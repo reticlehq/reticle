@@ -18,7 +18,16 @@ agent ──MCP──▶ iris bridge ──WebSocket──▶ @iris/browser (in 
 
 Driving a browser by screenshot is slow, costly, and blind to non-visual things (the API
 call that fired, the console error, the route change). Iris reads what the app actually did
-**in code** and lets the agent assert on it:
+**in code** and lets the agent assert on it.
+
+**Turn your test cases into agent checks.** The manual QA checklist you never automated —
+"login lands on the dashboard", "deleting an item removes it", "no console errors on
+checkout" — becomes something your agent runs against the live app, in your real dev session,
+and verifies with evidence. (Complements your CI Playwright/Cypress suite; see
+[docs/usage.md](docs/usage.md).)
+
+**~69× fewer tokens** than feeding the agent a full accessibility tree each step (measured;
+[docs/token-efficiency.md](docs/token-efficiency.md)). Here's the loop:
 
 ```jsonc
 // "I clicked Pay — verify the whole reaction in one call"
@@ -62,7 +71,7 @@ if (import.meta.env.DEV) install();
 ```
 
 That's it. Your agent can now `iris_snapshot`, `iris_act`, `iris_observe`, and `iris_assert`
-against the live app.
+against the live app. Full walkthrough, recipes, and the predicate DSL: **[docs/usage.md](docs/usage.md)**.
 
 ## The tools
 
