@@ -163,6 +163,10 @@ Or, with no build step, a script tag pointed at the bridge:
 </script>
 ```
 
+> **Want to watch the agent work?** Add `present: true` to `iris.connect()` for a glowing
+> border, a synthetic cursor that flies to targets, click/hover effects, and a narration HUD.
+> See [usage §16](usage.md#16-presenter-mode-narration--fake-clock-watch--control).
+
 ---
 
 ## Step 3 — (React) component & source-file mapping

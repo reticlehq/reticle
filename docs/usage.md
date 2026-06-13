@@ -526,3 +526,76 @@ connected (`iris_sessions` lists them).
   is opt-in and runs through a redactor (drop `password`/`token`/`secret`/… + your patterns).
 - **Additive & reversible.** Iris patches `fetch`/History/console defensively and restores
   them on disconnect; it will not break the app under test.
+
+---
+
+## 16. Presenter mode, narration & fake clock (watch + control)
+
+### Presenter mode — let a human watch the agent
+
+Turn it on when connecting:
+
+```ts
+iris.connect({ session: 'my-app', present: true, pace: 450 });
+```
+
+You get, in the page itself:
+
+- a **glowing border** while the agent is working,
+- a **synthetic cursor** that flies to each target before acting,
+- **click ripples, hover rings**, and a status **HUD** ("Clicking button \"Save\"… ✓ passed"),
+- a per-action **pacing** delay (`pace`, ms) so a human can follow.
+
+All presenter DOM uses `data-iris-*` and is excluded from snapshots/observers, so it never
+pollutes what the agent sees. Use `setIgnoreSelectors([...])` to also hide your own dev
+widgets.
+
+### `iris_narrate` — show the agent's intent
+
+So the human sees _what the agent is about to do and why_:
+
+```jsonc
+iris_narrate({ text: "Adding a beat, then checking the section count goes up" })
+```
+
+It renders on the HUD. (The agent's private reasoning isn't visible to Iris — narration is
+how it surfaces intent on the page.)
+
+### `iris_clock` — control time deterministically
+
+Fast-forward toasts, debounces, auto-dismiss, and commit-on-blur without waiting:
+
+```jsonc
+iris_clock({ freeze: true })          // freeze app timers (Date.now/setTimeout/setInterval)
+iris_act({ ref: e9, action: "click" })
+iris_clock({ advanceMs: 5000 })       // jump 5s — the auto-dismiss fires now, deterministically
+iris_assert({ predicate: { kind: "element", query: { role: "alert" }, absent: true } })
+iris_clock({ reset: true })           // restore real timers
+```
+
+It does **not** freeze `requestAnimationFrame`/microtasks (React's scheduler keeps running),
+and Iris's own internal timers are insulated, so freezing never stalls the tools.
+
+### Action refinements (from real-app use)
+
+- **`blur`** now fires a bubbling `focusout`, so React's commit-on-blur (`onBlur`) runs —
+  inline editors and form fields commit. `fill`/`type` focus first so a later `blur` commits.
+- **`hover`** accepts `{ holdMs }` to dwell, so timer-gated reveals mount; then `wait_for`
+  the revealed nodes.
+- **`drag`** yields a frame between phases (React flushes between steps) and accepts
+  `{ data: { mime, value } }` for custom `dataTransfer` payloads.
+
+### Richer `dataMatches` (signals)
+
+```jsonc
+{
+  "kind": "signal",
+  "name": "chat:edit-applied",
+  "dataMatches": { "count": { "$gte": 1 }, "sections": { "$contains": "hook" } },
+}
+// operators: $gte $lte $gt $lt $contains (array/substring) $length ; "*" = present
+```
+
+On a failed signal assert, the result includes a **near-miss**: the signals that _did_ fire
+with that name + their data. And `iris_observe`'s summary now includes `domChanged` (in-place
+text/attribute re-renders, not just added/removed nodes).
