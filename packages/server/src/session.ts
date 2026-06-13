@@ -161,6 +161,13 @@ export class Session {
       const parsed = HumanControlDataSchema.safeParse(event.data);
       if (parsed.success) this.applyHumanControl(parsed.data);
     }
+    if (event.type === EventType.ROUTE_CHANGE) {
+      // Keep the reported URL live across SPA navigation. The SDK already emits route.change on
+      // pushState/replaceState/popstate; without this the URL stays frozen at the hello value, and
+      // URL-based CDP correlation (real input) silently breaks after the first client-side nav.
+      const to = event.data['to'];
+      if (typeof to === 'string' && to.length > 0) this.url = to;
+    }
     const t = this.elapsed();
     const stamped: IrisEvent = { ...event, t, sessionId: this.id };
     this.#buffer.push(stamped, t);

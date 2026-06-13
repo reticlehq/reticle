@@ -3,9 +3,11 @@ import type { WebSocket } from 'ws';
 import {
   IRIS_PROTOCOL_VERSION,
   MessageKind,
+  EventType,
   SESSION_HEALTH,
   UNSCRIPTABLE_TAB_RECOMMENDATION,
   type HelloMessage,
+  type IrisEvent,
 } from '@syrin/iris-protocol';
 import { Session } from './session.js';
 
@@ -31,6 +33,30 @@ function makeSession(): { session: Session; tick: (ms: number) => void } {
     },
   };
 }
+
+describe('SPA navigation keeps session.url live (real-input correlation fix)', () => {
+  const routeEvent = (to: string): IrisEvent =>
+    ({
+      type: EventType.ROUTE_CHANGE,
+      data: { from: 'x', to, pathname: '', search: '', hash: '' },
+    }) as unknown as IrisEvent;
+
+  it('updates url on a ROUTE_CHANGE event (so CDP page correlation tracks SPA nav)', () => {
+    const { session } = makeSession();
+    expect(session.url).toBe('http://localhost/');
+    session.pushEvent(routeEvent('http://localhost/workspace?script=42'));
+    expect(session.url).toBe('http://localhost/workspace?script=42');
+    expect(session.info().url).toBe('http://localhost/workspace?script=42');
+  });
+
+  it('ignores a route event with a missing/empty/non-string `to` (keeps the last good url)', () => {
+    const { session } = makeSession();
+    session.pushEvent(routeEvent('http://localhost/a'));
+    session.pushEvent({ type: EventType.ROUTE_CHANGE, data: { to: '' } } as unknown as IrisEvent);
+    session.pushEvent({ type: EventType.ROUTE_CHANGE, data: {} } as unknown as IrisEvent);
+    expect(session.url).toBe('http://localhost/a');
+  });
+});
 
 describe('F2 session health', () => {
   it('throttles when lastSeen exceeds the stale threshold (clock injected)', () => {

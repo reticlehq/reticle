@@ -4,6 +4,7 @@ import {
   ActionWarning,
   EventType,
   InputMode,
+  InputModeReason,
   IrisCommand,
   SnapshotMode,
 } from '@syrin/iris-protocol';
@@ -97,19 +98,29 @@ function asBox(value: unknown): ElementBox | undefined {
   return { x, y, width: w, height: h };
 }
 
-/** R1: result of a real-input attempt, or undefined to mean "fall back to synthetic". */
+/** R1: outcome of a real-input attempt — real success (result set) or synthetic with a reason. */
 interface RealActResult {
+  /** Defined only on a successful native action; `undefined` means the synthetic path runs. */
   result: unknown;
   settled: boolean;
   /** Set when a provider was available but threw — surfaces the fallback to the agent. */
   fellBack?: boolean;
+  /** Why we went synthetic despite a configured provider (field bug #2: never a silent fallback). */
+  reason?: InputModeReason;
+}
+
+/** Synthetic outcome with a diagnostic reason (provider configured but native input skipped). */
+function synthetic(reason?: InputModeReason): RealActResult {
+  return reason === undefined
+    ? { result: undefined, settled: false }
+    : { result: undefined, settled: false, reason };
 }
 
 /**
- * R1: attempt to drive a pointer action via native input. Returns undefined whenever the
- * synthetic path should run (no provider, non-pointer action, no matching page, unresolvable
- * box, or the provider declined). A throw inside the provider becomes a synthetic fallback
- * flagged with `fellBack` so the agent learns it happened.
+ * R1: attempt to drive a pointer action via native input. Returns a synthetic outcome (with a
+ * `reason` when a provider is configured) whenever the synthetic path should run — no matching
+ * page, unresolvable box, declined, etc. A throw inside the provider becomes a synthetic fallback
+ * flagged with `fellBack`. `result` is defined only on a real success.
  */
 async function tryRealInput(
   deps: ToolDeps,
@@ -117,22 +128,23 @@ async function tryRealInput(
   ref: string,
   action: string,
   args: Record<string, unknown>,
-): Promise<RealActResult | undefined> {
+): Promise<RealActResult> {
   const provider = deps.realInput;
-  if (provider === undefined) return undefined;
-  if (!isPointerAction(action)) return undefined; // fill/type stay synthetic
-  if (!(await provider.isAvailableFor(session.url))) return undefined;
+  if (provider === undefined) return synthetic(); // real input not configured — no diagnostic
+  if (!isPointerAction(action)) return synthetic(InputModeReason.NOT_POINTER); // fill/type stay synthetic
+  if (!(await provider.isAvailableFor(session.url)))
+    return synthetic(InputModeReason.PAGE_NOT_CORRELATED);
 
   const box = asBox(await commandOrThrow(deps, session.id, IrisCommand.INSPECT, { ref }));
-  if (box === undefined) return undefined;
+  if (box === undefined) return synthetic(InputModeReason.ELEMENT_NOT_LOCATABLE);
 
   const inner = asRecord(args['args']);
   let toBox: ElementBox | undefined;
   if (action === ActionType.DRAG) {
     const toRef = asString(inner['toRef']);
-    if (toRef === undefined) return undefined; // native drag impossible ⇒ synthetic
+    if (toRef === undefined) return synthetic(InputModeReason.DRAG_TARGET_UNRESOLVED);
     toBox = asBox(await commandOrThrow(deps, session.id, IrisCommand.INSPECT, { ref: toRef }));
-    if (toBox === undefined) return undefined;
+    if (toBox === undefined) return synthetic(InputModeReason.DRAG_TARGET_UNRESOLVED);
   }
 
   const performArgs: RealInputArgs = {};
@@ -144,10 +156,15 @@ async function tryRealInput(
 
   try {
     const performed = await provider.perform(session.url, action, box, performArgs);
-    if (!performed.performed) return undefined; // provider declined ⇒ synthetic
+    if (!performed.performed) return synthetic(InputModeReason.PROVIDER_DECLINED);
     return { result: { performed: true, center: performed.center, action }, settled: true };
   } catch {
-    return { result: undefined, settled: false, fellBack: true };
+    return {
+      result: undefined,
+      settled: false,
+      fellBack: true,
+      reason: InputModeReason.PROVIDER_ERROR,
+    };
   }
 }
 
@@ -215,7 +232,7 @@ export const TOOLS: ToolDef[] = [
   {
     name: IrisTool.ACT,
     description:
-      'Execute one action against a ref: click|dblclick|hover|focus|fill|type|clear|select|check|uncheck|submit|press|scrollIntoView. Returns immediately with a `since` cursor for observe. Result includes effect: { dispatched, targetMatched, visible, enabled, defaultPrevented, focusMoved, valueChanged, domMutatedWithin } so you can tell "action missed" vs "app didn\'t react". Top-level dispatched/settled/settleReason report whether the click landed (dispatched) and whether a real frame flushed (settled) vs a throttled-tab timeout (settleReason:"timeout") — a settle timeout never fails the tool. Every result also carries inputMode. With real-input mode (server cdpUrl/IRIS_CDP_URL set) pointer actions (hover/click/dblclick/drag) are driven via native CDP input and return inputMode:"real" WITHOUT the synthetic `effect` block — observe the reaction with iris_observe. Otherwise inputMode:"synthetic". Real-input applies to iris_act only (not act_sequence/act_and_wait). When the tab is hidden/throttled, session.recommendation explains the limit (Iris cannot bring such a tab to front) and points to `iris drive` for a guaranteed scriptable context.',
+      'Execute one action against a ref: click|dblclick|hover|focus|fill|type|clear|select|check|uncheck|submit|press|scrollIntoView. Returns immediately with a `since` cursor for observe. Result includes effect: { dispatched, targetMatched, visible, enabled, defaultPrevented, focusMoved, valueChanged, domMutatedWithin } so you can tell "action missed" vs "app didn\'t react". Top-level dispatched/settled/settleReason report whether the click landed (dispatched) and whether a real frame flushed (settled) vs a throttled-tab timeout (settleReason:"timeout") — a settle timeout never fails the tool. Every result also carries inputMode. With real-input mode (server cdpUrl/IRIS_CDP_URL set) pointer actions (hover/click/dblclick/drag) are driven via native CDP input and return inputMode:"real" WITHOUT the synthetic `effect` block — observe the reaction with iris_observe. Otherwise inputMode:"synthetic"; when a provider IS configured but a pointer act still ran synthetic, inputModeReason says why (e.g. "page-not-correlated-to-a-cdp-target" right after an SPA navigation, or "element-not-locatable" when off-screen) so the fallback is never silent. Real-input applies to iris_act only (not act_sequence/act_and_wait). When the tab is hidden/throttled, session.recommendation explains the limit (Iris cannot bring such a tab to front) and points to `iris drive` for a guaranteed scriptable context.',
     inputSchema: {
       ref: z.string(),
       action: z.string(),
@@ -235,7 +252,7 @@ export const TOOLS: ToolDef[] = [
 
       // R1: drive native pointer input when a provider is available; otherwise fall back.
       const real = await tryRealInput(deps, session, ref, action, args);
-      if (real !== undefined && real.fellBack !== true) {
+      if (real.result !== undefined) {
         if (deps.recordings.active().length > 0) {
           deps.recordings.capture(compileActStep(args, real.result));
         }
@@ -261,15 +278,16 @@ export const TOOLS: ToolDef[] = [
       }
       // F1: lift dispatch/settle status to the envelope (a settle timeout is NOT a failure).
       const r = asRecord(result.result);
-      const fellBack = real?.fellBack === true;
       return withControl(session, {
         since,
         inputMode: InputMode.SYNTHETIC,
+        // #2: never a silent real→synthetic fallback — say WHY (unless real input isn't configured).
+        ...(real.reason !== undefined ? { inputModeReason: real.reason } : {}),
         dispatched: r['dispatched'] ?? true,
         settled: r['settled'] ?? null,
         settleReason: r['settleReason'] ?? null,
         result: result.result,
-        ...(fellBack ? { warning: ActionWarning.REAL_INPUT_FELL_BACK } : {}),
+        ...(real.fellBack === true ? { warning: ActionWarning.REAL_INPUT_FELL_BACK } : {}),
         ...healthEnvelope(session),
       });
     },

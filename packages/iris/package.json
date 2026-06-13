@@ -1,6 +1,6 @@
 {
   "name": "@syrin/iris",
-  "version": "0.3.5",
+  "version": "0.3.6",
   "description": "One-install Iris: the dev-only SDK (browser + React adapter) and the spec runner under one package, with subpaths for the source-mapping plugins and the MCP server.",
   "type": "module",
   "license": "MIT",

@@ -15,6 +15,7 @@ const ORDER = [
   'next-blur-clock-test',
   'm57-test',
   'p2-drive-test',
+  'spa-nav-realinput-test',
   'p3a-test',
   'p3b-test',
   'p4-spec',

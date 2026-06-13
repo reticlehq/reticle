@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ActionWarning, InputMode, SessionState } from '@syrin/iris-protocol';
+import { ActionWarning, InputMode, InputModeReason, SessionState } from '@syrin/iris-protocol';
 import type { CommandResult } from '@syrin/iris-protocol';
 import { TOOLS, type ToolDeps } from './tools.js';
 import { IrisTool } from './tool-names.js';
@@ -119,6 +119,7 @@ function actTool() {
 
 interface ActResult {
   inputMode: string;
+  inputModeReason?: string;
   warning?: string;
   result: unknown;
 }
@@ -154,6 +155,7 @@ describe('R1 iris_act real-input routing', () => {
     const res = await runAct(fakeDeps(provider, state), { ref: 'e1', action: 'click' });
 
     expect(res.inputMode).toBe(InputMode.SYNTHETIC);
+    expect(res.inputModeReason).toBe(InputModeReason.PAGE_NOT_CORRELATED);
     expect(provider.calls).toHaveLength(0);
     expect(state.actCalls).toBe(1);
   });
@@ -163,6 +165,7 @@ describe('R1 iris_act real-input routing', () => {
     const res = await runAct(fakeDeps(undefined, state), { ref: 'e1', action: 'click' });
 
     expect(res.inputMode).toBe(InputMode.SYNTHETIC);
+    expect(res.inputModeReason).toBeUndefined();
     expect(state.actCalls).toBe(1);
   });
 
@@ -176,6 +179,7 @@ describe('R1 iris_act real-input routing', () => {
     });
 
     expect(res.inputMode).toBe(InputMode.SYNTHETIC);
+    expect(res.inputModeReason).toBe(InputModeReason.NOT_POINTER);
     expect(provider.calls).toHaveLength(0);
     expect(state.actCalls).toBe(1);
   });
@@ -186,6 +190,7 @@ describe('R1 iris_act real-input routing', () => {
     const res = await runAct(fakeDeps(provider, state), { ref: 'e1', action: 'drag', args: {} });
 
     expect(res.inputMode).toBe(InputMode.SYNTHETIC);
+    expect(res.inputModeReason).toBe(InputModeReason.DRAG_TARGET_UNRESOLVED);
     expect(provider.calls).toHaveLength(0);
     expect(state.actCalls).toBe(1);
   });
@@ -211,6 +216,7 @@ describe('R1 iris_act real-input routing', () => {
     const res = await runAct(fakeDeps(provider, state), { ref: 'e1', action: 'click' });
 
     expect(res.inputMode).toBe(InputMode.SYNTHETIC);
+    expect(res.inputModeReason).toBe(InputModeReason.ELEMENT_NOT_LOCATABLE);
     expect(provider.calls).toHaveLength(0);
     expect(state.actCalls).toBe(1);
   });
@@ -221,6 +227,7 @@ describe('R1 iris_act real-input routing', () => {
     const res = await runAct(fakeDeps(provider, state), { ref: 'e1', action: 'click' });
 
     expect(res.inputMode).toBe(InputMode.SYNTHETIC);
+    expect(res.inputModeReason).toBe(InputModeReason.ELEMENT_NOT_LOCATABLE);
     expect(provider.calls).toHaveLength(0);
     expect(state.actCalls).toBe(1);
   });
@@ -231,6 +238,7 @@ describe('R1 iris_act real-input routing', () => {
     const res = await runAct(fakeDeps(provider, state), { ref: 'e1', action: 'click' });
 
     expect(res.inputMode).toBe(InputMode.SYNTHETIC);
+    expect(res.inputModeReason).toBe(InputModeReason.PROVIDER_ERROR);
     expect(res.warning).toBe(ActionWarning.REAL_INPUT_FELL_BACK);
     expect(state.actCalls).toBe(1);
   });

@@ -283,6 +283,21 @@ export const InputMode = {
 } as const;
 export type InputMode = (typeof InputMode)[keyof typeof InputMode];
 
+/**
+ * Why a pointer action ran SYNTHETIC even though a real-input provider is configured. Attached as
+ * `inputModeReason` so a real→synthetic fallback is never silent (field bug #2) — the agent can
+ * tell "I couldn't locate the element" from "the page isn't correlated to a CDP target".
+ */
+export const InputModeReason = {
+  NOT_POINTER: 'not-a-pointer-action', // fill/type never use native input
+  PAGE_NOT_CORRELATED: 'page-not-correlated-to-a-cdp-target', // no CDP page matches session.url
+  ELEMENT_NOT_LOCATABLE: 'element-not-locatable', // INSPECT returned no box (off-screen/stale ref)
+  DRAG_TARGET_UNRESOLVED: 'drag-target-unresolved', // drag toRef missing or not locatable
+  PROVIDER_DECLINED: 'provider-declined', // provider chose not to perform
+  PROVIDER_ERROR: 'provider-error', // provider threw → fell back to synthetic
+} as const;
+export type InputModeReason = (typeof InputModeReason)[keyof typeof InputModeReason];
+
 /** Best-effort caveats attached to action results so the agent can interpret a no-op (F3). */
 export const ActionWarning = {
   HOVER_NATIVE_ENTER_LEAVE:
