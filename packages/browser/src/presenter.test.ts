@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { PresenterMode } from '@iris/protocol';
 import { Presenter } from './presenter.js';
 import { buildSnapshot } from './snapshot.js';
 import { isIgnored } from './dom-ignore.js';
@@ -58,6 +59,47 @@ describe('presenter / transparency layer', () => {
 
     p.destroy();
     expect(document.querySelector('[data-iris-overlay]')).toBeNull();
+  });
+});
+
+describe('presenter H2 reading vs acting', () => {
+  it('READING sets mode + chip and hides the cursor', () => {
+    document.body.innerHTML = '';
+    const p = new Presenter({ paceMs: 0 });
+    p.mount();
+
+    p.setMode(PresenterMode.READING);
+    expect(p.mode).toBe(PresenterMode.READING);
+    const chip = document.querySelector('[data-iris-chip]');
+    expect(chip?.textContent).toBe('READING');
+    expect(chip?.getAttribute('data-mode')).toBe('reading');
+    expect(document.querySelector('[data-iris-cursor]')?.getAttribute('data-on')).toBe('0');
+
+    p.destroy();
+  });
+
+  it('ACTING sets mode + chip', () => {
+    document.body.innerHTML = '';
+    const p = new Presenter({ paceMs: 0 });
+    p.mount();
+
+    p.setMode(PresenterMode.ACTING);
+    expect(p.mode).toBe(PresenterMode.ACTING);
+    expect(document.querySelector('[data-iris-chip]')?.textContent).toBe('ACTING');
+
+    p.destroy();
+  });
+
+  it('chip text never leaks into snapshots', () => {
+    document.body.innerHTML = '<button>Save</button>';
+    const p = new Presenter({ paceMs: 0 });
+    p.mount();
+
+    p.setMode(PresenterMode.READING);
+    const snap = buildSnapshot({ mode: 'full' });
+    expect(snap.tree).not.toContain('READING');
+
+    p.destroy();
   });
 });
 

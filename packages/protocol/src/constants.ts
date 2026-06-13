@@ -177,6 +177,14 @@ export const IrisCommand = {
 } as const;
 export type IrisCommand = (typeof IrisCommand)[keyof typeof IrisCommand];
 
+/** Presenter intent shown to the human watcher (H2): is the agent reading or acting? */
+export const PresenterMode = {
+  IDLE: 'idle',
+  READING: 'reading',
+  ACTING: 'acting',
+} as const;
+export type PresenterMode = (typeof PresenterMode)[keyof typeof PresenterMode];
+
 /** Snapshot rendering modes (plan/04). */
 export const SnapshotMode = {
   FULL: 'full',

@@ -1,3 +1,4 @@
+import { PresenterMode } from '@iris/protocol';
 import { refs } from './refs.js';
 import { nativeSetTimeout, nativeClearTimeout, nativeNow } from './native-timers.js';
 
@@ -35,7 +36,25 @@ const CSS = `
 [data-iris-hud] .iris-note{color:#9aa3b2;margin-top:4px}
 [data-iris-hud] .iris-res{margin-top:4px;font-weight:600}
 [data-iris-hud] .iris-pass{color:#22c55e}[data-iris-hud] .iris-fail{color:#ef4444}
+[data-iris-hud] .iris-chip{display:none;font-weight:700;letter-spacing:.06em;font-size:10px;
+  padding:1px 6px;border-radius:6px;margin-right:7px;vertical-align:middle;}
+[data-iris-hud] .iris-chip[data-mode="reading"]{display:inline-block;color:#67e8f9;
+  background:rgba(34,211,238,.15);border:1px solid rgba(34,211,238,.5);}
+[data-iris-hud] .iris-chip[data-mode="acting"]{display:inline-block;color:#c7d2fe;
+  background:rgba(99,102,241,.18);border:1px solid rgba(99,102,241,.55);}
+[data-iris-hud] .iris-chip[data-mode="idle"]{display:none;}
+[data-iris-mode="reading"] [data-iris-glow][data-on="1"]{
+  box-shadow:inset 0 0 0 3px rgba(34,211,238,.9),inset 0 0 28px 6px rgba(34,211,238,.4);}
+[data-iris-mode="reading"] [data-iris-ring]{border-color:#22d3ee;
+  box-shadow:0 0 0 3px rgba(34,211,238,.25);}
 `;
+
+/** HUD chip copy keyed by mode (UI text, browser-local — not a wire string). */
+const CHIP_LABEL: Record<PresenterMode, string> = {
+  [PresenterMode.IDLE]: '',
+  [PresenterMode.READING]: 'READING',
+  [PresenterMode.ACTING]: 'ACTING',
+};
 
 export interface PresenterOptions {
   paceMs?: number;
@@ -79,6 +98,8 @@ export class Presenter {
   #actLine: HTMLElement | undefined;
   #noteLine: HTMLElement | undefined;
   #resLine: HTMLElement | undefined;
+  #chip: HTMLElement | undefined;
+  #mode: PresenterMode = PresenterMode.IDLE;
 
   readonly #now: () => number;
   readonly #idleAfterMs: number;
@@ -109,7 +130,7 @@ export class Presenter {
       <div data-iris-cursor></div>
       <div data-iris-ring></div>
       <div data-iris-hud>
-        <div><span class="iris-dot"></span><span class="iris-act">idle</span></div>
+        <div><span class="iris-dot"></span><span class="iris-chip" data-iris-chip></span><span class="iris-act">idle</span></div>
         <div class="iris-note"></div>
         <div class="iris-res"></div>
       </div>`;
@@ -122,6 +143,8 @@ export class Presenter {
     this.#actLine = root.querySelector<HTMLElement>('.iris-act') ?? undefined;
     this.#noteLine = root.querySelector<HTMLElement>('.iris-note') ?? undefined;
     this.#resLine = root.querySelector<HTMLElement>('.iris-res') ?? undefined;
+    this.#chip = root.querySelector<HTMLElement>('[data-iris-chip]') ?? undefined;
+    this.setMode(this.#mode);
   }
 
   destroy(): void {
@@ -155,6 +178,26 @@ export class Presenter {
   /** Test/diagnostic accessor for the current glow phase. */
   glowPhase(): GlowPhase {
     return this.#phase;
+  }
+
+  /** Current intent (reading vs acting), exposed for tests + the watcher (H2). */
+  get mode(): PresenterMode {
+    return this.#mode;
+  }
+
+  /**
+   * H2: set the presenter intent. READING shows a cyan scan + chip and hides the cursor; ACTING
+   * keeps the warm cursor/ripple + chip; IDLE clears the chip. Drives color via data-iris-mode.
+   */
+  setMode(mode: PresenterMode): void {
+    this.#mode = mode;
+    this.#root?.setAttribute('data-iris-mode', mode);
+    if (this.#chip !== undefined) {
+      this.#chip.textContent = CHIP_LABEL[mode];
+      this.#chip.setAttribute('data-mode', mode);
+    }
+    // READING has no real pointer to show (synthetic-hover pointer is R1) — hide the cursor.
+    if (mode === PresenterMode.READING) this.#cursor?.setAttribute(DATA_ON, GLOW_OFF);
   }
 
   #enterBusy(): void {
@@ -195,6 +238,7 @@ export class Presenter {
     this.#glow?.setAttribute(DATA_ON, GLOW_OFF);
     this.#hud?.setAttribute(DATA_ON, GLOW_OFF);
     this.#cursor?.setAttribute(DATA_ON, GLOW_OFF);
+    this.setMode(PresenterMode.IDLE); // H2: clear the READING/ACTING chip when going quiet
     if (this.#actLine !== undefined) this.#actLine.textContent = GlowPhase.IDLE;
     this.#fadeTimer = nativeSetTimeout(() => {
       this.#fadeTimer = undefined;

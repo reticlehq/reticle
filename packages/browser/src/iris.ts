@@ -5,6 +5,7 @@ import {
   IRIS_WS_PATH,
   IrisCommand,
   MessageKind,
+  PresenterMode,
   type CommandMessage,
   type HelloMessage,
   type IrisEvent,
@@ -190,6 +191,7 @@ export class Iris {
   async #presentBefore(command: CommandMessage): Promise<void> {
     const p = this.#presenter;
     if (p === undefined) return;
+    p.setMode(modeForCommand(command.name)); // H2: paint reading vs acting intent first
     if (command.name === IrisCommand.ACT) {
       const ref = str(command.args['ref']);
       await p.beforeAct(ref, str(command.args['action']), refLabel(ref));
@@ -206,6 +208,30 @@ export class Iris {
   }
 }
 
+/**
+ * H2: classify a browser command into the presenter intent the human watcher sees. Exhaustive
+ * over the 11 IrisCommand names that actually reach the browser. CLOCK/NARRATE are control/meta
+ * (neither a page read nor an act) -> IDLE so they don't paint a misleading chip. NARRATE never
+ * reaches #presentBefore anyway (it returns early in #handleCommand) and must not clear the mode.
+ */
+export function modeForCommand(commandName: string): PresenterMode {
+  switch (commandName) {
+    case IrisCommand.ACT:
+    case IrisCommand.ACT_SEQUENCE:
+      return PresenterMode.ACTING;
+    case IrisCommand.SNAPSHOT:
+    case IrisCommand.QUERY:
+    case IrisCommand.MATCH:
+    case IrisCommand.INSPECT:
+    case IrisCommand.ANIMATIONS:
+    case IrisCommand.STATE_READ:
+    case IrisCommand.CAPABILITIES:
+      return PresenterMode.READING;
+    default:
+      return PresenterMode.IDLE;
+  }
+}
+
 function presentStatus(commandName: string): string {
   switch (commandName) {
     case IrisCommand.SNAPSHOT:
@@ -215,6 +241,12 @@ function presentStatus(commandName: string): string {
       return 'Finding an element';
     case IrisCommand.INSPECT:
       return 'Inspecting an element';
+    case IrisCommand.ANIMATIONS:
+      return 'Reading animations';
+    case IrisCommand.STATE_READ:
+      return 'Reading state';
+    case IrisCommand.CAPABILITIES:
+      return 'Reading capabilities';
     default:
       return commandName;
   }
