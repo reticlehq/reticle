@@ -36,6 +36,13 @@ export interface RealInputResult {
   center: { cx: number; cy: number };
 }
 
+/** N3 VISUAL: options for a page screenshot — full-page scroll capture and/or a clip box. */
+export interface ScreenshotOpts {
+  fullPage?: boolean;
+  /** Restrict the capture to one element/region (viewport CSS px). */
+  clip?: ElementBox;
+}
+
 /** The capability surface iris_act depends on. A FAKE implementing this is injected in tests. */
 export interface RealInputProvider {
   /** Whether a Playwright Page currently matches this SDK session URL. */
@@ -47,6 +54,11 @@ export interface RealInputProvider {
     box: ElementBox,
     args: RealInputArgs,
   ): Promise<RealInputResult>;
+  /**
+   * N3 VISUAL (M11): capture a PNG of the correlated page, or undefined if no page matches. Optional
+   * so the visual layer stays opt-in — a provider that cannot screenshot simply omits it.
+   */
+  screenshot?(sessionUrl: string, opts: ScreenshotOpts): Promise<Uint8Array | undefined>;
 }
 
 /**
@@ -149,6 +161,21 @@ export async function performGesture(
   return { performed: false, center };
 }
 
+/**
+ * N3 VISUAL: capture a PNG from a Playwright page. Shared by the CDP + launched providers so the
+ * screenshot path lives in one place (mirrors performGesture). Returns the raw PNG bytes.
+ */
+export async function capturePage(page: Page, opts: ScreenshotOpts): Promise<Uint8Array> {
+  const buf = await page.screenshot(
+    opts.clip !== undefined
+      ? { clip: opts.clip }
+      : opts.fullPage === true
+        ? { fullPage: true }
+        : {},
+  );
+  return new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
+}
+
 export interface CdpProviderOptions {
   cdpUrl: string;
   /** Injected so the settle delay is deterministic in tests; defaults to a real Node timer. */
@@ -217,6 +244,13 @@ export class CdpRealInputProvider implements RealInputProvider {
     const page = await this.#pageFor(sessionUrl);
     if (page === undefined) return { performed: false, center: boxCenter(box) };
     return performGesture(page, action, box, args, this.#sleep);
+  }
+
+  /** N3 VISUAL: PNG of the correlated page, or undefined if none matches. */
+  async screenshot(sessionUrl: string, opts: ScreenshotOpts): Promise<Uint8Array | undefined> {
+    const page = await this.#pageFor(sessionUrl);
+    if (page === undefined) return undefined;
+    return capturePage(page, opts);
   }
 
   /** Best-effort cleanup; idempotent. */
@@ -303,6 +337,13 @@ export class LaunchedRealInputProvider implements OwnedRealInputProvider {
     const page = this.#page;
     if (page === undefined) return Promise.resolve({ performed: false, center: boxCenter(box) });
     return performGesture(page, action, box, args, this.#sleep);
+  }
+
+  /** N3 VISUAL: PNG of the owned page, or undefined before navigate / after dispose. */
+  screenshot(_sessionUrl: string, opts: ScreenshotOpts): Promise<Uint8Array | undefined> {
+    const page = this.#page;
+    if (page === undefined) return Promise.resolve(undefined);
+    return capturePage(page, opts);
   }
 
   /** Close the owned browser once. Idempotent and safe before navigate. */

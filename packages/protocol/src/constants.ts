@@ -18,7 +18,29 @@ export const IrisDir = {
   BASELINES_SUBDIR: 'baselines',
   /** 0.3.7 RUNHISTORY: cross-run memory — outcomes of past runs (the "did it behave like last time?" file). */
   PROJECT_FILE: 'project.json',
+  /** N3 VISUAL (M11): opt-in pixel baselines — .iris/visual/<name>.png + <name>.diff.png. */
+  VISUAL_SUBDIR: 'visual',
 } as const;
+
+/**
+ * N3 VISUAL (M11): structured reasons a screenshot/visual-diff could not produce a verdict (never
+ * thrown as free strings). The visual layer is OPT-IN and CDP/Playwright-driven — it is NEVER
+ * bundled into the always-on browser SDK — so NO_PROVIDER is the common "you must `iris drive`" case.
+ */
+export const VisualReason = {
+  NO_PROVIDER: 'no-visual-provider', // no CDP/launched browser → cannot capture pixels
+  CAPTURE_FAILED: 'capture-failed', // the page could not be screenshotted
+  BASELINE_MISSING: 'baseline-missing', // iris_visual_diff with no saved baseline of that name
+  DIMENSION_MISMATCH: 'dimension-mismatch', // current vs baseline differ in size — can't pixel-diff
+} as const;
+export type VisualReason = (typeof VisualReason)[keyof typeof VisualReason];
+
+/** N3 VISUAL: actionable companion to NO_PROVIDER — the visual layer needs a driven browser. */
+export const VISUAL_NO_PROVIDER_RECOMMENDATION =
+  'visual capture needs a driven browser — start with `iris drive <url>` or set IRIS_CDP_URL; the always-on SDK does not ship a screenshotter';
+
+/** N3 VISUAL: default per-pixel color-distance threshold (pixelmatch 0..1; higher = more lenient). */
+export const VISUAL_PIXEL_THRESHOLD = 0.1;
 
 /** Schema version stamped into contract.json so a reader can reject/upgrade old files. */
 export const CONTRACT_FILE_VERSION = 1;

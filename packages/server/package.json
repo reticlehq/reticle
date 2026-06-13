@@ -23,16 +23,19 @@
     "prepack": "tsc -b && find dist -name \"*.test.*\" -delete"
   },
   "dependencies": {
-    "@syrin/iris-protocol": "workspace:*",
     "@modelcontextprotocol/sdk": "^1.13.0",
+    "@syrin/iris-protocol": "workspace:*",
     "ws": "^8.18.0",
     "zod": "^3.24.1"
   },
   "devDependencies": {
+    "@types/pngjs": "^6.0.5",
     "@types/ws": "^8.5.13"
   },
   "optionalDependencies": {
-    "playwright": "^1.48.0"
+    "pixelmatch": "^7.2.0",
+    "playwright": "^1.48.0",
+    "pngjs": "^7.0.0"
   },
   "license": "MIT",
   "author": "Iris contributors",

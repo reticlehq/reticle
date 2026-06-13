@@ -21,6 +21,8 @@ export interface IrisDirPaths {
   baselines: string;
   /** .../.iris/project.json (0.3.7 RUNHISTORY: cross-run outcome memory) */
   project: string;
+  /** .../.iris/visual (N3 VISUAL: PNG baselines + diffs) */
+  visual: string;
 }
 
 export function irisDirPaths(root: string): IrisDirPaths {
@@ -30,7 +32,18 @@ export function irisDirPaths(root: string): IrisDirPaths {
     flows: join(root, IrisDir.FLOWS_SUBDIR),
     baselines: join(root, IrisDir.BASELINES_SUBDIR),
     project: join(root, IrisDir.PROJECT_FILE),
+    visual: join(root, IrisDir.VISUAL_SUBDIR),
   };
+}
+
+/** N3 VISUAL: the PNG baseline path for `name` (.iris/visual/<name>.png). */
+export function visualPath(root: string, name: string): string {
+  return join(root, IrisDir.VISUAL_SUBDIR, `${name}.png`);
+}
+
+/** N3 VISUAL: the overlay-diff PNG path for `name` (.iris/visual/<name>.diff.png). */
+export function visualDiffPath(root: string, name: string): string {
+  return join(root, IrisDir.VISUAL_SUBDIR, `${name}.diff.png`);
 }
 
 export function flowPath(root: string, name: string): string {

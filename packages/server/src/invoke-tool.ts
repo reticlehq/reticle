@@ -50,6 +50,8 @@ export const SESSION_EXEMPT_TOOLS: ReadonlySet<string> = new Set([
   IrisTool.END_SESSION, // live-control lifecycle
   IrisTool.RESUME, // live-control lifecycle
   IrisTool.MESSAGES, // drains the human→agent inbox
+  IrisTool.SCREENSHOT, // N3 VISUAL: own contract; provider-driven, not a live-DOM-health read
+  IrisTool.VISUAL_DIFF, // N3 VISUAL: own contract (matched/ratio/region)
 ]);
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {

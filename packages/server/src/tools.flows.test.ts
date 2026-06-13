@@ -32,6 +32,19 @@ function memoryFs(): FileSystemPort {
       files.set(path, data);
       return Promise.resolve();
     },
+    readFileBytes(path) {
+      const v = files.get(path);
+      if (v === undefined) {
+        const err: NodeJS.ErrnoException = new Error('ENOENT');
+        err.code = 'ENOENT';
+        return Promise.reject(err);
+      }
+      return Promise.resolve(new TextEncoder().encode(v));
+    },
+    writeFileBytes(path, data) {
+      files.set(path, new TextDecoder().decode(data));
+      return Promise.resolve();
+    },
     mkdir(path) {
       dirs.add(path);
       return Promise.resolve();

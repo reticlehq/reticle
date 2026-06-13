@@ -16,6 +16,7 @@ const ORDER = [
   'm57-test',
   'p2-drive-test',
   'spa-nav-realinput-test',
+  'visual-test',
   'p3a-test',
   'p3b-test',
   'project-history-test',

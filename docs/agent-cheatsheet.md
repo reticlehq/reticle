@@ -66,6 +66,13 @@ Sessions/perception/verify — what you'll use 90% of the time:
 > **0.3.7**. flows answer "does the journey still work?"; baselines answer "did the structure
 > change?"; project.json answers "is this run consistent with prior runs?".
 
+**Visual layer (opt-in, M11).** `iris_screenshot` saves a PNG baseline to `.iris/visual/<name>.png`;
+`iris_visual_diff` perceptually compares the live page to it (`{ masks }` to ignore volatile
+regions, `{ maxRatio }` tolerance) → `{ matched, changedPixels, ratio, region, diffPath }`. It
+answers "does it **look** right" — complementary to the behavioral layers, never a replacement.
+Both need a **driven browser** (`iris drive <url>` / `IRIS_CDP_URL`); without one they return
+`{ ok:false, reason:"no-visual-provider" }` (the always-on SDK ships no screenshotter).
+
 ## Start here
 
 1. `iris_sessions` — find the connected tab (omit `sessionId` if there's only one).

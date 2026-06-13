@@ -8,6 +8,10 @@ export interface FileSystemPort {
   /** Read a UTF-8 file. Rejects (ENOENT) if absent. */
   readFile(path: string): Promise<string>;
   writeFile(path: string, data: string): Promise<void>;
+  /** N3 VISUAL: read raw bytes (PNG baselines). Rejects (ENOENT) if absent. */
+  readFileBytes(path: string): Promise<Uint8Array>;
+  /** N3 VISUAL: write raw bytes (PNG screenshots/diffs). */
+  writeFileBytes(path: string, data: Uint8Array): Promise<void>;
   /** Recursive + idempotent: no throw if the directory already exists. */
   mkdir(path: string): Promise<void>;
   exists(path: string): Promise<boolean>;
@@ -22,6 +26,11 @@ export function createNodeFileSystem(): FileSystemPort {
   return {
     readFile: (path) => readFile(path, 'utf8'),
     writeFile: (path, data) => writeFile(path, data, 'utf8'),
+    readFileBytes: async (path) => {
+      const buf = await readFile(path);
+      return new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
+    },
+    writeFileBytes: (path, data) => writeFile(path, data),
     mkdir: async (path) => {
       await mkdir(path, { recursive: true });
     },

@@ -33,6 +33,9 @@ export { FlowStore, recordedStepToFlowStep } from './flows.js';
 export type { FlowResult, Clock } from './flows.js';
 export { ProjectStore } from './project-store.js';
 export type { ReadProjectResult } from './project-store.js';
+export { VisualStore } from './visual-store.js';
+export { diffPng } from './visual-diff.js';
+export type { VisualDiffResult, VisualRect, DiffOptions } from './visual-diff.js';
 export {
   CORE_TOOL_NAMES,
   TOOL_PROFILE,

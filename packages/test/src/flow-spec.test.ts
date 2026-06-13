@@ -31,6 +31,16 @@ function memoryFs(files: Record<string, string>): FileSystemPort {
       store.set(path, data);
       return Promise.resolve();
     },
+    readFileBytes: (path) => {
+      const v = store.get(path);
+      if (v === undefined)
+        return Promise.reject(Object.assign(new Error('enoent'), { code: 'ENOENT' }));
+      return Promise.resolve(new TextEncoder().encode(v));
+    },
+    writeFileBytes: (path, data) => {
+      store.set(path, new TextDecoder().decode(data));
+      return Promise.resolve();
+    },
     mkdir: () => Promise.resolve(),
     exists: (path) =>
       Promise.resolve(store.has(path) || [...store.keys()].some((k) => k.startsWith(`${path}/`))),

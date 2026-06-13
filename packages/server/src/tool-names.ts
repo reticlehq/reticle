@@ -39,6 +39,10 @@ export const IrisTool = {
   PROJECT: 'iris_project',
   /** 0.3.7 RUNHISTORY: explicitly record a run outcome (the manual companion to auto-recording). */
   RUN_RECORD: 'iris_run_record',
+  /** N3 VISUAL (M11): capture a pixel screenshot (CDP/driven browser) → .iris/visual/<name>.png. */
+  SCREENSHOT: 'iris_screenshot',
+  /** N3 VISUAL (M11): perceptual-diff the live page against a saved visual baseline. */
+  VISUAL_DIFF: 'iris_visual_diff',
   /** Live-control: end the session (→ ended + push PRESENTER). Handlers live in the tools facet. */
   END_SESSION: 'iris_end_session',
   /** Live-control: clear a pause (→ active). */
