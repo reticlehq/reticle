@@ -1,33 +1,39 @@
 /**
- * The only place design values are defined. Change here -> reflects everywhere.
- * (Foundation skill Step 5: single source of truth for design tokens.)
+ * The single source of truth for design values (mirrored as CSS custom properties in styles.css).
+ * Aesthetic: "Iris mission-control" — a deep near-black instrument panel with a signature iris
+ * gradient (cyan → indigo → violet), aurora glow, and hairline-bordered glass. JS reads these for
+ * charts / dynamic styling; CSS reads the matching --vars. Change a value in BOTH places.
  */
 
 export const Colors = {
-  bg: '#0b0d12',
-  surface: '#151823',
-  surfaceMuted: '#1d212e',
-  border: '#2a2f3d',
-  text: '#e6e9f0',
-  textMuted: '#9aa3b2',
+  bg: '#07080c',
+  panel: '#0f111a',
+  panelHover: '#151826',
+  hairline: 'rgba(255,255,255,0.07)',
+  border: '#20232f',
+  borderStrong: '#2c3040',
+  text: '#e9ebf2',
+  textMuted: '#9398a8',
+  textFaint: '#5b6072',
+  // Iris signature
+  iris1: '#22d3ee', // cyan
+  iris2: '#6366f1', // indigo
+  iris3: '#c084fc', // violet
   primary: '#6366f1',
-  primaryHover: '#7c7ff2',
-  success: '#22c55e',
-  danger: '#ef4444',
+  // Semantic
+  success: '#34d399',
+  warning: '#f5b544',
+  danger: '#fb7185',
+  info: '#38bdf8',
 } as const;
 
+/** The signature gradient, reused for the brand mark, active nav, primary CTAs, chart strokes. */
+export const IRIS_GRADIENT = `linear-gradient(135deg, ${Colors.iris1} 0%, ${Colors.iris2} 52%, ${Colors.iris3} 100%)`;
+
 export const Typography = {
-  fontFamily:
-    "ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
-  fontSize: {
-    xs: '12px',
-    sm: '14px',
-    md: '16px',
-    lg: '20px',
-    xl: '28px',
-  },
-  lineHeight: { tight: 1.2, normal: 1.5 },
-  fontWeight: { regular: 400, medium: 500, semibold: 600, bold: 700 },
+  display: "'Hanken Grotesk', ui-sans-serif, system-ui, sans-serif",
+  body: "'Hanken Grotesk', ui-sans-serif, system-ui, sans-serif",
+  mono: "'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace",
 } as const;
 
 /** 4px base unit. */
@@ -45,11 +51,4 @@ export const Radius = {
   lg: '16px',
   xl: '24px',
   full: '9999px',
-} as const;
-
-export const Shadow = {
-  sm: '0 1px 2px rgba(0,0,0,0.4)',
-  md: '0 4px 12px rgba(0,0,0,0.45)',
-  lg: '0 12px 32px rgba(0,0,0,0.5)',
-  glow: `0 0 0 3px ${Colors.primary}33`,
 } as const;

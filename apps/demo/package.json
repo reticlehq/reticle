@@ -15,15 +15,16 @@
     "@syrin/iris-browser": "workspace:*",
     "@syrin/iris-react": "workspace:*",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "zustand": "^5.0.14"
   },
   "devDependencies": {
+    "@syrin/iris-babel-plugin": "workspace:*",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^4.3.4",
     "agentation": "^3.0.2",
     "agentation-mcp": "^1.2.0",
-    "vite": "^6.0.7",
-    "@syrin/iris-babel-plugin": "workspace:*"
+    "vite": "^6.0.7"
   }
 }

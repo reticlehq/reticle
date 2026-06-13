@@ -104,7 +104,7 @@ reports `inputMode:"real"`:
   your app URL (no flags to juggle):
 
   ```bash
-  npx --registry http://localhost:4873/ @syrin/iris drive http://localhost:3000   # add --headed to watch
+  npx --registry http://localhost:4873/ @syrin/iris drive http://localhost:4310   # add --headed to watch
   ```
 
 - **Or attach to your own browser:** launch it with `--remote-debugging-port=9222`, then point

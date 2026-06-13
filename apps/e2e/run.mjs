@@ -1,5 +1,5 @@
 // E2E orchestrator: run each committed spec sequentially against already-running servers
-// (api:8787, demo:3000, next-smoke:3100). Each spec boots its own Iris bridge on :4400, so we
+// (api:8787, demo:4310, next-smoke:3100). Each spec boots its own Iris bridge on :4400, so we
 // free that port between specs. Exits non-zero if any spec fails — the CI regression gate.
 import { spawn } from 'node:child_process';
 import { readdirSync } from 'node:fs';

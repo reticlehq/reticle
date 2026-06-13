@@ -1,30 +1,18 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { Agentation } from 'agentation';
-import { iris } from '@syrin/iris-browser';
-import { install as installReactAdapter } from '@syrin/iris-react';
+import './styles.css';
 import { App } from './App.js';
+import { installIris } from './iris-dev.js';
 
-const isDev = import.meta.env.DEV;
-
-// Dev-only: give the coding agent eyes into this running app.
-if (isDev) {
-  installReactAdapter(); // DOM ref -> component stack -> source file
-  iris.connect({ session: 'demo', present: true }); // presenter: glow + cursor + HUD
-}
+// Dev-only: give the coding agent eyes into this running dashboard (presenter + capabilities +
+// store). Tree-shaken out of production builds.
+if (import.meta.env.DEV) installIris();
 
 const rootElement = document.getElementById('root');
-if (rootElement === null) {
-  throw new Error('Root element #root not found');
-}
-
-// Agentation can be toggled off with ?noagentation to keep Iris demos uncluttered.
-const showAgentation = isDev && !new URLSearchParams(window.location.search).has('noagentation');
+if (rootElement === null) throw new Error('Root element #root not found');
 
 createRoot(rootElement).render(
   <StrictMode>
     <App />
-    {/* Human UI annotations -> agent context (complements Iris). Dev only. */}
-    {showAgentation ? <Agentation /> : null}
   </StrictMode>,
 );

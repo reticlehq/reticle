@@ -4,7 +4,7 @@ set -uo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
 
-echo "==> starting api (:8787), demo (:3000), next-smoke (:3100)"
+echo "==> starting api (:8787), demo (:4310), next-smoke (:3100)"
 REFLECT_MS=6000 node apps/api/server.mjs > /tmp/e2e-api.log 2>&1 &
 API=$!
 pnpm --filter @syrin/iris-demo dev > /tmp/e2e-demo.log 2>&1 &
@@ -17,7 +17,7 @@ trap cleanup EXIT
 echo "==> waiting for servers"
 for _ in $(seq 1 120); do
   curl -s -o /dev/null http://localhost:8787/api/health \
-    && curl -s -o /dev/null http://localhost:3000 \
+    && curl -s -o /dev/null http://localhost:4310 \
     && curl -s -o /dev/null http://localhost:3100 \
     && break
   sleep 2

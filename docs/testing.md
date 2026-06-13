@@ -60,7 +60,7 @@ import { irisTest, bootSession, runSpecs, createTestContext } from '@syrin/iris/
 
 // … irisTest(...) registrations above …
 
-const booted = await bootSession({ driveUrl: 'http://localhost:3000', headless: true });
+const booted = await bootSession({ driveUrl: 'http://localhost:4310', headless: true });
 const { summary } = await runSpecs({
   invoke: booted.invoke,
   now: () => Date.now(),
