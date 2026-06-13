@@ -249,6 +249,19 @@ Capture a flow's reaction report and compile it into a replayable program — [�
 
 List interactive elements + console-error count for autonomous exploration — [§10](#10-autonomous-exploration).
 
+### Flows, recorder & self-healing (`.iris/`)
+
+`iris_contract_save`, `iris_flow_save` / `iris_flow_save_recorded` / `iris_flow_list` /
+`iris_flow_load` / `iris_flow_replay`, `iris_flow_heal`, `iris_annotate` — record once, replay
+forever (anchored on testid/signal), with legible drift + self-heal. Full guide:
+[Flows, the recorder & self-healing](flows.md).
+
+### Human-in-the-loop control
+
+`iris_end_session`, `iris_resume`, `iris_messages` — the human can pause the agent, send it a
+correction, or end the session from the floating panel; the agent receives guidance on its next
+tool call. Full guide: [Human-in-the-loop control](human-control.md).
+
 ---
 
 ## 4. The predicate DSL — full reference
