@@ -236,10 +236,14 @@ export class Session {
     return this.#state === SessionState.ENDED;
   }
 
-  /** Set the lifecycle state and echo it to the panel. The SOLE pusher of PRESENTER. */
-  setState(next: SessionState): void {
+  /**
+   * Set the lifecycle state and echo it to the panel in ONE PRESENTER push. The SOLE pusher of
+   * PRESENTER for a transition. Optional `text` rides the same push (e.g. an end-of-session
+   * summary) so a transition never emits two PRESENTER commands.
+   */
+  setState(next: SessionState, text?: string): void {
     this.#state = next;
-    this.#pushPresenter();
+    this.pushPresenter(this.#state, text);
   }
 
   /** Push a human note onto the inbox; empty/whitespace-only text is ignored. Stamped with elapsed t. */
@@ -314,11 +318,6 @@ export class Session {
     } catch {
       // A closing/closed tab must never break event routing for the session.
     }
-  }
-
-  /** Echo the current lifecycle state to the panel (keeps agent- AND human-driven changes in sync). */
-  #pushPresenter(): void {
-    this.pushPresenter(this.#state);
   }
 }
 

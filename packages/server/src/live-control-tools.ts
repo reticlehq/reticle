@@ -14,9 +14,10 @@ const sessionIdShape = { sessionId: z.string().optional() };
  * - iris_resume: clears a human pause. Sets state `active` and syncs the panel.
  * - iris_messages: explicit poll — drains and returns the queued human notes.
  *
- * State changes go through `setState` (which echoes the state to the panel); `pushPresenter`
- * additionally carries human-facing text (the end summary). No clock is read here — inbox stamps
- * were assigned by the session's injected elapsed clock at enqueue time.
+ * State changes go through `setState`, which echoes the state to the panel in a SINGLE PRESENTER
+ * push (optionally carrying human-facing text, e.g. the end summary) — a transition never emits two
+ * PRESENTER commands. No clock is read here — inbox stamps were assigned by the session's injected
+ * elapsed clock at enqueue time.
  */
 export const LIVE_CONTROL_TOOLS: ToolDef[] = [
   {
@@ -27,8 +28,8 @@ export const LIVE_CONTROL_TOOLS: ToolDef[] = [
     inputSchema: { summary: z.string().optional(), ...sessionIdShape },
     handler: (deps, args) => {
       const session = deps.sessions.resolve(asString(args['sessionId']));
-      session.setState(SessionState.ENDED);
-      session.pushPresenter(SessionState.ENDED, asString(args['summary']));
+      // One PRESENTER push for the transition; the optional summary rides the same push.
+      session.setState(SessionState.ENDED, asString(args['summary']));
       return Promise.resolve({ ok: true, state: SessionState.ENDED });
     },
   },
@@ -40,8 +41,8 @@ export const LIVE_CONTROL_TOOLS: ToolDef[] = [
     inputSchema: { ...sessionIdShape },
     handler: (deps, args) => {
       const session = deps.sessions.resolve(asString(args['sessionId']));
+      // setState echoes ACTIVE to the panel in a single PRESENTER push.
       session.setState(SessionState.ACTIVE);
-      session.pushPresenter(SessionState.ACTIVE);
       return Promise.resolve({ state: SessionState.ACTIVE });
     },
   },

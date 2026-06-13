@@ -56,8 +56,10 @@ function fakeSession(opts: { state?: SessionState; inbox?: string[] }): FakeSess
       });
     },
     getState: () => state,
-    setState: (next: SessionState) => {
+    setState: (next: SessionState, text?: string) => {
+      // Mirror the real Session: setState echoes ONE PRESENTER push (optionally carrying text).
       state = next;
+      pushed.push(text === undefined ? { state: next } : { state: next, text });
     },
     drainInbox: (): InboxMessage[] => inbox.splice(0, inbox.length).map((text) => ({ text, t: 0 })),
     inboxSize: () => inbox.length,
@@ -259,7 +261,8 @@ describe('live-control: agent tools', () => {
     };
     expect(res.state).toBe(SessionState.ACTIVE);
     expect(session.getState()).toBe(SessionState.ACTIVE);
-    expect(session.__pushed.at(-1)).toEqual({ state: SessionState.ACTIVE });
+    // Exactly one PRESENTER push for the transition (no redundant second push).
+    expect(session.__pushed).toEqual([{ state: SessionState.ACTIVE }]);
   });
 
   it('iris_end_session sets ended and pushes PRESENTER', async () => {
@@ -269,7 +272,8 @@ describe('live-control: agent tools', () => {
     })) as { ok: boolean; state: SessionState };
     expect(res).toEqual({ ok: true, state: SessionState.ENDED });
     expect(session.getState()).toBe(SessionState.ENDED);
-    expect(session.__pushed).toContainEqual({ state: SessionState.ENDED, text: 'done' });
+    // Single push carrying the summary — never a textless push followed by the summary push.
+    expect(session.__pushed).toEqual([{ state: SessionState.ENDED, text: 'done' }]);
   });
 
   it('iris_end_session works with no summary', async () => {
