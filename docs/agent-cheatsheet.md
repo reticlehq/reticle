@@ -28,6 +28,12 @@ A claim is real only when the layers agree. Check more than the UI:
 | **store**   | `iris_state`                         | Does live framework/store state match?      |
 
 > **Rule:** a passing UI assert that the store, network, or signal contradicts is a **false green**.
+
+**Session health is universal.** Every live-session tool result carries a `session` block
+(`throttled`, `focused`, `lastSeenMs`); when `throttled:true` it also adds a `warning` +
+`recommendation` (refocus, or `iris drive`). A throttled/backgrounded tab can silently no-op
+timers/rAF/pointer gestures — if you see `session.throttled`, distrust a green and refocus first.
+
 > Store reads (`iris_state`) are the reliable path; the DOM can lie (optimistic UI, stale render).
 
 ## Core tool set

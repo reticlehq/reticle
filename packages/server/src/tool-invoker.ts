@@ -1,4 +1,5 @@
 import { TOOLS, type ToolDeps } from './tools.js';
+import { runTool } from './invoke-tool.js';
 
 /** Named error prefix when an invoker is asked for a tool that does not exist. No free strings. */
 export const UNKNOWN_TOOL_ERROR = 'unknown iris tool';
@@ -21,6 +22,6 @@ export function createToolInvoker(deps: ToolDeps): ToolInvoker {
     if (tool === undefined) {
       return Promise.reject(new Error(`${UNKNOWN_TOOL_ERROR}: ${toolName}`));
     }
-    return tool.handler(deps, args);
+    return runTool(tool, deps, args);
   };
 }

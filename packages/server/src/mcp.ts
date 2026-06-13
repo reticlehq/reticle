@@ -1,6 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { TOOLS, type ToolDeps } from './tools.js';
 import { filterTools, TOOL_PROFILE, type ToolProfile } from './profiles.js';
+import { runTool } from './invoke-tool.js';
 import { log } from './log.js';
 
 const SERVER_INFO = { name: 'iris', version: '0.3.6' } as const;
@@ -21,7 +22,7 @@ export function createMcpServer(
       { description: tool.description, inputSchema: tool.inputSchema },
       async (args: Record<string, unknown>) => {
         try {
-          const result = await tool.handler(deps, args);
+          const result = await runTool(tool, deps, args);
           return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] };
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
