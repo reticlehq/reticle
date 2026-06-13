@@ -32,6 +32,8 @@ export interface ActionResult {
   ref: string;
   action: string;
   effect: ActionEffect;
+  /** data-testid of the resolved element, when present — lets the server compile a ref-stable replay step (G6). */
+  testid?: string;
 }
 
 /**
@@ -64,12 +66,12 @@ function requireElement(ref: string): HTMLElement {
   return el;
 }
 
-const result = (ref: string, action: string, effect: ActionEffect): ActionResult => ({
-  ok: true,
-  ref,
-  action,
-  effect,
-});
+const result = (ref: string, action: string, effect: ActionEffect): ActionResult => {
+  const testid = refs.resolve(ref)?.getAttribute('data-testid') ?? undefined;
+  return testid !== undefined
+    ? { ok: true, ref, action, effect, testid }
+    : { ok: true, ref, action, effect };
+};
 
 const FILL_LIKE = new Set<string>([ActionType.FILL, ActionType.TYPE, ActionType.CLEAR]);
 const isFillLike = (action: string): boolean => FILL_LIKE.has(action);
@@ -352,12 +354,28 @@ export interface ActionStep {
   args?: Record<string, unknown>;
 }
 
-export async function executeSequence(
-  steps: ActionStep[],
-): Promise<{ ok: true; count: number; effects: ActionEffect[] }> {
+export interface SequenceStepResult {
+  ref: string;
+  action: string;
+  testid?: string;
+}
+
+export async function executeSequence(steps: ActionStep[]): Promise<{
+  ok: true;
+  count: number;
+  effects: ActionEffect[];
+  steps: SequenceStepResult[];
+}> {
   const effects: ActionEffect[] = [];
+  const stepResults: SequenceStepResult[] = [];
   for (const step of steps) {
-    effects.push((await executeAction(step.ref, step.action, step.args ?? {})).effect);
+    const res = await executeAction(step.ref, step.action, step.args ?? {});
+    effects.push(res.effect);
+    stepResults.push(
+      res.testid !== undefined
+        ? { ref: res.ref, action: res.action, testid: res.testid }
+        : { ref: res.ref, action: res.action },
+    );
   }
-  return { ok: true, count: steps.length, effects };
+  return { ok: true, count: steps.length, effects, steps: stepResults };
 }

@@ -18,6 +18,7 @@ export const IrisTool = {
   DIFF: 'iris_diff',
   RECORD_START: 'iris_record_start',
   RECORD_STOP: 'iris_record_stop',
+  REPLAY: 'iris_replay',
   EXPLORE: 'iris_explore',
   NARRATE: 'iris_narrate',
   CLOCK: 'iris_clock',

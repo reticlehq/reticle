@@ -203,9 +203,9 @@ calling. Returns empty arrays (never errors) if the app advertised nothing.
 
 Regression detection — [§8](#8-regression-baselines--diff).
 
-### `iris_record_start` / `iris_record_stop`
+### `iris_record_start` / `iris_record_stop` / `iris_replay`
 
-Capture a flow's reaction report — [§9](#9-recording-a-flow).
+Capture a flow's reaction report and compile it into a replayable program — [§9](#9-recording-a-flow).
 
 ### `iris_explore`
 
@@ -476,10 +476,32 @@ tell me what happened," or to keep a known-good trace.
 
 ```jsonc
 iris_record_start({ name: "checkout" })
-// …agent performs the flow (acts)…
+// …agent performs the flow (iris_act / iris_act_sequence)…
 iris_record_stop({ name: "checkout" })
-// → { name, events: [...ordered timeline...], summary: { network, domAdded, … } }
+// → {
+//     name,
+//     program: { version, steps: [{ tool, args: { by:"testid", value, action, args }, stable }] },
+//     events: [...ordered timeline...],
+//     summary: { network, domAdded, … },
+//     warning?  // present when some steps could not be bound to a testid
+//   }
 ```
+
+`iris_record_stop` returns a compiled, replayable `program`: the agent's `iris_act` /
+`iris_act_sequence` invocations captured during the span, with each ref normalized to its
+element's `data-testid` where resolvable. Re-run it later:
+
+```jsonc
+iris_replay({ name: "checkout" })
+// re-resolves each step by testid and re-runs the actions in order
+// → { name, ok, steps: [{ tool, ok, error?, note? }] }   // stops at the first failure
+```
+
+**Limitation.** Normalization to a stable testid only works for elements that have a
+`data-testid`. A step whose element has none is stored in ref form (`stable: false`) and
+`iris_record_stop` returns a `warning`; replay best-effort re-uses the stored ref, which is
+only valid within the same live session and is not portable across reloads. Add `data-testid`
+to the elements you want replay-stable.
 
 ---
 

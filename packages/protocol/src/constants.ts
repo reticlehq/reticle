@@ -7,6 +7,9 @@ export const IRIS_DEFAULT_PORT = 4400;
 export const IRIS_WS_PATH = '/iris';
 export const IRIS_PROTOCOL_VERSION = 1;
 
+/** Schema version stamped onto compiled replay programs (G6). */
+export const REPLAY_PROGRAM_VERSION = 1;
+
 /** Bounds for the per-session ring buffer (see plan/02-architecture.md). */
 export const RING_BUFFER_DEFAULTS = {
   MAX_EVENTS: 2000,

@@ -165,3 +165,28 @@ describe('command registry passthrough', () => {
     expect(out.effect).toBeDefined();
   });
 });
+
+describe('action result: testid normalization (G6)', () => {
+  it('includes data-testid of the resolved element', async () => {
+    document.body.innerHTML = '<button data-testid="pay-btn">Pay</button>';
+    const r = await executeAction(refOf('button'), 'click');
+    expect(r.testid).toBe('pay-btn');
+  });
+
+  it('omits testid when the element has none', async () => {
+    document.body.innerHTML = '<button>Pay</button>';
+    const r = await executeAction(refOf('button'), 'click');
+    expect(r.testid).toBeUndefined();
+  });
+
+  it('executeSequence returns per-step testids where present', async () => {
+    document.body.innerHTML = '<button data-testid="a">A</button><button>B</button>';
+    const out = await executeSequence([
+      { ref: refOf('[data-testid="a"]'), action: 'click' },
+      { ref: refOf('button:not([data-testid])'), action: 'click' },
+    ]);
+    expect(out.steps).toHaveLength(2);
+    expect(out.steps[0]?.testid).toBe('a');
+    expect(out.steps[1]?.testid).toBeUndefined();
+  });
+});

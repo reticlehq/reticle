@@ -14,6 +14,7 @@ export { TOOLS } from './tools.js';
 export type { ToolDeps, ToolDef } from './tools.js';
 export { BaselineStore, normalizeLines, diffLines } from './baselines.js';
 export { RecordingStore } from './recordings.js';
+export type { RecordedStep, CompiledProgram } from './recordings.js';
 export { evaluatePredicate, waitForPredicate, PredicateSchema } from './predicate.js';
 export type { Predicate, EvalResult } from './predicate.js';
 export { buildReactionReport } from './reaction.js';

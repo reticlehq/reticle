@@ -1,11 +1,14 @@
 import { z } from 'zod';
-import { EventType, IrisCommand, SnapshotMode, type IrisEvent } from '@iris/protocol';
+import { EventType, IrisCommand, SnapshotMode } from '@iris/protocol';
 import type { SessionManager } from './session.js';
 import { IrisTool } from './tool-names.js';
 import { buildReactionReport } from './reaction.js';
 import { evaluatePredicate, waitForPredicate, PredicateSchema } from './predicate.js';
 import { type BaselineStore, normalizeLines, diffLines } from './baselines.js';
-import type { RecordingStore } from './recordings.js';
+import { REPLAY_PROGRAM_VERSION } from '@iris/protocol';
+import type { RecordingStore, CompiledProgram } from './recordings.js';
+import { compileActStep, compileSequenceStep, replayProgram } from './replay.js';
+import { matchNet, matchConsole } from './event-filters.js';
 
 export interface ToolDeps {
   sessions: SessionManager;
@@ -146,6 +149,9 @@ export const TOOLS: ToolDef[] = [
         args: args['args'] ?? {},
       });
       if (!result.ok) throw new Error(result.error ?? 'act failed');
+      if (deps.recordings.active().length > 0) {
+        deps.recordings.capture(compileActStep(args, result.result));
+      }
       return { since, result: result.result };
     },
   },
@@ -162,6 +168,9 @@ export const TOOLS: ToolDef[] = [
       const since = session.elapsed();
       const result = await session.command(IrisCommand.ACT_SEQUENCE, { steps: args['steps'] });
       if (!result.ok) throw new Error(result.error ?? 'act_sequence failed');
+      if (deps.recordings.active().length > 0) {
+        deps.recordings.capture(compileSequenceStep(args, result.result));
+      }
       return { since, result: result.result };
     },
   },
@@ -364,15 +373,47 @@ export const TOOLS: ToolDef[] = [
   },
   {
     name: IrisTool.RECORD_STOP,
-    description: 'Stop a recording and return the full ordered reaction report for the span.',
+    description:
+      'Stop a recording and return both the ordered reaction report for the span and a compiled, replayable { program: { version, steps:[{tool,args,stable}] } } of the agent acts captured during it.',
     inputSchema: { name: z.string(), ...sessionIdShape },
     handler: (deps, args) => {
       const session = deps.sessions.resolve(asString(args['sessionId']));
       const name = asString(args['name']) ?? 'default';
-      const cursor = deps.recordings.stop(name);
-      if (cursor === undefined) throw new Error(`no active recording named '${name}'`);
-      const events = session.eventsSince(cursor);
-      return Promise.resolve({ name, ...buildReactionReport(events, session.elapsed() - cursor) });
+      const rec = deps.recordings.stop(name);
+      if (rec === undefined) throw new Error(`no active recording named '${name}'`);
+      const events = session.eventsSince(rec.cursor);
+      const program: CompiledProgram = {
+        name,
+        version: REPLAY_PROGRAM_VERSION,
+        steps: rec.steps,
+      };
+      deps.recordings.saveCompiled(program);
+      const unstable = rec.steps.filter((s) => !s.stable).length;
+      return Promise.resolve({
+        name,
+        program,
+        ...(unstable > 0
+          ? {
+              warning: `${String(unstable)} step(s) not bound to a testid; replay may be brittle (in-session only)`,
+            }
+          : {}),
+        ...buildReactionReport(events, session.elapsed() - rec.cursor),
+      });
+    },
+  },
+  {
+    name: IrisTool.REPLAY,
+    description:
+      'Re-execute a previously recorded program by name. Re-resolves each step to its element by testid (falling back to the stored ref for unstable steps) and runs the actions in order against the live session. Stops at the first failure. Returns { ok, steps:[{tool,ok,error?,note?}] }.',
+    inputSchema: { name: z.string(), ...sessionIdShape },
+    handler: async (deps, args) => {
+      const name = asString(args['name']) ?? 'default';
+      const program = deps.recordings.getCompiled(name);
+      if (program === undefined) throw new Error(`no compiled recording named '${name}'`);
+      const session = deps.sessions.resolve(asString(args['sessionId']));
+      const since = session.elapsed();
+      const steps = await replayProgram(session, program);
+      return { name, since, steps, ok: steps.every((s) => s.ok) };
     },
   },
   {
@@ -444,33 +485,3 @@ export const TOOLS: ToolDef[] = [
     },
   },
 ];
-
-function matchNet(
-  e: IrisEvent,
-  method: string | undefined,
-  urlContains: string | undefined,
-  status: number | undefined,
-): boolean {
-  const d = e.data;
-  if (method !== undefined && asString(d['method'])?.toUpperCase() !== method.toUpperCase()) {
-    return false;
-  }
-  if (urlContains !== undefined && !(asString(d['url']) ?? '').includes(urlContains)) {
-    return false;
-  }
-  if (status !== undefined && asNumber(d['status']) !== status) return false;
-  return true;
-}
-
-function matchConsole(e: IrisEvent, level: string | undefined): boolean {
-  const isConsole =
-    e.type === EventType.CONSOLE_LOG ||
-    e.type === EventType.CONSOLE_WARN ||
-    e.type === EventType.CONSOLE_ERROR ||
-    e.type === EventType.ERROR_UNCAUGHT;
-  if (!isConsole) return false;
-  if (level === undefined) return true;
-  return (
-    e.type === `console.${level}` || (level === 'error' && e.type === EventType.ERROR_UNCAUGHT)
-  );
-}
