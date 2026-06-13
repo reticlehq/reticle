@@ -1,12 +1,15 @@
 name: Publish to npm
 
-# Publishes every public @syrin/* package when a GitHub Release is published.
-# Recursive publish skips the private apps and any version already on npm, so it is
-# safe to re-run. Requires the repo secret NPM_TOKEN (an npm "Automation" token).
+# Publishes @syrin/iris (the only public package; the rest are private) when a GitHub
+# Release is published. `pnpm -r publish` skips private packages and any version already
+# on npm, so it is safe to re-run.
 #
-# Provenance (the verified "published from GitHub Actions" badge) requires a PUBLIC
-# repo + the id-token permission below. If the repo is still private, drop the
-# NPM_CONFIG_PROVENANCE line (or make the repo public) or the publish will fail.
+# NPM_TOKEN (an npm "Automation" token) lives in the "Production" GitHub Environment, so
+# the job declares `environment: Production` below to bring that secret into scope.
+#
+# Provenance (the verified "published from GitHub Actions" badge) requires a PUBLIC repo +
+# the id-token permission below. If the repo is still private, drop the NPM_CONFIG_PROVENANCE
+# line (or make the repo public) or the publish will fail.
 
 on:
   release:
@@ -16,6 +19,7 @@ on:
 jobs:
   publish:
     runs-on: ubuntu-latest
+    environment: Production # NPM_TOKEN lives in this GitHub Environment
     permissions:
       contents: read
       id-token: write # npm provenance
