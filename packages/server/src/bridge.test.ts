@@ -11,6 +11,7 @@ import { Bridge } from './bridge.js';
 import { BaselineStore } from './baselines.js';
 import { RecordingStore } from './recordings.js';
 import { TOOLS, type ToolDeps } from './tools.js';
+import { IrisTool } from './tool-names.js';
 
 /** A stand-in for the real @iris/browser SDK: replies to commands and emits events. */
 class FakeBrowser {
@@ -77,6 +78,12 @@ class FakeBrowser {
               },
             ]
           : [],
+      };
+    } else if (name === IrisCommand.STATE_READ) {
+      result = {
+        stores: { workspace: { tab: args['store'] === 'workspace' ? 'open' : 'all' } },
+        storeNames: ['workspace'],
+        component: args['ref'] !== undefined ? { component: 'PayButton', hooks: [0] } : undefined,
       };
     } else if (name === IrisCommand.SNAPSHOT) {
       result = {
@@ -202,6 +209,21 @@ describe('bridge round-trip (north-star)', () => {
       summary: { network: number };
     };
     expect(rec.summary.network).toBeGreaterThanOrEqual(1);
+  });
+
+  it('iris_state is registered and round-trips store + component state (G2)', async () => {
+    const tool = TOOLS.find((t) => t.name === IrisTool.STATE);
+    expect(tool).toBeDefined();
+    expect(tool?.inputSchema['ref']).toBeDefined();
+    expect(tool?.inputSchema['store']).toBeDefined();
+
+    const result = (await callTool(deps, IrisTool.STATE, {
+      store: 'workspace',
+      ref: 'e7',
+    })) as { stores: Record<string, unknown>; storeNames: string[]; component?: unknown };
+    expect(result.storeNames).toContain('workspace');
+    expect(result.stores['workspace']).toEqual({ tab: 'open' });
+    expect(result.component).toEqual({ component: 'PayButton', hooks: [0] });
   });
 
   it('explore lists interactive elements with refs', async () => {

@@ -1,5 +1,10 @@
 import { registerAdapter, type ComponentInfo, type ComponentSource } from '@iris/browser';
 
+interface Hook {
+  memoizedState: unknown;
+  next: Hook | null;
+}
+
 /** Minimal shape of the React fiber fields we read. */
 interface DebugSource {
   fileName: string;
@@ -11,10 +16,12 @@ interface Fiber {
   type: unknown;
   elementType: unknown;
   _debugSource?: DebugSource;
+  memoizedState?: unknown; // for a function component this is the head of the hook list
 }
 
 const FIBER_PREFIXES = ['__reactFiber$', '__reactInternalInstance$'];
 const MAX_DEPTH = 200;
+const MAX_HOOKS = 100;
 
 /**
  * Framework plumbing to hide from the component stack (React Router/Next internals, context
@@ -97,11 +104,49 @@ function sourceFromAttribute(el: Element): ComponentSource | undefined {
   return { file, line: Number(line), column: Number(column) };
 }
 
+/** Find the nearest function-component fiber above a host node. */
+function nearestComponentFiber(el: Element): Fiber | null {
+  let fiber = getFiber(el);
+  let depth = 0;
+  while (fiber !== null && depth < MAX_DEPTH) {
+    depth += 1;
+    if (typeof fiber.type === 'function' || typeof fiber.elementType === 'function') return fiber;
+    fiber = fiber.return;
+  }
+  return null;
+}
+
+/**
+ * Best-effort read of a function component's hook states by walking memoizedState.next.
+ * React does not expose hook *names*; we return positional state values. State for class
+ * components / host fibers is skipped. Layout is React-version-specific — fail soft.
+ */
+export function readState(el: Element): unknown {
+  const fiber = nearestComponentFiber(el);
+  if (fiber === null) return undefined;
+  const name = componentName(fiber.elementType ?? fiber.type) ?? undefined;
+  const head = fiber.memoizedState;
+  if (typeof head !== 'object' || head === null) {
+    return { component: name, hooks: [] };
+  }
+  const hooks: unknown[] = [];
+  let hook = head as Hook;
+  let i = 0;
+  while (typeof hook === 'object' && i < MAX_HOOKS) {
+    hooks.push(hook.memoizedState);
+    const next = hook.next;
+    if (next === null || typeof next !== 'object') break;
+    hook = next;
+    i += 1;
+  }
+  return { component: name, hooks };
+}
+
 let installed = false;
 
 /** Register the React adapter so `iris.inspect` returns component stack + source file. */
 export function install(): void {
   if (installed) return;
   installed = true;
-  registerAdapter({ name: 'react', identify });
+  registerAdapter({ name: 'react', identify, readState });
 }

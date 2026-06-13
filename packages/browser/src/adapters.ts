@@ -14,6 +14,8 @@ export interface ComponentInfo {
 export interface IrisAdapter {
   name: string;
   identify: (el: Element) => ComponentInfo | null;
+  /** Best-effort: read a component's hook state for a DOM element (G2). */
+  readState?: (el: Element) => unknown;
 }
 
 // Persist on a global so the registry survives HMR module re-evaluation (otherwise the
@@ -33,6 +35,16 @@ export function identifyComponent(el: Element): ComponentInfo | null {
     if (info !== null) return info;
   }
   return null;
+}
+
+/** First adapter that returns non-undefined component state for the element wins. */
+export function readComponentState(el: Element): unknown {
+  for (const adapter of adapters) {
+    if (adapter.readState === undefined) continue;
+    const state = adapter.readState(el);
+    if (state !== undefined) return state;
+  }
+  return undefined;
 }
 
 export function adapterNames(): string[] {

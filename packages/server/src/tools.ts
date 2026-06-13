@@ -396,6 +396,21 @@ export const TOOLS: ToolDef[] = [
       }),
   },
   {
+    name: IrisTool.STATE,
+    description:
+      "Read live framework state without the app pre-broadcasting it. `store` reads a registered store (e.g. 'workspace'); omit to read all. `ref` reads the nearest React component's hook state for that element (best-effort). Returns { stores, storeNames, component? }.",
+    inputSchema: {
+      ref: z.string().optional(),
+      store: z.string().optional(),
+      ...sessionIdShape,
+    },
+    handler: (deps, args) =>
+      commandOrThrow(deps, asString(args['sessionId']), IrisCommand.STATE_READ, {
+        ref: args['ref'],
+        store: args['store'],
+      }),
+  },
+  {
     name: IrisTool.EXPLORE,
     description:
       'Autonomous-exploration helper: list interactive elements (with refs) + current console-error count, so the agent can drive the app and report anomalies.',

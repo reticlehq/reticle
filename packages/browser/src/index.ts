@@ -15,8 +15,17 @@ export type { IrisConnectOptions } from './iris.js';
 export { setIgnoreSelectors } from './dom-ignore.js';
 
 // Adapter API (used by @iris/react and other framework adapters).
-export { registerAdapter, identifyComponent, adapterNames } from './adapters.js';
+export {
+  registerAdapter,
+  identifyComponent,
+  readComponentState,
+  adapterNames,
+} from './adapters.js';
 export type { IrisAdapter, ComponentInfo, ComponentSource } from './adapters.js';
+
+// Store registry (G2): pull live framework/store state on demand.
+export { registerStore, unregisterStore, storeNames, readStores } from './stores.js';
+export type { StoreGetter } from './stores.js';
 
 // Lower-level building blocks (useful for tests and advanced embedding).
 export { buildSnapshot } from './snapshot.js';

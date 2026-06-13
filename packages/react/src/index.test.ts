@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { identify } from './index.js';
+import { identify, readState } from './index.js';
+
+interface HookStateResult {
+  component?: string;
+  hooks: unknown[];
+}
 
 function PayButton(): null {
   return null;
@@ -47,5 +52,61 @@ describe('react adapter fiber walk', () => {
     (el as unknown as Record<string, unknown>)['__reactFiber$x'] = host;
 
     expect(identify(el)?.componentStack).toEqual(['Page']);
+  });
+});
+
+describe('react adapter readState (G2 hook walk)', () => {
+  it('walks the memoizedState linked list into positional hook values', () => {
+    const el = document.createElement('button');
+    const componentFiber = {
+      return: null,
+      type: PayButton,
+      elementType: PayButton,
+      memoizedState: { memoizedState: 0, next: { memoizedState: 'x', next: null } },
+    };
+    const hostFiber = { return: componentFiber, type: 'button', elementType: 'button' };
+    (el as unknown as Record<string, unknown>)['__reactFiber$test'] = hostFiber;
+
+    const result = readState(el) as HookStateResult;
+    expect(result.component).toBe('PayButton');
+    expect(result.hooks).toEqual([0, 'x']);
+  });
+
+  it('returns undefined for a host-only element with no fiber', () => {
+    const el = document.createElement('div');
+    expect(readState(el)).toBeUndefined();
+  });
+
+  it('returns empty hooks when memoizedState is not an object (class/host)', () => {
+    const el = document.createElement('button');
+    const componentFiber = {
+      return: null,
+      type: PayButton,
+      elementType: PayButton,
+      memoizedState: null,
+    };
+    const hostFiber = { return: componentFiber, type: 'button', elementType: 'button' };
+    (el as unknown as Record<string, unknown>)['__reactFiber$test'] = hostFiber;
+
+    const result = readState(el) as HookStateResult;
+    expect(result.component).toBe('PayButton');
+    expect(result.hooks).toEqual([]);
+  });
+
+  it('caps a runaway/looping hook list', () => {
+    const el = document.createElement('button');
+    const head: { memoizedState: number; next: unknown } = { memoizedState: 1, next: null };
+    head.next = head; // self-referential loop
+    const componentFiber = {
+      return: null,
+      type: PayButton,
+      elementType: PayButton,
+      memoizedState: head,
+    };
+    const hostFiber = { return: componentFiber, type: 'button', elementType: 'button' };
+    (el as unknown as Record<string, unknown>)['__reactFiber$test'] = hostFiber;
+
+    const result = readState(el) as HookStateResult;
+    expect(result.hooks.length).toBeLessThanOrEqual(100);
   });
 });

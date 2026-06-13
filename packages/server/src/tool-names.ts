@@ -21,5 +21,6 @@ export const IrisTool = {
   EXPLORE: 'iris_explore',
   NARRATE: 'iris_narrate',
   CLOCK: 'iris_clock',
+  STATE: 'iris_state',
 } as const;
 export type IrisTool = (typeof IrisTool)[keyof typeof IrisTool];

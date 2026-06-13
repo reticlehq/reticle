@@ -2,6 +2,14 @@ import { describe, it, expect, vi } from 'vitest';
 import { IrisCommand, type MatchResult } from '@iris/protocol';
 import { createCommandRegistry } from './commands.js';
 import { refs } from './refs.js';
+import { registerStore, unregisterStore } from './stores.js';
+import { registerAdapter } from './adapters.js';
+
+interface StateResult {
+  stores: Record<string, unknown>;
+  storeNames: string[];
+  component?: unknown;
+}
 
 const reg = createCommandRegistry();
 
@@ -45,5 +53,37 @@ describe('command registry (driven by the bridge)', () => {
     const result = run(IrisCommand.INSPECT, { ref }) as { role: string; tag: string };
     expect(result.role).toBe('link');
     expect(result.tag).toBe('a');
+  });
+
+  it('STATE_READ returns a registered store and its name', () => {
+    registerStore('state_ws', () => ({ count: 7 }));
+    const result = run(IrisCommand.STATE_READ, { store: 'state_ws' }) as StateResult;
+    expect(result.stores['state_ws']).toEqual({ count: 7 });
+    expect(result.storeNames).toContain('state_ws');
+    unregisterStore('state_ws');
+  });
+
+  it('STATE_READ with no ref omits the component key', () => {
+    const result = run(IrisCommand.STATE_READ, {}) as StateResult;
+    expect(result.component).toBeUndefined();
+  });
+
+  it('STATE_READ with a bogus ref reports it no longer resolves', () => {
+    const result = run(IrisCommand.STATE_READ, { ref: 'e999999' }) as StateResult;
+    const component = result.component as { error: string };
+    expect(component.error).toContain('no longer resolves');
+  });
+
+  it('STATE_READ reads component state via an adapter readState (browser indirection)', () => {
+    document.body.innerHTML = '<button>Hi</button>';
+    const button = document.querySelector('button') as HTMLButtonElement;
+    const ref = refs.refFor(button);
+    registerAdapter({
+      name: 'fake_state',
+      identify: () => null,
+      readState: () => ({ hooks: [1] }),
+    });
+    const result = run(IrisCommand.STATE_READ, { ref }) as StateResult;
+    expect(result.component).toEqual({ hooks: [1] });
   });
 });

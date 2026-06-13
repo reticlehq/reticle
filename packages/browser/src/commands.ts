@@ -11,7 +11,8 @@ import { matchQuery, runQuery } from './query.js';
 import { executeAction, executeSequence, dispatchWebMcp, type ActionStep } from './actions.js';
 import { describe } from './a11y.js';
 import { refs } from './refs.js';
-import { identifyComponent } from './adapters.js';
+import { identifyComponent, readComponentState } from './adapters.js';
+import { readStores, storeNames } from './stores.js';
 import { freezeClock, advanceClock, resetClock, isClockFrozen } from './clock.js';
 
 export type CommandHandler = (args: Record<string, unknown>) => unknown;
@@ -57,6 +58,25 @@ function inspect(ref: string): unknown {
     styles,
     component,
   };
+}
+
+function readState(ref: string | undefined, store: string | undefined): unknown {
+  const stores = readStores(store);
+  const result: { stores: Record<string, unknown>; storeNames: string[]; component?: unknown } = {
+    stores,
+    storeNames: storeNames(),
+  };
+  if (ref !== undefined && ref.length > 0) {
+    const el = refs.resolve(ref);
+    if (el === null) {
+      result.component = { error: `ref '${ref}' no longer resolves` };
+    } else {
+      const state = readComponentState(el);
+      result.component =
+        state === undefined ? { error: 'no component state available for ref' } : state;
+    }
+  }
+  return result;
 }
 
 function listAnimations(): unknown {
@@ -113,5 +133,6 @@ export function createCommandRegistry(): Map<string, CommandHandler> {
     }
     return { frozen: isClockFrozen() };
   });
+  reg.set(IrisCommand.STATE_READ, (args) => readState(str(args['ref']), str(args['store'])));
   return reg;
 }
