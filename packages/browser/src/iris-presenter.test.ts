@@ -79,17 +79,23 @@ afterEach(() => {
 });
 
 describe('iris.ts session wiring (border)', () => {
-  it('17 connect({present:true}) calls sessionStart -> border on', () => {
+  it('17 connect({present:true}) mounts the overlay but stays dormant until the first command', async () => {
     const iris = new Iris();
-    iris.connect({ present: true });
+    iris.connect({ present: true, pace: 0 });
+    // Overlay is mounted (ready) but the session has NOT started — no glow, no panel — because
+    // nothing has happened yet. (The page merely loaded the SDK.)
     expect(document.querySelector('[data-iris-glow]')).not.toBeNull();
+    expect(dataOn()).not.toBe('1'); // dormant: no border until the agent acts
+    // The agent's first command starts the session → border on.
+    await dispatch(IrisCommand.SNAPSHOT);
     expect(dataOn()).toBe('1');
     iris.disconnect();
   });
 
-  it('18 disconnect() calls sessionEnd -> border off then overlay removed', () => {
+  it('18 disconnect() calls sessionEnd -> border off then overlay removed', async () => {
     const iris = new Iris();
-    iris.connect({ present: true });
+    iris.connect({ present: true, pace: 0 });
+    await dispatch(IrisCommand.SNAPSHOT); // start the session so the border is on
     expect(dataOn()).toBe('1');
     iris.disconnect();
     expect(document.querySelector('[data-iris-overlay]')).toBeNull();

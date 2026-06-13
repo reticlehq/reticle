@@ -153,8 +153,10 @@ export class Iris {
             : { kind: intent.kind },
         );
       this.#presenter = new Presenter(presenterOptions);
+      // Mount the overlay (invisible) but DON'T start the session here — the glow + panel must
+      // track the AGENT's work, not page load. A page that merely loaded the SDK shows nothing;
+      // the session (and its visuals) begins on the agent's first command (see #handleCommand).
       this.#presenter.mount();
-      this.#presenter.sessionStart(); // border fades in once and stays on (session mode)
     }
 
     if (options.recorder === true) {
@@ -236,6 +238,7 @@ export class Iris {
   async #handleCommand(command: CommandMessage): Promise<CommandOutcome> {
     // NARRATE: the agent tells the human what it's about to do / decide (presenter HUD).
     if (command.name === IrisCommand.NARRATE) {
+      this.#presenter?.sessionStart(); // first agent activity → reveal the glow + panel
       this.#presenter?.narrate(str(command.args['text']), str(command.args['level'], 'info'));
       return { ok: true, result: { shown: this.#presenter !== undefined } };
     }
@@ -255,6 +258,7 @@ export class Iris {
       return { ok: false, error: `unknown command '${command.name}'` };
     }
 
+    this.#presenter?.sessionStart(); // first agent command → reveal the glow + panel
     await this.#presentBefore(command);
     try {
       const result = await handler(command.args);
