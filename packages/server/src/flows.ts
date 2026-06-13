@@ -138,6 +138,63 @@ export class FlowStore {
     };
   }
 
+  /**
+   * M8 Stage B: persist an already-anchored FlowFile captured in-page (no recompilation). The
+   * browser resolved every semantic anchor at capture time; here we only validate the name +
+   * re-run FlowFileSchema before writing. save() is left untouched (no Stage A regression).
+   */
+  async saveFlow(flow: FlowFile): Promise<FlowResult<SaveSummary>> {
+    if (!isValidFlowName(flow.name)) return { ok: false, code: FlowErrorCode.INVALID_NAME };
+    const parsed = FlowFileSchema.safeParse(flow);
+    if (!parsed.success) return { ok: false, code: FlowErrorCode.PARSE_FAILED };
+    const valid = parsed.data;
+    await this.#fs.mkdir(irisDirPaths(this.#root).flows);
+    await this.#fs.writeFile(
+      flowPath(this.#root, valid.name),
+      `${JSON.stringify(valid, null, JSON_INDENT)}\n`,
+    );
+    const degraded = valid.steps.filter((s) => s.degraded === true).length;
+    return {
+      ok: true,
+      value: {
+        name: valid.name,
+        stepCount: valid.steps.length,
+        degraded,
+        empty: valid.steps.length === 0,
+      },
+    };
+  }
+
+  /**
+   * M8 Stage B self-healing: rewrite one step's testid anchor on disk (the iris_flow_heal apply
+   * path). Only the targeted step's TESTID anchor value changes; every other step is byte-identical
+   * (locked by a test). A non-testid or out-of-range step is a no-op rebind (returns the flow).
+   */
+  async rebindAnchor(
+    name: string,
+    stepIndex: number,
+    newTestid: string,
+  ): Promise<FlowResult<FlowFile>> {
+    const loaded = await this.load(name);
+    if (!loaded.ok) return loaded;
+    const flow = loaded.value;
+    const target = flow.steps[stepIndex];
+    if (target === undefined || target.anchor.kind !== AnchorKind.TESTID) {
+      return { ok: true, value: flow };
+    }
+    const next: FlowFile = {
+      ...flow,
+      steps: flow.steps.map((s, i) =>
+        i === stepIndex ? { ...s, anchor: { kind: AnchorKind.TESTID, value: newTestid } } : s,
+      ),
+    };
+    await this.#fs.writeFile(
+      flowPath(this.#root, name),
+      `${JSON.stringify(next, null, JSON_INDENT)}\n`,
+    );
+    return { ok: true, value: next };
+  }
+
   /** List flow names present under .iris/flows (no extension), sorted. [] if absent (no throw). */
   async list(): Promise<string[]> {
     const dir = irisDirPaths(this.#root).flows;

@@ -87,6 +87,50 @@ export type DriftReason = (typeof DriftReason)[keyof typeof DriftReason];
 /** M8 Stage A REPLAYANCHOR: default timeout (ms) a signal anchor waits to be observed at replay. */
 export const FLOW_SIGNAL_TIMEOUT_MS = 4000;
 
+/**
+ * M8 Stage B RECORDER: the structured annotation kinds a human can attach while recording.
+ * FIRST CUT: only these four structured kinds compile to flow fields (via a toolbar menu +
+ * a signal <select> drawn from registered capabilities). Free natural-language annotation →
+ * predicate compilation is explicitly OUT this cut (no NL parser). `wait-for` / `ignore-region`
+ * from the plan grammar are also future — only the four requested kinds ship here.
+ */
+export const AnnotationKind = {
+  ASSERT_SIGNAL: 'assert-signal', // → step.expect.signal  (invariant)
+  ASSERT_VISIBLE: 'assert-visible', // → step.expect.element (invariant)
+  MARK_DYNAMIC: 'mark-dynamic', // → flow.dynamic[]      (don't assert words/content)
+  SUCCESS_STATE: 'success-state', // → flow.success        (golden end condition)
+} as const;
+export type AnnotationKind = (typeof AnnotationKind)[keyof typeof AnnotationKind];
+
+/** M8 Stage B RECORDER: recorder lifecycle phases (drives the toolbar UI + the capture gate). */
+export const RecorderPhase = {
+  IDLE: 'idle', // listeners inert, no steps captured
+  RECORDING: 'recording', // capture-phase listeners live
+  ANNOTATING: 'annotating', // recording paused, awaiting an annotation target/kind
+} as const;
+export type RecorderPhase = (typeof RecorderPhase)[keyof typeof RecorderPhase];
+
+/**
+ * M8 Stage B RECORDER: structured codes for the recorded-save server tool (returned, never thrown).
+ */
+export const RecordedSaveError = {
+  NO_RECORDED_FLOW: 'flow_no_recorded', // no FLOW_RECORDED event for the session
+  INVALID_NAME: 'flow_invalid_name', // reuses FlowErrorCode.INVALID_NAME semantics
+} as const;
+export type RecordedSaveError = (typeof RecordedSaveError)[keyof typeof RecordedSaveError];
+
+/**
+ * M8 Stage B self-healing replay: the outcome of a proposed/applied nearest-match rebind.
+ * Rebinds testid anchors only (role/name re-anchoring is future); signal drift (nearest===null)
+ * yields NONE, surfaced legibly — never silent.
+ */
+export const RebindStatus = {
+  PROPOSED: 'proposed', // a nearest-match exists; NOT applied (opt-in)
+  APPLIED: 'applied', // caller passed apply:true and the rebind was written
+  NONE: 'none', // no nearest match → cannot heal (stays drift)
+} as const;
+export type RebindStatus = (typeof RebindStatus)[keyof typeof RebindStatus];
+
 /** Bounds for the per-session ring buffer (see plan/02-architecture.md). */
 export const RING_BUFFER_DEFAULTS = {
   MAX_EVENTS: 2000,
@@ -130,6 +174,8 @@ export const EventType = {
   STATE_CHANGE: 'state.change',
   /** F2: page-level visibility/focus health (distinct from element-level VISIBLE_*). */
   PAGE_HEALTH: 'page.health',
+  /** M8 Stage B RECORDER: browser → bridge: a human recording compiled in-page. */
+  FLOW_RECORDED: 'flow.recorded',
 } as const;
 export type EventType = (typeof EventType)[keyof typeof EventType];
 

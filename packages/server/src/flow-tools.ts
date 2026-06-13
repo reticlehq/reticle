@@ -1,15 +1,35 @@
 import { z } from 'zod';
 import {
+  EventType,
   FLOW_SIGNAL_TIMEOUT_MS,
   FlowErrorCode,
+  RebindStatus,
+  RecordedFlowSchema,
+  RecordedSaveError,
   ReplayStatus,
+  type FlowHealResult,
   type FlowReplayResult,
+  type IrisEvent,
 } from '@iris/protocol';
 import { IrisTool } from './tool-names.js';
 import { asString } from './tools-helpers.js';
 import { replayFlow } from './flow-replay.js';
+import { buildProposals } from './flow-heal.js';
 import { waitForPredicate } from './predicate.js';
 import type { ToolDef, ToolDeps } from './tools.js';
+
+/** The latest valid recorded-flow payload in a session's buffer, or undefined (never throws). */
+function latestRecordedFlow(
+  events: IrisEvent[],
+): { name: string; flow: import('@iris/protocol').FlowFile } | undefined {
+  for (let i = events.length - 1; i >= 0; i--) {
+    const event = events[i];
+    if (event?.type !== EventType.FLOW_RECORDED) continue;
+    const parsed = RecordedFlowSchema.safeParse(event.data);
+    if (parsed.success) return { name: parsed.data.name, flow: parsed.data.flow };
+  }
+  return undefined;
+}
 
 /** Map a structured FlowErrorCode to a legible one-line message for the agent. */
 function flowErrorMessage(code: FlowErrorCode): string {
@@ -106,6 +126,77 @@ export const FLOW_TOOLS: ToolDef[] = [
         status: drifted ? ReplayStatus.DRIFT : allOk ? ReplayStatus.OK : ReplayStatus.DRIFT,
         steps,
       };
+    },
+  },
+  {
+    name: IrisTool.FLOW_SAVE_RECORDED,
+    description:
+      'Persist the HUMAN-recorded flow from the live tab. The recorder toolbar compiles the ' +
+      "human's real clicks/inputs into a semantically anchored FlowFile in-page and emits it; this " +
+      'tool reads the LATEST recorded-flow from the session and writes it to .iris/flows/<name>.json ' +
+      '(no recompilation — the browser already resolved every anchor). Pass `name` to override the ' +
+      'recorded name. Returns { name, stepCount, degraded, empty } or { error, code } (code ' +
+      'flow_no_recorded when no recording is present).',
+    inputSchema: { name: z.string().optional(), ...{ sessionId: z.string().optional() } },
+    handler: async (deps: ToolDeps, args) => {
+      const session = deps.sessions.resolve(asString(args['sessionId']));
+      const recorded = latestRecordedFlow(session.eventsSince(0));
+      if (recorded === undefined) {
+        return {
+          error: 'no human recording on this tab — start the recorder toolbar and click Stop first',
+          code: RecordedSaveError.NO_RECORDED_FLOW,
+        };
+      }
+      const override = asString(args['name']);
+      const flow = override !== undefined ? { ...recorded.flow, name: override } : recorded.flow;
+      const res = await deps.flows.saveFlow(flow);
+      return res.ok ? res.value : { error: flowErrorMessage(res.code), code: res.code };
+    },
+  },
+  {
+    name: IrisTool.FLOW_HEAL,
+    description:
+      'Self-healing replay: replay a git-checked flow, and for every drifted step that has a ' +
+      'nearest surviving testid, PROPOSE a rebind (the "whose fault is it" fix). With apply:true, ' +
+      'opt-in WRITE the nearest-match rebinds back to disk. A drift with no nearest match is ' +
+      'status:none (legible, never silent). Returns { name, status: ok|drift|error, ' +
+      'proposals:[{ step, from, to, status: proposed|applied|none }], applied }.',
+    inputSchema: {
+      name: z.string(),
+      apply: z.boolean().optional(),
+      sessionId: z.string().optional(),
+    },
+    handler: async (deps: ToolDeps, args): Promise<FlowHealResult> => {
+      const name = asString(args['name']) ?? '';
+      const apply = args['apply'] === true;
+      const loaded = await deps.flows.load(name);
+      if (!loaded.ok) {
+        return { name, status: ReplayStatus.ERROR, proposals: [], applied: false };
+      }
+      const session = deps.sessions.resolve(asString(args['sessionId']));
+      const steps = await replayFlow(
+        session,
+        loaded.value,
+        waitForPredicate,
+        FLOW_SIGNAL_TIMEOUT_MS,
+      );
+      const proposals = buildProposals(steps, apply);
+      let applied = false;
+      if (apply) {
+        for (const p of proposals) {
+          if (p.status === RebindStatus.APPLIED) {
+            await deps.flows.rebindAnchor(name, p.step, p.to);
+            applied = true;
+          }
+        }
+      }
+      const drifted = steps.some((s) => s.drift !== undefined);
+      const status = drifted
+        ? ReplayStatus.DRIFT
+        : steps.every((s) => s.ok)
+          ? ReplayStatus.OK
+          : ReplayStatus.DRIFT;
+      return { name, status, proposals, applied };
     },
   },
 ];

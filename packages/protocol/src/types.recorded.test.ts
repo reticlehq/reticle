@@ -1,0 +1,68 @@
+import { describe, expect, it } from 'vitest';
+import { ActionType, AnchorKind, FLOW_FILE_VERSION } from './constants.js';
+import { FlowFileSchema, RecordedFlowSchema } from './types.js';
+
+/**
+ * M8 Stage B RECORDER — protocol schema tests. Lock back-compat for Stage-A flow files and the
+ * new in-page → wire recorded-flow payload. Anchors stay semantic (testid/role/signal) — never refs.
+ */
+describe('FlowFileSchema (Stage B fields)', () => {
+  it('P1: a Stage A FlowFile with no dynamic/success still parses (back-compat)', () => {
+    const stageA = {
+      version: FLOW_FILE_VERSION,
+      name: 'create-drop',
+      createdAt: 1234,
+      steps: [
+        {
+          tool: 'iris_act',
+          anchor: { kind: AnchorKind.TESTID, value: 'new-drop' },
+          action: ActionType.CLICK,
+          args: {},
+        },
+      ],
+    };
+    const parsed = FlowFileSchema.safeParse(stageA);
+    expect(parsed.success).toBe(true);
+  });
+});
+
+describe('RecordedFlowSchema (Stage B in-page recording payload)', () => {
+  function compiled(): unknown {
+    return {
+      name: 'recorded-flow',
+      flow: {
+        version: FLOW_FILE_VERSION,
+        name: 'recorded-flow',
+        createdAt: 1234,
+        steps: [
+          {
+            tool: 'iris_act',
+            anchor: { kind: AnchorKind.TESTID, value: 'save' },
+            action: ActionType.CLICK,
+            args: {},
+            expect: { signal: 'diff:shown' },
+          },
+        ],
+        dynamic: [{ kind: AnchorKind.TESTID, value: 'caption-text' }],
+        success: { signal: 'diff:shown' },
+      },
+    };
+  }
+
+  it('P2: accepts a compiled recording (steps + expect + dynamic + success)', () => {
+    expect(RecordedFlowSchema.safeParse(compiled()).success).toBe(true);
+  });
+
+  it('P3: rejects a ref-bearing anchor (anchors are testid/role/signal only)', () => {
+    const bad = {
+      name: 'x',
+      flow: {
+        version: FLOW_FILE_VERSION,
+        name: 'x',
+        createdAt: 0,
+        steps: [{ tool: 'iris_act', anchor: { kind: 'ref', value: 'e34' }, args: {} }],
+      },
+    };
+    expect(RecordedFlowSchema.safeParse(bad).success).toBe(false);
+  });
+});

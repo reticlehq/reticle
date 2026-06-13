@@ -32,6 +32,7 @@ import {
 import { refs } from './refs.js';
 import { describe } from './a11y.js';
 import { resetClock } from './clock.js';
+import { installRecorder, type RecorderHandle } from './recorder.js';
 import type { Teardown } from './observers/types.js';
 
 export interface IrisConnectOptions {
@@ -54,6 +55,11 @@ export interface IrisConnectOptions {
   border?: 'session' | 'busy';
   /** Max accumulated activity-log rows before the oldest are pruned (presenter). Default 50. */
   logMax?: number;
+  /**
+   * M8 Stage B RECORDER: mount the floating human-recorder toolbar (Record/Stop/Annotate).
+   * Default off — purely additive, dev-only.
+   */
+  recorder?: boolean;
 }
 
 function str(value: unknown, fallback = ''): string {
@@ -81,6 +87,7 @@ export class Iris {
   #start = 0;
   #overlay: OverlayHandle | undefined;
   #presenter: Presenter | undefined;
+  #recorder: RecorderHandle | undefined;
   #eventCount = 0;
   /** Act-row log handle for the in-flight act/act_sequence, so its outcome stamps the right row. */
   #actHandle: LogHandle | undefined;
@@ -129,6 +136,11 @@ export class Iris {
       this.#presenter.sessionStart(); // border fades in once and stays on (session mode)
     }
 
+    if (options.recorder === true) {
+      this.#recorder = installRecorder({ emit, now: () => Date.now() });
+      this.#recorder.mount();
+    }
+
     this.#transport.connect();
     this.#connected = true;
   }
@@ -159,6 +171,8 @@ export class Iris {
     this.#presenter?.sessionEnd(); // fade the border out before tearing the overlay down
     this.#presenter?.destroy();
     this.#presenter = undefined;
+    this.#recorder?.destroy();
+    this.#recorder = undefined;
     resetClock(); // restore any frozen timers
     this.#connected = false;
   }

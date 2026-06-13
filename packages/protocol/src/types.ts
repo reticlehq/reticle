@@ -6,6 +6,7 @@ import {
   ElementState,
   FLOW_FILE_VERSION,
   QueryBy,
+  type RebindStatus,
   type ReplayStatus,
 } from './constants.js';
 
@@ -183,14 +184,62 @@ export interface FlowReplayResult {
   error?: { code: string; message: string };
 }
 
-/** The on-disk flow file: diffable, git-tracked, anchor-resolved (M8 Stage A FLOWFMT). */
+/**
+ * The on-disk flow file: diffable, git-tracked, anchor-resolved (M8 Stage A FLOWFMT).
+ * Stage B adds the optional `dynamic` field (both `dynamic` + `success` are optional, so a
+ * Stage-A file with neither still parses — back-compat is locked by a test).
+ */
 export const FlowFileSchema = z.object({
   version: z.literal(FLOW_FILE_VERSION),
   name: z.string(),
+  // FUTURE: fixtures/preconditions — schema slot reserved, unpopulated this cut. The recorder
+  // never writes it and no fixture runner exists.
   fixture: z.string().optional(),
   /** From the injected clock (ms) — deterministic in tests, byte-stable on disk. */
   createdAt: z.number(),
   steps: z.array(FlowStepSchema),
   success: FlowExpectSchema.optional(),
+  /**
+   * M8 Stage B: anchors whose CONTENT must not be asserted (e.g. LLM output). Replay asserts
+   * presence, not words. Compiled from a `mark-dynamic` annotation.
+   */
+  dynamic: z.array(FlowAnchorSchema).optional(),
 });
 export type FlowFile = z.infer<typeof FlowFileSchema>;
+
+/**
+ * M8 Stage B RECORDER: the in-page → wire payload for a finished human recording. The browser
+ * compiles captured interactions into a FlowFile-shaped object (resolving semantic anchors at
+ * capture time) and emits it as ONE EventType.FLOW_RECORDED event; the server persists it.
+ */
+export const RecordedFlowSchema = z.object({
+  name: z.string(),
+  flow: FlowFileSchema,
+});
+export type RecordedFlow = z.infer<typeof RecordedFlowSchema>;
+
+/**
+ * M8 Stage B self-healing: one proposed (or applied) nearest-match rebind for a drifted step.
+ * `status` is PROPOSED (opt-in, disk untouched), APPLIED (written back), or NONE (no nearest →
+ * cannot heal). Rebinds testid anchors only this cut.
+ */
+export interface RebindProposal {
+  /** index of the drifted step. */
+  step: number;
+  /** the dead testid anchor. */
+  from: string;
+  /** nearestTestid() result, or the dead anchor itself when status === NONE. */
+  to: string;
+  status: RebindStatus;
+}
+
+/** M8 Stage B self-healing: the iris_flow_heal envelope. */
+export interface FlowHealResult {
+  name: string;
+  /** ok | drift | error (reuses Stage A ReplayStatus). */
+  status: ReplayStatus;
+  /** one per drifted step (NONE when there was no nearest match — never silent). */
+  proposals: RebindProposal[];
+  /** true iff apply:true AND ≥1 rebind was written back to disk. */
+  applied: boolean;
+}

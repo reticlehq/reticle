@@ -29,5 +29,9 @@ export const IrisTool = {
   FLOW_LIST: 'iris_flow_list',
   FLOW_LOAD: 'iris_flow_load',
   FLOW_REPLAY: 'iris_flow_replay',
+  /** M8 Stage B: persist the human-recorded flow from the live tab. */
+  FLOW_SAVE_RECORDED: 'iris_flow_save_recorded',
+  /** M8 Stage B: propose (+ opt-in apply) a nearest-match rebind for a drifted flow. */
+  FLOW_HEAL: 'iris_flow_heal',
 } as const;
 export type IrisTool = (typeof IrisTool)[keyof typeof IrisTool];
