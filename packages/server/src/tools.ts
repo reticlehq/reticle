@@ -130,7 +130,7 @@ export const TOOLS: ToolDef[] = [
   {
     name: IrisTool.ACT,
     description:
-      'Execute one action against a ref: click|dblclick|hover|focus|fill|type|clear|select|check|uncheck|submit|press|scrollIntoView. Returns immediately with a `since` cursor for observe.',
+      'Execute one action against a ref: click|dblclick|hover|focus|fill|type|clear|select|check|uncheck|submit|press|scrollIntoView. Returns immediately with a `since` cursor for observe. Result includes effect: { dispatched, targetMatched, visible, enabled, defaultPrevented, focusMoved, valueChanged, domMutatedWithin } so you can tell "action missed" vs "app didn\'t react".',
     inputSchema: {
       ref: z.string(),
       action: z.string(),
@@ -151,7 +151,8 @@ export const TOOLS: ToolDef[] = [
   },
   {
     name: IrisTool.ACT_SEQUENCE,
-    description: 'Run multiple actions in order (fill -> fill -> submit) in one round-trip.',
+    description:
+      'Run multiple actions in order (fill -> fill -> submit) in one round-trip. Returns per-step effects[] (see iris_act).',
     inputSchema: {
       steps: z.array(z.record(z.unknown())),
       ...sessionIdShape,

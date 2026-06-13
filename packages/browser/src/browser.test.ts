@@ -133,11 +133,11 @@ describe('actions', () => {
     expect(onInput).toHaveBeenCalled();
   });
 
-  it('throws a clear error for a stale ref', () => {
+  it('rejects with a clear error for a stale ref', async () => {
     render('<button>A</button>');
     const button = document.querySelector('button') as HTMLButtonElement;
     const ref = refs.refFor(button);
     button.remove();
-    expect(() => executeAction(ref, 'click')).toThrow(/no longer resolves/);
+    await expect(executeAction(ref, 'click')).rejects.toThrow(/no longer resolves/);
   });
 });

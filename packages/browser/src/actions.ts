@@ -1,15 +1,44 @@
-import { ActionType } from '@iris/protocol';
+import { ActionType, ElementState } from '@iris/protocol';
 import { refs } from './refs.js';
+import { isVisible, getStates } from './a11y.js';
 import { nativeSetTimeout } from './native-timers.js';
+
+/**
+ * Best-effort evidence of whether/why an action landed, so the agent can separate
+ * "my action missed" vs "app didn't react" vs "tool didn't dispatch". All probes are
+ * cheap and best-effort (see docs/usage.md §3).
+ */
+export interface ActionEffect {
+  /** We reached dispatch (no throw before it). Typed `true`: if we never dispatch we throw. */
+  dispatched: true;
+  /** Ref resolved to a still-connected element at read time. */
+  targetMatched: boolean;
+  /** a11y isVisible(el) at the start of the action. */
+  visible: boolean;
+  /** Not disabled / aria-disabled at the start of the action. */
+  enabled: boolean;
+  /** The primary cancelable event's dispatchEvent returned false (handler called preventDefault). */
+  defaultPrevented: boolean;
+  /** "<prevRef>-><newRef>" if document.activeElement changed, else null. body counts as null. */
+  focusMoved: string | null;
+  /** fill/type/clear only: input value before !== after; else false. */
+  valueChanged: boolean;
+  /** Mutation records counted by a short-lived MutationObserver (one microtask + rAF window). */
+  domMutatedWithin: number;
+}
 
 export interface ActionResult {
   ok: true;
   ref: string;
   action: string;
+  effect: ActionEffect;
 }
 
-/** Set a value on a controlled input the way React expects (native setter + input event). */
-function setNativeValue(el: HTMLInputElement | HTMLTextAreaElement, value: string): void {
+/**
+ * Set a value on a controlled input the way React expects (native setter + input event).
+ * Returns the `input` event's dispatchEvent result (defaultPrevented of the primary event).
+ */
+function setNativeValue(el: HTMLInputElement | HTMLTextAreaElement, value: string): boolean {
   const proto =
     el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
   // eslint-disable-next-line @typescript-eslint/unbound-method -- setter is invoked via .call(el)
@@ -19,8 +48,9 @@ function setNativeValue(el: HTMLInputElement | HTMLTextAreaElement, value: strin
   } else {
     el.value = value;
   }
-  el.dispatchEvent(new Event('input', { bubbles: true }));
+  const notPrevented = el.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
   el.dispatchEvent(new Event('change', { bubbles: true }));
+  return !notPrevented;
 }
 
 function asString(value: unknown, fallback = ''): string {
@@ -34,97 +64,129 @@ function requireElement(ref: string): HTMLElement {
   return el;
 }
 
-const result = (ref: string, action: string): ActionResult => ({ ok: true, ref, action });
+const result = (ref: string, action: string, effect: ActionEffect): ActionResult => ({
+  ok: true,
+  ref,
+  action,
+  effect,
+});
 
-/** Execute a single action against a ref. Returns immediately; reactions are observed. */
-export function executeAction(
-  ref: string,
+const FILL_LIKE = new Set<string>([ActionType.FILL, ActionType.TYPE, ActionType.CLEAR]);
+const isFillLike = (action: string): boolean => FILL_LIKE.has(action);
+
+/** Derive `enabled` from the shared a11y state logic (disabled prop + aria-disabled). */
+function enabledOf(el: Element): boolean {
+  return !getStates(el).includes(ElementState.DISABLED);
+}
+
+/** Current value for inputs/textareas/selects, else undefined. */
+function valueOf(el: Element): string | undefined {
+  if (
+    el instanceof HTMLInputElement ||
+    el instanceof HTMLTextAreaElement ||
+    el instanceof HTMLSelectElement
+  ) {
+    return el.value;
+  }
+  return undefined;
+}
+
+/** Ref of the currently-focused element, treating body/null as "no focus". */
+function activeRef(el: Element): string | null {
+  const active = el.ownerDocument.activeElement;
+  if (active === null || active === el.ownerDocument.body) return null;
+  return refs.refFor(active);
+}
+
+/**
+ * Dispatch the action's events. Returns `defaultPrevented` of the primary cancelable event
+ * (false for actions whose primary event is non-cancelable or unobservable). Drag/hover-hold
+ * await internally; the probe wrapper builds the result once they resolve.
+ */
+async function dispatchFor(
+  el: HTMLElement,
   action: string,
-  args: Record<string, unknown> = {},
-): ActionResult | Promise<ActionResult> {
-  const el = requireElement(ref);
+  args: Record<string, unknown>,
+): Promise<boolean> {
   switch (action) {
     case ActionType.CLICK:
-      el.click();
-      break;
+      // Explicit dispatch (not el.click(), which returns void) so we can read defaultPrevented.
+      return !el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
     case ActionType.DBLCLICK:
-      el.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
-      break;
+      return !el.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true }));
     case ActionType.HOVER: {
       firePointer(el, 'pointerover');
       el.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
       el.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
       firePointer(el, 'pointermove');
-      el.dispatchEvent(new MouseEvent('mousemove', { bubbles: true }));
+      const moved = el.dispatchEvent(
+        new MouseEvent('mousemove', { bubbles: true, cancelable: true }),
+      );
       // hover-dwell: keep "hovering" for holdMs so timer-gated reveals can mount.
       const holdMs = typeof args['holdMs'] === 'number' ? args['holdMs'] : 0;
-      if (holdMs > 0) return sleep(holdMs).then(() => result(ref, action));
-      break;
+      if (holdMs > 0) await sleep(holdMs);
+      return !moved;
     }
     case ActionType.FOCUS:
       el.focus();
       el.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
-      break;
+      return false; // FocusEvents are not cancelable.
     case ActionType.BLUR:
       // Fire a bubbling focusout so React 19's delegated root listener runs onBlur
       // (commit-on-blur). el.blur() alone only works if the element was truly focused.
       el.blur();
       el.dispatchEvent(new FocusEvent('blur'));
       el.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
-      break;
+      return false;
     case ActionType.FILL:
       if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
         el.focus(); // focus first so a later blur commits (onBlur editors)
-        setNativeValue(el, asString(args['value']));
-      } else {
-        throw new Error(`cannot fill a <${el.tagName.toLowerCase()}>`);
+        return setNativeValue(el, asString(args['value']));
       }
-      break;
+      throw new Error(`cannot fill a <${el.tagName.toLowerCase()}>`);
     case ActionType.TYPE:
       if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
         el.focus();
-        setNativeValue(el, el.value + asString(args['text']));
-      } else {
-        throw new Error(`cannot type into a <${el.tagName.toLowerCase()}>`);
+        return setNativeValue(el, el.value + asString(args['text']));
       }
-      break;
+      throw new Error(`cannot type into a <${el.tagName.toLowerCase()}>`);
     case ActionType.CLEAR:
       if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
-        setNativeValue(el, '');
+        return setNativeValue(el, '');
       }
-      break;
+      return false;
     case ActionType.SELECT:
       if (el instanceof HTMLSelectElement) {
         el.value = asString(args['value']);
         el.dispatchEvent(new Event('change', { bubbles: true }));
-      } else {
-        throw new Error(`cannot select on a <${el.tagName.toLowerCase()}>`);
+        return false; // change is not cancelable.
       }
-      break;
+      throw new Error(`cannot select on a <${el.tagName.toLowerCase()}>`);
     case ActionType.CHECK:
     case ActionType.UNCHECK:
       if (el instanceof HTMLInputElement) {
         el.checked = action === ActionType.CHECK;
         el.dispatchEvent(new Event('change', { bubbles: true }));
-      } else {
-        throw new Error(`cannot (un)check a <${el.tagName.toLowerCase()}>`);
+        return false;
       }
-      break;
+      throw new Error(`cannot (un)check a <${el.tagName.toLowerCase()}>`);
     case ActionType.SUBMIT: {
       const form = el instanceof HTMLFormElement ? el : el.closest('form');
       if (form === null) throw new Error('no form to submit');
       form.requestSubmit();
-      break;
+      return false; // requestSubmit() returns void; the internal submit event is unobservable.
     }
     case ActionType.PRESS: {
       const key = asString(args['key'], 'Enter');
-      el.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }));
+      const down = el.dispatchEvent(
+        new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }),
+      );
       el.dispatchEvent(new KeyboardEvent('keyup', { key, bubbles: true }));
-      break;
+      return !down;
     }
     case ActionType.SCROLL_INTO_VIEW:
       el.scrollIntoView();
-      break;
+      return false;
     case ActionType.UPLOAD: {
       if (!(el instanceof HTMLInputElement) || el.type !== 'file') {
         throw new Error('upload target must be a <input type="file">');
@@ -139,21 +201,68 @@ export function executeAction(
       const dt = new DataTransfer();
       dt.items.add(file);
       el.files = dt.files;
-      el.dispatchEvent(new Event('input', { bubbles: true }));
+      const inputOk = el.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
       el.dispatchEvent(new Event('change', { bubbles: true }));
-      break;
+      return !inputOk;
     }
     case ActionType.DRAG: {
       const toRef = asString(args['toRef']);
       const resolved = toRef !== undefined ? refs.resolve(toRef) : null;
-      return dragElement(el, resolved instanceof HTMLElement ? resolved : null, args['data']).then(
-        () => result(ref, action),
-      );
+      return await dragElement(el, resolved instanceof HTMLElement ? resolved : null, args['data']);
     }
     default:
       throw new Error(`unknown action '${action}'`);
   }
-  return result(ref, action);
+}
+
+/**
+ * Execute a single action against a ref and probe for best-effort evidence of effect.
+ * Always async: the MutationObserver read needs a microtask + rAF after dispatch.
+ */
+export async function executeAction(
+  ref: string,
+  action: string,
+  args: Record<string, unknown> = {},
+): Promise<ActionResult> {
+  const el = requireElement(ref);
+  const visible = isVisible(el);
+  const enabled = enabledOf(el);
+  const prevFocus = activeRef(el);
+  const valueBefore = valueOf(el);
+
+  let mutated = 0;
+  const obs = new MutationObserver((records) => {
+    mutated += records.length;
+  });
+  obs.observe(el.ownerDocument.documentElement, {
+    subtree: true,
+    childList: true,
+    attributes: true,
+    characterData: true,
+  });
+
+  let defaultPrevented = false;
+  try {
+    defaultPrevented = await dispatchFor(el, action, args);
+  } finally {
+    await Promise.resolve(); // flush microtasks (React commit queue + observer queue)
+    await frame(); // one rAF so the MutationObserver has delivered
+    obs.disconnect();
+  }
+
+  const valueAfter = valueOf(el);
+  const nextFocus = activeRef(el);
+  const effect: ActionEffect = {
+    dispatched: true,
+    targetMatched: el.isConnected,
+    visible,
+    enabled,
+    defaultPrevented,
+    focusMoved: prevFocus !== nextFocus ? `${prevFocus ?? 'null'}->${nextFocus ?? 'null'}` : null,
+    valueChanged: isFillLike(action) ? valueBefore !== valueAfter : false,
+    domMutatedWithin: mutated,
+  };
+  return result(ref, action, effect);
 }
 
 const sleep = (ms: number): Promise<void> => new Promise((r) => nativeSetTimeout(r, ms));
@@ -194,7 +303,7 @@ async function dragElement(
   source: HTMLElement,
   target: HTMLElement | null,
   data: unknown,
-): Promise<void> {
+): Promise<boolean> {
   const dest = target ?? source;
   const fire = (el: Element, type: string): void => {
     if (typeof PointerEvent === 'function' && type.startsWith('pointer')) {
@@ -212,6 +321,7 @@ async function dragElement(
   fire(dest, 'pointerup');
   fire(dest, 'mouseup');
 
+  let dropPrevented = false;
   if (typeof DragEvent === 'function') {
     const dataTransfer = makeDataTransfer(data);
     const init: DragEventInit = { bubbles: true, cancelable: true };
@@ -221,9 +331,10 @@ async function dragElement(
     dest.dispatchEvent(new DragEvent('dragenter', init));
     dest.dispatchEvent(new DragEvent('dragover', init));
     await frame();
-    dest.dispatchEvent(new DragEvent('drop', init));
+    dropPrevented = !dest.dispatchEvent(new DragEvent('drop', init));
     source.dispatchEvent(new DragEvent('dragend', init));
   }
+  return dropPrevented;
 }
 
 /** Best-effort WebMCP passthrough: call a navigator.modelContext tool if the site exposes one. */
@@ -246,9 +357,12 @@ export interface ActionStep {
   args?: Record<string, unknown>;
 }
 
-export async function executeSequence(steps: ActionStep[]): Promise<{ ok: true; count: number }> {
+export async function executeSequence(
+  steps: ActionStep[],
+): Promise<{ ok: true; count: number; effects: ActionEffect[] }> {
+  const effects: ActionEffect[] = [];
   for (const step of steps) {
-    await executeAction(step.ref, step.action, step.args ?? {});
+    effects.push((await executeAction(step.ref, step.action, step.args ?? {})).effect);
   }
-  return { ok: true, count: steps.length };
+  return { ok: true, count: steps.length, effects };
 }

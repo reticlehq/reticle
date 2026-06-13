@@ -111,9 +111,41 @@ Deep detail on one element.
 
 Perform one action / several in order.
 
-- **`iris_act` args:** `ref`, `action`, `args?`, `sessionId?`. → `{ since, result }`.
-- **`iris_act_sequence` args:** `steps: [{ ref, action, args? }]`. → `{ since, result }`.
+- **`iris_act` args:** `ref`, `action`, `args?`, `sessionId?`. → `{ since, result }` where
+  `result = { ok, ref, action, effect }`.
+- **`iris_act_sequence` args:** `steps: [{ ref, action, args? }]`. → `{ since, result }` where
+  `result = { ok, count, effects: [...] }` (one `effect` per step).
 - See [§5](#5-actions--full-list) for the action list.
+
+**`result.effect` — best-effort evidence the action landed.** All probes are cheap and capture
+only the _immediate_ effect (one microtask + one rAF after dispatch); async, network-driven
+re-renders show up in `iris_observe`, not here.
+
+| field              | meaning                                                                                                                                                                                                                                                                           |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `dispatched`       | always `true` (if we couldn't dispatch, the tool throws instead)                                                                                                                                                                                                                  |
+| `targetMatched`    | the ref still resolved to a connected element                                                                                                                                                                                                                                     |
+| `visible`          | element was visible at the start of the action                                                                                                                                                                                                                                    |
+| `enabled`          | element was not disabled / aria-disabled at the start                                                                                                                                                                                                                             |
+| `defaultPrevented` | a handler called `preventDefault()` on the primary cancelable event. Only meaningful for `click`/`dblclick`/`hover`/`fill`/`type`/`clear`/`press`/`upload`/`drag`; always `false` for non-cancelable events (`focus`/`blur`/`select`/`check`/`uncheck`/`submit`/`scrollIntoView`) |
+| `focusMoved`       | `"<prevRef>-><newRef>"` if `document.activeElement` changed, else `null` (body counts as `null`)                                                                                                                                                                                  |
+| `valueChanged`     | `fill`/`type`/`clear` only: input value before !== after; otherwise `false`                                                                                                                                                                                                       |
+| `domMutatedWithin` | count of MutationObserver records seen in the window                                                                                                                                                                                                                              |
+
+Use it to distinguish failure modes: `visible:false`/`enabled:false`/`targetMatched:false` →
+your action missed; the tool throwing → it never dispatched; `defaultPrevented:true` or all of
+`valueChanged:false`/`focusMoved:null`/`domMutatedWithin:0` → the app didn't react.
+
+**Cookbook — "Did my action even land?"**
+
+```ts
+const { result } = iris_act({ ref: saveBtn, action: 'click' });
+if (result.effect.defaultPrevented) {
+  // a handler blocked the default — the click was swallowed
+} else if (result.effect.domMutatedWithin === 0) {
+  // dispatched cleanly but the app rendered nothing — likely a dead control
+}
+```
 
 ### `iris_observe`
 

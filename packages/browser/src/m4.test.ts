@@ -40,6 +40,7 @@ describe('hover holdMs', () => {
     const el = document.getElementById('h') as HTMLElement;
     const r = await executeAction(refs.refFor(el), 'hover', { holdMs: 20 });
     expect(r).toMatchObject({ ok: true, action: 'hover' });
+    expect(r.effect.dispatched).toBe(true);
   });
 });
 

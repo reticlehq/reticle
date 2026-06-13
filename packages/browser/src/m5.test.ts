@@ -6,10 +6,12 @@ import { refs } from './refs.js';
 const reg = createCommandRegistry();
 
 describe('upload action', () => {
-  it('rejects a non-file target with a clear error', () => {
+  it('rejects a non-file target with a clear error', async () => {
     document.body.innerHTML = '<input type="text" />';
     const el = document.querySelector('input') as HTMLInputElement;
-    expect(() => executeAction(refs.refFor(el), 'upload', { name: 'x.txt' })).toThrow(/file/);
+    await expect(executeAction(refs.refFor(el), 'upload', { name: 'x.txt' })).rejects.toThrow(
+      /file/,
+    );
   });
 });
 
