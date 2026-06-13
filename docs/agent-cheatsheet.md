@@ -36,6 +36,11 @@ timers/rAF/pointer gestures — if you see `session.throttled`, distrust a green
 
 > Store reads (`iris_state`) are the reliable path; the DOM can lie (optimistic UI, stale render).
 
+**Reads never go silently empty.** A zero-result read returns a `hint`, not a bare `[]`:
+`iris_query` → `{ route, presentTestids, knownEmptyState }`; `iris_network` → `{ totalInWindow, present[] }`
+(what DID fire); `iris_console` → `{ totalInWindow, byLevel }` (so "0 errors" ≠ "silent page");
+`iris_state` lists `storeNames` when a store isn't found. Read the hint before assuming "not there."
+
 ## Core tool set
 
 Sessions/perception/verify — what you'll use 90% of the time:

@@ -18,7 +18,13 @@ import { type BaselineStore, normalizeLines, diffLines } from './baselines.js';
 import { REPLAY_PROGRAM_VERSION } from '@syrin/iris-protocol';
 import type { RecordingStore, CompiledProgram } from './recordings.js';
 import { compileActStep, compileSequenceStep, replayProgram } from './replay.js';
-import { matchNet, matchConsole } from './event-filters.js';
+import {
+  matchNet,
+  matchConsole,
+  isConsoleEvent,
+  netEmptyHint,
+  consoleEmptyHint,
+} from './event-filters.js';
 import { healthEnvelope, refuseIfThrottled } from './session-health.js';
 import { asString, asNumber, asRecord, parseInteractive } from './tools-helpers.js';
 import type { FileSystemPort } from './fs-port.js';
@@ -442,7 +448,8 @@ export const TOOLS: ToolDef[] = [
   },
   {
     name: IrisTool.NETWORK,
-    description: 'Filtered list of network calls. Fast path for "did POST /x return 200?".',
+    description:
+      'Filtered list of network calls. Fast path for "did POST /x return 200?". A zero-match filter returns a `hint` { totalInWindow, present[] } of the calls that DID fire, so a miss is diagnosable.',
     inputSchema: {
       since: z.number().optional(),
       method: z.string().optional(),
@@ -456,16 +463,19 @@ export const TOOLS: ToolDef[] = [
       const method = asString(args['method']);
       const urlContains = asString(args['urlContains']);
       const status = asNumber(args['status']);
-      const calls = session
-        .eventsSince(since)
-        .filter((e) => e.type === EventType.NET_REQUEST)
-        .filter((e) => matchNet(e, method, urlContains, status));
+      const allNet = session.eventsSince(since).filter((e) => e.type === EventType.NET_REQUEST);
+      const calls = allNet.filter((e) => matchNet(e, method, urlContains, status));
+      // N2 near-miss: a zero-match filter returns what DID fire, not a bare [].
+      if (calls.length === 0 && allNet.length > 0) {
+        return Promise.resolve({ calls, hint: netEmptyHint(allNet) });
+      }
       return Promise.resolve({ calls });
     },
   },
   {
     name: IrisTool.CONSOLE,
-    description: 'Console/error log. Fast path for "were there any errors during this flow?".',
+    description:
+      'Console/error log. Fast path for "were there any errors during this flow?". When a level filter matches nothing, returns a `hint` { totalInWindow, byLevel } so 0 errors is distinguishable from a silent page.',
     inputSchema: {
       level: z.string().optional(),
       since: z.number().optional(),
@@ -475,7 +485,12 @@ export const TOOLS: ToolDef[] = [
       const session = deps.sessions.resolve(asString(args['sessionId']));
       const since = asNumber(args['since']) ?? 0;
       const level = asString(args['level']);
-      const logs = session.eventsSince(since).filter((e) => matchConsole(e, level));
+      const allConsole = session.eventsSince(since).filter(isConsoleEvent);
+      const logs = allConsole.filter((e) => matchConsole(e, level));
+      // N2 near-miss: zero matches at this level → report what levels ARE present (not a bare []).
+      if (logs.length === 0 && allConsole.length > 0) {
+        return Promise.resolve({ logs, hint: consoleEmptyHint(allConsole) });
+      }
       return Promise.resolve({ logs });
     },
   },
