@@ -1,18 +1,18 @@
 {
-  "name": "@iris/babel-plugin",
+  "name": "@syrin/babel-plugin",
   "version": "0.3.0",
   "private": false,
-  "description": "Babel plugin that stamps data-iris-source=\"file:line:col\" on JSX host elements so @iris/react can map a DOM node to its source (works on React 19, which dropped _debugSource).",
+  "description": "Babel plugin that stamps data-iris-source=\"file:line:col\" on JSX host elements so @syrin/react can map a DOM node to its source (works on React 19, which dropped _debugSource).",
   "type": "module",
   "license": "MIT",
   "author": "Iris contributors",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/iris-mcp/iris.git",
+    "url": "git+https://github.com/syrin-labs/iris.git",
     "directory": "packages/babel-plugin"
   },
-  "homepage": "https://github.com/iris-mcp/iris#readme",
-  "bugs": "https://github.com/iris-mcp/iris/issues",
+  "homepage": "https://github.com/syrin-labs/iris#readme",
+  "bugs": "https://github.com/syrin-labs/iris/issues",
   "keywords": [
     "babel-plugin",
     "iris",

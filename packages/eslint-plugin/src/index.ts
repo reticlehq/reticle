@@ -1,4 +1,4 @@
-/** @iris/eslint-plugin — flat-config plugin export. */
+/** @syrin/eslint-plugin — flat-config plugin export. */
 
 import { requireSignalOnMutation } from './require-signal-on-mutation.js';
 import { PLUGIN_NAME, RULE_NAME } from './constants.js';

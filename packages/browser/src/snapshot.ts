@@ -1,4 +1,4 @@
-import { ElementState, SnapshotMode } from '@iris/protocol';
+import { ElementState, SnapshotMode } from '@syrin/protocol';
 import { getAccessibleName, getRole, getStates, getValue, isVisible } from './a11y.js';
 import { refs } from './refs.js';
 import { isIgnored } from './dom-ignore.js';

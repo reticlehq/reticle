@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { AnnotationKind, AnnotationSchema } from '@iris/protocol';
+import { AnnotationKind, AnnotationSchema } from '@syrin/protocol';
 
 /**
  * M8 Stage B ANNOTATE — zod validation (B). The structured discriminated union accepts only the

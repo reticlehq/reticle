@@ -81,32 +81,33 @@ expensive to run" and "run it on every edit."
 
 ## Quickstart
 
-**1. Run the bridge + MCP server**
+**One install** — everything (SDK, React adapter, source-mapping plugins, spec runner, and the
+MCP server) ships in a single package, `@syrin/iris`:
 
 ```bash
-npx @iris/server          # ws://localhost:4400, speaks MCP over stdio
+npm i -D @syrin/iris
 ```
 
-**2. Point your agent at it** — Claude Code (`.mcp.json`), Cursor, Windsurf, etc.:
+**1. Point your agent at the MCP server** — Claude Code (`.mcp.json`), Cursor, Windsurf, etc.:
 
 ```jsonc
-{ "mcpServers": { "iris": { "command": "npx", "args": ["@iris/server"] } } }
+{ "mcpServers": { "iris": { "command": "npx", "args": ["@syrin/iris"] } } }
 ```
 
-**3. Embed the SDK in your app (dev only)**
-
-```bash
-npm i -D @iris/browser
-```
+**2. Embed the SDK in your app (dev only)**
 
 ```ts
-import { iris } from '@iris/browser';
+import { iris } from '@syrin/iris';
 if (import.meta.env.DEV) iris.connect({ session: 'my-app' });
 ```
 
 That's it — run your app, and ask your agent: _"add a logout button and verify it works with
 Iris."_ → see [Getting Started](docs/getting-started.md) for the full walkthrough (React
-adapter, source mapping, examples).
+adapter via `@syrin/iris`, source mapping via `@syrin/iris/next` or `/babel`, examples).
+
+> Prefer granular installs? Every piece is still its own package — `@syrin/browser`,
+> `@syrin/react`, `@syrin/next`, `@syrin/babel-plugin`, `@syrin/server`, `@syrin/test`,
+> `@syrin/eslint-plugin`. `@syrin/iris` just re-exports them so you install and import **one**.
 
 ---
 
@@ -126,7 +127,7 @@ The six canonical reactions, plus anything your app emits:
 ## How it works
 
 ```text
-your coding agent ──MCP──▶ iris bridge + server ──WebSocket──▶ @iris/browser (in your app)
+your coding agent ──MCP──▶ iris bridge + server ──WebSocket──▶ @syrin/browser (in your app)
                                    ▲                                    │
                                    └──────────── observations ─────────┘
                           (DOM · network · routes · console · animations · signals)
@@ -138,14 +139,17 @@ machine; it's localhost-only and tree-shaken out of production.
 
 ## Packages
 
-| Package                                       | Role                                              |
-| --------------------------------------------- | ------------------------------------------------- |
-| [`@iris/browser`](packages/browser)           | The SDK you embed in your app (DOM-side)          |
-| [`@iris/server`](packages/server)             | Bridge + MCP server (the `iris` CLI)              |
-| [`@iris/react`](packages/react)               | React adapter: DOM → component → source file      |
-| [`@iris/babel-plugin`](packages/babel-plugin) | Source mapping on React 19 (`data-iris-source`)   |
-| [`@iris/next`](packages/next)                 | Next.js source mapping (keeps SWC) via `withIris` |
-| [`@iris/protocol`](packages/protocol)         | Shared wire contract (types + zod schemas)        |
+| Package                                          | Role                                                   |
+| ------------------------------------------------ | ------------------------------------------------------ |
+| [`@syrin/iris`](packages/iris)                   | **One-install umbrella** — re-exports everything below |
+| [`@syrin/browser`](packages/browser)             | The SDK you embed in your app (DOM-side)               |
+| [`@syrin/server`](packages/server)               | Bridge + MCP server (the `iris` CLI)                   |
+| [`@syrin/react`](packages/react)                 | React adapter: DOM → component → source file           |
+| [`@syrin/babel-plugin`](packages/babel-plugin)   | Source mapping on React 19 (`data-iris-source`)        |
+| [`@syrin/next`](packages/next)                   | Next.js source mapping (keeps SWC) via `withIris`      |
+| [`@syrin/test`](packages/test)                   | Declarative spec runner (`irisTest`)                   |
+| [`@syrin/eslint-plugin`](packages/eslint-plugin) | `require-signal-on-mutation` lint rule                 |
+| [`@syrin/protocol`](packages/protocol)           | Shared wire contract (types + zod schemas)             |
 
 ## Docs
 

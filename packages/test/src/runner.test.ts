@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { runSpecs, runOne } from './runner.js';
 import { IrisSkip } from './skip.js';
 import { TestStatus } from './constants.js';
-import type { ToolInvoker } from '@iris/server';
+import type { ToolInvoker } from '@syrin/server';
 import type { IrisSpec, RunnerOptions, SpecContext } from './types.js';
 
 /** A fake invoker that records every call and returns canned results keyed by tool name. */

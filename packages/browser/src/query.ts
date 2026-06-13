@@ -14,7 +14,7 @@ import {
   type MatchResult,
   type QueryEmptyHint,
   type QueryResult,
-} from '@iris/protocol';
+} from '@syrin/protocol';
 import { describe, getStates } from './a11y.js';
 import { getCapabilities } from './capabilities.js';
 import { refs } from './refs.js';

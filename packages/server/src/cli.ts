@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { pathToFileURL } from 'node:url';
-import { IRIS_DEFAULT_PORT } from '@iris/protocol';
+import { IRIS_DEFAULT_PORT } from '@syrin/protocol';
 import { start } from './index.js';
 import { log } from './log.js';
 

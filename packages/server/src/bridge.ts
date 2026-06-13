@@ -1,6 +1,6 @@
 import type { AddressInfo } from 'node:net';
 import { WebSocketServer, type RawData, type WebSocket } from 'ws';
-import { IRIS_WS_PATH, IrisMessageSchema, MessageKind } from '@iris/protocol';
+import { IRIS_WS_PATH, IrisMessageSchema, MessageKind } from '@syrin/protocol';
 import { Session, SessionManager } from './session.js';
 import { log } from './log.js';
 

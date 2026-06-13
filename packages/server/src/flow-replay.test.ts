@@ -12,7 +12,7 @@ import {
   type FlowStep,
   type IrisEvent,
   type QueryEmptyHint,
-} from '@iris/protocol';
+} from '@syrin/protocol';
 import { nearestTestid, replayFlow, type FlowReplaySession } from './flow-replay.js';
 import { waitForPredicate, type Predicate } from './predicate.js';
 import { asString } from './tools-helpers.js';

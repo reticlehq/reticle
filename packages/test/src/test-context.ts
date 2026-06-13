@@ -1,5 +1,5 @@
-import { IrisTool, type ToolInvoker } from '@iris/server';
-import { ActionType, type ElementQuery, type ElementState } from '@iris/protocol';
+import { IrisTool, type ToolInvoker } from '@syrin/server';
+import { ActionType, type ElementQuery, type ElementState } from '@syrin/protocol';
 import { resolveTestid } from './resolve.js';
 import { buildClock, type TestClock } from './clock.js';
 import { InputModeTracker, expectInputModeReal } from './input-mode.js';

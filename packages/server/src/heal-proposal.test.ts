@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DriftReason, HEAL_CONFIDENCE_MIN, type Drift, type FlowStepResult } from '@iris/protocol';
+import { DriftReason, HEAL_CONFIDENCE_MIN, type Drift, type FlowStepResult } from '@syrin/protocol';
 import { collectProposals, confidenceFor, proposeRebind } from './heal.js';
 import { IrisTool } from './tool-names.js';
 

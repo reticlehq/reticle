@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { IrisCommand, PresenterMode } from '@iris/protocol';
+import { IrisCommand, PresenterMode } from '@syrin/protocol';
 import { modeForCommand } from './iris.js';
 
 describe('H2 command-kind classifier', () => {

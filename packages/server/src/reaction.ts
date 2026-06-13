@@ -1,4 +1,4 @@
-import { EventType, type IrisEvent } from '@iris/protocol';
+import { EventType, type IrisEvent } from '@syrin/protocol';
 
 export interface ReactionSummary {
   total: number;

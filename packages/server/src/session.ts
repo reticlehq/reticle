@@ -6,7 +6,7 @@ import {
   type CommandResult,
   type HelloMessage,
   type IrisEvent,
-} from '@iris/protocol';
+} from '@syrin/protocol';
 import { RingBuffer } from './ring-buffer.js';
 import { buildSessionRecommendation } from './session-recommendation.js';
 
@@ -241,7 +241,7 @@ export class SessionManager {
     }
     if (this.#sessions.size === 0) {
       throw new Error(
-        'no browser session connected — is your app running with @iris/browser enabled?',
+        'no browser session connected — is your app running with @syrin/browser enabled?',
       );
     }
     if (this.#sessions.size > 1) {

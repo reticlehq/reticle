@@ -1,4 +1,4 @@
-import { IrisTool, type ToolInvoker } from '@iris/server';
+import { IrisTool, type ToolInvoker } from '@syrin/server';
 
 /** The deterministic-time facade exposed as `t.clock`. Each call maps to one iris_clock knob. */
 export interface TestClock {

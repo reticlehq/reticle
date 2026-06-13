@@ -25,14 +25,14 @@ Three pieces, each tiny:
 
 ```text
 ┌─────────────┐   MCP    ┌──────────────────────┐   WebSocket   ┌─────────────────────┐
-│ coding agent │◀───────▶│ iris bridge + server  │◀─────────────▶│ your app + @iris/    │
-│ (Claude Code)│  stdio  │  (npx @iris/server)   │  localhost    │ browser SDK (dev)    │
+│ coding agent │◀───────▶│ iris bridge + server  │◀─────────────▶│ your app + @syrin/    │
+│ (Claude Code)│  stdio  │  (npx @syrin/server)   │  localhost    │ browser SDK (dev)    │
 └─────────────┘          └──────────────────────┘  :4400        └─────────────────────┘
 ```
 
-1. **The MCP server** (`@iris/server`) — your agent launches it; it hosts the tools _and_ the
+1. **The MCP server** (`@syrin/server`) — your agent launches it; it hosts the tools _and_ the
    WebSocket bridge your app connects to. You don't run it by hand; the agent does.
-2. **The SDK** (`@iris/browser`) — a few lines in your app's dev entry point.
+2. **The SDK** (`@syrin/browser`) — a few lines in your app's dev entry point.
 3. **(Optional) React adapter + babel plugin** — so `iris_inspect` can tell the agent which
    component/file to edit.
 
@@ -56,7 +56,7 @@ MCP config.
 ```jsonc
 {
   "mcpServers": {
-    "iris": { "command": "npx", "args": ["@iris/server"] },
+    "iris": { "command": "npx", "args": ["@syrin/iris"] },
   },
 }
 ```
@@ -66,7 +66,7 @@ MCP config.
 ```jsonc
 {
   "mcpServers": {
-    "iris": { "command": "npx", "args": ["@iris/server"] },
+    "iris": { "command": "npx", "args": ["@syrin/iris"] },
   },
 }
 ```
@@ -82,10 +82,11 @@ on `ws://localhost:4400`.
 
 ## Step 2 — Embed the SDK in your app
 
-Install it as a dev dependency:
+Install the one package as a dev dependency (it includes the SDK, React adapter, source-mapping
+plugins, the spec runner, and the MCP server):
 
 ```bash
-npm i -D @iris/browser     # or: pnpm add -D @iris/browser
+npm i -D @syrin/iris     # or: pnpm add -D @syrin/iris
 ```
 
 Then call `iris.connect()` once, in dev only. Where you put it depends on your framework.
@@ -97,7 +98,7 @@ In your entry file (`src/main.tsx`):
 ```ts
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { iris } from '@iris/browser';
+import { iris } from '@syrin/iris';
 import { App } from './App';
 
 if (import.meta.env.DEV) {
@@ -123,7 +124,7 @@ import { useEffect } from 'react';
 export function IrisDev() {
   useEffect(() => {
     if (process.env.NODE_ENV === 'development') {
-      void import('@iris/browser').then(({ iris }) => iris.connect({ session: 'my-app' }));
+      void import('@syrin/iris').then(({ iris }) => iris.connect({ session: 'my-app' }));
     }
   }, []);
   return null;
@@ -151,7 +152,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 Anywhere your app boots in dev:
 
 ```ts
-import { iris } from '@iris/browser';
+import { iris } from '@syrin/iris';
 if (location.hostname === 'localhost') iris.connect({ session: 'my-app' });
 ```
 
@@ -159,7 +160,7 @@ Or, with no build step, a script tag pointed at the bridge:
 
 ```html
 <script type="module">
-  import { iris } from 'https://esm.sh/@iris/browser';
+  import { iris } from 'https://esm.sh/@syrin/iris';
   iris.connect({ session: 'my-app' });
 </script>
 ```
@@ -174,30 +175,22 @@ Or, with no build step, a script tag pointed at the bridge:
 
 This is optional but high-value: it lets `iris_inspect` map a DOM element back to the
 **React component and the source file:line** — so when the agent finds a problem, it knows
-which file to edit.
-
-```bash
-npm i -D @iris/react
-```
+which file to edit. (The React adapter ships with `@syrin/iris` — nothing extra to install.)
 
 ```ts
-import { install as installIrisReact } from '@iris/react';
+import { install as installIrisReact } from '@syrin/iris';
 if (import.meta.env.DEV) installIrisReact(); // call before iris.connect()
 ```
 
 **React ≤ 18:** that's all — it uses React's dev `_debugSource`.
 
-**React 19:** React removed `_debugSource`, so add the babel plugin to stamp the source onto
-elements in dev:
-
-```bash
-npm i -D @iris/babel-plugin
-```
+**React 19:** React removed `_debugSource`, so add the Babel plugin (also bundled in
+`@syrin/iris`, at `@syrin/iris/babel`) to stamp the source onto elements in dev:
 
 ```ts
 // vite.config.ts
 import react from '@vitejs/plugin-react';
-import irisSource from '@iris/babel-plugin';
+import irisSource from '@syrin/iris/babel';
 
 export default defineConfig({
   plugins: [react({ babel: { plugins: [irisSource] } })],
@@ -205,17 +198,13 @@ export default defineConfig({
 ```
 
 > **Next.js:** verified on **Next.js 15 / React 19 (app router, SWC)**. For source-file
-> mapping, use `@iris/next` instead of the Babel plugin — it adds a **dev-only webpack
+> mapping, use `@syrin/iris/next` instead of the Babel plugin — it adds a **dev-only webpack
 > pre-loader that keeps SWC** and stamps `data-iris-source` so `iris_inspect` returns
 > `file:line` (e.g. `app/page.tsx:30`):
 >
-> ```bash
-> npm i -D @iris/next
-> ```
->
 > ```js
 > // next.config.mjs
-> import irisNext from '@iris/next';
+> import irisNext from '@syrin/iris/next';
 > /** @type {import('next').NextConfig} */
 > const nextConfig = {};
 > export default irisNext.withIris(nextConfig); // no-op in production
@@ -295,7 +284,7 @@ committed, a webhook arrived, an edit applied, an LLM caption finished — emit 
 agent can assert on. This is the single highest-value instrumentation.
 
 ```ts
-import { iris } from '@iris/browser';
+import { iris } from '@syrin/iris';
 onSaved(() => iris.signal('order:saved', { id, total }));
 // agent: iris_assert({ predicate: { kind: 'signal', name: 'order:saved', dataMatches: { id: '*' } } })
 ```
@@ -309,7 +298,7 @@ onSaved(() => iris.signal('order:saved', { id, total }));
 every fact — expose the store and the agent reads it via `iris_state`.
 
 ```ts
-import { registerStore } from '@iris/browser';
+import { registerStore } from '@syrin/iris';
 registerStore('cart', () => useCart.getState());
 // agent: iris_state({ store: 'cart' })  → { stores: { cart: {...} } }
 ```
@@ -317,7 +306,7 @@ registerStore('cart', () => useCart.getState());
 **4. `registerCapabilities` so a fresh agent learns the surface without reading source.**
 
 ```ts
-import { registerCapabilities } from '@iris/browser';
+import { registerCapabilities } from '@syrin/iris';
 registerCapabilities({
   testids: ['refresh', 'cart-open', 'checkout'],
   signals: ['order:saved', 'cart:updated'],
@@ -344,12 +333,14 @@ registerCapabilities({
 
 ## Common setups at a glance
 
-| Stack                  | SDK connect                                | Source mapping                                      |
-| ---------------------- | ------------------------------------------ | --------------------------------------------------- |
-| Vite + React 19        | `iris.connect()` in `main.tsx` (dev)       | `@iris/react` + `@iris/babel-plugin`                |
-| Vite + React ≤18       | same                                       | `@iris/react` (no plugin needed)                    |
-| Next.js (app router)   | `IrisDev` client component in layout (dev) | `@iris/react` (component identity; file:line later) |
-| Vue / Svelte / vanilla | `iris.connect()` at boot (dev)             | core works; framework adapters on the roadmap       |
+Everything below comes from the single `@syrin/iris` install.
+
+| Stack                  | SDK connect                                | Source mapping                                          |
+| ---------------------- | ------------------------------------------ | ------------------------------------------------------- |
+| Vite + React 19        | `iris.connect()` in `main.tsx` (dev)       | `install()` from `@syrin/iris` + `@syrin/iris/babel`    |
+| Vite + React ≤18       | same                                       | `install()` from `@syrin/iris` (no plugin needed)       |
+| Next.js (app router)   | `IrisDev` client component in layout (dev) | `@syrin/iris/next` (`withIris`) → component + file:line |
+| Vue / Svelte / vanilla | `iris.connect()` at boot (dev)             | core works; framework adapters on the roadmap           |
 
 ---
 
@@ -375,7 +366,7 @@ registerCapabilities({
 
 **Source file isn't resolving on React 19**
 
-- Wire up `@iris/babel-plugin` (Step 3). Without it, only component identity is available.
+- Wire up `@syrin/babel-plugin` (Step 3). Without it, only component identity is available.
 
 **Nothing should run in production**
 

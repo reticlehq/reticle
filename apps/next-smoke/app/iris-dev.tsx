@@ -6,7 +6,10 @@ export function IrisDev() {
   useEffect(() => {
     if (process.env.NODE_ENV !== 'development') return;
     void (async () => {
-      const [browser, react] = await Promise.all([import('@iris/browser'), import('@iris/react')]);
+      const [browser, react] = await Promise.all([
+        import('@syrin/browser'),
+        import('@syrin/react'),
+      ]);
       const { iris, registerStore, registerCapabilities } = browser;
       react.install();
       // G2 demo: expose a "store" the agent can read directly via iris_state.

@@ -1,5 +1,5 @@
 {
-  "name": "@iris/e2e",
+  "name": "@syrin/e2e",
   "version": "0.2.2",
   "private": true,
   "type": "module",
@@ -9,8 +9,8 @@
     "e2e:ci": "bash run-ci.sh"
   },
   "dependencies": {
-    "@iris/server": "workspace:*",
-    "@iris/test": "workspace:*",
+    "@syrin/server": "workspace:*",
+    "@syrin/test": "workspace:*",
     "playwright": "^1.48.0"
   }
 }

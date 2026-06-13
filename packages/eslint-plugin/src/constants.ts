@@ -23,4 +23,4 @@ export const PLUGIN_NAME = 'iris';
 
 /** Docs URL builder root for ESLintUtils.RuleCreator. */
 export const DOCS_URL_ROOT =
-  'https://github.com/iris-mcp/iris/blob/main/packages/eslint-plugin/README.md';
+  'https://github.com/syrin-labs/iris/blob/main/packages/eslint-plugin/README.md';

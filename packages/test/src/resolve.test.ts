@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { IrisTool } from '@iris/server';
-import { QueryBy } from '@iris/protocol';
+import { IrisTool } from '@syrin/server';
+import { QueryBy } from '@syrin/protocol';
 import { resolveTestid } from './resolve.js';
 import { IrisQueryEmptyError } from './skip.js';
 import { NO_ELEMENT_FOR_TESTID } from './constants.js';
-import type { ToolInvoker } from '@iris/server';
+import type { ToolInvoker } from '@syrin/server';
 
 /** A fake invoker scripted per tool name; records every call for assertion. */
 function fakeInvoker(handlers: Record<string, (args: Record<string, unknown>) => unknown>): {

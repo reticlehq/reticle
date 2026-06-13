@@ -1,4 +1,4 @@
-import { PresenterMode } from '@iris/protocol';
+import { PresenterMode } from '@syrin/protocol';
 
 // Activity-log UI for the presenter HUD: a persistent, timestamped, scrollable transcript of
 // every read/act/narration. All strings here are presenter-only UI (chips, glyphs, attrs) — they

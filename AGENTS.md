@@ -12,8 +12,8 @@ Orientation and tool manifest for AI agents working in this repo. Pairs with `CL
 
 ## The codebase in one breath
 
-TypeScript pnpm+turbo monorepo. `@iris/protocol` is the shared contract; `@iris/browser`
-instruments a page; `@iris/server` is the bridge + MCP server; `@iris/react` maps DOM →
+TypeScript pnpm+turbo monorepo. `@syrin/protocol` is the shared contract; `@syrin/browser`
+instruments a page; `@syrin/server` is the bridge + MCP server; `@syrin/react` maps DOM →
 source file; `apps/demo` is the dogfood dashboard. One git repo at root. `plan/` is
 gitignored research.
 
@@ -22,7 +22,7 @@ gitignored research.
 | Tool                                                 | Use                                                                                       |
 | ---------------------------------------------------- | ----------------------------------------------------------------------------------------- |
 | `pnpm build / lint / typecheck / test:unit / format` | The quality gates — run before declaring done                                             |
-| `iris` (from `@iris/server`, M0+)                    | Start the bridge + MCP server                                                             |
+| `iris` (from `@syrin/server`, M0+)                   | Start the bridge + MCP server                                                             |
 | Graphify                                             | Knowledge graph per package; read `GRAPH_REPORT.md` first. `/graphify packages/<pkg>/src` |
 | Agentation (`agentation-mcp`)                        | Human UI annotations in the demo → agent context (complementary to Iris)                  |
 | Refero                                               | Design references: `/refero <niche>` → fold tokens into `skills/design.md`                |
@@ -30,7 +30,7 @@ gitignored research.
 
 ## Working rules for agents
 
-- **Contract-first:** change `@iris/protocol` (constant + zod schema) before either side.
+- **Contract-first:** change `@syrin/protocol` (constant + zod schema) before either side.
 - **Constants-first:** add the named constants a feature needs before writing it.
 - **Tests-first:** RED → GREEN → REFACTOR. Inject the clock; never read it in pure logic.
 - **Stay in your lane:** `browser` is DOM-only, `server` is Node-only, `protocol` depends on
@@ -43,5 +43,5 @@ gitignored research.
 
 For broad sweeps (e.g. "audit every observer for the never-break-the-host rule" or "design
 N approaches to the predicate DSL"), fan out read/verify agents per package and synthesize —
-each package is an independent unit of work. Keep `@iris/protocol` changes single-threaded
+each package is an independent unit of work. Keep `@syrin/protocol` changes single-threaded
 (it's the shared contract; parallel edits conflict).

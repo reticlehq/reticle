@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { ActionWarning, InputMode } from '@iris/protocol';
-import type { CommandResult } from '@iris/protocol';
+import { ActionWarning, InputMode } from '@syrin/protocol';
+import type { CommandResult } from '@syrin/protocol';
 import { TOOLS, type ToolDeps } from './tools.js';
 import { IrisTool } from './tool-names.js';
 import { BaselineStore } from './baselines.js';

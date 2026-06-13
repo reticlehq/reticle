@@ -1,5 +1,5 @@
 {
-  "name": "@iris/browser",
+  "name": "@syrin/browser",
   "version": "0.3.0",
   "description": "Iris browser SDK — installs observers, builds semantic snapshots, executes actions, talks to the bridge.",
   "type": "module",
@@ -19,7 +19,7 @@
     "prepack": "tsc -b && find dist -name \"*.test.*\" -delete"
   },
   "dependencies": {
-    "@iris/protocol": "workspace:*",
+    "@syrin/protocol": "workspace:*",
     "@testing-library/dom": "^10.4.1"
   },
   "devDependencies": {
@@ -30,11 +30,11 @@
   "author": "Iris contributors",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/iris-mcp/iris.git",
+    "url": "git+https://github.com/syrin-labs/iris.git",
     "directory": "packages/browser"
   },
-  "homepage": "https://github.com/iris-mcp/iris#readme",
-  "bugs": "https://github.com/iris-mcp/iris/issues",
+  "homepage": "https://github.com/syrin-labs/iris#readme",
+  "bugs": "https://github.com/syrin-labs/iris/issues",
   "publishConfig": {
     "access": "public"
   },

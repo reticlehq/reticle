@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { IrisCommand, MessageKind, type CommandMessage } from '@iris/protocol';
+import { IrisCommand, MessageKind, type CommandMessage } from '@syrin/protocol';
 
 // Capture the deps Iris passes to Transport so tests can drive #handleCommand without a real
 // WebSocket server. connect() still calls transport.connect(), which we stub to a no-op.

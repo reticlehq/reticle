@@ -13,7 +13,7 @@ import {
   type HealChange,
   type HealProposal,
   type IrisEvent,
-} from '@iris/protocol';
+} from '@syrin/protocol';
 import { IrisTool } from './tool-names.js';
 import { asString } from './tools-helpers.js';
 import { replayFlow } from './flow-replay.js';
@@ -25,7 +25,7 @@ import type { ToolDef, ToolDeps } from './tools.js';
 /** The latest valid recorded-flow payload in a session's buffer, or undefined (never throws). */
 function latestRecordedFlow(
   events: IrisEvent[],
-): { name: string; flow: import('@iris/protocol').FlowFile } | undefined {
+): { name: string; flow: import('@syrin/protocol').FlowFile } | undefined {
   for (let i = events.length - 1; i >= 0; i--) {
     const event = events[i];
     if (event?.type !== EventType.FLOW_RECORDED) continue;

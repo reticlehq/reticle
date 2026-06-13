@@ -1,10 +1,10 @@
 // Real-world Iris tests against the complex dashboard (apps/demo + apps/api).
 // Prereqs (run these first, in other terminals):
 //   REFLECT_MS=6000 node apps/api/server.mjs
-//   pnpm --filter @iris/demo dev
+//   pnpm --filter @syrin/demo dev
 // Then: node plan/real-world-tests.mjs
 import { chromium } from 'playwright';
-import { start, TOOLS, BaselineStore, RecordingStore } from '@iris/server';
+import { start, TOOLS, BaselineStore, RecordingStore } from '@syrin/server';
 
 const log = (...a) => console.log(...a);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -148,7 +148,7 @@ const inspAfter = await T('iris_inspect', { ref: hoverRef });
 const after = inspAfter.styles?.backgroundColor;
 check('background color changed on hover', before !== after && Boolean(after), `${before} → ${after}`);
 const src = inspAfter.component?.source;
-check('inspect resolves the source file (file:line via @iris/babel-plugin)',
+check('inspect resolves the source file (file:line via @syrin/babel-plugin)',
   typeof src?.file === 'string', src ? `${src.file}:${src.line}` : 'none');
 
 // ── TASK 8: attach a file → LLM → score modal ────────────────────────────

@@ -1,5 +1,5 @@
 {
-  "name": "@iris/api",
+  "name": "@syrin/api",
   "version": "0.0.0",
   "private": true,
   "description": "Demo backend for exercising Iris against real-world behaviors (auth, errors, eventual consistency, LLM, uploads).",

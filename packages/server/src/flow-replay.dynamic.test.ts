@@ -8,7 +8,7 @@ import {
   type ElementDescriptor,
   type FlowFile,
   type FlowStep,
-} from '@iris/protocol';
+} from '@syrin/protocol';
 import { replayFlow, type FlowReplaySession } from './flow-replay.js';
 import { waitForPredicate } from './predicate.js';
 import { asString } from './tools-helpers.js';

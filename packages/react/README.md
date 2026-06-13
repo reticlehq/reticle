@@ -1,23 +1,23 @@
-# @iris/react
+# @syrin/react
 
-React adapter for [Iris](https://github.com/iris-mcp/iris). Walks the React fiber tree so
+React adapter for [Iris](https://github.com/syrin-labs/iris). Walks the React fiber tree so
 `iris_inspect` can map a DOM element back to its **component stack and source file** — the
 bridge from "the agent sees a bug in the UI" to "the agent edits the right file".
 
 ```bash
-npm i -D @iris/react
+npm i -D @syrin/react
 ```
 
 ```ts
-import { install } from '@iris/react';
+import { install } from '@syrin/react';
 if (import.meta.env.DEV) install(); // call before iris.connect()
 ```
 
-Requires [`@iris/browser`](https://www.npmjs.com/package/@iris/browser).
+Requires [`@syrin/browser`](https://www.npmjs.com/package/@syrin/browser).
 
 **Source-file mapping:** on React ≤18, uses dev `_debugSource` automatically. On **React 19**
-(`_debugSource` removed), add [`@iris/babel-plugin`](https://www.npmjs.com/package/@iris/babel-plugin)
+(`_debugSource` removed), add [`@syrin/babel-plugin`](https://www.npmjs.com/package/@syrin/babel-plugin)
 to your dev build — the adapter then reads its `data-iris-source` stamp so `iris_inspect`
 returns `component.source = { file, line, column }`.
 
-See the [main README](https://github.com/iris-mcp/iris). MIT.
+See the [main README](https://github.com/syrin-labs/iris). MIT.

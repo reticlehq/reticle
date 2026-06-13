@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { EventType, type IrisEvent } from '@iris/protocol';
+import { EventType, type IrisEvent } from '@syrin/protocol';
 import { buildReactionReport } from './reaction.js';
 
 function ev(type: EventType, data: Record<string, unknown> = {}): IrisEvent {

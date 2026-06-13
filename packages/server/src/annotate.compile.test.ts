@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { AnnotationErrorCode, AnnotationKind, AnnotationTarget } from '@iris/protocol';
-import type { Annotation } from '@iris/protocol';
+import { AnnotationErrorCode, AnnotationKind, AnnotationTarget } from '@syrin/protocol';
+import type { Annotation } from '@syrin/protocol';
 import { compileAnnotation, describeCompiled } from './annotate.js';
 
 /**

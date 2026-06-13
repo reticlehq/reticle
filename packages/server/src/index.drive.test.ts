@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { DriveErrorCode, InputMode } from '@iris/protocol';
-import type { CommandResult } from '@iris/protocol';
+import { DriveErrorCode, InputMode } from '@syrin/protocol';
+import type { CommandResult } from '@syrin/protocol';
 import { start, type RunningServer } from './index.js';
 import { TOOLS, type ToolDeps } from './tools.js';
 import { IrisTool } from './tool-names.js';

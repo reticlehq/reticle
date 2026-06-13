@@ -1,4 +1,4 @@
-import { ActionType, ActionWarning, ElementState, SettleReason } from '@iris/protocol';
+import { ActionType, ActionWarning, ElementState, SettleReason } from '@syrin/protocol';
 import { refs } from './refs.js';
 import { isVisible, getStates } from './a11y.js';
 import { elementHasHoverHandlers } from './adapters.js';

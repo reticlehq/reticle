@@ -59,10 +59,10 @@ importers:
 
   apps/demo:
     dependencies:
-      '@iris/browser':
+      '@syrin/browser':
         specifier: workspace:*
         version: link:../../packages/browser
-      '@iris/react':
+      '@syrin/react':
         specifier: workspace:*
         version: link:../../packages/react
       react:
@@ -72,7 +72,7 @@ importers:
         specifier: ^19.0.0
         version: 19.2.7(react@19.2.7)
     devDependencies:
-      '@iris/babel-plugin':
+      '@syrin/babel-plugin':
         specifier: workspace:*
         version: link:../../packages/babel-plugin
       '@types/react':
@@ -96,10 +96,10 @@ importers:
 
   apps/e2e:
     dependencies:
-      '@iris/server':
+      '@syrin/server':
         specifier: workspace:*
         version: link:../../packages/server
-      '@iris/test':
+      '@syrin/test':
         specifier: workspace:*
         version: link:../../packages/test
       playwright:
@@ -118,13 +118,13 @@ importers:
         specifier: ^19.0.0
         version: 19.2.7(react@19.2.7)
     devDependencies:
-      '@iris/browser':
+      '@syrin/browser':
         specifier: workspace:*
         version: link:../../packages/browser
-      '@iris/next':
+      '@syrin/next':
         specifier: workspace:*
         version: link:../../packages/next
-      '@iris/react':
+      '@syrin/react':
         specifier: workspace:*
         version: link:../../packages/react
       '@types/node':
@@ -151,7 +151,7 @@ importers:
 
   packages/browser:
     dependencies:
-      '@iris/protocol':
+      '@syrin/protocol':
         specifier: workspace:*
         version: link:../protocol
       '@testing-library/dom':
@@ -178,12 +178,37 @@ importers:
         specifier: ^8.20.0
         version: 8.60.1(eslint@9.39.4)(typescript@5.9.3)
 
+  packages/iris:
+    dependencies:
+      '@syrin/babel-plugin':
+        specifier: workspace:*
+        version: link:../babel-plugin
+      '@syrin/browser':
+        specifier: workspace:*
+        version: link:../browser
+      '@syrin/next':
+        specifier: workspace:*
+        version: link:../next
+      '@syrin/react':
+        specifier: workspace:*
+        version: link:../react
+      '@syrin/server':
+        specifier: workspace:*
+        version: link:../server
+      '@syrin/test':
+        specifier: workspace:*
+        version: link:../test
+    devDependencies:
+      typescript:
+        specifier: ^5.6.0
+        version: 5.9.3
+
   packages/next:
     dependencies:
       '@babel/core':
         specifier: ^7.26.0
         version: 7.29.7
-      '@iris/babel-plugin':
+      '@syrin/babel-plugin':
         specifier: workspace:*
         version: link:../babel-plugin
       next:
@@ -198,10 +223,10 @@ importers:
 
   packages/react:
     dependencies:
-      '@iris/browser':
+      '@syrin/browser':
         specifier: workspace:*
         version: link:../browser
-      '@iris/protocol':
+      '@syrin/protocol':
         specifier: workspace:*
         version: link:../protocol
       react:
@@ -217,12 +242,12 @@ importers:
 
   packages/server:
     dependencies:
-      '@iris/protocol':
-        specifier: workspace:*
-        version: link:../protocol
       '@modelcontextprotocol/sdk':
         specifier: ^1.13.0
         version: 1.29.0(zod@3.25.76)
+      '@syrin/protocol':
+        specifier: workspace:*
+        version: link:../protocol
       ws:
         specifier: ^8.18.0
         version: 8.21.0
@@ -240,10 +265,10 @@ importers:
 
   packages/test:
     dependencies:
-      '@iris/protocol':
+      '@syrin/protocol':
         specifier: workspace:*
         version: link:../protocol
-      '@iris/server':
+      '@syrin/server':
         specifier: workspace:*
         version: link:../server
       vitest:

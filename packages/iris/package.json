@@ -1,0 +1,52 @@
+{
+  "name": "@syrin/iris",
+  "version": "0.3.0",
+  "description": "One-install Iris: the dev-only SDK (browser + React adapter) and the spec runner under one package, with subpaths for the source-mapping plugins and the MCP server.",
+  "type": "module",
+  "license": "MIT",
+  "repository": "github:syrin-labs/iris",
+  "bin": {
+    "iris": "./bin/iris.mjs"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./test": {
+      "types": "./dist/test.d.ts",
+      "default": "./dist/test.js"
+    },
+    "./server": {
+      "types": "./dist/server.d.ts",
+      "default": "./dist/server.js"
+    },
+    "./next": {
+      "types": "./static/next.d.ts",
+      "default": "./static/next.js"
+    },
+    "./babel": {
+      "types": "./static/babel.d.ts",
+      "default": "./static/babel.js"
+    }
+  },
+  "files": [
+    "dist",
+    "static",
+    "bin"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@syrin/babel-plugin": "workspace:*",
+    "@syrin/browser": "workspace:*",
+    "@syrin/next": "workspace:*",
+    "@syrin/react": "workspace:*",
+    "@syrin/server": "workspace:*",
+    "@syrin/test": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0"
+  }
+}

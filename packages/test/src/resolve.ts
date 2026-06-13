@@ -1,5 +1,5 @@
-import { IrisTool, type ToolInvoker } from '@iris/server';
-import { QueryBy } from '@iris/protocol';
+import { IrisTool, type ToolInvoker } from '@syrin/server';
+import { QueryBy } from '@syrin/protocol';
 import { IrisQueryEmptyError } from './skip.js';
 import { NO_ELEMENT_FOR_TESTID } from './constants.js';
 

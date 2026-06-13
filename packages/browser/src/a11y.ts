@@ -1,4 +1,4 @@
-import { ElementState, type ElementDescriptor } from '@iris/protocol';
+import { ElementState, type ElementDescriptor } from '@syrin/protocol';
 import { refs } from './refs.js';
 
 /** Roles whose accessible name comes from their text content. */

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { CapabilitiesSchema, ContractReadError, FROM_DISK_ARG, IrisCommand } from '@iris/protocol';
+import { CapabilitiesSchema, ContractReadError, FROM_DISK_ARG, IrisCommand } from '@syrin/protocol';
 import { IrisTool } from './tool-names.js';
 import { asString } from './tools-helpers.js';
 import { irisDirPaths, readContract, writeContract } from './iris-dir.js';

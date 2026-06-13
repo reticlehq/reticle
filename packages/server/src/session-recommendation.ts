@@ -1,4 +1,4 @@
-import { UNSCRIPTABLE_TAB_RECOMMENDATION } from '@iris/protocol';
+import { UNSCRIPTABLE_TAB_RECOMMENDATION } from '@syrin/protocol';
 
 /**
  * P2-surface: the session flags the recommendation is derived from. All already exist on every

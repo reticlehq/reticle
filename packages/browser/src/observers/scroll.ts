@@ -1,4 +1,4 @@
-import { EventType } from '@iris/protocol';
+import { EventType } from '@syrin/protocol';
 import { refs } from '../refs.js';
 import type { Emit, Teardown } from './types.js';
 

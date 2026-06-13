@@ -1,4 +1,4 @@
-import { EventType, type IrisEvent } from '@iris/protocol';
+import { EventType, type IrisEvent } from '@syrin/protocol';
 
 function asString(value: unknown): string | undefined {
   return typeof value === 'string' ? value : undefined;

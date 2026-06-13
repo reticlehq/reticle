@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 #
-# Publish @iris/* to a LOCAL registry (Verdaccio) so you can install them into a real
+# Publish @syrin/* to a LOCAL registry (Verdaccio) so you can install them into a real
 # external app without publishing to public npm. Run from the repo root:
 #
 #   bash scripts/local-registry.sh
 #
 # Then, in your app:
-#   echo '@iris:registry=http://localhost:4873/' >> .npmrc
-#   npm i -D @iris/browser @iris/react @iris/next
+#   echo '@syrin:registry=http://localhost:4873/' >> .npmrc
+#   npm i -D @syrin/browser @syrin/react @syrin/next
 #
 set -euo pipefail
 PORT=4873
@@ -30,7 +30,7 @@ TOKEN=$(curl -s -XPUT "${REG}/-/user/org.couchdb.user:iris" \
   | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{try{process.stdout.write(JSON.parse(d).token||'')}catch{}})")
 [ -n "${TOKEN}" ] || { echo "Failed to obtain a token from Verdaccio"; exit 1; }
 
-echo "==> Publishing @iris/* to ${REG}"
+echo "==> Publishing @syrin/* to ${REG}"
 # Inject the token for this host only, publish, then strip it back out.
 cleanup() { grep -v "localhost:${PORT}" "${HOME}/.npmrc" > "${HOME}/.npmrc.tmp" 2>/dev/null && mv "${HOME}/.npmrc.tmp" "${HOME}/.npmrc" || true; }
 trap cleanup EXIT
@@ -38,9 +38,9 @@ printf '\n//localhost:%s/:_authToken=%s\n' "${PORT}" "${TOKEN}" >> "${HOME}/.npm
 ( cd "${ROOT}" && pnpm -r publish --registry "${REG}" --no-git-checks )
 
 echo ""
-echo "✅ Published @iris/* to ${REG}"
+echo "✅ Published @syrin/* to ${REG}"
 echo ""
 echo "In your external app:"
-echo "  echo '@iris:registry=${REG}' >> .npmrc"
-echo "  npm i -D @iris/browser @iris/react @iris/next   # + @iris/babel-plugin for non-Next"
-echo "  npx --registry ${REG} @iris/server              # run the bridge + MCP server"
+echo "  echo '@syrin:registry=${REG}' >> .npmrc"
+echo "  npm i -D @syrin/browser @syrin/react @syrin/next   # + @syrin/babel-plugin for non-Next"
+echo "  npx --registry ${REG} @syrin/server              # run the bridge + MCP server"

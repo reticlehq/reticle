@@ -5,7 +5,7 @@ import {
   FlowErrorCode,
   FlowFileSchema,
   QueryBy,
-} from '@iris/protocol';
+} from '@syrin/protocol';
 import type {
   ActionType,
   FlowAnchor,
@@ -13,7 +13,7 @@ import type {
   FlowFile,
   FlowStep,
   HealChange,
-} from '@iris/protocol';
+} from '@syrin/protocol';
 import { IrisTool } from './tool-names.js';
 import type { CompiledProgram, RecordedStep } from './recordings.js';
 import type { FileSystemPort } from './fs-port.js';

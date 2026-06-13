@@ -6,8 +6,8 @@ import {
   type CommandResult,
   type FlowFile,
   type IrisEvent,
-} from '@iris/protocol';
-import type { Clock, EvalResult, FileSystemPort } from '@iris/server';
+} from '@syrin/protocol';
+import type { Clock, EvalResult, FileSystemPort } from '@syrin/server';
 import { FLOW_LOAD_ERROR_PREFIX, SpecMessage } from './constants.js';
 import { registerFlowSpecs } from './register.js';
 

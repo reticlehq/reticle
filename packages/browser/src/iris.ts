@@ -9,7 +9,7 @@ import {
   type CommandMessage,
   type HelloMessage,
   type IrisEvent,
-} from '@iris/protocol';
+} from '@syrin/protocol';
 import { createCommandRegistry, type CommandHandler } from './commands.js';
 import { Transport, type CommandOutcome } from './transport.js';
 import { adapterNames } from './adapters.js';

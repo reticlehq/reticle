@@ -1,4 +1,4 @@
-# Local registry config for testing @iris/* in a real external app without publishing to npm.
+# Local registry config for testing @syrin/* in a real external app without publishing to npm.
 storage: /tmp/iris-verdaccio-storage
 auth:
   htpasswd:
@@ -7,7 +7,7 @@ uplinks:
   npmjs:
     url: https://registry.npmjs.org/
 packages:
-  '@iris/*':
+  '@syrin/*':
     access: $all
     publish: $all
     unpublish: $all

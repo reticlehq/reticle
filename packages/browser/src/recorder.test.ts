@@ -8,7 +8,7 @@ import {
   RecordedFlowSchema,
   RecorderPhase,
   type FlowStep,
-} from '@iris/protocol';
+} from '@syrin/protocol';
 import {
   anchorFor,
   compileRecording,

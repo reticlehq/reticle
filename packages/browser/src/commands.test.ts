@@ -4,7 +4,7 @@ import {
   IrisCommand,
   type ComponentStateResult,
   type MatchResult,
-} from '@iris/protocol';
+} from '@syrin/protocol';
 import { createCommandRegistry } from './commands.js';
 import { refs } from './refs.js';
 import { registerStore, unregisterStore } from './stores.js';

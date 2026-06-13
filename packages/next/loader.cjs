@@ -15,7 +15,7 @@ module.exports = function irisNextLoader(source, inputMap) {
     return;
   }
 
-  pluginPromise = pluginPromise || import('@iris/babel-plugin').then((m) => m.default);
+  pluginPromise = pluginPromise || import('@syrin/babel-plugin').then((m) => m.default);
 
   pluginPromise
     .then((plugin) =>

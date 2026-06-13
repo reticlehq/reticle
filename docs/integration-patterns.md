@@ -8,7 +8,7 @@ silently drift, and an adoption path that starts paying off on day one — no re
 - [2 — Inject the emitter (zero prod bundle)](#2--inject-the-emitter-zero-prod-bundle)
 - [3 — Emit signals from the store layer, not N call sites](#3--emit-signals-from-the-store-layer-not-n-call-sites)
 - [4 — Self-registering domains (`registerIrisDomain`)](#4--self-registering-domains-registeririsdomain)
-- [5 — Keep the signal layer from rotting (`@iris/eslint-plugin`)](#5--keep-the-signal-layer-from-rotting-iriseslint-plugin)
+- [5 — Keep the signal layer from rotting (`@syrin/eslint-plugin`)](#5--keep-the-signal-layer-from-rotting-iriseslint-plugin)
 - [6 — Limitation: un-scriptable tabs → `iris drive`](#6--limitation-un-scriptable-tabs--iris-drive)
 - [Checklist](#checklist)
 
@@ -28,7 +28,7 @@ constant object for your E2E suite — pass it straight in. Now `iris_capabiliti
 agent your whole surface without reading source.
 
 ```ts
-import { registerCapabilities } from '@iris/browser';
+import { registerCapabilities } from '@syrin/browser';
 import { TestIds } from '../e2e/test-ids'; // the same constants your Playwright suite uses
 
 registerCapabilities({
@@ -43,7 +43,7 @@ data)` at the moments the DOM can't show — a save committed, a webhook arrived
 async generation finished. You instrument the off-DOM facts you'd otherwise eyeball, not every line.
 
 ```ts
-import { iris } from '@iris/browser';
+import { iris } from '@syrin/browser';
 onSaved(() => iris.signal('order:saved', { id, total }));
 // agent: iris_assert({ predicate: { kind: 'signal', name: 'order:saved', dataMatches: { id: '*' } } })
 ```
@@ -54,14 +54,14 @@ signal layer stays honest as the app grows.
 ## 2 — Inject the emitter (zero prod bundle)
 
 The #1 objection: _"I don't want a test tool in my production bundle."_ The answer: components never
-import `@iris/browser`. They depend on a tiny structural interface, `IrisEmitter` (`{ signal, state
+import `@syrin/browser`. They depend on a tiny structural interface, `IrisEmitter` (`{ signal, state
 }`), and the real emitter is injected once at the top. `createIrisEmitter()` returns an emitter that
 proxies to the connected `iris` singleton and is a **safe no-op** until `iris.connect()` runs — so
-nothing breaks in production or before connect, and **`@iris/browser` stays out of the prod bundle.**
+nothing breaks in production or before connect, and **`@syrin/browser` stays out of the prod bundle.**
 
 ```ts
-// app/emit.ts — the one place that touches @iris/browser
-import { createIrisEmitter } from '@iris/browser';
+// app/emit.ts — the one place that touches @syrin/browser
+import { createIrisEmitter } from '@syrin/browser';
 export const emit = createIrisEmitter(); // no-op until iris.connect()
 ```
 
@@ -108,7 +108,7 @@ its signal in one call that can't drift. It runs `mutate()`, emits the signal ex
 returns the mutation's value.
 
 ```ts
-import { commitAndSignal } from '@iris/browser';
+import { commitAndSignal } from '@syrin/browser';
 import { emit } from '../emit';
 
 const next = commitAndSignal(
@@ -139,7 +139,7 @@ calls accumulate as a union, with no duplicates.
 
 ```ts
 // features/sections/iris.ts — co-locate a domain's testids + signals in one module
-import { registerIrisDomain } from '@iris/browser';
+import { registerIrisDomain } from '@syrin/browser';
 
 export const SectionTestIds = { list: 'section-list', add: 'section-add' } as const;
 export const SectionSignals = { reordered: 'section:reordered' } as const;
@@ -153,7 +153,7 @@ registerIrisDomain({
 
 ```ts
 // features/search/iris.ts
-import { registerIrisDomain } from '@iris/browser';
+import { registerIrisDomain } from '@syrin/browser';
 registerIrisDomain({ testids: ['search-input'], signals: ['search:ran'] });
 ```
 
@@ -164,7 +164,7 @@ Importing both modules in dev makes `iris_capabilities()` return the merged surf
 your existing constants." (Named flows stay an explicit `registerCapabilities({ flows })` concern —
 their last-writer-wins semantics don't fit "accumulate from many domains.")
 
-## 5 — Keep the signal layer from rotting (`@iris/eslint-plugin`)
+## 5 — Keep the signal layer from rotting (`@syrin/eslint-plugin`)
 
 A signal layer silently rots: someone adds a mutation path and forgets the signal, and the agent's
 contract breaks with no error. The lint rule catches it at the only moment that's cheap — review.
@@ -175,7 +175,7 @@ state** (`mutators`) and which call emits a signal (`signalCallee`, default `sig
 
 ```js
 // eslint.config.js (flat config)
-import iris from '@iris/eslint-plugin';
+import iris from '@syrin/eslint-plugin';
 
 export default [
   {
@@ -208,8 +208,8 @@ owns a guaranteed-scriptable browser. See
 
 ## Checklist
 
-- [ ] One `app/emit.ts` is the **only** module importing `@iris/browser`; components import the emitter.
-- [ ] `iris.connect()` is dev-gated; the prod bundle has no `@iris/browser`.
+- [ ] One `app/emit.ts` is the **only** module importing `@syrin/browser`; components import the emitter.
+- [ ] `iris.connect()` is dev-gated; the prod bundle has no `@syrin/browser`.
 - [ ] Signals fire from the store layer (middleware or `commitAndSignal`); view-level exceptions are explicit.
 - [ ] Each domain self-registers via `registerIrisDomain`; `iris_capabilities()` returns the full surface.
 - [ ] Existing Playwright/Cypress testids are reused, not duplicated.

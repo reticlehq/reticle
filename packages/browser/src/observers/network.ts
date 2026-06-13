@@ -1,4 +1,4 @@
-import { EventType } from '@iris/protocol';
+import { EventType } from '@syrin/protocol';
 import type { Emit, Teardown } from './types.js';
 
 interface XhrMeta {

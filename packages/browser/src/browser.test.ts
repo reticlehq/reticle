@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { ElementState, SnapshotMode } from '@iris/protocol';
+import { ElementState, SnapshotMode } from '@syrin/protocol';
 import { getAccessibleName, getRole, getStates } from './a11y.js';
 import { buildSnapshot } from './snapshot.js';
 import { matchQuery, runQuery } from './query.js';

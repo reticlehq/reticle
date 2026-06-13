@@ -9,7 +9,7 @@ import {
   AnnotationTarget,
   QueryBy,
   type AnnotateResult,
-} from '@iris/protocol';
+} from '@syrin/protocol';
 import { TOOLS, type ToolDeps } from './tools.js';
 import { IrisTool } from './tool-names.js';
 import { BaselineStore } from './baselines.js';

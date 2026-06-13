@@ -6,7 +6,7 @@ import {
   InputMode,
   IrisCommand,
   SnapshotMode,
-} from '@iris/protocol';
+} from '@syrin/protocol';
 import type { Session, SessionManager } from './session.js';
 import type { ElementBox, RealInputArgs, RealInputProvider } from './real-input.js';
 import { isPointerAction } from './real-input.js';
@@ -14,7 +14,7 @@ import { IrisTool } from './tool-names.js';
 import { buildReactionReport } from './reaction.js';
 import { evaluatePredicate, waitForPredicate, PredicateSchema } from './predicate.js';
 import { type BaselineStore, normalizeLines, diffLines } from './baselines.js';
-import { REPLAY_PROGRAM_VERSION } from '@iris/protocol';
+import { REPLAY_PROGRAM_VERSION } from '@syrin/protocol';
 import type { RecordingStore, CompiledProgram } from './recordings.js';
 import { compileActStep, compileSequenceStep, replayProgram } from './replay.js';
 import { matchNet, matchConsole } from './event-filters.js';
@@ -203,7 +203,7 @@ export const TOOLS: ToolDef[] = [
   {
     name: IrisTool.INSPECT,
     description:
-      'Deep info on one element by ref: full a11y props, visibility, box, and (with @iris/react) component stack + source file.',
+      'Deep info on one element by ref: full a11y props, visibility, box, and (with @syrin/react) component stack + source file.',
     inputSchema: { ref: z.string(), ...sessionIdShape },
     handler: (deps, args) =>
       commandOrThrow(deps, asString(args['sessionId']), IrisCommand.INSPECT, {

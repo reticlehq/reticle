@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { PresenterMode } from '@iris/protocol';
+import { PresenterMode } from '@syrin/protocol';
 import { Presenter } from './presenter.js';
 import { buildSnapshot } from './snapshot.js';
 import { isIgnored } from './dom-ignore.js';

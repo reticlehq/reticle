@@ -6,7 +6,7 @@ import {
   FLOW_NAME_PATTERN,
   IrisDir,
   type CapabilitiesContract,
-} from '@iris/protocol';
+} from '@syrin/protocol';
 import type { FileSystemPort } from './fs-port.js';
 
 /** Resolved absolute paths inside a `.iris/` root. Pure: join() only, no IO, no cwd. */

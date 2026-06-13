@@ -1,5 +1,5 @@
 {
-  "name": "@iris/server",
+  "name": "@syrin/server",
   "version": "0.3.0",
   "description": "Iris bridge + MCP server. Hosts the browser WS endpoint and exposes MCP tools to the coding agent.",
   "type": "module",
@@ -23,7 +23,7 @@
     "prepack": "tsc -b && find dist -name \"*.test.*\" -delete"
   },
   "dependencies": {
-    "@iris/protocol": "workspace:*",
+    "@syrin/protocol": "workspace:*",
     "@modelcontextprotocol/sdk": "^1.13.0",
     "ws": "^8.18.0",
     "zod": "^3.24.1"
@@ -38,11 +38,11 @@
   "author": "Iris contributors",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/iris-mcp/iris.git",
+    "url": "git+https://github.com/syrin-labs/iris.git",
     "directory": "packages/server"
   },
-  "homepage": "https://github.com/iris-mcp/iris#readme",
-  "bugs": "https://github.com/iris-mcp/iris/issues",
+  "homepage": "https://github.com/syrin-labs/iris#readme",
+  "bugs": "https://github.com/syrin-labs/iris/issues",
   "publishConfig": {
     "access": "public"
   },

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { EventType, type IrisEvent } from '@iris/protocol';
+import { EventType, type IrisEvent } from '@syrin/protocol';
 import { RingBuffer } from './ring-buffer.js';
 
 function ev(t: number): IrisEvent {

@@ -10,7 +10,7 @@
  * pay for it; the type-only import is elided by `tsc`, so the build stays green without it.
  */
 import type { Browser, Page } from 'playwright';
-import { ActionType, DriveErrorCode, DRIVE_PLAYWRIGHT_MISSING_MSG } from '@iris/protocol';
+import { ActionType, DriveErrorCode, DRIVE_PLAYWRIGHT_MISSING_MSG } from '@syrin/protocol';
 
 /** Viewport CSS-px box as returned by the INSPECT command (getBoundingClientRect). */
 export interface ElementBox {
@@ -256,7 +256,7 @@ const launchedChromium: LaunchFn = async (headless) => {
 
 /**
  * P2-drive: launches and OWNS a Playwright Chromium, navigates it to `driveUrl`, then drives native
- * input on that page. Headless-capable so @iris/test / CI can run hover/drag unattended.
+ * input on that page. Headless-capable so @syrin/test / CI can run hover/drag unattended.
  */
 export class LaunchedRealInputProvider implements OwnedRealInputProvider {
   readonly #driveUrl: string;

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { AnnotationErrorCode, AnnotationSchema, type AnnotateResult } from '@iris/protocol';
+import { AnnotationErrorCode, AnnotationSchema, type AnnotateResult } from '@syrin/protocol';
 import { IrisTool } from './tool-names.js';
 import { asString } from './tools-helpers.js';
 import { compileAnnotation } from './annotate.js';

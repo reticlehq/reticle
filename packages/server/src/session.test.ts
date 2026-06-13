@@ -6,7 +6,7 @@ import {
   SESSION_HEALTH,
   UNSCRIPTABLE_TAB_RECOMMENDATION,
   type HelloMessage,
-} from '@iris/protocol';
+} from '@syrin/protocol';
 import { Session } from './session.js';
 
 const HELLO: HelloMessage = {

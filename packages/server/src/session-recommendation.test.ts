@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { UNSCRIPTABLE_TAB_RECOMMENDATION } from '@iris/protocol';
+import { UNSCRIPTABLE_TAB_RECOMMENDATION } from '@syrin/protocol';
 import { buildSessionRecommendation } from './session-recommendation.js';
 
 describe('P2-surface buildSessionRecommendation', () => {

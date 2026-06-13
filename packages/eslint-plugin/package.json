@@ -1,5 +1,5 @@
 {
-  "name": "@iris/eslint-plugin",
+  "name": "@syrin/eslint-plugin",
   "version": "0.3.0",
   "description": "Iris ESLint plugin — keeps the signal layer self-enforcing (mutation-without-signal).",
   "type": "module",
@@ -31,11 +31,11 @@
   "author": "Iris contributors",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/iris-mcp/iris.git",
+    "url": "git+https://github.com/syrin-labs/iris.git",
     "directory": "packages/eslint-plugin"
   },
-  "homepage": "https://github.com/iris-mcp/iris#readme",
-  "bugs": "https://github.com/iris-mcp/iris/issues",
+  "homepage": "https://github.com/syrin-labs/iris#readme",
+  "bugs": "https://github.com/syrin-labs/iris/issues",
   "publishConfig": {
     "access": "public"
   },

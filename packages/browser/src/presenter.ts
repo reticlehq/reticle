@@ -1,4 +1,4 @@
-import { PresenterMode } from '@iris/protocol';
+import { PresenterMode } from '@syrin/protocol';
 import { refs } from './refs.js';
 import { nativeSetTimeout, nativeClearTimeout, nativeNow } from './native-timers.js';
 import {
@@ -79,7 +79,7 @@ const CHIP_LABEL: Record<PresenterMode, string> = {
 
 /**
  * Border behavior. Presenter-only tunable: it never crosses the browser↔bridge↔agent wire, so it
- * stays a named const here (not in @iris/protocol).
+ * stays a named const here (not in @syrin/protocol).
  * - 'session': base border persists connect→disconnect; the busy machine drives only the shimmer.
  * - 'busy': M5.8 back-compat — the busy machine toggles the base border on/off.
  */

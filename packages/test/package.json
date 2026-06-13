@@ -1,5 +1,5 @@
 {
-  "name": "@iris/test",
+  "name": "@syrin/test",
   "version": "0.3.0",
   "description": "Iris test runner: irisTest spec registry + a runner that drives Iris tools without MCP/stdio.",
   "type": "module",
@@ -19,8 +19,8 @@
     "prepack": "tsc -b && find dist -name \"*.test.*\" -delete"
   },
   "dependencies": {
-    "@iris/protocol": "workspace:*",
-    "@iris/server": "workspace:*"
+    "@syrin/protocol": "workspace:*",
+    "@syrin/server": "workspace:*"
   },
   "peerDependencies": {
     "vitest": "^3.0.0"
@@ -34,11 +34,11 @@
   "author": "Iris contributors",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/iris-mcp/iris.git",
+    "url": "git+https://github.com/syrin-labs/iris.git",
     "directory": "packages/test"
   },
-  "homepage": "https://github.com/iris-mcp/iris#readme",
-  "bugs": "https://github.com/iris-mcp/iris/issues",
+  "homepage": "https://github.com/syrin-labs/iris#readme",
+  "bugs": "https://github.com/syrin-labs/iris/issues",
   "publishConfig": {
     "access": "public"
   },

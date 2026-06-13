@@ -1,4 +1,4 @@
-import type { FlowExpect } from '@iris/protocol';
+import type { FlowExpect } from '@syrin/protocol';
 
 /**
  * M8 Stage B ANNOTATE — holds the flow-level + per-step annotations accumulating during a live

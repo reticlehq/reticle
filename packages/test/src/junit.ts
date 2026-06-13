@@ -1,4 +1,4 @@
-import type { FileSystemPort } from '@iris/server';
+import type { FileSystemPort } from '@syrin/server';
 import { DEFAULT_JUNIT_SUITE_NAME, JUnit, TestStatus } from './constants.js';
 import { summarize } from './summary.js';
 import type { SpecResult } from './types.js';

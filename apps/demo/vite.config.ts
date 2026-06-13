@@ -1,6 +1,6 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
-import irisSource from '@iris/babel-plugin';
+import irisSource from '@syrin/babel-plugin';
 
 export default defineConfig({
   // Stamp data-iris-source on host elements in dev so iris_inspect can map DOM -> file:line

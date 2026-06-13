@@ -1,17 +1,17 @@
-# @iris/server
+# @syrin/server
 
-The [Iris](https://github.com/iris-mcp/iris) bridge + MCP server. It hosts a localhost
-WebSocket endpoint your app's `@iris/browser` SDK connects to, and exposes MCP tools your
+The [Iris](https://github.com/syrin-labs/iris) bridge + MCP server. It hosts a localhost
+WebSocket endpoint your app's `@syrin/browser` SDK connects to, and exposes MCP tools your
 coding agent uses to look at, act on, observe, and assert against the live app.
 
 ```bash
-npx @iris/server        # bridge on ws://localhost:4400, MCP over stdio
+npx @syrin/server        # bridge on ws://localhost:4400, MCP over stdio
 ```
 
 Point your agent at it (e.g. Claude Code `.mcp.json`):
 
 ```jsonc
-{ "mcpServers": { "iris": { "command": "npx", "args": ["@iris/server", "mcp"] } } }
+{ "mcpServers": { "iris": { "command": "npx", "args": ["@syrin/server", "mcp"] } } }
 ```
 
 Tools: `iris_snapshot`, `iris_query`, `iris_inspect`, `iris_act`, `iris_act_sequence`,
@@ -19,4 +19,4 @@ Tools: `iris_snapshot`, `iris_query`, `iris_inspect`, `iris_act`, `iris_act_sequ
 `iris_animations`, `iris_baseline_save`/`_list`, `iris_diff`, `iris_record_start`/`_stop`,
 `iris_explore`, `iris_sessions`.
 
-See the [main README](https://github.com/iris-mcp/iris). MIT.
+See the [main README](https://github.com/syrin-labs/iris). MIT.

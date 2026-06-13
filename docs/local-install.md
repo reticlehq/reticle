@@ -1,11 +1,11 @@
 # Use Iris in your own app — without publishing to npm
 
-Iris isn't on public npm yet, and its packages depend on each other (`@iris/browser` →
-`@iris/protocol`, etc.), so plain `npm pack` tarballs don't resolve cleanly. The reliable way
+Iris isn't on public npm yet, and its packages depend on each other (`@syrin/browser` →
+`@syrin/protocol`, etc.), so plain `npm pack` tarballs don't resolve cleanly. The reliable way
 to test it in your **real external app today** is a tiny **local registry** (Verdaccio). This
 is also exactly the path we use to validate publishing.
 
-## 1. Publish @iris/\* to a local registry
+## 1. Publish @syrin/\* to a local registry
 
 From the Iris repo:
 
@@ -14,20 +14,23 @@ bash scripts/local-registry.sh
 ```
 
 This starts a **fresh** Verdaccio on `http://localhost:4873`, creates a user/token, and
-publishes all `@iris/*` packages there at the current version (**0.3.0**):
+publishes all `@syrin/*` packages there at the current version (**0.3.0**):
 
-| Package                             | What you install it for                            |
-| ----------------------------------- | -------------------------------------------------- |
-| `@iris/browser`                     | the dev-only SDK you embed in your app             |
-| `@iris/server`                      | the bridge + MCP server (your agent runs it)       |
-| `@iris/react`                       | DOM → component → source-file mapping              |
-| `@iris/babel-plugin` / `@iris/next` | React 19 source mapping (Vite / Next.js)           |
-| `@iris/test`                        | write declarative, signal-bound specs (`irisTest`) |
-| `@iris/eslint-plugin`               | the `require-signal-on-mutation` lint rule         |
-| `@iris/protocol`                    | shared wire contract (pulled in automatically)     |
+| Package                               | What you install it for                            |
+| ------------------------------------- | -------------------------------------------------- |
+| **`@syrin/iris`**                     | **the one install** — re-exports everything below  |
+| `@syrin/browser`                      | the dev-only SDK you embed in your app             |
+| `@syrin/server`                       | the bridge + MCP server (your agent runs it)       |
+| `@syrin/react`                        | DOM → component → source-file mapping              |
+| `@syrin/babel-plugin` / `@syrin/next` | React 19 source mapping (Vite / Next.js)           |
+| `@syrin/test`                         | write declarative, signal-bound specs (`irisTest`) |
+| `@syrin/eslint-plugin`                | the `require-signal-on-mutation` lint rule         |
+| `@syrin/protocol`                     | shared wire contract (pulled in automatically)     |
 
-(Verified: an external `npm i @iris/browser` resolves the whole graph, including
-`@iris/protocol`, and imports correctly.) Leave it running.
+Most users only need **`@syrin/iris`** (it re-exports the SDK + React adapter at `.`, and the
+plugins/runner/server at `@syrin/iris/{next,babel,test,server}`); the rest stay available for
+granular installs. (Verified: an external `npm i @syrin/iris` resolves the whole graph, including
+`@syrin/protocol`, and imports correctly.) Leave it running.
 
 ## 2. Point your app at the local registry
 
@@ -35,45 +38,43 @@ In your app's project root, add an `.npmrc` (scopes only `@iris` to the local re
 everything else still comes from npm):
 
 ```ini
-@iris:registry=http://localhost:4873/
+@syrin:registry=http://localhost:4873/
 ```
 
 ## 3. Install + wire it up
 
+**One install** brings the SDK, React adapter, source-mapping plugins, the spec runner, and the
+MCP server:
+
 ```bash
-npm i -D @iris/browser @iris/react
-# React 19 source mapping:
-#   Vite/CRA  → npm i -D @iris/babel-plugin   (see docs/getting-started.md)
-#   Next.js   → npm i -D @iris/next            (keeps SWC)
-# optional:
-#   npm i -D @iris/test           # write replayable specs (irisTest)
-#   npm i -D @iris/eslint-plugin  # require-signal-on-mutation lint rule
+npm i -D @syrin/iris
+# optional: npm i -D @syrin/eslint-plugin   # require-signal-on-mutation lint rule
 ```
 
-Then follow [Getting Started](getting-started.md): embed `iris.connect()` (dev only), add the
-MCP server to your agent, and (React) `install()` the adapter. For the fastest agent loop, also
-do [Step 6 — make your app agent-legible](getting-started.md) (testids, `iris.signal`,
+Then follow [Getting Started](getting-started.md): embed `iris.connect()` (dev only) from
+`@syrin/iris`, add the MCP server to your agent, and (React) `install()` the adapter from
+`@syrin/iris`. For the fastest agent loop, also do
+[Step 6 — make your app agent-legible](getting-started.md) (testids, `iris.signal`,
 `registerStore`, `registerCapabilities`) and the
 [integration patterns](integration-patterns.md) (`createIrisEmitter` for zero prod-bundle cost).
 
-> **Upgrading.** The packages are pre-1.0 (currently **0.3.0**), so new tools land as minor
-> bumps. `scripts/local-registry.sh` resets Verdaccio and republishes the current version, so
-> pull the latest in your app explicitly — `npm update` won't cross a `0.x` minor:
+> **Upgrading.** The package is pre-1.0 (currently **0.3.0**), so new tools land as minor bumps.
+> `scripts/local-registry.sh` resets Verdaccio and republishes the current version, so pull the
+> latest in your app explicitly — `npm update` won't cross a `0.x` minor:
 >
 > ```bash
-> npm i -D @iris/browser@latest @iris/react@latest @iris/next@latest \
->          @iris/babel-plugin@latest @iris/test@latest @iris/eslint-plugin@latest
+> npm i -D @syrin/iris@latest @syrin/eslint-plugin@latest
 > ```
 
-**Run the MCP server** from the local registry too:
+**Run the MCP server** from the local registry too — `npx @syrin/iris` _is_ the server:
 
 ```jsonc
-// .mcp.json — point npx at the local registry so it fetches @iris/server from Verdaccio
+// .mcp.json — point npx at the local registry so it fetches @syrin/iris from Verdaccio
 {
   "mcpServers": {
     "iris": {
       "command": "npx",
-      "args": ["--registry", "http://localhost:4873/", "@iris/server"],
+      "args": ["--registry", "http://localhost:4873/", "@syrin/iris"],
     },
   },
 }
@@ -84,7 +85,7 @@ do [Step 6 — make your app agent-legible](getting-started.md) (testids, `iris.
 `next.config.mjs`:
 
 ```js
-import irisNext from '@iris/next';
+import irisNext from '@syrin/iris/next';
 /** @type {import('next').NextConfig} */
 const nextConfig = {};
 export default irisNext.withIris(nextConfig); // dev-only; keeps SWC; adds file:line mapping
@@ -103,7 +104,7 @@ reports `inputMode:"real"`:
   your app URL (no flags to juggle):
 
   ```bash
-  npx --registry http://localhost:4873/ @iris/server drive http://localhost:3000   # add --headed to watch
+  npx --registry http://localhost:4873/ @syrin/iris drive http://localhost:3000   # add --headed to watch
   ```
 
 - **Or attach to your own browser:** launch it with `--remote-debugging-port=9222`, then point
@@ -115,7 +116,7 @@ reports `inputMode:"real"`:
     "mcpServers": {
       "iris": {
         "command": "npx",
-        "args": ["--registry", "http://localhost:4873/", "@iris/server"],
+        "args": ["--registry", "http://localhost:4873/", "@syrin/iris"],
         "env": { "IRIS_CDP_URL": "http://localhost:9222" },
       },
     },
@@ -127,7 +128,7 @@ With neither set, Iris stays synthetic (zero extra deps) and says so via `inputM
 
 ## Write replayable specs + git-checked flows (0.3.0+)
 
-- **Specs:** with `@iris/test`, turn checks into `irisTest("…", async t => { await t.act(...);
+- **Specs:** with `@syrin/iris/test`, turn checks into `irisTest("…", async t => { await t.act(...);
 await t.expectSignal(...) })` — signal/testid-bound, `iris_clock` for determinism,
   `t.expectInputModeReal()` to skip-with-reason when real input isn't active. Run them headless
   via `iris drive` (the same path CI uses).
