@@ -1,5 +1,6 @@
 import {
   AnchorKind,
+  DEGRADED_ANCHOR_ROLE,
   FLOW_FILE_VERSION,
   FlowErrorCode,
   FlowFileSchema,
@@ -27,6 +28,15 @@ function asRecord(value: unknown): Record<string, unknown> {
   return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {};
 }
 
+/**
+ * The anchor for a DEGRADED step (no resolvable testid). A volatile eXX ref is NEVER persisted —
+ * the on-disk flow carries a placeholder ROLE anchor + degraded:true instead, so a ref can never
+ * leak into a git-checked file and the step still round-trips (the ROLE anchor satisfies min(1)).
+ */
+function degradedAnchor(): FlowAnchor {
+  return { kind: AnchorKind.ROLE, role: DEGRADED_ANCHOR_ROLE };
+}
+
 /** Convert one normalized sub-step (act_sequence child) into an anchored FlowStep. */
 function subStepToFlowStep(raw: unknown): FlowStep {
   const sub = asRecord(raw);
@@ -37,8 +47,7 @@ function subStepToFlowStep(raw: unknown): FlowStep {
   if (by === QueryBy.TESTID && value !== undefined) {
     return buildStep(IrisTool.ACT, { kind: AnchorKind.TESTID, value }, action, args, false);
   }
-  const ref = asString(sub['ref']) ?? '';
-  return buildStep(IrisTool.ACT, { kind: AnchorKind.TESTID, value: ref }, action, args, true);
+  return buildStep(IrisTool.ACT, degradedAnchor(), action, args, true);
 }
 
 function buildStep(
@@ -64,7 +73,7 @@ export function recordedStepToFlowStep(step: RecordedStep): FlowStep {
     const rawSubs = Array.isArray(step.args['steps']) ? step.args['steps'] : [];
     const subs = rawSubs.map(subStepToFlowStep);
     const degraded = subs.some((s) => s.degraded === true);
-    const anchor: FlowAnchor = subs[0]?.anchor ?? { kind: AnchorKind.TESTID, value: '' };
+    const anchor: FlowAnchor = subs[0]?.anchor ?? degradedAnchor();
     const out: FlowStep = { tool: IrisTool.ACT_SEQUENCE, anchor, steps: subs };
     if (degraded) out.degraded = true;
     if (step.expect !== undefined) out.expect = step.expect;
@@ -78,13 +87,7 @@ export function recordedStepToFlowStep(step: RecordedStep): FlowStep {
   const out =
     by === QueryBy.TESTID && value !== undefined
       ? buildStep(step.tool, { kind: AnchorKind.TESTID, value }, action, args, false)
-      : buildStep(
-          step.tool,
-          { kind: AnchorKind.TESTID, value: asString(step.args['ref']) ?? '' },
-          action,
-          args,
-          true,
-        );
+      : buildStep(step.tool, degradedAnchor(), action, args, true);
   if (step.expect !== undefined) out.expect = step.expect;
   return out;
 }

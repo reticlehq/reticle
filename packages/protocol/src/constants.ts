@@ -42,6 +42,14 @@ export const AnchorKind = {
 } as const;
 export type AnchorKind = (typeof AnchorKind)[keyof typeof AnchorKind];
 
+/**
+ * M8 Stage A FLOWFMT: the role marker for a DEGRADED step — one recorded with no resolvable
+ * testid. It is kept (never dropped) but a volatile eXX ref is NEVER persisted in its place;
+ * the step carries this placeholder ROLE anchor + degraded:true, a legible "add a data-testid
+ * here" marker that a human/Stage-B self-healing pass re-binds. Satisfies the anchor min(1).
+ */
+export const DEGRADED_ANCHOR_ROLE = 'unresolved';
+
 /** M8 FLOWFMT: structured failure codes for flow disk ops (returned, never thrown as free strings). */
 export const FlowErrorCode = {
   INVALID_NAME: 'flow_invalid_name', // path traversal / illegal chars

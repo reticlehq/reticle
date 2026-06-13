@@ -1,10 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { mkdtemp, rm, writeFile, mkdir } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile, mkdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   ActionType,
   AnchorKind,
+  DEGRADED_ANCHOR_ROLE,
   FLOW_FILE_VERSION,
   FlowErrorCode,
   FlowFileSchema,
@@ -142,6 +143,25 @@ describe('FlowStore (M8 Stage A FLOWFMT) — temp-dir fs, never touches the repo
     expect(loaded.value.steps).toHaveLength(1);
     expect(loaded.value.steps[0]?.degraded).toBe(true);
     expect(loaded.value.steps[0]?.anchor).toBeDefined();
+    // NO eXX ref leaks into the file: the degraded anchor is a placeholder ROLE, never the ref.
+    expect(loaded.value.steps[0]?.anchor).toEqual({
+      kind: AnchorKind.ROLE,
+      role: DEGRADED_ANCHOR_ROLE,
+    });
+    const raw = await readFile(flowPath(root, 'f'), 'utf8');
+    expect(raw).not.toContain('e34');
+  });
+
+  it('5b: a degraded step with NO ref still round-trips (save→load symmetric, not corrupt-on-write)', async () => {
+    const p = program('f', [
+      { tool: 'iris_act', stable: false, args: { action: ActionType.CLICK, args: {} } },
+    ]);
+    const saved = await store.save(p);
+    expect(saved.ok).toBe(true);
+    const loaded = await store.load('f');
+    expect(loaded.ok).toBe(true);
+    if (!loaded.ok) throw new Error('expected ok');
+    expect(loaded.value.steps[0]?.degraded).toBe(true);
   });
 
   it('6: act_sequence with one degraded sub-step marks the parent degraded but keeps both', async () => {
@@ -249,6 +269,7 @@ describe('recordedStepToFlowStep (pure)', () => {
     });
     expect(out).toBeDefined();
     expect(out.degraded).toBe(true);
-    expect(out.anchor).toBeDefined();
+    // The ref is NOT persisted as a testid value — it's a placeholder ROLE anchor.
+    expect(out.anchor).toEqual({ kind: AnchorKind.ROLE, role: DEGRADED_ANCHOR_ROLE });
   });
 });
