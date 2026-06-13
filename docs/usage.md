@@ -70,7 +70,9 @@ With one tab open you never specify it; with several, pass `sessionId`.
 
 ### `iris_sessions`
 
-List connected tabs. → `{ sessions: [{ sessionId, url, title, lastSeenMs }] }`
+List connected tabs. → `{ sessions: [{ sessionId, url, title, lastSeenMs, hidden, focused, throttled }] }`.
+`lastSeenMs` is the silence since the tab last reported (not time-since-connect); `throttled` is
+`true` when the tab is hidden or has gone quiet — a throttled tab silently no-ops timers/rAF/pointer.
 
 ### `iris_snapshot`
 
@@ -111,8 +113,12 @@ Deep detail on one element.
 
 Perform one action / several in order.
 
-- **`iris_act` args:** `ref`, `action`, `args?`, `sessionId?`. → `{ since, dispatched, settled, settleReason, result }`
-  where `result = { ok, ref, action, dispatched, settled, settleReason, effect }`.
+- **`iris_act` args:** `ref`, `action`, `args?`, `refuseWhenThrottled?`, `sessionId?`. →
+  `{ since, dispatched, settled, settleReason, result, session, warning? }`
+  where `result = { ok, ref, action, dispatched, settled, settleReason, effect }`. The `session`
+  block `{ lastSeenMs, throttled, focused }` (F2) reports tab health on every act; when `throttled`
+  is true a `warning` string is also attached. Pass `refuseWhenThrottled: true` to hard-fail instead
+  of warning (opt-in; default is warn-only so background testing never breaks).
 - **`iris_act_sequence` args:** `steps: [{ ref, action, args? }]`. → `{ since, dispatched, result }` where
   `result = { ok, count, effects: [...], steps: [...] }` (one `effect` per step; each step carries its own
   `dispatched`/`settled`/`settleReason`).
@@ -175,11 +181,12 @@ routeChanges, consoleErrors, animations, signals } }`.
 Act, then wait for a predicate — the whole act→observe→assert loop in one hop.
 
 - **args:** `ref`, `action`, `args?`, `until: <predicate>`, `timeout_ms?` (default 4000;
-  0 = evaluate once), `sessionId?`.
-- **returns:** `{ effect, verdict, trace }` — `effect` is the action result (`{ ok, ref, action }`),
-  `verdict` is `{ pass, evidence?, failureReason? }`, and `trace` is the reaction report of
-  everything the app did after the action. A failing `verdict` still returns `effect` + `trace` so
-  you can see what _did_ happen.
+  0 = evaluate once), `refuseWhenThrottled?`, `sessionId?`.
+- **returns:** `{ effect, verdict, trace, session, warning? }` — `effect` is the action result
+  (`{ ok, ref, action }`), `verdict` is `{ pass, evidence?, failureReason? }`, `trace` is the
+  reaction report of everything the app did after the action, and `session` (F2) is the tab-health
+  block `{ lastSeenMs, throttled, focused }` (with a `warning` when throttled). A failing `verdict`
+  still returns `effect` + `trace` so you can see what _did_ happen.
 
 ### `iris_wait_for`
 
@@ -192,8 +199,10 @@ Block until a predicate holds (or time out). Looks both backward (recent buffer)
 Verify a predicate; optionally wait for it.
 
 - **args:** `predicate`, `timeout_ms?` (0 = evaluate once), `sessionId?`.
-- **returns:** `{ pass, evidence, failureReason? }`. On failure includes a **near-miss**
-  (e.g. "found the dialog but not visible", or "no button named 'Submit'; saw: Cancel").
+- **returns:** `{ pass, evidence, failureReason?, session, warning? }`. On failure includes a
+  **near-miss** (e.g. "found the dialog but not visible", or "no button named 'Submit'; saw: Cancel").
+  The `session` block `{ lastSeenMs, throttled, focused }` (F2) reports tab health on every assert;
+  when throttled a `warning` is attached so you never assert against a tab that is silently no-oping.
 
 ### `iris_network` / `iris_console` / `iris_animations`
 
@@ -592,6 +601,10 @@ Iris is cheap by design ([benchmark](token-efficiency.md)), but keep it that way
   only consider what happened _after_ the action.
 - **Use `timeout_ms` for async.** Don't assert instantly on something that arrives over the
   network or after a re-render.
+- **Watch `session.throttled` (F2).** Background tabs throttle timers/rAF/pointer gestures, so
+  an act can silently no-op. Every `iris_act` / `iris_assert` / `iris_act_and_wait` result carries
+  `session: { lastSeenMs, throttled, focused }` and, when throttled, a `warning`. Refocus the tab
+  (or run it foregrounded) before driving; pass `refuseWhenThrottled: true` to hard-fail instead.
 - **Scope big pages.** On dashboards with hundreds of elements, scope queries to the panel
   you care about.
 - **Never breaks your app.** Observers are additive and reversible (`iris.disconnect()`

@@ -21,6 +21,28 @@ export const nativeClearTimeout = (id: number): void => {
 export const nativeSleep = (ms: number): Promise<void> =>
   new Promise((resolve) => nativeSetTimeout(resolve, ms));
 
+/**
+ * A self-rescheduling interval built on the bound real timer (F2). We do NOT use
+ * `setInterval` because iris_clock can freeze the app's timers — a native, pre-bound
+ * timer keeps the page-health heartbeat ticking so a frozen clock never reads as stale.
+ * Returns a stop function.
+ */
+export const nativeSetInterval = (cb: () => void, ms: number): (() => void) => {
+  let stopped = false;
+  let id = 0;
+  const tick = (): void => {
+    if (stopped) return;
+    cb();
+    if (stopped) return;
+    id = nativeSetTimeout(tick, ms);
+  };
+  id = nativeSetTimeout(tick, ms);
+  return () => {
+    stopped = true;
+    nativeClearTimeout(id);
+  };
+};
+
 /** Max time we wait for a real animation frame before giving up and resolving anyway. */
 export const FRAME_BUDGET_MS = 200;
 

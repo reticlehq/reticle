@@ -5,6 +5,7 @@ import {
   IRIS_WS_PATH,
   IrisCommand,
   MessageKind,
+  THROTTLED_WARNING,
   type ElementQuery,
 } from '@iris/protocol';
 import { Bridge } from './bridge.js';
@@ -345,6 +346,85 @@ describe('bridge round-trip (north-star)', () => {
     };
     expect(result.interactive.length).toBeGreaterThan(0);
     expect(result.interactive[0]?.ref).toMatch(/^e\d+$/);
+  });
+
+  it('F2: a hidden session surfaces throttled:true + a warning on an iris_act result', async () => {
+    browser.emit(EventType.PAGE_HEALTH, {
+      hidden: true,
+      focused: false,
+      reason: 'visibilitychange',
+    });
+    await waitUntil(() => bridge.sessions.resolve('demo').throttled());
+
+    const act = (await callTool(deps, 'iris_act', { ref: 'e7', action: 'click' })) as {
+      session: { lastSeenMs: number; throttled: boolean; focused: boolean };
+      warning?: string;
+    };
+    expect(act.session.throttled).toBe(true);
+    expect(act.session.focused).toBe(false);
+    expect(typeof act.session.lastSeenMs).toBe('number');
+    expect(act.warning).toBe(THROTTLED_WARNING);
+  });
+
+  it('F2: iris_assert and iris_act_and_wait carry the health envelope when throttled', async () => {
+    browser.emit(EventType.PAGE_HEALTH, { hidden: true, focused: false, reason: 'blur' });
+    await waitUntil(() => bridge.sessions.resolve('demo').throttled());
+
+    const verdict = (await callTool(deps, 'iris_assert', {
+      predicate: { kind: 'console', level: 'error', absent: true },
+    })) as { pass: boolean; session: { throttled: boolean }; warning?: string };
+    expect(verdict.pass).toBe(true);
+    expect(verdict.session.throttled).toBe(true);
+    expect(verdict.warning).toBe(THROTTLED_WARNING);
+
+    const aw = (await callTool(deps, 'iris_act_and_wait', {
+      ref: 'e7',
+      action: 'click',
+      timeout_ms: 0,
+      until: { kind: 'console', level: 'error', absent: true },
+    })) as { session: { throttled: boolean }; warning?: string };
+    expect(aw.session.throttled).toBe(true);
+    expect(aw.warning).toBe(THROTTLED_WARNING);
+  });
+
+  it('F2: iris_sessions surfaces hidden/focused/throttled', async () => {
+    browser.emit(EventType.PAGE_HEALTH, { hidden: true, focused: false, reason: 'heartbeat' });
+    await waitUntil(() => bridge.sessions.resolve('demo').throttled());
+    const result = (await callTool(deps, 'iris_sessions')) as {
+      sessions: { hidden: boolean; focused: boolean; throttled: boolean }[];
+    };
+    const entry = result.sessions[0];
+    expect(entry?.hidden).toBe(true);
+    expect(entry?.focused).toBe(false);
+    expect(entry?.throttled).toBe(true);
+  });
+
+  it('F2: a visible session has no warning and throttled:false', async () => {
+    browser.emit(EventType.PAGE_HEALTH, { hidden: false, focused: true, reason: 'focus' });
+    await waitUntil(() => !bridge.sessions.resolve('demo').throttled());
+    const act = (await callTool(deps, 'iris_act', { ref: 'e7', action: 'click' })) as {
+      session: { throttled: boolean; focused: boolean };
+      warning?: string;
+    };
+    expect(act.session.throttled).toBe(false);
+    expect(act.session.focused).toBe(true);
+    expect(act.warning).toBeUndefined();
+  });
+
+  it('F2: refuseWhenThrottled is opt-in — rejects only with the flag', async () => {
+    browser.emit(EventType.PAGE_HEALTH, { hidden: true, focused: false, reason: 'blur' });
+    await waitUntil(() => bridge.sessions.resolve('demo').throttled());
+
+    // Default (warn-only) still resolves so background testing is never broken.
+    await expect(callTool(deps, 'iris_act', { ref: 'e7', action: 'click' })).resolves.toBeDefined();
+    // Opt-in flag hard-fails.
+    await expect(
+      callTool(deps, 'iris_act', { ref: 'e7', action: 'click', refuseWhenThrottled: true }),
+    ).rejects.toThrow(/refusing to act/);
+
+    // Restore a healthy state for any later shared assertions.
+    browser.emit(EventType.PAGE_HEALTH, { hidden: false, focused: true, reason: 'focus' });
+    await waitUntil(() => !bridge.sessions.resolve('demo').throttled());
   });
 });
 

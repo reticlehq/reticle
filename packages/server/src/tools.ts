@@ -9,28 +9,13 @@ import { REPLAY_PROGRAM_VERSION } from '@iris/protocol';
 import type { RecordingStore, CompiledProgram } from './recordings.js';
 import { compileActStep, compileSequenceStep, replayProgram } from './replay.js';
 import { matchNet, matchConsole } from './event-filters.js';
+import { healthEnvelope, refuseIfThrottled } from './session-health.js';
+import { asString, asNumber, asRecord, parseInteractive } from './tools-helpers.js';
 
 export interface ToolDeps {
   sessions: SessionManager;
   baselines: BaselineStore;
   recordings: RecordingStore;
-}
-
-interface InteractiveItem {
-  ref: string;
-  desc: string;
-}
-
-/** Parse interactive elements (with refs) out of a snapshot tree for exploration. */
-function parseInteractive(tree: string): InteractiveItem[] {
-  const items: InteractiveItem[] = [];
-  for (const line of tree.split('\n')) {
-    const match = /\(ref=(e\d+)\)/.exec(line);
-    if (match !== null) {
-      items.push({ ref: match[1] ?? '', desc: line.replace(/\s*\(ref=e\d+\)/, '').trim() });
-    }
-  }
-  return items;
 }
 
 interface SnapshotResult {
@@ -71,22 +56,11 @@ async function commandOrThrow(
   return result.result;
 }
 
-function asString(value: unknown): string | undefined {
-  return typeof value === 'string' ? value : undefined;
-}
-
-function asNumber(value: unknown): number | undefined {
-  return typeof value === 'number' ? value : undefined;
-}
-
-function asRecord(value: unknown): Record<string, unknown> {
-  return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {};
-}
-
 export const TOOLS: ToolDef[] = [
   {
     name: IrisTool.SESSIONS,
-    description: 'List connected browser sessions (tab url/title, sessionId, last-seen).',
+    description:
+      'List connected browser sessions (tab url/title, sessionId, last-seen, and health: hidden/focused/throttled).',
     inputSchema: {},
     handler: (deps) => Promise.resolve({ sessions: deps.sessions.list() }),
   },
@@ -142,10 +116,12 @@ export const TOOLS: ToolDef[] = [
       ref: z.string(),
       action: z.string(),
       args: z.record(z.unknown()).optional(),
+      refuseWhenThrottled: z.boolean().optional(),
       ...sessionIdShape,
     },
     handler: async (deps, args) => {
       const session = deps.sessions.resolve(asString(args['sessionId']));
+      refuseIfThrottled(session, args['refuseWhenThrottled']);
       const since = session.elapsed();
       const result = await session.command(IrisCommand.ACT, {
         ref: args['ref'],
@@ -156,8 +132,7 @@ export const TOOLS: ToolDef[] = [
       if (deps.recordings.active().length > 0) {
         deps.recordings.capture(compileActStep(args, result.result));
       }
-      // F1: lift dispatch/settle status to the envelope so a settle timeout is visible without
-      // digging into result — and so it is plainly NOT a failure (the tool resolved, did not throw).
+      // F1: lift dispatch/settle status to the envelope (a settle timeout is NOT a failure).
       const r = asRecord(result.result);
       return {
         since,
@@ -165,6 +140,7 @@ export const TOOLS: ToolDef[] = [
         settled: r['settled'] ?? null,
         settleReason: r['settleReason'] ?? null,
         result: result.result,
+        ...healthEnvelope(session),
       };
     },
   },
@@ -184,8 +160,7 @@ export const TOOLS: ToolDef[] = [
       if (deps.recordings.active().length > 0) {
         deps.recordings.capture(compileSequenceStep(args, result.result));
       }
-      // F1: per-step settle status lives in result.steps[]; lift dispatched to the envelope.
-      const r = asRecord(result.result);
+      const r = asRecord(result.result); // F1: per-step settle status lives in result.steps[]
       return { since, dispatched: r['count'] !== undefined, result: result.result };
     },
   },
@@ -202,10 +177,12 @@ export const TOOLS: ToolDef[] = [
       args: z.record(z.unknown()).optional(),
       until: PredicateSchema,
       timeout_ms: z.number().optional(),
+      refuseWhenThrottled: z.boolean().optional(),
       ...sessionIdShape,
     },
     handler: async (deps, args) => {
       const session = deps.sessions.resolve(asString(args['sessionId']));
+      refuseIfThrottled(session, args['refuseWhenThrottled']);
       const until = PredicateSchema.parse(args['until']);
       const timeout = asNumber(args['timeout_ms']) ?? 4000;
 
@@ -223,7 +200,7 @@ export const TOOLS: ToolDef[] = [
           : await evaluatePredicate(session, until);
 
       const trace = buildReactionReport(session.eventsSince(since), session.elapsed() - since);
-      return { effect: actResult.result, verdict, trace };
+      return { effect: actResult.result, verdict, trace, ...healthEnvelope(session) };
     },
   },
   {
@@ -276,10 +253,11 @@ export const TOOLS: ToolDef[] = [
       const session = deps.sessions.resolve(asString(args['sessionId']));
       const predicate = PredicateSchema.parse(args['predicate']);
       const timeout = asNumber(args['timeout_ms']) ?? 0;
-      if (timeout > 0) {
-        return waitForPredicate(session, predicate, timeout);
-      }
-      return evaluatePredicate(session, predicate);
+      const verdict =
+        timeout > 0
+          ? await waitForPredicate(session, predicate, timeout)
+          : await evaluatePredicate(session, predicate);
+      return { ...verdict, ...healthEnvelope(session) };
     },
   },
   {

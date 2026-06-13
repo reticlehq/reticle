@@ -51,8 +51,35 @@ export const EventType = {
   REVEAL_SHOWN: 'reveal.shown',
   SIGNAL: 'signal',
   STATE_CHANGE: 'state.change',
+  /** F2: page-level visibility/focus health (distinct from element-level VISIBLE_*). */
+  PAGE_HEALTH: 'page.health',
 } as const;
 export type EventType = (typeof EventType)[keyof typeof EventType];
+
+/**
+ * F2 session health: SDK page-health heartbeat cadence (native timer) and the server's
+ * throttle threshold. Kept named so the server's staleness check can be reasoned about
+ * against the SDK's heartbeat (≈ 2 missed heartbeats ⇒ throttled).
+ */
+export const SESSION_HEALTH = {
+  HEARTBEAT_MS: 5_000,
+  /** lastSeenMs beyond this ⇒ throttled (≈ 2 missed heartbeats). */
+  STALE_THRESHOLD_MS: 12_000,
+} as const;
+
+/** Why the SDK emitted a PAGE_HEALTH event (F2). */
+export const HealthReason = {
+  VISIBILITY: 'visibilitychange',
+  FOCUS: 'focus',
+  BLUR: 'blur',
+  HEARTBEAT: 'heartbeat',
+  INITIAL: 'initial',
+} as const;
+export type HealthReason = (typeof HealthReason)[keyof typeof HealthReason];
+
+/** Surfaced on act/assert results when the target tab is throttled (F2). */
+export const THROTTLED_WARNING =
+  'tab throttled; timer/rAF/pointer gestures may silently no-op — refocus before driving';
 
 /** Actions the executor can perform against a ref (plan/03 + plan/05). */
 export const ActionType = {

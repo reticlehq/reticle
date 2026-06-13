@@ -61,6 +61,7 @@ export class Bridge {
         return;
       }
       if (session === undefined) return; // ignore anything before HELLO
+      session.touch(); // F2: canonical "last seen" stamp for every inbound message
 
       if (parsed.kind === MessageKind.EVENT) {
         session.pushEvent(parsed.event);

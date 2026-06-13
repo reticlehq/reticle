@@ -1,5 +1,12 @@
 import type { WebSocket } from 'ws';
-import { MessageKind, type CommandResult, type HelloMessage, type IrisEvent } from '@iris/protocol';
+import {
+  EventType,
+  MessageKind,
+  SESSION_HEALTH,
+  type CommandResult,
+  type HelloMessage,
+  type IrisEvent,
+} from '@iris/protocol';
 import { RingBuffer } from './ring-buffer.js';
 
 export interface SessionInfo {
@@ -8,7 +15,18 @@ export interface SessionInfo {
   title: string;
   adapters: string[];
   hasCapabilities: boolean;
+  /** F2: ms since the SDK last reported anything (silence ⇒ likely throttled). */
   lastSeenMs: number;
+  hidden: boolean;
+  focused: boolean;
+  throttled: boolean;
+}
+
+/** F2: the health block spliced onto act/assert results. */
+export interface SessionHealth {
+  lastSeenMs: number;
+  throttled: boolean;
+  focused: boolean;
 }
 
 type PendingCommand = {
@@ -39,6 +57,9 @@ export class Session {
   readonly #pending = new Map<string, PendingCommand>();
   readonly #listeners = new Set<(event: IrisEvent) => void>();
   #seq = 0;
+  #lastSeenAt: number;
+  #hidden = false;
+  #focused = true;
 
   constructor(hello: HelloMessage, socket: WebSocket, clock: Clock) {
     this.id = hello.sessionId;
@@ -49,11 +70,38 @@ export class Session {
     this.#socket = socket;
     this.#clock = clock;
     this.#startedAt = clock();
+    this.#lastSeenAt = clock();
   }
 
   /** Milliseconds since this session connected — the authoritative buffer clock. */
   elapsed(): number {
     return this.#clock() - this.#startedAt;
+  }
+
+  /** F2: mark that the SDK was just heard from. Called on every inbound message. */
+  touch(): void {
+    this.#lastSeenAt = this.#clock();
+  }
+
+  /** F2: ms since the SDK last reported anything (distinct from elapsed-since-connect). */
+  lastSeenMs(): number {
+    return this.#clock() - this.#lastSeenAt;
+  }
+
+  /** F2: record the latest page visibility/focus state from a PAGE_HEALTH event. */
+  applyHealth(hidden: boolean, focused: boolean): void {
+    this.#hidden = hidden;
+    this.#focused = focused;
+  }
+
+  /** F2: throttled if the tab is hidden OR we have not heard from it recently. */
+  throttled(): boolean {
+    return this.#hidden || this.lastSeenMs() > SESSION_HEALTH.STALE_THRESHOLD_MS;
+  }
+
+  /** F2: the attachable health block — single source of truth for the tools. */
+  health(): SessionHealth {
+    return { lastSeenMs: this.lastSeenMs(), throttled: this.throttled(), focused: this.#focused };
   }
 
   info(): SessionInfo {
@@ -63,12 +111,19 @@ export class Session {
       title: this.title,
       adapters: this.adapters,
       hasCapabilities: this.hasCapabilities,
-      lastSeenMs: this.elapsed(),
+      hidden: this.#hidden,
+      ...this.health(),
     };
   }
 
   /** Re-stamp an incoming event with server-relative time, buffer it, and fan out. */
   pushEvent(event: IrisEvent): void {
+    if (event.type === EventType.PAGE_HEALTH) {
+      const data = event.data;
+      const hidden = typeof data['hidden'] === 'boolean' ? data['hidden'] : this.#hidden;
+      const focused = typeof data['focused'] === 'boolean' ? data['focused'] : this.#focused;
+      this.applyHealth(hidden, focused);
+    }
     const t = this.elapsed();
     const stamped: IrisEvent = { ...event, t, sessionId: this.id };
     this.#buffer.push(stamped, t);

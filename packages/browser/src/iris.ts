@@ -19,6 +19,7 @@ import { installRoute } from './observers/route.js';
 import { installConsole } from './observers/console.js';
 import { installAnimation } from './observers/animation.js';
 import { installScroll } from './observers/scroll.js';
+import { installHealth } from './observers/health.js';
 import { installOverlay, type OverlayHandle } from './overlay.js';
 import { Presenter } from './presenter.js';
 import { refs } from './refs.js';
@@ -89,6 +90,7 @@ export class Iris {
       installAnimation(emit),
       installScroll(emit),
       installDom(emit),
+      installHealth(emit), // F2: page visibility/focus health + heartbeat
     ];
 
     if (options.overlay === true) {
