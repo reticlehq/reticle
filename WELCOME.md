@@ -105,12 +105,13 @@ These couldn't be completed automatically in the scaffold:
    ```
 3. **Agentation MCP** — the `agentation-mcp` server is already connected to this session.
    If it isn't in a fresh session: `npx add-mcp "npx -y agentation-mcp server"`.
-4. **Initial commit** — the repo is `git init`'d with everything staged but **not committed**
-   (left to you). `git commit` will trigger the pre-commit gate, which currently passes.
+4. **Publish to npm** — packages are publish-ready but not on public npm yet. To use Iris in
+   an external app today, see [`docs/local-install.md`](docs/local-install.md) (local
+   registry). For public release: `npm login` then `pnpm -r publish --access public`.
 
-## Feature build order (why this order)
+## What's next
 
-Follow `plan/ROADMAP.md`. Build the **M0 spike** first: browser ↔ bridge ↔ MCP round-trip
-proving the north-star demo (icon button → input → API call → modal → section, asserted in
-one call). Everything else layers on a working relay. The dashboard use cases (button
-clicks, lists, nav, tabs, signup) all land by **M2**, the first usable release.
+M0–M5 are shipped and verified. The forward plan (commit the e2e suite + CI, publish,
+virtualized lists, Vue/Svelte adapters, Next/SWC source map, visual layer, hosted bridge,
+perf) is fully specified in **`plan/NEXT-PHASES.md`**, with the condensed list in
+`plan/ROADMAP.md`.
