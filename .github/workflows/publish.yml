@@ -1,0 +1,36 @@
+name: Publish to npm
+
+# Publishes every public @syrin/* package when a GitHub Release is published.
+# Recursive publish skips the private apps and any version already on npm, so it is
+# safe to re-run. Requires the repo secret NPM_TOKEN (an npm "Automation" token).
+#
+# Provenance (the verified "published from GitHub Actions" badge) requires a PUBLIC
+# repo + the id-token permission below. If the repo is still private, drop the
+# NPM_CONFIG_PROVENANCE line (or make the repo public) or the publish will fail.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # npm provenance
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - name: Publish public packages
+        run: pnpm -r publish --access public --no-git-checks
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_CONFIG_PROVENANCE: true

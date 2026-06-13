@@ -5,6 +5,9 @@
   "type": "module",
   "license": "MIT",
   "repository": "github:syrin-labs/iris",
+  "publishConfig": {
+    "access": "public"
+  },
   "bin": {
     "iris": "./bin/iris.mjs"
   },
