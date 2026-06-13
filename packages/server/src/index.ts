@@ -4,7 +4,8 @@ import { Bridge } from './bridge.js';
 import { BaselineStore } from './baselines.js';
 import { RecordingStore } from './recordings.js';
 import { createMcpServer } from './mcp.js';
-import { CdpRealInputProvider } from './real-input.js';
+import { CdpRealInputProvider, LaunchedRealInputProvider } from './real-input.js';
+import type { OwnedRealInputProvider, RealInputProvider } from './real-input.js';
 import { log } from './log.js';
 
 export { IrisTool } from './tool-names.js';
@@ -19,8 +20,22 @@ export type { RecordedStep, CompiledProgram } from './recordings.js';
 export { evaluatePredicate, waitForPredicate, PredicateSchema } from './predicate.js';
 export type { Predicate, EvalResult } from './predicate.js';
 export { buildReactionReport } from './reaction.js';
-export { CdpRealInputProvider, boxCenter, isPointerAction } from './real-input.js';
-export type { RealInputProvider, ElementBox, RealInputArgs } from './real-input.js';
+export {
+  CdpRealInputProvider,
+  LaunchedRealInputProvider,
+  DriveError,
+  performGesture,
+  boxCenter,
+  isPointerAction,
+} from './real-input.js';
+export type {
+  RealInputProvider,
+  OwnedRealInputProvider,
+  LaunchFn,
+  LaunchedProviderOptions,
+  ElementBox,
+  RealInputArgs,
+} from './real-input.js';
 
 export interface StartOptions {
   port?: number;
@@ -28,10 +43,18 @@ export interface StartOptions {
   mcp?: boolean;
   /** R1: CDP endpoint for native real-input mode. Defaults to env IRIS_CDP_URL. No-op if unset. */
   cdpUrl?: string;
+  /** P2-drive: launch+own a Playwright Chromium at this url and route pointer actions through it. */
+  driveUrl?: string;
+  /** P2-drive: launch headless (default true; CLI `--headed` sets false). */
+  headless?: boolean;
+  /** P2-drive: injected so tests swap in a fake launched provider instead of real Playwright. */
+  realInputFactory?: (opts: { driveUrl: string; headless: boolean }) => OwnedRealInputProvider;
 }
 
 export interface RunningServer {
   bridge: Bridge;
+  /** P2-drive: the active real-input provider (launched/CDP), if any. */
+  realInput?: RealInputProvider;
   close: () => Promise<void>;
 }
 
@@ -41,9 +64,33 @@ export async function start(options: StartOptions = {}): Promise<RunningServer> 
   const bridge = new Bridge({ port });
   const baselines = new BaselineStore();
   const recordings = new RecordingStore();
-  const cdpUrl = options.cdpUrl ?? process.env['IRIS_CDP_URL'];
-  const realInput =
-    cdpUrl !== undefined && cdpUrl.length > 0 ? new CdpRealInputProvider({ cdpUrl }) : undefined;
+  // P2-drive precedence: driveUrl (launch+own a browser) → CDP (attach) → none.
+  let owned: { dispose: () => Promise<void> } | undefined;
+  let realInput: RealInputProvider | undefined;
+  const driveUrl = options.driveUrl;
+  if (driveUrl !== undefined && driveUrl.length > 0) {
+    const headless = options.headless ?? true;
+    const factory =
+      options.realInputFactory ??
+      ((opts) =>
+        new LaunchedRealInputProvider({ driveUrl: opts.driveUrl, headless: opts.headless }));
+    const launched = factory({ driveUrl, headless });
+    try {
+      await launched.navigate();
+    } catch (error) {
+      await bridge.close(); // no leaked WS port on a failed start
+      throw error;
+    }
+    owned = launched;
+    realInput = launched;
+  } else {
+    const cdpUrl = options.cdpUrl ?? process.env['IRIS_CDP_URL'];
+    if (cdpUrl !== undefined && cdpUrl.length > 0) {
+      const cdp = new CdpRealInputProvider({ cdpUrl });
+      owned = cdp;
+      realInput = cdp;
+    }
+  }
 
   if (options.mcp !== false) {
     const deps = { sessions: bridge.sessions, baselines, recordings };
@@ -54,6 +101,10 @@ export async function start(options: StartOptions = {}): Promise<RunningServer> 
 
   return {
     bridge,
-    close: () => bridge.close(),
+    ...(realInput !== undefined ? { realInput } : {}),
+    close: async () => {
+      await owned?.dispose();
+      await bridge.close();
+    },
   };
 }

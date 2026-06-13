@@ -98,6 +98,18 @@ export const ActionWarning = {
 } as const;
 export type ActionWarning = (typeof ActionWarning)[keyof typeof ActionWarning];
 
+/** P2-drive: failure modes when Iris launches/drives its own browser (`iris drive`). */
+export const DriveErrorCode = {
+  PLAYWRIGHT_MISSING: 'playwright_missing',
+  LAUNCH_FAILED: 'launch_failed',
+  NAVIGATE_FAILED: 'navigate_failed',
+} as const;
+export type DriveErrorCode = (typeof DriveErrorCode)[keyof typeof DriveErrorCode];
+
+/** P2-drive: human-facing message when the optional playwright dep is absent. */
+export const DRIVE_PLAYWRIGHT_MISSING_MSG =
+  "iris drive needs the optional 'playwright' package — install it: pnpm add -D playwright && npx playwright install chromium";
+
 /** Actions the executor can perform against a ref (plan/03 + plan/05). */
 export const ActionType = {
   CLICK: 'click',

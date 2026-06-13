@@ -10,7 +10,7 @@
  * pay for it; the type-only import is elided by `tsc`, so the build stays green without it.
  */
 import type { Browser, Page } from 'playwright';
-import { ActionType } from '@iris/protocol';
+import { ActionType, DriveErrorCode, DRIVE_PLAYWRIGHT_MISSING_MSG } from '@iris/protocol';
 
 /** Viewport CSS-px box as returned by the INSPECT command (getBoundingClientRect). */
 export interface ElementBox {
@@ -49,6 +49,27 @@ export interface RealInputProvider {
   ): Promise<RealInputResult>;
 }
 
+/**
+ * P2-drive: optional lifecycle a provider that OWNS a browser implements (`iris drive`). The
+ * iris_act routing still depends only on `RealInputProvider`; the server uses these to boot/tear-down.
+ */
+export interface OwnedRealInputProvider extends RealInputProvider {
+  /** Launch + navigate the owned browser. Must reject (never hang) on failure. */
+  navigate(): Promise<void>;
+  /** Close the owned browser. Idempotent. */
+  dispose(): Promise<void>;
+}
+
+/** P2-drive: structured, code-tagged failure so callers branch on cause, not message text. */
+export class DriveError extends Error {
+  readonly code: DriveErrorCode;
+  constructor(code: DriveErrorCode, message: string) {
+    super(message);
+    this.code = code;
+    this.name = 'DriveError';
+  }
+}
+
 /** Center of a viewport box in CSS px. Pure — unit-tested directly. */
 export function boxCenter(box: ElementBox): { cx: number; cy: number } {
   return { cx: box.x + box.width / 2, cy: box.y + box.height / 2 };
@@ -74,6 +95,59 @@ const DEFAULT_DRAG_STEPS = 8;
 
 type SleepFn = (ms: number) => Promise<void>;
 type ConnectFn = (url: string) => Promise<Browser>;
+
+/**
+ * Shared gesture executor: drive a native gesture on an already-resolved Page. Used by both the
+ * CDP-attached and the launched (drive) providers so the pointer logic lives in one place.
+ */
+export async function performGesture(
+  page: Page,
+  action: string,
+  box: ElementBox,
+  args: RealInputArgs,
+  sleep: SleepFn,
+): Promise<RealInputResult> {
+  const center = boxCenter(box);
+  const { cx, cy } = center;
+
+  if (action === ActionType.HOVER) {
+    await page.mouse.move(cx, cy);
+    await page.mouse.move(cx + 1, cy);
+    await page.mouse.move(cx, cy);
+    await sleep(REAL_INPUT_SETTLE_MS);
+    return { performed: true, center };
+  }
+  if (action === ActionType.CLICK) {
+    await page.mouse.move(cx, cy);
+    await page.mouse.click(cx, cy);
+    return { performed: true, center };
+  }
+  if (action === ActionType.DBLCLICK) {
+    await page.mouse.move(cx, cy);
+    await page.mouse.dblclick(cx, cy);
+    return { performed: true, center };
+  }
+  if (action === ActionType.DRAG) {
+    if (args.toBox === undefined) return { performed: false, center };
+    const dst = boxCenter(args.toBox);
+    const steps = args.steps ?? DEFAULT_DRAG_STEPS;
+    await page.mouse.move(cx, cy);
+    await page.mouse.down();
+    for (let i = 1; i <= steps; i += 1) {
+      const px = cx + ((dst.cx - cx) * i) / steps;
+      const py = cy + ((dst.cy - cy) * i) / steps;
+      await page.mouse.move(px, py, { steps: 1 });
+    }
+    await page.mouse.up();
+    return { performed: true, center };
+  }
+  if (action === ActionType.FILL || action === ActionType.TYPE) {
+    await page.mouse.click(cx, cy);
+    await page.keyboard.type(args.value ?? args.text ?? '');
+    return { performed: true, center };
+  }
+  return { performed: false, center };
+}
 
 export interface CdpProviderOptions {
   cdpUrl: string;
@@ -140,54 +214,102 @@ export class CdpRealInputProvider implements RealInputProvider {
     box: ElementBox,
     args: RealInputArgs,
   ): Promise<RealInputResult> {
-    const center = boxCenter(box);
     const page = await this.#pageFor(sessionUrl);
-    if (page === undefined) return { performed: false, center };
-    const { cx, cy } = center;
-
-    if (action === ActionType.HOVER) {
-      await page.mouse.move(cx, cy);
-      await page.mouse.move(cx + 1, cy);
-      await page.mouse.move(cx, cy);
-      await this.#sleep(REAL_INPUT_SETTLE_MS);
-      return { performed: true, center };
-    }
-    if (action === ActionType.CLICK) {
-      await page.mouse.move(cx, cy);
-      await page.mouse.click(cx, cy);
-      return { performed: true, center };
-    }
-    if (action === ActionType.DBLCLICK) {
-      await page.mouse.move(cx, cy);
-      await page.mouse.dblclick(cx, cy);
-      return { performed: true, center };
-    }
-    if (action === ActionType.DRAG) {
-      if (args.toBox === undefined) return { performed: false, center };
-      const dst = boxCenter(args.toBox);
-      const steps = args.steps ?? DEFAULT_DRAG_STEPS;
-      await page.mouse.move(cx, cy);
-      await page.mouse.down();
-      for (let i = 1; i <= steps; i += 1) {
-        const px = cx + ((dst.cx - cx) * i) / steps;
-        const py = cy + ((dst.cy - cy) * i) / steps;
-        await page.mouse.move(px, py, { steps: 1 });
-      }
-      await page.mouse.up();
-      return { performed: true, center };
-    }
-    if (action === ActionType.FILL || action === ActionType.TYPE) {
-      await page.mouse.click(cx, cy);
-      await page.keyboard.type(args.value ?? args.text ?? '');
-      return { performed: true, center };
-    }
-    return { performed: false, center };
+    if (page === undefined) return { performed: false, center: boxCenter(box) };
+    return performGesture(page, action, box, args, this.#sleep);
   }
 
   /** Best-effort cleanup; idempotent. */
   async dispose(): Promise<void> {
     const browser = this.#browser;
     this.#browser = undefined;
+    if (browser !== undefined) await browser.close();
+  }
+}
+
+/** P2-drive: injected launcher so unit tests stub Playwright without import(). */
+export type LaunchFn = (headless: boolean) => Promise<Browser>;
+
+export interface LaunchedProviderOptions {
+  driveUrl: string;
+  headless: boolean;
+  /** Injected so the settle delay is deterministic in tests; defaults to a real Node timer. */
+  sleep?: SleepFn;
+  /** Injected launcher so unit tests can stub Playwright; defaults to dynamic import('playwright'). */
+  launch?: LaunchFn;
+}
+
+/** The only place the dynamic value import of Playwright lives for the launched (drive) path. */
+const launchedChromium: LaunchFn = async (headless) => {
+  let mod: typeof import('playwright');
+  try {
+    mod = await import('playwright');
+  } catch {
+    throw new DriveError(DriveErrorCode.PLAYWRIGHT_MISSING, DRIVE_PLAYWRIGHT_MISSING_MSG);
+  }
+  try {
+    return await mod.chromium.launch({ headless });
+  } catch (e) {
+    throw new DriveError(DriveErrorCode.LAUNCH_FAILED, e instanceof Error ? e.message : String(e));
+  }
+};
+
+/**
+ * P2-drive: launches and OWNS a Playwright Chromium, navigates it to `driveUrl`, then drives native
+ * input on that page. Headless-capable so @iris/test / CI can run hover/drag unattended.
+ */
+export class LaunchedRealInputProvider implements OwnedRealInputProvider {
+  readonly #driveUrl: string;
+  readonly #headless: boolean;
+  readonly #sleep: SleepFn;
+  readonly #launch: LaunchFn;
+  #browser: Browser | undefined;
+  #page: Page | undefined;
+
+  constructor(options: LaunchedProviderOptions) {
+    this.#driveUrl = options.driveUrl;
+    this.#headless = options.headless;
+    this.#sleep = options.sleep ?? nodeSleep;
+    this.#launch = options.launch ?? launchedChromium;
+  }
+
+  async navigate(): Promise<void> {
+    this.#browser = await this.#launch(this.#headless);
+    const page = await this.#browser.newPage();
+    this.#page = page;
+    try {
+      await page.goto(this.#driveUrl);
+    } catch (e) {
+      throw new DriveError(
+        DriveErrorCode.NAVIGATE_FAILED,
+        e instanceof Error ? e.message : String(e),
+      );
+    }
+  }
+
+  isAvailableFor(sessionUrl: string): Promise<boolean> {
+    const page = this.#page;
+    if (page === undefined) return Promise.resolve(false);
+    if (page.url() === sessionUrl) return Promise.resolve(true);
+    return Promise.resolve(stripVolatile(page.url()) === stripVolatile(sessionUrl));
+  }
+
+  perform(
+    _sessionUrl: string,
+    action: string,
+    box: ElementBox,
+    args: RealInputArgs,
+  ): Promise<RealInputResult> {
+    const page = this.#page;
+    if (page === undefined) return Promise.resolve({ performed: false, center: boxCenter(box) });
+    return performGesture(page, action, box, args, this.#sleep);
+  }
+
+  /** Close the owned browser once. Idempotent and safe before navigate. */
+  async dispose(): Promise<void> {
+    const browser = this.#browser;
+    this.#browser = undefined;
+    this.#page = undefined;
     if (browser !== undefined) await browser.close();
   }
 }
