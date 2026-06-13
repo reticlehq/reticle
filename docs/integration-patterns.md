@@ -183,7 +183,7 @@ export default [
     rules: {
       'iris/require-signal-on-mutation': [
         'warn',
-        { mutators: ['set', 'reorderSections', 'addSection'], signalCallee: 'emit.signal' },
+        { mutators: ['set', 'reorderSections', 'addSection'], signalCallee: 'signal' },
       ],
     },
   },
