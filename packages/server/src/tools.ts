@@ -153,9 +153,18 @@ export const TOOLS: ToolDef[] = [
   {
     name: IrisTool.SESSIONS,
     description:
-      'List connected browser sessions (tab url/title, sessionId, last-seen, and health: hidden/focused/throttled), plus a `recommendation` pointing to `iris drive` when a tab is hidden/throttled and may be un-scriptable from here.',
+      'List connected browser sessions (tab url/title, sessionId, last-seen, health: hidden/focused/throttled, and `realInputAvailable` — true when native CDP/launched real input is driving this tab), plus a `recommendation` pointing to `iris drive` when a tab is hidden/throttled and may be un-scriptable from here.',
     inputSchema: {},
-    handler: (deps) => Promise.resolve({ sessions: deps.sessions.list() }),
+    handler: async (deps) => {
+      const provider = deps.realInput;
+      const sessions = await Promise.all(
+        deps.sessions.list().map(async (s) => ({
+          ...s,
+          realInputAvailable: provider !== undefined ? await provider.isAvailableFor(s.url) : false,
+        })),
+      );
+      return { sessions };
+    },
   },
   {
     name: IrisTool.SNAPSHOT,

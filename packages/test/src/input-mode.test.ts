@@ -60,23 +60,19 @@ describe('t.expectInputModeReal', () => {
     await expect(t.expectInputModeReal()).rejects.toBeInstanceOf(IrisSkip);
   });
 
-  it('probes with iris_act when no prior act ran, passing on real', async () => {
+  it('reads iris_sessions (no page mutation) when no prior act ran, passing on realInputAvailable', async () => {
     const { invoke, calls } = fakeInvoker({
-      [IrisTool.QUERY]: () => ({ elements: [{ ref: 'body' }] }),
-      [IrisTool.ACT]: () => ({ inputMode: InputMode.REAL, result: {} }),
+      [IrisTool.SESSIONS]: () => ({ sessions: [{ sessionId: 's1', realInputAvailable: true }] }),
     });
     const t = createTestContext(invoke);
     await expect(t.expectInputModeReal()).resolves.toBeUndefined();
-    const probe = calls.find((c) => c.tool === IrisTool.ACT);
-    expect(probe).toBeDefined();
-    // probe must use a non-mutating action.
-    expect(probe?.args['action']).toBe(ActionType.SCROLL_INTO_VIEW);
+    expect(calls.find((c) => c.tool === IrisTool.SESSIONS)).toBeDefined();
+    expect(calls.find((c) => c.tool === IrisTool.ACT)).toBeUndefined(); // never touches the page
   });
 
-  it('skips when the probe reports synthetic', async () => {
+  it('skips when the session reports real input is not available', async () => {
     const { invoke } = fakeInvoker({
-      [IrisTool.QUERY]: () => ({ elements: [{ ref: 'body' }] }),
-      [IrisTool.ACT]: () => ({ inputMode: InputMode.SYNTHETIC, result: {} }),
+      [IrisTool.SESSIONS]: () => ({ sessions: [{ sessionId: 's1', realInputAvailable: false }] }),
     });
     const t = createTestContext(invoke);
     await t.expectInputModeReal().then(

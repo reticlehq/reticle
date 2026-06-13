@@ -1,8 +1,11 @@
 import { IrisTool, type ToolInvoker } from '@iris/server';
-import { ActionType, InputMode } from '@iris/protocol';
-import { resolveTestid } from './resolve.js';
+import { InputMode } from '@iris/protocol';
 import { IrisSkip } from './skip.js';
-import { PROBE_TESTID, SKIP_REASON_REAL_INPUT } from './constants.js';
+import { SKIP_REASON_REAL_INPUT } from './constants.js';
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
 
 /** The act envelope's inputMode field, narrowed from the raw tool result. */
 export function readInputMode(actResult: unknown): InputMode | undefined {
@@ -49,14 +52,19 @@ export async function expectInputModeReal(
   }
 }
 
-/** Run a non-mutating pointer-free act to read inputMode without changing spec state. */
+/**
+ * Read whether native real input is active for the session WITHOUT touching the page: iris_sessions
+ * reports `realInputAvailable` per session (true when a CDP/launched provider matches the tab url).
+ * App-agnostic — no assumed testid.
+ */
 async function probeInputMode(invoke: ToolInvoker, sessionId?: string): Promise<InputMode> {
-  const ref = await resolveTestid(invoke, PROBE_TESTID, sessionId);
-  const args: Record<string, unknown> = {
-    ref,
-    action: ActionType.SCROLL_INTO_VIEW,
-    ...(sessionId !== undefined ? { sessionId } : {}),
-  };
-  const result = await invoke(IrisTool.ACT, args);
-  return readInputMode(result) ?? InputMode.SYNTHETIC;
+  const result = await invoke(IrisTool.SESSIONS, {});
+  const sessions = isRecord(result) && Array.isArray(result['sessions']) ? result['sessions'] : [];
+  for (const session of sessions) {
+    if (!isRecord(session)) continue;
+    if (sessionId === undefined || session['sessionId'] === sessionId) {
+      return session['realInputAvailable'] === true ? InputMode.REAL : InputMode.SYNTHETIC;
+    }
+  }
+  return InputMode.SYNTHETIC;
 }
