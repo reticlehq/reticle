@@ -4,9 +4,27 @@ import type { SessionManager } from './session.js';
 import { IrisTool } from './tool-names.js';
 import { buildReactionReport } from './reaction.js';
 import { evaluatePredicate, waitForPredicate, PredicateSchema } from './predicate.js';
+import { type BaselineStore, normalizeLines, diffLines } from './baselines.js';
 
 export interface ToolDeps {
   sessions: SessionManager;
+  baselines: BaselineStore;
+}
+
+interface SnapshotResult {
+  tree?: string;
+  status?: { route?: string };
+}
+
+async function snapshotTree(
+  deps: ToolDeps,
+  sessionId: string | undefined,
+): Promise<{ lines: string[]; route: string }> {
+  const session = deps.sessions.resolve(sessionId);
+  const result = await session.command(IrisCommand.SNAPSHOT, { mode: SnapshotMode.FULL });
+  if (!result.ok) throw new Error(result.error ?? 'snapshot failed');
+  const snap = (result.result ?? {}) as SnapshotResult;
+  return { lines: normalizeLines(snap.tree ?? ''), route: snap.status?.route ?? '' };
 }
 
 export interface ToolDef {
@@ -228,6 +246,44 @@ export const TOOLS: ToolDef[] = [
     inputSchema: { ...sessionIdShape },
     handler: (deps, args) =>
       commandOrThrow(deps, asString(args['sessionId']), IrisCommand.ANIMATIONS, {}),
+  },
+  {
+    name: IrisTool.BASELINE_SAVE,
+    description:
+      'Snapshot the current semantic state under a name, to diff against later (regression detection).',
+    inputSchema: { name: z.string(), ...sessionIdShape },
+    handler: async (deps, args) => {
+      const name = asString(args['name']) ?? 'default';
+      const { lines, route } = await snapshotTree(deps, asString(args['sessionId']));
+      deps.baselines.save({ name, lines, route });
+      return { name, lineCount: lines.length };
+    },
+  },
+  {
+    name: IrisTool.BASELINE_LIST,
+    description: 'List saved baseline names.',
+    inputSchema: {},
+    handler: (deps) => Promise.resolve({ baselines: deps.baselines.list() }),
+  },
+  {
+    name: IrisTool.DIFF,
+    description:
+      'Diff current semantic state vs a saved baseline: REMOVED/ADDED elements + console-error count. Answers "did anything silently go missing/break?".',
+    inputSchema: { baseline: z.string(), ...sessionIdShape },
+    handler: async (deps, args) => {
+      const name = asString(args['baseline']) ?? 'default';
+      const base = deps.baselines.get(name);
+      if (base === undefined) throw new Error(`no baseline named '${name}'`);
+      const session = deps.sessions.resolve(asString(args['sessionId']));
+      const { lines, route } = await snapshotTree(deps, asString(args['sessionId']));
+      const { removed, added } = diffLines(base.lines, lines);
+      const consoleErrors = session
+        .eventsSince(0)
+        .filter(
+          (e) => e.type === EventType.CONSOLE_ERROR || e.type === EventType.ERROR_UNCAUGHT,
+        ).length;
+      return { baseline: name, removed, added, consoleErrors, routeChanged: base.route !== route };
+    },
   },
 ];
 

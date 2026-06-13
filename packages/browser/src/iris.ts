@@ -15,6 +15,7 @@ import { installDom } from './observers/dom.js';
 import { installNetwork } from './observers/network.js';
 import { installRoute } from './observers/route.js';
 import { installConsole } from './observers/console.js';
+import { installAnimation } from './observers/animation.js';
 import type { Teardown } from './observers/types.js';
 
 export interface IrisConnectOptions {
@@ -56,6 +57,7 @@ export class Iris {
       installNetwork(emit),
       installRoute(emit),
       installConsole(emit),
+      installAnimation(emit),
       installDom(emit),
     ];
 

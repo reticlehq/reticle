@@ -8,6 +8,7 @@ import {
   type ElementQuery,
 } from '@iris/protocol';
 import { Bridge } from './bridge.js';
+import { BaselineStore } from './baselines.js';
 import { TOOLS, type ToolDeps } from './tools.js';
 
 /** A stand-in for the real @iris/browser SDK: replies to commands and emits events. */
@@ -117,7 +118,7 @@ describe('bridge round-trip (north-star)', () => {
   beforeAll(async () => {
     bridge = new Bridge({ port: 0 });
     const port = await bridge.ready;
-    deps = { sessions: bridge.sessions };
+    deps = { sessions: bridge.sessions, baselines: new BaselineStore() };
     browser = new FakeBrowser(port, 'demo');
     await browser.open();
     await waitUntil(() => bridge.sessions.count() === 1);

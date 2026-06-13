@@ -19,7 +19,8 @@
     "test:unit": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "@iris/protocol": "workspace:*"
+    "@iris/protocol": "workspace:*",
+    "@iris/browser": "workspace:*"
   },
   "peerDependencies": {
     "react": ">=18"
@@ -30,6 +31,7 @@
     }
   },
   "devDependencies": {
-    "@types/react": "^19.0.0"
+    "@types/react": "^19.0.0",
+    "jsdom": "^26.0.0"
   }
 }

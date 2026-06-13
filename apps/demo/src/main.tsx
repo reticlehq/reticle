@@ -2,12 +2,14 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Agentation } from 'agentation';
 import { iris } from '@iris/browser';
+import { install as installReactAdapter } from '@iris/react';
 import { App } from './App.js';
 
 const isDev = import.meta.env.DEV;
 
 // Dev-only: give the coding agent eyes into this running app.
 if (isDev) {
+  installReactAdapter(); // DOM ref -> component stack -> source file
   iris.connect({ session: 'demo' });
 }
 
