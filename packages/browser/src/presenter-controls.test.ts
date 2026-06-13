@@ -162,12 +162,15 @@ describe('presenter-controls / live-control panel', () => {
     expect(onControl.mock.calls.length).toBe(count);
   });
 
-  it('12 ended border fades after endedFadeMs via native timer', async () => {
+  it('12 ending fades the page border AND closes the panel after endedFadeMs', async () => {
     mount({ endedFadeMs: 5 });
     click(endBtn());
+    // before the delay: the panel is still up showing "Session ended"
+    expect(q('[data-iris-hud]')?.getAttribute('data-on')).toBe('1');
     await wait(20);
     await flush();
-    expect(q('[data-iris-glow]')?.getAttribute('data-on')).toBe('0');
+    expect(q('[data-iris-glow]')?.getAttribute('data-on')).toBe('0'); // border cleared
+    expect(q('[data-iris-hud]')?.getAttribute('data-on')).toBe('0'); // panel closed
   });
 
   it('13 setState(paused) updates panel without emitting (server push)', () => {

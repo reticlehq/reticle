@@ -126,6 +126,7 @@ export class ControlPanel {
   #fadeTimer: number | undefined;
   #root: HTMLElement | undefined;
   #glow: HTMLElement | undefined;
+  #hud: HTMLElement | undefined;
   readonly #host: ControlPanelHost;
 
   constructor(host: ControlPanelHost) {
@@ -140,6 +141,7 @@ export class ControlPanel {
   mount(root: HTMLElement, glow: HTMLElement | undefined): void {
     this.#root = root;
     this.#glow = glow;
+    this.#hud = root.querySelector<HTMLElement>('[data-iris-hud]') ?? undefined;
     this.#refs = queryControlRefs(root);
     this.#refs.pauseBtn?.addEventListener('click', () => this.#onPauseToggle());
     this.#refs.endBtn?.addEventListener('click', () => this.#onEnd());
@@ -209,11 +211,14 @@ export class ControlPanel {
       refs.banner.textContent = `${ENDED_BANNER_TEXT}${summary}`;
     }
     if (ended) {
+      // Show "Session ended" briefly, then CLOSE the panel — fade out the card AND the page
+      // border together so the surface fully clears once testing is over.
       const glow = this.#glow;
-      this.#fadeTimer = nativeSetTimeout(
-        () => glow?.setAttribute(DATA_ON, GLOW_OFF),
-        this.#host.endedFadeMs,
-      );
+      const hud = this.#hud;
+      this.#fadeTimer = nativeSetTimeout(() => {
+        glow?.setAttribute(DATA_ON, GLOW_OFF);
+        hud?.setAttribute(DATA_ON, GLOW_OFF);
+      }, this.#host.endedFadeMs);
     }
   }
 }
