@@ -13,6 +13,7 @@ real frameworks. ~10 minutes.
 - [Step 3 — (React) component & source-file mapping](#step-3--react-component--source-file-mapping)
 - [Step 4 — Run it & verify the connection](#step-4--run-it--verify-the-connection)
 - [Step 5 — Your first verification](#step-5--your-first-verification)
+- [Step 6 — Make your app agent-legible](#step-6--make-your-app-agent-legible-optional-high-leverage)
 - [Common setups at a glance](#common-setups-at-a-glance)
 - [Troubleshooting](#troubleshooting)
 
@@ -273,6 +274,56 @@ call 404'd, or a `TypeError` in `Dashboard.tsx:88`) and can fix it and re-check.
 That's the whole loop. From here, the [Usage Guide](usage.md) covers every tool, the full
 predicate DSL, and a dozen real situations (login, long lists, eventual consistency, file
 uploads, LLM calls, regressions, and more).
+
+---
+
+## Step 6 — Make your app agent-legible (optional, high-leverage)
+
+The basics above work with zero app changes. These four additions make the agent dramatically
+faster and let it verify things the DOM can't express — they're what turn Iris from "usable"
+into "magic." All are dev-only.
+
+**1. Stable `data-testid` on key elements.** Agents target testids more reliably than visible
+text (which changes with copy/i18n). Iris matches testids _exactly_.
+
+```tsx
+<button data-testid="refresh">Refresh</button>
+```
+
+**2. `iris.signal` for off-DOM facts.** When something matters but isn't visible — a save
+committed, a webhook arrived, an edit applied, an LLM caption finished — emit a signal the
+agent can assert on. This is the single highest-value instrumentation.
+
+```ts
+import { iris } from '@iris/browser';
+onSaved(() => iris.signal('order:saved', { id, total }));
+// agent: iris_assert({ predicate: { kind: 'signal', name: 'order:saved', dataMatches: { id: '*' } } })
+```
+
+**3. `registerStore` so the agent reads state directly.** No need to broadcast a signal for
+every fact — expose the store and the agent reads it via `iris_state`.
+
+```ts
+import { registerStore } from '@iris/browser';
+registerStore('cart', () => useCart.getState());
+// agent: iris_state({ store: 'cart' })  → { stores: { cart: {...} } }
+```
+
+**4. `registerCapabilities` so a fresh agent learns the surface without reading source.**
+
+```ts
+import { registerCapabilities } from '@iris/browser';
+registerCapabilities({
+  testids: ['refresh', 'cart-open', 'checkout'],
+  signals: ['order:saved', 'cart:updated'],
+  stores: ['cart'],
+});
+// agent: iris_capabilities()  → the whole testable surface
+```
+
+> Watch the agent work: pass `present: true` to `iris.connect()` for a glowing border, a
+> cursor that flies to targets, and a HUD; the agent can call `iris_narrate({ text })` to show
+> its intent. See [usage §16](usage.md#16-presenter-mode-narration--fake-clock-watch--control).
 
 ---
 

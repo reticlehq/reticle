@@ -14,11 +14,13 @@ PORT=4873
 REG="http://localhost:${PORT}"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-echo "==> Starting Verdaccio (if not already running) on ${REG}"
-if ! curl -s "${REG}/-/ping" >/dev/null 2>&1; then
-  npx --yes verdaccio@latest --config "${ROOT}/scripts/verdaccio.yaml" >/tmp/iris-verdaccio.log 2>&1 &
-  for _ in $(seq 1 30); do curl -s "${REG}/-/ping" >/dev/null 2>&1 && break; sleep 1; done
-fi
+echo "==> Starting a FRESH Verdaccio on ${REG} (reset so user/token + versions are clean)"
+pkill -f 'verdaccio --config' 2>/dev/null || true
+lsof -tiTCP:"${PORT}" -sTCP:LISTEN 2>/dev/null | xargs kill 2>/dev/null || true
+rm -rf /tmp/iris-verdaccio-storage /tmp/iris-verdaccio-htpasswd
+sleep 1
+npx --yes verdaccio@latest --config "${ROOT}/scripts/verdaccio.yaml" >/tmp/iris-verdaccio.log 2>&1 &
+for _ in $(seq 1 30); do curl -s "${REG}/-/ping" >/dev/null 2>&1 && break; sleep 1; done
 curl -s "${REG}/-/ping" >/dev/null 2>&1 || { echo "Verdaccio did not start; see /tmp/iris-verdaccio.log"; exit 1; }
 
 echo "==> Creating registry user + token"

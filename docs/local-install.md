@@ -38,7 +38,17 @@ npm i -D @iris/browser @iris/react
 ```
 
 Then follow [Getting Started](getting-started.md): embed `iris.connect()` (dev only), add the
-MCP server to your agent, and (React) `install()` the adapter.
+MCP server to your agent, and (React) `install()` the adapter. For the fastest agent loop, also
+do [Step 6 — make your app agent-legible](getting-started.md) (testids, `iris.signal`,
+`registerStore`, `registerCapabilities`).
+
+> **Upgrading.** The packages are pre-1.0 (currently **0.2.0**), so new tools land as minor
+> bumps. After re-running `scripts/local-registry.sh` (it republishes the current version),
+> pull the latest in your app explicitly — `npm update` won't cross a `0.x` minor:
+>
+> ```bash
+> npm i -D @iris/browser@latest @iris/react@latest @iris/next@latest @iris/babel-plugin@latest
+> ```
 
 **Run the MCP server** from the local registry too:
 

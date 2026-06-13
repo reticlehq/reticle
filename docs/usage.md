@@ -199,6 +199,17 @@ what to assert on without reading source.
 `iris_sessions` also surfaces a `hasCapabilities` flag per session so you know when it's worth
 calling. Returns empty arrays (never errors) if the app advertised nothing.
 
+### `iris_state`
+
+Read live framework/store state directly instead of inferring it from the DOM — [§17](#17-evidence-of-effect-actawait-state-capabilities-replay-m56).
+
+- `iris_state({ store?, ref?, sessionId? })` → `{ stores, component? }`
+
+### `iris_narrate` / `iris_clock`
+
+Show the agent's intent on the page, and control time (toasts/debounces/auto-dismiss) —
+[§16](#16-presenter-mode-narration--fake-clock-watch--control).
+
 ### `iris_baseline_save` / `iris_baseline_list` / `iris_diff`
 
 Regression detection — [§8](#8-regression-baselines--diff).
