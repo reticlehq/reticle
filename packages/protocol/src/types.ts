@@ -33,3 +33,19 @@ export interface MatchResult {
   count: number;
   elements: ElementDescriptor[];
 }
+
+/** Diagnostic hint attached to a zero-match iris_query result (F4). */
+export interface QueryEmptyHint {
+  /** location.pathname + location.search at query time. */
+  route: string;
+  /** Up to ~12 data-testid values actually present in the searched DOM scope. */
+  presentTestids: string[];
+  /** True if a capability-registered testid is present in the scope. */
+  knownEmptyState: boolean;
+}
+
+/** Result of the QUERY command / iris_query tool. `hint` present ONLY on zero matches. */
+export interface QueryResult {
+  elements: ElementDescriptor[];
+  hint?: QueryEmptyHint;
+}

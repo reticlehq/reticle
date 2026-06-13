@@ -82,7 +82,7 @@ export const TOOLS: ToolDef[] = [
   {
     name: IrisTool.QUERY,
     description:
-      'Find elements by Testing-Library semantics (role/text/label/placeholder/testid/alt). Returns matching refs + descriptors + visibility.',
+      'Find elements by Testing-Library semantics (role/text/label/placeholder/testid/alt). Returns matching refs + descriptors + visibility. On zero matches, also returns hint:{ route, presentTestids[], knownEmptyState } so you can distinguish an empty state from a missing element WITHOUT taking a snapshot.',
     inputSchema: {
       by: z.string(),
       value: z.string(),

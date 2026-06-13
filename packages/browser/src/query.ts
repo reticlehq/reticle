@@ -12,9 +12,15 @@ import {
   type ElementDescriptor,
   type ElementQuery,
   type MatchResult,
+  type QueryEmptyHint,
+  type QueryResult,
 } from '@iris/protocol';
 import { describe, getStates } from './a11y.js';
+import { getCapabilities } from './capabilities.js';
 import { refs } from './refs.js';
+
+const TESTID_ATTR = 'data-testid';
+const MAX_PRESENT_TESTIDS = 12;
 
 function resolveContainer(scope: string | undefined): HTMLElement {
   const body = document.body;
@@ -97,8 +103,29 @@ export function matchQuery(query: ElementQuery, state?: ElementState): MatchResu
   return { matched: descriptors.length > 0, count: descriptors.length, elements: descriptors };
 }
 
+/** Diagnostic hint for a zero-match query: what testids ARE present in the searched scope. */
+function buildEmptyHint(query: ElementQuery): QueryEmptyHint {
+  const container = resolveContainer(query.scope);
+  const all = container.querySelectorAll(`[${TESTID_ATTR}]`);
+  const present: string[] = [];
+  for (const el of Array.from(all)) {
+    const id = el.getAttribute(TESTID_ATTR);
+    if (id !== null && id.length > 0 && !present.includes(id)) {
+      present.push(id);
+      if (present.length >= MAX_PRESENT_TESTIDS) break;
+    }
+  }
+  const registered = getCapabilities().testids;
+  const knownEmptyState = present.some((id) => registered.includes(id));
+  const route = `${location.pathname}${location.search}`;
+  return { route, presentTestids: present, knownEmptyState };
+}
+
 /** Resolve a query to descriptors for the `query` MCP tool. */
-export function runQuery(query: ElementQuery): { elements: ElementDescriptor[] } {
+export function runQuery(query: ElementQuery): QueryResult {
   const result = matchQuery(query);
+  if (result.elements.length === 0) {
+    return { elements: result.elements, hint: buildEmptyHint(query) };
+  }
   return { elements: result.elements };
 }

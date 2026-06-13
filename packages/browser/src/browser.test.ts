@@ -2,7 +2,8 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { ElementState, SnapshotMode } from '@iris/protocol';
 import { getAccessibleName, getRole, getStates } from './a11y.js';
 import { buildSnapshot } from './snapshot.js';
-import { matchQuery } from './query.js';
+import { matchQuery, runQuery } from './query.js';
+import { registerCapabilities } from './capabilities.js';
 import { executeAction } from './actions.js';
 import { refs } from './refs.js';
 
@@ -108,6 +109,54 @@ describe('query', () => {
     // "toast" must NOT also match "show-toast".
     expect(matchQuery({ by: 'testid', value: 'toast' }).count).toBe(1);
     expect(matchQuery({ testid: 'toast' }).elements[0]?.role).toBe('generic');
+  });
+});
+
+describe('query empty hint (F4)', () => {
+  beforeEach(() => {
+    render('');
+  });
+
+  it('returns presentTestids containing other testids on a zero-match query', () => {
+    render('<div data-testid="cart-list"></div><div data-testid="cart-total"></div>');
+    const r = runQuery({ role: 'button', name: 'Checkout' });
+    expect(r.elements).toHaveLength(0);
+    expect(r.hint?.presentTestids).toEqual(expect.arrayContaining(['cart-list', 'cart-total']));
+  });
+
+  it('omits the hint on a successful match (shape unchanged)', () => {
+    render('<button>Pay</button>');
+    const r = runQuery({ role: 'button', name: 'Pay' });
+    expect(r.elements.length).toBeGreaterThan(0);
+    expect(r.hint).toBeUndefined();
+  });
+
+  it('flags knownEmptyState when a registered testid is present', () => {
+    registerCapabilities({ testids: ['cart-empty-region'] });
+    render('<div data-testid="cart-empty-region">No items</div>');
+    const r = runQuery({ by: 'testid', value: 'no-such-id' });
+    expect(r.hint?.knownEmptyState).toBe(true);
+  });
+
+  it('reports knownEmptyState false when present testids are not registered', () => {
+    render('<div data-testid="f4-unregistered-thing"></div>');
+    const r = runQuery({ by: 'testid', value: 'no-such-id' });
+    expect(r.hint?.knownEmptyState).toBe(false);
+  });
+
+  it('caps presentTestids at 12 and de-dupes', () => {
+    render(
+      Array.from({ length: 20 }, (_, i) => `<div data-testid="t${i}"></div>`).join('') +
+        '<div data-testid="t0"></div>',
+    );
+    const r = runQuery({ role: 'button', name: 'nope' });
+    expect(r.hint?.presentTestids).toHaveLength(12);
+  });
+
+  it('reflects location in route', () => {
+    history.pushState({}, '', '/cart?x=1');
+    const r = runQuery({ role: 'button', name: 'nope' });
+    expect(r.hint?.route).toBe('/cart?x=1');
   });
 });
 
