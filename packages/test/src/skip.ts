@@ -12,14 +12,40 @@ export class IrisSkip extends Error {
   }
 }
 
+/** Structured diagnosis attached to a matcher failure so the runner surfaces the tool's own evidence. */
+export interface AssertionDetail {
+  /** The predicate engine's near-miss / matched-element / found-entries evidence. */
+  evidence?: unknown;
+  /** The tool's own failureReason, preserved verbatim (the Error message may add framing). */
+  failureReason?: string;
+}
+
 /**
  * A failed matcher (e.g. an `iris_assert` returning `{ pass:false, failureReason }`). Carries the
- * reason as its message; the runner treats it as an ordinary fail (no special handling needed).
+ * reason as its message plus the tool's structured `evidence`/`failureReason`; the runner treats it
+ * as an ordinary fail (the message becomes SpecResult.error).
  */
 export class IrisAssertionError extends Error {
-  constructor(failureReason: string) {
-    super(failureReason);
+  readonly evidence?: unknown;
+  readonly failureReason?: string;
+
+  constructor(message: string, detail?: AssertionDetail) {
+    super(message);
     this.name = 'IrisAssertionError';
+    // exactOptionalPropertyTypes: only assign optional fields when actually provided.
+    if (detail?.evidence !== undefined) this.evidence = detail.evidence;
+    if (detail?.failureReason !== undefined) this.failureReason = detail.failureReason;
+  }
+}
+
+/**
+ * Raised when a testid resolves to zero elements (the act/fill chokepoint). A subclass so a runner
+ * can special-case "unknown testid" if it wants, but it is still an ordinary fail.
+ */
+export class IrisQueryEmptyError extends IrisAssertionError {
+  constructor(message: string, detail?: AssertionDetail) {
+    super(message, detail);
+    this.name = 'IrisQueryEmptyError';
   }
 }
 

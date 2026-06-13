@@ -28,3 +28,35 @@ export const JUnit = {
 
 /** Default JUnit <testsuite name=...> when the caller does not supply one. */
 export const DEFAULT_JUNIT_SUITE_NAME = 'iris';
+
+/**
+ * Skip reason `t.expectInputModeReal()` raises when the active input mode is 'synthetic'.
+ * The runner turns the IrisSkip carrying this into status:'skip' (never a silent pass).
+ */
+export const SKIP_REASON_REAL_INPUT = 'real input not active — run via iris drive';
+
+/** Default wait window for assertion matchers (iris_assert timeout_ms). */
+export const DEFAULT_ASSERT_TIMEOUT_MS = 4000;
+
+/** Predicate `kind` discriminants the matchers build. Mirrors @iris/server's Predicate union. */
+export const PredicateKind = {
+  SIGNAL: 'signal',
+  NET: 'net',
+  ELEMENT: 'element',
+  TEXT: 'text',
+  CONSOLE: 'console',
+} as const;
+export type PredicateKind = (typeof PredicateKind)[keyof typeof PredicateKind];
+
+/** Console level the expectNoConsoleErrors matcher asserts is absent. */
+export const CONSOLE_LEVEL_ERROR = 'error';
+
+/** Prefix of the IrisQueryEmptyError message when a testid resolves to nothing. */
+export const NO_ELEMENT_FOR_TESTID = 'no element for testid';
+
+/**
+ * Default testid the input-mode probe resolves to when no act has run yet. Apps that opt into
+ * `expectInputModeReal()` before any act should tag a stable benign element with this testid;
+ * the probe runs a non-mutating SCROLL_INTO_VIEW against it purely to read the reported inputMode.
+ */
+export const PROBE_TESTID = 'iris-root';

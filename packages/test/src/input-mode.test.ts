@@ -1,0 +1,90 @@
+import { describe, expect, it } from 'vitest';
+import { IrisTool } from '@iris/server';
+import { ActionType, InputMode } from '@iris/protocol';
+import { createTestContext } from './test-context.js';
+import { IrisSkip, isSkip } from './skip.js';
+import { SKIP_REASON_REAL_INPUT } from './constants.js';
+import type { ToolInvoker } from '@iris/server';
+
+function fakeInvoker(handlers: Record<string, (args: Record<string, unknown>) => unknown>): {
+  invoke: ToolInvoker;
+  calls: { tool: string; args: Record<string, unknown> }[];
+} {
+  const calls: { tool: string; args: Record<string, unknown> }[] = [];
+  const invoke: ToolInvoker = (tool, args) => {
+    calls.push({ tool, args });
+    const handler = handlers[tool];
+    if (handler === undefined) return Promise.reject(new Error(`no fake for ${tool}`));
+    return Promise.resolve(handler(args));
+  };
+  return { invoke, calls };
+}
+
+describe('t.expectInputModeReal', () => {
+  it('passes when the last act reported inputMode real, without an extra probe', async () => {
+    const { invoke, calls } = fakeInvoker({
+      [IrisTool.QUERY]: () => ({ elements: [{ ref: 'e1' }] }),
+      [IrisTool.ACT]: () => ({ inputMode: InputMode.REAL, result: {} }),
+    });
+    const t = createTestContext(invoke);
+    await t.act('add-section', ActionType.CLICK);
+    const actsBefore = calls.filter((c) => c.tool === IrisTool.ACT).length;
+    await expect(t.expectInputModeReal()).resolves.toBeUndefined();
+    const actsAfter = calls.filter((c) => c.tool === IrisTool.ACT).length;
+    expect(actsAfter).toBe(actsBefore); // no probe act issued
+  });
+
+  it('throws an IrisSkip when the last act was synthetic', async () => {
+    const { invoke } = fakeInvoker({
+      [IrisTool.QUERY]: () => ({ elements: [{ ref: 'e1' }] }),
+      [IrisTool.ACT]: () => ({ inputMode: InputMode.SYNTHETIC, result: {} }),
+    });
+    const t = createTestContext(invoke);
+    await t.act('add-section', ActionType.CLICK);
+    await t.expectInputModeReal().then(
+      () => expect.unreachable('should have skipped, not passed'),
+      (error: unknown) => {
+        expect(isSkip(error)).toBe(true);
+        expect((error as IrisSkip).reason).toBe(SKIP_REASON_REAL_INPUT);
+      },
+    );
+  });
+
+  it('never silently passes on synthetic (rejects rather than resolves)', async () => {
+    const { invoke } = fakeInvoker({
+      [IrisTool.QUERY]: () => ({ elements: [{ ref: 'e1' }] }),
+      [IrisTool.ACT]: () => ({ inputMode: InputMode.SYNTHETIC, result: {} }),
+    });
+    const t = createTestContext(invoke);
+    await t.act('add-section', ActionType.CLICK);
+    await expect(t.expectInputModeReal()).rejects.toBeInstanceOf(IrisSkip);
+  });
+
+  it('probes with iris_act when no prior act ran, passing on real', async () => {
+    const { invoke, calls } = fakeInvoker({
+      [IrisTool.QUERY]: () => ({ elements: [{ ref: 'body' }] }),
+      [IrisTool.ACT]: () => ({ inputMode: InputMode.REAL, result: {} }),
+    });
+    const t = createTestContext(invoke);
+    await expect(t.expectInputModeReal()).resolves.toBeUndefined();
+    const probe = calls.find((c) => c.tool === IrisTool.ACT);
+    expect(probe).toBeDefined();
+    // probe must use a non-mutating action.
+    expect(probe?.args['action']).toBe(ActionType.SCROLL_INTO_VIEW);
+  });
+
+  it('skips when the probe reports synthetic', async () => {
+    const { invoke } = fakeInvoker({
+      [IrisTool.QUERY]: () => ({ elements: [{ ref: 'body' }] }),
+      [IrisTool.ACT]: () => ({ inputMode: InputMode.SYNTHETIC, result: {} }),
+    });
+    const t = createTestContext(invoke);
+    await t.expectInputModeReal().then(
+      () => expect.unreachable('should have skipped'),
+      (error: unknown) => {
+        expect(isSkip(error)).toBe(true);
+        expect((error as IrisSkip).reason).toBe(SKIP_REASON_REAL_INPUT);
+      },
+    );
+  });
+});
