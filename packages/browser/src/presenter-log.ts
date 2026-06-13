@@ -33,7 +33,7 @@ const LOG_CHIP_CLASS = 'iris-chip';
 
 /** CSS for the log panel (injected with the rest of the presenter stylesheet). */
 export const LOG_CSS = `
-[data-iris-log]{margin-top:6px;max-height:160px;overflow-y:auto;display:flex;flex-direction:column;gap:2px;}
+[data-iris-log]{margin-top:6px;max-height:118px;overflow-y:auto;overscroll-behavior:contain;display:flex;flex-direction:column;gap:2px;}
 [data-iris-log-row]{display:flex;align-items:baseline;gap:6px;color:#cdd3df;}
 [data-iris-log-ts]{color:#6b7280;font-variant-numeric:tabular-nums;flex:none;}
 [data-iris-log] .iris-log-text{color:#cdd3df;}

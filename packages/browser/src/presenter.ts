@@ -51,11 +51,16 @@ const CSS = `
   font:12px/1.45 ui-sans-serif,system-ui,sans-serif;color:#e6e9f0;background:rgba(21,24,35,.92);
   border:1px solid #2a2f3d;border-radius:12px;padding:10px 14px;box-shadow:0 8px 30px rgba(0,0,0,.5);
   opacity:0;transition:opacity .2s ease,transform .2s ease;}
-[data-iris-hud][data-on="1"]{opacity:1;transform:translateX(-50%) translateY(0);}
-[data-iris-hud] .iris-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#6366f1;margin-right:7px;
+[data-iris-hud][data-on="1"]{opacity:1;transform:translateX(-50%) translateY(0);pointer-events:auto;}
+[data-iris-hud] .iris-hud-head{display:flex;align-items:center;gap:7px;}
+[data-iris-hud] .iris-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#6366f1;flex:none;
   box-shadow:0 0 8px #6366f1;animation:iris-blink 1s ease-in-out infinite;}
 @keyframes iris-blink{50%{opacity:.35}}
-[data-iris-hud] .iris-act{font-weight:600}
+[data-iris-hud] .iris-act{font-weight:600;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+[data-iris-hud] [data-iris-expand]{flex:none;cursor:pointer;background:transparent;border:1px solid #2a2f3d;
+  color:#9aa3b2;border-radius:6px;font-size:11px;line-height:1;padding:3px 6px;}
+[data-iris-hud] [data-iris-expand]:hover{color:#e6e9f0;border-color:#3a4151;}
+[data-iris-hud][data-expanded="1"] [data-iris-log]{max-height:46vh;}
 [data-iris-hud] .iris-pass{color:#22c55e}[data-iris-hud] .iris-fail{color:#ef4444}
 [data-iris-hud] .iris-chip{display:none;font-weight:700;letter-spacing:.06em;font-size:10px;
   padding:1px 6px;border-radius:6px;margin-right:7px;vertical-align:middle;}
@@ -192,7 +197,7 @@ export class Presenter {
       <div data-iris-cursor></div>
       <div data-iris-ring></div>
       <div data-iris-hud>
-        <div><span class="iris-dot"></span><span class="iris-chip" data-iris-chip></span><span class="iris-act">idle</span></div>
+        <div class="iris-hud-head"><span class="iris-dot"></span><span class="iris-chip" data-iris-chip></span><span class="iris-act">idle</span><button type="button" data-iris-expand title="Expand / collapse the activity log" aria-label="Expand the activity log">⤢</button></div>
         <div ${DATA_IRIS_LOG}></div>
       </div>`;
     document.body.appendChild(root);
@@ -204,6 +209,12 @@ export class Presenter {
     this.#actLine = root.querySelector<HTMLElement>('.iris-act') ?? undefined;
     this.#log = root.querySelector<HTMLElement>(`[${DATA_IRIS_LOG}]`) ?? undefined;
     this.#chip = root.querySelector<HTMLElement>('[data-iris-chip]') ?? undefined;
+    // Expand/collapse toggle: grow the log from a few rows to ~half the viewport.
+    root.querySelector<HTMLElement>('[data-iris-expand]')?.addEventListener('click', () => {
+      const hud = this.#hud;
+      if (hud === undefined) return;
+      hud.setAttribute('data-expanded', hud.getAttribute('data-expanded') === '1' ? '0' : '1');
+    });
     this.setMode(this.#mode);
   }
 
@@ -225,22 +236,27 @@ export class Presenter {
    * sessionEnd(). Idempotent, and a no-op when unmounted or in 'busy' border mode.
    */
   sessionStart(): void {
-    if (this.#borderMode !== BorderMode.SESSION) return;
     if (this.#sessionActive) return;
     this.#sessionActive = true;
-    this.#glow?.setAttribute(DATA_ON, GLOW_ON);
+    // The activity log/HUD persists the WHOLE session (connect→disconnect), like the border —
+    // it never fades on idle. (Independent of border mode so the log is always there.)
+    this.#hud?.setAttribute(DATA_ON, GLOW_ON);
+    // Base border persists in 'session' mode; 'busy' mode leaves it to the busy machine.
+    if (this.#borderMode === BorderMode.SESSION) this.#glow?.setAttribute(DATA_ON, GLOW_ON);
   }
 
   /**
-   * Session end: clears the base border. Idempotent; a no-op without a prior sessionStart, when
-   * unmounted, or in 'busy' border mode.
+   * Session end: hides the log/HUD and (in 'session' mode) clears the base border. Idempotent; a
+   * no-op without a prior sessionStart or when unmounted.
    */
   sessionEnd(): void {
-    if (this.#borderMode !== BorderMode.SESSION) return;
     if (!this.#sessionActive) return;
     this.#sessionActive = false;
-    this.#glow?.setAttribute(DATA_ON, GLOW_OFF);
-    this.#glow?.setAttribute(DATA_BUSY, BUSY_OFF);
+    this.#hud?.setAttribute(DATA_ON, GLOW_OFF);
+    if (this.#borderMode === BorderMode.SESSION) {
+      this.#glow?.setAttribute(DATA_ON, GLOW_OFF);
+      this.#glow?.setAttribute(DATA_BUSY, BUSY_OFF);
+    }
   }
 
   /**
@@ -304,7 +320,7 @@ export class Presenter {
       // M5.8 back-compat: the busy machine owns the base border.
       this.#glow?.setAttribute(DATA_ON, GLOW_ON);
     }
-    this.#hud?.setAttribute(DATA_ON, GLOW_ON);
+    // The HUD/log is session-owned (sessionStart/End), NOT toggled here — it stays put on idle.
     this.#cursor?.setAttribute(DATA_ON, GLOW_ON);
   }
 
@@ -337,7 +353,7 @@ export class Presenter {
       // M5.8 back-compat: fade the base border out.
       this.#glow?.setAttribute(DATA_ON, GLOW_OFF);
     }
-    this.#hud?.setAttribute(DATA_ON, GLOW_OFF);
+    // Do NOT hide the HUD/log on idle — it persists for the whole session (sessionStart/End).
     this.#cursor?.setAttribute(DATA_ON, GLOW_OFF);
     this.setMode(PresenterMode.IDLE); // H2: clear the READING/ACTING chip when going quiet
     if (this.#actLine !== undefined) this.#actLine.textContent = GlowPhase.IDLE;

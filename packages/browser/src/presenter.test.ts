@@ -420,6 +420,42 @@ describe('presenter v2 session border', () => {
     p.destroy();
   });
 
+  it('3b activity log/HUD persists the whole session — never fades on idle', async () => {
+    document.body.innerHTML = '';
+    let t = 0;
+    const p = new Presenter({
+      border: 'session',
+      now: () => t,
+      idleAfterMs: FAST_IDLE_MS,
+      glowFadeMs: FAST_FADE_MS,
+    });
+    p.mount();
+    const hud = document.querySelector('[data-iris-hud]') as HTMLElement;
+    p.sessionStart();
+    expect(hud.getAttribute('data-on')).toBe('1'); // shown from session start
+    p.status('one');
+    t += 1000;
+    await wait(FAST_IDLE_MS + FAST_FADE_MS + 20);
+    await flush();
+    expect(hud.getAttribute('data-on')).toBe('1'); // STILL on after going idle (the fix)
+    p.sessionEnd();
+    expect(hud.getAttribute('data-on')).toBe('0'); // hidden only on session end
+    p.destroy();
+  });
+
+  it('3c expand toggle grows then collapses the log', () => {
+    document.body.innerHTML = '';
+    const p = new Presenter({ border: 'session' });
+    p.mount();
+    const hud = document.querySelector('[data-iris-hud]') as HTMLElement;
+    const btn = document.querySelector('[data-iris-expand]') as HTMLElement;
+    btn.click();
+    expect(hud.getAttribute('data-expanded')).toBe('1');
+    btn.click();
+    expect(hud.getAttribute('data-expanded')).toBe('0');
+    p.destroy();
+  });
+
   it('4 sessionEnd clears the base border (data-on=0)', () => {
     document.body.innerHTML = '';
     const p = new Presenter({ border: 'session' });
