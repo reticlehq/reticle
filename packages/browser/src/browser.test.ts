@@ -94,6 +94,13 @@ describe('query', () => {
   it('matches a dialog by role', () => {
     expect(matchQuery({ role: 'dialog' }).matched).toBe(true);
   });
+
+  it('honors name in the by+value form (regression)', () => {
+    // by:'role'+value:'button'+name must not return every button.
+    const result = matchQuery({ by: 'role', value: 'button', name: 'Pay' });
+    expect(result.count).toBe(1);
+    expect(result.elements[0]?.name).toBe('Pay');
+  });
 });
 
 describe('actions', () => {

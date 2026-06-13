@@ -40,7 +40,11 @@ function findCandidates(query: ElementQuery): HTMLElement[] {
   if (by !== undefined && value !== undefined) {
     switch (by) {
       case QueryBy.ROLE:
-        return queryAllByRole(container, value, { hidden: true });
+        return queryAllByRole(
+          container,
+          value,
+          query.name !== undefined ? { hidden: true, name: query.name } : { hidden: true },
+        );
       case QueryBy.TEXT:
         return queryAllByText(container, value, { exact: false });
       case QueryBy.LABEL:

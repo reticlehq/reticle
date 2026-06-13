@@ -18,10 +18,13 @@ if (rootElement === null) {
   throw new Error('Root element #root not found');
 }
 
+// Agentation can be toggled off with ?noagentation to keep Iris demos uncluttered.
+const showAgentation = isDev && !new URLSearchParams(window.location.search).has('noagentation');
+
 createRoot(rootElement).render(
   <StrictMode>
     <App />
     {/* Human UI annotations -> agent context (complements Iris). Dev only. */}
-    {isDev ? <Agentation /> : null}
+    {showAgentation ? <Agentation /> : null}
   </StrictMode>,
 );
