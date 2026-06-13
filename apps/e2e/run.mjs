@@ -18,6 +18,7 @@ const ORDER = [
   'spa-nav-realinput-test',
   'visual-test',
   'crawl-test',
+  'scroll-find-test',
   'p3a-test',
   'p3b-test',
   'project-history-test',

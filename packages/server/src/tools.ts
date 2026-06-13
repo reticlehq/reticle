@@ -35,6 +35,7 @@ import { FLOW_TOOLS } from './flow-tools.js';
 import { PROJECT_TOOLS } from './project-tools.js';
 import { VISUAL_TOOLS } from './visual-tools.js';
 import { CRAWL_TOOLS } from './crawl-tools.js';
+import { SCROLL_TOOLS } from './scroll-tools.js';
 import { ANNOTATE_TOOLS } from './annotate-tools.js';
 import { LIVE_CONTROL_TOOLS } from './live-control-tools.js';
 import { pausedShortCircuit, withControl } from './control-envelope.js';
@@ -676,6 +677,8 @@ export const TOOLS: ToolDef[] = [
   ...VISUAL_TOOLS,
   // N4 EXPLORE: iris_crawl — autonomous click-everything + anomaly report. See crawl-tools.ts.
   ...CRAWL_TOOLS,
+  // N5 SCROLLFIND: iris_scroll_to — reveal a virtualized off-screen row. See scroll-tools.ts.
+  ...SCROLL_TOOLS,
   // M8 Stage B ANNOTATE: iris_annotate (structured annotation → expect/dynamic/success). See annotate-tools.ts.
   ...ANNOTATE_TOOLS,
   // Live-control: iris_end_session / iris_resume / iris_messages. See live-control-tools.ts.

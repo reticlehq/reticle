@@ -53,6 +53,8 @@ Sessions/perception/verify — what you'll use 90% of the time:
 `iris_replay`), persist a self-healing golden flow (`iris_flow_save*` / `iris_flow_replay` /
 `iris_flow_heal`), compile annotations (`iris_annotate`), explore autonomously
 (`iris_explore` lists controls; `iris_crawl` clicks them all and reports anomalies — **destructive**),
+reveal a virtualized off-screen row (`iris_scroll_to` — when `iris_query` finds nothing because a
+windowed list hasn't rendered it yet),
 visual-check (`iris_screenshot` / `iris_visual_diff`), or hand control to a human
 (`iris_end_session` / `iris_resume` / `iris_messages`).
 

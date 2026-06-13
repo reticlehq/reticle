@@ -17,6 +17,7 @@ import { identifyComponent, readComponentState } from './adapters.js';
 import { readStores, storeNames } from './stores.js';
 import { getCapabilities } from './capabilities.js';
 import { freezeClock, advanceClock, resetClock, isClockFrozen } from './clock.js';
+import { scrollContainer } from './scroll.js';
 
 export type CommandHandler = (args: Record<string, unknown>) => unknown;
 
@@ -158,5 +159,9 @@ export function createCommandRegistry(): Map<string, CommandHandler> {
   });
   reg.set(IrisCommand.STATE_READ, (args) => readState(str(args['ref']), str(args['store'])));
   reg.set(IrisCommand.CAPABILITIES, () => getCapabilities());
+  reg.set(IrisCommand.SCROLL, (args) => {
+    const dy = args['dy'];
+    return scrollContainer(str(args['ref']), typeof dy === 'number' ? dy : undefined);
+  });
   return reg;
 }

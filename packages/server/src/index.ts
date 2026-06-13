@@ -38,6 +38,8 @@ export { diffPng } from './visual-diff.js';
 export type { VisualDiffResult, VisualRect, DiffOptions } from './visual-diff.js';
 export { crawl } from './crawl.js';
 export type { CrawlReport, CrawlAnomaly, CrawlOptions, CrawlSession } from './crawl.js';
+export { scrollToFind } from './scroll-find.js';
+export type { ScrollFindResult, ScrollFindQuery, ScrollFindSession } from './scroll-find.js';
 export {
   CORE_TOOL_NAMES,
   TOOL_PROFILE,

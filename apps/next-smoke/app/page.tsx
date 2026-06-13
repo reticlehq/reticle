@@ -101,6 +101,11 @@ export default function Page() {
         <SmartSentence />
       </section>
 
+      <section style={{ marginTop: 24 }}>
+        <h3>Virtualized list (scroll-to-find test)</h3>
+        <VirtualList />
+      </section>
+
       {open ? (
         <div
           role="dialog"
@@ -162,6 +167,44 @@ function SmartSentence(): React.ReactElement {
         <span data-testid="hover-hint">Hover me to reveal words</span>
       )}
     </p>
+  );
+}
+
+/**
+ * A genuine windowed list: 500 rows but only the visible window (+ small buffer) is ever in the
+ * DOM, so a plain iris_query for an off-screen row (e.g. data-testid="row-400") finds NOTHING until
+ * the container is scrolled. This is the fixture iris_scroll_to (N5) must reveal.
+ */
+function VirtualList(): React.ReactElement {
+  const ROW_H = 28;
+  const TOTAL = 500;
+  const VIEW_H = 200;
+  const BUFFER = 3;
+  const [top, setTop] = useState(0);
+  const start = Math.max(0, Math.floor(top / ROW_H) - BUFFER);
+  const end = Math.min(TOTAL, Math.ceil((top + VIEW_H) / ROW_H) + BUFFER);
+  const rows = [];
+  for (let i = start; i < end; i += 1) {
+    rows.push(
+      <div
+        key={i}
+        data-testid={`row-${i}`}
+        style={{ position: 'absolute', top: i * ROW_H, height: ROW_H, lineHeight: `${ROW_H}px` }}
+      >
+        Row {i}
+      </div>,
+    );
+  }
+  return (
+    <div
+      data-testid="virtual-list"
+      onScroll={(e) => {
+        setTop((e.target as HTMLDivElement).scrollTop);
+      }}
+      style={{ height: VIEW_H, overflowY: 'scroll', border: '1px solid #2a2f3d', borderRadius: 8 }}
+    >
+      <div style={{ position: 'relative', height: TOTAL * ROW_H }}>{rows}</div>
+    </div>
   );
 }
 

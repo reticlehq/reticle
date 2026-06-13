@@ -53,6 +53,15 @@ export const CrawlAnomalyKind = {
 } as const;
 export type CrawlAnomalyKind = (typeof CrawlAnomalyKind)[keyof typeof CrawlAnomalyKind];
 
+/**
+ * N5 SCROLLFIND: bounds for iris_scroll_to — how many viewport scrolls to try before giving up on
+ * a virtualized/windowed list (which only renders visible rows, so a plain iris_query misses
+ * off-screen items). Each scroll advances ~one viewport; the loop also stops early at the list end.
+ */
+export const SCROLL_FIND_DEFAULTS = {
+  MAX_SCROLLS: 20,
+} as const;
+
 /** N4 EXPLORE: bounds so a crawl always terminates and each click has time to settle. */
 export const CRAWL_DEFAULTS = {
   /** Max controls clicked in one crawl (then `truncated:true`). */
@@ -496,6 +505,8 @@ export const IrisCommand = {
   CLOCK: 'clock',
   CAPABILITIES: 'capabilities',
   STATE_READ: 'state_read',
+  /** N5 SCROLLFIND: scroll a ref's nearest scrollable container by ~a viewport (virtualized lists). */
+  SCROLL: 'scroll',
   /**
    * Live-control: bridge → browser. Pushes the current session state to the panel so an
    * AGENT-driven pause/end keeps the presenter in sync. `args: { state, text? }`.

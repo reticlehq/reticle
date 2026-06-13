@@ -45,6 +45,8 @@ export const IrisTool = {
   VISUAL_DIFF: 'iris_visual_diff',
   /** N4 EXPLORE: autonomously click every reachable control + report anomalies (no script). */
   CRAWL: 'iris_crawl',
+  /** N5 SCROLLFIND: scroll a virtualized list until a queried row mounts, then return it. */
+  SCROLL_TO: 'iris_scroll_to',
   /** Live-control: end the session (→ ended + push PRESENTER). Handlers live in the tools facet. */
   END_SESSION: 'iris_end_session',
   /** Live-control: clear a pause (→ active). */
