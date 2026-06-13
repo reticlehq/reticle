@@ -1,6 +1,7 @@
 import { EventType } from '@iris/protocol';
 import { getAccessibleName, getRole, isVisible } from '../a11y.js';
 import { refs } from '../refs.js';
+import { isIrisOverlay } from '../dom-ignore.js';
 import type { Emit, Teardown } from './types.js';
 
 const WATCHED_ATTRS = [
@@ -30,10 +31,17 @@ export function installDom(emit: Emit): Teardown {
   const observer = new MutationObserver((records) => {
     let added = 0;
     let removed = 0;
+    let changed = 0;
     for (const record of records) {
       if (record.type === 'attributes') {
         const target = record.target;
-        if (target instanceof Element && record.attributeName !== null) {
+        if (
+          target instanceof Element &&
+          record.attributeName !== null &&
+          changed < MAX_PER_BATCH &&
+          !isIrisOverlay(target)
+        ) {
+          changed += 1;
           emit(
             EventType.DOM_ATTR,
             { attr: record.attributeName, value: target.getAttribute(record.attributeName) },
@@ -42,8 +50,20 @@ export function installDom(emit: Emit): Teardown {
         }
         continue;
       }
+      if (record.type === 'characterData') {
+        // In-place text change inside an existing subtree (wizard steps, inline edits) —
+        // childList-only would miss this.
+        const parent = record.target.parentElement;
+        if (parent !== null && changed < MAX_PER_BATCH && !isIrisOverlay(parent)) {
+          changed += 1;
+          const text = (record.target.textContent ?? '').trim().slice(0, 80);
+          emit(EventType.DOM_TEXT, { text }, refs.refFor(parent));
+        }
+        continue;
+      }
       for (const node of record.addedNodes) {
         if (!(node instanceof Element) || added >= MAX_PER_BATCH) continue;
+        if (isIrisOverlay(node)) continue;
         const role = getRole(node);
         const name = getAccessibleName(node);
         if (!isMeaningful(role, name)) continue;
@@ -60,6 +80,7 @@ export function installDom(emit: Emit): Teardown {
       }
       for (const node of record.removedNodes) {
         if (!(node instanceof Element) || removed >= MAX_PER_BATCH) continue;
+        if (isIrisOverlay(node)) continue;
         const role = getRole(node);
         const name = getAccessibleName(node);
         if (!isMeaningful(role, name)) continue;
@@ -74,6 +95,7 @@ export function installDom(emit: Emit): Teardown {
     childList: true,
     attributes: true,
     attributeFilter: WATCHED_ATTRS,
+    characterData: true,
   });
 
   return () => {

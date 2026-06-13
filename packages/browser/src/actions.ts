@@ -33,12 +33,14 @@ function requireElement(ref: string): HTMLElement {
   return el;
 }
 
+const result = (ref: string, action: string): ActionResult => ({ ok: true, ref, action });
+
 /** Execute a single action against a ref. Returns immediately; reactions are observed. */
 export function executeAction(
   ref: string,
   action: string,
   args: Record<string, unknown> = {},
-): ActionResult {
+): ActionResult | Promise<ActionResult> {
   const el = requireElement(ref);
   switch (action) {
     case ActionType.CLICK:
@@ -47,18 +49,31 @@ export function executeAction(
     case ActionType.DBLCLICK:
       el.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
       break;
-    case ActionType.HOVER:
+    case ActionType.HOVER: {
+      firePointer(el, 'pointerover');
       el.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
       el.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
+      firePointer(el, 'pointermove');
+      el.dispatchEvent(new MouseEvent('mousemove', { bubbles: true }));
+      // hover-dwell: keep "hovering" for holdMs so timer-gated reveals can mount.
+      const holdMs = typeof args['holdMs'] === 'number' ? args['holdMs'] : 0;
+      if (holdMs > 0) return sleep(holdMs).then(() => result(ref, action));
       break;
+    }
     case ActionType.FOCUS:
       el.focus();
+      el.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
       break;
     case ActionType.BLUR:
+      // Fire a bubbling focusout so React 19's delegated root listener runs onBlur
+      // (commit-on-blur). el.blur() alone only works if the element was truly focused.
       el.blur();
+      el.dispatchEvent(new FocusEvent('blur'));
+      el.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
       break;
     case ActionType.FILL:
       if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
+        el.focus(); // focus first so a later blur commits (onBlur editors)
         setNativeValue(el, asString(args['value']));
       } else {
         throw new Error(`cannot fill a <${el.tagName.toLowerCase()}>`);
@@ -66,6 +81,7 @@ export function executeAction(
       break;
     case ActionType.TYPE:
       if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
+        el.focus();
         setNativeValue(el, el.value + asString(args['text']));
       } else {
         throw new Error(`cannot type into a <${el.tagName.toLowerCase()}>`);
@@ -129,17 +145,55 @@ export function executeAction(
     case ActionType.DRAG: {
       const toRef = asString(args['toRef']);
       const resolved = toRef !== undefined ? refs.resolve(toRef) : null;
-      dragElement(el, resolved instanceof HTMLElement ? resolved : null);
-      break;
+      return dragElement(el, resolved instanceof HTMLElement ? resolved : null, args['data']).then(
+        () => result(ref, action),
+      );
     }
     default:
       throw new Error(`unknown action '${action}'`);
   }
-  return { ok: true, ref, action };
+  return result(ref, action);
 }
 
-/** Synthesize a pointer-based drag (works for dnd-kit / react-beautiful-dnd) plus best-effort HTML5 DnD. */
-function dragElement(source: HTMLElement, target: HTMLElement | null): void {
+const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+/** Yield to the browser so React can flush a commit between synthetic phases. */
+const frame = (): Promise<void> =>
+  new Promise((r) => {
+    if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => r());
+    else setTimeout(r, 0);
+  });
+
+function firePointer(el: Element, type: string): void {
+  if (typeof PointerEvent === 'function') {
+    el.dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true }));
+  } else {
+    el.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true }));
+  }
+}
+
+function makeDataTransfer(data: unknown): DataTransfer | null {
+  if (typeof DataTransfer !== 'function') return null;
+  const dt = new DataTransfer();
+  // data: { mime, value } or [{ mime, value }, …]
+  const entries = Array.isArray(data) ? data : data !== undefined ? [data] : [];
+  for (const entry of entries) {
+    if (typeof entry === 'object' && entry !== null) {
+      const e = entry as { mime?: unknown; value?: unknown };
+      if (typeof e.mime === 'string' && typeof e.value === 'string') dt.setData(e.mime, e.value);
+    }
+  }
+  return dt;
+}
+
+/**
+ * Pointer-based drag (dnd-kit / react-beautiful-dnd) + best-effort HTML5 DnD. Async: yields a
+ * frame between phases so React commits state between steps (fixes stale-closure handlers).
+ */
+async function dragElement(
+  source: HTMLElement,
+  target: HTMLElement | null,
+  data: unknown,
+): Promise<void> {
   const dest = target ?? source;
   const fire = (el: Element, type: string): void => {
     if (typeof PointerEvent === 'function' && type.startsWith('pointer')) {
@@ -150,17 +204,22 @@ function dragElement(source: HTMLElement, target: HTMLElement | null): void {
   };
   fire(source, 'pointerdown');
   fire(source, 'mousedown');
+  await frame();
   fire(dest, 'pointermove');
   fire(dest, 'mousemove');
+  await frame();
   fire(dest, 'pointerup');
   fire(dest, 'mouseup');
 
   if (typeof DragEvent === 'function') {
-    const dataTransfer = typeof DataTransfer === 'function' ? new DataTransfer() : null;
+    const dataTransfer = makeDataTransfer(data);
     const init: DragEventInit = { bubbles: true, cancelable: true };
     if (dataTransfer !== null) init.dataTransfer = dataTransfer;
     source.dispatchEvent(new DragEvent('dragstart', init));
+    await frame();
+    dest.dispatchEvent(new DragEvent('dragenter', init));
     dest.dispatchEvent(new DragEvent('dragover', init));
+    await frame();
     dest.dispatchEvent(new DragEvent('drop', init));
     source.dispatchEvent(new DragEvent('dragend', init));
   }
@@ -186,9 +245,9 @@ export interface ActionStep {
   args?: Record<string, unknown>;
 }
 
-export function executeSequence(steps: ActionStep[]): { ok: true; count: number } {
+export async function executeSequence(steps: ActionStep[]): Promise<{ ok: true; count: number }> {
   for (const step of steps) {
-    executeAction(step.ref, step.action, step.args ?? {});
+    await executeAction(step.ref, step.action, step.args ?? {});
   }
   return { ok: true, count: steps.length };
 }

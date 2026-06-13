@@ -330,6 +330,17 @@ export const TOOLS: ToolDef[] = [
     },
   },
   {
+    name: IrisTool.NARRATE,
+    description:
+      'Narrate your intent on the page (presenter HUD) so the human watching sees what you are about to do and why. Use a short sentence before a meaningful action.',
+    inputSchema: { text: z.string(), level: z.string().optional(), ...sessionIdShape },
+    handler: (deps, args) =>
+      commandOrThrow(deps, asString(args['sessionId']), IrisCommand.NARRATE, {
+        text: args['text'],
+        level: args['level'],
+      }),
+  },
+  {
     name: IrisTool.EXPLORE,
     description:
       'Autonomous-exploration helper: list interactive elements (with refs) + current console-error count, so the agent can drive the app and report anomalies.',

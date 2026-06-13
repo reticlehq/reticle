@@ -8,7 +8,7 @@ export function IrisDev() {
     void (async () => {
       const [{ iris }, react] = await Promise.all([import('@iris/browser'), import('@iris/react')]);
       react.install();
-      iris.connect({ session: 'next-smoke' });
+      iris.connect({ session: 'next-smoke', present: true });
     })();
   }, []);
   return null;

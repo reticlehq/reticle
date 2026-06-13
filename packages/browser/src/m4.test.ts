@@ -7,7 +7,7 @@ import { installOverlay } from './overlay.js';
 import { refs } from './refs.js';
 
 describe('drag', () => {
-  it('fires a pointer/mouse drag from source to target', () => {
+  it('fires a pointer/mouse drag from source to target (async, yields frames)', async () => {
     document.body.innerHTML = '<div id="a">A</div><div id="b">B</div>';
     const a = document.getElementById('a') as HTMLElement;
     const b = document.getElementById('b') as HTMLElement;
@@ -15,9 +15,31 @@ describe('drag', () => {
     const up = vi.fn();
     a.addEventListener('mousedown', down);
     b.addEventListener('mouseup', up);
-    executeAction(refs.refFor(a), 'drag', { toRef: refs.refFor(b) });
+    await executeAction(refs.refFor(a), 'drag', { toRef: refs.refFor(b) });
     expect(down).toHaveBeenCalled();
     expect(up).toHaveBeenCalled();
+  });
+});
+
+describe('blur → focusout (React commit-on-blur)', () => {
+  it('dispatches a bubbling focusout so delegated listeners fire', () => {
+    document.body.innerHTML = '<input />';
+    const input = document.querySelector('input') as HTMLInputElement;
+    const onFocusOut = vi.fn();
+    document.addEventListener('focusout', onFocusOut);
+    input.focus();
+    void executeAction(refs.refFor(input), 'blur');
+    expect(onFocusOut).toHaveBeenCalled();
+    document.removeEventListener('focusout', onFocusOut);
+  });
+});
+
+describe('hover holdMs', () => {
+  it('resolves after the dwell so timer-gated reveals can mount', async () => {
+    document.body.innerHTML = '<div id="h">hover</div>';
+    const el = document.getElementById('h') as HTMLElement;
+    const r = await executeAction(refs.refFor(el), 'hover', { holdMs: 20 });
+    expect(r).toMatchObject({ ok: true, action: 'hover' });
   });
 });
 

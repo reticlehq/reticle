@@ -5,6 +5,7 @@ export interface ReactionSummary {
   network: number;
   domAdded: number;
   domRemoved: number;
+  domChanged: number;
   routeChanges: number;
   consoleErrors: number;
   animations: number;
@@ -24,6 +25,7 @@ export function buildReactionReport(events: IrisEvent[], windowMs: number): Reac
     network: 0,
     domAdded: 0,
     domRemoved: 0,
+    domChanged: 0,
     routeChanges: 0,
     consoleErrors: 0,
     animations: 0,
@@ -39,6 +41,10 @@ export function buildReactionReport(events: IrisEvent[], windowMs: number): Reac
         break;
       case EventType.DOM_REMOVED:
         summary.domRemoved += 1;
+        break;
+      case EventType.DOM_ATTR:
+      case EventType.DOM_TEXT:
+        summary.domChanged += 1;
         break;
       case EventType.ROUTE_CHANGE:
         summary.routeChanges += 1;

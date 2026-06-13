@@ -110,7 +110,7 @@ describe('actions', () => {
     const onClick = vi.fn();
     button.addEventListener('click', onClick);
     const ref = refs.refFor(button);
-    executeAction(ref, 'click');
+    void executeAction(ref, 'click');
     expect(onClick).toHaveBeenCalledOnce();
   });
 
@@ -120,7 +120,7 @@ describe('actions', () => {
     const onInput = vi.fn();
     input.addEventListener('input', onInput);
     const ref = refs.refFor(input);
-    executeAction(ref, 'fill', { value: '4242' });
+    void executeAction(ref, 'fill', { value: '4242' });
     expect(input.value).toBe('4242');
     expect(onInput).toHaveBeenCalled();
   });

@@ -10,7 +10,7 @@ const isDev = import.meta.env.DEV;
 // Dev-only: give the coding agent eyes into this running app.
 if (isDev) {
   installReactAdapter(); // DOM ref -> component stack -> source file
-  iris.connect({ session: 'demo' });
+  iris.connect({ session: 'demo', present: true }); // presenter: glow + cursor + HUD
 }
 
 const rootElement = document.getElementById('root');

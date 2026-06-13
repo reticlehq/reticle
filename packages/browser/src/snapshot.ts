@@ -1,6 +1,7 @@
 import { ElementState, SnapshotMode } from '@iris/protocol';
 import { getAccessibleName, getRole, getStates, getValue, isVisible } from './a11y.js';
 import { refs } from './refs.js';
+import { isIgnored } from './dom-ignore.js';
 
 const INTERACTIVE = new Set([
   'button',
@@ -42,6 +43,7 @@ export interface SnapshotOptions {
 
 function skip(el: Element): boolean {
   if (SKIP_TAGS.has(el.tagName.toLowerCase())) return true;
+  if (isIgnored(el)) return true; // Iris overlay + known dev overlays
   if (el.getAttribute('aria-hidden') === 'true') return true;
   if (el instanceof HTMLElement && el.hidden) return true;
   const view = el.ownerDocument.defaultView;

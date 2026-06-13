@@ -32,6 +32,7 @@ export const EventType = {
   DOM_ADDED: 'dom.added',
   DOM_REMOVED: 'dom.removed',
   DOM_ATTR: 'dom.attr',
+  DOM_TEXT: 'dom.text',
   NET_REQUEST: 'net.request',
   NET_PENDING: 'net.pending',
   ROUTE_CHANGE: 'route.change',
@@ -105,6 +106,8 @@ export const IrisCommand = {
   ACT: 'act',
   ACT_SEQUENCE: 'act_sequence',
   ANIMATIONS: 'animations',
+  NARRATE: 'narrate',
+  CLOCK: 'clock',
 } as const;
 export type IrisCommand = (typeof IrisCommand)[keyof typeof IrisCommand];
 

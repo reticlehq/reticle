@@ -18,5 +18,7 @@ export const IrisTool = {
   RECORD_START: 'iris_record_start',
   RECORD_STOP: 'iris_record_stop',
   EXPLORE: 'iris_explore',
+  NARRATE: 'iris_narrate',
+  CLOCK: 'iris_clock',
 } as const;
 export type IrisTool = (typeof IrisTool)[keyof typeof IrisTool];

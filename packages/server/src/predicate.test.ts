@@ -121,6 +121,41 @@ describe('predicate engine', () => {
     expect(r.pass).toBe(true);
   });
 
+  it('signal dataMatches supports operators and array contains', async () => {
+    const session = new FakeSession([
+      ev(EventType.SIGNAL, {
+        name: 'chat:edit-applied',
+        data: { count: 2, sections: ['hook', 'beat'] },
+      }),
+    ]);
+    const pass = await evaluatePredicate(session, {
+      kind: 'signal',
+      name: 'chat:edit-applied',
+      dataMatches: { count: { $gte: 1 }, sections: { $contains: 'hook' } },
+    });
+    expect(pass.pass).toBe(true);
+    const fail = await evaluatePredicate(session, {
+      kind: 'signal',
+      name: 'chat:edit-applied',
+      dataMatches: { count: { $gte: 5 } },
+    });
+    expect(fail.pass).toBe(false);
+  });
+
+  it('signal failure reports a near-miss with what actually fired', async () => {
+    const session = new FakeSession([
+      ev(EventType.SIGNAL, { name: 'section:added', data: { label: '' } }),
+    ]);
+    const r = await evaluatePredicate(session, {
+      kind: 'signal',
+      name: 'section:added',
+      dataMatches: { label: 'Beat' },
+    });
+    expect(r.pass).toBe(false);
+    expect(r.failureReason).toContain('fired');
+    expect(r.evidence).toMatchObject({ nearMiss: [{ label: '' }] });
+  });
+
   it('element predicate reports a near-miss when the name is wrong', async () => {
     const session = new FakeSession([], (query) => {
       // Only a button named "Cancel" exists.

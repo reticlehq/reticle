@@ -92,15 +92,55 @@ function num(value: unknown): number | undefined {
   return typeof value === 'number' ? value : undefined;
 }
 
-/** Shallow JSON pattern match with `*` wildcard support. */
+/**
+ * Match one value against a pattern. Supports `*` (present), strict equality, and operators:
+ * `{$gte,$lte,$gt,$lt}` (numbers), `{$contains}` (array membership or substring), `{$length}`.
+ */
+function matchValue(got: unknown, want: unknown): boolean {
+  if (want === '*') return got !== undefined;
+  if (typeof want === 'object' && want !== null && !Array.isArray(want)) {
+    for (const [op, val] of Object.entries(want as Record<string, unknown>)) {
+      const n = typeof got === 'number' ? got : NaN;
+      switch (op) {
+        case '$gte':
+          if (!(n >= (val as number))) return false;
+          break;
+        case '$lte':
+          if (!(n <= (val as number))) return false;
+          break;
+        case '$gt':
+          if (!(n > (val as number))) return false;
+          break;
+        case '$lt':
+          if (!(n < (val as number))) return false;
+          break;
+        case '$contains':
+          if (Array.isArray(got)) {
+            if (!got.includes(val)) return false;
+          } else if (typeof got === 'string') {
+            if (!got.includes(String(val))) return false;
+          } else {
+            return false;
+          }
+          break;
+        case '$length':
+          if (!((Array.isArray(got) || typeof got === 'string') && got.length === val)) {
+            return false;
+          }
+          break;
+        default:
+          return false;
+      }
+    }
+    return true;
+  }
+  return got === want;
+}
+
+/** Shallow JSON pattern match: each key in `pattern` must match (see matchValue). */
 function dataMatches(actual: Record<string, unknown>, pattern: Record<string, unknown>): boolean {
   for (const [key, want] of Object.entries(pattern)) {
-    const got = actual[key];
-    if (want === '*') {
-      if (got === undefined) return false;
-      continue;
-    }
-    if (got !== want) return false;
+    if (!matchValue(actual[key], want)) return false;
   }
   return true;
 }
@@ -254,9 +294,23 @@ function evalSignal(events: IrisEvent[], p: Extract<Predicate, { kind: 'signal' 
     }
     return true;
   });
-  return hit !== undefined
-    ? { pass: true, evidence: hit.data }
-    : { pass: false, failureReason: `no signal matched ${JSON.stringify(p)}` };
+  if (hit !== undefined) return { pass: true, evidence: hit.data };
+
+  // Near-miss: show signals that fired with the same name (so the agent sees the real data).
+  const sameName = events
+    .filter(
+      (e) =>
+        e.type === EventType.SIGNAL && (p.name === undefined || str(e.data['name']) === p.name),
+    )
+    .map((e) => e.data['data'] ?? e.data);
+  return {
+    pass: false,
+    failureReason:
+      sameName.length > 0
+        ? `signal '${p.name ?? '(any)'}' fired ${String(sameName.length)}x but data didn't match`
+        : `no signal matched ${JSON.stringify(p)}`,
+    evidence: sameName.length > 0 ? { nearMiss: sameName } : undefined,
+  };
 }
 
 /** Evaluate a predicate once against the session's current state + event buffer. */

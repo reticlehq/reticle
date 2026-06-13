@@ -3,6 +3,7 @@ import {
   IRIS_DEFAULT_PORT,
   IRIS_PROTOCOL_VERSION,
   IRIS_WS_PATH,
+  IrisCommand,
   MessageKind,
   type CommandMessage,
   type HelloMessage,
@@ -18,6 +19,9 @@ import { installConsole } from './observers/console.js';
 import { installAnimation } from './observers/animation.js';
 import { installScroll } from './observers/scroll.js';
 import { installOverlay, type OverlayHandle } from './overlay.js';
+import { Presenter } from './presenter.js';
+import { refs } from './refs.js';
+import { describe } from './a11y.js';
 import type { Teardown } from './observers/types.js';
 
 export interface IrisConnectOptions {
@@ -27,6 +31,22 @@ export interface IrisConnectOptions {
   session?: string;
   /** Show a small in-page status chip (connection + event count). */
   overlay?: boolean;
+  /** Presenter mode: glow border, animated cursor, click/hover effects, narration HUD. */
+  present?: boolean;
+  /** Per-action pacing (ms) in presenter mode so a human can follow. Default 450. */
+  pace?: number;
+}
+
+function str(value: unknown, fallback = ''): string {
+  return typeof value === 'string' ? value : fallback;
+}
+
+/** A short human label for a ref ("button \"Save\"") for the presenter HUD. */
+function refLabel(refId: string): string {
+  const el = refs.resolve(refId);
+  if (!(el instanceof Element)) return refId;
+  const d = describe(el);
+  return d.name.length > 0 ? `${d.role} "${d.name}"` : `${d.role} (${refId})`;
 }
 
 /**
@@ -41,6 +61,7 @@ export class Iris {
   #session = 'default';
   #start = 0;
   #overlay: OverlayHandle | undefined;
+  #presenter: Presenter | undefined;
   #eventCount = 0;
 
   connect(options: IrisConnectOptions = {}): void {
@@ -73,6 +94,11 @@ export class Iris {
       this.#overlay.update({ connected: true, events: 0 });
     }
 
+    if (options.present === true) {
+      this.#presenter = new Presenter(options.pace !== undefined ? { paceMs: options.pace } : {});
+      this.#presenter.mount();
+    }
+
     this.#transport.connect();
     this.#connected = true;
   }
@@ -95,6 +121,8 @@ export class Iris {
     this.#transport = undefined;
     this.#overlay?.destroy();
     this.#overlay = undefined;
+    this.#presenter?.destroy();
+    this.#presenter = undefined;
     this.#connected = false;
   }
 
@@ -123,15 +151,60 @@ export class Iris {
   }
 
   async #handleCommand(command: CommandMessage): Promise<CommandOutcome> {
+    // NARRATE: the agent tells the human what it's about to do / decide (presenter HUD).
+    if (command.name === IrisCommand.NARRATE) {
+      this.#presenter?.narrate(str(command.args['text']), str(command.args['level'], 'info'));
+      return { ok: true, result: { shown: this.#presenter !== undefined } };
+    }
+
     const handler = this.#registry.get(command.name);
     if (handler === undefined) {
       return { ok: false, error: `unknown command '${command.name}'` };
     }
+
+    await this.#presentBefore(command);
     try {
       const result = await handler(command.args);
+      this.#presenter?.result(true);
       return { ok: true, result };
     } catch (error) {
+      this.#presenter?.result(false);
       return { ok: false, error: error instanceof Error ? error.message : String(error) };
+    } finally {
+      this.#presenter?.scheduleIdle();
     }
+  }
+
+  /** Drive the presenter (cursor/effects/status) before the real action runs. */
+  async #presentBefore(command: CommandMessage): Promise<void> {
+    const p = this.#presenter;
+    if (p === undefined) return;
+    if (command.name === IrisCommand.ACT) {
+      const ref = str(command.args['ref']);
+      await p.beforeAct(ref, str(command.args['action']), refLabel(ref));
+    } else if (command.name === IrisCommand.ACT_SEQUENCE) {
+      const steps = Array.isArray(command.args['steps']) ? command.args['steps'] : [];
+      for (const step of steps) {
+        const s = step as { ref?: unknown; action?: unknown };
+        const ref = str(s.ref);
+        await p.beforeAct(ref, str(s.action), refLabel(ref));
+      }
+    } else {
+      p.status(presentStatus(command.name));
+    }
+  }
+}
+
+function presentStatus(commandName: string): string {
+  switch (commandName) {
+    case IrisCommand.SNAPSHOT:
+      return 'Looking at the page';
+    case IrisCommand.QUERY:
+    case IrisCommand.MATCH:
+      return 'Finding an element';
+    case IrisCommand.INSPECT:
+      return 'Inspecting an element';
+    default:
+      return commandName;
   }
 }
