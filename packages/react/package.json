@@ -1,6 +1,6 @@
 {
   "name": "@syrin/iris-react",
-  "version": "0.3.7",
+  "version": "0.3.8",
   "description": "Iris React adapter — maps a DOM ref to its component stack and source file via the fiber tree.",
   "type": "module",
   "main": "./dist/index.js",
