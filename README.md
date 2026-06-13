@@ -151,6 +151,7 @@ machine; it's localhost-only and tree-shaken out of production.
 
 - **[Getting Started](docs/getting-started.md)** — install, wire up your agent, first verification (step by step).
 - **[Integrate with Claude Code](docs/integrate-with-claude-code.md)** — copy-paste prompts to make a coding agent wire Iris in and use it to verify its own work.
+- **[Integration Patterns](docs/integration-patterns.md)** — the recommended zero-prod-bundle integration + how to adopt Iris incrementally (reuse testids → capabilities → signals at the points that matter).
 - **[Usage Guide](docs/usage.md)** — every tool, the predicate DSL, real situations & use cases, FAQ.
 - **[Token Efficiency](docs/token-efficiency.md)** — the head-to-head benchmark + methodology.
 - **[Use it in your own app (no npm publish)](docs/local-install.md)** — local-registry path for testing in a real external app today.
