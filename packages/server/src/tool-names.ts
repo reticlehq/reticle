@@ -6,6 +6,7 @@ export const IrisTool = {
   INSPECT: 'iris_inspect',
   ACT: 'iris_act',
   ACT_SEQUENCE: 'iris_act_sequence',
+  ACT_AND_WAIT: 'iris_act_and_wait',
   OBSERVE: 'iris_observe',
   WAIT_FOR: 'iris_wait_for',
   NETWORK: 'iris_network',

@@ -156,6 +156,17 @@ The timeline + summary of what happened.
 - **returns:** `{ window_ms, events: [...], summary: { network, domAdded, domRemoved,
 routeChanges, consoleErrors, animations, signals } }`.
 
+### `iris_act_and_wait`
+
+Act, then wait for a predicate — the whole act→observe→assert loop in one hop.
+
+- **args:** `ref`, `action`, `args?`, `until: <predicate>`, `timeout_ms?` (default 4000;
+  0 = evaluate once), `sessionId?`.
+- **returns:** `{ effect, verdict, trace }` — `effect` is the action result (`{ ok, ref, action }`),
+  `verdict` is `{ pass, evidence?, failureReason? }`, and `trace` is the reaction report of
+  everything the app did after the action. A failing `verdict` still returns `effect` + `trace` so
+  you can see what _did_ happen.
+
 ### `iris_wait_for`
 
 Block until a predicate holds (or time out). Looks both backward (recent buffer) and forward.

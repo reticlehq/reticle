@@ -166,6 +166,43 @@ export const TOOLS: ToolDef[] = [
     },
   },
   {
+    name: IrisTool.ACT_AND_WAIT,
+    description:
+      'Act on a ref, then wait for a predicate to hold — one hop for the act->observe->assert loop. ' +
+      'Returns { effect } (the action result), { verdict } (predicate pass/evidence/near-miss), ' +
+      'and { trace } (the reaction report of everything the app did after the action). ' +
+      'timeout_ms 0 evaluates the predicate once without waiting.',
+    inputSchema: {
+      ref: z.string(),
+      action: z.string(),
+      args: z.record(z.unknown()).optional(),
+      until: PredicateSchema,
+      timeout_ms: z.number().optional(),
+      ...sessionIdShape,
+    },
+    handler: async (deps, args) => {
+      const session = deps.sessions.resolve(asString(args['sessionId']));
+      const until = PredicateSchema.parse(args['until']);
+      const timeout = asNumber(args['timeout_ms']) ?? 4000;
+
+      const since = session.elapsed();
+      const actResult = await session.command(IrisCommand.ACT, {
+        ref: args['ref'],
+        action: args['action'],
+        args: args['args'] ?? {},
+      });
+      if (!actResult.ok) throw new Error(actResult.error ?? 'act failed');
+
+      const verdict =
+        timeout > 0
+          ? await waitForPredicate(session, until, timeout)
+          : await evaluatePredicate(session, until);
+
+      const trace = buildReactionReport(session.eventsSince(since), session.elapsed() - since);
+      return { effect: actResult.result, verdict, trace };
+    },
+  },
+  {
     name: IrisTool.OBSERVE,
     description:
       'Return the timeline of everything the app did in a window (DOM/network/route/console/animation/signal), with a summary. Use after an action.',
