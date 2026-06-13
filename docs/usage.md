@@ -852,11 +852,25 @@ the browser's real hit-testing, which synthetic events don't drive. Every `iris_
 tells you which path ran:
 
 ```jsonc
-{ since, dispatched, settled, inputMode: "synthetic" | "real", result, session, warning? }
+{ since, dispatched, settled, inputMode: "synthetic" | "real", inputModeReason?, result, session, warning? }
 ```
 
 When `inputMode` is `"synthetic"` and the target has hover/enter handlers, the result carries a
 `warning` so you know a hover may be a no-op — you never have to reverse-engineer it.
+
+**`inputModeReason` — never a silent fallback.** When real input **is** configured but a pointer
+act still ran synthetic, the result says _why_, so per-element inconsistency is diagnosable
+instead of mysterious:
+
+| `inputModeReason`                      | meaning / fix                                                                                  |
+| -------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `page-not-correlated-to-a-cdp-target`  | no CDP page matches the session URL — usually a fresh tab or a CDP target that isn't this page |
+| `element-not-locatable`                | the element had no box (off-screen / stale ref) — `scrollIntoView` first                       |
+| `drag-target-unresolved`               | a drag's `toRef` was missing or not locatable                                                  |
+| `provider-declined` / `provider-error` | the CDP provider declined or threw (the latter also sets `warning`)                            |
+| `not-a-pointer-action`                 | `fill`/`type`/etc. — these are always synthetic by design                                      |
+
+(No `inputModeReason` is set when real input simply isn't configured — synthetic is the expected default there.)
 
 ### Enable real input (optional, opt-in)
 
@@ -879,7 +893,7 @@ dblclick/drag), and reports `inputMode: "real"`.
      "mcpServers": {
        "iris": {
          "command": "npx",
-         "args": ["@syrin/iris-server"],
+         "args": ["@syrin/iris"],
          "env": { "IRIS_CDP_URL": "http://localhost:9222" },
        },
      },
@@ -891,6 +905,13 @@ native hover/enter so hover-gated suggestion panels, tooltips, and pointer-based
 drivable. Everything else is unchanged, and with no `IRIS_CDP_URL` set, Iris stays in the
 synthetic (zero-dependency, in-page) mode — Playwright is an optional dependency loaded only
 when you opt in.
+
+> **SPA navigation is handled.** The URL correlation tracks client-side route changes
+> (`pushState`/`replaceState`/`popstate`), so real input keeps working after your app navigates
+> into a sub-route — e.g. the hover/quick-edit cluster on a `/workspace` view stays drivable.
+> (Before 0.3.6 the reported session URL froze at load, so real input silently dropped to
+> synthetic after the first SPA navigation; if you see `inputModeReason:"page-not-correlated-to-a-cdp-target"`,
+> upgrade to ≥ 0.3.6.)
 
 > **Watching the agent (presenter, M5.8).** With `present: true` the activity border now glows
 > once while the agent is busy and fades when idle (no per-action strobe); the HUD sits
