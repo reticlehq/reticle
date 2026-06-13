@@ -855,3 +855,10 @@ when you opt in.
 > **bottom-center**, shows a **READING** vs **ACTING** chip so you can tell observation from
 > action at a glance, and `iris_narrate` lines are **queued** with a minimum on-screen dwell so
 > none flash by unread.
+
+> **Limitation — un-scriptable tabs.** Iris observes/drives a tab through the in-page SDK +
+> (optionally) CDP; it **cannot bring to front or recover a browser tab the OS won't let it
+> script** (e.g. a backgrounded or non-default-browser tab reporting `hidden:true`/`throttled:true`).
+> When that happens, `iris_sessions` and every act/assert result carry a `session.recommendation`
+> saying so and pointing to `iris drive <url>` for a guaranteed scriptable context — refocus the
+> tab, or use `iris drive`.

@@ -81,6 +81,15 @@ export type HealthReason = (typeof HealthReason)[keyof typeof HealthReason];
 export const THROTTLED_WARNING =
   'tab throttled; timer/rAF/pointer gestures may silently no-op — refocus before driving';
 
+/**
+ * P2-surface: actionable companion to THROTTLED_WARNING. Surfaced on act/assert results and
+ * iris_sessions rows when a tab is hidden/throttled and may be un-focusable/un-recoverable from
+ * the in-page SDK + CDP path. Points at the `iris drive` escape hatch (a guaranteed scriptable
+ * context). Iris cannot bring such a tab to front or recover it, so it names the limit instead.
+ */
+export const UNSCRIPTABLE_TAB_RECOMMENDATION =
+  'tab hidden/throttled and may be un-focusable from here; refocus it, or run `iris drive <url>` for a guaranteed scriptable context';
+
 /** R1: which input path executed an action — native (CDP/Playwright) vs synthetic dispatchEvent. */
 export const InputMode = {
   REAL: 'real',

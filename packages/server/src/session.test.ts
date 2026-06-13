@@ -4,6 +4,7 @@ import {
   IRIS_PROTOCOL_VERSION,
   MessageKind,
   SESSION_HEALTH,
+  UNSCRIPTABLE_TAB_RECOMMENDATION,
   type HelloMessage,
 } from '@iris/protocol';
 import { Session } from './session.js';
@@ -68,5 +69,34 @@ describe('F2 session health', () => {
     expect(info.focused).toBe(false);
     expect(info.throttled).toBe(true);
     expect(typeof info.lastSeenMs).toBe('number');
+  });
+});
+
+describe('P2-surface un-scriptable tab recommendation', () => {
+  it('info() carries the recommendation when hidden', () => {
+    const { session } = makeSession();
+    session.applyHealth(true, false);
+    expect(session.info().recommendation).toBe(UNSCRIPTABLE_TAB_RECOMMENDATION);
+  });
+
+  it('info() recommends when stale past the threshold', () => {
+    const { session, tick } = makeSession();
+    session.touch();
+    tick(SESSION_HEALTH.STALE_THRESHOLD_MS + 1);
+    expect(session.info().recommendation).toBe(UNSCRIPTABLE_TAB_RECOMMENDATION);
+  });
+
+  it('info() omits recommendation when visible and recently seen', () => {
+    const { session, tick } = makeSession();
+    session.applyHealth(false, true);
+    tick(1000);
+    session.touch();
+    expect('recommendation' in session.info()).toBe(false);
+  });
+
+  it('health() carries the recommendation when throttled', () => {
+    const { session } = makeSession();
+    session.applyHealth(true, false);
+    expect(session.health().recommendation).toBe(UNSCRIPTABLE_TAB_RECOMMENDATION);
   });
 });

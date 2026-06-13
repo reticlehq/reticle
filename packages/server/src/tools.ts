@@ -137,7 +137,7 @@ export const TOOLS: ToolDef[] = [
   {
     name: IrisTool.SESSIONS,
     description:
-      'List connected browser sessions (tab url/title, sessionId, last-seen, and health: hidden/focused/throttled).',
+      'List connected browser sessions (tab url/title, sessionId, last-seen, and health: hidden/focused/throttled), plus a `recommendation` pointing to `iris drive` when a tab is hidden/throttled and may be un-scriptable from here.',
     inputSchema: {},
     handler: (deps) => Promise.resolve({ sessions: deps.sessions.list() }),
   },
@@ -188,7 +188,7 @@ export const TOOLS: ToolDef[] = [
   {
     name: IrisTool.ACT,
     description:
-      'Execute one action against a ref: click|dblclick|hover|focus|fill|type|clear|select|check|uncheck|submit|press|scrollIntoView. Returns immediately with a `since` cursor for observe. Result includes effect: { dispatched, targetMatched, visible, enabled, defaultPrevented, focusMoved, valueChanged, domMutatedWithin } so you can tell "action missed" vs "app didn\'t react". Top-level dispatched/settled/settleReason report whether the click landed (dispatched) and whether a real frame flushed (settled) vs a throttled-tab timeout (settleReason:"timeout") — a settle timeout never fails the tool. Every result also carries inputMode. With real-input mode (server cdpUrl/IRIS_CDP_URL set) pointer actions (hover/click/dblclick/drag) are driven via native CDP input and return inputMode:"real" WITHOUT the synthetic `effect` block — observe the reaction with iris_observe. Otherwise inputMode:"synthetic". Real-input applies to iris_act only (not act_sequence/act_and_wait).',
+      'Execute one action against a ref: click|dblclick|hover|focus|fill|type|clear|select|check|uncheck|submit|press|scrollIntoView. Returns immediately with a `since` cursor for observe. Result includes effect: { dispatched, targetMatched, visible, enabled, defaultPrevented, focusMoved, valueChanged, domMutatedWithin } so you can tell "action missed" vs "app didn\'t react". Top-level dispatched/settled/settleReason report whether the click landed (dispatched) and whether a real frame flushed (settled) vs a throttled-tab timeout (settleReason:"timeout") — a settle timeout never fails the tool. Every result also carries inputMode. With real-input mode (server cdpUrl/IRIS_CDP_URL set) pointer actions (hover/click/dblclick/drag) are driven via native CDP input and return inputMode:"real" WITHOUT the synthetic `effect` block — observe the reaction with iris_observe. Otherwise inputMode:"synthetic". Real-input applies to iris_act only (not act_sequence/act_and_wait). When the tab is hidden/throttled, session.recommendation explains the limit (Iris cannot bring such a tab to front) and points to `iris drive` for a guaranteed scriptable context.',
     inputSchema: {
       ref: z.string(),
       action: z.string(),

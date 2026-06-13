@@ -8,6 +8,7 @@ import {
   type IrisEvent,
 } from '@iris/protocol';
 import { RingBuffer } from './ring-buffer.js';
+import { buildSessionRecommendation } from './session-recommendation.js';
 
 export interface SessionInfo {
   sessionId: string;
@@ -20,6 +21,8 @@ export interface SessionInfo {
   hidden: boolean;
   focused: boolean;
   throttled: boolean;
+  /** P2-surface: present only when hidden/throttled — points at the `iris drive` escape hatch. */
+  recommendation?: string;
 }
 
 /** F2: the health block spliced onto act/assert results. */
@@ -27,6 +30,8 @@ export interface SessionHealth {
   lastSeenMs: number;
   throttled: boolean;
   focused: boolean;
+  /** P2-surface: present only when hidden/throttled — points at the `iris drive` escape hatch. */
+  recommendation?: string;
 }
 
 type PendingCommand = {
@@ -101,7 +106,18 @@ export class Session {
 
   /** F2: the attachable health block — single source of truth for the tools. */
   health(): SessionHealth {
-    return { lastSeenMs: this.lastSeenMs(), throttled: this.throttled(), focused: this.#focused };
+    const base: SessionHealth = {
+      lastSeenMs: this.lastSeenMs(),
+      throttled: this.throttled(),
+      focused: this.#focused,
+    };
+    // P2-surface: attach the escape-hatch hint only when un-scriptable (keeps field absent otherwise).
+    const recommendation = buildSessionRecommendation({
+      hidden: this.#hidden,
+      throttled: base.throttled,
+      focused: base.focused,
+    });
+    return recommendation === undefined ? base : { ...base, recommendation };
   }
 
   info(): SessionInfo {
