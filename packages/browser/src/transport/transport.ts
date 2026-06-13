@@ -25,6 +25,11 @@ export interface TransportDeps {
    * the SDK must end the session itself instead of showing a forever-"running" HUD.
    */
   onConnectionLost?: () => void;
+  /**
+   * Called with the cumulative drop count each time the outbound queue overflows. The
+   * caller (Iris) emits a synthetic TRANSPORT_OVERFLOW event so the agent learns about gaps.
+   */
+  onOverflow?: (dropped: number) => void;
 }
 
 const RECONNECT_DELAY_MS = 1000;
@@ -39,6 +44,7 @@ export class Transport {
   #disconnectedSince: number | undefined;
   /** Whether onConnectionLost has already fired for the current outage (fire-once). */
   #lost = false;
+  #overflowCount = 0;
   readonly #deps: TransportDeps;
   readonly #now: () => number;
 
@@ -128,6 +134,9 @@ export class Transport {
       this.#ws.send(text);
     } else if (this.#queue.length < MAX_QUEUE) {
       this.#queue.push(text);
+    } else {
+      this.#overflowCount += 1;
+      this.#deps.onOverflow?.(this.#overflowCount);
     }
   }
 

@@ -1,6 +1,6 @@
 # CLAUDE.md — Iris
 
-> Master rules for this codebase. Read this first. The `skills/` files hold the depth;
+> Master rules for this codebase. Read this first. The `dev-skills/` files hold the depth;
 > this file holds the non-negotiables and points you to the right skill.
 
 ## What Iris is
@@ -23,7 +23,8 @@ apps/demo              @syrin/iris-demo         — Vite/React dashboard used to
 apps/api               @syrin/iris-api          — Express backend exercising real-world behaviors (CJS-ish .mjs)
 apps/next-smoke        @syrin/iris-next-smoke   — Next.js 15 app verifying Iris on Next
 docs/                  — user-facing docs (getting-started, usage, token-efficiency, local-install)
-skills/                — engineering reference docs (open the one that matches your task)
+skill/                 — PUBLIC skill for users integrating Iris into their own project
+dev-skills/            — engineering reference docs for contributors (open the one that matches your task)
 plan/                  — research/design docs + throwaway test harnesses (ALWAYS gitignored)
 ```
 
@@ -40,18 +41,18 @@ strict TypeScript; `@syrin/iris-babel-plugin`/`@syrin/iris-next` are plain CJS t
 - **`@syrin/iris-server` only runs in Node.** It never imports DOM APIs.
 - **`@syrin/iris-react` is optional enrichment.** Core must work without it.
 
-## Non-negotiable rules (the short list — depth in skills/)
+## Non-negotiable rules (the short list — depth in dev-skills/)
 
-1. **Equality:** `===`/`!==` always. `eqeqeq` is an error. → `skills/typescript.md`
+1. **Equality:** `===`/`!==` always. `eqeqeq` is an error. → `dev-skills/typescript.md`
 2. **No `any`.** Use `unknown` + zod narrowing at boundaries. `no-explicit-any` is an error.
-3. **No free strings.** Every domain/wire/UI string is a named constant. → `skills/conventions.md`
+3. **No free strings.** Every domain/wire/UI string is a named constant. → `dev-skills/conventions.md`
 4. **No non-null `!`.** Use optional chaining + explicit null checks.
-5. **Tests first.** RED → GREEN → REFACTOR. → `skills/testing.md`
-6. **500-line file cap.** Over it = a cohesion failure; split before adding. → `skills/conventions.md`
+5. **Tests first.** RED → GREEN → REFACTOR. → `dev-skills/testing.md`
+6. **500-line file cap.** Over it = a cohesion failure; split before adding. → `dev-skills/conventions.md`
 7. **Inject the clock.** Never call `Date.now()`/`Math.random()` inside pure logic — pass them in.
-8. **Scope every data access to the authenticated principal.** → `skills/security.md`
-9. **Design tokens are the only place design values live.** → `skills/design.md`
-10. **No internal tracking tags.** Comments, file names, directory names, and test descriptions must never contain design-doc reference codes (letter + digit patterns like `N5`, `G4`, `M8`, `P2`, `F1`, `R1`) or internal version strings (like `0.3.7`). → `skills/conventions.md`
+8. **Scope every data access to the authenticated principal.** → `dev-skills/security.md`
+9. **Design tokens are the only place design values live.** → `dev-skills/design.md`
+10. **No internal tracking tags.** Comments, file names, directory names, and test descriptions must never contain design-doc reference codes (letter + digit patterns like `N5`, `G4`, `M8`, `P2`, `F1`, `R1`) or internal version strings (like `0.3.7`). → `dev-skills/conventions.md`
 
 ## Naming conventions
 
@@ -67,21 +68,21 @@ strict TypeScript; `@syrin/iris-babel-plugin`/`@syrin/iris-next` are plain CJS t
 
 ## Skills index — open the file that matches the task
 
-| Task                                            | Open                      |
-| ----------------------------------------------- | ------------------------- |
-| Building any UI / dev overlay                   | `skills/design.md`        |
-| TypeScript pattern or rule                      | `skills/typescript.md`    |
-| Python (N/A here, kept for parity)              | `skills/python.md`        |
-| Before writing any feature                      | `skills/testing.md`       |
-| Naming / constants                              | `skills/conventions.md`   |
-| Multi-agent / MCP tool design                   | `skills/agents.md`        |
-| New package or wire contract                    | `skills/architecture.md`  |
-| Any persistence (baselines/recordings)          | `skills/database.md`      |
-| Anything touching the bridge/transport security | `skills/security.md`      |
-| Anything slow or memory-hungry                  | `skills/performance.md`   |
-| Logs / metrics / debugging the bridge           | `skills/observability.md` |
-| Any new MCP tool surface                        | `skills/api-design.md`    |
-| CI / build / release                            | `skills/cicd.md`          |
+| Task                                            | Open                          |
+| ----------------------------------------------- | ----------------------------- |
+| Building any UI / dev overlay                   | `dev-skills/design.md`        |
+| TypeScript pattern or rule                      | `dev-skills/typescript.md`    |
+| Python (N/A here, kept for parity)              | `dev-skills/python.md`        |
+| Before writing any feature                      | `dev-skills/testing.md`       |
+| Naming / constants                              | `dev-skills/conventions.md`   |
+| Multi-agent / MCP tool design                   | `dev-skills/agents.md`        |
+| New package or wire contract                    | `dev-skills/architecture.md`  |
+| Any persistence (baselines/recordings)          | `dev-skills/database.md`      |
+| Anything touching the bridge/transport security | `dev-skills/security.md`      |
+| Anything slow or memory-hungry                  | `dev-skills/performance.md`   |
+| Logs / metrics / debugging the bridge           | `dev-skills/observability.md` |
+| Any new MCP tool surface                        | `dev-skills/api-design.md`    |
+| CI / build / release                            | `dev-skills/cicd.md`          |
 
 ## Pre/post-coding checklist
 

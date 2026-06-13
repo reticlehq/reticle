@@ -159,6 +159,9 @@ const CSS = `
   box-shadow:inset 0 0 0 3px rgba(34,211,238,.9),inset 0 0 28px 6px rgba(34,211,238,.4);}
 [data-iris-mode="reading"] [data-iris-ring]{border-color:#22d3ee;
   box-shadow:0 0 0 3px rgba(34,211,238,.25);}
+[data-iris-overlay][data-iris-throttled="1"] [data-iris-glow][data-on="1"]{
+  box-shadow:inset 0 0 0 3px rgba(251,191,36,.9),inset 0 0 28px 6px rgba(251,191,36,.45);}
+[data-iris-overlay][data-iris-throttled="1"] [data-iris-hud]{--iris-accent:#fbbf24;--iris-accent-soft:rgba(251,191,36,.16);}
 ${LOG_CSS}
 ${CONTROLS_CSS}`;
 
@@ -242,6 +245,7 @@ const GLOW_OFF = '0';
 const DATA_ON = 'data-on';
 /** Overlay-root attribute toggled when the panel is minimised to a bar. */
 const MIN_ATTR = 'data-iris-min';
+const THROTTLED_ATTR = 'data-iris-throttled';
 
 export class Presenter {
   readonly #paceMs: number;
@@ -688,6 +692,19 @@ export class Presenter {
   /** Legacy no-op kept for source compat; outcomes now flow through LogHandle.result(). */
   result(_ok: boolean): void {
     /* no-op */
+  }
+
+  /**
+   * Mirror the server's session.throttled() state onto the HUD border. When throttled (tab
+   * backgrounded or stale), the border turns amber so the developer knows actions are no-oping —
+   * the same signal the agent already reads from result.session.throttled.
+   */
+  setThrottled(throttled: boolean): void {
+    this.#root?.setAttribute(THROTTLED_ATTR, throttled ? '1' : '0');
+    if (throttled && this.#actLine !== undefined) {
+      this.#actLine.textContent =
+        'Tab backgrounded — actions throttled. Bring tab to front or use `iris drive`.';
+    }
   }
 
   /** Fly the cursor to an element, play the action's effect, then pace for the human. */

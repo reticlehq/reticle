@@ -1,4 +1,4 @@
-# skills/testing.md — TDD & Testing
+# dev-skills/testing.md — TDD & Testing
 
 **Open when:** before writing any feature code. (Maps to Foundation II.7.)
 

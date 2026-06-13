@@ -66,7 +66,7 @@ describe('project tools — temp dir, never touches the repo', () => {
     const res = (await tool(IrisTool.RUN_RECORD).handler(deps, {
       name: 'checkout',
       status: RunStatus.PASS,
-    })) as { recorded: boolean; name: string };
+    })) as { recorded: boolean; runName: string };
     expect(res.recorded).toBe(true);
     const last = await deps.project.lastRun('checkout');
     expect(last?.kind).toBe(RunKind.MANUAL);

@@ -6,6 +6,7 @@ import {
   IrisCommand,
   MessageKind,
   SESSION_HEALTH,
+  SESSION_LEASE,
   SESSION_LIFECYCLE,
   SessionState,
   type CommandResult,
@@ -29,6 +30,8 @@ export interface SessionInfo {
   throttled: boolean;
   /** present only when hidden/throttled — points at the `iris drive` escape hatch. */
   recommendation?: string;
+  stale?: boolean;
+  cleanup_suggestion?: string;
 }
 
 /** The health block spliced onto act/assert results. */
@@ -89,6 +92,8 @@ export class Session {
   /** True when the reaper/disconnect ended this session — such an end is revivable; explicit ends are not. */
   #autoEnded = false;
   readonly #inbox: InboxMessage[] = [];
+  /** Whether the session_lease has already been returned (fire-once per session). */
+  #firstCommandDone = false;
 
   constructor(hello: HelloMessage, socket: WebSocket, clock: Clock) {
     this.id = hello.sessionId;
@@ -146,7 +151,7 @@ export class Session {
   }
 
   info(): SessionInfo {
-    return {
+    const base: SessionInfo = {
       sessionId: this.id,
       url: this.url,
       title: this.title,
@@ -155,6 +160,17 @@ export class Session {
       hidden: this.#hidden,
       ...this.health(),
     };
+    if (this.staleMs() > SESSION_LEASE.STALE_AFTER_MS) {
+      base.stale = true;
+      base.cleanup_suggestion =
+        'Call iris_end_session to free this session before starting new work.';
+    }
+    return base;
+  }
+
+  /** Wall-clock age of the session in milliseconds. */
+  staleMs(): number {
+    return this.#clock() - this.#startedAt;
   }
 
   /** Re-stamp an incoming event with server-relative time, buffer it, and fan out. */
@@ -370,6 +386,34 @@ export class Session {
    */
   pushPresenter(state: SessionState, text?: string): void {
     this.#post(IrisCommand.PRESENTER, text === undefined ? { state } : { state, text });
+  }
+
+  /**
+   * Returns the one-time session lease block on the very first agent command, then undefined
+   * forever after. The lease carries an IMPORTANT reminder to call iris_end_session. Coding agents
+   * (Claude Code, Codex) read tool results — they will see this and remember to clean up.
+   */
+  takeSessionLease(): { sessionId: string; opened_at: number; IMPORTANT: string } | undefined {
+    if (this.#firstCommandDone) return undefined;
+    this.#firstCommandDone = true;
+    return {
+      sessionId: this.id,
+      opened_at: this.#startedAt,
+      IMPORTANT:
+        'Call iris_end_session when your task is fully complete. Do not rely on the idle timeout — explicit cleanup guarantees the next agent starts with a clean slate.',
+    };
+  }
+
+  /**
+   * Returns a human-readable age warning after SESSION_LEASE.WARN_AFTER_MS (10 min), else undefined.
+   * Spliced onto every session-bound tool result so the agent is passively reminded to clean up
+   * without needing an explicit polling loop.
+   */
+  ageWarning(): string | undefined {
+    const ageMs = this.#clock() - this.#startedAt;
+    if (ageMs < SESSION_LEASE.WARN_AFTER_MS) return undefined;
+    const minutes = Math.floor(ageMs / 60_000);
+    return `Session ${this.id} has been open for ${String(minutes)} minutes. If your task is complete, call iris_end_session now.`;
   }
 
   /** Fire-and-forget command send — NOT registered in #pending (no correlated result expected). */

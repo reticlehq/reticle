@@ -1,4 +1,4 @@
-# skills/design.md — Design Tokens & UI
+# dev-skills/design.md — Design Tokens & UI
 
 **Open when:** building any UI — the demo dashboard or the Iris dev overlay.
 

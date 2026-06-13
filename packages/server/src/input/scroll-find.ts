@@ -12,6 +12,13 @@ export interface ScrollFindQuery {
   name?: string;
   /** Ref of the scrollable list container; omit to scroll the document. */
   container?: string;
+  /**
+   * Known index of the target row in the list. When combined with totalCount, enables bisection:
+   * one jump to the estimated scroll offset rather than 20 sequential viewport scrolls.
+   */
+  targetIndex?: number;
+  /** Total item count in the list (required for bisection). */
+  totalCount?: number;
 }
 
 export interface ScrollFindResult {
@@ -58,7 +65,25 @@ export async function scrollToFind(
   const first = await queryFirst(session, q);
   if (first !== undefined) return { found: true, element: first, scrolls: 0, exhausted: false };
 
+  // Bisection: if the caller knows the target index and list size, jump to the estimated offset
+  // in one scroll command rather than stepping a viewport at a time. Then refine linearly.
   let scrolls = 0;
+  if (q.targetIndex !== undefined && q.totalCount !== undefined && q.totalCount > 1) {
+    const fraction = Math.min(1, Math.max(0, q.targetIndex / q.totalCount));
+    const sr = await session.command(IrisCommand.SCROLL, {
+      ...(q.container !== undefined ? { ref: q.container } : {}),
+      fraction,
+    });
+    scrolls += 1;
+    const hit = await queryFirst(session, q);
+    if (hit !== undefined) return { found: true, element: hit, scrolls, exhausted: false };
+    // Fall through to linear refinement from current position (already near the target).
+    const data = asRecord(sr.result);
+    if (data['atEnd'] === true || data['scrolled'] === false) {
+      return { found: false, scrolls, exhausted: true };
+    }
+  }
+
   for (let i = 0; i < max; i += 1) {
     const sr = await session.command(
       IrisCommand.SCROLL,

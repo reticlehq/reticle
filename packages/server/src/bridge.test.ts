@@ -326,10 +326,10 @@ describe('bridge round-trip (north-star)', () => {
   });
 
   it('records a span and returns its reaction report', async () => {
-    await callTool(deps, 'iris_record_start', { name: 'flow' });
+    await callTool(deps, 'iris_record_start', { recordingName: 'flow' });
     browser.emit(EventType.NET_REQUEST, { method: 'GET', url: '/api/x', status: 200 });
     await waitUntil(() => bridge.sessions.resolve('demo').eventsSince(0).length >= 4);
-    const rec = (await callTool(deps, 'iris_record_stop', { name: 'flow' })) as {
+    const rec = (await callTool(deps, 'iris_record_stop', { recordingName: 'flow' })) as {
       summary: { network: number };
     };
     expect(rec.summary.network).toBeGreaterThanOrEqual(1);
@@ -597,19 +597,21 @@ describe('record -> compile -> replay', () => {
     await bridge.close();
   });
 
-  it('iris_replay is registered with name in its schema', () => {
+  it('iris_replay is registered with recordingName in its schema', () => {
     const tool = TOOLS.find((t) => t.name === IrisTool.REPLAY);
     expect(tool).toBeDefined();
-    expect(tool?.inputSchema['name']).toBeDefined();
+    expect(tool?.inputSchema['recordingName']).toBeDefined();
   });
 
   it('compiles a testid-bound program (stable) and keeps the reaction report', async () => {
     browser.actHasTestid = true;
-    await callTool(deps, IrisTool.RECORD_START, { name: 'flow' });
+    await callTool(deps, IrisTool.RECORD_START, { recordingName: 'flow' });
     await callTool(deps, IrisTool.ACT, { ref: 'e7', action: 'click' });
     browser.emit(EventType.NET_REQUEST, { method: 'POST', url: '/api/order', status: 200 });
     await waitUntil(() => bridge.sessions.resolve('demo').eventsSince(0).length >= 1);
-    const rec = (await callTool(deps, IrisTool.RECORD_STOP, { name: 'flow' })) as RecordStopResult;
+    const rec = (await callTool(deps, IrisTool.RECORD_STOP, {
+      recordingName: 'flow',
+    })) as RecordStopResult;
     expect(rec.program.version).toBe(1);
     expect(rec.program.steps).toHaveLength(1);
     expect(rec.program.steps[0]).toEqual({
@@ -648,18 +650,20 @@ describe('record -> compile -> replay', () => {
   });
 
   it('replay of an unknown program throws', async () => {
-    await expect(callTool(deps, IrisTool.REPLAY, { name: 'nope' })).rejects.toThrow(
+    await expect(callTool(deps, IrisTool.REPLAY, { recordingName: 'nope' })).rejects.toThrow(
       /no compiled recording named 'nope'/,
     );
   });
 
   it('replay stops with ok:false when a testid does not resolve', async () => {
-    await callTool(deps, IrisTool.RECORD_START, { name: 'gone' });
+    await callTool(deps, IrisTool.RECORD_START, { recordingName: 'gone' });
     await callTool(deps, IrisTool.ACT, { ref: 'e7', action: 'click' });
-    await callTool(deps, IrisTool.RECORD_STOP, { name: 'gone' });
+    await callTool(deps, IrisTool.RECORD_STOP, { recordingName: 'gone' });
 
     browser.queryResolves = false;
-    const replay = (await callTool(deps, IrisTool.REPLAY, { name: 'gone' })) as ReplayResult;
+    const replay = (await callTool(deps, IrisTool.REPLAY, {
+      recordingName: 'gone',
+    })) as ReplayResult;
     expect(replay.ok).toBe(false);
     expect(replay.steps[0]?.ok).toBe(false);
     expect(replay.steps[0]?.error).toMatch(/did not resolve/);
@@ -667,16 +671,20 @@ describe('record -> compile -> replay', () => {
   });
 
   it('captures and replays an act_sequence step', async () => {
-    await callTool(deps, IrisTool.RECORD_START, { name: 'seq' });
+    await callTool(deps, IrisTool.RECORD_START, { recordingName: 'seq' });
     await callTool(deps, IrisTool.ACT_SEQUENCE, {
       steps: [{ ref: 'e7', action: 'click' }],
     });
-    const rec = (await callTool(deps, IrisTool.RECORD_STOP, { name: 'seq' })) as RecordStopResult;
+    const rec = (await callTool(deps, IrisTool.RECORD_STOP, {
+      recordingName: 'seq',
+    })) as RecordStopResult;
     expect(rec.program.steps[0]?.tool).toBe('iris_act_sequence');
     expect(rec.program.steps[0]?.stable).toBe(true);
 
     browser.received.length = 0;
-    const replay = (await callTool(deps, IrisTool.REPLAY, { name: 'seq' })) as ReplayResult;
+    const replay = (await callTool(deps, IrisTool.REPLAY, {
+      recordingName: 'seq',
+    })) as ReplayResult;
     expect(replay.ok).toBe(true);
     expect(replay.steps[0]?.tool).toBe('iris_act_sequence');
     const seqCmd = browser.received.find((c) => c.name === IrisCommand.ACT_SEQUENCE);

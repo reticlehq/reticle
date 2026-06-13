@@ -1,4 +1,4 @@
-# skills/agents.md — Agents & MCP Tool Design
+# dev-skills/agents.md — Agents & MCP Tool Design
 
 **Open when:** designing the MCP tool surface or multi-agent workflows.
 

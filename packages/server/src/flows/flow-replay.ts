@@ -99,6 +99,7 @@ function readQuery(result: CommandResult): { refs: string[]; hint?: QueryEmptyHi
       hint: {
         route: asString(hint['route']) ?? '',
         presentTestids: present,
+        presentRegions: [],
         knownEmptyState: hint['knownEmptyState'] === true,
       },
     };

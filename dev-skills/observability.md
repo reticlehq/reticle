@@ -1,4 +1,4 @@
-# skills/observability.md — Observability
+# dev-skills/observability.md — Observability
 
 **Open when:** adding logs/metrics or debugging the bridge. (Foundation II.6.)
 

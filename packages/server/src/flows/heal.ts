@@ -37,26 +37,41 @@ export function confidenceFor(from: string, to: string): number {
   return raw;
 }
 
-/**
- * A confident rebind for a TESTID drift, or undefined. Gates on: the drift is a testid miss
- * (not a signal), a nearest present testid exists, and its confidence clears HEAL_CONFIDENCE_MIN.
- * Below the floor → undefined (drift is still reported by the caller, just never auto-rewritten).
- */
-export function proposeRebind(drift: Drift, step: number): HealProposal | undefined {
+/** Internal: propose with a caller-supplied floor (enables the tunable-confidence API). */
+function proposeRebindWith(
+  drift: Drift,
+  step: number,
+  minConfidence: number,
+): HealProposal | undefined {
   if (drift.reasonKind !== DriftReason.TESTID_NOT_FOUND) return undefined;
   const to = drift.nearest;
   if (to === null) return undefined;
   const confidence = confidenceFor(drift.anchor, to);
-  if (confidence < HEAL_CONFIDENCE_MIN) return undefined;
+  if (confidence < minConfidence) return undefined;
   return { step, from: drift.anchor, to, confidence };
 }
 
-/** Map step results → the confident proposals (skips ok steps, signal drift, and below-floor drift). */
-export function collectProposals(steps: FlowStepResult[]): HealProposal[] {
+/**
+ * Public compat wrapper — uses HEAL_CONFIDENCE_MIN (the existing default floor).
+ * Prefer collectProposals(steps, minConfidence) for new callers.
+ */
+export function proposeRebind(drift: Drift, step: number): HealProposal | undefined {
+  return proposeRebindWith(drift, step, HEAL_CONFIDENCE_MIN);
+}
+
+/**
+ * Map step results → confident proposals (skips ok steps, signal drift, and below-floor drift).
+ * Pass minConfidence to tighten (0.9 → near-certain only) or loosen (0.0 → all candidates)
+ * the floor. Defaults to HEAL_CONFIDENCE_MIN (0.5) for backwards compatibility.
+ */
+export function collectProposals(
+  steps: FlowStepResult[],
+  minConfidence: number = HEAL_CONFIDENCE_MIN,
+): HealProposal[] {
   const proposals: HealProposal[] = [];
   for (const step of steps) {
     if (step.drift === undefined) continue;
-    const proposal = proposeRebind(step.drift, step.step);
+    const proposal = proposeRebindWith(step.drift, step.step, minConfidence);
     if (proposal !== undefined) proposals.push(proposal);
   }
   return proposals;

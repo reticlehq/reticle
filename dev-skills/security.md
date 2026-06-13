@@ -1,4 +1,4 @@
-# skills/security.md — Security & Privacy
+# dev-skills/security.md — Security & Privacy
 
 **Open when:** touching the bridge transport, action execution, or data capture.
 (Foundation II.4 + `plan/08`.)

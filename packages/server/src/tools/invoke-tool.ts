@@ -33,6 +33,8 @@ export const SESSION_BOUND_TOOLS: ReadonlySet<string> = new Set([
   IrisTool.EXPLORE,
   IrisTool.CRAWL,
   IrisTool.SCROLL_TO,
+  IrisTool.NAVIGATE,
+  IrisTool.REFRESH,
 ]);
 
 /**
@@ -55,6 +57,7 @@ export const SESSION_EXEMPT_TOOLS: ReadonlySet<string> = new Set([
   IrisTool.SESSION, // tunes the presenter session (idle-end); own contract
   IrisTool.SCREENSHOT, // own contract; provider-driven, not a live-DOM-health read
   IrisTool.VISUAL_DIFF, // own contract (matched/ratio/region)
+  IrisTool.ANNOTATE, // annotates a recording's steps; pure disk-side metadata, no live DOM read
 ]);
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -76,5 +79,10 @@ export async function runTool(
   if (!SESSION_BOUND_TOOLS.has(tool.name)) return result;
   if (!isPlainObject(result) || 'session' in result) return result;
   const session = deps.sessions.resolve(asString(args['sessionId']));
-  return { ...result, ...healthEnvelope(session) };
+  const envelope: Record<string, unknown> = { ...healthEnvelope(session) };
+  const lease = session.takeSessionLease();
+  if (lease !== undefined) envelope['session_lease'] = lease;
+  const warning = session.ageWarning();
+  if (warning !== undefined) envelope['session_age_warning'] = warning;
+  return { ...result, ...envelope };
 }

@@ -17,10 +17,35 @@ export const CRAWL_TOOLS: ToolDef[] = [
     description:
       'Autonomously click every reachable interactive control (bounded by maxSteps, default 25) and report anomalies WITHOUT a script: console errors, failed requests (status ≥ 400), and DEAD controls (dispatched but the app did nothing). DESTRUCTIVE — it really clicks (may navigate/mutate state); use iris_explore first for a non-destructive list. Returns { interactiveFound, stepsRun, anomalies[{kind,ref,desc,detail}], counts, visited, truncated }.',
     inputSchema: {
-      maxSteps: z.number().optional(),
-      settleMs: z.number().optional(),
-      scope: z.string().optional(),
-      sessionId: z.string().optional(),
+      maxSteps: z.number().optional().describe('Maximum number of controls to click. Default: 25.'),
+      settleMs: z
+        .number()
+        .optional()
+        .describe('Milliseconds to wait after each click for the app to react. Default: 500.'),
+      scope: z
+        .string()
+        .optional()
+        .describe('CSS selector or element ref to restrict crawling to a subtree.'),
+      sessionId: z
+        .string()
+        .optional()
+        .describe(
+          'Active session ID from iris_sessions. Omit when only one browser session is open.',
+        ),
+    },
+    outputSchema: {
+      interactiveFound: z.number(),
+      stepsRun: z.number(),
+      anomalies: z.array(
+        z.object({
+          kind: z.string(),
+          ref: z.string(),
+          desc: z.string(),
+          detail: z.string().optional(),
+        }),
+      ),
+      counts: z.record(z.number()),
+      truncated: z.boolean(),
     },
     handler: (deps: ToolDeps, args) => {
       const session = deps.sessions.resolve(asString(args['sessionId']));

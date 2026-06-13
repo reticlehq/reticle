@@ -1,4 +1,4 @@
-# skills/database.md — Persistence
+# dev-skills/database.md — Persistence
 
 **Open when:** adding any persistence. (Foundation II.12 — mostly N/A today.)
 

@@ -1,4 +1,4 @@
-# skills/conventions.md — Naming, Constants, Quality
+# dev-skills/conventions.md — Naming, Constants, Quality
 
 **Open when:** before naming anything or deciding whether to abstract. (Foundation II.8.)
 

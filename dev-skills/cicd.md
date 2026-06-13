@@ -1,4 +1,4 @@
-# skills/cicd.md — CI/CD & Build
+# dev-skills/cicd.md — CI/CD & Build
 
 **Open when:** working on the build pipeline, CI, or releases.
 

@@ -49,10 +49,10 @@ Then persist it to disk so it's committed and any agent can read it:
 **(a) Agent-recorded** — the agent drives, then saves:
 
 ```jsonc
-iris_record_start({ name: "create-task" })
+iris_record_start({ recordingName: "create-task" })
 iris_act({ ref: "e7", action: "click" })        // … drive the golden path …
-iris_record_stop({ name: "create-task" })
-iris_flow_save({ name: "create-task" })          // → .iris/flows/create-task.json
+iris_record_stop({ recordingName: "create-task" })
+iris_flow_save({ flowName: "create-task" })          // → .iris/flows/create-task.json
 ```
 
 **(b) Human-recorded (the recorder toolbar)** — with the presenter on (`present: true`), the
@@ -88,9 +88,9 @@ silently dropped.
 ## Run a flow
 
 ```jsonc
-iris_flow_list()                          // → flows on disk
-iris_flow_load({ name: "create-task" })   // → the flow JSON
-iris_flow_replay({ name: "create-task" }) // re-resolve each anchor against the LIVE DOM, run it
+iris_flow_list()                                    // → flows on disk
+iris_flow_load({ flowName: "create-task" })   // → the flow JSON
+iris_flow_replay({ flowName: "create-task" }) // re-resolve each anchor against the LIVE DOM, run it
 ```
 
 `iris_flow_replay` returns a status:
@@ -109,11 +109,11 @@ When a testid is renamed, the flow drifts. `iris_flow_heal` proposes — and opt
 the nearest-match rebind, so flows don't rot:
 
 ```jsonc
-iris_flow_heal({ name: "create-task" })               // PROPOSE only — never writes
+iris_flow_heal({ flowName: "create-task" })               // PROPOSE only — never writes
 // → { status: "drift", applied: false,
 //     proposals: [{ step: 0, from: "add-tassk", to: "add-task", confidence: 0.8 }] }
 
-iris_flow_heal({ name: "create-task", apply: true })  // rewrite the anchor on disk
+iris_flow_heal({ flowName: "create-task", apply: true })  // rewrite the anchor on disk
 // → { status: "healed", applied: true, proposals: [...] }
 ```
 
@@ -139,16 +139,16 @@ skipping `dynamic` regions — via `@syrin/iris-test`'s `flowsAsSpecs`. See
 
 ## Tool reference
 
-| Tool                                     | Args               | Returns                                           |
-| ---------------------------------------- | ------------------ | ------------------------------------------------- |
-| `iris_contract_save`                     | `{ sessionId? }`   | writes `.iris/contract.json`                      |
-| `iris_record_start` / `iris_record_stop` | `{ name }`         | start/stop capturing the agent's acts             |
-| `iris_flow_save`                         | `{ name }`         | persist the recording → `.iris/flows/<name>.json` |
-| `iris_flow_save_recorded`                | `{ name }`         | persist a human-recorded (toolbar) flow           |
-| `iris_flow_list`                         | `{}`               | flows on disk                                     |
-| `iris_flow_load`                         | `{ name }`         | the flow JSON                                     |
-| `iris_flow_replay`                       | `{ name }`         | `{ status: ok\|drift\|error, steps, … }`          |
-| `iris_flow_heal`                         | `{ name, apply? }` | propose / apply nearest-match rebind              |
-| `iris_annotate`                          | `{ kind, … }`      | compile a structured annotation into the flow     |
+| Tool                                     | Args                   | Returns                                               |
+| ---------------------------------------- | ---------------------- | ----------------------------------------------------- |
+| `iris_contract_save`                     | `{ sessionId? }`       | writes `.iris/contract.json`                          |
+| `iris_record_start` / `iris_record_stop` | `{ recordingName }`    | start/stop capturing the agent's acts                 |
+| `iris_flow_save`                         | `{ flowName }`         | persist the recording → `.iris/flows/<flowName>.json` |
+| `iris_flow_save_recorded`                | `{ flowName? }`        | persist a human-recorded (toolbar) flow               |
+| `iris_flow_list`                         | `{}`                   | flows on disk                                         |
+| `iris_flow_load`                         | `{ flowName }`         | the flow JSON                                         |
+| `iris_flow_replay`                       | `{ flowName }`         | `{ status: ok\|drift\|error, steps, … }`              |
+| `iris_flow_heal`                         | `{ flowName, apply? }` | propose / apply nearest-match rebind                  |
+| `iris_annotate`                          | `{ kind, … }`          | compile a structured annotation into the flow         |
 
 > Flow `name` must be a single safe path segment (no `/`, `\`, `..`, or leading dot).

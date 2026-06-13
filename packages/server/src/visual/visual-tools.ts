@@ -7,7 +7,12 @@ import { VisualStore } from './visual-store.js';
 import type { ElementBox, RealInputProvider, ScreenshotOpts } from '../input/real-input.js';
 import type { ToolDef, ToolDeps } from '../tools/tools.js';
 
-const sessionIdShape = { sessionId: z.string().optional() };
+const sessionIdShape = {
+  sessionId: z
+    .string()
+    .optional()
+    .describe('Active session ID from iris_sessions. Omit when only one browser session is open.'),
+};
 const rectShape = z.object({
   x: z.number(),
   y: z.number(),
@@ -89,11 +94,34 @@ export const VISUAL_TOOLS: ToolDef[] = [
     description:
       'Capture a pixel screenshot of the DRIVEN page (needs `iris drive`/IRIS_CDP_URL — the SDK has no screenshotter) and save it as a visual baseline at .iris/visual/<name>.png. { fullPage } for the whole scroll height, { ref } or { clip:{x,y,width,height} } for one element/region. Returns { saved:true, name, path, bytes } or { ok:false, reason } when no driven browser is attached.',
     inputSchema: {
-      name: z.string(),
-      fullPage: z.boolean().optional(),
-      ref: z.string().optional(),
-      clip: rectShape.optional(),
+      name: z
+        .string()
+        .describe(
+          'Baseline name — saved as .iris/visual/<name>.png. Use the same name in iris_visual_diff to compare.',
+        ),
+      fullPage: z
+        .boolean()
+        .optional()
+        .describe('Capture the full scroll height. Default: viewport only.'),
+      ref: z
+        .string()
+        .optional()
+        .describe(
+          'Element ref to screenshot (scopes to element bounding box). Omit for full page.',
+        ),
+      clip: rectShape
+        .optional()
+        .describe('Explicit { x, y, width, height } clip rectangle in page coordinates.'),
       ...sessionIdShape,
+    },
+    outputSchema: {
+      ok: z.boolean(),
+      saved: z.boolean().optional(),
+      name: z.string().optional(),
+      path: z.string().optional(),
+      bytes: z.number().optional(),
+      reason: z.string().optional(),
+      recommendation: z.string().optional(),
     },
     handler: async (deps: ToolDeps, args) => {
       const provider = screenshotProvider(deps);
@@ -105,7 +133,7 @@ export const VISUAL_TOOLS: ToolDef[] = [
       const name = asString(args['name']) ?? 'default';
       const store = new VisualStore(deps.fs, deps.irisRoot);
       const path = await store.saveBaseline(name, png);
-      return { saved: true, name, path, bytes: png.length };
+      return { ok: true, saved: true, name, path, bytes: png.length };
     },
   },
   {
@@ -113,14 +141,25 @@ export const VISUAL_TOOLS: ToolDef[] = [
     description:
       'Perceptually diff the DRIVEN page against a saved visual baseline (see iris_screenshot). { masks:[{x,y,width,height}] } neutralizes volatile regions; { maxRatio } sets the pass tolerance (default 0). Returns { matched, changedPixels, totalPixels, ratio, region?, diffPath, dimensionMismatch } — the overlay diff is written to .iris/visual/<baseline>.diff.png — or { ok:false, reason } (no-provider / baseline-missing).',
     inputSchema: {
-      baseline: z.string(),
+      baseline: z
+        .string()
+        .describe(
+          'Baseline screenshot name (from iris_screenshot). Used to compare with the current screenshot.',
+        ),
       fullPage: z.boolean().optional(),
       ref: z.string().optional(),
       clip: rectShape.optional(),
       masks: z.array(rectShape).optional(),
       maxRatio: z.number().optional(),
-      threshold: z.number().optional(),
+      threshold: z.number().optional().describe('Pixel difference threshold (0–1). Default: 0.01.'),
       ...sessionIdShape,
+    },
+    outputSchema: {
+      ok: z.boolean(),
+      match: z.boolean().optional(),
+      diffPct: z.number().optional(),
+      diffPath: z.string().optional(),
+      reason: z.string().optional(),
     },
     handler: async (deps: ToolDeps, args) => {
       const provider = screenshotProvider(deps);

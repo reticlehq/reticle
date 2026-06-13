@@ -90,9 +90,21 @@ export const FLOW_TOOLS: ToolDef[] = [
     name: IrisTool.FLOW_SAVE,
     description:
       'Persist the last/active recording (by name) as a git-checked, anchor-resolved flow at .iris/flows/<name>.json. Each step is bound to a SEMANTIC anchor (testid/role/signal), never a volatile ref; steps without a resolvable testid are kept with degraded:true (a "add a data-testid here" marker) rather than dropped. Returns { name, stepCount, degraded, empty } or { error, code }.',
-    inputSchema: { name: z.string() },
+    inputSchema: {
+      flowName: z
+        .string()
+        .describe(
+          'Name for the flow file (saved to .iris/flows/<flowName>.json). Use again in iris_flow_load/iris_flow_replay.',
+        ),
+    },
+    outputSchema: {
+      saved: z.boolean(),
+      path: z.string(),
+      stepCount: z.number().optional(),
+      degraded: z.number().optional(),
+    },
     handler: (deps: ToolDeps, args) => {
-      const name = asString(args['name']) ?? '';
+      const name = asString(args['flowName']) ?? '';
       const program = deps.recordings.getCompiled(name);
       if (program === undefined) {
         return Promise.resolve({
@@ -118,19 +130,33 @@ export const FLOW_TOOLS: ToolDef[] = [
     description:
       'List saved flow names under .iris/flows (a fresh agent learns the demonstrated journeys without a browser).',
     inputSchema: {},
+    outputSchema: {
+      flows: z.array(
+        z.object({ name: z.string(), path: z.string(), createdAt: z.number().optional() }),
+      ),
+    },
     handler: (deps: ToolDeps) => deps.flows.list().then((flows) => ({ flows })),
   },
   {
     name: IrisTool.FLOW_LOAD,
     description:
-      'Read + validate a saved flow by name from .iris/flows/<name>.json. Returns the FlowFile (version, name, createdAt, anchored steps) or a structured { error, code }.',
-    inputSchema: { name: z.string() },
+      'Read + validate a saved flow by flowName from .iris/flows/<flowName>.json. Returns the FlowFile (version, flowName, createdAt, anchored steps) or a structured { error, code }.',
+    inputSchema: {
+      flowName: z
+        .string()
+        .describe('Flow file name (without .json extension) from iris_flow_list.'),
+    },
+    outputSchema: {
+      flowName: z.string(),
+      steps: z.array(z.unknown()),
+      createdAt: z.number().optional(),
+    },
     handler: (deps: ToolDeps, args) =>
-      deps.flows
-        .load(asString(args['name']) ?? '')
-        .then((res) =>
-          res.ok ? res.value : { error: flowErrorMessage(res.code), code: res.code },
-        ),
+      deps.flows.load(asString(args['flowName']) ?? '').then((res) => {
+        if (!res.ok) return { error: flowErrorMessage(res.code), code: res.code };
+        const { name, ...rest } = res.value;
+        return { flowName: name, ...rest };
+      }),
   },
   {
     name: IrisTool.FLOW_REPLAY,
@@ -141,12 +167,28 @@ export const FLOW_TOOLS: ToolDef[] = [
       'nearest } } (the closest surviving testid) and stops — the "whose fault is it" contract. ' +
       'Returns { name, status: ok|drift|error, steps:[...] }; a missing/malformed file is status:error ' +
       'with a structured code (distinct from a contract-changed drift).',
-    inputSchema: { name: z.string(), sessionId: z.string().optional() },
+    inputSchema: {
+      flowName: z
+        .string()
+        .describe('Flow file name (without .json extension) from iris_flow_list.'),
+      sessionId: z
+        .string()
+        .optional()
+        .describe(
+          'Active session ID from iris_sessions. Omit when only one browser session is open.',
+        ),
+    },
+    outputSchema: {
+      status: z.string().describe('ok | drift | error'),
+      steps: z.array(z.unknown()),
+      proposals: z.array(z.unknown()).optional(),
+      error: z.object({ code: z.string(), message: z.string() }).optional(),
+    },
     handler: async (deps: ToolDeps, args): Promise<FlowReplayResult> => {
       // deps.now() here is the single clock site for the replay duration (a
       // handler-level concern, not pure logic), and every exit path records a run to project.json.
       const startedAt = deps.now();
-      const name = asString(args['name']) ?? '';
+      const name = asString(args['flowName']) ?? '';
       const loaded = await deps.flows.load(name);
       if (!loaded.ok) {
         await recordReplayRun(deps, name, ReplayStatus.ERROR, 0, deps.now() - startedAt);
@@ -181,7 +223,29 @@ export const FLOW_TOOLS: ToolDef[] = [
       '(no recompilation — the browser already resolved every anchor). Pass `name` to override the ' +
       'recorded name. Returns { name, stepCount, degraded, empty } or { error, code } (code ' +
       'flow_no_recorded when no recording is present).',
-    inputSchema: { name: z.string().optional(), ...{ sessionId: z.string().optional() } },
+    inputSchema: {
+      flowName: z
+        .string()
+        .optional()
+        .describe(
+          'Override the flow name embedded in the recorded flow. Omit to use the recorder-assigned name.',
+        ),
+      ...{
+        sessionId: z
+          .string()
+          .optional()
+          .describe(
+            'Active session ID from iris_sessions. Omit when only one browser session is open.',
+          ),
+      },
+    },
+    outputSchema: {
+      flowName: z.string().optional(),
+      stepCount: z.number().optional(),
+      degraded: z.number().optional(),
+      error: z.string().optional(),
+      code: z.string().optional(),
+    },
     handler: async (deps: ToolDeps, args) => {
       const session = deps.sessions.resolve(asString(args['sessionId']));
       const recorded = latestRecordedFlow(session.eventsSince(0));
@@ -191,10 +255,12 @@ export const FLOW_TOOLS: ToolDef[] = [
           code: RecordedSaveError.NO_RECORDED_FLOW,
         };
       }
-      const override = asString(args['name']);
+      const override = asString(args['flowName']);
       const flow = override !== undefined ? { ...recorded.flow, name: override } : recorded.flow;
       const res = await deps.flows.saveFlow(flow);
-      return res.ok ? res.value : { error: flowErrorMessage(res.code), code: res.code };
+      if (!res.ok) return { error: flowErrorMessage(res.code), code: res.code };
+      const { name, ...rest } = res.value;
+      return { flowName: name, ...rest };
     },
   },
   {
@@ -207,11 +273,26 @@ export const FLOW_TOOLS: ToolDef[] = [
       'status:unhealable (file untouched). Returns { name, status: healed|drift|unhealable|' +
       'nothing_to_heal|error, applied, proposals[], changed[], message }.',
     inputSchema: {
-      name: z.string(),
+      flowName: z.string().describe('Flow file name to heal (from iris_flow_list).'),
       apply: z.boolean().optional(),
-      sessionId: z.string().optional(),
+      sessionId: z
+        .string()
+        .optional()
+        .describe(
+          'Active session ID from iris_sessions. Omit when only one browser session is open.',
+        ),
     },
-    handler: (deps: ToolDeps, args): Promise<FlowHealResult> => healFlow(deps, args),
+    outputSchema: {
+      flowName: z.string(),
+      status: z.string(),
+      applied: z.boolean(),
+      proposals: z.array(z.unknown()),
+      changed: z.array(z.unknown()),
+      message: z.string(),
+      error: z.object({ code: z.string(), message: z.string() }).optional(),
+    },
+    handler: (deps: ToolDeps, args) =>
+      healFlow(deps, args).then(({ name, ...rest }) => ({ flowName: name, ...rest })),
   },
 ];
 
@@ -232,7 +313,7 @@ function toChange(proposal: HealProposal): HealChange {
  * when apply:true. A heal disk failure maps back to status:error.
  */
 async function healFlow(deps: ToolDeps, args: Record<string, unknown>): Promise<FlowHealResult> {
-  const name = asString(args['name']) ?? '';
+  const name = asString(args['flowName']) ?? '';
   const apply = args['apply'] === true;
   const loaded = await deps.flows.load(name);
   if (!loaded.ok) {

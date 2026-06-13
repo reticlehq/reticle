@@ -4,7 +4,12 @@ import { IrisTool } from '../tools/tool-names.js';
 import { asString } from '../tools/tools-helpers.js';
 import type { ToolDef } from '../tools/tools.js';
 
-const sessionIdShape = { sessionId: z.string().optional() };
+const sessionIdShape = {
+  sessionId: z
+    .string()
+    .optional()
+    .describe('Active session ID from iris_sessions. Omit when only one browser session is open.'),
+};
 
 /**
  * Live-control agent tools: the agent's side of the human-in-the-loop control surface.
@@ -26,11 +31,12 @@ export const LIVE_CONTROL_TOOLS: ToolDef[] = [
       'End this live testing session. Sets the server state to "ended", tells the human panel ' +
       '(PRESENTER), and stops driving. Optional `summary` is shown in the panel. Idempotent.',
     inputSchema: { summary: z.string().optional(), ...sessionIdShape },
+    outputSchema: { ended: z.boolean(), sessionId: z.string() },
     handler: (deps, args) => {
       const session = deps.sessions.resolve(asString(args['sessionId']));
       // One PRESENTER push for the transition; the optional summary rides the same push.
       session.setState(SessionState.ENDED, asString(args['summary']));
-      return Promise.resolve({ ok: true, state: SessionState.ENDED });
+      return Promise.resolve({ ended: true, sessionId: session.id });
     },
   },
   {
@@ -39,11 +45,12 @@ export const LIVE_CONTROL_TOOLS: ToolDef[] = [
       'Clear a human pause and resume driving the page. Sets state "active" and syncs the panel ' +
       '(PRESENTER). Call after you have addressed the human guidance returned by a paused iris_act.',
     inputSchema: { ...sessionIdShape },
+    outputSchema: { ok: z.boolean() },
     handler: (deps, args) => {
       const session = deps.sessions.resolve(asString(args['sessionId']));
       // setState echoes ACTIVE to the panel in a single PRESENTER push.
       session.setState(SessionState.ACTIVE);
-      return Promise.resolve({ state: SessionState.ACTIVE });
+      return Promise.resolve({ ok: true });
     },
   },
   {
@@ -52,6 +59,7 @@ export const LIVE_CONTROL_TOOLS: ToolDef[] = [
       'Drain and return any messages the human queued from the panel since the last poll. Use to ' +
       'explicitly check for human guidance without acting.',
     inputSchema: { ...sessionIdShape },
+    outputSchema: { messages: z.array(z.unknown()) },
     handler: (deps, args) => {
       const session = deps.sessions.resolve(asString(args['sessionId']));
       return Promise.resolve({ messages: session.drainInbox() });

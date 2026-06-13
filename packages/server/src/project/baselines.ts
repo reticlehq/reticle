@@ -40,7 +40,7 @@ export function diffLines(baseline: string[], current: string[]): DiffResult {
   return { removed, added };
 }
 
-/** In-memory baseline store (per server run). See skills/database.md for the local-file plan. */
+/** In-memory baseline store (per server run). See dev-skills/database.md for the local-file plan. */
 export class BaselineStore {
   readonly #map = new Map<string, Baseline>();
 

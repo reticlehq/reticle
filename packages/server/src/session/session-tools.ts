@@ -16,8 +16,22 @@ export const SESSION_TOOLS: ToolDef[] = [
     description:
       'Tune the presenter session for this app. { idleEndMs } sets how long the session stays open after you go quiet before it AUTO-ENDS (page glow off, the floating panel is kept so the human can read + Copy/Export the run). Default 5min. Raise it for slow apps, lower it for quick checks. The auto-end is enforced SERVER-SIDE (immune to background-tab throttling) and also fires if you (the MCP client) disconnect — so a forgotten or crashed session never leaves the HUD running forever. If you go quiet and then act again, the session revives automatically. Returns { applied, idleEndMs }.',
     inputSchema: {
+      idleEndMs: z
+        .number()
+        .optional()
+        .describe(
+          'Idle window in milliseconds after which the presenter session auto-ends. Default: 300000 (5 min). Raise for slow apps.',
+        ),
+      sessionId: z
+        .string()
+        .optional()
+        .describe(
+          'Active session ID from iris_sessions. Omit when only one browser session is open.',
+        ),
+    },
+    outputSchema: {
+      applied: z.boolean(),
       idleEndMs: z.number().optional(),
-      sessionId: z.string().optional(),
     },
     handler: async (deps: ToolDeps, args) => {
       const session = deps.sessions.resolve(asString(args['sessionId']));

@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "iris": {
+      "command": "node",
+      "args": ["packages/server/dist/cli.js"],
+      "env": {
+        "IRIS_PORT": "58432"
+      }
+    }
+  }
+}

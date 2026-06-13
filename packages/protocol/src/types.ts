@@ -48,11 +48,28 @@ export interface MatchResult {
   elements: ElementDescriptor[];
 }
 
+/**
+ * A semantic cluster of interactive elements in the DOM — the replacement for the raw testid list
+ * in zero-match hints. Tells the agent "there is a list with 847 rows" rather than 12 opaque IDs.
+ */
+export interface PresentRegion {
+  /** ARIA role of the container element. */
+  role: string;
+  /** Accessible name of the container, if present. */
+  name?: string;
+  /** Number of direct role-bearing children in the container. */
+  childCount: number;
+  /** Up to 3 `role[name]` strings sampled from the first children (for orientation). */
+  sample: string[];
+}
+
 /** Diagnostic hint attached to a zero-match iris_query result. */
 export interface QueryEmptyHint {
   /** location.pathname + location.search at query time. */
   route: string;
-  /** Up to ~12 data-testid values actually present in the searched DOM scope. */
+  /** Semantic clusters of the page's interactive regions — the successor to presentTestids. */
+  presentRegions: PresentRegion[];
+  /** @deprecated Use presentRegions. Kept for one major cycle; removed next major. */
   presentTestids: string[];
   /** True if a capability-registered testid is present in the scope. */
   knownEmptyState: boolean;

@@ -595,11 +595,11 @@ Capture everything that happens across a span — useful for "run my whole check
 tell me what happened," or to keep a known-good trace.
 
 ```jsonc
-iris_record_start({ name: "checkout" })
+iris_record_start({ recordingName: "checkout" })
 // …agent performs the flow (iris_act / iris_act_sequence)…
-iris_record_stop({ name: "checkout" })
+iris_record_stop({ recordingName: "checkout" })
 // → {
-//     name,
+//     recordingName,
 //     program: { version, steps: [{ tool, args: { by:"testid", value, action, args }, stable }] },
 //     events: [...ordered timeline...],
 //     summary: { network, domAdded, … },
@@ -612,9 +612,9 @@ iris_record_stop({ name: "checkout" })
 element's `data-testid` where resolvable. Re-run it later:
 
 ```jsonc
-iris_replay({ name: "checkout" })
+iris_replay({ recordingName: "checkout" })
 // re-resolves each step by testid and re-runs the actions in order
-// → { name, ok, steps: [{ tool, ok, error?, note? }] }   // stops at the first failure
+// → { recordingName, ok, steps: [{ tool, ok, error?, note? }] }   // stops at the first failure
 ```
 
 **Limitation.** Normalization to a stable testid only works for elements that have a
@@ -904,7 +904,7 @@ iris_capabilities()   // → { testids, signals, stores, flows }
 ### `iris_replay` — recordings become re-runnable programs
 
 `iris_record_start` → drive the flow → `iris_record_stop` returns a **compiled program**
-(steps bound to testids/signals, not volatile refs). `iris_replay({ name })` re-executes it —
+(steps bound to testids/signals, not volatile refs). `iris_replay({ recordingName })` re-executes it —
 your flow becomes a deterministic regression run, not a checklist.
 
 ---

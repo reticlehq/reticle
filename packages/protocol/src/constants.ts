@@ -313,6 +313,8 @@ export const EventType = {
   PAGE_HEALTH: 'page.health',
   /** browser → bridge: a human recording compiled in-page. */
   FLOW_RECORDED: 'flow.recorded',
+  /** synthetic: browser transport queue overflowed; events were dropped. `data: { dropped: number }`. */
+  TRANSPORT_OVERFLOW: 'transport.overflow',
   /**
    * Live-control: browser → bridge. A human acted on the presenter panel.
    * `data: { kind: HumanControlKind; text?: string }`. Rides the existing EventMessage.
@@ -376,6 +378,19 @@ export const SESSION_LIFECYCLE = {
   REAP_INTERVAL_MS: 5_000,
   /** Browser fallback: continuous failure to reach the bridge for this long ⇒ self-end the session. */
   BRIDGE_LOST_MS: 15_000,
+} as const;
+
+/**
+ * Coding-agent session hygiene thresholds. Coding agents (Claude Code, Codex, Cursor) often
+ * complete their task and close their context without calling iris_end_session. These constants
+ * drive two passive reminder layers: a one-time session_lease on first call, and recurring
+ * session_age_warning fields after WARN_AFTER_MS.
+ */
+export const SESSION_LEASE = {
+  /** ms after which age warnings appear on every session-bound tool result. */
+  WARN_AFTER_MS: 600_000, // 10 minutes
+  /** ms after which iris_sessions marks a session as stale. */
+  STALE_AFTER_MS: 1_800_000, // 30 minutes
 } as const;
 
 /** Why the SDK emitted a PAGE_HEALTH event. */
@@ -550,6 +565,10 @@ export const IrisCommand = {
    * AGENT-driven pause/end keeps the presenter in sync. `args: { state, text? }`.
    */
   PRESENTER: 'presenter',
+  /** Navigate the page to a new URL. `args: { url: string }`. */
+  NAVIGATE: 'navigate',
+  /** Reload the page. `args: { hard?: boolean }` — hard clears the cache via location replace trick. */
+  REFRESH: 'refresh',
 } as const;
 export type IrisCommand = (typeof IrisCommand)[keyof typeof IrisCommand];
 

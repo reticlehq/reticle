@@ -22,7 +22,7 @@ iris/  (this repo — one git repo, pnpm + turbo monorepo)
 │   ├── api/           @syrin/iris-api          — Express backend exercising real-world behaviors
 │   └── next-smoke/    @syrin/iris-next-smoke   — Next.js 15 app verifying Iris on Next
 ├── docs/             — user-facing docs (getting-started, usage, token-efficiency, local-install)
-├── skills/           — engineering reference docs (open the one matching your task)
+├── dev-skills/       — engineering reference docs (open the one matching your task)
 ├── plan/             — product design & roadmap + throwaway test harnesses (GITIGNORED)
 ├── CLAUDE.md         — master rules + skills index
 ├── AGENTS.md         — agent orientation + tool manifest
@@ -48,27 +48,27 @@ cat docs/getting-started.md   # how the product is used; plan/NEXT-PHASES.md for
 
 ## File → when to open it
 
-| File                      | Open when                                     |
-| ------------------------- | --------------------------------------------- |
-| `docs/getting-started.md` | Installing/using Iris in an app               |
-| `docs/usage.md`           | Tool reference, predicate DSL, cookbook       |
-| `plan/README.md`          | Understanding the product (design docs index) |
-| `plan/NEXT-PHASES.md`     | Deciding what to build next                   |
-| `CLAUDE.md`               | Anytime — the non-negotiable rules            |
-| `AGENTS.md`               | You're an agent orienting in the repo         |
-| `skills/design.md`        | Building any UI or the dev overlay            |
-| `skills/typescript.md`    | A TypeScript pattern or rule                  |
-| `skills/python.md`        | N/A — pure TS repo                            |
-| `skills/testing.md`       | Before writing any feature                    |
-| `skills/conventions.md`   | Naming or constants                           |
-| `skills/agents.md`        | Designing the MCP tool surface                |
-| `skills/architecture.md`  | New package or wire-contract change           |
-| `skills/database.md`      | Persistence (baselines/recordings)            |
-| `skills/security.md`      | Bridge transport, actions, data capture       |
-| `skills/performance.md`   | Anything slow or memory-hungry                |
-| `skills/observability.md` | Logs/metrics, debugging the bridge            |
-| `skills/api-design.md`    | Any new MCP tool                              |
-| `skills/cicd.md`          | Build pipeline, CI, releases                  |
+| File                          | Open when                                     |
+| ----------------------------- | --------------------------------------------- |
+| `docs/getting-started.md`     | Installing/using Iris in an app               |
+| `docs/usage.md`               | Tool reference, predicate DSL, cookbook       |
+| `plan/README.md`              | Understanding the product (design docs index) |
+| `plan/NEXT-PHASES.md`         | Deciding what to build next                   |
+| `CLAUDE.md`                   | Anytime — the non-negotiable rules            |
+| `AGENTS.md`                   | You're an agent orienting in the repo         |
+| `dev-skills/design.md`        | Building any UI or the dev overlay            |
+| `dev-skills/typescript.md`    | A TypeScript pattern or rule                  |
+| `dev-skills/python.md`        | N/A — pure TS repo                            |
+| `dev-skills/testing.md`       | Before writing any feature                    |
+| `dev-skills/conventions.md`   | Naming or constants                           |
+| `dev-skills/agents.md`        | Designing the MCP tool surface                |
+| `dev-skills/architecture.md`  | New package or wire-contract change           |
+| `dev-skills/database.md`      | Persistence (baselines/recordings)            |
+| `dev-skills/security.md`      | Bridge transport, actions, data capture       |
+| `dev-skills/performance.md`   | Anything slow or memory-hungry                |
+| `dev-skills/observability.md` | Logs/metrics, debugging the bridge            |
+| `dev-skills/api-design.md`    | Any new MCP tool                              |
+| `dev-skills/cicd.md`          | Build pipeline, CI, releases                  |
 
 ## The non-negotiables
 

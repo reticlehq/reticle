@@ -30,6 +30,8 @@ function throttledSession(): Session {
     }),
     getState: () => SessionState.ACTIVE,
     drainInbox: () => [],
+    takeSessionLease: () => undefined,
+    ageWarning: () => undefined,
   };
   return stub as Session;
 }

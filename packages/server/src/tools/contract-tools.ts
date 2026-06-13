@@ -10,7 +10,12 @@ import { asString } from './tools-helpers.js';
 import { irisDirPaths, readContract, writeContract } from '../project/iris-dir.js';
 import type { ToolDef, ToolDeps } from './tools.js';
 
-const sessionIdShape = { sessionId: z.string().optional() };
+const sessionIdShape = {
+  sessionId: z
+    .string()
+    .optional()
+    .describe('Active session ID from iris_sessions. Omit when only one browser session is open.'),
+};
 
 /** Unwrap a browser command result or throw its error so the agent sees a clean failure. */
 async function commandOrThrow(
@@ -36,6 +41,15 @@ export const CONTRACT_TOOLS: ToolDef[] = [
     description:
       'The app-advertised testable surface (iris.describe): testids, signals, stores, and named flows. Call this first to learn what to assert on without reading source. Pass { fromDisk:true } to read the git-checked .iris/contract.json instead of the live session (a fresh agent can learn the surface with no browser attached).',
     inputSchema: { [FROM_DISK_ARG]: z.boolean().optional(), ...sessionIdShape },
+    outputSchema: {
+      testids: z.array(z.string()),
+      signals: z.array(z.string()),
+      stores: z.array(z.string()),
+      flows: z.array(z.object({ name: z.string(), steps: z.array(z.string()) })),
+      source: z
+        .string()
+        .describe('live = real-time from the browser; disk = last saved contract.json'),
+    },
     handler: async (deps, args) => {
       if (args[FROM_DISK_ARG] === true) {
         const r = await readContract(deps.fs, deps.irisRoot);
@@ -47,7 +61,13 @@ export const CONTRACT_TOOLS: ToolDef[] = [
           );
         return { ...r.capabilities, source: 'disk', generatedAt: r.generatedAt };
       }
-      return commandOrThrow(deps, asString(args['sessionId']), IrisCommand.CAPABILITIES, {});
+      const caps = await commandOrThrow(
+        deps,
+        asString(args['sessionId']),
+        IrisCommand.CAPABILITIES,
+        {},
+      );
+      return { ...(caps as object), source: 'live' };
     },
   },
   {
@@ -55,6 +75,12 @@ export const CONTRACT_TOOLS: ToolDef[] = [
     description:
       "Persist the app's live capability registry (iris.describe) to .iris/contract.json — git-checked, diffable, readable by a fresh agent via iris_capabilities({ fromDisk:true }). Returns { path, counts }.",
     inputSchema: { ...sessionIdShape },
+    outputSchema: {
+      saved: z.boolean(),
+      path: z.string(),
+      testidCount: z.number(),
+      signalCount: z.number(),
+    },
     handler: async (deps, args) => {
       const res = await commandOrThrow(
         deps,
@@ -65,13 +91,10 @@ export const CONTRACT_TOOLS: ToolDef[] = [
       const caps = CapabilitiesSchema.parse(res);
       await writeContract(deps.fs, deps.irisRoot, caps, deps.now);
       return {
+        saved: true,
         path: irisDirPaths(deps.irisRoot).contract,
-        counts: {
-          testids: caps.testids.length,
-          signals: caps.signals.length,
-          stores: caps.stores.length,
-          flows: caps.flows.length,
-        },
+        testidCount: caps.testids.length,
+        signalCount: caps.signals.length,
       };
     },
   },

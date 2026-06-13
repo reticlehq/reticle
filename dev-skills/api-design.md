@@ -1,4 +1,4 @@
-# skills/api-design.md — MCP Tool / API Design
+# dev-skills/api-design.md — MCP Tool / API Design
 
 **Open when:** adding or changing an MCP tool. (Foundation II.5 + API section.)
 

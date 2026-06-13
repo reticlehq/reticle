@@ -97,7 +97,7 @@ function program(name: string, steps: RecordedStep[]): CompiledProgram {
 describe('iris_flow_save / iris_flow_load handlers', () => {
   it('19: iris_flow_save with no compiled recording returns NO_RECORDING', async () => {
     const deps = fakeDeps(memoryFs(), new RecordingStore());
-    const res = (await tool(IrisTool.FLOW_SAVE).handler(deps, { name: 'missing' })) as {
+    const res = (await tool(IrisTool.FLOW_SAVE).handler(deps, { flowName: 'missing' })) as {
       error?: string;
       code?: string;
     };
@@ -117,17 +117,17 @@ describe('iris_flow_save / iris_flow_load handlers', () => {
       ]),
     );
     const deps = fakeDeps(memoryFs(), recordings);
-    const saved = (await tool(IrisTool.FLOW_SAVE).handler(deps, { name: 'checkout' })) as {
+    const saved = (await tool(IrisTool.FLOW_SAVE).handler(deps, { flowName: 'checkout' })) as {
       name: string;
       stepCount: number;
     };
     expect(saved).toMatchObject({ name: 'checkout', stepCount: 1 });
 
-    const loaded = (await tool(IrisTool.FLOW_LOAD).handler(deps, { name: 'checkout' })) as {
-      name: string;
+    const loaded = (await tool(IrisTool.FLOW_LOAD).handler(deps, { flowName: 'checkout' })) as {
+      flowName: string;
       steps: { anchor: { kind: string; value?: string } }[];
     };
-    expect(loaded.name).toBe('checkout');
+    expect(loaded.flowName).toBe('checkout');
     expect(loaded.steps[0]?.anchor).toEqual({ kind: 'testid', value: 'pay' });
 
     const list = (await tool(IrisTool.FLOW_LIST).handler(deps, {})) as { flows: string[] };
@@ -147,8 +147,8 @@ describe('iris_flow_save / iris_flow_load handlers', () => {
       ]),
     );
     const deps = fakeDeps(memoryFs(), recordings);
-    await tool(IrisTool.FLOW_SAVE).handler(deps, { name: 'withexpect' });
-    const loaded = (await tool(IrisTool.FLOW_LOAD).handler(deps, { name: 'withexpect' })) as {
+    await tool(IrisTool.FLOW_SAVE).handler(deps, { flowName: 'withexpect' });
+    const loaded = (await tool(IrisTool.FLOW_LOAD).handler(deps, { flowName: 'withexpect' })) as {
       steps: { expect?: { signal?: string } }[];
     };
     expect(loaded.steps[0]?.expect?.signal).toBe('diff:shown');

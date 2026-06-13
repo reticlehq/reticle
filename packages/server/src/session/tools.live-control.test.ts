@@ -249,21 +249,21 @@ describe('live-control: agent tools', () => {
   it('iris_resume after pause lets the next act execute', async () => {
     const session = fakeSession({ state: SessionState.PAUSED });
     const resume = (await tool(IrisTool.RESUME).handler(fakeDeps(session), {})) as {
-      state: SessionState;
+      ok: boolean;
     };
-    expect(resume.state).toBe(SessionState.ACTIVE);
+    expect(resume.ok).toBe(true);
     expect(session.__pushed.at(-1)).toEqual({ state: SessionState.ACTIVE });
     const act = (await tool(IrisTool.ACT).handler(fakeDeps(session), ACT_ARGS)) as ControlShape;
     expect('result' in act).toBe(true);
     expect(session.__sent.filter((c) => c.name === 'act')).toHaveLength(1);
   });
 
-  it('iris_resume returns active and pushes PRESENTER', async () => {
+  it('iris_resume returns ok and pushes PRESENTER', async () => {
     const session = fakeSession({ state: SessionState.PAUSED });
     const res = (await tool(IrisTool.RESUME).handler(fakeDeps(session), {})) as {
-      state: SessionState;
+      ok: boolean;
     };
-    expect(res.state).toBe(SessionState.ACTIVE);
+    expect(res.ok).toBe(true);
     expect(session.getState()).toBe(SessionState.ACTIVE);
     // Exactly one PRESENTER push for the transition (no redundant second push).
     expect(session.__pushed).toEqual([{ state: SessionState.ACTIVE }]);
@@ -273,8 +273,8 @@ describe('live-control: agent tools', () => {
     const session = fakeSession({ state: SessionState.ACTIVE });
     const res = (await tool(IrisTool.END_SESSION).handler(fakeDeps(session), {
       summary: 'done',
-    })) as { ok: boolean; state: SessionState };
-    expect(res).toEqual({ ok: true, state: SessionState.ENDED });
+    })) as { ended: boolean; sessionId: string };
+    expect(res).toEqual({ ended: true, sessionId: 'demo' });
     expect(session.getState()).toBe(SessionState.ENDED);
     // Single push carrying the summary — never a textless push followed by the summary push.
     expect(session.__pushed).toEqual([{ state: SessionState.ENDED, text: 'done' }]);
@@ -283,20 +283,20 @@ describe('live-control: agent tools', () => {
   it('iris_end_session works with no summary', async () => {
     const session = fakeSession({ state: SessionState.ACTIVE });
     const res = (await tool(IrisTool.END_SESSION).handler(fakeDeps(session), {})) as {
-      ok: boolean;
-      state: SessionState;
+      ended: boolean;
+      sessionId: string;
     };
-    expect(res).toEqual({ ok: true, state: SessionState.ENDED });
+    expect(res).toEqual({ ended: true, sessionId: 'demo' });
     expect(session.__pushed).toContainEqual({ state: SessionState.ENDED });
   });
 
   it('iris_end_session is idempotent', async () => {
     const session = fakeSession({ state: SessionState.ENDED });
     const res = (await tool(IrisTool.END_SESSION).handler(fakeDeps(session), {})) as {
-      ok: boolean;
-      state: SessionState;
+      ended: boolean;
+      sessionId: string;
     };
-    expect(res).toEqual({ ok: true, state: SessionState.ENDED });
+    expect(res).toEqual({ ended: true, sessionId: 'demo' });
   });
 
   it('iris_messages drains the inbox', async () => {

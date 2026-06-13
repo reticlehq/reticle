@@ -1,4 +1,4 @@
-# skills/performance.md — Performance
+# dev-skills/performance.md — Performance
 
 **Open when:** anything slow or memory-hungry. (Foundation II.3.)
 

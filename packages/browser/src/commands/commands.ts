@@ -166,7 +166,29 @@ export function createCommandRegistry(): Map<string, CommandHandler> {
   reg.set(IrisCommand.CAPABILITIES, () => getCapabilities());
   reg.set(IrisCommand.SCROLL, (args) => {
     const dy = args['dy'];
-    return scrollContainer(str(args['ref']), typeof dy === 'number' ? dy : undefined);
+    const fraction = args['fraction'];
+    return scrollContainer(
+      str(args['ref']),
+      typeof dy === 'number' ? dy : undefined,
+      typeof fraction === 'number' ? fraction : undefined,
+    );
+  });
+  reg.set(IrisCommand.NAVIGATE, (args) => {
+    const url = str(args['url']);
+    if (url === undefined || url.length === 0) return { ok: false, reason: 'url required' };
+    window.location.assign(url);
+    return { ok: true, url };
+  });
+  reg.set(IrisCommand.REFRESH, (args) => {
+    if (args['hard'] === true) {
+      // Hard reload: navigate to self with a cache-busting param then replace history.
+      const url = new URL(window.location.href);
+      url.searchParams.set('_iris_reload', String(Date.now()));
+      window.location.replace(url.toString());
+    } else {
+      window.location.reload();
+    }
+    return { ok: true };
   });
   return reg;
 }

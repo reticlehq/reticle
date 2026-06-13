@@ -80,7 +80,7 @@ function el(ref: string, testid: string): ElementDescriptor {
 }
 
 function present(testids: string[]): QueryEmptyHint {
-  return { route: '/', presentTestids: testids, knownEmptyState: false };
+  return { route: '/', presentTestids: testids, presentRegions: [], knownEmptyState: false };
 }
 
 function testidStep(value: string, action: ActionType = ActionType.CLICK): FlowStep {

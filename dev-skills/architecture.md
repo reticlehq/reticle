@@ -1,4 +1,4 @@
-# skills/architecture.md — Architecture & Contracts
+# dev-skills/architecture.md — Architecture & Contracts
 
 **Open when:** adding a package, changing the wire contract, or making a structural call.
 (Foundation II.9 + II.10.)

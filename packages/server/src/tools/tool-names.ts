@@ -55,5 +55,9 @@ export const IrisTool = {
   RESUME: 'iris_resume',
   /** Live-control: drain the human→agent inbox (explicit poll). */
   MESSAGES: 'iris_messages',
+  /** Navigate the connected browser tab to a URL. */
+  NAVIGATE: 'iris_navigate',
+  /** Reload the connected browser tab (soft or hard). */
+  REFRESH: 'iris_refresh',
 } as const;
 export type IrisTool = (typeof IrisTool)[keyof typeof IrisTool];

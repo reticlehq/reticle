@@ -12,6 +12,7 @@ import {
   type ElementDescriptor,
   type ElementQuery,
   type MatchResult,
+  type PresentRegion,
   type QueryEmptyHint,
   type QueryResult,
 } from '@syrin/iris-protocol';
@@ -103,6 +104,64 @@ export function matchQuery(query: ElementQuery, state?: ElementState): MatchResu
   return { matched: descriptors.length > 0, count: descriptors.length, elements: descriptors };
 }
 
+/** Structural clusters of the page — the successor to the raw testid list in zero-match hints. */
+function buildPresentRegions(query: ElementQuery): PresentRegion[] {
+  const container = resolveContainer(query.scope);
+  const regions: PresentRegion[] = [];
+  const CONTAINER_ROLES = [
+    'list',
+    'listbox',
+    'grid',
+    'table',
+    'tree',
+    'treegrid',
+    'dialog',
+    'alertdialog',
+    'navigation',
+    'main',
+    'banner',
+    'form',
+    'search',
+    'menu',
+    'menubar',
+    'tablist',
+  ] as const;
+  for (const role of CONTAINER_ROLES) {
+    let containers: HTMLElement[];
+    try {
+      containers = queryAllByRole(container, role, { hidden: true });
+    } catch {
+      continue;
+    }
+    for (const el of containers) {
+      const name =
+        el.getAttribute('aria-label') ??
+        el.getAttribute('aria-labelledby') ??
+        el.getAttribute('data-testid') ??
+        undefined;
+      const children = el.querySelectorAll('[role]');
+      const sample: string[] = [];
+      for (const child of Array.from(children)) {
+        if (sample.length >= 3) break;
+        const childRole = child.getAttribute('role');
+        const childName =
+          child.getAttribute('aria-label') ??
+          child.getAttribute('data-testid') ??
+          child.textContent?.trim().slice(0, 40) ??
+          '';
+        if (childRole !== null && childName.length > 0) {
+          sample.push(`${childRole}[${childName}]`);
+        }
+      }
+      const region: PresentRegion = { role, childCount: children.length, sample };
+      if (name !== undefined && name.length > 0) region.name = name;
+      regions.push(region);
+      if (regions.length >= 10) return regions;
+    }
+  }
+  return regions;
+}
+
 /** Diagnostic hint for a zero-match query: what testids ARE present in the searched scope. */
 function buildEmptyHint(query: ElementQuery): QueryEmptyHint {
   const container = resolveContainer(query.scope);
@@ -118,7 +177,12 @@ function buildEmptyHint(query: ElementQuery): QueryEmptyHint {
   const registered = getCapabilities().testids;
   const knownEmptyState = present.some((id) => registered.includes(id));
   const route = `${location.pathname}${location.search}`;
-  return { route, presentTestids: present, knownEmptyState };
+  return {
+    route,
+    presentTestids: present,
+    presentRegions: buildPresentRegions(query),
+    knownEmptyState,
+  };
 }
 
 /** Resolve a query to descriptors for the `query` MCP tool. */

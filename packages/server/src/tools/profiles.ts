@@ -2,26 +2,22 @@ import { IrisTool } from './tool-names.js';
 import type { ToolDef } from './tools.js';
 
 /**
- * Which MCP tool surface to expose. A non-deferring MCP client loads every tool's
- * schema eagerly (~10–13k standing tokens). The `core` profile trims to the look→act→observe→assert
- * loop + cross-check + run-history so a small-context agent stays fluent without the overhead. Opt in
- * with env IRIS_TOOL_PROFILE=core (or StartOptions.toolProfile); FULL is the default — no change.
+ * Which MCP tool surface to expose.
+ *   core     — look→act→observe→assert loop only (~13 tools). Minimal token cost.
+ *   standard — core + the most common extras: inspect, sequences, network/console readers,
+ *              wait_for, flows, session lifecycle, scroll (~27 tools). The recommended default
+ *              for coding agents that need more than the bare loop.
+ *   full     — all tools. Default. No change for existing callers.
  */
 export const TOOL_PROFILE = {
   CORE: 'core',
+  STANDARD: 'standard',
   FULL: 'full',
 } as const;
 export type ToolProfile = (typeof TOOL_PROFILE)[keyof typeof TOOL_PROFILE];
 
-/** Env var a non-deferring client sets to request the lean surface. */
 export const TOOL_PROFILE_ENV = 'IRIS_TOOL_PROFILE';
 
-/**
- * The core loop + the 4-layer cross-check (UI/signal/network/state) + diff regression + run-history.
- * Built from IrisTool constants so a renamed tool fails to compile rather than silently drifting.
- * Everything else (record/replay, flows, annotate, live-control, clock, explore, inspect, the raw
- * network/console/animation readers) is reachable only under the FULL profile.
- */
 export const CORE_TOOL_NAMES: ReadonlySet<string> = new Set([
   IrisTool.SESSIONS,
   IrisTool.SNAPSHOT,
@@ -38,16 +34,43 @@ export const CORE_TOOL_NAMES: ReadonlySet<string> = new Set([
   IrisTool.PROJECT,
 ]);
 
-/**
- * Resolve the active profile: an explicit value wins, else the env var, else FULL. An unknown value
- * fails open to FULL (documented) so a typo never silently hides tools.
- */
+export const STANDARD_TOOL_NAMES: ReadonlySet<string> = new Set([
+  ...CORE_TOOL_NAMES,
+  IrisTool.ACT_SEQUENCE,
+  IrisTool.INSPECT,
+  IrisTool.NETWORK,
+  IrisTool.CONSOLE,
+  IrisTool.ANIMATIONS,
+  IrisTool.FLOW_SAVE,
+  IrisTool.FLOW_LIST,
+  IrisTool.FLOW_LOAD,
+  IrisTool.FLOW_REPLAY,
+  IrisTool.FLOW_HEAL,
+  IrisTool.SESSION,
+  IrisTool.END_SESSION,
+  IrisTool.RESUME,
+  IrisTool.MESSAGES,
+  IrisTool.SCROLL_TO,
+  IrisTool.CRAWL,
+  IrisTool.RECORD_START,
+  IrisTool.RECORD_STOP,
+  IrisTool.REPLAY,
+  IrisTool.EXPLORE,
+  IrisTool.BASELINE_SAVE,
+  IrisTool.BASELINE_LIST,
+  IrisTool.CONTRACT_SAVE,
+]);
+
 export function resolveToolProfile(explicit?: string): ToolProfile {
   const raw = explicit ?? process.env[TOOL_PROFILE_ENV];
-  return raw === TOOL_PROFILE.CORE ? TOOL_PROFILE.CORE : TOOL_PROFILE.FULL;
+  if (raw === TOOL_PROFILE.CORE) return TOOL_PROFILE.CORE;
+  if (raw === TOOL_PROFILE.STANDARD) return TOOL_PROFILE.STANDARD;
+  return TOOL_PROFILE.FULL;
 }
 
-/** Apply a profile to the tool list. CORE keeps only the core set; FULL passes everything through. */
 export function filterTools(tools: ToolDef[], profile: ToolProfile): ToolDef[] {
-  return profile === TOOL_PROFILE.CORE ? tools.filter((t) => CORE_TOOL_NAMES.has(t.name)) : tools;
+  if (profile === TOOL_PROFILE.CORE) return tools.filter((t) => CORE_TOOL_NAMES.has(t.name));
+  if (profile === TOOL_PROFILE.STANDARD)
+    return tools.filter((t) => STANDARD_TOOL_NAMES.has(t.name));
+  return tools;
 }

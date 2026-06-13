@@ -36,12 +36,42 @@ export const ANNOTATE_TOOLS: ToolDef[] = [
       "named recording (defaults to 'default'); `name` is the assert-signal's SIGNAL name, not the recording.",
     inputSchema: {
       // `flow` selects the recording; `name`/`signal`/`testid`/`dataMatches` are the annotation fields.
-      flow: z.string().optional(),
-      kind: z.string(),
-      name: z.string().optional(),
-      testid: z.string().optional(),
-      signal: z.string().optional(),
-      dataMatches: z.record(z.unknown()).optional(),
+      flow: z.string().optional().describe("Named recording to annotate. Defaults to 'default'."),
+      kind: z
+        .string()
+        .describe(
+          'Annotation kind: assert-signal | assert-visible | mark-dynamic | success-state.',
+        ),
+      name: z.string().optional().describe('Signal name for assert-signal annotations.'),
+      testid: z
+        .string()
+        .optional()
+        .describe(
+          'data-testid value for assert-visible / mark-dynamic / success-state annotations.',
+        ),
+      signal: z.string().optional().describe('Signal name for success-state annotations.'),
+      dataMatches: z
+        .record(z.unknown())
+        .optional()
+        .describe('Key/value pairs the signal payload must match (assert-signal only).'),
+      sessionId: z
+        .string()
+        .optional()
+        .describe(
+          'Active session ID from iris_sessions. Omit when only one browser session is open.',
+        ),
+      annotation: z
+        .unknown()
+        .optional()
+        .describe(
+          'Structured annotation: { kind, name, dataMatches? } for assert-signal; { kind, testid } for assert-visible / mark-dynamic; { kind, signal?, testid? } for success-state.',
+        ),
+    },
+    outputSchema: {
+      ok: z.boolean(),
+      target: z.string().optional(),
+      compiled: z.string().optional(),
+      code: z.string().optional(),
     },
     handler: (deps: ToolDeps, args): Promise<AnnotateResult> => {
       const name = asString(args['flow']) ?? DEFAULT_RECORDING;

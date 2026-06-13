@@ -109,7 +109,7 @@ describe('iris_flow_replay handler — temp dir, never touches the repo', () => 
     const deps = fakeDeps(fs, root, session);
 
     const res = (await tool(IrisTool.FLOW_REPLAY).handler(deps, {
-      name: 'green',
+      flowName: 'green',
     })) as FlowReplayResult;
     expect(res.status).toBe(ReplayStatus.OK);
     expect(res.name).toBe('green');
@@ -130,7 +130,7 @@ describe('iris_flow_replay handler — temp dir, never touches the repo', () => 
     const deps = fakeDeps(fs, root, session);
 
     const res = (await tool(IrisTool.FLOW_REPLAY).handler(deps, {
-      name: 'renamed',
+      flowName: 'renamed',
     })) as FlowReplayResult;
     expect(res.status).toBe(ReplayStatus.DRIFT);
     expect(res.steps.at(-1)?.drift?.nearest).toBe('chat-submit');
@@ -142,7 +142,7 @@ describe('iris_flow_replay handler — temp dir, never touches the repo', () => 
     const deps = fakeDeps(fs, root, session);
 
     const res = (await tool(IrisTool.FLOW_REPLAY).handler(deps, {
-      name: 'nope',
+      flowName: 'nope',
     })) as FlowReplayResult;
     expect(res.status).toBe(ReplayStatus.ERROR);
     expect(res.error?.code).toBe(FlowErrorCode.NOT_FOUND);
@@ -156,7 +156,7 @@ describe('iris_flow_replay handler — temp dir, never touches the repo', () => 
     const deps = fakeDeps(fs, root, session);
 
     const res = (await tool(IrisTool.FLOW_REPLAY).handler(deps, {
-      name: 'bad',
+      flowName: 'bad',
     })) as FlowReplayResult;
     expect(res.status).toBe(ReplayStatus.ERROR);
     expect(res.error?.code).toBe(FlowErrorCode.PARSE_FAILED);
@@ -168,7 +168,7 @@ describe('iris_flow_replay handler — temp dir, never touches the repo', () => 
     const deps = fakeDeps(fs, root, session);
 
     const res = (await tool(IrisTool.FLOW_REPLAY).handler(deps, {
-      name: '../escape',
+      flowName: '../escape',
     })) as FlowReplayResult;
     expect(res.status).toBe(ReplayStatus.ERROR);
     expect(res.error?.code).toBe(FlowErrorCode.INVALID_NAME);
@@ -181,7 +181,7 @@ describe('iris_flow_replay handler — temp dir, never touches the repo', () => 
     const session = scriptedSession((testid) => ({ elements: [{ ref: `e-${testid}` }] }));
     const deps = fakeDeps(fs, root, session);
 
-    await tool(IrisTool.FLOW_REPLAY).handler(deps, { name: 'green' });
+    await tool(IrisTool.FLOW_REPLAY).handler(deps, { flowName: 'green' });
     const history = await deps.project.read();
     expect(history.ok).toBe(true);
     if (!history.ok) throw new Error('expected history');
@@ -198,7 +198,7 @@ describe('iris_flow_replay handler — temp dir, never touches the repo', () => 
     const session = scriptedSession(() => ({ elements: [] }));
     const deps = fakeDeps(fs, root, session);
 
-    await tool(IrisTool.FLOW_REPLAY).handler(deps, { name: 'nope' });
+    await tool(IrisTool.FLOW_REPLAY).handler(deps, { flowName: 'nope' });
     const last = await deps.project.lastRun('nope');
     expect(last?.status).toBe(RunStatus.ERROR);
     expect(last?.kind).toBe(RunKind.FLOW_REPLAY);

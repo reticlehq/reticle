@@ -90,7 +90,8 @@ export function installIris(): void {
   const params = new URLSearchParams(window.location.search);
   const present = params.has('present');
   const session = params.get('session') ?? SESSION_AUTO;
-  iris.connect({ session, present });
+  const irisPort: number = typeof __IRIS_PORT__ !== 'undefined' ? __IRIS_PORT__ : 4400;
+  iris.connect({ session, present, url: `ws://localhost:${irisPort}/iris` });
   registerStore('app', () => useApp.getState());
   registerCapabilities({
     testids: TESTIDS,

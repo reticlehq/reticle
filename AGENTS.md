@@ -1,14 +1,14 @@
 # AGENTS.md — Iris
 
 Orientation and tool manifest for AI agents working in this repo. Pairs with `CLAUDE.md`
-(rules) and `skills/` (depth).
+(rules) and `dev-dev-skills/` (depth).
 
 ## Orient before you explore
 
 1. Read `CLAUDE.md` for the non-negotiables and the skills index.
 2. Read `plan/README.md` for the product design (then the specific `plan/0N-*.md` for your area).
 3. Read `GRAPH_REPORT.md` (if present, from Graphify) before grepping across packages.
-4. Open the one `skills/*.md` that matches your task — don't reread all of them.
+4. Open the one `dev-skills/*.md` that matches your task — don't reread all of them.
 
 ## The codebase in one breath
 
@@ -25,7 +25,7 @@ gitignored research.
 | `iris` (from `@syrin/iris-server`, M0+)              | Start the bridge + MCP server                                                             |
 | Graphify                                             | Knowledge graph per package; read `GRAPH_REPORT.md` first. `/graphify packages/<pkg>/src` |
 | Agentation (`agentation-mcp`)                        | Human UI annotations in the demo → agent context (complementary to Iris)                  |
-| Refero                                               | Design references: `/refero <niche>` → fold tokens into `skills/design.md`                |
+| Refero                                               | Design references: `/refero <niche>` → fold tokens into `dev-skills/design.md`            |
 | MCP servers                                          | Reach session-connected MCP tools via the harness                                         |
 
 ## Working rules for agents

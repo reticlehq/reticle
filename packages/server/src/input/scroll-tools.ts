@@ -13,24 +13,63 @@ export const SCROLL_TOOLS: ToolDef[] = [
   {
     name: IrisTool.SCROLL_TO,
     description:
-      'Find an element that a VIRTUALIZED/windowed list has not rendered yet: scrolls the container ~a viewport at a time (re-querying after each) until the match mounts, the list ends, or maxScrolls (default 20) is spent. Pass the list container ref as `container` (else the document scrolls). Use this when iris_query returns nothing but you expect a row further down. Returns { found, element?, scrolls, exhausted } (exhausted:true ⇒ hit the list end; false ⇒ hit the scroll budget).',
+      'Find an element in a VIRTUALIZED list that has not rendered yet. Pass `by` (role|text|testid|label|placeholder|alt) and `value` (query string) to identify the target row. Scrolls the container until the row mounts, the list ends, or maxScrolls (default 20) is spent. Pass targetIndex + totalCount for bisection — jumps directly to the estimated offset in one scroll (e.g. targetIndex:800 totalCount:1000 jumps to 80% of scrollHeight). Returns { found, element?, scrolls, exhausted }.',
     inputSchema: {
-      by: z.string(),
-      value: z.string(),
-      name: z.string().optional(),
-      container: z.string().optional(),
-      maxScrolls: z.number().optional(),
-      ...{ sessionId: z.string().optional() },
+      by: z
+        .string()
+        .describe(
+          'Query strategy for finding the target: role | text | testid | label | placeholder | alt',
+        ),
+      value: z
+        .string()
+        .describe('Query value for the selected strategy (the element to scroll into view).'),
+      name: z.string().optional().describe('Optional accessible name filter when using by=role.'),
+      container: z
+        .string()
+        .optional()
+        .describe('Element ref for the scrollable container. Omit to scroll the document.'),
+      maxScrolls: z
+        .number()
+        .optional()
+        .describe('Maximum number of scroll steps before giving up. Default: 20.'),
+      targetIndex: z
+        .number()
+        .optional()
+        .describe(
+          'Known row index of the target in the list. Combine with totalCount for bisection — jumps directly to the estimated offset.',
+        ),
+      totalCount: z
+        .number()
+        .optional()
+        .describe(
+          'Total item count in the virtualized list. Required for bisection with targetIndex.',
+        ),
+      sessionId: z
+        .string()
+        .optional()
+        .describe(
+          'Active session ID from iris_sessions. Omit when only one browser session is open.',
+        ),
+    },
+    outputSchema: {
+      found: z.boolean(),
+      element: z.object({ ref: z.string(), role: z.string(), name: z.string() }).optional(),
+      scrolls: z.number(),
+      exhausted: z.boolean(),
     },
     handler: (deps: ToolDeps, args) => {
       const session = deps.sessions.resolve(asString(args['sessionId']));
       const name = asString(args['name']);
       const container = asString(args['container']);
+      const targetIndex = asNumber(args['targetIndex']);
+      const totalCount = asNumber(args['totalCount']);
       const q: ScrollFindQuery = {
         by: asString(args['by']) ?? '',
         value: asString(args['value']) ?? '',
         ...(name !== undefined ? { name } : {}),
         ...(container !== undefined ? { container } : {}),
+        ...(targetIndex !== undefined ? { targetIndex } : {}),
+        ...(totalCount !== undefined ? { totalCount } : {}),
       };
       const maxScrolls = asNumber(args['maxScrolls']);
       return scrollToFind(session, q, maxScrolls !== undefined ? { maxScrolls } : {});

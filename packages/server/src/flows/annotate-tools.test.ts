@@ -197,9 +197,9 @@ describe('iris_annotate handler — temp dir, never touches the repo', () => {
       kind: AnnotationKind.SUCCESS_STATE,
       signal: 'diff:shown',
     });
-    await tool(IrisTool.FLOW_SAVE).handler(deps, { name: 'checkout' });
+    await tool(IrisTool.FLOW_SAVE).handler(deps, { flowName: 'checkout' });
 
-    const loaded = (await tool(IrisTool.FLOW_LOAD).handler(deps, { name: 'checkout' })) as {
+    const loaded = (await tool(IrisTool.FLOW_LOAD).handler(deps, { flowName: 'checkout' })) as {
       steps: { expect?: { signal?: string } }[];
       dynamic?: { kind: string; value?: string }[];
       success?: { signal?: string };
@@ -221,9 +221,9 @@ describe('iris_annotate handler — temp dir, never touches the repo', () => {
       name: 'diff:shown',
       dataMatches: { count: 2 },
     });
-    await tool(IrisTool.FLOW_SAVE).handler(deps, { name: 'dm' });
+    await tool(IrisTool.FLOW_SAVE).handler(deps, { flowName: 'dm' });
 
-    const loaded = (await tool(IrisTool.FLOW_LOAD).handler(deps, { name: 'dm' })) as {
+    const loaded = (await tool(IrisTool.FLOW_LOAD).handler(deps, { flowName: 'dm' })) as {
       steps: { expect?: { signalData?: Record<string, unknown> } }[];
     };
     expect(loaded.steps[0]?.expect?.signalData).toEqual({ count: 2 });

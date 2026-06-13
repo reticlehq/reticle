@@ -47,7 +47,7 @@ function el(ref: string, testid: string): ElementDescriptor {
 }
 
 function present(testids: string[]): QueryEmptyHint {
-  return { route: '/', presentTestids: testids, knownEmptyState: false };
+  return { route: '/', presentTestids: testids, presentRegions: [], knownEmptyState: false };
 }
 
 class FakeSession {
@@ -140,7 +140,7 @@ describe('FlowStore.heal + iris_flow_heal', () => {
     await store.saveFlow(flowFile('chat', [clickStep('old-id')]));
     const session = renamedSession('old-id', ['new-id']);
 
-    const res = await heal(store, session, { name: 'chat', apply: true });
+    const res = await heal(store, session, { flowName: 'chat', apply: true });
     expect(res.status).toBe(HealStatus.HEALED);
     expect(res.applied).toBe(true);
     expect(res.changed).toEqual([{ step: 0, from: 'old-id', to: 'new-id' }]);
@@ -160,7 +160,7 @@ describe('FlowStore.heal + iris_flow_heal', () => {
     const before = await readFile(flowPath(root, 'chat'), 'utf8');
     const session = renamedSession('old-id', ['new-id']);
 
-    const res = await heal(store, session, { name: 'chat', apply: false });
+    const res = await heal(store, session, { flowName: 'chat', apply: false });
     expect(res.status).toBe(HealStatus.DRIFT);
     expect(res.applied).toBe(false);
     expect(res.changed).toEqual([]);
@@ -178,7 +178,7 @@ describe('FlowStore.heal + iris_flow_heal', () => {
     const before = await readFile(flowPath(root, 'chat'), 'utf8');
     const session = renamedSession('old-id', ['zzz-unrelated']);
 
-    const res = await heal(store, session, { name: 'chat', apply: true });
+    const res = await heal(store, session, { flowName: 'chat', apply: true });
     expect(res.status).toBe(HealStatus.UNHEALABLE);
     expect(res.proposals).toEqual([]);
     expect(res.changed).toEqual([]);
@@ -194,7 +194,7 @@ describe('FlowStore.heal + iris_flow_heal', () => {
     const before = await readFile(flowPath(root, 'chat'), 'utf8');
     const session = new FakeSession((testid) => ({ elements: [el(`e-${testid}`, testid)] }));
 
-    const res = await heal(store, session, { name: 'chat', apply: true });
+    const res = await heal(store, session, { flowName: 'chat', apply: true });
     expect(res.status).toBe(HealStatus.NOTHING_TO_HEAL);
     expect(res.changed).toEqual([]);
     expect(res.proposals).toEqual([]);
@@ -206,7 +206,7 @@ describe('FlowStore.heal + iris_flow_heal', () => {
 
   it('heal on a missing flow returns a structured error', async () => {
     const session = new FakeSession(() => ({ elements: [] }));
-    const res = await heal(store, session, { name: 'ghost', apply: true });
+    const res = await heal(store, session, { flowName: 'ghost', apply: true });
     expect(res.status).toBe(HealStatus.ERROR);
     expect(res.error?.code).toBe(FlowErrorCode.NOT_FOUND);
     expect(res.applied).toBe(false);
@@ -219,7 +219,7 @@ describe('FlowStore.heal + iris_flow_heal', () => {
     const traverseStore = new FlowStore(fsPort, root, clock);
     const session = new FakeSession(() => ({ elements: [] }));
 
-    const res = await heal(traverseStore, session, { name: '../etc/passwd', apply: true });
+    const res = await heal(traverseStore, session, { flowName: '../etc/passwd', apply: true });
     expect(res.status).toBe(HealStatus.ERROR);
     expect(res.error?.code).toBe(FlowErrorCode.INVALID_NAME);
     expect(writeSpy).not.toHaveBeenCalled();
@@ -237,7 +237,7 @@ describe('FlowStore.heal + iris_flow_heal', () => {
       return { elements: [el(`e-${testid}`, testid)] };
     });
 
-    const res = await heal(store, session, { name: 'multi', apply: true });
+    const res = await heal(store, session, { flowName: 'multi', apply: true });
     expect(res.status).toBe(HealStatus.HEALED);
     expect(res.changed).toEqual([{ step: 0, from: 'old-id', to: 'new-id' }]);
 
@@ -256,7 +256,7 @@ describe('FlowStore.heal + iris_flow_heal', () => {
     const writeSpy = vi.spyOn(fsPort, 'writeFile');
     const session = new FakeSession(() => ({ elements: [] }));
 
-    const res = await heal(badStore, session, { name: 'bad', apply: true });
+    const res = await heal(badStore, session, { flowName: 'bad', apply: true });
     expect(res.status).toBe(HealStatus.ERROR);
     expect(res.error?.code).toBe(FlowErrorCode.PARSE_FAILED);
     expect(writeSpy).not.toHaveBeenCalled();
@@ -265,21 +265,21 @@ describe('FlowStore.heal + iris_flow_heal', () => {
   it('heal apply:true then heal again is nothing_to_heal (idempotent)', async () => {
     await store.saveFlow(flowFile('chat', [clickStep('old-id')]));
     const first = await heal(store, renamedSession('old-id', ['new-id']), {
-      name: 'chat',
+      flowName: 'chat',
       apply: true,
     });
     expect(first.status).toBe(HealStatus.HEALED);
 
     // The renamed anchor now resolves to a live element on a second pass.
     const greenSession = new FakeSession((testid) => ({ elements: [el(`e-${testid}`, testid)] }));
-    const second = await heal(store, greenSession, { name: 'chat', apply: true });
+    const second = await heal(store, greenSession, { flowName: 'chat', apply: true });
     expect(second.status).toBe(HealStatus.NOTHING_TO_HEAL);
     expect(second.changed).toEqual([]);
   });
 
   it('healed file is re-readable, byte-stable, preserves createdAt + trailing newline', async () => {
     await store.saveFlow(flowFile('chat', [clickStep('old-id')]));
-    await heal(store, renamedSession('old-id', ['new-id']), { name: 'chat', apply: true });
+    await heal(store, renamedSession('old-id', ['new-id']), { flowName: 'chat', apply: true });
 
     const raw = await readFile(flowPath(root, 'chat'), 'utf8');
     expect(raw.endsWith('\n')).toBe(true);

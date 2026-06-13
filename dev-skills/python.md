@@ -1,4 +1,4 @@
-# skills/python.md — N/A for this stack
+# dev-skills/python.md — N/A for this stack
 
 Iris is a pure-TypeScript monorepo. There is no Python service.
 

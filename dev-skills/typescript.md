@@ -1,4 +1,4 @@
-# skills/typescript.md — TypeScript Rules & Patterns
+# dev-skills/typescript.md — TypeScript Rules & Patterns
 
 **Open when:** any TypeScript question or pattern. (Maps to Foundation II.11.)
 
