@@ -4,6 +4,7 @@ import {
   type HelloMessage,
   type IrisEvent,
 } from '@iris/protocol';
+import { nativeSetTimeout } from './native-timers.js';
 
 export interface CommandOutcome {
   ok: boolean;
@@ -51,7 +52,7 @@ export class Transport {
     };
     ws.onclose = (): void => {
       this.#ws = undefined;
-      if (!this.#closed) setTimeout(() => this.#open(), RECONNECT_DELAY_MS);
+      if (!this.#closed) nativeSetTimeout(() => this.#open(), RECONNECT_DELAY_MS);
     };
     ws.onerror = (): void => {
       ws.close();

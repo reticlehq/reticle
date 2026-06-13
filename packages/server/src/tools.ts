@@ -341,6 +341,23 @@ export const TOOLS: ToolDef[] = [
       }),
   },
   {
+    name: IrisTool.CLOCK,
+    description:
+      'Control a fake clock: { freeze:true } to freeze time, { advanceMs:N } to fast-forward timers (toasts, debounces, auto-dismiss), { reset:true } to restore. Lets you test time-gated UI deterministically.',
+    inputSchema: {
+      freeze: z.boolean().optional(),
+      advanceMs: z.number().optional(),
+      reset: z.boolean().optional(),
+      ...sessionIdShape,
+    },
+    handler: (deps, args) =>
+      commandOrThrow(deps, asString(args['sessionId']), IrisCommand.CLOCK, {
+        freeze: args['freeze'],
+        advanceMs: args['advanceMs'],
+        reset: args['reset'],
+      }),
+  },
+  {
     name: IrisTool.EXPLORE,
     description:
       'Autonomous-exploration helper: list interactive elements (with refs) + current console-error count, so the agent can drive the app and report anomalies.',

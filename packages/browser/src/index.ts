@@ -1,10 +1,18 @@
 import { Iris } from './iris.js';
 
-/** The singleton embedded in the host app: `import { iris } from '@iris/browser'`. */
-export const iris = new Iris();
+/**
+ * The singleton embedded in the host app: `import { iris } from '@iris/browser'`.
+ * Persisted on a global so HMR module re-evaluation reuses the same (already-connected)
+ * instance instead of creating a second bridge connection (feedback #7).
+ */
+const globalStore = globalThis as unknown as { __irisInstance?: Iris };
+export const iris: Iris = (globalStore.__irisInstance ??= new Iris());
 
 export { Iris } from './iris.js';
 export type { IrisConnectOptions } from './iris.js';
+
+// Exclude your own dev widgets from snapshots/observers.
+export { setIgnoreSelectors } from './dom-ignore.js';
 
 // Adapter API (used by @iris/react and other framework adapters).
 export { registerAdapter, identifyComponent, adapterNames } from './adapters.js';

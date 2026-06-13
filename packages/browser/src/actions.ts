@@ -1,5 +1,6 @@
 import { ActionType } from '@iris/protocol';
 import { refs } from './refs.js';
+import { nativeSetTimeout } from './native-timers.js';
 
 export interface ActionResult {
   ok: true;
@@ -155,12 +156,12 @@ export function executeAction(
   return result(ref, action);
 }
 
-const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+const sleep = (ms: number): Promise<void> => new Promise((r) => nativeSetTimeout(r, ms));
 /** Yield to the browser so React can flush a commit between synthetic phases. */
 const frame = (): Promise<void> =>
   new Promise((r) => {
     if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => r());
-    else setTimeout(r, 0);
+    else nativeSetTimeout(r, 0);
   });
 
 function firePointer(el: Element, type: string): void {

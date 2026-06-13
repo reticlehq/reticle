@@ -22,6 +22,7 @@ import { installOverlay, type OverlayHandle } from './overlay.js';
 import { Presenter } from './presenter.js';
 import { refs } from './refs.js';
 import { describe } from './a11y.js';
+import { resetClock } from './clock.js';
 import type { Teardown } from './observers/types.js';
 
 export interface IrisConnectOptions {
@@ -123,6 +124,7 @@ export class Iris {
     this.#overlay = undefined;
     this.#presenter?.destroy();
     this.#presenter = undefined;
+    resetClock(); // restore any frozen timers
     this.#connected = false;
   }
 

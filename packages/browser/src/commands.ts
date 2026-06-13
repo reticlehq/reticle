@@ -12,6 +12,7 @@ import { executeAction, executeSequence, dispatchWebMcp, type ActionStep } from 
 import { describe } from './a11y.js';
 import { refs } from './refs.js';
 import { identifyComponent } from './adapters.js';
+import { freezeClock, advanceClock, resetClock, isClockFrozen } from './clock.js';
 
 export type CommandHandler = (args: Record<string, unknown>) => unknown;
 
@@ -102,5 +103,15 @@ export function createCommandRegistry(): Map<string, CommandHandler> {
   );
   reg.set(IrisCommand.INSPECT, (args) => inspect(str(args['ref']) ?? ''));
   reg.set(IrisCommand.ANIMATIONS, () => listAnimations());
+  reg.set(IrisCommand.CLOCK, (args) => {
+    if (args['reset'] === true) {
+      resetClock();
+    } else {
+      if (args['freeze'] === true) freezeClock();
+      const adv = args['advanceMs'];
+      if (typeof adv === 'number') advanceClock(adv);
+    }
+    return { frozen: isClockFrozen() };
+  });
   return reg;
 }

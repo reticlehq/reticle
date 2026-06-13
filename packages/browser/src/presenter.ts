@@ -1,4 +1,5 @@
 import { refs } from './refs.js';
+import { nativeSetTimeout, nativeClearTimeout } from './native-timers.js';
 
 // Presenter / transparency layer: a human watches the agent work. Glowing border while
 // active, a synthetic cursor that flies to targets, click/hover/type effects, and a HUD that
@@ -52,7 +53,7 @@ export class Presenter {
   #actLine: HTMLElement | undefined;
   #noteLine: HTMLElement | undefined;
   #resLine: HTMLElement | undefined;
-  #idleTimer: ReturnType<typeof setTimeout> | undefined;
+  #idleTimer: number | undefined;
 
   constructor(options: PresenterOptions = {}) {
     this.#paceMs = options.paceMs ?? DEFAULT_PACE;
@@ -101,8 +102,8 @@ export class Presenter {
 
   /** Keep the "working" state up briefly after the last command, then go idle. */
   scheduleIdle(): void {
-    if (this.#idleTimer !== undefined) clearTimeout(this.#idleTimer);
-    this.#idleTimer = setTimeout(() => {
+    if (this.#idleTimer !== undefined) nativeClearTimeout(this.#idleTimer);
+    this.#idleTimer = nativeSetTimeout(() => {
       this.setActive(false);
       if (this.#actLine !== undefined) this.#actLine.textContent = 'idle';
     }, 1200);
@@ -157,7 +158,7 @@ export class Presenter {
     this.#ring.style.width = `${String(rect.width + 8)}px`;
     this.#ring.style.height = `${String(rect.height + 8)}px`;
     this.#ring.setAttribute('data-on', '1');
-    setTimeout(() => this.#ring?.setAttribute('data-on', '0'), 700);
+    nativeSetTimeout(() => this.#ring?.setAttribute('data-on', '0'), 700);
   }
 
   #ripple(x: number, y: number): void {
@@ -167,11 +168,11 @@ export class Presenter {
     r.style.left = `${String(x)}px`;
     r.style.top = `${String(y)}px`;
     this.#root.appendChild(r);
-    setTimeout(() => r.remove(), 520);
+    nativeSetTimeout(() => r.remove(), 520);
   }
 
   #pause(): Promise<void> {
-    return new Promise((res) => setTimeout(res, this.#paceMs));
+    return new Promise((res) => nativeSetTimeout(res, this.#paceMs));
   }
 }
 

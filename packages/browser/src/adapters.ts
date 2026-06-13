@@ -16,7 +16,10 @@ export interface IrisAdapter {
   identify: (el: Element) => ComponentInfo | null;
 }
 
-const adapters: IrisAdapter[] = [];
+// Persist on a global so the registry survives HMR module re-evaluation (otherwise the
+// adapter silently drops after a hot reload and source mapping degrades). See feedback #7.
+const globalStore = globalThis as unknown as { __irisAdapters?: IrisAdapter[] };
+const adapters: IrisAdapter[] = (globalStore.__irisAdapters ??= []);
 
 /** Called by @iris/react (and future adapters) to register themselves. */
 export function registerAdapter(adapter: IrisAdapter): void {
