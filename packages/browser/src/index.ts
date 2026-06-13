@@ -32,6 +32,13 @@ export type { StoreGetter } from './stores.js';
 export { registerCapabilities, getCapabilities, hasCapabilities } from './capabilities.js';
 export type { Capabilities, CapabilitiesInput, CapabilityFlow } from './capabilities.js';
 
+// SDK helpers (P5): adopt the recommended integration patterns without boilerplate.
+export { createIrisEmitter } from './emitter.js';
+export type { IrisEmitter, EmitterTarget, CreateIrisEmitterOptions } from './emitter.js';
+export { commitAndSignal } from './commit-and-signal.js';
+export { registerIrisDomain } from './domains.js';
+export type { IrisDomain } from './domains.js';
+
 // Lower-level building blocks (useful for tests and advanced embedding).
 export { buildSnapshot } from './snapshot.js';
 export { matchQuery, runQuery } from './query.js';

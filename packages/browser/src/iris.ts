@@ -145,6 +145,11 @@ export class Iris {
     this.#connected = true;
   }
 
+  /** Whether the in-page SDK is connected to the bridge (read by createIrisEmitter, P5a). */
+  get connected(): boolean {
+    return this.#connected;
+  }
+
   /** Surface an arbitrary app-domain observation the DOM can't express (plan/03 §7). */
   signal(name: string, data: Record<string, unknown> = {}): void {
     this.#emit(EventType.SIGNAL, { name, data });

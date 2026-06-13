@@ -300,6 +300,11 @@ onSaved(() => iris.signal('order:saved', { id, total }));
 // agent: iris_assert({ predicate: { kind: 'signal', name: 'order:saved', dataMatches: { id: '*' } } })
 ```
 
+> **Recommended:** instead of importing `iris` into components, inject a `createIrisEmitter()`
+> emitter and pair each commit with `commitAndSignal(...)` so the mutation↔signal can't drift —
+> `iris.signal` stays the primitive underneath. See
+> [integration-patterns.md](integration-patterns.md).
+
 **3. `registerStore` so the agent reads state directly.** No need to broadcast a signal for
 every fact — expose the store and the agent reads it via `iris_state`.
 
@@ -320,6 +325,10 @@ registerCapabilities({
 });
 // agent: iris_capabilities()  → the whole testable surface
 ```
+
+> **Multi-domain apps:** prefer `registerIrisDomain({ testids, signals, stores })` co-located in
+> one `iris.ts` per domain — each self-registers and `iris_capabilities()` assembles the union, so
+> there's no central map to forget. See [integration-patterns.md](integration-patterns.md).
 
 > Watch the agent work: pass `present: true` to `iris.connect()` for a glowing border, a
 > cursor that flies to targets, and a HUD; the agent can call `iris_narrate({ text })` to show

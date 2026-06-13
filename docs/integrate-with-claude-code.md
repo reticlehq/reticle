@@ -38,13 +38,17 @@ Then do all of this:
    - install the React adapter: import { install } from '@iris/react'; install()
    - Vite: add @iris/babel-plugin to vite.config; Next: wrap next.config with withIris from @iris/next
 
-5. Make the app AGENT-LEGIBLE (this is what makes Iris fast — see getting-started Step 6):
+5. Make the app AGENT-LEGIBLE (this is what makes Iris fast — see getting-started Step 6 and
+   docs/integration-patterns.md):
    - add stable data-testid to the key interactive elements you'll want to target
-   - emit iris.signal('<name>', {...}) at moments the DOM can't express (save succeeded,
-     webhook received, edit applied, caption generated)
+   - inject ONE emitter: export const emit = createIrisEmitter() (no-op until iris.connect())
+   - emit at moments the DOM can't express (save succeeded, webhook received, edit applied,
+     caption generated) via commitAndSignal(emit, () => mutate(), '<name>', {...}) at commit
+     points so the mutation↔signal can't drift
    - registerStore('<name>', () => myStore.getState()) for any state worth asserting
-   - registerCapabilities({ testids:[...], signals:[...], stores:[...] }) so a future agent
-     learns the testable surface without reading source
+   - self-register each domain with registerIrisDomain({ testids:[...], signals:[...],
+     stores:[...] }) co-located per domain, so iris_capabilities() assembles the surface
+     without a central map to forget
 
 6. Restart so the MCP server loads, run the app in dev, then VERIFY the wiring:
    - iris_sessions  → confirm this app's session is connected
@@ -97,8 +101,10 @@ asserting on volatile output. Report evidence, not prose.
 - [ ] `.mcp.json` has the `iris` server; `iris_sessions` shows the app connected.
 - [ ] `iris.connect()` is dev-gated; nothing Iris ships to prod.
 - [ ] React adapter installed + source mapping returns `file:line` from `iris_inspect`.
-- [ ] Key elements have `data-testid`; load-bearing moments emit `iris.signal`.
-- [ ] `registerCapabilities(...)` declares the surface; `iris_capabilities()` returns it.
+- [ ] Key elements have `data-testid`; components depend on an injected `createIrisEmitter()`
+      emitter and commit points use `commitAndSignal(...)` so signals can't drift.
+- [ ] `registerCapabilities(...)` / per-domain `registerIrisDomain(...)` declare the surface;
+      `iris_capabilities()` returns it.
 - [ ] One real flow verified end-to-end with `iris_act_and_wait` (evidence + verdict pasted).
 
 ## Upgrading later
