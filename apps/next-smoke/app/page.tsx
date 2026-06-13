@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { iris } from '@iris/browser';
 
 export default function Page() {
@@ -96,6 +96,11 @@ export default function Page() {
         ) : null}
       </section>
 
+      <section style={{ marginTop: 24 }}>
+        <h3>Hover-gated reveal (real-input test)</h3>
+        <SmartSentence />
+      </section>
+
       {open ? (
         <div
           role="dialog"
@@ -121,6 +126,42 @@ export default function Page() {
         </div>
       ) : null}
     </main>
+  );
+}
+
+/**
+ * Mirrors AlianPost's smart-sentence: word spans (data-testid="word:<i>") mount only after a
+ * real onMouseEnter + a 500ms dwell. Synthetic dispatchEvent can't drive native hover, so this
+ * is the fixture that distinguishes synthetic input from real (CDP) input.
+ */
+function SmartSentence(): React.ReactElement {
+  const [revealed, setRevealed] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  return (
+    <p
+      data-testid="smart-sentence"
+      style={{ padding: 8, border: '1px dashed #2a2f3d', borderRadius: 8, display: 'inline-block' }}
+      onMouseEnter={() => {
+        iris.signal('hover:enter', { target: 'smart-sentence' });
+        timer.current = setTimeout(() => {
+          setRevealed(true);
+        }, 500);
+      }}
+      onMouseLeave={() => {
+        if (timer.current !== undefined) clearTimeout(timer.current);
+        setRevealed(false);
+      }}
+    >
+      {revealed ? (
+        'the quick brown fox'.split(' ').map((w, i) => (
+          <span key={w} data-testid={`word:${i}`} style={{ marginRight: 4 }}>
+            {w}
+          </span>
+        ))
+      ) : (
+        <span data-testid="hover-hint">Hover me to reveal words</span>
+      )}
+    </p>
   );
 }
 
