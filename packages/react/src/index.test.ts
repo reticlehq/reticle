@@ -64,7 +64,7 @@ function fiberEl(memoizedState: unknown): Element {
   return el;
 }
 
-describe('react adapter readState (G2 hook walk, F5 bounded)', () => {
+describe('react adapter readState', () => {
   it('walks the memoizedState linked list into positional hook values', () => {
     const el = fiberEl({ memoizedState: 0, next: { memoizedState: 'x', next: null } });
 
@@ -93,7 +93,7 @@ describe('react adapter readState (G2 hook walk, F5 bounded)', () => {
     expect(result.hooks?.length ?? 0).toBeLessThanOrEqual(100);
   });
 
-  it('does not throw and stays JSON-serializable on circular hook state (F5 core)', () => {
+  it('does not throw and stays JSON-serializable on circular hook state', () => {
     const circular: Record<string, unknown> = { label: 'state' };
     circular['self'] = circular; // cycle (fiber backref / reducer state shape)
     const result = readState(fiberEl({ memoizedState: circular, next: null }));

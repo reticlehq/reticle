@@ -124,10 +124,10 @@ function nearestComponentFiber(el: Element): Fiber | null {
 }
 
 /**
- * JSON-safe projection of an arbitrary hook value (F5). Drops functions/DOM nodes/cycles and
+ * JSON-safe projection of an arbitrary hook value. Drops functions/DOM nodes/cycles and
  * bounds depth/breadth, so the result handed to `JSON.stringify` downstream can never throw.
  * Raw hook states routinely hold `useRef` DOM nodes, dispatchers, and circular fiber backrefs —
- * serializing those un-guarded is the F5 hang. Never throws.
+ * serializing those un-guarded can cause hangs. Never throws.
  */
 function safeValue(value: unknown, depth: number, seen: WeakSet<object>): unknown {
   if (value === null) return null;
@@ -157,7 +157,7 @@ function safeValue(value: unknown, depth: number, seen: WeakSet<object>): unknow
  * Best-effort, bounded read of a function component's hook states by walking memoizedState.next.
  * React does not expose hook *names*; we return positional, sanitized state values. State for
  * class components / host fibers is skipped. Layout is React-version-specific — fail soft to a
- * structured `{ ok: false, reason }` (F5) rather than throwing or producing an unserializable value.
+ * structured `{ ok: false, reason }` rather than throwing or producing an unserializable value.
  */
 /** Build a success result, omitting `component` when the name is unknown (exactOptional-safe). */
 function ok(name: string | null, hooks: unknown[]): ComponentStateResult {
@@ -200,7 +200,7 @@ const HOVER_HANDLER_KEYS = [
 ] as const;
 
 /**
- * F3: true if the element's host fiber declares React enter/leave handlers. Synthetic dispatchEvent
+ * True if the element's host fiber declares React enter/leave handlers. Synthetic dispatchEvent
  * does not reliably trigger React's native enter/leave synthesis (no hit-testing), so callers warn.
  * Fail soft: any unexpected fiber shape returns false.
  */

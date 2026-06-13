@@ -7,23 +7,23 @@ export const IRIS_DEFAULT_PORT = 4400;
 export const IRIS_WS_PATH = '/iris';
 export const IRIS_PROTOCOL_VERSION = 1;
 
-/** Schema version stamped onto compiled replay programs (G6). */
+/** Schema version stamped onto compiled replay programs. */
 export const REPLAY_PROGRAM_VERSION = 1;
 
-/** M8 Stage A: the git-checked Iris workspace directory + its layout. No free strings. */
+/** The git-checked Iris workspace directory + its layout. No free strings. */
 export const IrisDir = {
   ROOT: '.iris',
   CONTRACT_FILE: 'contract.json',
   FLOWS_SUBDIR: 'flows',
   BASELINES_SUBDIR: 'baselines',
-  /** 0.3.7 RUNHISTORY: cross-run memory — outcomes of past runs (the "did it behave like last time?" file). */
+  /** cross-run memory — outcomes of past runs (the "did it behave like last time?" file). */
   PROJECT_FILE: 'project.json',
-  /** N3 VISUAL (M11): opt-in pixel baselines — .iris/visual/<name>.png + <name>.diff.png. */
+  /** opt-in pixel baselines — .iris/visual/<name>.png + <name>.diff.png. */
   VISUAL_SUBDIR: 'visual',
 } as const;
 
 /**
- * N3 VISUAL (M11): structured reasons a screenshot/visual-diff could not produce a verdict (never
+ * Structured reasons a screenshot/visual-diff could not produce a verdict (never
  * thrown as free strings). The visual layer is OPT-IN and CDP/Playwright-driven — it is NEVER
  * bundled into the always-on browser SDK — so NO_PROVIDER is the common "you must `iris drive`" case.
  */
@@ -35,15 +35,15 @@ export const VisualReason = {
 } as const;
 export type VisualReason = (typeof VisualReason)[keyof typeof VisualReason];
 
-/** N3 VISUAL: actionable companion to NO_PROVIDER — the visual layer needs a driven browser. */
+/** Actionable companion to NO_PROVIDER — the visual layer needs a driven browser. */
 export const VISUAL_NO_PROVIDER_RECOMMENDATION =
   'visual capture needs a driven browser — start with `iris drive <url>` or set IRIS_CDP_URL; the always-on SDK does not ship a screenshotter';
 
-/** N3 VISUAL: default per-pixel color-distance threshold (pixelmatch 0..1; higher = more lenient). */
+/** Default per-pixel color-distance threshold (pixelmatch 0..1; higher = more lenient). */
 export const VISUAL_PIXEL_THRESHOLD = 0.1;
 
 /**
- * N4 EXPLORE (autonomous "smart monkey"): the anomaly classes iris_crawl reports after clicking a
+ * Autonomous "smart monkey" anomaly classes iris_crawl reports after clicking a
  * reachable control. Named so the agent (and tests) branch on cause, never on message text.
  */
 export const CrawlAnomalyKind = {
@@ -54,7 +54,7 @@ export const CrawlAnomalyKind = {
 export type CrawlAnomalyKind = (typeof CrawlAnomalyKind)[keyof typeof CrawlAnomalyKind];
 
 /**
- * N5 SCROLLFIND: bounds for iris_scroll_to — how many viewport scrolls to try before giving up on
+ * Bounds for iris_scroll_to — how many viewport scrolls to try before giving up on
  * a virtualized/windowed list (which only renders visible rows, so a plain iris_query misses
  * off-screen items). Each scroll advances ~one viewport; the loop also stops early at the list end.
  */
@@ -62,7 +62,7 @@ export const SCROLL_FIND_DEFAULTS = {
   MAX_SCROLLS: 20,
 } as const;
 
-/** N4 EXPLORE: bounds so a crawl always terminates and each click has time to settle. */
+/** Bounds so a crawl always terminates and each click has time to settle. */
 export const CRAWL_DEFAULTS = {
   /** Max controls clicked in one crawl (then `truncated:true`). */
   MAX_STEPS: 25,
@@ -86,12 +86,12 @@ export const ContractReadError = {
 export type ContractReadError = (typeof ContractReadError)[keyof typeof ContractReadError];
 
 /**
- * 0.3.7 RUNHISTORY: schema version stamped into project.json so a reader can reject/upgrade old files.
+ * Schema version stamped into project.json so a reader can reject/upgrade old files.
  */
 export const PROJECT_FILE_VERSION = 1;
 
 /**
- * 0.3.7 RUNHISTORY: structured outcome when reading project.json fails (never thrown to the agent).
+ * Structured outcome when reading project.json fails (never thrown to the agent).
  * Mirrors ContractReadError. NOTE: recordRun() self-heals a MALFORMED file (starts fresh) so a
  * corrupt history never wedges the agent; only the READ path (iris_project) surfaces MALFORMED.
  */
@@ -101,7 +101,7 @@ export const ProjectReadError = {
 } as const;
 export type ProjectReadError = (typeof ProjectReadError)[keyof typeof ProjectReadError];
 
-/** 0.3.7 RUNHISTORY: how a run record was produced. */
+/** How a run record was produced. */
 export const RunKind = {
   FLOW_REPLAY: 'flow_replay', // auto-recorded by iris_flow_replay
   MANUAL: 'manual', // explicitly recorded via iris_run_record
@@ -109,7 +109,7 @@ export const RunKind = {
 export type RunKind = (typeof RunKind)[keyof typeof RunKind];
 
 /**
- * 0.3.7 RUNHISTORY: the persisted outcome of a run. Distinct from ReplayStatus (a wire/replay
+ * The persisted outcome of a run. Distinct from ReplayStatus (a wire/replay
  * concept of ok|drift|error): RunStatus is the history concept and adds pass/fail. The replay
  * site maps ReplayStatus.OK→PASS, DRIFT→DRIFT, ERROR→ERROR.
  */
@@ -122,7 +122,7 @@ export const RunStatus = {
 export type RunStatus = (typeof RunStatus)[keyof typeof RunStatus];
 
 /**
- * 0.3.7 RUNHISTORY: bounds on project.json so the file stays small + diffable. recordRun keeps the
+ * Bounds on project.json so the file stays small + diffable. recordRun keeps the
  * last PER_NAME runs of any single name, then caps the whole list to TOTAL most-recent overall.
  */
 export const PROJECT_RUN_CAP = {
@@ -130,7 +130,7 @@ export const PROJECT_RUN_CAP = {
   TOTAL: 200,
 } as const;
 
-/** M8 Stage A FLOWFMT: schema version stamped onto on-disk flow files (.iris/flows/<name>.json). */
+/** Schema version stamped onto on-disk flow files (.iris/flows/<name>.json). */
 export const FLOW_FILE_VERSION = 1;
 
 /** How a flow step is anchored to the live DOM at replay time (semantic, never a volatile ref). */
@@ -142,14 +142,14 @@ export const AnchorKind = {
 export type AnchorKind = (typeof AnchorKind)[keyof typeof AnchorKind];
 
 /**
- * M8 Stage A FLOWFMT: the role marker for a DEGRADED step — one recorded with no resolvable
+ * The role marker for a DEGRADED step — one recorded with no resolvable
  * testid. It is kept (never dropped) but a volatile eXX ref is NEVER persisted in its place;
  * the step carries this placeholder ROLE anchor + degraded:true, a legible "add a data-testid
- * here" marker that a human/Stage-B self-healing pass re-binds. Satisfies the anchor min(1).
+ * here" marker that a human/self-healing pass re-binds. Satisfies the anchor min(1).
  */
 export const DEGRADED_ANCHOR_ROLE = 'unresolved';
 
-/** M8 FLOWFMT: structured failure codes for flow disk ops (returned, never thrown as free strings). */
+/** Structured failure codes for flow disk ops (returned, never thrown as free strings). */
 export const FlowErrorCode = {
   INVALID_NAME: 'flow_invalid_name', // path traversal / illegal chars
   NOT_FOUND: 'flow_not_found', // load of a missing flow
@@ -158,11 +158,11 @@ export const FlowErrorCode = {
 } as const;
 export type FlowErrorCode = (typeof FlowErrorCode)[keyof typeof FlowErrorCode];
 
-/** M8 FLOWFMT: a flow name must be a single safe path segment (no '/', '\\', '..', leading dot). */
+/** A flow name must be a single safe path segment (no '/', '\\', '..', leading dot). */
 export const FLOW_NAME_PATTERN = /^[a-z0-9][a-z0-9-_]{0,63}$/i;
 
 /**
- * M8 Stage A REPLAYANCHOR: the outcome of replaying an on-disk flow by re-resolving its
+ * The outcome of replaying an on-disk flow by re-resolving its
  * semantic anchors against the live DOM. `drift` (an anchor missed → contract changed) is
  * cleanly separated from `error` (the flow file is missing/malformed) and `ok`. No free strings.
  */
@@ -174,7 +174,7 @@ export const ReplayStatus = {
 export type ReplayStatus = (typeof ReplayStatus)[keyof typeof ReplayStatus];
 
 /**
- * M8 Stage A REPLAYANCHOR: why an anchor failed to resolve at replay time (the "whose fault is
+ * Why an anchor failed to resolve at replay time (the "whose fault is
  * it" reason kind). Drives the human `reason` sentence and whether a nearest-match is offered.
  */
 export const DriftReason = {
@@ -183,11 +183,11 @@ export const DriftReason = {
 } as const;
 export type DriftReason = (typeof DriftReason)[keyof typeof DriftReason];
 
-/** M8 Stage A REPLAYANCHOR: default timeout (ms) a signal anchor waits to be observed at replay. */
+/** Default timeout (ms) a signal anchor waits to be observed at replay. */
 export const FLOW_SIGNAL_TIMEOUT_MS = 4000;
 
 /**
- * M8 Stage B RECORDER: the structured annotation kinds a human can attach while recording.
+ * The structured annotation kinds a human can attach while recording.
  * FIRST CUT: only these four structured kinds compile to flow fields (via a toolbar menu +
  * a signal <select> drawn from registered capabilities). Free natural-language annotation →
  * predicate compilation is explicitly OUT this cut (no NL parser). `wait-for` / `ignore-region`
@@ -201,7 +201,7 @@ export const AnnotationKind = {
 } as const;
 export type AnnotationKind = (typeof AnnotationKind)[keyof typeof AnnotationKind];
 
-/** M8 Stage B RECORDER: recorder lifecycle phases (drives the toolbar UI + the capture gate). */
+/** Recorder lifecycle phases (drives the toolbar UI + the capture gate). */
 export const RecorderPhase = {
   IDLE: 'idle', // listeners inert, no steps captured
   RECORDING: 'recording', // capture-phase listeners live
@@ -210,7 +210,7 @@ export const RecorderPhase = {
 export type RecorderPhase = (typeof RecorderPhase)[keyof typeof RecorderPhase];
 
 /**
- * M8 Stage B RECORDER: structured codes for the recorded-save server tool (returned, never thrown).
+ * Structured codes for the recorded-save server tool (returned, never thrown).
  */
 export const RecordedSaveError = {
   NO_RECORDED_FLOW: 'flow_no_recorded', // no FLOW_RECORDED event for the session
@@ -219,7 +219,7 @@ export const RecordedSaveError = {
 export type RecordedSaveError = (typeof RecordedSaveError)[keyof typeof RecordedSaveError];
 
 /**
- * M8 Stage B SELFHEAL: outcome of iris_flow_heal (distinct from ReplayStatus — adds heal verbs).
+ * Outcome of iris_flow_heal (distinct from ReplayStatus — adds heal verbs).
  * Rebinds testid anchors only (role/name/signal re-anchoring is future). A confident nearest-match
  * is required before any disk write — the "never silently rewrite" invariant.
  */
@@ -233,14 +233,14 @@ export const HealStatus = {
 export type HealStatus = (typeof HealStatus)[keyof typeof HealStatus];
 
 /**
- * SELFHEAL: minimum normalized confidence (0,1] a nearest-match rebind must clear before it is
+ * Minimum normalized confidence (0,1] a nearest-match rebind must clear before it is
  * eligible to be APPLIED (or surfaced as a confident proposal). Below this, drift is reported but
  * NEVER auto-rewritten — the "never silently rewrite" invariant has a single numeric home here.
  */
 export const HEAL_CONFIDENCE_MIN = 0.5;
 
 /**
- * M8 Stage B ANNOTATE: what a structured annotation binds to. STEP folds onto the LAST captured
+ * What a structured annotation binds to. STEP folds onto the LAST captured
  * step's expect (assert-signal / assert-visible); FLOW folds onto the flow header (mark-dynamic →
  * dynamic[], success-state → success).
  */
@@ -251,7 +251,7 @@ export const AnnotationTarget = {
 export type AnnotationTarget = (typeof AnnotationTarget)[keyof typeof AnnotationTarget];
 
 /**
- * M8 Stage B ANNOTATE: structured failure codes for the annotate compiler/tool (returned, never
+ * Structured failure codes for the annotate compiler/tool (returned, never
  * thrown / free strings). NO_ACTIVE_RECORDING = annotate() with nothing recording; NO_STEP_TO_
  * ANNOTATE = an assert-* with zero captured steps yet; UNKNOWN_KIND = kind ∉ AnnotationKind (or a
  * free natural-language string — see AnnotationSchema's FUTURE note); MISSING_FIELD = e.g. a
@@ -265,7 +265,7 @@ export const AnnotationErrorCode = {
 } as const;
 export type AnnotationErrorCode = (typeof AnnotationErrorCode)[keyof typeof AnnotationErrorCode];
 
-/** M8 Stage B ANNOTATE: leading word of the compiled-predicate confirmation ("will assert …"). */
+/** Leading word of the compiled-predicate confirmation ("will assert …"). */
 export const COMPILED_PREDICATE_PREFIX = 'will';
 
 /** Bounds for the per-session ring buffer (see plan/02-architecture.md). */
@@ -309,9 +309,9 @@ export const EventType = {
   REVEAL_SHOWN: 'reveal.shown',
   SIGNAL: 'signal',
   STATE_CHANGE: 'state.change',
-  /** F2: page-level visibility/focus health (distinct from element-level VISIBLE_*). */
+  /** page-level visibility/focus health (distinct from element-level VISIBLE_*). */
   PAGE_HEALTH: 'page.health',
-  /** M8 Stage B RECORDER: browser → bridge: a human recording compiled in-page. */
+  /** browser → bridge: a human recording compiled in-page. */
   FLOW_RECORDED: 'flow.recorded',
   /**
    * Live-control: browser → bridge. A human acted on the presenter panel.
@@ -332,6 +332,13 @@ export const SessionState = {
 } as const;
 export type SessionState = (typeof SessionState)[keyof typeof SessionState];
 
+/**
+ * Sentinel session label meaning "give this tab its own unique id". The SDK maps it (and an absent
+ * label) to a per-tab id so several tabs — a human tab + an Iris-driven tour, a Director-cut popup —
+ * never collide on one session id. Pass an explicit label only when tabs should intentionally share.
+ */
+export const SESSION_AUTO = 'auto';
+
 /** Live-control: kinds a human can emit from the panel (the `kind` of a HUMAN_CONTROL event). */
 export const HumanControlKind = {
   PAUSE: 'pause',
@@ -342,7 +349,7 @@ export const HumanControlKind = {
 export type HumanControlKind = (typeof HumanControlKind)[keyof typeof HumanControlKind];
 
 /**
- * F2 session health: SDK page-health heartbeat cadence (native timer) and the server's
+ * SDK page-health heartbeat cadence (native timer) and the server's
  * throttle threshold. Kept named so the server's staleness check can be reasoned about
  * against the SDK's heartbeat (≈ 2 missed heartbeats ⇒ throttled).
  */
@@ -352,7 +359,26 @@ export const SESSION_HEALTH = {
   STALE_THRESHOLD_MS: 12_000,
 } as const;
 
-/** Why the SDK emitted a PAGE_HEALTH event (F2). */
+/**
+ * Server-authoritative session liveness. The browser-side idle timer is throttled in a backgrounded
+ * tab and dies entirely if the agent (MCP client) kills the bridge — so the Node server (immune to
+ * throttling) owns the decision: a session whose AGENT has been idle past `IDLE_END_MS` is reaped and
+ * ended via a PRESENTER push (which a throttled tab still receives). `BRIDGE_LOST_MS` is the browser's
+ * own fallback: when it cannot reach the bridge for this long (server/agent process gone), it ends the
+ * session itself so the HUD never sits "running" forever.
+ */
+export const SESSION_LIFECYCLE = {
+  /** Default agent-idle window before the server reaps a session. Agent-tunable via iris_session. */
+  IDLE_END_MS: 300_000,
+  /** Floor for a tuned idle window (so an agent can't disable the safety net). */
+  IDLE_END_MIN_MS: 5_000,
+  /** How often the server reaper sweeps sessions for idle/disconnected ones. */
+  REAP_INTERVAL_MS: 5_000,
+  /** Browser fallback: continuous failure to reach the bridge for this long ⇒ self-end the session. */
+  BRIDGE_LOST_MS: 15_000,
+} as const;
+
+/** Why the SDK emitted a PAGE_HEALTH event. */
 export const HealthReason = {
   VISIBILITY: 'visibilitychange',
   FOCUS: 'focus',
@@ -362,12 +388,12 @@ export const HealthReason = {
 } as const;
 export type HealthReason = (typeof HealthReason)[keyof typeof HealthReason];
 
-/** Surfaced on act/assert results when the target tab is throttled (F2). */
+/** Surfaced on act/assert results when the target tab is throttled. */
 export const THROTTLED_WARNING =
   'tab throttled; timer/rAF/pointer gestures may silently no-op — refocus before driving';
 
 /**
- * P2-surface: actionable companion to THROTTLED_WARNING. Surfaced on act/assert results and
+ * Actionable companion to THROTTLED_WARNING. Surfaced on act/assert results and
  * iris_sessions rows when a tab is hidden/throttled and may be un-focusable/un-recoverable from
  * the in-page SDK + CDP path. Points at the `iris drive` escape hatch (a guaranteed scriptable
  * context). Iris cannot bring such a tab to front or recover it, so it names the limit instead.
@@ -375,7 +401,7 @@ export const THROTTLED_WARNING =
 export const UNSCRIPTABLE_TAB_RECOMMENDATION =
   'tab hidden/throttled and may be un-focusable from here; refocus it, or run `iris drive <url>` for a guaranteed scriptable context';
 
-/** R1: which input path executed an action — native (CDP/Playwright) vs synthetic dispatchEvent. */
+/** Which input path executed an action — native (CDP/Playwright) vs synthetic dispatchEvent. */
 export const InputMode = {
   REAL: 'real',
   SYNTHETIC: 'synthetic',
@@ -389,6 +415,9 @@ export type InputMode = (typeof InputMode)[keyof typeof InputMode];
  */
 export const InputModeReason = {
   NOT_POINTER: 'not-a-pointer-action', // fill/type never use native input
+  // Clicks default to the occlusion-honest synthetic path ("don't click, run the code") even with a
+  // provider configured; pass action arg native:true to force a trusted native click when needed.
+  SYNTHETIC_CLICK_PREFERRED: 'synthetic-click-preferred',
   PAGE_NOT_CORRELATED: 'page-not-correlated-to-a-cdp-target', // no CDP page matches session.url
   ELEMENT_NOT_LOCATABLE: 'element-not-locatable', // INSPECT returned no box (off-screen/stale ref)
   DRAG_TARGET_UNRESOLVED: 'drag-target-unresolved', // drag toRef missing or not locatable
@@ -397,17 +426,24 @@ export const InputModeReason = {
 } as const;
 export type InputModeReason = (typeof InputModeReason)[keyof typeof InputModeReason];
 
-/** Best-effort caveats attached to action results so the agent can interpret a no-op (F3). */
+/** Best-effort caveats attached to action results so the agent can interpret a no-op. */
 export const ActionWarning = {
   HOVER_NATIVE_ENTER_LEAVE:
     'target has enter/leave handlers; synthetic hover may not trigger them — expect no state change',
-  /** R1: real-input provider was available but failed; the action fell back to synthetic dispatch. */
+  /** real-input provider was available but failed; the action fell back to synthetic dispatch. */
   REAL_INPUT_FELL_BACK:
     'real-input provider was available but failed; fell back to synthetic dispatch',
+  /**
+   * The click point was covered by another element. Synthetic dispatch still delivered the event to
+   * your target, but a real user could NOT click it — treat the target as visually blocked, not
+   * actionable. Scroll it into a clear area or dismiss the overlay on top.
+   */
+  CLICK_OCCLUDED:
+    'target is visually occluded by another element; a real user could not click it (synthetic dispatch still delivered the event) — dismiss the overlay or scroll the target clear',
 } as const;
 export type ActionWarning = (typeof ActionWarning)[keyof typeof ActionWarning];
 
-/** P2-drive: failure modes when Iris launches/drives its own browser (`iris drive`). */
+/** Failure modes when Iris launches/drives its own browser (`iris drive`). */
 export const DriveErrorCode = {
   PLAYWRIGHT_MISSING: 'playwright_missing',
   LAUNCH_FAILED: 'launch_failed',
@@ -415,7 +451,7 @@ export const DriveErrorCode = {
 } as const;
 export type DriveErrorCode = (typeof DriveErrorCode)[keyof typeof DriveErrorCode];
 
-/** P2-drive: human-facing message when the optional playwright dep is absent. */
+/** Human-facing message when the optional playwright dep is absent. */
 export const DRIVE_PLAYWRIGHT_MISSING_MSG =
   "iris drive needs the optional 'playwright' package — install it: pnpm add -D playwright && npx playwright install chromium";
 
@@ -448,14 +484,14 @@ export const SettleReason = {
 } as const;
 export type SettleReason = (typeof SettleReason)[keyof typeof SettleReason];
 
-/** Outcome reasons for a bounded component-state read (F5). Store reads never use these. */
+/** Outcome reasons for a bounded component-state read. Store reads never use these. */
 export const ComponentStateReason = {
   UNAVAILABLE: 'component-state-unavailable',
 } as const;
 export type ComponentStateReason = (typeof ComponentStateReason)[keyof typeof ComponentStateReason];
 
 /**
- * Result of a component-state read attempt (F5), discriminated on `ok`. Crosses
+ * Result of a component-state read attempt, discriminated on `ok`. Crosses
  * browser -> bridge -> agent as `result.component`, so the contract lives in protocol.
  * Always JSON-serializable: hook values are sanitized (no functions/DOM nodes/cycles).
  */
@@ -505,7 +541,7 @@ export const IrisCommand = {
   CLOCK: 'clock',
   CAPABILITIES: 'capabilities',
   STATE_READ: 'state_read',
-  /** N5 SCROLLFIND: scroll a ref's nearest scrollable container by ~a viewport (virtualized lists). */
+  /** scroll a ref's nearest scrollable container by ~a viewport (virtualized lists). */
   SCROLL: 'scroll',
   /** Session lifecycle: agent tunes the presenter session (e.g. idle-end timeout) for the app's needs. */
   SESSION_CONFIG: 'session_config',
@@ -517,7 +553,7 @@ export const IrisCommand = {
 } as const;
 export type IrisCommand = (typeof IrisCommand)[keyof typeof IrisCommand];
 
-/** Presenter intent shown to the human watcher (H2): is the agent reading or acting? */
+/** Presenter intent shown to the human watcher: is the agent reading or acting? */
 export const PresenterMode = {
   IDLE: 'idle',
   READING: 'reading',

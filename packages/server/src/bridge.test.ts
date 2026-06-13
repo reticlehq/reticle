@@ -9,14 +9,14 @@ import {
   type ElementQuery,
 } from '@syrin/iris-protocol';
 import { Bridge } from './bridge.js';
-import { BaselineStore } from './baselines.js';
-import { createNodeFileSystem } from './fs-port.js';
-import { RecordingStore } from './recordings.js';
-import { FlowStore } from './flows.js';
-import { ProjectStore } from './project-store.js';
-import { AnnotationStore } from './annotation-store.js';
-import { TOOLS, type ToolDeps } from './tools.js';
-import { IrisTool } from './tool-names.js';
+import { BaselineStore } from './project/baselines.js';
+import { createNodeFileSystem } from './project/fs-port.js';
+import { RecordingStore } from './flows/recordings.js';
+import { FlowStore } from './flows/flows.js';
+import { ProjectStore } from './project/project-store.js';
+import { AnnotationStore } from './flows/annotation-store.js';
+import { TOOLS, type ToolDeps } from './tools/tools.js';
+import { IrisTool } from './tools/tool-names.js';
 
 /** A stand-in for the real @syrin/iris-browser SDK: replies to commands and emits events. */
 const FAKE_CAPABILITIES = {
@@ -33,7 +33,7 @@ class FakeBrowser {
   handlesCapabilities = true;
   /** When false, ACT results omit a testid (element has no data-testid → unstable step). */
   actHasTestid = true;
-  /** F1: when false, ACT reports settled:false + settleReason:'timeout' (throttled-tab path). */
+  /** when false, ACT reports settled:false + settleReason:'timeout' (throttled-tab path). */
   actSettled = true;
   /** When false, QUERY by testid returns no match (testid not in current DOM at replay). */
   queryResolves = true;
@@ -293,7 +293,7 @@ describe('bridge round-trip (north-star)', () => {
     expect(verdict.pass, verdict.failureReason).toBe(true);
   });
 
-  it('F1: lifts dispatched/settled/settleReason to the iris_act envelope', async () => {
+  it('lifts dispatched/settled/settleReason to the iris_act envelope', async () => {
     const act = (await callTool(deps, 'iris_act', { ref: 'e7', action: 'click' })) as {
       dispatched: unknown;
       settled: unknown;
@@ -304,7 +304,7 @@ describe('bridge round-trip (north-star)', () => {
     expect(act.settleReason).toBe(null);
   });
 
-  it('F1: a settle timeout does NOT fail iris_act — it resolves with settled:false', async () => {
+  it('a settle timeout does NOT fail iris_act — it resolves with settled:false', async () => {
     browser.actSettled = false;
     const act = (await callTool(deps, 'iris_act', { ref: 'e7', action: 'click' })) as {
       dispatched: unknown;
@@ -358,7 +358,7 @@ describe('bridge round-trip (north-star)', () => {
     expect(result.interactive[0]?.ref).toMatch(/^e\d+$/);
   });
 
-  it('F2: a hidden session surfaces throttled:true + a warning on an iris_act result', async () => {
+  it('a hidden session surfaces throttled:true + a warning on an iris_act result', async () => {
     browser.emit(EventType.PAGE_HEALTH, {
       hidden: true,
       focused: false,
@@ -376,7 +376,7 @@ describe('bridge round-trip (north-star)', () => {
     expect(act.warning).toBe(THROTTLED_WARNING);
   });
 
-  it('F2: iris_assert and iris_act_and_wait carry the health envelope when throttled', async () => {
+  it('iris_assert and iris_act_and_wait carry the health envelope when throttled', async () => {
     browser.emit(EventType.PAGE_HEALTH, { hidden: true, focused: false, reason: 'blur' });
     await waitUntil(() => bridge.sessions.resolve('demo').throttled());
 
@@ -397,7 +397,7 @@ describe('bridge round-trip (north-star)', () => {
     expect(aw.warning).toBe(THROTTLED_WARNING);
   });
 
-  it('F2: iris_sessions surfaces hidden/focused/throttled', async () => {
+  it('iris_sessions surfaces hidden/focused/throttled', async () => {
     browser.emit(EventType.PAGE_HEALTH, { hidden: true, focused: false, reason: 'heartbeat' });
     await waitUntil(() => bridge.sessions.resolve('demo').throttled());
     const result = (await callTool(deps, 'iris_sessions')) as {
@@ -409,7 +409,7 @@ describe('bridge round-trip (north-star)', () => {
     expect(entry?.throttled).toBe(true);
   });
 
-  it('F2: a visible session has no warning and throttled:false', async () => {
+  it('a visible session has no warning and throttled:false', async () => {
     browser.emit(EventType.PAGE_HEALTH, { hidden: false, focused: true, reason: 'focus' });
     await waitUntil(() => !bridge.sessions.resolve('demo').throttled());
     const act = (await callTool(deps, 'iris_act', { ref: 'e7', action: 'click' })) as {
@@ -421,7 +421,7 @@ describe('bridge round-trip (north-star)', () => {
     expect(act.warning).toBeUndefined();
   });
 
-  it('F2: refuseWhenThrottled is opt-in — rejects only with the flag', async () => {
+  it('refuseWhenThrottled is opt-in — rejects only with the flag', async () => {
     browser.emit(EventType.PAGE_HEALTH, { hidden: true, focused: false, reason: 'blur' });
     await waitUntil(() => bridge.sessions.resolve('demo').throttled());
 
@@ -444,7 +444,7 @@ interface ActAndWaitResult {
   trace: { window_ms: number; summary: { network: number } };
 }
 
-describe('iris_act_and_wait (G3 composite)', () => {
+describe('iris_act_and_wait (composite)', () => {
   let bridge: Bridge;
   let deps: ToolDeps;
   let browser: FakeBrowser;
@@ -568,7 +568,7 @@ interface ReplayResult {
   steps: { tool: string; ok: boolean; error?: string; note?: string }[];
 }
 
-describe('G6 record -> compile -> replay', () => {
+describe('record -> compile -> replay', () => {
   let bridge: Bridge;
   let deps: ToolDeps;
   let browser: FakeBrowser;

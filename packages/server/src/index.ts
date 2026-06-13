@@ -2,55 +2,56 @@ import { join } from 'node:path';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { IRIS_DEFAULT_PORT, IrisDir } from '@syrin/iris-protocol';
 import { Bridge } from './bridge.js';
-import { BaselineStore } from './baselines.js';
-import { RecordingStore } from './recordings.js';
-import { FlowStore } from './flows.js';
-import { ProjectStore } from './project-store.js';
-import { AnnotationStore } from './annotation-store.js';
-import { createNodeFileSystem } from './fs-port.js';
+import { BaselineStore } from './project/baselines.js';
+import { RecordingStore } from './flows/recordings.js';
+import { FlowStore } from './flows/flows.js';
+import { ProjectStore } from './project/project-store.js';
+import { AnnotationStore } from './flows/annotation-store.js';
+import { createNodeFileSystem } from './project/fs-port.js';
 import { createMcpServer } from './mcp.js';
-import { resolveToolProfile } from './profiles.js';
-import { CdpRealInputProvider, LaunchedRealInputProvider } from './real-input.js';
-import type { OwnedRealInputProvider, RealInputProvider } from './real-input.js';
+import { SessionReaper, endAllSessions, MCP_DISCONNECT_SUMMARY } from './session/session-reaper.js';
+import { resolveToolProfile } from './tools/profiles.js';
+import { CdpRealInputProvider, LaunchedRealInputProvider } from './input/real-input.js';
+import type { OwnedRealInputProvider, RealInputProvider } from './input/real-input.js';
 import { log } from './log.js';
 
-export { IrisTool } from './tool-names.js';
-export { RingBuffer } from './ring-buffer.js';
+export { IrisTool } from './tools/tool-names.js';
+export { RingBuffer } from './events/ring-buffer.js';
 export { Bridge } from './bridge.js';
-export { Session, SessionManager } from './session.js';
-export type { SessionInfo, SessionHealth } from './session.js';
-export { buildSessionRecommendation } from './session-recommendation.js';
-export type { RecommendationInputs } from './session-recommendation.js';
-export { TOOLS } from './tools.js';
-export type { ToolDeps, ToolDef } from './tools.js';
-export { createToolInvoker, UNKNOWN_TOOL_ERROR } from './tool-invoker.js';
-export { runTool, SESSION_BOUND_TOOLS, SESSION_EXEMPT_TOOLS } from './invoke-tool.js';
-export type { ToolInvoker } from './tool-invoker.js';
-export { BaselineStore, normalizeLines, diffLines } from './baselines.js';
-export { RecordingStore } from './recordings.js';
-export type { RecordedStep, CompiledProgram } from './recordings.js';
-export { FlowStore, recordedStepToFlowStep } from './flows.js';
-export type { FlowResult, Clock } from './flows.js';
-export { ProjectStore } from './project-store.js';
-export type { ReadProjectResult } from './project-store.js';
-export { VisualStore } from './visual-store.js';
-export { diffPng } from './visual-diff.js';
-export type { VisualDiffResult, VisualRect, DiffOptions } from './visual-diff.js';
-export { crawl } from './crawl.js';
-export type { CrawlReport, CrawlAnomaly, CrawlOptions, CrawlSession } from './crawl.js';
-export { scrollToFind } from './scroll-find.js';
-export type { ScrollFindResult, ScrollFindQuery, ScrollFindSession } from './scroll-find.js';
+export { Session, SessionManager } from './session/session.js';
+export type { SessionInfo, SessionHealth } from './session/session.js';
+export { buildSessionRecommendation } from './session/session-recommendation.js';
+export type { RecommendationInputs } from './session/session-recommendation.js';
+export { TOOLS } from './tools/tools.js';
+export type { ToolDeps, ToolDef } from './tools/tools.js';
+export { createToolInvoker, UNKNOWN_TOOL_ERROR } from './tools/tool-invoker.js';
+export { runTool, SESSION_BOUND_TOOLS, SESSION_EXEMPT_TOOLS } from './tools/invoke-tool.js';
+export type { ToolInvoker } from './tools/tool-invoker.js';
+export { BaselineStore, normalizeLines, diffLines } from './project/baselines.js';
+export { RecordingStore } from './flows/recordings.js';
+export type { RecordedStep, CompiledProgram } from './flows/recordings.js';
+export { FlowStore, recordedStepToFlowStep } from './flows/flows.js';
+export type { FlowResult, Clock } from './flows/flows.js';
+export { ProjectStore } from './project/project-store.js';
+export type { ReadProjectResult } from './project/project-store.js';
+export { VisualStore } from './visual/visual-store.js';
+export { diffPng } from './visual/visual-diff.js';
+export type { VisualDiffResult, VisualRect, DiffOptions } from './visual/visual-diff.js';
+export { crawl } from './crawl/crawl.js';
+export type { CrawlReport, CrawlAnomaly, CrawlOptions, CrawlSession } from './crawl/crawl.js';
+export { scrollToFind } from './input/scroll-find.js';
+export type { ScrollFindResult, ScrollFindQuery, ScrollFindSession } from './input/scroll-find.js';
 export {
   CORE_TOOL_NAMES,
   TOOL_PROFILE,
   TOOL_PROFILE_ENV,
   filterTools,
   resolveToolProfile,
-} from './profiles.js';
-export type { ToolProfile } from './profiles.js';
-export { AnnotationStore } from './annotation-store.js';
-export { replayFlow, nearestTestid } from './flow-replay.js';
-export type { FlowReplaySession, WaitForSignal } from './flow-replay.js';
+} from './tools/profiles.js';
+export type { ToolProfile } from './tools/profiles.js';
+export { AnnotationStore } from './flows/annotation-store.js';
+export { replayFlow, nearestTestid } from './flows/flow-replay.js';
+export type { FlowReplaySession, WaitForSignal } from './flows/flow-replay.js';
 export {
   ensureIrisDir,
   writeContract,
@@ -58,13 +59,13 @@ export {
   irisDirPaths,
   flowPath,
   baselinePath,
-} from './iris-dir.js';
-export type { IrisDirPaths, ReadContractResult } from './iris-dir.js';
-export { createNodeFileSystem } from './fs-port.js';
-export type { FileSystemPort } from './fs-port.js';
-export { evaluatePredicate, waitForPredicate, PredicateSchema } from './predicate.js';
-export type { Predicate, EvalResult } from './predicate.js';
-export { buildReactionReport } from './reaction.js';
+} from './project/iris-dir.js';
+export type { IrisDirPaths, ReadContractResult } from './project/iris-dir.js';
+export { createNodeFileSystem } from './project/fs-port.js';
+export type { FileSystemPort } from './project/fs-port.js';
+export { evaluatePredicate, waitForPredicate, PredicateSchema } from './events/predicate.js';
+export type { Predicate, EvalResult } from './events/predicate.js';
+export { buildReactionReport } from './events/reaction.js';
 export {
   CdpRealInputProvider,
   LaunchedRealInputProvider,
@@ -72,7 +73,7 @@ export {
   performGesture,
   boxCenter,
   isPointerAction,
-} from './real-input.js';
+} from './input/real-input.js';
 export type {
   RealInputProvider,
   OwnedRealInputProvider,
@@ -80,31 +81,31 @@ export type {
   LaunchedProviderOptions,
   ElementBox,
   RealInputArgs,
-} from './real-input.js';
+} from './input/real-input.js';
 
 export interface StartOptions {
   port?: number;
   /** When false, skip the MCP stdio transport (used in tests). */
   mcp?: boolean;
-  /** R1: CDP endpoint for native real-input mode. Defaults to env IRIS_CDP_URL. No-op if unset. */
+  /** CDP endpoint for native real-input mode. Defaults to env IRIS_CDP_URL. No-op if unset. */
   cdpUrl?: string;
-  /** P2-drive: launch+own a Playwright Chromium at this url and route pointer actions through it. */
+  /** launch+own a Playwright Chromium at this url and route pointer actions through it. */
   driveUrl?: string;
-  /** P2-drive: launch headless (default true; CLI `--headed` sets false). */
+  /** launch headless (default true; CLI `--headed` sets false). */
   headless?: boolean;
-  /** P2-drive: injected so tests swap in a fake launched provider instead of real Playwright. */
+  /** injected so tests swap in a fake launched provider instead of real Playwright. */
   realInputFactory?: (opts: { driveUrl: string; headless: boolean }) => OwnedRealInputProvider;
-  /** M8 Stage A: absolute .iris root. Defaults to process.cwd()/.iris. Injectable for tests. */
+  /** absolute .iris root. Defaults to process.cwd()/.iris. Injectable for tests. */
   irisRoot?: string;
-  /** M8 Stage A: injectable clock for contract.json's generatedAt stamp. Defaults to Date.now. */
+  /** injectable clock for contract.json's generatedAt stamp. Defaults to Date.now. */
   now?: () => number;
-  /** 0.3.7 FLUENCY: 'core' exposes the lean tool surface. Defaults to env IRIS_TOOL_PROFILE, else 'full'. */
+  /** 'core' exposes the lean tool surface. Defaults to env IRIS_TOOL_PROFILE, else 'full'. */
   toolProfile?: string;
 }
 
 export interface RunningServer {
   bridge: Bridge;
-  /** P2-drive: the active real-input provider (launched/CDP), if any. */
+  /** the active real-input provider (launched/CDP), if any. */
   realInput?: RealInputProvider;
   close: () => Promise<void>;
 }
@@ -113,9 +114,13 @@ export interface RunningServer {
 export async function start(options: StartOptions = {}): Promise<RunningServer> {
   const port = options.port ?? IRIS_DEFAULT_PORT;
   const bridge = new Bridge({ port });
+  // Server-authoritative liveness: a Node-side reaper (immune to browser throttling) ends sessions
+  // whose agent has gone idle, so a forgotten/crashed agent never leaves the HUD "running" forever.
+  const reaper = new SessionReaper(bridge.sessions);
+  reaper.start();
   const baselines = new BaselineStore();
   const recordings = new RecordingStore();
-  // P2-drive precedence: driveUrl (launch+own a browser) → CDP (attach) → none.
+  // drive precedence: driveUrl (launch+own a browser) → CDP (attach) → none.
   let owned: { dispose: () => Promise<void> } | undefined;
   let realInput: RealInputProvider | undefined;
   const driveUrl = options.driveUrl;
@@ -167,6 +172,12 @@ export async function start(options: StartOptions = {}): Promise<RunningServer> 
       realInput !== undefined ? { ...deps, realInput } : deps,
       profile,
     );
+    // When Claude (the MCP client) disconnects cleanly, end every active session at once so the HUD
+    // doesn't linger. (If Claude instead KILLS this process, the WS dies and the browser self-ends
+    // via SESSION_LIFECYCLE.BRIDGE_LOST_MS — see transport.ts.)
+    server.server.onclose = () => {
+      endAllSessions(bridge.sessions, MCP_DISCONNECT_SUMMARY);
+    };
     await server.connect(new StdioServerTransport());
     log('mcp_connected', { port });
   }
@@ -175,6 +186,7 @@ export async function start(options: StartOptions = {}): Promise<RunningServer> 
     bridge,
     ...(realInput !== undefined ? { realInput } : {}),
     close: async () => {
+      reaper.stop();
       await owned?.dispose();
       await bridge.close();
     },

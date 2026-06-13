@@ -28,6 +28,25 @@ creation-flow component files (not `new-`).
 - **500-line cap:** at the limit, stop and split — extract constants, utilities,
   sub-modules. Commit the refactor before the feature.
 
+## No internal tracking tags
+
+Comments, file names, directory names, and test `describe`/`it` strings must never contain
+design-doc reference codes or internal version strings. These are not appropriate in
+production code — they rot, confuse new contributors, and pollute search results.
+
+**Forbidden patterns:**
+
+- Single-letter + digit codes: `N5`, `G4`, `M8`, `P2`, `F1`, `R1`, `G2`, etc.
+- Version strings used as labels: `0.3.7`, `0.3.10`, etc.
+- Hybrid forms: `M8 Stage A`, `0.3.7 FLUENCY`, `N5 SCROLLFIND`, `P2-drive`
+
+**Replace with prose.** Instead of `// N5: scroll-find first pass`, write what it actually
+does: `// scroll until the target element enters the viewport`. Instead of a test named
+`'F1: settle is bounded'`, name it `'settle resolves with dispatched:true when rAF never fires'`.
+
+The pre-commit hook rejects any staged file whose comment lines match `\b[A-Z]\d+\b` or
+embed a `\d+\.\d+\.\d+` version string in comment text.
+
 ## Rule of Three over premature DRY
 
 Copy once = example. Twice = coincidence. Three times = extract. The third occurrence

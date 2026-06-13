@@ -62,6 +62,22 @@ if staged | grep -E '(components|views|features)/' | grep -qE '/new-[^/]+\.(ts|t
   note "${RED}✗ component file prefixed 'new-' — use 'create-'${NC}"; fail=1
 fi
 
+# 1f. no internal tracking tags in source files
+# Rejects: design-doc codes (G4, N5, M8, P2, F1, R1, …) and version labels (0.3.7) in comments.
+# Matches lines that start with a comment marker (// or #) and contain a bare letter+digit token
+# or a semver-like string. Skips the pre-commit.sh itself and skills/ docs (those explain the rule).
+while IFS= read -r f; do
+  [ -z "$f" ] && continue
+  [ -f "$f" ] || continue
+  case "$f" in pre-commit.sh|skills/*) continue;; esac
+  if grep -nE '(//|#)[^"'"'"'`]*\b[A-Z][0-9]+(\.[0-9]+)?\b' "$f" >/dev/null 2>&1; then
+    note "${RED}✗ internal tracking tag (e.g. N5, G4, M8) in comment in $f — use prose instead${NC}"; fail=1
+  fi
+  if grep -nE '(//|#)[^"'"'"'`]*\b[0-9]+\.[0-9]+\.[0-9]+\b' "$f" >/dev/null 2>&1; then
+    note "${RED}✗ version string in comment in $f — remove internal milestone labels${NC}"; fail=1
+  fi
+done < <(ts_staged)
+
 [ "$fail" -eq 0 ] && note "${GREEN}✓ safety${NC}"
 
 # ----- 2. FORMAT -----------------------------------------------------------

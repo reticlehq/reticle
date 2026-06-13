@@ -1,24 +1,27 @@
 import { EventType } from '@syrin/iris-protocol';
-import { refs } from '../refs.js';
+import { refs } from '../dom/refs.js';
+import { isIrisOverlay } from '../dom/dom-ignore.js';
 import type { Emit, Teardown } from './types.js';
 
 /** Observe CSS animations + transitions and emit anim.start / anim.end (plan/03 §6). */
 export function installAnimation(emit: Emit): Teardown {
   const onStart = (event: AnimationEvent): void => {
     const target = event.target;
-    if (target instanceof Element) {
+    // Skip Iris's own HUD keyframes (iris-pulse/iris-shimmer/…) so observe/record never
+    // self-pollute the agent's view of the app (matches the DOM observer's overlay filter).
+    if (target instanceof Element && !isIrisOverlay(target)) {
       emit(EventType.ANIM_START, { name: event.animationName }, refs.refFor(target));
     }
   };
   const onEnd = (event: AnimationEvent): void => {
     const target = event.target;
-    if (target instanceof Element) {
+    if (target instanceof Element && !isIrisOverlay(target)) {
       emit(EventType.ANIM_END, { name: event.animationName }, refs.refFor(target));
     }
   };
   const onTransitionEnd = (event: TransitionEvent): void => {
     const target = event.target;
-    if (target instanceof Element) {
+    if (target instanceof Element && !isIrisOverlay(target)) {
       emit(
         EventType.ANIM_END,
         { name: event.propertyName, kind: 'transition' },

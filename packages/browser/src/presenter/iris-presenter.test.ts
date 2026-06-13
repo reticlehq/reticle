@@ -1,0 +1,246 @@
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import {
+  EventType,
+  HumanControlKind,
+  IrisCommand,
+  MessageKind,
+  SessionState,
+  type CommandMessage,
+  type IrisEvent,
+} from '@syrin/iris-protocol';
+
+// Capture the deps Iris passes to Transport so tests can drive #handleCommand without a real
+// WebSocket server. connect() still calls transport.connect(), which we stub to a no-op.
+type HandleCommand = (command: CommandMessage) => Promise<{ ok: boolean; result?: unknown }>;
+interface CapturedDeps {
+  handleCommand: HandleCommand | undefined;
+}
+const captured: CapturedDeps = { handleCommand: undefined };
+const sentEvents: IrisEvent[] = [];
+
+vi.mock('../transport/transport.js', () => {
+  class FakeTransport {
+    constructor(deps: { handleCommand: HandleCommand }) {
+      captured.handleCommand = deps.handleCommand;
+    }
+    connect(): void {
+      /* no-op: no real socket in jsdom */
+    }
+    close(): void {
+      /* no-op */
+    }
+    sendEvent(event: IrisEvent): void {
+      sentEvents.push(event);
+    }
+  }
+  return { Transport: FakeTransport };
+});
+
+// Imported after the mock is registered.
+const { Iris } = await import('../iris.js');
+
+const cmd = (name: string, args: Record<string, unknown> = {}): CommandMessage => ({
+  kind: MessageKind.COMMAND,
+  id: 'c1',
+  name,
+  args,
+});
+
+const dispatch = (name: string, args: Record<string, unknown> = {}): Promise<unknown> => {
+  const h = captured.handleCommand;
+  if (h === undefined) throw new Error('handleCommand not captured');
+  return h(cmd(name, args));
+};
+
+const logRows = (): HTMLElement[] =>
+  Array.from(document.querySelectorAll<HTMLElement>('[data-iris-log] [data-iris-log-row]'));
+const dataOn = (): string | null =>
+  document.querySelector('[data-iris-glow]')?.getAttribute('data-on') ?? null;
+
+const FAST_IDLE_MS = 20;
+const FAST_FADE_MS = 5;
+const wait = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+const flush = (): Promise<void> => new Promise((r) => setTimeout(r, 0));
+
+const clickSel = (sel: string): void => {
+  document.querySelector(sel)?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+};
+const humanControlEvents = (): IrisEvent[] =>
+  sentEvents.filter((e) => e.type === EventType.HUMAN_CONTROL);
+
+beforeEach(() => {
+  document.body.innerHTML = '';
+  captured.handleCommand = undefined;
+  sentEvents.length = 0;
+});
+
+afterEach(() => {
+  document.querySelectorAll('[data-iris-overlay]').forEach((e) => e.remove());
+});
+
+describe('iris.ts session wiring (border)', () => {
+  it('17 connect({present:true}) mounts the overlay but stays dormant until the first command', async () => {
+    const iris = new Iris();
+    iris.connect({ present: true, pace: 0 });
+    // Overlay is mounted (ready) but the session has NOT started — no glow, no panel — because
+    // nothing has happened yet. (The page merely loaded the SDK.)
+    expect(document.querySelector('[data-iris-glow]')).not.toBeNull();
+    expect(dataOn()).not.toBe('1'); // dormant: no border until the agent acts
+    // The agent's first command starts the session → border on.
+    await dispatch(IrisCommand.SNAPSHOT);
+    expect(dataOn()).toBe('1');
+    iris.disconnect();
+  });
+
+  it('18 disconnect() calls sessionEnd -> border off then overlay removed', async () => {
+    const iris = new Iris();
+    iris.connect({ present: true, pace: 0 });
+    await dispatch(IrisCommand.SNAPSHOT); // start the session so the border is on
+    expect(dataOn()).toBe('1');
+    iris.disconnect();
+    expect(document.querySelector('[data-iris-overlay]')).toBeNull();
+  });
+
+  it('19 connect({present:true, border:"busy"}) restores fade behavior end-to-end', async () => {
+    const iris = new Iris();
+    iris.connect({ present: true, border: 'busy', pace: 0 });
+    await dispatch(IrisCommand.SNAPSHOT);
+    // go quiet; busy machine fades the border out (old behavior)
+    await wait(FAST_IDLE_MS + FAST_FADE_MS + 700 + 300);
+    await flush();
+    expect(dataOn()).toBe('0');
+    iris.disconnect();
+  });
+
+  it('20 connect({present:false}) — no presenter, session calls are skipped', async () => {
+    const iris = new Iris();
+    iris.connect({ present: false });
+    const out = await dispatch(IrisCommand.NARRATE, { text: 'hi' });
+    expect((out as { ok: boolean }).ok).toBe(true);
+    expect(document.querySelector('[data-iris-glow]')).toBeNull();
+    expect(() => iris.disconnect()).not.toThrow();
+  });
+
+  it('21 disconnect() without a prior connect() is a safe no-op', () => {
+    const iris = new Iris();
+    expect(() => iris.disconnect()).not.toThrow();
+    expect(document.querySelector('[data-iris-overlay]')).toBeNull();
+  });
+
+  it('22 double disconnect() after connect({present:true}) is a safe no-op', () => {
+    const iris = new Iris();
+    iris.connect({ present: true });
+    iris.disconnect();
+    expect(() => iris.disconnect()).not.toThrow();
+    expect(document.querySelector('[data-iris-overlay]')).toBeNull();
+  });
+});
+
+describe('iris.ts -> presenter log wiring', () => {
+  it('read commands log("read", label)', async () => {
+    const iris = new Iris();
+    iris.connect({ present: true, pace: 0 });
+    await dispatch(IrisCommand.SNAPSHOT);
+    const rows = logRows();
+    const readRows = rows.filter((r) => r.querySelector('.iris-chip')?.textContent === 'READ');
+    expect(readRows.length).toBeGreaterThanOrEqual(1);
+    expect(readRows[0]?.querySelector('.iris-log-text')?.textContent).toBe('Looking at the page');
+    iris.disconnect();
+  });
+
+  it('act command logs act then updates result on success', async () => {
+    document.body.innerHTML = '<button id="b">Save</button>';
+    const iris = new Iris();
+    iris.connect({ present: true, pace: 0 });
+    // act on a ref that does not resolve still succeeds via the registry (no-op path); we only
+    // need the act row + a pass glyph. Use a query first to register a ref is overkill; the act
+    // handler tolerates an unknown ref by failing — so assert via a known-good snapshot+act.
+    await dispatch(IrisCommand.SNAPSHOT);
+    const before = logRows().length;
+    await dispatch(IrisCommand.ACT, { ref: 'r-missing', action: 'click' });
+    const actRows = logRows()
+      .slice(before)
+      .filter((r) => r.querySelector('.iris-chip')?.textContent === 'ACT');
+    expect(actRows.length).toBeGreaterThanOrEqual(1);
+    // result glyph present (pass or fail depending on ref resolution)
+    const last = actRows[actRows.length - 1];
+    expect(last?.textContent).toMatch(/[✓✗]/);
+    iris.disconnect();
+  });
+
+  it('narrate command appends (never overwrites) across 3 calls', async () => {
+    const iris = new Iris();
+    iris.connect({ present: true, pace: 0 });
+    await dispatch(IrisCommand.NARRATE, { text: 'one' });
+    await dispatch(IrisCommand.NARRATE, { text: 'two' });
+    await dispatch(IrisCommand.NARRATE, { text: 'three' });
+    const texts = logRows().map((r) => r.querySelector('.iris-log-text')?.textContent);
+    expect(texts).toEqual(['one', 'two', 'three']);
+    iris.disconnect();
+  });
+
+  it('present:false → narrate/act commands are no-ops', async () => {
+    const iris = new Iris();
+    iris.connect({ present: false });
+    const n = await dispatch(IrisCommand.NARRATE, { text: 'x' });
+    expect((n as { ok: boolean }).ok).toBe(true);
+    expect(document.querySelector('[data-iris-log]')).toBeNull();
+    iris.disconnect();
+  });
+});
+
+describe('iris.ts -> live-control wiring', () => {
+  it('18 panel pause emits a HUMAN_CONTROL event over transport', () => {
+    const iris = new Iris();
+    iris.connect({ present: true, pace: 0 });
+    clickSel('[data-iris-pause]');
+    const evs = humanControlEvents();
+    expect(evs.length).toBe(1);
+    expect(evs[0]?.data).toEqual({ kind: HumanControlKind.PAUSE });
+    expect(typeof evs[0]?.t).toBe('number');
+    iris.disconnect();
+  });
+
+  it('19 send emits a HUMAN_CONTROL message event with text', () => {
+    const iris = new Iris();
+    iris.connect({ present: true, pace: 0 });
+    const inp = document.querySelector<HTMLInputElement>('[data-iris-input]');
+    if (inp === null) throw new Error('no input');
+    inp.value = 'check the cart total';
+    clickSel('[data-iris-send]');
+    const evs = humanControlEvents();
+    expect(evs.length).toBe(1);
+    expect(evs[0]?.data).toEqual({
+      kind: HumanControlKind.MESSAGE,
+      text: 'check the cart total',
+    });
+    iris.disconnect();
+  });
+
+  it('20 PRESENTER command from server calls setState without emitting', async () => {
+    const iris = new Iris();
+    iris.connect({ present: true, pace: 0 });
+    const out = await dispatch(IrisCommand.PRESENTER, { state: SessionState.PAUSED });
+    expect((out as { ok: boolean }).ok).toBe(true);
+    expect(
+      document
+        .querySelector('[data-iris-overlay][data-iris-state]')
+        ?.getAttribute('data-iris-state'),
+    ).toBe('paused');
+    expect(humanControlEvents().length).toBe(0);
+    iris.disconnect();
+  });
+
+  it('21 PRESENTER with unknown state is a safe no-op', async () => {
+    const iris = new Iris();
+    iris.connect({ present: true, pace: 0 });
+    const out = await dispatch(IrisCommand.PRESENTER, { state: 'bogus' });
+    expect((out as { ok: boolean }).ok).toBe(true);
+    expect(
+      document
+        .querySelector('[data-iris-overlay][data-iris-state]')
+        ?.getAttribute('data-iris-state'),
+    ).toBe('active');
+    iris.disconnect();
+  });
+});

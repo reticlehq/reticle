@@ -62,7 +62,7 @@ export const NO_ELEMENT_FOR_TESTID = 'no element for testid';
 export const PROBE_TESTID = 'iris-root';
 
 /**
- * FLOW2SPEC (P4): a flow under .iris/flows becomes a runnable spec. A flow either loads to a
+ * a flow under .iris/flows becomes a runnable spec. A flow either loads to a
  * RUNNABLE spec (replay its anchored steps + assert flow.success) or, when the file is
  * missing/malformed/badly-named, surfaces as an ERROR spec that fails loudly (never a silent skip).
  */

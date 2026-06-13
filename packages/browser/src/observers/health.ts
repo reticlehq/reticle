@@ -1,5 +1,5 @@
 import { EventType, HealthReason, SESSION_HEALTH } from '@syrin/iris-protocol';
-import { nativeSetInterval } from '../native-timers.js';
+import { nativeSetInterval } from '../timers/native-timers.js';
 import type { Emit, Teardown } from './types.js';
 
 function snapshotHealth(): { hidden: boolean; focused: boolean } {
@@ -10,7 +10,7 @@ function snapshotHealth(): { hidden: boolean; focused: boolean } {
 }
 
 /**
- * F2: report page visibility/focus immediately on change + a lightweight native heartbeat.
+ * Report page visibility/focus immediately on change + a lightweight native heartbeat.
  * Lets the bridge know whether the tab is foregrounded so the agent never drives a throttled
  * tab blind. Uses a native (pre-bound) timer so a frozen app clock (iris_clock) never stalls it.
  */

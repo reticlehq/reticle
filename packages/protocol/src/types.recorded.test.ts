@@ -3,11 +3,11 @@ import { ActionType, AnchorKind, FLOW_FILE_VERSION } from './constants.js';
 import { FlowFileSchema, RecordedFlowSchema } from './types.js';
 
 /**
- * M8 Stage B RECORDER — protocol schema tests. Lock back-compat for Stage-A flow files and the
+ * Protocol schema tests. Lock back-compat for flow files and the
  * new in-page → wire recorded-flow payload. Anchors stay semantic (testid/role/signal) — never refs.
  */
-describe('FlowFileSchema (Stage B fields)', () => {
-  it('P1: a Stage A FlowFile with no dynamic/success still parses (back-compat)', () => {
+describe('FlowFileSchema', () => {
+  it('a FlowFile with no dynamic/success still parses (back-compat)', () => {
     const stageA = {
       version: FLOW_FILE_VERSION,
       name: 'create-drop',
@@ -26,7 +26,7 @@ describe('FlowFileSchema (Stage B fields)', () => {
   });
 });
 
-describe('RecordedFlowSchema (Stage B in-page recording payload)', () => {
+describe('RecordedFlowSchema (in-page recording payload)', () => {
   function compiled(): unknown {
     return {
       name: 'recorded-flow',
@@ -49,11 +49,11 @@ describe('RecordedFlowSchema (Stage B in-page recording payload)', () => {
     };
   }
 
-  it('P2: accepts a compiled recording (steps + expect + dynamic + success)', () => {
+  it('accepts a compiled recording (steps + expect + dynamic + success)', () => {
     expect(RecordedFlowSchema.safeParse(compiled()).success).toBe(true);
   });
 
-  it('P3: rejects a ref-bearing anchor (anchors are testid/role/signal only)', () => {
+  it('rejects a ref-bearing anchor (anchors are testid/role/signal only)', () => {
     const bad = {
       name: 'x',
       flow: {

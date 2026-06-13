@@ -1,5 +1,5 @@
 import { EventType } from '@syrin/iris-protocol';
-import { refs } from '../refs.js';
+import { refs } from '../dom/refs.js';
 import type { Emit, Teardown } from './types.js';
 
 const THROTTLE_MS = 100;

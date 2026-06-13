@@ -4,10 +4,10 @@ import { IRIS_DEFAULT_PORT } from '@syrin/iris-protocol';
 import { start } from './index.js';
 import { log } from './log.js';
 
-/** P2-drive: local CLI usage string (never crosses the wire) — named, not a free string. */
+/** Local CLI usage string (never crosses the wire) — named, not a free string. */
 export const DRIVE_USAGE = 'usage: iris drive <url> [--headed]';
 
-/** P2-drive: `--headed` flips the default headless launch off. */
+/** `--headed` flips the default headless launch off. */
 const HEADED_FLAG = '--headed';
 const DRIVE_COMMAND = 'drive';
 

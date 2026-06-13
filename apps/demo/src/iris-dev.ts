@@ -1,4 +1,4 @@
-import { iris } from '@syrin/iris-browser';
+import { iris, SESSION_AUTO } from '@syrin/iris-browser';
 import { install as installReactAdapter } from '@syrin/iris-react';
 import { registerCapabilities, registerStore } from '@syrin/iris-browser';
 import { Sig } from './lib/iris-bridge.js';
@@ -84,11 +84,12 @@ export function installIris(): void {
   installReactAdapter(); // DOM ref → React fiber → component → source file (iris_inspect)
   // The presenter HUD (glow + cursor + narration panel) is opt-in via ?present so the dashboard
   // stays clean for filming. Iris still drives the page either way; add ?present to show the agent.
-  // ?session=<id> gives a tab its own Iris session so several browsers (a human tab + an
-  // Iris-driven tour) can view the dashboard at once without fighting over one session id.
+  // Default to a per-tab id (SESSION_AUTO) so several tabs — a human tab + an Iris-driven tour, a
+  // new-tab popup — never collide on one session id. Pass ?session=<id> only when tabs should
+  // intentionally share a session.
   const params = new URLSearchParams(window.location.search);
   const present = params.has('present');
-  const session = params.get('session') ?? 'demo';
+  const session = params.get('session') ?? SESSION_AUTO;
   iris.connect({ session, present });
   registerStore('app', () => useApp.getState());
   registerCapabilities({

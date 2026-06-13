@@ -1,7 +1,7 @@
 import type { AddressInfo } from 'node:net';
 import { WebSocketServer, type RawData, type WebSocket } from 'ws';
 import { IRIS_WS_PATH, IrisMessageSchema, MessageKind } from '@syrin/iris-protocol';
-import { Session, SessionManager } from './session.js';
+import { Session, SessionManager } from './session/session.js';
 import { log } from './log.js';
 
 export interface BridgeOptions {
@@ -61,7 +61,7 @@ export class Bridge {
         return;
       }
       if (session === undefined) return; // ignore anything before HELLO
-      session.touch(); // F2: canonical "last seen" stamp for every inbound message
+      session.touch(); // canonical "last seen" stamp for every inbound message
 
       if (parsed.kind === MessageKind.EVENT) {
         session.pushEvent(parsed.event);

@@ -51,6 +51,7 @@ strict TypeScript; `@syrin/iris-babel-plugin`/`@syrin/iris-next` are plain CJS t
 7. **Inject the clock.** Never call `Date.now()`/`Math.random()` inside pure logic — pass them in.
 8. **Scope every data access to the authenticated principal.** → `skills/security.md`
 9. **Design tokens are the only place design values live.** → `skills/design.md`
+10. **No internal tracking tags.** Comments, file names, directory names, and test descriptions must never contain design-doc reference codes (letter + digit patterns like `N5`, `G4`, `M8`, `P2`, `F1`, `R1`) or internal version strings (like `0.3.7`). → `skills/conventions.md`
 
 ## Naming conventions
 

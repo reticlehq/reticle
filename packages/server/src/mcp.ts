@@ -1,14 +1,14 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { TOOLS, type ToolDeps } from './tools.js';
-import { filterTools, TOOL_PROFILE, type ToolProfile } from './profiles.js';
-import { runTool } from './invoke-tool.js';
+import { TOOLS, type ToolDeps } from './tools/tools.js';
+import { filterTools, TOOL_PROFILE, type ToolProfile } from './tools/profiles.js';
+import { runTool } from './tools/invoke-tool.js';
 import { log } from './log.js';
 
 const SERVER_INFO = { name: 'iris', version: '0.3.10' } as const;
 
 /**
  * Build an MCP server exposing the Iris tools, backed by the given session manager. The optional
- * profile trims the surface to the core loop (0.3.7); FULL (default) exposes every tool, so existing
+ * profile trims the surface to the core loop; FULL (default) exposes every tool, so existing
  * callers are unaffected.
  */
 export function createMcpServer(

@@ -151,10 +151,26 @@ re-renders show up in `iris_observe`, not here.
 | `focusMoved`       | `"<prevRef>-><newRef>"` if `document.activeElement` changed, else `null` (body counts as `null`)                                                                                                                                                                                  |
 | `valueChanged`     | `fill`/`type`/`clear` only: input value before !== after; otherwise `false`                                                                                                                                                                                                       |
 | `domMutatedWithin` | count of MutationObserver records seen in the window                                                                                                                                                                                                                              |
+| `occluded`         | `click`/`dblclick` only: the click point hit-tested to a _foreign_ element (an overlay is on top). Synthetic dispatch still delivered the event, but **a real user could not click it** — treat the target as visually blocked. `false` when not click-like or not hit-testable   |
+| `occludedBy`       | the ref of the element actually on top at the click point when `occluded`, else `null`                                                                                                                                                                                            |
+| `scrolledIntoView` | `click`/`dblclick` only: the target was off-viewport, so Iris scrolled it into view before dispatch                                                                                                                                                                               |
 
 Use it to distinguish failure modes: `visible:false`/`enabled:false`/`targetMatched:false` →
-your action missed; the tool throwing → it never dispatched; `defaultPrevented:true` or all of
-`valueChanged:false`/`focusMoved:null`/`domMutatedWithin:0` → the app didn't react.
+your action missed; the tool throwing → it never dispatched; `occluded:true` → the control is
+covered by something (a real user is blocked even though the synthetic event landed);
+`defaultPrevented:true` or all of `valueChanged:false`/`focusMoved:null`/`domMutatedWithin:0` →
+the app didn't react.
+
+**Clicks run the code, they don't push pixels.** A `click`/`dblclick` fires the full
+`pointerdown → mousedown → focus → pointerup → mouseup → click` sequence directly on the resolved
+element — so pointer- and focus-gated handlers fire the way they do for a real user, with no
+coordinate gesture to be intercepted by the presenter HUD or missed off-screen. This is the **default
+even when native CDP real input is configured** (`inputMode:"synthetic"`,
+`inputModeReason:"synthetic-click-preferred"`). Before dispatch Iris hit-tests the click point
+(`occluded`) and scrolls an off-screen target in (`scrolledIntoView`), so a blocked or off-viewport
+target is reported, never silently "successful". For the rare case that needs a **trusted** native
+click — a native file picker, clipboard, or an `isTrusted`-gated handler — pass `args:{ native:true }`
+to drive it through CDP. `hover`/`drag` still use native pointer input (they need real hit-testing).
 
 **Cookbook — "Did my action even land?"**
 
@@ -172,9 +188,13 @@ if (result.effect.defaultPrevented) {
 The timeline + summary of what happened.
 
 - **args:** `window_ms?` (default 2000) **or** `since?` (cursor from an act), `filters?`
-  (event-type names), `sessionId?`.
+  (event-type names), `max_events?` (cap the timeline to the most recent N), `sessionId?`.
 - **returns:** `{ window_ms, events: [...], summary: { network, domAdded, domRemoved,
-routeChanges, consoleErrors, animations, signals } }`.
+routeChanges, consoleErrors, animations, signals }, cost: { events, bytes, droppedOldest? } }`.
+- **Output budget.** Every result carries a `cost:{ events, bytes }` hint so you can self-budget your
+  next call. When `max_events` truncates the timeline, the dropped count is surfaced as
+  `cost.droppedOldest` — never a silent cap. (The presenter HUD's own animations are filtered out of
+  the timeline automatically, so `observe` shows the app, not the instrument.)
 
 ### `iris_act_and_wait`
 
@@ -186,19 +206,27 @@ Act, then wait for a predicate — the whole act→observe→assert loop in one 
   (`{ ok, ref, action }`), `verdict` is `{ pass, evidence?, failureReason? }`, `trace` is the
   reaction report of everything the app did after the action, and `session` (F2) is the tab-health
   block `{ lastSeenMs, throttled, focused }` (with a `warning` when throttled). A failing `verdict`
-  still returns `effect` + `trace` so you can see what _did_ happen.
+  still returns `effect` + `trace` so you can see what _did_ happen. The predicate is automatically
+  floored at this act's cursor, so it only matches events the action actually caused.
 
 ### `iris_wait_for`
 
 Block until a predicate holds (or time out). Looks both backward (recent buffer) and forward.
 
-- **args:** `predicate`, `timeout_ms?` (default 4000), `sessionId?`.
+- **args:** `predicate`, `timeout_ms?` (default 4000), `since?`, `sessionId?`.
+- **No stale-signal false passes.** By default the evaluation window is floored at your **last
+  act's cursor**, so a signal/network/console/animation event buffered _before_ the action can
+  never satisfy the predicate (the report's "validation 68 == 68 was a lie" footgun). Pass an
+  explicit `since` (an act/observe cursor) to widen or narrow the window deliberately. Element/text
+  predicates query the live DOM and are unaffected by `since`.
 
 ### `iris_assert`
 
 Verify a predicate; optionally wait for it.
 
-- **args:** `predicate`, `timeout_ms?` (0 = evaluate once), `sessionId?`.
+- **args:** `predicate`, `timeout_ms?` (0 = evaluate once), `since?`, `sessionId?`.
+- Same `since` default as `iris_wait_for`: scoped to your last act so a stale buffered event can't
+  fake a pass; override with an explicit `since`.
 - **returns:** `{ pass, evidence, failureReason?, session, warning? }`. On failure includes a
   **near-miss** (e.g. "found the dialog but not visible", or "no button named 'Submit'; saw: Cancel").
   The `session` block `{ lastSeenMs, throttled, focused }` (F2) reports tab health on every assert;
@@ -226,11 +254,21 @@ calling. Returns empty arrays (never errors) if the app advertised nothing.
 
 Read live framework/store state directly instead of inferring it from the DOM — [§17](#17-evidence-of-effect-actawait-state-capabilities-replay-m56).
 
-- `iris_state({ store?, ref?, sessionId? })` → `{ stores, component? }`
+- `iris_state({ store?, ref?, path?, depth?, sessionId? })` → `{ stores, component? }`, or
+  `{ store, path, found, value, availableKeys?, storeNames }` when `path`/`depth` is given.
 
 Store reads are the reliable path. The `ref` component read is best-effort and bounded: when the
 component state can't be read it returns `component: { ok: false, reason: "component-state-unavailable" }`
 rather than hanging.
+
+**Scope big stores so you don't pay for them.** A whole store can be tens of KB. Narrow the read:
+
+- `path` extracts a dot-path sub-tree relative to the named `store` (numeric segments index arrays),
+  e.g. `iris_state({ store:"workspace", path:"captionCache.v3.0.text" })`.
+- `depth` collapses anything deeper than N levels to a compact size marker (`{…7 keys}`,
+  `[Array(120)]`) so you can skim a store's _shape_ before drilling in.
+- A wrong `path` returns `{ found:false, availableKeys:[...] }` — the keys that _were_ present where
+  the walk stopped — so a mistyped path is self-correcting, not a bare `null`.
 
 ### `iris_narrate` / `iris_clock`
 
@@ -244,6 +282,8 @@ Regression detection — [§8](#8-regression-baselines--diff).
 ### `iris_record_start` / `iris_record_stop` / `iris_replay`
 
 Capture a flow's reaction report and compile it into a replayable program — [§9](#9-recording-a-flow).
+`iris_record_stop` also returns a `cost:{ events, bytes }` hint alongside the reaction report so you
+can gauge the recording's size.
 
 ### `iris_explore`
 
@@ -720,6 +760,25 @@ All presenter DOM uses `data-iris-*` and is excluded from snapshots/observers, s
 pollutes what the agent sees. Use `setIgnoreSelectors([...])` to also hide your own dev
 widgets.
 
+#### Session liveness — the HUD never gets stuck "running"
+
+A session starts on the agent's first activity and must reliably end even when the agent
+misbehaves. Iris is an MCP tool, so the agent (Claude) can crash, disconnect, or simply forget
+to call `iris_end_session` — and a backgrounded tab's own timers are throttled by the browser.
+So **the Node server owns liveness, not the browser tab:**
+
+- **Agent goes idle / forgets to end** → a server-side reaper (immune to tab throttling) ends the
+  session after `idleEndMs` of no agent commands and pushes the end to the browser. A backgrounded
+  tab still receives that push, so you can switch windows and come back to a correctly-ended HUD.
+- **Agent (MCP client) disconnects cleanly** → every active session ends at once.
+- **Agent kills the Iris server process** (so no push can arrive) → the SDK self-ends the session
+  after it can't reach the bridge for `BRIDGE_LOST_MS` (~15s), showing "lost connection to Iris."
+- **Slow-but-alive agent** → if it goes quiet long enough to auto-end and then acts again, the
+  session **revives** automatically (an explicit `iris_end_session` stays terminal).
+
+Tune the idle window with `iris_session({ idleEndMs })` — it updates both the browser timer and
+the server reaper. The human keeps the panel (with Copy/Export of the run) after any end.
+
 ### `iris_narrate` — show the agent's intent
 
 So the human sees _what the agent is about to do and why_:
@@ -818,9 +877,16 @@ registerStore('workspace', () => useWorkspace.getState());
 ```jsonc
 iris_state({ store: "workspace" })   // → { stores: { workspace: {…} } }
 iris_state({ ref: "e9" })            // → { component: { ok: true, component, hooks } } or { component: { ok: false, reason: "component-state-unavailable" } }
+
+// Scope a large store instead of paying for the whole thing:
+iris_state({ store: "workspace", path: "captionCache.v3" })  // → { found: true, value: {…} }
+iris_state({ store: "workspace", depth: 1 })                 // → top-level keys, deeper values collapsed to "{…N keys}"
+iris_state({ store: "workspace", path: "nope" })             // → { found: false, availableKeys: ["captionCache", "version", …] }
 ```
 
 Store reads are the reliable path; ref reads degrade to a structured failure rather than blocking.
+`path` (dot-path, numeric segments index arrays) and `depth` keep a 60KB store from becoming a token
+tax — and a wrong `path` returns the keys that _were_ there, so it's self-correcting.
 
 ### `iris_capabilities` — the app's testable surface
 
@@ -848,8 +914,16 @@ your flow becomes a deterministic regression run, not a checklist.
 Iris drives actions by dispatching JS events from inside the page. That covers click, fill,
 type, select, submit, press, and HTML5 drag — but it **cannot** trigger browser-native pointer
 behavior: `onMouseEnter`/`onMouseLeave`, hover-gated reveals, and pointer-library drags rely on
-the browser's real hit-testing, which synthetic events don't drive. Every `iris_act` result
-tells you which path ran:
+the browser's real hit-testing, which synthetic events don't drive.
+
+**Clicks are synthetic by default — on purpose.** Even with real input configured, `click`/`dblclick`
+run the occlusion-honest synthetic path (full `pointerdown→…→click` sequence + a `occluded` hit-test +
+off-viewport auto-scroll), reporting `inputModeReason:"synthetic-click-preferred"`. There's no
+coordinate gesture for the presenter HUD to intercept or to miss off-screen, and synthetic dispatch
+reaches the resolved element directly. Reserve native clicks for the rare `isTrusted`-gated case
+(native file picker, clipboard) with `args:{ native:true }`. Real input remains the path for
+`hover`/`drag`, which genuinely need the browser's hit-testing. Every `iris_act` result tells you
+which path ran:
 
 ```jsonc
 { since, dispatched, settled, inputMode: "synthetic" | "real", inputModeReason?, result, session, warning? }
@@ -862,21 +936,23 @@ When `inputMode` is `"synthetic"` and the target has hover/enter handlers, the r
 act still ran synthetic, the result says _why_, so per-element inconsistency is diagnosable
 instead of mysterious:
 
-| `inputModeReason`                      | meaning / fix                                                                                  |
-| -------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| `page-not-correlated-to-a-cdp-target`  | no CDP page matches the session URL — usually a fresh tab or a CDP target that isn't this page |
-| `element-not-locatable`                | the element had no box (off-screen / stale ref) — `scrollIntoView` first                       |
-| `drag-target-unresolved`               | a drag's `toRef` was missing or not locatable                                                  |
-| `provider-declined` / `provider-error` | the CDP provider declined or threw (the latter also sets `warning`)                            |
-| `not-a-pointer-action`                 | `fill`/`type`/etc. — these are always synthetic by design                                      |
+| `inputModeReason`                      | meaning / fix                                                                                                                         |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `page-not-correlated-to-a-cdp-target`  | no CDP page matches the session URL — usually a fresh tab or a CDP target that isn't this page                                        |
+| `element-not-locatable`                | the element had no box (off-screen / stale ref) — `scrollIntoView` first                                                              |
+| `drag-target-unresolved`               | a drag's `toRef` was missing or not locatable                                                                                         |
+| `provider-declined` / `provider-error` | the CDP provider declined or threw (the latter also sets `warning`)                                                                   |
+| `not-a-pointer-action`                 | `fill`/`type`/etc. — these are always synthetic by design                                                                             |
+| `synthetic-click-preferred`            | a `click`/`dblclick` ran the occlusion-honest synthetic path by default — pass `args:{ native:true }` to force a trusted native click |
 
 (No `inputModeReason` is set when real input simply isn't configured — synthetic is the expected default there.)
 
 ### Enable real input (optional, opt-in)
 
 Point Iris's server at a Chrome DevTools (CDP) endpoint; it then drives **real** pointer input
-(via Playwright `connectOverCDP`) at the element's box for pointer actions (hover/click/
-dblclick/drag), and reports `inputMode: "real"`.
+(via Playwright `connectOverCDP`) at the element's box for `hover`/`drag` (and for `click`/`dblclick`
+only when you pass `args:{ native:true }` — clicks default to synthetic), and reports
+`inputMode: "real"`.
 
 1. Launch your browser with remote debugging:
 

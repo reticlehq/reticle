@@ -2,22 +2,22 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { DriveErrorCode, InputMode, SessionState } from '@syrin/iris-protocol';
 import type { CommandResult } from '@syrin/iris-protocol';
 import { start, type RunningServer } from './index.js';
-import { TOOLS, type ToolDeps } from './tools.js';
-import { IrisTool } from './tool-names.js';
-import { BaselineStore } from './baselines.js';
-import { createNodeFileSystem } from './fs-port.js';
-import { RecordingStore } from './recordings.js';
-import { FlowStore } from './flows.js';
-import { ProjectStore } from './project-store.js';
-import { AnnotationStore } from './annotation-store.js';
+import { TOOLS, type ToolDeps } from './tools/tools.js';
+import { IrisTool } from './tools/tool-names.js';
+import { BaselineStore } from './project/baselines.js';
+import { createNodeFileSystem } from './project/fs-port.js';
+import { RecordingStore } from './flows/recordings.js';
+import { FlowStore } from './flows/flows.js';
+import { ProjectStore } from './project/project-store.js';
+import { AnnotationStore } from './flows/annotation-store.js';
 import {
   DriveError,
   boxCenter,
   type ElementBox,
   type OwnedRealInputProvider,
   type RealInputProvider,
-} from './real-input.js';
-import type { Session, SessionManager } from './session.js';
+} from './input/real-input.js';
+import type { Session, SessionManager } from './session/session.js';
 
 const DRIVE_URL = 'http://localhost:3000/app';
 const SOURCE_BOX: ElementBox = { x: 0, y: 0, width: 200, height: 100 };
@@ -86,6 +86,8 @@ function fakeSession(state: { actCalls: number }): Session {
     id: 'demo',
     url: DRIVE_URL,
     elapsed: () => 0,
+    markActCursor: () => undefined,
+    lastActCursor: () => undefined,
     command,
     health: () => ({ lastSeenMs: 0, throttled: false, focused: true }),
     throttled: () => false,
@@ -122,7 +124,12 @@ interface ActResult {
 async function runClick(deps: ToolDeps): Promise<ActResult> {
   const tool = TOOLS.find((t) => t.name === IrisTool.ACT);
   if (tool === undefined) throw new Error('no act tool');
-  return (await tool.handler(deps, { ref: 'e1', action: 'click' })) as ActResult;
+  // native:true so the launched provider drives the gesture (clicks default to synthetic otherwise).
+  return (await tool.handler(deps, {
+    ref: 'e1',
+    action: 'click',
+    args: { native: true },
+  })) as ActResult;
 }
 
 let running: RunningServer | undefined;
@@ -133,7 +140,7 @@ afterEach(async () => {
   }
 });
 
-describe('P2 start({ driveUrl }) wiring', () => {
+describe('start({ driveUrl }) wiring', () => {
   it('start({driveUrl}) installs a realInput provider and navigates it', async () => {
     let factoryArgs: { driveUrl: string; headless: boolean } | undefined;
     const fake = makeFakeLaunched();

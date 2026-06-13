@@ -38,6 +38,14 @@ Use `fast-check` (add when needed) for the protocol and predicate engine — aut
 adversarial inputs and shrinks failures to a minimal repro. Catches the empty-buffer,
 off-by-one-cursor, and unicode-name cases unit tests miss.
 
+## Test naming
+
+`describe` and `it` strings must describe the observable behavior, not internal tracking
+codes. Never use design-doc tags (`F1`, `N5`, `M8`, etc.) or version strings (`0.3.7`) in
+test names — they mean nothing to a reader who wasn't in that planning session. Write what
+the system does: `'resolves with dispatched:true when rAF never fires'` not
+`'F1: settle is bounded'`. See `skills/conventions.md` for the full rule.
+
 ## Coverage ≠ correctness
 
 Lines executed is not behavior verified. The real signal is mutation testing (`stryker`).

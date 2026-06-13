@@ -6,7 +6,7 @@ afterEach(() => {
   vi.resetModules();
 });
 
-describe('F2 installHealth (jsdom)', () => {
+describe('installHealth (jsdom)', () => {
   it('emits an initial PAGE_HEALTH baseline with hidden/focused booleans', async () => {
     const { installHealth } = await import('./health.js');
     const emit = vi.fn();

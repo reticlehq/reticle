@@ -1,7 +1,7 @@
 import { EventType } from '@syrin/iris-protocol';
-import { getAccessibleName, getRole, isVisible } from '../a11y.js';
-import { refs } from '../refs.js';
-import { isIrisOverlay } from '../dom-ignore.js';
+import { getAccessibleName, getRole, isVisible } from '../dom/a11y.js';
+import { refs } from '../dom/refs.js';
+import { isIrisOverlay } from '../dom/dom-ignore.js';
 import type { Emit, Teardown } from './types.js';
 
 const WATCHED_ATTRS = [

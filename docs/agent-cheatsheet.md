@@ -16,6 +16,13 @@ vision model, evidence not prose. Everything below returns structured data. Full
 `iris_act` returns a `since` cursor — pass it to `iris_observe({ since })` to scope the window.
 Elements are addressed by stable refs (`e7`) from `snapshot`/`query`; they re-resolve across re-renders.
 
+**`assert`/`wait_for` are auto-scoped to your last act.** By default they only count events buffered
+_since_ the most recent act, so a stale signal from a previous step can't fake a pass — pass an
+explicit `since` to override. **Clicks run the code, not pixels:** `iris_act` click fires the full
+pointer sequence on the element (no coordinate gesture for the HUD to intercept), reports
+`occluded:true` when something covers the target, and stays synthetic even with CDP configured
+(use `args:{ native:true }` for a trusted native click).
+
 ## The 4-layer cross-check — never trust a green the state contradicts
 
 A claim is real only when the layers agree. Check more than the UI:
@@ -40,6 +47,8 @@ timers/rAF/pointer gestures — if you see `session.throttled`, distrust a green
 `iris_query` → `{ route, presentTestids, knownEmptyState }`; `iris_network` → `{ totalInWindow, present[] }`
 (what DID fire); `iris_console` → `{ totalInWindow, byLevel }` (so "0 errors" ≠ "silent page");
 `iris_state` lists `storeNames` when a store isn't found. Read the hint before assuming "not there."
+Scope big stores with `iris_state({ store, path:"a.b.0", depth })` instead of paying for the whole
+tree; a wrong `path` returns `{ found:false, availableKeys }` so it's self-correcting.
 
 ## Core tool set
 

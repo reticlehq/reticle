@@ -48,7 +48,7 @@ export interface MatchResult {
   elements: ElementDescriptor[];
 }
 
-/** Diagnostic hint attached to a zero-match iris_query result (F4). */
+/** Diagnostic hint attached to a zero-match iris_query result. */
 export interface QueryEmptyHint {
   /** location.pathname + location.search at query time. */
   route: string;
@@ -70,7 +70,7 @@ export const CapabilityFlowSchema = z.object({
   steps: z.array(z.string()),
 });
 
-/** The app's testable surface — persisted form of the browser Capabilities (M8 Stage A). */
+/** The app's testable surface — persisted form of the browser Capabilities. */
 export const CapabilitiesSchema = z.object({
   testids: z.array(z.string()),
   signals: z.array(z.string()),
@@ -79,7 +79,7 @@ export const CapabilitiesSchema = z.object({
 });
 export type CapabilitiesContract = z.infer<typeof CapabilitiesSchema>;
 
-/** The on-disk contract.json envelope: versioned + timestamped capabilities (M8 Stage A). */
+/** The on-disk contract.json envelope: versioned + timestamped capabilities. */
 export const ContractFileSchema = z.object({
   version: z.number(),
   generatedAt: z.number(),
@@ -88,7 +88,7 @@ export const ContractFileSchema = z.object({
 export type ContractFile = z.infer<typeof ContractFileSchema>;
 
 /**
- * 0.3.7 RUNHISTORY — evidence counts captured with a run so the agent can compare runs over time
+ * Evidence counts captured with a run so the agent can compare runs over time
  * ("console errors went 0→3 since last run"). All optional: a run records only what it observed.
  */
 export const RunEvidenceSchema = z.object({
@@ -98,7 +98,7 @@ export const RunEvidenceSchema = z.object({
 });
 export type RunEvidence = z.infer<typeof RunEvidenceSchema>;
 
-/** 0.3.7 RUNHISTORY — one persisted run outcome in .iris/project.json. */
+/** One persisted run outcome in .iris/project.json. */
 export const RunRecordSchema = z.object({
   kind: z.nativeEnum(RunKind),
   name: z.string(),
@@ -110,14 +110,14 @@ export const RunRecordSchema = z.object({
 });
 export type RunRecord = z.infer<typeof RunRecordSchema>;
 
-/** 0.3.7 RUNHISTORY — the optional learned map of the app (known flow/route names). */
+/** The optional learned map of the app (known flow/route names). */
 export const ProjectLearnedSchema = z.object({
   flows: z.array(z.string()).optional(),
   routes: z.array(z.string()).optional(),
 });
 export type ProjectLearned = z.infer<typeof ProjectLearnedSchema>;
 
-/** 0.3.7 RUNHISTORY — the on-disk project.json envelope: versioned learned-map + chronological runs. */
+/** The on-disk project.json envelope: versioned learned-map + chronological runs. */
 export const ProjectFileSchema = z.object({
   version: z.number(),
   learned: ProjectLearnedSchema.optional(),
@@ -126,7 +126,7 @@ export const ProjectFileSchema = z.object({
 export type ProjectFile = z.infer<typeof ProjectFileSchema>;
 
 /**
- * M8 Stage A FLOWFMT — a semantic anchor: how a step re-finds its element/event at replay
+ * A semantic anchor: how a step re-finds its element/event at replay
  * time. Never a volatile eXX ref. testid/role+name bind a DOM element; signal binds an event.
  */
 export const FlowAnchorSchema = z.discriminatedUnion('kind', [
@@ -140,12 +140,12 @@ export const FlowAnchorSchema = z.discriminatedUnion('kind', [
 ]);
 export type FlowAnchor = z.infer<typeof FlowAnchorSchema>;
 
-/** A post-condition a step asserts (compiled from a Stage-B annotation; sparse in Stage A). */
+/** A post-condition a step asserts (compiled from a structured annotation; optional). */
 export const FlowExpectSchema = z.object({
   signal: z.string().optional(),
   /**
-   * M8 Stage B ANNOTATE: optional payload shape an `assert-signal` annotation requires the signal
-   * to match (the predicate DSL's signal.dataMatches). Additive/optional — a Stage-A file with a
+   * Optional payload shape an `assert-signal` annotation requires the signal
+   * to match (the predicate DSL's signal.dataMatches). Additive/optional — a flow file with a
    * bare `signal` still parses, and the on-disk version stays FLOW_FILE_VERSION 1.
    */
   signalData: z.record(z.unknown()).optional(),
@@ -194,7 +194,7 @@ export const FlowStepSchema: z.ZodType<FlowStep> = baseFlowStep.extend({
 }) as z.ZodType<FlowStep>;
 
 /**
- * M8 Stage A REPLAYANCHOR — a legible-drift record returned when an anchor misses at replay.
+ * A legible-drift record returned when an anchor misses at replay.
  * The "whose fault is it" payload: what was expected, why it's gone, and the closest surviving
  * anchor (a concrete fix suggestion). Never a bare "command failed".
  */
@@ -209,7 +209,7 @@ export interface Drift {
   nearest: string | null;
 }
 
-/** M8 Stage A REPLAYANCHOR — the per-step result of re-resolving + running one anchored step. */
+/** The per-step result of re-resolving + running one anchored step. */
 export interface FlowStepResult {
   /** 0-based index of this step in the flow. */
   step: number;
@@ -223,13 +223,13 @@ export interface FlowStepResult {
   /** Present iff this step stopped on an anchor miss. */
   drift?: Drift;
   /**
-   * M8 Stage B SELFHEAL: a confidence-scored nearest-match rebind for this drifted step (additive,
-   * optional — a Stage-A step result without it is unchanged). Set only for a confident testid drift.
+   * A confidence-scored nearest-match rebind for this drifted step (additive,
+   * optional). Set only for a confident testid drift.
    */
   proposal?: HealProposal;
 }
 
-/** M8 Stage A REPLAYANCHOR — the iris_flow_replay envelope. */
+/** The iris_flow_replay envelope. */
 export interface FlowReplayResult {
   name: string;
   status: ReplayStatus;
@@ -237,16 +237,16 @@ export interface FlowReplayResult {
   /** Set when status === 'error' (missing/invalid file) — no steps ran. */
   error?: { code: string; message: string };
   /**
-   * M8 Stage B SELFHEAL: the confident rebind proposals aggregated across drifted steps (additive,
+   * The confident rebind proposals aggregated across drifted steps (additive,
    * optional — present only when at least one drifted step has a confident nearest match).
    */
   proposals?: HealProposal[];
 }
 
 /**
- * The on-disk flow file: diffable, git-tracked, anchor-resolved (M8 Stage A FLOWFMT).
- * Stage B adds the optional `dynamic` field (both `dynamic` + `success` are optional, so a
- * Stage-A file with neither still parses — back-compat is locked by a test).
+ * The on-disk flow file: diffable, git-tracked, anchor-resolved.
+ * The optional `dynamic` field (both `dynamic` + `success` are optional, so a
+ * file with neither still parses — back-compat is locked by a test).
  */
 export const FlowFileSchema = z.object({
   version: z.literal(FLOW_FILE_VERSION),
@@ -259,7 +259,7 @@ export const FlowFileSchema = z.object({
   steps: z.array(FlowStepSchema),
   success: FlowExpectSchema.optional(),
   /**
-   * M8 Stage B: anchors whose CONTENT must not be asserted (e.g. LLM output). Replay asserts
+   * Anchors whose CONTENT must not be asserted (e.g. LLM output). Replay asserts
    * presence, not words. Compiled from a `mark-dynamic` annotation.
    */
   dynamic: z.array(FlowAnchorSchema).optional(),
@@ -267,7 +267,7 @@ export const FlowFileSchema = z.object({
 export type FlowFile = z.infer<typeof FlowFileSchema>;
 
 /**
- * M8 Stage B RECORDER: the in-page → wire payload for a finished human recording. The browser
+ * The in-page → wire payload for a finished human recording. The browser
  * compiles captured interactions into a FlowFile-shaped object (resolving semantic anchors at
  * capture time) and emits it as ONE EventType.FLOW_RECORDED event; the server persists it.
  */
@@ -277,7 +277,7 @@ export const RecordedFlowSchema = z.object({
 });
 export type RecordedFlow = z.infer<typeof RecordedFlowSchema>;
 
-/** M8 Stage B SELFHEAL: a concrete, confidence-scored rebind proposed for one drifted step. */
+/** A concrete, confidence-scored rebind proposed for one drifted step. */
 export interface HealProposal {
   /** 0-based step index in the flow. */
   step: number;
@@ -289,14 +289,14 @@ export interface HealProposal {
   confidence: number;
 }
 
-/** M8 Stage B SELFHEAL: one applied rebind (a HealProposal that was written to disk). */
+/** One applied rebind (a HealProposal that was written to disk). */
 export interface HealChange {
   step: number;
   from: string;
   to: string;
 }
 
-/** M8 Stage B SELFHEAL: the iris_flow_heal envelope. */
+/** The iris_flow_heal envelope. */
 export interface FlowHealResult {
   name: string;
   status: HealStatus;
@@ -312,14 +312,14 @@ export interface FlowHealResult {
 }
 
 /**
- * M8 Stage B ANNOTATE — the structured annotation REQUEST a human/agent attaches to the live
+ * The structured annotation REQUEST a human/agent attaches to the live
  * recording (the server-side `iris_annotate` tool). A discriminated union over the four shipped
  * AnnotationKind values. Each variant carries exactly the fields its compilation needs.
  *
  * FIRST CUT boundary (do NOT remove): only this structured union is accepted. A free
  * NATURAL-LANGUAGE annotation (e.g. the string "the diff should appear") is REJECTED by this
  * schema — never guessed/compiled into a predicate. Free NL → predicate compilation is explicitly
- * FUTURE (M8 Stage C); a `safeParse` of a bare string returns success:false, which the tool maps
+ * FUTURE; a `safeParse` of a bare string returns success:false, which the tool maps
  * to AnnotationErrorCode.UNKNOWN_KIND. No NL parser exists or is faked here.
  */
 export const AnnotationSchema = z.discriminatedUnion('kind', [
@@ -345,7 +345,7 @@ export const AnnotationSchema = z.discriminatedUnion('kind', [
 export type Annotation = z.infer<typeof AnnotationSchema>;
 
 /**
- * M8 Stage B ANNOTATE — the iris_annotate result envelope (discriminated on `ok`, never a free
+ * The iris_annotate result envelope (discriminated on `ok`, never a free
  * string). On success it names the target (step|flow) + the human compiled-predicate text the
  * recorder confirmation strip shows ("will assert signal diff:shown").
  */
@@ -354,7 +354,7 @@ export type AnnotateResult =
   | { ok: false; code: AnnotationErrorCode };
 
 /**
- * M8 Stage B ANNOTATE — the patch a compiled annotation produces. The caller applies it to the
+ * The patch a compiled annotation produces. The caller applies it to the
  * AnnotationStore: a step.expect (assert-*), a flow.dynamic[] entry (mark-dynamic), or flow.success
  * (success-state). All optional; exactly the fields the compiled kind needs are set.
  */
@@ -368,7 +368,7 @@ export interface AnnotatePatch {
   success?: FlowExpect;
 }
 
-/** M8 Stage B ANNOTATE — pure compiler output: the result envelope + (on ok) the patch to apply. */
+/** Pure compiler output: the result envelope + (on ok) the patch to apply. */
 export interface AnnotateOutcome {
   result: AnnotateResult;
   patch?: AnnotatePatch;
