@@ -221,6 +221,9 @@ importers:
       '@iris/server':
         specifier: workspace:*
         version: link:../server
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.6(@types/node@22.19.20)(jsdom@29.1.1)
 
 packages:
 

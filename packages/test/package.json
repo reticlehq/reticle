@@ -22,6 +22,14 @@
     "@iris/protocol": "workspace:*",
     "@iris/server": "workspace:*"
   },
+  "peerDependencies": {
+    "vitest": "^3.0.0"
+  },
+  "peerDependenciesMeta": {
+    "vitest": {
+      "optional": true
+    }
+  },
   "license": "MIT",
   "author": "Iris contributors",
   "repository": {

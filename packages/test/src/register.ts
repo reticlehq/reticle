@@ -1,4 +1,3 @@
-import { it } from 'vitest';
 import type { FlowErrorCode } from '@iris/protocol';
 import type { FlowReplaySession } from '@iris/server';
 import { FLOW_LOAD_ERROR_PREFIX, SpecKind, SpecOutcome } from './constants.js';
@@ -49,6 +48,17 @@ export interface RegisterFlowSpecsOptions extends FlowsAsSpecsOptions {
   register?: RegisterFn;
 }
 
+/**
+ * Resolve the default registrar (vitest's `it`) lazily. vitest is an OPTIONAL peer dependency, so the
+ * public barrel (`@iris/test`) must stay importable when vitest is absent — only callers that actually
+ * register flow specs without injecting their own `register` fn need it. A static top-level import
+ * would pull vitest into the eager module graph of every `import { irisTest } from '@iris/test'`.
+ */
+async function defaultRegister(): Promise<RegisterFn> {
+  const vitest = await import('vitest');
+  return vitest.it;
+}
+
 /** Turn one FlowSpec into a (name, fn) registration. The fn throws structured evidence on failure. */
 function specToCase(
   spec: FlowSpec,
@@ -77,7 +87,7 @@ export async function registerFlowSpecs(
   getSession: () => Promise<FlowReplaySession> | FlowReplaySession,
   opts?: RegisterFlowSpecsOptions,
 ): Promise<void> {
-  const register = opts?.register ?? it;
+  const register = opts?.register ?? (await defaultRegister());
   const specs = await flowsAsSpecs(source, opts);
   for (const spec of specs) {
     register(spec.name, specToCase(spec, getSession));
