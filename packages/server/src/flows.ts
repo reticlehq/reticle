@@ -6,7 +6,14 @@ import {
   FlowFileSchema,
   QueryBy,
 } from '@iris/protocol';
-import type { ActionType, FlowAnchor, FlowExpect, FlowFile, FlowStep } from '@iris/protocol';
+import type {
+  ActionType,
+  FlowAnchor,
+  FlowExpect,
+  FlowFile,
+  FlowStep,
+  HealChange,
+} from '@iris/protocol';
 import { IrisTool } from './tool-names.js';
 import type { CompiledProgram, RecordedStep } from './recordings.js';
 import type { FileSystemPort } from './fs-port.js';
@@ -142,6 +149,15 @@ export class FlowStore {
   }
 
   /**
+   * The single byte-stable flow serializer: 2-space indent + one trailing newline. save(),
+   * saveFlow() and heal() all route through it so an unchanged flow that round-trips through any
+   * of them produces byte-identical on-disk content (locked by the SELFHEAL byte-stability tests).
+   */
+  #serialize(flow: FlowFile): string {
+    return `${JSON.stringify(flow, null, JSON_INDENT)}\n`;
+  }
+
+  /**
    * Convert a CompiledProgram (G6 testid-normalized) into an anchored, on-disk flow + write it.
    * M8 Stage B: optionally fold structured annotations (per-step expect, dynamic[], success) onto
    * the flow before writing. Omitting `annotations` reproduces the exact Stage-A bytes.
@@ -162,10 +178,7 @@ export class FlowStore {
     };
     const flow = withAnnotations(base, annotations);
     await this.#fs.mkdir(irisDirPaths(this.#root).flows);
-    await this.#fs.writeFile(
-      flowPath(this.#root, program.name),
-      `${JSON.stringify(flow, null, JSON_INDENT)}\n`,
-    );
+    await this.#fs.writeFile(flowPath(this.#root, program.name), this.#serialize(flow));
     const degraded = flow.steps.filter((s) => s.degraded === true).length;
     return {
       ok: true,
@@ -189,10 +202,7 @@ export class FlowStore {
     if (!parsed.success) return { ok: false, code: FlowErrorCode.PARSE_FAILED };
     const valid = parsed.data;
     await this.#fs.mkdir(irisDirPaths(this.#root).flows);
-    await this.#fs.writeFile(
-      flowPath(this.#root, valid.name),
-      `${JSON.stringify(valid, null, JSON_INDENT)}\n`,
-    );
+    await this.#fs.writeFile(flowPath(this.#root, valid.name), this.#serialize(valid));
     const degraded = valid.steps.filter((s) => s.degraded === true).length;
     return {
       ok: true,
@@ -206,33 +216,45 @@ export class FlowStore {
   }
 
   /**
-   * M8 Stage B self-healing: rewrite one step's testid anchor on disk (the iris_flow_heal apply
-   * path). Only the targeted step's TESTID anchor value changes; every other step is byte-identical
-   * (locked by a test). A non-testid or out-of-range step is a no-op rebind (returns the flow).
+   * M8 Stage B SELFHEAL: apply confident testid rebinds to an on-disk flow (the iris_flow_heal
+   * apply path). Loads + validates the flow (so it gets NOT_FOUND / PARSE_FAILED for free), then
+   * rewrites ONLY the named steps' testid anchors — preserving createdAt + every other field — and
+   * re-serializes byte-stably via the same #serialize() that save() uses. The name guard runs
+   * FIRST, before any path is joined, so a traversal name never reaches the disk.
+   *
+   * This writer is PURE of the confidence policy: it trusts the changes it is handed (the tool only
+   * calls it with proposals that already cleared HEAL_CONFIDENCE_MIN). A change whose `from` no
+   * longer matches the step's testid anchor is skipped (idempotent / defensive), never throwing.
    */
-  async rebindAnchor(
+  async heal(
     name: string,
-    stepIndex: number,
-    newTestid: string,
-  ): Promise<FlowResult<FlowFile>> {
+    changes: HealChange[],
+  ): Promise<FlowResult<{ name: string; changed: HealChange[] }>> {
+    if (!isValidFlowName(name)) return { ok: false, code: FlowErrorCode.INVALID_NAME };
     const loaded = await this.load(name);
-    if (!loaded.ok) return loaded;
+    if (!loaded.ok) return { ok: false, code: loaded.code };
     const flow = loaded.value;
-    const target = flow.steps[stepIndex];
-    if (target === undefined || target.anchor.kind !== AnchorKind.TESTID) {
-      return { ok: true, value: flow };
-    }
-    const next: FlowFile = {
-      ...flow,
-      steps: flow.steps.map((s, i) =>
-        i === stepIndex ? { ...s, anchor: { kind: AnchorKind.TESTID, value: newTestid } } : s,
-      ),
-    };
-    await this.#fs.writeFile(
-      flowPath(this.#root, name),
-      `${JSON.stringify(next, null, JSON_INDENT)}\n`,
-    );
-    return { ok: true, value: next };
+
+    const byStep = new Map<number, HealChange>();
+    for (const change of changes) byStep.set(change.step, change);
+
+    const applied: HealChange[] = [];
+    const steps = flow.steps.map((step, index): FlowStep => {
+      const change = byStep.get(index);
+      if (
+        change === undefined ||
+        step.anchor.kind !== AnchorKind.TESTID ||
+        step.anchor.value !== change.from
+      ) {
+        return step;
+      }
+      applied.push(change);
+      return { ...step, anchor: { kind: AnchorKind.TESTID, value: change.to } };
+    });
+
+    const next: FlowFile = { ...flow, steps };
+    await this.#fs.writeFile(flowPath(this.#root, name), this.#serialize(next));
+    return { ok: true, value: { name, changed: applied } };
   }
 
   /** List flow names present under .iris/flows (no extension), sorted. [] if absent (no throw). */

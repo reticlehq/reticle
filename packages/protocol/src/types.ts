@@ -8,8 +8,8 @@ import {
   type DriftReason,
   ElementState,
   FLOW_FILE_VERSION,
+  type HealStatus,
   QueryBy,
-  type RebindStatus,
   type ReplayStatus,
 } from './constants.js';
 
@@ -182,6 +182,11 @@ export interface FlowStepResult {
   note?: string;
   /** Present iff this step stopped on an anchor miss. */
   drift?: Drift;
+  /**
+   * M8 Stage B SELFHEAL: a confidence-scored nearest-match rebind for this drifted step (additive,
+   * optional — a Stage-A step result without it is unchanged). Set only for a confident testid drift.
+   */
+  proposal?: HealProposal;
 }
 
 /** M8 Stage A REPLAYANCHOR — the iris_flow_replay envelope. */
@@ -191,6 +196,11 @@ export interface FlowReplayResult {
   steps: FlowStepResult[];
   /** Set when status === 'error' (missing/invalid file) — no steps ran. */
   error?: { code: string; message: string };
+  /**
+   * M8 Stage B SELFHEAL: the confident rebind proposals aggregated across drifted steps (additive,
+   * optional — present only when at least one drifted step has a confident nearest match).
+   */
+  proposals?: HealProposal[];
 }
 
 /**
@@ -227,30 +237,38 @@ export const RecordedFlowSchema = z.object({
 });
 export type RecordedFlow = z.infer<typeof RecordedFlowSchema>;
 
-/**
- * M8 Stage B self-healing: one proposed (or applied) nearest-match rebind for a drifted step.
- * `status` is PROPOSED (opt-in, disk untouched), APPLIED (written back), or NONE (no nearest →
- * cannot heal). Rebinds testid anchors only this cut.
- */
-export interface RebindProposal {
-  /** index of the drifted step. */
+/** M8 Stage B SELFHEAL: a concrete, confidence-scored rebind proposed for one drifted step. */
+export interface HealProposal {
+  /** 0-based step index in the flow. */
   step: number;
-  /** the dead testid anchor. */
+  /** Old (missing) testid anchor value. */
   from: string;
-  /** nearestTestid() result, or the dead anchor itself when status === NONE. */
+  /** Proposed nearest present testid. */
   to: string;
-  status: RebindStatus;
+  /** Normalized (0,1]; >= HEAL_CONFIDENCE_MIN to be applicable. */
+  confidence: number;
 }
 
-/** M8 Stage B self-healing: the iris_flow_heal envelope. */
+/** M8 Stage B SELFHEAL: one applied rebind (a HealProposal that was written to disk). */
+export interface HealChange {
+  step: number;
+  from: string;
+  to: string;
+}
+
+/** M8 Stage B SELFHEAL: the iris_flow_heal envelope. */
 export interface FlowHealResult {
   name: string;
-  /** ok | drift | error (reuses Stage A ReplayStatus). */
-  status: ReplayStatus;
-  /** one per drifted step (NONE when there was no nearest match — never silent). */
-  proposals: RebindProposal[];
-  /** true iff apply:true AND ≥1 rebind was written back to disk. */
+  status: HealStatus;
+  /** Whether the file was rewritten (true only when status === 'healed'). */
   applied: boolean;
+  /** Confident, applicable rebinds. With apply:false these are the dry-run diff. */
+  proposals: HealProposal[];
+  /** Anchors actually written (empty unless applied). */
+  changed: HealChange[];
+  /** Human one-liner for the agent (e.g. "nothing to heal", floor explanation). */
+  message: string;
+  error?: { code: string; message: string };
 }
 
 /**

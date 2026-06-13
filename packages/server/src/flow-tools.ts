@@ -3,18 +3,21 @@ import {
   EventType,
   FLOW_SIGNAL_TIMEOUT_MS,
   FlowErrorCode,
-  RebindStatus,
+  HEAL_CONFIDENCE_MIN,
+  HealStatus,
   RecordedFlowSchema,
   RecordedSaveError,
   ReplayStatus,
   type FlowHealResult,
   type FlowReplayResult,
+  type HealChange,
+  type HealProposal,
   type IrisEvent,
 } from '@iris/protocol';
 import { IrisTool } from './tool-names.js';
 import { asString } from './tools-helpers.js';
 import { replayFlow } from './flow-replay.js';
-import { buildProposals } from './flow-heal.js';
+import { collectProposals } from './heal.js';
 import { waitForPredicate } from './predicate.js';
 import type { FlowAnnotations } from './flows.js';
 import type { ToolDef, ToolDeps } from './tools.js';
@@ -163,47 +166,108 @@ export const FLOW_TOOLS: ToolDef[] = [
   {
     name: IrisTool.FLOW_HEAL,
     description:
-      'Self-healing replay: replay a git-checked flow, and for every drifted step that has a ' +
-      'nearest surviving testid, PROPOSE a rebind (the "whose fault is it" fix). With apply:true, ' +
-      'opt-in WRITE the nearest-match rebinds back to disk. A drift with no nearest match is ' +
-      'status:none (legible, never silent). Returns { name, status: ok|drift|error, ' +
-      'proposals:[{ step, from, to, status: proposed|applied|none }], applied }.',
+      'Self-healing replay. Re-runs iris_flow_replay; on testid DRIFT computes confidence-scored ' +
+      'nearest-match rebind PROPOSALS. With apply:false (default) returns the proposed diff WITHOUT ' +
+      'writing. With apply:true, writes the confident rebind(s) back into .iris/flows/<name>.json and ' +
+      'returns what changed — never silently. A drift with no proposal above the confidence floor is ' +
+      'status:unhealable (file untouched). Returns { name, status: healed|drift|unhealable|' +
+      'nothing_to_heal|error, applied, proposals[], changed[], message }.',
     inputSchema: {
       name: z.string(),
       apply: z.boolean().optional(),
       sessionId: z.string().optional(),
     },
-    handler: async (deps: ToolDeps, args): Promise<FlowHealResult> => {
-      const name = asString(args['name']) ?? '';
-      const apply = args['apply'] === true;
-      const loaded = await deps.flows.load(name);
-      if (!loaded.ok) {
-        return { name, status: ReplayStatus.ERROR, proposals: [], applied: false };
-      }
-      const session = deps.sessions.resolve(asString(args['sessionId']));
-      const steps = await replayFlow(
-        session,
-        loaded.value,
-        waitForPredicate,
-        FLOW_SIGNAL_TIMEOUT_MS,
-      );
-      const proposals = buildProposals(steps, apply);
-      let applied = false;
-      if (apply) {
-        for (const p of proposals) {
-          if (p.status === RebindStatus.APPLIED) {
-            await deps.flows.rebindAnchor(name, p.step, p.to);
-            applied = true;
-          }
-        }
-      }
-      const drifted = steps.some((s) => s.drift !== undefined);
-      const status = drifted
-        ? ReplayStatus.DRIFT
-        : steps.every((s) => s.ok)
-          ? ReplayStatus.OK
-          : ReplayStatus.DRIFT;
-      return { name, status, proposals, applied };
-    },
+    handler: (deps: ToolDeps, args): Promise<FlowHealResult> => healFlow(deps, args),
   },
 ];
+
+const HEAL_MESSAGES = {
+  NOTHING: 'nothing to heal — every anchor resolved on replay',
+  HEALED: 'rewrote drifted testid anchors to their nearest surviving match',
+  DRIFT_DRY: 'confident rebind(s) proposed — re-run with apply:true to write them to disk',
+  UNHEALABLE: `drift found, but no nearest match cleared the confidence floor (HEAL_CONFIDENCE_MIN=${HEAL_CONFIDENCE_MIN}); file left untouched — add a data-testid or fix the flow by hand`,
+} as const;
+
+function toChange(proposal: HealProposal): HealChange {
+  return { step: proposal.step, from: proposal.from, to: proposal.to };
+}
+
+/**
+ * M8 Stage B SELFHEAL handler: load → replay → collect confident proposals → (apply ? write : dry).
+ * Never silently rewrites: only proposals that cleared HEAL_CONFIDENCE_MIN are eligible, and only
+ * when apply:true. A heal disk failure maps back to status:error.
+ */
+async function healFlow(deps: ToolDeps, args: Record<string, unknown>): Promise<FlowHealResult> {
+  const name = asString(args['name']) ?? '';
+  const apply = args['apply'] === true;
+  const loaded = await deps.flows.load(name);
+  if (!loaded.ok) {
+    return {
+      name,
+      status: HealStatus.ERROR,
+      applied: false,
+      proposals: [],
+      changed: [],
+      message: flowErrorMessage(loaded.code),
+      error: { code: loaded.code, message: flowErrorMessage(loaded.code) },
+    };
+  }
+
+  const session = deps.sessions.resolve(asString(args['sessionId']));
+  const steps = await replayFlow(session, loaded.value, waitForPredicate, FLOW_SIGNAL_TIMEOUT_MS);
+  const drifted = steps.some((s) => s.drift !== undefined);
+  if (!drifted) {
+    return {
+      name,
+      status: HealStatus.NOTHING_TO_HEAL,
+      applied: false,
+      proposals: [],
+      changed: [],
+      message: HEAL_MESSAGES.NOTHING,
+    };
+  }
+
+  const proposals = collectProposals(steps);
+  if (proposals.length === 0) {
+    return {
+      name,
+      status: HealStatus.UNHEALABLE,
+      applied: false,
+      proposals: [],
+      changed: [],
+      message: HEAL_MESSAGES.UNHEALABLE,
+    };
+  }
+
+  if (!apply) {
+    return {
+      name,
+      status: HealStatus.DRIFT,
+      applied: false,
+      proposals,
+      changed: [],
+      message: HEAL_MESSAGES.DRIFT_DRY,
+    };
+  }
+
+  const written = await deps.flows.heal(name, proposals.map(toChange));
+  if (!written.ok) {
+    return {
+      name,
+      status: HealStatus.ERROR,
+      applied: false,
+      proposals,
+      changed: [],
+      message: flowErrorMessage(written.code),
+      error: { code: written.code, message: flowErrorMessage(written.code) },
+    };
+  }
+  return {
+    name,
+    status: HealStatus.HEALED,
+    applied: written.value.changed.length > 0,
+    proposals,
+    changed: written.value.changed,
+    message: HEAL_MESSAGES.HEALED,
+  };
+}

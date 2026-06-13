@@ -120,16 +120,25 @@ export const RecordedSaveError = {
 export type RecordedSaveError = (typeof RecordedSaveError)[keyof typeof RecordedSaveError];
 
 /**
- * M8 Stage B self-healing replay: the outcome of a proposed/applied nearest-match rebind.
- * Rebinds testid anchors only (role/name re-anchoring is future); signal drift (nearest===null)
- * yields NONE, surfaced legibly — never silent.
+ * M8 Stage B SELFHEAL: outcome of iris_flow_heal (distinct from ReplayStatus — adds heal verbs).
+ * Rebinds testid anchors only (role/name/signal re-anchoring is future). A confident nearest-match
+ * is required before any disk write — the "never silently rewrite" invariant.
  */
-export const RebindStatus = {
-  PROPOSED: 'proposed', // a nearest-match exists; NOT applied (opt-in)
-  APPLIED: 'applied', // caller passed apply:true and the rebind was written
-  NONE: 'none', // no nearest match → cannot heal (stays drift)
+export const HealStatus = {
+  HEALED: 'healed', // apply:true and >=1 anchor rewritten on disk
+  DRIFT: 'drift', // apply:false: confident proposal(s) returned, file untouched
+  UNHEALABLE: 'unhealable', // drift exists but no proposal cleared the confidence floor
+  NOTHING_TO_HEAL: 'nothing_to_heal', // replay was green
+  ERROR: 'error', // flow missing/malformed/invalid-name — no steps ran
 } as const;
-export type RebindStatus = (typeof RebindStatus)[keyof typeof RebindStatus];
+export type HealStatus = (typeof HealStatus)[keyof typeof HealStatus];
+
+/**
+ * SELFHEAL: minimum normalized confidence (0,1] a nearest-match rebind must clear before it is
+ * eligible to be APPLIED (or surfaced as a confident proposal). Below this, drift is reported but
+ * NEVER auto-rewritten — the "never silently rewrite" invariant has a single numeric home here.
+ */
+export const HEAL_CONFIDENCE_MIN = 0.5;
 
 /**
  * M8 Stage B ANNOTATE: what a structured annotation binds to. STEP folds onto the LAST captured

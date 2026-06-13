@@ -33,8 +33,12 @@ export type WaitForSignal = (
   timeoutMs: number,
 ) => Promise<EvalResult>;
 
-/** A single ASCII-ish edit distance (case-insensitive). Small inputs (testids), so O(n*m) is fine. */
-function editDistance(a: string, b: string): number {
+/**
+ * A single ASCII-ish edit distance (case-insensitive). Small inputs (testids), so O(n*m) is fine.
+ * Exported so the SELFHEAL proposal layer derives its confidence from the SAME distance used to
+ * pick `nearest` — no second, divergent heuristic enters the trust boundary.
+ */
+export function editDistance(a: string, b: string): number {
   const s = a.toLowerCase();
   const t = b.toLowerCase();
   const rows = s.length + 1;
