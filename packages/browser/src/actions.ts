@@ -108,10 +108,58 @@ export function executeAction(
     case ActionType.SCROLL_INTO_VIEW:
       el.scrollIntoView();
       break;
+    case ActionType.DRAG: {
+      const toRef = asString(args['toRef']);
+      const resolved = toRef !== undefined ? refs.resolve(toRef) : null;
+      dragElement(el, resolved instanceof HTMLElement ? resolved : null);
+      break;
+    }
     default:
       throw new Error(`unknown action '${action}'`);
   }
   return { ok: true, ref, action };
+}
+
+/** Synthesize a pointer-based drag (works for dnd-kit / react-beautiful-dnd) plus best-effort HTML5 DnD. */
+function dragElement(source: HTMLElement, target: HTMLElement | null): void {
+  const dest = target ?? source;
+  const fire = (el: Element, type: string): void => {
+    if (typeof PointerEvent === 'function' && type.startsWith('pointer')) {
+      el.dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true }));
+    } else {
+      el.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true }));
+    }
+  };
+  fire(source, 'pointerdown');
+  fire(source, 'mousedown');
+  fire(dest, 'pointermove');
+  fire(dest, 'mousemove');
+  fire(dest, 'pointerup');
+  fire(dest, 'mouseup');
+
+  if (typeof DragEvent === 'function') {
+    const dataTransfer = typeof DataTransfer === 'function' ? new DataTransfer() : null;
+    const init: DragEventInit = { bubbles: true, cancelable: true };
+    if (dataTransfer !== null) init.dataTransfer = dataTransfer;
+    source.dispatchEvent(new DragEvent('dragstart', init));
+    dest.dispatchEvent(new DragEvent('dragover', init));
+    dest.dispatchEvent(new DragEvent('drop', init));
+    source.dispatchEvent(new DragEvent('dragend', init));
+  }
+}
+
+/** Best-effort WebMCP passthrough: call a navigator.modelContext tool if the site exposes one. */
+export async function dispatchWebMcp(
+  tool: string,
+  params: Record<string, unknown>,
+): Promise<unknown> {
+  const mc = (
+    navigator as unknown as { modelContext?: { callTool?: (n: string, p: unknown) => unknown } }
+  ).modelContext;
+  if (mc === undefined || typeof mc.callTool !== 'function') {
+    throw new Error('WebMCP (navigator.modelContext) not available on this page');
+  }
+  return await mc.callTool(tool, params);
 }
 
 export interface ActionStep {

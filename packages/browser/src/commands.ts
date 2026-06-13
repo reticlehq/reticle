@@ -1,4 +1,5 @@
 import {
+  ActionType,
   ElementQuerySchema,
   IrisCommand,
   SnapshotMode,
@@ -7,7 +8,7 @@ import {
 } from '@iris/protocol';
 import { buildSnapshot } from './snapshot.js';
 import { matchQuery, runQuery } from './query.js';
-import { executeAction, executeSequence, type ActionStep } from './actions.js';
+import { executeAction, executeSequence, dispatchWebMcp, type ActionStep } from './actions.js';
 import { describe } from './a11y.js';
 import { refs } from './refs.js';
 import { identifyComponent } from './adapters.js';
@@ -81,9 +82,14 @@ export function createCommandRegistry(): Map<string, CommandHandler> {
       str(args['state']) as ElementState | undefined,
     ),
   );
-  reg.set(IrisCommand.ACT, (args) =>
-    executeAction(str(args['ref']) ?? '', str(args['action']) ?? '', record(args['args'])),
-  );
+  reg.set(IrisCommand.ACT, (args) => {
+    const action = str(args['action']) ?? '';
+    if (action === ActionType.WEBMCP) {
+      const inner = record(args['args']);
+      return dispatchWebMcp(str(inner['tool']) ?? '', record(inner['params']));
+    }
+    return executeAction(str(args['ref']) ?? '', action, record(args['args']));
+  });
   reg.set(IrisCommand.ACT_SEQUENCE, (args) =>
     executeSequence((Array.isArray(args['steps']) ? args['steps'] : []) as ActionStep[]),
   );

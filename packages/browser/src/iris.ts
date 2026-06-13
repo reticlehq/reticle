@@ -16,6 +16,8 @@ import { installNetwork } from './observers/network.js';
 import { installRoute } from './observers/route.js';
 import { installConsole } from './observers/console.js';
 import { installAnimation } from './observers/animation.js';
+import { installScroll } from './observers/scroll.js';
+import { installOverlay, type OverlayHandle } from './overlay.js';
 import type { Teardown } from './observers/types.js';
 
 export interface IrisConnectOptions {
@@ -23,6 +25,8 @@ export interface IrisConnectOptions {
   url?: string;
   /** Human-friendly session label so the agent can target the right tab. */
   session?: string;
+  /** Show a small in-page status chip (connection + event count). */
+  overlay?: boolean;
 }
 
 /**
@@ -36,6 +40,8 @@ export class Iris {
   #connected = false;
   #session = 'default';
   #start = 0;
+  #overlay: OverlayHandle | undefined;
+  #eventCount = 0;
 
   connect(options: IrisConnectOptions = {}): void {
     if (this.#connected) return;
@@ -58,8 +64,14 @@ export class Iris {
       installRoute(emit),
       installConsole(emit),
       installAnimation(emit),
+      installScroll(emit),
       installDom(emit),
     ];
+
+    if (options.overlay === true) {
+      this.#overlay = installOverlay();
+      this.#overlay.update({ connected: true, events: 0 });
+    }
 
     this.#transport.connect();
     this.#connected = true;
@@ -70,12 +82,19 @@ export class Iris {
     this.#emit(EventType.SIGNAL, { name, data });
   }
 
+  /** Report a framework/store state change the agent can observe and assert on. */
+  state(name: string, value: unknown): void {
+    this.#emit(EventType.STATE_CHANGE, { name, value });
+  }
+
   disconnect(): void {
     if (!this.#connected) return;
     for (const teardown of this.#teardowns) teardown();
     this.#teardowns = [];
     this.#transport?.close();
     this.#transport = undefined;
+    this.#overlay?.destroy();
+    this.#overlay = undefined;
     this.#connected = false;
   }
 
@@ -88,6 +107,8 @@ export class Iris {
       data,
     };
     this.#transport?.sendEvent(event);
+    this.#eventCount += 1;
+    this.#overlay?.update({ connected: true, events: this.#eventCount });
   };
 
   #hello(): HelloMessage {

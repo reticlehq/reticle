@@ -67,6 +67,7 @@ export const ActionType = {
   PRESS: 'press',
   UPLOAD: 'upload',
   SCROLL_INTO_VIEW: 'scrollIntoView',
+  DRAG: 'drag',
   WEBMCP: 'webmcp',
 } as const;
 export type ActionType = (typeof ActionType)[keyof typeof ActionType];
