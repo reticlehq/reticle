@@ -77,9 +77,23 @@ export function clampLogMax(n: number | undefined): number {
   return Math.floor(n);
 }
 
-/** Pure +elapsed formatter (no clock read) so log timestamps are deterministic in tests. */
+/**
+ * Pure, human-readable duration ("3s", "47s", "2m", "1h 4m") — no clock read, so it stays
+ * deterministic in tests. Used for both the per-row timestamp (time since session start) and the
+ * live "idle · {duration} since last action" heartbeat. Sub-second reads as "0s".
+ */
+export function humanDuration(ms: number): string {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return s % 60 === 0 ? `${m}m` : `${m}m ${s % 60}s`;
+  const h = Math.floor(m / 60);
+  return m % 60 === 0 ? `${h}h` : `${h}h ${m % 60}m`;
+}
+
+/** Per-row timestamp: time since the session's first row, human-readable (e.g. "2m", not "+132.4s"). */
 export function formatElapsed(ms: number): string {
-  return `+${(ms / 1000).toFixed(1)}s`;
+  return humanDuration(ms);
 }
 
 /**

@@ -291,7 +291,7 @@ export class Iris {
         await p.beforeAct(ref, str(s.action), label);
       }
     } else {
-      const label = presentStatus(command.name);
+      const label = presentStatus(command.name, command.args);
       p.status(label);
       p.log(LOG_KIND.READ, label);
     }
@@ -322,22 +322,44 @@ export function modeForCommand(commandName: string): PresenterMode {
   }
 }
 
-function presentStatus(commandName: string): string {
+/**
+ * Human-legible status for a read command — now WITH the target (which testid/value/ref/store), so
+ * the watcher sees "Finding [testid=row-3700]" instead of a meaningless repeating "Finding an
+ * element". Falls back to the bare verb when no target is in the args.
+ */
+function presentStatus(commandName: string, args: Record<string, unknown> = {}): string {
   switch (commandName) {
     case IrisCommand.SNAPSHOT:
       return 'Looking at the page';
     case IrisCommand.QUERY:
-    case IrisCommand.MATCH:
-      return 'Finding an element';
-    case IrisCommand.INSPECT:
-      return 'Inspecting an element';
+    case IrisCommand.MATCH: {
+      const q = commandName === IrisCommand.MATCH ? (args['query'] ?? {}) : args;
+      const target = queryTarget(q as Record<string, unknown>);
+      return target !== undefined ? `Finding ${target}` : 'Finding an element';
+    }
+    case IrisCommand.INSPECT: {
+      const ref = str(args['ref']);
+      return ref !== undefined ? `Inspecting ${refLabel(ref)}` : 'Inspecting an element';
+    }
     case IrisCommand.ANIMATIONS:
       return 'Reading animations';
-    case IrisCommand.STATE_READ:
-      return 'Reading state';
+    case IrisCommand.STATE_READ: {
+      const store = str(args['store']);
+      return store !== undefined ? `Reading state: ${store}` : 'Reading state';
+    }
     case IrisCommand.CAPABILITIES:
       return 'Reading capabilities';
     default:
       return commandName;
   }
+}
+
+/** Compact "what we're looking for" from a query's args (testid/value/name/role/text/label). */
+function queryTarget(q: Record<string, unknown>): string | undefined {
+  const testid = str(q['testid']) ?? (str(q['by']) === 'testid' ? str(q['value']) : undefined);
+  if (testid !== undefined) return `[testid=${testid}]`;
+  const name = str(q['name']);
+  const value = str(q['value']) ?? str(q['text']) ?? str(q['label']) ?? str(q['role']);
+  if (value !== undefined) return name !== undefined ? `"${value}" (${name})` : `"${value}"`;
+  return name !== undefined ? `"${name}"` : undefined;
 }

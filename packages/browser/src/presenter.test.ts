@@ -249,12 +249,12 @@ describe('presenter v2 activity log', () => {
       performance.now = () => 42;
       Date.now = () => 42;
       let t = 0;
-      const p = new Presenter({ now: () => (t += 100) });
+      const p = new Presenter({ now: () => (t += 1100) });
       p.mount();
       p.log('read', 'a');
       p.log('read', 'b');
       const ts = logRows().map((r) => r.querySelector('[data-iris-log-ts]')?.textContent ?? '');
-      // Patched wall clock is frozen at 42; injected clock advances → rows must differ.
+      // Patched wall clock is frozen at 42; injected clock advances >1s/row → rows must differ.
       expect(ts[0]).not.toBe(ts[1]);
       p.destroy();
     } finally {
@@ -263,17 +263,38 @@ describe('presenter v2 activity log', () => {
     }
   });
 
-  it('L13 timestamp formatted as +elapsed from first row', () => {
+  it('L13 timestamp is a human-readable duration since the first row', () => {
     document.body.innerHTML = '';
-    const times = [1000, 1400];
+    const times = [1000, 3400];
     let i = 0;
     const p = new Presenter({ now: () => times[i++] ?? 0 });
     p.mount();
     p.log('read', 'a');
     p.log('read', 'b');
     const ts = logRows().map((r) => r.querySelector('[data-iris-log-ts]')?.textContent ?? '');
-    expect(ts[0]).toBe('+0.0s');
-    expect(ts[1]).toBe('+0.4s');
+    expect(ts[0]).toBe('0s');
+    expect(ts[1]).toBe('2s'); // 2400ms elapsed → "2s"
+    p.destroy();
+  });
+
+  it('L13b liveness: a quiet agent shows a live, growing "idle · {duration}" clock', async () => {
+    document.body.innerHTML = '';
+    let clock = 0;
+    const p = new Presenter({ now: () => clock, heartbeatMs: 8, idleNoticeMs: 20 });
+    p.mount();
+    p.sessionStart();
+    p.status('Inspecting [testid=row-3700]');
+    const act = (): string => document.querySelector('.iris-act')?.textContent ?? '';
+    expect(act()).toBe('Inspecting [testid=row-3700]'); // active → shows the action
+
+    clock = 5000; // 5s since the last action — well past idleNoticeMs
+    await wait(24); // let a heartbeat tick (8ms) fire
+    expect(act()).toContain('idle');
+    expect(act()).toContain('5s');
+    expect(act()).toContain('since last action');
+
+    p.status('Clicking Deploy'); // fresh activity → back to the live action text
+    expect(act()).toBe('Clicking Deploy');
     p.destroy();
   });
 

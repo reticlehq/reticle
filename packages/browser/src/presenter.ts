@@ -10,6 +10,7 @@ import {
   HUMAN_ROW_PREFIX,
   clampLogMax,
   formatElapsed,
+  humanDuration,
   appendLogRow,
   type LogKind,
   type LogResult,
@@ -154,6 +155,10 @@ export interface PresenterOptions {
   idleAfterMs?: number;
   /** Fade duration before fading -> idle (keep in sync with the glow CSS opacity transition). */
   glowFadeMs?: number;
+  /** Liveness heartbeat interval (ms). Overridable so tests run fast. */
+  heartbeatMs?: number;
+  /** Quiet (ms) after which the act strip shows the live "idle · {duration}" clock. Test-overridable. */
+  idleNoticeMs?: number;
   /** Deprecated: accepted for source compat; the live log no longer auto-expires. */
   narrationDwellMs?: number;
   /**
@@ -185,6 +190,14 @@ export type GlowPhase = (typeof GlowPhase)[keyof typeof GlowPhase];
 
 /** Quiet window before busy -> fading. */
 const IDLE_AFTER_MS = 700;
+/** Liveness heartbeat: how often the act strip refreshes its "idle · {duration}" clock. */
+const HEARTBEAT_MS = 1000;
+/**
+ * After this much quiet, the act strip stops showing the last action and starts a LIVE, ticking
+ * "◌ idle · {duration} since last action" — so a watcher can tell a 3s think from a dead agent
+ * (the killer gap: a frozen panel used to look identical whether the agent paused or stopped).
+ */
+const IDLE_NOTICE_MS = 4000;
 /** Must match the glow CSS opacity transition (.25s) so phase reaches idle after the fade paints. */
 const GLOW_FADE_MS = 250;
 const GLOW_ON = '1';
@@ -208,11 +221,16 @@ export class Presenter {
   readonly #now: () => number;
   readonly #idleAfterMs: number;
   readonly #glowFadeMs: number;
+  readonly #heartbeatMs: number;
+  readonly #idleNoticeMs: number;
   readonly #borderMode: BorderMode;
   #phase: GlowPhase = GlowPhase.IDLE;
   #lastActivityMs = 0;
   #idleCheckTimer: number | undefined;
   #fadeTimer: number | undefined;
+  /** Liveness: the most recent action text + a 1s ticker that ages it into an "idle · {dur}" clock. */
+  #lastActionText = '';
+  #heartbeatTimer: number | undefined;
   /** Tracks sessionStart/sessionEnd so both are idempotent (no strobe / no spurious off-write). */
   #sessionActive = false;
 
@@ -231,6 +249,8 @@ export class Presenter {
     this.#now = options.now ?? nativeNow;
     this.#idleAfterMs = options.idleAfterMs ?? IDLE_AFTER_MS;
     this.#glowFadeMs = options.glowFadeMs ?? GLOW_FADE_MS;
+    this.#heartbeatMs = options.heartbeatMs ?? HEARTBEAT_MS;
+    this.#idleNoticeMs = options.idleNoticeMs ?? IDLE_NOTICE_MS;
     this.#borderMode = options.border ?? DEFAULT_BORDER_MODE;
     this.#logMax = clampLogMax(options.logMax);
     this.#onControl = options.onControl;
@@ -315,6 +335,8 @@ export class Presenter {
   destroy(): void {
     if (this.#idleCheckTimer !== undefined) nativeClearTimeout(this.#idleCheckTimer);
     if (this.#fadeTimer !== undefined) nativeClearTimeout(this.#fadeTimer);
+    if (this.#heartbeatTimer !== undefined) nativeClearTimeout(this.#heartbeatTimer);
+    this.#heartbeatTimer = undefined;
     this.#panel.teardown();
     this.#idleCheckTimer = undefined;
     this.#fadeTimer = undefined;
@@ -338,6 +360,8 @@ export class Presenter {
     this.#hud?.setAttribute(DATA_ON, GLOW_ON);
     // Base border persists in 'session' mode; 'busy' mode leaves it to the busy machine.
     if (this.#borderMode === BorderMode.SESSION) this.#glow?.setAttribute(DATA_ON, GLOW_ON);
+    this.#lastActivityMs = this.#now();
+    this.#startHeartbeat();
   }
 
   /**
@@ -347,6 +371,10 @@ export class Presenter {
   sessionEnd(): void {
     if (!this.#sessionActive) return;
     this.#sessionActive = false;
+    if (this.#heartbeatTimer !== undefined) {
+      nativeClearTimeout(this.#heartbeatTimer);
+      this.#heartbeatTimer = undefined;
+    }
     this.#hud?.setAttribute(DATA_ON, GLOW_OFF);
     if (this.#borderMode === BorderMode.SESSION) {
       this.#glow?.setAttribute(DATA_ON, GLOW_OFF);
@@ -451,7 +479,8 @@ export class Presenter {
     // Do NOT hide the HUD/log on idle — it persists for the whole session (sessionStart/End).
     this.#cursor?.setAttribute(DATA_ON, GLOW_OFF);
     this.setMode(PresenterMode.IDLE); // H2: clear the READING/ACTING chip when going quiet
-    if (this.#actLine !== undefined) this.#actLine.textContent = GlowPhase.IDLE;
+    // Keep the last action text on the strip; the heartbeat turns it into a live "idle · {dur}"
+    // clock once the quiet exceeds IDLE_NOTICE_MS (so a brief think doesn't blank the context).
     this.#fadeTimer = nativeSetTimeout(() => {
       this.#fadeTimer = undefined;
       if (this.#phase === GlowPhase.FADING) this.#phase = GlowPhase.IDLE;
@@ -460,7 +489,31 @@ export class Presenter {
 
   status(text: string): void {
     this.markActivity();
+    this.#lastActionText = text;
     if (this.#actLine !== undefined) this.#actLine.textContent = text;
+  }
+
+  /**
+   * Liveness heartbeat (native 1s timer — never rAF, so it ticks in a foreground tab regardless of
+   * agent activity). Once the agent has been quiet for IDLE_NOTICE_MS, the act strip shows a LIVE,
+   * growing "◌ idle · {duration} since last action" — the signal that was missing when a stopped
+   * agent left the panel frozen and indistinguishable from one still thinking.
+   */
+  #startHeartbeat(): void {
+    if (this.#heartbeatTimer !== undefined) nativeClearTimeout(this.#heartbeatTimer);
+    const tick = (): void => {
+      this.#tickLiveness();
+      this.#heartbeatTimer = nativeSetTimeout(tick, this.#heartbeatMs);
+    };
+    this.#heartbeatTimer = nativeSetTimeout(tick, this.#heartbeatMs);
+  }
+
+  #tickLiveness(): void {
+    if (!this.#sessionActive || this.#actLine === undefined) return;
+    const idleMs = this.#now() - this.#lastActivityMs;
+    if (idleMs < this.#idleNoticeMs) return; // still active (or a brief think) — keep the action text
+    const since = this.#lastActionText !== '' ? ` since last action` : '';
+    this.#actLine.textContent = `◌ idle · ${humanDuration(idleMs)}${since}`;
   }
 
   /**
