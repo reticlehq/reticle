@@ -3,6 +3,7 @@ import {
   CONTRACT_FILE_VERSION,
   ContractFileSchema,
   ContractReadError,
+  FLOW_NAME_PATTERN,
   IrisDir,
   type CapabilitiesContract,
 } from '@iris/protocol';
@@ -31,6 +32,14 @@ export function irisDirPaths(root: string): IrisDirPaths {
 
 export function flowPath(root: string, name: string): string {
   return join(root, IrisDir.FLOWS_SUBDIR, `${name}.json`);
+}
+
+/**
+ * A flow name must be a single safe path segment — rejects '../', '/', '\\', absolute, dotfiles.
+ * Guards every disk op before a path is ever joined, so a traversal name never escapes .iris/.
+ */
+export function isValidFlowName(name: string): boolean {
+  return FLOW_NAME_PATTERN.test(name) && !name.includes('..');
 }
 
 export function baselinePath(root: string, name: string): string {

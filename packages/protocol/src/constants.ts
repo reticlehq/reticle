@@ -31,6 +31,29 @@ export const ContractReadError = {
 } as const;
 export type ContractReadError = (typeof ContractReadError)[keyof typeof ContractReadError];
 
+/** M8 Stage A FLOWFMT: schema version stamped onto on-disk flow files (.iris/flows/<name>.json). */
+export const FLOW_FILE_VERSION = 1;
+
+/** How a flow step is anchored to the live DOM at replay time (semantic, never a volatile ref). */
+export const AnchorKind = {
+  TESTID: 'testid', // { kind:'testid', value }
+  ROLE: 'role', // { kind:'role', role, name? } — best-effort fallback
+  SIGNAL: 'signal', // { kind:'signal', name } — wait/assert anchors
+} as const;
+export type AnchorKind = (typeof AnchorKind)[keyof typeof AnchorKind];
+
+/** M8 FLOWFMT: structured failure codes for flow disk ops (returned, never thrown as free strings). */
+export const FlowErrorCode = {
+  INVALID_NAME: 'flow_invalid_name', // path traversal / illegal chars
+  NOT_FOUND: 'flow_not_found', // load of a missing flow
+  PARSE_FAILED: 'flow_parse_failed', // on-disk JSON failed zod validation
+  NO_RECORDING: 'flow_no_recording', // save with no compiled program by that name
+} as const;
+export type FlowErrorCode = (typeof FlowErrorCode)[keyof typeof FlowErrorCode];
+
+/** M8 FLOWFMT: a flow name must be a single safe path segment (no '/', '\\', '..', leading dot). */
+export const FLOW_NAME_PATTERN = /^[a-z0-9][a-z0-9-_]{0,63}$/i;
+
 /** Bounds for the per-session ring buffer (see plan/02-architecture.md). */
 export const RING_BUFFER_DEFAULTS = {
   MAX_EVENTS: 2000,

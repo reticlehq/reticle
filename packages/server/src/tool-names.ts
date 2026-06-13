@@ -25,5 +25,8 @@ export const IrisTool = {
   STATE: 'iris_state',
   CAPABILITIES: 'iris_capabilities',
   CONTRACT_SAVE: 'iris_contract_save',
+  FLOW_SAVE: 'iris_flow_save',
+  FLOW_LIST: 'iris_flow_list',
+  FLOW_LOAD: 'iris_flow_load',
 } as const;
 export type IrisTool = (typeof IrisTool)[keyof typeof IrisTool];

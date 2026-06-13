@@ -4,6 +4,7 @@ import { IRIS_DEFAULT_PORT, IrisDir } from '@iris/protocol';
 import { Bridge } from './bridge.js';
 import { BaselineStore } from './baselines.js';
 import { RecordingStore } from './recordings.js';
+import { FlowStore } from './flows.js';
 import { createNodeFileSystem } from './fs-port.js';
 import { createMcpServer } from './mcp.js';
 import { CdpRealInputProvider, LaunchedRealInputProvider } from './real-input.js';
@@ -22,6 +23,8 @@ export type { ToolDeps, ToolDef } from './tools.js';
 export { BaselineStore, normalizeLines, diffLines } from './baselines.js';
 export { RecordingStore } from './recordings.js';
 export type { RecordedStep, CompiledProgram } from './recordings.js';
+export { FlowStore, recordedStepToFlowStep } from './flows.js';
+export type { FlowResult, Clock } from './flows.js';
 export {
   ensureIrisDir,
   writeContract,
@@ -117,7 +120,8 @@ export async function start(options: StartOptions = {}): Promise<RunningServer> 
     const fs = createNodeFileSystem();
     const irisRoot = options.irisRoot ?? join(process.cwd(), IrisDir.ROOT);
     const now = options.now ?? ((): number => Date.now());
-    const deps = { sessions: bridge.sessions, baselines, recordings, fs, irisRoot, now };
+    const flows = new FlowStore(fs, irisRoot, { now });
+    const deps = { sessions: bridge.sessions, baselines, recordings, flows, fs, irisRoot, now };
     const server = createMcpServer(realInput !== undefined ? { ...deps, realInput } : deps);
     await server.connect(new StdioServerTransport());
     log('mcp_connected', { port });

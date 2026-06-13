@@ -5,6 +5,7 @@ import { TOOLS, type ToolDeps } from './tools.js';
 import { IrisTool } from './tool-names.js';
 import { BaselineStore } from './baselines.js';
 import { RecordingStore } from './recordings.js';
+import { FlowStore } from './flows.js';
 import type { Session, SessionManager } from './session.js';
 import { irisDirPaths, readContract, writeContract, type ReadContractResult } from './iris-dir.js';
 import type { FileSystemPort } from './fs-port.js';
@@ -64,6 +65,7 @@ function fakeDeps(fs: FileSystemPort): ToolDeps {
     sessions: sessions as SessionManager,
     baselines: new BaselineStore(),
     recordings: new RecordingStore(),
+    flows: new FlowStore(fs, ROOT, { now: () => FROZEN }),
     fs,
     irisRoot: ROOT,
     now: () => FROZEN,

@@ -21,12 +21,16 @@ import { matchNet, matchConsole } from './event-filters.js';
 import { healthEnvelope, refuseIfThrottled } from './session-health.js';
 import { asString, asNumber, asRecord, parseInteractive } from './tools-helpers.js';
 import type { FileSystemPort } from './fs-port.js';
+import type { FlowStore } from './flows.js';
 import { CONTRACT_TOOLS } from './contract-tools.js';
+import { FLOW_TOOLS } from './flow-tools.js';
 
 export interface ToolDeps {
   sessions: SessionManager;
   baselines: BaselineStore;
   recordings: RecordingStore;
+  /** M8 Stage A FLOWFMT: on-disk anchored-flow store (.iris/flows/). */
+  flows: FlowStore;
   /** R1: optional native-input provider. undefined ⇒ everything stays synthetic. */
   realInput?: RealInputProvider;
   /** M8 Stage A: injected filesystem seam (tests pass a fake/temp-dir adapter). */
@@ -579,4 +583,6 @@ export const TOOLS: ToolDef[] = [
   },
   // M8 Stage A: iris_capabilities (live | fromDisk) + iris_contract_save. See contract-tools.ts.
   ...CONTRACT_TOOLS,
+  // M8 Stage A FLOWFMT: iris_flow_save / iris_flow_list / iris_flow_load. See flow-tools.ts.
+  ...FLOW_TOOLS,
 ];

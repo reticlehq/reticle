@@ -7,6 +7,7 @@ import { IrisTool } from './tool-names.js';
 import { BaselineStore } from './baselines.js';
 import { createNodeFileSystem } from './fs-port.js';
 import { RecordingStore } from './recordings.js';
+import { FlowStore } from './flows.js';
 import {
   DriveError,
   boxCenter,
@@ -97,6 +98,7 @@ function depsWith(realInput: RealInputProvider | undefined, state: { actCalls: n
     sessions: sessions as SessionManager,
     baselines: new BaselineStore(),
     recordings: new RecordingStore(),
+    flows: new FlowStore(createNodeFileSystem(), '/tmp/iris-test/.iris', { now: () => 0 }),
     fs: createNodeFileSystem(),
     irisRoot: '/tmp/iris-test/.iris',
     now: () => 0,

@@ -1,3 +1,5 @@
+import type { FlowExpect } from '@iris/protocol';
+
 /** One captured agent action, normalized for replay (G6). */
 export interface RecordedStep {
   /** IrisTool.ACT | IrisTool.ACT_SEQUENCE */
@@ -6,6 +8,8 @@ export interface RecordedStep {
   args: Record<string, unknown>;
   /** false if any ref could not be normalized to a testid (replay only valid in-session). */
   stable: boolean;
+  /** M8 FLOWFMT: optional post-condition annotation carried into the on-disk flow's expect. */
+  expect?: FlowExpect;
 }
 
 interface ActiveRecording {
