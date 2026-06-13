@@ -16,6 +16,8 @@ export interface IrisAdapter {
   identify: (el: Element) => ComponentInfo | null;
   /** Best-effort: read a component's hook state for a DOM element (G2). */
   readState?: (el: Element) => unknown;
+  /** Best-effort (F3): does the element declare framework enter/leave handlers synthetic hover may not fire? */
+  hasHoverHandlers?: (el: Element) => boolean;
 }
 
 // Persist on a global so the registry survives HMR module re-evaluation (otherwise the
@@ -45,6 +47,18 @@ export function readComponentState(el: Element): unknown {
     if (state !== undefined) return state;
   }
   return undefined;
+}
+
+/**
+ * F3: true if any installed adapter reports framework enter/leave hover handlers on the element.
+ * No-op-safe: returns false when no adapter is installed or none implements the probe.
+ */
+export function elementHasHoverHandlers(el: Element): boolean {
+  for (const adapter of adapters) {
+    if (adapter.hasHoverHandlers === undefined) continue;
+    if (adapter.hasHoverHandlers(el)) return true;
+  }
+  return false;
 }
 
 export function adapterNames(): string[] {

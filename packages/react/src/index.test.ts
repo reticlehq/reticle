@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { identify, readState } from './index.js';
+import { identify, readState, hasHoverHandlers } from './index.js';
 
 interface HookStateResult {
   component?: string;
@@ -108,5 +108,38 @@ describe('react adapter readState (G2 hook walk)', () => {
 
     const result = readState(el) as HookStateResult;
     expect(result.hooks.length).toBeLessThanOrEqual(100);
+  });
+});
+
+describe('react adapter hasHoverHandlers (F3)', () => {
+  function withProps(props: unknown): Element {
+    const el = document.createElement('button');
+    const hostFiber = { return: null, type: 'button', elementType: 'button', memoizedProps: props };
+    (el as unknown as Record<string, unknown>)['__reactFiber$test'] = hostFiber;
+    return el;
+  }
+
+  const handlerKeys = ['onMouseEnter', 'onMouseLeave', 'onPointerEnter', 'onPointerLeave'] as const;
+
+  for (const key of handlerKeys) {
+    it(`returns true when host props declare ${key}`, () => {
+      expect(hasHoverHandlers(withProps({ [key]: () => undefined }))).toBe(true);
+    });
+  }
+
+  it('returns false when only an unrelated handler is present', () => {
+    expect(hasHoverHandlers(withProps({ onClick: () => undefined }))).toBe(false);
+  });
+
+  it('returns false for a plain element with no fiber', () => {
+    expect(hasHoverHandlers(document.createElement('div'))).toBe(false);
+  });
+
+  it('returns false (fail-soft) when memoizedProps is null', () => {
+    expect(hasHoverHandlers(withProps(null))).toBe(false);
+  });
+
+  it('returns false when a hover key is present but not a function', () => {
+    expect(hasHoverHandlers(withProps({ onMouseEnter: 'nope' }))).toBe(false);
   });
 });

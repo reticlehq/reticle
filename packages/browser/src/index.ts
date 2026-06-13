@@ -19,6 +19,7 @@ export {
   registerAdapter,
   identifyComponent,
   readComponentState,
+  elementHasHoverHandlers,
   adapterNames,
 } from './adapters.js';
 export type { IrisAdapter, ComponentInfo, ComponentSource } from './adapters.js';

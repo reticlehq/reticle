@@ -17,6 +17,7 @@ interface Fiber {
   elementType: unknown;
   _debugSource?: DebugSource;
   memoizedState?: unknown; // for a function component this is the head of the hook list
+  memoizedProps?: unknown; // host fiber props incl. JSX event handlers
 }
 
 const FIBER_PREFIXES = ['__reactFiber$', '__reactInternalInstance$'];
@@ -142,11 +143,31 @@ export function readState(el: Element): unknown {
   return { component: name, hooks };
 }
 
+const HOVER_HANDLER_KEYS = [
+  'onMouseEnter',
+  'onMouseLeave',
+  'onPointerEnter',
+  'onPointerLeave',
+] as const;
+
+/**
+ * F3: true if the element's host fiber declares React enter/leave handlers. Synthetic dispatchEvent
+ * does not reliably trigger React's native enter/leave synthesis (no hit-testing), so callers warn.
+ * Fail soft: any unexpected fiber shape returns false.
+ */
+export function hasHoverHandlers(el: Element): boolean {
+  const fiber = getFiber(el);
+  const props = fiber?.memoizedProps;
+  if (typeof props !== 'object' || props === null) return false;
+  const p = props as Record<string, unknown>;
+  return HOVER_HANDLER_KEYS.some((k) => typeof p[k] === 'function');
+}
+
 let installed = false;
 
 /** Register the React adapter so `iris.inspect` returns component stack + source file. */
 export function install(): void {
   if (installed) return;
   installed = true;
-  registerAdapter({ name: 'react', identify, readState });
+  registerAdapter({ name: 'react', identify, readState, hasHoverHandlers });
 }

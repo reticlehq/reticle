@@ -1,8 +1,12 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { IrisCommand } from '@iris/protocol';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { ActionWarning, IrisCommand } from '@iris/protocol';
 import { executeAction, executeSequence } from './actions.js';
 import { createCommandRegistry } from './commands.js';
+import { registerAdapter, type IrisAdapter } from './adapters.js';
 import { refs } from './refs.js';
+
+const adapters = ((globalThis as unknown as { __irisAdapters?: IrisAdapter[] }).__irisAdapters ??=
+  []);
 
 function refOf(selector: string): string {
   const el = document.querySelector(selector);
@@ -163,6 +167,68 @@ describe('command registry passthrough', () => {
     if (handler === undefined) throw new Error('no act handler');
     const out = (await handler({ ref, action: 'click' })) as { effect?: unknown };
     expect(out.effect).toBeDefined();
+  });
+});
+
+describe('action result: hover enter/leave warning (F3)', () => {
+  beforeEach(() => {
+    adapters.length = 0;
+  });
+  afterEach(() => {
+    adapters.length = 0;
+  });
+
+  it('warns when the adapter reports the hover target has enter/leave handlers', async () => {
+    registerAdapter({
+      name: 'mock-hover',
+      identify: () => null,
+      hasHoverHandlers: () => true,
+    });
+    document.body.innerHTML = '<button>x</button>';
+    const r = await executeAction(refOf('button'), 'hover');
+    expect(r.warning).toBe(ActionWarning.HOVER_NATIVE_ENTER_LEAVE);
+  });
+
+  it('no warning when the adapter reports no hover handlers', async () => {
+    registerAdapter({
+      name: 'mock-hover',
+      identify: () => null,
+      hasHoverHandlers: () => false,
+    });
+    document.body.innerHTML = '<button>x</button>';
+    const r = await executeAction(refOf('button'), 'hover');
+    expect(r.warning).toBeUndefined();
+  });
+
+  it('no warning for a non-hover action even when handlers are present', async () => {
+    registerAdapter({
+      name: 'mock-hover',
+      identify: () => null,
+      hasHoverHandlers: () => true,
+    });
+    document.body.innerHTML = '<button>x</button>';
+    const r = await executeAction(refOf('button'), 'click');
+    expect(r.warning).toBeUndefined();
+  });
+
+  it('no warning (no-op-safe) when no adapter is installed', async () => {
+    document.body.innerHTML = '<button>x</button>';
+    const r = await executeAction(refOf('button'), 'hover');
+    expect(r.warning).toBeUndefined();
+  });
+
+  it('improved hover dispatches a bubbling mouseover with relatedTarget', async () => {
+    document.body.innerHTML = '<button>x</button>';
+    const button = document.querySelector('button') as HTMLButtonElement;
+    let seen = false;
+    let related: EventTarget | null = null;
+    document.body.addEventListener('mouseover', (e) => {
+      seen = true;
+      related = e.relatedTarget;
+    });
+    await executeAction(refs.refFor(button), 'hover');
+    expect(seen).toBe(true);
+    expect(related).not.toBeNull();
   });
 });
 

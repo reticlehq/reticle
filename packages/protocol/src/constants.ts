@@ -81,6 +81,13 @@ export type HealthReason = (typeof HealthReason)[keyof typeof HealthReason];
 export const THROTTLED_WARNING =
   'tab throttled; timer/rAF/pointer gestures may silently no-op — refocus before driving';
 
+/** Best-effort caveats attached to action results so the agent can interpret a no-op (F3). */
+export const ActionWarning = {
+  HOVER_NATIVE_ENTER_LEAVE:
+    'target has enter/leave handlers; synthetic hover may not trigger them — expect no state change',
+} as const;
+export type ActionWarning = (typeof ActionWarning)[keyof typeof ActionWarning];
+
 /** Actions the executor can perform against a ref (plan/03 + plan/05). */
 export const ActionType = {
   CLICK: 'click',
