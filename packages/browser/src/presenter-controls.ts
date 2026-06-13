@@ -22,6 +22,11 @@ const CONTROL_LABEL = {
 const INPUT_PLACEHOLDER = 'Tell the agent something…';
 const PAUSED_BADGE_TEXT = 'PAUSED';
 const ENDED_BANNER_TEXT = 'Session ended';
+const COPY_LABEL = 'Copy run';
+const EXPORT_LABEL = 'Export';
+const COPIED_TEXT = 'Copied ✓';
+/** Download filename for the exported run state. */
+const RUN_FILENAME = 'iris-run.json';
 /** Border fade-out delay after a session ends (native timer; presenter-only tunable). */
 export const ENDED_FADE_MS = 4000;
 
@@ -63,6 +68,11 @@ export const CONTROLS_CSS = `
 [data-iris-hud] .iris-banner{display:none;flex:none;padding:8px 15px;color:var(--iris-accent);
   font-size:11.5px;font-weight:500;border-bottom:1px solid var(--iris-line2);background:var(--iris-accent-soft);}
 [data-iris-overlay][data-iris-state="ended"] [data-iris-banner]{display:block;}
+/* Export row: hidden during a live session; revealed when ended so the run can be copied/saved. */
+[data-iris-hud] .iris-export{display:none;align-items:center;gap:8px;margin-top:9px;}
+[data-iris-overlay][data-iris-state="ended"] [data-iris-hud] .iris-export{display:flex;}
+[data-iris-hud] .iris-export-msg{color:var(--iris-ok);font-size:11px;opacity:0;transition:opacity .15s;}
+[data-iris-hud] .iris-export-msg[data-show="1"]{opacity:1;}
 [data-iris-overlay][data-iris-state="paused"] [data-iris-glow][data-on="1"]{animation:none;
   box-shadow:inset 0 0 0 3px rgba(246,180,76,.9),inset 0 0 30px 6px rgba(246,180,76,.4);}
 [data-iris-overlay][data-iris-state="ended"] [data-iris-glow][data-on="1"]{animation:none;
@@ -79,7 +89,7 @@ export const CONTROLS_BANNER_HTML = `<div data-iris-banner class="iris-banner">$
 const SEND_ICON = `<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>`;
 
 /** Footer markup: a rounded composer pill (input + icon Send), appended after the log div. */
-export const CONTROLS_FOOT_HTML = `<div data-iris-foot><div class="iris-composer"><input data-iris-input class="iris-msg" type="text" placeholder="${INPUT_PLACEHOLDER}" /><button type="button" data-iris-send class="iris-send" aria-label="${CONTROL_LABEL.SEND}">${SEND_ICON}</button></div></div>`;
+export const CONTROLS_FOOT_HTML = `<div data-iris-foot><div class="iris-composer"><input data-iris-input class="iris-msg" type="text" placeholder="${INPUT_PLACEHOLDER}" /><button type="button" data-iris-send class="iris-send" aria-label="${CONTROL_LABEL.SEND}">${SEND_ICON}</button></div><div class="iris-export"><button type="button" data-iris-copy class="iris-ctl">${COPY_LABEL}</button><button type="button" data-iris-export class="iris-ctl">${EXPORT_LABEL}</button><span data-iris-export-msg class="iris-export-msg"></span></div></div>`;
 
 /** Element refs of the control surface, queried once after the markup is in the DOM. */
 export interface ControlRefs {
@@ -88,6 +98,9 @@ export interface ControlRefs {
   input: HTMLInputElement | undefined;
   sendBtn: HTMLButtonElement | undefined;
   banner: HTMLElement | undefined;
+  copyBtn: HTMLButtonElement | undefined;
+  exportBtn: HTMLButtonElement | undefined;
+  exportMsg: HTMLElement | undefined;
 }
 
 export function queryControlRefs(root: HTMLElement): ControlRefs {
@@ -97,6 +110,9 @@ export function queryControlRefs(root: HTMLElement): ControlRefs {
     input: root.querySelector<HTMLInputElement>('[data-iris-input]') ?? undefined,
     sendBtn: root.querySelector<HTMLButtonElement>('[data-iris-send]') ?? undefined,
     banner: root.querySelector<HTMLElement>('[data-iris-banner]') ?? undefined,
+    copyBtn: root.querySelector<HTMLButtonElement>('[data-iris-copy]') ?? undefined,
+    exportBtn: root.querySelector<HTMLButtonElement>('[data-iris-export]') ?? undefined,
+    exportMsg: root.querySelector<HTMLElement>('[data-iris-export-msg]') ?? undefined,
   };
 }
 
@@ -108,6 +124,8 @@ export interface ControlPanelHost {
   logHuman: (text: string) => void;
   /** Injected ended-border fade delay (native timer). */
   endedFadeMs: number;
+  /** The exported run state for the Copy/Export buttons (serialized to JSON). */
+  runState: () => unknown;
 }
 
 /**
@@ -123,12 +141,14 @@ export class ControlPanel {
     input: undefined,
     sendBtn: undefined,
     banner: undefined,
+    copyBtn: undefined,
+    exportBtn: undefined,
+    exportMsg: undefined,
   };
   #state: SessionState = SessionState.ACTIVE;
   #fadeTimer: number | undefined;
   #root: HTMLElement | undefined;
   #glow: HTMLElement | undefined;
-  #hud: HTMLElement | undefined;
   readonly #host: ControlPanelHost;
 
   constructor(host: ControlPanelHost) {
@@ -143,7 +163,6 @@ export class ControlPanel {
   mount(root: HTMLElement, glow: HTMLElement | undefined): void {
     this.#root = root;
     this.#glow = glow;
-    this.#hud = root.querySelector<HTMLElement>('[data-iris-hud]') ?? undefined;
     this.#refs = queryControlRefs(root);
     this.#refs.pauseBtn?.addEventListener('click', () => this.#onPauseToggle());
     this.#refs.endBtn?.addEventListener('click', () => this.#onEnd());
@@ -151,7 +170,36 @@ export class ControlPanel {
     this.#refs.input?.addEventListener('keydown', (e) => {
       if (e instanceof KeyboardEvent && e.key === 'Enter') this.#onSend();
     });
+    this.#refs.copyBtn?.addEventListener('click', () => this.#onCopy());
+    this.#refs.exportBtn?.addEventListener('click', () => this.#onExport());
     this.setState(SessionState.ACTIVE);
+  }
+
+  /** Serialize the run state to pretty JSON for Copy/Export. */
+  #runJson(): string {
+    return JSON.stringify(this.#host.runState(), null, 2);
+  }
+
+  /** Copy the run state to the clipboard (with a brief "Copied ✓" flash). */
+  #onCopy(): void {
+    void navigator.clipboard?.writeText(this.#runJson());
+    const msg = this.#refs.exportMsg;
+    if (msg !== undefined) {
+      msg.textContent = COPIED_TEXT;
+      msg.setAttribute('data-show', '1');
+      nativeSetTimeout(() => msg.setAttribute('data-show', '0'), 1600);
+    }
+  }
+
+  /** Download the run state as iris-run.json. */
+  #onExport(): void {
+    const blob = new Blob([this.#runJson()], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = RUN_FILENAME;
+    a.click();
+    URL.revokeObjectURL(url);
   }
 
   /** Clear any pending ended-fade timer (called from Presenter.destroy). */
@@ -213,13 +261,11 @@ export class ControlPanel {
       refs.banner.textContent = `${ENDED_BANNER_TEXT}${summary}`;
     }
     if (ended) {
-      // Show "Session ended" briefly, then CLOSE the panel — fade out the card AND the page
-      // border together so the surface fully clears once testing is over.
+      // End the run: fade out the page BORDER (testing is over) but KEEP the panel so the human can
+      // read the result and Copy/Export the run state. The composer disables; the export row reveals.
       const glow = this.#glow;
-      const hud = this.#hud;
       this.#fadeTimer = nativeSetTimeout(() => {
         glow?.setAttribute(DATA_ON, GLOW_OFF);
-        hud?.setAttribute(DATA_ON, GLOW_OFF);
       }, this.#host.endedFadeMs);
     }
   }

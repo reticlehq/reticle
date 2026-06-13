@@ -507,6 +507,8 @@ export const IrisCommand = {
   STATE_READ: 'state_read',
   /** N5 SCROLLFIND: scroll a ref's nearest scrollable container by ~a viewport (virtualized lists). */
   SCROLL: 'scroll',
+  /** Session lifecycle: agent tunes the presenter session (e.g. idle-end timeout) for the app's needs. */
+  SESSION_CONFIG: 'session_config',
   /**
    * Live-control: bridge → browser. Pushes the current session state to the panel so an
    * AGENT-driven pause/end keeps the presenter in sync. `args: { state, text? }`.

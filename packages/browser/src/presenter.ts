@@ -4,6 +4,7 @@ import { actionVerb } from './presenter-verbs.js';
 import { nativeSetTimeout, nativeClearTimeout, nativeNow } from './native-timers.js';
 import {
   LOG_KIND,
+  LOG_RESULT,
   LOG_CSS,
   CHIP_LABEL,
   DATA_IRIS_LOG,
@@ -16,6 +17,26 @@ import {
   type LogResult,
   type LogHandle,
 } from './presenter-log.js';
+import { getCapabilities, type Capabilities } from './capabilities.js';
+
+/** The in-page run-state export (Copy/Export buttons). The full event ring-buffer is server-side. */
+export interface PresenterRunState {
+  session: string;
+  url: string;
+  state: SessionState;
+  startedMs: number;
+  durationMs: number;
+  counts: {
+    reads: number;
+    acts: number;
+    narrations: number;
+    human: number;
+    passes: number;
+    fails: number;
+  };
+  capabilities: Capabilities;
+  log: { at: number; kind: LogKind; text: string; result?: LogResult }[];
+}
 import {
   CONTROLS_CSS,
   CONTROLS_HEAD_HTML,
@@ -166,6 +187,10 @@ export interface PresenterOptions {
   heartbeatMs?: number;
   /** Quiet (ms) after which the act strip shows the live "idle · {duration}" clock. Test-overridable. */
   idleNoticeMs?: number;
+  /** Quiet (ms) after which the session AUTO-ENDS (glow off, panel kept). Default 5min; agent-tunable. */
+  idleEndMs?: number;
+  /** Session id, surfaced in the exported run state. */
+  sessionId?: string;
   /** Deprecated: accepted for source compat; the live log no longer auto-expires. */
   narrationDwellMs?: number;
   /**
@@ -205,6 +230,11 @@ const HEARTBEAT_MS = 1000;
  * (the killer gap: a frozen panel used to look identical whether the agent paused or stopped).
  */
 const IDLE_NOTICE_MS = 4000;
+/** Default session-idle-end: after this much quiet the session auto-ends (glow off, panel persists
+ *  for analysis). Agent-tweakable via iris_session { idleEndMs } for the app's needs. */
+const IDLE_END_MS = 300_000;
+/** Floor for a tweaked idle-end so the agent can't set a uselessly tiny window. */
+const IDLE_END_MIN_MS = 5_000;
 /** Must match the glow CSS opacity transition (.25s) so phase reaches idle after the fade paints. */
 const GLOW_FADE_MS = 250;
 const GLOW_ON = '1';
@@ -238,6 +268,12 @@ export class Presenter {
   /** Liveness: the most recent action text + a 1s ticker that ages it into an "idle · {dur}" clock. */
   #lastActionText = '';
   #heartbeatTimer: number | undefined;
+  /** Session lifecycle: idle-end window (tweakable), session id, start/end cursors, structured run log. */
+  #idleEndMs: number;
+  readonly #sessionId: string;
+  #startMs: number | undefined;
+  #endMs: number | undefined;
+  readonly #runLog: { at: number; kind: LogKind; text: string; result?: LogResult }[] = [];
   /** Tracks sessionStart/sessionEnd so both are idempotent (no strobe / no spurious off-write). */
   #sessionActive = false;
 
@@ -258,6 +294,8 @@ export class Presenter {
     this.#glowFadeMs = options.glowFadeMs ?? GLOW_FADE_MS;
     this.#heartbeatMs = options.heartbeatMs ?? HEARTBEAT_MS;
     this.#idleNoticeMs = options.idleNoticeMs ?? IDLE_NOTICE_MS;
+    this.#idleEndMs = options.idleEndMs ?? IDLE_END_MS;
+    this.#sessionId = options.sessionId ?? '';
     this.#borderMode = options.border ?? DEFAULT_BORDER_MODE;
     this.#logMax = clampLogMax(options.logMax);
     this.#onControl = options.onControl;
@@ -267,6 +305,7 @@ export class Presenter {
         this.log(LOG_KIND.HUMAN, HUMAN_ROW_PREFIX + text);
       },
       endedFadeMs: options.endedFadeMs ?? ENDED_FADE_MS,
+      runState: () => this.runState(),
     });
   }
 
@@ -360,13 +399,33 @@ export class Presenter {
    * sessionEnd(). Idempotent, and a no-op when unmounted or in 'busy' border mode.
    */
   sessionStart(): void {
+    // Returning agent activity after the session ended (idle or explicit) revives it as a fresh run.
+    if (this.state === SessionState.ENDED) {
+      this.#revive();
+      return;
+    }
     if (this.#sessionActive) return;
     this.#sessionActive = true;
-    // The activity log/HUD persists the WHOLE session (connect→disconnect), like the border —
-    // it never fades on idle. (Independent of border mode so the log is always there.)
+    this.#startMs ??= this.#now();
+    this.#endMs = undefined;
+    this.#showSession();
+    this.#lastActivityMs = this.#now();
+    this.#startHeartbeat();
+  }
+
+  /** Turn the base border (session mode) + the HUD/log on — the visible "session is live" state. */
+  #showSession(): void {
+    // The activity log/HUD persists the WHOLE session, like the border — it never fades on idle.
     this.#hud?.setAttribute(DATA_ON, GLOW_ON);
     // Base border persists in 'session' mode; 'busy' mode leaves it to the busy machine.
     if (this.#borderMode === BorderMode.SESSION) this.#glow?.setAttribute(DATA_ON, GLOW_ON);
+  }
+
+  /** Revive after an ended session (new agent activity): clear the ended state + glow back on. */
+  #revive(): void {
+    this.#panel.setState(SessionState.ACTIVE);
+    this.#endMs = undefined;
+    this.#showSession();
     this.#lastActivityMs = this.#now();
     this.#startHeartbeat();
   }
@@ -517,10 +576,60 @@ export class Presenter {
 
   #tickLiveness(): void {
     if (!this.#sessionActive || this.#actLine === undefined) return;
+    if (this.state === SessionState.ENDED) return; // already ended — leave the summary
     const idleMs = this.#now() - this.#lastActivityMs;
+    if (idleMs >= this.#idleEndMs) {
+      this.#endIdle(idleMs); // crossed the idle-end window → auto-end (glow off, panel kept)
+      return;
+    }
     if (idleMs < this.#idleNoticeMs) return; // still active (or a brief think) — keep the action text
     const since = this.#lastActionText !== '' ? ` since last action` : '';
     this.#actLine.textContent = `◌ idle · ${humanDuration(idleMs)}${since}`;
+  }
+
+  /** Auto-end after the idle window: stamp the end, drive the panel to ENDED, stop the heartbeat. */
+  #endIdle(idleMs: number): void {
+    this.#endMs = this.#now();
+    this.#panel.setState(SessionState.ENDED, `idle ${humanDuration(idleMs)}`);
+    if (this.#heartbeatTimer !== undefined) {
+      nativeClearTimeout(this.#heartbeatTimer);
+      this.#heartbeatTimer = undefined;
+    }
+  }
+
+  /** Agent-tunable idle-end window (iris_session). Floored so it can't be set uselessly small. */
+  setIdleEndMs(ms: number): void {
+    if (!Number.isFinite(ms)) return;
+    this.#idleEndMs = Math.max(IDLE_END_MIN_MS, Math.floor(ms));
+  }
+
+  /**
+   * The exported "run state" for the Copy/Export buttons — everything the page holds about this
+   * run: session id, url, duration, capability surface, per-kind counts, and the full activity log.
+   * (The full network/console ring-buffer lives server-side; this is the in-page run summary.)
+   */
+  runState(): PresenterRunState {
+    const now = this.#now();
+    const start = this.#startMs ?? now;
+    const counts = { reads: 0, acts: 0, narrations: 0, human: 0, passes: 0, fails: 0 };
+    for (const e of this.#runLog) {
+      if (e.kind === LOG_KIND.READ) counts.reads += 1;
+      else if (e.kind === LOG_KIND.ACT) counts.acts += 1;
+      else if (e.kind === LOG_KIND.NARRATION) counts.narrations += 1;
+      else if (e.kind === LOG_KIND.HUMAN) counts.human += 1;
+      if (e.result === LOG_RESULT.PASS) counts.passes += 1;
+      else if (e.result === LOG_RESULT.FAIL) counts.fails += 1;
+    }
+    return {
+      session: this.#sessionId,
+      url: typeof location === 'undefined' ? '' : location.href,
+      state: this.state,
+      startedMs: start,
+      durationMs: Math.max(0, (this.#endMs ?? now) - start),
+      counts,
+      capabilities: getCapabilities(),
+      log: this.#runLog.map((e) => ({ ...e })),
+    };
   }
 
   /**
@@ -536,12 +645,26 @@ export class Presenter {
     if (trimmed.length === 0) return undefined;
 
     this.#logBaseMs ??= ms;
+    // Structured run-log entry (mirrors the DOM row) for the exported run state, capped like the DOM.
+    const entry: { at: number; kind: LogKind; text: string; result?: LogResult } =
+      result !== undefined
+        ? { at: ms - this.#logBaseMs, kind, text: trimmed, result }
+        : { at: ms - this.#logBaseMs, kind, text: trimmed };
+    this.#runLog.push(entry);
+    while (this.#runLog.length > this.#logMax) this.#runLog.shift();
+
     const ts = formatElapsed(ms - this.#logBaseMs);
     const handle = appendLogRow(this.#log, kind, trimmed, ts, this.#logMax);
     if (result !== undefined) handle.result(result);
     // Feed the minimised-bar live line so the latest activity always shows when collapsed.
     if (this.#liveLine !== undefined) this.#liveLine.textContent = trimmed;
-    return handle;
+    // Wrap the handle so a later outcome stamp updates BOTH the DOM glyph and the run-log entry.
+    return {
+      result: (r: LogResult): void => {
+        handle.result(r);
+        entry.result = r;
+      },
+    };
   }
 
   /** Back-compat: narration appends to the live log (append-only, never overwrites). */

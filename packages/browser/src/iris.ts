@@ -64,6 +64,8 @@ export interface IrisConnectOptions {
   recorder?: boolean;
   /** Live-control: overridable ended-border fade delay (native timer). Default 4000. */
   endedFadeMs?: number;
+  /** Session auto-end after this much agent idle (presenter). Default 5min; agent-tunable via iris_session. */
+  idleEndMs?: number;
 }
 
 function str(value: unknown, fallback = ''): string {
@@ -143,6 +145,8 @@ export class Iris {
       if (options.border !== undefined) presenterOptions.border = options.border;
       if (options.logMax !== undefined) presenterOptions.logMax = options.logMax;
       if (options.endedFadeMs !== undefined) presenterOptions.endedFadeMs = options.endedFadeMs;
+      if (options.idleEndMs !== undefined) presenterOptions.idleEndMs = options.idleEndMs;
+      presenterOptions.sessionId = this.#session;
       // The panel calls this when the human pauses/resumes/ends or sends a message. We emit a
       // HUMAN_CONTROL event over the existing transport; #emit stamps `t` from the elapsed clock.
       presenterOptions.onControl = (intent) =>
@@ -241,6 +245,13 @@ export class Iris {
       this.#presenter?.sessionStart(); // first agent activity → reveal the glow + panel
       this.#presenter?.narrate(str(command.args['text']), str(command.args['level'], 'info'));
       return { ok: true, result: { shown: this.#presenter !== undefined } };
+    }
+
+    // SESSION_CONFIG: the agent tunes the session for the app (currently the idle-end window).
+    if (command.name === IrisCommand.SESSION_CONFIG) {
+      const idleEndMs = command.args['idleEndMs'];
+      if (typeof idleEndMs === 'number') this.#presenter?.setIdleEndMs(idleEndMs);
+      return { ok: true, result: { applied: this.#presenter !== undefined, idleEndMs } };
     }
 
     // PRESENTER: bridge → browser server-push so an AGENT-driven pause/end mirrors onto the panel.

@@ -307,6 +307,62 @@ describe('presenter v2 activity log', () => {
     p.destroy();
   });
 
+  it('L13c idle-end: a quiet session auto-ends, keeps the panel, and exposes the run state', async () => {
+    document.body.innerHTML = '';
+    let clock = 0;
+    const p = new Presenter({
+      now: () => clock,
+      heartbeatMs: 8,
+      idleNoticeMs: 20,
+      idleEndMs: 100,
+      sessionId: 'demo',
+    });
+    p.mount();
+    p.sessionStart();
+    p.log('read', 'Finding [testid=row-3700]', 'pass');
+    expect(p.state).toBe('active');
+
+    clock = 5000; // far past idleEndMs → the heartbeat should auto-end the session
+    expect(await until(() => p.state === 'ended', 800)).toBe(true);
+
+    // The panel (HUD/log) PERSISTS for analysis (only the border fades).
+    expect(document.querySelector('[data-iris-hud]')?.getAttribute('data-on')).toBe('1');
+    expect(document.querySelector('div[data-iris-overlay]')?.getAttribute('data-iris-state')).toBe(
+      'ended',
+    );
+
+    // The run state is exportable and reflects what happened.
+    const rs = p.runState();
+    expect(rs.session).toBe('demo');
+    expect(rs.state).toBe('ended');
+    expect(rs.counts.reads).toBeGreaterThanOrEqual(1);
+    expect(rs.counts.passes).toBeGreaterThanOrEqual(1);
+    expect(rs.log.some((e) => e.text.includes('row-3700'))).toBe(true);
+
+    // A fresh agent action revives the session (glow back on).
+    clock = 5200;
+    p.sessionStart();
+    expect(p.state).toBe('active');
+    expect(document.querySelector('[data-iris-glow]')?.getAttribute('data-on')).toBe('1');
+    p.destroy();
+  });
+
+  it('L13d setIdleEndMs is floored (agent can not set a uselessly tiny window)', () => {
+    document.body.innerHTML = '';
+    let clock = 0;
+    const p = new Presenter({ now: () => clock, heartbeatMs: 8, idleEndMs: 100, sessionId: 's' });
+    p.mount();
+    p.setIdleEndMs(1); // below the floor
+    p.sessionStart();
+    p.status('x');
+    clock = 2000; // 2s quiet — above the tiny value we tried to set, but below the 5s floor
+    // Give the heartbeat a few ticks; it must NOT have ended (floor kept the window ≥ 5s).
+    return until(() => false, 40).then(() => {
+      expect(p.state).toBe('active');
+      p.destroy();
+    });
+  });
+
   it('L14 log text never leaks into buildSnapshot()', () => {
     document.body.innerHTML = '<button>Save</button>';
     const p = new Presenter({});

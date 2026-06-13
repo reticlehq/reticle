@@ -162,15 +162,17 @@ describe('presenter-controls / live-control panel', () => {
     expect(onControl.mock.calls.length).toBe(count);
   });
 
-  it('12 ending fades the page border AND closes the panel after endedFadeMs', async () => {
+  it('12 ending fades the page border but KEEPS the panel for analysis (+ export row)', async () => {
     mount({ endedFadeMs: 5 });
     click(endBtn());
-    // before the delay: the panel is still up showing "Session ended"
     expect(q('[data-iris-hud]')?.getAttribute('data-on')).toBe('1');
     await wait(20);
     await flush();
-    expect(q('[data-iris-glow]')?.getAttribute('data-on')).toBe('0'); // border cleared
-    expect(q('[data-iris-hud]')?.getAttribute('data-on')).toBe('0'); // panel closed
+    expect(q('[data-iris-glow]')?.getAttribute('data-on')).toBe('0'); // border cleared (testing over)
+    expect(q('[data-iris-hud]')?.getAttribute('data-on')).toBe('1'); // panel PERSISTS for analysis
+    expect(stateAttr()).toBe('ended'); // → CSS reveals the Copy/Export row
+    expect(q('[data-iris-copy]')).not.toBeNull();
+    expect(q('[data-iris-export]')).not.toBeNull();
   });
 
   it('13 setState(paused) updates panel without emitting (server push)', () => {

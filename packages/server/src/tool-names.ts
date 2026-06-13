@@ -47,6 +47,8 @@ export const IrisTool = {
   CRAWL: 'iris_crawl',
   /** N5 SCROLLFIND: scroll a virtualized list until a queried row mounts, then return it. */
   SCROLL_TO: 'iris_scroll_to',
+  /** Session lifecycle: tune the presenter session (e.g. idle-end window) for the app's needs. */
+  SESSION: 'iris_session',
   /** Live-control: end the session (→ ended + push PRESENTER). Handlers live in the tools facet. */
   END_SESSION: 'iris_end_session',
   /** Live-control: clear a pause (→ active). */
