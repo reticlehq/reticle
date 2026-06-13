@@ -1,4 +1,4 @@
-// Cut vertical 9:16 (1080x1920) reels of the explainers: video as a rounded band on brand bg.
+// Cut vertical 9:16 (1080x1920) reels of all demos: video as a rounded band on brand bg.
 // Run: node assets/marketing/demo/verticalize.mjs
 import { chromium } from 'playwright';
 import { execSync } from 'node:child_process';
@@ -15,6 +15,11 @@ const probe = (f) => Number(execSync(`ffprobe -v error -show_entries format=dura
 const jobs = [
   { src: 'demo-explainer.mp4', out: 'demo-explainer-vertical.mp4' },
   { src: 'demo-explainer-2.mp4', out: 'demo-explainer-2-vertical.mp4' },
+  { src: 'demo-caught-it.mp4', out: 'demo-caught-it-vertical.mp4' },
+  { src: 'demo-agent-tour.mp4', out: 'demo-agent-tour-vertical.mp4' },
+  { src: 'demo-talks-to-site.mp4', out: 'demo-talks-to-site-vertical.mp4' },
+  { src: 'demo-prompt-verified.mp4', out: 'demo-prompt-verified-vertical.mp4' },
+  { src: 'demo-montage.mp4', out: 'demo-montage-vertical.mp4' },
 ];
 
 const browser = await chromium.launch();
