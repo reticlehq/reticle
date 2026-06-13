@@ -484,6 +484,35 @@ iris_assert({ timeout_ms: 30000, predicate: {
   kind: "signal", name: "webhook:received", dataMatches: { provider: "stripe" } } })
 ```
 
+#### Keeping signals from drifting (lint)
+
+Signals only help if you actually emit one whenever user-visible state changes. The
+`@iris/eslint-plugin` package ships one rule, `iris/require-signal-on-mutation`, that flags any
+function which calls a configured store **mutator** but never fires the **signal callee** in
+the same body — so the signal map can't silently fall behind the store.
+
+```js
+// eslint.config.mjs
+import iris from '@iris/eslint-plugin';
+
+export default [
+  {
+    plugins: { iris },
+    rules: {
+      'iris/require-signal-on-mutation': [
+        'error',
+        { mutators: ['set', 'reorderSections', 'addSection'], signalCallee: 'irisSignal' },
+      ],
+    },
+  },
+];
+```
+
+`mutators` lists the callee names that change state; `signalCallee` (default
+`['irisSignal', 'signal']`) is the name that counts as firing a signal. See
+[`packages/eslint-plugin/README.md`](../packages/eslint-plugin/README.md) for scoping and
+matching details.
+
 ---
 
 ## 8. Regression: baselines & diff

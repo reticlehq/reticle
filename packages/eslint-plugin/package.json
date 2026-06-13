@@ -1,0 +1,54 @@
+{
+  "name": "@iris/eslint-plugin",
+  "version": "0.2.2",
+  "description": "Iris ESLint plugin — keeps the signal layer self-enforcing (mutation-without-signal).",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b",
+    "lint": "eslint src",
+    "test:unit": "vitest run --passWithNoTests",
+    "prepack": "tsc -b && find dist -name \"*.test.*\" -delete"
+  },
+  "dependencies": {
+    "@typescript-eslint/utils": "^8.20.0"
+  },
+  "peerDependencies": {
+    "eslint": ">=9"
+  },
+  "devDependencies": {
+    "@typescript-eslint/rule-tester": "^8.20.0"
+  },
+  "license": "MIT",
+  "author": "Iris contributors",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/iris-mcp/iris.git",
+    "directory": "packages/eslint-plugin"
+  },
+  "homepage": "https://github.com/iris-mcp/iris#readme",
+  "bugs": "https://github.com/iris-mcp/iris/issues",
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "sideEffects": false,
+  "keywords": [
+    "mcp",
+    "ai-agents",
+    "eslint",
+    "eslint-plugin",
+    "testing"
+  ]
+}
