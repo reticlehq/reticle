@@ -84,8 +84,12 @@ export function installIris(): void {
   installReactAdapter(); // DOM ref → React fiber → component → source file (iris_inspect)
   // The presenter HUD (glow + cursor + narration panel) is opt-in via ?present so the dashboard
   // stays clean for filming. Iris still drives the page either way; add ?present to show the agent.
-  const present = new URLSearchParams(window.location.search).has('present');
-  iris.connect({ session: 'demo', present });
+  // ?session=<id> gives a tab its own Iris session so several browsers (a human tab + an
+  // Iris-driven tour) can view the dashboard at once without fighting over one session id.
+  const params = new URLSearchParams(window.location.search);
+  const present = params.has('present');
+  const session = params.get('session') ?? 'demo';
+  iris.connect({ session, present });
   registerStore('app', () => useApp.getState());
   registerCapabilities({
     testids: TESTIDS,
