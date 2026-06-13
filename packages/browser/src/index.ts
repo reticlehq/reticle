@@ -1,7 +1,7 @@
 import { Iris } from './iris.js';
 
 /**
- * The singleton embedded in the host app: `import { iris } from '@syrin/browser'`.
+ * The singleton embedded in the host app: `import { iris } from '@syrin/iris-browser'`.
  * Persisted on a global so HMR module re-evaluation reuses the same (already-connected)
  * instance instead of creating a second bridge connection (feedback #7).
  */
@@ -14,7 +14,7 @@ export type { IrisConnectOptions } from './iris.js';
 // Exclude your own dev widgets from snapshots/observers.
 export { setIgnoreSelectors } from './dom-ignore.js';
 
-// Adapter API (used by @syrin/react and other framework adapters).
+// Adapter API (used by @syrin/iris-react and other framework adapters).
 export {
   registerAdapter,
   identifyComponent,

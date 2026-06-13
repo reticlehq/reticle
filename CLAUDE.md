@@ -13,32 +13,32 @@ uses to **look, act, observe, and assert**. See `plan/` for the full design (git
 ## Monorepo layout
 
 ```
-packages/protocol      @syrin/protocol     — shared wire contract, constants, zod schemas
-packages/browser       @syrin/browser      — instrumentation SDK embedded in the app (DOM-side)
-packages/server        @syrin/server       — bridge + MCP server, the `iris` CLI (Node-side)
-packages/react         @syrin/react        — React adapter: DOM ref -> component -> source file
-packages/babel-plugin  @syrin/babel-plugin — stamps data-iris-source (source mapping, React 19)
-packages/next          @syrin/next         — Next.js source mapping (keeps SWC) via withIris (CJS)
-apps/demo              @syrin/demo         — Vite/React dashboard used to dogfood Iris
-apps/api               @syrin/api          — Express backend exercising real-world behaviors (CJS-ish .mjs)
-apps/next-smoke        @syrin/next-smoke   — Next.js 15 app verifying Iris on Next
+packages/protocol      @syrin/iris-protocol     — shared wire contract, constants, zod schemas
+packages/browser       @syrin/iris-browser      — instrumentation SDK embedded in the app (DOM-side)
+packages/server        @syrin/iris-server       — bridge + MCP server, the `iris` CLI (Node-side)
+packages/react         @syrin/iris-react        — React adapter: DOM ref -> component -> source file
+packages/babel-plugin  @syrin/iris-babel-plugin — stamps data-iris-source (source mapping, React 19)
+packages/next          @syrin/iris-next         — Next.js source mapping (keeps SWC) via withIris (CJS)
+apps/demo              @syrin/iris-demo         — Vite/React dashboard used to dogfood Iris
+apps/api               @syrin/iris-api          — Express backend exercising real-world behaviors (CJS-ish .mjs)
+apps/next-smoke        @syrin/iris-next-smoke   — Next.js 15 app verifying Iris on Next
 docs/                  — user-facing docs (getting-started, usage, token-efficiency, local-install)
 skills/                — engineering reference docs (open the one that matches your task)
 plan/                  — research/design docs + throwaway test harnesses (ALWAYS gitignored)
 ```
 
 This is **one git repo** at the root (pnpm + turbo monorepo). The TS library packages are
-strict TypeScript; `@syrin/babel-plugin`/`@syrin/next` are plain CJS tooling and `apps/api`/
+strict TypeScript; `@syrin/iris-babel-plugin`/`@syrin/iris-next` are plain CJS tooling and `apps/api`/
 `apps/next-smoke` are local fixtures — all excluded from the build/lint/test gates.
 
 ## Service boundaries (who owns what)
 
-- **`@syrin/protocol` is the contract.** Any message that crosses browser ↔ bridge ↔ agent
+- **`@syrin/iris-protocol` is the contract.** Any message that crosses browser ↔ bridge ↔ agent
   is defined there as a constant + zod schema. Browser and server depend on it; it depends
   on nothing. Never inline a wire string in `browser` or `server` — add it to `protocol`.
-- **`@syrin/browser` only touches the DOM/page.** It never imports Node APIs.
-- **`@syrin/server` only runs in Node.** It never imports DOM APIs.
-- **`@syrin/react` is optional enrichment.** Core must work without it.
+- **`@syrin/iris-browser` only touches the DOM/page.** It never imports Node APIs.
+- **`@syrin/iris-server` only runs in Node.** It never imports DOM APIs.
+- **`@syrin/iris-react` is optional enrichment.** Core must work without it.
 
 ## Non-negotiable rules (the short list — depth in skills/)
 
@@ -56,7 +56,7 @@ strict TypeScript; `@syrin/babel-plugin`/`@syrin/next` are plain CJS tooling and
 
 | Thing                | Convention                                        | Example                              |
 | -------------------- | ------------------------------------------------- | ------------------------------------ |
-| Package              | `@syrin/<kebab>`                                  | `@syrin/browser`                     |
+| Package              | `@syrin/<kebab>`                                  | `@syrin/iris-browser`                |
 | File                 | kebab-case                                        | `ring-buffer.ts`                     |
 | Type / class         | PascalCase                                        | `RingBuffer`, `IrisEvent`            |
 | Variable / function  | camelCase                                         | `pushEvent`                          |

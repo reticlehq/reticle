@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { EventType } from '@syrin/protocol';
+import { EventType } from '@syrin/iris-protocol';
 import { installDom } from './observers/dom.js';
 import { executeAction, executeSequence } from './actions.js';
 import { refs } from './refs.js';

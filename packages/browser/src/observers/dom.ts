@@ -1,4 +1,4 @@
-import { EventType } from '@syrin/protocol';
+import { EventType } from '@syrin/iris-protocol';
 import { getAccessibleName, getRole, isVisible } from '../a11y.js';
 import { refs } from '../refs.js';
 import { isIrisOverlay } from '../dom-ignore.js';

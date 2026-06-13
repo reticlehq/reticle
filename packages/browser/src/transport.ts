@@ -3,7 +3,7 @@ import {
   type CommandMessage,
   type HelloMessage,
   type IrisEvent,
-} from '@syrin/protocol';
+} from '@syrin/iris-protocol';
 import { nativeSetTimeout } from './native-timers.js';
 
 export interface CommandOutcome {

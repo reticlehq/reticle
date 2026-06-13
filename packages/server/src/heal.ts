@@ -4,7 +4,7 @@ import {
   type Drift,
   type FlowStepResult,
   type HealProposal,
-} from '@syrin/protocol';
+} from '@syrin/iris-protocol';
 import { editDistance } from './flow-replay.js';
 
 /**

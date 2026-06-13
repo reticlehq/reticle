@@ -24,7 +24,7 @@
 
 - [ ] No hardcoded design values (colors/spacing/fonts come from `tokens.ts`)
 - [ ] No free strings (constants in `protocol` / `tool-names` / demo `constants/`)
-- [ ] Wire-format changes went through `@syrin/protocol` (constant + zod schema) first
+- [ ] Wire-format changes went through `@syrin/iris-protocol` (constant + zod schema) first
 - [ ] New/changed behavior has a failing-then-passing test
 
 ## Conventions

@@ -1,5 +1,5 @@
-import type { FlowExpect } from '@syrin/protocol';
-import type { EvalResult, FlowReplaySession, Predicate, WaitForSignal } from '@syrin/server';
+import type { FlowExpect } from '@syrin/iris-protocol';
+import type { EvalResult, FlowReplaySession, Predicate, WaitForSignal } from '@syrin/iris-server';
 import { PredicateKind } from './constants.js';
 
 /**

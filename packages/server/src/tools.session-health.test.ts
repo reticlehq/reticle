@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { UNSCRIPTABLE_TAB_RECOMMENDATION } from '@syrin/protocol';
-import type { CommandResult } from '@syrin/protocol';
+import { UNSCRIPTABLE_TAB_RECOMMENDATION } from '@syrin/iris-protocol';
+import type { CommandResult } from '@syrin/iris-protocol';
 import { TOOLS, type ToolDeps } from './tools.js';
 import { IrisTool } from './tool-names.js';
 import { BaselineStore } from './baselines.js';

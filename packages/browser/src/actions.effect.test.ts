@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { ActionWarning, IrisCommand } from '@syrin/protocol';
+import { ActionWarning, IrisCommand } from '@syrin/iris-protocol';
 import { executeAction, executeSequence } from './actions.js';
 import { createCommandRegistry } from './commands.js';
 import { registerAdapter, type IrisAdapter } from './adapters.js';

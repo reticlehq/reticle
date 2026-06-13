@@ -1,7 +1,7 @@
 # Use Iris in your own app — without publishing to npm
 
-Iris isn't on public npm yet, and its packages depend on each other (`@syrin/browser` →
-`@syrin/protocol`, etc.), so plain `npm pack` tarballs don't resolve cleanly. The reliable way
+Iris isn't on public npm yet, and its packages depend on each other (`@syrin/iris-browser` →
+`@syrin/iris-protocol`, etc.), so plain `npm pack` tarballs don't resolve cleanly. The reliable way
 to test it in your **real external app today** is a tiny **local registry** (Verdaccio). This
 is also exactly the path we use to validate publishing.
 
@@ -16,21 +16,21 @@ bash scripts/local-registry.sh
 This starts a **fresh** Verdaccio on `http://localhost:4873`, creates a user/token, and
 publishes all `@syrin/*` packages there at the current version (**0.3.0**):
 
-| Package                               | What you install it for                            |
-| ------------------------------------- | -------------------------------------------------- |
-| **`@syrin/iris`**                     | **the one install** — re-exports everything below  |
-| `@syrin/browser`                      | the dev-only SDK you embed in your app             |
-| `@syrin/server`                       | the bridge + MCP server (your agent runs it)       |
-| `@syrin/react`                        | DOM → component → source-file mapping              |
-| `@syrin/babel-plugin` / `@syrin/next` | React 19 source mapping (Vite / Next.js)           |
-| `@syrin/test`                         | write declarative, signal-bound specs (`irisTest`) |
-| `@syrin/eslint-plugin`                | the `require-signal-on-mutation` lint rule         |
-| `@syrin/protocol`                     | shared wire contract (pulled in automatically)     |
+| Package                                         | What you install it for                            |
+| ----------------------------------------------- | -------------------------------------------------- |
+| **`@syrin/iris`**                               | **the one install** — re-exports everything below  |
+| `@syrin/iris-browser`                           | the dev-only SDK you embed in your app             |
+| `@syrin/iris-server`                            | the bridge + MCP server (your agent runs it)       |
+| `@syrin/iris-react`                             | DOM → component → source-file mapping              |
+| `@syrin/iris-babel-plugin` / `@syrin/iris-next` | React 19 source mapping (Vite / Next.js)           |
+| `@syrin/iris-test`                              | write declarative, signal-bound specs (`irisTest`) |
+| `@syrin/iris-eslint-plugin`                     | the `require-signal-on-mutation` lint rule         |
+| `@syrin/iris-protocol`                          | shared wire contract (pulled in automatically)     |
 
 Most users only need **`@syrin/iris`** (it re-exports the SDK + React adapter at `.`, and the
 plugins/runner/server at `@syrin/iris/{next,babel,test,server}`); the rest stay available for
 granular installs. (Verified: an external `npm i @syrin/iris` resolves the whole graph, including
-`@syrin/protocol`, and imports correctly.) Leave it running.
+`@syrin/iris-protocol`, and imports correctly.) Leave it running.
 
 ## 2. Point your app at the local registry
 
@@ -48,7 +48,7 @@ MCP server:
 
 ```bash
 npm i -D @syrin/iris
-# optional: npm i -D @syrin/eslint-plugin   # require-signal-on-mutation lint rule
+# optional: npm i -D @syrin/iris-eslint-plugin   # require-signal-on-mutation lint rule
 ```
 
 Then follow [Getting Started](getting-started.md): embed `iris.connect()` (dev only) from
@@ -63,7 +63,7 @@ Then follow [Getting Started](getting-started.md): embed `iris.connect()` (dev o
 > latest in your app explicitly — `npm update` won't cross a `0.x` minor:
 >
 > ```bash
-> npm i -D @syrin/iris@latest @syrin/eslint-plugin@latest
+> npm i -D @syrin/iris@latest @syrin/iris-eslint-plugin@latest
 > ```
 
 **Run the MCP server** from the local registry too — `npx @syrin/iris` _is_ the server:

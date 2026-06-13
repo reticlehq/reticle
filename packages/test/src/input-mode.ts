@@ -1,5 +1,5 @@
-import { IrisTool, type ToolInvoker } from '@syrin/server';
-import { InputMode } from '@syrin/protocol';
+import { IrisTool, type ToolInvoker } from '@syrin/iris-server';
+import { InputMode } from '@syrin/iris-protocol';
 import { IrisSkip } from './skip.js';
 import { SKIP_REASON_REAL_INPUT } from './constants.js';
 

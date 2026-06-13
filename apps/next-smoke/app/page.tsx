@@ -1,6 +1,6 @@
 'use client';
 import { useState, useRef } from 'react';
-import { iris } from '@syrin/browser';
+import { iris } from '@syrin/iris-browser';
 
 export default function Page() {
   const [loading, setLoading] = useState(false);

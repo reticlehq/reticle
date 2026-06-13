@@ -1,5 +1,5 @@
-import { registerAdapter, type ComponentInfo, type ComponentSource } from '@syrin/browser';
-import { ComponentStateReason, type ComponentStateResult } from '@syrin/protocol';
+import { registerAdapter, type ComponentInfo, type ComponentSource } from '@syrin/iris-browser';
+import { ComponentStateReason, type ComponentStateResult } from '@syrin/iris-protocol';
 
 interface Hook {
   memoizedState: unknown;
@@ -87,7 +87,7 @@ export function identify(el: Element): ComponentInfo | null {
   }
 
   // React 19 dropped `_debugSource`; fall back to a data-iris-source stamp if present
-  // (added by @syrin/babel-plugin in dev).
+  // (added by @syrin/iris-babel-plugin in dev).
   if (source === undefined) {
     source = sourceFromAttribute(el);
   }

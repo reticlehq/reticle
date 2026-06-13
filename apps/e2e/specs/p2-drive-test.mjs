@@ -1,6 +1,6 @@
 // HONESTY-CRITICAL: prove `iris drive` LAUNCHES its own browser, navigates to the app, and drives
 // the hover-gated smart-sentence with inputMode:"real" — headless, no manual CDP flags.
-import { start, TOOLS, BaselineStore, RecordingStore, LaunchedRealInputProvider } from '@syrin/server';
+import { start, TOOLS, BaselineStore, RecordingStore, LaunchedRealInputProvider } from '@syrin/iris-server';
 const sleep=(ms)=>new Promise(r=>setTimeout(r,ms));
 let pass=0,fail=0; const chk=(l,o,d='')=>{console.log(`   ${o?'✅':'❌'} ${l}${d?'  — '+d:''}`);o?pass++:fail++;};
 const server=await start({port:4400,mcp:false});

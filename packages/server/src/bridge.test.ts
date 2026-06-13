@@ -7,7 +7,7 @@ import {
   MessageKind,
   THROTTLED_WARNING,
   type ElementQuery,
-} from '@syrin/protocol';
+} from '@syrin/iris-protocol';
 import { Bridge } from './bridge.js';
 import { BaselineStore } from './baselines.js';
 import { createNodeFileSystem } from './fs-port.js';
@@ -17,7 +17,7 @@ import { AnnotationStore } from './annotation-store.js';
 import { TOOLS, type ToolDeps } from './tools.js';
 import { IrisTool } from './tool-names.js';
 
-/** A stand-in for the real @syrin/browser SDK: replies to commands and emits events. */
+/** A stand-in for the real @syrin/iris-browser SDK: replies to commands and emits events. */
 const FAKE_CAPABILITIES = {
   testids: ['toast'],
   signals: ['webhook:received'],

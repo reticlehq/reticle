@@ -10,7 +10,7 @@ import {
   FlowErrorCode,
   FlowFileSchema,
   QueryBy,
-} from '@syrin/protocol';
+} from '@syrin/iris-protocol';
 import { createNodeFileSystem, type FileSystemPort } from './fs-port.js';
 import { flowPath, irisDirPaths } from './iris-dir.js';
 import { FlowStore, recordedStepToFlowStep } from './flows.js';

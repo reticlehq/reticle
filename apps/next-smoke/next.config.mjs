@@ -1,9 +1,9 @@
-import irisNext from '@syrin/next';
+import irisNext from '@syrin/iris-next';
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   // Workspace packages ship compiled ESM; transpile them through Next to be safe.
-  transpilePackages: ['@syrin/browser', '@syrin/react', '@syrin/protocol'],
+  transpilePackages: ['@syrin/iris-browser', '@syrin/iris-react', '@syrin/iris-protocol'],
 };
 
 // withIris adds a dev-only source-mapping pre-loader (keeps SWC). No-op in production.

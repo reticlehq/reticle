@@ -1,5 +1,5 @@
 {
-  "name": "@syrin/test",
+  "name": "@syrin/iris-test",
   "version": "0.3.1",
   "description": "Iris test runner: irisTest spec registry + a runner that drives Iris tools without MCP/stdio.",
   "type": "module",
@@ -19,8 +19,8 @@
     "prepack": "tsc -b && find dist -name \"*.test.*\" -delete"
   },
   "dependencies": {
-    "@syrin/protocol": "workspace:*",
-    "@syrin/server": "workspace:*"
+    "@syrin/iris-protocol": "workspace:*",
+    "@syrin/iris-server": "workspace:*"
   },
   "peerDependencies": {
     "vitest": "^3.0.0"

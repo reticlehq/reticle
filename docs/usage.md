@@ -107,7 +107,7 @@ Deep detail on one element.
 
 - **args:** `ref`, `sessionId?`.
 - **returns:** descriptor + `tag` + `box` + `styles { color, backgroundColor, opacity }` +
-  `component { componentStack, source?: { file, line, column } }` (with `@syrin/react`).
+  `component { componentStack, source?: { file, line, column } }` (with `@syrin/iris-react`).
 
 ### `iris_act` / `iris_act_sequence`
 
@@ -487,13 +487,13 @@ iris_assert({ timeout_ms: 30000, predicate: {
 #### Keeping signals from drifting (lint)
 
 Signals only help if you actually emit one whenever user-visible state changes. The
-`@syrin/eslint-plugin` package ships one rule, `iris/require-signal-on-mutation`, that flags any
+`@syrin/iris-eslint-plugin` package ships one rule, `iris/require-signal-on-mutation`, that flags any
 function which calls a configured store **mutator** but never fires the **signal callee** in
 the same body — so the signal map can't silently fall behind the store.
 
 ```js
 // eslint.config.mjs
-import iris from '@syrin/eslint-plugin';
+import iris from '@syrin/iris-eslint-plugin';
 
 export default [
   {
@@ -798,7 +798,7 @@ one.
 No need to broadcast a signal for every fact. Register stores in your app:
 
 ```ts
-import { registerStore } from '@syrin/browser';
+import { registerStore } from '@syrin/iris-browser';
 registerStore('workspace', () => useWorkspace.getState());
 ```
 
@@ -814,7 +814,7 @@ Store reads are the reliable path; ref reads degrade to a structured failure rat
 Declare it once so the agent learns the surface without reading source:
 
 ```ts
-import { registerCapabilities } from '@syrin/browser';
+import { registerCapabilities } from '@syrin/iris-browser';
 registerCapabilities({ testids: [...], signals: [...], stores: [...], flows: [...] });
 ```
 
@@ -866,7 +866,7 @@ dblclick/drag), and reports `inputMode: "real"`.
      "mcpServers": {
        "iris": {
          "command": "npx",
-         "args": ["@syrin/server"],
+         "args": ["@syrin/iris-server"],
          "env": { "IRIS_CDP_URL": "http://localhost:9222" },
        },
      },

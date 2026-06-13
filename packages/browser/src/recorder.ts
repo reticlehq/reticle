@@ -10,7 +10,7 @@ import {
   type FlowExpect,
   type FlowFile,
   type FlowStep,
-} from '@syrin/protocol';
+} from '@syrin/iris-protocol';
 import { getAccessibleName, getRole } from './a11y.js';
 import { isIrisOverlay } from './dom-ignore.js';
 import { getCapabilities } from './capabilities.js';

@@ -7,7 +7,7 @@ import {
   type ElementQuery,
   type IrisEvent,
   type MatchResult,
-} from '@syrin/protocol';
+} from '@syrin/iris-protocol';
 import { z } from 'zod';
 
 /** The subset of Session the predicate engine needs — keeps it testable with a fake. */

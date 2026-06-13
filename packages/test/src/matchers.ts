@@ -1,5 +1,5 @@
-import { IrisTool, type ToolInvoker } from '@syrin/server';
-import type { ElementQuery, ElementState } from '@syrin/protocol';
+import { IrisTool, type ToolInvoker } from '@syrin/iris-server';
+import type { ElementQuery, ElementState } from '@syrin/iris-protocol';
 import { IrisAssertionError } from './skip.js';
 import { CONSOLE_LEVEL_ERROR, DEFAULT_ASSERT_TIMEOUT_MS, PredicateKind } from './constants.js';
 

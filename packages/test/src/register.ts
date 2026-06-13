@@ -1,5 +1,5 @@
-import type { FlowErrorCode } from '@syrin/protocol';
-import type { FlowReplaySession } from '@syrin/server';
+import type { FlowErrorCode } from '@syrin/iris-protocol';
+import type { FlowReplaySession } from '@syrin/iris-server';
 import { FLOW_LOAD_ERROR_PREFIX, SpecKind, SpecOutcome } from './constants.js';
 import { flowsAsSpecs } from './flow-spec.js';
 import type { FlowSpec, FlowsAsSpecsOptions, SpecRunResult } from './flow-spec.js';
@@ -50,9 +50,9 @@ export interface RegisterFlowSpecsOptions extends FlowsAsSpecsOptions {
 
 /**
  * Resolve the default registrar (vitest's `it`) lazily. vitest is an OPTIONAL peer dependency, so the
- * public barrel (`@syrin/test`) must stay importable when vitest is absent — only callers that actually
+ * public barrel (`@syrin/iris-test`) must stay importable when vitest is absent — only callers that actually
  * register flow specs without injecting their own `register` fn need it. A static top-level import
- * would pull vitest into the eager module graph of every `import { irisTest } from '@syrin/test'`.
+ * would pull vitest into the eager module graph of every `import { irisTest } from '@syrin/iris-test'`.
  */
 async function defaultRegister(): Promise<RegisterFn> {
   const vitest = await import('vitest');

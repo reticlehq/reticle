@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { IrisTool } from '@syrin/server';
+import { IrisTool } from '@syrin/iris-server';
 import { createTestContext } from './test-context.js';
-import type { ToolInvoker } from '@syrin/server';
+import type { ToolInvoker } from '@syrin/iris-server';
 
 function fakeInvoker(handlers: Record<string, (args: Record<string, unknown>) => unknown>): {
   invoke: ToolInvoker;

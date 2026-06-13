@@ -1,5 +1,5 @@
 {
-  "name": "@syrin/next",
+  "name": "@syrin/iris-next",
   "version": "0.3.1",
   "private": false,
   "description": "Next.js helper for Iris: keeps SWC, adds source-file mapping via a dev-only webpack pre-loader (data-iris-source).",
@@ -33,7 +33,7 @@
   ],
   "dependencies": {
     "@babel/core": "^7.26.0",
-    "@syrin/babel-plugin": "workspace:*"
+    "@syrin/iris-babel-plugin": "workspace:*"
   },
   "peerDependencies": {
     "next": ">=13"

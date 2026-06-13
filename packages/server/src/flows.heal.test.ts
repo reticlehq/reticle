@@ -17,7 +17,7 @@ import {
   type FlowHealResult,
   type IrisEvent,
   type QueryEmptyHint,
-} from '@syrin/protocol';
+} from '@syrin/iris-protocol';
 import { FLOW_TOOLS } from './flow-tools.js';
 import { IrisTool } from './tool-names.js';
 import { FlowStore } from './flows.js';

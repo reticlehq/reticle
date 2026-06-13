@@ -6,7 +6,7 @@ import {
   type ElementQuery,
   type IrisEvent,
   type MatchResult,
-} from '@syrin/protocol';
+} from '@syrin/iris-protocol';
 import { evaluatePredicate, type PredicateSession } from './predicate.js';
 
 /** In-memory session: events from an array, MATCH from a supplied matcher. */

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { EventType } from '@syrin/protocol';
+import { EventType } from '@syrin/iris-protocol';
 import { createCommandRegistry } from './commands.js';
 import { executeAction } from './actions.js';
 import { installScroll } from './observers/scroll.js';

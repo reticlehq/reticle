@@ -7,8 +7,8 @@ export function IrisDev() {
     if (process.env.NODE_ENV !== 'development') return;
     void (async () => {
       const [browser, react] = await Promise.all([
-        import('@syrin/browser'),
-        import('@syrin/react'),
+        import('@syrin/iris-browser'),
+        import('@syrin/iris-react'),
       ]);
       const { iris, registerStore, registerCapabilities } = browser;
       react.install();

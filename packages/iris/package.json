@@ -39,12 +39,12 @@
     "build": "tsc -p tsconfig.json"
   },
   "dependencies": {
-    "@syrin/babel-plugin": "workspace:*",
-    "@syrin/browser": "workspace:*",
-    "@syrin/next": "workspace:*",
-    "@syrin/react": "workspace:*",
-    "@syrin/server": "workspace:*",
-    "@syrin/test": "workspace:*"
+    "@syrin/iris-babel-plugin": "workspace:*",
+    "@syrin/iris-browser": "workspace:*",
+    "@syrin/iris-next": "workspace:*",
+    "@syrin/iris-react": "workspace:*",
+    "@syrin/iris-server": "workspace:*",
+    "@syrin/iris-test": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.6.0"

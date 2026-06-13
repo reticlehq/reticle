@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { IrisTool } from '@syrin/server';
-import { QueryBy } from '@syrin/protocol';
+import { IrisTool } from '@syrin/iris-server';
+import { QueryBy } from '@syrin/iris-protocol';
 import { createTestContext } from './test-context.js';
 import { IrisAssertionError } from './skip.js';
 import { CONSOLE_LEVEL_ERROR, PredicateKind } from './constants.js';
-import type { ToolInvoker } from '@syrin/server';
+import type { ToolInvoker } from '@syrin/iris-server';
 
 function fakeInvoker(handlers: Record<string, (args: Record<string, unknown>) => unknown>): {
   invoke: ToolInvoker;

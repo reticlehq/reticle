@@ -1,4 +1,4 @@
-import type { ToolInvoker } from '@syrin/server';
+import type { ToolInvoker } from '@syrin/iris-server';
 import type { TestStatus } from './constants.js';
 
 /**

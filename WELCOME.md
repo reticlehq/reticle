@@ -11,16 +11,16 @@ exposed over MCP.
 ```
 iris/  (this repo — one git repo, pnpm + turbo monorepo)
 ├── packages/
-│   ├── protocol/      @syrin/protocol     — shared wire contract, constants, zod schemas
-│   ├── browser/       @syrin/browser      — instrumentation SDK embedded in the app (DOM-side)
-│   ├── server/        @syrin/server       — bridge + MCP server, the `iris` CLI (Node-side)
-│   ├── react/         @syrin/react        — React adapter: DOM ref → component → source file
-│   ├── babel-plugin/  @syrin/babel-plugin — stamps data-iris-source (source mapping, React 19)
-│   └── next/          @syrin/next         — Next.js source mapping (keeps SWC) via withIris
+│   ├── protocol/      @syrin/iris-protocol     — shared wire contract, constants, zod schemas
+│   ├── browser/       @syrin/iris-browser      — instrumentation SDK embedded in the app (DOM-side)
+│   ├── server/        @syrin/iris-server       — bridge + MCP server, the `iris` CLI (Node-side)
+│   ├── react/         @syrin/iris-react        — React adapter: DOM ref → component → source file
+│   ├── babel-plugin/  @syrin/iris-babel-plugin — stamps data-iris-source (source mapping, React 19)
+│   └── next/          @syrin/iris-next         — Next.js source mapping (keeps SWC) via withIris
 ├── apps/
-│   ├── demo/          @syrin/demo         — Vite/React dashboard to dogfood Iris
-│   ├── api/           @syrin/api          — Express backend exercising real-world behaviors
-│   └── next-smoke/    @syrin/next-smoke   — Next.js 15 app verifying Iris on Next
+│   ├── demo/          @syrin/iris-demo         — Vite/React dashboard to dogfood Iris
+│   ├── api/           @syrin/iris-api          — Express backend exercising real-world behaviors
+│   └── next-smoke/    @syrin/iris-next-smoke   — Next.js 15 app verifying Iris on Next
 ├── docs/             — user-facing docs (getting-started, usage, token-efficiency, local-install)
 ├── skills/           — engineering reference docs (open the one matching your task)
 ├── plan/             — product design & roadmap + throwaway test harnesses (GITIGNORED)
@@ -31,14 +31,14 @@ iris/  (this repo — one git repo, pnpm + turbo monorepo)
 ```
 
 > `apps/api` and `apps/next-smoke` are local fixtures/examples (excluded from the build/lint/
-> test gates). `@syrin/babel-plugin` and `@syrin/next` are plain CJS tooling (no build step).
+> test gates). `@syrin/iris-babel-plugin` and `@syrin/iris-next` are plain CJS tooling (no build step).
 
 ## First 5 commands
 
 ```bash
 pnpm install          # install everything (already done if you're reading this)
 pnpm build            # compile all packages (tsc -b via turbo)
-pnpm --filter @syrin/demo dev   # run the demo dashboard at http://localhost:3000
+pnpm --filter @syrin/iris-demo dev   # run the demo dashboard at http://localhost:3000
 pnpm lint && pnpm typecheck && pnpm test:unit   # the quality gates
 cat docs/getting-started.md   # how the product is used; plan/NEXT-PHASES.md for what's next
 ```
@@ -78,7 +78,7 @@ cat docs/getting-started.md   # how the product is used; plan/NEXT-PHASES.md for
 4. Tests first — RED → GREEN → REFACTOR; inject the clock.
 5. 500-line file cap.
 6. Design values only in `tokens.ts`.
-7. Contract changes go through `@syrin/protocol` first.
+7. Contract changes go through `@syrin/iris-protocol` first.
 
 ## Installed tools
 

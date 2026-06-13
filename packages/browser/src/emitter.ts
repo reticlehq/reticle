@@ -2,7 +2,7 @@
  * The injected-emitter pattern (P5a): host-app components depend on a tiny structural interface
  * instead of importing the SDK directly. The real emitter proxies to the connected `iris`
  * singleton; when Iris isn't connected (or isn't loaded) every call is a SAFE NO-OP — so nothing
- * breaks in production or before `iris.connect()`, and `@syrin/browser` stays out of the prod bundle.
+ * breaks in production or before `iris.connect()`, and `@syrin/iris-browser` stays out of the prod bundle.
  */
 
 import { iris } from './index.js';

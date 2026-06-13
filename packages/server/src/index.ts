@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { IRIS_DEFAULT_PORT, IrisDir } from '@syrin/protocol';
+import { IRIS_DEFAULT_PORT, IrisDir } from '@syrin/iris-protocol';
 import { Bridge } from './bridge.js';
 import { BaselineStore } from './baselines.js';
 import { RecordingStore } from './recordings.js';

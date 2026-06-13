@@ -28,7 +28,7 @@ Then do all of this:
 
 2. Install the dev deps from the local registry (skip the registry lines if using public npm):
    echo '@syrin:registry=http://localhost:4873/' >> .npmrc
-   npm i -D @syrin/iris @syrin/react        # + @syrin/next for Next.js, or @syrin/babel-plugin otherwise
+   npm i -D @syrin/iris @syrin/iris-react        # + @syrin/iris-next for Next.js, or @syrin/iris-babel-plugin otherwise
 
 3. Embed the SDK in DEV ONLY (see getting-started Step 2 for your framework):
    - call iris.connect({ session: '<app-name>', present: true }) once on startup in dev
@@ -36,7 +36,7 @@ Then do all of this:
 
 4. React source mapping (so failures point at file:line) — getting-started Step 3:
    - install the React adapter: import { install } from '@syrin/iris'; install()
-   - Vite: add @syrin/babel-plugin to vite.config; Next: wrap next.config with withIris from @syrin/next
+   - Vite: add @syrin/iris-babel-plugin to vite.config; Next: wrap next.config with withIris from @syrin/iris-next
 
 5. Make the app AGENT-LEGIBLE (this is what makes Iris fast — see getting-started Step 6 and
    docs/integration-patterns.md):
@@ -112,7 +112,7 @@ asserting on volatile output. Report evidence, not prose.
 Iris is pre-1.0, so new tools land as minor bumps. Pull the latest explicitly:
 
 ```bash
-npm i -D @syrin/iris@latest @syrin/react@latest @syrin/next@latest @syrin/babel-plugin@latest
+npm i -D @syrin/iris@latest @syrin/iris-react@latest @syrin/iris-next@latest @syrin/iris-babel-plugin@latest
 ```
 
 (`npm update` alone won't cross a `0.x` minor — use `@latest`.) The full tool list lives in

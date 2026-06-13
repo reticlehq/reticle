@@ -3,7 +3,7 @@
 // by neutering rAF before page load (addInitScript) so the SDK's bound realRaf never resolves —
 // exactly the condition that made iris_act hang to the 8s timeout and report a click as an error.
 import { chromium } from 'playwright';
-import { start, TOOLS, BaselineStore, RecordingStore } from '@syrin/server';
+import { start, TOOLS, BaselineStore, RecordingStore } from '@syrin/iris-server';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const now = () => Number(process.hrtime.bigint() / 1000000n);

@@ -1,4 +1,4 @@
-import type { EventType } from '@syrin/protocol';
+import type { EventType } from '@syrin/iris-protocol';
 
 /** An observer emits normalized events; the orchestrator stamps time + forwards them. */
 export type Emit = (type: EventType, data: Record<string, unknown>, ref?: string) => void;

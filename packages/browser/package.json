@@ -1,5 +1,5 @@
 {
-  "name": "@syrin/browser",
+  "name": "@syrin/iris-browser",
   "version": "0.3.1",
   "description": "Iris browser SDK — installs observers, builds semantic snapshots, executes actions, talks to the bridge.",
   "type": "module",
@@ -19,7 +19,7 @@
     "prepack": "tsc -b && find dist -name \"*.test.*\" -delete"
   },
   "dependencies": {
-    "@syrin/protocol": "workspace:*",
+    "@syrin/iris-protocol": "workspace:*",
     "@testing-library/dom": "^10.4.1"
   },
   "devDependencies": {

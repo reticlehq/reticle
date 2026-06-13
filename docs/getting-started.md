@@ -26,13 +26,13 @@ Three pieces, each tiny:
 ```text
 ┌─────────────┐   MCP    ┌──────────────────────┐   WebSocket   ┌─────────────────────┐
 │ coding agent │◀───────▶│ iris bridge + server  │◀─────────────▶│ your app + @syrin/    │
-│ (Claude Code)│  stdio  │  (npx @syrin/server)   │  localhost    │ browser SDK (dev)    │
+│ (Claude Code)│  stdio  │  (npx @syrin/iris-server)   │  localhost    │ browser SDK (dev)    │
 └─────────────┘          └──────────────────────┘  :4400        └─────────────────────┘
 ```
 
-1. **The MCP server** (`@syrin/server`) — your agent launches it; it hosts the tools _and_ the
+1. **The MCP server** (`@syrin/iris-server`) — your agent launches it; it hosts the tools _and_ the
    WebSocket bridge your app connects to. You don't run it by hand; the agent does.
-2. **The SDK** (`@syrin/browser`) — a few lines in your app's dev entry point.
+2. **The SDK** (`@syrin/iris-browser`) — a few lines in your app's dev entry point.
 3. **(Optional) React adapter + babel plugin** — so `iris_inspect` can tell the agent which
    component/file to edit.
 
@@ -366,7 +366,7 @@ Everything below comes from the single `@syrin/iris` install.
 
 **Source file isn't resolving on React 19**
 
-- Wire up `@syrin/babel-plugin` (Step 3). Without it, only component identity is available.
+- Wire up `@syrin/iris-babel-plugin` (Step 3). Without it, only component identity is available.
 
 **Nothing should run in production**
 

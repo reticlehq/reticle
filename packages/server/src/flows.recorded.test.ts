@@ -12,7 +12,7 @@ import {
   type CommandResult,
   type FlowFile,
   type IrisEvent,
-} from '@syrin/protocol';
+} from '@syrin/iris-protocol';
 import { createNodeFileSystem, type FileSystemPort } from './fs-port.js';
 import { FlowStore } from './flows.js';
 import { AnnotationStore } from './annotation-store.js';

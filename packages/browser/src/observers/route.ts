@@ -1,4 +1,4 @@
-import { EventType } from '@syrin/protocol';
+import { EventType } from '@syrin/iris-protocol';
 import type { Emit, Teardown } from './types.js';
 
 function snapshotLocation(): { pathname: string; search: string; hash: string; href: string } {

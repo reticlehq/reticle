@@ -7,7 +7,7 @@ import {
   type ComponentStateResult,
   type ElementQuery,
   type ElementState,
-} from '@syrin/protocol';
+} from '@syrin/iris-protocol';
 import { buildSnapshot } from './snapshot.js';
 import { matchQuery, runQuery } from './query.js';
 import { executeAction, executeSequence, dispatchWebMcp, type ActionStep } from './actions.js';

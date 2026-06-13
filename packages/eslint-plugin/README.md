@@ -1,14 +1,14 @@
-# @syrin/eslint-plugin
+# @syrin/iris-eslint-plugin
 
 Keeps the Iris **signal layer self-enforcing**. When your store mutates user-visible state,
 an `iris.signal(...)` should fire so an agent can assert on the change off-DOM. This plugin
 makes "state changed ⇒ signal fired" a lint rule instead of a convention that rots. It pairs
-with the runtime `commitAndSignal(mutate, signal, data)` helper from `@syrin/browser`.
+with the runtime `commitAndSignal(mutate, signal, data)` helper from `@syrin/iris-browser`.
 
 ## Install
 
 ```sh
-pnpm add -D @syrin/eslint-plugin
+pnpm add -D @syrin/iris-eslint-plugin
 ```
 
 Peer dependency: `eslint >= 9` (flat config).
@@ -17,7 +17,7 @@ Peer dependency: `eslint >= 9` (flat config).
 
 ```js
 // eslint.config.mjs
-import iris from '@syrin/eslint-plugin';
+import iris from '@syrin/iris-eslint-plugin';
 
 export default [
   {
@@ -39,7 +39,7 @@ Shortcut: enable the bundled `recommended` config (turns the rule on at `warn` w
 defaults until you configure `mutators`):
 
 ```js
-import iris from '@syrin/eslint-plugin';
+import iris from '@syrin/iris-eslint-plugin';
 
 export default [iris.configs.recommended];
 ```

@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { IrisTool } from '@syrin/server';
-import { ActionType, InputMode } from '@syrin/protocol';
+import { IrisTool } from '@syrin/iris-server';
+import { ActionType, InputMode } from '@syrin/iris-protocol';
 import { createTestContext } from './test-context.js';
 import { IrisSkip, isSkip } from './skip.js';
 import { SKIP_REASON_REAL_INPUT } from './constants.js';
-import type { ToolInvoker } from '@syrin/server';
+import type { ToolInvoker } from '@syrin/iris-server';
 
 function fakeInvoker(handlers: Record<string, (args: Record<string, unknown>) => unknown>): {
   invoke: ToolInvoker;

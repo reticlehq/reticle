@@ -6,7 +6,7 @@ import {
   type Annotation,
   type AnnotateOutcome,
   type FlowExpect,
-} from '@syrin/protocol';
+} from '@syrin/iris-protocol';
 
 /**
  * M8 Stage B ANNOTATE — the PURE compiler at the heart of the facet. A structured annotation +

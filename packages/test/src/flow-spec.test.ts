@@ -8,9 +8,9 @@ import {
   type CommandResult,
   type FlowFile,
   type IrisEvent,
-} from '@syrin/protocol';
-import type { Clock, EvalResult, FileSystemPort } from '@syrin/server';
-import { FlowStore } from '@syrin/server';
+} from '@syrin/iris-protocol';
+import type { Clock, EvalResult, FileSystemPort } from '@syrin/iris-server';
+import { FlowStore } from '@syrin/iris-server';
 import { SpecKind, SpecMessage, SpecOutcome } from './constants.js';
 import { flowToSpec, flowsAsSpecs } from './flow-spec.js';
 

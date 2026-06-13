@@ -105,9 +105,9 @@ That's it — run your app, and ask your agent: _"add a logout button and verify
 Iris."_ → see [Getting Started](docs/getting-started.md) for the full walkthrough (React
 adapter via `@syrin/iris`, source mapping via `@syrin/iris/next` or `/babel`, examples).
 
-> Prefer granular installs? Every piece is still its own package — `@syrin/browser`,
-> `@syrin/react`, `@syrin/next`, `@syrin/babel-plugin`, `@syrin/server`, `@syrin/test`,
-> `@syrin/eslint-plugin`. `@syrin/iris` just re-exports them so you install and import **one**.
+> Prefer granular installs? Every piece is still its own package — `@syrin/iris-browser`,
+> `@syrin/iris-react`, `@syrin/iris-next`, `@syrin/iris-babel-plugin`, `@syrin/iris-server`, `@syrin/iris-test`,
+> `@syrin/iris-eslint-plugin`. `@syrin/iris` just re-exports them so you install and import **one**.
 
 ---
 
@@ -127,7 +127,7 @@ The six canonical reactions, plus anything your app emits:
 ## How it works
 
 ```text
-your coding agent ──MCP──▶ iris bridge + server ──WebSocket──▶ @syrin/browser (in your app)
+your coding agent ──MCP──▶ iris bridge + server ──WebSocket──▶ @syrin/iris-browser (in your app)
                                    ▲                                    │
                                    └──────────── observations ─────────┘
                           (DOM · network · routes · console · animations · signals)
@@ -139,17 +139,17 @@ machine; it's localhost-only and tree-shaken out of production.
 
 ## Packages
 
-| Package                                          | Role                                                   |
-| ------------------------------------------------ | ------------------------------------------------------ |
-| [`@syrin/iris`](packages/iris)                   | **One-install umbrella** — re-exports everything below |
-| [`@syrin/browser`](packages/browser)             | The SDK you embed in your app (DOM-side)               |
-| [`@syrin/server`](packages/server)               | Bridge + MCP server (the `iris` CLI)                   |
-| [`@syrin/react`](packages/react)                 | React adapter: DOM → component → source file           |
-| [`@syrin/babel-plugin`](packages/babel-plugin)   | Source mapping on React 19 (`data-iris-source`)        |
-| [`@syrin/next`](packages/next)                   | Next.js source mapping (keeps SWC) via `withIris`      |
-| [`@syrin/test`](packages/test)                   | Declarative spec runner (`irisTest`)                   |
-| [`@syrin/eslint-plugin`](packages/eslint-plugin) | `require-signal-on-mutation` lint rule                 |
-| [`@syrin/protocol`](packages/protocol)           | Shared wire contract (types + zod schemas)             |
+| Package                                               | Role                                                   |
+| ----------------------------------------------------- | ------------------------------------------------------ |
+| [`@syrin/iris`](packages/iris)                        | **One-install umbrella** — re-exports everything below |
+| [`@syrin/iris-browser`](packages/browser)             | The SDK you embed in your app (DOM-side)               |
+| [`@syrin/iris-server`](packages/server)               | Bridge + MCP server (the `iris` CLI)                   |
+| [`@syrin/iris-react`](packages/react)                 | React adapter: DOM → component → source file           |
+| [`@syrin/iris-babel-plugin`](packages/babel-plugin)   | Source mapping on React 19 (`data-iris-source`)        |
+| [`@syrin/iris-next`](packages/next)                   | Next.js source mapping (keeps SWC) via `withIris`      |
+| [`@syrin/iris-test`](packages/test)                   | Declarative spec runner (`irisTest`)                   |
+| [`@syrin/iris-eslint-plugin`](packages/eslint-plugin) | `require-signal-on-mutation` lint rule                 |
+| [`@syrin/iris-protocol`](packages/protocol)           | Shared wire contract (types + zod schemas)             |
 
 ## Docs
 

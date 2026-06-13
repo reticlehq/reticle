@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { IrisDir } from '@syrin/protocol';
+import { IrisDir } from '@syrin/iris-protocol';
 import {
   AnnotationStore,
   BaselineStore,
@@ -8,8 +8,8 @@ import {
   createNodeFileSystem,
   createToolInvoker,
   start,
-} from '@syrin/server';
-import type { RunningServer, ToolDeps, ToolInvoker } from '@syrin/server';
+} from '@syrin/iris-server';
+import type { RunningServer, ToolDeps, ToolInvoker } from '@syrin/iris-server';
 
 export interface BootedRun {
   invoke: ToolInvoker;
@@ -32,7 +32,7 @@ export interface BootOptions {
 
 /**
  * Build ToolDeps from a started server (Option b: zero further server changes). The only place
- * in @syrin/test that touches real IO — and it does so only by delegating to @syrin/server's start.
+ * in @syrin/iris-test that touches real IO — and it does so only by delegating to @syrin/iris-server's start.
  */
 function defaultBuildDeps(server: RunningServer, opts: BootOptions): ToolDeps {
   const fs = createNodeFileSystem();

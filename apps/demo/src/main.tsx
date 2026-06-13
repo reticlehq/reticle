@@ -1,8 +1,8 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Agentation } from 'agentation';
-import { iris } from '@syrin/browser';
-import { install as installReactAdapter } from '@syrin/react';
+import { iris } from '@syrin/iris-browser';
+import { install as installReactAdapter } from '@syrin/iris-react';
 import { App } from './App.js';
 
 const isDev = import.meta.env.DEV;

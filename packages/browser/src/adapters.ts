@@ -25,7 +25,7 @@ export interface IrisAdapter {
 const globalStore = globalThis as unknown as { __irisAdapters?: IrisAdapter[] };
 const adapters: IrisAdapter[] = (globalStore.__irisAdapters ??= []);
 
-/** Called by @syrin/react (and future adapters) to register themselves. */
+/** Called by @syrin/iris-react (and future adapters) to register themselves. */
 export function registerAdapter(adapter: IrisAdapter): void {
   if (!adapters.some((a) => a.name === adapter.name)) adapters.push(adapter);
 }

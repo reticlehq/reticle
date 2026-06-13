@@ -7,7 +7,7 @@
 #
 # Then, in your app:
 #   echo '@syrin:registry=http://localhost:4873/' >> .npmrc
-#   npm i -D @syrin/browser @syrin/react @syrin/next
+#   npm i -D @syrin/iris-browser @syrin/iris-react @syrin/iris-next
 #
 set -euo pipefail
 PORT=4873
@@ -42,5 +42,5 @@ echo "✅ Published @syrin/* to ${REG}"
 echo ""
 echo "In your external app:"
 echo "  echo '@syrin:registry=${REG}' >> .npmrc"
-echo "  npm i -D @syrin/browser @syrin/react @syrin/next   # + @syrin/babel-plugin for non-Next"
-echo "  npx --registry ${REG} @syrin/server              # run the bridge + MCP server"
+echo "  npm i -D @syrin/iris-browser @syrin/iris-react @syrin/iris-next   # + @syrin/iris-babel-plugin for non-Next"
+echo "  npx --registry ${REG} @syrin/iris-server              # run the bridge + MCP server"

@@ -1,4 +1,4 @@
-import { EventType, HealthReason, SESSION_HEALTH } from '@syrin/protocol';
+import { EventType, HealthReason, SESSION_HEALTH } from '@syrin/iris-protocol';
 import { nativeSetInterval } from '../native-timers.js';
 import type { Emit, Teardown } from './types.js';
 

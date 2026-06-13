@@ -1,4 +1,4 @@
-import type { FlowExpect } from '@syrin/protocol';
+import type { FlowExpect } from '@syrin/iris-protocol';
 
 /** One captured agent action, normalized for replay (G6). */
 export interface RecordedStep {

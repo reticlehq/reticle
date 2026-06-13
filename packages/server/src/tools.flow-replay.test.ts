@@ -10,7 +10,7 @@ import {
   ReplayStatus,
   type CommandResult,
   type FlowReplayResult,
-} from '@syrin/protocol';
+} from '@syrin/iris-protocol';
 import { TOOLS, type ToolDeps } from './tools.js';
 import { IrisTool } from './tool-names.js';
 import { BaselineStore } from './baselines.js';

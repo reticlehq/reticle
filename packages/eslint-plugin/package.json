@@ -1,5 +1,5 @@
 {
-  "name": "@syrin/eslint-plugin",
+  "name": "@syrin/iris-eslint-plugin",
   "version": "0.3.1",
   "description": "Iris ESLint plugin — keeps the signal layer self-enforcing (mutation-without-signal).",
   "type": "module",

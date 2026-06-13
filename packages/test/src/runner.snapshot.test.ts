@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { runSpecs } from './runner.js';
 import { irisTest } from './spec.js';
 import { clearRegistry, getRegistered } from './registry.js';
-import type { ToolInvoker } from '@syrin/server';
+import type { ToolInvoker } from '@syrin/iris-server';
 import type { RunnerOptions, SpecContext } from './types.js';
 
 afterEach(() => clearRegistry());

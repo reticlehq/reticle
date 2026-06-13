@@ -59,10 +59,10 @@ importers:
 
   apps/demo:
     dependencies:
-      '@syrin/browser':
+      '@syrin/iris-browser':
         specifier: workspace:*
         version: link:../../packages/browser
-      '@syrin/react':
+      '@syrin/iris-react':
         specifier: workspace:*
         version: link:../../packages/react
       react:
@@ -72,7 +72,7 @@ importers:
         specifier: ^19.0.0
         version: 19.2.7(react@19.2.7)
     devDependencies:
-      '@syrin/babel-plugin':
+      '@syrin/iris-babel-plugin':
         specifier: workspace:*
         version: link:../../packages/babel-plugin
       '@types/react':
@@ -96,10 +96,10 @@ importers:
 
   apps/e2e:
     dependencies:
-      '@syrin/server':
+      '@syrin/iris-server':
         specifier: workspace:*
         version: link:../../packages/server
-      '@syrin/test':
+      '@syrin/iris-test':
         specifier: workspace:*
         version: link:../../packages/test
       playwright:
@@ -118,13 +118,13 @@ importers:
         specifier: ^19.0.0
         version: 19.2.7(react@19.2.7)
     devDependencies:
-      '@syrin/browser':
+      '@syrin/iris-browser':
         specifier: workspace:*
         version: link:../../packages/browser
-      '@syrin/next':
+      '@syrin/iris-next':
         specifier: workspace:*
         version: link:../../packages/next
-      '@syrin/react':
+      '@syrin/iris-react':
         specifier: workspace:*
         version: link:../../packages/react
       '@types/node':
@@ -151,7 +151,7 @@ importers:
 
   packages/browser:
     dependencies:
-      '@syrin/protocol':
+      '@syrin/iris-protocol':
         specifier: workspace:*
         version: link:../protocol
       '@testing-library/dom':
@@ -180,22 +180,22 @@ importers:
 
   packages/iris:
     dependencies:
-      '@syrin/babel-plugin':
+      '@syrin/iris-babel-plugin':
         specifier: workspace:*
         version: link:../babel-plugin
-      '@syrin/browser':
+      '@syrin/iris-browser':
         specifier: workspace:*
         version: link:../browser
-      '@syrin/next':
+      '@syrin/iris-next':
         specifier: workspace:*
         version: link:../next
-      '@syrin/react':
+      '@syrin/iris-react':
         specifier: workspace:*
         version: link:../react
-      '@syrin/server':
+      '@syrin/iris-server':
         specifier: workspace:*
         version: link:../server
-      '@syrin/test':
+      '@syrin/iris-test':
         specifier: workspace:*
         version: link:../test
     devDependencies:
@@ -208,7 +208,7 @@ importers:
       '@babel/core':
         specifier: ^7.26.0
         version: 7.29.7
-      '@syrin/babel-plugin':
+      '@syrin/iris-babel-plugin':
         specifier: workspace:*
         version: link:../babel-plugin
       next:
@@ -223,10 +223,10 @@ importers:
 
   packages/react:
     dependencies:
-      '@syrin/browser':
+      '@syrin/iris-browser':
         specifier: workspace:*
         version: link:../browser
-      '@syrin/protocol':
+      '@syrin/iris-protocol':
         specifier: workspace:*
         version: link:../protocol
       react:
@@ -245,7 +245,7 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: ^1.13.0
         version: 1.29.0(zod@3.25.76)
-      '@syrin/protocol':
+      '@syrin/iris-protocol':
         specifier: workspace:*
         version: link:../protocol
       ws:
@@ -265,10 +265,10 @@ importers:
 
   packages/test:
     dependencies:
-      '@syrin/protocol':
+      '@syrin/iris-protocol':
         specifier: workspace:*
         version: link:../protocol
-      '@syrin/server':
+      '@syrin/iris-server':
         specifier: workspace:*
         version: link:../server
       vitest:

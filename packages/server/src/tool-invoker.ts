@@ -5,7 +5,7 @@ export const UNKNOWN_TOOL_ERROR = 'unknown iris tool';
 
 /**
  * Programmatic, MCP-free dispatch: (toolName, args) -> the same value the MCP handler returns.
- * This is the seam @syrin/test calls instead of standing up a stdio MCP transport.
+ * This is the seam @syrin/iris-test calls instead of standing up a stdio MCP transport.
  */
 export type ToolInvoker = (toolName: string, args: Record<string, unknown>) => Promise<unknown>;
 

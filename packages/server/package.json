@@ -1,5 +1,5 @@
 {
-  "name": "@syrin/server",
+  "name": "@syrin/iris-server",
   "version": "0.3.1",
   "description": "Iris bridge + MCP server. Hosts the browser WS endpoint and exposes MCP tools to the coding agent.",
   "type": "module",
@@ -23,7 +23,7 @@
     "prepack": "tsc -b && find dist -name \"*.test.*\" -delete"
   },
   "dependencies": {
-    "@syrin/protocol": "workspace:*",
+    "@syrin/iris-protocol": "workspace:*",
     "@modelcontextprotocol/sdk": "^1.13.0",
     "ws": "^8.18.0",
     "zod": "^3.24.1"

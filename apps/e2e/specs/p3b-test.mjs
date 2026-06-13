@@ -1,6 +1,6 @@
 import { chromium } from 'playwright';
 import os from 'node:os'; import path from 'node:path'; import nfs from 'node:fs';
-import { start, TOOLS, BaselineStore, RecordingStore, FlowStore, AnnotationStore, createNodeFileSystem } from '@syrin/server';
+import { start, TOOLS, BaselineStore, RecordingStore, FlowStore, AnnotationStore, createNodeFileSystem } from '@syrin/iris-server';
 const sleep=(ms)=>new Promise(r=>setTimeout(r,ms));
 let pass=0,fail=0; const chk=(l,o,d='')=>{console.log(`   ${o?'✅':'❌'} ${l}${d?'  — '+d:''}`);o?pass++:fail++;};
 const irisRoot=path.join(os.tmpdir(),`iris-p3b-${process.pid}`,'.iris');

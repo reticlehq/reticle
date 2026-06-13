@@ -11,7 +11,7 @@ import {
   type FlowStepResult,
   type IrisEvent,
   type QueryEmptyHint,
-} from '@syrin/protocol';
+} from '@syrin/iris-protocol';
 import type { EvalResult, Predicate } from './predicate.js';
 import { asRecord, asString } from './tools-helpers.js';
 

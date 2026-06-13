@@ -1,4 +1,4 @@
-import { IrisCommand, QueryBy } from '@syrin/protocol';
+import { IrisCommand, QueryBy } from '@syrin/iris-protocol';
 import { IrisTool } from './tool-names.js';
 import type { RecordedStep, CompiledProgram } from './recordings.js';
 import type { Session } from './session.js';

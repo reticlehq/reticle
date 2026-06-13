@@ -1,4 +1,4 @@
-import { THROTTLED_WARNING } from '@syrin/protocol';
+import { THROTTLED_WARNING } from '@syrin/iris-protocol';
 import type { Session, SessionHealth } from './session.js';
 
 /** F2: the `session` (and optional throttled `warning`) block spliced onto act/assert results. */
