@@ -4,6 +4,7 @@ import { Bridge } from './bridge.js';
 import { BaselineStore } from './baselines.js';
 import { RecordingStore } from './recordings.js';
 import { createMcpServer } from './mcp.js';
+import { CdpRealInputProvider } from './real-input.js';
 import { log } from './log.js';
 
 export { IrisTool } from './tool-names.js';
@@ -18,11 +19,15 @@ export type { RecordedStep, CompiledProgram } from './recordings.js';
 export { evaluatePredicate, waitForPredicate, PredicateSchema } from './predicate.js';
 export type { Predicate, EvalResult } from './predicate.js';
 export { buildReactionReport } from './reaction.js';
+export { CdpRealInputProvider, boxCenter, isPointerAction } from './real-input.js';
+export type { RealInputProvider, ElementBox, RealInputArgs } from './real-input.js';
 
 export interface StartOptions {
   port?: number;
   /** When false, skip the MCP stdio transport (used in tests). */
   mcp?: boolean;
+  /** R1: CDP endpoint for native real-input mode. Defaults to env IRIS_CDP_URL. No-op if unset. */
+  cdpUrl?: string;
 }
 
 export interface RunningServer {
@@ -36,9 +41,13 @@ export async function start(options: StartOptions = {}): Promise<RunningServer> 
   const bridge = new Bridge({ port });
   const baselines = new BaselineStore();
   const recordings = new RecordingStore();
+  const cdpUrl = options.cdpUrl ?? process.env['IRIS_CDP_URL'];
+  const realInput =
+    cdpUrl !== undefined && cdpUrl.length > 0 ? new CdpRealInputProvider({ cdpUrl }) : undefined;
 
   if (options.mcp !== false) {
-    const server = createMcpServer({ sessions: bridge.sessions, baselines, recordings });
+    const deps = { sessions: bridge.sessions, baselines, recordings };
+    const server = createMcpServer(realInput !== undefined ? { ...deps, realInput } : deps);
     await server.connect(new StdioServerTransport());
     log('mcp_connected', { port });
   }

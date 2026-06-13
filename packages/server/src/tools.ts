@@ -1,6 +1,15 @@
 import { z } from 'zod';
-import { EventType, IrisCommand, SnapshotMode } from '@iris/protocol';
-import type { SessionManager } from './session.js';
+import {
+  ActionType,
+  ActionWarning,
+  EventType,
+  InputMode,
+  IrisCommand,
+  SnapshotMode,
+} from '@iris/protocol';
+import type { Session, SessionManager } from './session.js';
+import type { ElementBox, RealInputArgs, RealInputProvider } from './real-input.js';
+import { isPointerAction } from './real-input.js';
 import { IrisTool } from './tool-names.js';
 import { buildReactionReport } from './reaction.js';
 import { evaluatePredicate, waitForPredicate, PredicateSchema } from './predicate.js';
@@ -16,6 +25,8 @@ export interface ToolDeps {
   sessions: SessionManager;
   baselines: BaselineStore;
   recordings: RecordingStore;
+  /** R1: optional native-input provider. undefined ⇒ everything stays synthetic. */
+  realInput?: RealInputProvider;
 }
 
 interface SnapshotResult {
@@ -54,6 +65,72 @@ async function commandOrThrow(
   const result = await session.command(name, args);
   if (!result.ok) throw new Error(result.error ?? `command '${name}' failed`);
   return result.result;
+}
+
+/** R1: narrow an INSPECT result's `box` into a positive-area ElementBox (else undefined). */
+function asBox(value: unknown): ElementBox | undefined {
+  const b = asRecord(asRecord(value)['box']);
+  const x = asNumber(b['x']);
+  const y = asNumber(b['y']);
+  const w = asNumber(b['width']);
+  const h = asNumber(b['height']);
+  if (x === undefined || y === undefined || w === undefined || h === undefined) return undefined;
+  if (w <= 0 || h <= 0) return undefined; // zero-area (display:none) ⇒ native click would miss
+  return { x, y, width: w, height: h };
+}
+
+/** R1: result of a real-input attempt, or undefined to mean "fall back to synthetic". */
+interface RealActResult {
+  result: unknown;
+  settled: boolean;
+  /** Set when a provider was available but threw — surfaces the fallback to the agent. */
+  fellBack?: boolean;
+}
+
+/**
+ * R1: attempt to drive a pointer action via native input. Returns undefined whenever the
+ * synthetic path should run (no provider, non-pointer action, no matching page, unresolvable
+ * box, or the provider declined). A throw inside the provider becomes a synthetic fallback
+ * flagged with `fellBack` so the agent learns it happened.
+ */
+async function tryRealInput(
+  deps: ToolDeps,
+  session: Session,
+  ref: string,
+  action: string,
+  args: Record<string, unknown>,
+): Promise<RealActResult | undefined> {
+  const provider = deps.realInput;
+  if (provider === undefined) return undefined;
+  if (!isPointerAction(action)) return undefined; // fill/type stay synthetic
+  if (!(await provider.isAvailableFor(session.url))) return undefined;
+
+  const box = asBox(await commandOrThrow(deps, session.id, IrisCommand.INSPECT, { ref }));
+  if (box === undefined) return undefined;
+
+  const inner = asRecord(args['args']);
+  let toBox: ElementBox | undefined;
+  if (action === ActionType.DRAG) {
+    const toRef = asString(inner['toRef']);
+    if (toRef === undefined) return undefined; // native drag impossible ⇒ synthetic
+    toBox = asBox(await commandOrThrow(deps, session.id, IrisCommand.INSPECT, { ref: toRef }));
+    if (toBox === undefined) return undefined;
+  }
+
+  const performArgs: RealInputArgs = {};
+  const value = asString(inner['value']);
+  if (value !== undefined) performArgs.value = value;
+  const text = asString(inner['text']);
+  if (text !== undefined) performArgs.text = text;
+  if (toBox !== undefined) performArgs.toBox = toBox;
+
+  try {
+    const performed = await provider.perform(session.url, action, box, performArgs);
+    if (!performed.performed) return undefined; // provider declined ⇒ synthetic
+    return { result: { performed: true, center: performed.center, action }, settled: true };
+  } catch {
+    return { result: undefined, settled: false, fellBack: true };
+  }
 }
 
 export const TOOLS: ToolDef[] = [
@@ -111,7 +188,7 @@ export const TOOLS: ToolDef[] = [
   {
     name: IrisTool.ACT,
     description:
-      'Execute one action against a ref: click|dblclick|hover|focus|fill|type|clear|select|check|uncheck|submit|press|scrollIntoView. Returns immediately with a `since` cursor for observe. Result includes effect: { dispatched, targetMatched, visible, enabled, defaultPrevented, focusMoved, valueChanged, domMutatedWithin } so you can tell "action missed" vs "app didn\'t react". Top-level dispatched/settled/settleReason report whether the click landed (dispatched) and whether a real frame flushed (settled) vs a throttled-tab timeout (settleReason:"timeout") — a settle timeout never fails the tool.',
+      'Execute one action against a ref: click|dblclick|hover|focus|fill|type|clear|select|check|uncheck|submit|press|scrollIntoView. Returns immediately with a `since` cursor for observe. Result includes effect: { dispatched, targetMatched, visible, enabled, defaultPrevented, focusMoved, valueChanged, domMutatedWithin } so you can tell "action missed" vs "app didn\'t react". Top-level dispatched/settled/settleReason report whether the click landed (dispatched) and whether a real frame flushed (settled) vs a throttled-tab timeout (settleReason:"timeout") — a settle timeout never fails the tool. Every result also carries inputMode. With real-input mode (server cdpUrl/IRIS_CDP_URL set) pointer actions (hover/click/dblclick/drag) are driven via native CDP input and return inputMode:"real" WITHOUT the synthetic `effect` block — observe the reaction with iris_observe. Otherwise inputMode:"synthetic". Real-input applies to iris_act only (not act_sequence/act_and_wait).',
     inputSchema: {
       ref: z.string(),
       action: z.string(),
@@ -123,6 +200,26 @@ export const TOOLS: ToolDef[] = [
       const session = deps.sessions.resolve(asString(args['sessionId']));
       refuseIfThrottled(session, args['refuseWhenThrottled']);
       const since = session.elapsed();
+      const ref = asString(args['ref']) ?? '';
+      const action = asString(args['action']) ?? '';
+
+      // R1: drive native pointer input when a provider is available; otherwise fall back.
+      const real = await tryRealInput(deps, session, ref, action, args);
+      if (real !== undefined && real.fellBack !== true) {
+        if (deps.recordings.active().length > 0) {
+          deps.recordings.capture(compileActStep(args, real.result));
+        }
+        return {
+          since,
+          inputMode: InputMode.REAL,
+          dispatched: true,
+          settled: real.settled,
+          settleReason: null,
+          result: real.result,
+          ...healthEnvelope(session),
+        };
+      }
+
       const result = await session.command(IrisCommand.ACT, {
         ref: args['ref'],
         action: args['action'],
@@ -134,12 +231,15 @@ export const TOOLS: ToolDef[] = [
       }
       // F1: lift dispatch/settle status to the envelope (a settle timeout is NOT a failure).
       const r = asRecord(result.result);
+      const fellBack = real?.fellBack === true;
       return {
         since,
+        inputMode: InputMode.SYNTHETIC,
         dispatched: r['dispatched'] ?? true,
         settled: r['settled'] ?? null,
         settleReason: r['settleReason'] ?? null,
         result: result.result,
+        ...(fellBack ? { warning: ActionWarning.REAL_INPUT_FELL_BACK } : {}),
         ...healthEnvelope(session),
       };
     },

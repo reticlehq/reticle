@@ -31,6 +31,9 @@
   "devDependencies": {
     "@types/ws": "^8.5.13"
   },
+  "optionalDependencies": {
+    "playwright": "^1.48.0"
+  },
   "license": "MIT",
   "author": "Iris contributors",
   "repository": {

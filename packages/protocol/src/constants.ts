@@ -81,10 +81,20 @@ export type HealthReason = (typeof HealthReason)[keyof typeof HealthReason];
 export const THROTTLED_WARNING =
   'tab throttled; timer/rAF/pointer gestures may silently no-op — refocus before driving';
 
+/** R1: which input path executed an action — native (CDP/Playwright) vs synthetic dispatchEvent. */
+export const InputMode = {
+  REAL: 'real',
+  SYNTHETIC: 'synthetic',
+} as const;
+export type InputMode = (typeof InputMode)[keyof typeof InputMode];
+
 /** Best-effort caveats attached to action results so the agent can interpret a no-op (F3). */
 export const ActionWarning = {
   HOVER_NATIVE_ENTER_LEAVE:
     'target has enter/leave handlers; synthetic hover may not trigger them — expect no state change',
+  /** R1: real-input provider was available but failed; the action fell back to synthetic dispatch. */
+  REAL_INPUT_FELL_BACK:
+    'real-input provider was available but failed; fell back to synthetic dispatch',
 } as const;
 export type ActionWarning = (typeof ActionWarning)[keyof typeof ActionWarning];
 
