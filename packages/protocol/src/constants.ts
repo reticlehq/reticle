@@ -42,6 +42,27 @@ export const VISUAL_NO_PROVIDER_RECOMMENDATION =
 /** N3 VISUAL: default per-pixel color-distance threshold (pixelmatch 0..1; higher = more lenient). */
 export const VISUAL_PIXEL_THRESHOLD = 0.1;
 
+/**
+ * N4 EXPLORE (autonomous "smart monkey"): the anomaly classes iris_crawl reports after clicking a
+ * reachable control. Named so the agent (and tests) branch on cause, never on message text.
+ */
+export const CrawlAnomalyKind = {
+  CONSOLE_ERROR: 'console-error', // the click logged a console.error / uncaught error
+  FAILED_REQUEST: 'failed-request', // it fired a request that returned >= 400
+  DEAD_CONTROL: 'dead-control', // it dispatched but the app did NOTHING (no DOM/net/route/signal)
+} as const;
+export type CrawlAnomalyKind = (typeof CrawlAnomalyKind)[keyof typeof CrawlAnomalyKind];
+
+/** N4 EXPLORE: bounds so a crawl always terminates and each click has time to settle. */
+export const CRAWL_DEFAULTS = {
+  /** Max controls clicked in one crawl (then `truncated:true`). */
+  MAX_STEPS: 25,
+  /** ms to wait for a click's reaction to land in the buffer before classifying. */
+  SETTLE_MS: 300,
+  /** HTTP status at/above which a response counts as a failed request. */
+  FAILED_STATUS: 400,
+} as const;
+
 /** Schema version stamped into contract.json so a reader can reject/upgrade old files. */
 export const CONTRACT_FILE_VERSION = 1;
 

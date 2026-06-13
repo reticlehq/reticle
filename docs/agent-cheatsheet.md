@@ -51,7 +51,9 @@ Sessions/perception/verify — what you'll use 90% of the time:
 
 **Reach past core when…** you need to record/replay a journey (`iris_record_start/stop`,
 `iris_replay`), persist a self-healing golden flow (`iris_flow_save*` / `iris_flow_replay` /
-`iris_flow_heal`), compile annotations (`iris_annotate`), or hand control to a human
+`iris_flow_heal`), compile annotations (`iris_annotate`), explore autonomously
+(`iris_explore` lists controls; `iris_crawl` clicks them all and reports anomalies — **destructive**),
+visual-check (`iris_screenshot` / `iris_visual_diff`), or hand control to a human
 (`iris_end_session` / `iris_resume` / `iris_messages`).
 
 ## flows vs baselines vs project.json (the persistence layers)

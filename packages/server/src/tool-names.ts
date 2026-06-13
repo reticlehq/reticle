@@ -43,6 +43,8 @@ export const IrisTool = {
   SCREENSHOT: 'iris_screenshot',
   /** N3 VISUAL (M11): perceptual-diff the live page against a saved visual baseline. */
   VISUAL_DIFF: 'iris_visual_diff',
+  /** N4 EXPLORE: autonomously click every reachable control + report anomalies (no script). */
+  CRAWL: 'iris_crawl',
   /** Live-control: end the session (→ ended + push PRESENTER). Handlers live in the tools facet. */
   END_SESSION: 'iris_end_session',
   /** Live-control: clear a pause (→ active). */

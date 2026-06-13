@@ -31,6 +31,7 @@ export const SESSION_BOUND_TOOLS: ReadonlySet<string> = new Set([
   IrisTool.CLOCK,
   IrisTool.STATE,
   IrisTool.EXPLORE,
+  IrisTool.CRAWL,
 ]);
 
 /**

@@ -36,6 +36,8 @@ export type { ReadProjectResult } from './project-store.js';
 export { VisualStore } from './visual-store.js';
 export { diffPng } from './visual-diff.js';
 export type { VisualDiffResult, VisualRect, DiffOptions } from './visual-diff.js';
+export { crawl } from './crawl.js';
+export type { CrawlReport, CrawlAnomaly, CrawlOptions, CrawlSession } from './crawl.js';
 export {
   CORE_TOOL_NAMES,
   TOOL_PROFILE,

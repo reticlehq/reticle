@@ -34,6 +34,7 @@ import { CONTRACT_TOOLS } from './contract-tools.js';
 import { FLOW_TOOLS } from './flow-tools.js';
 import { PROJECT_TOOLS } from './project-tools.js';
 import { VISUAL_TOOLS } from './visual-tools.js';
+import { CRAWL_TOOLS } from './crawl-tools.js';
 import { ANNOTATE_TOOLS } from './annotate-tools.js';
 import { LIVE_CONTROL_TOOLS } from './live-control-tools.js';
 import { pausedShortCircuit, withControl } from './control-envelope.js';
@@ -673,6 +674,8 @@ export const TOOLS: ToolDef[] = [
   ...PROJECT_TOOLS,
   // N3 VISUAL (M11): iris_screenshot / iris_visual_diff — opt-in, CDP-driven. See visual-tools.ts.
   ...VISUAL_TOOLS,
+  // N4 EXPLORE: iris_crawl — autonomous click-everything + anomaly report. See crawl-tools.ts.
+  ...CRAWL_TOOLS,
   // M8 Stage B ANNOTATE: iris_annotate (structured annotation → expect/dynamic/success). See annotate-tools.ts.
   ...ANNOTATE_TOOLS,
   // Live-control: iris_end_session / iris_resume / iris_messages. See live-control-tools.ts.
