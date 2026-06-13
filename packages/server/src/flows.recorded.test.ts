@@ -15,6 +15,7 @@ import {
 } from '@iris/protocol';
 import { createNodeFileSystem, type FileSystemPort } from './fs-port.js';
 import { FlowStore } from './flows.js';
+import { AnnotationStore } from './annotation-store.js';
 import { FLOW_TOOLS } from './flow-tools.js';
 import { IrisTool } from './tool-names.js';
 import { BaselineStore } from './baselines.js';
@@ -102,6 +103,7 @@ function fakeDeps(store: FlowStore, events: IrisEvent[]): ToolDeps {
     baselines: new BaselineStore(),
     recordings: new RecordingStore(),
     flows: store,
+    annotations: new AnnotationStore(),
     fs: createNodeFileSystem(),
     irisRoot: '/virtual/.iris',
     now: () => FROZEN,

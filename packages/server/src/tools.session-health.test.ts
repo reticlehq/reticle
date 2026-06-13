@@ -7,6 +7,7 @@ import { BaselineStore } from './baselines.js';
 import { createNodeFileSystem } from './fs-port.js';
 import { RecordingStore } from './recordings.js';
 import { FlowStore } from './flows.js';
+import { AnnotationStore } from './annotation-store.js';
 import type { Session, SessionInfo, SessionManager } from './session.js';
 
 const SESSION_URL = 'http://localhost:5173/app';
@@ -51,6 +52,7 @@ function fakeDeps(throttled: boolean, listRows: SessionInfo[]): ToolDeps {
     baselines: new BaselineStore(),
     recordings: new RecordingStore(),
     flows: new FlowStore(createNodeFileSystem(), '/tmp/iris-test/.iris', { now: () => 0 }),
+    annotations: new AnnotationStore(),
     fs: createNodeFileSystem(),
     irisRoot: '/tmp/iris-test/.iris',
     now: () => 0,

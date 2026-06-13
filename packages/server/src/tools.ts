@@ -24,6 +24,8 @@ import type { FileSystemPort } from './fs-port.js';
 import type { FlowStore } from './flows.js';
 import { CONTRACT_TOOLS } from './contract-tools.js';
 import { FLOW_TOOLS } from './flow-tools.js';
+import { ANNOTATE_TOOLS } from './annotate-tools.js';
+import type { AnnotationStore } from './annotation-store.js';
 
 export interface ToolDeps {
   sessions: SessionManager;
@@ -31,6 +33,8 @@ export interface ToolDeps {
   recordings: RecordingStore;
   /** M8 Stage A FLOWFMT: on-disk anchored-flow store (.iris/flows/). */
   flows: FlowStore;
+  /** M8 Stage B ANNOTATE: structured annotations accumulating for the live recording. */
+  annotations: AnnotationStore;
   /** R1: optional native-input provider. undefined ⇒ everything stays synthetic. */
   realInput?: RealInputProvider;
   /** M8 Stage A: injected filesystem seam (tests pass a fake/temp-dir adapter). */
@@ -585,4 +589,6 @@ export const TOOLS: ToolDef[] = [
   ...CONTRACT_TOOLS,
   // M8 Stage A FLOWFMT: iris_flow_save / iris_flow_list / iris_flow_load. See flow-tools.ts.
   ...FLOW_TOOLS,
+  // M8 Stage B ANNOTATE: iris_annotate (structured annotation → expect/dynamic/success). See annotate-tools.ts.
+  ...ANNOTATE_TOOLS,
 ];

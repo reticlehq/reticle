@@ -7,6 +7,7 @@ import { BaselineStore } from './baselines.js';
 import { createNodeFileSystem } from './fs-port.js';
 import { RecordingStore } from './recordings.js';
 import { FlowStore } from './flows.js';
+import { AnnotationStore } from './annotation-store.js';
 import { boxCenter, type ElementBox, type RealInputProvider } from './real-input.js';
 import type { Session, SessionManager } from './session.js';
 
@@ -72,6 +73,7 @@ function fakeDeps(provider: RealInputProvider | undefined, state: FakeSessionSta
     baselines: new BaselineStore(),
     recordings: new RecordingStore(),
     flows: new FlowStore(createNodeFileSystem(), '/tmp/iris-test/.iris', { now: () => 0 }),
+    annotations: new AnnotationStore(),
     fs: createNodeFileSystem(),
     irisRoot: '/tmp/iris-test/.iris',
     now: () => 0,

@@ -2,6 +2,9 @@ import { z } from 'zod';
 import {
   ActionType,
   AnchorKind,
+  AnnotationKind,
+  type AnnotationErrorCode,
+  type AnnotationTarget,
   type DriftReason,
   ElementState,
   FLOW_FILE_VERSION,
@@ -100,6 +103,12 @@ export type FlowAnchor = z.infer<typeof FlowAnchorSchema>;
 /** A post-condition a step asserts (compiled from a Stage-B annotation; sparse in Stage A). */
 export const FlowExpectSchema = z.object({
   signal: z.string().optional(),
+  /**
+   * M8 Stage B ANNOTATE: optional payload shape an `assert-signal` annotation requires the signal
+   * to match (the predicate DSL's signal.dataMatches). Additive/optional — a Stage-A file with a
+   * bare `signal` still parses, and the on-disk version stays FLOW_FILE_VERSION 1.
+   */
+  signalData: z.record(z.unknown()).optional(),
   net: z
     .object({
       method: z.string().optional(),
@@ -242,4 +251,67 @@ export interface FlowHealResult {
   proposals: RebindProposal[];
   /** true iff apply:true AND ≥1 rebind was written back to disk. */
   applied: boolean;
+}
+
+/**
+ * M8 Stage B ANNOTATE — the structured annotation REQUEST a human/agent attaches to the live
+ * recording (the server-side `iris_annotate` tool). A discriminated union over the four shipped
+ * AnnotationKind values. Each variant carries exactly the fields its compilation needs.
+ *
+ * FIRST CUT boundary (do NOT remove): only this structured union is accepted. A free
+ * NATURAL-LANGUAGE annotation (e.g. the string "the diff should appear") is REJECTED by this
+ * schema — never guessed/compiled into a predicate. Free NL → predicate compilation is explicitly
+ * FUTURE (M8 Stage C); a `safeParse` of a bare string returns success:false, which the tool maps
+ * to AnnotationErrorCode.UNKNOWN_KIND. No NL parser exists or is faked here.
+ */
+export const AnnotationSchema = z.discriminatedUnion('kind', [
+  z.object({
+    kind: z.literal(AnnotationKind.ASSERT_SIGNAL),
+    name: z.string().min(1),
+    dataMatches: z.record(z.unknown()).optional(),
+  }),
+  z.object({
+    kind: z.literal(AnnotationKind.ASSERT_VISIBLE),
+    testid: z.string().min(1),
+  }),
+  z.object({
+    kind: z.literal(AnnotationKind.MARK_DYNAMIC),
+    testid: z.string().min(1),
+  }),
+  z.object({
+    kind: z.literal(AnnotationKind.SUCCESS_STATE),
+    signal: z.string().min(1).optional(),
+    testid: z.string().min(1).optional(),
+  }),
+]);
+export type Annotation = z.infer<typeof AnnotationSchema>;
+
+/**
+ * M8 Stage B ANNOTATE — the iris_annotate result envelope (discriminated on `ok`, never a free
+ * string). On success it names the target (step|flow) + the human compiled-predicate text the
+ * recorder confirmation strip shows ("will assert signal diff:shown").
+ */
+export type AnnotateResult =
+  | { ok: true; target: AnnotationTarget; compiled: string }
+  | { ok: false; code: AnnotationErrorCode };
+
+/**
+ * M8 Stage B ANNOTATE — the patch a compiled annotation produces. The caller applies it to the
+ * AnnotationStore: a step.expect (assert-*), a flow.dynamic[] entry (mark-dynamic), or flow.success
+ * (success-state). All optional; exactly the fields the compiled kind needs are set.
+ */
+export interface AnnotatePatch {
+  /** index of the step whose .expect is set (assert-signal / assert-visible). */
+  stepIndex?: number;
+  stepExpect?: FlowExpect;
+  /** the testid pushed into flow.dynamic[] (mark-dynamic). */
+  dynamicAdd?: string;
+  /** flow.success (success-state). */
+  success?: FlowExpect;
+}
+
+/** M8 Stage B ANNOTATE — pure compiler output: the result envelope + (on ok) the patch to apply. */
+export interface AnnotateOutcome {
+  result: AnnotateResult;
+  patch?: AnnotatePatch;
 }

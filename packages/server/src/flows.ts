@@ -6,7 +6,7 @@ import {
   FlowFileSchema,
   QueryBy,
 } from '@iris/protocol';
-import type { ActionType, FlowAnchor, FlowFile, FlowStep } from '@iris/protocol';
+import type { ActionType, FlowAnchor, FlowExpect, FlowFile, FlowStep } from '@iris/protocol';
 import { IrisTool } from './tool-names.js';
 import type { CompiledProgram, RecordedStep } from './recordings.js';
 import type { FileSystemPort } from './fs-port.js';
@@ -99,6 +99,33 @@ interface SaveSummary {
   empty: boolean;
 }
 
+/**
+ * M8 Stage B ANNOTATE — the structured annotations folded onto a flow at save time: per-step
+ * expect predicates (assert-*), dynamic testids (mark-dynamic → flow.dynamic[]), and the flow's
+ * success end-condition (success-state). All optional — a Stage-A save with no annotations writes
+ * the same bytes as before.
+ */
+export interface FlowAnnotations {
+  stepExpect: Map<number, FlowExpect>;
+  dynamic: string[];
+  success?: FlowExpect;
+}
+
+/** Apply folded annotations onto an anchored flow (pure): per-step expect, dynamic[], success. */
+function withAnnotations(flow: FlowFile, ann: FlowAnnotations | undefined): FlowFile {
+  if (ann === undefined) return flow;
+  const steps = flow.steps.map((step, i) => {
+    const expect = ann.stepExpect.get(i);
+    return expect === undefined ? step : { ...step, expect };
+  });
+  const out: FlowFile = { ...flow, steps };
+  if (ann.dynamic.length > 0) {
+    out.dynamic = ann.dynamic.map((value) => ({ kind: AnchorKind.TESTID, value }));
+  }
+  if (ann.success !== undefined) out.success = ann.success;
+  return out;
+}
+
 const JSON_INDENT = 2;
 const FLOW_SUFFIX = '.json';
 
@@ -114,27 +141,40 @@ export class FlowStore {
     this.#clock = clock;
   }
 
-  /** Convert a CompiledProgram (G6 testid-normalized) into an anchored, on-disk flow + write it. */
-  async save(program: CompiledProgram): Promise<FlowResult<SaveSummary>> {
+  /**
+   * Convert a CompiledProgram (G6 testid-normalized) into an anchored, on-disk flow + write it.
+   * M8 Stage B: optionally fold structured annotations (per-step expect, dynamic[], success) onto
+   * the flow before writing. Omitting `annotations` reproduces the exact Stage-A bytes.
+   */
+  async save(
+    program: CompiledProgram,
+    annotations?: FlowAnnotations,
+  ): Promise<FlowResult<SaveSummary>> {
     if (!isValidFlowName(program.name)) {
       return { ok: false, code: FlowErrorCode.INVALID_NAME };
     }
     const steps = program.steps.map(recordedStepToFlowStep);
-    const flow: FlowFile = {
+    const base: FlowFile = {
       version: FLOW_FILE_VERSION,
       name: program.name,
       createdAt: this.#clock.now(),
       steps,
     };
+    const flow = withAnnotations(base, annotations);
     await this.#fs.mkdir(irisDirPaths(this.#root).flows);
     await this.#fs.writeFile(
       flowPath(this.#root, program.name),
       `${JSON.stringify(flow, null, JSON_INDENT)}\n`,
     );
-    const degraded = steps.filter((s) => s.degraded === true).length;
+    const degraded = flow.steps.filter((s) => s.degraded === true).length;
     return {
       ok: true,
-      value: { name: program.name, stepCount: steps.length, degraded, empty: steps.length === 0 },
+      value: {
+        name: program.name,
+        stepCount: flow.steps.length,
+        degraded,
+        empty: flow.steps.length === 0,
+      },
     };
   }
 

@@ -16,6 +16,7 @@ import { IrisTool } from './tool-names.js';
 import { BaselineStore } from './baselines.js';
 import { RecordingStore } from './recordings.js';
 import { FlowStore } from './flows.js';
+import { AnnotationStore } from './annotation-store.js';
 import { createNodeFileSystem, type FileSystemPort } from './fs-port.js';
 import { flowPath } from './iris-dir.js';
 import { asString } from './tools-helpers.js';
@@ -52,6 +53,7 @@ function fakeDeps(
     baselines: new BaselineStore(),
     recordings,
     flows: new FlowStore(fs, root, clock),
+    annotations: new AnnotationStore(),
     fs,
     irisRoot: root,
     now: clock.now,

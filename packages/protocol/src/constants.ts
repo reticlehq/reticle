@@ -131,6 +131,35 @@ export const RebindStatus = {
 } as const;
 export type RebindStatus = (typeof RebindStatus)[keyof typeof RebindStatus];
 
+/**
+ * M8 Stage B ANNOTATE: what a structured annotation binds to. STEP folds onto the LAST captured
+ * step's expect (assert-signal / assert-visible); FLOW folds onto the flow header (mark-dynamic →
+ * dynamic[], success-state → success).
+ */
+export const AnnotationTarget = {
+  STEP: 'step',
+  FLOW: 'flow',
+} as const;
+export type AnnotationTarget = (typeof AnnotationTarget)[keyof typeof AnnotationTarget];
+
+/**
+ * M8 Stage B ANNOTATE: structured failure codes for the annotate compiler/tool (returned, never
+ * thrown / free strings). NO_ACTIVE_RECORDING = annotate() with nothing recording; NO_STEP_TO_
+ * ANNOTATE = an assert-* with zero captured steps yet; UNKNOWN_KIND = kind ∉ AnnotationKind (or a
+ * free natural-language string — see AnnotationSchema's FUTURE note); MISSING_FIELD = e.g. a
+ * success-state with neither signal nor testid.
+ */
+export const AnnotationErrorCode = {
+  NO_ACTIVE_RECORDING: 'annotate_no_recording',
+  NO_STEP_TO_ANNOTATE: 'annotate_no_step',
+  UNKNOWN_KIND: 'annotate_unknown_kind',
+  MISSING_FIELD: 'annotate_missing_field',
+} as const;
+export type AnnotationErrorCode = (typeof AnnotationErrorCode)[keyof typeof AnnotationErrorCode];
+
+/** M8 Stage B ANNOTATE: leading word of the compiled-predicate confirmation ("will assert …"). */
+export const COMPILED_PREDICATE_PREFIX = 'will';
+
 /** Bounds for the per-session ring buffer (see plan/02-architecture.md). */
 export const RING_BUFFER_DEFAULTS = {
   MAX_EVENTS: 2000,

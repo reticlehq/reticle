@@ -5,6 +5,7 @@ import { Bridge } from './bridge.js';
 import { BaselineStore } from './baselines.js';
 import { RecordingStore } from './recordings.js';
 import { FlowStore } from './flows.js';
+import { AnnotationStore } from './annotation-store.js';
 import { createNodeFileSystem } from './fs-port.js';
 import { createMcpServer } from './mcp.js';
 import { CdpRealInputProvider, LaunchedRealInputProvider } from './real-input.js';
@@ -123,7 +124,17 @@ export async function start(options: StartOptions = {}): Promise<RunningServer> 
     const irisRoot = options.irisRoot ?? join(process.cwd(), IrisDir.ROOT);
     const now = options.now ?? ((): number => Date.now());
     const flows = new FlowStore(fs, irisRoot, { now });
-    const deps = { sessions: bridge.sessions, baselines, recordings, flows, fs, irisRoot, now };
+    const annotations = new AnnotationStore();
+    const deps = {
+      sessions: bridge.sessions,
+      baselines,
+      recordings,
+      annotations,
+      flows,
+      fs,
+      irisRoot,
+      now,
+    };
     const server = createMcpServer(realInput !== undefined ? { ...deps, realInput } : deps);
     await server.connect(new StdioServerTransport());
     log('mcp_connected', { port });

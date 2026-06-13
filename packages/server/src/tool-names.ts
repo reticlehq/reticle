@@ -33,5 +33,7 @@ export const IrisTool = {
   FLOW_SAVE_RECORDED: 'iris_flow_save_recorded',
   /** M8 Stage B: propose (+ opt-in apply) a nearest-match rebind for a drifted flow. */
   FLOW_HEAL: 'iris_flow_heal',
+  /** M8 Stage B ANNOTATE: structured annotation → compiles into the recording's expect/dynamic/success. */
+  ANNOTATE: 'iris_annotate',
 } as const;
 export type IrisTool = (typeof IrisTool)[keyof typeof IrisTool];

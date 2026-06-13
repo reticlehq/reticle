@@ -20,6 +20,7 @@ import { buildProposals } from './flow-heal.js';
 import { FLOW_TOOLS } from './flow-tools.js';
 import { IrisTool } from './tool-names.js';
 import { FlowStore } from './flows.js';
+import { AnnotationStore } from './annotation-store.js';
 import { createNodeFileSystem } from './fs-port.js';
 import { BaselineStore } from './baselines.js';
 import { RecordingStore } from './recordings.js';
@@ -145,6 +146,7 @@ function fakeDeps(store: FlowStore, session: FakeSession): ToolDeps {
     baselines: new BaselineStore(),
     recordings: new RecordingStore(),
     flows: store,
+    annotations: new AnnotationStore(),
     fs: createNodeFileSystem(),
     irisRoot: '/virtual/.iris',
     now: () => FROZEN,

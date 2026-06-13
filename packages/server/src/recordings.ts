@@ -40,6 +40,15 @@ export class RecordingStore {
     return this.#active.has(name);
   }
 
+  /**
+   * M8 Stage B ANNOTATE: number of steps captured so far in the named ACTIVE recording (0 if it
+   * exists but is empty, undefined if there is no active recording by that name). Lets the annotate
+   * compiler target the LAST captured step without exposing the mutable step array.
+   */
+  stepCount(name: string): number | undefined {
+    return this.#active.get(name)?.steps.length;
+  }
+
   /** Append a captured step to every active recording (steps belong to all in-flight spans). */
   capture(step: RecordedStep): void {
     for (const rec of this.#active.values()) rec.steps.push(step);

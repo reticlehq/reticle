@@ -16,6 +16,7 @@ import { asString } from './tools-helpers.js';
 import { replayFlow } from './flow-replay.js';
 import { buildProposals } from './flow-heal.js';
 import { waitForPredicate } from './predicate.js';
+import type { FlowAnnotations } from './flows.js';
 import type { ToolDef, ToolDeps } from './tools.js';
 
 /** The latest valid recorded-flow payload in a session's buffer, or undefined (never throws). */
@@ -65,11 +66,17 @@ export const FLOW_TOOLS: ToolDef[] = [
           code: FlowErrorCode.NO_RECORDING,
         });
       }
-      return deps.flows
-        .save(program)
-        .then((res) =>
-          res.ok ? res.value : { error: flowErrorMessage(res.code), code: res.code },
-        );
+      // M8 Stage B: fold any structured annotations (expect/dynamic/success) onto the saved flow.
+      const success = deps.annotations.success(name);
+      const annotations: FlowAnnotations = {
+        stepExpect: deps.annotations.stepExpect(name),
+        dynamic: deps.annotations.dynamic(name),
+        ...(success !== undefined ? { success } : {}),
+      };
+      return deps.flows.save(program, annotations).then((res) => {
+        if (res.ok) deps.annotations.clear(name);
+        return res.ok ? res.value : { error: flowErrorMessage(res.code), code: res.code };
+      });
     },
   },
   {

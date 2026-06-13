@@ -125,6 +125,7 @@ async function runTestidStep(
   step: FlowStep,
   index: number,
   value: string,
+  dynamic: ReadonlySet<string>,
 ): Promise<FlowStepResult> {
   const queryResult = await session.command(IrisCommand.QUERY, { by: QueryBy.TESTID, value });
   const { refs, hint } = readQuery(queryResult);
@@ -145,7 +146,31 @@ async function runTestidStep(
     args: step.args ?? {},
   });
   const result: FlowStepResult = { step: index, tool: step.tool, anchor: value, ok: act.ok };
-  if (!act.ok) result.error = act.error ?? 'command failed';
+  if (!act.ok) {
+    result.error = act.error ?? 'command failed';
+    if (note !== undefined) result.note = note;
+    return result;
+  }
+  // M8 Stage B ANNOTATE: assert the step's expect.element testid is present AFTER the action —
+  // unless that testid was marked DYNAMIC (the LLM-output case), in which case its presence/content
+  // is NOT asserted (only the action ran). The skip is scoped strictly to the dynamic set.
+  const expectTestid = step.expect?.element?.testid;
+  if (expectTestid !== undefined && !dynamic.has(expectTestid)) {
+    const expectQuery = await session.command(IrisCommand.QUERY, {
+      by: QueryBy.TESTID,
+      value: expectTestid,
+    });
+    const expectRefs = readQuery(expectQuery);
+    if (expectRefs.refs.length === 0) {
+      return {
+        step: index,
+        tool: step.tool,
+        anchor: expectTestid,
+        ok: false,
+        drift: testidDrift(expectTestid, expectRefs.hint),
+      };
+    }
+  }
   if (note !== undefined) result.note = note;
   return result;
 }
@@ -188,6 +213,12 @@ export async function replayFlow(
   signalTimeoutMs: number,
 ): Promise<FlowStepResult[]> {
   const results: FlowStepResult[] = [];
+  // M8 Stage B ANNOTATE: testids whose region is LLM-dynamic — their expect-presence is NOT asserted.
+  const dynamic = new Set<string>(
+    (flow.dynamic ?? [])
+      .filter((a) => a.kind === AnchorKind.TESTID)
+      .map((a) => (a.kind === AnchorKind.TESTID ? a.value : '')),
+  );
   let index = 0;
   for (const step of flow.steps) {
     const label = anchorLabel(step.anchor);
@@ -195,7 +226,7 @@ export async function replayFlow(
     if (step.anchor.kind === AnchorKind.SIGNAL) {
       result = await runSignalStep(session, step, index, label, waitForSignal, signalTimeoutMs);
     } else {
-      result = await runTestidStep(session, step, index, label);
+      result = await runTestidStep(session, step, index, label, dynamic);
     }
     results.push(result);
     if (result.drift !== undefined || !result.ok) break;
