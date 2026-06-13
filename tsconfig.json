@@ -4,6 +4,7 @@
     { "path": "packages/protocol" },
     { "path": "packages/browser" },
     { "path": "packages/server" },
-    { "path": "packages/react" }
+    { "path": "packages/react" },
+    { "path": "packages/babel-plugin" }
   ]
 }

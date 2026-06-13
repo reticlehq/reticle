@@ -72,6 +72,9 @@ importers:
         specifier: ^19.0.0
         version: 19.2.7(react@19.2.7)
     devDependencies:
+      '@iris/babel-plugin':
+        specifier: workspace:*
+        version: link:../../packages/babel-plugin
       '@types/react':
         specifier: ^19.0.0
         version: 19.2.17
@@ -90,6 +93,15 @@ importers:
       vite:
         specifier: ^6.0.7
         version: 6.4.3(@types/node@22.19.20)
+
+  packages/babel-plugin:
+    devDependencies:
+      '@babel/core':
+        specifier: ^7.26.0
+        version: 7.29.7
+      '@types/babel__core':
+        specifier: ^7.20.5
+        version: 7.20.5
 
   packages/browser:
     dependencies:

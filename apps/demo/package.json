@@ -23,6 +23,7 @@
     "@vitejs/plugin-react": "^4.3.4",
     "agentation": "^3.0.2",
     "agentation-mcp": "^1.2.0",
-    "vite": "^6.0.7"
+    "vite": "^6.0.7",
+    "@iris/babel-plugin": "workspace:*"
   }
 }

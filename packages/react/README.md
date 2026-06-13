@@ -13,6 +13,11 @@ import { install } from '@iris/react';
 if (import.meta.env.DEV) install(); // call before iris.connect()
 ```
 
-Requires [`@iris/browser`](https://www.npmjs.com/package/@iris/browser). Source mapping uses
-React's dev `_debugSource` (on by default in Vite/Next/CRA dev). See the
-[main README](https://github.com/iris-mcp/iris). MIT.
+Requires [`@iris/browser`](https://www.npmjs.com/package/@iris/browser).
+
+**Source-file mapping:** on React ≤18, uses dev `_debugSource` automatically. On **React 19**
+(`_debugSource` removed), add [`@iris/babel-plugin`](https://www.npmjs.com/package/@iris/babel-plugin)
+to your dev build — the adapter then reads its `data-iris-source` stamp so `iris_inspect`
+returns `component.source = { file, line, column }`.
+
+See the [main README](https://github.com/iris-mcp/iris). MIT.

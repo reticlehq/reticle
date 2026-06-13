@@ -57,10 +57,27 @@ export function identify(el: Element): ComponentInfo | null {
     fiber = fiber.return;
   }
 
+  // React 19 dropped `_debugSource`; fall back to a data-iris-source stamp if present
+  // (added by @iris/babel-plugin in dev).
+  if (source === undefined) {
+    source = sourceFromAttribute(el);
+  }
+
   if (stack.length === 0 && source === undefined) return null;
   const info: ComponentInfo = { componentStack: stack };
   if (source !== undefined) info.source = source;
   return info;
+}
+
+function sourceFromAttribute(el: Element): ComponentSource | undefined {
+  const stamped = el.closest('[data-iris-source]');
+  const raw = stamped?.getAttribute('data-iris-source');
+  if (raw === null || raw === undefined) return undefined;
+  const match = /^(.*):(\d+):(\d+)$/.exec(raw);
+  if (match === null) return undefined;
+  const [, file, line, column] = match;
+  if (file === undefined || line === undefined || column === undefined) return undefined;
+  return { file, line: Number(line), column: Number(column) };
 }
 
 let installed = false;

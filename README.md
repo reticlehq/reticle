@@ -80,12 +80,13 @@ against the live app.
 
 ## Packages
 
-| Package                               | Role                                         |
-| ------------------------------------- | -------------------------------------------- |
-| [`@iris/browser`](packages/browser)   | Instrumentation SDK embedded in your app     |
-| [`@iris/server`](packages/server)     | Bridge + MCP server (the `iris` CLI)         |
-| [`@iris/react`](packages/react)       | React adapter: DOM → component → source file |
-| [`@iris/protocol`](packages/protocol) | Shared wire contract (types + schemas)       |
+| Package                                       | Role                                                     |
+| --------------------------------------------- | -------------------------------------------------------- |
+| [`@iris/browser`](packages/browser)           | Instrumentation SDK embedded in your app                 |
+| [`@iris/server`](packages/server)             | Bridge + MCP server (the `iris` CLI)                     |
+| [`@iris/react`](packages/react)               | React adapter: DOM → component → source file             |
+| [`@iris/babel-plugin`](packages/babel-plugin) | Stamps `data-iris-source` for source mapping on React 19 |
+| [`@iris/protocol`](packages/protocol)         | Shared wire contract (types + schemas)                   |
 
 ## Status
 
