@@ -33,3 +33,16 @@ export type {
   ContextFactory,
   RunnerOptions,
 } from './types.js';
+
+// FLOW2SPEC (P4): flows under .iris/flows become the runnable suite.
+export { flowToSpec, flowsAsSpecs } from './flow-spec.js';
+export type { FlowSpec, FlowSpecOptions, FlowsAsSpecsOptions, SpecRunResult } from './flow-spec.js';
+export { assertSuccess, successToPredicate } from './success-assert.js';
+export {
+  registerFlowSpecs,
+  irisFlowsAsSpecs,
+  FlowMalformedError,
+  SpecFailure,
+} from './register.js';
+export type { RegisterFn, RegisterFlowSpecsOptions } from './register.js';
+export { SpecKind, SpecOutcome, SpecMessage, FLOW_LOAD_ERROR_PREFIX } from './constants.js';

@@ -60,3 +60,31 @@ export const NO_ELEMENT_FOR_TESTID = 'no element for testid';
  * the probe runs a non-mutating SCROLL_INTO_VIEW against it purely to read the reported inputMode.
  */
 export const PROBE_TESTID = 'iris-root';
+
+/**
+ * FLOW2SPEC (P4): a flow under .iris/flows becomes a runnable spec. A flow either loads to a
+ * RUNNABLE spec (replay its anchored steps + assert flow.success) or, when the file is
+ * missing/malformed/badly-named, surfaces as an ERROR spec that fails loudly (never a silent skip).
+ */
+export const SpecKind = { RUNNABLE: 'runnable', ERROR: 'error' } as const;
+export type SpecKind = (typeof SpecKind)[keyof typeof SpecKind];
+
+/** FLOW2SPEC: the binary outcome of running one RUNNABLE flow spec. */
+export const SpecOutcome = { PASS: 'pass', FAIL: 'fail' } as const;
+export type SpecOutcome = (typeof SpecOutcome)[keyof typeof SpecOutcome];
+
+/**
+ * FLOW2SPEC: the named failure/diagnostic messages a flow spec can carry — never a free string.
+ * SUCCESS_NOT_MET: replay was clean but flow.success did not hold. STEP_DRIFT: a step anchor
+ * drifted or its expect did not hold (replay stopped). EMPTY_DIR: documentation-only note that an
+ * empty .iris/flows yields zero specs.
+ */
+export const SpecMessage = {
+  SUCCESS_NOT_MET: 'flow.success predicate did not hold after replay',
+  STEP_DRIFT: 'a step anchor drifted or its expect did not hold',
+  EMPTY_DIR: 'no flows under .iris/flows — zero specs registered',
+} as const;
+export type SpecMessage = (typeof SpecMessage)[keyof typeof SpecMessage];
+
+/** FLOW2SPEC: prefix of the Error a malformed/missing flow file raises when its spec runs. */
+export const FLOW_LOAD_ERROR_PREFIX = 'flow could not be loaded';
