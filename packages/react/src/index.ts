@@ -16,6 +16,17 @@ interface Fiber {
 const FIBER_PREFIXES = ['__reactFiber$', '__reactInternalInstance$'];
 const MAX_DEPTH = 200;
 
+/**
+ * Framework plumbing to hide from the component stack (React Router/Next internals, context
+ * providers, error/suspense boundaries) so the agent sees *your* components, not the runtime.
+ */
+const FRAMEWORK_NOISE =
+  /(Context|Boundary|Provider|Router|Handler)$|^(Root|ServerRoot|HotReload|Fragment|__next)/;
+
+function isFrameworkNoise(name: string): boolean {
+  return FRAMEWORK_NOISE.test(name);
+}
+
 function getFiber(el: Element): Fiber | null {
   const key = Object.keys(el).find((k) => FIBER_PREFIXES.some((p) => k.startsWith(p)));
   if (key === undefined) return null;
@@ -41,13 +52,17 @@ function componentName(type: unknown): string | null {
 export function identify(el: Element): ComponentInfo | null {
   let fiber = getFiber(el);
   const stack: string[] = [];
+  const rawStack: string[] = [];
   let source: ComponentSource | undefined;
   let depth = 0;
 
   while (fiber !== null && depth < MAX_DEPTH) {
     depth += 1;
     const name = componentName(fiber.elementType ?? fiber.type);
-    if (name !== null && stack[stack.length - 1] !== name) stack.push(name);
+    if (name !== null && rawStack[rawStack.length - 1] !== name) {
+      rawStack.push(name);
+      if (!isFrameworkNoise(name) && stack[stack.length - 1] !== name) stack.push(name);
+    }
     if (source === undefined && fiber._debugSource !== undefined) {
       source = { file: fiber._debugSource.fileName, line: fiber._debugSource.lineNumber };
       if (fiber._debugSource.columnNumber !== undefined) {
@@ -63,8 +78,10 @@ export function identify(el: Element): ComponentInfo | null {
     source = sourceFromAttribute(el);
   }
 
-  if (stack.length === 0 && source === undefined) return null;
-  const info: ComponentInfo = { componentStack: stack };
+  // Prefer the de-noised stack; fall back to the nearest raw name if filtering left nothing.
+  const componentStack = stack.length > 0 ? stack : rawStack.slice(0, 1);
+  if (componentStack.length === 0 && source === undefined) return null;
+  const info: ComponentInfo = { componentStack };
   if (source !== undefined) info.source = source;
   return info;
 }

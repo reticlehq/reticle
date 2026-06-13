@@ -1,0 +1,22 @@
+{
+  "name": "@iris/next-smoke",
+  "version": "0.0.0",
+  "private": true,
+  "description": "A real Next.js (app router, React 19) app to smoke-test Iris on Next.",
+  "scripts": {
+    "dev": "next dev -p 3100"
+  },
+  "dependencies": {
+    "next": "^15.1.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@iris/browser": "workspace:*",
+    "@iris/react": "workspace:*",
+    "@types/node": "^22.10.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "typescript": "^5.7.3"
+  }
+}

@@ -13,6 +13,7 @@ export default tseslint.config(
       'plan/**',
       'coverage/**',
       'apps/api/**',
+      'apps/next-smoke/**',
     ],
   },
   js.configs.recommended,

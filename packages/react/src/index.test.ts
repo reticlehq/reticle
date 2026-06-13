@@ -28,4 +28,24 @@ describe('react adapter fiber walk', () => {
     const el = document.createElement('div');
     expect(identify(el)).toBeNull();
   });
+
+  it('filters framework wrappers (Next/React internals) from the stack', () => {
+    function Page(): null {
+      return null;
+    }
+    function LayoutRouterContext(): null {
+      return null;
+    }
+    function AppRouter(): null {
+      return null;
+    }
+    const el = document.createElement('button');
+    const root = { return: null, type: AppRouter, elementType: AppRouter };
+    const ctx = { return: root, type: LayoutRouterContext, elementType: LayoutRouterContext };
+    const pageFiber = { return: ctx, type: Page, elementType: Page };
+    const host = { return: pageFiber, type: 'button', elementType: 'button' };
+    (el as unknown as Record<string, unknown>)['__reactFiber$x'] = host;
+
+    expect(identify(el)?.componentStack).toEqual(['Page']);
+  });
 });

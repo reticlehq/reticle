@@ -199,10 +199,11 @@ export default defineConfig({
 });
 ```
 
-> **Next.js note:** Next uses SWC, not Babel, by default. Component identity still works;
-> precise file:line mapping via Babel requires opting into Babel (which disables SWC) — an
-> SWC-native plugin is on the roadmap. Until then, component-stack identity is available
-> without the plugin.
+> **Next.js note:** verified on **Next.js 15 / React 19 (app router, SWC)** — snapshot,
+> query, act, observe, assert, network, console, and **component identity** all work. Next
+> uses SWC, not Babel, so precise file:line mapping isn't available out of the box (an
+> SWC-native plugin is on the roadmap); component-stack identity works without it, with Next's
+> internal wrappers filtered out so you see your components.
 
 ---
 
