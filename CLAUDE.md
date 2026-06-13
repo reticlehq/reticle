@@ -13,16 +13,23 @@ uses to **look, act, observe, and assert**. See `plan/` for the full design (git
 ## Monorepo layout
 
 ```
-packages/protocol   @iris/protocol  — shared wire contract, constants, zod schemas
-packages/browser    @iris/browser   — instrumentation SDK embedded in the app (DOM-side)
-packages/server     @iris/server    — bridge + MCP server, the `iris` CLI (Node-side)
-packages/react      @iris/react     — React adapter: DOM ref -> component stack -> source file
-apps/demo           @iris/demo      — React dashboard used to dogfood Iris
-skills/             — engineering reference docs (open the one that matches your task)
-plan/               — research/design docs (ALWAYS gitignored, never ship)
+packages/protocol      @iris/protocol     — shared wire contract, constants, zod schemas
+packages/browser       @iris/browser      — instrumentation SDK embedded in the app (DOM-side)
+packages/server        @iris/server       — bridge + MCP server, the `iris` CLI (Node-side)
+packages/react         @iris/react        — React adapter: DOM ref -> component -> source file
+packages/babel-plugin  @iris/babel-plugin — stamps data-iris-source (source mapping, React 19)
+packages/next          @iris/next         — Next.js source mapping (keeps SWC) via withIris (CJS)
+apps/demo              @iris/demo         — Vite/React dashboard used to dogfood Iris
+apps/api               @iris/api          — Express backend exercising real-world behaviors (CJS-ish .mjs)
+apps/next-smoke        @iris/next-smoke   — Next.js 15 app verifying Iris on Next
+docs/                  — user-facing docs (getting-started, usage, token-efficiency, local-install)
+skills/                — engineering reference docs (open the one that matches your task)
+plan/                  — research/design docs + throwaway test harnesses (ALWAYS gitignored)
 ```
 
-This is **one git repo** at the root (pnpm + turbo monorepo). Pure TypeScript; no Python.
+This is **one git repo** at the root (pnpm + turbo monorepo). The TS library packages are
+strict TypeScript; `@iris/babel-plugin`/`@iris/next` are plain CJS tooling and `apps/api`/
+`apps/next-smoke` are local fixtures — all excluded from the build/lint/test gates.
 
 ## Service boundaries (who owns what)
 
