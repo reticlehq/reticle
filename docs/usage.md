@@ -811,7 +811,7 @@ one.
 No need to broadcast a signal for every fact. Register stores in your app:
 
 ```ts
-import { registerStore } from '@syrin/iris-browser';
+import { registerStore } from '@syrin/iris';
 registerStore('workspace', () => useWorkspace.getState());
 ```
 
@@ -827,7 +827,7 @@ Store reads are the reliable path; ref reads degrade to a structured failure rat
 Declare it once so the agent learns the surface without reading source:
 
 ```ts
-import { registerCapabilities } from '@syrin/iris-browser';
+import { registerCapabilities } from '@syrin/iris';
 registerCapabilities({ testids: [...], signals: [...], stores: [...], flows: [...] });
 ```
 
