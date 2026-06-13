@@ -1,108 +1,174 @@
-# Iris 👁️ — eyes for coding agents
+<div align="center">
 
-> Let your AI coding agent **see and verify** your running web app — without screenshots.
+# Iris 👁️
 
-Iris instruments your app (a tiny dev-only SDK), and exposes its real runtime behavior to
-your coding agent over an **MCP server**. Instead of screenshotting and guessing, the agent
-gets structured answers to: _what's on screen, what did the app just do, and did the right
-thing happen?_
+### Your AI writes the code. Iris checks that it actually works — without screenshots.
 
-```
-agent ──MCP──▶ iris bridge ──WebSocket──▶ @iris/browser (in your app)
-                   ▲                              │
-                   └────── observations ──────────┘
-        (DOM · network · routes · console · animations · signals)
-```
+Iris gives your coding agent **eyes** into your running web app. Instead of taking
+screenshots and guessing, the agent reads what your app _actually did_ — the API call that
+fired, the modal that opened, the console error it threw, the element that appeared — and
+**verifies it with evidence**.
 
-## Why
+**TypeScript · Model Context Protocol · React-first · dev-only · localhost-only**
 
-Driving a browser by screenshot is slow, costly, and blind to non-visual things (the API
-call that fired, the console error, the route change). Iris reads what the app actually did
-**in code** and lets the agent assert on it.
+[Quickstart](#quickstart) · [Getting Started](docs/getting-started.md) · [Full Guide](docs/usage.md) · [Why it's ~69× cheaper](docs/token-efficiency.md)
 
-**Turn your test cases into agent checks.** The manual QA checklist you never automated —
-"login lands on the dashboard", "deleting an item removes it", "no console errors on
-checkout" — becomes something your agent runs against the live app, in your real dev session,
-and verifies with evidence. (Complements your CI Playwright/Cypress suite; see
-[docs/usage.md](docs/usage.md).)
+</div>
 
-**~69× fewer tokens** than feeding the agent a full accessibility tree each step (measured;
-[docs/token-efficiency.md](docs/token-efficiency.md)). Here's the loop:
+---
+
+## The problem
+
+You ask your AI agent to build a feature. Then _you_ open the browser, click around, and
+check it actually works — every time. The agent can't really check its own work:
+
+- **Screenshots are bad eyes.** They're expensive (1–2k+ tokens each), need a vision model,
+  and are blind to everything non-visual — the network call, the console error, the route
+  change.
+- **Manual QA doesn't scale.** Every change means re-clicking the same flows. Something
+  silently breaks and nobody notices until production.
+
+## The idea
+
+Your app already knows everything that happened — _in code_. Iris exposes that to your agent
+over MCP, so it can **look → act → observe → assert**:
 
 ```jsonc
-// "I clicked Pay — verify the whole reaction in one call"
+// The agent clicked "Pay". Did the right things actually happen? One call:
 iris_assert({
-  timeout_ms: 2000,
   predicate: { allOf: [
-    { kind: "net", method: "POST", urlContains: "/api/order", status: 200 },
+    { kind: "net",     method: "POST", urlContains: "/api/order", status: 200 },
     { kind: "element", query: { role: "dialog", name: "Order confirmed" }, state: "visible" },
     { kind: "console", level: "error", absent: true }
   ]}
 })
-// → { pass: true, evidence: { ... } }   (no screenshots, deterministic, cheap)
+// → { pass: true, evidence: { … } }   ✅ deterministic, no screenshot, ~33 tokens
 ```
 
-## Quick start
+If it fails, Iris says _why_ — the near-miss, the console error, and (on React) the **source
+file to fix**.
+
+## Turn your test cases into agent checks
+
+Every team has test cases they never automated — the QA checklist, the acceptance criteria,
+the "I just eyeball it" steps. **Iris lets your agent run them against the live app, while it
+codes.** A test case maps almost 1:1 to a check:
+
+| Your test case (plain English)                  | Iris check                                                     |
+| ----------------------------------------------- | -------------------------------------------------------------- |
+| "Login with valid creds lands on the dashboard" | `net /api/login 200` **and** `element tab "Dashboard" visible` |
+| "Deleting an item removes it from the list"     | `element {text, scope: list}` **absent**                       |
+| "Submitting shows a success toast"              | `text "Saved" visible`                                         |
+| "No console errors on checkout"                 | `console level:error absent`                                   |
+
+> Your CI Playwright/Cypress suite gates releases. **Iris is the checklist your agent runs on
+> every edit** — including the long tail nobody wrote automation for.
+
+## ~69× fewer tokens than feeding the agent a full page
+
+Measured on the same dashboard (a 1,000-item list), [full methodology](docs/token-efficiency.md):
+
+|                                                        | Tokens per step |
+| ------------------------------------------------------ | --------------: |
+| Full accessibility-tree snapshot (e.g. Playwright MCP) |          ~6,856 |
+| **Iris verify loop** (query + observe + assert)        |        **~100** |
+
+Iris asks _narrow questions_ instead of dumping the whole page every step. A 20-step flow:
+~2,000 tokens with Iris vs ~138,000 with full-tree snapshots — the difference between "too
+expensive to run" and "run it on every edit."
+
+---
+
+## Quickstart
 
 **1. Run the bridge + MCP server**
 
 ```bash
-npx @iris/server          # starts on ws://localhost:4400, speaks MCP over stdio
+npx @iris/server          # ws://localhost:4400, speaks MCP over stdio
 ```
 
-**2. Point your coding agent at it** (e.g. Claude Code `.mcp.json`):
+**2. Point your agent at it** — Claude Code (`.mcp.json`), Cursor, Windsurf, etc.:
 
 ```jsonc
-{ "mcpServers": { "iris": { "command": "npx", "args": ["@iris/server", "mcp"] } } }
+{ "mcpServers": { "iris": { "command": "npx", "args": ["@iris/server"] } } }
 ```
 
 **3. Embed the SDK in your app (dev only)**
+
+```bash
+npm i -D @iris/browser
+```
 
 ```ts
 import { iris } from '@iris/browser';
 if (import.meta.env.DEV) iris.connect({ session: 'my-app' });
 ```
 
-For React, optionally add the adapter for component/source mapping:
+That's it — run your app, and ask your agent: _"add a logout button and verify it works with
+Iris."_ → see [Getting Started](docs/getting-started.md) for the full walkthrough (React
+adapter, source mapping, examples).
 
-```ts
-import { install } from '@iris/react';
-if (import.meta.env.DEV) install();
+---
+
+## What it can verify
+
+The six canonical reactions, plus anything your app emits:
+
+- ✅ **API calls** — method, URL, status, timing (`net`)
+- ✅ **DOM changes** — element appeared / disappeared, modal/drawer/toast opened
+- ✅ **Navigation** — SPA route changes
+- ✅ **Console & errors** — including "**no** errors during this flow"
+- ✅ **Animations** — started / completed
+- ✅ **App signals** — webhooks, websockets, store changes you surface via `iris.signal()`
+- ✅ **Regressions** — baseline now, diff later ("did anything silently go missing?")
+- ✅ **Source mapping** — DOM element → React component → **file:line** to edit
+
+## How it works
+
+```text
+your coding agent ──MCP──▶ iris bridge + server ──WebSocket──▶ @iris/browser (in your app)
+                                   ▲                                    │
+                                   └──────────── observations ─────────┘
+                          (DOM · network · routes · console · animations · signals)
 ```
 
-That's it. Your agent can now `iris_snapshot`, `iris_act`, `iris_observe`, and `iris_assert`
-against the live app. Full walkthrough, recipes, and the predicate DSL: **[docs/usage.md](docs/usage.md)**.
-
-## The tools
-
-| Tool                                                | What it does                                                  |
-| --------------------------------------------------- | ------------------------------------------------------------- |
-| `iris_sessions`                                     | List connected tabs                                           |
-| `iris_snapshot`                                     | Semantic accessibility snapshot (full / interactive / status) |
-| `iris_query`                                        | Find elements (role/text/label/testid…)                       |
-| `iris_inspect`                                      | Element detail + component + source file (with `@iris/react`) |
-| `iris_act` / `iris_act_sequence`                    | Click / fill / type / select / submit / …                     |
-| `iris_observe`                                      | Timeline of everything the app did in a window                |
-| `iris_wait_for`                                     | Block until a predicate holds                                 |
-| `iris_assert`                                       | Verify a predicate; returns evidence + diagnosis on failure   |
-| `iris_network` / `iris_console` / `iris_animations` | Fast targeted lookups                                         |
+Your app instruments _itself_ (a tiny dev-only SDK). The bridge relays the agent's
+MCP tool calls to the page and streams the page's observations back. Nothing leaves your
+machine; it's localhost-only and tree-shaken out of production.
 
 ## Packages
 
-| Package                                       | Role                                                     |
-| --------------------------------------------- | -------------------------------------------------------- |
-| [`@iris/browser`](packages/browser)           | Instrumentation SDK embedded in your app                 |
-| [`@iris/server`](packages/server)             | Bridge + MCP server (the `iris` CLI)                     |
-| [`@iris/react`](packages/react)               | React adapter: DOM → component → source file             |
-| [`@iris/babel-plugin`](packages/babel-plugin) | Stamps `data-iris-source` for source mapping on React 19 |
-| [`@iris/protocol`](packages/protocol)         | Shared wire contract (types + schemas)                   |
+| Package                                       | Role                                            |
+| --------------------------------------------- | ----------------------------------------------- |
+| [`@iris/browser`](packages/browser)           | The SDK you embed in your app (DOM-side)        |
+| [`@iris/server`](packages/server)             | Bridge + MCP server (the `iris` CLI)            |
+| [`@iris/react`](packages/react)               | React adapter: DOM → component → source file    |
+| [`@iris/babel-plugin`](packages/babel-plugin) | Source mapping on React 19 (`data-iris-source`) |
+| [`@iris/protocol`](packages/protocol)         | Shared wire contract (types + zod schemas)      |
 
-## Status
+## Docs
 
-Active development. Dev-only, localhost-only by default (see
-[`skills/security.md`](skills/security.md)). Built as a pnpm + turbo TypeScript monorepo;
-see [`WELCOME.md`](WELCOME.md) to develop, and `plan/ROADMAP.md` for what's next.
+- **[Getting Started](docs/getting-started.md)** — install, wire up your agent, first verification (step by step).
+- **[Usage Guide](docs/usage.md)** — every tool, the predicate DSL, real situations & use cases, FAQ.
+- **[Token Efficiency](docs/token-efficiency.md)** — the head-to-head benchmark + methodology.
+
+## How is this different?
+
+|                                          | What it's for                                                                                                                                                                               |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Playwright / Cypress**                 | Scripted E2E tests in CI. Great — but you write and maintain them, and they run separately from your agent.                                                                                 |
+| **Playwright MCP / Chrome DevTools MCP** | Let an agent _drive/inspect_ a browser. Powerful, but full-tree snapshots are token-heavy and they spin up a separate browser.                                                              |
+| **Iris**                                 | Lets your agent _verify_ your running app cheaply, from **inside** it (your real session/auth), with **assertions + regression** as first-class — and points at the **source file** to fix. |
+
+They compose: drive with one, assert with Iris.
+
+## Status & safety
+
+Active development; **dev-only and localhost-only by default**. Observers are additive and
+fully reversible — Iris never breaks the host app. No telemetry. MIT licensed.
+
+See [`WELCOME.md`](WELCOME.md) to develop.
 
 ## License
 
-MIT
+MIT © Iris contributors
