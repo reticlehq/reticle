@@ -34,23 +34,40 @@ export type ControlHandler = (intent: ControlIntent) => void;
 
 /** CSS for the control surface (injected with the rest of the presenter stylesheet). */
 export const CONTROLS_CSS = `
-[data-iris-hud] .iris-ctl{pointer-events:auto;cursor:pointer;background:transparent;border:1px solid #2a2f3d;
-  color:#9aa3b2;border-radius:6px;font-size:11px;line-height:1;padding:3px 7px;flex:none;}
-[data-iris-hud] .iris-ctl:hover{color:#e6e9f0;border-color:#3a4151;}
-[data-iris-hud] .iris-ctl:disabled{opacity:.4;cursor:default;}
-[data-iris-hud] .iris-badge{display:none;font-weight:700;letter-spacing:.06em;font-size:10px;
-  color:#f59e0b;border:1px solid rgba(245,158,11,.6);background:rgba(245,158,11,.15);
-  padding:1px 6px;border-radius:6px;flex:none;}
-[data-iris-overlay][data-iris-state="paused"] [data-iris-badge]{display:inline-block;}
-[data-iris-hud] [data-iris-foot]{display:flex;gap:6px;margin-top:6px;}
-[data-iris-hud] .iris-msg{flex:1;min-width:0;pointer-events:auto;background:rgba(10,12,20,.6);
-  border:1px solid #2a2f3d;color:#e6e9f0;border-radius:6px;font-size:12px;padding:4px 8px;}
-[data-iris-hud] .iris-banner{display:none;margin-top:6px;color:#9aa3b2;font-weight:600;}
+[data-iris-hud] .iris-ctl{pointer-events:auto;cursor:pointer;flex:none;display:inline-flex;align-items:center;justify-content:center;
+  height:26px;padding:0 10px;border-radius:8px;border:1px solid var(--iris-line);background:rgba(255,255,255,.04);
+  color:var(--iris-muted);font-family:var(--iris-mono);font-size:10.5px;font-weight:600;letter-spacing:.04em;line-height:1;
+  transition:background .15s,color .15s,border-color .15s,transform .1s;}
+[data-iris-hud] .iris-ctl:hover{color:var(--iris-fg);background:rgba(255,255,255,.09);}
+[data-iris-hud] .iris-ctl:active{transform:scale(.95);}
+[data-iris-hud] .iris-ctl:disabled{opacity:.35;cursor:default;}
+[data-iris-hud] [data-iris-end]{color:#ff9aa2;border-color:rgba(255,107,107,.22);}
+[data-iris-hud] [data-iris-end]:hover{color:#ff7a7a;border-color:rgba(255,107,107,.5);background:rgba(255,107,107,.1);}
+[data-iris-hud] .iris-badge{display:none;align-items:center;flex:none;font-weight:700;letter-spacing:.12em;font-size:8.5px;
+  color:var(--iris-accent);border:1px solid var(--iris-accent);background:var(--iris-accent-soft);padding:2px 7px;border-radius:999px;}
+[data-iris-overlay][data-iris-state="paused"] [data-iris-badge]{display:inline-flex;}
+[data-iris-hud] [data-iris-foot]{display:flex;align-items:center;gap:8px;flex:none;padding:10px 12px;
+  border-top:1px solid var(--iris-line2);background:rgba(0,0,0,.20);}
+[data-iris-hud] .iris-msg{flex:1;min-width:0;pointer-events:auto;box-sizing:border-box;height:34px;
+  background:rgba(255,255,255,.05);border:1px solid var(--iris-line);color:var(--iris-fg);border-radius:10px;
+  font-family:var(--iris-mono);font-size:12px;padding:0 12px;transition:border-color .15s,box-shadow .15s;}
+[data-iris-hud] .iris-msg::placeholder{color:var(--iris-faint);}
+[data-iris-hud] .iris-msg:focus{outline:none;border-color:var(--iris-accent);box-shadow:0 0 0 3px var(--iris-accent-soft);}
+[data-iris-hud] .iris-msg:disabled{opacity:.4;}
+[data-iris-hud] [data-iris-send]{flex:none;width:34px;height:34px;padding:0;border-radius:10px;
+  background:var(--iris-accent);border:1px solid var(--iris-accent);color:#0b0d14;font-size:0;
+  cursor:pointer;pointer-events:auto;display:inline-flex;align-items:center;justify-content:center;transition:filter .15s,transform .1s;}
+[data-iris-hud] [data-iris-send]::before{content:"↑";font-size:15px;font-weight:800;line-height:1;font-family:var(--iris-mono);}
+[data-iris-hud] [data-iris-send]:hover{filter:brightness(1.12);}
+[data-iris-hud] [data-iris-send]:active{transform:scale(.93);}
+[data-iris-hud] [data-iris-send]:disabled{opacity:.4;cursor:default;}
+[data-iris-hud] .iris-banner{display:none;flex:none;padding:8px 14px;color:var(--iris-accent);
+  font-size:11px;font-weight:600;letter-spacing:.01em;border-bottom:1px solid var(--iris-line2);background:var(--iris-accent-soft);}
 [data-iris-overlay][data-iris-state="ended"] [data-iris-banner]{display:block;}
-[data-iris-overlay][data-iris-state="paused"] [data-iris-glow][data-on="1"]{
-  animation:none;box-shadow:inset 0 0 0 3px rgba(245,158,11,.9),inset 0 0 28px 6px rgba(245,158,11,.4);}
-[data-iris-overlay][data-iris-state="ended"] [data-iris-glow][data-on="1"]{
-  animation:none;box-shadow:inset 0 0 0 3px rgba(107,114,128,.7);}
+[data-iris-overlay][data-iris-state="paused"] [data-iris-glow][data-on="1"]{animation:none;
+  box-shadow:inset 0 0 0 3px rgba(246,180,76,.9),inset 0 0 30px 6px rgba(246,180,76,.4);}
+[data-iris-overlay][data-iris-state="ended"] [data-iris-glow][data-on="1"]{animation:none;
+  box-shadow:inset 0 0 0 2px rgba(61,215,166,.55);}
 `;
 
 /** Header markup (controls + badge) injected into .iris-hud-head, after the expand button. */

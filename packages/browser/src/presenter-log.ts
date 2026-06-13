@@ -42,17 +42,28 @@ const RESULT_CLASS: Record<LogResult, string> = { pass: 'iris-pass', fail: 'iris
 export const DATA_IRIS_LOG = 'data-iris-log';
 const DATA_IRIS_LOG_ROW = 'data-iris-log-row';
 const DATA_IRIS_LOG_TS = 'data-iris-log-ts';
+const DATA_KIND = 'data-kind';
 const LOG_TEXT_CLASS = 'iris-log-text';
 const LOG_RES_CLASS = 'iris-res';
 const LOG_CHIP_CLASS = 'iris-chip';
 
-/** CSS for the log panel (injected with the rest of the presenter stylesheet). */
+/** CSS for the log feed (injected with the rest of the presenter stylesheet; vars inherit from the card). */
 export const LOG_CSS = `
-[data-iris-log]{margin-top:6px;max-height:118px;overflow-y:auto;overscroll-behavior:contain;display:flex;flex-direction:column;gap:2px;}
-[data-iris-log-row]{display:flex;align-items:baseline;gap:6px;color:#cdd3df;}
-[data-iris-log-ts]{color:#6b7280;font-variant-numeric:tabular-nums;flex:none;}
-[data-iris-log] .iris-log-text{color:#cdd3df;}
-[data-iris-log] .iris-res{font-weight:600;flex:none;}
+[data-iris-log]{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;display:flex;flex-direction:column;
+  gap:7px;padding:12px 14px;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.16) transparent;}
+[data-iris-log]::-webkit-scrollbar{width:9px;}
+[data-iris-log]::-webkit-scrollbar-thumb{background:rgba(255,255,255,.14);border-radius:9px;border:2px solid transparent;background-clip:content-box;}
+[data-iris-log]::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,.26);background-clip:content-box;}
+[data-iris-log-row]{display:flex;align-items:baseline;gap:8px;font-size:12px;line-height:1.45;
+  animation:iris-row-in .26s cubic-bezier(.16,1,.3,1);}
+@keyframes iris-row-in{from{opacity:0;transform:translateY(5px);}to{opacity:1;transform:none;}}
+[data-iris-log-ts]{flex:none;color:var(--iris-faint);font-size:10px;font-variant-numeric:tabular-nums;padding-top:1px;}
+[data-iris-log] .iris-log-text{flex:1;min-width:0;color:#d6dae4;overflow-wrap:anywhere;word-break:break-word;}
+[data-iris-log] .iris-res{flex:none;font-weight:700;}
+[data-iris-log-row][data-kind="human"]{align-self:flex-end;max-width:88%;
+  background:var(--iris-accent-soft);border:1px solid var(--iris-accent);border-radius:13px 13px 4px 13px;padding:6px 11px;}
+[data-iris-log-row][data-kind="human"] [data-iris-log-ts]{display:none;}
+[data-iris-log-row][data-kind="human"] .iris-log-text{color:var(--iris-fg);}
 `;
 
 /** Handle returned from logRow/Presenter.log so the caller can stamp the outcome glyph later. */
@@ -85,6 +96,7 @@ export function appendLogRow(
 ): LogHandle {
   const row = document.createElement('div');
   row.setAttribute(DATA_IRIS_LOG_ROW, '');
+  row.setAttribute(DATA_KIND, kind); // styles the human row as an accent chat bubble
 
   const tsEl = document.createElement('span');
   tsEl.setAttribute(DATA_IRIS_LOG_TS, '');

@@ -60,28 +60,53 @@ const CSS = `
 [data-iris-ring]{position:fixed;pointer-events:none;z-index:2147483644;border:2px solid #22c55e;border-radius:8px;
   box-shadow:0 0 0 3px rgba(34,197,94,.25);opacity:0;transition:opacity .15s ease;}
 [data-iris-ring][data-on="1"]{opacity:1;}
-[data-iris-hud]{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(6px);
-  max-width:520px;min-width:280px;text-align:left;z-index:2147483647;pointer-events:none;
-  font:12px/1.45 ui-sans-serif,system-ui,sans-serif;color:#e6e9f0;background:rgba(21,24,35,.92);
-  border:1px solid #2a2f3d;border-radius:12px;padding:10px 14px;box-shadow:0 8px 30px rgba(0,0,0,.5);
-  opacity:0;transition:opacity .2s ease,transform .2s ease;}
-[data-iris-hud][data-on="1"]{opacity:1;transform:translateX(-50%) translateY(0);pointer-events:auto;}
-[data-iris-hud] .iris-hud-head{display:flex;align-items:center;gap:7px;}
-[data-iris-hud] .iris-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#6366f1;flex:none;
-  box-shadow:0 0 8px #6366f1;animation:iris-blink 1s ease-in-out infinite;}
-@keyframes iris-blink{50%{opacity:.35}}
-[data-iris-hud] .iris-act{font-weight:600;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-[data-iris-hud] [data-iris-expand]{flex:none;cursor:pointer;background:transparent;border:1px solid #2a2f3d;
-  color:#9aa3b2;border-radius:6px;font-size:11px;line-height:1;padding:3px 6px;}
-[data-iris-hud] [data-iris-expand]:hover{color:#e6e9f0;border-color:#3a4151;}
-[data-iris-hud][data-expanded="1"] [data-iris-log]{max-height:46vh;}
-[data-iris-hud] .iris-pass{color:#22c55e}[data-iris-hud] .iris-fail{color:#ef4444}
-[data-iris-hud] .iris-chip{display:none;font-weight:700;letter-spacing:.06em;font-size:10px;
-  padding:1px 6px;border-radius:6px;margin-right:7px;vertical-align:middle;}
-[data-iris-hud] .iris-chip[data-mode="reading"]{display:inline-block;color:#67e8f9;
-  background:rgba(34,211,238,.15);border:1px solid rgba(34,211,238,.5);}
-[data-iris-hud] .iris-chip[data-mode="acting"]{display:inline-block;color:#c7d2fe;
-  background:rgba(99,102,241,.18);border:1px solid rgba(99,102,241,.55);}
+[data-iris-hud]{
+  --iris-accent:#7c83ff;--iris-accent-soft:rgba(124,131,255,.16);
+  --iris-bg:rgba(13,15,22,.80);--iris-bg2:rgba(19,22,32,.74);
+  --iris-fg:#e8eaf1;--iris-muted:#9aa0b2;--iris-faint:#646b80;
+  --iris-line:rgba(255,255,255,.09);--iris-line2:rgba(255,255,255,.05);
+  --iris-read:#54d2e6;--iris-ok:#3dd7a6;--iris-bad:#ff7a7a;
+  --iris-mono:ui-monospace,"SF Mono","JetBrains Mono","Cascadia Code",Menlo,Consolas,monospace;
+  position:fixed;right:20px;bottom:20px;left:auto;box-sizing:border-box;
+  width:368px;height:464px;max-width:calc(100vw - 32px);max-height:calc(100vh - 32px);
+  display:flex;flex-direction:column;overflow:hidden;text-align:left;z-index:2147483647;pointer-events:none;
+  font-family:var(--iris-mono);font-size:12.5px;line-height:1.5;color:var(--iris-fg);
+  background:linear-gradient(180deg,var(--iris-bg),var(--iris-bg2));
+  -webkit-backdrop-filter:blur(22px) saturate(1.4);backdrop-filter:blur(22px) saturate(1.4);
+  border:1px solid var(--iris-line);border-radius:16px;
+  box-shadow:0 24px 64px -16px rgba(0,0,0,.65),0 0 0 1px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,255,255,.06),0 0 50px -22px var(--iris-accent);
+  opacity:0;transform:translateY(12px) scale(.985);
+  transition:opacity .3s ease,transform .4s cubic-bezier(.16,1,.3,1),box-shadow .35s ease;}
+[data-iris-overlay][data-iris-state="paused"] [data-iris-hud]{--iris-accent:#f6b44c;--iris-accent-soft:rgba(246,180,76,.16);}
+[data-iris-overlay][data-iris-state="ended"] [data-iris-hud]{--iris-accent:#3dd7a6;--iris-accent-soft:rgba(61,215,166,.14);}
+[data-iris-hud]::before{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+  background:radial-gradient(130% 90% at 0% 0%,var(--iris-accent-soft),transparent 55%);}
+[data-iris-hud]>*{position:relative;}
+[data-iris-hud][data-on="1"]{opacity:1;transform:translateY(0) scale(1);pointer-events:auto;}
+[data-iris-hud][data-expanded="1"]{height:min(648px,calc(100vh - 40px));}
+[data-iris-hud] .iris-hud-head{display:flex;align-items:center;gap:8px;flex:none;
+  padding:11px 11px 11px 14px;border-bottom:1px solid var(--iris-line2);}
+[data-iris-hud] .iris-dot{width:9px;height:9px;border-radius:50%;flex:none;background:var(--iris-accent);
+  animation:iris-breathe 2.6s ease-in-out infinite;}
+@keyframes iris-breathe{0%,100%{box-shadow:0 0 0 0 var(--iris-accent),0 0 7px 1px var(--iris-accent);opacity:.85}
+  50%{box-shadow:0 0 0 4px var(--iris-accent-soft),0 0 15px 3px var(--iris-accent);opacity:1}}
+[data-iris-hud] .iris-brand{font-weight:600;letter-spacing:.16em;text-transform:lowercase;font-size:12px;color:var(--iris-fg);}
+[data-iris-hud] .iris-head-sp{flex:1;}
+[data-iris-hud] .iris-act-strip{flex:none;padding:7px 14px;border-bottom:1px solid var(--iris-line2);background:rgba(0,0,0,.14);}
+[data-iris-hud] .iris-act{display:block;color:var(--iris-muted);font-size:11px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+[data-iris-hud] [data-iris-expand]{flex:none;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;
+  width:26px;height:26px;border-radius:8px;border:1px solid var(--iris-line);background:rgba(255,255,255,.04);
+  color:var(--iris-muted);font-size:13px;line-height:1;transition:background .15s,color .15s,transform .1s;}
+[data-iris-hud] [data-iris-expand]:hover{color:var(--iris-fg);background:rgba(255,255,255,.08);}
+[data-iris-hud] [data-iris-expand]:active{transform:scale(.94);}
+[data-iris-hud] .iris-pass{color:var(--iris-ok);}[data-iris-hud] .iris-fail{color:var(--iris-bad);}
+[data-iris-hud] .iris-chip{display:none;flex:none;font-size:9px;font-weight:700;letter-spacing:.1em;
+  padding:2px 6px;border-radius:5px;vertical-align:middle;}
+[data-iris-hud] .iris-chip[data-mode="reading"]{display:inline-block;color:var(--iris-read);
+  background:rgba(84,210,230,.12);border:1px solid rgba(84,210,230,.32);}
+[data-iris-hud] .iris-chip[data-mode="acting"]{display:inline-block;color:var(--iris-accent);
+  background:var(--iris-accent-soft);border:1px solid var(--iris-accent);}
 [data-iris-hud] .iris-chip[data-mode="idle"]{display:none;}
 [data-iris-mode="reading"] [data-iris-glow][data-on="1"]{
   box-shadow:inset 0 0 0 3px rgba(34,211,238,.9),inset 0 0 28px 6px rgba(34,211,238,.4);}
@@ -236,7 +261,8 @@ export class Presenter {
       <div data-iris-cursor></div>
       <div data-iris-ring></div>
       <div data-iris-hud>
-        <div class="iris-hud-head"><span class="iris-dot"></span><span class="iris-chip" data-iris-chip></span><span class="iris-act">idle</span><button type="button" data-iris-expand title="Expand / collapse the activity log" aria-label="Expand the activity log">⤢</button>${CONTROLS_HEAD_HTML}</div>
+        <div class="iris-hud-head"><span class="iris-dot"></span><span class="iris-brand">iris</span><span class="iris-chip" data-iris-chip></span><span class="iris-head-sp"></span><button type="button" data-iris-expand title="Expand / collapse the panel" aria-label="Expand the activity log">⤢</button>${CONTROLS_HEAD_HTML}</div>
+        <div class="iris-act-strip"><span class="iris-act">idle</span></div>
         ${CONTROLS_BANNER_HTML}
         <div ${DATA_IRIS_LOG}></div>
         ${CONTROLS_FOOT_HTML}

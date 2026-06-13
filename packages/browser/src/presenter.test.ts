@@ -629,16 +629,18 @@ describe('presenter v2 not-mounted safety', () => {
 });
 
 describe('presenter v2 HUD positioning', () => {
-  it('HUD is positioned bottom-center (left:50% + translateX(-50%), both states)', () => {
+  it('HUD is docked bottom-right with a fixed size (never resizes with content)', () => {
     document.body.innerHTML = '';
     const p = new Presenter({ paceMs: 0 });
     p.mount();
 
     const css = document.querySelector('style[data-iris-overlay]')?.textContent ?? '';
-    expect(css).toContain('left:50%');
-    expect(css).toContain('translateX(-50%)');
-    // regression guard: the data-on toggle must keep the horizontal centering
-    expect(css).toContain('[data-iris-hud][data-on="1"]{opacity:1;transform:translateX(-50%)');
+    // bottom-right dock (least intrusive over a host app)
+    expect(css).toContain('right:20px;bottom:20px;left:auto');
+    // fixed width + height so the panel doesn't jump with children's text width
+    expect(css).toContain('width:368px;height:464px');
+    // the feed flexes/scrolls inside the fixed card
+    expect(css).toContain('[data-iris-log]{flex:1;min-height:0;overflow-y:auto');
 
     p.destroy();
   });
