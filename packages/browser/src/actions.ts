@@ -108,6 +108,24 @@ export function executeAction(
     case ActionType.SCROLL_INTO_VIEW:
       el.scrollIntoView();
       break;
+    case ActionType.UPLOAD: {
+      if (!(el instanceof HTMLInputElement) || el.type !== 'file') {
+        throw new Error('upload target must be a <input type="file">');
+      }
+      const file = new File(
+        [asString(args['content'], 'iris test file')],
+        asString(args['name'], 'file.txt'),
+        {
+          type: asString(args['type'], 'text/plain'),
+        },
+      );
+      const dt = new DataTransfer();
+      dt.items.add(file);
+      el.files = dt.files;
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+      break;
+    }
     case ActionType.DRAG: {
       const toRef = asString(args['toRef']);
       const resolved = toRef !== undefined ? refs.resolve(toRef) : null;

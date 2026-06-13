@@ -43,10 +43,17 @@ function inspect(ref: string): unknown {
   if (el === null) return { error: `ref '${ref}' no longer resolves` };
   const rect = el.getBoundingClientRect();
   const component = identifyComponent(el);
+  const view = el.ownerDocument.defaultView;
+  const cs = view !== null ? view.getComputedStyle(el) : null;
+  const styles =
+    cs !== null
+      ? { color: cs.color, backgroundColor: cs.backgroundColor, opacity: cs.opacity }
+      : null;
   return {
     ...describe(el),
     tag: el.tagName.toLowerCase(),
     box: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
+    styles,
     component,
   };
 }

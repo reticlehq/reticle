@@ -1,77 +1,65 @@
 import { useState, type CSSProperties } from 'react';
 import { Colors, Radius, Spacing, Typography } from './design/tokens.js';
-import { DashboardTab, TAB_LABELS, TestId } from './constants/index.js';
+import { DashboardTab, TAB_LABELS, TAB_ORDER } from './constants/index.js';
+import { LoginForm } from './components/LoginForm.js';
+import { ItemsPanel } from './components/ItemsPanel.js';
+import { ErrorsPanel } from './components/ErrorsPanel.js';
+import { ScriptPanel } from './components/ScriptPanel.js';
+import { ScorePanel } from './components/ScorePanel.js';
+import { NotificationsPanel } from './components/NotificationsPanel.js';
+import { HoverButton } from './components/HoverButton.js';
 
-const TAB_ORDER: readonly DashboardTab[] = [
-  DashboardTab.OVERVIEW,
-  DashboardTab.ACTIVITY,
-  DashboardTab.SETTINGS,
-];
+export function App() {
+  const [token, setToken] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<DashboardTab>(DashboardTab.ITEMS);
+  const [notifications, setNotifications] = useState<string[]>([]);
 
-export function App(): React.JSX.Element {
-  const [activeTab, setActiveTab] = useState<DashboardTab>(DashboardTab.OVERVIEW);
-  const [items, setItems] = useState<string[]>(['First item']);
+  if (token === null) {
+    return <LoginForm onAuth={setToken} />;
+  }
 
-  const addItem = (): void => {
-    setItems((prev) => [...prev, `Item ${String(prev.length + 1)}`]);
-  };
-
-  const removeItem = (index: number): void => {
-    setItems((prev) => prev.filter((_value, i) => i !== index));
+  const notify = (message: string): void => {
+    setNotifications((prev) => [message, ...prev]);
   };
 
   return (
     <main style={pageStyle}>
-      <h1 style={{ fontSize: Typography.fontSize.xl }}>Iris Demo Dashboard</h1>
+      <div style={headerStyle}>
+        <h1 style={{ fontSize: Typography.fontSize.xl, margin: 0 }}>Iris Dashboard</h1>
+        <HoverButton />
+      </div>
 
       <div role="tablist" aria-label="Dashboard sections" style={tablistStyle}>
         {TAB_ORDER.map((tab) => {
           const selected = tab === activeTab;
+          const count = tab === DashboardTab.NOTIFICATIONS ? notifications.length : 0;
           return (
             <button
               key={tab}
               role="tab"
               aria-selected={selected}
-              data-testid={TestId.TAB}
+              data-testid={`tab-${tab}`}
               onClick={() => {
                 setActiveTab(tab);
               }}
               style={tabStyle(selected)}
             >
               {TAB_LABELS[tab]}
+              {count > 0 ? ` (${String(count)})` : ''}
             </button>
           );
         })}
       </div>
 
-      <section role="tabpanel" data-testid={TestId.TAB_PANEL} style={panelStyle}>
-        {activeTab === DashboardTab.OVERVIEW ? (
-          <div>
-            <button data-testid={TestId.ADD_ITEM} onClick={addItem} style={primaryButtonStyle}>
-              Add item
-            </button>
-            <ul data-testid={TestId.ITEM_LIST} style={{ marginTop: Spacing.md }}>
-              {items.map((item, index) => (
-                <li key={item} style={listItemStyle}>
-                  <span>{item}</span>
-                  <button
-                    aria-label={`Remove ${item}`}
-                    onClick={() => {
-                      removeItem(index);
-                    }}
-                    style={removeButtonStyle}
-                  >
-                    Remove
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </div>
+      <div role="tabpanel">
+        {activeTab === DashboardTab.ITEMS ? <ItemsPanel token={token} onNotify={notify} /> : null}
+        {activeTab === DashboardTab.ERRORS ? <ErrorsPanel token={token} /> : null}
+        {activeTab === DashboardTab.GENERATE ? <ScriptPanel token={token} /> : null}
+        {activeTab === DashboardTab.SCORE ? <ScorePanel token={token} /> : null}
+        {activeTab === DashboardTab.NOTIFICATIONS ? (
+          <NotificationsPanel items={notifications} />
         ) : null}
-
-        {activeTab === DashboardTab.ACTIVITY ? <p>No recent activity.</p> : null}
-        {activeTab === DashboardTab.SETTINGS ? <p>Settings go here.</p> : null}
-      </section>
+      </div>
     </main>
   );
 }
@@ -84,10 +72,17 @@ const pageStyle: CSSProperties = {
   padding: Spacing.xl,
 };
 
+const headerStyle: CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+};
+
 const tablistStyle: CSSProperties = {
   display: 'flex',
   gap: Spacing.sm,
   marginTop: Spacing.lg,
+  flexWrap: 'wrap',
 };
 
 function tabStyle(selected: boolean): CSSProperties {
@@ -100,37 +95,3 @@ function tabStyle(selected: boolean): CSSProperties {
     cursor: 'pointer',
   };
 }
-
-const panelStyle: CSSProperties = {
-  marginTop: Spacing.lg,
-  padding: Spacing.lg,
-  background: Colors.surface,
-  borderRadius: Radius.lg,
-  border: `1px solid ${Colors.border}`,
-};
-
-const primaryButtonStyle: CSSProperties = {
-  padding: `${Spacing.sm} ${Spacing.md}`,
-  borderRadius: Radius.md,
-  border: 'none',
-  background: Colors.primary,
-  color: Colors.text,
-  cursor: 'pointer',
-};
-
-const listItemStyle: CSSProperties = {
-  display: 'flex',
-  justifyContent: 'space-between',
-  alignItems: 'center',
-  padding: `${Spacing.sm} 0`,
-  borderBottom: `1px solid ${Colors.border}`,
-};
-
-const removeButtonStyle: CSSProperties = {
-  padding: `${Spacing.xs} ${Spacing.sm}`,
-  borderRadius: Radius.sm,
-  border: `1px solid ${Colors.border}`,
-  background: Colors.surfaceMuted,
-  color: Colors.textMuted,
-  cursor: 'pointer',
-};

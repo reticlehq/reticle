@@ -12,6 +12,7 @@ export default tseslint.config(
       '**/*.tsbuildinfo',
       'plan/**',
       'coverage/**',
+      'apps/api/**',
     ],
   },
   js.configs.recommended,

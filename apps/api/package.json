@@ -1,0 +1,15 @@
+{
+  "name": "@iris/api",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Demo backend for exercising Iris against real-world behaviors (auth, errors, eventual consistency, LLM, uploads).",
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs",
+    "dev": "node server.mjs"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.21.2"
+  }
+}
