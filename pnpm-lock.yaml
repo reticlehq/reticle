@@ -208,6 +208,10 @@ importers:
       '@types/ws':
         specifier: ^8.5.13
         version: 8.18.1
+    optionalDependencies:
+      playwright:
+        specifier: ^1.48.0
+        version: 1.60.0
 
 packages:
 

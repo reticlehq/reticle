@@ -1,6 +1,6 @@
 {
   "name": "@iris/react",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Iris React adapter — maps a DOM ref to its component stack and source file via the fiber tree.",
   "type": "module",
   "main": "./dist/index.js",

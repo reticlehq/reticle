@@ -325,6 +325,12 @@ registerCapabilities({
 > cursor that flies to targets, and a HUD; the agent can call `iris_narrate({ text })` to show
 > its intent. See [usage §16](usage.md#16-presenter-mode-narration--fake-clock-watch--control).
 
+> **Hover-gated UI (tooltips, hover menus, pointer drag)?** Synthetic events can't trigger
+> native `onMouseEnter`. Enable **real input** by launching your browser with
+> `--remote-debugging-port=9222` and setting `IRIS_CDP_URL` in the MCP server `env` — Iris then
+> drives real pointer input and `iris_act` reports `inputMode:"real"`. See
+> [usage §18](usage.md#18-real-input-mode--native-hover--drag-m58).
+
 ---
 
 ## Common setups at a glance

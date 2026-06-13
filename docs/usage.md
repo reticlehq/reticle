@@ -798,3 +798,60 @@ iris_capabilities()   // → { testids, signals, stores, flows }
 `iris_record_start` → drive the flow → `iris_record_stop` returns a **compiled program**
 (steps bound to testids/signals, not volatile refs). `iris_replay({ name })` re-executes it —
 your flow becomes a deterministic regression run, not a checklist.
+
+---
+
+## 18. Real input mode — native hover & drag (M5.8)
+
+Iris drives actions by dispatching JS events from inside the page. That covers click, fill,
+type, select, submit, press, and HTML5 drag — but it **cannot** trigger browser-native pointer
+behavior: `onMouseEnter`/`onMouseLeave`, hover-gated reveals, and pointer-library drags rely on
+the browser's real hit-testing, which synthetic events don't drive. Every `iris_act` result
+tells you which path ran:
+
+```jsonc
+{ since, dispatched, settled, inputMode: "synthetic" | "real", result, session, warning? }
+```
+
+When `inputMode` is `"synthetic"` and the target has hover/enter handlers, the result carries a
+`warning` so you know a hover may be a no-op — you never have to reverse-engineer it.
+
+### Enable real input (optional, opt-in)
+
+Point Iris's server at a Chrome DevTools (CDP) endpoint; it then drives **real** pointer input
+(via Playwright `connectOverCDP`) at the element's box for pointer actions (hover/click/
+dblclick/drag), and reports `inputMode: "real"`.
+
+1. Launch your browser with remote debugging:
+
+   ```bash
+   # Chrome/Chromium
+   google-chrome --remote-debugging-port=9222 http://localhost:3000
+   ```
+
+2. Tell the Iris server where it is, via the MCP config `env`:
+
+   ```jsonc
+   // .mcp.json
+   {
+     "mcpServers": {
+       "iris": {
+         "command": "npx",
+         "args": ["@iris/server"],
+         "env": { "IRIS_CDP_URL": "http://localhost:9222" },
+       },
+     },
+   }
+   ```
+
+That's it. Iris correlates the CDP page to your SDK session by URL; pointer actions now fire
+native hover/enter so hover-gated suggestion panels, tooltips, and pointer-based drag become
+drivable. Everything else is unchanged, and with no `IRIS_CDP_URL` set, Iris stays in the
+synthetic (zero-dependency, in-page) mode — Playwright is an optional dependency loaded only
+when you opt in.
+
+> **Watching the agent (presenter, M5.8).** With `present: true` the activity border now glows
+> once while the agent is busy and fades when idle (no per-action strobe); the HUD sits
+> **bottom-center**, shows a **READING** vs **ACTING** chip so you can tell observation from
+> action at a glance, and `iris_narrate` lines are **queued** with a minimum on-screen dwell so
+> none flash by unread.
