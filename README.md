@@ -117,6 +117,11 @@ it on every edit."
 > gap is only ~1.8×. The 73× comes from **not needing the whole tree** — that's architectural, not a
 > serializer trick. [Read the full breakdown →](docs/token-efficiency.md)
 
+<p align="center">
+  <img src="assets/readme/benchmark.png" alt="~100 vs ~7,300 tokens per verify step — 73× leaner" width="49%" />
+  <img src="assets/readme/bench-cost.png" alt="Cumulative tokens over a 20-step flow: ~2,000 with Iris vs ~146,000 with full-tree snapshots" width="49%" />
+</p>
+
 ---
 
 ## Quickstart
@@ -152,6 +157,55 @@ That's it — run your app and ask your agent: _"add a logout button and verify 
 
 ---
 
+## A full walkthrough: the bug your agent would have shipped
+
+The clip at the top is this, end to end. You asked your agent to add a **Redeploy** button; it edited the
+code and said _"done."_ Here is Iris checking that claim — from inside the running app, no screenshot:
+
+**1. The agent acts, then asks Iris to verify (not screenshot).**
+
+```jsonc
+iris_act({ query: { role: "button", name: "Redeploy" } }); // click it
+iris_assert({
+  predicate: { allOf: [
+    { kind: "net",     method: "POST", urlContains: "/api/redeploy", status: 200 },
+    { kind: "signal",  name: "deploy:redeployed" },
+    { kind: "console", level: "error", absent: true }
+  ]}
+})
+```
+
+**2. Iris returns a verdict with evidence — and it's red:**
+
+```jsonc
+{
+  "pass": false,
+  "evidence": { "net": { "url": "/api/redeploy", "status": 401 } },
+  "failureReason": "POST /api/redeploy returned 401, expected 200",
+  "source": { "file": "src/lib/api.ts", "line": 65 },
+} // ← the exact line to fix
+```
+
+The button rendered, the toast said _"Redeploying…"_, a screenshot would have looked perfect — and the
+request `401`'d. The agent never saw it. Iris did.
+
+**3. The agent fixes the one line Iris pointed at:**
+
+```diff
+- headers: { 'content-type': 'application/json' },
++ headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
+```
+
+**4. Re-assert → green, with proof:**
+
+```jsonc
+{ "pass": true, "evidence": { "net": { "status": 200 }, "signal": "deploy:redeployed" } }
+```
+
+~100 tokens, deterministic, no vision model. That's the loop your agent runs on **every** edit.
+
+---
+
 ## What it can verify
 
 Six canonical reactions, plus anything your app emits:
@@ -168,6 +222,8 @@ Six canonical reactions, plus anything your app emits:
 …and an autonomous **crawler** (`iris_crawl`) that clicks every reachable control and classifies what
 breaks (console error, failed request, dead control). ~44 MCP tools in total.
 
+<p align="center"><img src="assets/readme/bench-coverage.png" alt="The six reaction types Iris verifies in one assert — API calls, DOM changes, navigation, console & errors, animations, app signals" width="520" /></p>
+
 ## Why screenshots can't do this — and Iris can: `signals`
 
 The most important question is rarely visible. _"Did the charge actually commit?"_ isn't a pixel. So your
@@ -180,6 +236,63 @@ iris.signal('webhook:received', { provider: 'stripe' }); // an external event ar
 
 …and the agent asserts on them directly. A bundled ESLint rule (`require-signal-on-mutation`) flags any
 state mutation that forgot to emit one, so your observable surface can't silently drift from your code.
+
+## Cookbook
+
+Common verifications, copy-paste. Each is one `iris_assert` (or a tiny loop) the agent runs right after it acts.
+
+**Did the form actually submit — not just clear?**
+
+```jsonc
+iris_assert({ predicate: { allOf: [
+  { kind: "net",     method: "POST", urlContains: "/api/contact", status: 200 },
+  { kind: "element", query: { text: "Thanks — we'll be in touch" }, state: "visible" }
+]}})
+```
+
+**Catch a silent 500 hiding behind a success toast:**
+
+```jsonc
+iris_assert({ predicate: { allOf: [
+  { kind: "element", query: { text: "Saved" }, state: "visible" }, // the toast says it worked
+  { kind: "net",     urlContains: "/api/save", status: 200 }        // the network says the truth
+]}})
+// → pass:false, evidence.net.status:500 — caught before it shipped.
+```
+
+**"No console errors during this whole flow":**
+
+```jsonc
+const { since } = await iris_act({ query: { role: "button", name: "Checkout" } });
+iris_assert({ since, predicate: { kind: "console", level: "error", absent: true } });
+```
+
+**Confirm an async job / webhook actually fired** (not just the spinner):
+
+```ts
+iris.signal('invoice:emailed', { id }); // emit at the commit point in your app
+```
+
+```jsonc
+iris_wait_for({ predicate: { kind: "signal", name: "invoice:emailed" }, timeoutMs: 5000 });
+```
+
+**Catch a regression before it ships:**
+
+```jsonc
+iris_baseline_save({ name: "settings" }); // before the change
+// …agent edits…
+iris_diff({ baseline: "settings" });      // → { removed: [...], counters: { consoleErrors: +1 } }
+```
+
+**Assert a debounced / animated result without flaky sleeps:**
+
+```jsonc
+iris_clock({ advanceMs: 400 }); // skip the debounce deterministically
+iris_assert({ predicate: { kind: "element", query: { role: "listbox" }, state: "visible" } });
+```
+
+> More patterns + the full predicate DSL: **[Usage Guide](docs/usage.md)**.
 
 ## How it works
 
@@ -207,6 +320,8 @@ Iris gives agents a _verdict_.**
 | **Playwright MCP / Chrome DevTools MCP** | Let an agent _drive/inspect_ a separate browser. Powerful — but full-tree snapshots are token-heavy, they leave "did it work?" for the agent to infer, and there's no first-class assert/regression or source-map. |
 | **Domscribe / React Grab / LocatorJS**   | Map a DOM element to its source file:line (Iris does this too). But they stop at editing — **no assertions, no regression, no network/console/signal observation.**                                                |
 | **Iris**                                 | Lets your agent _verify_ your running app cheaply, from **inside** it (your real session/auth), with **assertions + regression + signals** as first-class — and points at the **source file** to fix.              |
+
+<p align="center"><img src="assets/readme/bench-matrix.png" alt="Capability matrix — Iris vs Playwright MCP vs Chrome DevTools MCP vs screenshot+vision: verdict with evidence, regression diff, app signals, source-to-file:line, runs inside your real session, tokens per step" width="92%" /></p>
 
 **They compose:** drive with Playwright MCP, **verify with Iris.**
 
