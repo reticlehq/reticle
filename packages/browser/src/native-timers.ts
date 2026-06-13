@@ -10,6 +10,15 @@ const realSetTimeout = typeof g.setTimeout === 'function' ? g.setTimeout.bind(g)
 const realClearTimeout = typeof g.clearTimeout === 'function' ? g.clearTimeout.bind(g) : null;
 const realRaf =
   typeof g.requestAnimationFrame === 'function' ? g.requestAnimationFrame.bind(g) : null;
+const realPerfNow =
+  typeof g.performance?.now === 'function' ? g.performance.now.bind(g.performance) : null;
+
+/**
+ * Monotonic "now" bound at load. clock.ts deliberately does NOT patch performance.now, so this
+ * stays live even when the app clock (iris_clock) is frozen — the presenter state machine relies
+ * on it. Falls back to 0 in SSR where performance is absent.
+ */
+export const nativeNow = (): number => (realPerfNow ? realPerfNow() : 0);
 
 export const nativeSetTimeout = (cb: () => void, ms = 0): number =>
   realSetTimeout ? (realSetTimeout(cb, ms) as unknown as number) : 0;

@@ -1,5 +1,5 @@
 import { refs } from './refs.js';
-import { nativeSetTimeout, nativeClearTimeout } from './native-timers.js';
+import { nativeSetTimeout, nativeClearTimeout, nativeNow } from './native-timers.js';
 
 // Presenter / transparency layer: a human watches the agent work. Glowing border while
 // active, a synthetic cursor that flies to targets, click/hover/type effects, and a HUD that
@@ -39,9 +39,35 @@ const CSS = `
 
 export interface PresenterOptions {
   paceMs?: number;
+  /** Injected monotonic clock for the glow state machine (tests drive transitions). */
+  now?: () => number;
+  /** Quiet window before busy -> fading. Overridable so tests run fast. */
+  idleAfterMs?: number;
+  /** Fade duration before fading -> idle (keep in sync with the glow CSS opacity transition). */
+  glowFadeMs?: number;
 }
 
 const DEFAULT_PACE = 450;
+
+/**
+ * Glow state machine phases (exposed via glowPhase() for tests). A burst of activity flips the
+ * border IN once on the first activity, holds steady (the slow iris-pulse breathing keeps running
+ * uninterrupted — no per-action restart/strobe), then fades OUT once after a quiet window.
+ */
+export const GlowPhase = {
+  IDLE: 'idle',
+  BUSY: 'busy',
+  FADING: 'fading',
+} as const;
+export type GlowPhase = (typeof GlowPhase)[keyof typeof GlowPhase];
+
+/** Quiet window before busy -> fading. */
+const IDLE_AFTER_MS = 700;
+/** Must match the glow CSS opacity transition (.25s) so phase reaches idle after the fade paints. */
+const GLOW_FADE_MS = 250;
+const GLOW_ON = '1';
+const GLOW_OFF = '0';
+const DATA_ON = 'data-on';
 
 export class Presenter {
   readonly #paceMs: number;
@@ -53,10 +79,20 @@ export class Presenter {
   #actLine: HTMLElement | undefined;
   #noteLine: HTMLElement | undefined;
   #resLine: HTMLElement | undefined;
-  #idleTimer: number | undefined;
+
+  readonly #now: () => number;
+  readonly #idleAfterMs: number;
+  readonly #glowFadeMs: number;
+  #phase: GlowPhase = GlowPhase.IDLE;
+  #lastActivityMs = 0;
+  #idleCheckTimer: number | undefined;
+  #fadeTimer: number | undefined;
 
   constructor(options: PresenterOptions = {}) {
     this.#paceMs = options.paceMs ?? DEFAULT_PACE;
+    this.#now = options.now ?? nativeNow;
+    this.#idleAfterMs = options.idleAfterMs ?? IDLE_AFTER_MS;
+    this.#glowFadeMs = options.glowFadeMs ?? GLOW_FADE_MS;
   }
 
   mount(): void {
@@ -89,34 +125,91 @@ export class Presenter {
   }
 
   destroy(): void {
+    if (this.#idleCheckTimer !== undefined) nativeClearTimeout(this.#idleCheckTimer);
+    if (this.#fadeTimer !== undefined) nativeClearTimeout(this.#fadeTimer);
+    this.#idleCheckTimer = undefined;
+    this.#fadeTimer = undefined;
     this.#root?.remove();
     document.querySelectorAll('style[data-iris-overlay]').forEach((s) => s.remove());
     this.#root = undefined;
   }
 
-  setActive(on: boolean): void {
-    this.#glow?.setAttribute('data-on', on ? '1' : '0');
-    this.#hud?.setAttribute('data-on', on ? '1' : '0');
-    this.#cursor?.setAttribute('data-on', on ? '1' : '0');
+  /**
+   * Record agent activity. Idempotent while busy — only the first activity from idle/fading flips
+   * the glow on, so a burst never restarts the iris-pulse animation (no strobe). Subsequent calls
+   * just refresh the last-activity timestamp and re-arm the idle check.
+   */
+  markActivity(): void {
+    this.#lastActivityMs = this.#now();
+    if (this.#phase === GlowPhase.IDLE || this.#phase === GlowPhase.FADING) {
+      this.#enterBusy();
+    }
+    this.#armIdleCheck();
   }
 
-  /** Keep the "working" state up briefly after the last command, then go idle. */
+  /** Re-arm the quiet-window idle check (kept for iris.ts's finally block). */
   scheduleIdle(): void {
-    if (this.#idleTimer !== undefined) nativeClearTimeout(this.#idleTimer);
-    this.#idleTimer = nativeSetTimeout(() => {
-      this.setActive(false);
-      if (this.#actLine !== undefined) this.#actLine.textContent = 'idle';
-    }, 1200);
+    this.#armIdleCheck();
+  }
+
+  /** Test/diagnostic accessor for the current glow phase. */
+  glowPhase(): GlowPhase {
+    return this.#phase;
+  }
+
+  #enterBusy(): void {
+    if (this.#fadeTimer !== undefined) {
+      nativeClearTimeout(this.#fadeTimer);
+      this.#fadeTimer = undefined;
+    }
+    this.#phase = GlowPhase.BUSY;
+    // Single DOM write that flips the fade-in. iris-pulse keeps running from here, uninterrupted.
+    this.#glow?.setAttribute(DATA_ON, GLOW_ON);
+    this.#hud?.setAttribute(DATA_ON, GLOW_ON);
+    this.#cursor?.setAttribute(DATA_ON, GLOW_ON);
+  }
+
+  #armIdleCheck(): void {
+    if (this.#idleCheckTimer !== undefined) nativeClearTimeout(this.#idleCheckTimer);
+    this.#idleCheckTimer = nativeSetTimeout(() => this.#checkIdle(), this.#idleAfterMs);
+  }
+
+  #checkIdle(): void {
+    this.#idleCheckTimer = undefined;
+    if (this.#phase !== GlowPhase.BUSY) return;
+    const quietFor = this.#now() - this.#lastActivityMs;
+    if (quietFor < this.#idleAfterMs) {
+      // Activity landed during the wait; re-arm for only the remaining quiet time.
+      this.#idleCheckTimer = nativeSetTimeout(
+        () => this.#checkIdle(),
+        this.#idleAfterMs - quietFor,
+      );
+      return;
+    }
+    this.#beginFade();
+  }
+
+  #beginFade(): void {
+    this.#phase = GlowPhase.FADING;
+    // Single fade-out write.
+    this.#glow?.setAttribute(DATA_ON, GLOW_OFF);
+    this.#hud?.setAttribute(DATA_ON, GLOW_OFF);
+    this.#cursor?.setAttribute(DATA_ON, GLOW_OFF);
+    if (this.#actLine !== undefined) this.#actLine.textContent = GlowPhase.IDLE;
+    this.#fadeTimer = nativeSetTimeout(() => {
+      this.#fadeTimer = undefined;
+      if (this.#phase === GlowPhase.FADING) this.#phase = GlowPhase.IDLE;
+    }, this.#glowFadeMs);
   }
 
   status(text: string): void {
-    this.setActive(true);
+    this.markActivity();
     if (this.#actLine !== undefined) this.#actLine.textContent = text;
     if (this.#resLine !== undefined) this.#resLine.textContent = '';
   }
 
   narrate(text: string, level = 'info'): void {
-    this.setActive(true);
+    this.markActivity();
     if (this.#noteLine !== undefined) {
       this.#noteLine.textContent = level === 'info' ? text : `[${level}] ${text}`;
     }
