@@ -97,7 +97,7 @@ Both need a **driven browser** (`iris drive <url>` / `IRIS_CDP_URL`); without on
 
 - **Keep the eyes cheap.** Prefer `iris_query` / scoped or `interactive` `iris_snapshot` /
   `iris_assert` over dumping the full tree. A full verify loop is ~100 tokens; see
-  [token-efficiency.md](token-efficiency.md) (~69× leaner than full-tree snapshots).
+  [token-efficiency.md](token-efficiency.md) (~73× leaner than full-tree snapshots).
 - **Predicate schema is not bloated.** The recursive predicate DSL used by `iris_assert` /
   `iris_wait_for` / `iris_act_and_wait` is **factored, not inlined**: when converted to the
   JSON Schema MCP sends, the predicate body is emitted **once** (~2.7k chars ≈ **~685 tokens**

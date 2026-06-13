@@ -1,0 +1,45 @@
+<!--SIZE:1600x1000-->
+<!doctype html>
+<html><head><meta charset="utf-8" /><link rel="stylesheet" href="../../marketing/src/_system.css" /><style>
+  html,body{width:1600px;height:1000px}
+  .card{width:1600px;height:1000px;padding:var(--s14) var(--s16);display:flex;flex-direction:column}
+  .layer{display:flex;flex-direction:column;height:100%}
+  .top{display:flex;align-items:center;justify-content:space-between}
+  .kick{font-family:var(--mono);font-size:15px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--faint)}
+  h1{font-family:var(--sans);font-weight:800;letter-spacing:-.03em;font-size:60px;margin-top:var(--s5);line-height:1.02}
+  h1 .hi{--hi:rgba(95,217,245,.32)}
+  .win{margin-top:var(--s7);flex:1;background:rgba(7,6,14,.75);border:1px solid rgba(255,255,255,.1);border-radius:var(--r5);overflow:hidden;display:flex;flex-direction:column;box-shadow:0 40px 120px rgba(0,0,0,.5)}
+  .bar{display:flex;align-items:center;gap:9px;padding:var(--s5) var(--s6);border-bottom:1px solid rgba(255,255,255,.08)}
+  .wd{width:13px;height:13px;border-radius:50%}.w1{background:#ff5f57}.w2{background:#febc2e}.w3{background:#28c840}
+  .bar .t{margin-left:var(--s3);color:var(--faint);font-family:var(--mono);font-size:16px;font-weight:600}
+  pre{margin:0;padding:var(--s8) var(--s10);font-family:var(--mono);font-size:24px;line-height:1.55;flex:1;white-space:pre-wrap}
+  .cmt{color:var(--faint)}.key{color:var(--iris-bright)}.str{color:var(--cyan)}.ok{color:var(--green)}.bad{color:var(--red)}.num{color:var(--amber)}
+  .meta{display:flex;gap:var(--s12);padding:var(--s6) var(--s10);border-top:1px solid rgba(255,255,255,.08)}
+  .meta div b{display:block;font-family:var(--sans);font-size:38px;font-weight:800;letter-spacing:-.02em}
+  .meta div span{color:var(--faint);font-family:var(--mono);font-size:16px}
+  .m1 b{color:var(--cyan)}.m2 b{color:var(--green)}.m3 b{color:var(--iris-bright)}
+  .foot{margin-top:var(--s6)}
+</style></head><body>
+  <div class="card bg-dark">
+    <div class="grain"></div>
+    <div class="layer">
+      <div class="top"><div class="brand"><img src="../../wordmark-white.svg" alt="Syrin" /><span class="sep">/</span><span class="prod">Iris</span></div><span class="kick">deterministic · no vision model</span></div>
+      <h1>A verdict you can <span class="hi">diff</span>, not a photo you squint at.</h1>
+      <div class="win">
+        <div class="bar"><span class="wd w1"></span><span class="wd w2"></span><span class="wd w3"></span><span class="t">iris_assert · redeploy verify</span></div>
+<pre><span class="cmt">// did the redeploy actually commit?</span>
+{
+  <span class="key">"pass"</span>: <span class="bad">false</span>,
+  <span class="key">"evidence"</span>: [
+    { <span class="key">"net"</span>: { <span class="key">"url"</span>:<span class="str">"/api/redeploy"</span>, <span class="key">"status"</span>:<span class="bad">401</span> } },
+    { <span class="key">"console"</span>: <span class="str">"[redeploy] failed: 401"</span> },
+    { <span class="key">"signal"</span>: <span class="str">"deploy:redeployed"</span>, <span class="key">"fired"</span>:<span class="bad">false</span> }
+  ],
+  <span class="key">"source"</span>: { <span class="key">"file"</span>:<span class="str">"src/lib/api.ts"</span>, <span class="key">"line"</span>:<span class="num">65</span> }
+}</pre>
+        <div class="meta"><div class="m1"><b>~10 ms</b><span>to a verdict</span></div><div class="m2"><b>~33 tok</b><span>the whole answer</span></div><div class="m3"><b>0</b><span>pixels parsed</span></div></div>
+      </div>
+      <div class="foot coords"><span class="code">syrin.ai/iris</span><span class="dot"></span><span class="code">@syrin/iris</span></div>
+    </div>
+  </div>
+</body></html>

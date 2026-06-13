@@ -1,0 +1,43 @@
+<!--SIZE:1600x1000-->
+<!doctype html>
+<html><head><meta charset="utf-8" /><link rel="stylesheet" href="_system.css" /><style>
+  html,body{width:1600px;height:1000px}
+  .card{width:1600px;height:1000px;padding:var(--s16)}
+  h1{font-family:var(--sans);font-weight:800;letter-spacing:-.03em;line-height:1.04;font-size:60px;margin-top:var(--s5)}
+  h1 .hi{--hi:rgba(95,217,245,.3)}
+  .mid{margin:auto 0;display:flex;align-items:center;gap:var(--s24)}
+  .donut{position:relative;width:440px;height:440px;flex:none}
+  .ring{width:440px;height:440px;border-radius:50%;
+    background:conic-gradient(var(--cyan) 0 60deg,var(--iris-bright) 60deg 120deg,var(--green) 120deg 180deg,var(--amber) 180deg 240deg,var(--peach) 240deg 300deg,var(--blue) 300deg 360deg);
+    -webkit-mask:radial-gradient(circle,transparent 58%,#000 59%);mask:radial-gradient(circle,transparent 58%,#000 59%)}
+  .center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+  .center .n{font-family:var(--sans);font-weight:800;font-size:120px;letter-spacing:-.04em;line-height:1}
+  .center .l{color:var(--muted);font-size:var(--t-sm)}
+  .legend{flex:1;display:grid;grid-template-columns:1fr 1fr;gap:var(--s5) var(--s8)}
+  .li{display:flex;align-items:center;gap:var(--s4)}
+  .li .dot{width:18px;height:18px;border-radius:6px;flex:none}
+  .li .t{font-weight:700;font-size:var(--t-sm)}
+  .li .d{color:var(--faint);font-family:var(--mono);font-size:15px;margin-top:2px}
+  .foot{margin-top:var(--s8)}
+</style></head><body>
+  <div class="card bg-dark">
+    <div class="grain"></div>
+    <div class="layer">
+      <div class="brand"><img src="../../wordmark-white.svg" alt="Syrin" /><span class="sep">/</span><span class="prod">Iris</span></div>
+      <span class="tag-solution" style="margin-top:var(--s8);display:inline-flex">what it verifies</span>
+      <h1>Six things, <span class="hi">one assert.</span></h1>
+      <div class="mid">
+        <div class="donut"><div class="ring"></div><div class="center"><div class="n">6</div><div class="l">reaction types</div></div></div>
+        <div class="legend">
+          <div class="li"><span class="dot" style="background:var(--cyan)"></span><div><div class="t">API calls</div><div class="d">method, status, timing</div></div></div>
+          <div class="li"><span class="dot" style="background:var(--iris-bright)"></span><div><div class="t">DOM changes</div><div class="d">modal, toast, removed</div></div></div>
+          <div class="li"><span class="dot" style="background:var(--green)"></span><div><div class="t">Navigation</div><div class="d">SPA route changes</div></div></div>
+          <div class="li"><span class="dot" style="background:var(--amber)"></span><div><div class="t">Console errors</div><div class="d">incl. "none this flow"</div></div></div>
+          <div class="li"><span class="dot" style="background:var(--peach)"></span><div><div class="t">Animations</div><div class="d">started, completed</div></div></div>
+          <div class="li"><span class="dot" style="background:var(--blue)"></span><div><div class="t">App signals</div><div class="d">webhooks, store commits</div></div></div>
+        </div>
+      </div>
+      <div class="foot coords"><span>plus regression and source-to-file mapping</span><span class="dot"></span><span class="code">syrin.ai/iris</span></div>
+    </div>
+  </div>
+</body></html>

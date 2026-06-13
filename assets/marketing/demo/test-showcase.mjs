@@ -1,0 +1,21 @@
+import { chromium } from 'playwright';
+import { execSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+const here = dirname(fileURLToPath(import.meta.url));
+const recDir = mkdtempSync(join(tmpdir(), 'sc-'));
+const b = await chromium.launch();
+const ctx = await b.newContext({ viewport: { width: 1920, height: 1080 }, recordVideo: { dir: recDir, size: { width: 1920, height: 1080 } } });
+const p = await ctx.newPage();
+await p.goto('file://' + join(here, 'showcase.html'));
+try { await p.evaluate(() => document.fonts.ready); } catch {}
+await p.waitForTimeout(300);
+await p.evaluate(() => { const v = document.querySelector('#v'); v.currentTime = 0; v.play().catch(()=>{}); document.querySelector('.stage').classList.add('go'); });
+await p.waitForTimeout(15500);
+const v = await p.video().path();
+await p.close(); await ctx.close(); await b.close();
+execSync(`ffmpeg -y -i "${v}" -r 30 -s 1920x1080 -pix_fmt yuv420p -c:v libx264 -crf 20 -an /tmp/showcase_test.mp4`, { stdio: 'ignore' });
+rmSync(recDir, { recursive: true, force: true });
+console.log('done');

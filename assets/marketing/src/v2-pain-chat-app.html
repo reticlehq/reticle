@@ -1,0 +1,31 @@
+<!--SIZE:1080x1350-->
+<!doctype html>
+<html><head><meta charset="utf-8" /><link rel="stylesheet" href="_system.css" /><style>
+  html,body{width:1080px;height:1350px}
+  .card{width:1080px;height:1350px;padding:var(--s16)}
+  .mid{margin:auto 0;display:flex;flex-direction:column;gap:var(--s8)}
+  h1{font-family:var(--sans);font-weight:800;letter-spacing:-.03em;line-height:1.07;font-size:104px}
+  h1 .b{color:var(--red)}
+  .lead{max-width:840px;font-size:var(--t-md)}
+  .lead b{color:var(--ink);font-weight:600}
+  .iris-line{display:flex;align-items:center;gap:var(--s4);margin-top:var(--s4)}
+  .iris-line .ico{width:30px;height:30px;color:var(--cyan)}
+  .iris-line span{font-size:var(--t-base);font-weight:600}
+  .iris-line b{color:var(--cyan)}
+</style></head><body>
+  <div class="card bg-dark">
+    <div class="grain"></div>
+    <div class="layer" style="justify-content:space-between">
+      <div class="brand"><img src="../../wordmark-white.svg" alt="Syrin" /><span class="sep">/</span><span class="prod">Iris</span></div>
+      <div class="mid">
+        <h1>It worked<br />in the chat.<br /><span class="b">It broke<br />in the app.</span></h1>
+        <p class="lead">You built it with Claude Code. It said <b>done.</b> A user found the bug first.</p>
+        <div class="iris-line">
+          <svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.5 2.5L16 9"/></svg>
+          <span>Iris is the part that <b>checks your AI's work.</b></span>
+        </div>
+      </div>
+      <div class="coords"><span>syrin.ai/iris</span><span class="dot"></span><span class="code">npm i -D @syrin/iris</span></div>
+    </div>
+  </div>
+</body></html>

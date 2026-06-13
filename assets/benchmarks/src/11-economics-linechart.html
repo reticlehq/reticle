@@ -1,0 +1,50 @@
+<!--SIZE:1600x1000-->
+<!doctype html>
+<html><head><meta charset="utf-8" /><link rel="stylesheet" href="../../marketing/src/_system.css" /><style>
+  html,body{width:1600px;height:1000px}
+  .card{width:1600px;height:1000px;padding:var(--s14) var(--s16)}
+  .top{display:flex;align-items:center;justify-content:space-between}
+  .kick{font-family:var(--mono);font-size:15px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--faint)}
+  h1{font-family:var(--sans);font-weight:800;letter-spacing:-.03em;font-size:64px;margin-top:var(--s4)}
+  h1 .hi{--hi:rgba(95,217,245,.32)}
+  .wrap{margin-top:var(--s4);flex:1;display:flex;gap:var(--s5)}
+  .yaxis{display:flex;flex-direction:column;justify-content:space-between;padding:6px 0 44px;text-align:right;color:var(--faint);font-family:var(--mono);font-size:17px;font-weight:600}
+  .chart{flex:1;position:relative}
+  svg{width:100%;height:100%;display:block}
+  .leg{position:absolute;left:40px;top:10px;display:flex;flex-direction:column;gap:var(--s3)}
+  .leg div{display:flex;align-items:center;gap:var(--s3);font-size:22px;font-weight:700}
+  .leg .sw{width:30px;height:6px;border-radius:3px}
+  .tagpw{position:absolute;left:33%;top:33%;color:var(--red);font-family:var(--sans);font-weight:800;font-size:34px}
+  .tagpw small{display:block;color:var(--faint);font-family:var(--mono);font-size:16px;font-weight:600;margin-top:2px}
+  .tagir{position:absolute;right:14px;bottom:64px;color:var(--cyan);font-family:var(--sans);font-weight:800;font-size:30px;text-align:right}
+  .tagir small{display:block;color:var(--faint);font-family:var(--mono);font-size:15px;font-weight:600}
+  .foot{margin-top:var(--s4)}
+</style></head><body>
+  <div class="card bg-dark">
+    <div class="grain"></div>
+    <div class="layer">
+      <div class="top"><div class="brand"><img src="../../wordmark-white.svg" alt="Syrin" /><span class="sep">/</span><span class="prod">Iris</span></div><span class="kick">cumulative tokens · 20 steps</span></div>
+      <h1>Cheap enough to run on <span class="hi">every edit.</span></h1>
+      <div class="wrap">
+        <div class="yaxis"><span>146k</span><span>110k</span><span>73k</span><span>37k</span><span>0</span></div>
+        <div class="chart">
+          <div class="leg"><div><span class="sw" style="background:var(--red)"></span> Full-tree snapshot</div><div><span class="sw" style="background:linear-gradient(90deg,var(--cyan),var(--iris-bright))"></span> Iris verify loop</div></div>
+          <div class="tagpw">~146,000<small>full tree, at step 20</small></div>
+          <div class="tagir">~2,000<small>Iris, at step 20</small></div>
+          <svg viewBox="0 0 1300 540" preserveAspectRatio="none">
+            <defs>
+              <linearGradient id="pw" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ff6b86" stop-opacity=".28"/><stop offset="1" stop-color="#ff6b86" stop-opacity="0"/></linearGradient>
+              <linearGradient id="irl" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#5fd9f5"/><stop offset="1" stop-color="#a594ff"/></linearGradient>
+            </defs>
+            <g stroke="rgba(255,255,255,.08)" stroke-width="1"><line x1="0" y1="7" x2="1300" y2="7"/><line x1="0" y1="135" x2="1300" y2="135"/><line x1="0" y1="263" x2="1300" y2="263"/><line x1="0" y1="391" x2="1300" y2="391"/><line x1="0" y1="519" x2="1300" y2="519"/></g>
+            <path d="M0,519 L325,392 L650,264 L975,136 L1300,8 L1300,519 Z" fill="url(#pw)"/>
+            <polyline points="0,519 325,392 650,264 975,136 1300,8" fill="none" stroke="#ff6b86" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+            <polyline points="0,519 325,518 650,516 975,514 1300,512" fill="none" stroke="url(#irl)" stroke-width="7" stroke-linecap="round"/>
+            <circle cx="1300" cy="8" r="9" fill="#ff6b86"/><circle cx="1300" cy="512" r="9" fill="#5fd9f5"/>
+          </svg>
+        </div>
+      </div>
+      <div class="foot coords"><span class="code">syrin.ai/iris</span><span class="dot"></span><span class="code">@syrin/iris</span><span class="dot"></span><span>github.com/syrin-labs/iris</span></div>
+    </div>
+  </div>
+</body></html>

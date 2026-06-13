@@ -10,25 +10,27 @@ to ask **narrow questions** instead, so the per-interaction cost stays tiny.
 Measured against the demo dashboard (`apps/demo`) **with a 1,000-item list rendered**, after
 login. Token estimate = characters ÷ 4. Reproduce with `node plan/vs-playwright.mjs`.
 
-| Payload                                                                            |     Tokens |
-| ---------------------------------------------------------------------------------- | ---------: |
-| **Playwright MCP** — page accessibility snapshot (sent _every_ `browser_snapshot`) | **~6,856** |
-| Iris — `snapshot` `full` (whole page, incl. all 1,000 items)                       |     ~4,144 |
-| Iris — `snapshot` `interactive` (actionable elements only)                         |       ~110 |
-| Iris — `snapshot` `status` (route / dialogs / counters)                            |        ~31 |
-| Iris — `query` one element                                                         |        ~28 |
-| Iris — `observe` (reaction after an action)                                        |        ~39 |
-| Iris — `assert` verdict                                                            |        ~33 |
-| **Iris — a full verify loop** (`query` + `observe` + `assert`)                     |   **~100** |
+| Payload                                                                        |     Tokens |
+| ------------------------------------------------------------------------------ | ---------: |
+| **Playwright MCP** — with-refs snapshot (the real payload it sends every step) | **~7,300** |
+| Playwright MCP — bare accessibility tree (what we measured directly)           |     ~6,856 |
+| Iris — `snapshot` `full` (whole page, incl. all 1,000 items)                   |     ~4,144 |
+| Iris — `snapshot` `interactive` (actionable elements only)                     |       ~110 |
+| Iris — `snapshot` `status` (route / dialogs / counters)                        |        ~31 |
+| Iris — `query` one element                                                     |        ~28 |
+| Iris — `observe` (reaction after an action)                                    |        ~39 |
+| Iris — `assert` verdict                                                        |        ~33 |
+| **Iris — a full verify loop** (`query` + `observe` + `assert`)                 |   **~100** |
 
-**Result on this page:** the common Iris loop is **~69× leaner** than Playwright MCP's
-per-step snapshot (100 vs 6,856 tokens). On the complex pages Playwright's ecosystem cites
-(50k+), the gap widens to **~100–500×**.
+**Result on this page:** the common Iris loop is **~73× leaner** than Playwright MCP's
+per-step snapshot (100 vs ~7,300 tokens). The bare a11y tree we measured directly is 6,856;
+Playwright MCP's actual payload adds a `[ref=…]` to every node, pushing it to ~7,300. On the
+complex pages Playwright's ecosystem cites (50k+), the gap widens to **~100–500×**.
 
 ## The honest version
 
-- **Full-tree vs full-tree, the gap is modest (~1.6×):** Iris `full` (4,144) vs Playwright's
-  aria snapshot (6,856). Iris collapses generic wrapper nodes, but both include every list
+- **Full-tree vs full-tree, the gap is modest (~1.8×):** Iris `full` (4,144) vs Playwright's
+  with-refs snapshot (~7,300). Iris collapses generic wrapper nodes, but both include every list
   item. If you force Iris to dump the whole page each step, you don't save much.
 - **The savings come from _not needing_ the full tree.** Playwright MCP's primary perception
   primitive is "return the accessibility tree"; Iris's is "answer a specific question"
@@ -43,7 +45,7 @@ per-step snapshot (100 vs 6,856 tokens). On the complex pages Playwright's ecosy
 
 A 20-step verification flow:
 
-- **Full-tree approach:** ~6,900 tokens × 20 ≈ **~138,000 tokens** (and more on complex
+- **Full-tree approach:** ~7,300 tokens × 20 ≈ **~146,000 tokens** (and more on complex
   pages), plus a vision model if it also screenshots.
 - **Iris:** ~100 tokens × 20 ≈ **~2,000 tokens**, any model, deterministic.
 

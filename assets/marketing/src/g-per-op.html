@@ -1,0 +1,35 @@
+<!--SIZE:1600x1000-->
+<!doctype html>
+<html><head><meta charset="utf-8" /><link rel="stylesheet" href="_system.css" /><style>
+  html,body{width:1600px;height:1000px}
+  .card{width:1600px;height:1000px;padding:var(--s16)}
+  h1{font-family:var(--sans);font-weight:800;letter-spacing:-.03em;line-height:1.04;font-size:60px;margin-top:var(--s5)}
+  h1 .hi{--hi:rgba(95,217,245,.3)}
+  .rows{margin:auto 0;display:flex;flex-direction:column;gap:var(--s5)}
+  .row{display:grid;grid-template-columns:300px 1fr 140px;align-items:center;gap:var(--s6)}
+  .rl{font-size:var(--t-sm);font-weight:600}
+  .rl small{display:block;color:var(--faint);font-family:var(--mono);font-size:15px;margin-top:2px;font-weight:500}
+  .track{height:36px;border-radius:var(--rpill);background:rgba(255,255,255,.06);overflow:hidden}
+  .fill{height:100%;min-width:30px;border-radius:var(--rpill);background:linear-gradient(90deg,var(--cyan),var(--iris-bright));box-shadow:0 0 24px rgba(95,217,245,.4)}
+  .rv{text-align:right;font-weight:800;font-size:var(--t-md);color:var(--cyan);font-variant-numeric:tabular-nums}
+  .big .fill{background:rgba(255,255,255,.16);box-shadow:none;min-width:0}
+  .big .rl,.big .rv{color:var(--muted)}
+  .foot{margin-top:var(--s10)}
+</style></head><body>
+  <div class="card bg-dark">
+    <div class="grain"></div>
+    <div class="layer">
+      <div class="brand"><img src="../../wordmark-white.svg" alt="Syrin" /><span class="sep">/</span><span class="prod">Iris</span></div>
+      <span class="tag-solution" style="margin-top:var(--s8);display:inline-flex">cost per operation</span>
+      <h1>Every answer is a <span class="hi">few dozen tokens.</span></h1>
+      <div class="rows">
+        <div class="row"><div class="rl">query one element<small>iris_query</small></div><div class="track"><div class="fill" style="width:0.4%"></div></div><div class="rv">~28</div></div>
+        <div class="row"><div class="rl">assert a verdict<small>iris_assert</small></div><div class="track"><div class="fill" style="width:0.5%"></div></div><div class="rv">~33</div></div>
+        <div class="row"><div class="rl">observe a reaction<small>net, dom, console, signals</small></div><div class="track"><div class="fill" style="width:0.6%"></div></div><div class="rv">~39</div></div>
+        <div class="row"><div class="rl">interactive snapshot<small>actionable elements only</small></div><div class="track"><div class="fill" style="width:1.6%"></div></div><div class="rv">~110</div></div>
+        <div class="row big"><div class="rl">full-tree snapshot<small>other tools, every step</small></div><div class="track"><div class="fill" style="width:100%"></div></div><div class="rv">~7,300</div></div>
+      </div>
+      <div class="foot coords"><span>you ask narrow questions, the page stays out of context</span><span class="dot"></span><span class="code">syrin.ai/iris</span></div>
+    </div>
+  </div>
+</body></html>

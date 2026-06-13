@@ -1,0 +1,32 @@
+<!--SIZE:1080x1080-->
+<!doctype html>
+<html><head><meta charset="utf-8" /><link rel="stylesheet" href="_system.css" /><style>
+  html,body{width:1080px;height:1080px}
+  .card{width:1080px;height:1080px;padding:var(--s16)}
+  .mid{margin:auto 0;display:flex;flex-direction:column;gap:var(--s8)}
+  h1{font-family:var(--sans);font-weight:800;letter-spacing:-.035em;line-height:1.0;font-size:128px}
+  h1 .strike{position:relative;white-space:nowrap}
+  h1 .strike::after{content:"";position:absolute;left:-8px;right:-8px;top:52%;height:10px;background:var(--red);border-radius:6px;transform:rotate(-3deg)}
+  .lead{max-width:760px;font-size:var(--t-md)}
+  .lead b{color:var(--ink);font-weight:600}
+  .stats{display:flex;gap:var(--s10)}
+  .stat .n{font-weight:800;font-size:var(--t-xl);letter-spacing:-.03em;line-height:1}
+  .s1 .n{color:var(--green)} .s2 .n{color:var(--cyan)}
+  .stat .l{color:var(--muted);font-size:var(--t-mono);margin-top:var(--s2)}
+</style></head><body>
+  <div class="card bg-dark">
+    <div class="grain"></div>
+    <div class="layer" style="justify-content:space-between">
+      <div class="brand"><img src="../../wordmark-white.svg" alt="Syrin" /><span class="sep">/</span><span class="prod">Iris</span></div>
+      <div class="mid">
+        <h1>No<br /><span class="strike">screenshots.</span></h1>
+        <p class="lead">Iris reads the network call, the console error, the signal. <b>The stuff a picture can't show.</b></p>
+        <div class="stats">
+          <div class="stat s1"><div class="n">0</div><div class="l">vision models</div></div>
+          <div class="stat s2"><div class="n">~33</div><div class="l">tokens to check</div></div>
+        </div>
+      </div>
+      <div class="coords"><span class="code">syrin.ai/iris</span></div>
+    </div>
+  </div>
+</body></html>

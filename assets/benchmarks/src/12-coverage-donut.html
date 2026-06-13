@@ -1,0 +1,43 @@
+<!--SIZE:1080x1080-->
+<!doctype html>
+<html><head><meta charset="utf-8" /><link rel="stylesheet" href="../../marketing/src/_system.css" /><style>
+  html,body{width:1080px;height:1080px}
+  .card{width:1080px;height:1080px;padding:var(--s16)}
+  :root{--k1:var(--cyan);--k2:var(--iris-bright);--k3:var(--green);--k4:var(--amber);--k5:var(--peach);--k6:#5b9bff}
+  .top{display:flex;align-items:center;gap:var(--s3)}
+  .top .kick{margin-left:auto;font-family:var(--mono);font-size:15px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--faint)}
+  h1{font-family:var(--sans);font-weight:800;letter-spacing:-.03em;font-size:62px;margin-top:var(--s6);line-height:1.02}
+  h1 .hi{--hi:rgba(139,123,255,.32)}
+  .mid{flex:1;display:flex;align-items:center;gap:var(--s12);margin-top:var(--s4)}
+  .donut{position:relative;width:430px;height:430px;flex:none}
+  .ring{width:430px;height:430px;border-radius:50%;background:conic-gradient(var(--k1) 0 60deg,var(--k2) 60deg 120deg,var(--k3) 120deg 180deg,var(--k4) 180deg 240deg,var(--k5) 240deg 300deg,var(--k6) 300deg 360deg);-webkit-mask:radial-gradient(circle,transparent 57%,#000 58%);mask:radial-gradient(circle,transparent 57%,#000 58%);box-shadow:0 30px 90px rgba(0,0,0,.5)}
+  .center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}
+  .center .big{font-family:var(--sans);font-size:120px;font-weight:800;letter-spacing:-.04em;line-height:1}
+  .center .lab{color:var(--muted);font-size:20px;margin-top:var(--s1)}
+  .legend{display:flex;flex-direction:column;gap:var(--s5)}
+  .li{display:flex;align-items:center;gap:var(--s4)}
+  .li .d{width:20px;height:20px;border-radius:6px;flex:none}
+  .li .t{font-size:27px;font-weight:700}
+  .li .s{display:block;color:var(--faint);font-family:var(--mono);font-size:16px;font-weight:500;margin-top:2px}
+  .foot{margin-top:var(--s4)}
+</style></head><body>
+  <div class="card bg-dark">
+    <div class="grain"></div>
+    <div class="layer">
+      <div class="top"><div class="brand"><img src="../../wordmark-white.svg" alt="Syrin" /><span class="sep">/</span><span class="prod">Iris</span></div><span class="kick">what it verifies</span></div>
+      <h1>Six reactions,<br />plus anything <span class="hi">you emit.</span></h1>
+      <div class="mid">
+        <div class="donut"><div class="ring"></div><div class="center"><div class="big">6</div><div class="lab">one assert</div></div></div>
+        <div class="legend">
+          <div class="li"><span class="d" style="background:var(--k1)"></span><span class="t">API calls<span class="s">method · status · timing</span></span></div>
+          <div class="li"><span class="d" style="background:var(--k2)"></span><span class="t">DOM changes<span class="s">modal · toast · removed</span></span></div>
+          <div class="li"><span class="d" style="background:var(--k3)"></span><span class="t">Navigation<span class="s">SPA route changes</span></span></div>
+          <div class="li"><span class="d" style="background:var(--k4)"></span><span class="t">Console &amp; errors<span class="s">incl. "none this flow"</span></span></div>
+          <div class="li"><span class="d" style="background:var(--k5)"></span><span class="t">Animations<span class="s">started · completed</span></span></div>
+          <div class="li"><span class="d" style="background:var(--k6)"></span><span class="t">App signals<span class="s">webhooks · store commits</span></span></div>
+        </div>
+      </div>
+      <div class="foot coords"><span class="code">syrin.ai/iris</span><span class="dot"></span><span class="code">@syrin/iris</span></div>
+    </div>
+  </div>
+</body></html>

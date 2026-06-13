@@ -1,0 +1,57 @@
+<!--SIZE:1600x1000-->
+<!doctype html>
+<html><head><meta charset="utf-8" /><link rel="stylesheet" href="../../marketing/src/_system.css" /><style>
+  html,body{width:1600px;height:1000px}
+  .card{width:1600px;height:1000px;padding:var(--s14) var(--s16)}
+  .top{display:flex;align-items:center;justify-content:space-between}
+  .kick{font-family:var(--mono);font-size:15px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--faint)}
+  h1{font-family:var(--sans);font-weight:800;letter-spacing:-.03em;font-size:60px;margin-top:var(--s5);line-height:1.02}
+  .flow{margin-top:auto;display:grid;grid-template-columns:1fr 80px 1fr;align-items:stretch}
+  .step{border:1px solid rgba(255,255,255,.12);border-radius:var(--r6);padding:var(--s9);display:flex;flex-direction:column}
+  .red{background:rgba(255,107,134,.06);border-color:rgba(255,107,134,.3)}
+  .green{background:rgba(70,214,160,.07);border-color:rgba(70,214,160,.3)}
+  .badge{font-family:var(--mono);font-size:17px;font-weight:700;letter-spacing:.04em;text-transform:uppercase}
+  .red .badge{color:var(--red)} .green .badge{color:var(--green)}
+  .verdict{font-family:var(--sans);font-size:46px;font-weight:800;margin-top:var(--s4);letter-spacing:-.02em;line-height:1.05}
+  .red .verdict{color:var(--red)} .green .verdict{color:var(--green)}
+  .ev{margin-top:var(--s6);display:flex;flex-direction:column;gap:var(--s4);font-family:var(--mono);font-size:23px;color:var(--muted)}
+  .ev div{display:flex;align-items:center;gap:var(--s3)} .ev .ico{width:24px;height:24px;flex:none;stroke-width:2.6} .ev b{color:var(--ink)}
+  .red .ico{color:var(--red)} .green .ico{color:var(--green)}
+  .arrow{display:flex;align-items:center;justify-content:center;color:var(--iris-bright)}
+  .arrow svg{width:44px;height:44px;stroke-width:2.4}
+  .fixbar{grid-column:1 / -1;margin-top:var(--s6);background:rgba(7,6,14,.6);border:1px solid rgba(255,255,255,.1);border-radius:var(--r4);padding:var(--s6) var(--s7);display:flex;align-items:center;gap:var(--s5);font-family:var(--mono);font-size:22px}
+  .fixbar .lbl{color:var(--iris-bright);font-weight:800;letter-spacing:.04em}
+  .fixbar code{color:var(--muted)} .fixbar .plus{color:var(--green);font-weight:800}
+  .foot{margin-top:var(--s6)}
+</style></head><body>
+  <div class="card bg-dark">
+    <div class="grain"></div>
+    <div class="layer">
+      <div class="top"><div class="brand"><img src="../../wordmark-white.svg" alt="Syrin" /><span class="sep">/</span><span class="prod">Iris</span></div><span class="kick">red to green · the agent fixes its own work</span></div>
+      <h1>It looked done. Iris proved otherwise, then proved the fix.</h1>
+      <div class="flow">
+        <div class="step red">
+          <span class="badge">before · pass: false</span>
+          <div class="verdict">401, behind a success toast</div>
+          <div class="ev">
+            <div><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 6l12 12M18 6L6 18"/></svg>POST /api/redeploy <b>401</b></div>
+            <div><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 6l12 12M18 6L6 18"/></svg>console error captured</div>
+            <div><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 6l12 12M18 6L6 18"/></svg>signal never fired</div>
+          </div>
+        </div>
+        <div class="arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
+        <div class="step green">
+          <span class="badge">after · pass: true</span>
+          <div class="verdict">200, committed for real</div>
+          <div class="ev">
+            <div><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 12.5l5 5L20 6.5"/></svg>POST /api/redeploy <b>200</b></div>
+            <div><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 12.5l5 5L20 6.5"/></svg>no console errors</div>
+            <div><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 12.5l5 5L20 6.5"/></svg>signal deploy:redeployed</div>
+          </div>
+        </div>
+        <div class="fixbar"><span class="lbl">THE FIX</span><code>headers: {</code><span class="plus">+ authorization: `Bearer ${token}`</span><code>}</code></div>
+      </div>
+      <div class="foot coords"><span class="code">syrin.ai/iris</span><span class="dot"></span><span class="code">@syrin/iris</span></div>
+    </div>
+  </div>
+</body></html>

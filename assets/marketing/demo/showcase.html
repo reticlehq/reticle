@@ -1,0 +1,46 @@
+<!doctype html>
+<html><head><meta charset="utf-8" /><link rel="stylesheet" href="../src/_system.css" /><style>
+  html,body{width:1920px;height:1080px;margin:0}
+  .stage{width:1920px;height:1080px;position:relative;overflow:hidden;font-family:var(--sans);color:var(--ink);
+    -webkit-font-smoothing:antialiased;perspective:1700px}
+  .grain{z-index:4}
+  /* the product window: starts full, parks to the right with a slant */
+  .win{position:absolute;top:0;left:0;width:1920px;height:1080px;overflow:hidden;z-index:2;transform-origin:72% 50%;
+    will-change:transform}
+  .win video{width:100%;height:100%;object-fit:cover;display:block}
+  .stage.go .win{animation:park 1.5s 1.7s cubic-bezier(.65,0,.2,1) both}
+  @keyframes park{
+    0%{transform:none;border-radius:0;box-shadow:none}
+    100%{transform:translateX(430px) translateZ(-90px) rotateY(-15deg) scale(.6);
+      border-radius:24px;box-shadow:-50px 50px 140px rgba(0,0,0,.55),0 0 0 1px rgba(255,255,255,.08)}
+  }
+  /* left text rail */
+  .rail{position:absolute;left:120px;top:0;height:100%;width:760px;z-index:3;display:flex;flex-direction:column;
+    justify-content:center;gap:var(--s8)}
+  .kicker{font-family:var(--mono);font-size:var(--t-sm);font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--cyan);opacity:0}
+  .stage.go .kicker{animation:rise .6s 2.5s both}
+  h2{font-family:var(--sans);font-weight:800;letter-spacing:-.03em;line-height:1.04;font-size:58px;opacity:0}
+  .stage.go h2{animation:rise .6s 2.8s both}
+  .point{display:flex;gap:var(--s5);align-items:flex-start;opacity:0}
+  .point .ic{flex:none;width:54px;height:54px;border-radius:var(--r4);display:flex;align-items:center;justify-content:center;background:rgba(95,217,245,.14);color:var(--cyan)}
+  .point .ic svg{width:30px;height:30px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+  .point .p{color:var(--red);font-weight:600;font-size:var(--t-base)}
+  .point .s{font-size:var(--t-md);font-weight:700;letter-spacing:-.02em;margin-top:2px}
+  .stage.go .point:nth-of-type(1){animation:rise .6s 3.5s both}
+  .stage.go .point:nth-of-type(2){animation:rise .6s 6.3s both}
+  .stage.go .point:nth-of-type(3){animation:rise .6s 9.1s both}
+  @keyframes rise{0%{opacity:0;transform:translateY(22px)}100%{opacity:1;transform:none}}
+</style></head><body>
+  <div class="stage bg-dark">
+    <div class="win"><video id="v" src="showcase-clip.mp4" muted playsinline loop preload="auto"></video></div>
+    <div class="grain"></div>
+    <div class="rail">
+      <div class="kicker">how Iris works</div>
+      <h2>It runs your app,<br />and tells the truth.</h2>
+      <div class="point"><span class="ic"><svg viewBox="0 0 24 24"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></span><div><div class="p">A screenshot just sees pixels.</div><div class="s">Iris runs the real flow, in your live app.</div></div></div>
+      <div class="point"><span class="ic"><svg viewBox="0 0 24 24"><path d="M5 13a7 7 0 0 1 14 0"/><path d="M8.5 13a3.5 3.5 0 0 1 7 0"/><circle cx="12" cy="13" r="1.2" fill="currentColor" stroke="none"/></svg></span><div><div class="p">The 401 was invisible.</div><div class="s">It reads the network, console, and signals.</div></div></div>
+      <div class="point"><span class="ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="2.5"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></span><div><div class="p">Then you debug blind.</div><div class="s">It points at the exact file to fix.</div></div></div>
+    </div>
+  </div>
+  <script>document.querySelector('#v').play().catch(()=>{});</script>
+</body></html>

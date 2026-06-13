@@ -1,0 +1,53 @@
+<!--SIZE:1600x900-->
+<!doctype html>
+<html><head><meta charset="utf-8" /><link rel="stylesheet" href="_system.css" /><style>
+  html,body{width:1600px;height:900px}
+  .card{width:1600px;height:900px;padding:var(--s16)}
+  h1{font-family:var(--sans);font-weight:800;letter-spacing:-.03em;line-height:1.04;font-size:60px;margin-top:var(--s5)}
+  h1 .hi{--hi:rgba(70,214,160,.3)}
+  .flow{margin:auto 0;display:flex;align-items:center;gap:var(--s8)}
+  .vc{flex:1;border-radius:var(--r6);padding:var(--s8);border:1px solid}
+  .vc.fail{background:rgba(255,107,134,.08);border-color:rgba(255,107,134,.4)}
+  .vc.pass{background:rgba(70,214,160,.1);border-color:rgba(70,214,160,.42)}
+  .vlabel{font-family:var(--mono);font-weight:700;font-size:var(--t-sm);display:flex;align-items:center;gap:var(--s3)}
+  .fail .vlabel{color:var(--red)} .pass .vlabel{color:var(--green)}
+  .vlabel .ico{width:24px;height:24px}
+  .ev{margin-top:var(--s5);display:flex;flex-direction:column;gap:var(--s3);font-family:var(--mono);font-size:var(--t-mono)}
+  .ev .r{display:flex;align-items:center;gap:var(--s3)}
+  .fail .ev{color:#ffd0da} .pass .ev{color:#bde6d4}
+  .ev .ico{width:18px;height:18px;flex:none} .fail .ev .ico{color:var(--red)} .pass .ev .ico{color:var(--green)}
+  .ev b{color:#fff}
+  .fixarrow{flex:none;display:flex;flex-direction:column;align-items:center;gap:var(--s2);color:var(--faint)}
+  .fixarrow .ico{width:36px;height:36px;color:var(--iris-bright)}
+  .fixarrow span{font-family:var(--mono);font-size:14px}
+  .foot{margin-top:var(--s8)}
+</style></head><body>
+  <div class="card bg-dark">
+    <div class="grain"></div>
+    <div class="layer">
+      <div class="brand"><img src="../../wordmark-white.svg" alt="Syrin" /><span class="sep">/</span><span class="prod">Iris</span></div>
+      <span class="tag-solution" style="margin-top:var(--s8);display:inline-flex">what you actually get</span>
+      <h1>A verdict with evidence. Then <span class="hi">the green.</span></h1>
+      <div class="flow">
+        <div class="vc fail">
+          <div class="vlabel"><svg class="ico" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg> pass: false</div>
+          <div class="ev">
+            <div class="r"><svg class="ico" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg> POST /api/redeploy &rarr; <b>401</b></div>
+            <div class="r"><svg class="ico" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg> console error captured</div>
+            <div class="r"><svg class="ico" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg> source: api.ts:65</div>
+          </div>
+        </div>
+        <div class="fixarrow"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg><span>one-line fix</span></div>
+        <div class="vc pass">
+          <div class="vlabel"><svg class="ico" viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5"/></svg> pass: true</div>
+          <div class="ev">
+            <div class="r"><svg class="ico" viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5"/></svg> POST /api/redeploy &rarr; <b>200</b></div>
+            <div class="r"><svg class="ico" viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5"/></svg> no console errors</div>
+            <div class="r"><svg class="ico" viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5"/></svg> signal deploy:redeployed</div>
+          </div>
+        </div>
+      </div>
+      <div class="foot coords"><span>~33 tokens · no screenshot · deterministic</span><span class="dot"></span><span class="code">syrin.ai/iris</span></div>
+    </div>
+  </div>
+</body></html>

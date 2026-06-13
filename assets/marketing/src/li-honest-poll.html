@@ -1,0 +1,35 @@
+<!--SIZE:1080x1350-->
+<!doctype html>
+<html><head><meta charset="utf-8" /><link rel="stylesheet" href="_system.css" /><style>
+  html,body{width:1080px;height:1350px}
+  .card{width:1080px;height:1350px;padding:var(--s16)}
+  h1{font-family:var(--sans);font-weight:800;letter-spacing:-.03em;line-height:1.06;font-size:62px;margin-top:var(--s10)}
+  .opts{margin:auto 0;display:flex;flex-direction:column;gap:var(--s4)}
+  .opt{display:flex;align-items:center;gap:var(--s5);background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);
+    border-radius:var(--r5);padding:var(--s6) var(--s7)}
+  .opt.sel{background:rgba(255,107,134,.1);border-color:rgba(255,107,134,.45)}
+  .radio{flex:none;width:30px;height:30px;border-radius:50%;border:2px solid var(--faint)}
+  .opt.sel .radio{border-color:var(--red);background:radial-gradient(circle,var(--red) 0 40%,transparent 46%)}
+  .opt .t{font-size:var(--t-base);font-weight:600}
+  .opt.sel .t{color:#ffd9e0}
+  .resolve{font-size:var(--t-base);color:var(--muted);font-weight:500}
+  .resolve b{color:var(--cyan);font-weight:600}
+</style></head><body>
+  <div class="card bg-dark">
+    <div class="grain"></div>
+    <div class="layer" style="justify-content:space-between">
+      <div>
+        <div class="brand"><img src="../../wordmark-white.svg" alt="Syrin" /><span class="sep">/</span><span class="prod">Iris</span></div>
+        <span class="eyebrow" style="display:inline-flex;margin-top:var(--s10)">be honest</span>
+        <h1>How do you check<br />your AI's code<br />actually works?</h1>
+      </div>
+      <div class="opts">
+        <div class="opt"><span class="radio"></span><span class="t">I click through it myself</span></div>
+        <div class="opt"><span class="radio"></span><span class="t">I run it once and hope</span></div>
+        <div class="opt"><span class="radio"></span><span class="t">I don't, honestly</span></div>
+        <div class="opt sel"><span class="radio"></span><span class="t">a user finds the bug first</span></div>
+      </div>
+      <div class="resolve">Pick your pain in the comments. <b>Or let your agent check it for you.</b></div>
+    </div>
+  </div>
+</body></html>

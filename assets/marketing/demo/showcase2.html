@@ -1,0 +1,38 @@
+<!doctype html>
+<html><head><meta charset="utf-8" /><link rel="stylesheet" href="../src/_system.css" /><style>
+  html,body{width:1920px;height:1080px;margin:0}
+  .stage{width:1920px;height:1080px;position:relative;overflow:hidden;font-family:var(--sans);color:var(--ink);-webkit-font-smoothing:antialiased;perspective:1700px}
+  .grain{z-index:4}
+  .win{position:absolute;top:0;left:0;width:1920px;height:1080px;overflow:hidden;z-index:2;transform-origin:72% 50%;will-change:transform}
+  .win video{width:100%;height:100%;object-fit:cover;display:block}
+  .stage.go .win{animation:park 1.5s 1.6s cubic-bezier(.65,0,.2,1) both}
+  @keyframes park{0%{transform:none;border-radius:0;box-shadow:none}
+    100%{transform:translateX(430px) translateZ(-90px) rotateY(-15deg) scale(.6);border-radius:24px;box-shadow:-50px 50px 140px rgba(0,0,0,.55),0 0 0 1px rgba(255,255,255,.08)}}
+  .rail{position:absolute;left:120px;top:0;height:100%;width:760px;z-index:3;display:flex;flex-direction:column;justify-content:center}
+  .kicker{font-family:var(--mono);font-size:var(--t-sm);font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--cyan);opacity:0;margin-bottom:var(--s7)}
+  .stage.go .kicker{animation:rise .6s 2.4s both}
+  .msgs{position:relative;height:300px}
+  .msg{position:absolute;left:0;top:0;opacity:0}
+  .msg .p{color:var(--red);font-weight:600;font-size:var(--t-base)}
+  .msg .s{font-family:var(--sans);font-weight:800;letter-spacing:-.03em;line-height:1.06;font-size:62px;margin-top:var(--s3)}
+  .msg .s b{color:var(--cyan)}
+  .stage.go .msg:nth-of-type(1){animation:inout 3.6s 2.9s both}
+  .stage.go .msg:nth-of-type(2){animation:inout 3.6s 6.5s both}
+  .stage.go .msg:nth-of-type(3){animation:rise .6s 10.1s both}
+  @keyframes inout{0%{opacity:0;transform:translateY(22px)}11%{opacity:1;transform:none}80%{opacity:1;transform:none}100%{opacity:0;transform:translateY(-16px)}}
+  @keyframes rise{0%{opacity:0;transform:translateY(22px)}100%{opacity:1;transform:none}}
+</style></head><body>
+  <div class="stage bg-dark">
+    <div class="win"><video id="v" src="showcase-clip2.mp4" muted playsinline loop preload="auto"></video></div>
+    <div class="grain"></div>
+    <div class="rail">
+      <div class="kicker">the third way</div>
+      <div class="msgs">
+        <div class="msg"><div class="p">Screenshots are blind and expensive.</div><div class="s">It reads the <b>wire</b>, not pixels.</div></div>
+        <div class="msg"><div class="p">Tests are slow to write and maintain.</div><div class="s">Your agent writes the check, <b>in one call.</b></div></div>
+        <div class="msg"><div class="p">You never really know if it worked.</div><div class="s">A verdict, with evidence. <b>~100 tokens.</b></div></div>
+      </div>
+    </div>
+  </div>
+  <script>document.querySelector('#v').play().catch(()=>{});</script>
+</body></html>

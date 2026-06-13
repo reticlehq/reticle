@@ -1,0 +1,24 @@
+<!doctype html>
+<html><head><meta charset="utf-8" /><link rel="stylesheet" href="../src/_system.css" /><style>
+  html,body{margin:0;background:transparent}
+  .lockup{display:inline-flex;flex-direction:column;align-items:center;gap:28px;padding:48px 64px;font-family:var(--sans);-webkit-font-smoothing:antialiased}
+  .lockup .syrin{height:58px;width:auto;display:block}
+  .row{display:flex;align-items:baseline;gap:22px}
+  .iris{font-family:var(--sans);font-weight:800;letter-spacing:-.04em;font-size:132px;line-height:.9}
+  .bar{width:2px;height:88px;align-self:center;border-radius:2px}
+  .tag{font-family:var(--mono);font-size:21px;font-weight:600;letter-spacing:.04em}
+  .light .iris{color:#15131f}.light .bar{background:#15131f;opacity:.18}.light .tag{color:#6c6c86}
+  .dark .iris{color:#f5f4fb}.dark .bar{background:#f5f4fb;opacity:.22}.dark .tag{color:#9a98ad}
+  .iris .dot{color:var(--cyan)}
+</style></head><body>
+  <div class="lockup" id="L">
+    <img class="syrin" id="mark" alt="Syrin" />
+    <div class="row"><div class="iris">Iris<span class="dot">.</span></div></div>
+    <div class="tag">eyes for your coding agent</div>
+  </div>
+  <script>
+    const theme = new URLSearchParams(location.search).get('theme') || 'dark';
+    document.getElementById('L').classList.add(theme);
+    document.getElementById('mark').src = theme === 'light' ? '../../wordmark-black.svg' : '../../wordmark-white.svg';
+  </script>
+</body></html>

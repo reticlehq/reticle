@@ -1,0 +1,40 @@
+<!--SIZE:1600x1000-->
+<!doctype html>
+<html><head><meta charset="utf-8" /><link rel="stylesheet" href="_system.css" /><style>
+  html,body{width:1600px;height:1000px}
+  .card{width:1600px;height:1000px;padding:var(--s16)}
+  .top{display:flex;align-items:flex-start;justify-content:space-between}
+  h1{font-family:var(--sans);font-weight:800;letter-spacing:-.03em;line-height:1.04;font-size:60px;margin-top:var(--s5);max-width:880px}
+  h1 .hi{--hi:rgba(95,217,245,.32)}
+  .chart{margin:auto 0;display:flex;align-items:flex-end;justify-content:center;gap:var(--s28);height:520px}
+  .col{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%}
+  .val{font-family:var(--sans);font-weight:800;font-size:var(--t-lg);letter-spacing:-.03em;margin-bottom:var(--s4)}
+  .bar{width:260px;border-radius:var(--r5) var(--r5) 0 0}
+  .b-iris{height:44px;background:linear-gradient(180deg,var(--cyan),var(--iris-bright));box-shadow:0 0 60px rgba(95,217,245,.5)}
+  .b-pw{height:480px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.14);border-bottom:none}
+  .lab{margin-top:var(--s5);text-align:center}
+  .lab .n{font-weight:700;font-size:var(--t-sm)}
+  .lab .d{color:var(--faint);font-family:var(--mono);font-size:15px;margin-top:var(--s1)}
+  .iris .val{color:var(--cyan)} .pw .val{color:var(--muted)}
+  .x{font-family:var(--sans);font-weight:800;font-size:120px;letter-spacing:-.04em;color:var(--cyan);align-self:center;margin-bottom:160px}
+  .x small{font-size:var(--t-md);color:var(--muted);font-weight:700;display:block;text-align:center}
+  .foot{margin-top:var(--s8)}
+</style></head><body>
+  <div class="card bg-dark">
+    <div class="grain"></div>
+    <div class="layer">
+      <div class="top">
+        <div>
+          <div class="brand"><img src="../../wordmark-white.svg" alt="Syrin" /><span class="sep">/</span><span class="prod">Iris</span></div>
+          <h1>Verifying one step,<br />in <span class="hi">tokens.</span></h1>
+        </div>
+      </div>
+      <div class="chart">
+        <div class="col iris"><div class="val">~100</div><div class="bar b-iris"></div><div class="lab"><div class="n">Iris verify loop</div><div class="d">query + observe + assert</div></div></div>
+        <div class="x">73×<small>leaner</small></div>
+        <div class="col pw"><div class="val">~7,300</div><div class="bar b-pw"></div><div class="lab"><div class="n">Full-tree snapshot</div><div class="d">with-refs, every step</div></div></div>
+      </div>
+      <div class="foot coords"><span>measured on a 1,000-item dashboard</span><span class="dot"></span><span class="code">syrin.ai/iris</span></div>
+    </div>
+  </div>
+</body></html>

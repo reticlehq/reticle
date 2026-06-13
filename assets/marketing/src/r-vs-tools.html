@@ -1,0 +1,40 @@
+<!--SIZE:1600x1000-->
+<!doctype html>
+<html><head><meta charset="utf-8" /><link rel="stylesheet" href="_system.css" /><style>
+  html,body{width:1600px;height:1000px}
+  .card{width:1600px;height:1000px;padding:var(--s16)}
+  h1{font-family:var(--sans);font-weight:800;letter-spacing:-.03em;line-height:1.05;font-size:62px;margin-top:var(--s4);max-width:1100px}
+  h1 .hi{--hi:rgba(255,107,134,.34)}
+  .cols{margin:auto 0;display:grid;grid-template-columns:1fr 1fr 1fr;gap:var(--s6)}
+  .col{border-radius:var(--r6);padding:var(--s8);border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.04);display:flex;flex-direction:column;gap:var(--s4)}
+  .col.iris{background:rgba(95,217,245,.1);border-color:rgba(95,217,245,.34)}
+  .name{font-family:var(--mono);font-size:var(--t-sm);font-weight:700}
+  .col.iris .name{color:var(--cyan)}
+  .role{color:var(--muted);font-size:var(--t-xs);line-height:1.5;min-height:84px}
+  .col.iris .role{color:#cdeef7}
+  .stat{font-weight:800;font-size:var(--t-lg);letter-spacing:-.03em}
+  .col.iris .stat{color:var(--cyan)} .pw .stat{color:var(--muted)}
+  .stat small{font-size:var(--t-mono);color:var(--faint);font-weight:600;font-family:var(--mono);display:block;margin-top:var(--s1)}
+  .verb{display:flex;align-items:center;gap:var(--s2);font-size:var(--t-xs);font-weight:600;color:var(--muted)}
+  .verb .ico{width:20px;height:20px}
+  .verb.no{color:var(--faint)} .verb.no .ico{color:var(--faint)} .verb.yes{color:var(--green)} .verb.yes .ico{color:var(--green)}
+  .compose{text-align:center;font-weight:600;font-size:var(--t-sm);color:var(--muted);margin-top:var(--s8)}
+  .compose b{color:var(--cyan)}
+  .foot{margin-top:var(--s8)}
+</style></head><body>
+  <div class="card bg-dark">
+    <div class="grain"></div>
+    <div class="layer">
+      <div class="brand"><img src="../../wordmark-white.svg" alt="Syrin" /><span class="sep">/</span><span class="prod">Iris</span></div>
+      <span class="tag-problem" style="margin-top:var(--s8);display:inline-flex">the problem</span>
+      <h1>Tools that <span class="hi">drive a browser</span> were never built to verify your app.</h1>
+      <div class="cols">
+        <div class="col pw"><div class="name">Playwright MCP</div><div class="role">Drives a separate browser. Hands the agent a full-page snapshot to interpret.</div><div class="stat">~7,300<small>tokens / step</small></div><div class="verb no"><svg class="ico" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg> no built-in verdict</div></div>
+        <div class="col pw"><div class="name">Chrome DevTools MCP</div><div class="role">Inspects via CDP: perf, network, console. Powerful, but primitives, not a verdict.</div><div class="stat">verbose<small>perf traces, heap</small></div><div class="verb no"><svg class="ico" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg> no regression / signals</div></div>
+        <div class="col iris"><div class="name">Iris</div><div class="role">Runs inside your real app. Returns a verdict with evidence, points at the file.</div><div class="stat">~100<small>tokens / step</small></div><div class="verb yes"><svg class="ico" viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5"/></svg> verdict, regression, signals</div></div>
+      </div>
+      <div class="compose">All good tools. <b>Drive with theirs. Verify with Iris.</b></div>
+      <div class="foot coords"><span>first-class, built-in</span><span class="dot"></span><span class="code">syrin.ai/iris</span></div>
+    </div>
+  </div>
+</body></html>

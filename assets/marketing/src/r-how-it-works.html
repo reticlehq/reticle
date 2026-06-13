@@ -1,0 +1,40 @@
+<!--SIZE:1600x1000-->
+<!doctype html>
+<html><head><meta charset="utf-8" /><link rel="stylesheet" href="_system.css" /><style>
+  html,body{width:1600px;height:1000px}
+  .card{width:1600px;height:1000px;padding:var(--s16)}
+  h1{font-family:var(--sans);font-weight:800;letter-spacing:-.03em;line-height:1.05;font-size:60px;margin-top:var(--s4)}
+  h1 .hi{--hi:rgba(255,107,134,.34)}
+  .flow{margin:auto 0;display:flex;align-items:center;justify-content:center;gap:var(--s4)}
+  .node{flex:1;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.12);border-radius:var(--r5);
+    padding:var(--s7);display:flex;flex-direction:column;gap:var(--s3);min-height:240px}
+  .node.app{background:rgba(95,217,245,.1);border-color:rgba(95,217,245,.32)}
+  .node .ic{width:40px;height:40px;color:var(--iris-bright)}
+  .node.app .ic{color:var(--cyan)}
+  .node .t{font-weight:700;font-size:var(--t-sm);letter-spacing:-.01em}
+  .node .d{color:var(--muted);font-size:var(--t-xs);line-height:1.45}
+  .node .tag{margin-top:auto;font-family:var(--mono);font-size:14px;color:var(--faint)}
+  .arrow{flex:none;display:flex;flex-direction:column;align-items:center;gap:var(--s1);color:var(--faint)}
+  .arrow .ico{width:32px;height:32px;color:var(--iris-bright)}
+  .arrow span{font-family:var(--mono);font-size:13px}
+  .observers{display:flex;flex-wrap:wrap;gap:var(--s2);margin-top:var(--s2)}
+  .obs{font-family:var(--mono);font-size:13px;color:var(--cyan);background:rgba(95,217,245,.1);border-radius:var(--r2);padding:3px 9px}
+  .foot{margin-top:var(--s10)}
+</style></head><body>
+  <div class="card bg-dark">
+    <div class="grain"></div>
+    <div class="layer">
+      <div class="brand"><img src="../../wordmark-white.svg" alt="Syrin" /><span class="sep">/</span><span class="prod">Iris</span></div>
+      <span class="tag-problem" style="margin-top:var(--s8);display:inline-flex">the problem</span>
+      <h1>Your coding agent <span class="hi">can't see</span> the app it just built.</h1>
+      <div class="flow">
+        <div class="node"><svg class="ico ic" viewBox="0 0 24 24"><path d="M8 9l-4 3 4 3M16 9l4 3-4 3M13 6l-2 12"/></svg><div class="t">Your coding agent</div><div class="d">Claude Code, Cursor, Codex, Antigravity</div><div class="tag">asks + reads results</div></div>
+        <div class="arrow"><svg class="ico" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg><span>MCP</span></div>
+        <div class="node"><svg class="ico ic" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18"/></svg><div class="t">Iris bridge + server</div><div class="d">relays calls, streams back observations. localhost only.</div><div class="tag">the iris CLI</div></div>
+        <div class="arrow"><svg class="ico" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg><span>WebSocket</span></div>
+        <div class="node app"><svg class="ico ic" viewBox="0 0 24 24"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg><div class="t">SDK in your real app</div><div class="d">a tiny dev-only SDK watches everything that happens.</div><div class="observers"><span class="obs">dom</span><span class="obs">network</span><span class="obs">console</span><span class="obs">routes</span><span class="obs">signals</span></div></div>
+      </div>
+      <div class="foot coords"><span>so it answers from inside the running app, not a screenshot</span><span class="dot"></span><span class="code">syrin.ai/iris</span></div>
+    </div>
+  </div>
+</body></html>

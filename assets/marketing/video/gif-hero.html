@@ -1,0 +1,109 @@
+<!doctype html>
+<html><head><meta charset="utf-8" /><link rel="stylesheet" href="../src/_system.css" /><style>
+  /* ~16s one-shot motion graphic: agent says done -> Iris FAIL (401) -> fix -> PASS. */
+  html,body{width:1280px;height:720px;margin:0}
+  .stage{width:1280px;height:720px;position:relative;overflow:hidden;font-family:var(--sans);color:var(--ink);-webkit-font-smoothing:antialiased}
+  .scene{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    gap:var(--s7);padding:var(--s20);opacity:0}
+  .cap{position:absolute;top:var(--s12);left:0;right:0;text-align:center;font-family:var(--mono);font-size:var(--t-sm);
+    font-weight:600;letter-spacing:.04em;color:var(--faint)}
+  .cap.bad{color:var(--red)} .cap.good{color:var(--green)} .cap.iris{color:var(--cyan)}
+
+  @keyframes sc{0%{opacity:0;transform:translateY(16px) scale(.99)}7%{opacity:1;transform:none}90%{opacity:1}100%{opacity:0;transform:translateY(-10px) scale(.99)}}
+  @keyframes hold{0%{opacity:0;transform:translateY(16px)}16%{opacity:1;transform:none}100%{opacity:1}}
+  @keyframes pop{0%{opacity:0;transform:translateY(10px)}100%{opacity:1;transform:none}}
+  .s1{animation:sc 4s 0s both} .s2{animation:sc 4.6s 3.9s both} .s3{animation:sc 2.6s 8.4s both}
+  .s4{animation:sc 3.4s 10.9s both} .s5{animation:hold 3.5s 14.2s both}
+  /* hold all animations until fonts are ready (capture adds body.go) */
+  .scene,.prog,.stage .ev .r{animation-play-state:paused}
+  body.go .scene,body.go .prog,body.go .stage .ev .r{animation-play-state:running}
+
+  /* agent bubble */
+  .bubble{display:flex;align-items:center;gap:var(--s4);background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);
+    border-radius:var(--r6);padding:var(--s6) var(--s8);font-size:var(--t-md);font-weight:600}
+  .bubble .chk{width:44px;height:44px;border-radius:50%;background:var(--green);color:#06231a;display:flex;align-items:center;justify-content:center;flex:none}
+  .bubble .chk .ico{width:26px;height:26px;stroke-width:3}
+  .who{font-family:var(--mono);font-size:var(--t-mono);color:var(--faint);font-weight:600}
+
+  /* verdict panel */
+  .panel{width:760px;border-radius:var(--r6);padding:var(--s8);border:1px solid}
+  .panel.fail{background:rgba(255,107,134,.08);border-color:rgba(255,107,134,.4)}
+  .panel.pass{background:rgba(70,214,160,.1);border-color:rgba(70,214,160,.42)}
+  .vh{display:flex;align-items:center;gap:var(--s4);font-family:var(--mono);font-weight:700;font-size:var(--t-lg)}
+  .fail .vh{color:var(--red)} .pass .vh{color:var(--green)}
+  .vh .ico{width:40px;height:40px}
+  .ev{margin-top:var(--s6);display:flex;flex-direction:column;gap:var(--s4);font-family:var(--mono);font-size:var(--t-base)}
+  .ev .r{display:flex;align-items:center;gap:var(--s4);opacity:0}
+  .ev .r .ico{width:24px;height:24px;flex:none}
+  .fail .ev{color:#ffd0da} .fail .ev .ico{color:var(--red)} .pass .ev{color:#bde6d4} .pass .ev .ico{color:var(--green)}
+  .ev b{color:#fff}
+  .s2 .ev .r:nth-child(1){animation:pop .4s 4.5s both} .s2 .ev .r:nth-child(2){animation:pop .4s 4.9s both} .s2 .ev .r:nth-child(3){animation:pop .4s 5.3s both}
+  .s4 .ev .r:nth-child(1){animation:pop .4s 11.5s both} .s4 .ev .r:nth-child(2){animation:pop .4s 11.9s both} .s4 .ev .r:nth-child(3){animation:pop .4s 12.3s both}
+
+  /* fix code */
+  .code{font-family:var(--mono);font-size:var(--t-base);line-height:2;background:rgba(7,6,14,.7);border:1px solid rgba(255,255,255,.1);border-radius:var(--r5);padding:var(--s8)}
+  .code .cm{color:var(--faint)} .code .add{color:var(--green);background:rgba(70,214,160,.12);border-radius:var(--r2);padding:2px 8px}
+
+  /* endcard */
+  .end .big{font-family:var(--sans);font-weight:800;font-size:72px;letter-spacing:-.03em;text-align:center;line-height:1.05}
+  .end .big .hi{--hi:rgba(95,217,245,.3)}
+  .lock{display:flex;align-items:center;gap:var(--s3)} .lock img{height:34px}
+  .lock .sep{color:var(--faint);font-size:26px;font-weight:300} .lock .prod{font-size:26px;font-weight:700}
+  .end .pill{font-family:var(--mono);font-size:var(--t-sm);font-weight:600;color:var(--cyan);border:1px solid rgba(95,217,245,.4);background:rgba(95,217,245,.08);border-radius:var(--rpill);padding:var(--s3) var(--s6)}
+  .end .url{font-family:var(--mono);font-size:var(--t-mono);color:var(--faint);font-weight:600}
+
+  /* progress bar */
+  .prog{position:absolute;left:0;bottom:0;height:5px;background:linear-gradient(90deg,var(--cyan),var(--iris-bright));width:0;animation:fill 16s linear both}
+  @keyframes fill{to{width:100%}}
+</style></head><body>
+  <div class="stage bg-dark">
+    <div class="grain"></div>
+
+    <div class="scene s1">
+      <div class="cap">you asked your AI to add a Redeploy button</div>
+      <div class="who">your coding agent</div>
+      <div class="bubble"><span class="chk"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 12.5l5 5L20 6.5"/></svg></span>Done. Redeploy works.</div>
+      <div class="cap" style="top:auto;bottom:var(--s14)">looks done.</div>
+    </div>
+
+    <div class="scene s2">
+      <div class="cap bad">Iris checks it in the running app</div>
+      <div class="panel fail">
+        <div class="vh"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 6l12 12M18 6L6 18"/></svg>pass: false</div>
+        <div class="ev">
+          <div class="r"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 6l12 12M18 6L6 18"/></svg>POST /api/redeploy &rarr; <b>401</b></div>
+          <div class="r"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 6l12 12M18 6L6 18"/></svg>console error captured</div>
+          <div class="r"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 6l12 12M18 6L6 18"/></svg>signal never fired &middot; source: api.ts:65</div>
+        </div>
+      </div>
+      <div class="cap bad" style="top:auto;bottom:var(--s14)">it isn't.</div>
+    </div>
+
+    <div class="scene s3">
+      <div class="cap iris">the one-line fix</div>
+      <div class="code"><span class="cm">// api.ts</span><br />headers: { 'content-type': 'application/json',<br /><span class="add">+ authorization: `Bearer ${token}`</span> }</div>
+    </div>
+
+    <div class="scene s4">
+      <div class="cap good">re-checked, with proof</div>
+      <div class="panel pass">
+        <div class="vh"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 12.5l5 5L20 6.5"/></svg>pass: true</div>
+        <div class="ev">
+          <div class="r"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 12.5l5 5L20 6.5"/></svg>POST /api/redeploy &rarr; <b>200</b></div>
+          <div class="r"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 12.5l5 5L20 6.5"/></svg>no console errors</div>
+          <div class="r"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 12.5l5 5L20 6.5"/></svg>signal deploy:redeployed fired</div>
+        </div>
+      </div>
+      <div class="cap good" style="top:auto;bottom:var(--s14)">now it's done.</div>
+    </div>
+
+    <div class="scene s5 end">
+      <div class="big">Your AI writes the code.<br /><span class="hi">Iris checks it works.</span></div>
+      <div class="lock"><img src="../../wordmark-white.svg" alt="Syrin" /><span class="sep">/</span><span class="prod">Iris</span></div>
+      <div class="pill">npm i -D @syrin/iris</div>
+      <div class="url">syrin.ai/iris</div>
+    </div>
+
+    <div class="prog"></div>
+  </div>
+</body></html>

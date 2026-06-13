@@ -1,0 +1,38 @@
+<!--SIZE:1600x1000-->
+<!doctype html>
+<html><head><meta charset="utf-8" /><link rel="stylesheet" href="../../marketing/src/_system.css" /><style>
+  html,body{width:1600px;height:1000px}
+  .card{width:1600px;height:1000px;padding:var(--s16);color:var(--ink-on-light)}
+  .top{display:flex;align-items:center;justify-content:space-between}
+  .brand .prod,.brand .sep{color:var(--ink-on-light)}
+  .kick{font-family:var(--mono);font-size:var(--t-mono);font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#8a8aa2}
+  h1{font-family:var(--sans);font-weight:800;letter-spacing:-.03em;font-size:66px;margin-top:var(--s6);line-height:1.02}
+  h1 .hi{--hi:rgba(95,217,245,.4)}
+  .sub{color:#55556e;font-size:var(--t-base);margin-top:var(--s4);max-width:1120px;line-height:1.45}
+  .rows{margin:auto 0;display:flex;flex-direction:column;gap:var(--s6)}
+  .row{display:grid;grid-template-columns:380px 1fr 150px;align-items:center;gap:var(--s8)}
+  .rl{font-size:var(--t-sm);font-weight:700}
+  .rl small{display:block;color:#8a8aa2;font-family:var(--mono);font-size:15px;font-weight:500;margin-top:3px}
+  .track{height:30px;background:#eceaf4;border-radius:var(--rpill);overflow:hidden}
+  .fill{height:100%;min-width:26px;border-radius:var(--rpill);background:linear-gradient(90deg,var(--iris),var(--iris-bright))}
+  .rv{text-align:right;font-family:var(--sans);font-weight:800;font-size:34px;letter-spacing:-.02em;color:var(--iris)}
+  .big .fill{background:linear-gradient(90deg,#cdcddd,#b6b6c9);min-width:0} .big .rv,.big .rl{color:#8a8aa2}
+  .foot{margin-top:var(--s4);color:#8a8aa2}
+  .foot .code{color:var(--iris)}.foot .dot{background:#c7c7d6}
+</style></head><body>
+  <div class="card bg-light">
+    <div class="layer">
+      <div class="top"><div class="brand"><img src="../../wordmark-black.svg" alt="Syrin" /><span class="sep">/</span><span class="prod">Iris</span></div><span class="kick">tokens per answer</span></div>
+      <h1>One answer is a <span class="hi">sliver</span> of a page.</h1>
+      <div class="sub">Most steps cost a few dozen tokens. The full-page snapshot is there if you ever want it — you rarely do.</div>
+      <div class="rows">
+        <div class="row"><div class="rl">query one element<small>iris_query</small></div><div class="track"><div class="fill" style="width:0.7%"></div></div><div class="rv">~28</div></div>
+        <div class="row"><div class="rl">assert a verdict<small>iris_assert</small></div><div class="track"><div class="fill" style="width:0.8%"></div></div><div class="rv">~33</div></div>
+        <div class="row"><div class="rl">observe a reaction<small>net · dom · console · signals</small></div><div class="track"><div class="fill" style="width:0.95%"></div></div><div class="rv">~39</div></div>
+        <div class="row"><div class="rl">interactive snapshot<small>actionable elements only</small></div><div class="track"><div class="fill" style="width:2.65%"></div></div><div class="rv">~110</div></div>
+        <div class="row big"><div class="rl">full-page snapshot<small>whole page, 1,000 items</small></div><div class="track"><div class="fill" style="width:100%"></div></div><div class="rv">~4,144</div></div>
+      </div>
+      <div class="foot coords"><span class="code">syrin.ai/iris</span><span class="dot"></span><span class="code">@syrin/iris</span><span class="dot"></span><span>github.com/syrin-labs/iris</span></div>
+    </div>
+  </div>
+</body></html>

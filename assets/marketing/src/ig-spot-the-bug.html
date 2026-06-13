@@ -1,0 +1,38 @@
+<!--SIZE:1080x1080-->
+<!doctype html>
+<html><head><meta charset="utf-8" /><link rel="stylesheet" href="_system.css" /><style>
+  html,body{width:1080px;height:1080px}
+  .card{width:1080px;height:1080px;padding:var(--s16)}
+  h1{font-family:var(--sans);font-weight:800;letter-spacing:-.03em;line-height:1.04;font-size:60px;margin-top:var(--s6)}
+  h1 .hi{--hi:rgba(255,107,134,.36)}
+  .stage{margin:auto 0;display:flex;flex-direction:column;align-items:center;gap:var(--s6)}
+  .app{width:520px;background:#fbfbff;border-radius:var(--r6);padding:var(--s8);color:#15131f;box-shadow:0 40px 100px rgba(0,0,0,.5)}
+  .app .ttl{font-weight:700;font-size:var(--t-base);letter-spacing:-.02em}
+  .app .line{display:flex;justify-content:space-between;align-items:center;margin-top:var(--s6);padding-bottom:var(--s4);border-bottom:1px solid #ececf4;color:#56536b;font-size:var(--t-sm)}
+  .app .line b{color:#15131f}
+  .app .total{display:flex;justify-content:space-between;align-items:center;margin-top:var(--s4);font-weight:700;font-size:var(--t-base)}
+  .app .pay{margin-top:var(--s6);width:100%;background:#16b06a;color:#fff;border-radius:var(--r3);padding:var(--s5);text-align:center;font-weight:700;font-size:var(--t-base)}
+  .callout{display:inline-flex;align-items:center;gap:var(--s3);background:rgba(255,107,134,.14);border:1px solid var(--red);
+    border-radius:var(--rpill);padding:var(--s4) var(--s6);font-family:var(--mono);font-size:var(--t-sm);color:#ffd0da;white-space:nowrap}
+  .callout b{color:#fff}
+  .callout .ico{width:20px;height:20px;color:var(--red);flex:none}
+  .foot{margin-top:var(--s8)}
+</style></head><body>
+  <div class="card bg-dark">
+    <div class="grain"></div>
+    <div class="layer">
+      <div class="brand"><img src="../../wordmark-white.svg" alt="Syrin" /><span class="sep">/</span><span class="prod">Iris</span></div>
+      <h1>Spot the bug.<br /><span class="hi">You can't.</span> A screenshot can't either.</h1>
+      <div class="stage">
+        <div class="app">
+          <div class="ttl">Checkout</div>
+          <div class="line"><span>Pro plan, annual</span><b>$49.00</b></div>
+          <div class="total"><span>Total</span><span>$49.00</span></div>
+          <div class="pay">Pay $49.00</div>
+        </div>
+        <div class="callout"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6L6 18"/></svg> POST /api/order &rarr; <b>401</b> &nbsp;nothing was charged</div>
+      </div>
+      <div class="foot coords"><span>looks done. Iris reads the network, so it knows.</span><span class="dot"></span><span class="code">syrin.ai/iris</span></div>
+    </div>
+  </div>
+</body></html>

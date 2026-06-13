@@ -1,0 +1,48 @@
+<!--SIZE:1600x1000-->
+<!doctype html>
+<html><head><meta charset="utf-8" /><link rel="stylesheet" href="_system.css" /><style>
+  html,body{width:1600px;height:1000px}
+  .card{width:1600px;height:1000px;padding:var(--s16)}
+  .grid{margin:auto 0;display:grid;grid-template-columns:1fr 1fr;gap:var(--s14);align-items:center}
+  h1{font-family:var(--sans);font-weight:800;letter-spacing:-.03em;line-height:1.05;font-size:72px;margin-top:var(--s4)}
+  h1 .hi{--hi:rgba(255,107,134,.36)}
+  .lead{font-size:var(--t-base);color:var(--muted);margin-top:var(--s6);max-width:620px;line-height:1.55}
+  .sol{margin-top:var(--s8)}
+  .sol .h{font-weight:700;font-size:var(--t-base);margin-top:var(--s4);letter-spacing:-.02em}
+  .term pre{font-size:21px}
+  .verdict{display:flex;align-items:center;gap:var(--s3);margin-top:var(--s5);font-family:var(--mono);font-size:var(--t-mono)}
+  .verdict .ico{width:24px;height:24px;color:var(--red)}
+  .verdict b{color:#ffd0da;font-weight:600}
+  .foot{margin-top:var(--s12)}
+</style></head><body>
+  <div class="card bg-dark">
+    <div class="grain"></div>
+    <div class="layer">
+      <div class="brand"><img src="../../wordmark-white.svg" alt="Syrin" /><span class="sep">/</span><span class="prod">Iris</span></div>
+      <div class="grid">
+        <div>
+          <span class="tag-problem">the problem</span>
+          <h1>Your agent says<br /><span class="hi">"done."</span><br />It never checked.</h1>
+          <p class="lead">It writes the code and moves on. Whether the app actually did the right thing is your problem to find out, by hand.</p>
+        </div>
+        <div>
+          <span class="tag-solution">what iris does</span>
+          <div class="sol">
+            <div class="h">One call. A verdict with evidence.</div>
+            <div class="term" style="margin-top:var(--s4)">
+              <div class="bar"><i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i></div>
+<pre><span class="cm">// did clicking "Pay" actually work?</span>
+<span class="k">iris_assert</span>({ allOf: [
+  { net: <span class="s">"POST /api/order"</span>, status: <span class="num">200</span> },
+  { signal: <span class="s">"order:saved"</span> },
+  { console: <span class="s">"error"</span>, absent: <span class="ok">true</span> },
+]})</pre>
+            </div>
+            <div class="verdict"><svg class="ico" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg> <b>pass: false</b> &nbsp;net 401 · order:saved never fired</div>
+          </div>
+        </div>
+      </div>
+      <div class="foot coords"><span>look, act, observe, assert</span><span class="dot"></span><span class="code">syrin.ai/iris</span></div>
+    </div>
+  </div>
+</body></html>

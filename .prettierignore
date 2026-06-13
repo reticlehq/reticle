@@ -8,3 +8,7 @@ coverage/
 GRAPH_REPORT.md
 
 apps/e2e/
+
+# Marketing/benchmark design artifacts — generated cards, compact inline-style
+# HTML/CSS rendered to images/video; not held to the code formatter.
+assets/

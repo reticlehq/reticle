@@ -1,0 +1,35 @@
+<!doctype html>
+<html><head><meta charset="utf-8" /><link rel="stylesheet" href="../src/_system.css" /><style>
+  html,body{width:1080px;height:1920px;margin:0}
+  .stage{width:1080px;height:1920px;position:relative;overflow:hidden;font-family:var(--sans);color:var(--ink);
+    -webkit-font-smoothing:antialiased;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:var(--s14);padding:var(--s16)}
+  .grain{z-index:1}
+  .top{position:relative;z-index:2;display:flex;flex-direction:column;align-items:center;gap:var(--s4)}
+  .lock{display:flex;align-items:center;gap:var(--s3)}.lock img{height:46px}.lock .sep{color:var(--faint);font-size:36px;font-weight:300}.lock .prod{font-size:36px;font-weight:700}
+  .kick{font-family:var(--mono);font-size:var(--t-sm);font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--cyan)}
+  .band{position:relative;z-index:2;width:1000px;height:563px;border-radius:28px;overflow:hidden;
+    box-shadow:0 50px 140px rgba(0,0,0,.6),0 0 0 1px rgba(255,255,255,.08)}
+  .band video{width:100%;height:100%;object-fit:cover;display:block}
+  .bottom{position:relative;z-index:2;display:flex;flex-direction:column;align-items:center;gap:var(--s4)}
+  .bottom .t{font-size:var(--t-md);font-weight:700;letter-spacing:-.02em;text-align:center}
+  .bottom .url{font-family:var(--mono);font-size:var(--t-base);font-weight:600;color:var(--cyan)}
+</style></head><body>
+  <div class="stage bg-dark">
+    <div class="grain"></div>
+    <div class="top">
+      <div class="lock"><img src="../../wordmark-white.svg" /><span class="sep">/</span><span class="prod">Iris</span></div>
+      <div class="kick">your AI, verified</div>
+    </div>
+    <div class="band"><video id="v" muted playsinline></video></div>
+    <div class="bottom">
+      <div class="t">Give your agent a verdict.</div>
+      <div class="url">syrin.ai/iris</div>
+    </div>
+  </div>
+  <script>
+    const src = new URLSearchParams(location.search).get('src') || '';
+    const v = document.getElementById('v');
+    v.src = src;
+    v.play().catch(()=>{});
+  </script>
+</body></html>

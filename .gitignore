@@ -1,6 +1,17 @@
 # Research never ships — plan/ is always ignored
 plan/
 
+# Marketing: keep the source (HTML/CSS/mjs) reproducible, but never commit the heavy
+# render outputs or raw footage — host those on a CDN / GitHub Releases. The curated
+# README media lives in assets/readme/ (a separate dir) and IS committed.
+assets/clips/
+assets/*.png
+assets/marketing/**/*.mp4
+assets/marketing/**/*.mov
+assets/marketing/**/*.gif
+assets/marketing/**/*.png
+assets/benchmarks/*.png
+
 # Env
 .env
 .env.*

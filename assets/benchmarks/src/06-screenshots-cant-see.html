@@ -1,0 +1,59 @@
+<!--SIZE:1600x1000-->
+<!doctype html>
+<html><head><meta charset="utf-8" /><link rel="stylesheet" href="../../marketing/src/_system.css" /><style>
+  html,body{width:1600px;height:1000px}
+  .card{width:1600px;height:1000px;padding:var(--s14) var(--s16)}
+  .top{display:flex;align-items:center;justify-content:space-between}
+  .kick{font-family:var(--mono);font-size:15px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--faint)}
+  h1{font-family:var(--sans);font-weight:800;letter-spacing:-.03em;font-size:66px;margin-top:var(--s5);line-height:1.02}
+  h1 .hi{--hi:rgba(255,107,134,.32)}
+  .split{margin-top:var(--s10);display:grid;grid-template-columns:1fr 1fr;gap:var(--s8)}
+  .pane{border:1px solid rgba(255,255,255,.1);border-radius:var(--r6);padding:var(--s9);display:flex;flex-direction:column;min-height:520px}
+  .left{background:rgba(255,107,134,.05)}
+  .right{background:rgba(70,214,160,.06);border-color:rgba(70,214,160,.28)}
+  .eyebrow{font-family:var(--mono);font-size:14px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--faint)}
+  .pane h2{display:flex;align-items:center;gap:var(--s4);font-size:30px;font-weight:800;margin-top:var(--s3)}
+  .pane h2 .ico{width:34px;height:34px}
+  ul{list-style:none;margin-top:var(--s8);display:flex;flex-direction:column;gap:var(--s6)}
+  li{display:flex;align-items:center;gap:var(--s4);font-size:25px}
+  li .ico{width:28px;height:28px;flex:none;stroke-width:2.6}
+  .miss{color:var(--faint)} .miss .ico{color:var(--red)}
+  .see{color:var(--ink)} .see .ico{color:var(--green)}
+  .see code{font-family:var(--mono);font-size:21px;color:var(--cyan);background:rgba(95,217,245,.08);padding:3px 10px;border-radius:var(--r2)}
+  .tagline{margin-top:auto;padding-top:var(--s6);font-family:var(--mono);font-size:17px;font-weight:600}
+  .left .tagline{color:var(--faint)} .right .tagline{color:var(--green)}
+  .foot{margin-top:var(--s7)}
+</style></head><body>
+  <div class="card bg-dark">
+    <div class="grain"></div>
+    <div class="layer">
+      <div class="top"><div class="brand"><img src="../../wordmark-white.svg" alt="Syrin" /><span class="sep">/</span><span class="prod">Iris</span></div><span class="kick">what a screenshot misses</span></div>
+      <h1>The bug that ships <span class="hi">isn't a pixel.</span></h1>
+      <div class="split">
+        <div class="pane left">
+          <div class="eyebrow">A screenshot sees</div>
+          <h2><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="var(--faint)" stroke-width="2"><rect x="3" y="6" width="18" height="13" rx="2"/><circle cx="12" cy="12.5" r="3.2"/><path d="M8 6l1.5-2.2h5L16 6"/></svg>A reassuring toast</h2>
+          <ul>
+            <li class="miss"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 6l12 12M18 6L6 18"/></svg>the POST that returned 401</li>
+            <li class="miss"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 6l12 12M18 6L6 18"/></svg>the console error it swallowed</li>
+            <li class="miss"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 6l12 12M18 6L6 18"/></svg>the webhook that never arrived</li>
+            <li class="miss"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 6l12 12M18 6L6 18"/></svg>the button it silently deleted</li>
+          </ul>
+          <div class="tagline">looks done, ships broken</div>
+        </div>
+        <div class="pane right">
+          <div class="eyebrow">Iris sees</div>
+          <h2><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2.4"><path d="M4 12.5l5 5L20 6.5"/></svg>A verdict, with evidence</h2>
+          <ul>
+            <li class="see"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 12.5l5 5L20 6.5"/></svg><code>net 401</code> on /api/order</li>
+            <li class="see"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 12.5l5 5L20 6.5"/></svg><code>console error</code> captured</li>
+            <li class="see"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 12.5l5 5L20 6.5"/></svg><code>signal</code> never fired</li>
+            <li class="see"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 12.5l5 5L20 6.5"/></svg><code>source</code> file:line to fix</li>
+          </ul>
+          <div class="tagline">caught before you saw it</div>
+        </div>
+      </div>
+      <div class="foot coords"><span class="code">syrin.ai/iris</span><span class="dot"></span><span class="code">@syrin/iris</span></div>
+    </div>
+  </div>
+</body></html>

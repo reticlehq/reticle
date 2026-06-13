@@ -1,0 +1,35 @@
+<!--SIZE:1200x630-->
+<!doctype html>
+<html><head><meta charset="utf-8" /><link rel="stylesheet" href="../../marketing/src/_system.css" /><style>
+  html,body{width:1200px;height:630px}
+  .card{width:1200px;height:630px;padding:var(--s12) var(--s14)}
+  .top{display:flex;align-items:center;justify-content:space-between}
+  .kick{font-family:var(--mono);font-size:14px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--faint)}
+  h1{font-family:var(--sans);font-weight:800;letter-spacing:-.03em;font-size:52px;margin-top:var(--s4);line-height:1.04}
+  h1 .hi{--hi:rgba(95,217,245,.32)}
+  .vs{margin-top:auto;display:flex;gap:var(--s6)}
+  .c{flex:1;border:1px solid rgba(255,255,255,.12);border-radius:var(--r5);padding:var(--s7) var(--s8)}
+  .bad{background:rgba(255,107,134,.07);border-color:rgba(255,107,134,.32)}
+  .good{background:rgba(95,217,245,.08);border-color:rgba(95,217,245,.3)}
+  .lab{font-family:var(--mono);font-size:14px;font-weight:700;letter-spacing:.06em;text-transform:uppercase}
+  .bad .lab{color:var(--red)} .good .lab{color:var(--cyan)}
+  .n{font-family:var(--sans);font-weight:800;font-size:78px;letter-spacing:-.04em;margin-top:var(--s2);line-height:1}
+  .bad .n{color:var(--red)} .good .n{color:var(--cyan)}
+  .d{margin-top:var(--s3);color:var(--muted);font-size:19px}
+  .note{margin-top:var(--s4);color:var(--faint);font-size:15px}
+  .foot{margin-top:var(--s5)}
+</style></head><body>
+  <div class="card bg-dark">
+    <div class="grain"></div>
+    <div class="layer">
+      <div class="top"><div class="brand"><img src="../../wordmark-white.svg" alt="Syrin" /><span class="sep">/</span><span class="prod">Iris</span></div><span class="kick">cost of looking</span></div>
+      <h1>A screenshot costs a model.<br /><span class="hi">An assert costs ~33 tokens.</span></h1>
+      <div class="vs">
+        <div class="c bad"><div class="lab">screenshot + vision</div><div class="n">~1,500</div><div class="d">tokens, plus a vision model, still blind to the network</div></div>
+        <div class="c good"><div class="lab">an Iris assert</div><div class="n">~33</div><div class="d">tokens, structured verdict, any model</div></div>
+      </div>
+      <div class="note">image-token estimate for a full-page screenshot through a vision model.</div>
+      <div class="foot coords"><span class="code">syrin.ai/iris</span><span class="dot"></span><span class="code">@syrin/iris</span><span class="dot"></span><span>github.com/syrin-labs/iris</span></div>
+    </div>
+  </div>
+</body></html>
