@@ -6,6 +6,7 @@ import {
   IrisCommand,
   MessageKind,
   PresenterMode,
+  SessionState,
   type CommandMessage,
   type HelloMessage,
   type IrisEvent,
@@ -30,6 +31,7 @@ import {
   type LogHandle,
 } from './presenter.js';
 import { refs } from './refs.js';
+import { actionVerb } from './presenter-verbs.js';
 import { describe } from './a11y.js';
 import { resetClock } from './clock.js';
 import { installRecorder, type RecorderHandle } from './recorder.js';
@@ -60,10 +62,19 @@ export interface IrisConnectOptions {
    * Default off — purely additive, dev-only.
    */
   recorder?: boolean;
+  /** Live-control: overridable ended-border fade delay (native timer). Default 4000. */
+  endedFadeMs?: number;
 }
 
 function str(value: unknown, fallback = ''): string {
   return typeof value === 'string' ? value : fallback;
+}
+
+/** Narrow an unknown command arg into a SessionState (membership check — no `any`, no zod needed). */
+function isSessionState(value: unknown): value is SessionState {
+  return (
+    value === SessionState.ACTIVE || value === SessionState.PAUSED || value === SessionState.ENDED
+  );
 }
 
 /** A short human label for a ref ("button \"Save\"") for the presenter HUD. */
@@ -131,6 +142,16 @@ export class Iris {
       }
       if (options.border !== undefined) presenterOptions.border = options.border;
       if (options.logMax !== undefined) presenterOptions.logMax = options.logMax;
+      if (options.endedFadeMs !== undefined) presenterOptions.endedFadeMs = options.endedFadeMs;
+      // The panel calls this when the human pauses/resumes/ends or sends a message. We emit a
+      // HUMAN_CONTROL event over the existing transport; #emit stamps `t` from the elapsed clock.
+      presenterOptions.onControl = (intent) =>
+        this.#emit(
+          EventType.HUMAN_CONTROL,
+          intent.text !== undefined
+            ? { kind: intent.kind, text: intent.text }
+            : { kind: intent.kind },
+        );
       this.#presenter = new Presenter(presenterOptions);
       this.#presenter.mount();
       this.#presenter.sessionStart(); // border fades in once and stays on (session mode)
@@ -163,6 +184,11 @@ export class Iris {
   /** Advertise the app's testable surface so the agent learns it without reading source. */
   describe(input: CapabilitiesInput): void {
     registerCapabilities(input);
+  }
+
+  /** Live-control: end the session programmatically from the host app (drives the panel to ended). */
+  endSession(): void {
+    this.#presenter?.setState(SessionState.ENDED);
   }
 
   disconnect(): void {
@@ -214,6 +240,16 @@ export class Iris {
       return { ok: true, result: { shown: this.#presenter !== undefined } };
     }
 
+    // PRESENTER: bridge → browser server-push so an AGENT-driven pause/end mirrors onto the panel.
+    // This calls setState ONLY (never re-emits a control), so a HUMAN_CONTROL echo can't loop.
+    if (command.name === IrisCommand.PRESENTER) {
+      const state = command.args['state'];
+      if (isSessionState(state)) {
+        this.#presenter?.setState(state, str(command.args['text']) || undefined);
+      }
+      return { ok: true, result: { applied: this.#presenter !== undefined } };
+    }
+
     const handler = this.#registry.get(command.name);
     if (handler === undefined) {
       return { ok: false, error: `unknown command '${command.name}'` };
@@ -242,7 +278,7 @@ export class Iris {
     if (command.name === IrisCommand.ACT) {
       const ref = str(command.args['ref']);
       const label = refLabel(ref);
-      this.#actHandle = p.log(LOG_KIND.ACT, `${actLabel(str(command.args['action']))} ${label}`);
+      this.#actHandle = p.log(LOG_KIND.ACT, `${actionVerb(str(command.args['action']))} ${label}`);
       await p.beforeAct(ref, str(command.args['action']), label);
     } else if (command.name === IrisCommand.ACT_SEQUENCE) {
       const steps = Array.isArray(command.args['steps']) ? command.args['steps'] : [];
@@ -251,7 +287,7 @@ export class Iris {
         const ref = str(s.ref);
         const label = refLabel(ref);
         // one log row per step; the last handle carries the sequence outcome glyph
-        this.#actHandle = p.log(LOG_KIND.ACT, `${actLabel(str(s.action))} ${label}`);
+        this.#actHandle = p.log(LOG_KIND.ACT, `${actionVerb(str(s.action))} ${label}`);
         await p.beforeAct(ref, str(s.action), label);
       }
     } else {
@@ -283,33 +319,6 @@ export function modeForCommand(commandName: string): PresenterMode {
       return PresenterMode.READING;
     default:
       return PresenterMode.IDLE;
-  }
-}
-
-/** Short verb for an act-log row (e.g. "Clicking"). Mirrors the presenter's cursor label. */
-function actLabel(action: string): string {
-  switch (action) {
-    case 'click':
-    case 'dblclick':
-      return 'Clicking';
-    case 'fill':
-    case 'type':
-      return 'Typing into';
-    case 'hover':
-      return 'Hovering';
-    case 'select':
-      return 'Selecting';
-    case 'submit':
-      return 'Submitting';
-    case 'check':
-    case 'uncheck':
-      return 'Toggling';
-    case 'upload':
-      return 'Uploading to';
-    case 'drag':
-      return 'Dragging';
-    default:
-      return action;
   }
 }
 

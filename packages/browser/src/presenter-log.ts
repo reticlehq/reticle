@@ -8,18 +8,33 @@ import { PresenterMode } from '@syrin/iris-protocol';
 /** Default cap on accumulated activity-log rows (bounds DOM). Presenter-local UI tunable. */
 export const DEFAULT_LOG_MAX = 50;
 /** Activity-log entry kinds (presenter-only UI; never a wire string). */
-export const LOG_KIND = { READ: 'read', ACT: 'act', NARRATION: 'narration' } as const;
+export const LOG_KIND = {
+  READ: 'read',
+  ACT: 'act',
+  NARRATION: 'narration',
+  HUMAN: 'human',
+} as const;
 export type LogKind = (typeof LOG_KIND)[keyof typeof LOG_KIND];
+
+/** Prefix for a human-authored activity row ("🧑 you: <text>"). Presenter-only UI. */
+export const HUMAN_ROW_PREFIX = '🧑 you: ';
 /** Act-row outcome glyph keys (presenter-only UI). */
 export const LOG_RESULT = { PASS: 'pass', FAIL: 'fail' } as const;
 export type LogResult = (typeof LOG_RESULT)[keyof typeof LOG_RESULT];
 
-const LOG_CHIP: Record<LogKind, string> = { read: 'READ', act: 'ACT', narration: '' };
-/** Map a log kind to the data-mode that styles its chip (narration shows no chip). */
+const LOG_CHIP: Record<LogKind, string> = { read: 'READ', act: 'ACT', narration: '', human: '' };
+/** HUD chip copy keyed by presenter mode (UI text, browser-local — not a wire string). */
+export const CHIP_LABEL: Record<PresenterMode, string> = {
+  [PresenterMode.IDLE]: '',
+  [PresenterMode.READING]: 'READING',
+  [PresenterMode.ACTING]: 'ACTING',
+};
+/** Map a log kind to the data-mode that styles its chip (narration/human show no chip). */
 const LOG_CHIP_MODE: Record<LogKind, PresenterMode> = {
   read: PresenterMode.READING,
   act: PresenterMode.ACTING,
   narration: PresenterMode.IDLE,
+  human: PresenterMode.IDLE,
 };
 const RESULT_GLYPH: Record<LogResult, string> = { pass: '✓', fail: '✗' };
 const RESULT_CLASS: Record<LogResult, string> = { pass: 'iris-pass', fail: 'iris-fail' };

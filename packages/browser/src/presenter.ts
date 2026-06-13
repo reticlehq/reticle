@@ -1,10 +1,13 @@
-import { PresenterMode } from '@syrin/iris-protocol';
+import { PresenterMode, SessionState } from '@syrin/iris-protocol';
 import { refs } from './refs.js';
+import { actionVerb } from './presenter-verbs.js';
 import { nativeSetTimeout, nativeClearTimeout, nativeNow } from './native-timers.js';
 import {
   LOG_KIND,
   LOG_CSS,
+  CHIP_LABEL,
   DATA_IRIS_LOG,
+  HUMAN_ROW_PREFIX,
   clampLogMax,
   formatElapsed,
   appendLogRow,
@@ -12,6 +15,17 @@ import {
   type LogResult,
   type LogHandle,
 } from './presenter-log.js';
+import {
+  CONTROLS_CSS,
+  CONTROLS_HEAD_HTML,
+  CONTROLS_BANNER_HTML,
+  CONTROLS_FOOT_HTML,
+  ENDED_FADE_MS,
+  ControlPanel,
+  type ControlHandler,
+} from './presenter-controls.js';
+
+export type { ControlHandler, ControlIntent } from './presenter-controls.js';
 
 export {
   LOG_KIND,
@@ -73,14 +87,8 @@ const CSS = `
   box-shadow:inset 0 0 0 3px rgba(34,211,238,.9),inset 0 0 28px 6px rgba(34,211,238,.4);}
 [data-iris-mode="reading"] [data-iris-ring]{border-color:#22d3ee;
   box-shadow:0 0 0 3px rgba(34,211,238,.25);}
-${LOG_CSS}`;
-
-/** HUD chip copy keyed by mode (UI text, browser-local — not a wire string). */
-const CHIP_LABEL: Record<PresenterMode, string> = {
-  [PresenterMode.IDLE]: '',
-  [PresenterMode.READING]: 'READING',
-  [PresenterMode.ACTING]: 'ACTING',
-};
+${LOG_CSS}
+${CONTROLS_CSS}`;
 
 /**
  * Border behavior. Presenter-only tunable: it never crosses the browser↔bridge↔agent wire, so it
@@ -112,6 +120,10 @@ export interface PresenterOptions {
   border?: BorderMode;
   /** Max accumulated activity-log rows before the oldest are pruned. Default 50. */
   logMax?: number;
+  /** Called when the human clicks pause/resume/end or sends a message from the panel. */
+  onControl?: ControlHandler;
+  /** Overridable ended-border fade delay (native timer). Default 4000. */
+  endedFadeMs?: number;
 }
 
 const DEFAULT_PACE = 450;
@@ -164,6 +176,10 @@ export class Presenter {
   /** now() of the first row, the baseline for the +elapsed timestamps. */
   #logBaseMs: number | undefined;
 
+  // Live-control panel: the two-way control surface (Pause/Resume + End + message Send).
+  #onControl: ControlHandler | undefined;
+  readonly #panel: ControlPanel;
+
   constructor(options: PresenterOptions = {}) {
     this.#paceMs = options.paceMs ?? DEFAULT_PACE;
     this.#now = options.now ?? nativeNow;
@@ -171,6 +187,29 @@ export class Presenter {
     this.#glowFadeMs = options.glowFadeMs ?? GLOW_FADE_MS;
     this.#borderMode = options.border ?? DEFAULT_BORDER_MODE;
     this.#logMax = clampLogMax(options.logMax);
+    this.#onControl = options.onControl;
+    this.#panel = new ControlPanel({
+      emit: (kind, text) => this.#onControl?.(text !== undefined ? { kind, text } : { kind }),
+      logHuman: (text) => {
+        this.log(LOG_KIND.HUMAN, HUMAN_ROW_PREFIX + text);
+      },
+      endedFadeMs: options.endedFadeMs ?? ENDED_FADE_MS,
+    });
+  }
+
+  /** Setter so iris.ts can wire the control callback after construction. */
+  setControlHandler(handler: ControlHandler): void {
+    this.#onControl = handler;
+  }
+
+  /** Current live-control session state mirrored onto the panel (data-iris-state). */
+  get state(): SessionState {
+    return this.#panel.state;
+  }
+
+  /** Drive the panel's live-control visual state (server-push / agent path; never emits). */
+  setState(state: SessionState, text?: string): void {
+    this.#panel.setState(state, text);
   }
 
   /** Current cap on accumulated log rows. */
@@ -197,8 +236,10 @@ export class Presenter {
       <div data-iris-cursor></div>
       <div data-iris-ring></div>
       <div data-iris-hud>
-        <div class="iris-hud-head"><span class="iris-dot"></span><span class="iris-chip" data-iris-chip></span><span class="iris-act">idle</span><button type="button" data-iris-expand title="Expand / collapse the activity log" aria-label="Expand the activity log">⤢</button></div>
+        <div class="iris-hud-head"><span class="iris-dot"></span><span class="iris-chip" data-iris-chip></span><span class="iris-act">idle</span><button type="button" data-iris-expand title="Expand / collapse the activity log" aria-label="Expand the activity log">⤢</button>${CONTROLS_HEAD_HTML}</div>
+        ${CONTROLS_BANNER_HTML}
         <div ${DATA_IRIS_LOG}></div>
+        ${CONTROLS_FOOT_HTML}
       </div>`;
     document.body.appendChild(root);
     this.#root = root;
@@ -215,12 +256,15 @@ export class Presenter {
       if (hud === undefined) return;
       hud.setAttribute('data-expanded', hud.getAttribute('data-expanded') === '1' ? '0' : '1');
     });
+    // The panel queries its refs, binds listeners, and paints the initial active state.
+    this.#panel.mount(root, this.#glow);
     this.setMode(this.#mode);
   }
 
   destroy(): void {
     if (this.#idleCheckTimer !== undefined) nativeClearTimeout(this.#idleCheckTimer);
     if (this.#fadeTimer !== undefined) nativeClearTimeout(this.#fadeTimer);
+    this.#panel.teardown();
     this.#idleCheckTimer = undefined;
     this.#fadeTimer = undefined;
     this.#sessionActive = false;
@@ -400,12 +444,9 @@ export class Presenter {
     }
   }
 
-  /**
-   * Legacy result(): kept for source compat. The live log carries outcomes via the LogHandle
-   * returned from log(), so this is a tolerated no-op (it never stamps a glyph onto a read row).
-   */
+  /** Legacy no-op kept for source compat; outcomes now flow through LogHandle.result(). */
   result(_ok: boolean): void {
-    /* no-op: outcomes flow through LogHandle.result() */
+    /* no-op */
   }
 
   /** Fly the cursor to an element, play the action's effect, then pace for the human. */
@@ -453,31 +494,5 @@ export class Presenter {
 
   #pause(): Promise<void> {
     return new Promise((res) => nativeSetTimeout(res, this.#paceMs));
-  }
-}
-
-function actionVerb(action: string): string {
-  switch (action) {
-    case 'click':
-    case 'dblclick':
-      return 'Clicking';
-    case 'fill':
-    case 'type':
-      return 'Typing into';
-    case 'hover':
-      return 'Hovering';
-    case 'select':
-      return 'Selecting';
-    case 'submit':
-      return 'Submitting';
-    case 'check':
-    case 'uncheck':
-      return 'Toggling';
-    case 'upload':
-      return 'Uploading to';
-    case 'drag':
-      return 'Dragging';
-    default:
-      return action;
   }
 }

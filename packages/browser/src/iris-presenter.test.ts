@@ -1,5 +1,13 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { IrisCommand, MessageKind, type CommandMessage } from '@syrin/iris-protocol';
+import {
+  EventType,
+  HumanControlKind,
+  IrisCommand,
+  MessageKind,
+  SessionState,
+  type CommandMessage,
+  type IrisEvent,
+} from '@syrin/iris-protocol';
 
 // Capture the deps Iris passes to Transport so tests can drive #handleCommand without a real
 // WebSocket server. connect() still calls transport.connect(), which we stub to a no-op.
@@ -8,6 +16,7 @@ interface CapturedDeps {
   handleCommand: HandleCommand | undefined;
 }
 const captured: CapturedDeps = { handleCommand: undefined };
+const sentEvents: IrisEvent[] = [];
 
 vi.mock('./transport.js', () => {
   class FakeTransport {
@@ -20,8 +29,8 @@ vi.mock('./transport.js', () => {
     close(): void {
       /* no-op */
     }
-    sendEvent(): void {
-      /* no-op */
+    sendEvent(event: IrisEvent): void {
+      sentEvents.push(event);
     }
   }
   return { Transport: FakeTransport };
@@ -53,9 +62,16 @@ const FAST_FADE_MS = 5;
 const wait = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 const flush = (): Promise<void> => new Promise((r) => setTimeout(r, 0));
 
+const clickSel = (sel: string): void => {
+  document.querySelector(sel)?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+};
+const humanControlEvents = (): IrisEvent[] =>
+  sentEvents.filter((e) => e.type === EventType.HUMAN_CONTROL);
+
 beforeEach(() => {
   document.body.innerHTML = '';
   captured.handleCommand = undefined;
+  sentEvents.length = 0;
 });
 
 afterEach(() => {
@@ -163,6 +179,62 @@ describe('iris.ts -> presenter log wiring', () => {
     const n = await dispatch(IrisCommand.NARRATE, { text: 'x' });
     expect((n as { ok: boolean }).ok).toBe(true);
     expect(document.querySelector('[data-iris-log]')).toBeNull();
+    iris.disconnect();
+  });
+});
+
+describe('iris.ts -> live-control wiring', () => {
+  it('18 panel pause emits a HUMAN_CONTROL event over transport', () => {
+    const iris = new Iris();
+    iris.connect({ present: true, pace: 0 });
+    clickSel('[data-iris-pause]');
+    const evs = humanControlEvents();
+    expect(evs.length).toBe(1);
+    expect(evs[0]?.data).toEqual({ kind: HumanControlKind.PAUSE });
+    expect(typeof evs[0]?.t).toBe('number');
+    iris.disconnect();
+  });
+
+  it('19 send emits a HUMAN_CONTROL message event with text', () => {
+    const iris = new Iris();
+    iris.connect({ present: true, pace: 0 });
+    const inp = document.querySelector<HTMLInputElement>('[data-iris-input]');
+    if (inp === null) throw new Error('no input');
+    inp.value = 'check the cart total';
+    clickSel('[data-iris-send]');
+    const evs = humanControlEvents();
+    expect(evs.length).toBe(1);
+    expect(evs[0]?.data).toEqual({
+      kind: HumanControlKind.MESSAGE,
+      text: 'check the cart total',
+    });
+    iris.disconnect();
+  });
+
+  it('20 PRESENTER command from server calls setState without emitting', async () => {
+    const iris = new Iris();
+    iris.connect({ present: true, pace: 0 });
+    const out = await dispatch(IrisCommand.PRESENTER, { state: SessionState.PAUSED });
+    expect((out as { ok: boolean }).ok).toBe(true);
+    expect(
+      document
+        .querySelector('[data-iris-overlay][data-iris-state]')
+        ?.getAttribute('data-iris-state'),
+    ).toBe('paused');
+    expect(humanControlEvents().length).toBe(0);
+    iris.disconnect();
+  });
+
+  it('21 PRESENTER with unknown state is a safe no-op', async () => {
+    const iris = new Iris();
+    iris.connect({ present: true, pace: 0 });
+    const out = await dispatch(IrisCommand.PRESENTER, { state: 'bogus' });
+    expect((out as { ok: boolean }).ok).toBe(true);
+    expect(
+      document
+        .querySelector('[data-iris-overlay][data-iris-state]')
+        ?.getAttribute('data-iris-state'),
+    ).toBe('active');
     iris.disconnect();
   });
 });
