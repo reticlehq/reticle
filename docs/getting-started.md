@@ -25,16 +25,18 @@ Three pieces, each tiny:
 
 ```text
 ┌─────────────┐   MCP    ┌──────────────────────┐   WebSocket   ┌─────────────────────┐
-│ coding agent │◀───────▶│ iris bridge + server  │◀─────────────▶│ your app + @syrin/    │
-│ (Claude Code)│  stdio  │  (npx @syrin/iris-server)   │  localhost    │ browser SDK (dev)    │
+│ coding agent │◀───────▶│  iris bridge + server │◀─────────────▶│ your app + the Iris │
+│ (Claude Code)│  stdio  │   (npx @syrin/iris)   │  localhost    │   SDK (dev only)    │
 └─────────────┘          └──────────────────────┘  :4400        └─────────────────────┘
 ```
 
-1. **The MCP server** (`@syrin/iris-server`) — your agent launches it; it hosts the tools _and_ the
-   WebSocket bridge your app connects to. You don't run it by hand; the agent does.
-2. **The SDK** (`@syrin/iris-browser`) — a few lines in your app's dev entry point.
-3. **(Optional) React adapter + babel plugin** — so `iris_inspect` can tell the agent which
-   component/file to edit.
+It all ships in **one package, `@syrin/iris`**:
+
+1. **The MCP server** — your agent launches it with `npx @syrin/iris`; it hosts the tools _and_
+   the WebSocket bridge your app connects to. You don't run it by hand; the agent does.
+2. **The SDK** — `import { iris } from '@syrin/iris'`, a few lines in your app's dev entry point.
+3. **(Optional) React adapter + source-mapping** — so `iris_inspect` can tell the agent which
+   component/file to edit (also in `@syrin/iris`).
 
 Everything is **dev-only** and **localhost-only**. It's tree-shaken out of production builds.
 
