@@ -1,6 +1,25 @@
 import { PresenterMode } from '@iris/protocol';
 import { refs } from './refs.js';
 import { nativeSetTimeout, nativeClearTimeout, nativeNow } from './native-timers.js';
+import {
+  LOG_KIND,
+  LOG_CSS,
+  DATA_IRIS_LOG,
+  clampLogMax,
+  formatElapsed,
+  appendLogRow,
+  type LogKind,
+  type LogResult,
+  type LogHandle,
+} from './presenter-log.js';
+
+export {
+  LOG_KIND,
+  LOG_RESULT,
+  type LogKind,
+  type LogResult,
+  type LogHandle,
+} from './presenter-log.js';
 
 // Presenter / transparency layer: a human watches the agent work. Glowing border while
 // active, a synthetic cursor that flies to targets, click/hover/type effects, and a HUD that
@@ -11,8 +30,11 @@ const CSS = `
 [data-iris-glow]{position:fixed;inset:0;pointer-events:none;z-index:2147483600;opacity:0;
   transition:opacity .25s ease;box-shadow:inset 0 0 0 3px rgba(99,102,241,.9),inset 0 0 28px 6px rgba(99,102,241,.45);}
 [data-iris-glow][data-on="1"]{opacity:1;animation:iris-pulse 1.6s ease-in-out infinite;}
+[data-iris-glow][data-on="1"][data-busy="1"]{animation:iris-shimmer 1.1s ease-in-out infinite;}
 @keyframes iris-pulse{0%,100%{box-shadow:inset 0 0 0 3px rgba(99,102,241,.9),inset 0 0 22px 4px rgba(99,102,241,.35)}
   50%{box-shadow:inset 0 0 0 3px rgba(124,127,242,1),inset 0 0 40px 10px rgba(99,102,241,.6)}}
+@keyframes iris-shimmer{0%,100%{box-shadow:inset 0 0 0 3px rgba(124,127,242,1),inset 0 0 34px 8px rgba(99,102,241,.55)}
+  50%{box-shadow:inset 0 0 0 3px rgba(140,142,255,1),inset 0 0 48px 12px rgba(99,102,241,.7)}}
 [data-iris-cursor]{position:fixed;top:0;left:0;width:22px;height:22px;margin:-11px 0 0 -11px;
   border:2px solid #6366f1;border-radius:50%;background:rgba(99,102,241,.25);pointer-events:none;
   z-index:2147483646;opacity:0;transition:transform .32s cubic-bezier(.22,1,.36,1),opacity .2s ease;}
@@ -34,8 +56,6 @@ const CSS = `
   box-shadow:0 0 8px #6366f1;animation:iris-blink 1s ease-in-out infinite;}
 @keyframes iris-blink{50%{opacity:.35}}
 [data-iris-hud] .iris-act{font-weight:600}
-[data-iris-hud] .iris-note{color:#9aa3b2;margin-top:4px}
-[data-iris-hud] .iris-res{margin-top:4px;font-weight:600}
 [data-iris-hud] .iris-pass{color:#22c55e}[data-iris-hud] .iris-fail{color:#ef4444}
 [data-iris-hud] .iris-chip{display:none;font-weight:700;letter-spacing:.06em;font-size:10px;
   padding:1px 6px;border-radius:6px;margin-right:7px;vertical-align:middle;}
@@ -48,7 +68,7 @@ const CSS = `
   box-shadow:inset 0 0 0 3px rgba(34,211,238,.9),inset 0 0 28px 6px rgba(34,211,238,.4);}
 [data-iris-mode="reading"] [data-iris-ring]{border-color:#22d3ee;
   box-shadow:0 0 0 3px rgba(34,211,238,.25);}
-`;
+${LOG_CSS}`;
 
 /** HUD chip copy keyed by mode (UI text, browser-local — not a wire string). */
 const CHIP_LABEL: Record<PresenterMode, string> = {
@@ -56,6 +76,19 @@ const CHIP_LABEL: Record<PresenterMode, string> = {
   [PresenterMode.READING]: 'READING',
   [PresenterMode.ACTING]: 'ACTING',
 };
+
+/**
+ * Border behavior. Presenter-only tunable: it never crosses the browser↔bridge↔agent wire, so it
+ * stays a named const here (not in @iris/protocol).
+ * - 'session': base border persists connect→disconnect; the busy machine drives only the shimmer.
+ * - 'busy': M5.8 back-compat — the busy machine toggles the base border on/off.
+ */
+const BorderMode = { SESSION: 'session', BUSY: 'busy' } as const;
+type BorderMode = (typeof BorderMode)[keyof typeof BorderMode];
+const DEFAULT_BORDER_MODE: BorderMode = BorderMode.SESSION;
+const DATA_BUSY = 'data-busy';
+const BUSY_ON = '1';
+const BUSY_OFF = '0';
 
 export interface PresenterOptions {
   paceMs?: number;
@@ -65,18 +98,18 @@ export interface PresenterOptions {
   idleAfterMs?: number;
   /** Fade duration before fading -> idle (keep in sync with the glow CSS opacity transition). */
   glowFadeMs?: number;
-  /** Minimum time (ms) each narration line stays visible before the next replaces it. */
+  /** Deprecated: accepted for source compat; the live log no longer auto-expires. */
   narrationDwellMs?: number;
+  /**
+   * 'session' (default): base border persists connect→disconnect, busy machine drives only the
+   * shimmer. 'busy': M5.8 back-compat — busy machine toggles the base border on/off.
+   */
+  border?: BorderMode;
+  /** Max accumulated activity-log rows before the oldest are pruned. Default 50. */
+  logMax?: number;
 }
 
 const DEFAULT_PACE = 450;
-/**
- * Minimum time each narration line stays visible before the FIFO queue advances. Browser-local
- * presentation timing (like DEFAULT_PACE); never crosses the wire, so it is not a protocol constant.
- */
-const DEFAULT_NARRATION_DWELL_MS = 3000;
-/** Backpressure cap: an agent that spams narrate() can't grow the queue without bound. */
-const NARRATION_QUEUE_MAX = 50;
 
 /**
  * Glow state machine phases (exposed via glowPhase() for tests). A burst of activity flips the
@@ -106,33 +139,43 @@ export class Presenter {
   #ring: HTMLElement | undefined;
   #hud: HTMLElement | undefined;
   #actLine: HTMLElement | undefined;
-  #noteLine: HTMLElement | undefined;
-  #resLine: HTMLElement | undefined;
   #chip: HTMLElement | undefined;
   #mode: PresenterMode = PresenterMode.IDLE;
 
   readonly #now: () => number;
   readonly #idleAfterMs: number;
   readonly #glowFadeMs: number;
+  readonly #borderMode: BorderMode;
   #phase: GlowPhase = GlowPhase.IDLE;
   #lastActivityMs = 0;
   #idleCheckTimer: number | undefined;
   #fadeTimer: number | undefined;
+  /** Tracks sessionStart/sessionEnd so both are idempotent (no strobe / no spurious off-write). */
+  #sessionActive = false;
 
-  // H3: narration is a FIFO queue with a min-dwell so rapid iris_narrate calls never clobber each
-  // other — each line is the visible .iris-note for >= #dwellMs before the next surfaces.
-  readonly #dwellMs: number;
-  #narrationQueue: string[] = [];
-  #narrationTimer: number | undefined;
-  /** nativeNow() when the current line became visible; undefined when nothing is displayed. */
-  #currentShownAt: number | undefined;
+  // v2: narration + action status accumulate in a persistent, timestamped, scrollable log.
+  #logMax: number;
+  #log: HTMLElement | undefined;
+  /** now() of the first row, the baseline for the +elapsed timestamps. */
+  #logBaseMs: number | undefined;
 
   constructor(options: PresenterOptions = {}) {
     this.#paceMs = options.paceMs ?? DEFAULT_PACE;
     this.#now = options.now ?? nativeNow;
     this.#idleAfterMs = options.idleAfterMs ?? IDLE_AFTER_MS;
     this.#glowFadeMs = options.glowFadeMs ?? GLOW_FADE_MS;
-    this.#dwellMs = options.narrationDwellMs ?? DEFAULT_NARRATION_DWELL_MS;
+    this.#borderMode = options.border ?? DEFAULT_BORDER_MODE;
+    this.#logMax = clampLogMax(options.logMax);
+  }
+
+  /** Current cap on accumulated log rows. */
+  get logMax(): number {
+    return this.#logMax;
+  }
+
+  set logMax(n: number) {
+    this.#logMax = clampLogMax(n);
+    this.#pruneLog();
   }
 
   mount(): void {
@@ -150,8 +193,7 @@ export class Presenter {
       <div data-iris-ring></div>
       <div data-iris-hud>
         <div><span class="iris-dot"></span><span class="iris-chip" data-iris-chip></span><span class="iris-act">idle</span></div>
-        <div class="iris-note"></div>
-        <div class="iris-res"></div>
+        <div ${DATA_IRIS_LOG}></div>
       </div>`;
     document.body.appendChild(root);
     this.#root = root;
@@ -160,8 +202,7 @@ export class Presenter {
     this.#ring = root.querySelector<HTMLElement>('[data-iris-ring]') ?? undefined;
     this.#hud = root.querySelector<HTMLElement>('[data-iris-hud]') ?? undefined;
     this.#actLine = root.querySelector<HTMLElement>('.iris-act') ?? undefined;
-    this.#noteLine = root.querySelector<HTMLElement>('.iris-note') ?? undefined;
-    this.#resLine = root.querySelector<HTMLElement>('.iris-res') ?? undefined;
+    this.#log = root.querySelector<HTMLElement>(`[${DATA_IRIS_LOG}]`) ?? undefined;
     this.#chip = root.querySelector<HTMLElement>('[data-iris-chip]') ?? undefined;
     this.setMode(this.#mode);
   }
@@ -169,15 +210,37 @@ export class Presenter {
   destroy(): void {
     if (this.#idleCheckTimer !== undefined) nativeClearTimeout(this.#idleCheckTimer);
     if (this.#fadeTimer !== undefined) nativeClearTimeout(this.#fadeTimer);
-    if (this.#narrationTimer !== undefined) nativeClearTimeout(this.#narrationTimer);
     this.#idleCheckTimer = undefined;
     this.#fadeTimer = undefined;
-    this.#narrationTimer = undefined;
-    this.#narrationQueue = [];
-    this.#currentShownAt = undefined;
+    this.#sessionActive = false;
+    this.#logBaseMs = undefined;
+    this.#log = undefined;
     this.#root?.remove();
     document.querySelectorAll('style[data-iris-overlay]').forEach((s) => s.remove());
     this.#root = undefined;
+  }
+
+  /**
+   * Session start: in 'session' border mode this fades the base border IN and keeps it on until
+   * sessionEnd(). Idempotent, and a no-op when unmounted or in 'busy' border mode.
+   */
+  sessionStart(): void {
+    if (this.#borderMode !== BorderMode.SESSION) return;
+    if (this.#sessionActive) return;
+    this.#sessionActive = true;
+    this.#glow?.setAttribute(DATA_ON, GLOW_ON);
+  }
+
+  /**
+   * Session end: clears the base border. Idempotent; a no-op without a prior sessionStart, when
+   * unmounted, or in 'busy' border mode.
+   */
+  sessionEnd(): void {
+    if (this.#borderMode !== BorderMode.SESSION) return;
+    if (!this.#sessionActive) return;
+    this.#sessionActive = false;
+    this.#glow?.setAttribute(DATA_ON, GLOW_OFF);
+    this.#glow?.setAttribute(DATA_BUSY, BUSY_OFF);
   }
 
   /**
@@ -186,7 +249,12 @@ export class Presenter {
    * just refresh the last-activity timestamp and re-arm the idle check.
    */
   markActivity(): void {
-    this.#lastActivityMs = this.#now();
+    this.#markActivityAt(this.#now());
+  }
+
+  /** markActivity with a caller-supplied timestamp so log() reads the clock exactly once per row. */
+  #markActivityAt(ms: number): void {
+    this.#lastActivityMs = ms;
     if (this.#phase === GlowPhase.IDLE || this.#phase === GlowPhase.FADING) {
       this.#enterBusy();
     }
@@ -229,8 +297,13 @@ export class Presenter {
       this.#fadeTimer = undefined;
     }
     this.#phase = GlowPhase.BUSY;
-    // Single DOM write that flips the fade-in. iris-pulse keeps running from here, uninterrupted.
-    this.#glow?.setAttribute(DATA_ON, GLOW_ON);
+    if (this.#borderMode === BorderMode.SESSION) {
+      // Session mode: modulate only the shimmer; the base border (data-on) stays session-owned.
+      this.#glow?.setAttribute(DATA_BUSY, BUSY_ON);
+    } else {
+      // M5.8 back-compat: the busy machine owns the base border.
+      this.#glow?.setAttribute(DATA_ON, GLOW_ON);
+    }
     this.#hud?.setAttribute(DATA_ON, GLOW_ON);
     this.#cursor?.setAttribute(DATA_ON, GLOW_ON);
   }
@@ -257,8 +330,13 @@ export class Presenter {
 
   #beginFade(): void {
     this.#phase = GlowPhase.FADING;
-    // Single fade-out write.
-    this.#glow?.setAttribute(DATA_ON, GLOW_OFF);
+    if (this.#borderMode === BorderMode.SESSION) {
+      // Session mode: relax the shimmer only; the base border stays on.
+      this.#glow?.setAttribute(DATA_BUSY, BUSY_OFF);
+    } else {
+      // M5.8 back-compat: fade the base border out.
+      this.#glow?.setAttribute(DATA_ON, GLOW_OFF);
+    }
     this.#hud?.setAttribute(DATA_ON, GLOW_OFF);
     this.#cursor?.setAttribute(DATA_ON, GLOW_OFF);
     this.setMode(PresenterMode.IDLE); // H2: clear the READING/ACTING chip when going quiet
@@ -272,47 +350,46 @@ export class Presenter {
   status(text: string): void {
     this.markActivity();
     if (this.#actLine !== undefined) this.#actLine.textContent = text;
-    if (this.#resLine !== undefined) this.#resLine.textContent = '';
   }
 
   /**
-   * Enqueue a narration line (FIFO). Never writes .iris-note directly — that only happens in
-   * #advanceNarration once the prior line has met its min-dwell — so rapid calls never clobber.
+   * Append an activity-log row. Accumulates (never overwrites): each call adds a timestamped row
+   * with a mode chip + text. Returns a handle to stamp the row's outcome glyph (✓/✗) later, or
+   * undefined when unmounted / when the text is empty after trimming.
    */
-  narrate(text: string, level = 'info'): void {
-    this.markActivity();
+  log(kind: LogKind, text: string, result?: LogResult): LogHandle | undefined {
+    const ms = this.#now();
+    this.#markActivityAt(ms);
+    if (this.#log === undefined) return undefined;
+    const trimmed = text.trim();
+    if (trimmed.length === 0) return undefined;
+
+    this.#logBaseMs ??= ms;
+    const ts = formatElapsed(ms - this.#logBaseMs);
+    const handle = appendLogRow(this.#log, kind, trimmed, ts, this.#logMax);
+    if (result !== undefined) handle.result(result);
+    return handle;
+  }
+
+  /** Back-compat: narration appends to the live log (append-only, never overwrites). */
+  narrate(text: string, level = 'info'): LogHandle | undefined {
     const line = level === 'info' ? text : `[${level}] ${text}`;
-    if (this.#narrationQueue.length >= NARRATION_QUEUE_MAX) {
-      this.#narrationQueue.shift(); // drop the oldest *pending* line, never the visible one
+    return this.log(LOG_KIND.NARRATION, line);
+  }
+
+  #pruneLog(): void {
+    if (this.#log === undefined) return;
+    while (this.#log.childElementCount > this.#logMax) {
+      this.#log.firstElementChild?.remove();
     }
-    this.#narrationQueue.push(line);
-    // Nothing on screen -> show now; otherwise the dwell timer surfaces it FIFO.
-    if (this.#currentShownAt === undefined) this.#advanceNarration();
   }
 
   /**
-   * Show the next queued line and arm the min-dwell timer on a NATIVE timer (the source of truth)
-   * so a frozen app clock (iris_clock) can't stall narration progression. #currentShownAt is
-   * bookkeeping/testability only — it is never used as the advance gate.
+   * Legacy result(): kept for source compat. The live log carries outcomes via the LogHandle
+   * returned from log(), so this is a tolerated no-op (it never stamps a glyph onto a read row).
    */
-  #advanceNarration(): void {
-    const next = this.#narrationQueue.shift();
-    if (next === undefined) {
-      this.#currentShownAt = undefined;
-      return;
-    }
-    if (this.#noteLine !== undefined) this.#noteLine.textContent = next;
-    this.#currentShownAt = this.#now();
-    this.#narrationTimer = nativeSetTimeout(() => {
-      this.#narrationTimer = undefined;
-      this.#advanceNarration(); // FIFO: surface the next line, or go quiet if the queue drained
-    }, this.#dwellMs);
-  }
-
-  result(ok: boolean): void {
-    if (this.#resLine === undefined) return;
-    this.#resLine.textContent = ok ? '✓ passed' : '✗ failed';
-    this.#resLine.className = `iris-res ${ok ? 'iris-pass' : 'iris-fail'}`;
+  result(_ok: boolean): void {
+    /* no-op: outcomes flow through LogHandle.result() */
   }
 
   /** Fly the cursor to an element, play the action's effect, then pace for the human. */

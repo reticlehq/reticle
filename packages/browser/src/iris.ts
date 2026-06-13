@@ -22,7 +22,13 @@ import { installAnimation } from './observers/animation.js';
 import { installScroll } from './observers/scroll.js';
 import { installHealth } from './observers/health.js';
 import { installOverlay, type OverlayHandle } from './overlay.js';
-import { Presenter, type PresenterOptions } from './presenter.js';
+import {
+  Presenter,
+  LOG_KIND,
+  LOG_RESULT,
+  type PresenterOptions,
+  type LogHandle,
+} from './presenter.js';
 import { refs } from './refs.js';
 import { describe } from './a11y.js';
 import { resetClock } from './clock.js';
@@ -41,6 +47,13 @@ export interface IrisConnectOptions {
   pace?: number;
   /** Min ms each narration line stays visible before the next replaces it (presenter). Default 3000. */
   narrationDwellMs?: number;
+  /**
+   * Border behavior in presenter mode: 'session' (default) persists the border for the whole
+   * session; 'busy' restores the M5.8 fade-after-idle behavior.
+   */
+  border?: 'session' | 'busy';
+  /** Max accumulated activity-log rows before the oldest are pruned (presenter). Default 50. */
+  logMax?: number;
 }
 
 function str(value: unknown, fallback = ''): string {
@@ -69,6 +82,8 @@ export class Iris {
   #overlay: OverlayHandle | undefined;
   #presenter: Presenter | undefined;
   #eventCount = 0;
+  /** Act-row log handle for the in-flight act/act_sequence, so its outcome stamps the right row. */
+  #actHandle: LogHandle | undefined;
 
   connect(options: IrisConnectOptions = {}): void {
     if (this.#connected) return;
@@ -107,8 +122,11 @@ export class Iris {
       if (options.narrationDwellMs !== undefined) {
         presenterOptions.narrationDwellMs = options.narrationDwellMs;
       }
+      if (options.border !== undefined) presenterOptions.border = options.border;
+      if (options.logMax !== undefined) presenterOptions.logMax = options.logMax;
       this.#presenter = new Presenter(presenterOptions);
       this.#presenter.mount();
+      this.#presenter.sessionStart(); // border fades in once and stays on (session mode)
     }
 
     this.#transport.connect();
@@ -138,6 +156,7 @@ export class Iris {
     this.#transport = undefined;
     this.#overlay?.destroy();
     this.#overlay = undefined;
+    this.#presenter?.sessionEnd(); // fade the border out before tearing the overlay down
     this.#presenter?.destroy();
     this.#presenter = undefined;
     resetClock(); // restore any frozen timers
@@ -184,12 +203,13 @@ export class Iris {
     await this.#presentBefore(command);
     try {
       const result = await handler(command.args);
-      this.#presenter?.result(true);
+      this.#actHandle?.result(LOG_RESULT.PASS);
       return { ok: true, result };
     } catch (error) {
-      this.#presenter?.result(false);
+      this.#actHandle?.result(LOG_RESULT.FAIL);
       return { ok: false, error: error instanceof Error ? error.message : String(error) };
     } finally {
+      this.#actHandle = undefined;
       this.#presenter?.scheduleIdle();
     }
   }
@@ -199,18 +219,26 @@ export class Iris {
     const p = this.#presenter;
     if (p === undefined) return;
     p.setMode(modeForCommand(command.name)); // H2: paint reading vs acting intent first
+    this.#actHandle = undefined;
     if (command.name === IrisCommand.ACT) {
       const ref = str(command.args['ref']);
-      await p.beforeAct(ref, str(command.args['action']), refLabel(ref));
+      const label = refLabel(ref);
+      this.#actHandle = p.log(LOG_KIND.ACT, `${actLabel(str(command.args['action']))} ${label}`);
+      await p.beforeAct(ref, str(command.args['action']), label);
     } else if (command.name === IrisCommand.ACT_SEQUENCE) {
       const steps = Array.isArray(command.args['steps']) ? command.args['steps'] : [];
       for (const step of steps) {
         const s = step as { ref?: unknown; action?: unknown };
         const ref = str(s.ref);
-        await p.beforeAct(ref, str(s.action), refLabel(ref));
+        const label = refLabel(ref);
+        // one log row per step; the last handle carries the sequence outcome glyph
+        this.#actHandle = p.log(LOG_KIND.ACT, `${actLabel(str(s.action))} ${label}`);
+        await p.beforeAct(ref, str(s.action), label);
       }
     } else {
-      p.status(presentStatus(command.name));
+      const label = presentStatus(command.name);
+      p.status(label);
+      p.log(LOG_KIND.READ, label);
     }
   }
 }
@@ -236,6 +264,33 @@ export function modeForCommand(commandName: string): PresenterMode {
       return PresenterMode.READING;
     default:
       return PresenterMode.IDLE;
+  }
+}
+
+/** Short verb for an act-log row (e.g. "Clicking"). Mirrors the presenter's cursor label. */
+function actLabel(action: string): string {
+  switch (action) {
+    case 'click':
+    case 'dblclick':
+      return 'Clicking';
+    case 'fill':
+    case 'type':
+      return 'Typing into';
+    case 'hover':
+      return 'Hovering';
+    case 'select':
+      return 'Selecting';
+    case 'submit':
+      return 'Submitting';
+    case 'check':
+    case 'uncheck':
+      return 'Toggling';
+    case 'upload':
+      return 'Uploading to';
+    case 'drag':
+      return 'Dragging';
+    default:
+      return action;
   }
 }
 
