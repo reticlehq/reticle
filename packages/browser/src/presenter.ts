@@ -85,7 +85,14 @@ const CSS = `
 [data-iris-hud]::before{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
   background:radial-gradient(130% 90% at 50% 0%,var(--iris-accent-soft),transparent 60%);}
 [data-iris-hud]>*{position:relative;}
-[data-iris-hud][data-on="1"]{opacity:1;transform:translateX(-50%) translateY(0) scale(1);pointer-events:auto;}
+[data-iris-hud][data-on="1"]{opacity:1;transform:translateX(-50%) translateY(0) scale(1);}
+/* Click-through: the glassy panel itself never blocks the app — only its interactive controls
+   capture clicks (buttons / inputs), so a human can click straight through the HUD to the page.
+   The log auto-scrolls, so it stays click-through too (drag-scroll is traded for click-through). */
+[data-iris-hud] button,[data-iris-hud] input,[data-iris-hud] textarea,
+[data-iris-hud] select,[data-iris-hud] [contenteditable]{pointer-events:auto;}
+/* When minimised to a pill, the whole bar is the (single) click target to restore. */
+[data-iris-overlay][data-iris-min="1"] [data-iris-hud][data-on="1"]{pointer-events:auto;}
 [data-iris-hud] .iris-hud-head{display:flex;align-items:center;gap:8px;flex:none;
   padding:12px 12px 12px 15px;border-bottom:1px solid var(--iris-line2);}
 [data-iris-hud] .iris-dot{width:9px;height:9px;border-radius:50%;flex:none;background:var(--iris-accent);

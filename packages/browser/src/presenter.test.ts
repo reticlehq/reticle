@@ -8,6 +8,15 @@ const FAST_IDLE_MS = 20;
 const FAST_FADE_MS = 5;
 const flush = (): Promise<void> => new Promise((r) => setTimeout(r, 0));
 const wait = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+/** Poll a predicate until true or timeout — robust to real-timer lateness under load (no flake). */
+const until = async (pred: () => boolean, ms = 1000): Promise<boolean> => {
+  const t0 = Date.now();
+  while (!pred()) {
+    if (Date.now() - t0 > ms) return false;
+    await wait(5);
+  }
+  return true;
+};
 
 interface GlowFlips {
   enters: number;
@@ -551,9 +560,10 @@ describe('presenter v2 session border', () => {
     p.sessionStart();
     p.status('x');
     t += 1000;
-    await wait(FAST_IDLE_MS + FAST_FADE_MS + 20);
-    await flush();
-    expect(p.glowPhase()).toBe('idle');
+    // Poll instead of a fixed wait: the busy→fading→idle chain runs on real timers, which fire late
+    // under load — a fixed sleep flaked ("fading" instead of "idle"). The clock (now) is fixed, so
+    // the logic is deterministic; only the timer scheduling is slow.
+    expect(await until(() => p.glowPhase() === 'idle')).toBe(true);
     expect(dataBusy()).toBe('0');
     expect(dataOn()).toBe('1');
     p.destroy();
