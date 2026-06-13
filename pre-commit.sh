@@ -12,37 +12,37 @@ fail=0
 note() { printf "%b\n" "$1"; }
 step() { printf "\n%b==> %s%b\n" "$YELLOW" "$1" "$NC"; }
 
-# Staged files (added/copied/modified), text only.
-mapfile -t STAGED < <(git diff --cached --name-only --diff-filter=ACM)
-ts_staged() { printf '%s\n' "${STAGED[@]}" | grep -E '\.(ts|tsx)$' || true; }
+# Staged files (added/copied/modified) as a newline string — portable (no mapfile,
+# works on macOS bash 3.2). Each grep over it tolerates an empty list.
+STAGED="$(git diff --cached --name-only --diff-filter=ACM)"
+staged() { printf '%s\n' "$STAGED"; }
+ts_staged() { staged | grep -E '\.(ts|tsx)$' || true; }
 
 # ----- 1. SAFETY -----------------------------------------------------------
 step "Safety checks"
 
 # 1a. plan/ never ships
-if printf '%s\n' "${STAGED[@]}" | grep -qE '^plan/'; then
+if staged | grep -qE '^plan/'; then
   note "${RED}✗ plan/ files are staged — research never ships${NC}"; fail=1
 fi
 
 # 1b. .env never committed (only .env.example)
-if printf '%s\n' "${STAGED[@]}" | grep -qE '(^|/)\.env($|\.)' | grep -qv '\.env\.example'; then
+if staged | grep -E '(^|/)\.env($|\.)' | grep -qv '\.env\.example'; then
   note "${RED}✗ a .env file is staged${NC}"; fail=1
 fi
 
-# 1c. obvious secrets
-if [ "${#STAGED[@]}" -gt 0 ]; then
-  if git diff --cached -U0 -- "${STAGED[@]}" 2>/dev/null \
-      | grep -E '^\+' \
-      | grep -Eiq '(api[_-]?key|secret|password|private[_-]?key)["'"'"']?\s*[:=]\s*["'"'"'][A-Za-z0-9/_+-]{12,}'; then
-    note "${RED}✗ possible hardcoded secret in staged changes${NC}"; fail=1
-  fi
+# 1c. obvious secrets in the added lines
+if git diff --cached -U0 2>/dev/null \
+    | grep -E '^\+' \
+    | grep -Eiq '(api[_-]?key|secret|password|private[_-]?key)["'"'"']?[[:space:]]*[:=][[:space:]]*["'"'"'][A-Za-z0-9/_+-]{12,}'; then
+  note "${RED}✗ possible hardcoded secret in staged changes${NC}"; fail=1
 fi
 
-# 1d. no `any`, no console.log, file size, new- prefix, bare eslint-disable
+# 1d. no `any`, no console.log, file size, bare eslint-disable
 while IFS= read -r f; do
   [ -z "$f" ] && continue
   [ -f "$f" ] || continue
-  if grep -nE '(:\s*any\b|<any>|as any\b|any\[\])' "$f" >/dev/null; then
+  if grep -nE '(:[[:space:]]*any\b|<any>|as any\b|any\[\])' "$f" >/dev/null; then
     note "${RED}✗ 'any' type in $f${NC}"; fail=1
   fi
   if grep -nE '\bconsole\.log\b' "$f" >/dev/null; then
@@ -58,9 +58,7 @@ while IFS= read -r f; do
 done < <(ts_staged)
 
 # 1e. component files must use create-, not new-
-if printf '%s\n' "${STAGED[@]}" \
-    | grep -E '(components|views|features)/.*' \
-    | grep -qE '/new-[^/]+\.(ts|tsx)$'; then
+if staged | grep -E '(components|views|features)/' | grep -qE '/new-[^/]+\.(ts|tsx)$'; then
   note "${RED}✗ component file prefixed 'new-' — use 'create-'${NC}"; fail=1
 fi
 
