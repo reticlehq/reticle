@@ -2,7 +2,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { TOOLS, type ToolDeps } from './tools.js';
 import { log } from './log.js';
 
-const SERVER_INFO = { name: 'iris', version: '0.2.0' } as const;
+const SERVER_INFO = { name: 'iris', version: '0.2.1' } as const;
 
 /** Build an MCP server exposing the Iris tools, backed by the given session manager. */
 export function createMcpServer(deps: ToolDeps): McpServer {
