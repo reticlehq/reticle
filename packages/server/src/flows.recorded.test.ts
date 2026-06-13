@@ -15,6 +15,7 @@ import {
 } from '@syrin/iris-protocol';
 import { createNodeFileSystem, type FileSystemPort } from './fs-port.js';
 import { FlowStore } from './flows.js';
+import { ProjectStore } from './project-store.js';
 import { AnnotationStore } from './annotation-store.js';
 import { FLOW_TOOLS } from './flow-tools.js';
 import { IrisTool } from './tool-names.js';
@@ -103,6 +104,7 @@ function fakeDeps(store: FlowStore, events: IrisEvent[]): ToolDeps {
     baselines: new BaselineStore(),
     recordings: new RecordingStore(),
     flows: store,
+    project: new ProjectStore(createNodeFileSystem(), '/virtual/.iris', { now: () => FROZEN }),
     annotations: new AnnotationStore(),
     fs: createNodeFileSystem(),
     irisRoot: '/virtual/.iris',

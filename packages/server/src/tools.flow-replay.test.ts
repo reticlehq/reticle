@@ -8,6 +8,8 @@ import {
   IrisCommand,
   QueryBy,
   ReplayStatus,
+  RunKind,
+  RunStatus,
   type CommandResult,
   type FlowReplayResult,
 } from '@syrin/iris-protocol';
@@ -16,6 +18,7 @@ import { IrisTool } from './tool-names.js';
 import { BaselineStore } from './baselines.js';
 import { RecordingStore } from './recordings.js';
 import { FlowStore } from './flows.js';
+import { ProjectStore } from './project-store.js';
 import { AnnotationStore } from './annotation-store.js';
 import { createNodeFileSystem, type FileSystemPort } from './fs-port.js';
 import { flowPath } from './iris-dir.js';
@@ -53,6 +56,7 @@ function fakeDeps(
     baselines: new BaselineStore(),
     recordings,
     flows: new FlowStore(fs, root, clock),
+    project: new ProjectStore(fs, root, clock),
     annotations: new AnnotationStore(),
     fs,
     irisRoot: root,
@@ -168,5 +172,35 @@ describe('iris_flow_replay handler (M8 Stage A REPLAYANCHOR) — temp dir, never
     })) as FlowReplayResult;
     expect(res.status).toBe(ReplayStatus.ERROR);
     expect(res.error?.code).toBe(FlowErrorCode.INVALID_NAME);
+  });
+
+  // ---- 0.3.7 RUNHISTORY: every replay records a run to .iris/project.json ----
+
+  it('F: an ok replay auto-records a pass run with mapped status + driftSteps:0', async () => {
+    await saveFlow('green', [actStep('chat-send')]);
+    const session = scriptedSession((testid) => ({ elements: [{ ref: `e-${testid}` }] }));
+    const deps = fakeDeps(fs, root, session);
+
+    await tool(IrisTool.FLOW_REPLAY).handler(deps, { name: 'green' });
+    const history = await deps.project.read();
+    expect(history.ok).toBe(true);
+    if (!history.ok) throw new Error('expected history');
+    expect(history.file.runs).toHaveLength(1);
+    expect(history.file.runs[0]).toMatchObject({
+      kind: RunKind.FLOW_REPLAY,
+      name: 'green',
+      status: RunStatus.PASS,
+      evidence: { driftSteps: 0 },
+    });
+  });
+
+  it('G: the missing-flow ERROR early-return also records an error run', async () => {
+    const session = scriptedSession(() => ({ elements: [] }));
+    const deps = fakeDeps(fs, root, session);
+
+    await tool(IrisTool.FLOW_REPLAY).handler(deps, { name: 'nope' });
+    const last = await deps.project.lastRun('nope');
+    expect(last?.status).toBe(RunStatus.ERROR);
+    expect(last?.kind).toBe(RunKind.FLOW_REPLAY);
   });
 });

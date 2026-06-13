@@ -18,6 +18,7 @@ const ORDER = [
   'spa-nav-realinput-test',
   'p3a-test',
   'p3b-test',
+  'project-history-test',
   'p4-spec',
   'live-control-test',
   'real-world-tests',

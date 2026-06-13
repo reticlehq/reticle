@@ -13,6 +13,7 @@ import { BaselineStore } from './baselines.js';
 import { createNodeFileSystem } from './fs-port.js';
 import { RecordingStore } from './recordings.js';
 import { FlowStore } from './flows.js';
+import { ProjectStore } from './project-store.js';
 import { AnnotationStore } from './annotation-store.js';
 import { TOOLS, type ToolDeps } from './tools.js';
 import { IrisTool } from './tool-names.js';
@@ -199,6 +200,7 @@ describe('bridge round-trip (north-star)', () => {
       baselines: new BaselineStore(),
       recordings: new RecordingStore(),
       flows: new FlowStore(createNodeFileSystem(), '/tmp/iris-test/.iris', { now: () => 0 }),
+      project: new ProjectStore(createNodeFileSystem(), '/tmp/iris-test/.iris', { now: () => 0 }),
       annotations: new AnnotationStore(),
       fs: createNodeFileSystem(),
       irisRoot: '/tmp/iris-test/.iris',
@@ -455,6 +457,7 @@ describe('iris_act_and_wait (G3 composite)', () => {
       baselines: new BaselineStore(),
       recordings: new RecordingStore(),
       flows: new FlowStore(createNodeFileSystem(), '/tmp/iris-test/.iris', { now: () => 0 }),
+      project: new ProjectStore(createNodeFileSystem(), '/tmp/iris-test/.iris', { now: () => 0 }),
       annotations: new AnnotationStore(),
       fs: createNodeFileSystem(),
       irisRoot: '/tmp/iris-test/.iris',
@@ -578,6 +581,7 @@ describe('G6 record -> compile -> replay', () => {
       baselines: new BaselineStore(),
       recordings: new RecordingStore(),
       flows: new FlowStore(createNodeFileSystem(), '/tmp/iris-test/.iris', { now: () => 0 }),
+      project: new ProjectStore(createNodeFileSystem(), '/tmp/iris-test/.iris', { now: () => 0 }),
       annotations: new AnnotationStore(),
       fs: createNodeFileSystem(),
       irisRoot: '/tmp/iris-test/.iris',

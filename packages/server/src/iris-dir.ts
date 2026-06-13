@@ -19,6 +19,8 @@ export interface IrisDirPaths {
   flows: string;
   /** .../.iris/baselines */
   baselines: string;
+  /** .../.iris/project.json (0.3.7 RUNHISTORY: cross-run outcome memory) */
+  project: string;
 }
 
 export function irisDirPaths(root: string): IrisDirPaths {
@@ -27,6 +29,7 @@ export function irisDirPaths(root: string): IrisDirPaths {
     contract: join(root, IrisDir.CONTRACT_FILE),
     flows: join(root, IrisDir.FLOWS_SUBDIR),
     baselines: join(root, IrisDir.BASELINES_SUBDIR),
+    project: join(root, IrisDir.PROJECT_FILE),
   };
 }
 

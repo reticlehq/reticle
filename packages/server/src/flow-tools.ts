@@ -8,6 +8,8 @@ import {
   RecordedFlowSchema,
   RecordedSaveError,
   ReplayStatus,
+  RunKind,
+  RunStatus,
   type FlowHealResult,
   type FlowReplayResult,
   type HealChange,
@@ -47,6 +49,35 @@ function flowErrorMessage(code: FlowErrorCode): string {
     case FlowErrorCode.NO_RECORDING:
       return 'no compiled recording by that name — record one (iris_record_start/stop) first';
   }
+}
+
+/** 0.3.7 RUNHISTORY: map the wire ReplayStatus onto the persisted RunStatus (ok→pass). */
+function replayToRunStatus(status: ReplayStatus): RunStatus {
+  switch (status) {
+    case ReplayStatus.OK:
+      return RunStatus.PASS;
+    case ReplayStatus.DRIFT:
+      return RunStatus.DRIFT;
+    case ReplayStatus.ERROR:
+      return RunStatus.ERROR;
+  }
+}
+
+/** 0.3.7 RUNHISTORY: append a flow-replay outcome to .iris/project.json (never throws into replay). */
+async function recordReplayRun(
+  deps: ToolDeps,
+  name: string,
+  status: ReplayStatus,
+  driftSteps: number,
+  durationMs: number,
+): Promise<void> {
+  await deps.project.recordRun({
+    kind: RunKind.FLOW_REPLAY,
+    name,
+    status: replayToRunStatus(status),
+    evidence: { driftSteps },
+    durationMs,
+  });
 }
 
 /**
@@ -112,9 +143,13 @@ export const FLOW_TOOLS: ToolDef[] = [
       'with a structured code (distinct from a contract-changed drift).',
     inputSchema: { name: z.string(), sessionId: z.string().optional() },
     handler: async (deps: ToolDeps, args): Promise<FlowReplayResult> => {
+      // 0.3.7 RUNHISTORY: deps.now() here is the single clock site for the replay duration (a
+      // handler-level concern, not pure logic), and every exit path records a run to project.json.
+      const startedAt = deps.now();
       const name = asString(args['name']) ?? '';
       const loaded = await deps.flows.load(name);
       if (!loaded.ok) {
+        await recordReplayRun(deps, name, ReplayStatus.ERROR, 0, deps.now() - startedAt);
         return {
           name,
           status: ReplayStatus.ERROR,
@@ -129,13 +164,12 @@ export const FLOW_TOOLS: ToolDef[] = [
         waitForPredicate,
         FLOW_SIGNAL_TIMEOUT_MS,
       );
-      const drifted = steps.some((s) => s.drift !== undefined);
+      const driftSteps = steps.filter((s) => s.drift !== undefined).length;
       const allOk = steps.every((s) => s.ok);
-      return {
-        name,
-        status: drifted ? ReplayStatus.DRIFT : allOk ? ReplayStatus.OK : ReplayStatus.DRIFT,
-        steps,
-      };
+      const status =
+        driftSteps > 0 ? ReplayStatus.DRIFT : allOk ? ReplayStatus.OK : ReplayStatus.DRIFT;
+      await recordReplayRun(deps, name, status, driftSteps, deps.now() - startedAt);
+      return { name, status, steps };
     },
   },
   {

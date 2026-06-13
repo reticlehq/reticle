@@ -11,6 +11,8 @@ import {
   type HealStatus,
   QueryBy,
   type ReplayStatus,
+  RunKind,
+  RunStatus,
 } from './constants.js';
 
 /** A query describing which element(s) to find, Testing-Library style. */
@@ -84,6 +86,44 @@ export const ContractFileSchema = z.object({
   capabilities: CapabilitiesSchema,
 });
 export type ContractFile = z.infer<typeof ContractFileSchema>;
+
+/**
+ * 0.3.7 RUNHISTORY — evidence counts captured with a run so the agent can compare runs over time
+ * ("console errors went 0→3 since last run"). All optional: a run records only what it observed.
+ */
+export const RunEvidenceSchema = z.object({
+  consoleErrors: z.number().optional(),
+  networkErrors: z.number().optional(),
+  driftSteps: z.number().optional(),
+});
+export type RunEvidence = z.infer<typeof RunEvidenceSchema>;
+
+/** 0.3.7 RUNHISTORY — one persisted run outcome in .iris/project.json. */
+export const RunRecordSchema = z.object({
+  kind: z.nativeEnum(RunKind),
+  name: z.string(),
+  status: z.nativeEnum(RunStatus),
+  at: z.number(),
+  summary: z.string().optional(),
+  evidence: RunEvidenceSchema.optional(),
+  durationMs: z.number().optional(),
+});
+export type RunRecord = z.infer<typeof RunRecordSchema>;
+
+/** 0.3.7 RUNHISTORY — the optional learned map of the app (known flow/route names). */
+export const ProjectLearnedSchema = z.object({
+  flows: z.array(z.string()).optional(),
+  routes: z.array(z.string()).optional(),
+});
+export type ProjectLearned = z.infer<typeof ProjectLearnedSchema>;
+
+/** 0.3.7 RUNHISTORY — the on-disk project.json envelope: versioned learned-map + chronological runs. */
+export const ProjectFileSchema = z.object({
+  version: z.number(),
+  learned: ProjectLearnedSchema.optional(),
+  runs: z.array(RunRecordSchema),
+});
+export type ProjectFile = z.infer<typeof ProjectFileSchema>;
 
 /**
  * M8 Stage A FLOWFMT — a semantic anchor: how a step re-finds its element/event at replay

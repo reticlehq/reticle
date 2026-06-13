@@ -1,13 +1,21 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { TOOLS, type ToolDeps } from './tools.js';
+import { filterTools, TOOL_PROFILE, type ToolProfile } from './profiles.js';
 import { log } from './log.js';
 
 const SERVER_INFO = { name: 'iris', version: '0.3.6' } as const;
 
-/** Build an MCP server exposing the Iris tools, backed by the given session manager. */
-export function createMcpServer(deps: ToolDeps): McpServer {
+/**
+ * Build an MCP server exposing the Iris tools, backed by the given session manager. The optional
+ * profile trims the surface to the core loop (0.3.7); FULL (default) exposes every tool, so existing
+ * callers are unaffected.
+ */
+export function createMcpServer(
+  deps: ToolDeps,
+  profile: ToolProfile = TOOL_PROFILE.FULL,
+): McpServer {
   const server = new McpServer(SERVER_INFO);
-  for (const tool of TOOLS) {
+  for (const tool of filterTools(TOOLS, profile)) {
     server.registerTool(
       tool.name,
       { description: tool.description, inputSchema: tool.inputSchema },

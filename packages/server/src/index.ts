@@ -5,9 +5,11 @@ import { Bridge } from './bridge.js';
 import { BaselineStore } from './baselines.js';
 import { RecordingStore } from './recordings.js';
 import { FlowStore } from './flows.js';
+import { ProjectStore } from './project-store.js';
 import { AnnotationStore } from './annotation-store.js';
 import { createNodeFileSystem } from './fs-port.js';
 import { createMcpServer } from './mcp.js';
+import { resolveToolProfile } from './profiles.js';
 import { CdpRealInputProvider, LaunchedRealInputProvider } from './real-input.js';
 import type { OwnedRealInputProvider, RealInputProvider } from './real-input.js';
 import { log } from './log.js';
@@ -28,6 +30,16 @@ export { RecordingStore } from './recordings.js';
 export type { RecordedStep, CompiledProgram } from './recordings.js';
 export { FlowStore, recordedStepToFlowStep } from './flows.js';
 export type { FlowResult, Clock } from './flows.js';
+export { ProjectStore } from './project-store.js';
+export type { ReadProjectResult } from './project-store.js';
+export {
+  CORE_TOOL_NAMES,
+  TOOL_PROFILE,
+  TOOL_PROFILE_ENV,
+  filterTools,
+  resolveToolProfile,
+} from './profiles.js';
+export type { ToolProfile } from './profiles.js';
 export { AnnotationStore } from './annotation-store.js';
 export { replayFlow, nearestTestid } from './flow-replay.js';
 export type { FlowReplaySession, WaitForSignal } from './flow-replay.js';
@@ -78,6 +90,8 @@ export interface StartOptions {
   irisRoot?: string;
   /** M8 Stage A: injectable clock for contract.json's generatedAt stamp. Defaults to Date.now. */
   now?: () => number;
+  /** 0.3.7 FLUENCY: 'core' exposes the lean tool surface. Defaults to env IRIS_TOOL_PROFILE, else 'full'. */
+  toolProfile?: string;
 }
 
 export interface RunningServer {
@@ -127,6 +141,7 @@ export async function start(options: StartOptions = {}): Promise<RunningServer> 
     const irisRoot = options.irisRoot ?? join(process.cwd(), IrisDir.ROOT);
     const now = options.now ?? ((): number => Date.now());
     const flows = new FlowStore(fs, irisRoot, { now });
+    const project = new ProjectStore(fs, irisRoot, { now });
     const annotations = new AnnotationStore();
     const deps = {
       sessions: bridge.sessions,
@@ -134,11 +149,16 @@ export async function start(options: StartOptions = {}): Promise<RunningServer> 
       recordings,
       annotations,
       flows,
+      project,
       fs,
       irisRoot,
       now,
     };
-    const server = createMcpServer(realInput !== undefined ? { ...deps, realInput } : deps);
+    const profile = resolveToolProfile(options.toolProfile);
+    const server = createMcpServer(
+      realInput !== undefined ? { ...deps, realInput } : deps,
+      profile,
+    );
     await server.connect(new StdioServerTransport());
     log('mcp_connected', { port });
   }

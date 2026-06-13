@@ -7,6 +7,7 @@ import { BaselineStore } from './baselines.js';
 import { createNodeFileSystem } from './fs-port.js';
 import { RecordingStore } from './recordings.js';
 import { FlowStore } from './flows.js';
+import { ProjectStore } from './project-store.js';
 import { AnnotationStore } from './annotation-store.js';
 import type { Session, SessionInfo, SessionManager } from './session.js';
 
@@ -34,6 +35,8 @@ function fakeSession(throttled: boolean): Session {
     url: SESSION_URL,
     elapsed: () => 0,
     eventsSince: () => [],
+    eventsInWindow: () => [],
+    onEvent: () => () => undefined,
     command,
     health: () => health,
     throttled: () => throttled,
@@ -56,6 +59,7 @@ function fakeDeps(throttled: boolean, listRows: SessionInfo[]): ToolDeps {
     baselines: new BaselineStore(),
     recordings: new RecordingStore(),
     flows: new FlowStore(createNodeFileSystem(), '/tmp/iris-test/.iris', { now: () => 0 }),
+    project: new ProjectStore(createNodeFileSystem(), '/tmp/iris-test/.iris', { now: () => 0 }),
     annotations: new AnnotationStore(),
     fs: createNodeFileSystem(),
     irisRoot: '/tmp/iris-test/.iris',
@@ -136,5 +140,27 @@ describe('P2-surface tool results carry the recommendation', () => {
     };
     const row = res.sessions[0];
     expect(row !== undefined && 'recommendation' in row).toBe(false);
+  });
+
+  // 0.3.7 status-honesty audit: every page-driving/observing tool carries session health.
+
+  it('act_sequence result surfaces the recommendation for a throttled tab', async () => {
+    const res = (await tool(IrisTool.ACT_SEQUENCE).handler(fakeDeps(true, []), {
+      steps: [{ ref: 'e1', action: 'click' }],
+    })) as HealthBlock;
+    expect(res.session.recommendation).toBe(UNSCRIPTABLE_TAB_RECOMMENDATION);
+  });
+
+  it('observe result surfaces the recommendation for a throttled tab', async () => {
+    const res = (await tool(IrisTool.OBSERVE).handler(fakeDeps(true, []), {})) as HealthBlock;
+    expect(res.session.recommendation).toBe(UNSCRIPTABLE_TAB_RECOMMENDATION);
+  });
+
+  it('wait_for result surfaces the recommendation for a throttled tab', async () => {
+    const res = (await tool(IrisTool.WAIT_FOR).handler(fakeDeps(true, []), {
+      predicate: { kind: 'console', level: 'error', absent: true },
+      timeout_ms: 0,
+    })) as HealthBlock;
+    expect(res.session.recommendation).toBe(UNSCRIPTABLE_TAB_RECOMMENDATION);
   });
 });

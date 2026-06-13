@@ -16,6 +16,8 @@ export const IrisDir = {
   CONTRACT_FILE: 'contract.json',
   FLOWS_SUBDIR: 'flows',
   BASELINES_SUBDIR: 'baselines',
+  /** 0.3.7 RUNHISTORY: cross-run memory — outcomes of past runs (the "did it behave like last time?" file). */
+  PROJECT_FILE: 'project.json',
 } as const;
 
 /** Schema version stamped into contract.json so a reader can reject/upgrade old files. */
@@ -30,6 +32,51 @@ export const ContractReadError = {
   MALFORMED: 'contract-malformed', // present but not valid JSON / fails schema
 } as const;
 export type ContractReadError = (typeof ContractReadError)[keyof typeof ContractReadError];
+
+/**
+ * 0.3.7 RUNHISTORY: schema version stamped into project.json so a reader can reject/upgrade old files.
+ */
+export const PROJECT_FILE_VERSION = 1;
+
+/**
+ * 0.3.7 RUNHISTORY: structured outcome when reading project.json fails (never thrown to the agent).
+ * Mirrors ContractReadError. NOTE: recordRun() self-heals a MALFORMED file (starts fresh) so a
+ * corrupt history never wedges the agent; only the READ path (iris_project) surfaces MALFORMED.
+ */
+export const ProjectReadError = {
+  MISSING: 'project-missing', // no .iris/project.json on disk
+  MALFORMED: 'project-malformed', // present but not valid JSON / fails schema
+} as const;
+export type ProjectReadError = (typeof ProjectReadError)[keyof typeof ProjectReadError];
+
+/** 0.3.7 RUNHISTORY: how a run record was produced. */
+export const RunKind = {
+  FLOW_REPLAY: 'flow_replay', // auto-recorded by iris_flow_replay
+  MANUAL: 'manual', // explicitly recorded via iris_run_record
+} as const;
+export type RunKind = (typeof RunKind)[keyof typeof RunKind];
+
+/**
+ * 0.3.7 RUNHISTORY: the persisted outcome of a run. Distinct from ReplayStatus (a wire/replay
+ * concept of ok|drift|error): RunStatus is the history concept and adds pass/fail. The replay
+ * site maps ReplayStatus.OK→PASS, DRIFT→DRIFT, ERROR→ERROR.
+ */
+export const RunStatus = {
+  PASS: 'pass',
+  DRIFT: 'drift',
+  ERROR: 'error',
+  FAIL: 'fail',
+} as const;
+export type RunStatus = (typeof RunStatus)[keyof typeof RunStatus];
+
+/**
+ * 0.3.7 RUNHISTORY: bounds on project.json so the file stays small + diffable. recordRun keeps the
+ * last PER_NAME runs of any single name, then caps the whole list to TOTAL most-recent overall.
+ */
+export const PROJECT_RUN_CAP = {
+  PER_NAME: 50,
+  TOTAL: 200,
+} as const;
 
 /** M8 Stage A FLOWFMT: schema version stamped onto on-disk flow files (.iris/flows/<name>.json). */
 export const FLOW_FILE_VERSION = 1;

@@ -23,8 +23,10 @@ import { healthEnvelope, refuseIfThrottled } from './session-health.js';
 import { asString, asNumber, asRecord, parseInteractive } from './tools-helpers.js';
 import type { FileSystemPort } from './fs-port.js';
 import type { FlowStore } from './flows.js';
+import type { ProjectStore } from './project-store.js';
 import { CONTRACT_TOOLS } from './contract-tools.js';
 import { FLOW_TOOLS } from './flow-tools.js';
+import { PROJECT_TOOLS } from './project-tools.js';
 import { ANNOTATE_TOOLS } from './annotate-tools.js';
 import { LIVE_CONTROL_TOOLS } from './live-control-tools.js';
 import { pausedShortCircuit, withControl } from './control-envelope.js';
@@ -38,6 +40,8 @@ export interface ToolDeps {
   flows: FlowStore;
   /** M8 Stage B ANNOTATE: structured annotations accumulating for the live recording. */
   annotations: AnnotationStore;
+  /** 0.3.7 RUNHISTORY: cross-run outcome memory (.iris/project.json). */
+  project: ProjectStore;
   /** R1: optional native-input provider. undefined ⇒ everything stays synthetic. */
   realInput?: RealInputProvider;
   /** M8 Stage A: injected filesystem seam (tests pass a fake/temp-dir adapter). */
@@ -232,7 +236,7 @@ export const TOOLS: ToolDef[] = [
   {
     name: IrisTool.ACT,
     description:
-      'Execute one action against a ref: click|dblclick|hover|focus|fill|type|clear|select|check|uncheck|submit|press|scrollIntoView. Returns immediately with a `since` cursor for observe. Result includes effect: { dispatched, targetMatched, visible, enabled, defaultPrevented, focusMoved, valueChanged, domMutatedWithin } so you can tell "action missed" vs "app didn\'t react". Top-level dispatched/settled/settleReason report whether the click landed (dispatched) and whether a real frame flushed (settled) vs a throttled-tab timeout (settleReason:"timeout") — a settle timeout never fails the tool. Every result also carries inputMode. With real-input mode (server cdpUrl/IRIS_CDP_URL set) pointer actions (hover/click/dblclick/drag) are driven via native CDP input and return inputMode:"real" WITHOUT the synthetic `effect` block — observe the reaction with iris_observe. Otherwise inputMode:"synthetic"; when a provider IS configured but a pointer act still ran synthetic, inputModeReason says why (e.g. "page-not-correlated-to-a-cdp-target" right after an SPA navigation, or "element-not-locatable" when off-screen) so the fallback is never silent. Real-input applies to iris_act only (not act_sequence/act_and_wait). When the tab is hidden/throttled, session.recommendation explains the limit (Iris cannot bring such a tab to front) and points to `iris drive` for a guaranteed scriptable context.',
+      'Execute one action against a ref: click|dblclick|hover|focus|fill|type|clear|select|check|uncheck|submit|press|scrollIntoView. Returns immediately with a `since` cursor — observe the reaction with iris_observe. Carries effect:{dispatched,targetMatched,visible,enabled,focusMoved,valueChanged,domMutatedWithin} to tell "action missed" from "app didn\'t react"; dispatched=landed, settled=a real frame flushed, and a settle timeout never fails the tool. inputMode is "real" (native CDP, no synthetic effect block) or "synthetic"; inputModeReason explains any real→synthetic fallback so it is never silent. Full model (real-input, throttled tabs, `iris drive`): docs/usage.md §18.',
     inputSchema: {
       ref: z.string(),
       action: z.string(),
@@ -316,6 +320,7 @@ export const TOOLS: ToolDef[] = [
         since,
         dispatched: r['count'] !== undefined,
         result: result.result,
+        ...healthEnvelope(session),
       });
     },
   },
@@ -385,7 +390,13 @@ export const TOOLS: ToolDef[] = [
       const filters = Array.isArray(args['filters']) ? (args['filters'] as string[]) : undefined;
       const filtered =
         filters === undefined ? events : events.filter((e) => filters.includes(e.type));
-      return Promise.resolve(withControl(session, buildReactionReport(filtered, windowMs)));
+      // F2: carry session health — a throttled tab means the observed timeline may be incomplete.
+      return Promise.resolve(
+        withControl(session, {
+          ...buildReactionReport(filtered, windowMs),
+          ...healthEnvelope(session),
+        }),
+      );
     },
   },
   {
@@ -397,10 +408,16 @@ export const TOOLS: ToolDef[] = [
       timeout_ms: z.number().optional(),
       ...sessionIdShape,
     },
-    handler: (deps, args) => {
+    handler: async (deps, args) => {
       const session = deps.sessions.resolve(asString(args['sessionId']));
       const predicate = PredicateSchema.parse(args['predicate']);
-      return waitForPredicate(session, predicate, asNumber(args['timeout_ms']) ?? 4000);
+      const verdict = await waitForPredicate(
+        session,
+        predicate,
+        asNumber(args['timeout_ms']) ?? 4000,
+      );
+      // F2: match iris_assert — wrap with control + session health (throttle matters most while blocking).
+      return withControl(session, { ...verdict, ...healthEnvelope(session) });
     },
   },
   {
@@ -636,6 +653,8 @@ export const TOOLS: ToolDef[] = [
   ...CONTRACT_TOOLS,
   // M8 Stage A FLOWFMT: iris_flow_save / iris_flow_list / iris_flow_load. See flow-tools.ts.
   ...FLOW_TOOLS,
+  // 0.3.7 RUNHISTORY: iris_project (read history + diff-vs-last) / iris_run_record. See project-tools.ts.
+  ...PROJECT_TOOLS,
   // M8 Stage B ANNOTATE: iris_annotate (structured annotation → expect/dynamic/success). See annotate-tools.ts.
   ...ANNOTATE_TOOLS,
   // Live-control: iris_end_session / iris_resume / iris_messages. See live-control-tools.ts.

@@ -35,6 +35,10 @@ export const IrisTool = {
   FLOW_HEAL: 'iris_flow_heal',
   /** M8 Stage B ANNOTATE: structured annotation → compiles into the recording's expect/dynamic/success. */
   ANNOTATE: 'iris_annotate',
+  /** 0.3.7 RUNHISTORY: read cross-run history (.iris/project.json) + diff-vs-last for a name. */
+  PROJECT: 'iris_project',
+  /** 0.3.7 RUNHISTORY: explicitly record a run outcome (the manual companion to auto-recording). */
+  RUN_RECORD: 'iris_run_record',
   /** Live-control: end the session (→ ended + push PRESENTER). Handlers live in the tools facet. */
   END_SESSION: 'iris_end_session',
   /** Live-control: clear a pause (→ active). */

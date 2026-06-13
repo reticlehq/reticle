@@ -16,6 +16,7 @@ import { BaselineStore } from './baselines.js';
 import { RecordingStore, type RecordedStep } from './recordings.js';
 import { AnnotationStore } from './annotation-store.js';
 import { FlowStore } from './flows.js';
+import { ProjectStore } from './project-store.js';
 import { createNodeFileSystem, type FileSystemPort } from './fs-port.js';
 import type { Session, SessionManager } from './session.js';
 
@@ -43,6 +44,7 @@ function fakeDeps(
     recordings,
     annotations,
     flows: new FlowStore(fs, root, clock),
+    project: new ProjectStore(fs, root, clock),
     fs,
     irisRoot: root,
     now: clock.now,

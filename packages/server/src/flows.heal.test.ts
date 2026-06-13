@@ -21,6 +21,7 @@ import {
 import { FLOW_TOOLS } from './flow-tools.js';
 import { IrisTool } from './tool-names.js';
 import { FlowStore } from './flows.js';
+import { ProjectStore } from './project-store.js';
 import { replayFlow } from './flow-replay.js';
 import { waitForPredicate } from './predicate.js';
 import { AnnotationStore } from './annotation-store.js';
@@ -99,6 +100,7 @@ function fakeDeps(store: FlowStore, session: FakeSession): ToolDeps {
     baselines: new BaselineStore(),
     recordings: new RecordingStore(),
     flows: store,
+    project: new ProjectStore(createNodeFileSystem(), '/virtual/.iris', { now: () => FROZEN }),
     annotations: new AnnotationStore(),
     fs: createNodeFileSystem(),
     irisRoot: '/virtual/.iris',

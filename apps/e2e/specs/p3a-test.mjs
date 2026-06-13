@@ -1,13 +1,15 @@
 import { chromium } from 'playwright';
 import os from 'node:os'; import path from 'node:path'; import nfs from 'node:fs';
-import { start, TOOLS, BaselineStore, RecordingStore, FlowStore, AnnotationStore, createNodeFileSystem } from '@syrin/iris-server';
+import { start, TOOLS, BaselineStore, RecordingStore, FlowStore, ProjectStore, AnnotationStore, createNodeFileSystem } from '@syrin/iris-server';
 const sleep=(ms)=>new Promise(r=>setTimeout(r,ms));
 let pass=0,fail=0; const chk=(l,o,d='')=>{console.log(`   ${o?'✅':'❌'} ${l}${d?'  — '+d:''}`);o?pass++:fail++;};
 const irisRoot=path.join(os.tmpdir(),`iris-p3a-${process.pid}`,'.iris');
 const fsp=createNodeFileSystem();
-const flows=new FlowStore(fsp,irisRoot,{now:()=>Date.now()});
+const now=()=>Date.now();
+const flows=new FlowStore(fsp,irisRoot,{now});
+const project=new ProjectStore(fsp,irisRoot,{now});
 const server=await start({port:4400,mcp:false});
-const deps={sessions:server.bridge.sessions,baselines:new BaselineStore(),recordings:new RecordingStore(),flows,fs:fsp,irisRoot,annotations:new AnnotationStore()};
+const deps={sessions:server.bridge.sessions,baselines:new BaselineStore(),recordings:new RecordingStore(),flows,project,fs:fsp,irisRoot,now,annotations:new AnnotationStore()};
 const T=(n,a={})=>TOOLS.find(t=>t.name===n).handler(deps,{sessionId:'next-smoke',...a});
 const b=await chromium.launch({headless:true}); const p=await b.newPage();
 await p.goto('http://localhost:3100/',{waitUntil:'networkidle'});
