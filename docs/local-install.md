@@ -13,11 +13,21 @@ From the Iris repo:
 bash scripts/local-registry.sh
 ```
 
-This starts Verdaccio on `http://localhost:4873`, creates a user/token, and publishes all
-`@iris/*` packages there. (Verified: an external `npm i @iris/browser` then resolves the
-whole graph, including `@iris/protocol`, and imports correctly.)
+This starts a **fresh** Verdaccio on `http://localhost:4873`, creates a user/token, and
+publishes all `@iris/*` packages there at the current version (**0.3.0**):
 
-Leave it running.
+| Package                             | What you install it for                            |
+| ----------------------------------- | -------------------------------------------------- |
+| `@iris/browser`                     | the dev-only SDK you embed in your app             |
+| `@iris/server`                      | the bridge + MCP server (your agent runs it)       |
+| `@iris/react`                       | DOM → component → source-file mapping              |
+| `@iris/babel-plugin` / `@iris/next` | React 19 source mapping (Vite / Next.js)           |
+| `@iris/test`                        | write declarative, signal-bound specs (`irisTest`) |
+| `@iris/eslint-plugin`               | the `require-signal-on-mutation` lint rule         |
+| `@iris/protocol`                    | shared wire contract (pulled in automatically)     |
+
+(Verified: an external `npm i @iris/browser` resolves the whole graph, including
+`@iris/protocol`, and imports correctly.) Leave it running.
 
 ## 2. Point your app at the local registry
 
@@ -35,19 +45,24 @@ npm i -D @iris/browser @iris/react
 # React 19 source mapping:
 #   Vite/CRA  → npm i -D @iris/babel-plugin   (see docs/getting-started.md)
 #   Next.js   → npm i -D @iris/next            (keeps SWC)
+# optional:
+#   npm i -D @iris/test           # write replayable specs (irisTest)
+#   npm i -D @iris/eslint-plugin  # require-signal-on-mutation lint rule
 ```
 
 Then follow [Getting Started](getting-started.md): embed `iris.connect()` (dev only), add the
 MCP server to your agent, and (React) `install()` the adapter. For the fastest agent loop, also
 do [Step 6 — make your app agent-legible](getting-started.md) (testids, `iris.signal`,
-`registerStore`, `registerCapabilities`).
+`registerStore`, `registerCapabilities`) and the
+[integration patterns](integration-patterns.md) (`createIrisEmitter` for zero prod-bundle cost).
 
-> **Upgrading.** The packages are pre-1.0 (currently **0.2.0**), so new tools land as minor
-> bumps. After re-running `scripts/local-registry.sh` (it republishes the current version),
+> **Upgrading.** The packages are pre-1.0 (currently **0.3.0**), so new tools land as minor
+> bumps. `scripts/local-registry.sh` resets Verdaccio and republishes the current version, so
 > pull the latest in your app explicitly — `npm update` won't cross a `0.x` minor:
 >
 > ```bash
-> npm i -D @iris/browser@latest @iris/react@latest @iris/next@latest @iris/babel-plugin@latest
+> npm i -D @iris/browser@latest @iris/react@latest @iris/next@latest \
+>          @iris/babel-plugin@latest @iris/test@latest @iris/eslint-plugin@latest
 > ```
 
 **Run the MCP server** from the local registry too:
@@ -77,6 +92,49 @@ export default irisNext.withIris(nextConfig); // dev-only; keeps SWC; adds file:
 
 Mount the SDK from a dev-only client component (see the Next.js section in
 [Getting Started](getting-started.md)).
+
+## Real input for hover/drag (optional, 0.3.0+)
+
+Synthetic events can't trigger native `onMouseEnter`/pointer state (hover menus, tooltips,
+pointer drag). Enable **real input** so the server drives genuine pointer input and `iris_act`
+reports `inputMode:"real"`:
+
+- **Easiest — `iris drive`:** Iris launches its own scriptable, headless-capable browser at
+  your app URL (no flags to juggle):
+
+  ```bash
+  npx --registry http://localhost:4873/ @iris/server drive http://localhost:3000   # add --headed to watch
+  ```
+
+- **Or attach to your own browser:** launch it with `--remote-debugging-port=9222`, then point
+  the MCP server at it via `env`:
+
+  ```jsonc
+  // .mcp.json
+  {
+    "mcpServers": {
+      "iris": {
+        "command": "npx",
+        "args": ["--registry", "http://localhost:4873/", "@iris/server"],
+        "env": { "IRIS_CDP_URL": "http://localhost:9222" },
+      },
+    },
+  }
+  ```
+
+With neither set, Iris stays synthetic (zero extra deps) and says so via `inputMode`. See
+[usage §18](usage.md#18-real-input-mode--native-hover--drag-m58).
+
+## Write replayable specs + git-checked flows (0.3.0+)
+
+- **Specs:** with `@iris/test`, turn checks into `irisTest("…", async t => { await t.act(...);
+await t.expectSignal(...) })` — signal/testid-bound, `iris_clock` for determinism,
+  `t.expectInputModeReal()` to skip-with-reason when real input isn't active. Run them headless
+  via `iris drive` (the same path CI uses).
+- **Flows:** record a flow once and Iris writes it to a git-checked `.iris/flows/<name>.json`
+  (anchored on testid/signal); `iris_flow_replay` re-resolves anchors at run time and reports
+  **legible drift** with a nearest-match; `iris_flow_heal` proposes/applies the rebind. A fresh
+  agent reads `.iris/contract.json` to learn your testable surface without grepping source.
 
 ## When you're ready for real npm
 
