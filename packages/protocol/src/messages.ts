@@ -1,5 +1,15 @@
 import { z } from 'zod';
-import { EventType, MessageKind } from './constants.js';
+import { EventType, HumanControlKind, MessageKind } from './constants.js';
+
+/**
+ * Live-control: the narrowed payload of a HUMAN_CONTROL event. The server safeParses
+ * `event.data` against this at the inbound boundary (unknown → narrowed; never `any`).
+ */
+export const HumanControlDataSchema = z.object({
+  kind: z.nativeEnum(HumanControlKind),
+  text: z.string().optional(),
+});
+export type HumanControlData = z.infer<typeof HumanControlDataSchema>;
 
 /**
  * A normalized observation pushed from the browser into the ring buffer.

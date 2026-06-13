@@ -214,8 +214,33 @@ export const EventType = {
   PAGE_HEALTH: 'page.health',
   /** M8 Stage B RECORDER: browser → bridge: a human recording compiled in-page. */
   FLOW_RECORDED: 'flow.recorded',
+  /**
+   * Live-control: browser → bridge. A human acted on the presenter panel.
+   * `data: { kind: HumanControlKind; text?: string }`. Rides the existing EventMessage.
+   */
+  HUMAN_CONTROL: 'human.control',
 } as const;
 export type EventType = (typeof EventType)[keyof typeof EventType];
+
+/**
+ * Live-control: per-session lifecycle state (server-owned). The presenter panel mirrors it.
+ * `active → paused → active … → ended`; `ended` is terminal.
+ */
+export const SessionState = {
+  ACTIVE: 'active',
+  PAUSED: 'paused',
+  ENDED: 'ended',
+} as const;
+export type SessionState = (typeof SessionState)[keyof typeof SessionState];
+
+/** Live-control: kinds a human can emit from the panel (the `kind` of a HUMAN_CONTROL event). */
+export const HumanControlKind = {
+  PAUSE: 'pause',
+  RESUME: 'resume',
+  END: 'end',
+  MESSAGE: 'message',
+} as const;
+export type HumanControlKind = (typeof HumanControlKind)[keyof typeof HumanControlKind];
 
 /**
  * F2 session health: SDK page-health heartbeat cadence (native timer) and the server's
@@ -366,6 +391,11 @@ export const IrisCommand = {
   CLOCK: 'clock',
   CAPABILITIES: 'capabilities',
   STATE_READ: 'state_read',
+  /**
+   * Live-control: bridge → browser. Pushes the current session state to the panel so an
+   * AGENT-driven pause/end keeps the presenter in sync. `args: { state, text? }`.
+   */
+  PRESENTER: 'presenter',
 } as const;
 export type IrisCommand = (typeof IrisCommand)[keyof typeof IrisCommand];
 

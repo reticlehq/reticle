@@ -35,5 +35,11 @@ export const IrisTool = {
   FLOW_HEAL: 'iris_flow_heal',
   /** M8 Stage B ANNOTATE: structured annotation → compiles into the recording's expect/dynamic/success. */
   ANNOTATE: 'iris_annotate',
+  /** Live-control: end the session (→ ended + push PRESENTER). Handlers live in the tools facet. */
+  END_SESSION: 'iris_end_session',
+  /** Live-control: clear a pause (→ active). */
+  RESUME: 'iris_resume',
+  /** Live-control: drain the human→agent inbox (explicit poll). */
+  MESSAGES: 'iris_messages',
 } as const;
 export type IrisTool = (typeof IrisTool)[keyof typeof IrisTool];

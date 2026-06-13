@@ -1,10 +1,15 @@
 import type { WebSocket } from 'ws';
 import {
   EventType,
+  HumanControlDataSchema,
+  HumanControlKind,
+  IrisCommand,
   MessageKind,
   SESSION_HEALTH,
+  SessionState,
   type CommandResult,
   type HelloMessage,
+  type HumanControlData,
   type IrisEvent,
 } from '@syrin/iris-protocol';
 import { RingBuffer } from './ring-buffer.js';
@@ -44,6 +49,15 @@ type Clock = () => number;
 
 const DEFAULT_COMMAND_TIMEOUT_MS = 8000;
 
+/** ws readyState for an OPEN socket — guard fire-and-forget pushes against a closing tab. */
+const WS_OPEN = 1;
+
+/** Live-control: a human note queued for the agent, stamped with session-relative elapsed time. */
+export interface InboxMessage {
+  text: string;
+  t: number;
+}
+
 /**
  * One connected browser tab. Owns its socket, a ring buffer of observations, and the
  * in-flight command map. `clock` is injected so elapsed-time logic stays testable.
@@ -65,6 +79,8 @@ export class Session {
   #lastSeenAt: number;
   #hidden = false;
   #focused = true;
+  #state: SessionState = SessionState.ACTIVE;
+  readonly #inbox: InboxMessage[] = [];
 
   constructor(hello: HelloMessage, socket: WebSocket, clock: Clock) {
     this.id = hello.sessionId;
@@ -140,6 +156,11 @@ export class Session {
       const focused = typeof data['focused'] === 'boolean' ? data['focused'] : this.#focused;
       this.applyHealth(hidden, focused);
     }
+    if (event.type === EventType.HUMAN_CONTROL) {
+      // Narrow unknown at the boundary; an invalid/unknown control is ignored (never thrown).
+      const parsed = HumanControlDataSchema.safeParse(event.data);
+      if (parsed.success) this.applyHumanControl(parsed.data);
+    }
     const t = this.elapsed();
     const stamped: IrisEvent = { ...event, t, sessionId: this.id };
     this.#buffer.push(stamped, t);
@@ -199,6 +220,95 @@ export class Session {
       pending.reject(new Error(reason));
       this.#pending.delete(id);
     }
+  }
+
+  // ── Live-control: state machine + human→agent inbox (server-owned) ───────────────
+
+  getState(): SessionState {
+    return this.#state;
+  }
+
+  isPaused(): boolean {
+    return this.#state === SessionState.PAUSED;
+  }
+
+  isEnded(): boolean {
+    return this.#state === SessionState.ENDED;
+  }
+
+  /** Set the lifecycle state and echo it to the panel. The SOLE pusher of PRESENTER. */
+  setState(next: SessionState): void {
+    this.#state = next;
+    this.#pushPresenter();
+  }
+
+  /** Push a human note onto the inbox; empty/whitespace-only text is ignored. Stamped with elapsed t. */
+  pushMessage(text: string): void {
+    const trimmed = text.trim();
+    if (trimmed.length === 0) return;
+    this.#inbox.push({ text: trimmed, t: this.elapsed() });
+  }
+
+  /** Return the queued human notes AND clear the inbox (delivered-once). */
+  drainInbox(): InboxMessage[] {
+    return this.#inbox.splice(0, this.#inbox.length);
+  }
+
+  /** Diagnostic read of the inbox depth (does not clear). */
+  inboxSize(): number {
+    return this.#inbox.length;
+  }
+
+  /**
+   * Apply a narrowed human control. `setState` is called only on a GENUINE change, so each real
+   * transition pushes exactly one PRESENTER command; no-ops (e.g. resume on active, pause after
+   * end) push nothing. `ended` is terminal — pause/resume after end are no-ops.
+   */
+  applyHumanControl(data: HumanControlData): void {
+    if (this.#state === SessionState.ENDED) {
+      // Terminal: end is idempotent; pause/resume are no-ops.
+      return;
+    }
+    switch (data.kind) {
+      case HumanControlKind.PAUSE:
+        if (this.#state !== SessionState.PAUSED) this.setState(SessionState.PAUSED);
+        return;
+      case HumanControlKind.RESUME:
+        if (this.#state !== SessionState.ACTIVE) this.setState(SessionState.ACTIVE);
+        return;
+      case HumanControlKind.END:
+        this.setState(SessionState.ENDED);
+        return;
+      case HumanControlKind.MESSAGE:
+        if (data.text !== undefined) this.pushMessage(data.text);
+        return;
+      default:
+        return;
+    }
+  }
+
+  /** Fire-and-forget command send — NOT registered in #pending (no correlated result expected). */
+  #post(name: string, args: Record<string, unknown>): void {
+    if (this.#socket.readyState !== WS_OPEN) return;
+    this.#seq += 1;
+    const id = `c${String(this.#seq)}`;
+    const payload = JSON.stringify({
+      kind: MessageKind.COMMAND,
+      id,
+      sessionId: this.id,
+      name,
+      args,
+    });
+    try {
+      this.#socket.send(payload);
+    } catch {
+      // A closing/closed tab must never break event routing for the session.
+    }
+  }
+
+  /** Echo the current lifecycle state to the panel (keeps agent- AND human-driven changes in sync). */
+  #pushPresenter(): void {
+    this.#post(IrisCommand.PRESENTER, { state: this.#state });
   }
 }
 
