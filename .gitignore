@@ -1,0 +1,40 @@
+# Research never ships — plan/ is always ignored
+plan/
+
+# Env
+.env
+.env.*
+!.env.example
+
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build output
+dist/
+build/
+.next/
+.turbo/
+*.tsbuildinfo
+
+# Test / coverage
+coverage/
+
+# Python (not used here, kept for parity with the foundation skill)
+__pycache__/
+.venv/
+.mypy_cache/
+.ruff_cache/
+
+# Graphify artifacts
+graph.json
+graph.html
+graphify-out/
+GRAPH_REPORT.md
+
+# Iris local runtime artifacts
+.iris/
+
+# Logs / OS
+*.log
+.DS_Store

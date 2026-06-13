@@ -1,0 +1,9 @@
+{
+  "files": [],
+  "references": [
+    { "path": "packages/protocol" },
+    { "path": "packages/browser" },
+    { "path": "packages/server" },
+    { "path": "packages/react" }
+  ]
+}

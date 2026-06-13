@@ -1,0 +1,8 @@
+pnpm-lock.yaml
+**/dist/**
+**/node_modules/**
+**/.turbo/**
+plan/
+coverage/
+.agents/
+GRAPH_REPORT.md

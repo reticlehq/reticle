@@ -1,0 +1,25 @@
+{
+  "name": "@iris/browser",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Iris browser SDK — installs observers, builds semantic snapshots, executes actions, talks to the bridge.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b",
+    "lint": "eslint src",
+    "test:unit": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@iris/protocol": "workspace:*",
+    "@testing-library/dom": "^10.4.1"
+  }
+}

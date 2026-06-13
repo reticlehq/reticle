@@ -1,0 +1,21 @@
+/** MCP tool names exposed to the coding agent (plan/05). No free strings. */
+export const IrisTool = {
+  SESSIONS: 'iris_sessions',
+  SNAPSHOT: 'iris_snapshot',
+  QUERY: 'iris_query',
+  INSPECT: 'iris_inspect',
+  ACT: 'iris_act',
+  ACT_SEQUENCE: 'iris_act_sequence',
+  OBSERVE: 'iris_observe',
+  WAIT_FOR: 'iris_wait_for',
+  NETWORK: 'iris_network',
+  CONSOLE: 'iris_console',
+  ANIMATIONS: 'iris_animations',
+  ASSERT: 'iris_assert',
+  BASELINE_SAVE: 'iris_baseline_save',
+  BASELINE_LIST: 'iris_baseline_list',
+  DIFF: 'iris_diff',
+  RECORD_START: 'iris_record_start',
+  RECORD_STOP: 'iris_record_stop',
+} as const;
+export type IrisTool = (typeof IrisTool)[keyof typeof IrisTool];

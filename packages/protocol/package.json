@@ -1,0 +1,24 @@
+{
+  "name": "@iris/protocol",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Shared wire contract, constants, and zod schemas for the Iris browser SDK <-> bridge channel.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b",
+    "lint": "eslint src",
+    "test:unit": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "zod": "^3.24.1"
+  }
+}
