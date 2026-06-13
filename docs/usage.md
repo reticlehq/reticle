@@ -685,3 +685,68 @@ and Iris's own internal timers are insulated, so freezing never stalls the tools
 On a failed signal assert, the result includes a **near-miss**: the signals that _did_ fire
 with that name + their data. And `iris_observe`'s summary now includes `domChanged` (in-place
 text/attribute re-renders, not just added/removed nodes).
+
+---
+
+## 17. Evidence-of-effect, act+await, state, capabilities, replay (M5.6)
+
+These close the "is the action trusted?" gap — so you can tell _my action missed_ vs _the
+app didn't react_ vs _the tool didn't dispatch_.
+
+### `iris_act` returns evidence-of-effect
+
+Every `iris_act` result now carries an `effect`:
+
+```jsonc
+{ since, result: { ok: true, ref, action, testid,
+  effect: { dispatched, targetMatched, visible, enabled, defaultPrevented,
+            focusMoved: "e11->e12"|null, valueChanged, domMutatedWithin } } }
+```
+
+Read it to disambiguate failures instantly: `targetMatched:false` = your ref was stale;
+`defaultPrevented:true` = a handler cancelled it; `domMutatedWithin:0` + `valueChanged:false`
+= the app didn't react.
+
+### `iris_act_and_wait` — one hop for act → observe → assert
+
+```jsonc
+iris_act_and_wait({ ref, action, args?, until: <predicate>, timeout_ms })
+// → { effect, verdict: { pass, evidence, failureReason? }, trace: <reaction report> }
+```
+
+Performs the action (with settle so React commits land in the window), waits for `until`, and
+returns the action's effect + the verdict + the full causal trace. Collapses four calls into
+one.
+
+### `iris_state` — read live framework/store state
+
+No need to broadcast a signal for every fact. Register stores in your app:
+
+```ts
+import { registerStore } from '@iris/browser';
+registerStore('workspace', () => useWorkspace.getState());
+```
+
+```jsonc
+iris_state({ store: "workspace" })   // → { stores: { workspace: {…} } }
+iris_state({ ref: "e9" })            // → component hook state for that element (best-effort)
+```
+
+### `iris_capabilities` — the app's testable surface
+
+Declare it once so the agent learns the surface without reading source:
+
+```ts
+import { registerCapabilities } from '@iris/browser';
+registerCapabilities({ testids: [...], signals: [...], stores: [...], flows: [...] });
+```
+
+```jsonc
+iris_capabilities()   // → { testids, signals, stores, flows }
+```
+
+### `iris_replay` — recordings become re-runnable programs
+
+`iris_record_start` → drive the flow → `iris_record_stop` returns a **compiled program**
+(steps bound to testids/signals, not volatile refs). `iris_replay({ name })` re-executes it —
+your flow becomes a deterministic regression run, not a checklist.
