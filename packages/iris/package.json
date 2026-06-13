@@ -9,47 +9,85 @@
     "access": "public"
   },
   "bin": {
-    "iris": "./bin/iris.mjs"
+    "iris": "./dist/cli.js"
   },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
-    "./test": {
-      "types": "./dist/test.d.ts",
-      "default": "./dist/test.js"
-    },
     "./server": {
       "types": "./dist/server.d.ts",
       "default": "./dist/server.js"
     },
+    "./test": {
+      "types": "./dist/test.d.ts",
+      "default": "./dist/test.js"
+    },
     "./next": {
-      "types": "./static/next.d.ts",
-      "default": "./static/next.js"
+      "types": "./dist/next.d.ts",
+      "default": "./dist/next.js"
     },
     "./babel": {
-      "types": "./static/babel.d.ts",
-      "default": "./static/babel.js"
+      "types": "./dist/babel.d.ts",
+      "default": "./dist/babel.js"
+    },
+    "./eslint": {
+      "types": "./dist/eslint.d.ts",
+      "default": "./dist/eslint.js"
     }
   },
   "files": [
-    "dist",
-    "static",
-    "bin"
+    "dist"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json"
+    "build": "tsup",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@syrin/iris-babel-plugin": "workspace:*",
-    "@syrin/iris-browser": "workspace:*",
-    "@syrin/iris-next": "workspace:*",
-    "@syrin/iris-react": "workspace:*",
-    "@syrin/iris-server": "workspace:*",
-    "@syrin/iris-test": "workspace:*"
+    "@babel/core": "^7.26.0",
+    "@modelcontextprotocol/sdk": "^1.13.0",
+    "@testing-library/dom": "^10.4.1",
+    "@typescript-eslint/utils": "^8.20.0",
+    "ws": "^8.18.0",
+    "zod": "^3.24.1"
   },
   "devDependencies": {
+    "@syrin/iris-babel-plugin": "workspace:*",
+    "@syrin/iris-browser": "workspace:*",
+    "@syrin/iris-eslint-plugin": "workspace:*",
+    "@syrin/iris-next": "workspace:*",
+    "@syrin/iris-protocol": "workspace:*",
+    "@syrin/iris-react": "workspace:*",
+    "@syrin/iris-server": "workspace:*",
+    "@syrin/iris-test": "workspace:*",
+    "@types/ws": "^8.5.13",
+    "tsup": "^8.3.5",
     "typescript": "^5.6.0"
+  },
+  "optionalDependencies": {
+    "pixelmatch": "^7.2.0",
+    "playwright": "^1.48.0",
+    "pngjs": "^7.0.0"
+  },
+  "peerDependencies": {
+    "eslint": ">=9",
+    "next": ">=13",
+    "react": ">=18",
+    "vitest": "^3.0.0"
+  },
+  "peerDependenciesMeta": {
+    "eslint": {
+      "optional": true
+    },
+    "next": {
+      "optional": true
+    },
+    "react": {
+      "optional": true
+    },
+    "vitest": {
+      "optional": true
+    }
   }
 }

@@ -39,9 +39,6 @@
   },
   "homepage": "https://github.com/syrin-labs/iris#readme",
   "bugs": "https://github.com/syrin-labs/iris/issues",
-  "publishConfig": {
-    "access": "public"
-  },
   "files": [
     "dist",
     "README.md"
@@ -51,5 +48,6 @@
     "mcp",
     "ai-agents",
     "testing"
-  ]
+  ],
+  "private": true
 }

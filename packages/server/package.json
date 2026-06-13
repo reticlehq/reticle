@@ -12,6 +12,9 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./cli": {
+      "default": "./dist/cli.js"
     }
   },
   "scripts": {
@@ -46,9 +49,6 @@
   },
   "homepage": "https://github.com/syrin-labs/iris#readme",
   "bugs": "https://github.com/syrin-labs/iris/issues",
-  "publishConfig": {
-    "access": "public"
-  },
   "files": [
     "dist",
     "README.md"
@@ -58,5 +58,6 @@
     "ai-agents",
     "testing",
     "cli"
-  ]
+  ],
+  "private": true
 }

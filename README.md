@@ -150,10 +150,9 @@ That's it — run your app and ask your agent: _"add a logout button and verify 
 [Getting Started](docs/getting-started.md) for the full walkthrough (React adapter, source mapping via
 `@syrin/iris/next` or `/babel`, and adding `signals` at the points that matter).
 
-> Prefer granular installs? Every piece is still its own package — `@syrin/iris-browser`,
-> `@syrin/iris-react`, `@syrin/iris-next`, `@syrin/iris-babel-plugin`, `@syrin/iris-server`,
-> `@syrin/iris-test`, `@syrin/iris-eslint-plugin`. `@syrin/iris` just re-exports them so you install and
-> import **one**.
+> **It's one package — nothing else to install.** The browser SDK, the bridge + MCP server, the React
+> adapter, the source-mapping plugins, the spec runner, and the lint rule all ship as **subpaths** of
+> `@syrin/iris` (`/server`, `/next`, `/babel`, `/test`, `/eslint`).
 
 ---
 
@@ -378,19 +377,20 @@ the ones you miss). Dev-only, tree-shaken out of production.
 - **[Token Efficiency](docs/token-efficiency.md)** — the head-to-head benchmark + honest methodology.
 - **[Use it in your own app (no npm publish)](docs/local-install.md)** — local-registry path for testing in a real external app today.
 
-## Packages
+## What's inside
 
-| Package                                               | Role                                                   |
-| ----------------------------------------------------- | ------------------------------------------------------ |
-| [`@syrin/iris`](packages/iris)                        | **One-install umbrella** — re-exports everything below |
-| [`@syrin/iris-browser`](packages/browser)             | The SDK you embed in your app (DOM-side)               |
-| [`@syrin/iris-server`](packages/server)               | Bridge + MCP server (the `iris` CLI)                   |
-| [`@syrin/iris-react`](packages/react)                 | React adapter: DOM → component → source file           |
-| [`@syrin/iris-babel-plugin`](packages/babel-plugin)   | Source mapping on React 19 (`data-iris-source`)        |
-| [`@syrin/iris-next`](packages/next)                   | Next.js source mapping (keeps SWC) via `withIris`      |
-| [`@syrin/iris-test`](packages/test)                   | Declarative spec runner (`irisTest`)                   |
-| [`@syrin/iris-eslint-plugin`](packages/eslint-plugin) | `require-signal-on-mutation` lint rule                 |
-| [`@syrin/iris-protocol`](packages/protocol)           | Shared wire contract (types + zod schemas)             |
+One install (`@syrin/iris`) — everything ships as a subpath:
+
+| Import               | What it is                                                |
+| -------------------- | --------------------------------------------------------- |
+| `@syrin/iris`        | the dev-only browser SDK + React adapter (embed in app)   |
+| `@syrin/iris/server` | the bridge + MCP server — also the `iris` CLI             |
+| `@syrin/iris/test`   | the declarative spec runner (`irisTest`)                  |
+| `@syrin/iris/next`   | Next.js source mapping (keeps SWC) via `withIris`         |
+| `@syrin/iris/babel`  | React 19 source-mapping Babel plugin (`data-iris-source`) |
+| `@syrin/iris/eslint` | the `require-signal-on-mutation` lint rule                |
+
+> Internally these are separate workspace packages (`packages/*`), bundled into the one published package at build time.
 
 ## Status & safety
 

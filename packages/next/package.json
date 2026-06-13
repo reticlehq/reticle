@@ -1,7 +1,7 @@
 {
   "name": "@syrin/iris-next",
   "version": "0.3.10",
-  "private": false,
+  "private": true,
   "description": "Next.js helper for Iris: keeps SWC, adds source-file mapping via a dev-only webpack pre-loader (data-iris-source).",
   "license": "MIT",
   "author": "Iris contributors",
@@ -18,18 +18,19 @@
     "source",
     "devtools"
   ],
-  "publishConfig": {
-    "access": "public"
-  },
   "main": "./index.cjs",
   "exports": {
-    ".": "./index.cjs",
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./index.cjs"
+    },
     "./loader": "./loader.cjs"
   },
   "files": [
     "index.cjs",
     "loader.cjs",
-    "README.md"
+    "README.md",
+    "index.d.ts"
   ],
   "dependencies": {
     "@babel/core": "^7.26.0",
@@ -37,5 +38,6 @@
   },
   "peerDependencies": {
     "next": ">=13"
-  }
+  },
+  "types": "./index.d.ts"
 }
