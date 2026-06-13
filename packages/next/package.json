@@ -1,0 +1,41 @@
+{
+  "name": "@iris/next",
+  "version": "0.1.0",
+  "private": false,
+  "description": "Next.js helper for Iris: keeps SWC, adds source-file mapping via a dev-only webpack pre-loader (data-iris-source).",
+  "license": "MIT",
+  "author": "Iris contributors",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/iris-mcp/iris.git",
+    "directory": "packages/next"
+  },
+  "homepage": "https://github.com/iris-mcp/iris#readme",
+  "keywords": [
+    "iris",
+    "next",
+    "nextjs",
+    "source",
+    "devtools"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "main": "./index.cjs",
+  "exports": {
+    ".": "./index.cjs",
+    "./loader": "./loader.cjs"
+  },
+  "files": [
+    "index.cjs",
+    "loader.cjs",
+    "README.md"
+  ],
+  "dependencies": {
+    "@babel/core": "^7.26.0",
+    "@iris/babel-plugin": "workspace:*"
+  },
+  "peerDependencies": {
+    "next": ">=13"
+  }
+}

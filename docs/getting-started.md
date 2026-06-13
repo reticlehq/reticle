@@ -199,11 +199,25 @@ export default defineConfig({
 });
 ```
 
-> **Next.js note:** verified on **Next.js 15 / React 19 (app router, SWC)** — snapshot,
-> query, act, observe, assert, network, console, and **component identity** all work. Next
-> uses SWC, not Babel, so precise file:line mapping isn't available out of the box (an
-> SWC-native plugin is on the roadmap); component-stack identity works without it, with Next's
-> internal wrappers filtered out so you see your components.
+> **Next.js:** verified on **Next.js 15 / React 19 (app router, SWC)**. For source-file
+> mapping, use `@iris/next` instead of the Babel plugin — it adds a **dev-only webpack
+> pre-loader that keeps SWC** and stamps `data-iris-source` so `iris_inspect` returns
+> `file:line` (e.g. `app/page.tsx:30`):
+>
+> ```bash
+> npm i -D @iris/next
+> ```
+>
+> ```js
+> // next.config.mjs
+> import irisNext from '@iris/next';
+> /** @type {import('next').NextConfig} */
+> const nextConfig = {};
+> export default irisNext.withIris(nextConfig); // no-op in production
+> ```
+>
+> Component identity works with or without it (Next's internal wrappers are filtered out so
+> you see your components, e.g. just `Page`).
 
 ---
 

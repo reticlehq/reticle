@@ -138,13 +138,14 @@ machine; it's localhost-only and tree-shaken out of production.
 
 ## Packages
 
-| Package                                       | Role                                            |
-| --------------------------------------------- | ----------------------------------------------- |
-| [`@iris/browser`](packages/browser)           | The SDK you embed in your app (DOM-side)        |
-| [`@iris/server`](packages/server)             | Bridge + MCP server (the `iris` CLI)            |
-| [`@iris/react`](packages/react)               | React adapter: DOM → component → source file    |
-| [`@iris/babel-plugin`](packages/babel-plugin) | Source mapping on React 19 (`data-iris-source`) |
-| [`@iris/protocol`](packages/protocol)         | Shared wire contract (types + zod schemas)      |
+| Package                                       | Role                                              |
+| --------------------------------------------- | ------------------------------------------------- |
+| [`@iris/browser`](packages/browser)           | The SDK you embed in your app (DOM-side)          |
+| [`@iris/server`](packages/server)             | Bridge + MCP server (the `iris` CLI)              |
+| [`@iris/react`](packages/react)               | React adapter: DOM → component → source file      |
+| [`@iris/babel-plugin`](packages/babel-plugin) | Source mapping on React 19 (`data-iris-source`)   |
+| [`@iris/next`](packages/next)                 | Next.js source mapping (keeps SWC) via `withIris` |
+| [`@iris/protocol`](packages/protocol)         | Shared wire contract (types + zod schemas)        |
 
 ## Docs
 

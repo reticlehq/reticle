@@ -13,6 +13,7 @@
   },
   "devDependencies": {
     "@iris/browser": "workspace:*",
+    "@iris/next": "workspace:*",
     "@iris/react": "workspace:*",
     "@types/node": "^22.10.0",
     "@types/react": "^19.0.0",
