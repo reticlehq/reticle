@@ -28,5 +28,6 @@ export const IrisTool = {
   FLOW_SAVE: 'iris_flow_save',
   FLOW_LIST: 'iris_flow_list',
   FLOW_LOAD: 'iris_flow_load',
+  FLOW_REPLAY: 'iris_flow_replay',
 } as const;
 export type IrisTool = (typeof IrisTool)[keyof typeof IrisTool];

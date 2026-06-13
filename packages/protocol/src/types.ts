@@ -1,5 +1,13 @@
 import { z } from 'zod';
-import { ActionType, AnchorKind, ElementState, FLOW_FILE_VERSION, QueryBy } from './constants.js';
+import {
+  ActionType,
+  AnchorKind,
+  type DriftReason,
+  ElementState,
+  FLOW_FILE_VERSION,
+  QueryBy,
+  type ReplayStatus,
+} from './constants.js';
 
 /** A query describing which element(s) to find, Testing-Library style. */
 export const ElementQuerySchema = z.object({
@@ -134,6 +142,46 @@ const baseFlowStep = z.object({
 export const FlowStepSchema: z.ZodType<FlowStep> = baseFlowStep.extend({
   steps: z.lazy(() => z.array(FlowStepSchema).optional()),
 }) as z.ZodType<FlowStep>;
+
+/**
+ * M8 Stage A REPLAYANCHOR — a legible-drift record returned when an anchor misses at replay.
+ * The "whose fault is it" payload: what was expected, why it's gone, and the closest surviving
+ * anchor (a concrete fix suggestion). Never a bare "command failed".
+ */
+export interface Drift {
+  /** Named reason kind (testid not found / signal not observed). */
+  reasonKind: DriftReason;
+  /** Human sentence, e.g. `testid "chat-send" not found`. */
+  reason: string;
+  /** The missed anchor value (the testid string, or the signal name). */
+  anchor: string;
+  /** Closest present testid via the live near-miss; null only when the page has no testids (or signal drift). */
+  nearest: string | null;
+}
+
+/** M8 Stage A REPLAYANCHOR — the per-step result of re-resolving + running one anchored step. */
+export interface FlowStepResult {
+  /** 0-based index of this step in the flow. */
+  step: number;
+  /** The server-side tool constant the step runs (IrisTool.ACT | ACT_SEQUENCE). */
+  tool: string;
+  /** The testid/signal value the step is bound to (the re-resolved anchor). */
+  anchor: string;
+  ok: boolean;
+  error?: string;
+  note?: string;
+  /** Present iff this step stopped on an anchor miss. */
+  drift?: Drift;
+}
+
+/** M8 Stage A REPLAYANCHOR — the iris_flow_replay envelope. */
+export interface FlowReplayResult {
+  name: string;
+  status: ReplayStatus;
+  steps: FlowStepResult[];
+  /** Set when status === 'error' (missing/invalid file) — no steps ran. */
+  error?: { code: string; message: string };
+}
 
 /** The on-disk flow file: diffable, git-tracked, anchor-resolved (M8 Stage A FLOWFMT). */
 export const FlowFileSchema = z.object({

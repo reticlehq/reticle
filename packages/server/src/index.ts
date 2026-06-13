@@ -25,6 +25,8 @@ export { RecordingStore } from './recordings.js';
 export type { RecordedStep, CompiledProgram } from './recordings.js';
 export { FlowStore, recordedStepToFlowStep } from './flows.js';
 export type { FlowResult, Clock } from './flows.js';
+export { replayFlow, nearestTestid } from './flow-replay.js';
+export type { FlowReplaySession, WaitForSignal } from './flow-replay.js';
 export {
   ensureIrisDir,
   writeContract,

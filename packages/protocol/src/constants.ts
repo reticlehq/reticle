@@ -54,6 +54,31 @@ export type FlowErrorCode = (typeof FlowErrorCode)[keyof typeof FlowErrorCode];
 /** M8 FLOWFMT: a flow name must be a single safe path segment (no '/', '\\', '..', leading dot). */
 export const FLOW_NAME_PATTERN = /^[a-z0-9][a-z0-9-_]{0,63}$/i;
 
+/**
+ * M8 Stage A REPLAYANCHOR: the outcome of replaying an on-disk flow by re-resolving its
+ * semantic anchors against the live DOM. `drift` (an anchor missed → contract changed) is
+ * cleanly separated from `error` (the flow file is missing/malformed) and `ok`. No free strings.
+ */
+export const ReplayStatus = {
+  OK: 'ok', // every anchor resolved and every step ran green
+  DRIFT: 'drift', // an anchor missed (testid renamed / signal not observed) — legible drift returned
+  ERROR: 'error', // the flow file could not be loaded (missing/invalid) — no steps ran
+} as const;
+export type ReplayStatus = (typeof ReplayStatus)[keyof typeof ReplayStatus];
+
+/**
+ * M8 Stage A REPLAYANCHOR: why an anchor failed to resolve at replay time (the "whose fault is
+ * it" reason kind). Drives the human `reason` sentence and whether a nearest-match is offered.
+ */
+export const DriftReason = {
+  TESTID_NOT_FOUND: 'testid_not_found', // a testid anchor resolved to zero live elements
+  SIGNAL_NOT_OBSERVED: 'signal_not_observed', // a signal anchor never fired within the timeout
+} as const;
+export type DriftReason = (typeof DriftReason)[keyof typeof DriftReason];
+
+/** M8 Stage A REPLAYANCHOR: default timeout (ms) a signal anchor waits to be observed at replay. */
+export const FLOW_SIGNAL_TIMEOUT_MS = 4000;
+
 /** Bounds for the per-session ring buffer (see plan/02-architecture.md). */
 export const RING_BUFFER_DEFAULTS = {
   MAX_EVENTS: 2000,

@@ -1,7 +1,14 @@
 import { z } from 'zod';
-import { FlowErrorCode } from '@iris/protocol';
+import {
+  FLOW_SIGNAL_TIMEOUT_MS,
+  FlowErrorCode,
+  ReplayStatus,
+  type FlowReplayResult,
+} from '@iris/protocol';
 import { IrisTool } from './tool-names.js';
 import { asString } from './tools-helpers.js';
+import { replayFlow } from './flow-replay.js';
+import { waitForPredicate } from './predicate.js';
 import type { ToolDef, ToolDeps } from './tools.js';
 
 /** Map a structured FlowErrorCode to a legible one-line message for the agent. */
@@ -63,5 +70,42 @@ export const FLOW_TOOLS: ToolDef[] = [
         .then((res) =>
           res.ok ? res.value : { error: flowErrorMessage(res.code), code: res.code },
         ),
+  },
+  {
+    name: IrisTool.FLOW_REPLAY,
+    description:
+      "Replay a git-checked flow from .iris/flows/<name>.json. RE-RESOLVES each step's semantic " +
+      'anchor (testid via iris_query; signal via predicate) against the LIVE DOM — never reuses a ' +
+      'stale ref. On an anchor MISS returns legible DRIFT { step, anchor, drift:{ reasonKind, reason, ' +
+      'nearest } } (the closest surviving testid) and stops — the "whose fault is it" contract. ' +
+      'Returns { name, status: ok|drift|error, steps:[...] }; a missing/malformed file is status:error ' +
+      'with a structured code (distinct from a contract-changed drift).',
+    inputSchema: { name: z.string(), sessionId: z.string().optional() },
+    handler: async (deps: ToolDeps, args): Promise<FlowReplayResult> => {
+      const name = asString(args['name']) ?? '';
+      const loaded = await deps.flows.load(name);
+      if (!loaded.ok) {
+        return {
+          name,
+          status: ReplayStatus.ERROR,
+          steps: [],
+          error: { code: loaded.code, message: flowErrorMessage(loaded.code) },
+        };
+      }
+      const session = deps.sessions.resolve(asString(args['sessionId']));
+      const steps = await replayFlow(
+        session,
+        loaded.value,
+        waitForPredicate,
+        FLOW_SIGNAL_TIMEOUT_MS,
+      );
+      const drifted = steps.some((s) => s.drift !== undefined);
+      const allOk = steps.every((s) => s.ok);
+      return {
+        name,
+        status: drifted ? ReplayStatus.DRIFT : allOk ? ReplayStatus.OK : ReplayStatus.DRIFT,
+        steps,
+      };
+    },
   },
 ];
