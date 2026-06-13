@@ -98,6 +98,20 @@ describe('iris.ts session wiring (border)', () => {
     expect(document.querySelector('[data-iris-glow]')).toBeNull();
     expect(() => iris.disconnect()).not.toThrow();
   });
+
+  it('21 disconnect() without a prior connect() is a safe no-op', () => {
+    const iris = new Iris();
+    expect(() => iris.disconnect()).not.toThrow();
+    expect(document.querySelector('[data-iris-overlay]')).toBeNull();
+  });
+
+  it('22 double disconnect() after connect({present:true}) is a safe no-op', () => {
+    const iris = new Iris();
+    iris.connect({ present: true });
+    iris.disconnect();
+    expect(() => iris.disconnect()).not.toThrow();
+    expect(document.querySelector('[data-iris-overlay]')).toBeNull();
+  });
 });
 
 describe('iris.ts -> presenter log wiring', () => {
