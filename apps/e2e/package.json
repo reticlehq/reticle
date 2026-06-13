@@ -1,0 +1,16 @@
+{
+  "name": "@iris/e2e",
+  "version": "0.2.2",
+  "private": true,
+  "type": "module",
+  "description": "Committed end-to-end battery: boots api+demo+next-smoke and drives Iris in a real (headless) browser. The product's regression safety net.",
+  "scripts": {
+    "e2e": "node run.mjs",
+    "e2e:ci": "bash run-ci.sh"
+  },
+  "dependencies": {
+    "@iris/server": "workspace:*",
+    "@iris/test": "workspace:*",
+    "playwright": "^1.48.0"
+  }
+}

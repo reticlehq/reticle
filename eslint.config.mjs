@@ -14,6 +14,7 @@ export default tseslint.config(
       'coverage/**',
       'apps/api/**',
       'apps/next-smoke/**',
+      'apps/e2e/**',
       'packages/next/**',
     ],
   },

@@ -6,3 +6,5 @@ plan/
 coverage/
 .agents/
 GRAPH_REPORT.md
+
+apps/e2e/

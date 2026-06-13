@@ -94,6 +94,18 @@ importers:
         specifier: ^6.0.7
         version: 6.4.3(@types/node@22.19.20)
 
+  apps/e2e:
+    dependencies:
+      '@iris/server':
+        specifier: workspace:*
+        version: link:../../packages/server
+      '@iris/test':
+        specifier: workspace:*
+        version: link:../../packages/test
+      playwright:
+        specifier: ^1.48.0
+        version: 1.60.0
+
   apps/next-smoke:
     dependencies:
       next:
