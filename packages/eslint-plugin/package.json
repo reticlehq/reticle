@@ -1,6 +1,6 @@
 {
   "name": "@iris/eslint-plugin",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "description": "Iris ESLint plugin — keeps the signal layer self-enforcing (mutation-without-signal).",
   "type": "module",
   "main": "./dist/index.js",
