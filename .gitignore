@@ -38,3 +38,6 @@ GRAPH_REPORT.md
 # Logs / OS
 *.log
 .DS_Store
+
+# local registry auth token (never commit)
+.npmrc

@@ -1,0 +1,19 @@
+# Local registry config for testing @iris/* in a real external app without publishing to npm.
+storage: /tmp/iris-verdaccio-storage
+auth:
+  htpasswd:
+    file: /tmp/iris-verdaccio-htpasswd
+uplinks:
+  npmjs:
+    url: https://registry.npmjs.org/
+packages:
+  '@iris/*':
+    access: $all
+    publish: $all
+    unpublish: $all
+  '**':
+    access: $all
+    publish: $all
+    proxy: npmjs
+log: { type: stdout, format: pretty, level: warn }
+listen: 0.0.0.0:4873
