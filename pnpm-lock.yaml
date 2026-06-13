@@ -213,6 +213,15 @@ importers:
         specifier: ^1.48.0
         version: 1.60.0
 
+  packages/test:
+    dependencies:
+      '@iris/protocol':
+        specifier: workspace:*
+        version: link:../protocol
+      '@iris/server':
+        specifier: workspace:*
+        version: link:../server
+
 packages:
 
   '@asamuzakjp/css-color@3.2.0':

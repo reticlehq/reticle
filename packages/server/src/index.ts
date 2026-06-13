@@ -21,6 +21,8 @@ export { buildSessionRecommendation } from './session-recommendation.js';
 export type { RecommendationInputs } from './session-recommendation.js';
 export { TOOLS } from './tools.js';
 export type { ToolDeps, ToolDef } from './tools.js';
+export { createToolInvoker, UNKNOWN_TOOL_ERROR } from './tool-invoker.js';
+export type { ToolInvoker } from './tool-invoker.js';
 export { BaselineStore, normalizeLines, diffLines } from './baselines.js';
 export { RecordingStore } from './recordings.js';
 export type { RecordedStep, CompiledProgram } from './recordings.js';
