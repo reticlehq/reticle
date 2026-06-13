@@ -15,7 +15,9 @@
     "test": "turbo run test",
     "test:unit": "turbo run test:unit",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "publish": "pnpm build && pnpm -r publish --access public --no-git-checks",
+    "publish:dry-run": "pnpm build && pnpm -r publish --access public --no-git-checks --dry-run"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
