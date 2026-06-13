@@ -1,13 +1,13 @@
 <div align="center">
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://cdn.jsdelivr.net/gh/syrin-labs/iris@main/assets/readme/lockup-on-dark.png" />
-  <img alt="Syrin Iris — eyes for your coding agent" src="https://cdn.jsdelivr.net/gh/syrin-labs/iris@main/assets/readme/lockup-on-light.png" width="300" />
+  <source media="(prefers-color-scheme: dark)" srcset="assets/readme/lockup-on-dark.png" />
+  <img alt="Syrin Iris — eyes for your coding agent" src="assets/readme/lockup-on-light.png" width="300" />
 </picture>
 
 ### Your AI writes the code. Iris tells it whether the code actually works — with evidence, not screenshots.
 
-<a href="https://syrin.ai/iris"><img src="https://cdn.jsdelivr.net/gh/syrin-labs/iris@main/assets/readme/hero.gif" alt="Iris catches a 401 your agent said was 'done' — pass:false, with evidence, then a one-line fix to pass:true" width="820" /></a>
+<a href="https://syrin.ai/iris"><img src="assets/readme/hero.gif" alt="Iris catches a 401 your agent said was 'done' — pass:false, with evidence, then a one-line fix to pass:true" width="820" /></a>
 
 [![npm](https://img.shields.io/npm/v/@syrin/iris?color=8b7bff&labelColor=15131f&logo=npm)](https://www.npmjs.com/package/@syrin/iris)
 [![downloads](https://img.shields.io/npm/dm/@syrin/iris?color=5fd9f5&labelColor=15131f)](https://www.npmjs.com/package/@syrin/iris)
