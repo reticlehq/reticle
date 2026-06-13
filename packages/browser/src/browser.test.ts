@@ -101,6 +101,14 @@ describe('query', () => {
     expect(result.count).toBe(1);
     expect(result.elements[0]?.name).toBe('Pay');
   });
+
+  it('matches testid exactly, not as a substring (regression)', () => {
+    document.body.innerHTML =
+      '<div data-testid="toast">t</div><button data-testid="show-toast">b</button>';
+    // "toast" must NOT also match "show-toast".
+    expect(matchQuery({ by: 'testid', value: 'toast' }).count).toBe(1);
+    expect(matchQuery({ testid: 'toast' }).elements[0]?.role).toBe('generic');
+  });
 });
 
 describe('actions', () => {

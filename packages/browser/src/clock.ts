@@ -16,7 +16,6 @@ interface Originals {
   setInterval: typeof window.setInterval;
   clearInterval: typeof window.clearInterval;
   dateNow: () => number;
-  perfNow: () => number;
 }
 
 let installed = false;
@@ -41,7 +40,6 @@ export function freezeClock(): void {
     setInterval: window.setInterval,
     clearInterval: window.clearInterval,
     dateNow: Date.now,
-    perfNow: performance.now.bind(performance),
   };
 
   const schedule = (cb: () => void, delay: number, interval?: number): number => {
@@ -60,8 +58,9 @@ export function freezeClock(): void {
   window.setInterval = ((cb: () => void, delay = 0) =>
     schedule(cb, delay, Math.max(1, delay))) as unknown as typeof window.setInterval;
   window.clearInterval = ((id: number) => cancel(id)) as unknown as typeof window.clearInterval;
+  // Note: we deliberately do NOT patch performance.now — React 19's scheduler uses it to
+  // flush updates, and freezing it stalls re-renders. setTimeout/Date.now cover app timers.
   Date.now = () => realBase + virtualNow;
-  performance.now = () => virtualNow;
 }
 
 /** Run all timers due within the next `ms` of virtual time, in order. */
@@ -92,7 +91,6 @@ export function resetClock(): void {
   window.setInterval = originals.setInterval;
   window.clearInterval = originals.clearInterval;
   Date.now = originals.dateNow;
-  performance.now = originals.perfNow;
   originals = null;
   tasks = [];
   installed = false;

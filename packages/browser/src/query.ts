@@ -52,7 +52,7 @@ function findCandidates(query: ElementQuery): HTMLElement[] {
       case QueryBy.PLACEHOLDER:
         return queryAllByPlaceholderText(container, value, { exact: false });
       case QueryBy.TESTID:
-        return queryAllByTestId(container, value, { exact: false });
+        return queryAllByTestId(container, value, { exact: true });
       case QueryBy.ALT:
         return queryAllByAltText(container, value, { exact: false });
       default:
@@ -75,8 +75,7 @@ function findCandidates(query: ElementQuery): HTMLElement[] {
   if (query.placeholder !== undefined) {
     return queryAllByPlaceholderText(container, query.placeholder, { exact: false });
   }
-  if (query.testid !== undefined)
-    return queryAllByTestId(container, query.testid, { exact: false });
+  if (query.testid !== undefined) return queryAllByTestId(container, query.testid, { exact: true });
   if (query.alt !== undefined) return queryAllByAltText(container, query.alt, { exact: false });
   return [];
 }

@@ -1,11 +1,28 @@
 'use client';
 import { useState } from 'react';
+import { iris } from '@iris/browser';
 
 export default function Page() {
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
   const [reply, setReply] = useState('');
   const [items, setItems] = useState<string[]>(['First task']);
+  const [committed, setCommitted] = useState('');
+  const [toast, setToast] = useState(false);
+
+  // Commit-on-blur: the value is only saved when the field loses focus (React onBlur).
+  const commit = (value: string) => {
+    setCommitted(value);
+    iris.signal('field:committed', { value });
+  };
+
+  // Auto-dismiss toast: appears, then disappears after 4s (a time-gated UI).
+  const showToast = () => {
+    setToast(true);
+    setTimeout(() => {
+      setToast(false);
+    }, 4000);
+  };
 
   const ping = async () => {
     setLoading(true);
@@ -46,6 +63,38 @@ export default function Page() {
           <li key={t}>{t}</li>
         ))}
       </ul>
+
+      <section style={{ marginTop: 24 }}>
+        <h3>Commit on blur</h3>
+        <input
+          data-testid="edit-field"
+          placeholder="Type, then blur to commit"
+          defaultValue=""
+          onBlur={(e) => {
+            commit(e.target.value);
+          }}
+          style={{
+            padding: 8,
+            borderRadius: 8,
+            border: '1px solid #2a2f3d',
+            background: '#151823',
+            color: '#e6e9f0',
+          }}
+        />
+        <p data-testid="committed">Committed: {committed}</p>
+      </section>
+
+      <section style={{ marginTop: 24 }}>
+        <h3>Auto-dismiss toast</h3>
+        <button data-testid="show-toast" onClick={showToast} style={btn}>
+          Show toast (auto-dismisses in 4s)
+        </button>
+        {toast ? (
+          <div data-testid="toast" role="status" style={{ marginTop: 8, color: '#22c55e' }}>
+            Saved! This toast disappears in 4 seconds.
+          </div>
+        ) : null}
+      </section>
 
       {open ? (
         <div
