@@ -35,34 +35,33 @@ export type ControlHandler = (intent: ControlIntent) => void;
 /** CSS for the control surface (injected with the rest of the presenter stylesheet). */
 export const CONTROLS_CSS = `
 [data-iris-hud] .iris-ctl{pointer-events:auto;cursor:pointer;flex:none;display:inline-flex;align-items:center;justify-content:center;
-  height:26px;padding:0 10px;border-radius:8px;border:1px solid var(--iris-line);background:rgba(255,255,255,.04);
-  color:var(--iris-muted);font-family:var(--iris-mono);font-size:10.5px;font-weight:600;letter-spacing:.04em;line-height:1;
+  height:26px;padding:0 11px;border-radius:8px;border:1px solid var(--iris-line);background:rgba(255,255,255,.04);
+  color:var(--iris-muted);font-family:var(--iris-font);font-size:11px;font-weight:500;letter-spacing:.01em;line-height:1;
   transition:background .15s,color .15s,border-color .15s,transform .1s;}
 [data-iris-hud] .iris-ctl:hover{color:var(--iris-fg);background:rgba(255,255,255,.09);}
 [data-iris-hud] .iris-ctl:active{transform:scale(.95);}
 [data-iris-hud] .iris-ctl:disabled{opacity:.35;cursor:default;}
 [data-iris-hud] [data-iris-end]{color:#ff9aa2;border-color:rgba(255,107,107,.22);}
 [data-iris-hud] [data-iris-end]:hover{color:#ff7a7a;border-color:rgba(255,107,107,.5);background:rgba(255,107,107,.1);}
-[data-iris-hud] .iris-badge{display:none;align-items:center;flex:none;font-weight:700;letter-spacing:.12em;font-size:8.5px;
-  color:var(--iris-accent);border:1px solid var(--iris-accent);background:var(--iris-accent-soft);padding:2px 7px;border-radius:999px;}
+[data-iris-hud] .iris-badge{display:none;align-items:center;flex:none;font-weight:600;letter-spacing:.1em;font-size:9px;
+  color:var(--iris-accent);border:1px solid var(--iris-accent);background:var(--iris-accent-soft);padding:2px 8px;border-radius:999px;}
 [data-iris-overlay][data-iris-state="paused"] [data-iris-badge]{display:inline-flex;}
-[data-iris-hud] [data-iris-foot]{display:flex;align-items:center;gap:8px;flex:none;padding:10px 12px;
-  border-top:1px solid var(--iris-line2);background:rgba(0,0,0,.20);}
-[data-iris-hud] .iris-msg{flex:1;min-width:0;pointer-events:auto;box-sizing:border-box;height:34px;
-  background:rgba(255,255,255,.05);border:1px solid var(--iris-line);color:var(--iris-fg);border-radius:10px;
-  font-family:var(--iris-mono);font-size:12px;padding:0 12px;transition:border-color .15s,box-shadow .15s;}
+[data-iris-hud] [data-iris-foot]{flex:none;padding:10px 12px 12px;border-top:1px solid var(--iris-line2);background:rgba(0,0,0,.16);}
+[data-iris-hud] .iris-composer{display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.05);
+  border:1px solid var(--iris-line);border-radius:14px;padding:5px 6px 5px 14px;transition:border-color .15s,box-shadow .15s;}
+[data-iris-hud] .iris-composer:focus-within{border-color:var(--iris-accent);box-shadow:0 0 0 3px var(--iris-accent-soft);}
+[data-iris-hud] .iris-msg{flex:1;min-width:0;pointer-events:auto;background:transparent;border:none;outline:none;
+  color:var(--iris-fg);font-family:var(--iris-font);font-size:13px;height:28px;padding:0;}
 [data-iris-hud] .iris-msg::placeholder{color:var(--iris-faint);}
-[data-iris-hud] .iris-msg:focus{outline:none;border-color:var(--iris-accent);box-shadow:0 0 0 3px var(--iris-accent-soft);}
-[data-iris-hud] .iris-msg:disabled{opacity:.4;}
-[data-iris-hud] [data-iris-send]{flex:none;width:34px;height:34px;padding:0;border-radius:10px;
-  background:var(--iris-accent);border:1px solid var(--iris-accent);color:#0b0d14;font-size:0;
-  cursor:pointer;pointer-events:auto;display:inline-flex;align-items:center;justify-content:center;transition:filter .15s,transform .1s;}
-[data-iris-hud] [data-iris-send]::before{content:"↑";font-size:15px;font-weight:800;line-height:1;font-family:var(--iris-mono);}
-[data-iris-hud] [data-iris-send]:hover{filter:brightness(1.12);}
-[data-iris-hud] [data-iris-send]:active{transform:scale(.93);}
-[data-iris-hud] [data-iris-send]:disabled{opacity:.4;cursor:default;}
-[data-iris-hud] .iris-banner{display:none;flex:none;padding:8px 14px;color:var(--iris-accent);
-  font-size:11px;font-weight:600;letter-spacing:.01em;border-bottom:1px solid var(--iris-line2);background:var(--iris-accent-soft);}
+[data-iris-hud] .iris-msg:disabled{opacity:.5;}
+[data-iris-hud] .iris-send{flex:none;width:30px;height:30px;padding:0;border-radius:10px;border:none;cursor:pointer;pointer-events:auto;
+  background:var(--iris-accent);color:#0b0d14;display:inline-flex;align-items:center;justify-content:center;transition:filter .15s,transform .1s;}
+[data-iris-hud] .iris-send svg{display:block;}
+[data-iris-hud] .iris-send:hover{filter:brightness(1.12);}
+[data-iris-hud] .iris-send:active{transform:scale(.9);}
+[data-iris-hud] .iris-send:disabled{opacity:.4;cursor:default;}
+[data-iris-hud] .iris-banner{display:none;flex:none;padding:8px 15px;color:var(--iris-accent);
+  font-size:11.5px;font-weight:500;border-bottom:1px solid var(--iris-line2);background:var(--iris-accent-soft);}
 [data-iris-overlay][data-iris-state="ended"] [data-iris-banner]{display:block;}
 [data-iris-overlay][data-iris-state="paused"] [data-iris-glow][data-on="1"]{animation:none;
   box-shadow:inset 0 0 0 3px rgba(246,180,76,.9),inset 0 0 30px 6px rgba(246,180,76,.4);}
@@ -76,8 +75,11 @@ export const CONTROLS_HEAD_HTML = `<button type="button" data-iris-pause class="
 /** Banner markup (between head and log, hidden unless ended). */
 export const CONTROLS_BANNER_HTML = `<div data-iris-banner class="iris-banner">${ENDED_BANNER_TEXT}</div>`;
 
-/** Footer markup (input + Send), appended after the log div. */
-export const CONTROLS_FOOT_HTML = `<div data-iris-foot><input data-iris-input class="iris-msg" type="text" placeholder="${INPUT_PLACEHOLDER}" /><button type="button" data-iris-send class="iris-ctl">${CONTROL_LABEL.SEND}</button></div>`;
+/** Aesthetic send glyph (Feather "send" paper-plane). Inline SVG so it's crisp at any DPI. */
+const SEND_ICON = `<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>`;
+
+/** Footer markup: a rounded composer pill (input + icon Send), appended after the log div. */
+export const CONTROLS_FOOT_HTML = `<div data-iris-foot><div class="iris-composer"><input data-iris-input class="iris-msg" type="text" placeholder="${INPUT_PLACEHOLDER}" /><button type="button" data-iris-send class="iris-send" aria-label="${CONTROL_LABEL.SEND}">${SEND_ICON}</button></div></div>`;
 
 /** Element refs of the control surface, queried once after the markup is in the DOM. */
 export interface ControlRefs {

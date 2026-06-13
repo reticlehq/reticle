@@ -443,16 +443,26 @@ describe('presenter v2 session border', () => {
     p.destroy();
   });
 
-  it('3c expand toggle grows then collapses the log', () => {
+  it('3c minimise button collapses to a bar; clicking the bar restores it', () => {
     document.body.innerHTML = '';
     const p = new Presenter({ border: 'session' });
     p.mount();
-    const hud = document.querySelector('[data-iris-hud]') as HTMLElement;
-    const btn = document.querySelector('[data-iris-expand]') as HTMLElement;
-    btn.click();
-    expect(hud.getAttribute('data-expanded')).toBe('1');
-    btn.click();
-    expect(hud.getAttribute('data-expanded')).toBe('0');
+    const overlay = document.querySelector('div[data-iris-overlay]') as HTMLElement;
+    const head = document.querySelector('.iris-hud-head') as HTMLElement;
+    (document.querySelector('[data-iris-min-btn]') as HTMLElement).click();
+    expect(overlay.getAttribute('data-iris-min')).toBe('1'); // collapsed to the bar
+    head.click(); // clicking the minimised bar restores the panel
+    expect(overlay.getAttribute('data-iris-min')).toBe('0');
+    p.destroy();
+  });
+
+  it('3d the minimised bar shows the latest activity in the live line', () => {
+    document.body.innerHTML = '';
+    const p = new Presenter({ border: 'session' });
+    p.mount();
+    p.log('act', 'Clicking Pay');
+    p.log('narration', 'now checking the receipt');
+    expect(document.querySelector('.iris-live')?.textContent).toBe('now checking the receipt');
     p.destroy();
   });
 
@@ -629,16 +639,17 @@ describe('presenter v2 not-mounted safety', () => {
 });
 
 describe('presenter v2 HUD positioning', () => {
-  it('HUD is docked bottom-right with a fixed size (never resizes with content)', () => {
+  it('HUD is docked bottom-center with a fixed size (never resizes with content)', () => {
     document.body.innerHTML = '';
     const p = new Presenter({ paceMs: 0 });
     p.mount();
 
     const css = document.querySelector('style[data-iris-overlay]')?.textContent ?? '';
-    // bottom-right dock (least intrusive over a host app)
-    expect(css).toContain('right:20px;bottom:20px;left:auto');
+    // bottom-center dock (like a chatbox), horizontally centered
+    expect(css).toContain('left:50%;right:auto;bottom:20px');
+    expect(css).toContain('translateX(-50%)');
     // fixed width + height so the panel doesn't jump with children's text width
-    expect(css).toContain('width:368px;height:464px');
+    expect(css).toContain('width:384px;height:468px');
     // the feed flexes/scrolls inside the fixed card
     expect(css).toContain('[data-iris-log]{flex:1;min-height:0;overflow-y:auto');
 
