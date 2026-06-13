@@ -37,6 +37,28 @@ GitHub Actions: install (pnpm, frozen lockfile) → `pnpm build` → `pnpm lint`
 `pnpm typecheck` → `pnpm test:unit` → E2E dogfood against `apps/demo`. Cache the pnpm store
 and turbo cache. Publishing the `@iris/*` packages is a later, tagged-release concern.
 
+## Releasing to npm
+
+The four packages publish as a set (`@iris/protocol`, `@iris/browser`, `@iris/server`,
+`@iris/react`); `@iris/demo` is `private` and never publishes.
+
+```bash
+# bump versions together (keep them in lockstep for the workspace deps)
+pnpm -r --filter '@iris/*' exec npm version <patch|minor|major>
+# publish (prepack builds + strips test artifacts; workspace:* -> real versions automatically)
+pnpm -r --filter '@iris/*' publish --access public
+```
+
+Each package's `prepack` runs `tsc -b && find dist -name '*.test.*' -delete`, so tarballs
+contain only `dist` (compiled JS + d.ts + maps) and the README. Verify before publishing:
+
+```bash
+cd packages/server && npm pack --dry-run   # inspect the file list
+```
+
+First-time publish needs `npm login` and the `@iris` scope to exist/be owned. This is a
+human-gated step — CI does not publish automatically.
+
 ## esbuild note
 
 pnpm 10 blocks postinstall scripts by default; `esbuild` is allowlisted in root
