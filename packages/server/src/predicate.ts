@@ -3,12 +3,19 @@ import {
   ElementState,
   EventType,
   IrisCommand,
+  type CommandResult,
   type ElementQuery,
   type IrisEvent,
   type MatchResult,
 } from '@iris/protocol';
 import { z } from 'zod';
-import type { Session } from './session.js';
+
+/** The subset of Session the predicate engine needs — keeps it testable with a fake. */
+export interface PredicateSession {
+  command(name: string, args?: Record<string, unknown>): Promise<CommandResult>;
+  eventsSince(cursor: number): IrisEvent[];
+  onEvent(listener: (event: IrisEvent) => void): () => void;
+}
 
 /** The predicate DSL (plan/06). A declarative description of what should be true. */
 export type Predicate =
@@ -98,17 +105,23 @@ function dataMatches(actual: Record<string, unknown>, pattern: Record<string, un
   return true;
 }
 
+async function matchOnce(
+  session: PredicateSession,
+  query: ElementQuery,
+  state: ElementState | undefined,
+): Promise<MatchResult> {
+  const res = await session.command(IrisCommand.MATCH, { query, state });
+  if (!res.ok) return { matched: false, count: 0, elements: [] };
+  return (res.result ?? { matched: false, count: 0, elements: [] }) as MatchResult;
+}
+
 async function evalElement(
-  session: Session,
+  session: PredicateSession,
   query: ElementQuery,
   state: ElementState | undefined,
   absent: boolean,
 ): Promise<EvalResult> {
-  const res = await session.command(IrisCommand.MATCH, { query, state });
-  if (!res.ok) {
-    return { pass: false, failureReason: res.error ?? 'match command failed' };
-  }
-  const match = (res.result ?? { matched: false, count: 0, elements: [] }) as MatchResult;
+  const match = await matchOnce(session, query, state);
   if (absent) {
     return match.matched
       ? {
@@ -118,12 +131,36 @@ async function evalElement(
         }
       : { pass: true, evidence: { absent: true } };
   }
-  return match.matched
-    ? { pass: true, evidence: match.elements }
-    : {
+  if (match.matched) return { pass: true, evidence: match.elements };
+
+  // Diagnostic near-miss: was it there but in the wrong state, or a similar element present?
+  if (state !== undefined) {
+    const relaxed = await matchOnce(session, query, undefined);
+    if (relaxed.matched) {
+      return {
         pass: false,
-        failureReason: `no element matched ${JSON.stringify(query)}${state === undefined ? '' : ` in state '${state}'`}`,
+        failureReason: `element exists but not in state '${state}'`,
+        evidence: { nearMiss: relaxed.elements },
       };
+    }
+  }
+  if (query.role !== undefined && query.name !== undefined) {
+    const roleOnly = await matchOnce(session, { role: query.role }, state);
+    if (roleOnly.matched) {
+      return {
+        pass: false,
+        failureReason: `no '${query.role}' named '${query.name}'; saw: ${roleOnly.elements
+          .map((e) => e.name)
+          .filter((n) => n.length > 0)
+          .join(', ')}`,
+        evidence: { nearMiss: roleOnly.elements },
+      };
+    }
+  }
+  return {
+    pass: false,
+    failureReason: `no element matched ${JSON.stringify(query)}${state === undefined ? '' : ` in state '${state}'`}`,
+  };
 }
 
 function evalNet(events: IrisEvent[], p: Extract<Predicate, { kind: 'net' }>): EvalResult {
@@ -224,7 +261,7 @@ function evalSignal(events: IrisEvent[], p: Extract<Predicate, { kind: 'signal' 
 
 /** Evaluate a predicate once against the session's current state + event buffer. */
 export async function evaluatePredicate(
-  session: Session,
+  session: PredicateSession,
   predicate: Predicate,
 ): Promise<EvalResult> {
   const events = session.eventsSince(0);
@@ -283,7 +320,7 @@ export async function evaluatePredicate(
 
 /** Evaluate now, else wait for it to become true (on each event + a poll) until timeout. */
 export function waitForPredicate(
-  session: Session,
+  session: PredicateSession,
   predicate: Predicate,
   timeoutMs: number,
 ): Promise<EvalResult> {
