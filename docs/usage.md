@@ -111,11 +111,25 @@ Deep detail on one element.
 
 Perform one action / several in order.
 
-- **`iris_act` args:** `ref`, `action`, `args?`, `sessionId?`. → `{ since, result }` where
-  `result = { ok, ref, action, effect }`.
-- **`iris_act_sequence` args:** `steps: [{ ref, action, args? }]`. → `{ since, result }` where
-  `result = { ok, count, effects: [...] }` (one `effect` per step).
+- **`iris_act` args:** `ref`, `action`, `args?`, `sessionId?`. → `{ since, dispatched, settled, settleReason, result }`
+  where `result = { ok, ref, action, dispatched, settled, settleReason, effect }`.
+- **`iris_act_sequence` args:** `steps: [{ ref, action, args? }]`. → `{ since, dispatched, result }` where
+  `result = { ok, count, effects: [...], steps: [...] }` (one `effect` per step; each step carries its own
+  `dispatched`/`settled`/`settleReason`).
 - See [§5](#5-actions--full-list) for the action list.
+
+**Dispatch vs settle (F1).** The action is two phases: the **dispatch** (the synchronous click/fill —
+this is what can fail) and the **settle** (waiting one animation frame so React's commit lands before
+we return). The settle is **bounded** (~200ms): in a throttled/background tab `requestAnimationFrame`
+never fires, so Iris falls back to a timer and resolves anyway. A settle timeout is therefore **never an
+error** — `iris_act` resolves with `settled:false, settleReason:"timeout"` and the dispatch (the click)
+has still landed. Only a real dispatch failure (stale ref, wrong element type) throws.
+
+| top-level field | meaning                                                                              |
+| --------------- | ------------------------------------------------------------------------------------ |
+| `dispatched`    | the action dispatched without throwing (mirror of `effect.dispatched`)               |
+| `settled`       | a real animation frame flushed within the budget; `false` = the fallback timer fired |
+| `settleReason`  | `"timeout"` when the fallback fired (throttled tab), else `null`                     |
 
 **`result.effect` — best-effort evidence the action landed.** All probes are cheap and capture
 only the _immediate_ effect (one microtask + one rAF after dispatch); async, network-driven
@@ -709,10 +723,14 @@ app didn't react_ vs _the tool didn't dispatch_.
 Every `iris_act` result now carries an `effect`:
 
 ```jsonc
-{ since, result: { ok: true, ref, action, testid,
+{ since, dispatched, settled, settleReason,
+  result: { ok: true, ref, action, dispatched, settled, settleReason, testid,
   effect: { dispatched, targetMatched, visible, enabled, defaultPrevented,
             focusMoved: "e11->e12"|null, valueChanged, domMutatedWithin } } }
 ```
+
+`settled:false, settleReason:"timeout"` means the settle frame did not flush within the budget
+(a throttled/background tab) — this is **not** a failure: the dispatch landed and the tool resolved.
 
 Read it to disambiguate failures instantly: `targetMatched:false` = your ref was stale;
 `defaultPrevented:true` = a handler cancelled it; `domMutatedWithin:0` + `valueChanged:false`

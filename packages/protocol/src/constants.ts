@@ -76,6 +76,13 @@ export const ActionType = {
 } as const;
 export type ActionType = (typeof ActionType)[keyof typeof ActionType];
 
+/** Why an action's settle wait ended without a real animation frame (F1). */
+export const SettleReason = {
+  TIMEOUT: 'timeout',
+  THROTTLED: 'throttled',
+} as const;
+export type SettleReason = (typeof SettleReason)[keyof typeof SettleReason];
+
 /** Element states the assertion engine can check (plan/06). */
 export const ElementState = {
   VISIBLE: 'visible',

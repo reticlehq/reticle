@@ -1,4 +1,4 @@
-import { ActionType, ElementState } from '@iris/protocol';
+import { ActionType, ElementState, SettleReason } from '@iris/protocol';
 import { refs } from './refs.js';
 import { isVisible, getStates } from './a11y.js';
 import { nativeSetTimeout, nativeFrame, settle } from './native-timers.js';
@@ -31,6 +31,12 @@ export interface ActionResult {
   ok: true;
   ref: string;
   action: string;
+  /** We reached dispatch without throwing. Mirror of effect.dispatched for top-level reads (F1). */
+  dispatched: boolean;
+  /** A real animation frame fired within the settle budget (false = fallback timer fired) (F1). */
+  settled: boolean;
+  /** Why settle did not complete on a real frame: SettleReason.TIMEOUT when the budget fallback fired, else null (F1). */
+  settleReason: SettleReason | null;
   effect: ActionEffect;
   /** data-testid of the resolved element, when present — lets the server compile a ref-stable replay step (G6). */
   testid?: string;
@@ -66,11 +72,16 @@ function requireElement(ref: string): HTMLElement {
   return el;
 }
 
-const result = (ref: string, action: string, effect: ActionEffect): ActionResult => {
+const result = (
+  ref: string,
+  action: string,
+  effect: ActionEffect,
+  settled: boolean,
+  settleReason: SettleReason | null,
+): ActionResult => {
   const testid = refs.resolve(ref)?.getAttribute('data-testid') ?? undefined;
-  return testid !== undefined
-    ? { ok: true, ref, action, effect, testid }
-    : { ok: true, ref, action, effect };
+  const base = { ok: true as const, ref, action, dispatched: true, settled, settleReason, effect };
+  return testid !== undefined ? { ...base, testid } : base;
 };
 
 const FILL_LIKE = new Set<string>([ActionType.FILL, ActionType.TYPE, ActionType.CLEAR]);
@@ -244,12 +255,18 @@ export async function executeAction(
   });
 
   let defaultPrevented = false;
+  let settled = false;
+  let settleReason: SettleReason | null = null;
   try {
     defaultPrevented = await dispatchFor(el, action, args);
   } finally {
-    // G4 settle: microtask + one frame so React's commit (and the resulting DOM mutations →
-    // dom.added/dom.text/dom.attr events) flush before we return — landing inside observe({ since }).
-    await settle();
+    // F1: bounded settle — microtask + one BOUNDED frame so React's commit (and the resulting DOM
+    // mutations → dom.added/dom.text/dom.attr events) flush before we return, landing inside
+    // observe({ since }). Bounded so a throttled/background tab never hangs; a settle timeout NEVER
+    // rejects (only a real dispatch failure thrown above does). settle() can never throw.
+    const outcome = await settle();
+    settled = outcome.settled;
+    settleReason = outcome.settled ? null : SettleReason.TIMEOUT;
     obs.disconnect();
   }
 
@@ -265,7 +282,7 @@ export async function executeAction(
     valueChanged: isFillLike(action) ? valueBefore !== valueAfter : false,
     domMutatedWithin: mutated,
   };
-  return result(ref, action, effect);
+  return result(ref, action, effect, settled, settleReason);
 }
 
 const sleep = (ms: number): Promise<void> => new Promise((r) => nativeSetTimeout(r, ms));
@@ -357,6 +374,10 @@ export interface ActionStep {
 export interface SequenceStepResult {
   ref: string;
   action: string;
+  /** F1: per-step dispatch/settle outcome (see ActionResult). */
+  dispatched: boolean;
+  settled: boolean;
+  settleReason: SettleReason | null;
   testid?: string;
 }
 
@@ -371,11 +392,14 @@ export async function executeSequence(steps: ActionStep[]): Promise<{
   for (const step of steps) {
     const res = await executeAction(step.ref, step.action, step.args ?? {});
     effects.push(res.effect);
-    stepResults.push(
-      res.testid !== undefined
-        ? { ref: res.ref, action: res.action, testid: res.testid }
-        : { ref: res.ref, action: res.action },
-    );
+    const stepBase = {
+      ref: res.ref,
+      action: res.action,
+      dispatched: res.dispatched,
+      settled: res.settled,
+      settleReason: res.settleReason,
+    };
+    stepResults.push(res.testid !== undefined ? { ...stepBase, testid: res.testid } : stepBase);
   }
   return { ok: true, count: steps.length, effects, steps: stepResults };
 }

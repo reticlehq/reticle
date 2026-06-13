@@ -79,6 +79,10 @@ function asNumber(value: unknown): number | undefined {
   return typeof value === 'number' ? value : undefined;
 }
 
+function asRecord(value: unknown): Record<string, unknown> {
+  return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {};
+}
+
 export const TOOLS: ToolDef[] = [
   {
     name: IrisTool.SESSIONS,
@@ -133,7 +137,7 @@ export const TOOLS: ToolDef[] = [
   {
     name: IrisTool.ACT,
     description:
-      'Execute one action against a ref: click|dblclick|hover|focus|fill|type|clear|select|check|uncheck|submit|press|scrollIntoView. Returns immediately with a `since` cursor for observe. Result includes effect: { dispatched, targetMatched, visible, enabled, defaultPrevented, focusMoved, valueChanged, domMutatedWithin } so you can tell "action missed" vs "app didn\'t react".',
+      'Execute one action against a ref: click|dblclick|hover|focus|fill|type|clear|select|check|uncheck|submit|press|scrollIntoView. Returns immediately with a `since` cursor for observe. Result includes effect: { dispatched, targetMatched, visible, enabled, defaultPrevented, focusMoved, valueChanged, domMutatedWithin } so you can tell "action missed" vs "app didn\'t react". Top-level dispatched/settled/settleReason report whether the click landed (dispatched) and whether a real frame flushed (settled) vs a throttled-tab timeout (settleReason:"timeout") — a settle timeout never fails the tool.',
     inputSchema: {
       ref: z.string(),
       action: z.string(),
@@ -152,7 +156,16 @@ export const TOOLS: ToolDef[] = [
       if (deps.recordings.active().length > 0) {
         deps.recordings.capture(compileActStep(args, result.result));
       }
-      return { since, result: result.result };
+      // F1: lift dispatch/settle status to the envelope so a settle timeout is visible without
+      // digging into result — and so it is plainly NOT a failure (the tool resolved, did not throw).
+      const r = asRecord(result.result);
+      return {
+        since,
+        dispatched: r['dispatched'] ?? true,
+        settled: r['settled'] ?? null,
+        settleReason: r['settleReason'] ?? null,
+        result: result.result,
+      };
     },
   },
   {
@@ -171,7 +184,9 @@ export const TOOLS: ToolDef[] = [
       if (deps.recordings.active().length > 0) {
         deps.recordings.capture(compileSequenceStep(args, result.result));
       }
-      return { since, result: result.result };
+      // F1: per-step settle status lives in result.steps[]; lift dispatched to the envelope.
+      const r = asRecord(result.result);
+      return { since, dispatched: r['count'] !== undefined, result: result.result };
     },
   },
   {

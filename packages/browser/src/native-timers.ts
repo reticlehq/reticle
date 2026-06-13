@@ -21,20 +21,44 @@ export const nativeClearTimeout = (id: number): void => {
 export const nativeSleep = (ms: number): Promise<void> =>
   new Promise((resolve) => nativeSetTimeout(resolve, ms));
 
-/** One animation frame via the real (unpatched) rAF, or a 0ms timer fallback (jsdom/SSR). */
-export const nativeFrame = (): Promise<void> =>
-  new Promise((resolve) => {
-    if (realRaf) realRaf(() => resolve());
-    else nativeSetTimeout(() => resolve(), 0);
-  });
+/** Max time we wait for a real animation frame before giving up and resolving anyway. */
+export const FRAME_BUDGET_MS = 200;
+
+/** Outcome of a bounded frame/settle wait. */
+export interface FrameOutcome {
+  /** true = a real rAF fired within budget; false = the timeout fallback fired. */
+  settled: boolean;
+}
 
 /**
- * "Settle": let the framework flush. Awaits a microtask then one animation frame so a React
- * commit (and the MutationObserver records it triggers) lands before the caller returns. Uses
- * native timers/rAF so a frozen app clock (iris_clock) never stalls it — rAF/microtasks are
- * never patched by the fake clock, so this is deadlock-safe under freeze.
+ * One animation frame, BOUNDED: races real rAF against a nativeSetTimeout(FRAME_BUDGET_MS).
+ * In a throttled/background tab rAF never fires, so the timer wins and we still resolve.
+ * Returns whether rAF won (settled:true) or the fallback fired (settled:false).
  */
-export const settle = async (): Promise<void> => {
+export const boundedFrame = (budgetMs = FRAME_BUDGET_MS): Promise<FrameOutcome> =>
+  new Promise((resolve) => {
+    let done = false;
+    const finish = (settled: boolean): void => {
+      if (done) return;
+      done = true;
+      nativeClearTimeout(timer);
+      resolve({ settled });
+    };
+    const timer = nativeSetTimeout(() => finish(false), budgetMs);
+    if (realRaf) realRaf(() => finish(true));
+    else nativeSetTimeout(() => finish(true), 0); // jsdom/SSR: 0ms timer "is" the frame
+  });
+
+/** One animation frame, BOUNDED — delegates to boundedFrame so it never hangs in a throttled tab. */
+export const nativeFrame = (): Promise<void> => boundedFrame().then(() => undefined);
+
+/**
+ * "Settle": let the framework flush. Awaits a microtask then one BOUNDED animation frame so a
+ * React commit (and the MutationObserver records it triggers) lands before the caller returns.
+ * Uses native timers/rAF so a frozen app clock (iris_clock) never stalls it, AND is bounded so a
+ * throttled/background tab (rAF never fires) never deadlocks. Reports whether a real frame fired.
+ */
+export const settle = async (budgetMs = FRAME_BUDGET_MS): Promise<FrameOutcome> => {
   await Promise.resolve(); // drain the current microtask queue (React scheduler tick)
-  await nativeFrame(); // one frame so commit + MutationObserver records flush
+  return boundedFrame(budgetMs); // one bounded frame so commit + MutationObserver records flush
 };

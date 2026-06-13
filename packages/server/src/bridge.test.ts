@@ -28,6 +28,8 @@ class FakeBrowser {
   handlesCapabilities = true;
   /** When false, ACT results omit a testid (element has no data-testid → unstable step). */
   actHasTestid = true;
+  /** F1: when false, ACT reports settled:false + settleReason:'timeout' (throttled-tab path). */
+  actSettled = true;
   /** When false, QUERY by testid returns no match (testid not in current DOM at replay). */
   queryResolves = true;
   /** Records every command the bridge sent (for replay assertions). */
@@ -84,6 +86,9 @@ class FakeBrowser {
         ok: true,
         ref: args['ref'],
         action: args['action'],
+        dispatched: true,
+        settled: this.actSettled,
+        settleReason: this.actSettled ? null : 'timeout',
         effect: { dispatched: true },
         ...(this.actHasTestid ? { testid: 'pay-btn' } : {}),
       };
@@ -275,6 +280,30 @@ describe('bridge round-trip (north-star)', () => {
       },
     })) as { pass: boolean; failureReason?: string };
     expect(verdict.pass, verdict.failureReason).toBe(true);
+  });
+
+  it('F1: lifts dispatched/settled/settleReason to the iris_act envelope', async () => {
+    const act = (await callTool(deps, 'iris_act', { ref: 'e7', action: 'click' })) as {
+      dispatched: unknown;
+      settled: unknown;
+      settleReason: unknown;
+    };
+    expect(act.dispatched).toBe(true);
+    expect(act.settled).toBe(true);
+    expect(act.settleReason).toBe(null);
+  });
+
+  it('F1: a settle timeout does NOT fail iris_act — it resolves with settled:false', async () => {
+    browser.actSettled = false;
+    const act = (await callTool(deps, 'iris_act', { ref: 'e7', action: 'click' })) as {
+      dispatched: unknown;
+      settled: unknown;
+      settleReason: unknown;
+    };
+    expect(act.dispatched).toBe(true);
+    expect(act.settled).toBe(false);
+    expect(act.settleReason).toBe('timeout');
+    browser.actSettled = true;
   });
 
   it('reports a failing assert with a reason', async () => {
