@@ -24,11 +24,12 @@ const CSS = `
 [data-iris-ring]{position:fixed;pointer-events:none;z-index:2147483644;border:2px solid #22c55e;border-radius:8px;
   box-shadow:0 0 0 3px rgba(34,197,94,.25);opacity:0;transition:opacity .15s ease;}
 [data-iris-ring][data-on="1"]{opacity:1;}
-[data-iris-hud]{position:fixed;left:12px;bottom:12px;max-width:380px;z-index:2147483647;pointer-events:none;
+[data-iris-hud]{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(6px);
+  max-width:520px;min-width:280px;text-align:left;z-index:2147483647;pointer-events:none;
   font:12px/1.45 ui-sans-serif,system-ui,sans-serif;color:#e6e9f0;background:rgba(21,24,35,.92);
-  border:1px solid #2a2f3d;border-radius:12px;padding:10px 12px;box-shadow:0 8px 30px rgba(0,0,0,.5);
-  opacity:0;transform:translateY(6px);transition:opacity .2s ease,transform .2s ease;}
-[data-iris-hud][data-on="1"]{opacity:1;transform:none;}
+  border:1px solid #2a2f3d;border-radius:12px;padding:10px 14px;box-shadow:0 8px 30px rgba(0,0,0,.5);
+  opacity:0;transition:opacity .2s ease,transform .2s ease;}
+[data-iris-hud][data-on="1"]{opacity:1;transform:translateX(-50%) translateY(0);}
 [data-iris-hud] .iris-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#6366f1;margin-right:7px;
   box-shadow:0 0 8px #6366f1;animation:iris-blink 1s ease-in-out infinite;}
 @keyframes iris-blink{50%{opacity:.35}}
@@ -64,9 +65,18 @@ export interface PresenterOptions {
   idleAfterMs?: number;
   /** Fade duration before fading -> idle (keep in sync with the glow CSS opacity transition). */
   glowFadeMs?: number;
+  /** Minimum time (ms) each narration line stays visible before the next replaces it. */
+  narrationDwellMs?: number;
 }
 
 const DEFAULT_PACE = 450;
+/**
+ * Minimum time each narration line stays visible before the FIFO queue advances. Browser-local
+ * presentation timing (like DEFAULT_PACE); never crosses the wire, so it is not a protocol constant.
+ */
+const DEFAULT_NARRATION_DWELL_MS = 3000;
+/** Backpressure cap: an agent that spams narrate() can't grow the queue without bound. */
+const NARRATION_QUEUE_MAX = 50;
 
 /**
  * Glow state machine phases (exposed via glowPhase() for tests). A burst of activity flips the
@@ -109,11 +119,20 @@ export class Presenter {
   #idleCheckTimer: number | undefined;
   #fadeTimer: number | undefined;
 
+  // H3: narration is a FIFO queue with a min-dwell so rapid iris_narrate calls never clobber each
+  // other — each line is the visible .iris-note for >= #dwellMs before the next surfaces.
+  readonly #dwellMs: number;
+  #narrationQueue: string[] = [];
+  #narrationTimer: number | undefined;
+  /** nativeNow() when the current line became visible; undefined when nothing is displayed. */
+  #currentShownAt: number | undefined;
+
   constructor(options: PresenterOptions = {}) {
     this.#paceMs = options.paceMs ?? DEFAULT_PACE;
     this.#now = options.now ?? nativeNow;
     this.#idleAfterMs = options.idleAfterMs ?? IDLE_AFTER_MS;
     this.#glowFadeMs = options.glowFadeMs ?? GLOW_FADE_MS;
+    this.#dwellMs = options.narrationDwellMs ?? DEFAULT_NARRATION_DWELL_MS;
   }
 
   mount(): void {
@@ -150,8 +169,12 @@ export class Presenter {
   destroy(): void {
     if (this.#idleCheckTimer !== undefined) nativeClearTimeout(this.#idleCheckTimer);
     if (this.#fadeTimer !== undefined) nativeClearTimeout(this.#fadeTimer);
+    if (this.#narrationTimer !== undefined) nativeClearTimeout(this.#narrationTimer);
     this.#idleCheckTimer = undefined;
     this.#fadeTimer = undefined;
+    this.#narrationTimer = undefined;
+    this.#narrationQueue = [];
+    this.#currentShownAt = undefined;
     this.#root?.remove();
     document.querySelectorAll('style[data-iris-overlay]').forEach((s) => s.remove());
     this.#root = undefined;
@@ -252,11 +275,38 @@ export class Presenter {
     if (this.#resLine !== undefined) this.#resLine.textContent = '';
   }
 
+  /**
+   * Enqueue a narration line (FIFO). Never writes .iris-note directly — that only happens in
+   * #advanceNarration once the prior line has met its min-dwell — so rapid calls never clobber.
+   */
   narrate(text: string, level = 'info'): void {
     this.markActivity();
-    if (this.#noteLine !== undefined) {
-      this.#noteLine.textContent = level === 'info' ? text : `[${level}] ${text}`;
+    const line = level === 'info' ? text : `[${level}] ${text}`;
+    if (this.#narrationQueue.length >= NARRATION_QUEUE_MAX) {
+      this.#narrationQueue.shift(); // drop the oldest *pending* line, never the visible one
     }
+    this.#narrationQueue.push(line);
+    // Nothing on screen -> show now; otherwise the dwell timer surfaces it FIFO.
+    if (this.#currentShownAt === undefined) this.#advanceNarration();
+  }
+
+  /**
+   * Show the next queued line and arm the min-dwell timer on a NATIVE timer (the source of truth)
+   * so a frozen app clock (iris_clock) can't stall narration progression. #currentShownAt is
+   * bookkeeping/testability only — it is never used as the advance gate.
+   */
+  #advanceNarration(): void {
+    const next = this.#narrationQueue.shift();
+    if (next === undefined) {
+      this.#currentShownAt = undefined;
+      return;
+    }
+    if (this.#noteLine !== undefined) this.#noteLine.textContent = next;
+    this.#currentShownAt = this.#now();
+    this.#narrationTimer = nativeSetTimeout(() => {
+      this.#narrationTimer = undefined;
+      this.#advanceNarration(); // FIFO: surface the next line, or go quiet if the queue drained
+    }, this.#dwellMs);
   }
 
   result(ok: boolean): void {

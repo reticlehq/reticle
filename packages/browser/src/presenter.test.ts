@@ -103,6 +103,120 @@ describe('presenter H2 reading vs acting', () => {
   });
 });
 
+describe('presenter narration queue / min-dwell', () => {
+  // native-timers binds the real setTimeout at module load, so vitest fake timers can't drive
+  // the dwell. Use a small REAL dwell + wait(), matching the glow-state-machine tests' approach.
+  const DWELL = 40;
+  const note = (): string | null =>
+    document.querySelector('[data-iris-hud] .iris-note')?.textContent ?? null;
+
+  it('enqueues three rapid narrations FIFO; each is visible for >= min-dwell', async () => {
+    document.body.innerHTML = '';
+    const p = new Presenter({ paceMs: 0, narrationDwellMs: DWELL });
+    p.mount();
+
+    p.narrate('line one');
+    p.narrate('line two');
+    p.narrate('line three');
+
+    // First shows immediately; the other two are queued, not clobbered.
+    expect(note()).toBe('line one');
+
+    await wait(DWELL * 0.5);
+    expect(note()).toBe('line one'); // still visible before its min-dwell elapses
+
+    await wait(DWELL); // past the first dwell
+    expect(note()).toBe('line two');
+
+    await wait(DWELL);
+    expect(note()).toBe('line three');
+
+    await wait(DWELL * 2);
+    expect(note()).toBe('line three'); // last line stays; queue drained
+
+    p.destroy();
+  });
+
+  it('keeps the action status chip separate from the narration line', async () => {
+    document.body.innerHTML = '';
+    const p = new Presenter({ paceMs: 0, narrationDwellMs: DWELL });
+    p.mount();
+
+    p.status('READING the page');
+    p.narrate('intent');
+    expect(document.querySelector('[data-iris-hud] .iris-act')?.textContent).toBe(
+      'READING the page',
+    );
+    expect(note()).toBe('intent');
+
+    await wait(DWELL * 1.5); // advancing the queue must not touch the act line
+    expect(document.querySelector('[data-iris-hud] .iris-act')?.textContent).toBe(
+      'READING the page',
+    );
+
+    p.destroy();
+  });
+
+  it('destroy mid-dwell clears the timer and removes the overlay', async () => {
+    document.body.innerHTML = '';
+    const p = new Presenter({ paceMs: 0, narrationDwellMs: DWELL });
+    p.mount();
+
+    p.narrate('first');
+    p.narrate('second');
+    p.destroy();
+
+    await wait(DWELL * 2); // a leaked timer firing into a removed node would throw here
+    expect(document.querySelector('[data-iris-overlay]')).toBeNull();
+  });
+
+  it('queued narration never leaks into snapshots', () => {
+    document.body.innerHTML = '<button>Save</button>';
+    const p = new Presenter({ paceMs: 0, narrationDwellMs: DWELL });
+    p.mount();
+
+    p.narrate('one');
+    p.narrate('two');
+    p.narrate('three');
+
+    const snap = buildSnapshot({ mode: 'full' });
+    expect(snap.tree).toContain('button "Save"');
+    expect(snap.tree).not.toContain('one');
+    expect(snap.tree).not.toContain('two');
+
+    p.destroy();
+  });
+
+  it('caps the pending queue without dropping the visible line', async () => {
+    document.body.innerHTML = '';
+    const p = new Presenter({ paceMs: 0, narrationDwellMs: DWELL });
+    p.mount();
+
+    for (let i = 0; i < 60; i++) p.narrate(`line ${String(i)}`);
+    // line 0 shows immediately; the cap drops oldest *pending* lines, never the visible one.
+    expect(note()).toBe('line 0');
+
+    await wait(DWELL); // advance once: the next surfaced line must be a still-pending one
+    expect(note()).not.toBe('line 0');
+
+    p.destroy();
+  });
+
+  it('HUD is positioned bottom-center (left:50% + translateX(-50%), both states)', () => {
+    document.body.innerHTML = '';
+    const p = new Presenter({ paceMs: 0 });
+    p.mount();
+
+    const css = document.querySelector('style[data-iris-overlay]')?.textContent ?? '';
+    expect(css).toContain('left:50%');
+    expect(css).toContain('translateX(-50%)');
+    // regression guard: the data-on toggle must keep the horizontal centering
+    expect(css).toContain('[data-iris-hud][data-on="1"]{opacity:1;transform:translateX(-50%)');
+
+    p.destroy();
+  });
+});
+
 describe('presenter glow state machine', () => {
   it('coalesces a burst into exactly one busy-enter and one idle-exit (no flicker)', async () => {
     document.body.innerHTML = '';

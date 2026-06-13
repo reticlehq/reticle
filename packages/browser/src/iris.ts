@@ -22,7 +22,7 @@ import { installAnimation } from './observers/animation.js';
 import { installScroll } from './observers/scroll.js';
 import { installHealth } from './observers/health.js';
 import { installOverlay, type OverlayHandle } from './overlay.js';
-import { Presenter } from './presenter.js';
+import { Presenter, type PresenterOptions } from './presenter.js';
 import { refs } from './refs.js';
 import { describe } from './a11y.js';
 import { resetClock } from './clock.js';
@@ -39,6 +39,8 @@ export interface IrisConnectOptions {
   present?: boolean;
   /** Per-action pacing (ms) in presenter mode so a human can follow. Default 450. */
   pace?: number;
+  /** Min ms each narration line stays visible before the next replaces it (presenter). Default 3000. */
+  narrationDwellMs?: number;
 }
 
 function str(value: unknown, fallback = ''): string {
@@ -100,7 +102,12 @@ export class Iris {
     }
 
     if (options.present === true) {
-      this.#presenter = new Presenter(options.pace !== undefined ? { paceMs: options.pace } : {});
+      const presenterOptions: PresenterOptions = {};
+      if (options.pace !== undefined) presenterOptions.paceMs = options.pace;
+      if (options.narrationDwellMs !== undefined) {
+        presenterOptions.narrationDwellMs = options.narrationDwellMs;
+      }
+      this.#presenter = new Presenter(presenterOptions);
       this.#presenter.mount();
     }
 
