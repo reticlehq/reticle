@@ -1,7 +1,7 @@
 import { ActionType, ElementState } from '@iris/protocol';
 import { refs } from './refs.js';
 import { isVisible, getStates } from './a11y.js';
-import { nativeSetTimeout } from './native-timers.js';
+import { nativeSetTimeout, nativeFrame, settle } from './native-timers.js';
 
 /**
  * Best-effort evidence of whether/why an action landed, so the agent can separate
@@ -245,8 +245,9 @@ export async function executeAction(
   try {
     defaultPrevented = await dispatchFor(el, action, args);
   } finally {
-    await Promise.resolve(); // flush microtasks (React commit queue + observer queue)
-    await frame(); // one rAF so the MutationObserver has delivered
+    // G4 settle: microtask + one frame so React's commit (and the resulting DOM mutations →
+    // dom.added/dom.text/dom.attr events) flush before we return — landing inside observe({ since }).
+    await settle();
     obs.disconnect();
   }
 
@@ -266,12 +267,6 @@ export async function executeAction(
 }
 
 const sleep = (ms: number): Promise<void> => new Promise((r) => nativeSetTimeout(r, ms));
-/** Yield to the browser so React can flush a commit between synthetic phases. */
-const frame = (): Promise<void> =>
-  new Promise((r) => {
-    if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => r());
-    else nativeSetTimeout(r, 0);
-  });
 
 function firePointer(el: Element, type: string): void {
   if (typeof PointerEvent === 'function') {
@@ -314,10 +309,10 @@ async function dragElement(
   };
   fire(source, 'pointerdown');
   fire(source, 'mousedown');
-  await frame();
+  await nativeFrame();
   fire(dest, 'pointermove');
   fire(dest, 'mousemove');
-  await frame();
+  await nativeFrame();
   fire(dest, 'pointerup');
   fire(dest, 'mouseup');
 
@@ -327,10 +322,10 @@ async function dragElement(
     const init: DragEventInit = { bubbles: true, cancelable: true };
     if (dataTransfer !== null) init.dataTransfer = dataTransfer;
     source.dispatchEvent(new DragEvent('dragstart', init));
-    await frame();
+    await nativeFrame();
     dest.dispatchEvent(new DragEvent('dragenter', init));
     dest.dispatchEvent(new DragEvent('dragover', init));
-    await frame();
+    await nativeFrame();
     dropPrevented = !dest.dispatchEvent(new DragEvent('drop', init));
     source.dispatchEvent(new DragEvent('dragend', init));
   }
