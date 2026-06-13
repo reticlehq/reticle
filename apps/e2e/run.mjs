@@ -18,6 +18,7 @@ const ORDER = [
   'p3a-test',
   'p3b-test',
   'p4-spec',
+  'live-control-test',
   'real-world-tests',
 ];
 const present = new Set(readdirSync(specsDir).map((f) => f.replace(/\.mjs$/, '')));

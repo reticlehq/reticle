@@ -1,6 +1,6 @@
 {
   "name": "@syrin/iris-protocol",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Shared wire contract, constants, and zod schemas for the Iris browser SDK <-> bridge channel.",
   "type": "module",
   "main": "./dist/index.js",

@@ -178,10 +178,10 @@ describe('presenter-controls / live-control panel', () => {
     expect(onControl).not.toHaveBeenCalled();
   });
 
-  it('14 setState(ended, summary) shows summary in banner', () => {
+  it('14 setState(ended, summary) leads with "Session ended" and appends the summary', () => {
     const { presenter, onControl } = mount();
     presenter.setState(SessionState.ENDED, 'all green');
-    expect(q('[data-iris-banner]')?.textContent).toBe('all green');
+    expect(q('[data-iris-banner]')?.textContent).toBe('Session ended · all green');
     expect(onControl).not.toHaveBeenCalled();
   });
 

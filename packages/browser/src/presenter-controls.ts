@@ -186,7 +186,11 @@ export class ControlPanel {
     if (refs.endBtn !== undefined) refs.endBtn.disabled = ended;
     if (refs.sendBtn !== undefined) refs.sendBtn.disabled = ended;
     if (refs.input !== undefined) refs.input.disabled = ended;
-    if (refs.banner !== undefined) refs.banner.textContent = text ?? ENDED_BANNER_TEXT;
+    // Always lead with "Session ended" so the end is unmistakable; append any agent summary.
+    if (refs.banner !== undefined) {
+      const summary = text !== undefined && text.trim().length > 0 ? ` · ${text.trim()}` : '';
+      refs.banner.textContent = `${ENDED_BANNER_TEXT}${summary}`;
+    }
     if (ended) {
       const glow = this.#glow;
       this.#fadeTimer = nativeSetTimeout(
