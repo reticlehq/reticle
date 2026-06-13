@@ -1,4 +1,5 @@
 import { registerAdapter, type ComponentInfo, type ComponentSource } from '@iris/browser';
+import { ComponentStateReason, type ComponentStateResult } from '@iris/protocol';
 
 interface Hook {
   memoizedState: unknown;
@@ -23,6 +24,11 @@ interface Fiber {
 const FIBER_PREFIXES = ['__reactFiber$', '__reactInternalInstance$'];
 const MAX_DEPTH = 200;
 const MAX_HOOKS = 100;
+const MAX_SERIALIZE_DEPTH = 4;
+const MAX_SERIALIZE_KEYS = 50;
+const MAX_SERIALIZE_ITEMS = 50;
+/** Marker substituted for a DOM node so the agent sees the tag, never the (circular) node. */
+const DOM_NODE_MARKER = '[Node]';
 
 /**
  * Framework plumbing to hide from the component stack (React Router/Next internals, context
@@ -118,29 +124,72 @@ function nearestComponentFiber(el: Element): Fiber | null {
 }
 
 /**
- * Best-effort read of a function component's hook states by walking memoizedState.next.
- * React does not expose hook *names*; we return positional state values. State for class
- * components / host fibers is skipped. Layout is React-version-specific — fail soft.
+ * JSON-safe projection of an arbitrary hook value (F5). Drops functions/DOM nodes/cycles and
+ * bounds depth/breadth, so the result handed to `JSON.stringify` downstream can never throw.
+ * Raw hook states routinely hold `useRef` DOM nodes, dispatchers, and circular fiber backrefs —
+ * serializing those un-guarded is the F5 hang. Never throws.
  */
-export function readState(el: Element): unknown {
-  const fiber = nearestComponentFiber(el);
-  if (fiber === null) return undefined;
-  const name = componentName(fiber.elementType ?? fiber.type) ?? undefined;
-  const head = fiber.memoizedState;
-  if (typeof head !== 'object' || head === null) {
-    return { component: name, hooks: [] };
+function safeValue(value: unknown, depth: number, seen: WeakSet<object>): unknown {
+  if (value === null) return null;
+  const t = typeof value;
+  if (t === 'string' || t === 'number' || t === 'boolean') return value;
+  if (t === 'undefined' || t === 'function' || t === 'symbol' || t === 'bigint') return null;
+  if (typeof Node !== 'undefined' && value instanceof Node) return DOM_NODE_MARKER;
+  if (depth >= MAX_SERIALIZE_DEPTH) return null;
+  const obj = value as object;
+  if (seen.has(obj)) return null;
+  seen.add(obj);
+  if (Array.isArray(value)) {
+    const out = value.slice(0, MAX_SERIALIZE_ITEMS).map((v) => safeValue(v, depth + 1, seen));
+    seen.delete(obj);
+    return out;
   }
-  const hooks: unknown[] = [];
-  let hook = head as Hook;
-  let i = 0;
-  while (typeof hook === 'object' && i < MAX_HOOKS) {
-    hooks.push(hook.memoizedState);
-    const next = hook.next;
-    if (next === null || typeof next !== 'object') break;
-    hook = next;
-    i += 1;
+  const out: Record<string, unknown> = {};
+  const keys = Object.keys(obj).slice(0, MAX_SERIALIZE_KEYS);
+  for (const key of keys) {
+    out[key] = safeValue((obj as Record<string, unknown>)[key], depth + 1, seen);
   }
-  return { component: name, hooks };
+  seen.delete(obj);
+  return out;
+}
+
+/**
+ * Best-effort, bounded read of a function component's hook states by walking memoizedState.next.
+ * React does not expose hook *names*; we return positional, sanitized state values. State for
+ * class components / host fibers is skipped. Layout is React-version-specific — fail soft to a
+ * structured `{ ok: false, reason }` (F5) rather than throwing or producing an unserializable value.
+ */
+/** Build a success result, omitting `component` when the name is unknown (exactOptional-safe). */
+function ok(name: string | null, hooks: unknown[]): ComponentStateResult {
+  return name === null ? { ok: true, hooks } : { ok: true, component: name, hooks };
+}
+
+export function readState(el: Element): ComponentStateResult {
+  try {
+    const fiber = nearestComponentFiber(el);
+    if (fiber === null) {
+      return { ok: false, reason: ComponentStateReason.UNAVAILABLE };
+    }
+    const name = componentName(fiber.elementType ?? fiber.type);
+    const head = fiber.memoizedState;
+    if (typeof head !== 'object' || head === null) {
+      return ok(name, []);
+    }
+    const hooks: unknown[] = [];
+    const seen = new WeakSet<object>();
+    let hook = head as Hook;
+    let i = 0;
+    while (typeof hook === 'object' && i < MAX_HOOKS) {
+      hooks.push(safeValue(hook.memoizedState, 0, seen));
+      const next = hook.next;
+      if (next === null || typeof next !== 'object') break;
+      hook = next;
+      i += 1;
+    }
+    return ok(name, hooks);
+  } catch {
+    return { ok: false, reason: ComponentStateReason.UNAVAILABLE };
+  }
 }
 
 const HOVER_HANDLER_KEYS = [

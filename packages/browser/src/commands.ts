@@ -1,8 +1,10 @@
 import {
   ActionType,
+  ComponentStateReason,
   ElementQuerySchema,
   IrisCommand,
   SnapshotMode,
+  type ComponentStateResult,
   type ElementQuery,
   type ElementState,
 } from '@iris/protocol';
@@ -61,20 +63,40 @@ function inspect(ref: string): unknown {
   };
 }
 
+/** Narrowing guard: an adapter returned a F5 ComponentStateResult (has a boolean `ok`). */
+function isComponentStateResult(value: unknown): value is ComponentStateResult {
+  return (
+    typeof value === 'object' && value !== null && 'ok' in value && typeof value.ok === 'boolean'
+  );
+}
+
+const COMPONENT_UNAVAILABLE: ComponentStateResult = {
+  ok: false,
+  reason: ComponentStateReason.UNAVAILABLE,
+};
+
+/**
+ * Stores are the reliable path. The `ref` component read is bounded (F5): a stale ref, no
+ * adapter, or an adapter returning a non-conforming value all collapse to a structured
+ * `{ ok: false, reason }` — never a raw (possibly circular) object that could hang serialization.
+ */
 function readState(ref: string | undefined, store: string | undefined): unknown {
   const stores = readStores(store);
-  const result: { stores: Record<string, unknown>; storeNames: string[]; component?: unknown } = {
+  const result: {
+    stores: Record<string, unknown>;
+    storeNames: string[];
+    component?: ComponentStateResult;
+  } = {
     stores,
     storeNames: storeNames(),
   };
   if (ref !== undefined && ref.length > 0) {
     const el = refs.resolve(ref);
     if (el === null) {
-      result.component = { error: `ref '${ref}' no longer resolves` };
+      result.component = COMPONENT_UNAVAILABLE;
     } else {
       const state = readComponentState(el);
-      result.component =
-        state === undefined ? { error: 'no component state available for ref' } : state;
+      result.component = isComponentStateResult(state) ? state : COMPONENT_UNAVAILABLE;
     }
   }
   return result;

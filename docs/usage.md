@@ -228,6 +228,10 @@ Read live framework/store state directly instead of inferring it from the DOM �
 
 - `iris_state({ store?, ref?, sessionId? })` → `{ stores, component? }`
 
+Store reads are the reliable path. The `ref` component read is best-effort and bounded: when the
+component state can't be read it returns `component: { ok: false, reason: "component-state-unavailable" }`
+rather than hanging.
+
 ### `iris_narrate` / `iris_clock`
 
 Show the agent's intent on the page, and control time (toasts/debounces/auto-dismiss) —
@@ -771,8 +775,10 @@ registerStore('workspace', () => useWorkspace.getState());
 
 ```jsonc
 iris_state({ store: "workspace" })   // → { stores: { workspace: {…} } }
-iris_state({ ref: "e9" })            // → component hook state for that element (best-effort)
+iris_state({ ref: "e9" })            // → { component: { ok: true, component, hooks } } or { component: { ok: false, reason: "component-state-unavailable" } }
 ```
+
+Store reads are the reliable path; ref reads degrade to a structured failure rather than blocking.
 
 ### `iris_capabilities` — the app's testable surface
 

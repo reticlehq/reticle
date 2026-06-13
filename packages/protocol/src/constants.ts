@@ -117,6 +117,26 @@ export const SettleReason = {
 } as const;
 export type SettleReason = (typeof SettleReason)[keyof typeof SettleReason];
 
+/** Outcome reasons for a bounded component-state read (F5). Store reads never use these. */
+export const ComponentStateReason = {
+  UNAVAILABLE: 'component-state-unavailable',
+} as const;
+export type ComponentStateReason = (typeof ComponentStateReason)[keyof typeof ComponentStateReason];
+
+/**
+ * Result of a component-state read attempt (F5), discriminated on `ok`. Crosses
+ * browser -> bridge -> agent as `result.component`, so the contract lives in protocol.
+ * Always JSON-serializable: hook values are sanitized (no functions/DOM nodes/cycles).
+ */
+export interface ComponentStateResult {
+  ok: boolean;
+  reason?: ComponentStateReason;
+  /** Component display name, when known. */
+  component?: string;
+  /** Positional, JSON-safe hook states. */
+  hooks?: unknown[];
+}
+
 /** Element states the assertion engine can check (plan/06). */
 export const ElementState = {
   VISIBLE: 'visible',

@@ -440,7 +440,7 @@ export const TOOLS: ToolDef[] = [
   {
     name: IrisTool.STATE,
     description:
-      "Read live framework state without the app pre-broadcasting it. `store` reads a registered store (e.g. 'workspace'); omit to read all. `ref` reads the nearest React component's hook state for that element (best-effort). Returns { stores, storeNames, component? }.",
+      "Read live framework state without the app pre-broadcasting it. PREFERRED/RELIABLE: `store` reads a registered store (e.g. 'workspace'); omit `store` to read all stores. `ref` attempts a best-effort read of the nearest React component's hook state and is BOUNDED — if it cannot be read it returns component: { ok: false, reason: 'component-state-unavailable' } rather than hanging or erroring; on success component is { ok: true, component, hooks }. Returns { stores, storeNames, component? }.",
     inputSchema: {
       ref: z.string().optional(),
       store: z.string().optional(),
