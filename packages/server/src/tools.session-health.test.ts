@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { UNSCRIPTABLE_TAB_RECOMMENDATION } from '@syrin/iris-protocol';
+import { SessionState, UNSCRIPTABLE_TAB_RECOMMENDATION } from '@syrin/iris-protocol';
 import type { CommandResult } from '@syrin/iris-protocol';
 import { TOOLS, type ToolDeps } from './tools.js';
 import { IrisTool } from './tool-names.js';
@@ -37,6 +37,10 @@ function fakeSession(throttled: boolean): Session {
     command,
     health: () => health,
     throttled: () => throttled,
+    // Live-control: a clean active session — no pause short-circuit, no piggyback.
+    getState: () => SessionState.ACTIVE,
+    drainInbox: () => [],
+    inboxSize: () => 0,
   };
   return stub as Session;
 }

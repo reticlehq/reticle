@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ActionWarning, InputMode } from '@syrin/iris-protocol';
+import { ActionWarning, InputMode, SessionState } from '@syrin/iris-protocol';
 import type { CommandResult } from '@syrin/iris-protocol';
 import { TOOLS, type ToolDeps } from './tools.js';
 import { IrisTool } from './tool-names.js';
@@ -61,6 +61,10 @@ function fakeSession(state: FakeSessionState): Session {
     command,
     health: () => ({ lastSeenMs: 0, throttled: false, focused: true }),
     throttled: () => false,
+    // Live-control: a clean active session — no pause short-circuit, no piggyback.
+    getState: () => SessionState.ACTIVE,
+    drainInbox: () => [],
+    inboxSize: () => 0,
   };
   return stub as Session;
 }

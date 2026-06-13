@@ -287,6 +287,16 @@ export class Session {
     }
   }
 
+  /**
+   * Push a lifecycle state to the panel, optionally with human-facing `text` (e.g. an end-of-
+   * session summary). Used by the live-control agent tools to sync the presenter on an
+   * agent-initiated end/resume. State changes still flow through `setState`; this is the
+   * text-carrying push.
+   */
+  pushPresenter(state: SessionState, text?: string): void {
+    this.#post(IrisCommand.PRESENTER, text === undefined ? { state } : { state, text });
+  }
+
   /** Fire-and-forget command send — NOT registered in #pending (no correlated result expected). */
   #post(name: string, args: Record<string, unknown>): void {
     if (this.#socket.readyState !== WS_OPEN) return;
@@ -308,7 +318,7 @@ export class Session {
 
   /** Echo the current lifecycle state to the panel (keeps agent- AND human-driven changes in sync). */
   #pushPresenter(): void {
-    this.#post(IrisCommand.PRESENTER, { state: this.#state });
+    this.pushPresenter(this.#state);
   }
 }
 

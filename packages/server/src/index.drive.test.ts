@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { DriveErrorCode, InputMode } from '@syrin/iris-protocol';
+import { DriveErrorCode, InputMode, SessionState } from '@syrin/iris-protocol';
 import type { CommandResult } from '@syrin/iris-protocol';
 import { start, type RunningServer } from './index.js';
 import { TOOLS, type ToolDeps } from './tools.js';
@@ -88,6 +88,10 @@ function fakeSession(state: { actCalls: number }): Session {
     command,
     health: () => ({ lastSeenMs: 0, throttled: false, focused: true }),
     throttled: () => false,
+    // Live-control: a clean active session — no pause short-circuit, no piggyback.
+    getState: () => SessionState.ACTIVE,
+    drainInbox: () => [],
+    inboxSize: () => 0,
   };
   return stub as Session;
 }

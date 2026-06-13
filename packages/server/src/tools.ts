@@ -25,6 +25,8 @@ import type { FlowStore } from './flows.js';
 import { CONTRACT_TOOLS } from './contract-tools.js';
 import { FLOW_TOOLS } from './flow-tools.js';
 import { ANNOTATE_TOOLS } from './annotate-tools.js';
+import { LIVE_CONTROL_TOOLS } from './live-control-tools.js';
+import { pausedShortCircuit, withControl } from './control-envelope.js';
 import type { AnnotationStore } from './annotation-store.js';
 
 export interface ToolDeps {
@@ -223,6 +225,9 @@ export const TOOLS: ToolDef[] = [
     },
     handler: async (deps, args) => {
       const session = deps.sessions.resolve(asString(args['sessionId']));
+      // Live-control: refuse to drive the page while the human has paused us (before any work).
+      const paused = pausedShortCircuit(session);
+      if (paused !== undefined) return paused;
       refuseIfThrottled(session, args['refuseWhenThrottled']);
       const since = session.elapsed();
       const ref = asString(args['ref']) ?? '';
@@ -234,7 +239,7 @@ export const TOOLS: ToolDef[] = [
         if (deps.recordings.active().length > 0) {
           deps.recordings.capture(compileActStep(args, real.result));
         }
-        return {
+        return withControl(session, {
           since,
           inputMode: InputMode.REAL,
           dispatched: true,
@@ -242,7 +247,7 @@ export const TOOLS: ToolDef[] = [
           settleReason: null,
           result: real.result,
           ...healthEnvelope(session),
-        };
+        });
       }
 
       const result = await session.command(IrisCommand.ACT, {
@@ -257,7 +262,7 @@ export const TOOLS: ToolDef[] = [
       // F1: lift dispatch/settle status to the envelope (a settle timeout is NOT a failure).
       const r = asRecord(result.result);
       const fellBack = real?.fellBack === true;
-      return {
+      return withControl(session, {
         since,
         inputMode: InputMode.SYNTHETIC,
         dispatched: r['dispatched'] ?? true,
@@ -266,7 +271,7 @@ export const TOOLS: ToolDef[] = [
         result: result.result,
         ...(fellBack ? { warning: ActionWarning.REAL_INPUT_FELL_BACK } : {}),
         ...healthEnvelope(session),
-      };
+      });
     },
   },
   {
@@ -279,6 +284,9 @@ export const TOOLS: ToolDef[] = [
     },
     handler: async (deps, args) => {
       const session = deps.sessions.resolve(asString(args['sessionId']));
+      // Live-control: refuse to drive the page while the human has paused us (before any work).
+      const paused = pausedShortCircuit(session);
+      if (paused !== undefined) return paused;
       const since = session.elapsed();
       const result = await session.command(IrisCommand.ACT_SEQUENCE, { steps: args['steps'] });
       if (!result.ok) throw new Error(result.error ?? 'act_sequence failed');
@@ -286,7 +294,11 @@ export const TOOLS: ToolDef[] = [
         deps.recordings.capture(compileSequenceStep(args, result.result));
       }
       const r = asRecord(result.result); // F1: per-step settle status lives in result.steps[]
-      return { since, dispatched: r['count'] !== undefined, result: result.result };
+      return withControl(session, {
+        since,
+        dispatched: r['count'] !== undefined,
+        result: result.result,
+      });
     },
   },
   {
@@ -307,6 +319,9 @@ export const TOOLS: ToolDef[] = [
     },
     handler: async (deps, args) => {
       const session = deps.sessions.resolve(asString(args['sessionId']));
+      // Live-control: refuse to drive the page (no act, no predicate eval) while paused.
+      const paused = pausedShortCircuit(session);
+      if (paused !== undefined) return paused;
       refuseIfThrottled(session, args['refuseWhenThrottled']);
       const until = PredicateSchema.parse(args['until']);
       const timeout = asNumber(args['timeout_ms']) ?? 4000;
@@ -325,7 +340,12 @@ export const TOOLS: ToolDef[] = [
           : await evaluatePredicate(session, until);
 
       const trace = buildReactionReport(session.eventsSince(since), session.elapsed() - since);
-      return { effect: actResult.result, verdict, trace, ...healthEnvelope(session) };
+      return withControl(session, {
+        effect: actResult.result,
+        verdict,
+        trace,
+        ...healthEnvelope(session),
+      });
     },
   },
   {
@@ -347,7 +367,7 @@ export const TOOLS: ToolDef[] = [
       const filters = Array.isArray(args['filters']) ? (args['filters'] as string[]) : undefined;
       const filtered =
         filters === undefined ? events : events.filter((e) => filters.includes(e.type));
-      return Promise.resolve(buildReactionReport(filtered, windowMs));
+      return Promise.resolve(withControl(session, buildReactionReport(filtered, windowMs)));
     },
   },
   {
@@ -382,7 +402,7 @@ export const TOOLS: ToolDef[] = [
         timeout > 0
           ? await waitForPredicate(session, predicate, timeout)
           : await evaluatePredicate(session, predicate);
-      return { ...verdict, ...healthEnvelope(session) };
+      return withControl(session, { ...verdict, ...healthEnvelope(session) });
     },
   },
   {
@@ -600,4 +620,6 @@ export const TOOLS: ToolDef[] = [
   ...FLOW_TOOLS,
   // M8 Stage B ANNOTATE: iris_annotate (structured annotation → expect/dynamic/success). See annotate-tools.ts.
   ...ANNOTATE_TOOLS,
+  // Live-control: iris_end_session / iris_resume / iris_messages. See live-control-tools.ts.
+  ...LIVE_CONTROL_TOOLS,
 ];
