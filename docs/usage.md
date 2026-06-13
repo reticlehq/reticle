@@ -189,6 +189,16 @@ Fast targeted lookups without a full timeline.
 - `iris_console({ level?, since? })` → `{ logs }`
 - `iris_animations()` → running/recent animations.
 
+### `iris_capabilities`
+
+The app-advertised testable surface (registered via `iris.describe`). Call this first to learn
+what to assert on without reading source.
+
+- `iris_capabilities({ sessionId? })` → `{ testids, signals, stores, flows }`
+
+`iris_sessions` also surfaces a `hasCapabilities` flag per session so you know when it's worth
+calling. Returns empty arrays (never errors) if the app advertised nothing.
+
 ### `iris_baseline_save` / `iris_baseline_list` / `iris_diff`
 
 Regression detection — [§8](#8-regression-baselines--diff).
@@ -418,7 +428,18 @@ Surface it from your app, then assert on it:
 // in your app
 iris.signal('webhook:received', { provider: 'stripe', event: 'payment_intent.succeeded' });
 iris.state('cart', { items: 3 });
+
+// Advertise your testable surface at init so the agent learns it without reading source.
+// Call this once at module load (before connect); it merges idempotently across HMR reloads.
+iris.describe({
+  testids: ['cart-badge', 'toast'],
+  signals: ['webhook:received'],
+  stores: ['cart'],
+  flows: [{ name: 'checkout', steps: ['fill address', 'pay', 'see confirmation'] }],
+});
 ```
+
+The agent reads this back with `iris_capabilities()` — see [§3](#3-tool-reference).
 
 ```jsonc
 iris_assert({ timeout_ms: 30000, predicate: {

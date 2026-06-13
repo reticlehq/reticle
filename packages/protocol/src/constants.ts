@@ -108,6 +108,7 @@ export const IrisCommand = {
   ANIMATIONS: 'animations',
   NARRATE: 'narrate',
   CLOCK: 'clock',
+  CAPABILITIES: 'capabilities',
   STATE_READ: 'state_read',
 } as const;
 export type IrisCommand = (typeof IrisCommand)[keyof typeof IrisCommand];

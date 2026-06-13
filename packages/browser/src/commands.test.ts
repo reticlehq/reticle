@@ -4,6 +4,7 @@ import { createCommandRegistry } from './commands.js';
 import { refs } from './refs.js';
 import { registerStore, unregisterStore } from './stores.js';
 import { registerAdapter } from './adapters.js';
+import { registerCapabilities } from './capabilities.js';
 
 interface StateResult {
   stores: Record<string, unknown>;
@@ -85,5 +86,18 @@ describe('command registry (driven by the bridge)', () => {
     });
     const result = run(IrisCommand.STATE_READ, { ref }) as StateResult;
     expect(result.component).toEqual({ hooks: [1] });
+  });
+
+  it('CAPABILITIES returns the registered capabilities (G5)', () => {
+    registerCapabilities({
+      testids: ['item-list'],
+      flows: [{ name: 'checkout', steps: ['fill', 'submit'] }],
+    });
+    const result = run(IrisCommand.CAPABILITIES) as {
+      testids: string[];
+      flows: { name: string; steps: string[] }[];
+    };
+    expect(result.testids).toContain('item-list');
+    expect(result.flows.some((f) => f.name === 'checkout')).toBe(true);
   });
 });

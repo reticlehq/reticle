@@ -12,6 +12,7 @@ import {
 import { createCommandRegistry, type CommandHandler } from './commands.js';
 import { Transport, type CommandOutcome } from './transport.js';
 import { adapterNames } from './adapters.js';
+import { registerCapabilities, hasCapabilities, type CapabilitiesInput } from './capabilities.js';
 import { installDom } from './observers/dom.js';
 import { installNetwork } from './observers/network.js';
 import { installRoute } from './observers/route.js';
@@ -114,6 +115,11 @@ export class Iris {
     this.#emit(EventType.STATE_CHANGE, { name, value });
   }
 
+  /** Advertise the app's testable surface so the agent learns it without reading source. */
+  describe(input: CapabilitiesInput): void {
+    registerCapabilities(input);
+  }
+
   disconnect(): void {
     if (!this.#connected) return;
     for (const teardown of this.#teardowns) teardown();
@@ -149,6 +155,7 @@ export class Iris {
       url: location.href,
       title: document.title,
       adapters: adapterNames(),
+      hasCapabilities: hasCapabilities(),
     };
   }
 

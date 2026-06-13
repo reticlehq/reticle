@@ -7,6 +7,7 @@ export interface SessionInfo {
   url: string;
   title: string;
   adapters: string[];
+  hasCapabilities: boolean;
   lastSeenMs: number;
 }
 
@@ -29,6 +30,7 @@ export class Session {
   url: string;
   title: string;
   adapters: string[];
+  hasCapabilities: boolean;
 
   readonly #socket: WebSocket;
   readonly #clock: Clock;
@@ -43,6 +45,7 @@ export class Session {
     this.url = hello.url;
     this.title = hello.title;
     this.adapters = hello.adapters;
+    this.hasCapabilities = hello.hasCapabilities ?? false;
     this.#socket = socket;
     this.#clock = clock;
     this.#startedAt = clock();
@@ -59,6 +62,7 @@ export class Session {
       url: this.url,
       title: this.title,
       adapters: this.adapters,
+      hasCapabilities: this.hasCapabilities,
       lastSeenMs: this.elapsed(),
     };
   }

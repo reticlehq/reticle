@@ -14,13 +14,23 @@ import { TOOLS, type ToolDeps } from './tools.js';
 import { IrisTool } from './tool-names.js';
 
 /** A stand-in for the real @iris/browser SDK: replies to commands and emits events. */
+const FAKE_CAPABILITIES = {
+  testids: ['toast'],
+  signals: ['webhook:received'],
+  stores: ['cart'],
+  flows: [{ name: 'pay', steps: ['fill', 'click'] }],
+};
+
 class FakeBrowser {
   readonly #ws: WebSocket;
   matcher: (query: ElementQuery) => boolean = () => false;
+  /** When false, the browser pretends it has no CAPABILITIES handler (older build). */
+  handlesCapabilities = true;
 
   constructor(
     port: number,
     private readonly sessionId: string,
+    private readonly hasCapabilities = false,
   ) {
     this.#ws = new WebSocket(`ws://127.0.0.1:${String(port)}${IRIS_WS_PATH}`);
   }
@@ -35,6 +45,7 @@ class FakeBrowser {
           url: 'http://localhost:3000/checkout',
           title: 'Checkout',
           adapters: [],
+          hasCapabilities: this.hasCapabilities,
         });
         this.#ws.on('message', (raw) => {
           this.#onMessage(JSON.parse((raw as Buffer).toString('utf8')) as Record<string, unknown>);
@@ -90,6 +101,17 @@ class FakeBrowser {
         tree: '- button "Pay" (ref=e7)\n- dialog "Order confirmed" (ref=e12)',
         status: { route: '/checkout' },
       };
+    } else if (name === IrisCommand.CAPABILITIES) {
+      if (!this.handlesCapabilities) {
+        this.#send({
+          kind: MessageKind.COMMAND_RESULT,
+          id,
+          ok: false,
+          error: `unknown command '${name}'`,
+        });
+        return;
+      }
+      result = FAKE_CAPABILITIES;
     }
     this.#send({ kind: MessageKind.COMMAND_RESULT, id, ok: true, result });
   }
@@ -134,7 +156,7 @@ describe('bridge round-trip (north-star)', () => {
       baselines: new BaselineStore(),
       recordings: new RecordingStore(),
     };
-    browser = new FakeBrowser(port, 'demo');
+    browser = new FakeBrowser(port, 'demo', true);
     await browser.open();
     await waitUntil(() => bridge.sessions.count() === 1);
   });
@@ -147,6 +169,34 @@ describe('bridge round-trip (north-star)', () => {
   it('lists the connected session', async () => {
     const result = (await callTool(deps, 'iris_sessions')) as { sessions: unknown[] };
     expect(result.sessions).toHaveLength(1);
+  });
+
+  it('advertises hasCapabilities from HELLO on the session (G5)', () => {
+    const session = deps.sessions.list()[0] as { hasCapabilities?: boolean };
+    expect(session.hasCapabilities).toBe(true);
+  });
+
+  it('iris_capabilities returns the app-advertised testable surface (G5)', async () => {
+    const tool = TOOLS.find((t) => t.name === IrisTool.CAPABILITIES);
+    expect(tool).toBeDefined();
+    const result = (await callTool(deps, IrisTool.CAPABILITIES, {})) as {
+      testids: string[];
+      signals: string[];
+      stores: string[];
+      flows: { name: string; steps: string[] }[];
+    };
+    expect(result.testids).toEqual(['toast']);
+    expect(result.signals).toEqual(['webhook:received']);
+    expect(result.stores).toEqual(['cart']);
+    expect(result.flows).toEqual([{ name: 'pay', steps: ['fill', 'click'] }]);
+  });
+
+  it('iris_capabilities propagates an unknown-command error from older browsers (G5)', async () => {
+    browser.handlesCapabilities = false;
+    await expect(callTool(deps, IrisTool.CAPABILITIES, {})).rejects.toThrow(
+      /unknown command 'capabilities'/,
+    );
+    browser.handlesCapabilities = true;
   });
 
   it('acts, observes the reaction, and asserts the full chain', async () => {

@@ -13,6 +13,7 @@ import { describe } from './a11y.js';
 import { refs } from './refs.js';
 import { identifyComponent, readComponentState } from './adapters.js';
 import { readStores, storeNames } from './stores.js';
+import { getCapabilities } from './capabilities.js';
 import { freezeClock, advanceClock, resetClock, isClockFrozen } from './clock.js';
 
 export type CommandHandler = (args: Record<string, unknown>) => unknown;
@@ -134,5 +135,6 @@ export function createCommandRegistry(): Map<string, CommandHandler> {
     return { frozen: isClockFrozen() };
   });
   reg.set(IrisCommand.STATE_READ, (args) => readState(str(args['ref']), str(args['store'])));
+  reg.set(IrisCommand.CAPABILITIES, () => getCapabilities());
   return reg;
 }

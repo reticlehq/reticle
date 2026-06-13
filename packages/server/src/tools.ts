@@ -305,6 +305,14 @@ export const TOOLS: ToolDef[] = [
       commandOrThrow(deps, asString(args['sessionId']), IrisCommand.ANIMATIONS, {}),
   },
   {
+    name: IrisTool.CAPABILITIES,
+    description:
+      'The app-advertised testable surface (iris.describe): testids, signals, stores, and named flows. Call this first to learn what to assert on without reading source.',
+    inputSchema: { ...sessionIdShape },
+    handler: (deps, args) =>
+      commandOrThrow(deps, asString(args['sessionId']), IrisCommand.CAPABILITIES, {}),
+  },
+  {
     name: IrisTool.BASELINE_SAVE,
     description:
       'Snapshot the current semantic state under a name, to diff against later (regression detection).',

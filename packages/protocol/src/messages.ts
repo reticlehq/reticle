@@ -25,6 +25,8 @@ export const HelloMessageSchema = z.object({
   url: z.string(),
   title: z.string(),
   adapters: z.array(z.string()),
+  /** Whether the app has advertised a capability registry (iris.describe). */
+  hasCapabilities: z.boolean().optional(),
 });
 export type HelloMessage = z.infer<typeof HelloMessageSchema>;
 

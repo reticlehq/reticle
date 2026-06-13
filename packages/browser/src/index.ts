@@ -27,6 +27,10 @@ export type { IrisAdapter, ComponentInfo, ComponentSource } from './adapters.js'
 export { registerStore, unregisterStore, storeNames, readStores } from './stores.js';
 export type { StoreGetter } from './stores.js';
 
+// Capability registry (G5): the app self-describes its testable surface via iris.describe.
+export { registerCapabilities, getCapabilities, hasCapabilities } from './capabilities.js';
+export type { Capabilities, CapabilitiesInput, CapabilityFlow } from './capabilities.js';
+
 // Lower-level building blocks (useful for tests and advanced embedding).
 export { buildSnapshot } from './snapshot.js';
 export { matchQuery, runQuery } from './query.js';
