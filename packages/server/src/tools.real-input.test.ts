@@ -4,6 +4,7 @@ import type { CommandResult } from '@iris/protocol';
 import { TOOLS, type ToolDeps } from './tools.js';
 import { IrisTool } from './tool-names.js';
 import { BaselineStore } from './baselines.js';
+import { createNodeFileSystem } from './fs-port.js';
 import { RecordingStore } from './recordings.js';
 import { boxCenter, type ElementBox, type RealInputProvider } from './real-input.js';
 import type { Session, SessionManager } from './session.js';
@@ -69,6 +70,9 @@ function fakeDeps(provider: RealInputProvider | undefined, state: FakeSessionSta
     sessions: sessions as SessionManager,
     baselines: new BaselineStore(),
     recordings: new RecordingStore(),
+    fs: createNodeFileSystem(),
+    irisRoot: '/tmp/iris-test/.iris',
+    now: () => 0,
   };
   if (provider !== undefined) deps.realInput = provider;
   return deps;

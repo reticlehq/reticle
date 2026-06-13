@@ -20,6 +20,8 @@ import { compileActStep, compileSequenceStep, replayProgram } from './replay.js'
 import { matchNet, matchConsole } from './event-filters.js';
 import { healthEnvelope, refuseIfThrottled } from './session-health.js';
 import { asString, asNumber, asRecord, parseInteractive } from './tools-helpers.js';
+import type { FileSystemPort } from './fs-port.js';
+import { CONTRACT_TOOLS } from './contract-tools.js';
 
 export interface ToolDeps {
   sessions: SessionManager;
@@ -27,6 +29,12 @@ export interface ToolDeps {
   recordings: RecordingStore;
   /** R1: optional native-input provider. undefined ⇒ everything stays synthetic. */
   realInput?: RealInputProvider;
+  /** M8 Stage A: injected filesystem seam (tests pass a fake/temp-dir adapter). */
+  fs: FileSystemPort;
+  /** M8 Stage A: absolute .iris path (index.ts computes cwd()/.iris). */
+  irisRoot: string;
+  /** M8 Stage A: injected clock for the contract's generatedAt stamp. */
+  now: () => number;
 }
 
 interface SnapshotResult {
@@ -407,14 +415,6 @@ export const TOOLS: ToolDef[] = [
       commandOrThrow(deps, asString(args['sessionId']), IrisCommand.ANIMATIONS, {}),
   },
   {
-    name: IrisTool.CAPABILITIES,
-    description:
-      'The app-advertised testable surface (iris.describe): testids, signals, stores, and named flows. Call this first to learn what to assert on without reading source.',
-    inputSchema: { ...sessionIdShape },
-    handler: (deps, args) =>
-      commandOrThrow(deps, asString(args['sessionId']), IrisCommand.CAPABILITIES, {}),
-  },
-  {
     name: IrisTool.BASELINE_SAVE,
     description:
       'Snapshot the current semantic state under a name, to diff against later (regression detection).',
@@ -577,4 +577,6 @@ export const TOOLS: ToolDef[] = [
       };
     },
   },
+  // M8 Stage A: iris_capabilities (live | fromDisk) + iris_contract_save. See contract-tools.ts.
+  ...CONTRACT_TOOLS,
 ];

@@ -10,6 +10,27 @@ export const IRIS_PROTOCOL_VERSION = 1;
 /** Schema version stamped onto compiled replay programs (G6). */
 export const REPLAY_PROGRAM_VERSION = 1;
 
+/** M8 Stage A: the git-checked Iris workspace directory + its layout. No free strings. */
+export const IrisDir = {
+  ROOT: '.iris',
+  CONTRACT_FILE: 'contract.json',
+  FLOWS_SUBDIR: 'flows',
+  BASELINES_SUBDIR: 'baselines',
+} as const;
+
+/** Schema version stamped into contract.json so a reader can reject/upgrade old files. */
+export const CONTRACT_FILE_VERSION = 1;
+
+/** Arg key on iris_capabilities selecting the on-disk contract over the live session. */
+export const FROM_DISK_ARG = 'fromDisk';
+
+/** Structured outcome when reading contract.json fails (never thrown to the agent). */
+export const ContractReadError = {
+  MISSING: 'contract-missing', // no .iris/contract.json on disk
+  MALFORMED: 'contract-malformed', // present but not valid JSON / fails schema
+} as const;
+export type ContractReadError = (typeof ContractReadError)[keyof typeof ContractReadError];
+
 /** Bounds for the per-session ring buffer (see plan/02-architecture.md). */
 export const RING_BUFFER_DEFAULTS = {
   MAX_EVENTS: 2000,

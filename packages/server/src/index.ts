@@ -1,8 +1,10 @@
+import { join } from 'node:path';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { IRIS_DEFAULT_PORT } from '@iris/protocol';
+import { IRIS_DEFAULT_PORT, IrisDir } from '@iris/protocol';
 import { Bridge } from './bridge.js';
 import { BaselineStore } from './baselines.js';
 import { RecordingStore } from './recordings.js';
+import { createNodeFileSystem } from './fs-port.js';
 import { createMcpServer } from './mcp.js';
 import { CdpRealInputProvider, LaunchedRealInputProvider } from './real-input.js';
 import type { OwnedRealInputProvider, RealInputProvider } from './real-input.js';
@@ -20,6 +22,17 @@ export type { ToolDeps, ToolDef } from './tools.js';
 export { BaselineStore, normalizeLines, diffLines } from './baselines.js';
 export { RecordingStore } from './recordings.js';
 export type { RecordedStep, CompiledProgram } from './recordings.js';
+export {
+  ensureIrisDir,
+  writeContract,
+  readContract,
+  irisDirPaths,
+  flowPath,
+  baselinePath,
+} from './iris-dir.js';
+export type { IrisDirPaths, ReadContractResult } from './iris-dir.js';
+export { createNodeFileSystem } from './fs-port.js';
+export type { FileSystemPort } from './fs-port.js';
 export { evaluatePredicate, waitForPredicate, PredicateSchema } from './predicate.js';
 export type { Predicate, EvalResult } from './predicate.js';
 export { buildReactionReport } from './reaction.js';
@@ -52,6 +65,10 @@ export interface StartOptions {
   headless?: boolean;
   /** P2-drive: injected so tests swap in a fake launched provider instead of real Playwright. */
   realInputFactory?: (opts: { driveUrl: string; headless: boolean }) => OwnedRealInputProvider;
+  /** M8 Stage A: absolute .iris root. Defaults to process.cwd()/.iris. Injectable for tests. */
+  irisRoot?: string;
+  /** M8 Stage A: injectable clock for contract.json's generatedAt stamp. Defaults to Date.now. */
+  now?: () => number;
 }
 
 export interface RunningServer {
@@ -96,7 +113,11 @@ export async function start(options: StartOptions = {}): Promise<RunningServer> 
   }
 
   if (options.mcp !== false) {
-    const deps = { sessions: bridge.sessions, baselines, recordings };
+    // cwd()/Date.now() are confined to start() — never inside iris-dir.ts's pure logic (rule 7).
+    const fs = createNodeFileSystem();
+    const irisRoot = options.irisRoot ?? join(process.cwd(), IrisDir.ROOT);
+    const now = options.now ?? ((): number => Date.now());
+    const deps = { sessions: bridge.sessions, baselines, recordings, fs, irisRoot, now };
     const server = createMcpServer(realInput !== undefined ? { ...deps, realInput } : deps);
     await server.connect(new StdioServerTransport());
     log('mcp_connected', { port });

@@ -49,3 +49,26 @@ export interface QueryResult {
   elements: ElementDescriptor[];
   hint?: QueryEmptyHint;
 }
+
+/** One named flow advertised by the app (mirrors the browser CapabilityFlow). */
+export const CapabilityFlowSchema = z.object({
+  name: z.string(),
+  steps: z.array(z.string()),
+});
+
+/** The app's testable surface — persisted form of the browser Capabilities (M8 Stage A). */
+export const CapabilitiesSchema = z.object({
+  testids: z.array(z.string()),
+  signals: z.array(z.string()),
+  stores: z.array(z.string()),
+  flows: z.array(CapabilityFlowSchema),
+});
+export type CapabilitiesContract = z.infer<typeof CapabilitiesSchema>;
+
+/** The on-disk contract.json envelope: versioned + timestamped capabilities (M8 Stage A). */
+export const ContractFileSchema = z.object({
+  version: z.number(),
+  generatedAt: z.number(),
+  capabilities: CapabilitiesSchema,
+});
+export type ContractFile = z.infer<typeof ContractFileSchema>;

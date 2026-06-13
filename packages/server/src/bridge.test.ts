@@ -10,6 +10,7 @@ import {
 } from '@iris/protocol';
 import { Bridge } from './bridge.js';
 import { BaselineStore } from './baselines.js';
+import { createNodeFileSystem } from './fs-port.js';
 import { RecordingStore } from './recordings.js';
 import { TOOLS, type ToolDeps } from './tools.js';
 import { IrisTool } from './tool-names.js';
@@ -195,6 +196,9 @@ describe('bridge round-trip (north-star)', () => {
       sessions: bridge.sessions,
       baselines: new BaselineStore(),
       recordings: new RecordingStore(),
+      fs: createNodeFileSystem(),
+      irisRoot: '/tmp/iris-test/.iris',
+      now: () => 0,
     };
     browser = new FakeBrowser(port, 'demo', true);
     await browser.open();
@@ -446,6 +450,9 @@ describe('iris_act_and_wait (G3 composite)', () => {
       sessions: bridge.sessions,
       baselines: new BaselineStore(),
       recordings: new RecordingStore(),
+      fs: createNodeFileSystem(),
+      irisRoot: '/tmp/iris-test/.iris',
+      now: () => 0,
     };
     browser = new FakeBrowser(port, 'demo');
     await browser.open();
@@ -564,6 +571,9 @@ describe('G6 record -> compile -> replay', () => {
       sessions: bridge.sessions,
       baselines: new BaselineStore(),
       recordings: new RecordingStore(),
+      fs: createNodeFileSystem(),
+      irisRoot: '/tmp/iris-test/.iris',
+      now: () => 0,
     };
     browser = new FakeBrowser(port, 'demo');
     await browser.open();

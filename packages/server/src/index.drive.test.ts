@@ -5,6 +5,7 @@ import { start, type RunningServer } from './index.js';
 import { TOOLS, type ToolDeps } from './tools.js';
 import { IrisTool } from './tool-names.js';
 import { BaselineStore } from './baselines.js';
+import { createNodeFileSystem } from './fs-port.js';
 import { RecordingStore } from './recordings.js';
 import {
   DriveError,
@@ -96,6 +97,9 @@ function depsWith(realInput: RealInputProvider | undefined, state: { actCalls: n
     sessions: sessions as SessionManager,
     baselines: new BaselineStore(),
     recordings: new RecordingStore(),
+    fs: createNodeFileSystem(),
+    irisRoot: '/tmp/iris-test/.iris',
+    now: () => 0,
   };
   if (realInput !== undefined) deps.realInput = realInput;
   return deps;
