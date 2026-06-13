@@ -1,7 +1,6 @@
 {
   "name": "@iris/browser",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.1.0",
   "description": "Iris browser SDK — installs observers, builds semantic snapshots, executes actions, talks to the bridge.",
   "type": "module",
   "main": "./dist/index.js",
@@ -16,7 +15,8 @@
     "build": "tsc -b",
     "typecheck": "tsc -b",
     "lint": "eslint src",
-    "test:unit": "vitest run --passWithNoTests"
+    "test:unit": "vitest run --passWithNoTests",
+    "prepack": "tsc -b && find dist -name \"*.test.*\" -delete"
   },
   "dependencies": {
     "@iris/protocol": "workspace:*",
@@ -25,5 +25,29 @@
   "devDependencies": {
     "@types/jsdom": "^28.0.3",
     "jsdom": "^29.1.1"
-  }
+  },
+  "license": "MIT",
+  "author": "Iris contributors",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/iris-mcp/iris.git",
+    "directory": "packages/browser"
+  },
+  "homepage": "https://github.com/iris-mcp/iris#readme",
+  "bugs": "https://github.com/iris-mcp/iris/issues",
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "sideEffects": false,
+  "keywords": [
+    "mcp",
+    "ai-agents",
+    "testing",
+    "instrumentation",
+    "observability"
+  ]
 }

@@ -5,10 +5,29 @@ import { IrisTool } from './tool-names.js';
 import { buildReactionReport } from './reaction.js';
 import { evaluatePredicate, waitForPredicate, PredicateSchema } from './predicate.js';
 import { type BaselineStore, normalizeLines, diffLines } from './baselines.js';
+import type { RecordingStore } from './recordings.js';
 
 export interface ToolDeps {
   sessions: SessionManager;
   baselines: BaselineStore;
+  recordings: RecordingStore;
+}
+
+interface InteractiveItem {
+  ref: string;
+  desc: string;
+}
+
+/** Parse interactive elements (with refs) out of a snapshot tree for exploration. */
+function parseInteractive(tree: string): InteractiveItem[] {
+  const items: InteractiveItem[] = [];
+  for (const line of tree.split('\n')) {
+    const match = /\(ref=(e\d+)\)/.exec(line);
+    if (match !== null) {
+      items.push({ ref: match[1] ?? '', desc: line.replace(/\s*\(ref=e\d+\)/, '').trim() });
+    }
+  }
+  return items;
 }
 
 interface SnapshotResult {
@@ -283,6 +302,56 @@ export const TOOLS: ToolDef[] = [
           (e) => e.type === EventType.CONSOLE_ERROR || e.type === EventType.ERROR_UNCAUGHT,
         ).length;
       return { baseline: name, removed, added, consoleErrors, routeChanged: base.route !== route };
+    },
+  },
+  {
+    name: IrisTool.RECORD_START,
+    description: 'Start recording the event timeline under a name (for replay / a flow report).',
+    inputSchema: { name: z.string(), ...sessionIdShape },
+    handler: (deps, args) => {
+      const session = deps.sessions.resolve(asString(args['sessionId']));
+      const name = asString(args['name']) ?? 'default';
+      const cursor = session.elapsed();
+      deps.recordings.start(name, cursor);
+      return Promise.resolve({ name, since: cursor });
+    },
+  },
+  {
+    name: IrisTool.RECORD_STOP,
+    description: 'Stop a recording and return the full ordered reaction report for the span.',
+    inputSchema: { name: z.string(), ...sessionIdShape },
+    handler: (deps, args) => {
+      const session = deps.sessions.resolve(asString(args['sessionId']));
+      const name = asString(args['name']) ?? 'default';
+      const cursor = deps.recordings.stop(name);
+      if (cursor === undefined) throw new Error(`no active recording named '${name}'`);
+      const events = session.eventsSince(cursor);
+      return Promise.resolve({ name, ...buildReactionReport(events, session.elapsed() - cursor) });
+    },
+  },
+  {
+    name: IrisTool.EXPLORE,
+    description:
+      'Autonomous-exploration helper: list interactive elements (with refs) + current console-error count, so the agent can drive the app and report anomalies.',
+    inputSchema: { scope: z.string().optional(), ...sessionIdShape },
+    handler: async (deps, args) => {
+      const session = deps.sessions.resolve(asString(args['sessionId']));
+      const result = await session.command(IrisCommand.SNAPSHOT, {
+        mode: SnapshotMode.INTERACTIVE,
+        scope: args['scope'],
+      });
+      if (!result.ok) throw new Error(result.error ?? 'snapshot failed');
+      const snap = (result.result ?? {}) as { tree?: string };
+      const consoleErrors = session
+        .eventsSince(0)
+        .filter(
+          (e) => e.type === EventType.CONSOLE_ERROR || e.type === EventType.ERROR_UNCAUGHT,
+        ).length;
+      return {
+        interactive: parseInteractive(snap.tree ?? ''),
+        consoleErrors,
+        hint: 'act on each ref, observe the reaction, and report failed requests / console errors / dead controls',
+      };
     },
   },
 ];

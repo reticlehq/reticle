@@ -1,7 +1,6 @@
 {
   "name": "@iris/react",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.1.0",
   "description": "Iris React adapter — maps a DOM ref to its component stack and source file via the fiber tree.",
   "type": "module",
   "main": "./dist/index.js",
@@ -16,7 +15,8 @@
     "build": "tsc -b",
     "typecheck": "tsc -b",
     "lint": "eslint src",
-    "test:unit": "vitest run --passWithNoTests"
+    "test:unit": "vitest run --passWithNoTests",
+    "prepack": "tsc -b && find dist -name \"*.test.*\" -delete"
   },
   "dependencies": {
     "@iris/protocol": "workspace:*",
@@ -33,5 +33,28 @@
   "devDependencies": {
     "@types/react": "^19.0.0",
     "jsdom": "^26.0.0"
-  }
+  },
+  "license": "MIT",
+  "author": "Iris contributors",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/iris-mcp/iris.git",
+    "directory": "packages/react"
+  },
+  "homepage": "https://github.com/iris-mcp/iris#readme",
+  "bugs": "https://github.com/iris-mcp/iris/issues",
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "sideEffects": false,
+  "keywords": [
+    "mcp",
+    "ai-agents",
+    "react",
+    "testing"
+  ]
 }

@@ -1,7 +1,6 @@
 {
   "name": "@iris/server",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.1.0",
   "description": "Iris bridge + MCP server. Hosts the browser WS endpoint and exposes MCP tools to the coding agent.",
   "type": "module",
   "main": "./dist/index.js",
@@ -20,7 +19,8 @@
     "dev": "tsc -b --watch",
     "typecheck": "tsc -b",
     "lint": "eslint src",
-    "test:unit": "vitest run --passWithNoTests"
+    "test:unit": "vitest run --passWithNoTests",
+    "prepack": "tsc -b && find dist -name \"*.test.*\" -delete"
   },
   "dependencies": {
     "@iris/protocol": "workspace:*",
@@ -30,5 +30,27 @@
   },
   "devDependencies": {
     "@types/ws": "^8.5.13"
-  }
+  },
+  "license": "MIT",
+  "author": "Iris contributors",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/iris-mcp/iris.git",
+    "directory": "packages/server"
+  },
+  "homepage": "https://github.com/iris-mcp/iris#readme",
+  "bugs": "https://github.com/iris-mcp/iris/issues",
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "keywords": [
+    "mcp",
+    "ai-agents",
+    "testing",
+    "cli"
+  ]
 }

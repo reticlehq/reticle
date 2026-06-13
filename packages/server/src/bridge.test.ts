@@ -9,6 +9,7 @@ import {
 } from '@iris/protocol';
 import { Bridge } from './bridge.js';
 import { BaselineStore } from './baselines.js';
+import { RecordingStore } from './recordings.js';
 import { TOOLS, type ToolDeps } from './tools.js';
 
 /** A stand-in for the real @iris/browser SDK: replies to commands and emits events. */
@@ -78,7 +79,10 @@ class FakeBrowser {
           : [],
       };
     } else if (name === IrisCommand.SNAPSHOT) {
-      result = { tree: '- dialog "Order confirmed"', status: { route: '/checkout' } };
+      result = {
+        tree: '- button "Pay" (ref=e7)\n- dialog "Order confirmed" (ref=e12)',
+        status: { route: '/checkout' },
+      };
     }
     this.#send({ kind: MessageKind.COMMAND_RESULT, id, ok: true, result });
   }
@@ -118,7 +122,11 @@ describe('bridge round-trip (north-star)', () => {
   beforeAll(async () => {
     bridge = new Bridge({ port: 0 });
     const port = await bridge.ready;
-    deps = { sessions: bridge.sessions, baselines: new BaselineStore() };
+    deps = {
+      sessions: bridge.sessions,
+      baselines: new BaselineStore(),
+      recordings: new RecordingStore(),
+    };
     browser = new FakeBrowser(port, 'demo');
     await browser.open();
     await waitUntil(() => bridge.sessions.count() === 1);
@@ -184,5 +192,23 @@ describe('bridge round-trip (north-star)', () => {
     })) as { pass: boolean; failureReason?: string };
     expect(verdict.pass).toBe(false);
     expect(verdict.failureReason).toBeTruthy();
+  });
+
+  it('records a span and returns its reaction report', async () => {
+    await callTool(deps, 'iris_record_start', { name: 'flow' });
+    browser.emit(EventType.NET_REQUEST, { method: 'GET', url: '/api/x', status: 200 });
+    await waitUntil(() => bridge.sessions.resolve('demo').eventsSince(0).length >= 4);
+    const rec = (await callTool(deps, 'iris_record_stop', { name: 'flow' })) as {
+      summary: { network: number };
+    };
+    expect(rec.summary.network).toBeGreaterThanOrEqual(1);
+  });
+
+  it('explore lists interactive elements with refs', async () => {
+    const result = (await callTool(deps, 'iris_explore', {})) as {
+      interactive: { ref: string }[];
+    };
+    expect(result.interactive.length).toBeGreaterThan(0);
+    expect(result.interactive[0]?.ref).toMatch(/^e\d+$/);
   });
 });

@@ -1,7 +1,6 @@
 {
   "name": "@iris/protocol",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.1.0",
   "description": "Shared wire contract, constants, and zod schemas for the Iris browser SDK <-> bridge channel.",
   "type": "module",
   "main": "./dist/index.js",
@@ -16,9 +15,33 @@
     "build": "tsc -b",
     "typecheck": "tsc -b",
     "lint": "eslint src",
-    "test:unit": "vitest run --passWithNoTests"
+    "test:unit": "vitest run --passWithNoTests",
+    "prepack": "tsc -b && find dist -name \"*.test.*\" -delete"
   },
   "dependencies": {
     "zod": "^3.24.1"
-  }
+  },
+  "license": "MIT",
+  "author": "Iris contributors",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/iris-mcp/iris.git",
+    "directory": "packages/protocol"
+  },
+  "homepage": "https://github.com/iris-mcp/iris#readme",
+  "bugs": "https://github.com/iris-mcp/iris/issues",
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "sideEffects": false,
+  "keywords": [
+    "mcp",
+    "ai-agents",
+    "testing",
+    "protocol"
+  ]
 }
