@@ -1,9 +1,9 @@
-<div align="center">
-
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/readme/lockup-on-dark.png" />
-  <img alt="Syrin Iris — eyes for your coding agent" src="assets/readme/lockup-on-light.png" width="300" />
+  <img alt="Syrin Iris — eyes for your coding agent" src="assets/readme/lockup-on-light.png" width="180" />
 </picture>
+
+<div align="center">
 
 ### Your AI writes the code. Iris tells it whether the code actually works — with evidence, not screenshots.
 
@@ -21,7 +21,7 @@ arrived. If something silently broke, Iris says **what**, **why**, and (on React
 
 **TypeScript · Model Context Protocol · React-first · dev-only · localhost-only · MIT**
 
-[Quickstart](#quickstart) · [Watch the demo](https://syrin.ai/iris) · [Getting Started](docs/getting-started.md) · [Full Guide](docs/usage.md) · [Why it's ~73× cheaper](docs/token-efficiency.md) · [How is this different?](#how-is-this-different)
+[Easy install (Claude Code)](skill/SKILL.md) · [Quickstart](#quickstart) · [Watch the demo](https://syrin.ai/iris) · [Getting Started](docs/getting-started.md) · [Full Guide](docs/usage.md) · [Why it's ~73× cheaper](docs/token-efficiency.md) · [How is this different?](#how-is-this-different)
 
 </div>
 
@@ -153,6 +153,20 @@ That's it — run your app and ask your agent: _"add a logout button and verify 
 > **It's one package — nothing else to install.** The browser SDK, the bridge + MCP server, the React
 > adapter, the source-mapping plugins, the spec runner, and the lint rule all ship as **subpaths** of
 > `@syrin/iris` (`/server`, `/next`, `/babel`, `/test`, `/eslint`).
+
+## Easy installation with Claude Code
+
+If you're using **Claude Code**, the fastest path is the bundled skill file — no manual JSON config:
+
+**→ [`skill/SKILL.md`](skill/SKILL.md)**
+
+Save it as `.claude/skills/iris.md` in your project, then type `/iris` in Claude Code. It will:
+
+1. Start the Iris daemon (`iris serve`) — a background process that survives session restarts
+2. Add the MCP server to your project config (`{ "url": "http://localhost:4400/mcp/sse" }`)
+3. Wire a stop hook so the daemon shuts down cleanly when Claude exits
+
+> **Why this matters for teams:** the daemon mode eliminates the three most common failure modes — port conflicts on restart, orphan Chrome processes holding ports for 40+ minutes, and MCP not reconnecting after a session refresh. The daemon stays up; Claude reconnects to it.
 
 ---
 
@@ -367,6 +381,7 @@ the ones you miss). Dev-only, tree-shaken out of production.
 
 ## Docs
 
+- **[Easy Installation (Claude Code)](skill/SKILL.md)** — drop the skill file, type `/iris`, done. Daemon mode, no manual MCP config.
 - **[Getting Started](docs/getting-started.md)** — install, wire up your agent, first verification (step by step).
 - **[Integrate with Claude Code](docs/integrate-with-claude-code.md)** — copy-paste prompts to make a coding agent wire Iris in and verify its own work.
 - **[Integration Patterns](docs/integration-patterns.md)** — zero-prod-bundle integration + adopting Iris incrementally (testids → capabilities → signals).
