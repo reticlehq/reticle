@@ -345,7 +345,9 @@ export const TOOLS: ToolDef[] = [
       box: z
         .object({ x: z.number(), y: z.number(), width: z.number(), height: z.number() })
         .optional(),
-      component: z.object({ name: z.string(), sourceFile: z.string().optional() }).optional(),
+      component: z
+        .object({ name: z.string().optional(), sourceFile: z.string().optional() })
+        .optional(),
     },
     handler: (deps, args) =>
       commandOrThrow(deps, asString(args['sessionId']), IrisCommand.INSPECT, {
@@ -1005,7 +1007,7 @@ export const TOOLS: ToolDef[] = [
       ...sessionIdShape,
     },
     outputSchema: {
-      ok: z.boolean(),
+      ok: z.boolean().optional(),
       elapsed: z.number().optional(),
     },
     handler: (deps, args) =>
