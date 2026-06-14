@@ -1,3 +1,4 @@
+import * as http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { WebSocketServer, type RawData, type WebSocket } from 'ws';
 import { IRIS_WS_PATH, IrisMessageSchema, MessageKind } from '@syrin/iris-protocol';
@@ -8,6 +9,12 @@ export interface BridgeOptions {
   port: number;
   host?: string;
   clock?: () => number;
+  /**
+   * When set, the WebSocket server attaches to this HTTP server instead of binding standalone.
+   * Used in daemon mode where a single HTTP server handles both WS and SSE MCP traffic.
+   * `port` and `host` are ignored for binding when this is provided.
+   */
+  server?: http.Server;
 }
 
 /** Normalize ws RawData (string | Buffer | Buffer[] | ArrayBuffer) into a UTF-8 string. */
@@ -21,7 +28,7 @@ function rawToString(raw: RawData): string {
 /**
  * The browser-facing half of the relay: a localhost WebSocket server. Each connection
  * announces itself with HELLO (registering a Session), then streams EVENTs and replies to
- * COMMANDs. See plan/02-architecture.md.
+ * COMMANDs.
  */
 export class Bridge {
   readonly sessions = new SessionManager();
@@ -32,16 +39,32 @@ export class Bridge {
 
   constructor(options: BridgeOptions) {
     this.#clock = options.clock ?? (() => Date.now());
-    this.#wss = new WebSocketServer({
-      port: options.port,
-      host: options.host ?? '127.0.0.1',
-      path: IRIS_WS_PATH,
-    });
-    this.ready = new Promise<number>((resolve) => {
-      this.#wss.on('listening', () => {
-        resolve((this.#wss.address() as AddressInfo).port);
+
+    if (options.server !== undefined) {
+      const srv = options.server;
+      this.#wss = new WebSocketServer({ server: srv, path: IRIS_WS_PATH });
+      this.ready = new Promise<number>((resolve) => {
+        if (srv.listening) {
+          resolve((srv.address() as AddressInfo).port);
+        } else {
+          srv.once('listening', () => {
+            resolve((srv.address() as AddressInfo).port);
+          });
+        }
       });
-    });
+    } else {
+      this.#wss = new WebSocketServer({
+        port: options.port,
+        host: options.host ?? '127.0.0.1',
+        path: IRIS_WS_PATH,
+      });
+      this.ready = new Promise<number>((resolve) => {
+        this.#wss.on('listening', () => {
+          resolve((this.#wss.address() as AddressInfo).port);
+        });
+      });
+    }
+
     this.#wss.on('connection', (socket) => {
       this.#onConnection(socket);
     });
@@ -60,8 +83,8 @@ export class Bridge {
         log('session_connected', { sessionId: session.id, url: session.url });
         return;
       }
-      if (session === undefined) return; // ignore anything before HELLO
-      session.touch(); // canonical "last seen" stamp for every inbound message
+      if (session === undefined) return;
+      session.touch();
 
       if (parsed.kind === MessageKind.EVENT) {
         session.pushEvent(parsed.event);

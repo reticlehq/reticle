@@ -29,14 +29,14 @@ The whole thing should take about **10 minutes**.
 **The three-piece architecture:**
 
 ```
-┌─────────────────┐   MCP/stdio   ┌──────────────────────┐   WebSocket   ┌──────────────────────┐
-│  coding agent   │◀─────────────▶│  Iris bridge + MCP   │◀─────────────▶│  user's app + SDK    │
-│  (you, Claude)  │               │  npx @syrin/iris      │  localhost    │  @syrin/iris (dev)   │
-└─────────────────┘               └──────────────────────┘  :4400        └──────────────────────┘
+┌─────────────────┐   MCP/SSE   ┌──────────────────────┐   WebSocket   ┌──────────────────────┐
+│  coding agent   │◀───────────▶│  Iris daemon (HTTP)  │◀─────────────▶│  user's app + SDK    │
+│  (you, Claude)  │             │  npx @syrin/iris serve │  localhost    │  @syrin/iris (dev)   │
+└─────────────────┘             └──────────────────────┘  :4400        └──────────────────────┘
 ```
 
-- **The MCP server** — you launch it via the MCP config; it hosts the tools AND the WebSocket
-  bridge. The user does not run it by hand.
+- **The daemon** — a persistent HTTP server you start once with `npx @syrin/iris serve`. It
+  survives Claude session restarts and owns the browser lifecycle. MCP connects via SSE.
 - **The SDK** — a few lines in the app's dev entry point. Tree-shaken out of production builds.
 - **The React adapter** (optional) — maps DOM elements back to component name + `file:line`.
 
@@ -72,7 +72,30 @@ The whole thing should take about **10 minutes**.
 
 ---
 
-## Step 0 — Ask these questions before doing anything
+## Step 0 — Start the Iris daemon
+
+Before asking questions or touching any config, start the daemon now:
+
+```bash
+npx @syrin/iris serve
+```
+
+Then confirm it is running:
+
+```bash
+npx @syrin/iris status
+```
+
+The daemon runs in the background and persists across Claude sessions — no need to restart
+it each time. It will be stopped automatically when this Claude session ends (via the stop
+hook you register in Step 1b).
+
+> **Already running?** `iris serve` is idempotent — if the daemon is already on port 4400
+> it exits 0 immediately.
+
+---
+
+## Step 0.5 — Ask these questions before doing anything
 
 Ask ALL of them in a single message. Do not start installing until you have the answers.
 
@@ -116,18 +139,39 @@ entry to the existing `mcpServers` object. If it does not, create it.
 // .mcp.json
 {
   "mcpServers": {
-    "iris": { "command": "npx", "args": ["@syrin/iris"] },
+    "iris": { "url": "http://localhost:4400/mcp/sse" },
   },
 }
 ```
 
-> **Port conflict?** If port 4400 is taken by another service, add an `env` block:
-> `"env": { "IRIS_PORT": "58432" }` — then pass the same port to `iris.connect()` in Step 3.
+The daemon is already running, so Claude connects immediately — no restart needed.
 
-Tell the user: "I've created `.mcp.json`. Please run `/mcp` (Claude Code) or restart your
-agent so it picks up the new server. Let me know when it says 'connected to iris'."
+> **Port conflict?** If port 4400 is taken, start with `npx @syrin/iris serve --port 58432`
+> instead and update the url to `http://localhost:58432/mcp/sse`. Pass the same port to
+> `iris.connect()` in Step 3.
 
-Wait for confirmation before continuing.
+---
+
+## Step 1b — Register the stop hook
+
+Write or merge into `.claude/settings.json` so the daemon shuts down cleanly when this
+Claude Code session ends:
+
+```jsonc
+// .claude/settings.json
+{
+  "hooks": {
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [{ "type": "command", "command": "npx @syrin/iris stop --quiet" }],
+      },
+    ],
+  },
+}
+```
+
+This handles orphan-process cleanup automatically — no manual `iris stop` required.
 
 ---
 
@@ -567,10 +611,33 @@ iris_end_session({ summary: "done" })
 1. Is the app running? Start the dev server and open it in a browser tab.
 2. Is `iris.connect()` executing? Add a temporary `console.log('iris connecting')` before
    it to confirm the code path runs.
-3. Is the MCP server alive? In Claude Code, run `/mcp` — it should show `iris: connected`.
-   If not, check `.mcp.json` exists in the project root and restart the agent.
-4. Port mismatch? The bridge defaults to 4400. If you set `IRIS_PORT`, pass the same URL:
-   `iris.connect({ url: 'ws://localhost:<port>/iris' })`.
+3. Is the daemon running? Run `npx @syrin/iris status` — it should print `running: true`.
+   If not, run `npx @syrin/iris serve` and check for errors in `~/.iris/daemon-4400.log`.
+4. Is Claude connected to the MCP? Run `/mcp` in Claude Code — it should show `iris: connected`.
+   If not, check `.mcp.json` has `"url": "http://localhost:4400/mcp/sse"` and run `/mcp` again.
+5. Port mismatch? The bridge defaults to 4400. If you started with `--port N`, update the
+   `iris.connect()` call: `iris.connect({ url: 'ws://localhost:<N>/iris' })`.
+
+**`npx @syrin/iris status` shows not running after `iris serve`**
+
+The daemon may have failed to start. Check the log:
+
+```bash
+cat ~/.iris/daemon-4400.log
+```
+
+Common causes: port already occupied by another process, Playwright missing (for `--drive`
+mode), permission errors writing `~/.iris/`.
+
+**Port still occupied after a crash**
+
+`iris stop` reads the PID file and sends SIGTERM for a clean shutdown. If the daemon crashed
+and left a stale PID file, `iris stop` cleans it up automatically. If Chrome is still
+running from a previous `--drive` session:
+
+```bash
+pkill -f "iris.*chromium"
+```
 
 **The tab connects but `adapters` is empty (no `"react"`)**
 

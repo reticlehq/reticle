@@ -1,6 +1,7 @@
 import { join } from 'node:path';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { IRIS_DEFAULT_PORT, IrisDir } from '@syrin/iris-protocol';
+import { createSharedServer } from './http-server.js';
 import { Bridge } from './bridge.js';
 import { BaselineStore } from './project/baselines.js';
 import { RecordingStore } from './flows/recordings.js';
@@ -38,6 +39,8 @@ export { VisualStore } from './visual/visual-store.js';
 export { diffPng } from './visual/visual-diff.js';
 export type { VisualDiffResult, VisualRect, DiffOptions } from './visual/visual-diff.js';
 export { crawl } from './crawl/crawl.js';
+export { MCP_SSE_PATH, MCP_MESSAGE_PATH } from './http-server.js';
+export { writePid, removePid, isRunning, logPath, readPid, isAlive } from './daemon.js';
 export type { CrawlReport, CrawlAnomaly, CrawlOptions, CrawlSession } from './crawl/crawl.js';
 export { scrollToFind } from './input/scroll-find.js';
 export type { ScrollFindResult, ScrollFindQuery, ScrollFindSession } from './input/scroll-find.js';
@@ -189,6 +192,92 @@ export async function start(options: StartOptions = {}): Promise<RunningServer> 
       reaper.stop();
       await owned?.dispose();
       await bridge.close();
+    },
+  };
+}
+
+/**
+ * Start the Iris bridge in daemon mode: a single HTTP server handles both the WebSocket
+ * bridge (browser SDK) and the SSE MCP transport (Claude/agent). Unlike start(), the MCP
+ * connection is not tied to the process lifetime — Claude reconnects across sessions while
+ * browser sessions persist in the daemon.
+ */
+export async function startDaemon(options: StartOptions = {}): Promise<RunningServer> {
+  const port = options.port ?? IRIS_DEFAULT_PORT;
+
+  const shared = createSharedServer();
+  const bridge = new Bridge({ port, server: shared.httpServer });
+
+  const reaper = new SessionReaper(bridge.sessions);
+  reaper.start();
+
+  let owned: { dispose: () => Promise<void> } | undefined;
+  let realInput: RealInputProvider | undefined;
+  const driveUrl = options.driveUrl;
+  if (driveUrl !== undefined && driveUrl.length > 0) {
+    const headless = options.headless ?? true;
+    const factory =
+      options.realInputFactory ??
+      ((opts) =>
+        new LaunchedRealInputProvider({ driveUrl: opts.driveUrl, headless: opts.headless }));
+    const launched = factory({ driveUrl, headless });
+    try {
+      await launched.navigate();
+    } catch (error) {
+      await shared.close();
+      throw error;
+    }
+    owned = launched;
+    realInput = launched;
+  } else {
+    const cdpUrl = options.cdpUrl ?? process.env['IRIS_CDP_URL'];
+    if (cdpUrl !== undefined && cdpUrl.length > 0) {
+      const cdp = new CdpRealInputProvider({ cdpUrl });
+      owned = cdp;
+      realInput = cdp;
+    }
+  }
+
+  const fs = createNodeFileSystem();
+  const irisRoot = options.irisRoot ?? join(process.cwd(), IrisDir.ROOT);
+  const now = options.now ?? ((): number => Date.now());
+  const flows = new FlowStore(fs, irisRoot, { now });
+  const project = new ProjectStore(fs, irisRoot, { now });
+  const annotations = new AnnotationStore();
+  const deps = {
+    sessions: bridge.sessions,
+    baselines: new BaselineStore(),
+    recordings: new RecordingStore(),
+    annotations,
+    flows,
+    project,
+    fs,
+    irisRoot,
+    now,
+  };
+  const profile = resolveToolProfile(options.toolProfile);
+  const mcpServer = createMcpServer(
+    realInput !== undefined ? { ...deps, realInput } : deps,
+    profile,
+  );
+
+  shared.attachMcp(mcpServer);
+
+  await new Promise<void>((resolve) => {
+    shared.httpServer.once('listening', resolve);
+    shared.httpServer.listen(port, '127.0.0.1');
+  });
+
+  log('mcp_daemon_started', { port });
+
+  return {
+    bridge,
+    ...(realInput !== undefined ? { realInput } : {}),
+    close: async () => {
+      reaper.stop();
+      await owned?.dispose();
+      await bridge.close();
+      await shared.close();
     },
   };
 }
