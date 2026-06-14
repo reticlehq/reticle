@@ -979,14 +979,14 @@ export const TOOLS: ToolDef[] = [
         .describe('Display severity: info | warn | error. Default: info.'),
       ...sessionIdShape,
     },
-    outputSchema: {
-      ok: z.boolean(),
-    },
-    handler: (deps, args) =>
-      commandOrThrow(deps, asString(args['sessionId']), IrisCommand.NARRATE, {
+    outputSchema: { ok: z.boolean() },
+    handler: async (deps, args) => {
+      const result = (await commandOrThrow(deps, asString(args['sessionId']), IrisCommand.NARRATE, {
         text: args['text'],
         level: args['level'],
-      }),
+      })) as Record<string, unknown>;
+      return { ok: true, ...result };
+    },
   },
   {
     name: IrisTool.CLOCK,

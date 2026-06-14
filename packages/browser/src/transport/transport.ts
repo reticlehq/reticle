@@ -19,6 +19,8 @@ export interface TransportDeps {
   handleCommand: (command: CommandMessage) => Promise<CommandOutcome>;
   /** Unthrottled, unpatched clock for bridge-loss timing. Defaults to nativeNow (performance.now). */
   now?: () => number;
+  /** Fired each time the WebSocket (re-)connects to the bridge. */
+  onConnected?: () => void;
   /**
    * Liveness fallback: fired once when the bridge has been unreachable for SESSION_LIFECYCLE
    * .BRIDGE_LOST_MS — i.e. the server/agent process is gone, so no server-pushed end can arrive and
@@ -68,6 +70,7 @@ export class Transport {
       ws.send(JSON.stringify(this.#deps.hello()));
       for (const msg of this.#queue) ws.send(msg);
       this.#queue = [];
+      this.#deps.onConnected?.();
     };
     ws.onmessage = (event: MessageEvent): void => {
       const data: unknown = event.data;

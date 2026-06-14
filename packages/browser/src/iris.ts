@@ -136,6 +136,9 @@ export class Iris {
       url,
       hello: () => this.#hello(),
       handleCommand: (command) => this.#handleCommand(command),
+      // Show the presenter HUD as soon as the agent bridge connects — the user immediately sees
+      // the glow border and narration panel, even before the first tool call lands.
+      onConnected: () => this.#presenter?.sessionStart(),
       // Liveness fallback: if the bridge stays unreachable (the agent killed the server process),
       // no server-pushed end can arrive — so end the run we're presenting ourselves. A returning
       // agent revives it via the normal sessionStart() path on its next command.
@@ -183,9 +186,8 @@ export class Iris {
             : { kind: intent.kind },
         );
       this.#presenter = new Presenter(presenterOptions);
-      // Mount the overlay (invisible) but DON'T start the session here — the glow + panel must
-      // track the AGENT's work, not page load. A page that merely loaded the SDK shows nothing;
-      // the session (and its visuals) begins on the agent's first command (see #handleCommand).
+      // Mount the overlay. The session (glow + HUD) activates on bridge connect via onConnected,
+      // so the presenter is visible as soon as the agent is reachable — not just on first command.
       this.#presenter.mount();
     }
 
