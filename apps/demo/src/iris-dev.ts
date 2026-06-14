@@ -82,13 +82,13 @@ const FLOWS = [
 
 export function installIris(): void {
   installReactAdapter(); // DOM ref → React fiber → component → source file (iris_inspect)
-  // The presenter HUD (glow + cursor + narration panel) is opt-in via ?present so the dashboard
-  // stays clean for filming. Iris still drives the page either way; add ?present to show the agent.
+  // The presenter HUD (glow + cursor + narration panel) is on by default. Add ?nopresent to
+  // suppress it (e.g. for clean screen recordings). Iris still drives the page either way.
   // Default to a per-tab id (SESSION_AUTO) so several tabs — a human tab + an Iris-driven tour, a
   // new-tab popup — never collide on one session id. Pass ?session=<id> only when tabs should
   // intentionally share a session.
   const params = new URLSearchParams(window.location.search);
-  const present = params.has('present');
+  const present = !params.has('nopresent');
   const session = params.get('session') ?? SESSION_AUTO;
   const irisPort: number = typeof __IRIS_PORT__ !== 'undefined' ? __IRIS_PORT__ : 4400;
   iris.connect({ session, present, url: `ws://localhost:${irisPort}/iris` });
