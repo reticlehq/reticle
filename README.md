@@ -1,9 +1,9 @@
+<div align="center">
+
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/readme/lockup-on-dark.png" />
-  <img alt="Syrin Iris — eyes for your coding agent" src="assets/readme/lockup-on-light.png" width="180" />
+  <img alt="Syrin Iris — eyes for your coding agent" src="assets/readme/lockup-on-light.png" width="260" />
 </picture>
-
-<div align="center">
 
 ### Your AI writes the code. Iris tells it whether the code actually works — with evidence, not screenshots.
 
