@@ -59,5 +59,9 @@
     "testing",
     "cli"
   ],
+  "iris": {
+    "changelog": "Smart MCP proxy with auto-start daemon, auto-update, and rollback support. Agents can call iris_version_info, iris_apply_update, and iris_rollback.",
+    "breakingChanges": []
+  },
   "private": true
 }

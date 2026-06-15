@@ -125,6 +125,36 @@ describe('parseCliArgs', () => {
     });
   });
 
+  it('mcp returns mcp result on default port', () => {
+    expect(parseCliArgs(['mcp'], PORT)).toEqual({ kind: 'mcp', port: PORT, headless: true });
+  });
+
+  it('mcp --port overrides the port', () => {
+    expect(parseCliArgs(['mcp', '--port', '5000'], PORT)).toEqual({
+      kind: 'mcp',
+      port: 5000,
+      headless: true,
+    });
+  });
+
+  it('mcp --drive passes the drive url', () => {
+    expect(parseCliArgs(['mcp', '--drive', 'http://localhost:3000'], PORT)).toEqual({
+      kind: 'mcp',
+      port: PORT,
+      driveUrl: 'http://localhost:3000',
+      headless: true,
+    });
+  });
+
+  it('mcp --drive --headed passes both flags', () => {
+    expect(parseCliArgs(['mcp', '--drive', 'http://localhost:3000', '--headed'], PORT)).toEqual({
+      kind: 'mcp',
+      port: PORT,
+      driveUrl: 'http://localhost:3000',
+      headless: false,
+    });
+  });
+
   it('unknown command is a usage error', () => {
     expect(parseCliArgs(['nope'], PORT)).toEqual({ kind: 'error', message: CLI_USAGE });
   });

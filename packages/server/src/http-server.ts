@@ -9,8 +9,13 @@ export const MCP_MESSAGE_PATH = '/mcp/message';
 
 export interface SharedServer {
   readonly httpServer: http.Server;
-  /** Register the MCP server — must be called before listen(). */
-  attachMcp(server: McpServer): void;
+  /**
+   * Register a factory that creates a fresh McpServer per SSE connection.
+   * The MCP SDK's Protocol layer only supports one transport per Server instance,
+   * so each concurrent Claude Code client needs its own McpServer.
+   * Must be called before listen().
+   */
+  attachMcp(factory: () => McpServer): void;
   close(): Promise<void>;
 }
 
@@ -24,28 +29,33 @@ export interface SharedServer {
  *   WS   /iris          → browser SDK connections (via WebSocketServer)
  */
 export function createSharedServer(): SharedServer {
-  let attachedMcp: McpServer | undefined;
+  type McpFactory = () => McpServer;
+  let mcpFactory: McpFactory | undefined;
   const transports = new Map<string, SSEServerTransport>();
 
   const httpServer = http.createServer((req, res) => {
     const url = req.url ?? '/';
 
     if (req.method === 'GET' && url === MCP_SSE_PATH) {
-      if (attachedMcp === undefined) {
+      if (mcpFactory === undefined) {
         res.writeHead(503, { 'Content-Type': 'text/plain' });
         res.end('MCP server not ready');
         return;
       }
+      // Fresh McpServer per connection: the MCP SDK's Protocol layer only supports
+      // one active transport per Server instance, so concurrent clients each need
+      // their own instance backed by the same shared ToolDeps.
+      const mcpServer = mcpFactory();
       const transport = new SSEServerTransport(MCP_MESSAGE_PATH, res);
       const sid = transport.sessionId;
       transports.set(sid, transport);
       res.on('close', () => {
         transports.delete(sid);
-        // Closing the transport lets McpServer release it so the next connect() succeeds.
         transport.close().catch(() => undefined);
+        mcpServer.close().catch(() => undefined);
         log('mcp_client_disconnected', { sessionId: sid });
       });
-      attachedMcp
+      mcpServer
         .connect(transport)
         .then(() => {
           log('mcp_client_connected', { sessionId: sid });
@@ -82,8 +92,8 @@ export function createSharedServer(): SharedServer {
     res.end('not found');
   });
 
-  function attachMcp(server: McpServer): void {
-    attachedMcp = server;
+  function attachMcp(factory: McpFactory): void {
+    mcpFactory = factory;
   }
 
   async function close(): Promise<void> {

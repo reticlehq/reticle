@@ -11,7 +11,7 @@ import {
   type HelloMessage,
   type IrisEvent,
 } from '@syrin/iris-protocol';
-import { Session } from './session.js';
+import { Session, SessionManager } from './session.js';
 
 const HELLO: HelloMessage = {
   kind: MessageKind.HELLO,
@@ -145,6 +145,95 @@ describe('server-authoritative liveness', () => {
     session.setState(SessionState.ENDED); // human/agent iris_end_session, not the reaper
     session.markAgentActivity();
     expect(session.getState()).toBe(SessionState.ENDED);
+  });
+});
+
+describe('SessionManager.resolve() auto-selection', () => {
+  function makeHello(id: string): HelloMessage {
+    return { ...HELLO, sessionId: id };
+  }
+
+  function makeThrottledSession(id: string, nowMs: number): Session {
+    const now = nowMs;
+    const s = new Session(makeHello(id), fakeSocket, () => now);
+    s.touch(); // mark seen at nowMs
+    s.applyHealth(true, false); // hidden → throttled
+    return s;
+  }
+
+  it('single session resolves regardless of throttled state', () => {
+    const mgr = new SessionManager();
+    const s = makeThrottledSession('a', 0);
+    mgr.add(s);
+    expect(mgr.resolve().id).toBe('a');
+  });
+
+  it('prefers the non-throttled session when one is focused and the other is not', () => {
+    const mgr = new SessionManager();
+    // sA: focused, lastSeenMs = 0
+    const clockA = 0;
+    const sA = new Session(makeHello('a'), fakeSocket, () => clockA);
+    sA.touch();
+    sA.applyHealth(false, true);
+    // sB: hidden, touch happened 5 s in the past → lastSeenMs = 5000
+    let clockB = -5_000;
+    const sB = new Session(makeHello('b'), fakeSocket, () => clockB);
+    sB.touch();
+    clockB = 0;
+    sB.applyHealth(true, false);
+    mgr.add(sB);
+    mgr.add(sA);
+    expect(mgr.resolve().id).toBe('a');
+  });
+
+  it('all-throttled: picks the session with the freshest heartbeat, no gap required', () => {
+    // Simulates: user is in VS Code, Chrome is on another desktop — both tabs are hidden.
+    // The gap between lastSeenMs values is only 500 ms (< 1000 ms old threshold).
+    // Before the fix this would throw. After the fix it should silently pick the freshest.
+    const mgr = new SessionManager();
+    let clockA = 0;
+    const sA = new Session(makeHello('a'), fakeSocket, () => clockA);
+    sA.touch(); // touched at 0
+    clockA = 500; // now it's 500 ms later — lastSeenMs(a) = 500
+    sA.applyHealth(true, false);
+
+    let clockB = 0;
+    const sB = new Session(makeHello('b'), fakeSocket, () => clockB);
+    sB.touch(); // touched at 0
+    clockB = 200; // lastSeenMs(b) = 200 (more recent — smaller value means fresher)
+    sB.applyHealth(true, false);
+
+    mgr.add(sA);
+    mgr.add(sB);
+    // sB is the freshest (lastSeenMs=200 < 500). Should be auto-selected.
+    expect(mgr.resolve().id).toBe('b');
+  });
+
+  it('all-throttled with exactly equal lastSeenMs still throws — cannot distinguish without sessionId', () => {
+    // Degenerate edge case: two sessions have precisely the same heartbeat time.
+    // Even with no gap required (allThrottled), 0 < 0 is false — still ambiguous.
+    // In practice this never happens; the test documents the invariant.
+    const mgr = new SessionManager();
+    const sA = makeThrottledSession('a', 0);
+    const sB = makeThrottledSession('b', 0);
+    mgr.add(sA);
+    mgr.add(sB);
+    expect(() => mgr.resolve()).toThrow('multiple sessions connected');
+  });
+
+  it('mixed throttled: still throws when two non-throttled sessions are within 1 s of each other', () => {
+    const mgr = new SessionManager();
+    const sA = new Session(makeHello('a'), fakeSocket, () => 0);
+    sA.touch();
+    sA.applyHealth(false, true); // focused, lastSeenMs = 0
+
+    const sB = new Session(makeHello('b'), fakeSocket, () => 0);
+    sB.touch();
+    sB.applyHealth(false, true); // focused, lastSeenMs = 0
+
+    mgr.add(sA);
+    mgr.add(sB);
+    expect(() => mgr.resolve()).toThrow('multiple sessions connected');
   });
 });
 

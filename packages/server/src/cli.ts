@@ -4,18 +4,21 @@ import { IRIS_DEFAULT_PORT } from '@syrin/iris-protocol';
 import { start, startDaemon } from './index.js';
 import { log } from './log.js';
 import { readPid, isAlive, isRunning, removePid, spawnDaemon } from './daemon.js';
+import { waitForDaemon, startMcpProxy, probeDaemon } from './mcp-proxy.js';
 import type { StartOptions } from './index.js';
 
 export const CLI_USAGE = `usage:
   iris serve [--port N] [--drive <url>] [--headed]
   iris stop  [--port N] [--quiet]
   iris status [--port N]
-  iris drive <url> [--headed]   (foreground mode — for debugging)`;
+  iris drive <url> [--headed]                       (foreground mode — for debugging)
+  iris mcp   [--port N] [--drive <url>] [--headed]  (MCP stdio proxy — auto-starts daemon if needed)`;
 
 const SERVE_COMMAND = 'serve';
 const STOP_COMMAND = 'stop';
 const STATUS_COMMAND = 'status';
 const DRIVE_COMMAND = 'drive';
+const MCP_COMMAND = 'mcp';
 const DAEMON_INNER_COMMAND = '_daemon';
 
 const HEADED_FLAG = '--headed';
@@ -29,6 +32,7 @@ export type CliResult =
   | { kind: 'status'; port: number }
   | { kind: '_daemon'; port: number; driveUrl?: string; headless: boolean }
   | { kind: 'drive'; port: number; driveUrl: string; headless: boolean }
+  | { kind: 'mcp'; port: number; driveUrl?: string; headless: boolean }
   | { kind: 'error'; message: string };
 
 type ServeFlags =
@@ -135,6 +139,16 @@ export function parseCliArgs(argv: string[], defaultPort: number): CliResult {
         ...(r.driveUrl !== undefined ? { driveUrl: r.driveUrl } : {}),
       };
     }
+    case MCP_COMMAND: {
+      const r = parseServeFlags(rest, defaultPort);
+      if (r.kind === 'error') return r;
+      return {
+        kind: 'mcp',
+        port: r.port,
+        headless: r.headless,
+        ...(r.driveUrl !== undefined ? { driveUrl: r.driveUrl } : {}),
+      };
+    }
     default:
       return { kind: 'error', message: CLI_USAGE };
   }
@@ -229,6 +243,44 @@ function handleDaemonInner(parsed: { port: number; driveUrl?: string; headless: 
     });
 }
 
+/**
+ * MCP proxy mode: ensures the daemon is running, then bridges Claude Code's
+ * stdin/stdout to the daemon's SSE endpoint. This is the recommended way to
+ * configure Iris in .mcp.json — users never need to manage the daemon manually.
+ *
+ * Pass --drive <url> to have the daemon launch its own Playwright browser at that
+ * URL. The agent then has full autonomous control without relying on the user's browser.
+ */
+function handleMcp(opts: { port: number; driveUrl?: string; headless: boolean }): void {
+  const { port, driveUrl, headless } = opts;
+  // Probe the port first — a daemon with a stale PID file is still usable.
+  // Only spawn when nothing is actually listening on the port.
+  probeDaemon(port)
+    .then((listening) => {
+      if (!listening) {
+        const scriptPath = process.argv[1];
+        if (scriptPath === undefined) {
+          log('iris_mcp_no_script', {});
+          process.exit(1);
+          return;
+        }
+        const daemonArgs = [DAEMON_INNER_COMMAND, PORT_FLAG, String(port)];
+        if (driveUrl !== undefined) {
+          daemonArgs.push(DRIVE_FLAG, driveUrl);
+          if (!headless) daemonArgs.push(HEADED_FLAG);
+        }
+        spawnDaemon(process.execPath, scriptPath, daemonArgs, port);
+        log('iris_mcp_daemon_started', { port, ...(driveUrl !== undefined ? { driveUrl } : {}) });
+      }
+      return waitForDaemon(port).then(() => startMcpProxy(port));
+    })
+    .catch((err: unknown) => {
+      const message = err instanceof Error ? err.message : String(err);
+      log('iris_mcp_proxy_error', { error: message });
+      process.exit(1);
+    });
+}
+
 function handleLegacyDrive(parsed: { port: number; driveUrl: string; headless: boolean }): void {
   const options: StartOptions = {
     port: parsed.port,
@@ -267,6 +319,9 @@ function main(): void {
       break;
     case 'drive':
       handleLegacyDrive(parsed);
+      break;
+    case 'mcp':
+      handleMcp(parsed);
       break;
     case '_daemon':
       handleDaemonInner(parsed);

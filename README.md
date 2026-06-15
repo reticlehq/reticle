@@ -21,9 +21,189 @@ arrived. If something silently broke, Iris says **what**, **why**, and (on React
 
 **TypeScript · Model Context Protocol · React-first · dev-only · localhost-only · MIT**
 
-[Easy install (Claude Code)](skill/SKILL.md) · [Quickstart](#quickstart) · [Watch the demo](https://syrin.ai/iris) · [Getting Started](docs/getting-started.md) · [Full Guide](docs/usage.md) · [Why it's ~73× cheaper](docs/token-efficiency.md) · [How is this different?](#how-is-this-different)
+[Installation](#installation) · [Watch the demo](https://syrin.ai/iris) · [Getting Started](docs/getting-started.md) · [Full Guide](docs/usage.md) · [Why it's ~73× cheaper](docs/token-efficiency.md) · [How is this different?](#how-is-this-different)
 
 </div>
+
+---
+
+## Installation
+
+### Easiest — paste one prompt into your AI tool
+
+One skill file handles everything. First time in a project it runs setup. Every time after that it tests the app.
+
+**Paste this into your AI tool:**
+
+```text
+Follow https://raw.githubusercontent.com/syrinlabs/iris/main/SKILL.md
+```
+
+That's it. The agent detects whether Iris is already set up (checks for `.iris.json`), and does the right thing — setup wizard on first run, verification on every run after.
+
+---
+
+### Persistent skill — register once, type `/iris` forever
+
+**Claude Code**
+
+```bash
+curl --create-dirs -o .claude/skills/iris.md \
+  https://raw.githubusercontent.com/syrinlabs/iris/main/SKILL.md
+```
+
+**OpenCode**
+
+```bash
+opencode skill add https://raw.githubusercontent.com/syrinlabs/iris/main/SKILL.md
+```
+
+Then type `/iris` — setup on first use, test the app on every use after.
+
+---
+
+### Manual — four steps
+
+**1. Install**
+
+```bash
+npm i -D @syrin/iris       # or pnpm / yarn / bun
+```
+
+**2. Configure your MCP server**
+
+Each tool has its own config file and format — pick the one you use:
+
+<details>
+<summary><b>Claude Code</b> — <code>.mcp.json</code></summary>
+
+```jsonc
+{
+  "mcpServers": {
+    "iris": {
+      "command": "npx",
+      "args": ["@syrin/iris", "mcp", "--drive", "http://localhost:4310"],
+    },
+  },
+}
+```
+
+</details>
+
+<details>
+<summary><b>OpenCode</b> — <code>opencode.json</code></summary>
+
+```jsonc
+{
+  "mcp": {
+    "iris": {
+      "type": "local",
+      "command": ["npx", "@syrin/iris", "mcp", "--drive", "http://localhost:4310"],
+    },
+  },
+}
+```
+
+`type: "local"` is required. `command` is a flat array — no separate `args`.
+
+</details>
+
+<details>
+<summary><b>Codex CLI</b> — <code>.codex/config.toml</code></summary>
+
+```toml
+[mcp_servers.iris]
+command = "npx"
+args    = ["@syrin/iris", "mcp", "--drive", "http://localhost:4310"]
+```
+
+</details>
+
+<details>
+<summary><b>Cursor</b> — <code>.cursor/mcp.json</code></summary>
+
+```jsonc
+{
+  "mcpServers": {
+    "iris": {
+      "command": "npx",
+      "args": ["@syrin/iris", "mcp", "--drive", "http://localhost:4310"],
+    },
+  },
+}
+```
+
+</details>
+
+<details>
+<summary><b>Windsurf</b> — <code>~/.codeium/windsurf/mcp_config.json</code></summary>
+
+```jsonc
+{
+  "mcpServers": {
+    "iris": {
+      "command": "npx",
+      "args": ["@syrin/iris", "mcp", "--drive", "http://localhost:4310"],
+    },
+  },
+}
+```
+
+This file is global. Create it if it doesn't exist — Windsurf won't create it automatically.
+
+</details>
+
+<details>
+<summary><b>VS Code / GitHub Copilot</b> — <code>.vscode/mcp.json</code></summary>
+
+```jsonc
+{
+  "servers": {
+    "iris": {
+      "command": "npx",
+      "args": ["@syrin/iris", "mcp", "--drive", "http://localhost:4310"],
+    },
+  },
+}
+```
+
+Root key is `"servers"` — not `"mcpServers"`. MCP tools only appear in Copilot **Agent mode**.
+
+</details>
+
+<details>
+<summary><b>Zed</b> — <code>~/.config/zed/settings.json</code></summary>
+
+```jsonc
+{
+  "context_servers": {
+    "iris": {
+      "command": "npx",
+      "args": ["@syrin/iris", "mcp", "--drive", "http://localhost:4310"],
+    },
+  },
+}
+```
+
+</details>
+
+Replace `4310` with the port your dev server runs on, or pick a dedicated Iris testing port
+(see the skill file for port conflict guidance).
+
+**3. Embed the SDK in your app (dev only)**
+
+```ts
+import { iris } from '@syrin/iris';
+if (import.meta.env.DEV) iris.connect({ session: 'my-app' });
+```
+
+**4. Run your app and ask your agent to verify something**
+
+```
+Add a logout button and verify it actually works with Iris.
+```
+
+→ See [Getting Started](docs/getting-started.md) for the full walkthrough (React adapter, source mapping, signals).
 
 ---
 
@@ -123,50 +303,6 @@ it on every edit."
 </p>
 
 ---
-
-## Quickstart
-
-**One install** — SDK, React adapter, source-mapping plugins, spec runner, and the MCP server all ship in
-a single package, `@syrin/iris`:
-
-```bash
-npm i -D @syrin/iris
-```
-
-**1. Point your agent at the MCP server** — Claude Code (`.mcp.json`), Cursor, Windsurf, etc.:
-
-```jsonc
-{ "mcpServers": { "iris": { "command": "npx", "args": ["@syrin/iris"] } } }
-```
-
-**2. Embed the SDK in your app (dev only)**
-
-```ts
-import { iris } from '@syrin/iris';
-if (import.meta.env.DEV) iris.connect({ session: 'my-app' });
-```
-
-That's it — run your app and ask your agent: _"add a logout button and verify it works with Iris."_ → see
-[Getting Started](docs/getting-started.md) for the full walkthrough (React adapter, source mapping via
-`@syrin/iris/next` or `/babel`, and adding `signals` at the points that matter).
-
-> **It's one package — nothing else to install.** The browser SDK, the bridge + MCP server, the React
-> adapter, the source-mapping plugins, the spec runner, and the lint rule all ship as **subpaths** of
-> `@syrin/iris` (`/server`, `/next`, `/babel`, `/test`, `/eslint`).
-
-## Easy installation with Claude Code
-
-If you're using **Claude Code**, the fastest path is the bundled skill file — no manual JSON config:
-
-**→ [`skill/SKILL.md`](skill/SKILL.md)**
-
-Save it as `.claude/skills/iris.md` in your project, then type `/iris` in Claude Code. It will:
-
-1. Start the Iris daemon (`iris serve`) — a background process that survives session restarts
-2. Add the MCP server to your project config (`{ "url": "http://localhost:4400/mcp/sse" }`)
-3. Wire a stop hook so the daemon shuts down cleanly when Claude exits
-
-> **Why this matters for teams:** the daemon mode eliminates the three most common failure modes — port conflicts on restart, orphan Chrome processes holding ports for 40+ minutes, and MCP not reconnecting after a session refresh. The daemon stays up; Claude reconnects to it.
 
 ---
 
@@ -381,7 +517,7 @@ the ones you miss). Dev-only, tree-shaken out of production.
 
 ## Docs
 
-- **[Easy Installation (Claude Code)](skill/SKILL.md)** — drop the skill file, type `/iris`, done. Daemon mode, no manual MCP config.
+- **[Installation (skill file + manual)](README.md#installation)** — `/iris-setup` (one-time setup) and `/iris` (test the app) skills for Claude Code, OpenCode, Cursor, Windsurf, VS Code, Codex, and Zed. Manual configs for each tool also in that section.
 - **[Getting Started](docs/getting-started.md)** — install, wire up your agent, first verification (step by step).
 - **[Integrate with Claude Code](docs/integrate-with-claude-code.md)** — copy-paste prompts to make a coding agent wire Iris in and verify its own work.
 - **[Integration Patterns](docs/integration-patterns.md)** — zero-prod-bundle integration + adopting Iris incrementally (testids → capabilities → signals).

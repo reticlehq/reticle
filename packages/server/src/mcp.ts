@@ -1,4 +1,3 @@
-import { createRequire } from 'node:module';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { isToonable, resultToToon } from '@syrin/iris-protocol';
@@ -6,12 +5,9 @@ import { TOOLS, type ToolDeps } from './tools/tools.js';
 import { filterTools, TOOL_PROFILE, type ToolProfile } from './tools/profiles.js';
 import { runTool } from './tools/invoke-tool.js';
 import { log } from './log.js';
+import { SERVER_VERSION } from './server-version.js';
 
-interface PackageJson {
-  version: string;
-}
-const _pkg: PackageJson = createRequire(import.meta.url)('../package.json') as PackageJson;
-const SERVER_INFO = { name: 'iris', version: _pkg.version };
+const SERVER_INFO = { name: 'iris', version: SERVER_VERSION };
 
 const ENCODING_ENV = 'IRIS_ENCODING';
 const TOON_VALUE = 'toon';

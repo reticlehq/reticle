@@ -59,5 +59,11 @@ export const IrisTool = {
   NAVIGATE: 'iris_navigate',
   /** Reload the connected browser tab (soft or hard). */
   REFRESH: 'iris_refresh',
+  /** Report running version, latest available, changelog, and breaking changes. */
+  VERSION_INFO: 'iris_version_info',
+  /** Install the latest server version and restart (Claude Code reconnects automatically). */
+  APPLY_UPDATE: 'iris_apply_update',
+  /** Restore the previous server version and restart. */
+  ROLLBACK: 'iris_rollback',
 } as const;
 export type IrisTool = (typeof IrisTool)[keyof typeof IrisTool];

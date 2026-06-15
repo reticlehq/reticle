@@ -44,6 +44,7 @@ import { ANNOTATE_TOOLS } from '../flows/annotate-tools.js';
 import { LIVE_CONTROL_TOOLS } from '../session/live-control-tools.js';
 import { pausedShortCircuit, withControl } from '../session/control-envelope.js';
 import type { AnnotationStore } from '../flows/annotation-store.js';
+import { UPDATE_TOOLS } from '../update/update-tools.js';
 
 export interface ToolDeps {
   sessions: SessionManager;
@@ -1143,4 +1144,6 @@ export const TOOLS: ToolDef[] = [
   ...LIVE_CONTROL_TOOLS,
   // iris_navigate / iris_refresh — browser navigation tools. See browser-tools.ts.
   ...BROWSER_TOOLS,
+  // iris_version_info / iris_apply_update / iris_rollback — update lifecycle tools.
+  ...UPDATE_TOOLS,
 ];

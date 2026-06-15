@@ -256,12 +256,8 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
     now,
   };
   const profile = resolveToolProfile(options.toolProfile);
-  const mcpServer = createMcpServer(
-    realInput !== undefined ? { ...deps, realInput } : deps,
-    profile,
-  );
-
-  shared.attachMcp(mcpServer);
+  const effectiveDeps = realInput !== undefined ? { ...deps, realInput } : deps;
+  shared.attachMcp(() => createMcpServer(effectiveDeps, profile));
 
   await new Promise<void>((resolve) => {
     shared.httpServer.once('listening', resolve);

@@ -72,6 +72,17 @@ export const CRAWL_DEFAULTS = {
   FAILED_STATUS: 400,
 } as const;
 
+/** How long to wait between npm registry update checks (24 h). */
+export const UpdateCheckIntervalMs = 24 * 60 * 60 * 1000;
+
+/** States of the server update lifecycle exposed by iris_version_info. */
+export const UpdateStatus = {
+  UP_TO_DATE: 'up_to_date',
+  UPDATE_AVAILABLE: 'update_available',
+  CHECKING: 'checking',
+} as const;
+export type UpdateStatus = (typeof UpdateStatus)[keyof typeof UpdateStatus];
+
 /** Schema version stamped into contract.json so a reader can reject/upgrade old files. */
 export const CONTRACT_FILE_VERSION = 1;
 
