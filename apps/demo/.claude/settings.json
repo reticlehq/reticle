@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ../../packages/iris/dist/cli.js stop --quiet"
+          }
+        ]
+      }
+    ]
+  }
+}
