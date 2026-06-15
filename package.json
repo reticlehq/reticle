@@ -5,14 +5,14 @@
   "description": "Iris — eyes for coding agents. Observe and verify a running web app over MCP, no screenshots.",
   "packageManager": "pnpm@10.33.2",
   "engines": {
-    "node": ">=22"
+    "node": ">=22.12"
   },
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
-    "test": "turbo run test",
+    "test": "turbo run test:unit",
     "test:unit": "turbo run test:unit",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
@@ -20,6 +20,10 @@
     "publish:dry-run": "pnpm build && pnpm -r publish --access public --no-git-checks --dry-run"
   },
   "pnpm": {
+    "overrides": {
+      "esbuild@>=0.18.0 <0.28.1": "0.28.1",
+      "postcss@<8.5.10": "8.5.15"
+    },
     "onlyBuiltDependencies": [
       "esbuild"
     ]
@@ -27,7 +31,7 @@
   "devDependencies": {
     "@eslint/js": "^9.18.0",
     "@types/node": "^22.10.0",
-    "@vitest/coverage-v8": "^4.1.8",
+    "@vitest/coverage-v8": "^3.2.6",
     "eslint": "^9.18.0",
     "eslint-plugin-react-hooks": "^5.1.0",
     "jsdom": "^29.1.1",
@@ -36,7 +40,7 @@
     "turbo": "^2.3.3",
     "typescript": "^5.7.3",
     "typescript-eslint": "^8.20.0",
-    "vitest": "^3.0.0",
+    "vitest": "^3.2.6",
     "ws": "^8.21.0"
   }
 }

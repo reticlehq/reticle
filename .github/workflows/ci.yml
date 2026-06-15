@@ -20,6 +20,7 @@ jobs:
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test:unit
+      - run: pnpm audit --audit-level high
       - run: pnpm format:check
 
   e2e:
@@ -34,6 +35,6 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
-      - run: pnpm --filter @iris/e2e exec playwright install --with-deps chromium
+      - run: pnpm --filter @syrin/iris-e2e --fail-if-no-match exec playwright install --with-deps chromium
       - name: Run e2e battery (boots api+demo+next-smoke, drives Iris headless)
-        run: pnpm --filter @iris/e2e run e2e:ci
+        run: pnpm --filter @syrin/iris-e2e --fail-if-no-match run e2e:ci

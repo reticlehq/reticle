@@ -1,9 +1,11 @@
 import {
   ActionType,
   ComponentStateReason,
+  DANGEROUS_ACTION_CONFIRM_ARG,
   ElementQuerySchema,
   IrisCommand,
   SnapshotMode,
+  TRANSPORT_LIMITS,
   type ComponentStateResult,
   type ElementQuery,
   type ElementState,
@@ -63,6 +65,15 @@ function inspect(ref: string): unknown {
   return {
     ...describe(el),
     tag: el.tagName.toLowerCase(),
+    href: el.getAttribute('href') ?? undefined,
+    formAction:
+      el instanceof HTMLButtonElement || el instanceof HTMLInputElement
+        ? (el.form?.getAttribute('action') ?? undefined)
+        : undefined,
+    formText:
+      el instanceof HTMLButtonElement || el instanceof HTMLInputElement
+        ? (el.form?.textContent ?? undefined)
+        : undefined,
     box: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
     styles,
     component,
@@ -123,6 +134,16 @@ function listAnimations(): unknown {
   return { animations };
 }
 
+export function resolveNavigationUrl(rawUrl: string, baseUrl: string): string | null {
+  if (rawUrl.length === 0 || rawUrl.length > TRANSPORT_LIMITS.MAX_URL_LENGTH) return null;
+  try {
+    const url = new URL(rawUrl, baseUrl);
+    return url.protocol === 'http:' || url.protocol === 'https:' ? url.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Map browser command names to handlers. Used by the transport on each COMMAND. */
 export function createCommandRegistry(): Map<string, CommandHandler> {
   const reg = new Map<string, CommandHandler>();
@@ -143,7 +164,11 @@ export function createCommandRegistry(): Map<string, CommandHandler> {
     const action = str(args['action']) ?? '';
     if (action === ActionType.WEBMCP) {
       const inner = record(args['args']);
-      return dispatchWebMcp(str(inner['tool']) ?? '', record(inner['params']));
+      return dispatchWebMcp(
+        str(inner['tool']) ?? '',
+        record(inner['params']),
+        inner[DANGEROUS_ACTION_CONFIRM_ARG] === true,
+      );
     }
     return executeAction(str(args['ref']) ?? '', action, record(args['args']));
   });
@@ -174,8 +199,10 @@ export function createCommandRegistry(): Map<string, CommandHandler> {
     );
   });
   reg.set(IrisCommand.NAVIGATE, (args) => {
-    const url = str(args['url']);
-    if (url === undefined || url.length === 0) return { ok: false, reason: 'url required' };
+    const rawUrl = str(args['url']);
+    if (rawUrl === undefined || rawUrl.length === 0) return { ok: false, reason: 'url required' };
+    const url = resolveNavigationUrl(rawUrl, window.location.href);
+    if (url === null) return { ok: false, reason: 'only http(s) navigation is allowed' };
     window.location.assign(url);
     return { ok: true, url };
   });

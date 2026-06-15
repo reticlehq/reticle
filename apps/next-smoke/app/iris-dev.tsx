@@ -19,7 +19,12 @@ export function IrisDev() {
         testids: ['ping-button', 'add-task', 'edit-field', 'show-toast'],
         signals: ['field:committed'],
       });
-      iris.connect({ session: 'next-smoke', present: true });
+      const token = process.env['NEXT_PUBLIC_IRIS_TOKEN'];
+      iris.connect({
+        session: 'next-smoke',
+        present: true,
+        ...(typeof token === 'string' && token.length > 0 ? { token } : {}),
+      });
     })();
   }, []);
   return null;

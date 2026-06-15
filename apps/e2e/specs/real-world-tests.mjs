@@ -26,7 +26,7 @@ const refOf = async (by, value) => { for (let i = 0; i < 40; i++) { const r = (a
 
 const b = await chromium.launch({ headless: true });
 const p = await b.newPage();
-await p.goto('http://localhost:4310/', { waitUntil: 'networkidle' });
+await p.goto('http://localhost:4310/?session=demo', { waitUntil: 'networkidle' });
 for (let i = 0; i < 200 && server.bridge.sessions.count() === 0; i++) await sleep(50);
 
 console.log('\n=== Iris × showcase dashboard (:4310) ===');

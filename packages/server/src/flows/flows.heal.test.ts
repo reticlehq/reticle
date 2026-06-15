@@ -5,12 +5,14 @@ import { join } from 'node:path';
 import {
   ActionType,
   AnchorKind,
+  DANGEROUS_ACTION_CONFIRM_ARG,
   FLOW_FILE_VERSION,
   FLOW_SIGNAL_TIMEOUT_MS,
   FlowErrorCode,
   FlowFileSchema,
   HealStatus,
   IrisCommand,
+  ReplayStatus,
   type CommandResult,
   type ElementDescriptor,
   type FlowFile,
@@ -51,7 +53,12 @@ function present(testids: string[]): QueryEmptyHint {
 }
 
 class FakeSession {
-  constructor(private readonly script: (testid: string) => QueryScript) {}
+  readonly actArgs: Record<string, unknown>[] = [];
+
+  constructor(
+    private readonly script: (testid: string) => QueryScript,
+    private readonly actOk = true,
+  ) {}
   command(name: string, args: Record<string, unknown> = {}): Promise<CommandResult> {
     if (name === IrisCommand.QUERY) {
       return Promise.resolve({
@@ -59,6 +66,16 @@ class FakeSession {
         id: 'q',
         ok: true,
         result: this.script(asString(args['value']) ?? ''),
+      });
+    }
+    if (name === IrisCommand.ACT) {
+      this.actArgs.push((args['args'] as Record<string, unknown> | undefined) ?? {});
+      return Promise.resolve({
+        kind: 'command_result',
+        id: 'a',
+        ok: this.actOk,
+        result: {},
+        ...(this.actOk ? {} : { error: 'act failed' }),
       });
     }
     return Promise.resolve({ kind: 'command_result', id: 'x', ok: true, result: {} });
@@ -202,6 +219,33 @@ describe('FlowStore.heal + iris_flow_heal', () => {
 
     const after = await readFile(flowPath(root, 'chat'), 'utf8');
     expect(after).toEqual(before);
+  });
+
+  it('heal reports a resolved-anchor action failure as an error', async () => {
+    await store.saveFlow(flowFile('chat', [clickStep('chat-send')]));
+    const session = new FakeSession((testid) => ({ elements: [el(`e-${testid}`, testid)] }), false);
+
+    const res = await heal(store, session, { flowName: 'chat', apply: true });
+    expect(res.status).toBe(HealStatus.ERROR);
+    expect(res.error).toEqual({ code: ReplayStatus.ERROR, message: 'act failed' });
+    expect(res.applied).toBe(false);
+    expect(res.proposals).toEqual([]);
+    expect(res.changed).toEqual([]);
+  });
+
+  it('heal forwards destructive-action confirmation only when explicitly requested', async () => {
+    await store.saveFlow(flowFile('chat', [clickStep('delete-account')]));
+    const session = new FakeSession((testid) => ({ elements: [el(`e-${testid}`, testid)] }));
+
+    await heal(store, session, { flowName: 'chat', apply: false });
+    await heal(store, session, {
+      flowName: 'chat',
+      apply: false,
+      confirmDangerous: true,
+    });
+
+    expect(session.actArgs[0]).not.toHaveProperty(DANGEROUS_ACTION_CONFIRM_ARG);
+    expect(session.actArgs[1]).toMatchObject({ [DANGEROUS_ACTION_CONFIRM_ARG]: true });
   });
 
   it('heal on a missing flow returns a structured error', async () => {

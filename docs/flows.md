@@ -99,7 +99,8 @@ iris_flow_replay({ flowName: "create-task" }) // re-resolve each anchor against 
 - `drift` — an anchor missed (a testid was renamed, or a signal never fired). The result is
   **legible**: `{ step, anchor, drift: { reasonKind: "testid_not_found", nearest: "send-message" } }`
   — never a blind failure. (This is the "whose fault is it" principle.)
-- `error` — the flow file is missing/invalid; no steps ran.
+- `error` — the flow file is missing/invalid, or a resolved action failed. Runtime failures include
+  the failed step and a top-level error envelope.
 
 A testid-_preserving_ refactor (you moved markup but kept the testids) still replays green.
 

@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import babel from '@rolldown/plugin-babel';
 import irisSource from '@syrin/iris-babel-plugin';
 
 // The Iris showcase dashboard runs on a dedicated port (4310) so it never collides with other
@@ -10,7 +11,7 @@ const IRIS_PORT = Number(process.env['IRIS_PORT'] ?? 4400);
 export default defineConfig({
   // Stamp data-iris-source on host elements in dev so iris_inspect can map DOM -> file:line
   // (React 19 removed _debugSource). Dev-only; harmless in prod builds.
-  plugins: [react({ babel: { plugins: [irisSource] } })],
+  plugins: [babel({ plugins: [irisSource] }), react()],
   server: { port: 4310 },
   define: { __IRIS_PORT__: IRIS_PORT },
 });

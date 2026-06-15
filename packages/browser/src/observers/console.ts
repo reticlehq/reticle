@@ -1,6 +1,7 @@
 /* eslint-disable no-console -- this module's whole purpose is to wrap console.{log,warn,error} */
 import { EventType } from '@syrin/iris-protocol';
 import type { Emit, Teardown } from './types.js';
+import { safeStringify } from '../security/serialization.js';
 
 type ConsoleMethod = 'log' | 'warn' | 'error';
 
@@ -15,11 +16,7 @@ function stringifyArgs(args: unknown[]): string {
     .map((a) => {
       if (typeof a === 'string') return a;
       if (a instanceof Error) return a.message;
-      try {
-        return JSON.stringify(a);
-      } catch {
-        return String(a);
-      }
+      return safeStringify(a);
     })
     .join(' ');
 }

@@ -85,6 +85,12 @@ export type {
 
 export interface StartOptions {
   port?: number;
+  /** Bind address. Non-loopback hosts require a token. Defaults to IRIS_HOST or localhost. */
+  host?: string;
+  /** Browser/bridge pairing token. Defaults to IRIS_TOKEN. */
+  token?: string;
+  /** Browser origins allowed in addition to localhost. Defaults to IRIS_ALLOWED_ORIGINS. */
+  allowedOrigins?: string[];
   /** When false, skip the MCP stdio transport (used in tests). */
   mcp?: boolean;
   /** CDP endpoint for native real-input mode. Defaults to env IRIS_CDP_URL. No-op if unset. */
@@ -113,7 +119,23 @@ export interface RunningServer {
 /** Start the Iris bridge (browser WS endpoint) and, by default, the MCP stdio server. */
 export async function start(options: StartOptions = {}): Promise<RunningServer> {
   const port = options.port ?? IRIS_DEFAULT_PORT;
-  const bridge = new Bridge({ port });
+  const envToken = process.env['IRIS_TOKEN'];
+  const envOrigins = process.env['IRIS_ALLOWED_ORIGINS'];
+  const host = options.host ?? process.env['IRIS_HOST'];
+  const token =
+    options.token ?? (envToken !== undefined && envToken.length > 0 ? envToken : undefined);
+  const allowedOrigins =
+    options.allowedOrigins ??
+    envOrigins
+      ?.split(',')
+      .map((origin) => origin.trim())
+      .filter((origin) => origin.length > 0);
+  const bridge = new Bridge({
+    port,
+    ...(host === undefined ? {} : { host }),
+    ...(token === undefined ? {} : { token }),
+    ...(allowedOrigins === undefined ? {} : { allowedOrigins }),
+  });
   // Server-authoritative liveness: a Node-side reaper (immune to browser throttling) ends sessions
   // whose agent has gone idle, so a forgotten/crashed agent never leaves the HUD "running" forever.
   const reaper = new SessionReaper(bridge.sessions);

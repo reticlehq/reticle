@@ -768,7 +768,7 @@ describe('presenter glow state machine', () => {
 
     // Go quiet: jump clock past the idle window, let native timers fire the fade-out.
     t += 1000;
-    await wait(FAST_IDLE_MS + FAST_FADE_MS + 20);
+    expect(await until(() => p.glowPhase() === 'idle')).toBe(true);
     await flush();
 
     expect(flips.enters).toBe(1);
@@ -796,7 +796,7 @@ describe('presenter glow state machine', () => {
     expect(p.glowPhase()).toBe('busy');
 
     t += 1000;
-    await wait(FAST_IDLE_MS + FAST_FADE_MS + 20);
+    expect(await until(() => p.glowPhase() === 'idle')).toBe(true);
     await flush();
 
     expect(p.glowPhase()).toBe('idle');
@@ -822,7 +822,7 @@ describe('presenter glow state machine', () => {
 
     p.status('one');
     t += 1000;
-    await wait(FAST_IDLE_MS + 10); // idle check fires -> begins fade
+    expect(await until(() => p.glowPhase() === 'fading')).toBe(true);
     expect(p.glowPhase()).toBe('fading');
 
     p.status('resumed'); // activity during fade

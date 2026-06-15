@@ -8,6 +8,8 @@ import {
   PresenterMode,
   SESSION_AUTO,
   SessionState,
+  TRANSPORT_LIMITS,
+  isLoopbackHostname,
   type CommandMessage,
   type HelloMessage,
   type IrisEvent,
@@ -47,6 +49,10 @@ export interface IrisConnectOptions {
   url?: string;
   /** Human-friendly session label so the agent can target the right tab. */
   session?: string;
+  /** Browser/bridge pairing token. Required when either endpoint is non-localhost. */
+  token?: string;
+  /** Explicitly allow Iris on a non-localhost page or bridge. Requires token. */
+  allowNonLocalhost?: boolean;
   /** Show a small in-page status chip (connection + event count). */
   overlay?: boolean;
   /** Presenter mode: glow border, animated cursor, click/hover effects, narration HUD. */
@@ -71,6 +77,45 @@ export interface IrisConnectOptions {
   endedFadeMs?: number;
   /** Session auto-end after this much agent idle (presenter). Default 5min; agent-tunable via iris_session. */
   idleEndMs?: number;
+}
+
+export function connectionPolicy(
+  pageHostname: string,
+  bridgeUrl: string,
+  allowNonLocalhost: boolean,
+  token: string | undefined,
+): { allowed: boolean; reason?: string } {
+  let bridge: URL;
+  try {
+    bridge = new URL(bridgeUrl);
+  } catch {
+    return { allowed: false, reason: 'invalid Iris bridge URL' };
+  }
+  if (bridge.protocol !== 'ws:' && bridge.protocol !== 'wss:') {
+    return { allowed: false, reason: 'Iris bridge URL must use ws:// or wss://' };
+  }
+  if ((token?.length ?? 0) > TRANSPORT_LIMITS.MAX_TOKEN_LENGTH) {
+    return {
+      allowed: false,
+      reason: `Iris pairing token exceeds ${String(TRANSPORT_LIMITS.MAX_TOKEN_LENGTH)} characters`,
+    };
+  }
+  const remoteBridge = !isLoopbackHostname(bridge.hostname);
+  if (remoteBridge && bridge.protocol !== 'wss:') {
+    return { allowed: false, reason: 'a non-local Iris bridge must use wss://' };
+  }
+  const remote = !isLoopbackHostname(pageHostname) || remoteBridge;
+  if (!remote) return { allowed: true };
+  if (!allowNonLocalhost) {
+    return {
+      allowed: false,
+      reason: 'Iris is disabled outside localhost unless allowNonLocalhost is explicitly enabled',
+    };
+  }
+  if (token === undefined || token.length === 0) {
+    return { allowed: false, reason: 'a pairing token is required outside localhost' };
+  }
+  return { allowed: true };
 }
 
 function str(value: unknown, fallback = ''): string {
@@ -120,6 +165,7 @@ export class Iris {
   #presenter: Presenter | undefined;
   #recorder: RecorderHandle | undefined;
   #eventCount = 0;
+  #token: string | undefined;
   /** Act-row log handle for the in-flight act/act_sequence, so its outcome stamps the right row. */
   #actHandle: LogHandle | undefined;
 
@@ -127,11 +173,28 @@ export class Iris {
     if (this.#connected) return;
     if (typeof window === 'undefined' || typeof document === 'undefined') return;
 
-    this.#session = resolveSessionLabel(options.session, () => `s${Date.now().toString(36)}`);
+    const url = options.url ?? `ws://localhost:${String(IRIS_DEFAULT_PORT)}${IRIS_WS_PATH}`;
+    const policy = connectionPolicy(
+      window.location.hostname,
+      url,
+      options.allowNonLocalhost === true,
+      options.token,
+    );
+    if (!policy.allowed) {
+      globalThis.console.warn(`[Iris] ${policy.reason ?? 'connection blocked'}`);
+      return;
+    }
+
+    this.#session = resolveSessionLabel(options.session, () =>
+      typeof globalThis.crypto?.randomUUID === 'function'
+        ? `s${globalThis.crypto.randomUUID()}`
+        : `s${Date.now().toString(36)}`,
+    );
+    this.#token =
+      options.token !== undefined && options.token.length > 0 ? options.token : undefined;
     this.#start = performance.now();
     this.#registry = createCommandRegistry();
 
-    const url = options.url ?? `ws://localhost:${String(IRIS_DEFAULT_PORT)}${IRIS_WS_PATH}`;
     this.#transport = new Transport({
       url,
       hello: () => this.#hello(),
@@ -261,6 +324,7 @@ export class Iris {
       url: location.href,
       title: document.title,
       adapters: adapterNames(),
+      ...(this.#token === undefined ? {} : { token: this.#token }),
       hasCapabilities: hasCapabilities(),
     };
   }

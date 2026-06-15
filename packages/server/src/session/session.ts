@@ -309,6 +309,16 @@ export class Session {
     }
   }
 
+  /** End this transport without letting a stale socket remove its replacement session. */
+  disconnect(reason: string): void {
+    this.rejectAll(reason);
+    try {
+      this.#socket.close(1008, reason);
+    } catch {
+      // A fake or already-closed socket needs no further cleanup.
+    }
+  }
+
   // ── Live-control: state machine + human→agent inbox (server-owned) ───────────────
 
   getState(): SessionState {
@@ -440,13 +450,16 @@ export class Session {
 export class SessionManager {
   readonly #sessions = new Map<string, Session>();
 
-  add(session: Session): void {
+  add(session: Session): Session | undefined {
+    const previous = this.#sessions.get(session.id);
     this.#sessions.set(session.id, session);
+    return previous;
   }
 
-  remove(sessionId: string): void {
-    this.#sessions.get(sessionId)?.rejectAll('session disconnected');
-    this.#sessions.delete(sessionId);
+  remove(session: Session): boolean {
+    if (this.#sessions.get(session.id) !== session) return false;
+    session.rejectAll('session disconnected');
+    return this.#sessions.delete(session.id);
   }
 
   get(sessionId: string): Session | undefined {

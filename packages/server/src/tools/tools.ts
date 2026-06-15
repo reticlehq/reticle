@@ -2,10 +2,12 @@ import { z } from 'zod';
 import {
   ActionType,
   ActionWarning,
+  DANGEROUS_ACTION_CONFIRM_ARG,
   EventType,
   InputMode,
   InputModeReason,
   IrisCommand,
+  isDangerousActionText,
   SnapshotMode,
 } from '@syrin/iris-protocol';
 import type { Session, SessionManager } from '../session/session.js';
@@ -175,14 +177,49 @@ async function tryRealInput(
   if (!(await provider.isAvailableFor(session.url)))
     return synthetic(InputModeReason.PAGE_NOT_CORRELATED);
 
-  const box = asBox(await commandOrThrow(deps, session.id, IrisCommand.INSPECT, { ref }));
+  const inspected = await commandOrThrow(deps, session.id, IrisCommand.INSPECT, { ref });
+  const confirmed = inner[DANGEROUS_ACTION_CONFIRM_ARG] === true;
+  const dangerousDescriptorText = (value: unknown): string => {
+    const descriptor = asRecord(value);
+    return [
+      asString(descriptor['name']) ?? '',
+      asString(descriptor['text']) ?? '',
+      asString(descriptor['value']) ?? '',
+      asString(descriptor['href']) ?? '',
+      asString(descriptor['formAction']) ?? '',
+      asString(descriptor['formText']) ?? '',
+    ].join(' ');
+  };
+  if (
+    (action === ActionType.CLICK || action === ActionType.DBLCLICK) &&
+    !confirmed &&
+    isDangerousActionText(dangerousDescriptorText(inspected))
+  ) {
+    throw new Error(
+      `potentially destructive native action blocked; retry with args.${DANGEROUS_ACTION_CONFIRM_ARG}=true`,
+    );
+  }
+  const box = asBox(inspected);
   if (box === undefined) return synthetic(InputModeReason.ELEMENT_NOT_LOCATABLE);
 
   let toBox: ElementBox | undefined;
   if (action === ActionType.DRAG) {
     const toRef = asString(inner['toRef']);
     if (toRef === undefined) return synthetic(InputModeReason.DRAG_TARGET_UNRESOLVED);
-    toBox = asBox(await commandOrThrow(deps, session.id, IrisCommand.INSPECT, { ref: toRef }));
+    const targetInspected = await commandOrThrow(deps, session.id, IrisCommand.INSPECT, {
+      ref: toRef,
+    });
+    if (
+      !confirmed &&
+      isDangerousActionText(
+        `${dangerousDescriptorText(inspected)} ${dangerousDescriptorText(targetInspected)}`,
+      )
+    ) {
+      throw new Error(
+        `potentially destructive native action blocked; retry with args.${DANGEROUS_ACTION_CONFIRM_ARG}=true`,
+      );
+    }
+    toBox = asBox(targetInspected);
     if (toBox === undefined) return synthetic(InputModeReason.DRAG_TARGET_UNRESOLVED);
   }
 
@@ -367,7 +404,7 @@ export const TOOLS: ToolDef[] = [
         .record(z.unknown())
         .optional()
         .describe(
-          'Action-specific arguments: { value } for fill/select, { text } for type/press, { native: true } to force a trusted native click.',
+          'Action-specific arguments: { value } for fill/select, { text } for type/press, { native: true } to force a trusted native click, { confirmDangerous: true } to allow a potentially destructive control.',
         ),
       refuseWhenThrottled: z
         .boolean()
@@ -452,7 +489,7 @@ export const TOOLS: ToolDef[] = [
       steps: z
         .array(z.record(z.unknown()))
         .describe(
-          'Ordered list of { ref, action, args? } objects. Each step is equivalent to one iris_act call.',
+          'Ordered list of { ref, action, args? } objects. Each step is equivalent to one iris_act call; put confirmDangerous:true in a destructive step args object.',
         ),
       ...sessionIdShape,
     },
@@ -502,7 +539,9 @@ export const TOOLS: ToolDef[] = [
       args: z
         .record(z.unknown())
         .optional()
-        .describe('Action-specific arguments: { value } for fill/select, { text } for type/press.'),
+        .describe(
+          'Action-specific arguments: { value } for fill/select, { text } for type/press, { confirmDangerous: true } for a potentially destructive control.',
+        ),
       until: PredicateSchema.describe(
         'Predicate to wait for after the action completes. Same shape accepted by iris_assert.',
       ),
@@ -932,11 +971,15 @@ export const TOOLS: ToolDef[] = [
   {
     name: IrisTool.REPLAY,
     description:
-      'Re-execute a previously recorded program by recordingName. Re-resolves each step to its element by testid (falling back to the stored ref for unstable steps) and runs the actions in order against the live session. Stops at the first failure. Returns { ok, steps:[{tool,ok,error?,note?}] }.',
+      'Re-execute a previously recorded program by recordingName. Re-resolves each step to its element by testid (falling back to the stored ref for unstable steps) and runs the actions in order against the live session. Stops at the first failure. Destructive controls require confirmDangerous:true on every replay; confirmation is never persisted. Returns { ok, steps:[{tool,ok,error?,note?}] }.',
     inputSchema: {
       recordingName: z
         .string()
         .describe('Name of a compiled recording (from iris_record_stop) to re-execute.'),
+      confirmDangerous: z
+        .boolean()
+        .optional()
+        .describe('Set true to allow destructive controls during this replay only.'),
       ...sessionIdShape,
     },
     outputSchema: {
@@ -957,7 +1000,7 @@ export const TOOLS: ToolDef[] = [
       if (program === undefined) throw new Error(`no compiled recording named '${name}'`);
       const session = deps.sessions.resolve(asString(args['sessionId']));
       const since = session.elapsed();
-      const steps = await replayProgram(session, program);
+      const steps = await replayProgram(session, program, args['confirmDangerous'] === true);
       return { recordingName: name, since, steps, ok: steps.every((s) => s.ok) };
     },
   },

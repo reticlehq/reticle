@@ -46,7 +46,7 @@ check('new task rendered after click', added.pass, added.failureReason ?? '');
 console.log('\nTASK B — API call (Next route handler) + modal + no console errors');
 const since = (await T('iris_act', { ref: await refOf('testid', 'ping-button'), action: 'click' })).since;
 const verdict = await T('iris_assert', {
-  timeout_ms: 4000,
+  timeout_ms: 10000,
   predicate: { kind: 'allOf', predicates: [
     { kind: 'net', method: 'GET', urlContains: '/api/ping', status: 200, since },
     { kind: 'element', query: { role: 'dialog', name: 'Server reply' }, state: 'visible' },

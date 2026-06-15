@@ -1,5 +1,6 @@
-import { ElementState, type ElementDescriptor } from '@syrin/iris-protocol';
+import { ElementState, REDACTED_VALUE, type ElementDescriptor } from '@syrin/iris-protocol';
 import { refs } from './refs.js';
+import { isSensitiveKey } from '../security/serialization.js';
 
 /** Roles whose accessible name comes from their text content. */
 const NAME_FROM_CONTENT = new Set([
@@ -183,6 +184,22 @@ export function getValue(el: Element): string | undefined {
     el instanceof HTMLTextAreaElement ||
     el instanceof HTMLSelectElement
   ) {
+    const autocomplete = el.getAttribute('autocomplete') ?? '';
+    const identifiers = [
+      el.getAttribute('name') ?? '',
+      el.id,
+      el.getAttribute('data-testid') ?? '',
+      el.getAttribute('aria-label') ?? '',
+    ];
+    const sensitiveAutocomplete =
+      /current-password|new-password|cc-number|cc-csc|one-time-code/i.test(autocomplete);
+    if (
+      (el instanceof HTMLInputElement && el.type.toLowerCase() === 'password') ||
+      sensitiveAutocomplete ||
+      identifiers.some(isSensitiveKey)
+    ) {
+      return REDACTED_VALUE;
+    }
     return el.value;
   }
   const valueNow = el.getAttribute('aria-valuenow');

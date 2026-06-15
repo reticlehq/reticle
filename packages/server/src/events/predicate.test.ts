@@ -7,7 +7,7 @@ import {
   type IrisEvent,
   type MatchResult,
 } from '@syrin/iris-protocol';
-import { evaluatePredicate, type PredicateSession } from './predicate.js';
+import { evaluatePredicate, waitForPredicate, type PredicateSession } from './predicate.js';
 
 /** In-memory session: events from an array, MATCH from a supplied matcher. */
 class FakeSession implements PredicateSession {
@@ -202,5 +202,19 @@ describe('predicate engine', () => {
     });
     expect(r.pass).toBe(false);
     expect(r.failureReason).toContain('Cancel');
+  });
+
+  it('turns a disconnected browser command into a failed wait verdict', async () => {
+    const session: PredicateSession = {
+      command: () => Promise.reject(new Error('session disconnected')),
+      eventsSince: () => [],
+      onEvent: () => () => undefined,
+    };
+    const result = await waitForPredicate(
+      session,
+      { kind: 'element', query: { text: 'Ready' } },
+      100,
+    );
+    expect(result).toEqual({ pass: false, failureReason: 'session disconnected' });
   });
 });

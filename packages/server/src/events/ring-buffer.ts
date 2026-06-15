@@ -3,6 +3,7 @@ import { RING_BUFFER_DEFAULTS, type IrisEvent } from '@syrin/iris-protocol';
 export interface RingBufferOptions {
   maxEvents?: number;
   maxAgeMs?: number;
+  maxBytes?: number;
 }
 
 /**
@@ -16,16 +17,23 @@ export interface RingBufferOptions {
 export class RingBuffer {
   readonly #maxEvents: number;
   readonly #maxAgeMs: number;
+  readonly #maxBytes: number;
   #events: IrisEvent[] = [];
+  #eventBytes: number[] = [];
+  #totalBytes = 0;
   #droppedCount = 0;
 
   constructor(options: RingBufferOptions = {}) {
     this.#maxEvents = options.maxEvents ?? RING_BUFFER_DEFAULTS.MAX_EVENTS;
     this.#maxAgeMs = options.maxAgeMs ?? RING_BUFFER_DEFAULTS.MAX_AGE_MS;
+    this.#maxBytes = options.maxBytes ?? RING_BUFFER_DEFAULTS.MAX_BYTES;
   }
 
   push(event: IrisEvent, now: number): void {
     this.#events.push(event);
+    const bytes = Buffer.byteLength(JSON.stringify(event), 'utf8');
+    this.#eventBytes.push(bytes);
+    this.#totalBytes += bytes;
     this.#evict(now);
   }
 
@@ -53,10 +61,17 @@ export class RingBuffer {
   #evict(now: number): void {
     const before = this.#events.length;
     const cutoff = now - this.#maxAgeMs;
-    if (this.#events.length > this.#maxEvents) {
-      this.#events = this.#events.slice(this.#events.length - this.#maxEvents);
+    while (
+      this.#events.length > this.#maxEvents ||
+      (this.#totalBytes > this.#maxBytes && this.#events.length > 0)
+    ) {
+      this.#events.shift();
+      this.#totalBytes -= this.#eventBytes.shift() ?? 0;
     }
-    this.#events = this.#events.filter((e) => e.t >= cutoff);
+    while ((this.#events[0]?.t ?? cutoff) < cutoff) {
+      this.#events.shift();
+      this.#totalBytes -= this.#eventBytes.shift() ?? 0;
+    }
     this.#droppedCount += before - this.#events.length;
   }
 
