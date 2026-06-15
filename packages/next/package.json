@@ -1,6 +1,6 @@
 {
   "name": "@syrin/iris-next",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "private": true,
   "description": "Next.js helper for Iris: keeps SWC, adds source-file mapping via a dev-only webpack pre-loader (data-iris-source).",
   "license": "MIT",
