@@ -12,6 +12,14 @@ const JSX_FILE = /\.[jt]sx$/;
 const VIRTUAL_PREFIX = '\0';
 const NODE_MODULES = 'node_modules';
 
+/**
+ * The connect code is served as a real module (not an inline <script>) so that Vite's import
+ * pipeline resolves the bare `@syrin/iris` specifier. An inline injected script is NOT run through
+ * import resolution, so its bare import would fail in the browser. This path-like id is requested
+ * by the injected <script src> and served by the load() hook below.
+ */
+export const IRIS_CONNECT_MODULE = '/@iris-connect';
+
 export interface IrisVitePluginOptions {
   /** Bridge WebSocket port. Defaults to the SDK default; only baked into connect() when non-default. */
   port?: number;
@@ -31,13 +39,14 @@ export interface IrisVitePlugin {
   apply: 'serve';
   enforce: 'pre';
   transform: (code: string, id: string) => { code: string; map: string | null } | null;
+  resolveId: (id: string) => string | null;
+  load: (id: string) => string | null;
   transformIndexHtml: (html: string) => HtmlTag[];
 }
 
 interface HtmlTag {
   tag: string;
   attrs: Record<string, string>;
-  children: string;
   injectTo: 'body';
 }
 
@@ -75,11 +84,10 @@ function connectArgs(options: IrisVitePluginOptions): string {
   return Object.keys(args).length > 0 ? JSON.stringify(args) : '';
 }
 
-function injectScript(options: IrisVitePluginOptions): HtmlTag[] {
-  if (options.inject === false) return [];
+/** The body of the connect module — real imports, resolved by Vite when the module is served. */
+export function connectModuleSource(options: IrisVitePluginOptions): string {
   const args = connectArgs(options);
-  const children = `import { iris, install } from '${IRIS_PACKAGE}'; install(); iris.connect(${args});`;
-  return [{ tag: 'script', attrs: { type: 'module' }, children, injectTo: 'body' }];
+  return `import { iris, install } from '${IRIS_PACKAGE}';\ninstall();\niris.connect(${args});\n`;
 }
 
 /**
@@ -93,6 +101,7 @@ function injectScript(options: IrisVitePluginOptions): HtmlTag[] {
  */
 export function iris(options: IrisVitePluginOptions = {}): IrisVitePlugin {
   const sourceMapping = options.sourceMapping !== false;
+  const inject = options.inject !== false;
   return {
     name: IRIS_VITE_PLUGIN_NAME,
     apply: 'serve',
@@ -101,8 +110,19 @@ export function iris(options: IrisVitePluginOptions = {}): IrisVitePlugin {
       if (!sourceMapping || !shouldStamp(id)) return null;
       return stamp(code, id);
     },
+    resolveId(id) {
+      // Return the id verbatim so Vite serves it back to load() (the bare imports inside it then
+      // go through normal resolution). No NUL prefix: the browser requests it as a URL.
+      return inject && id === IRIS_CONNECT_MODULE ? IRIS_CONNECT_MODULE : null;
+    },
+    load(id) {
+      return inject && id === IRIS_CONNECT_MODULE ? connectModuleSource(options) : null;
+    },
     transformIndexHtml() {
-      return injectScript(options);
+      if (!inject) return [];
+      return [
+        { tag: 'script', attrs: { type: 'module', src: IRIS_CONNECT_MODULE }, injectTo: 'body' },
+      ];
     },
   };
 }
