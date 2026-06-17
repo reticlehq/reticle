@@ -22,7 +22,8 @@
   "pnpm": {
     "overrides": {
       "esbuild@>=0.18.0 <0.28.1": "0.28.1",
-      "postcss@<8.5.10": "8.5.15"
+      "postcss@<8.5.10": "8.5.15",
+      "hono@<4.12.25": "4.12.25"
     },
     "onlyBuiltDependencies": [
       "esbuild"
