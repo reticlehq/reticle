@@ -5,7 +5,7 @@
  */
 
 import { Framework, installCommand, installCommandParts, type Detection } from './detect.js';
-import { mergeMcpConfig, McpMergeStatus, irisServerEntry } from './mcp-config.js';
+import { claudeAddCommand, mcpManual } from './mcp.js';
 import { patchViteConfig, VitePatchKind } from './vite-config.js';
 import {
   viteManual,
@@ -14,11 +14,10 @@ import {
   nextIrisDevFile,
   NEXT_IRIS_DEV_PATH,
   nextConfigManual,
-  mcpManual,
 } from './snippets.js';
 
 const IRIS_PACKAGE = '@syrin/iris';
-const MCP_FILE = '.mcp.json';
+const MCP_TARGET = 'global (claude user scope)';
 
 export const StepStatus = {
   APPLY: 'apply',
@@ -46,8 +45,10 @@ export interface Plan {
 
 export interface PlanInput {
   detection: Detection;
-  /** Current `.mcp.json` content, or null if absent. */
-  mcpJson: string | null;
+  /** Whether the `claude` CLI is installed (so we can register the MCP server globally). */
+  claudeCli: boolean;
+  /** Whether an `iris` MCP server is already registered (any scope) — skip to stay idempotent. */
+  mcpExists: boolean;
   /** Discovered Vite config: its path + source, or null if none found. */
   viteConfig: { path: string; source: string } | null;
   /** Discovered Next config filename (e.g. 'next.config.mjs'), or null. */
@@ -57,33 +58,35 @@ export interface PlanInput {
   options: { port: number | undefined; mcp: boolean; install: boolean };
 }
 
+const MCP_TITLE = 'MCP server (global)';
+
 function mcpStep(input: PlanInput): Step {
   if (!input.options.mcp) {
-    return { title: 'MCP config', target: MCP_FILE, status: StepStatus.SKIP, detail: '--no-mcp' };
+    return { title: MCP_TITLE, target: MCP_TARGET, status: StepStatus.SKIP, detail: '--no-mcp' };
   }
-  const r = mergeMcpConfig(input.mcpJson, input.options.port);
-  if (r.status === McpMergeStatus.ALREADY) {
+  if (input.mcpExists) {
     return {
-      title: 'MCP config',
-      target: MCP_FILE,
+      title: MCP_TITLE,
+      target: MCP_TARGET,
       status: StepStatus.ALREADY,
-      detail: 'iris server already configured',
+      detail: 'iris already registered (install once, used by every project)',
     };
   }
-  if (r.status === McpMergeStatus.MANUAL) {
+  if (!input.claudeCli) {
     return {
-      title: 'MCP config',
-      target: MCP_FILE,
+      title: MCP_TITLE,
+      target: MCP_TARGET,
       status: StepStatus.MANUAL,
-      detail: mcpManual(irisServerEntry(input.options.port)),
+      detail: mcpManual(input.options.port),
     };
   }
+  const cmd = claudeAddCommand(input.options.port);
   return {
-    title: 'MCP config',
-    target: MCP_FILE,
+    title: MCP_TITLE,
+    target: MCP_TARGET,
     status: StepStatus.APPLY,
-    detail: 'add iris MCP server',
-    write: { path: MCP_FILE, content: r.content },
+    detail: 'register iris globally for all projects',
+    exec: { command: cmd.command, args: cmd.args, fallback: cmd.display },
   };
 }
 

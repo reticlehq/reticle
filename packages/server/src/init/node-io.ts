@@ -40,6 +40,11 @@ export function buildNodeIo(cwd: string): InitIo {
       const result = spawnSync(command, [...args], { cwd, stdio: 'inherit', shell: true });
       return result.status === 0;
     },
+    probe(command, args) {
+      // Quiet yes/no check (CLI availability, existing registration). Never throws.
+      const result = spawnSync(command, [...args], { cwd, stdio: 'ignore', shell: true });
+      return result.status === 0;
+    },
     print(line) {
       process.stdout.write(`${line}\n`);
     },

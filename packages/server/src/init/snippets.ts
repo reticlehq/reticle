@@ -73,12 +73,4 @@ export function htmlManual(port: number | undefined): string {
   </script>`;
 }
 
-/** Printed when an existing .mcp.json can't be parsed (jsonc/comments) and we won't rewrite it. */
-export function mcpManual(entry: Record<string, unknown>): string {
-  return `Couldn't parse your existing .mcp.json (comments or trailing commas?). Add this server
-to its "mcpServers" object by hand:
-
-  "iris": ${JSON.stringify(entry, null, 2)}`;
-}
-
 export const NEXT_IRIS_DEV_PATH = 'app/iris-dev.tsx';

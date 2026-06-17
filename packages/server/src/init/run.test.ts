@@ -7,7 +7,14 @@ interface MemoryIo extends InitIo {
   execCalls: { command: string; args: readonly string[] }[];
 }
 
-function memoryIo(files: Record<string, string>, execOk = true): MemoryIo {
+interface MemoryOpts {
+  execOk?: boolean;
+  claudeAvailable?: boolean;
+  mcpExists?: boolean;
+}
+
+function memoryIo(files: Record<string, string>, opts: MemoryOpts = {}): MemoryIo {
+  const { execOk = true, claudeAvailable = true, mcpExists = false } = opts;
   const written: Record<string, string> = {};
   const lines: string[] = [];
   const execCalls: { command: string; args: readonly string[] }[] = [];
@@ -25,6 +32,7 @@ function memoryIo(files: Record<string, string>, execOk = true): MemoryIo {
       execCalls.push({ command, args });
       return execOk;
     },
+    probe: (_command, args) => (args.includes('get') ? mcpExists : claudeAvailable),
     print: (l) => lines.push(l),
   };
 }
@@ -37,6 +45,11 @@ const OPTS: InitOptions = {
   install: false,
 };
 
+const VITE_FILES = {
+  'package.json': JSON.stringify({ devDependencies: { vite: '^5', react: '^19' } }),
+  'vite.config.ts': `export default { plugins: [] };\n`,
+};
+
 describe('runInit', () => {
   it('errors cleanly without a package.json', () => {
     const io = memoryIo({});
@@ -45,51 +58,47 @@ describe('runInit', () => {
     expect(io.lines.join('\n')).toContain('No package.json');
   });
 
-  it('writes .mcp.json and patches the vite config for a Vite+React project', () => {
-    const io = memoryIo({
-      'package.json': JSON.stringify({ devDependencies: { vite: '^5', react: '^19' } }),
-      'vite.config.ts': `import react from '@vitejs/plugin-react';\nexport default { plugins: [react()] };\n`,
-    });
+  it('registers iris globally via the claude CLI (not a project .mcp.json) and patches vite', () => {
+    const io = memoryIo(VITE_FILES);
     const r = runInit(OPTS, io);
     expect(r.ok).toBe(true);
-    expect(io.written['.mcp.json']).toContain('@syrin/iris');
+    expect(io.written['.mcp.json']).toBeUndefined();
+    expect(io.execCalls.some((c) => c.command === 'claude' && c.args.includes('add'))).toBe(true);
     expect(io.written['vite.config.ts']).toContain('@syrin/iris/vite');
   });
 
-  it('dry run writes nothing but still reports', () => {
-    const io = memoryIo({
-      'package.json': JSON.stringify({ devDependencies: { vite: '^5' } }),
-      'vite.config.ts': `export default { plugins: [] };\n`,
-    });
+  it('does not re-register when an iris server already exists (idempotent, install-once)', () => {
+    const io = memoryIo(VITE_FILES, { mcpExists: true });
+    runInit(OPTS, io);
+    expect(io.execCalls.some((c) => c.command === 'claude')).toBe(false);
+  });
+
+  it('prints manual global instructions when the claude CLI is missing', () => {
+    const io = memoryIo(VITE_FILES, { claudeAvailable: false });
+    runInit(OPTS, io);
+    expect(io.execCalls.some((c) => c.command === 'claude' && c.args.includes('add'))).toBe(false);
+    expect(io.lines.join('\n')).toContain('-s user');
+  });
+
+  it('dry run writes nothing and runs no subprocess', () => {
+    const io = memoryIo(VITE_FILES);
     const r = runInit({ ...OPTS, dryRun: true }, io);
     expect(Object.keys(io.written)).toHaveLength(0);
+    expect(io.execCalls).toHaveLength(0);
     expect(io.lines.join('\n')).toContain('dry run');
     expect(r.applied).toBeGreaterThan(0);
   });
 
   it('runs the install when enabled', () => {
-    const io = memoryIo({
-      'package.json': JSON.stringify({ devDependencies: { vite: '^5' } }),
-      'pnpm-lock.yaml': '',
-      'vite.config.ts': `export default { plugins: [] };\n`,
-    });
+    const io = memoryIo({ ...VITE_FILES, 'pnpm-lock.yaml': '' }, { mcpExists: true });
     runInit({ ...OPTS, install: true }, io);
     expect(io.execCalls).toEqual([{ command: 'pnpm', args: ['add', '-D', '@syrin/iris'] }]);
   });
 
-  it('does not run the install in dry run', () => {
-    const io = memoryIo({ 'package.json': JSON.stringify({ devDependencies: { vite: '^5' } }) });
-    runInit({ ...OPTS, install: true, dryRun: true }, io);
-    expect(io.execCalls).toHaveLength(0);
-  });
-
-  it('downgrades the install step to manual when it fails', () => {
-    const io = memoryIo(
-      { 'package.json': JSON.stringify({ devDependencies: { vite: '^5' } }) },
-      false,
-    );
+  it('downgrades a failed step to manual with its fallback command', () => {
+    const io = memoryIo(VITE_FILES, { execOk: false, mcpExists: true });
     const r = runInit({ ...OPTS, install: true }, io);
-    expect(io.lines.join('\n')).toContain('install failed — run manually');
+    expect(io.lines.join('\n')).toContain('step failed — run manually');
     expect(r.manual).toBeGreaterThan(0);
   });
 

@@ -6,9 +6,9 @@
 
 import { detect, Framework, type DetectInput } from './detect.js';
 import { buildPlan, StepStatus, type Plan, type PlanInput } from './plan.js';
+import { claudeAvailableProbe, claudeExistsProbe } from './mcp.js';
 
 const PACKAGE_JSON = 'package.json';
-const MCP_FILE = '.mcp.json';
 const NEXT_IRIS_DEV = 'app/iris-dev.tsx';
 const VITE_CONFIG_CANDIDATES = [
   'vite.config.ts',
@@ -39,8 +39,10 @@ export interface InitIo {
   exists(relPath: string): boolean;
   /** Basenames present in the project root. */
   rootFiles(): readonly string[];
-  /** Runs a subprocess to completion; returns true on exit code 0. */
+  /** Runs a subprocess to completion (inherits stdio); returns true on exit code 0. */
   exec(command: string, args: readonly string[]): boolean;
+  /** Runs a subprocess quietly (no stdio) for a yes/no check; returns true on exit code 0. */
+  probe(command: string, args: readonly string[]): boolean;
   print(line: string): void;
 }
 
@@ -77,9 +79,17 @@ function gatherPlanInput(options: InitOptions, io: InitIo, pkgRaw: string): Plan
   const viteConfig =
     vitePath !== null && viteSource !== null ? { path: vitePath, source: viteSource } : null;
 
+  // Global MCP registration goes through the `claude` CLI; probe for it (and for an existing
+  // registration) only when the MCP step is in play.
+  const availableProbe = claudeAvailableProbe();
+  const claudeCli = options.mcp ? io.probe(availableProbe.command, availableProbe.args) : false;
+  const existsProbe = claudeExistsProbe();
+  const mcpExists = claudeCli ? io.probe(existsProbe.command, existsProbe.args) : false;
+
   return {
     detection,
-    mcpJson: io.readFile(MCP_FILE),
+    claudeCli,
+    mcpExists,
     viteConfig,
     nextConfigFile: firstPresent(rootFiles, NEXT_CONFIG_CANDIDATES),
     nextIrisDevExists: io.exists(NEXT_IRIS_DEV),
@@ -106,7 +116,7 @@ function report(plan: Plan, dryRun: boolean, failed: ReadonlySet<string>, io: In
     const status = downgraded ? StepStatus.MANUAL : s.status;
     const detail =
       downgraded && s.exec !== undefined
-        ? `install failed — run manually: ${s.exec.fallback}`
+        ? `step failed — run manually: ${s.exec.fallback}`
         : s.detail;
     io.print(`  [${STATUS_SYMBOL[status]}] ${s.title} → ${s.target}`);
     if (status === StepStatus.APPLY) applied++;

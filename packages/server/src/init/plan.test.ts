@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { buildPlan, StepStatus, type PlanInput } from './plan.js';
 import { Framework, PackageManager, type Detection } from './detect.js';
 
+const MCP_STEP = 'MCP server (global)';
+
 function detection(framework: Framework, reactMajor = 19): Detection {
   return {
     framework,
@@ -14,7 +16,8 @@ function detection(framework: Framework, reactMajor = 19): Detection {
 function input(partial: Partial<PlanInput>): PlanInput {
   return {
     detection: partial.detection ?? detection(Framework.VITE),
-    mcpJson: partial.mcpJson ?? null,
+    claudeCli: partial.claudeCli ?? true,
+    mcpExists: partial.mcpExists ?? false,
     viteConfig: partial.viteConfig ?? null,
     nextConfigFile: partial.nextConfigFile ?? null,
     nextIrisDevExists: partial.nextIrisDevExists ?? false,
@@ -33,14 +36,58 @@ function step(plan: ReturnType<typeof buildPlan>, title: string) {
   return s;
 }
 
+describe('buildPlan — MCP (global, claude user scope)', () => {
+  it('registers iris globally via an exec step when the claude CLI is present', () => {
+    const s = step(buildPlan(input({ claudeCli: true, mcpExists: false })), MCP_STEP);
+    expect(s.status).toBe(StepStatus.APPLY);
+    expect(s.exec?.command).toBe('claude');
+    expect(s.exec?.args).toEqual([
+      'mcp',
+      'add',
+      'iris',
+      '-s',
+      'user',
+      '--',
+      'npx',
+      '@syrin/iris',
+      'mcp',
+    ]);
+  });
+
+  it('is ALREADY (idempotent) when an iris server is already registered', () => {
+    const s = step(buildPlan(input({ claudeCli: true, mcpExists: true })), MCP_STEP);
+    expect(s.status).toBe(StepStatus.ALREADY);
+  });
+
+  it('bails to manual global instructions when the claude CLI is missing', () => {
+    const s = step(buildPlan(input({ claudeCli: false, mcpExists: false })), MCP_STEP);
+    expect(s.status).toBe(StepStatus.MANUAL);
+    expect(s.detail).toContain('-s user');
+  });
+
+  it('skips under --no-mcp', () => {
+    const s = step(
+      buildPlan(input({ options: { port: undefined, mcp: false, install: false } })),
+      MCP_STEP,
+    );
+    expect(s.status).toBe(StepStatus.SKIP);
+  });
+
+  it('bakes --port into the global registration', () => {
+    const s = step(
+      buildPlan(input({ options: { port: 5000, mcp: true, install: false } })),
+      MCP_STEP,
+    );
+    expect(s.exec?.args).toContain('--port');
+    expect(s.exec?.args).toContain('5000');
+  });
+});
+
 describe('buildPlan — Vite', () => {
-  it('writes .mcp.json and patches the vite config (no entry edit needed)', () => {
+  it('patches the vite config; no separate entry-file step (plugin injects connect)', () => {
     const plan = buildPlan(input({ viteConfig: { path: 'vite.config.ts', source: VITE_SRC } }));
-    expect(step(plan, 'MCP config').status).toBe(StepStatus.APPLY);
-    expect(step(plan, 'MCP config').write).toBeDefined();
     expect(step(plan, 'Vite plugin').status).toBe(StepStatus.APPLY);
     expect(step(plan, 'Vite plugin').write?.content).toContain('@syrin/iris/vite');
-    // The plugin injects connect(), so there is no separate entry-file step.
     expect(plan.steps.some((s) => s.title.includes('entry'))).toBe(false);
   });
 
@@ -58,20 +105,10 @@ describe('buildPlan — Vite', () => {
     );
     expect(step(plan, 'Vite plugin').write?.content).toContain('iris({ port: 5000 })');
   });
+});
 
-  it('bails MCP to manual when .mcp.json is unparseable jsonc (no crash)', () => {
-    const plan = buildPlan(input({ mcpJson: '{\n  // c\n  "mcpServers": {}\n}' }));
-    const s = step(plan, 'MCP config');
-    expect(s.status).toBe(StepStatus.MANUAL);
-    expect(s.detail).toContain('"iris"');
-  });
-
-  it('skips MCP under --no-mcp', () => {
-    const plan = buildPlan(input({ options: { port: undefined, mcp: false, install: false } }));
-    expect(step(plan, 'MCP config').status).toBe(StepStatus.SKIP);
-  });
-
-  it('makes install an exec step when install is enabled, manual otherwise', () => {
+describe('buildPlan — install', () => {
+  it('makes install an exec step when enabled, manual otherwise', () => {
     const off = buildPlan(input({ options: { port: undefined, mcp: true, install: false } }));
     expect(step(off, 'Install dependency').status).toBe(StepStatus.MANUAL);
     expect(step(off, 'Install dependency').exec).toBeUndefined();
@@ -103,9 +140,9 @@ describe('buildPlan — Next', () => {
 });
 
 describe('buildPlan — HTML', () => {
-  it('gives an MCP write plus a manual connect snippet', () => {
+  it('registers MCP globally plus a manual connect snippet', () => {
     const plan = buildPlan(input({ detection: detection(Framework.HTML, 0) }));
-    expect(step(plan, 'MCP config').status).toBe(StepStatus.APPLY);
+    expect(step(plan, MCP_STEP).status).toBe(StepStatus.APPLY);
     expect(step(plan, 'Connect snippet').status).toBe(StepStatus.MANUAL);
   });
 });

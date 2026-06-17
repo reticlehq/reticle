@@ -58,42 +58,46 @@ npx @syrin/iris init
 
 It detects your framework, package manager, and React version, then:
 
-- merges an `iris` entry into `.mcp.json` (never clobbering an existing one),
+- **registers the Iris MCP server once, globally** (`claude mcp add iris -s user`) — so every
+  project on this machine gets it; you never re-add it per project,
 - installs `@syrin/iris` as a dev dependency,
 - **Vite:** adds the `iris()` plugin to your config — which wires source mapping _and_
   `iris.connect()` for you, so there is nothing else to edit,
 - **Next / other:** creates the dev component and prints the exact `withIris` / mount / connect
   snippets to paste (it never half-edits a build config).
 
-Re-running is safe (already-done steps are skipped). Preview without writing via
-`npx @syrin/iris init --dry-run`. Flags: `--port N`, `--no-mcp`, `--no-install`, `--yes`.
+The bridge + MCP server is a single process that serves all your projects, so it's registered at
+**user scope**, not in a per-project `.mcp.json`. Only the SDK (the `iris()` plugin / connect call)
+is added per project.
+
+Re-running is safe (already-registered/already-patched steps are skipped). Preview without writing
+via `npx @syrin/iris init --dry-run`. Flags: `--port N`, `--no-mcp`, `--no-install`, `--yes`.
 
 Then restart your dev server and skip to [Step 4](#step-4--run-it--verify-the-connection). The
 manual steps below explain what `init` sets up, if you prefer to wire it yourself.
 
 ---
 
-## Step 1 — Connect your coding agent (MCP)
+## Step 1 — Connect your coding agent (MCP), once
 
-You don't start the server manually — your agent starts it via MCP. Add Iris to your agent's
-MCP config.
+You don't start the server manually — your agent starts it via MCP. Register Iris **once, at the
+user (global) scope** so every project picks it up — there's nothing to add per project.
 
-**Claude Code** — create/edit `.mcp.json` in your project root:
+**Claude Code** — one command:
 
-```jsonc
-{
-  "mcpServers": {
-    "iris": { "command": "npx", "args": ["@syrin/iris"] },
-  },
-}
+```bash
+claude mcp add iris -s user -- npx @syrin/iris mcp
 ```
 
-**Cursor** — `~/.cursor/mcp.json` (or project `.cursor/mcp.json`):
+(`iris init` runs exactly this for you. `-s user` is what makes it global; drop it for a
+project-local registration instead.)
+
+**Cursor** — add to your global `~/.cursor/mcp.json` (not per-project):
 
 ```jsonc
 {
   "mcpServers": {
-    "iris": { "command": "npx", "args": ["@syrin/iris"] },
+    "iris": { "command": "npx", "args": ["@syrin/iris", "mcp"] },
   },
 }
 ```
