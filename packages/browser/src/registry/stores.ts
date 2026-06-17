@@ -1,5 +1,6 @@
-/** Store registry — lets the agent pull live framework/store state on demand. */
+import { sanitizeForTransport } from '../security/serialization.js';
 
+/** Store registry — lets the agent pull live framework/store state on demand. */
 export type StoreGetter = () => unknown;
 
 // Persist on a global so registrations survive HMR re-evaluation (see adapters.ts / feedback #7).
@@ -25,7 +26,7 @@ export function readStores(only?: string): Record<string, unknown> {
   for (const [name, getter] of stores) {
     if (only !== undefined && name !== only) continue;
     try {
-      out[name] = getter();
+      out[name] = sanitizeForTransport(getter());
     } catch (error) {
       out[name] = { __error: error instanceof Error ? error.message : String(error) };
     }

@@ -19,6 +19,7 @@ const TARGET_BOX: ElementBox = { x: 400, y: 200, width: 40, height: 20 };
 interface FakeSessionState {
   actCalls: number;
   inspectRefs: string[];
+  inspectName?: string;
   /** When set, INSPECT for this ref returns no box (stale ref). */
   staleRef?: string;
   /** When set, INSPECT returns a zero-area box for this ref. */
@@ -42,7 +43,12 @@ function fakeSession(state: FakeSessionState): Session {
         });
       }
       const box = ref === 'eTarget' ? TARGET_BOX : SOURCE_BOX;
-      return Promise.resolve({ kind: 'command_result', id: 'c', ok: true, result: { box } });
+      return Promise.resolve({
+        kind: 'command_result',
+        id: 'c',
+        ok: true,
+        result: { box, ...(state.inspectName === undefined ? {} : { name: state.inspectName }) },
+      });
     }
     if (name === 'act') {
       state.actCalls += 1;
@@ -158,6 +164,30 @@ describe('iris_act real-input routing', () => {
     expect(provider.calls).toHaveLength(1);
     expect(state.actCalls).toBe(0); // synthetic ACT never sent
     expect(provider.calls[0]?.center).toEqual({ cx: 100, cy: 50 });
+  });
+
+  it('blocks a destructive native click until explicitly confirmed', async () => {
+    const provider = makeProvider(true);
+    const state: FakeSessionState = {
+      actCalls: 0,
+      inspectRefs: [],
+      inspectName: 'Delete account',
+    };
+    await expect(
+      runAct(fakeDeps(provider, state), {
+        ref: 'e1',
+        action: 'click',
+        args: { native: true },
+      }),
+    ).rejects.toThrow(/confirmDangerous/);
+    expect(provider.calls).toHaveLength(0);
+
+    await runAct(fakeDeps(provider, state), {
+      ref: 'e1',
+      action: 'click',
+      args: { native: true, confirmDangerous: true },
+    });
+    expect(provider.calls).toHaveLength(1);
   });
 
   it('routes hover to real input with the hover action', async () => {

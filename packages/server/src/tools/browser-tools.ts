@@ -40,8 +40,17 @@ export const BROWSER_TOOLS: ToolDef[] = [
     handler: async (deps, args) => {
       const url = asString(args['url']);
       if (url === undefined || url.length === 0) return { ok: false, reason: 'url required' };
-      await commandOrThrow(deps, asString(args['sessionId']), IrisCommand.NAVIGATE, { url });
-      return { ok: true, url };
+      const result = (await commandOrThrow(
+        deps,
+        asString(args['sessionId']),
+        IrisCommand.NAVIGATE,
+        { url },
+      )) as { ok?: unknown; url?: unknown; reason?: unknown };
+      return {
+        ok: result.ok === true,
+        ...(typeof result.url === 'string' ? { url: result.url } : {}),
+        ...(typeof result.reason === 'string' ? { reason: result.reason } : {}),
+      };
     },
   },
   {

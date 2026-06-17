@@ -165,12 +165,16 @@ export const FLOW_TOOLS: ToolDef[] = [
       'anchor (testid via iris_query; signal via predicate) against the LIVE DOM — never reuses a ' +
       'stale ref. On an anchor MISS returns legible DRIFT { step, anchor, drift:{ reasonKind, reason, ' +
       'nearest } } (the closest surviving testid) and stops — the "whose fault is it" contract. ' +
-      'Returns { name, status: ok|drift|error, steps:[...] }; a missing/malformed file is status:error ' +
-      'with a structured code (distinct from a contract-changed drift).',
+      'Returns { name, status: ok|drift|error, steps:[...] }; missing/malformed files and action ' +
+      'failures are status:error with a structured code (distinct from contract-changed drift).',
     inputSchema: {
       flowName: z
         .string()
         .describe('Flow file name (without .json extension) from iris_flow_list.'),
+      confirmDangerous: z
+        .boolean()
+        .optional()
+        .describe('Set true to allow destructive controls during this replay only.'),
       sessionId: z
         .string()
         .optional()
@@ -205,12 +209,23 @@ export const FLOW_TOOLS: ToolDef[] = [
         loaded.value,
         waitForPredicate,
         FLOW_SIGNAL_TIMEOUT_MS,
+        args['confirmDangerous'] === true,
       );
       const driftSteps = steps.filter((s) => s.drift !== undefined).length;
       const allOk = steps.every((s) => s.ok);
       const status =
-        driftSteps > 0 ? ReplayStatus.DRIFT : allOk ? ReplayStatus.OK : ReplayStatus.DRIFT;
+        driftSteps > 0 ? ReplayStatus.DRIFT : allOk ? ReplayStatus.OK : ReplayStatus.ERROR;
       await recordReplayRun(deps, name, status, driftSteps, deps.now() - startedAt);
+      const failed = steps.find((step) => !step.ok && step.drift === undefined);
+      if (failed !== undefined) {
+        const message = failed.error ?? 'flow action failed';
+        return {
+          name,
+          status,
+          steps,
+          error: { code: ReplayStatus.ERROR, message },
+        };
+      }
       return { name, status, steps };
     },
   },
@@ -275,6 +290,10 @@ export const FLOW_TOOLS: ToolDef[] = [
     inputSchema: {
       flowName: z.string().describe('Flow file name to heal (from iris_flow_list).'),
       apply: z.boolean().optional(),
+      confirmDangerous: z
+        .boolean()
+        .optional()
+        .describe('Set true to allow destructive controls during this heal replay only.'),
       sessionId: z
         .string()
         .optional()
@@ -329,8 +348,27 @@ async function healFlow(deps: ToolDeps, args: Record<string, unknown>): Promise<
   }
 
   const session = deps.sessions.resolve(asString(args['sessionId']));
-  const steps = await replayFlow(session, loaded.value, waitForPredicate, FLOW_SIGNAL_TIMEOUT_MS);
+  const steps = await replayFlow(
+    session,
+    loaded.value,
+    waitForPredicate,
+    FLOW_SIGNAL_TIMEOUT_MS,
+    args['confirmDangerous'] === true,
+  );
   const drifted = steps.some((s) => s.drift !== undefined);
+  const failed = steps.find((s) => !s.ok && s.drift === undefined);
+  if (failed !== undefined) {
+    const message = failed.error ?? 'flow replay failed before an anchor could be healed';
+    return {
+      name,
+      status: HealStatus.ERROR,
+      applied: false,
+      proposals: [],
+      changed: [],
+      message,
+      error: { code: ReplayStatus.ERROR, message },
+    };
+  }
   if (!drifted) {
     return {
       name,

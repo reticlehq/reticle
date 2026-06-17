@@ -1,4 +1,4 @@
-import { IrisCommand, QueryBy } from '@syrin/iris-protocol';
+import { DANGEROUS_ACTION_CONFIRM_ARG, IrisCommand, QueryBy } from '@syrin/iris-protocol';
 import { IrisTool } from '../tools/tool-names.js';
 import type { RecordedStep, CompiledProgram } from './recordings.js';
 import type { Session } from '../session/session.js';
@@ -11,11 +11,22 @@ function asRecord(value: unknown): Record<string, unknown> {
   return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {};
 }
 
+/** A destructive-action confirmation is one-shot and must never persist into a recording. */
+export function replayActionArgs(
+  value: unknown,
+  confirmDangerous = false,
+): Record<string, unknown> {
+  const args = { ...asRecord(value) };
+  delete args[DANGEROUS_ACTION_CONFIRM_ARG];
+  if (confirmDangerous) args[DANGEROUS_ACTION_CONFIRM_ARG] = true;
+  return args;
+}
+
 /** Compile a single iris_act invocation into a normalized RecordedStep using the action result's testid. */
 export function compileActStep(args: Record<string, unknown>, res: unknown): RecordedStep {
   const testid = asString(asRecord(res)['testid']);
   const action = asString(args['action']) ?? '';
-  const actArgs = asRecord(args['args']);
+  const actArgs = replayActionArgs(args['args']);
   if (testid !== undefined) {
     return {
       tool: IrisTool.ACT,
@@ -48,7 +59,7 @@ export function compileSequenceStep(args: Record<string, unknown>, res: unknown)
   const subSteps: CompiledSubStep[] = inputSteps.map((raw, i) => {
     const step = asRecord(raw);
     const action = asString(step['action']) ?? '';
-    const stepArgs = asRecord(step['args']);
+    const stepArgs = replayActionArgs(step['args']);
     const testid = asString(asRecord(resolved[i])['testid']);
     if (testid !== undefined) {
       return { by: QueryBy.TESTID, value: testid, action, args: stepArgs };
@@ -95,6 +106,7 @@ export interface ReplayStepResult {
 export async function replayProgram(
   session: Session,
   program: CompiledProgram,
+  confirmDangerous = false,
 ): Promise<ReplayStepResult[]> {
   const results: ReplayStepResult[] = [];
   for (const step of program.steps) {
@@ -110,7 +122,7 @@ export async function replayProgram(
           liveSteps.push({
             ref,
             action: asString(sub['action']) ?? '',
-            args: asRecord(sub['args']),
+            args: replayActionArgs(sub['args'], confirmDangerous),
           });
         }
         const r = await session.command(IrisCommand.ACT_SEQUENCE, { steps: liveSteps });
@@ -121,7 +133,7 @@ export async function replayProgram(
         const r = await session.command(IrisCommand.ACT, {
           ref,
           action: asString(step.args['action']) ?? '',
-          args: asRecord(step.args['args']),
+          args: replayActionArgs(step.args['args'], confirmDangerous),
         });
         results.push(buildResult(step.tool, r.ok, r.error, note !== undefined ? [note] : []));
         if (!r.ok) break;

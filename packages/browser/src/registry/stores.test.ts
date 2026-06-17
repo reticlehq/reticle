@@ -30,6 +30,20 @@ describe('store registry', () => {
     unregisterStore('ws_ok');
   });
 
+  it('returns redacted, JSON-safe state for secrets, BigInt, and cycles', () => {
+    const state: Record<string, unknown> = { password: 'secret', count: 2n };
+    state['self'] = state;
+    registerStore('ws_safe', () => state);
+    const out = readStores('ws_safe');
+    expect(out['ws_safe']).toEqual({
+      password: '[REDACTED]',
+      count: '2',
+      self: '[CIRCULAR]',
+    });
+    expect(() => JSON.stringify(out)).not.toThrow();
+    unregisterStore('ws_safe');
+  });
+
   it('unregisterStore removes it', () => {
     registerStore('ws_d', () => 0);
     expect(storeNames()).toContain('ws_d');

@@ -23,6 +23,14 @@ describe('RingBuffer', () => {
     expect(buf.since(0).map((e) => e.t)).toEqual([2, 3]);
   });
 
+  it('evicts by serialized byte size', () => {
+    const buf = new RingBuffer({ maxAgeMs: 1_000_000, maxEvents: 100, maxBytes: 300 });
+    buf.push({ ...ev(1), data: { text: 'a'.repeat(100) } }, 1);
+    buf.push({ ...ev(2), data: { text: 'b'.repeat(100) } }, 2);
+    expect(buf.since(0).map((e) => e.t)).toEqual([2]);
+    expect(buf.bufferHealth().dropped).toBe(1);
+  });
+
   it('since() and window() select the right slices', () => {
     const buf = new RingBuffer({ maxAgeMs: 1_000_000, maxEvents: 100 });
     [10, 20, 30, 40].forEach((t) => buf.push(ev(t), t));

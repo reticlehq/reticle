@@ -22,7 +22,7 @@
     "dev": "tsc -b --watch",
     "typecheck": "tsc -b",
     "lint": "eslint src",
-    "test:unit": "vitest run --passWithNoTests",
+    "test:unit": "vitest run src --passWithNoTests",
     "prepack": "tsc -b && find dist -name \"*.test.*\" -delete"
   },
   "dependencies": {

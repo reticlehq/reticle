@@ -162,16 +162,26 @@ export async function performGesture(
 }
 
 /**
+ * Iris paints its own dev overlay (presenter HUD + border glow) into the page. That chrome is
+ * time-varying — the activity log and border state change with every command — so capturing it
+ * makes a fresh screenshot of an unchanged page differ from its baseline. Hide it during capture
+ * (Playwright applies this stylesheet only for the shot, then reverts) so visual baselines reflect
+ * the app, not Iris. Disabling animations settles any remaining transitions for determinism.
+ */
+const HIDE_IRIS_CHROME_CSS = '[data-iris-overlay]{display:none !important}';
+const SCREENSHOT_DETERMINISM = { style: HIDE_IRIS_CHROME_CSS, animations: 'disabled' } as const;
+
+/**
  * Capture a PNG from a Playwright page. Shared by the CDP + launched providers so the
  * screenshot path lives in one place (mirrors performGesture). Returns the raw PNG bytes.
  */
 export async function capturePage(page: Page, opts: ScreenshotOpts): Promise<Uint8Array> {
   const buf = await page.screenshot(
     opts.clip !== undefined
-      ? { clip: opts.clip }
+      ? { ...SCREENSHOT_DETERMINISM, clip: opts.clip }
       : opts.fullPage === true
-        ? { fullPage: true }
-        : {},
+        ? { ...SCREENSHOT_DETERMINISM, fullPage: true }
+        : { ...SCREENSHOT_DETERMINISM },
   );
   return new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
 }

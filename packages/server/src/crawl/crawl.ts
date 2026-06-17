@@ -2,6 +2,7 @@ import {
   ActionType,
   CRAWL_DEFAULTS,
   CrawlAnomalyKind,
+  DANGEROUS_ACTION_CONFIRM_ARG,
   EventType,
   IrisCommand,
   type CommandResult,
@@ -41,6 +42,7 @@ export interface CrawlOptions {
   maxSteps?: number;
   settleMs?: number;
   scope?: string;
+  confirmDangerous?: boolean;
 }
 
 /** Any buffer event that proves the app reacted to a click (vs a dead/no-op control). */
@@ -109,7 +111,7 @@ export async function crawl(
     const act = await session.command(IrisCommand.ACT, {
       ref: item.ref,
       action: ActionType.CLICK,
-      args: {},
+      args: opts.confirmDangerous === true ? { [DANGEROUS_ACTION_CONFIRM_ARG]: true } : {},
     });
     await sleep(settleMs);
     const events = session.eventsSince(since);

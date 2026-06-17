@@ -1,6 +1,13 @@
-import { ActionType, ActionWarning, ElementState, SettleReason } from '@syrin/iris-protocol';
+import {
+  ActionType,
+  ActionWarning,
+  DANGEROUS_ACTION_CONFIRM_ARG,
+  ElementState,
+  isDangerousActionText,
+  SettleReason,
+} from '@syrin/iris-protocol';
 import { refs } from '../dom/refs.js';
-import { isVisible, getStates } from '../dom/a11y.js';
+import { getAccessibleName, isVisible, getStates } from '../dom/a11y.js';
 import { elementHasHoverHandlers } from '../registry/adapters.js';
 import { nativeSetTimeout, nativeFrame, settle } from '../timers/native-timers.js';
 
@@ -113,6 +120,47 @@ const isFillLike = (action: string): boolean => FILL_LIKE.has(action);
 
 /** Actions that resolve to a point and so benefit from off-viewport scroll + occlusion hit-test. */
 const CLICK_LIKE = new Set<string>([ActionType.CLICK, ActionType.DBLCLICK]);
+
+function dangerousActionContext(el: HTMLElement): string {
+  const form = el.closest('form');
+  return [
+    getAccessibleName(el),
+    el.textContent ?? '',
+    el.getAttribute('value') ?? '',
+    el.getAttribute('title') ?? '',
+    el.getAttribute('aria-label') ?? '',
+    el.getAttribute('href') ?? '',
+    form?.getAttribute('action') ?? '',
+    form?.textContent ?? '',
+  ].join(' ');
+}
+
+export function requiresDangerousConfirmation(text: string): boolean {
+  return isDangerousActionText(text);
+}
+
+function assertActionAllowed(el: HTMLElement, action: string, args: Record<string, unknown>): void {
+  const canTrigger =
+    action === ActionType.CLICK ||
+    action === ActionType.DBLCLICK ||
+    action === ActionType.DRAG ||
+    action === ActionType.SUBMIT ||
+    (action === ActionType.PRESS && asString(args['key'], 'Enter') === 'Enter');
+  const dragTarget = action === ActionType.DRAG ? refs.resolve(asString(args['toRef'])) : null;
+  const context =
+    dragTarget instanceof HTMLElement
+      ? `${dangerousActionContext(el)} ${dangerousActionContext(dragTarget)}`
+      : dangerousActionContext(el);
+  if (
+    canTrigger &&
+    requiresDangerousConfirmation(context) &&
+    args[DANGEROUS_ACTION_CONFIRM_ARG] !== true
+  ) {
+    throw new Error(
+      `potentially destructive action blocked; retry with args.${DANGEROUS_ACTION_CONFIRM_ARG}=true`,
+    );
+  }
+}
 
 /** Best-effort click-point geometry. All-false default when there is nothing measurable to test. */
 interface ClickGeometry {
@@ -345,6 +393,7 @@ export async function executeAction(
   args: Record<string, unknown> = {},
 ): Promise<ActionResult> {
   const el = requireElement(ref);
+  assertActionAllowed(el, action, args);
   const visible = isVisible(el);
   const enabled = enabledOf(el);
   const prevFocus = activeRef(el);
@@ -488,7 +537,13 @@ async function dragElement(
 export async function dispatchWebMcp(
   tool: string,
   params: Record<string, unknown>,
+  confirmDangerous = false,
 ): Promise<unknown> {
+  if (requiresDangerousConfirmation(tool) && !confirmDangerous) {
+    throw new Error(
+      `potentially destructive WebMCP tool blocked; retry with ${DANGEROUS_ACTION_CONFIRM_ARG}=true`,
+    );
+  }
   const mc = (
     navigator as unknown as { modelContext?: { callTool?: (n: string, p: unknown) => unknown } }
   ).modelContext;

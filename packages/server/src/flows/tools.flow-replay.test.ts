@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   ActionType,
+  DANGEROUS_ACTION_CONFIRM_ARG,
   FlowErrorCode,
   IrisCommand,
   QueryBy,
@@ -22,14 +23,22 @@ import { ProjectStore } from '../project/project-store.js';
 import { AnnotationStore } from './annotation-store.js';
 import { createNodeFileSystem, type FileSystemPort } from '../project/fs-port.js';
 import { flowPath } from '../project/iris-dir.js';
-import { asString } from '../tools/tools-helpers.js';
+import { asRecord, asString } from '../tools/tools-helpers.js';
 import type { Session, SessionManager } from '../session/session.js';
 import type { CompiledProgram, RecordedStep } from './recordings.js';
 
 const clock = { now: (): number => 1234 };
 
-/** A session whose QUERY answers from a per-testid script and whose ACT always succeeds. */
-function scriptedSession(queryScript: (testid: string) => unknown): Partial<Session> {
+interface ScriptedSessionOptions {
+  actOk?: boolean;
+  actArgs?: Record<string, unknown>[];
+}
+
+/** A session whose QUERY answers from a per-testid script and whose ACT is configurable. */
+function scriptedSession(
+  queryScript: (testid: string) => unknown,
+  options: ScriptedSessionOptions = {},
+): Partial<Session> {
   const command = (name: string, args: Record<string, unknown> = {}): Promise<CommandResult> => {
     if (name === IrisCommand.QUERY) {
       return Promise.resolve({
@@ -39,7 +48,18 @@ function scriptedSession(queryScript: (testid: string) => unknown): Partial<Sess
         result: queryScript(asString(args['value']) ?? ''),
       });
     }
-    return Promise.resolve({ kind: 'command_result', id: 'a', ok: true, result: {} });
+    if (name === IrisCommand.ACT) {
+      options.actArgs?.push(asRecord(args['args']));
+      const ok = options.actOk ?? true;
+      return Promise.resolve({
+        kind: 'command_result',
+        id: 'a',
+        ok,
+        result: {},
+        ...(ok ? {} : { error: 'act failed' }),
+      });
+    }
+    return Promise.resolve({ kind: 'command_result', id: 'x', ok: true, result: {} });
   };
   return { id: 'demo', command, eventsSince: () => [], onEvent: () => () => undefined };
 }
@@ -202,5 +222,42 @@ describe('iris_flow_replay handler — temp dir, never touches the repo', () => 
     const last = await deps.project.lastRun('nope');
     expect(last?.status).toBe(RunStatus.ERROR);
     expect(last?.kind).toBe(RunKind.FLOW_REPLAY);
+  });
+
+  it('H: an action failure is an error, not selector drift', async () => {
+    await saveFlow('action-fails', [actStep('chat-send')]);
+    const session = scriptedSession((testid) => ({ elements: [{ ref: `e-${testid}` }] }), {
+      actOk: false,
+    });
+    const deps = fakeDeps(fs, root, session);
+
+    const res = (await tool(IrisTool.FLOW_REPLAY).handler(deps, {
+      flowName: 'action-fails',
+    })) as FlowReplayResult;
+    expect(res.status).toBe(ReplayStatus.ERROR);
+    expect(res.steps[0]).toMatchObject({ ok: false, error: 'act failed' });
+    expect(res.error).toEqual({ code: ReplayStatus.ERROR, message: 'act failed' });
+
+    const last = await deps.project.lastRun('action-fails');
+    expect(last?.status).toBe(RunStatus.ERROR);
+    expect(last?.evidence).toMatchObject({ driftSteps: 0 });
+  });
+
+  it('I: destructive-action confirmation is scoped to the current replay invocation', async () => {
+    await saveFlow('dangerous', [actStep('delete-account')]);
+    const actArgs: Record<string, unknown>[] = [];
+    const session = scriptedSession((testid) => ({ elements: [{ ref: `e-${testid}` }] }), {
+      actArgs,
+    });
+    const deps = fakeDeps(fs, root, session);
+
+    await tool(IrisTool.FLOW_REPLAY).handler(deps, { flowName: 'dangerous' });
+    await tool(IrisTool.FLOW_REPLAY).handler(deps, {
+      flowName: 'dangerous',
+      confirmDangerous: true,
+    });
+
+    expect(actArgs[0]).not.toHaveProperty(DANGEROUS_ACTION_CONFIRM_ARG);
+    expect(actArgs[1]).toMatchObject({ [DANGEROUS_ACTION_CONFIRM_ARG]: true });
   });
 });

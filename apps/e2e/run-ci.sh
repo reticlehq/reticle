@@ -23,6 +23,7 @@ for _ in $(seq 1 120); do
   sleep 2
 done
 curl -s -o /dev/null http://localhost:8787/api/health || { echo "api never came up"; cat /tmp/e2e-api.log; exit 1; }
+curl -s -o /dev/null http://localhost:4310 || { echo "demo never came up"; cat /tmp/e2e-demo.log; exit 1; }
 curl -s -o /dev/null http://localhost:3100 || { echo "next never came up"; cat /tmp/e2e-next.log; exit 1; }
 
 echo "==> running e2e battery"

@@ -1,4 +1,5 @@
 import {
+  CommandMessageSchema,
   MessageKind,
   SESSION_LIFECYCLE,
   type CommandMessage,
@@ -6,6 +7,7 @@ import {
   type IrisEvent,
 } from '@syrin/iris-protocol';
 import { nativeSetTimeout, nativeNow } from '../timers/native-timers.js';
+import { safeStringify } from '../security/serialization.js';
 
 export interface CommandOutcome {
   ok: boolean;
@@ -67,6 +69,8 @@ export class Transport {
     ws.onopen = (): void => {
       this.#disconnectedSince = undefined; // healthy again — reset the loss timer
       this.#lost = false;
+      // HELLO is SDK-owned schema data. Preserve its pairing token; the generic sanitizer
+      // intentionally redacts fields named "token" from app-controlled payloads.
       ws.send(JSON.stringify(this.#deps.hello()));
       for (const msg of this.#queue) ws.send(msg);
       this.#queue = [];
@@ -113,12 +117,22 @@ export class Transport {
     } catch {
       return;
     }
-    const msg = parsed as { kind?: string };
-    if (msg.kind !== MessageKind.COMMAND) return;
-    const command = parsed as CommandMessage;
-    const outcome = await this.#deps.handleCommand(command);
+    const result = CommandMessageSchema.safeParse(parsed);
+    if (!result.success) return;
+    const command = result.data;
+    const currentSessionId = this.#deps.hello().sessionId;
+    if (command.sessionId !== undefined && command.sessionId !== currentSessionId) return;
+    let outcome: CommandOutcome;
+    try {
+      outcome = await this.#deps.handleCommand(command);
+    } catch (error) {
+      outcome = {
+        ok: false,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
     this.#sendRaw(
-      JSON.stringify({
+      safeStringify({
         kind: MessageKind.COMMAND_RESULT,
         id: command.id,
         ok: outcome.ok,
@@ -129,7 +143,7 @@ export class Transport {
   }
 
   sendEvent(event: IrisEvent): void {
-    this.#sendRaw(JSON.stringify({ kind: MessageKind.EVENT, event }));
+    this.#sendRaw(safeStringify({ kind: MessageKind.EVENT, event }));
   }
 
   #sendRaw(text: string): void {

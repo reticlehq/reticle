@@ -17,10 +17,10 @@ for(let i=0;i<200&&server.bridge.sessions.count()===0;i++) await sleep(50);
 const refOf=async(by,value)=>{for(let i=0;i<30;i++){const r=(await T('iris_query',{by,value})).elements?.[0]?.ref;if(r)return r;await sleep(100);}throw new Error('not found '+value);};
 console.log('\n=== M8 Stage A: record → .iris/ flow → replay → drift (real browser) ===');
 // record + save
-await T('iris_record_start',{name:'addtask'});
+await T('iris_record_start',{recordingName:'addtask'});
 await T('iris_act',{ref:await refOf('testid','add-task'),action:'click'});
-await T('iris_record_stop',{name:'addtask'});
-const saved=await T('iris_flow_save',{name:'addtask'});
+await T('iris_record_stop',{recordingName:'addtask'});
+const saved=await T('iris_flow_save',{flowName:'addtask'});
 const flowFile=path.join(irisRoot,'flows','addtask.json');
 chk('flow saved to .iris/flows/addtask.json on disk', nfs.existsSync(flowFile), flowFile);
 const raw=nfs.readFileSync(flowFile,'utf8');
@@ -28,11 +28,11 @@ chk('flow anchors on testid (no eXX refs leaked)', raw.includes('add-task') && !
 const list=await T('iris_flow_list',{});
 chk('iris_flow_list returns the saved flow', JSON.stringify(list).includes('addtask'));
 // replay happy path
-const rep=await T('iris_flow_replay',{name:'addtask'});
+const rep=await T('iris_flow_replay',{flowName:'addtask'});
 chk('iris_flow_replay re-resolves anchors + runs green', (rep.ok!==false)&&!rep.drift, JSON.stringify(rep).slice(0,90));
 // drift: corrupt the testid, replay, expect legible drift with nearest match
 nfs.writeFileSync(flowFile, raw.replaceAll('add-task','add-tassk'));
-const drift=await T('iris_flow_replay',{name:'addtask'});
+const drift=await T('iris_flow_replay',{flowName:'addtask'});
 const ds=JSON.stringify(drift);
 chk('renamed testid → legible drift with a nearest-match', /drift/i.test(ds) && /add-task/.test(ds), ds.slice(0,140));
 console.log(`\n${fail===0?'✅ M8 STAGE A VERIFIED':'❌ FAILED'} (${pass} passed, ${fail} failed)`);

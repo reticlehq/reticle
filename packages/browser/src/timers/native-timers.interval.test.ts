@@ -13,10 +13,12 @@ describe('nativeSetInterval', () => {
   it('fires repeatedly until stopped', async () => {
     const cb = vi.fn();
     const stop = nativeSetInterval(cb, 5);
-    await new Promise((r) => setTimeout(r, 30));
+    await vi.waitFor(() => expect(cb.mock.calls.length).toBeGreaterThanOrEqual(2), {
+      timeout: 1_000,
+      interval: 10,
+    });
     stop();
     const count = cb.mock.calls.length;
-    expect(count).toBeGreaterThanOrEqual(2);
     await new Promise((r) => setTimeout(r, 20));
     expect(cb.mock.calls.length).toBe(count); // no more after stop
   });

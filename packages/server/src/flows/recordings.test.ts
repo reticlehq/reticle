@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
+import { ActionType, DANGEROUS_ACTION_CONFIRM_ARG } from '@syrin/iris-protocol';
 import { RecordingStore, type RecordedStep, type CompiledProgram } from './recordings.js';
+import { compileActStep, compileSequenceStep } from './replay.js';
 
 const step = (tool: string, stable = true): RecordedStep => ({ tool, stable, args: {} });
 
@@ -40,5 +42,31 @@ describe('RecordingStore (G6)', () => {
     store.saveCompiled(program);
     expect(store.getCompiled('flow')).toBe(program);
     expect(store.getCompiled('nope')).toBeUndefined();
+  });
+
+  it('never persists one-shot destructive-action confirmations', () => {
+    const act = compileActStep(
+      {
+        ref: 'e1',
+        action: ActionType.CLICK,
+        args: { [DANGEROUS_ACTION_CONFIRM_ARG]: true, value: 'kept' },
+      },
+      { testid: 'delete-account' },
+    );
+    expect(act.args['args']).toEqual({ value: 'kept' });
+
+    const sequence = compileSequenceStep(
+      {
+        steps: [
+          {
+            ref: 'e1',
+            action: ActionType.CLICK,
+            args: { [DANGEROUS_ACTION_CONFIRM_ARG]: true },
+          },
+        ],
+      },
+      { steps: [{ testid: 'delete-account' }] },
+    );
+    expect((sequence.args['steps'] as { args: Record<string, unknown> }[])[0]?.args).toEqual({});
   });
 });

@@ -7,6 +7,36 @@ export const IRIS_DEFAULT_PORT = 4400;
 export const IRIS_WS_PATH = '/iris';
 export const IRIS_PROTOCOL_VERSION = 1;
 
+/** Hard transport bounds shared by the browser and bridge. */
+export const TRANSPORT_LIMITS = {
+  MAX_MESSAGE_BYTES: 1024 * 1024,
+  MAX_MESSAGES_PER_SECOND: 1000,
+  MAX_SESSIONS: 32,
+  MAX_PENDING_CONNECTIONS: 16,
+  HELLO_TIMEOUT_MS: 5000,
+  MAX_BUFFER_BYTES: 8 * 1024 * 1024,
+  MAX_SESSION_ID_LENGTH: 128,
+  MAX_URL_LENGTH: 4096,
+  MAX_TITLE_LENGTH: 512,
+  MAX_ADAPTERS: 32,
+  MAX_ADAPTER_NAME_LENGTH: 128,
+  MAX_TOKEN_LENGTH: 512,
+  MAX_COMMAND_ID_LENGTH: 128,
+  MAX_COMMAND_NAME_LENGTH: 128,
+  MAX_REF_LENGTH: 128,
+  MAX_ERROR_LENGTH: 4096,
+  MAX_SERIALIZE_DEPTH: 8,
+  MAX_COLLECTION_ITEMS: 200,
+  MAX_OBJECT_KEYS: 200,
+  MAX_STRING_LENGTH: 64 * 1024,
+} as const;
+
+/** Replacement used when sensitive data is removed before crossing the bridge. */
+export const REDACTED_VALUE = '[REDACTED]';
+
+/** Explicit opt-in argument required for potentially destructive actions. */
+export const DANGEROUS_ACTION_CONFIRM_ARG = 'confirmDangerous';
+
 /** Schema version stamped onto compiled replay programs. */
 export const REPLAY_PROGRAM_VERSION = 1;
 
@@ -175,12 +205,12 @@ export const FLOW_NAME_PATTERN = /^[a-z0-9][a-z0-9-_]{0,63}$/i;
 /**
  * The outcome of replaying an on-disk flow by re-resolving its
  * semantic anchors against the live DOM. `drift` (an anchor missed → contract changed) is
- * cleanly separated from `error` (the flow file is missing/malformed) and `ok`. No free strings.
+ * cleanly separated from `error` (the flow could not load or an action failed) and `ok`.
  */
 export const ReplayStatus = {
   OK: 'ok', // every anchor resolved and every step ran green
   DRIFT: 'drift', // an anchor missed (testid renamed / signal not observed) — legible drift returned
-  ERROR: 'error', // the flow file could not be loaded (missing/invalid) — no steps ran
+  ERROR: 'error', // the flow could not load or a resolved action failed
 } as const;
 export type ReplayStatus = (typeof ReplayStatus)[keyof typeof ReplayStatus];
 
@@ -239,7 +269,7 @@ export const HealStatus = {
   DRIFT: 'drift', // apply:false: confident proposal(s) returned, file untouched
   UNHEALABLE: 'unhealable', // drift exists but no proposal cleared the confidence floor
   NOTHING_TO_HEAL: 'nothing_to_heal', // replay was green
-  ERROR: 'error', // flow missing/malformed/invalid-name — no steps ran
+  ERROR: 'error', // flow missing/malformed/invalid-name, or a resolved action failed
 } as const;
 export type HealStatus = (typeof HealStatus)[keyof typeof HealStatus];
 
@@ -283,6 +313,7 @@ export const COMPILED_PREDICATE_PREFIX = 'will';
 export const RING_BUFFER_DEFAULTS = {
   MAX_EVENTS: 2000,
   MAX_AGE_MS: 60_000,
+  MAX_BYTES: TRANSPORT_LIMITS.MAX_BUFFER_BYTES,
 } as const;
 
 /** The observers that can be installed in the browser SDK (plan/03). */

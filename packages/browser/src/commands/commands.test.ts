@@ -5,7 +5,7 @@ import {
   type ComponentStateResult,
   type MatchResult,
 } from '@syrin/iris-protocol';
-import { createCommandRegistry } from './commands.js';
+import { createCommandRegistry, resolveNavigationUrl } from './commands.js';
 import { refs } from '../dom/refs.js';
 import { registerStore, unregisterStore } from '../registry/stores.js';
 import { registerAdapter } from '../registry/adapters.js';
@@ -26,6 +26,19 @@ function run(name: string, args: Record<string, unknown> = {}): unknown {
 }
 
 describe('command registry (driven by the bridge)', () => {
+  it('allows relative/http(s) navigation and rejects executable protocols', () => {
+    expect(resolveNavigationUrl('/next', 'https://app.example/current')).toBe(
+      'https://app.example/next',
+    );
+    expect(resolveNavigationUrl('https://safe.example/path', 'https://app.example/')).toBe(
+      'https://safe.example/path',
+    );
+    expect(resolveNavigationUrl('javascript:globalThis.pwned=true', 'https://app.example/')).toBe(
+      null,
+    );
+    expect(resolveNavigationUrl('data:text/html,boom', 'https://app.example/')).toBe(null);
+  });
+
   it('SNAPSHOT returns a tree with status', () => {
     document.body.innerHTML = '<button>Save</button>';
     const result = run(IrisCommand.SNAPSHOT, {}) as { tree: string; status: { route: string } };

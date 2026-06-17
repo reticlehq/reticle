@@ -19,7 +19,7 @@ const refOf=async()=>{for(let i=0;i<30;i++){const r=(await T('iris_query',{by:'t
 console.log('\n=== bug #1: real input survives SPA navigation (real Chromium + CDP) ===');
 // baseline on "/"
 let ref=await refOf();
-const a1=await T('iris_act',{ref,action:'click'});
+const a1=await T('iris_act',{ref,action:'click',args:{native:true}});
 chk('pre-nav: iris_act is REAL', a1.inputMode==='real', `inputMode=${a1.inputMode} url=${sess.url}`);
 chk('pre-nav: realInputAvailable true', (await provider.isAvailableFor(sess.url))===true);
 // CLIENT-SIDE NAV (pushState) — no full reload; SDK stays connected and emits route.change
@@ -27,10 +27,12 @@ await page.evaluate(()=>history.pushState({},'','/workspace?script=42'));
 for(let i=0;i<40&&!/\/workspace\?script=42/.test(sess.url);i++) await sleep(50); // wait for route.change → server
 chk('after pushState: session.url tracks the SPA route (THE FIX)', /\/workspace\?script=42$/.test(sess.url), `url=${sess.url}`);
 chk('after pushState: page.url matches session.url', page.url()===sess.url, `cdp=${page.url()}`);
-chk('after pushState: realInputAvailable STILL true', (await provider.isAvailableFor(sess.url))===true);
+let available=false;
+for(let i=0;i<40&&!available;i++){available=await provider.isAvailableFor(sess.url);if(!available)await sleep(50);}
+chk('after pushState: realInputAvailable STILL true', available);
 // real input must STILL engage post-nav (the button is still mounted; pushState didn't re-render)
 ref=await refOf();
-const a2=await T('iris_act',{ref,action:'click'});
+const a2=await T('iris_act',{ref,action:'click',args:{native:true}});
 chk('after pushState: iris_act is STILL REAL (was synthetic before the fix)', a2.inputMode==='real', `inputMode=${a2.inputMode}`);
 console.log(`\n${fail===0?'✅ BUG #1 FIXED':'❌ STILL BROKEN'} (${pass} passed, ${fail} failed)`);
 await browser.close(); await server.close(); process.exit(fail===0?0:1);
