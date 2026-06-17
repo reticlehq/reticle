@@ -5,15 +5,16 @@
  */
 
 import { Framework, installCommand, installCommandParts, type Detection } from './detect.js';
-import { mergeMcpConfig, McpMergeStatus } from './mcp-config.js';
+import { mergeMcpConfig, McpMergeStatus, irisServerEntry } from './mcp-config.js';
 import { patchViteConfig, VitePatchKind } from './vite-config.js';
 import {
-  VITE_MANUAL,
-  HTML_MANUAL,
+  viteManual,
+  htmlManual,
   NEXT_LAYOUT_MANUAL,
-  NEXT_IRIS_DEV_FILE,
+  nextIrisDevFile,
   NEXT_IRIS_DEV_PATH,
   nextConfigManual,
+  mcpManual,
 } from './snippets.js';
 
 const IRIS_PACKAGE = '@syrin/iris';
@@ -69,6 +70,14 @@ function mcpStep(input: PlanInput): Step {
       detail: 'iris server already configured',
     };
   }
+  if (r.status === McpMergeStatus.MANUAL) {
+    return {
+      title: 'MCP config',
+      target: MCP_FILE,
+      status: StepStatus.MANUAL,
+      detail: mcpManual(irisServerEntry(input.options.port)),
+    };
+  }
   return {
     title: 'MCP config',
     target: MCP_FILE,
@@ -101,17 +110,18 @@ function installStep(input: PlanInput): Step {
 
 function viteSteps(input: PlanInput): Step[] {
   const cfg = input.viteConfig;
+  const port = input.options.port;
   if (cfg === null) {
     return [
       {
         title: 'Vite plugin',
         target: 'vite.config',
         status: StepStatus.MANUAL,
-        detail: VITE_MANUAL,
+        detail: viteManual(port),
       },
     ];
   }
-  const patch = patchViteConfig(cfg.source);
+  const patch = patchViteConfig(cfg.source, port);
   if (patch.kind === VitePatchKind.ALREADY) {
     return [
       {
@@ -128,7 +138,7 @@ function viteSteps(input: PlanInput): Step[] {
         title: 'Vite plugin',
         target: cfg.path,
         status: StepStatus.MANUAL,
-        detail: `${patch.reason}\n\n${VITE_MANUAL}`,
+        detail: `${patch.reason}\n\n${viteManual(port)}`,
       },
     ];
   }
@@ -157,7 +167,7 @@ function nextSteps(input: PlanInput): Step[] {
         target: NEXT_IRIS_DEV_PATH,
         status: StepStatus.APPLY,
         detail: 'create dev-only connect component',
-        write: { path: NEXT_IRIS_DEV_PATH, content: NEXT_IRIS_DEV_FILE },
+        write: { path: NEXT_IRIS_DEV_PATH, content: nextIrisDevFile(input.options.port) },
       };
   return [
     devFile,
@@ -187,7 +197,7 @@ export function buildPlan(input: PlanInput): Plan {
       title: 'Connect snippet',
       target: 'index.html',
       status: StepStatus.MANUAL,
-      detail: HTML_MANUAL,
+      detail: htmlManual(input.options.port),
     });
   }
   return { framework: input.detection.framework, steps };

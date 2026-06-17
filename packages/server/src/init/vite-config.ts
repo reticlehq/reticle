@@ -6,8 +6,12 @@
  */
 
 export const VITE_IMPORT = "import { iris } from '@syrin/iris/vite';";
-const IRIS_PLUGIN_CALL = 'iris()';
 const IRIS_MARKER = '@syrin/iris/vite';
+
+/** The `iris(...)` call — carries the bridge port so the injected connect() targets it. */
+export function irisPluginCall(port: number | undefined): string {
+  return port === undefined ? 'iris()' : `iris({ port: ${String(port)} })`;
+}
 /** Matches the start of a `plugins: [` array literal. */
 const PLUGINS_ARRAY = /plugins\s*:\s*\[/;
 /** Matches an ES import statement (used to place our import after the last one). */
@@ -37,17 +41,17 @@ function insertImport(source: string): string {
   return `${source.slice(0, end)}\n${VITE_IMPORT}${source.slice(end)}`;
 }
 
-function insertPlugin(source: string): string {
+function insertPlugin(source: string, port: number | undefined): string {
   // Insert right after the opening `[` of the plugins array.
-  return source.replace(PLUGINS_ARRAY, (match) => `${match}${IRIS_PLUGIN_CALL}, `);
+  return source.replace(PLUGINS_ARRAY, (match) => `${match}${irisPluginCall(port)}, `);
 }
 
-export function patchViteConfig(source: string): VitePatch {
+export function patchViteConfig(source: string, port?: number): VitePatch {
   if (source.includes(IRIS_MARKER)) {
     return { kind: VitePatchKind.ALREADY };
   }
   if (!PLUGINS_ARRAY.test(source)) {
     return { kind: VitePatchKind.MANUAL, reason: NO_PLUGINS_REASON };
   }
-  return { kind: VitePatchKind.APPLY, code: insertImport(insertPlugin(source)) };
+  return { kind: VitePatchKind.APPLY, code: insertImport(insertPlugin(source, port)) };
 }

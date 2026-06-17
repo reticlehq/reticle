@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { pathToFileURL } from 'node:url';
+import { realpathSync } from 'node:fs';
 import { IRIS_DEFAULT_PORT } from '@syrin/iris-protocol';
 import { start, startDaemon } from './index.js';
 import { log } from './log.js';
@@ -395,6 +396,23 @@ function main(): void {
   }
 }
 
-if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href) {
+/**
+ * True when this module is the process entry point. Resolves argv[1] through the realpath because
+ * package managers (notably pnpm) symlink `node_modules/<pkg>` into a store dir: the bin shim runs
+ * `node node_modules/@syrin/iris/dist/cli.js` (the symlink) while ESM `import.meta.url` is the
+ * realpath. A plain string compare is false there, so `iris <cmd>` would silently no-op.
+ */
+function isEntryPoint(): boolean {
+  const argv1 = process.argv[1];
+  if (argv1 === undefined) return false;
+  if (import.meta.url === pathToFileURL(argv1).href) return true;
+  try {
+    return import.meta.url === pathToFileURL(realpathSync(argv1)).href;
+  } catch {
+    return false;
+  }
+}
+
+if (isEntryPoint()) {
   main();
 }

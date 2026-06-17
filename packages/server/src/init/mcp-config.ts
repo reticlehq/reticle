@@ -12,12 +12,14 @@ const PORT_FLAG = '--port';
 export const McpMergeStatus = {
   APPLY: 'apply',
   ALREADY: 'already',
+  /** The existing file could not be parsed as JSON (e.g. jsonc with comments) — bail to manual. */
+  MANUAL: 'manual',
 } as const;
 export type McpMergeStatus = (typeof McpMergeStatus)[keyof typeof McpMergeStatus];
 
 export interface McpMergeResult {
   status: McpMergeStatus;
-  /** Full file content to write (2-space JSON, trailing newline). Unchanged when `already`. */
+  /** Full file content to write (2-space JSON, trailing newline). Unchanged when not `apply`. */
   content: string;
 }
 
@@ -26,7 +28,8 @@ interface McpConfigShape {
   [key: string]: unknown;
 }
 
-function irisServerEntry(port: number | undefined): Record<string, unknown> {
+/** The iris server entry to add to `mcpServers`, rendered for a manual paste when we can't merge. */
+export function irisServerEntry(port: number | undefined): Record<string, unknown> {
   const args =
     port === undefined
       ? [IRIS_PACKAGE, MCP_SUBCOMMAND]
@@ -34,15 +37,27 @@ function irisServerEntry(port: number | undefined): Record<string, unknown> {
   return { command: NPX_COMMAND, args };
 }
 
-function parseConfig(existing: string | null): McpConfigShape {
-  if (existing === null || existing.trim().length === 0) return {};
-  const parsed: unknown = JSON.parse(existing);
-  if (typeof parsed !== 'object' || parsed === null) return {};
-  return parsed as McpConfigShape;
+type ParseResult = { ok: true; config: McpConfigShape } | { ok: false };
+
+function parseConfig(existing: string | null): ParseResult {
+  if (existing === null || existing.trim().length === 0) return { ok: true, config: {} };
+  try {
+    const parsed: unknown = JSON.parse(existing);
+    if (typeof parsed !== 'object' || parsed === null) return { ok: true, config: {} };
+    return { ok: true, config: parsed as McpConfigShape };
+  } catch {
+    // Comments / trailing commas (jsonc) or genuinely malformed — don't crash, don't rewrite
+    // (rewriting would strip the user's comments). The caller bails to a manual instruction.
+    return { ok: false };
+  }
 }
 
 export function mergeMcpConfig(existing: string | null, port: number | undefined): McpMergeResult {
-  const config = parseConfig(existing);
+  const parsed = parseConfig(existing);
+  if (!parsed.ok) {
+    return { status: McpMergeStatus.MANUAL, content: existing ?? '' };
+  }
+  const config = parsed.config;
   const servers = config.mcpServers ?? {};
 
   if (Object.prototype.hasOwnProperty.call(servers, SERVER_KEY)) {

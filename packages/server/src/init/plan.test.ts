@@ -49,6 +49,23 @@ describe('buildPlan — Vite', () => {
     expect(step(plan, 'Vite plugin').status).toBe(StepStatus.MANUAL);
   });
 
+  it('bakes --port into the patched iris() call (bridge/SDK port agree)', () => {
+    const plan = buildPlan(
+      input({
+        viteConfig: { path: 'vite.config.ts', source: VITE_SRC },
+        options: { port: 5000, mcp: true, install: false },
+      }),
+    );
+    expect(step(plan, 'Vite plugin').write?.content).toContain('iris({ port: 5000 })');
+  });
+
+  it('bails MCP to manual when .mcp.json is unparseable jsonc (no crash)', () => {
+    const plan = buildPlan(input({ mcpJson: '{\n  // c\n  "mcpServers": {}\n}' }));
+    const s = step(plan, 'MCP config');
+    expect(s.status).toBe(StepStatus.MANUAL);
+    expect(s.detail).toContain('"iris"');
+  });
+
   it('skips MCP under --no-mcp', () => {
     const plan = buildPlan(input({ options: { port: undefined, mcp: false, install: false } }));
     expect(step(plan, 'MCP config').status).toBe(StepStatus.SKIP);

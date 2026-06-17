@@ -42,4 +42,11 @@ describe('mergeMcpConfig', () => {
     expect(r.status).toBe(McpMergeStatus.ALREADY);
     expect(r.content).toBe(existing);
   });
+
+  it('bails to manual on unparseable jsonc (comments) without crashing or rewriting', () => {
+    const jsonc = '{\n  // my servers\n  "mcpServers": { "other": { "command": "x" } }\n}\n';
+    const r = mergeMcpConfig(jsonc, undefined);
+    expect(r.status).toBe(McpMergeStatus.MANUAL);
+    expect(r.content).toBe(jsonc); // unchanged — we never strip the user's comments
+  });
 });

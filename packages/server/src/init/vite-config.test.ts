@@ -33,6 +33,19 @@ describe('patchViteConfig', () => {
     expect(patchViteConfig(r.code).kind).toBe(VitePatchKind.ALREADY);
   });
 
+  it('bakes a non-default port into the iris() call', () => {
+    const r = patchViteConfig(BASIC, 5000);
+    if (r.kind !== VitePatchKind.APPLY) throw new Error('expected apply');
+    expect(r.code).toContain('iris({ port: 5000 })');
+  });
+
+  it('emits bare iris() when no port is given', () => {
+    const r = patchViteConfig(BASIC);
+    if (r.kind !== VitePatchKind.APPLY) throw new Error('expected apply');
+    expect(r.code).toContain('iris(), ');
+    expect(r.code).not.toContain('port:');
+  });
+
   it('bails to manual when there is no plugins array', () => {
     const r = patchViteConfig(`import { defineConfig } from 'vite';
 export default defineConfig({ server: { port: 3000 } });

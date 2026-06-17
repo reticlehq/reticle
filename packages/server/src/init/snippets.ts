@@ -1,18 +1,29 @@
 /**
- * Generated file contents and copy-paste snippets for `iris init`. Kept as named constants so the
- * runner never inlines free strings (see dev-skills/conventions.md).
+ * Generated file contents and copy-paste snippets for `iris init`. Kept as named constants/builders
+ * so the runner never inlines free strings (see dev-skills/conventions.md).
  */
 
+import { IRIS_DEFAULT_PORT, IRIS_WS_PATH } from '@syrin/iris-protocol';
+
+/** The connect() argument literal for a non-default port; empty string for the default. */
+function connectArg(port: number | undefined): string {
+  if (port === undefined || port === IRIS_DEFAULT_PORT) return '';
+  return `{ url: 'ws://localhost:${String(port)}${IRIS_WS_PATH}' }`;
+}
+
 /** The Vite-config snippet printed when we can't safely auto-patch the config. */
-export const VITE_MANUAL = `Add the Iris plugin to your Vite config:
+export function viteManual(port: number | undefined): string {
+  const call = port === undefined ? 'iris()' : `iris({ port: ${String(port)} })`;
+  return `Add the Iris plugin to your Vite config:
 
   import { iris } from '@syrin/iris/vite';
 
   export default defineConfig({
-    plugins: [react(), iris()],
+    plugins: [react(), ${call}],
   });
 
 The plugin only applies during \`vite\` (dev) — it is dropped from \`vite build\`.`;
+}
 
 /** Next.js config wrap — always printed (we never auto-rewrite next.config). */
 export function nextConfigManual(configFile: string): string {
@@ -24,7 +35,8 @@ export function nextConfigManual(configFile: string): string {
 }
 
 /** The dev-only client component that connects Iris after hydration. */
-export const NEXT_IRIS_DEV_FILE = `'use client';
+export function nextIrisDevFile(port: number | undefined): string {
+  return `'use client';
 import { useEffect } from 'react';
 
 /** Dev-only: connect Iris + install the React adapter, after hydration. */
@@ -33,12 +45,13 @@ export function IrisDev() {
     if (process.env.NODE_ENV !== 'development') return;
     void import('@syrin/iris').then(({ iris, install }) => {
       install();
-      iris.connect();
+      iris.connect(${connectArg(port)});
     });
   }, []);
   return null;
 }
 `;
+}
 
 /** Mount instruction for the root layout. */
 export const NEXT_LAYOUT_MANUAL = `Mount <IrisDev /> in your root layout (app/layout.tsx), dev-only:
@@ -48,14 +61,24 @@ export const NEXT_LAYOUT_MANUAL = `Mount <IrisDev /> in your root layout (app/la
   {process.env.NODE_ENV === 'development' ? <IrisDev /> : null}`;
 
 /** Plain-HTML / vanilla connect snippet. */
-export const HTML_MANUAL = `Add a dev-gated module script at app boot:
+export function htmlManual(port: number | undefined): string {
+  return `Add a dev-gated module script at app boot:
 
   <script type="module">
     if (location.hostname === 'localhost') {
       const { iris, install } = await import('@syrin/iris');
       install();
-      iris.connect();
+      iris.connect(${connectArg(port)});
     }
   </script>`;
+}
+
+/** Printed when an existing .mcp.json can't be parsed (jsonc/comments) and we won't rewrite it. */
+export function mcpManual(entry: Record<string, unknown>): string {
+  return `Couldn't parse your existing .mcp.json (comments or trailing commas?). Add this server
+to its "mcpServers" object by hand:
+
+  "iris": ${JSON.stringify(entry, null, 2)}`;
+}
 
 export const NEXT_IRIS_DEV_PATH = 'app/iris-dev.tsx';
