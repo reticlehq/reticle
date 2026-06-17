@@ -7,26 +7,33 @@ interface MemoryIo extends InitIo {
   execCalls: { command: string; args: readonly string[] }[];
 }
 
+const HOME = '/home/u';
+
 interface MemoryOpts {
   execOk?: boolean;
   claudeAvailable?: boolean;
   mcpExists?: boolean;
+  cursor?: boolean;
 }
 
 function memoryIo(files: Record<string, string>, opts: MemoryOpts = {}): MemoryIo {
-  const { execOk = true, claudeAvailable = true, mcpExists = false } = opts;
+  const { execOk = true, claudeAvailable = true, mcpExists = false, cursor = false } = opts;
   const written: Record<string, string> = {};
   const lines: string[] = [];
   const execCalls: { command: string; args: readonly string[] }[] = [];
+  // Simulate the Cursor config dir existing when requested.
+  const present = { ...files };
+  if (cursor) present[`${HOME}/.cursor`] = '';
   return {
     written,
     lines,
     execCalls,
-    readFile: (p) => files[p] ?? written[p] ?? null,
+    readFile: (p) => present[p] ?? written[p] ?? null,
     writeFile: (p, c) => {
       written[p] = c;
     },
-    exists: (p) => p in files || p in written,
+    exists: (p) => p in present || p in written,
+    homeDir: () => HOME,
     rootFiles: () => Object.keys(files).filter((p) => !p.includes('/')),
     exec: (command, args) => {
       execCalls.push({ command, args });
@@ -73,11 +80,24 @@ describe('runInit', () => {
     expect(io.execCalls.some((c) => c.command === 'claude')).toBe(false);
   });
 
-  it('prints manual global instructions when the claude CLI is missing', () => {
-    const io = memoryIo(VITE_FILES, { claudeAvailable: false });
+  it('prints manual global instructions when no agent is detected', () => {
+    const io = memoryIo(VITE_FILES, { claudeAvailable: false, cursor: false });
     runInit(OPTS, io);
     expect(io.execCalls.some((c) => c.command === 'claude' && c.args.includes('add'))).toBe(false);
     expect(io.lines.join('\n')).toContain('-s user');
+  });
+
+  it('registers in Cursor global config when Cursor is present', () => {
+    const io = memoryIo(VITE_FILES, { claudeAvailable: false, cursor: true });
+    runInit(OPTS, io);
+    expect(io.written['/home/u/.cursor/mcp.json']).toContain('@syrin/iris');
+  });
+
+  it('registers with BOTH Claude and Cursor when both are present', () => {
+    const io = memoryIo(VITE_FILES, { claudeAvailable: true, cursor: true });
+    runInit(OPTS, io);
+    expect(io.execCalls.some((c) => c.command === 'claude' && c.args.includes('add'))).toBe(true);
+    expect(io.written['/home/u/.cursor/mcp.json']).toContain('@syrin/iris');
   });
 
   it('dry run writes nothing and runs no subprocess', () => {

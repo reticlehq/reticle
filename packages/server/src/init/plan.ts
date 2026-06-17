@@ -6,6 +6,7 @@
 
 import { Framework, installCommand, installCommandParts, type Detection } from './detect.js';
 import { claudeAddCommand, mcpManual } from './mcp.js';
+import { mergeCursorConfig, CursorMergeStatus, cursorServerEntry } from './cursor.js';
 import { patchViteConfig, VitePatchKind } from './vite-config.js';
 import {
   viteManual,
@@ -47,8 +48,14 @@ export interface PlanInput {
   detection: Detection;
   /** Whether the `claude` CLI is installed (so we can register the MCP server globally). */
   claudeCli: boolean;
-  /** Whether an `iris` MCP server is already registered (any scope) — skip to stay idempotent. */
+  /** Whether an `iris` MCP server is already registered with Claude (any scope) — idempotency. */
   mcpExists: boolean;
+  /** Whether Cursor is installed for this user (its global config dir exists). */
+  cursorPresent: boolean;
+  /** Current ~/.cursor/mcp.json content, or null if absent. */
+  cursorConfig: string | null;
+  /** Absolute path of ~/.cursor/mcp.json (the write target). */
+  cursorConfigPath: string;
   /** Discovered Vite config: its path + source, or null if none found. */
   viteConfig: { path: string; source: string } | null;
   /** Discovered Next config filename (e.g. 'next.config.mjs'), or null. */
@@ -58,36 +65,80 @@ export interface PlanInput {
   options: { port: number | undefined; mcp: boolean; install: boolean };
 }
 
-const MCP_TITLE = 'MCP server (global)';
+const CLAUDE_MCP_TITLE = 'MCP server (Claude, global)';
+const CURSOR_MCP_TITLE = 'MCP server (Cursor, global)';
 
-function mcpStep(input: PlanInput): Step {
-  if (!input.options.mcp) {
-    return { title: MCP_TITLE, target: MCP_TARGET, status: StepStatus.SKIP, detail: '--no-mcp' };
-  }
+function claudeMcpStep(input: PlanInput): Step | null {
+  if (!input.claudeCli) return null;
   if (input.mcpExists) {
     return {
-      title: MCP_TITLE,
+      title: CLAUDE_MCP_TITLE,
       target: MCP_TARGET,
       status: StepStatus.ALREADY,
       detail: 'iris already registered (install once, used by every project)',
     };
   }
-  if (!input.claudeCli) {
-    return {
-      title: MCP_TITLE,
-      target: MCP_TARGET,
-      status: StepStatus.MANUAL,
-      detail: mcpManual(input.options.port),
-    };
-  }
   const cmd = claudeAddCommand(input.options.port);
   return {
-    title: MCP_TITLE,
+    title: CLAUDE_MCP_TITLE,
     target: MCP_TARGET,
     status: StepStatus.APPLY,
     detail: 'register iris globally for all projects',
     exec: { command: cmd.command, args: cmd.args, fallback: cmd.display },
   };
+}
+
+function cursorMcpStep(input: PlanInput): Step | null {
+  if (!input.cursorPresent) return null;
+  const r = mergeCursorConfig(input.cursorConfig, input.options.port);
+  if (r.status === CursorMergeStatus.ALREADY) {
+    return {
+      title: CURSOR_MCP_TITLE,
+      target: input.cursorConfigPath,
+      status: StepStatus.ALREADY,
+      detail: 'iris already in Cursor global config',
+    };
+  }
+  if (r.status === CursorMergeStatus.MANUAL) {
+    return {
+      title: CURSOR_MCP_TITLE,
+      target: input.cursorConfigPath,
+      status: StepStatus.MANUAL,
+      detail: `couldn't parse ${input.cursorConfigPath} — add this server by hand:\n  "iris": ${JSON.stringify(cursorServerEntry(input.options.port))}`,
+    };
+  }
+  return {
+    title: CURSOR_MCP_TITLE,
+    target: input.cursorConfigPath,
+    status: StepStatus.APPLY,
+    detail: 'register iris in Cursor global config',
+    write: { path: input.cursorConfigPath, content: r.content },
+  };
+}
+
+/** One global registration per detected agent (Claude + Cursor). Falls back to a manual note. */
+function mcpSteps(input: PlanInput): Step[] {
+  if (!input.options.mcp) {
+    return [
+      {
+        title: 'MCP server (global)',
+        target: MCP_TARGET,
+        status: StepStatus.SKIP,
+        detail: '--no-mcp',
+      },
+    ];
+  }
+  const steps = [claudeMcpStep(input), cursorMcpStep(input)].filter((s): s is Step => s !== null);
+  if (steps.length > 0) return steps;
+  // No supported agent detected — print the one-time global instructions.
+  return [
+    {
+      title: 'MCP server (global)',
+      target: MCP_TARGET,
+      status: StepStatus.MANUAL,
+      detail: mcpManual(input.options.port),
+    },
+  ];
 }
 
 function installStep(input: PlanInput): Step {
@@ -190,7 +241,7 @@ function nextSteps(input: PlanInput): Step[] {
 }
 
 export function buildPlan(input: PlanInput): Plan {
-  const steps: Step[] = [mcpStep(input), installStep(input)];
+  const steps: Step[] = [...mcpSteps(input), installStep(input)];
   if (input.detection.framework === Framework.VITE) {
     steps.push(...viteSteps(input));
   } else if (input.detection.framework === Framework.NEXT) {

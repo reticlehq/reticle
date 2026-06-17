@@ -58,8 +58,9 @@ npx @syrin/iris init
 
 It detects your framework, package manager, and React version, then:
 
-- **registers the Iris MCP server once, globally** (`claude mcp add iris -s user`) — so every
-  project on this machine gets it; you never re-add it per project,
+- **registers the Iris MCP server once, globally, for each agent you have installed** — Claude
+  Code (`claude mcp add iris -s user`) and/or Cursor (`~/.cursor/mcp.json`) — so every project on
+  this machine gets it; you never re-add it per project,
 - installs `@syrin/iris` as a dev dependency,
 - **Vite:** adds the `iris()` plugin to your config — which wires source mapping _and_
   `iris.connect()` for you, so there is nothing else to edit,
@@ -92,7 +93,7 @@ claude mcp add iris -s user -- npx @syrin/iris mcp
 (`iris init` runs exactly this for you. `-s user` is what makes it global; drop it for a
 project-local registration instead.)
 
-**Cursor** — add to your global `~/.cursor/mcp.json` (not per-project):
+**Cursor** — add to your global `~/.cursor/mcp.json` (not per-project; `iris init` writes this for you):
 
 ```jsonc
 {

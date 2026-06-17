@@ -7,17 +7,22 @@
  */
 
 export const MCP_SERVER_NAME = 'iris';
-const NPX = 'npx';
+export const NPX = 'npx';
 const IRIS_PACKAGE = '@syrin/iris';
 const MCP_SUBCOMMAND = 'mcp';
 const PORT_FLAG = '--port';
 export const CLAUDE_CLI = 'claude';
 
-/** The subprocess that the SDK/agent runs to launch the bridge — the tail after `claude mcp add … --`. */
-function serverInvocation(port: number | undefined): string[] {
+/** Args after `npx` that launch the bridge: `@syrin/iris mcp [--port N]`. Shared across agents. */
+export function npxServerArgs(port: number | undefined): string[] {
   return port === undefined
-    ? [NPX, IRIS_PACKAGE, MCP_SUBCOMMAND]
-    : [NPX, IRIS_PACKAGE, MCP_SUBCOMMAND, PORT_FLAG, String(port)];
+    ? [IRIS_PACKAGE, MCP_SUBCOMMAND]
+    : [IRIS_PACKAGE, MCP_SUBCOMMAND, PORT_FLAG, String(port)];
+}
+
+/** The full `npx …` invocation — the tail after `claude mcp add … --`. */
+function serverInvocation(port: number | undefined): string[] {
+  return [NPX, ...npxServerArgs(port)];
 }
 
 export interface ClaudeAddCommand {

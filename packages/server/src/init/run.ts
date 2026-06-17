@@ -7,6 +7,7 @@
 import { detect, Framework, type DetectInput } from './detect.js';
 import { buildPlan, StepStatus, type Plan, type PlanInput } from './plan.js';
 import { claudeAvailableProbe, claudeExistsProbe } from './mcp.js';
+import { CURSOR_DIR_RELPATH, CURSOR_MCP_RELPATH } from './cursor.js';
 
 const PACKAGE_JSON = 'package.json';
 const NEXT_IRIS_DEV = 'app/iris-dev.tsx';
@@ -32,11 +33,13 @@ export interface InitOptions {
 }
 
 export interface InitIo {
-  /** Returns file content or null if it does not exist. Path is project-relative. */
+  /** Returns file content or null if it does not exist. Path is project-relative or absolute. */
   readFile(relPath: string): string | null;
-  /** Writes content, creating parent directories. Path is project-relative. */
+  /** Writes content, creating parent directories. Path is project-relative or absolute. */
   writeFile(relPath: string, content: string): void;
   exists(relPath: string): boolean;
+  /** The user's home directory (for global agent config like ~/.cursor/mcp.json). */
+  homeDir(): string;
   /** Basenames present in the project root. */
   rootFiles(): readonly string[];
   /** Runs a subprocess to completion (inherits stdio); returns true on exit code 0. */
@@ -79,17 +82,25 @@ function gatherPlanInput(options: InitOptions, io: InitIo, pkgRaw: string): Plan
   const viteConfig =
     vitePath !== null && viteSource !== null ? { path: vitePath, source: viteSource } : null;
 
-  // Global MCP registration goes through the `claude` CLI; probe for it (and for an existing
-  // registration) only when the MCP step is in play.
+  // Global MCP registration targets each agent that's present: Claude via its CLI, Cursor via its
+  // global config file. Only probe when the MCP step is in play.
   const availableProbe = claudeAvailableProbe();
   const claudeCli = options.mcp ? io.probe(availableProbe.command, availableProbe.args) : false;
   const existsProbe = claudeExistsProbe();
   const mcpExists = claudeCli ? io.probe(existsProbe.command, existsProbe.args) : false;
 
+  const cursorDir = `${io.homeDir()}/${CURSOR_DIR_RELPATH}`;
+  const cursorConfigPath = `${io.homeDir()}/${CURSOR_MCP_RELPATH}`;
+  const cursorPresent = options.mcp && io.exists(cursorDir);
+  const cursorConfig = cursorPresent ? io.readFile(cursorConfigPath) : null;
+
   return {
     detection,
     claudeCli,
     mcpExists,
+    cursorPresent,
+    cursorConfig,
+    cursorConfigPath,
     viteConfig,
     nextConfigFile: firstPresent(rootFiles, NEXT_CONFIG_CANDIDATES),
     nextIrisDevExists: io.exists(NEXT_IRIS_DEV),

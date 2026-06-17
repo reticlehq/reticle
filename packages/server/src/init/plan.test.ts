@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { buildPlan, StepStatus, type PlanInput } from './plan.js';
 import { Framework, PackageManager, type Detection } from './detect.js';
 
+const CLAUDE_STEP = 'MCP server (Claude, global)';
+const CURSOR_STEP = 'MCP server (Cursor, global)';
 const MCP_STEP = 'MCP server (global)';
 
 function detection(framework: Framework, reactMajor = 19): Detection {
@@ -18,11 +20,18 @@ function input(partial: Partial<PlanInput>): PlanInput {
     detection: partial.detection ?? detection(Framework.VITE),
     claudeCli: partial.claudeCli ?? true,
     mcpExists: partial.mcpExists ?? false,
+    cursorPresent: partial.cursorPresent ?? false,
+    cursorConfig: partial.cursorConfig ?? null,
+    cursorConfigPath: partial.cursorConfigPath ?? '/home/u/.cursor/mcp.json',
     viteConfig: partial.viteConfig ?? null,
     nextConfigFile: partial.nextConfigFile ?? null,
     nextIrisDevExists: partial.nextIrisDevExists ?? false,
     options: partial.options ?? { port: undefined, mcp: true, install: false },
   };
+}
+
+function maybeStep(plan: ReturnType<typeof buildPlan>, title: string) {
+  return plan.steps.find((x) => x.title === title);
 }
 
 const VITE_SRC = `import { defineConfig } from 'vite';
@@ -36,9 +45,9 @@ function step(plan: ReturnType<typeof buildPlan>, title: string) {
   return s;
 }
 
-describe('buildPlan — MCP (global, claude user scope)', () => {
-  it('registers iris globally via an exec step when the claude CLI is present', () => {
-    const s = step(buildPlan(input({ claudeCli: true, mcpExists: false })), MCP_STEP);
+describe('buildPlan — MCP (global, per detected agent)', () => {
+  it('registers with Claude via an exec step when the claude CLI is present', () => {
+    const s = step(buildPlan(input({ claudeCli: true, mcpExists: false })), CLAUDE_STEP);
     expect(s.status).toBe(StepStatus.APPLY);
     expect(s.exec?.command).toBe('claude');
     expect(s.exec?.args).toEqual([
@@ -54,13 +63,36 @@ describe('buildPlan — MCP (global, claude user scope)', () => {
     ]);
   });
 
-  it('is ALREADY (idempotent) when an iris server is already registered', () => {
-    const s = step(buildPlan(input({ claudeCli: true, mcpExists: true })), MCP_STEP);
+  it('Claude step is ALREADY (idempotent) when iris is already registered', () => {
+    const s = step(buildPlan(input({ claudeCli: true, mcpExists: true })), CLAUDE_STEP);
     expect(s.status).toBe(StepStatus.ALREADY);
   });
 
-  it('bails to manual global instructions when the claude CLI is missing', () => {
-    const s = step(buildPlan(input({ claudeCli: false, mcpExists: false })), MCP_STEP);
+  it('registers with Cursor by writing its global config when Cursor is present', () => {
+    const plan = buildPlan(input({ claudeCli: false, cursorPresent: true, cursorConfig: null }));
+    const s = step(plan, CURSOR_STEP);
+    expect(s.status).toBe(StepStatus.APPLY);
+    expect(s.write?.path).toBe('/home/u/.cursor/mcp.json');
+    expect(s.write?.content).toContain('@syrin/iris');
+  });
+
+  it('registers with BOTH agents when both are present', () => {
+    const plan = buildPlan(input({ claudeCli: true, cursorPresent: true, cursorConfig: null }));
+    expect(maybeStep(plan, CLAUDE_STEP)).toBeDefined();
+    expect(maybeStep(plan, CURSOR_STEP)).toBeDefined();
+  });
+
+  it('Cursor step is ALREADY when iris is already in its config', () => {
+    const existing = JSON.stringify({ mcpServers: { iris: { command: 'x' } } });
+    const plan = buildPlan(
+      input({ claudeCli: false, cursorPresent: true, cursorConfig: existing }),
+    );
+    expect(step(plan, CURSOR_STEP).status).toBe(StepStatus.ALREADY);
+  });
+
+  it('falls back to a single manual step when no agent is detected', () => {
+    const plan = buildPlan(input({ claudeCli: false, cursorPresent: false }));
+    const s = step(plan, MCP_STEP);
     expect(s.status).toBe(StepStatus.MANUAL);
     expect(s.detail).toContain('-s user');
   });
@@ -73,13 +105,17 @@ describe('buildPlan — MCP (global, claude user scope)', () => {
     expect(s.status).toBe(StepStatus.SKIP);
   });
 
-  it('bakes --port into the global registration', () => {
-    const s = step(
-      buildPlan(input({ options: { port: 5000, mcp: true, install: false } })),
-      MCP_STEP,
+  it('bakes --port into both agents’ registration', () => {
+    const plan = buildPlan(
+      input({
+        claudeCli: true,
+        cursorPresent: true,
+        cursorConfig: null,
+        options: { port: 5000, mcp: true, install: false },
+      }),
     );
-    expect(s.exec?.args).toContain('--port');
-    expect(s.exec?.args).toContain('5000');
+    expect(step(plan, CLAUDE_STEP).exec?.args).toContain('5000');
+    expect(step(plan, CURSOR_STEP).write?.content).toContain('5000');
   });
 });
 
@@ -142,7 +178,7 @@ describe('buildPlan — Next', () => {
 describe('buildPlan — HTML', () => {
   it('registers MCP globally plus a manual connect snippet', () => {
     const plan = buildPlan(input({ detection: detection(Framework.HTML, 0) }));
-    expect(step(plan, MCP_STEP).status).toBe(StepStatus.APPLY);
+    expect(step(plan, CLAUDE_STEP).status).toBe(StepStatus.APPLY);
     expect(step(plan, 'Connect snippet').status).toBe(StepStatus.MANUAL);
   });
 });

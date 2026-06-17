@@ -5,12 +5,14 @@
  */
 
 import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, statSync } from 'node:fs';
-import { join, dirname } from 'node:path';
+import { join, dirname, isAbsolute } from 'node:path';
+import { homedir } from 'node:os';
 import { spawnSync } from 'node:child_process';
 import type { InitIo } from './run.js';
 
 export function buildNodeIo(cwd: string): InitIo {
-  const abs = (rel: string): string => join(cwd, rel);
+  // Project-relative by default; absolute paths (e.g. ~/.cursor/mcp.json) pass through unchanged.
+  const abs = (rel: string): string => (isAbsolute(rel) ? rel : join(cwd, rel));
   return {
     readFile(rel) {
       const path = abs(rel);
@@ -24,6 +26,9 @@ export function buildNodeIo(cwd: string): InitIo {
     },
     exists(rel) {
       return existsSync(abs(rel));
+    },
+    homeDir() {
+      return homedir();
     },
     rootFiles() {
       return readdirSync(cwd).filter((name) => {
