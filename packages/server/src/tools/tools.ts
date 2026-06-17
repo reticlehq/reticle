@@ -28,7 +28,7 @@ import {
   consoleEmptyHint,
 } from '../events/event-filters.js';
 import { healthEnvelope, refuseIfThrottled } from '../session/session-health.js';
-import { applyEventBudget, costHint } from '../session/output-budget.js';
+import { applyEventBudget, costHint, withSizeCost } from '../session/output-budget.js';
 import { selectPath, capDepth } from '../session/state-select.js';
 import { asString, asNumber, asRecord, parseInteractive } from './tools-helpers.js';
 import type { FileSystemPort } from '../project/fs-port.js';
@@ -283,7 +283,7 @@ export const TOOLS: ToolDef[] = [
   {
     name: IrisTool.SNAPSHOT,
     description:
-      'Semantic accessibility snapshot of the page or a subtree. mode: full|interactive|status. Use to see what is on screen right now.',
+      'Semantic accessibility snapshot of the page or a subtree. mode: full|interactive|status. Use to see what is on screen right now. The result carries cost:{ bytes, tokens } (estimated) — if it is large, re-scope (pass `scope`) or use mode:interactive/status instead of reading the whole tree.',
     inputSchema: {
       scope: z
         .string()
@@ -305,12 +305,16 @@ export const TOOLS: ToolDef[] = [
         .optional()
         .describe('Indented ARIA tree of every element on the page (or the scoped subtree).'),
       status: z.object({ route: z.string(), title: z.string().optional() }).optional(),
+      cost: z
+        .object({ bytes: z.number(), tokens: z.number() })
+        .optional()
+        .describe('Estimated size of this result — re-scope if large.'),
     },
     handler: (deps, args) =>
       commandOrThrow(deps, asString(args['sessionId']), IrisCommand.SNAPSHOT, {
         scope: args['scope'],
         mode: args['mode'] ?? SnapshotMode.FULL,
-      }),
+      }).then(withSizeCost),
   },
   {
     name: IrisTool.QUERY,
@@ -356,6 +360,10 @@ export const TOOLS: ToolDef[] = [
         .describe(
           'Present only on zero matches — tells you what IS on the page so you can diagnose the miss.',
         ),
+      cost: z
+        .object({ bytes: z.number(), tokens: z.number() })
+        .optional()
+        .describe('Estimated size of this result — narrow with `name`/`scope` if large.'),
     },
     handler: (deps, args) =>
       commandOrThrow(deps, asString(args['sessionId']), IrisCommand.QUERY, {
@@ -363,7 +371,7 @@ export const TOOLS: ToolDef[] = [
         value: args['value'],
         name: args['name'],
         scope: args['scope'],
-      }),
+      }).then(withSizeCost),
   },
   {
     name: IrisTool.INSPECT,

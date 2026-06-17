@@ -1,6 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import { EventType, SessionState, type IrisEvent } from '@syrin/iris-protocol';
-import { applyEventBudget, costHint } from './output-budget.js';
+import {
+  applyEventBudget,
+  costHint,
+  estimateTokens,
+  sizeCost,
+  withSizeCost,
+} from './output-budget.js';
 import { TOOLS } from '../tools/tools.js';
 import { IrisTool } from '../tools/tool-names.js';
 import type { Session, SessionManager } from './session.js';
@@ -36,6 +42,49 @@ describe('costHint', () => {
 
   it('includes droppedOldest only when something was dropped', () => {
     expect(costHint({}, 1, 4).droppedOldest).toBe(4);
+  });
+});
+
+describe('estimateTokens', () => {
+  it('is ~chars/4 and grows with length', () => {
+    expect(estimateTokens('')).toBe(0);
+    expect(estimateTokens('abcd')).toBe(1);
+    expect(estimateTokens('a'.repeat(400))).toBe(100);
+    expect(estimateTokens('a'.repeat(1000))).toBeGreaterThan(estimateTokens('a'.repeat(100)));
+  });
+});
+
+describe('sizeCost / withSizeCost', () => {
+  it('reports bytes + an estimated token count for a payload', () => {
+    const c = sizeCost({ tree: 'a'.repeat(400) });
+    expect(c.bytes).toBeGreaterThan(400);
+    expect(c.tokens).toBeGreaterThan(0);
+  });
+
+  it('attaches cost to an object result without dropping fields', () => {
+    const r = withSizeCost({ tree: 'x', status: { route: '/' } }) as {
+      tree: string;
+      status: { route: string };
+      cost: { bytes: number; tokens: number };
+    };
+    expect(r.tree).toBe('x');
+    expect(r.status.route).toBe('/');
+    expect(r.cost.bytes).toBeGreaterThan(0);
+    expect(r.cost.tokens).toBeGreaterThanOrEqual(1);
+  });
+
+  it('measures the body, not including the cost field it adds', () => {
+    const big = withSizeCost({ tree: 'a'.repeat(4000) }) as unknown as {
+      cost: { tokens: number };
+    };
+    // ~4000 chars of tree + JSON overhead → ~1000 tokens, not inflated by the cost object itself.
+    expect(big.cost.tokens).toBeGreaterThan(900);
+    expect(big.cost.tokens).toBeLessThan(1100);
+  });
+
+  it('passes non-object results through unchanged', () => {
+    expect(withSizeCost(null)).toBeNull();
+    expect(withSizeCost('err')).toBe('err');
   });
 });
 

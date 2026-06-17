@@ -31,3 +31,41 @@ export function costHint(payload: unknown, events: number, droppedOldest = 0): C
   const bytes = JSON.stringify(payload)?.length ?? 0;
   return droppedOldest > 0 ? { events, bytes, droppedOldest } : { events, bytes };
 }
+
+/**
+ * Rough token estimate for a string. The exact count is model/tokenizer-specific, but ~4 characters
+ * per token is the well-known heuristic for English-ish text (and JSON) across GPT/Claude
+ * tokenizers — accurate enough for the only decision it drives: "is this response big enough that I
+ * should re-scope before reading it?" Deliberately a cheap, dependency-free approximation, NOT a
+ * billing-grade count.
+ */
+const CHARS_PER_TOKEN = 4;
+export function estimateTokens(text: string): number {
+  return Math.ceil(text.length / CHARS_PER_TOKEN);
+}
+
+/**
+ * A size preview for non-event read results (snapshot, query). Same intent as CostHint but for
+ * payloads measured by size rather than event count: the agent can bail and re-scope (mode:status,
+ * a tighter scope, a more specific query) before spending context on a large body. The token
+ * figure is an estimate (see estimateTokens).
+ */
+export interface SizeCost {
+  bytes: number;
+  tokens: number;
+}
+
+export function sizeCost(payload: unknown): SizeCost {
+  const json = JSON.stringify(payload) ?? '';
+  return { bytes: json.length, tokens: estimateTokens(json) };
+}
+
+/**
+ * Attach a `cost` size preview to a read result. Pure: the cost is computed over the result BEFORE
+ * the cost field is added (so it measures the body the agent will actually read), then merged in.
+ * Non-object results (e.g. a thrown-error envelope) pass through unchanged.
+ */
+export function withSizeCost<T>(result: T): T {
+  if (typeof result !== 'object' || result === null) return result;
+  return { ...(result as Record<string, unknown>), cost: sizeCost(result) } as T;
+}
