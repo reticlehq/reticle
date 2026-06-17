@@ -29,6 +29,7 @@ import {
 } from '../events/event-filters.js';
 import { healthEnvelope, refuseIfThrottled } from '../session/session-health.js';
 import { applyEventBudget, costHint, withSizeCost } from '../session/output-budget.js';
+import { applySnapshotDelta, SnapshotCache } from './snapshot-delta.js';
 import { selectPath, capDepth } from '../session/state-select.js';
 import { asString, asNumber, asRecord, parseInteractive } from './tools-helpers.js';
 import type { FileSystemPort } from '../project/fs-port.js';
@@ -245,6 +246,9 @@ async function tryRealInput(
   }
 }
 
+/** Per-server last-snapshot cache backing iris_snapshot's diff:true delta mode (route-invalidated). */
+const SNAPSHOT_CACHE = new SnapshotCache();
+
 export const TOOLS: ToolDef[] = [
   {
     name: IrisTool.SESSIONS,
@@ -283,7 +287,7 @@ export const TOOLS: ToolDef[] = [
   {
     name: IrisTool.SNAPSHOT,
     description:
-      'Semantic accessibility snapshot of the page or a subtree. mode: full|interactive|status. Use to see what is on screen right now. The result carries cost:{ bytes, tokens } (estimated) — if it is large, re-scope (pass `scope`) or use mode:interactive/status instead of reading the whole tree.',
+      'Semantic accessibility snapshot of the page or a subtree. mode: full|interactive|status. Use to see what is on screen right now. The result carries cost:{ bytes, tokens } (estimated) — if it is large, re-scope (pass `scope`) or use mode:interactive/status instead of reading the whole tree. Pass diff:true after your first snapshot to get back ONLY what changed since your last look (mode:delta with added/removed, or mode:unchanged) — far fewer tokens and no stale tree to mis-read; a route change resets it to a full snapshot automatically.',
     inputSchema: {
       scope: z
         .string()
@@ -297,6 +301,12 @@ export const TOOLS: ToolDef[] = [
         .describe(
           'full = all elements; interactive = only clickable/focusable elements; status = only route + title. Default: full.',
         ),
+      diff: z
+        .boolean()
+        .optional()
+        .describe(
+          'Return only what changed since your last snapshot of the same scope/mode (mode:delta|unchanged). First call (or after a route change) still returns the full tree.',
+        ),
       ...sessionIdShape,
     },
     outputSchema: {
@@ -305,16 +315,45 @@ export const TOOLS: ToolDef[] = [
         .optional()
         .describe('Indented ARIA tree of every element on the page (or the scoped subtree).'),
       status: z.object({ route: z.string(), title: z.string().optional() }).optional(),
+      mode: z
+        .string()
+        .optional()
+        .describe('delta | unchanged when diff:true returned a change set.'),
+      delta: z
+        .object({
+          added: z.array(z.string()),
+          removed: z.array(z.string()),
+          addedCount: z.number(),
+          removedCount: z.number(),
+        })
+        .optional()
+        .describe('Only present on a diff:true call that found changes.'),
       cost: z
         .object({ bytes: z.number(), tokens: z.number() })
         .optional()
         .describe('Estimated size of this result — re-scope if large.'),
     },
-    handler: (deps, args) =>
-      commandOrThrow(deps, asString(args['sessionId']), IrisCommand.SNAPSHOT, {
+    handler: (deps, args) => {
+      const sessionId = asString(args['sessionId']);
+      const mode = asString(args['mode']) ?? SnapshotMode.FULL;
+      return commandOrThrow(deps, sessionId, IrisCommand.SNAPSHOT, {
         scope: args['scope'],
-        mode: args['mode'] ?? SnapshotMode.FULL,
-      }).then(withSizeCost),
+        mode,
+      }).then((raw) =>
+        withSizeCost(
+          applySnapshotDelta(
+            raw,
+            {
+              sessionId: sessionId ?? 'default',
+              scope: asString(args['scope']) ?? '',
+              mode,
+              diff: args['diff'] === true,
+            },
+            SNAPSHOT_CACHE,
+          ),
+        ),
+      );
+    },
   },
   {
     name: IrisTool.QUERY,
