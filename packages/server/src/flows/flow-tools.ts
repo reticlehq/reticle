@@ -19,6 +19,7 @@ import {
 import { IrisTool } from '../tools/tool-names.js';
 import { asString } from '../tools/tools-helpers.js';
 import { replayFlow } from './flow-replay.js';
+import { classifyFlowAssertions } from './flow-classify.js';
 import { collectProposals } from './heal.js';
 import { waitForPredicate } from '../events/predicate.js';
 import type { FlowAnnotations } from './flows.js';
@@ -89,7 +90,7 @@ export const FLOW_TOOLS: ToolDef[] = [
   {
     name: IrisTool.FLOW_SAVE,
     description:
-      'Persist the last/active recording (by name) as a git-checked, anchor-resolved flow at .iris/flows/<name>.json. Each step is bound to a SEMANTIC anchor (testid/role/signal), never a volatile ref; steps without a resolvable testid are kept with degraded:true (a "add a data-testid here" marker) rather than dropped. Returns { name, stepCount, degraded, empty } or { error, code }.',
+      'Persist the last/active recording (by name) as a git-checked, anchor-resolved flow at .iris/flows/<name>.json. Each step is bound to a SEMANTIC anchor (testid/role/signal), never a volatile ref; steps without a resolvable testid are kept with degraded:true (a "add a data-testid here" marker) rather than dropped. Returns { name, stepCount, degraded, empty, assertions } — `assertions.grade` is asserted | presence-only | assertion-free: a flow that only acts (or only checks element presence) will pass even if the feature breaks, so when grade is not "asserted" follow assertions.warning and add a consequence assertion via iris_annotate (assert-signal / assert-net / success-state).',
     inputSchema: {
       flowName: z
         .string()
@@ -102,6 +103,16 @@ export const FLOW_TOOLS: ToolDef[] = [
       path: z.string(),
       stepCount: z.number().optional(),
       degraded: z.number().optional(),
+      assertions: z
+        .object({
+          grade: z.string().describe('asserted | presence-only | assertion-free'),
+          hasConsequenceAssertion: z.boolean(),
+          totalSteps: z.number(),
+          consequenceSteps: z.number(),
+          weakSteps: z.number(),
+          warning: z.string().optional(),
+        })
+        .optional(),
     },
     handler: (deps: ToolDeps, args) => {
       const name = asString(args['flowName']) ?? '';
@@ -119,9 +130,15 @@ export const FLOW_TOOLS: ToolDef[] = [
         dynamic: deps.annotations.dynamic(name),
         ...(success !== undefined ? { success } : {}),
       };
-      return deps.flows.save(program, annotations).then((res) => {
-        if (res.ok) deps.annotations.clear(name);
-        return res.ok ? res.value : { error: flowErrorMessage(res.code), code: res.code };
+      return deps.flows.save(program, annotations).then(async (res) => {
+        if (!res.ok) return { error: flowErrorMessage(res.code), code: res.code };
+        deps.annotations.clear(name);
+        // Grade the saved flow's assertions so the agent learns immediately if it just saved a flow
+        // that asserts nothing observable (passes even when the feature is broken).
+        const loaded = await deps.flows.load(res.value.name);
+        return loaded.ok
+          ? { ...res.value, assertions: classifyFlowAssertions(loaded.value) }
+          : res.value;
       });
     },
   },
