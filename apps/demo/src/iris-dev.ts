@@ -91,7 +91,20 @@ export function installIris(): void {
   const present = !params.has('nopresent');
   const session = params.get('session') ?? SESSION_AUTO;
   const irisPort: number = typeof __IRIS_PORT__ !== 'undefined' ? __IRIS_PORT__ : 4400;
-  iris.connect({ session, present, url: `ws://localhost:${irisPort}/iris` });
+  const token = import.meta.env.VITE_IRIS_TOKEN;
+  const configuredUrl = import.meta.env.VITE_IRIS_WS_URL;
+  const url =
+    typeof configuredUrl === 'string' && configuredUrl.length > 0
+      ? configuredUrl
+      : `ws://localhost:${irisPort}/iris`;
+  const allowNonLocalhost = import.meta.env.VITE_IRIS_ALLOW_NON_LOCALHOST === 'true';
+  iris.connect({
+    session,
+    present,
+    url,
+    ...(allowNonLocalhost ? { allowNonLocalhost: true } : {}),
+    ...(typeof token === 'string' && token.length > 0 ? { token } : {}),
+  });
   registerStore('app', () => useApp.getState());
   registerCapabilities({
     testids: TESTIDS,

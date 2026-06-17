@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   ActionType,
   AnchorKind,
+  DANGEROUS_ACTION_CONFIRM_ARG,
   DriftReason,
   EventType,
   FLOW_FILE_VERSION,
@@ -15,7 +16,7 @@ import {
 } from '@syrin/iris-protocol';
 import { nearestTestid, replayFlow, type FlowReplaySession } from './flow-replay.js';
 import { waitForPredicate, type Predicate } from '../events/predicate.js';
-import { asString } from '../tools/tools-helpers.js';
+import { asRecord, asString } from '../tools/tools-helpers.js';
 import { IrisTool } from '../tools/tool-names.js';
 
 /** A scripted QUERY response per testid: live elements + (on zero) the present-testids near-miss. */
@@ -33,6 +34,7 @@ const PASS = (): boolean => true;
  */
 class FakeSession implements FlowReplaySession {
   readonly acts: { ref: string; action: string }[] = [];
+  readonly actArgs: Record<string, unknown>[] = [];
   readonly queries: string[] = [];
 
   constructor(
@@ -55,6 +57,7 @@ class FakeSession implements FlowReplaySession {
     if (name === IrisCommand.ACT) {
       const ref = asString(args['ref']) ?? '';
       this.acts.push({ ref, action: asString(args['action']) ?? '' });
+      this.actArgs.push(asRecord(args['args']));
       return Promise.resolve({
         kind: 'command_result',
         id: 'a',
@@ -166,6 +169,20 @@ describe('replayFlow — anchor re-resolution + legible drift', () => {
     expect(steps[0]?.ok).toBe(true);
     expect(steps[0]?.drift).toBeUndefined();
     expect(session.acts).toEqual([{ ref: 'e1', action: ActionType.CLICK }]);
+  });
+
+  it('requires a fresh destructive-action confirmation for each replay', async () => {
+    const step = testidStep('delete-account');
+    step.args = { [DANGEROUS_ACTION_CONFIRM_ARG]: true };
+    const script = (testid: string): QueryScript => ({ elements: [el(`e-${testid}`, testid)] });
+
+    const unconfirmed = new FakeSession(script);
+    await replayFlow(unconfirmed, flow([step]), waitForPredicate, FAST);
+    expect(unconfirmed.actArgs[0]).not.toHaveProperty(DANGEROUS_ACTION_CONFIRM_ARG);
+
+    const confirmed = new FakeSession(script);
+    await replayFlow(confirmed, flow([step]), waitForPredicate, FAST, true);
+    expect(confirmed.actArgs[0]).toMatchObject({ [DANGEROUS_ACTION_CONFIRM_ARG]: true });
   });
 
   it('6: a signal-expect step waits on the signal predicate (reuses predicate.ts)', async () => {

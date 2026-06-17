@@ -251,7 +251,7 @@ export interface FlowReplayResult {
   name: string;
   status: ReplayStatus;
   steps: FlowStepResult[];
-  /** Set when status === 'error' (missing/invalid file) — no steps ran. */
+  /** Set when status === 'error' (load failure or resolved action failure). */
   error?: { code: string; message: string };
   /**
    * The confident rebind proposals aggregated across drifted steps (additive,

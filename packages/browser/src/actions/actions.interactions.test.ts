@@ -73,6 +73,36 @@ describe('webmcp passthrough', () => {
     expect(callTool).toHaveBeenCalledWith('search', { q: 'x' });
     expect(result).toEqual({ called: 'search' });
   });
+
+  it('blocks dangerous tools without explicit confirmation', async () => {
+    const callTool = vi.fn(() => Promise.resolve({ ok: true }));
+    (navigator as unknown as Record<string, unknown>)['modelContext'] = { callTool };
+    const reg = createCommandRegistry();
+    const handler = reg.get('act');
+    if (handler === undefined) throw new Error('no act handler');
+    await expect(
+      handler({ action: 'webmcp', args: { tool: 'delete_account', params: {} } }),
+    ).rejects.toThrow(/confirmDangerous/);
+    await handler({
+      action: 'webmcp',
+      args: { tool: 'delete_account', params: {}, confirmDangerous: true },
+    });
+    expect(callTool).toHaveBeenCalledOnce();
+  });
+});
+
+describe('dangerous action confirmation', () => {
+  it('blocks a destructive click until explicitly confirmed', async () => {
+    document.body.innerHTML = '<button>Delete account</button>';
+    const button = document.querySelector('button') as HTMLButtonElement;
+    const ref = refs.refFor(button);
+    const clicked = vi.fn();
+    button.addEventListener('click', clicked);
+    await expect(executeAction(ref, 'click')).rejects.toThrow(/confirmDangerous/);
+    expect(clicked).not.toHaveBeenCalled();
+    await executeAction(ref, 'click', { confirmDangerous: true });
+    expect(clicked).toHaveBeenCalledOnce();
+  });
 });
 
 describe('dev overlay', () => {

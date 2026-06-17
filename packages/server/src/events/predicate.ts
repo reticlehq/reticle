@@ -391,6 +391,10 @@ export function waitForPredicate(
 ): Promise<EvalResult> {
   return new Promise<EvalResult>((resolve) => {
     let done = false;
+    const failed = (error: unknown): EvalResult => ({
+      pass: false,
+      failureReason: error instanceof Error ? error.message : String(error),
+    });
     const finish = (result: EvalResult): void => {
       if (done) return;
       done = true;
@@ -400,22 +404,30 @@ export function waitForPredicate(
       resolve(result);
     };
     const check = (): void => {
-      void evaluatePredicate(session, predicate, since).then((r) => {
-        if (r.pass) finish(r);
-      });
+      void evaluatePredicate(session, predicate, since)
+        .then((r) => {
+          if (r.pass) finish(r);
+        })
+        .catch((error: unknown) => {
+          finish(failed(error));
+        });
     };
     const unsub = session.onEvent(() => {
       check();
     });
     const interval = setInterval(check, 150);
     const timer = setTimeout(() => {
-      void evaluatePredicate(session, predicate, since).then((r) => {
-        finish({
-          pass: false,
-          evidence: r.evidence,
-          failureReason: r.failureReason ?? 'timed out waiting for predicate',
+      void evaluatePredicate(session, predicate, since)
+        .then((r) => {
+          finish({
+            pass: false,
+            evidence: r.evidence,
+            failureReason: r.failureReason ?? 'timed out waiting for predicate',
+          });
+        })
+        .catch((error: unknown) => {
+          finish(failed(error));
         });
-      });
     }, timeoutMs);
     check();
   });

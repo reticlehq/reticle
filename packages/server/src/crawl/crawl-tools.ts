@@ -26,6 +26,12 @@ export const CRAWL_TOOLS: ToolDef[] = [
         .string()
         .optional()
         .describe('CSS selector or element ref to restrict crawling to a subtree.'),
+      confirmDangerous: z
+        .boolean()
+        .optional()
+        .describe(
+          'Set true to allow controls classified as destructive. Default false; those controls are blocked by the browser.',
+        ),
       sessionId: z
         .string()
         .optional()
@@ -56,6 +62,7 @@ export const CRAWL_TOOLS: ToolDef[] = [
         ...(maxSteps !== undefined ? { maxSteps } : {}),
         ...(settleMs !== undefined ? { settleMs } : {}),
         ...(scope !== undefined ? { scope } : {}),
+        ...(args['confirmDangerous'] === true ? { confirmDangerous: true } : {}),
       };
       return crawl(session, opts, nodeSleep);
     },

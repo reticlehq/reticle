@@ -22,14 +22,14 @@ const refOf=async(by,value)=>{for(let i=0;i<30;i++){const r=(await T('iris_query
 console.log('\n=== 0.3.7 RUNHISTORY: replay → .iris/project.json → iris_project diff (real browser) ===');
 
 // Record + save a one-step flow.
-await T('iris_record_start',{name:'addtask'});
+await T('iris_record_start',{recordingName:'addtask'});
 await T('iris_act',{ref:await refOf('testid','add-task'),action:'click'});
-await T('iris_record_stop',{name:'addtask'});
-await T('iris_flow_save',{name:'addtask'});
+await T('iris_record_stop',{recordingName:'addtask'});
+await T('iris_flow_save',{flowName:'addtask'});
 
 // Replay twice — each replay should auto-record a run.
-await T('iris_flow_replay',{name:'addtask'});
-await T('iris_flow_replay',{name:'addtask'});
+await T('iris_flow_replay',{flowName:'addtask'});
+await T('iris_flow_replay',{flowName:'addtask'});
 
 // 1) project.json exists on disk and holds flow_replay records.
 const projFile=path.join(irisRoot,'project.json');
@@ -41,13 +41,13 @@ chk('each run carries status + driftSteps evidence + at', onDisk.runs.every(r=>r
 // 2) iris_project { name } returns scoped history + lastRun + diff-vs-last.
 const proj=await T('iris_project',{name:'addtask'});
 chk('iris_project returns scoped runs', Array.isArray(proj.runs)&&proj.runs.length===2, `runs=${proj.runs?.length}`);
-chk('iris_project returns lastRun', proj.lastRun&&proj.lastRun.name==='addtask', JSON.stringify(proj.lastRun).slice(0,80));
-chk('iris_project returns a diff-vs-last block', proj.diff&&typeof proj.diff.regressed==='boolean', JSON.stringify(proj.diff).slice(0,100));
+chk('iris_project returns lastRun', proj.lastRun&&proj.lastRun.name==='addtask', JSON.stringify(proj.lastRun)?.slice(0,80));
+chk('iris_project returns a diff-vs-last block', proj.diff&&typeof proj.diff.regressed==='boolean', JSON.stringify(proj.diff)?.slice(0,100));
 
 // 3) iris_run_record appends a manual run that lastRun then sees.
 await T('iris_run_record',{name:'addtask',status:'pass',summary:'manual smoke'});
 const after=await T('iris_project',{name:'addtask'});
-chk('iris_run_record appends a manual run', after.lastRun?.kind==='manual'&&after.lastRun?.summary==='manual smoke', JSON.stringify(after.lastRun).slice(0,100));
+chk('iris_run_record appends a manual run', after.lastRun?.kind==='manual'&&after.lastRun?.summary==='manual smoke', JSON.stringify(after.lastRun)?.slice(0,100));
 
 console.log(`\n${fail===0?'✅ RUNHISTORY VERIFIED':'❌ FAILED'} (${pass} passed, ${fail} failed)`);
 await b.close(); await server.close(); nfs.rmSync(path.dirname(irisRoot),{recursive:true,force:true}); process.exit(fail===0?0:1);

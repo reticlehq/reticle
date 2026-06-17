@@ -14,6 +14,7 @@ import {
 } from '@syrin/iris-protocol';
 import type { EvalResult, Predicate } from '../events/predicate.js';
 import { asRecord, asString } from '../tools/tools-helpers.js';
+import { replayActionArgs } from './replay.js';
 
 /**
  * The session surface flow-replay needs: QUERY to re-resolve a testid anchor against the live
@@ -131,6 +132,7 @@ async function runTestidStep(
   index: number,
   value: string,
   dynamic: ReadonlySet<string>,
+  confirmDangerous: boolean,
 ): Promise<FlowStepResult> {
   const queryResult = await session.command(IrisCommand.QUERY, { by: QueryBy.TESTID, value });
   const { refs, hint } = readQuery(queryResult);
@@ -148,7 +150,7 @@ async function runTestidStep(
   const act = await session.command(IrisCommand.ACT, {
     ref,
     action: step.action ?? '',
-    args: step.args ?? {},
+    args: replayActionArgs(step.args, confirmDangerous),
   });
   const result: FlowStepResult = { step: index, tool: step.tool, anchor: value, ok: act.ok };
   if (!act.ok) {
@@ -216,6 +218,7 @@ export async function replayFlow(
   flow: FlowFile,
   waitForSignal: WaitForSignal,
   signalTimeoutMs: number,
+  confirmDangerous = false,
 ): Promise<FlowStepResult[]> {
   const results: FlowStepResult[] = [];
   // testids whose region is LLM-dynamic — their expect-presence is NOT asserted.
@@ -231,7 +234,7 @@ export async function replayFlow(
     if (step.anchor.kind === AnchorKind.SIGNAL) {
       result = await runSignalStep(session, step, index, label, waitForSignal, signalTimeoutMs);
     } else {
-      result = await runTestidStep(session, step, index, label, dynamic);
+      result = await runTestidStep(session, step, index, label, dynamic, confirmDangerous);
     }
     results.push(result);
     if (result.drift !== undefined || !result.ok) break;

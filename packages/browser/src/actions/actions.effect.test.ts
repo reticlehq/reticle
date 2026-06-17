@@ -235,13 +235,13 @@ describe('action result: hover enter/leave warning (F3)', () => {
 describe('action result: testid normalization (G6)', () => {
   it('includes data-testid of the resolved element', async () => {
     document.body.innerHTML = '<button data-testid="pay-btn">Pay</button>';
-    const r = await executeAction(refOf('button'), 'click');
+    const r = await executeAction(refOf('button'), 'click', { confirmDangerous: true });
     expect(r.testid).toBe('pay-btn');
   });
 
   it('omits testid when the element has none', async () => {
     document.body.innerHTML = '<button>Pay</button>';
-    const r = await executeAction(refOf('button'), 'click');
+    const r = await executeAction(refOf('button'), 'click', { confirmDangerous: true });
     expect(r.testid).toBeUndefined();
   });
 

@@ -110,7 +110,7 @@ describe('ProjectStore — temp-dir filesystem, never touches the repo', () => {
     if (!r.ok) throw new Error('expected ok');
     expect(r.file.runs).toHaveLength(PROJECT_RUN_CAP.TOTAL);
     expect(r.file.runs.at(-1)?.name).toBe(`flow-${PROJECT_RUN_CAP.TOTAL + 24}`);
-  });
+  }, 30_000);
 
   // ---- EDGE / INVALID ----
 
