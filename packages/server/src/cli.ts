@@ -5,15 +5,19 @@ import { start, startDaemon } from './index.js';
 import { log } from './log.js';
 import { readPid, isAlive, isRunning, removePid, spawnDaemon } from './daemon.js';
 import { waitForDaemon, startMcpProxy, probeDaemon } from './mcp-proxy.js';
+import { runInit } from './init/run.js';
+import { buildNodeIo } from './init/node-io.js';
 import type { StartOptions } from './index.js';
 
 export const CLI_USAGE = `usage:
+  iris init  [--yes] [--dry-run] [--port N] [--no-mcp] [--no-install]  (wire Iris into the project in this directory)
   iris serve [--port N] [--drive <url>] [--headed]
   iris stop  [--port N] [--quiet]
   iris status [--port N]
   iris drive <url> [--headed]                       (foreground mode — for debugging)
   iris mcp   [--port N] [--drive <url>] [--headed]  (MCP stdio proxy — auto-starts daemon if needed)`;
 
+const INIT_COMMAND = 'init';
 const SERVE_COMMAND = 'serve';
 const STOP_COMMAND = 'stop';
 const STATUS_COMMAND = 'status';
@@ -25,8 +29,13 @@ const HEADED_FLAG = '--headed';
 const PORT_FLAG = '--port';
 const DRIVE_FLAG = '--drive';
 const QUIET_FLAG = '--quiet';
+const DRY_RUN_FLAG = '--dry-run';
+const YES_FLAG = '--yes';
+const NO_MCP_FLAG = '--no-mcp';
+const NO_INSTALL_FLAG = '--no-install';
 
 export type CliResult =
+  | { kind: 'init'; port: number | undefined; mcp: boolean; dryRun: boolean; install: boolean }
   | { kind: 'serve'; port: number; driveUrl?: string; headless: boolean }
   | { kind: 'stop'; port: number; quiet: boolean }
   | { kind: 'status'; port: number }
@@ -98,6 +107,41 @@ function parseDriveSuffix(args: string[], port: number): DriveSuffix {
   return { kind: 'ok', port, driveUrl, headless };
 }
 
+type InitFlags =
+  | { kind: 'ok'; port: number | undefined; mcp: boolean; dryRun: boolean; install: boolean }
+  | { kind: 'error'; message: string };
+
+function parseInitFlags(args: string[]): InitFlags {
+  let port: number | undefined;
+  let mcp = true;
+  let dryRun = false;
+  let install = true;
+  let i = 0;
+  while (i < args.length) {
+    const arg = args[i];
+    if (arg === PORT_FLAG) {
+      i++;
+      const n = args[i];
+      if (n === undefined) return { kind: 'error', message: CLI_USAGE };
+      const parsed = parseInt(n, 10);
+      if (isNaN(parsed)) return { kind: 'error', message: CLI_USAGE };
+      port = parsed;
+    } else if (arg === NO_MCP_FLAG) {
+      mcp = false;
+    } else if (arg === NO_INSTALL_FLAG) {
+      install = false;
+    } else if (arg === DRY_RUN_FLAG) {
+      dryRun = true;
+    } else if (arg === YES_FLAG) {
+      // Accepted for scripting/CI; init has no interactive prompts today.
+    } else {
+      return { kind: 'error', message: CLI_USAGE };
+    }
+    i++;
+  }
+  return { kind: 'ok', port, mcp, dryRun, install };
+}
+
 /** Pure CLI arg parser — exported for unit tests. argv = process.argv.slice(2). */
 export function parseCliArgs(argv: string[], defaultPort: number): CliResult {
   if (argv.length === 0) return { kind: 'serve', port: defaultPort, headless: true };
@@ -105,6 +149,11 @@ export function parseCliArgs(argv: string[], defaultPort: number): CliResult {
   const [cmd, ...rest] = argv;
 
   switch (cmd) {
+    case INIT_COMMAND: {
+      const r = parseInitFlags(rest);
+      if (r.kind === 'error') return r;
+      return { kind: 'init', port: r.port, mcp: r.mcp, dryRun: r.dryRun, install: r.install };
+    }
     case SERVE_COMMAND: {
       const r = parseServeFlags(rest, defaultPort);
       if (r.kind === 'error') return r;
@@ -152,6 +201,20 @@ export function parseCliArgs(argv: string[], defaultPort: number): CliResult {
     default:
       return { kind: 'error', message: CLI_USAGE };
   }
+}
+
+function handleInit(parsed: {
+  port: number | undefined;
+  mcp: boolean;
+  dryRun: boolean;
+  install: boolean;
+}): void {
+  const cwd = process.cwd();
+  const result = runInit(
+    { cwd, port: parsed.port, mcp: parsed.mcp, dryRun: parsed.dryRun, install: parsed.install },
+    buildNodeIo(cwd),
+  );
+  if (!result.ok) process.exit(1);
 }
 
 function handleServe(parsed: { port: number; driveUrl?: string; headless: boolean }): void {
@@ -307,6 +370,9 @@ function main(): void {
     case 'error':
       log('iris_usage_error', { message: parsed.message });
       process.exit(1);
+      break;
+    case 'init':
+      handleInit(parsed);
       break;
     case 'serve':
       handleServe(parsed);

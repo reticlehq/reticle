@@ -9,6 +9,7 @@ export default defineConfig({
     test: 'src/test.ts', // './test'   — declarative spec runner
     next: 'src/next.ts', // './next'   — Next.js source mapping
     babel: 'src/babel.ts', // './babel'  — React 19 babel plugin
+    vite: 'src/vite.ts', // './vite'   — Vite plugin (source mapping + connect injection)
     eslint: 'src/eslint.ts', // './eslint' — require-signal-on-mutation rule
     cli: 'src/cli.ts', // bin         — the `iris` CLI
   },

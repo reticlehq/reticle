@@ -48,6 +48,31 @@ Everything is **dev-only** and **localhost-only**. It's tree-shaken out of produ
 
 ---
 
+## Fastest path — `iris init`
+
+From your project root:
+
+```bash
+npx @syrin/iris init
+```
+
+It detects your framework, package manager, and React version, then:
+
+- merges an `iris` entry into `.mcp.json` (never clobbering an existing one),
+- installs `@syrin/iris` as a dev dependency,
+- **Vite:** adds the `iris()` plugin to your config — which wires source mapping _and_
+  `iris.connect()` for you, so there is nothing else to edit,
+- **Next / other:** creates the dev component and prints the exact `withIris` / mount / connect
+  snippets to paste (it never half-edits a build config).
+
+Re-running is safe (already-done steps are skipped). Preview without writing via
+`npx @syrin/iris init --dry-run`. Flags: `--port N`, `--no-mcp`, `--no-install`, `--yes`.
+
+Then restart your dev server and skip to [Step 4](#step-4--run-it--verify-the-connection). The
+manual steps below explain what `init` sets up, if you prefer to wire it yourself.
+
+---
+
 ## Step 1 — Connect your coding agent (MCP)
 
 You don't start the server manually — your agent starts it via MCP. Add Iris to your agent's
@@ -95,7 +120,27 @@ Then call `iris.connect()` once, in dev only. Where you put it depends on your f
 
 ### Vite + React
 
-In your entry file (`src/main.tsx`):
+**Recommended — the Vite plugin (one line, does everything).** Add `iris()` to your
+`vite.config.ts`:
+
+```ts
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+import { iris } from '@syrin/iris/vite';
+
+export default defineConfig({
+  plugins: [react(), iris()],
+});
+```
+
+This injects `iris.connect()` for you _and_ handles React 19 source mapping (Step 3) — so there's
+no entry-file edit and no separate Babel setup. `apply: 'serve'` means it's dropped from
+`vite build` entirely, so it can never reach production. (This is exactly what `iris init` adds.)
+
+<details>
+<summary>Prefer to wire it by hand instead of the plugin?</summary>
+
+In your entry file (`src/main.tsx`), call `connect()` in dev only:
 
 ```ts
 import { StrictMode } from 'react';
@@ -113,6 +158,11 @@ createRoot(document.getElementById('root')!).render(
   </StrictMode>,
 );
 ```
+
+On React 19 you then also need the source-mapping Babel plugin from Step 3. The Vite plugin
+above bundles both, which is why it's the recommended path.
+
+</details>
 
 ### Next.js
 
@@ -186,8 +236,10 @@ if (import.meta.env.DEV) installIrisReact(); // call before iris.connect()
 
 **React ≤ 18:** that's all — it uses React's dev `_debugSource`.
 
-**React 19:** React removed `_debugSource`, so add the Babel plugin (also bundled in
-`@syrin/iris`, at `@syrin/iris/babel`) to stamp the source onto elements in dev:
+**React 19:** React removed `_debugSource`, so the source has to be stamped at build time.
+**If you added the `iris()` Vite plugin in Step 2, this is already handled — skip ahead.**
+Otherwise add the Babel plugin (also bundled in `@syrin/iris`, at `@syrin/iris/babel`) to stamp
+the source onto elements in dev:
 
 ```ts
 // vite.config.ts
@@ -355,8 +407,7 @@ Everything below comes from the single `@syrin/iris` install.
 
 | Stack                  | SDK connect                                | Source mapping                                          |
 | ---------------------- | ------------------------------------------ | ------------------------------------------------------- |
-| Vite + React 19        | `iris.connect()` in `main.tsx` (dev)       | `install()` from `@syrin/iris` + `@syrin/iris/babel`    |
-| Vite + React ≤18       | same                                       | `install()` from `@syrin/iris` (no plugin needed)       |
+| Vite + React (any)     | `iris()` plugin (auto) — or `connect()`    | `iris()` plugin handles it (incl. React 19)             |
 | Next.js (app router)   | `IrisDev` client component in layout (dev) | `@syrin/iris/next` (`withIris`) → component + file:line |
 | Vue / Svelte / vanilla | `iris.connect()` at boot (dev)             | core works; framework adapters on the roadmap           |
 
