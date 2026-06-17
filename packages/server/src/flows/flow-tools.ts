@@ -20,7 +20,9 @@ import { IrisTool } from '../tools/tool-names.js';
 import { asString } from '../tools/tools-helpers.js';
 import { replayFlow } from './flow-replay.js';
 import { classifyFlowAssertions } from './flow-classify.js';
+import { assertSuccess, dynamicTestids, successLabel } from './flow-success.js';
 import { collectProposals } from './heal.js';
+import type { FlowStepResult } from '@syrin/iris-protocol';
 import { waitForPredicate } from '../events/predicate.js';
 import type { FlowAnnotations } from './flows.js';
 import type { ToolDef, ToolDeps } from '../tools/tools.js';
@@ -228,6 +230,27 @@ export const FLOW_TOOLS: ToolDef[] = [
         FLOW_SIGNAL_TIMEOUT_MS,
         args['confirmDangerous'] === true,
       );
+      // "green means intent satisfied": when every step ran clean, assert the flow's success
+      // end-condition as a real consequence. A signal/net success that never fires FAILS the replay
+      // even though all locators resolved — the regression a healed-but-wrong locator ships green.
+      const stepsClean = steps.length > 0 && steps.every((s) => s.ok && s.drift === undefined);
+      if (stepsClean && loaded.value.success !== undefined) {
+        const verdict = await assertSuccess(
+          session,
+          loaded.value.success,
+          dynamicTestids(loaded.value),
+          waitForPredicate,
+          FLOW_SIGNAL_TIMEOUT_MS,
+        );
+        const row: FlowStepResult = {
+          step: steps.length,
+          tool: 'success',
+          anchor: successLabel(loaded.value.success),
+          ok: verdict.pass,
+          ...(verdict.pass ? {} : { error: verdict.failureReason ?? 'flow.success not satisfied' }),
+        };
+        steps.push(row);
+      }
       const driftSteps = steps.filter((s) => s.drift !== undefined).length;
       const allOk = steps.every((s) => s.ok);
       const status =
