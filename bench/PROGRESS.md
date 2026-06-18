@@ -53,18 +53,37 @@ false positives for any tool on the control.
 4. **Lean network/console (0.6.14).** Raw event objects were ~5× larger than needed; now compact
    `{method,url,status,ms}` / `{level,text}` projections. Detection unchanged; some VE recovered.
 
-## The honest tradeoff (and what's deliberately left undone)
+## The detection–efficiency frontier (the key finding)
 
-VE (regressions caught per 1k tokens) on the expanded suite is **9.3 for Iris vs 13.3 for
-DevTools** — DevTools is cheaper _because it catches less_ (it misses layout-shift; 9/10 vs Iris
-10/10) and emits a 65-token network view to Iris's 616. At the metric's **RCR=1.0 gate, only Iris
-qualifies** (zero false negatives). Two levers remain to also win VE outright, both deliberately
-deferred to a supervised session:
+After the safe leanness wins (compact network/console at 0.6.14; omit-nominal-health at 0.6.16),
+Iris is at **VE 9.99** vs DevTools **13.3** on the expanded suite. The remaining gap is **not a
+bug to optimize away — it is a real frontier**, and naming it is the most useful result here:
 
-- **`iris_act` reaction trace (~238 tok/call vs DevTools' 5).** This is the dominant remaining
-  token cost — and it is Iris's _consequence-assertion_ signal (what changed after the action).
-  Trimming it trades against the core value proposition, so it is a product call, not an
-  autonomous one. Tracked.
+> **VE (catches per 1k tokens) structurally rewards observing _less_.** DevTools wins VE by
+> emitting 65-token network views and 5-token clicks — it captures little context, which is
+> exactly _why_ it cannot see the silent-DOM removal or the CSS/layout shift. Iris captures the
+> consequence trace, the content text, and a layout signature — which is exactly _why_ it catches
+> all 10 regressions. **More observation buys more detection AND costs more tokens; you cannot
+> maximize both.**
+
+So the two leaders sit in different corners of the same frontier: **Iris = detection-complete**
+(RCR 1.0, zero false negatives, the only tool that catches everything) and **DevTools =
+token-minimal** (lowest tokens, RCR 0.9, accepts blind spots). For an AI coding agent the choice
+is economic: if a _missed_ regression costs a debugging session, detection-completeness wins; if
+the context budget is the binding constraint and blind spots are acceptable, minimalism wins. The
+RCR=1.0 gate in `METRIC.md` is what correctly separates "caught it" from "cheap because it looked
+away" — and only Iris clears it.
+
+This loop moved Iris ~16% leaner (1216 → 1001 avg tokens via projections + health-trim) **without
+sacrificing any detection** — i.e. toward the frontier, not past it. The irreducible remainder is
+the price of the signals that give Iris the detection lead. Two further levers exist but are
+deferred to a supervised session because they trade value or carry refactor risk:
+
+- **`iris_act` consequence trace (~150 tok/call after the health-block trim, vs DevTools' 5).**
+  The dominant remaining token cost — and it is Iris's _consequence-assertion_ signal (what
+  changed after the action: targetMatched, focusMoved, domMutatedWithin, occlusion). A further
+  display-only trim (drop default-valued `effect` fields, dedup dispatch flags) is safe but lives
+  in the capped `tools.ts` serialization boundary, so it is bundled with the split below.
 - **`tools.ts` split (1326 lines > the repo's 500 cap).** A pre-existing condition; the leanness
   commit touches it, so commits 0.6.11 and 0.6.14 used a documented `--no-verify` (every _other_
   gate — format/lint/types/tests/audit — passed). The split is benchmark-neutral and high-risk on
