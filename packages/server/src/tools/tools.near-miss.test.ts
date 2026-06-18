@@ -84,12 +84,12 @@ describe('token budget on iris_network / iris_console', () => {
       ev(EventType.NET_REQUEST, { url: '/3', status: 200 }),
     ]);
     const r = (await tool(IrisTool.NETWORK).handler(deps, { limit: 2 })) as {
-      calls: { data: { url: string } }[];
+      calls: { url: string }[];
       total?: number;
       droppedOldest?: number;
       cost?: { bytes: number };
     };
-    expect(r.calls.map((c) => c.data.url)).toEqual(['/2', '/3']);
+    expect(r.calls.map((c) => c.url)).toEqual(['/2', '/3']);
     expect(r.total).toBe(3);
     expect(r.droppedOldest).toBe(1);
     expect(r.cost?.bytes).toBeGreaterThan(0);
@@ -116,11 +116,11 @@ describe('token budget on iris_network / iris_console', () => {
       ev(EventType.CONSOLE_ERROR, { message: 'c' }),
     ]);
     const r = (await tool(IrisTool.CONSOLE).handler(deps, { level: 'error', limit: 1 })) as {
-      logs: { data: { message: string } }[];
+      logs: { text: string }[];
       total?: number;
       droppedOldest?: number;
     };
-    expect(r.logs.map((l) => l.data.message)).toEqual(['c']);
+    expect(r.logs.map((l) => l.text)).toEqual(['c']);
     expect(r.total).toBe(3);
     expect(r.droppedOldest).toBe(2);
   });

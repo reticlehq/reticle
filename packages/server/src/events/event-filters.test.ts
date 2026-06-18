@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { EventType, type IrisEvent } from '@syrin/iris-protocol';
-import { consoleEmptyHint, netEmptyHint, reconcileNet } from './event-filters.js';
+import {
+  consoleEmptyHint,
+  netEmptyHint,
+  reconcileNet,
+  projectNetCall,
+  projectConsoleLog,
+} from './event-filters.js';
 
 function ev(type: EventType, data: Record<string, unknown>, t = 1): IrisEvent {
   return { t, type, sessionId: 's', data };
@@ -36,6 +42,42 @@ describe('reconcileNet (in-flight / hung requests)', () => {
     ];
     const out = reconcileNet(events);
     expect(out.map((e) => e.data['url'])).toEqual(['/early', '/late']);
+  });
+});
+
+describe('compact projections (token leanness)', () => {
+  it('projectNetCall keeps only method/url/status/ms and drops event plumbing', () => {
+    const e = ev(EventType.NET_REQUEST, {
+      id: 'n1',
+      method: 'POST',
+      url: '/api/x',
+      status: 500,
+      ok: false,
+      durationMs: 42,
+      initiator: 'fetch',
+    });
+    expect(projectNetCall(e)).toEqual({ method: 'POST', url: '/api/x', status: 500, ms: 42 });
+  });
+
+  it('projectNetCall passes through a pending (no-status) request', () => {
+    const e = ev(EventType.NET_PENDING, {
+      method: 'GET',
+      url: '/api/hang',
+      status: 'pending',
+      pending: true,
+    });
+    expect(projectNetCall(e)).toEqual({ method: 'GET', url: '/api/hang', status: 'pending' });
+  });
+
+  it('projectConsoleLog maps type to level and extracts the message', () => {
+    expect(projectConsoleLog(ev(EventType.CONSOLE_ERROR, { message: 'boom' }))).toEqual({
+      level: 'error',
+      text: 'boom',
+    });
+    expect(projectConsoleLog(ev(EventType.ERROR_UNCAUGHT, { message: 'uncaught x' }))).toEqual({
+      level: 'error',
+      text: 'uncaught x',
+    });
   });
 });
 

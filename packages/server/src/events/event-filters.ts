@@ -47,6 +47,37 @@ export function reconcileNet(events: IrisEvent[]): IrisEvent[] {
   return [...completed, ...unresolved].sort((a, b) => a.t - b.t);
 }
 
+/** Compact network-call summary for iris_network output — drops event plumbing (t, type,
+ * sessionId, ref, id, initiator, ok) the agent never needs, keeping only method/url/status/ms.
+ * This is the bulk of the token cost: raw IrisEvent objects are ~5x larger than this. */
+export interface NetCallView {
+  method: string;
+  url: string;
+  status?: number | string;
+  ms?: number;
+}
+export function projectNetCall(e: IrisEvent): NetCallView {
+  const status = e.data['status'];
+  const ms = asNumber(e.data['durationMs']);
+  const view: NetCallView = {
+    method: asString(e.data['method']) ?? '',
+    url: asString(e.data['url']) ?? '',
+  };
+  if (typeof status === 'number' || typeof status === 'string') view.status = status;
+  if (ms !== undefined) view.ms = ms;
+  return view;
+}
+
+/** Compact console-log summary for iris_console output — { level, text } only. */
+export interface ConsoleLogView {
+  level: string;
+  text: string;
+}
+export function projectConsoleLog(e: IrisEvent): ConsoleLogView {
+  const level = e.type === EventType.ERROR_UNCAUGHT ? 'error' : e.type.replace('console.', '');
+  return { level, text: asString(e.data['message']) ?? '' };
+}
+
 /** True for any console.* / uncaught-error event (the iris_console universe). */
 export function isConsoleEvent(e: IrisEvent): boolean {
   return (

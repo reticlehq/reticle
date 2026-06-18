@@ -27,6 +27,8 @@ import {
   netEmptyHint,
   consoleEmptyHint,
   reconcileNet,
+  projectNetCall,
+  projectConsoleLog,
 } from '../events/event-filters.js';
 import { healthEnvelope, refuseIfThrottled } from '../session/session-health.js';
 import { applyEventBudget, costHint, withSizeCost } from '../session/output-budget.js';
@@ -903,7 +905,8 @@ export const TOOLS: ToolDef[] = [
       if (matched.length === 0 && allNet.length > 0) {
         return Promise.resolve(withSizeCost({ calls: matched, hint: netEmptyHint(allNet) }));
       }
-      const { events: calls, droppedOldest } = applyEventBudget(matched, limit);
+      const { events: budgeted, droppedOldest } = applyEventBudget(matched, limit);
+      const calls = budgeted.map(projectNetCall);
       return Promise.resolve(
         withSizeCost(
           droppedOldest > 0 ? { calls, total: matched.length, droppedOldest } : { calls },
@@ -953,7 +956,8 @@ export const TOOLS: ToolDef[] = [
       if (matched.length === 0 && allConsole.length > 0) {
         return Promise.resolve(withSizeCost({ logs: matched, hint: consoleEmptyHint(allConsole) }));
       }
-      const { events: logs, droppedOldest } = applyEventBudget(matched, limit);
+      const { events: budgeted, droppedOldest } = applyEventBudget(matched, limit);
+      const logs = budgeted.map(projectConsoleLog);
       return Promise.resolve(
         withSizeCost(droppedOldest > 0 ? { logs, total: matched.length, droppedOldest } : { logs }),
       );
