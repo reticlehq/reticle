@@ -338,7 +338,10 @@ export const FLOW_TOOLS: ToolDef[] = [
       'returns what changed — never silently. Before writing, apply re-replays the healed flow and ' +
       're-asserts its success consequence: if the rebound locator resolves but the consequence no ' +
       'longer fires, the write is REFUSED (status:consequence_broken) — it heals the locator, never ' +
-      'the intent. A drift with no proposal above the confidence floor is status:unhealable (file ' +
+      'the intent. NOTE: because apply:true re-runs the flow, its actions EXECUTE again on the live ' +
+      'app (a side-effectful flow — submit, create, pay — runs its steps again, and destructive steps ' +
+      'need confirmDangerous or the heal is refused); use apply:false to preview a rebind with no ' +
+      'execution. A drift with no proposal above the confidence floor is status:unhealable (file ' +
       'untouched). Returns { name, status: healed|drift|unhealable|consequence_broken|' +
       'nothing_to_heal|error, applied, proposals[], changed[], message }.',
     inputSchema: {
