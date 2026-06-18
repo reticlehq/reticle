@@ -57,6 +57,10 @@ class FakeSession implements FlowReplaySession {
   onEvent(): () => void {
     return () => undefined;
   }
+
+  elapsed(): number {
+    return 0;
+  }
 }
 
 function step(value: string, expectTestid?: string): FlowStep {

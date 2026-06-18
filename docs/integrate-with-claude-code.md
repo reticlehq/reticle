@@ -23,8 +23,10 @@ Read these docs first and follow them exactly:
 
 Then do all of this:
 
-1. MCP: add an "iris" server to .mcp.json:
-   { "mcpServers": { "iris": { "command": "npx", "args": ["@syrin/iris"] } } }
+1. MCP: register the "iris" server ONCE, globally (user scope) — not per project:
+   claude mcp add iris -s user -- npx @syrin/iris mcp
+   (`npx @syrin/iris init` runs this for you. Use a project-scoped `.mcp.json` only if a repo
+   needs its own pinned config.)
 
 2. Install the dev deps from the local registry (skip the registry lines if using public npm):
    echo '@syrin:registry=http://localhost:4873/' >> .npmrc
@@ -98,7 +100,7 @@ asserting on volatile output. Report evidence, not prose.
 
 ## What "good integration" looks like (checklist the agent should hit)
 
-- [ ] `.mcp.json` has the `iris` server; `iris_sessions` shows the app connected.
+- [ ] the `iris` MCP server is registered (globally via `claude mcp add -s user`); `iris_sessions` shows the app connected.
 - [ ] `iris.connect()` is dev-gated; nothing Iris ships to prod.
 - [ ] React adapter installed + source mapping returns `file:line` from `iris_inspect`.
 - [ ] Key elements have `data-testid`; components depend on an injected `createIrisEmitter()`

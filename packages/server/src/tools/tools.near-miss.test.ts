@@ -75,3 +75,53 @@ describe('near-miss on iris_network / iris_console', () => {
     expect(r.hint?.byLevel).toEqual({ log: 1, warn: 1, error: 0 });
   });
 });
+
+describe('token budget on iris_network / iris_console', () => {
+  it('iris_network: limit keeps the most recent N, reporting total + droppedOldest + cost', async () => {
+    const deps = depsWith([
+      ev(EventType.NET_REQUEST, { url: '/1', status: 200 }),
+      ev(EventType.NET_REQUEST, { url: '/2', status: 200 }),
+      ev(EventType.NET_REQUEST, { url: '/3', status: 200 }),
+    ]);
+    const r = (await tool(IrisTool.NETWORK).handler(deps, { limit: 2 })) as {
+      calls: { data: { url: string } }[];
+      total?: number;
+      droppedOldest?: number;
+      cost?: { bytes: number };
+    };
+    expect(r.calls.map((c) => c.data.url)).toEqual(['/2', '/3']);
+    expect(r.total).toBe(3);
+    expect(r.droppedOldest).toBe(1);
+    expect(r.cost?.bytes).toBeGreaterThan(0);
+  });
+
+  it('iris_network: no limit returns all matches + a cost hint, no total/droppedOldest', async () => {
+    const deps = depsWith([ev(EventType.NET_REQUEST, { url: '/1', status: 200 })]);
+    const r = (await tool(IrisTool.NETWORK).handler(deps, {})) as {
+      calls: unknown[];
+      total?: number;
+      droppedOldest?: number;
+      cost?: { bytes: number };
+    };
+    expect(r.calls).toHaveLength(1);
+    expect(r.total).toBeUndefined();
+    expect(r.droppedOldest).toBeUndefined();
+    expect(r.cost?.bytes).toBeGreaterThan(0);
+  });
+
+  it('iris_console: limit keeps the most recent N entries', async () => {
+    const deps = depsWith([
+      ev(EventType.CONSOLE_ERROR, { message: 'a' }),
+      ev(EventType.CONSOLE_ERROR, { message: 'b' }),
+      ev(EventType.CONSOLE_ERROR, { message: 'c' }),
+    ]);
+    const r = (await tool(IrisTool.CONSOLE).handler(deps, { level: 'error', limit: 1 })) as {
+      logs: { data: { message: string } }[];
+      total?: number;
+      droppedOldest?: number;
+    };
+    expect(r.logs.map((l) => l.data.message)).toEqual(['c']);
+    expect(r.total).toBe(3);
+    expect(r.droppedOldest).toBe(2);
+  });
+});

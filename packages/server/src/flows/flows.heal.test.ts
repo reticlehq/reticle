@@ -6,6 +6,7 @@ import {
   ActionType,
   AnchorKind,
   DANGEROUS_ACTION_CONFIRM_ARG,
+  EventType,
   FLOW_FILE_VERSION,
   FLOW_SIGNAL_TIMEOUT_MS,
   FlowErrorCode,
@@ -58,6 +59,7 @@ class FakeSession {
   constructor(
     private readonly script: (testid: string) => QueryScript,
     private readonly actOk = true,
+    private readonly events: IrisEvent[] = [],
   ) {}
   command(name: string, args: Record<string, unknown> = {}): Promise<CommandResult> {
     if (name === IrisCommand.QUERY) {
@@ -81,11 +83,35 @@ class FakeSession {
     return Promise.resolve({ kind: 'command_result', id: 'x', ok: true, result: {} });
   }
   eventsSince(): IrisEvent[] {
-    return [];
+    return this.events;
   }
   onEvent(): () => void {
     return () => undefined;
   }
+  elapsed(): number {
+    return 0;
+  }
+}
+
+/** A SIGNAL event the success oracle can match (data.name === the flow's success.signal). */
+function signalEvent(name: string): IrisEvent {
+  return { t: 0, type: EventType.SIGNAL, sessionId: 's', data: { name, data: {} } };
+}
+
+/** Like renamedSession, but the page also emits `signal` — so a healed flow's consequence holds. */
+function renamedSessionWithSignal(
+  old: string,
+  presentTestids: string[],
+  signal: string,
+): FakeSession {
+  return new FakeSession(
+    (testid) =>
+      testid === old
+        ? { elements: [], hint: present(presentTestids) }
+        : { elements: [el(`e-${testid}`, testid)] },
+    true,
+    [signalEvent(signal)],
+  );
 }
 
 /** A session where `old` resolves to 0 elements with `present`, and any other testid resolves to 1. */
@@ -170,6 +196,54 @@ describe('FlowStore.heal + iris_flow_heal', () => {
     const steps = await replayFlow(session, loaded.value, waitForPredicate, FLOW_SIGNAL_TIMEOUT_MS);
     expect(steps.every((s) => s.ok)).toBe(true);
     expect(steps.some((s) => s.drift !== undefined)).toBe(false);
+  });
+
+  it('heal apply re-verifies the success consequence and writes when it still fires', async () => {
+    await store.saveFlow({
+      ...flowFile('chat', [clickStep('old-id')]),
+      success: { signal: 'done' },
+    });
+    const session = renamedSessionWithSignal('old-id', ['new-id'], 'done');
+
+    const res = await heal(store, session, { flowName: 'chat', apply: true });
+    expect(res.status).toBe(HealStatus.HEALED);
+    expect(res.applied).toBe(true);
+    expect(res.changed).toEqual([{ step: 0, from: 'old-id', to: 'new-id' }]);
+
+    const loaded = await store.load('chat');
+    if (!loaded.ok) throw new Error('expected ok');
+    expect(loaded.value.steps[0]?.anchor).toEqual({ kind: AnchorKind.TESTID, value: 'new-id' });
+  });
+
+  it('REFUSES to persist a heal when the rebind breaks the success consequence', async () => {
+    await store.saveFlow({
+      ...flowFile('chat', [clickStep('old-id')]),
+      success: { signal: 'done' },
+    });
+    const before = await readFile(flowPath(root, 'chat'), 'utf8');
+    // The locator heals (old-id → new-id resolves), but the page never emits the 'done' signal,
+    // so the healed flow no longer satisfies its intent. The write must be refused.
+    const session = renamedSession('old-id', ['new-id']);
+
+    const res = await heal(store, session, { flowName: 'chat', apply: true });
+    expect(res.status).toBe(HealStatus.CONSEQUENCE_BROKEN);
+    expect(res.applied).toBe(false);
+    expect(res.changed).toEqual([]);
+    expect(res.proposals).toHaveLength(1); // the proposal is still surfaced for a human
+    expect(res.message).toContain('done');
+
+    const after = await readFile(flowPath(root, 'chat'), 'utf8');
+    expect(after).toEqual(before); // file untouched — never ship a green-but-dead flow
+  }, 10_000);
+
+  it('heals a flow with no declared success but says the rebind is unverified', async () => {
+    await store.saveFlow(flowFile('chat', [clickStep('old-id')]));
+    const session = renamedSession('old-id', ['new-id']);
+
+    const res = await heal(store, session, { flowName: 'chat', apply: true });
+    expect(res.status).toBe(HealStatus.HEALED);
+    expect(res.applied).toBe(true);
+    expect(res.message.toLowerCase()).toContain('no success consequence');
   });
 
   it('heal apply:false returns the proposal but does NOT modify the file', async () => {

@@ -130,8 +130,13 @@ describe('iris_flow_save / iris_flow_load handlers', () => {
     expect(loaded.flowName).toBe('checkout');
     expect(loaded.steps[0]?.anchor).toEqual({ kind: 'testid', value: 'pay' });
 
-    const list = (await tool(IrisTool.FLOW_LIST).handler(deps, {})) as { flows: string[] };
-    expect(list.flows).toEqual(['checkout']);
+    // FLOW_LIST returns {name, path} objects (matches its outputSchema — schema-validating MCP
+    // clients reject bare strings).
+    const list = (await tool(IrisTool.FLOW_LIST).handler(deps, {})) as {
+      flows: { name: string; path: string }[];
+    };
+    expect(list.flows.map((f) => f.name)).toEqual(['checkout']);
+    expect(list.flows[0]?.path).toContain('checkout');
   });
 
   it('3: a recorded expect.signal survives the round-trip', async () => {

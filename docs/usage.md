@@ -79,14 +79,22 @@ List connected tabs. → `{ sessions: [{ sessionId, url, title, lastSeenMs, hidd
 A semantic, accessibility-tree view of the page.
 
 - **args:** `mode?: 'full' | 'interactive' | 'status'` (default `full`), `scope?` (CSS
-  selector or ref), `sessionId?`.
-- **returns:** `{ tree, status: { route, title, visibleDialogs }, nodes, truncated }`.
+  selector or ref), `diff?: boolean`, `sessionId?`.
+- **returns:** `{ tree, status: { route, title, visibleDialogs }, nodes, truncated, cost: { bytes, tokens } }`.
+- **`diff: true`** returns only what changed since your last snapshot of the same scope/mode —
+  `{ mode: 'delta', delta: { added, removed, addedCount, removedCount } }` or `{ mode: 'unchanged' }`
+  (no full tree). The first call (and any call after a route change) still returns the full tree.
+  ~99% fewer tokens to re-look after an action; see [token-efficiency.md](token-efficiency.md).
+- **`cost`** is an estimated size of the result — re-scope (`mode`/`scope`) before reading if large.
 
 ```jsonc
 iris_snapshot({ mode: "interactive" })
 // - tab "Overview" (ref=e2)
 // - button "Add item" (ref=e5)
 // status: { route: "/dashboard", visibleDialogs: [] }
+
+iris_snapshot({ diff: true }) // after an action — only the change set
+// { mode: "delta", delta: { added: ['- alert "Saved!"'], removed: [], addedCount: 1, removedCount: 0 } }
 ```
 
 ### `iris_query`
@@ -249,6 +257,20 @@ what to assert on without reading source.
 
 `iris_sessions` also surfaces a `hasCapabilities` flag per session so you know when it's worth
 calling. Returns empty arrays (never errors) if the app advertised nothing.
+
+### `iris_domain`
+
+Read the app's domain model **before testing**: a synthesis of every saved flow + the registered
+capabilities. Tells you what to test and where the real risk is without crawling the app. Reads
+`.iris/flows/` + `.iris/contract.json` — no browser needed.
+
+- `iris_domain({})` → `{ flowCount, flows: [{ name, steps, grade, asserts, signals, testids, warning?, risk? }], declared: { testids, signals, stores }, coverage: { asserted, presenceOnly, assertionFree }, gaps: { unassertedFlows, declaredUntestedSignals, declaredUntestedTestids }, riskRanked, summary }`
+- **`gaps`** is the point: `declaredUntestedSignals` are intents the app emits that **no flow
+  asserts** (untested behavior); `unassertedFlows` act but verify no consequence. Close them with a
+  flow + a consequence assertion (`iris_annotate`).
+- **`riskRanked`** orders flow names worst-first by combining run history (`.iris/project.json`:
+  recently failed/drifted, or passed-with-errors) with assertion quality (a green assertion-free
+  flow is still risky). **Test these first.** Each flow's `risk` carries `{ level, reason, lastStatus? }`.
 
 ### `iris_state`
 

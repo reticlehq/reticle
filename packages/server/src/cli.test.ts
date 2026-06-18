@@ -39,6 +39,45 @@ describe('parseCliArgs', () => {
     });
   });
 
+  it('init with no flags defaults to mcp + install on, no dry run, no port', () => {
+    expect(parseCliArgs(['init'], PORT)).toEqual({
+      kind: 'init',
+      port: undefined,
+      mcp: true,
+      dryRun: false,
+      install: true,
+    });
+  });
+
+  it('init --dry-run --no-mcp --no-install --port sets each flag', () => {
+    expect(
+      parseCliArgs(['init', '--dry-run', '--no-mcp', '--no-install', '--port', '4500'], PORT),
+    ).toEqual({
+      kind: 'init',
+      port: 4500,
+      mcp: false,
+      dryRun: true,
+      install: false,
+    });
+  });
+
+  it('init --yes is accepted', () => {
+    expect(parseCliArgs(['init', '--yes'], PORT)).toEqual({
+      kind: 'init',
+      port: undefined,
+      mcp: true,
+      dryRun: false,
+      install: true,
+    });
+  });
+
+  it('init rejects unknown flags', () => {
+    expect(parseCliArgs(['init', '--bogus'], PORT)).toEqual({
+      kind: 'error',
+      message: CLI_USAGE,
+    });
+  });
+
   it('stop returns stop result with quiet false', () => {
     expect(parseCliArgs(['stop'], PORT)).toEqual({ kind: 'stop', port: PORT, quiet: false });
   });

@@ -57,6 +57,7 @@ interface SessionLike {
   command(name: string, args?: Record<string, unknown>): Promise<CommandResult>;
   eventsSince(cursor: number): IrisEvent[];
   onEvent(listener: (event: IrisEvent) => void): () => void;
+  elapsed(): number;
 }
 
 function ok(result: unknown): CommandResult {
@@ -82,6 +83,7 @@ function fakeSession(testids: string[]): SessionLike {
     },
     eventsSince: () => [],
     onEvent: () => () => {},
+    elapsed: () => 0,
   };
 }
 

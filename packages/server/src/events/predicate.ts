@@ -15,6 +15,8 @@ export interface PredicateSession {
   command(name: string, args?: Record<string, unknown>): Promise<CommandResult>;
   eventsSince(cursor: number): IrisEvent[];
   onEvent(listener: (event: IrisEvent) => void): () => void;
+  /** Milliseconds since connect — the same clock that stamps event `t` (injected, testable). */
+  elapsed(): number;
 }
 
 /** The predicate DSL (plan/06). A declarative description of what should be true. */
@@ -26,6 +28,7 @@ export type Predicate =
   | { kind: 'console'; level?: string; absent?: boolean; since?: number }
   | { kind: 'animation'; name?: string; target?: string; completed?: boolean }
   | { kind: 'signal'; name?: string; dataMatches?: Record<string, unknown> }
+  | { kind: 'settled'; quietMs?: number }
   | { kind: 'allOf'; predicates: Predicate[] }
   | { kind: 'anyOf'; predicates: Predicate[] }
   | { kind: 'not'; predicate: Predicate };
@@ -73,6 +76,7 @@ export const PredicateSchema = z.lazy(() =>
       name: z.string().optional(),
       dataMatches: z.record(z.unknown()).optional(),
     }),
+    z.object({ kind: z.literal('settled'), quietMs: z.number().positive().optional() }),
     z.object({ kind: z.literal('allOf'), predicates: z.array(PredicateSchema) }),
     z.object({ kind: z.literal('anyOf'), predicates: z.array(PredicateSchema) }),
     z.object({ kind: z.literal('not'), predicate: PredicateSchema }),
@@ -314,6 +318,63 @@ function evalSignal(events: IrisEvent[], p: Extract<Predicate, { kind: 'signal' 
 }
 
 /**
+ * Activity that resets the "quiet" timer for a `settled` predicate: network calls and STRUCTURAL DOM
+ * mutations (nodes added/removed, attributes changed). Deliberately EXCLUDES `dom.text` and animation
+ * frames: a count-up counter, a spinner, a pulsing dot, or any looping CSS animation emits a text/anim
+ * event every frame forever, so an app with ambient motion would NEVER go quiet (observed live: one
+ * login flooded 319 dom.text events from the dashboard's count-up animations). That is the same trap
+ * that got Playwright's `networkidle` deprecated. Network + structural DOM are the real "the app is
+ * still doing work" signals; for an outcome gated on an animation finishing, assert that specific
+ * consequence (signal/net) instead of relying on settle.
+ */
+const SETTLE_ACTIVITY: ReadonlySet<EventType> = new Set([
+  EventType.NET_REQUEST,
+  EventType.DOM_ADDED,
+  EventType.DOM_REMOVED,
+  EventType.DOM_ATTR,
+]);
+
+/** Default quiet window — enough to absorb a render+xhr settle without waiting on slow polls. */
+const DEFAULT_QUIET_MS = 500;
+
+/**
+ * "The page has gone quiet": no network/DOM/animation activity for at least `quietMs`. Needs the
+ * wall-clock `now` (in the buffer's time base) because "no activity in the last N ms" is relative to
+ * now, not to any buffered event — so `now` is injected (CLAUDE.md rule 7), and the wait loop's
+ * poll interval is what eventually flips this to pass once activity stops.
+ */
+function evalSettled(
+  events: IrisEvent[],
+  p: Extract<Predicate, { kind: 'settled' }>,
+  now: number,
+): EvalResult {
+  const quietMs = p.quietMs ?? DEFAULT_QUIET_MS;
+  let lastT = -1;
+  let lastType: EventType | undefined;
+  for (const e of events) {
+    if (SETTLE_ACTIVITY.has(e.type) && e.t > lastT) {
+      lastT = e.t;
+      lastType = e.type;
+    }
+  }
+  if (lastT < 0) {
+    return {
+      pass: true,
+      evidence: { settled: true, quietForMs: null, note: 'no activity to settle' },
+    };
+  }
+  const quietForMs = now - lastT;
+  if (quietForMs >= quietMs) {
+    return { pass: true, evidence: { settled: true, quietForMs, lastActivity: lastType } };
+  }
+  return {
+    pass: false,
+    failureReason: `not settled: last activity (${String(lastType)}) ${String(quietForMs)}ms ago, need ${String(quietMs)}ms quiet`,
+    evidence: { quietForMs, lastActivity: lastType },
+  };
+}
+
+/**
  * Evaluate a predicate once against the session's current state + event buffer.
  *
  * `since` is an event-time floor: buffer-backed predicates (net/console/animation/signal/route)
@@ -346,6 +407,8 @@ export async function evaluatePredicate(
       return evalAnimation(events, predicate);
     case 'signal':
       return evalSignal(events, predicate);
+    case 'settled':
+      return evalSettled(events, predicate, session.elapsed());
     case 'allOf': {
       const results = await Promise.all(
         predicate.predicates.map((p) => evaluatePredicate(session, p, since)),

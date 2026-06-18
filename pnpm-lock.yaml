@@ -252,6 +252,9 @@ importers:
       '@syrin/iris-test':
         specifier: workspace:*
         version: link:../test
+      '@syrin/iris-vite-plugin':
+        specifier: workspace:*
+        version: link:../vite-plugin
       '@types/ws':
         specifier: ^8.5.13
         version: 8.18.1
@@ -352,6 +355,25 @@ importers:
       vitest:
         specifier: ^3.2.6
         version: 3.2.6(@types/node@22.19.20)(jsdom@29.1.1)(lightningcss@1.32.0)
+
+  packages/vite-plugin:
+    dependencies:
+      '@babel/core':
+        specifier: ^7.26.0
+        version: 7.29.7
+      '@syrin/iris-babel-plugin':
+        specifier: workspace:*
+        version: link:../babel-plugin
+      '@syrin/iris-protocol':
+        specifier: workspace:*
+        version: link:../protocol
+    devDependencies:
+      '@types/babel__core':
+        specifier: ^7.20.5
+        version: 7.20.5
+      vite:
+        specifier: ^7
+        version: 7.3.5(@types/node@22.19.20)(lightningcss@1.32.0)
 
 packages:
 

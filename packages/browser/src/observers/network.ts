@@ -21,14 +21,17 @@ function methodOf(input: RequestInfo | URL, init: RequestInit | undefined): stri
 
 /** Patch fetch + XMLHttpRequest to emit net.request events. Fully reversible. */
 export function installNetwork(emit: Emit): Teardown {
-  const origFetch = window.fetch.bind(window);
+  // Keep the true original for teardown identity, plus a window-bound copy to invoke
+  // (fetch throws "Illegal invocation" if called with the wrong `this`).
+  const origFetch = window.fetch;
+  const callFetch = origFetch.bind(window);
 
   window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const start = performance.now();
     const method = methodOf(input, init);
     const url = urlOf(input);
     try {
-      const res = await origFetch(input, init);
+      const res = await callFetch(input, init);
       emit(EventType.NET_REQUEST, {
         method,
         url,

@@ -61,7 +61,13 @@ function scriptedSession(
     }
     return Promise.resolve({ kind: 'command_result', id: 'x', ok: true, result: {} });
   };
-  return { id: 'demo', command, eventsSince: () => [], onEvent: () => () => undefined };
+  return {
+    id: 'demo',
+    command,
+    eventsSince: () => [],
+    onEvent: () => () => undefined,
+    elapsed: () => 0,
+  };
 }
 
 function fakeDeps(

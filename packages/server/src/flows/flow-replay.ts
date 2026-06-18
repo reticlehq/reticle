@@ -25,13 +25,20 @@ export interface FlowReplaySession {
   command(name: string, args?: Record<string, unknown>): Promise<CommandResult>;
   eventsSince(cursor: number): IrisEvent[];
   onEvent(listener: (event: IrisEvent) => void): () => void;
+  /** Buffer clock (ms since connect) — required by the predicate engine's `settled` check. */
+  elapsed(): number;
 }
 
-/** The injected predicate-waiter (the real waitForPredicate) — reused, never reimplemented. */
+/**
+ * The injected predicate-waiter (the real waitForPredicate) — reused, never reimplemented.
+ * `since` is the event-time floor (default 0 = whole buffer): pass the cursor captured before a
+ * replay so the success oracle can't be satisfied by a stale signal from a prior replay/run.
+ */
 export type WaitForSignal = (
   session: FlowReplaySession,
   predicate: Predicate,
   timeoutMs: number,
+  since?: number,
 ) => Promise<EvalResult>;
 
 /**
@@ -108,14 +115,38 @@ function readQuery(result: CommandResult): { refs: string[]; hint?: QueryEmptyHi
   return { refs };
 }
 
+/**
+ * True when ≥2 present testids tie at the minimum edit distance to the missing one — `nearest` is
+ * then an arbitrary lexical-tiebreak pick, so auto-healing would be a coin-flip between candidates.
+ * Such a drift is surfaced (with a nearest) but never auto-healed.
+ */
+export function nearestIsAmbiguous(missing: string, present: string[]): boolean {
+  if (present.length < 2) return false;
+  let min = Number.POSITIVE_INFINITY;
+  let count = 0;
+  for (const candidate of present) {
+    const distance = editDistance(missing, candidate);
+    if (distance < min) {
+      min = distance;
+      count = 1;
+    } else if (distance === min) {
+      count += 1;
+    }
+  }
+  return count >= 2;
+}
+
 /** Build the legible-drift record for a testid anchor that resolved to zero live elements. */
 function testidDrift(value: string, hint: QueryEmptyHint | undefined): Drift {
-  return {
+  const present = hint?.presentTestids ?? [];
+  const drift: Drift = {
     reasonKind: DriftReason.TESTID_NOT_FOUND,
     reason: `testid "${value}" not found`,
     anchor: value,
-    nearest: nearestTestid(value, hint?.presentTestids ?? []),
+    nearest: nearestTestid(value, present),
   };
+  if (nearestIsAmbiguous(value, present)) drift.ambiguous = true;
+  return drift;
 }
 
 /** The testid value of a step's primary anchor, for labelling the result row. */

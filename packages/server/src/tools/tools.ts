@@ -28,13 +28,17 @@ import {
   consoleEmptyHint,
 } from '../events/event-filters.js';
 import { healthEnvelope, refuseIfThrottled } from '../session/session-health.js';
-import { applyEventBudget, costHint } from '../session/output-budget.js';
+import { applyEventBudget, costHint, withSizeCost } from '../session/output-budget.js';
+import { applySnapshotDelta, SnapshotCache } from './snapshot-delta.js';
 import { selectPath, capDepth } from '../session/state-select.js';
 import { asString, asNumber, asRecord, parseInteractive } from './tools-helpers.js';
+import { paginateQueryResult } from './query-paginate.js';
+import { isPresenceOnlyAssertion, PRESENCE_ONLY_ADVICE } from './assert-grade.js';
 import type { FileSystemPort } from '../project/fs-port.js';
 import type { FlowStore } from '../flows/flows.js';
 import type { ProjectStore } from '../project/project-store.js';
 import { CONTRACT_TOOLS } from './contract-tools.js';
+import { DOMAIN_TOOLS } from '../domain/domain-tools.js';
 import { BROWSER_TOOLS } from './browser-tools.js';
 import { FLOW_TOOLS } from '../flows/flow-tools.js';
 import { PROJECT_TOOLS } from '../project/project-tools.js';
@@ -245,6 +249,9 @@ async function tryRealInput(
   }
 }
 
+/** Per-server last-snapshot cache backing iris_snapshot's diff:true delta mode (route-invalidated). */
+const SNAPSHOT_CACHE = new SnapshotCache();
+
 export const TOOLS: ToolDef[] = [
   {
     name: IrisTool.SESSIONS,
@@ -283,7 +290,7 @@ export const TOOLS: ToolDef[] = [
   {
     name: IrisTool.SNAPSHOT,
     description:
-      'Semantic accessibility snapshot of the page or a subtree. mode: full|interactive|status. Use to see what is on screen right now.',
+      'Semantic accessibility snapshot of the page or a subtree. mode: full|interactive|status. Use to see what is on screen right now. The result carries cost:{ bytes, tokens } (estimated) — if it is large, re-scope (pass `scope`) or use mode:interactive/status instead of reading the whole tree. Pass diff:true after your first snapshot to get back ONLY what changed since your last look (mode:delta with added/removed, or mode:unchanged) — far fewer tokens and no stale tree to mis-read; a route change resets it to a full snapshot automatically.',
     inputSchema: {
       scope: z
         .string()
@@ -297,6 +304,12 @@ export const TOOLS: ToolDef[] = [
         .describe(
           'full = all elements; interactive = only clickable/focusable elements; status = only route + title. Default: full.',
         ),
+      diff: z
+        .boolean()
+        .optional()
+        .describe(
+          'Return only what changed since your last snapshot of the same scope/mode (mode:delta|unchanged). First call (or after a route change) still returns the full tree.',
+        ),
       ...sessionIdShape,
     },
     outputSchema: {
@@ -305,17 +318,50 @@ export const TOOLS: ToolDef[] = [
         .optional()
         .describe('Indented ARIA tree of every element on the page (or the scoped subtree).'),
       status: z.object({ route: z.string(), title: z.string().optional() }).optional(),
+      mode: z
+        .string()
+        .optional()
+        .describe('delta | unchanged when diff:true returned a change set.'),
+      delta: z
+        .object({
+          added: z.array(z.string()),
+          removed: z.array(z.string()),
+          addedCount: z.number(),
+          removedCount: z.number(),
+        })
+        .optional()
+        .describe('Only present on a diff:true call that found changes.'),
+      cost: z
+        .object({ bytes: z.number(), tokens: z.number() })
+        .optional()
+        .describe('Estimated size of this result — re-scope if large.'),
     },
-    handler: (deps, args) =>
-      commandOrThrow(deps, asString(args['sessionId']), IrisCommand.SNAPSHOT, {
+    handler: (deps, args) => {
+      const sessionId = asString(args['sessionId']);
+      const mode = asString(args['mode']) ?? SnapshotMode.FULL;
+      return commandOrThrow(deps, sessionId, IrisCommand.SNAPSHOT, {
         scope: args['scope'],
-        mode: args['mode'] ?? SnapshotMode.FULL,
-      }),
+        mode,
+      }).then((raw) =>
+        withSizeCost(
+          applySnapshotDelta(
+            raw,
+            {
+              sessionId: sessionId ?? 'default',
+              scope: asString(args['scope']) ?? '',
+              mode,
+              diff: args['diff'] === true,
+            },
+            SNAPSHOT_CACHE,
+          ),
+        ),
+      );
+    },
   },
   {
     name: IrisTool.QUERY,
     description:
-      'Find elements by Testing-Library semantics. Pass `by` (role|text|label|placeholder|testid|alt) and `value` (the query string). Returns matching refs + descriptors + visibility. On zero matches, also returns hint:{ route, presentTestids[], knownEmptyState } so you can distinguish an empty state from a missing element WITHOUT taking a snapshot.',
+      'Find elements by Testing-Library semantics. Pass `by` (role|text|label|placeholder|testid|alt) and `value` (the query string). Returns matching refs + descriptors + visibility. Pass `limit` to cap descriptors (broad role queries can be large) or `count_only:true` for just the match count — both cut tokens. On zero matches, also returns hint:{ route, presentTestids[], knownEmptyState } so you can distinguish an empty state from a missing element WITHOUT taking a snapshot.',
     inputSchema: {
       by: z.string().describe('Query strategy: role | text | label | placeholder | testid | alt'),
       value: z
@@ -333,19 +379,39 @@ export const TOOLS: ToolDef[] = [
         .string()
         .optional()
         .describe('CSS selector or element ref to restrict the search to a subtree.'),
+      limit: z
+        .number()
+        .optional()
+        .describe(
+          'Cap the returned descriptors to the first N (cuts tokens on broad queries). If more matched, the result carries total + truncated:true so the trim is never silent — narrow with name/scope.',
+        ),
+      count_only: z
+        .boolean()
+        .optional()
+        .describe(
+          'Return just { count } (no element descriptors) — use when you only need "how many match?" and not their refs.',
+        ),
       ...sessionIdShape,
     },
     outputSchema: {
-      elements: z.array(
-        z.object({
-          ref: z.string(),
-          role: z.string(),
-          name: z.string(),
-          value: z.string().optional(),
-          states: z.array(z.string()),
-          visible: z.boolean(),
-        }),
-      ),
+      elements: z
+        .array(
+          z.object({
+            ref: z.string(),
+            role: z.string(),
+            name: z.string(),
+            value: z.string().optional(),
+            states: z.array(z.string()),
+            visible: z.boolean(),
+          }),
+        )
+        .optional(),
+      count: z.number().optional().describe('Match count — present when count_only is set.'),
+      total: z
+        .number()
+        .optional()
+        .describe('Total matches before `limit` truncation — present only when truncated.'),
+      truncated: z.boolean().optional().describe('True when `limit` dropped some matches.'),
       hint: z
         .object({
           route: z.string(),
@@ -356,6 +422,10 @@ export const TOOLS: ToolDef[] = [
         .describe(
           'Present only on zero matches — tells you what IS on the page so you can diagnose the miss.',
         ),
+      cost: z
+        .object({ bytes: z.number(), tokens: z.number() })
+        .optional()
+        .describe('Estimated size of this result — narrow with `name`/`scope`/`limit` if large.'),
     },
     handler: (deps, args) =>
       commandOrThrow(deps, asString(args['sessionId']), IrisCommand.QUERY, {
@@ -363,7 +433,11 @@ export const TOOLS: ToolDef[] = [
         value: args['value'],
         name: args['name'],
         scope: args['scope'],
-      }),
+      }).then((result) =>
+        withSizeCost(
+          paginateQueryResult(result, asNumber(args['limit']), args['count_only'] === true),
+        ),
+      ),
   },
   {
     name: IrisTool.INSPECT,
@@ -529,6 +603,7 @@ export const TOOLS: ToolDef[] = [
     name: IrisTool.ACT_AND_WAIT,
     description:
       'Act on a ref, then wait for a predicate to hold — one hop for the act->observe->assert loop. ' +
+      'Omit `until` to wait for the page to settle (network + DOM idle) — use this instead of a fixed sleep. ' +
       'Returns { effect } (the action result), { verdict } (predicate pass/evidence/near-miss), ' +
       'and { trace } (the reaction report of everything the app did after the action). ' +
       'timeout_ms 0 evaluates the predicate once without waiting.',
@@ -545,8 +620,8 @@ export const TOOLS: ToolDef[] = [
         .describe(
           'Action-specific arguments: { value } for fill/select, { text } for type/press, { confirmDangerous: true } for a potentially destructive control.',
         ),
-      until: PredicateSchema.describe(
-        'Predicate to wait for after the action completes. Same shape accepted by iris_assert.',
+      until: PredicateSchema.optional().describe(
+        'Predicate to wait for after the action completes (same shape as iris_assert). OMIT to wait for the page to SETTLE — network + DOM idle — the deterministic default instead of a sleep. To assert a consequence AND settle, allOf them: { kind: "allOf", predicates: [<your predicate>, { kind: "settled" }] }.',
       ),
       timeout_ms: z
         .number()
@@ -578,7 +653,11 @@ export const TOOLS: ToolDef[] = [
       const paused = pausedShortCircuit(session);
       if (paused !== undefined) return paused;
       refuseIfThrottled(session, args['refuseWhenThrottled']);
-      const until = PredicateSchema.parse(args['until']);
+      // Omitting `until` waits for the page to settle (idle) — the deterministic default vs a sleep.
+      const until =
+        args['until'] !== undefined
+          ? PredicateSchema.parse(args['until'])
+          : ({ kind: 'settled' } as const);
       const timeout = asNumber(args['timeout_ms']) ?? 4000;
 
       const since = session.elapsed();
@@ -651,6 +730,12 @@ export const TOOLS: ToolDef[] = [
         events: z.number(),
         bytes: z.number(),
         droppedOldest: z.number().optional(),
+        recommendation: z
+          .string()
+          .optional()
+          .describe(
+            'Present when the timeline is large — scope your next call (filters/max_events).',
+          ),
       }),
       session: z
         .object({ lastSeenMs: z.number(), throttled: z.boolean(), focused: z.boolean() })
@@ -687,7 +772,7 @@ export const TOOLS: ToolDef[] = [
       'Block until a predicate is satisfied (or already true in the recent buffer), else time out. Returns matching evidence or a near-miss diagnosis. By default it only counts events since your last act, so a signal buffered BEFORE the action can never fake a pass; pass `since` (an observe/act cursor) to widen or narrow that window explicitly.',
     inputSchema: {
       predicate: PredicateSchema.describe(
-        'Predicate to wait for: { signal }, { net }, { element } or a combination.',
+        'Predicate to wait for: { signal }, { net }, { element }, { kind: "settled", quietMs } (deterministic network + DOM idle — prefer this over a fixed sleep), or a combination via allOf/anyOf.',
       ),
       timeout_ms: z.number().optional().describe('Maximum wait in milliseconds. Default: 4000.'),
       since: z
@@ -722,7 +807,7 @@ export const TOOLS: ToolDef[] = [
   {
     name: IrisTool.ASSERT,
     description:
-      'Evaluate a predicate (optionally waiting up to timeout_ms). Returns { pass, evidence, failureReason? }. The end of every verify loop. By default it only counts events since your last act, so a stale buffered signal can never fake a pass; pass `since` (an observe/act cursor) to set the window explicitly.',
+      'Evaluate a predicate (optionally waiting up to timeout_ms). Returns { pass, evidence, failureReason? }. The end of every verify loop. Prefer a { signal } or { net } consequence over { element }/{ text } presence — a passing presence-only assertion returns `advice` because a wrong/healed element can fake it. By default it only counts events since your last act, so a stale buffered signal can never fake a pass; pass `since` (an observe/act cursor) to set the window explicitly.',
     inputSchema: {
       predicate: PredicateSchema.describe(
         'Predicate to evaluate: { signal }, { net }, { element } or a combination.',
@@ -743,6 +828,10 @@ export const TOOLS: ToolDef[] = [
       pass: z.boolean(),
       evidence: z.unknown().optional(),
       failureReason: z.string().optional(),
+      advice: z
+        .string()
+        .optional()
+        .describe('Present on a PASSING presence-only assertion — nudges toward a consequence.'),
       session: z
         .object({ lastSeenMs: z.number(), throttled: z.boolean(), focused: z.boolean() })
         .optional(),
@@ -757,7 +846,11 @@ export const TOOLS: ToolDef[] = [
         timeout > 0
           ? await waitForPredicate(session, predicate, timeout, since)
           : await evaluatePredicate(session, predicate, since);
-      return withControl(session, { ...verdict, ...healthEnvelope(session) });
+      // A GREEN presence-only assertion is the dangerous case (a wrong element can fake it) — nudge
+      // toward a consequence. Never on a failing verdict (moot) or when a signal/net is asserted.
+      const advice =
+        verdict.pass && isPresenceOnlyAssertion(predicate) ? { advice: PRESENCE_ONLY_ADVICE } : {};
+      return withControl(session, { ...verdict, ...advice, ...healthEnvelope(session) });
     },
   },
   {
@@ -777,11 +870,23 @@ export const TOOLS: ToolDef[] = [
         .describe('HTTP method filter: GET | POST | PUT | DELETE | PATCH etc.'),
       urlContains: z.string().optional().describe('Substring that the request URL must contain.'),
       status: z.number().optional().describe('HTTP status code filter (e.g. 200, 404, 500).'),
+      limit: z
+        .number()
+        .optional()
+        .describe(
+          'Keep only the most recent N matching calls (older are dropped and counted in droppedOldest) — cuts tokens on a wide window.',
+        ),
       ...sessionIdShape,
     },
     outputSchema: {
       calls: z.array(z.unknown()),
+      total: z
+        .number()
+        .optional()
+        .describe('Total matches before `limit` — present only when capped.'),
+      droppedOldest: z.number().optional().describe('How many older matches `limit` dropped.'),
       hint: z.object({ totalInWindow: z.number(), present: z.array(z.string()) }).optional(),
+      cost: z.object({ bytes: z.number(), tokens: z.number() }).optional(),
     },
     handler: (deps, args) => {
       const session = deps.sessions.resolve(asString(args['sessionId']));
@@ -789,13 +894,19 @@ export const TOOLS: ToolDef[] = [
       const method = asString(args['method']);
       const urlContains = asString(args['urlContains']);
       const status = asNumber(args['status']);
+      const limit = asNumber(args['limit']);
       const allNet = session.eventsSince(since).filter((e) => e.type === EventType.NET_REQUEST);
-      const calls = allNet.filter((e) => matchNet(e, method, urlContains, status));
+      const matched = allNet.filter((e) => matchNet(e, method, urlContains, status));
       // zero-match filter returns what DID fire, not a bare [].
-      if (calls.length === 0 && allNet.length > 0) {
-        return Promise.resolve({ calls, hint: netEmptyHint(allNet) });
+      if (matched.length === 0 && allNet.length > 0) {
+        return Promise.resolve(withSizeCost({ calls: matched, hint: netEmptyHint(allNet) }));
       }
-      return Promise.resolve({ calls });
+      const { events: calls, droppedOldest } = applyEventBudget(matched, limit);
+      return Promise.resolve(
+        withSizeCost(
+          droppedOldest > 0 ? { calls, total: matched.length, droppedOldest } : { calls },
+        ),
+      );
     },
   },
   {
@@ -811,23 +922,39 @@ export const TOOLS: ToolDef[] = [
         .number()
         .optional()
         .describe('Cursor from a prior iris_act — scopes the query to log entries after that act.'),
+      limit: z
+        .number()
+        .optional()
+        .describe(
+          'Keep only the most recent N matching entries (older are dropped and counted in droppedOldest) — cuts tokens when a page spams the console.',
+        ),
       ...sessionIdShape,
     },
     outputSchema: {
       logs: z.array(z.unknown()),
+      total: z
+        .number()
+        .optional()
+        .describe('Total matches before `limit` — present only when capped.'),
+      droppedOldest: z.number().optional().describe('How many older matches `limit` dropped.'),
       hint: z.object({ totalInWindow: z.number(), byLevel: z.record(z.number()) }).optional(),
+      cost: z.object({ bytes: z.number(), tokens: z.number() }).optional(),
     },
     handler: (deps, args) => {
       const session = deps.sessions.resolve(asString(args['sessionId']));
       const since = asNumber(args['since']) ?? 0;
       const level = asString(args['level']);
+      const limit = asNumber(args['limit']);
       const allConsole = session.eventsSince(since).filter(isConsoleEvent);
-      const logs = allConsole.filter((e) => matchConsole(e, level));
+      const matched = allConsole.filter((e) => matchConsole(e, level));
       // zero matches at this level → report what levels ARE present (not a bare []).
-      if (logs.length === 0 && allConsole.length > 0) {
-        return Promise.resolve({ logs, hint: consoleEmptyHint(allConsole) });
+      if (matched.length === 0 && allConsole.length > 0) {
+        return Promise.resolve(withSizeCost({ logs: matched, hint: consoleEmptyHint(allConsole) }));
       }
-      return Promise.resolve({ logs });
+      const { events: logs, droppedOldest } = applyEventBudget(matched, limit);
+      return Promise.resolve(
+        withSizeCost(droppedOldest > 0 ? { logs, total: matched.length, droppedOldest } : { logs }),
+      );
     },
   },
   {
@@ -1169,6 +1296,7 @@ export const TOOLS: ToolDef[] = [
   },
   // iris_capabilities (live | fromDisk) + iris_contract_save. See contract-tools.ts.
   ...CONTRACT_TOOLS,
+  ...DOMAIN_TOOLS,
   // iris_flow_save / iris_flow_list / iris_flow_load. See flow-tools.ts.
   ...FLOW_TOOLS,
   // iris_project (read history + diff-vs-last) / iris_run_record. See project-tools.ts.

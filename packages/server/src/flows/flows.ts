@@ -15,6 +15,7 @@ import type {
   HealChange,
 } from '@syrin/iris-protocol';
 import { IrisTool } from '../tools/tool-names.js';
+import { applyHealChanges } from './heal.js';
 import type { CompiledProgram, RecordedStep } from './recordings.js';
 import type { FileSystemPort } from '../project/fs-port.js';
 import { flowPath, irisDirPaths, isValidFlowName } from '../project/iris-dir.js';
@@ -235,24 +236,7 @@ export class FlowStore {
     if (!loaded.ok) return { ok: false, code: loaded.code };
     const flow = loaded.value;
 
-    const byStep = new Map<number, HealChange>();
-    for (const change of changes) byStep.set(change.step, change);
-
-    const applied: HealChange[] = [];
-    const steps = flow.steps.map((step, index): FlowStep => {
-      const change = byStep.get(index);
-      if (
-        change === undefined ||
-        step.anchor.kind !== AnchorKind.TESTID ||
-        step.anchor.value !== change.from
-      ) {
-        return step;
-      }
-      applied.push(change);
-      return { ...step, anchor: { kind: AnchorKind.TESTID, value: change.to } };
-    });
-
-    const next: FlowFile = { ...flow, steps };
+    const { flow: next, applied } = applyHealChanges(flow, changes);
     await this.#fs.writeFile(flowPath(this.#root, name), this.#serialize(next));
     return { ok: true, value: { name, changed: applied } };
   }

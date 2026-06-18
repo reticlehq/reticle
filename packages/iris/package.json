@@ -1,6 +1,6 @@
 {
   "name": "@syrin/iris",
-  "version": "0.5.0",
+  "version": "0.6.10",
   "description": "One-install Iris: the dev-only SDK (browser + React adapter) and the spec runner under one package, with subpaths for the source-mapping plugins and the MCP server.",
   "type": "module",
   "license": "MIT",
@@ -32,6 +32,10 @@
       "types": "./dist/babel.d.ts",
       "default": "./dist/babel.js"
     },
+    "./vite": {
+      "types": "./dist/vite.d.ts",
+      "default": "./dist/vite.js"
+    },
     "./eslint": {
       "types": "./dist/eslint.d.ts",
       "default": "./dist/eslint.js"
@@ -61,6 +65,7 @@
     "@syrin/iris-react": "workspace:*",
     "@syrin/iris-server": "workspace:*",
     "@syrin/iris-test": "workspace:*",
+    "@syrin/iris-vite-plugin": "workspace:*",
     "@types/ws": "^8.5.13",
     "tsup": "^8.3.5",
     "typescript": "^5.6.0"

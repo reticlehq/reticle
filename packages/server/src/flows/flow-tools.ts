@@ -19,7 +19,11 @@ import {
 import { IrisTool } from '../tools/tool-names.js';
 import { asString } from '../tools/tools-helpers.js';
 import { replayFlow } from './flow-replay.js';
-import { collectProposals } from './heal.js';
+import { classifyFlowAssertions } from './flow-classify.js';
+import { assertSuccess, dynamicTestids, successLabel } from './flow-success.js';
+import { flowPath } from '../project/iris-dir.js';
+import { applyHealChanges, collectProposals } from './heal.js';
+import type { FlowStepResult } from '@syrin/iris-protocol';
 import { waitForPredicate } from '../events/predicate.js';
 import type { FlowAnnotations } from './flows.js';
 import type { ToolDef, ToolDeps } from '../tools/tools.js';
@@ -89,7 +93,7 @@ export const FLOW_TOOLS: ToolDef[] = [
   {
     name: IrisTool.FLOW_SAVE,
     description:
-      'Persist the last/active recording (by name) as a git-checked, anchor-resolved flow at .iris/flows/<name>.json. Each step is bound to a SEMANTIC anchor (testid/role/signal), never a volatile ref; steps without a resolvable testid are kept with degraded:true (a "add a data-testid here" marker) rather than dropped. Returns { name, stepCount, degraded, empty } or { error, code }.',
+      'Persist the last/active recording (by name) as a git-checked, anchor-resolved flow at .iris/flows/<name>.json. Each step is bound to a SEMANTIC anchor (testid/role/signal), never a volatile ref; steps without a resolvable testid are kept with degraded:true (a "add a data-testid here" marker) rather than dropped. Returns { name, stepCount, degraded, empty, assertions } — `assertions.grade` is asserted | presence-only | assertion-free: a flow that only acts (or only checks element presence) will pass even if the feature breaks, so when grade is not "asserted" follow assertions.warning and add a consequence assertion via iris_annotate (assert-signal / assert-net / success-state).',
     inputSchema: {
       flowName: z
         .string()
@@ -102,6 +106,16 @@ export const FLOW_TOOLS: ToolDef[] = [
       path: z.string(),
       stepCount: z.number().optional(),
       degraded: z.number().optional(),
+      assertions: z
+        .object({
+          grade: z.string().describe('asserted | presence-only | assertion-free'),
+          hasConsequenceAssertion: z.boolean(),
+          totalSteps: z.number(),
+          consequenceSteps: z.number(),
+          weakSteps: z.number(),
+          warning: z.string().optional(),
+        })
+        .optional(),
     },
     handler: (deps: ToolDeps, args) => {
       const name = asString(args['flowName']) ?? '';
@@ -119,9 +133,15 @@ export const FLOW_TOOLS: ToolDef[] = [
         dynamic: deps.annotations.dynamic(name),
         ...(success !== undefined ? { success } : {}),
       };
-      return deps.flows.save(program, annotations).then((res) => {
-        if (res.ok) deps.annotations.clear(name);
-        return res.ok ? res.value : { error: flowErrorMessage(res.code), code: res.code };
+      return deps.flows.save(program, annotations).then(async (res) => {
+        if (!res.ok) return { error: flowErrorMessage(res.code), code: res.code };
+        deps.annotations.clear(name);
+        // Grade the saved flow's assertions so the agent learns immediately if it just saved a flow
+        // that asserts nothing observable (passes even when the feature is broken).
+        const loaded = await deps.flows.load(res.value.name);
+        return loaded.ok
+          ? { ...res.value, assertions: classifyFlowAssertions(loaded.value) }
+          : res.value;
       });
     },
   },
@@ -135,7 +155,13 @@ export const FLOW_TOOLS: ToolDef[] = [
         z.object({ name: z.string(), path: z.string(), createdAt: z.number().optional() }),
       ),
     },
-    handler: (deps: ToolDeps) => deps.flows.list().then((flows) => ({ flows })),
+    // Return {name, path} objects to MATCH the declared outputSchema. Returning bare name strings
+    // (the prior bug) made schema-validating MCP clients reject the result ("expected object,
+    // received string") — caught driving the live demo.
+    handler: (deps: ToolDeps) =>
+      deps.flows.list().then((names) => ({
+        flows: names.map((name) => ({ name, path: flowPath(deps.irisRoot, name) })),
+      })),
   },
   {
     name: IrisTool.FLOW_LOAD,
@@ -204,6 +230,9 @@ export const FLOW_TOOLS: ToolDef[] = [
         };
       }
       const session = deps.sessions.resolve(asString(args['sessionId']));
+      // Floor the success oracle at the start of THIS replay so a stale signal from a prior run
+      // in the same session can't fake a pass.
+      const replayFloor = session.elapsed();
       const steps = await replayFlow(
         session,
         loaded.value,
@@ -211,6 +240,28 @@ export const FLOW_TOOLS: ToolDef[] = [
         FLOW_SIGNAL_TIMEOUT_MS,
         args['confirmDangerous'] === true,
       );
+      // "green means intent satisfied": when every step ran clean, assert the flow's success
+      // end-condition as a real consequence. A signal/net success that never fires FAILS the replay
+      // even though all locators resolved — the regression a healed-but-wrong locator ships green.
+      const stepsClean = steps.length > 0 && steps.every((s) => s.ok && s.drift === undefined);
+      if (stepsClean && loaded.value.success !== undefined) {
+        const verdict = await assertSuccess(
+          session,
+          loaded.value.success,
+          dynamicTestids(loaded.value),
+          waitForPredicate,
+          FLOW_SIGNAL_TIMEOUT_MS,
+          replayFloor,
+        );
+        const row: FlowStepResult = {
+          step: steps.length,
+          tool: 'success',
+          anchor: successLabel(loaded.value.success),
+          ok: verdict.pass,
+          ...(verdict.pass ? {} : { error: verdict.failureReason ?? 'flow.success not satisfied' }),
+        };
+        steps.push(row);
+      }
       const driftSteps = steps.filter((s) => s.drift !== undefined).length;
       const allOk = steps.every((s) => s.ok);
       const status =
@@ -284,8 +335,11 @@ export const FLOW_TOOLS: ToolDef[] = [
       'Self-healing replay. Re-runs iris_flow_replay; on testid DRIFT computes confidence-scored ' +
       'nearest-match rebind PROPOSALS. With apply:false (default) returns the proposed diff WITHOUT ' +
       'writing. With apply:true, writes the confident rebind(s) back into .iris/flows/<name>.json and ' +
-      'returns what changed — never silently. A drift with no proposal above the confidence floor is ' +
-      'status:unhealable (file untouched). Returns { name, status: healed|drift|unhealable|' +
+      'returns what changed — never silently. Before writing, apply re-replays the healed flow and ' +
+      're-asserts its success consequence: if the rebound locator resolves but the consequence no ' +
+      'longer fires, the write is REFUSED (status:consequence_broken) — it heals the locator, never ' +
+      'the intent. A drift with no proposal above the confidence floor is status:unhealable (file ' +
+      'untouched). Returns { name, status: healed|drift|unhealable|consequence_broken|' +
       'nothing_to_heal|error, applied, proposals[], changed[], message }.',
     inputSchema: {
       flowName: z.string().describe('Flow file name to heal (from iris_flow_list).'),
@@ -317,9 +371,14 @@ export const FLOW_TOOLS: ToolDef[] = [
 
 const HEAL_MESSAGES = {
   NOTHING: 'nothing to heal — every anchor resolved on replay',
-  HEALED: 'rewrote drifted testid anchors to their nearest surviving match',
+  HEALED:
+    "rewrote drifted testid anchors to their nearest surviving match and re-verified the flow's success consequence still fires",
   DRIFT_DRY: 'confident rebind(s) proposed — re-run with apply:true to write them to disk',
   UNHEALABLE: `drift found, but no nearest match cleared the confidence floor (HEAL_CONFIDENCE_MIN=${HEAL_CONFIDENCE_MIN}); file left untouched — add a data-testid or fix the flow by hand`,
+  HEALED_UNVERIFIED:
+    'rewrote drifted testid anchors — but this flow declares no success consequence, so the rebind resolves a locator without proving the intent still holds. Add a success-state assertion (iris_annotate) so future heals can be verified.',
+  CONSEQUENCE_BROKEN:
+    'rebind resolves the drifted locator to a surviving element, but the healed flow no longer satisfies its success consequence — refusing to write (a heal that loses the intent would ship a green-but-dead test). Fix by hand and verify',
 } as const;
 
 function toChange(proposal: HealProposal): HealChange {
@@ -403,6 +462,48 @@ async function healFlow(deps: ToolDeps, args: Record<string, unknown>): Promise<
     };
   }
 
+  // M5 invariant — "heal the locator, never the intent." Before persisting, verify the rebind on a
+  // healed in-memory copy: a rebound testid can resolve to a real but WRONG element that no longer
+  // triggers the flow's success consequence (e.g. a look-alike control). Persisting that would ship
+  // a green flow that tests nothing. Re-replay the healed flow and assert its success; refuse the
+  // write if the consequence no longer fires. Flows with no declared success can't be verified — we
+  // still heal them but say so loudly so the gap is visible.
+  const { flow: healed } = applyHealChanges(loaded.value, proposals.map(toChange));
+  if (healed.success !== undefined) {
+    // Floor the success oracle at the start of the VERIFY replay so the success signal emitted by the
+    // earlier drift replay's prefix (this same heal call) cannot fake the verification.
+    const verifyFloor = session.elapsed();
+    const verifySteps = await replayFlow(
+      session,
+      healed,
+      waitForPredicate,
+      FLOW_SIGNAL_TIMEOUT_MS,
+      args['confirmDangerous'] === true,
+    );
+    const verifyClean =
+      verifySteps.length > 0 && verifySteps.every((s) => s.ok && s.drift === undefined);
+    const verdict = verifyClean
+      ? await assertSuccess(
+          session,
+          healed.success,
+          dynamicTestids(healed),
+          waitForPredicate,
+          FLOW_SIGNAL_TIMEOUT_MS,
+          verifyFloor,
+        )
+      : { pass: false, failureReason: 'healed flow did not replay cleanly' };
+    if (!verdict.pass) {
+      return {
+        name,
+        status: HealStatus.CONSEQUENCE_BROKEN,
+        applied: false,
+        proposals,
+        changed: [],
+        message: `${HEAL_MESSAGES.CONSEQUENCE_BROKEN} (${successLabel(healed.success)}: ${verdict.failureReason ?? 'not satisfied'})`,
+      };
+    }
+  }
+
   const written = await deps.flows.heal(name, proposals.map(toChange));
   if (!written.ok) {
     return {
@@ -421,6 +522,7 @@ async function healFlow(deps: ToolDeps, args: Record<string, unknown>): Promise<
     applied: written.value.changed.length > 0,
     proposals,
     changed: written.value.changed,
-    message: HEAL_MESSAGES.HEALED,
+    message:
+      loaded.value.success !== undefined ? HEAL_MESSAGES.HEALED : HEAL_MESSAGES.HEALED_UNVERIFIED,
   };
 }

@@ -6,6 +6,7 @@
     { "path": "packages/server" },
     { "path": "packages/test" },
     { "path": "packages/react" },
-    { "path": "packages/babel-plugin" }
+    { "path": "packages/babel-plugin" },
+    { "path": "packages/vite-plugin" }
   ]
 }

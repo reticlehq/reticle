@@ -47,6 +47,7 @@ function fakeSession(opts: { state?: SessionState; inbox?: string[] }): FakeSess
     markActCursor: () => undefined,
     lastActCursor: () => undefined,
     eventsSince: () => [],
+    onEvent: () => () => undefined,
     health: () => ({ lastSeenMs: 0, throttled: false, focused: true }),
     throttled: () => false,
     command: (name: string, args?: Record<string, unknown>): Promise<CommandResult> => {
@@ -204,6 +205,19 @@ describe('live-control: piggyback', () => {
     expect('verdict' in res).toBe(true);
     expect('trace' in res).toBe(true);
     expect(res.control?.guidance).toHaveLength(1);
+  });
+
+  it('iris_act_and_wait with no `until` defaults to waiting for the page to settle', async () => {
+    const session = fakeSession({ state: SessionState.ACTIVE, inbox: [] });
+    const res = (await tool(IrisTool.ACT_AND_WAIT).handler(fakeDeps(session), {
+      ...ACT_ARGS,
+      timeout_ms: 50,
+    })) as ControlShape;
+    // No buffered activity (eventsSince → []) → the implicit `settled` predicate passes at once.
+    const verdict = res.verdict as { pass: boolean; evidence?: { settled?: boolean } };
+    expect(verdict.pass).toBe(true);
+    expect(verdict.evidence?.settled).toBe(true);
+    expect(session.__sent.filter((c) => c.name === 'act')).toHaveLength(1);
   });
 
   it('iris_assert piggybacks control while paused (observe-only)', async () => {
