@@ -95,6 +95,29 @@ describe('snapshot', () => {
     expect(snap.tree).not.toContain('JustText');
     expect(snap.tree).toContain('button "Go"');
   });
+
+  it('emits a layout signature for grid containers so a CLS/layout regression is visible', () => {
+    // A layout regression (column count change) leaves the role+text tree identical — only
+    // the computed layout differs. The signature makes that visible (a11y-only tools cannot).
+    render('<div style="display:grid;grid-template-columns:1fr 1fr"><span>a</span></div>');
+    const snap = buildSnapshot({ mode: SnapshotMode.FULL });
+    expect(snap.tree).toContain('grid-cols:');
+  });
+
+  it('the layout signature changes when grid columns change (detects the regression)', () => {
+    render('<main style="display:grid;grid-template-columns:1fr 1fr"><span>x</span></main>');
+    const before = buildSnapshot({ mode: SnapshotMode.FULL }).tree;
+    const main = document.querySelector('main');
+    if (main instanceof HTMLElement) main.style.gridTemplateColumns = '1fr 1fr 1fr';
+    const after = buildSnapshot({ mode: SnapshotMode.FULL }).tree;
+    expect(before).not.toBe(after);
+  });
+
+  it('omits the layout signature in interactive mode (kept lean)', () => {
+    render('<div style="display:grid;grid-template-columns:1fr 1fr"><button>Go</button></div>');
+    const snap = buildSnapshot({ mode: SnapshotMode.INTERACTIVE });
+    expect(snap.tree).not.toContain('grid-cols:');
+  });
 });
 
 describe('query', () => {

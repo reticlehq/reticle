@@ -83,18 +83,45 @@ function stateSuffix(el: Element): string {
   return states.length > 0 ? ` [${states.join(',')}]` : '';
 }
 
-function formatLine(el: Element, depth: number, role: string, name: string): string {
+function formatLine(
+  el: Element,
+  depth: number,
+  role: string,
+  name: string,
+  layout: string,
+): string {
   const indent = '  '.repeat(depth);
   const value = getValue(el);
   const namePart = name.length > 0 ? ` "${name}"` : '';
   const refPart = INTERACTIVE.has(role) || name.length > 0 ? ` (ref=${refs.refFor(el)})` : '';
   const valuePart = value !== undefined && value.length > 0 ? ` [value="${value}"]` : '';
-  return `${indent}- ${role}${namePart}${refPart}${valuePart}${stateSuffix(el)}`;
+  const layoutPart = layout.length > 0 ? ` [${layout}]` : '';
+  return `${indent}- ${role}${namePart}${refPart}${valuePart}${layoutPart}${stateSuffix(el)}`;
 }
 
 /** A generic container's own text content, with no ref (kept lean — text isn't actionable). */
 function formatTextLine(depth: number, text: string): string {
   return `${'  '.repeat(depth)}- text "${text}"`;
+}
+
+/**
+ * Compact signature of an element's own layout when it is a grid/flex container. A layout
+ * regression (e.g. grid columns 2 -> 3) leaves the role+text tree identical, so a role-only
+ * snapshot is blind to it; this line makes it visible. Empty for non-container elements.
+ */
+function layoutSignature(el: Element): string {
+  const view = el.ownerDocument.defaultView;
+  if (view === null) return '';
+  const style = view.getComputedStyle(el);
+  const display = style.display;
+  // Grid track templates are the high-signal CLS case (column/row count + sizing) and there are
+  // few grid containers per page. Flex is intentionally excluded: nearly every row is a flex
+  // box, so signing them all floods the snapshot for little regression value.
+  if (display === 'grid' || display === 'inline-grid') {
+    const cols = style.gridTemplateColumns;
+    return cols !== '' && cols !== 'none' ? `grid-cols:${cols}` : 'grid';
+  }
+  return '';
 }
 
 interface WalkCtx {
@@ -119,18 +146,19 @@ function walk(parent: Element, depth: number, ctx: WalkCtx): void {
     const interactive = INTERACTIVE.has(role);
     // A generic, unnamed container's own text content — only consulted outside INTERACTIVE mode,
     // so the actionable-only view stays lean while FULL/meaningful views see content regressions.
-    const text =
-      ctx.mode !== SnapshotMode.INTERACTIVE && role === 'generic' && name.length === 0
-        ? directText(child)
-        : '';
-    const meaningful = interactive || role !== 'generic' || name.length > 0 || text.length > 0;
-    const include = ctx.mode === SnapshotMode.INTERACTIVE ? interactive : meaningful;
+    const lean = ctx.mode === SnapshotMode.INTERACTIVE;
+    const text = !lean && role === 'generic' && name.length === 0 ? directText(child) : '';
+    // Layout signature for grid/flex containers — makes CLS/layout regressions visible.
+    const layout = lean ? '' : layoutSignature(child);
+    const meaningful =
+      interactive || role !== 'generic' || name.length > 0 || text.length > 0 || layout.length > 0;
+    const include = lean ? interactive : meaningful;
     if (include) {
       ctx.nodes += 1;
       ctx.lines.push(
-        text.length > 0 && name.length === 0
+        text.length > 0 && name.length === 0 && layout.length === 0
           ? formatTextLine(depth, text)
-          : formatLine(child, depth, role, name),
+          : formatLine(child, depth, role, name, layout),
       );
       walk(child, depth + 1, ctx);
     } else {
