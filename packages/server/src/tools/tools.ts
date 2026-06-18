@@ -577,6 +577,7 @@ export const TOOLS: ToolDef[] = [
     name: IrisTool.ACT_AND_WAIT,
     description:
       'Act on a ref, then wait for a predicate to hold — one hop for the act->observe->assert loop. ' +
+      'Omit `until` to wait for the page to settle (network/DOM/animation idle) — use this instead of a fixed sleep. ' +
       'Returns { effect } (the action result), { verdict } (predicate pass/evidence/near-miss), ' +
       'and { trace } (the reaction report of everything the app did after the action). ' +
       'timeout_ms 0 evaluates the predicate once without waiting.',
@@ -593,8 +594,8 @@ export const TOOLS: ToolDef[] = [
         .describe(
           'Action-specific arguments: { value } for fill/select, { text } for type/press, { confirmDangerous: true } for a potentially destructive control.',
         ),
-      until: PredicateSchema.describe(
-        'Predicate to wait for after the action completes. Same shape accepted by iris_assert. For deterministic waiting instead of a sleep, use { kind: "settled", quietMs } to block until network/DOM/animation activity has been quiet for quietMs (default 500) — or allOf it with the consequence you expect.',
+      until: PredicateSchema.optional().describe(
+        'Predicate to wait for after the action completes (same shape as iris_assert). OMIT to wait for the page to SETTLE — network/DOM/animation idle — the deterministic default instead of a sleep. To assert a consequence AND settle, allOf them: { kind: "allOf", predicates: [<your predicate>, { kind: "settled" }] }.',
       ),
       timeout_ms: z
         .number()
@@ -626,7 +627,11 @@ export const TOOLS: ToolDef[] = [
       const paused = pausedShortCircuit(session);
       if (paused !== undefined) return paused;
       refuseIfThrottled(session, args['refuseWhenThrottled']);
-      const until = PredicateSchema.parse(args['until']);
+      // Omitting `until` waits for the page to settle (idle) — the deterministic default vs a sleep.
+      const until =
+        args['until'] !== undefined
+          ? PredicateSchema.parse(args['until'])
+          : ({ kind: 'settled' } as const);
       const timeout = asNumber(args['timeout_ms']) ?? 4000;
 
       const since = session.elapsed();
