@@ -41,6 +41,8 @@ export {
 } from './flows/flow-success.js';
 export { classifyFlowAssertions, FlowAssertionGrade } from './flows/flow-classify.js';
 export type { FlowAssertionClassification } from './flows/flow-classify.js';
+export { buildDomainModel } from './domain/domain-model.js';
+export type { DomainModel, DomainFlowSummary, DomainGaps } from './domain/domain-model.js';
 export { ProjectStore } from './project/project-store.js';
 export type { ReadProjectResult } from './project/project-store.js';
 export { VisualStore } from './visual/visual-store.js';

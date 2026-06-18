@@ -36,6 +36,7 @@ import type { FileSystemPort } from '../project/fs-port.js';
 import type { FlowStore } from '../flows/flows.js';
 import type { ProjectStore } from '../project/project-store.js';
 import { CONTRACT_TOOLS } from './contract-tools.js';
+import { DOMAIN_TOOLS } from '../domain/domain-tools.js';
 import { BROWSER_TOOLS } from './browser-tools.js';
 import { FLOW_TOOLS } from '../flows/flow-tools.js';
 import { PROJECT_TOOLS } from '../project/project-tools.js';
@@ -1216,6 +1217,7 @@ export const TOOLS: ToolDef[] = [
   },
   // iris_capabilities (live | fromDisk) + iris_contract_save. See contract-tools.ts.
   ...CONTRACT_TOOLS,
+  ...DOMAIN_TOOLS,
   // iris_flow_save / iris_flow_list / iris_flow_load. See flow-tools.ts.
   ...FLOW_TOOLS,
   // iris_project (read history + diff-vs-last) / iris_run_record. See project-tools.ts.
