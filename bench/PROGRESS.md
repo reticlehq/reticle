@@ -6,7 +6,8 @@
 
 ## The headline
 
-Iris went from **worst detection to best-in-class** on the 10-scenario cross-tool suite:
+Iris went from **worst detection to best-in-class** on the cross-tool suite (10 scenarios,
+expanded to 12 in the depth pass):
 
 | Version         | What landed                         | Iris RCR | Iris accuracy | Iris VE | avg tokens |
 | --------------- | ----------------------------------- | -------- | ------------- | ------- | ---------- |
@@ -54,10 +55,11 @@ false positives for any tool on the control.
 
 ## The honest tradeoff (and what's deliberately left undone)
 
-VE (regressions caught per 1k tokens) is **6.8 for Iris vs 8.6 for DevTools** — DevTools is
-cheaper _because it catches less_ (it misses layout-shift; 7/8 vs Iris 8/8). At the metric's
-**RCR=1.0 gate, only Iris qualifies.** Two levers remain to also win VE outright, both
-deliberately deferred to a supervised session:
+VE (regressions caught per 1k tokens) on the expanded suite is **9.3 for Iris vs 13.3 for
+DevTools** — DevTools is cheaper _because it catches less_ (it misses layout-shift; 9/10 vs Iris
+10/10) and emits a 65-token network view to Iris's 616. At the metric's **RCR=1.0 gate, only Iris
+qualifies** (zero false negatives). Two levers remain to also win VE outright, both deliberately
+deferred to a supervised session:
 
 - **`iris_act` reaction trace (~238 tok/call vs DevTools' 5).** This is the dominant remaining
   token cost — and it is Iris's _consequence-assertion_ signal (what changed after the action).
