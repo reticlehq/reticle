@@ -224,6 +224,12 @@ export interface Drift {
   anchor: string;
   /** Closest present testid via the live near-miss; null only when the page has no testids (or signal drift). */
   nearest: string | null;
+  /**
+   * True when two or more present testids tie at the minimum edit distance, so `nearest` is an
+   * arbitrary pick. An ambiguous drift is NEVER auto-healed (a wrong rebind ships a bug green) —
+   * it is surfaced for a human/agent to choose. Absent ⇒ unambiguous.
+   */
+  ambiguous?: boolean;
 }
 
 /** The per-step result of re-resolving + running one anchored step. */

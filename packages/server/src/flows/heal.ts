@@ -44,6 +44,10 @@ function proposeRebindWith(
   minConfidence: number,
 ): HealProposal | undefined {
   if (drift.reasonKind !== DriftReason.TESTID_NOT_FOUND) return undefined;
+  // Never auto-heal an ambiguous drift: when two present testids tie at the minimum distance, the
+  // `nearest` pick is arbitrary, so a rebind would be a coin-flip that can land on the wrong element
+  // and ship a bug green. Surface it (the drift still carries `nearest`) and defer to a human.
+  if (drift.ambiguous === true) return undefined;
   const to = drift.nearest;
   if (to === null) return undefined;
   const confidence = confidenceFor(drift.anchor, to);

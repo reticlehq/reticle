@@ -32,6 +32,30 @@ function signalDrift(name: string): Drift {
   };
 }
 
+function ambiguousDrift(from: string, nearest: string): Drift {
+  return { ...testidDrift(from, nearest), ambiguous: true };
+}
+
+describe('ambiguous drift is never auto-healed (heals the locator, never the intent)', () => {
+  it('refuses a proposal when the drift is ambiguous, even with a high-confidence nearest', () => {
+    // nearest is one edit away (would normally clear the floor), but the tie makes it unsafe.
+    expect(proposeRebind(ambiguousDrift('submit-bt', 'submit-btn'), 0)).toBeUndefined();
+  });
+
+  it('still proposes for an unambiguous high-confidence drift', () => {
+    expect(proposeRebind(testidDrift('submit-bt', 'submit-btn'), 0)).toBeDefined();
+  });
+
+  it('collectProposals skips ambiguous drifts', () => {
+    const steps: FlowStepResult[] = [
+      { step: 0, tool: IrisTool.ACT, anchor: 'a', ok: false, drift: ambiguousDrift('a', 'ab') },
+      { step: 1, tool: IrisTool.ACT, anchor: 'c', ok: false, drift: testidDrift('c', 'cd') },
+    ];
+    const proposals = collectProposals(steps);
+    expect(proposals.map((p) => p.step)).toEqual([1]); // only the unambiguous one
+  });
+});
+
 describe('confidenceFor — normalized edit-distance confidence', () => {
   it('confidence is higher for a smaller edit distance', () => {
     expect(confidenceFor('chat-send', 'chat-sent')).toBeGreaterThan(

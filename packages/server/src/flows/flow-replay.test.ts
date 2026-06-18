@@ -14,7 +14,12 @@ import {
   type IrisEvent,
   type QueryEmptyHint,
 } from '@syrin/iris-protocol';
-import { nearestTestid, replayFlow, type FlowReplaySession } from './flow-replay.js';
+import {
+  nearestTestid,
+  nearestIsAmbiguous,
+  replayFlow,
+  type FlowReplaySession,
+} from './flow-replay.js';
 import { waitForPredicate, type Predicate } from '../events/predicate.js';
 import { asRecord, asString } from '../tools/tools-helpers.js';
 import { IrisTool } from '../tools/tool-names.js';
@@ -225,5 +230,21 @@ describe('nearestTestid — closest surviving anchor', () => {
 
   it('8b: ties broken by shortest, case-insensitive', () => {
     expect(nearestTestid('Send', ['send-x', 'send'])).toBe('send');
+  });
+});
+
+describe('nearestIsAmbiguous — refuse to auto-heal a coin-flip', () => {
+  it('is true when two candidates tie at the minimum distance', () => {
+    // both differ from "submit-bt" by one edit → tie → arbitrary pick → ambiguous
+    expect(nearestIsAmbiguous('submit-bt', ['submit-btn', 'submit-bts'])).toBe(true);
+  });
+
+  it('is false when one candidate is strictly closest', () => {
+    expect(nearestIsAmbiguous('chat-send', ['chat-send-x', 'sidebar'])).toBe(false);
+  });
+
+  it('is false with fewer than two candidates', () => {
+    expect(nearestIsAmbiguous('x', [])).toBe(false);
+    expect(nearestIsAmbiguous('x', ['y'])).toBe(false);
   });
 });
