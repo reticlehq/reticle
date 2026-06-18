@@ -21,7 +21,7 @@ import {
   type RunRecord,
 } from '@syrin/iris-protocol';
 import { classifyFlowAssertions, FlowAssertionGrade } from '../flows/flow-classify.js';
-import { flowRisk, latestRun, rankByRisk, type FlowRisk } from './flow-risk.js';
+import { flowRisk, latestRun, rankByRisk, RiskLevel, type FlowRisk } from './flow-risk.js';
 
 export interface DomainFlowSummary {
   name: string;
@@ -135,6 +135,15 @@ export function buildDomainModel(
       )
     : [];
 
+  // The most actionable fact — the riskiest flow to test first — when run history flagged one.
+  const top = riskRanked[0];
+  const topFlow = top === undefined ? undefined : flowSummaries.find((f) => f.name === top);
+  const topRisk =
+    topFlow?.risk !== undefined &&
+    (topFlow.risk.level === RiskLevel.HIGH || topFlow.risk.level === RiskLevel.MEDIUM)
+      ? { name: topFlow.name, reason: topFlow.risk.reason }
+      : undefined;
+
   return {
     flowCount: flows.length,
     flows: flowSummaries,
@@ -142,7 +151,7 @@ export function buildDomainModel(
     coverage,
     gaps,
     riskRanked,
-    summary: buildSummary(flows.length, coverage, gaps),
+    summary: buildSummary(flows.length, coverage, gaps, topRisk),
   };
 }
 
@@ -150,6 +159,7 @@ function buildSummary(
   flowCount: number,
   coverage: DomainModel['coverage'],
   gaps: DomainGaps,
+  topRisk: { name: string; reason: string } | undefined,
 ): string {
   if (flowCount === 0) {
     return 'No saved flows yet — record the critical journeys (iris_record_start) so the agent learns the app.';
@@ -157,6 +167,9 @@ function buildSummary(
   const parts = [
     `${String(flowCount)} flow${flowCount === 1 ? '' : 's'}: ${String(coverage.asserted)} asserted, ${String(coverage.presenceOnly)} presence-only, ${String(coverage.assertionFree)} assertion-free`,
   ];
+  if (topRisk !== undefined) {
+    parts.push(`test first: ${topRisk.name} (${topRisk.reason})`);
+  }
   if (gaps.declaredUntestedSignals.length > 0) {
     parts.push(
       `${String(gaps.declaredUntestedSignals.length)} declared signal(s) no flow asserts (${gaps.declaredUntestedSignals.join(', ')})`,

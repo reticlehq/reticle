@@ -86,6 +86,16 @@ describe('buildDomainModel', () => {
     expect(m.riskRanked[0]).toBe('broken'); // failed run surfaces first
     expect(m.flows.find((f) => f.name === 'broken')?.risk?.level).toBe('high');
     expect(m.flows.find((f) => f.name === 'clean')?.risk?.level).toBe('low');
+    // the summary headlines the riskiest flow to test first.
+    expect(m.summary).toContain('test first: broken');
+  });
+
+  it('omits the "test first" headline when the top flow is only low risk', () => {
+    const flows = [flow('clean', [testidStep('a')], { signal: 's' })];
+    const runs = [{ kind: 'flow_replay', name: 'clean', status: 'pass', at: 1 }] as Parameters<
+      typeof buildDomainModel
+    >[2];
+    expect(buildDomainModel(flows, null, runs).summary).not.toContain('test first');
   });
 
   it('treats a green assertion-free flow as still risky (false confidence)', () => {
