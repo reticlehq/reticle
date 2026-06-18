@@ -46,12 +46,20 @@ The user's stretch goal is 100×. Stated plainly so we don't fake it:
   100× more than 8 regressions, and tokens cannot approach zero. The honest within-field goal
   is **RCR 1.0 at the lowest token cost** — which makes Iris a few× better than DevTools on VE
   and the only tool at full coverage. We chase that real number.
-- **Against screenshot/vision agents, ~100× is real and defensible.** A vision-based "look at
-  the page" costs ~1,000–5,000 image tokens per observation and still cannot read a swallowed
-  500 or a console error. Iris catches those from structured signals at tens-to-hundreds of
-  tokens. Caught-regressions-per-1k-tokens for a structured-signal tool vs a screenshot loop
-  is genuinely 1–2 orders of magnitude — _that_ is where the 100× claim lives, and Layer B
-  (with an API key) is where we will measure it head-to-head.
+- **Against screenshot/vision agents, the gap is large and now measured (not assumed).** A
+  single screenshot of the demo at the benchmark's 1280×800 viewport = **1365 Anthropic image
+  tokens** (measured artifact, via Anthropic's documented formula `tokens = w·h/750`). By
+  comparison, Iris's targeted structured observations this version (measured): a console check
+  ≈ **138** tokens, a network check ≈ **250**. So a structured check is **~5–10× cheaper per
+  look** — and, decisively, **pixels are categorically blind to 3 of the 8 regressions**
+  (swallowed 500, console error, hung request are not in the image at all), so no number of
+  screenshots detects them. A real verify loop re-screenshots before/after each step (1365 ×
+  N looks), so the cumulative cost reaches **1–2 orders of magnitude** while still missing the
+  non-visual regressions — that is where the "≈100×" lives.
+  - _Honesty caveat:_ Iris's per-check figures are the o200k text-token proxy (≈ Anthropic
+    text tokens ±~20%); the 1365 is exact Anthropic image tokens. The comparison is
+    directional, not a single flat "100×". Layer B (with an API key) will measure a real
+    screenshot-agent loop head-to-head.
 
 We optimize the real metric (VE with the RCR gate) and report the screenshot comparison
 separately and honestly. No fabricated 100×.
