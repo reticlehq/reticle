@@ -4,7 +4,7 @@ All notable changes to **`@syrin/iris`** are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.6.10] — 2026-06-18
 
 ### Added
 

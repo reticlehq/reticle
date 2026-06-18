@@ -1,6 +1,6 @@
 {
   "name": "@syrin/iris-test",
-  "version": "0.5.0",
+  "version": "0.6.10",
   "description": "Iris test runner: irisTest spec registry + a runner that drives Iris tools without MCP/stdio.",
   "type": "module",
   "main": "./dist/index.js",
