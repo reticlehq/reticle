@@ -31,6 +31,36 @@ const SCENARIOS = [
   },
 
   {
+    id: 'wrong-status-404',
+    regression: null,
+    expectDetect: true,
+    observe: 'network',
+    steps: [
+      { view: 'diagnostics' },
+      { tap: { testid: 'fault-404', nameRe: /404 Not Found/, label: '404' } },
+      { wait: 600 },
+    ],
+    mode: 'present',
+    rx: /\b404\b/,
+    signal: 'network request with status 404 (wrong status / missing resource)',
+  },
+
+  {
+    id: 'cors-blocked',
+    regression: null,
+    expectDetect: true,
+    observe: 'network',
+    steps: [
+      { view: 'diagnostics' },
+      { tap: { testid: 'fault-cors', nameRe: /CORS blocked/, label: 'cors' } },
+      { wait: 800 },
+    ],
+    mode: 'present',
+    rx: /cors/i,
+    signal: 'cross-origin request blocked (CORS) — fails or returns status 0',
+  },
+
+  {
     id: 'silent-dom-regression',
     regression: 'silent-dom-regression',
     expectDetect: true,

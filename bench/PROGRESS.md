@@ -15,13 +15,26 @@ Iris went from **worst detection to best-in-class** on the 10-scenario cross-too
 | 0.6.12          | snapshot text → silent DOM visible  | 0.875    | 0.889         | 6.80    | 1029       |
 | 0.6.13          | grid layout signature → CLS visible | **1.0**  | **1.0**       | 6.58    | 1216       |
 | 0.6.14          | compact network/console output      | **1.0**  | **1.0**       | 6.80    | 1177       |
+| 0.6.15 †        | +404 + CORS scenarios (depth)       | **1.0**  | **1.0**       | 9.30    | 1075       |
 
-Competitors (unchanged, same suite): **Playwright MCP** RCR 0.875 / acc 0.889 / VE 4.8;
-**Chrome DevTools MCP** RCR 0.875 / acc 0.889 / VE 8.6.
+† **Suite expanded at 0.6.15** from 8 → 10 measured regressions (added wrong-status-404 and
+cors-blocked, both detected by all three tools). Numbers from 0.6.15 are on the larger suite,
+so VE/avg are not directly comparable to earlier rows (the cheaper network scenarios pull the
+average down). Tracked precisely in `history.jsonl` via `measured_cells`.
 
-**Iris is now the only tool of the three that catches all 8 injected regressions** — including
-the silent-DOM removal and the CSS/layout (CLS) shift that the a11y-only tools structurally
-miss. Detection accuracy 1.0 vs 0.889 for both competitors. Zero false positives on the control.
+**Expanded-suite standings (0.6.15, 10 regressions + control, cross-component NOT MEASURED):**
+
+| Tool                | Detection accuracy | Caught    | False neg  | Avg tokens | VE   |
+| ------------------- | ------------------ | --------- | ---------- | ---------- | ---- |
+| **Iris**            | **1.0**            | **10/10** | **0**      | 1075       | 9.3  |
+| Chrome DevTools MCP | 0.909              | 9/10      | 1 (layout) | 677        | 13.3 |
+| Playwright MCP      | 0.909              | 9/10      | 1 (layout) | 1260       | 7.1  |
+
+**Iris is the only tool with zero false negatives** — it catches every regression, including the
+silent-DOM removal and the CSS/layout (CLS) shift the a11y-only tools structurally miss. DevTools
+leads VE only by catching one fewer regression and emitting an ultra-compact network view (65 tok
+vs Iris's 616) — the remaining VE gap is the `iris_act` consequence trace (deferred, below). Zero
+false positives for any tool on the control.
 
 ## What each fix did (and why it was a real gap, not a tuning trick)
 

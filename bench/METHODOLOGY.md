@@ -99,7 +99,7 @@ Effort is not a runtime measurement; it is scored on a fixed rubric and labeled 
 - **Maintenance burden** — selector/recipe fragility across UI change.
 - **Explicit test-writing burden** — how much the engineer must hand-author vs. ask in NL.
 
-## The 10 scenarios
+## The scenarios (10 original + 2 added in the depth pass)
 
 Each scenario file (`scenarios/<id>.json`) defines: `setup`, `injected_regression`,
 `expected_behavior`, `failure_signal`, `success_criteria`, `canonical_task` (the NL prompt),
@@ -117,6 +117,13 @@ and per-tool `recipe` (idiomatic call sequence for Layer A).
 | 8   | cross-component-regression | Action in A silently stops updating B                 | dependent signal/store field never changes           | drop `emit(NAV_CHANGED)` / store wiring                 |
 | 9   | network-timeout            | Request hangs; UI shows a spinner forever             | pending request beyond threshold; no resolution      | force a never-resolving fetch path                      |
 | 10  | no-regression-control      | Nothing is wrong                                      | NONE — any detection = false positive                | unmodified app                                          |
+| 11  | wrong-status-404           | Request returns 404 (missing resource / wrong status) | `net` event status 404                               | api `/api/broken/404` (built-in fault button)           |
+| 12  | cors-blocked               | Cross-origin request blocked; fails silently          | `net` request fails / status 0 (CORS)                | api `/api/broken/cors` (built-in fault button)          |
+
+Scenarios 11–12 were added in the regression-depth pass (v0.6.15). Both are **fair** — their
+discriminator is a network signal every tool can observe — and all three tools detect them, so
+they broaden the failure-mode taxonomy without biasing the comparison. Iris's detection lead
+remains attributable solely to layout-shift (#6), the one regression only it catches.
 
 ### Per-scenario detail (canonical form)
 
