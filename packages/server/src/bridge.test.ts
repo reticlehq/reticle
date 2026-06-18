@@ -413,11 +413,11 @@ describe('bridge round-trip (north-star)', () => {
     browser.emit(EventType.PAGE_HEALTH, { hidden: false, focused: true, reason: 'focus' });
     await waitUntil(() => !bridge.sessions.resolve('demo').throttled());
     const act = (await callTool(deps, 'iris_act', { ref: 'e7', action: 'click' })) as {
-      session: { throttled: boolean; focused: boolean };
+      session?: { throttled: boolean; focused: boolean };
       warning?: string;
     };
-    expect(act.session.throttled).toBe(false);
-    expect(act.session.focused).toBe(true);
+    // Nominal session → health block omitted entirely (absence means healthy); no warning.
+    expect(act.session).toBeUndefined();
     expect(act.warning).toBeUndefined();
   });
 

@@ -76,7 +76,7 @@ function tool(name: string) {
 }
 
 interface HealthBlock {
-  session: { recommendation?: string };
+  session?: { recommendation?: string };
 }
 
 const healthyRow: SessionInfo = {
@@ -110,8 +110,8 @@ describe('tool results carry the recommendation', () => {
       ref: 'e1',
       action: 'click',
     })) as HealthBlock;
-    expect(res.session.recommendation).toBe(UNSCRIPTABLE_TAB_RECOMMENDATION);
-    expect(res.session.recommendation).toContain('iris drive');
+    expect(res.session?.recommendation).toBe(UNSCRIPTABLE_TAB_RECOMMENDATION);
+    expect(res.session?.recommendation).toContain('iris drive');
   });
 
   it('act result has no recommendation for a healthy tab', async () => {
@@ -119,14 +119,15 @@ describe('tool results carry the recommendation', () => {
       ref: 'e1',
       action: 'click',
     })) as HealthBlock;
-    expect('recommendation' in res.session).toBe(false);
+    // Nominal session → the whole health block is omitted (healthy conveys nothing actionable).
+    expect(res.session).toBeUndefined();
   });
 
   it('assert result surfaces the recommendation', async () => {
     const res = (await tool(IrisTool.ASSERT).handler(fakeDeps(true, []), {
       predicate: { kind: 'console', level: 'error', absent: true },
     })) as HealthBlock;
-    expect(res.session.recommendation).toBe(UNSCRIPTABLE_TAB_RECOMMENDATION);
+    expect(res.session?.recommendation).toBe(UNSCRIPTABLE_TAB_RECOMMENDATION);
   });
 
   it('sessions list carries per-row recommendation for an un-scriptable tab', async () => {
@@ -150,12 +151,12 @@ describe('tool results carry the recommendation', () => {
     const res = (await tool(IrisTool.ACT_SEQUENCE).handler(fakeDeps(true, []), {
       steps: [{ ref: 'e1', action: 'click' }],
     })) as HealthBlock;
-    expect(res.session.recommendation).toBe(UNSCRIPTABLE_TAB_RECOMMENDATION);
+    expect(res.session?.recommendation).toBe(UNSCRIPTABLE_TAB_RECOMMENDATION);
   });
 
   it('observe result surfaces the recommendation for a throttled tab', async () => {
     const res = (await tool(IrisTool.OBSERVE).handler(fakeDeps(true, []), {})) as HealthBlock;
-    expect(res.session.recommendation).toBe(UNSCRIPTABLE_TAB_RECOMMENDATION);
+    expect(res.session?.recommendation).toBe(UNSCRIPTABLE_TAB_RECOMMENDATION);
   });
 
   it('wait_for result surfaces the recommendation for a throttled tab', async () => {
@@ -163,6 +164,6 @@ describe('tool results carry the recommendation', () => {
       predicate: { kind: 'console', level: 'error', absent: true },
       timeout_ms: 0,
     })) as HealthBlock;
-    expect(res.session.recommendation).toBe(UNSCRIPTABLE_TAB_RECOMMENDATION);
+    expect(res.session?.recommendation).toBe(UNSCRIPTABLE_TAB_RECOMMENDATION);
   });
 });
