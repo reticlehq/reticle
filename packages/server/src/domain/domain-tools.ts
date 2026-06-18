@@ -15,7 +15,7 @@ export const DOMAIN_TOOLS: ToolDef[] = [
   {
     name: IrisTool.DOMAIN,
     description:
-      'Read the app domain model BEFORE testing: every saved flow with its assertion grade + the anchors/signals it exercises, plus GAPS — declared signals/testids that NO flow asserts (untested intent), and flows that assert no observable consequence. Use this to decide what to test and where the real risk is, instead of crawling the whole app. Reads .iris/flows/ + .iris/contract.json (no browser needed).',
+      'Read the app domain model BEFORE testing: every saved flow with its assertion grade, the consequence that MUST hold for it (mustHold = what it actually tests), the anchors/signals it exercises, plus GAPS — declared signals/testids that NO flow asserts (untested intent), and flows that assert no observable consequence. Use this to decide what to test and where the real risk is, instead of crawling the whole app. Reads .iris/flows/ + .iris/contract.json (no browser needed).',
     inputSchema: {},
     outputSchema: {
       flowCount: z.number(),
@@ -25,6 +25,12 @@ export const DOMAIN_TOOLS: ToolDef[] = [
           steps: z.number(),
           grade: z.string(),
           asserts: z.boolean(),
+          mustHold: z
+            .string()
+            .optional()
+            .describe(
+              'The success consequence that must hold for this flow (what it actually tests).',
+            ),
           warning: z.string().optional(),
           signals: z.array(z.string()),
           testids: z.array(z.string()),

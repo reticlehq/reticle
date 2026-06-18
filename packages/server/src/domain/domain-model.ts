@@ -21,6 +21,7 @@ import {
   type RunRecord,
 } from '@syrin/iris-protocol';
 import { classifyFlowAssertions, FlowAssertionGrade } from '../flows/flow-classify.js';
+import { successLabel } from '../flows/flow-success.js';
 import { flowRisk, latestRun, rankByRisk, RiskLevel, type FlowRisk } from './flow-risk.js';
 
 export interface DomainFlowSummary {
@@ -29,6 +30,13 @@ export interface DomainFlowSummary {
   grade: string;
   /** True when the flow asserts a real consequence (signal/net), not just presence. */
   asserts: boolean;
+  /**
+   * The success consequence that MUST hold for this flow to count as passing — the human-readable
+   * label of flow.success (e.g. a signal name or net URL). Undefined when the flow declares no
+   * success condition (then `asserts` is false: it tests nothing observable). This is the
+   * "what must hold for each flow" an agent needs before testing.
+   */
+  mustHold?: string;
   warning?: string;
   signals: string[];
   testids: string[];
@@ -106,6 +114,7 @@ export function buildDomainModel(
       signals: flowSignals(flow),
       testids: flowTestids(flow),
     };
+    if (flow.success !== undefined) summary.mustHold = successLabel(flow.success);
     if (c.warning !== undefined) summary.warning = c.warning;
     if (hasHistory) summary.risk = flowRisk(c.grade, latestRun(flow.name, runs));
     return summary;

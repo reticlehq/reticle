@@ -41,6 +41,21 @@ describe('buildDomainModel', () => {
     expect(m.coverage.asserted).toBe(1);
   });
 
+  it('surfaces mustHold — what must hold for each flow — from its success consequence', () => {
+    const m = buildDomainModel(
+      [
+        flow('checkout', [testidStep('pay')], { signal: 'order:placed' }),
+        flow('browse', [testidStep('nav')]), // no success declared
+      ],
+      contract(),
+    );
+    const checkout = m.flows.find((f) => f.name === 'checkout');
+    const browse = m.flows.find((f) => f.name === 'browse');
+    expect(checkout?.mustHold).toBe('order:placed'); // the consequence that must hold
+    expect(browse?.mustHold).toBeUndefined(); // tests nothing observable
+    expect(browse?.asserts).toBe(false);
+  });
+
   it('flags declared signals that NO flow asserts (untested intent — the differentiator)', () => {
     const m = buildDomainModel(
       [flow('checkout', [testidStep('pay')], { signal: 'order:placed' })],
