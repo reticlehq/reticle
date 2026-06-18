@@ -269,6 +269,7 @@ export const HealStatus = {
   DRIFT: 'drift', // apply:false: confident proposal(s) returned, file untouched
   UNHEALABLE: 'unhealable', // drift exists but no proposal cleared the confidence floor
   NOTHING_TO_HEAL: 'nothing_to_heal', // replay was green
+  CONSEQUENCE_BROKEN: 'consequence_broken', // rebind resolves a locator but the flow's success consequence no longer fires — REFUSED (file untouched)
   ERROR: 'error', // flow missing/malformed/invalid-name, or a resolved action failed
 } as const;
 export type HealStatus = (typeof HealStatus)[keyof typeof HealStatus];

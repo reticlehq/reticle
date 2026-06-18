@@ -1,8 +1,12 @@
 import {
+  AnchorKind,
   DriftReason,
   HEAL_CONFIDENCE_MIN,
   type Drift,
+  type FlowFile,
+  type FlowStep,
   type FlowStepResult,
+  type HealChange,
   type HealProposal,
 } from '@syrin/iris-protocol';
 import { editDistance } from './flow-replay.js';
@@ -35,6 +39,34 @@ export function confidenceFor(from: string, to: string): number {
   if (raw >= 1) return 1;
   if (raw <= 0) return Number.EPSILON;
   return raw;
+}
+
+/**
+ * Pure: rewrite the named steps' testid anchors (from→to) and return the new flow plus the changes
+ * that actually applied. A change whose `from` no longer matches that step's testid anchor is
+ * skipped (idempotent / defensive), never throwing. Shared by the on-disk writer (FlowStore.heal)
+ * and the in-memory pre-write verification in iris_flow_heal, so both rewrite identically.
+ */
+export function applyHealChanges(
+  flow: FlowFile,
+  changes: HealChange[],
+): { flow: FlowFile; applied: HealChange[] } {
+  const byStep = new Map<number, HealChange>();
+  for (const change of changes) byStep.set(change.step, change);
+  const applied: HealChange[] = [];
+  const steps = flow.steps.map((step, index): FlowStep => {
+    const change = byStep.get(index);
+    if (
+      change === undefined ||
+      step.anchor.kind !== AnchorKind.TESTID ||
+      step.anchor.value !== change.from
+    ) {
+      return step;
+    }
+    applied.push(change);
+    return { ...step, anchor: { kind: AnchorKind.TESTID, value: change.to } };
+  });
+  return { flow: { ...flow, steps }, applied };
 }
 
 /** Internal: propose with a caller-supplied floor (enables the tunable-confidence API). */

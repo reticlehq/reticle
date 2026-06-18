@@ -22,7 +22,7 @@ import { replayFlow } from './flow-replay.js';
 import { classifyFlowAssertions } from './flow-classify.js';
 import { assertSuccess, dynamicTestids, successLabel } from './flow-success.js';
 import { flowPath } from '../project/iris-dir.js';
-import { collectProposals } from './heal.js';
+import { applyHealChanges, collectProposals } from './heal.js';
 import type { FlowStepResult } from '@syrin/iris-protocol';
 import { waitForPredicate } from '../events/predicate.js';
 import type { FlowAnnotations } from './flows.js';
@@ -331,8 +331,11 @@ export const FLOW_TOOLS: ToolDef[] = [
       'Self-healing replay. Re-runs iris_flow_replay; on testid DRIFT computes confidence-scored ' +
       'nearest-match rebind PROPOSALS. With apply:false (default) returns the proposed diff WITHOUT ' +
       'writing. With apply:true, writes the confident rebind(s) back into .iris/flows/<name>.json and ' +
-      'returns what changed — never silently. A drift with no proposal above the confidence floor is ' +
-      'status:unhealable (file untouched). Returns { name, status: healed|drift|unhealable|' +
+      'returns what changed — never silently. Before writing, apply re-replays the healed flow and ' +
+      're-asserts its success consequence: if the rebound locator resolves but the consequence no ' +
+      'longer fires, the write is REFUSED (status:consequence_broken) — it heals the locator, never ' +
+      'the intent. A drift with no proposal above the confidence floor is status:unhealable (file ' +
+      'untouched). Returns { name, status: healed|drift|unhealable|consequence_broken|' +
       'nothing_to_heal|error, applied, proposals[], changed[], message }.',
     inputSchema: {
       flowName: z.string().describe('Flow file name to heal (from iris_flow_list).'),
@@ -364,9 +367,14 @@ export const FLOW_TOOLS: ToolDef[] = [
 
 const HEAL_MESSAGES = {
   NOTHING: 'nothing to heal — every anchor resolved on replay',
-  HEALED: 'rewrote drifted testid anchors to their nearest surviving match',
+  HEALED:
+    "rewrote drifted testid anchors to their nearest surviving match and re-verified the flow's success consequence still fires",
   DRIFT_DRY: 'confident rebind(s) proposed — re-run with apply:true to write them to disk',
   UNHEALABLE: `drift found, but no nearest match cleared the confidence floor (HEAL_CONFIDENCE_MIN=${HEAL_CONFIDENCE_MIN}); file left untouched — add a data-testid or fix the flow by hand`,
+  HEALED_UNVERIFIED:
+    'rewrote drifted testid anchors — but this flow declares no success consequence, so the rebind resolves a locator without proving the intent still holds. Add a success-state assertion (iris_annotate) so future heals can be verified.',
+  CONSEQUENCE_BROKEN:
+    'rebind resolves the drifted locator to a surviving element, but the healed flow no longer satisfies its success consequence — refusing to write (a heal that loses the intent would ship a green-but-dead test). Fix by hand and verify',
 } as const;
 
 function toChange(proposal: HealProposal): HealChange {
@@ -450,6 +458,44 @@ async function healFlow(deps: ToolDeps, args: Record<string, unknown>): Promise<
     };
   }
 
+  // M5 invariant — "heal the locator, never the intent." Before persisting, verify the rebind on a
+  // healed in-memory copy: a rebound testid can resolve to a real but WRONG element that no longer
+  // triggers the flow's success consequence (e.g. a look-alike control). Persisting that would ship
+  // a green flow that tests nothing. Re-replay the healed flow and assert its success; refuse the
+  // write if the consequence no longer fires. Flows with no declared success can't be verified — we
+  // still heal them but say so loudly so the gap is visible.
+  const { flow: healed } = applyHealChanges(loaded.value, proposals.map(toChange));
+  if (healed.success !== undefined) {
+    const verifySteps = await replayFlow(
+      session,
+      healed,
+      waitForPredicate,
+      FLOW_SIGNAL_TIMEOUT_MS,
+      args['confirmDangerous'] === true,
+    );
+    const verifyClean =
+      verifySteps.length > 0 && verifySteps.every((s) => s.ok && s.drift === undefined);
+    const verdict = verifyClean
+      ? await assertSuccess(
+          session,
+          healed.success,
+          dynamicTestids(healed),
+          waitForPredicate,
+          FLOW_SIGNAL_TIMEOUT_MS,
+        )
+      : { pass: false, failureReason: 'healed flow did not replay cleanly' };
+    if (!verdict.pass) {
+      return {
+        name,
+        status: HealStatus.CONSEQUENCE_BROKEN,
+        applied: false,
+        proposals,
+        changed: [],
+        message: `${HEAL_MESSAGES.CONSEQUENCE_BROKEN} (${successLabel(healed.success)}: ${verdict.failureReason ?? 'not satisfied'})`,
+      };
+    }
+  }
+
   const written = await deps.flows.heal(name, proposals.map(toChange));
   if (!written.ok) {
     return {
@@ -468,6 +514,7 @@ async function healFlow(deps: ToolDeps, args: Record<string, unknown>): Promise<
     applied: written.value.changed.length > 0,
     proposals,
     changed: written.value.changed,
-    message: HEAL_MESSAGES.HEALED,
+    message:
+      loaded.value.success !== undefined ? HEAL_MESSAGES.HEALED : HEAL_MESSAGES.HEALED_UNVERIFIED,
   };
 }
