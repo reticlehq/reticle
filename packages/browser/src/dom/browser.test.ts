@@ -68,6 +68,33 @@ describe('snapshot', () => {
     expect(snap.tree).toContain('button "Click"');
     expect(snap.tree).not.toContain('heading');
   });
+
+  it('includes text content of generic containers so silent content removal is visible', () => {
+    // KPI-card shape: generic divs with no role/name carry the value text. Without this,
+    // removing a card is invisible to the snapshot (the silent-DOM benchmark blind spot).
+    render('<div class="kpi"><div>Deploys</div><div>1240</div></div>');
+    const snap = buildSnapshot({ mode: SnapshotMode.FULL });
+    expect(snap.tree).toContain('Deploys');
+    expect(snap.tree).toContain('1240');
+  });
+
+  it('a snapshot changes when a generic text node is removed (detects the regression)', () => {
+    render('<section><div>Alpha</div><div>Beta</div></section>');
+    const before = buildSnapshot({ mode: SnapshotMode.FULL }).tree;
+    const section = document.querySelector('section');
+    const last = section?.lastElementChild ?? null;
+    if (section !== null && last !== null) section.removeChild(last);
+    const after = buildSnapshot({ mode: SnapshotMode.FULL }).tree;
+    expect(before).not.toBe(after);
+    expect(after).not.toContain('Beta');
+  });
+
+  it('keeps interactive mode lean: omits generic text content', () => {
+    render('<div>JustText</div><button>Go</button>');
+    const snap = buildSnapshot({ mode: SnapshotMode.INTERACTIVE });
+    expect(snap.tree).not.toContain('JustText');
+    expect(snap.tree).toContain('button "Go"');
+  });
 });
 
 describe('query', () => {

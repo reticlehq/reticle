@@ -21,6 +21,24 @@ const INTERACTIVE = new Set([
 
 const SKIP_TAGS = new Set(['script', 'style', 'noscript', 'template', 'head', 'meta', 'link']);
 
+/** Cap on inlined text content so a verbose node can't blow up the snapshot. */
+const TEXT_MAX = 80;
+
+/**
+ * Concatenated DIRECT text of an element (its own text nodes, not descendants' — those are
+ * captured when their own element is walked, so no duplication). Collapsed + truncated.
+ * This is what makes a silent removal of non-interactive content (e.g. a KPI card) visible:
+ * the accessibility role tree alone omits generic containers' text.
+ */
+function directText(el: Element): string {
+  let out = '';
+  for (const node of el.childNodes) {
+    if (node.nodeType === 3 /* Node.TEXT_NODE */) out += node.textContent ?? '';
+  }
+  const collapsed = out.replace(/\s+/g, ' ').trim();
+  return collapsed.length > TEXT_MAX ? `${collapsed.slice(0, TEXT_MAX)}…` : collapsed;
+}
+
 export interface SnapshotStatus {
   route: string;
   title: string;
@@ -74,6 +92,11 @@ function formatLine(el: Element, depth: number, role: string, name: string): str
   return `${indent}- ${role}${namePart}${refPart}${valuePart}${stateSuffix(el)}`;
 }
 
+/** A generic container's own text content, with no ref (kept lean — text isn't actionable). */
+function formatTextLine(depth: number, text: string): string {
+  return `${'  '.repeat(depth)}- text "${text}"`;
+}
+
 interface WalkCtx {
   lines: string[];
   nodes: number;
@@ -94,11 +117,21 @@ function walk(parent: Element, depth: number, ctx: WalkCtx): void {
     const role = getRole(child);
     const name = getAccessibleName(child);
     const interactive = INTERACTIVE.has(role);
-    const meaningful = interactive || role !== 'generic' || name.length > 0;
+    // A generic, unnamed container's own text content — only consulted outside INTERACTIVE mode,
+    // so the actionable-only view stays lean while FULL/meaningful views see content regressions.
+    const text =
+      ctx.mode !== SnapshotMode.INTERACTIVE && role === 'generic' && name.length === 0
+        ? directText(child)
+        : '';
+    const meaningful = interactive || role !== 'generic' || name.length > 0 || text.length > 0;
     const include = ctx.mode === SnapshotMode.INTERACTIVE ? interactive : meaningful;
     if (include) {
       ctx.nodes += 1;
-      ctx.lines.push(formatLine(child, depth, role, name));
+      ctx.lines.push(
+        text.length > 0 && name.length === 0
+          ? formatTextLine(depth, text)
+          : formatLine(child, depth, role, name),
+      );
       walk(child, depth + 1, ctx);
     } else {
       walk(child, depth, ctx);
