@@ -33,6 +33,7 @@ import { applySnapshotDelta, SnapshotCache } from './snapshot-delta.js';
 import { selectPath, capDepth } from '../session/state-select.js';
 import { asString, asNumber, asRecord, parseInteractive } from './tools-helpers.js';
 import { paginateQueryResult } from './query-paginate.js';
+import { isPresenceOnlyAssertion, PRESENCE_ONLY_ADVICE } from './assert-grade.js';
 import type { FileSystemPort } from '../project/fs-port.js';
 import type { FlowStore } from '../flows/flows.js';
 import type { ProjectStore } from '../project/project-store.js';
@@ -806,7 +807,7 @@ export const TOOLS: ToolDef[] = [
   {
     name: IrisTool.ASSERT,
     description:
-      'Evaluate a predicate (optionally waiting up to timeout_ms). Returns { pass, evidence, failureReason? }. The end of every verify loop. By default it only counts events since your last act, so a stale buffered signal can never fake a pass; pass `since` (an observe/act cursor) to set the window explicitly.',
+      'Evaluate a predicate (optionally waiting up to timeout_ms). Returns { pass, evidence, failureReason? }. The end of every verify loop. Prefer a { signal } or { net } consequence over { element }/{ text } presence — a passing presence-only assertion returns `advice` because a wrong/healed element can fake it. By default it only counts events since your last act, so a stale buffered signal can never fake a pass; pass `since` (an observe/act cursor) to set the window explicitly.',
     inputSchema: {
       predicate: PredicateSchema.describe(
         'Predicate to evaluate: { signal }, { net }, { element } or a combination.',
@@ -827,6 +828,10 @@ export const TOOLS: ToolDef[] = [
       pass: z.boolean(),
       evidence: z.unknown().optional(),
       failureReason: z.string().optional(),
+      advice: z
+        .string()
+        .optional()
+        .describe('Present on a PASSING presence-only assertion — nudges toward a consequence.'),
       session: z
         .object({ lastSeenMs: z.number(), throttled: z.boolean(), focused: z.boolean() })
         .optional(),
@@ -841,7 +846,11 @@ export const TOOLS: ToolDef[] = [
         timeout > 0
           ? await waitForPredicate(session, predicate, timeout, since)
           : await evaluatePredicate(session, predicate, since);
-      return withControl(session, { ...verdict, ...healthEnvelope(session) });
+      // A GREEN presence-only assertion is the dangerous case (a wrong element can fake it) — nudge
+      // toward a consequence. Never on a failing verdict (moot) or when a signal/net is asserted.
+      const advice =
+        verdict.pass && isPresenceOnlyAssertion(predicate) ? { advice: PRESENCE_ONLY_ADVICE } : {};
+      return withControl(session, { ...verdict, ...advice, ...healthEnvelope(session) });
     },
   },
   {
