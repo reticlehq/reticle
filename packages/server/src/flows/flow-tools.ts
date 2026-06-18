@@ -21,6 +21,7 @@ import { asString } from '../tools/tools-helpers.js';
 import { replayFlow } from './flow-replay.js';
 import { classifyFlowAssertions } from './flow-classify.js';
 import { assertSuccess, dynamicTestids, successLabel } from './flow-success.js';
+import { flowPath } from '../project/iris-dir.js';
 import { collectProposals } from './heal.js';
 import type { FlowStepResult } from '@syrin/iris-protocol';
 import { waitForPredicate } from '../events/predicate.js';
@@ -154,7 +155,13 @@ export const FLOW_TOOLS: ToolDef[] = [
         z.object({ name: z.string(), path: z.string(), createdAt: z.number().optional() }),
       ),
     },
-    handler: (deps: ToolDeps) => deps.flows.list().then((flows) => ({ flows })),
+    // Return {name, path} objects to MATCH the declared outputSchema. Returning bare name strings
+    // (the prior bug) made schema-validating MCP clients reject the result ("expected object,
+    // received string") — caught driving the live demo.
+    handler: (deps: ToolDeps) =>
+      deps.flows.list().then((names) => ({
+        flows: names.map((name) => ({ name, path: flowPath(deps.irisRoot, name) })),
+      })),
   },
   {
     name: IrisTool.FLOW_LOAD,
