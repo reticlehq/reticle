@@ -29,11 +29,16 @@ export interface FlowReplaySession {
   elapsed(): number;
 }
 
-/** The injected predicate-waiter (the real waitForPredicate) — reused, never reimplemented. */
+/**
+ * The injected predicate-waiter (the real waitForPredicate) — reused, never reimplemented.
+ * `since` is the event-time floor (default 0 = whole buffer): pass the cursor captured before a
+ * replay so the success oracle can't be satisfied by a stale signal from a prior replay/run.
+ */
 export type WaitForSignal = (
   session: FlowReplaySession,
   predicate: Predicate,
   timeoutMs: number,
+  since?: number,
 ) => Promise<EvalResult>;
 
 /**

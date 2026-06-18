@@ -87,9 +87,12 @@ export async function assertSuccess(
   dynamic: ReadonlySet<string>,
   waitForSignal: WaitForSignal,
   timeoutMs: number,
+  since = 0,
 ): Promise<EvalResult> {
   if (success === undefined) return { pass: true };
   const predicate = successToPredicate(success, dynamic);
   if (predicate === undefined) return { pass: true };
-  return waitForSignal(session, predicate, timeoutMs);
+  // `since` floors the window at the start of THIS replay so a success signal left in the buffer by
+  // a prior replay/run (or, in heal, by the pre-heal drift replay) cannot fake a pass.
+  return waitForSignal(session, predicate, timeoutMs, since);
 }

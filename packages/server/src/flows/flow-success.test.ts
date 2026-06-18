@@ -87,6 +87,27 @@ describe('assertSuccess — green only when the consequence holds', () => {
     );
     expect(r.pass).toBe(true);
   });
+
+  it('honors the since floor: a success signal from a PRIOR replay does not fake a pass', async () => {
+    // A success signal fired at t=10 (a previous replay / the pre-heal drift replay's prefix).
+    const filtering: FlowReplaySession = {
+      command: () => Promise.resolve({ kind: 'command_result', id: 'q', ok: true, result: {} }),
+      eventsSince: (cursor: number) =>
+        [{ t: 10, type: EventType.SIGNAL, sessionId: 's', data: { name: 'done' } }].filter(
+          (e) => e.t >= cursor,
+        ),
+      onEvent: () => () => undefined,
+      elapsed: () => 1000,
+    };
+    // floor 0 (whole buffer) → the stale signal matches (legacy behavior).
+    expect(
+      (await assertSuccess(filtering, { signal: 'done' }, NONE, waitForPredicate, 0, 0)).pass,
+    ).toBe(true);
+    // floor 20 (this replay started after the stale signal) → excluded, so it FAILS.
+    expect(
+      (await assertSuccess(filtering, { signal: 'done' }, NONE, waitForPredicate, 0, 20)).pass,
+    ).toBe(false);
+  });
 });
 
 describe('dynamicTestids', () => {

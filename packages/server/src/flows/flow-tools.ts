@@ -230,6 +230,9 @@ export const FLOW_TOOLS: ToolDef[] = [
         };
       }
       const session = deps.sessions.resolve(asString(args['sessionId']));
+      // Floor the success oracle at the start of THIS replay so a stale signal from a prior run
+      // in the same session can't fake a pass.
+      const replayFloor = session.elapsed();
       const steps = await replayFlow(
         session,
         loaded.value,
@@ -248,6 +251,7 @@ export const FLOW_TOOLS: ToolDef[] = [
           dynamicTestids(loaded.value),
           waitForPredicate,
           FLOW_SIGNAL_TIMEOUT_MS,
+          replayFloor,
         );
         const row: FlowStepResult = {
           step: steps.length,
@@ -466,6 +470,9 @@ async function healFlow(deps: ToolDeps, args: Record<string, unknown>): Promise<
   // still heal them but say so loudly so the gap is visible.
   const { flow: healed } = applyHealChanges(loaded.value, proposals.map(toChange));
   if (healed.success !== undefined) {
+    // Floor the success oracle at the start of the VERIFY replay so the success signal emitted by the
+    // earlier drift replay's prefix (this same heal call) cannot fake the verification.
+    const verifyFloor = session.elapsed();
     const verifySteps = await replayFlow(
       session,
       healed,
@@ -482,6 +489,7 @@ async function healFlow(deps: ToolDeps, args: Record<string, unknown>): Promise<
           dynamicTestids(healed),
           waitForPredicate,
           FLOW_SIGNAL_TIMEOUT_MS,
+          verifyFloor,
         )
       : { pass: false, failureReason: 'healed flow did not replay cleanly' };
     if (!verdict.pass) {
