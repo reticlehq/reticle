@@ -4,6 +4,40 @@ All notable changes to **`@syrin/iris`** are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Deterministic waiting — the `settled` predicate** (`packages/server`). A new predicate
+  `{ kind: "settled", quietMs }` passes once network/DOM/animation activity has been quiet for
+  `quietMs` (default 500ms). Usable in `iris_wait_for` and `iris_assert`, and composable inside
+  `allOf` with the consequence you expect. Replaces fixed sleeps — the #1 cause of flaky agent tests.
+- **`iris_act_and_wait` auto-settle** (`packages/server`). Omit `until` and the tool waits for the page
+  to settle instead of requiring a predicate — "act, then wait for quiet" is now a single zero-config
+  call, the documented alternative to a sleep.
+- **`iris_query` token controls** (`packages/server`) — `limit` (cap returned descriptors; reports
+  `total` + `truncated` so a trim is never silent) and `count_only` (return just the match count).
+- **`iris_network` / `iris_console` token controls** (`packages/server`) — `limit` (keep the most
+  recent N matches, reporting `total` + `droppedOldest`) and a `cost:{bytes,tokens}` hint, matching the
+  other read tools so the agent can self-budget everywhere.
+- **`iris_domain` `mustHold` per flow** (`packages/server`) — each flow now reports the success
+  consequence that must hold for it (signal name / net URL), so an agent can answer "what are the
+  critical flows and what must hold for each?" from the domain model alone.
+
+### Changed
+
+- **Self-healing now verifies the consequence before persisting** (`packages/server`). `iris_flow_heal`
+  with `apply:true` re-replays the healed flow and re-asserts its success consequence; if a rebound
+  locator resolves but the flow no longer satisfies its intent, the write is **refused**
+  (`status:consequence_broken`, file untouched). It heals the locator, never the intent.
+
+### Fixed
+
+- **Browser observers fully restore patched globals on teardown** (`packages/browser`). The network,
+  route, and console observers stored a bound copy and assigned it back on teardown, so `window.fetch`
+  / `history.pushState` / `console.*` were never restored to their original identity. They now keep the
+  true original for restore and a bound copy only for invocation.
+
 ## [0.5.0] — 2026-06-15
 
 ### Added
@@ -25,24 +59,18 @@ All notable changes to **`@syrin/iris`** are documented here. The format follows
   dev-only HUD overlay that the agent can control: `iris_narrate` shows a caption, `iris_highlight`
   draws a ring around any element. The HUD is excluded from snapshots and tree-shaken in production.
 - **Unified `SKILL.md` at repo root** — a single skill file auto-detects mode: setup wizard on first
-  run (no `.iris.json`), live-app testing on every run after. Covers Claude Code, OpenCode, Codex CLI,
-  Cursor, Windsurf, VS Code, and Zed MCP config formats.
+  run (no `.iris.json`), live-app testing on every run after. Covers Claude Code, OpenCode, Codex CLI, Cursor, Windsurf, VS Code, and Zed MCP config formats.
 - **`.iris.json` project config** — written after first-run setup; persists `port`, `headed`,
   `framework`, and `harnesses` so subsequent runs need zero questions.
-- **`dev:iris` script** in `apps/demo` — second Vite dev server on port 4310, isolated from the user's
-  normal dev port.
+- **`dev:iris` script** in `apps/demo` — second Vite dev server on port 4310, isolated from the user's normal dev port.
 
 ### Fixed
 
 - **All-throttled session auto-selection** (`packages/server`). When every connected tab is hidden
-  (e.g. user is in VS Code with Chrome on another desktop), `SessionManager.resolve()` now picks the
-  session with the freshest heartbeat instead of throwing `"multiple sessions connected"`.
-- **Presenter HUD shows on bridge connect** — the overlay now mounts as soon as the SDK connects to the
-  bridge, not only after the first `iris_narrate` call.
-- **`iris_narrate` MCP schema validation** — relaxed the output schema so the tool no longer rejects
-  responses from narration calls.
-- **`iris_inspect` / `iris_clock` output schemas** — relaxed to pass through extra fields instead of
-  stripping them, fixing spurious validation errors.
+  (e.g. user is in VS Code with Chrome on another desktop), `SessionManager.resolve()` now picks the session with the freshest heartbeat instead of throwing `"multiple sessions connected"`.
+- **Presenter HUD shows on bridge connect** — the overlay now mounts as soon as the SDK connects to the bridge, not only after the first `iris_narrate` call.
+- **`iris_narrate` MCP schema validation** — relaxed the output schema so the tool no longer rejects responses from narration calls.
+- **`iris_inspect` / `iris_clock` output schemas** — relaxed to pass through extra fields instead of stripping them, fixing spurious validation errors.
 
 ---
 
