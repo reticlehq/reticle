@@ -699,6 +699,12 @@ export const TOOLS: ToolDef[] = [
         events: z.number(),
         bytes: z.number(),
         droppedOldest: z.number().optional(),
+        recommendation: z
+          .string()
+          .optional()
+          .describe(
+            'Present when the timeline is large — scope your next call (filters/max_events).',
+          ),
       }),
       session: z
         .object({ lastSeenMs: z.number(), throttled: z.boolean(), focused: z.boolean() })

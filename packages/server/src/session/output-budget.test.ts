@@ -43,6 +43,23 @@ describe('costHint', () => {
   it('includes droppedOldest only when something was dropped', () => {
     expect(costHint({}, 1, 4).droppedOldest).toBe(4);
   });
+
+  it('adds no recommendation for a small timeline', () => {
+    expect(costHint({ a: 1 }, 5).recommendation).toBeUndefined();
+  });
+
+  it('recommends scoping when the event count is large (observed: login flooded ~319)', () => {
+    const c = costHint({ a: 1 }, 319);
+    expect(c.recommendation).toBeDefined();
+    expect(c.recommendation).toContain('filters');
+    expect(c.recommendation).toContain('319');
+  });
+
+  it('recommends scoping when the byte size is large even with few events', () => {
+    const big = { blob: 'x'.repeat(9000) };
+    const c = costHint(big, 3);
+    expect(c.recommendation).toBeDefined();
+  });
 });
 
 describe('estimateTokens', () => {

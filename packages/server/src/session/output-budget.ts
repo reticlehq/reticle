@@ -10,7 +10,18 @@ export interface CostHint {
   events: number;
   bytes: number;
   droppedOldest?: number;
+  /** Present when the timeline is large — tells the agent to scope its NEXT call (cut tokens). */
+  recommendation?: string;
 }
+
+/**
+ * Above this, a timeline is big enough that re-reading it unscoped is a real token tax. Observed
+ * live: a single login flooded 319 events / ~37KB because the dashboard's count-up animations emit
+ * a dom.text per frame — the agent only dodged the cost by knowing to pass filters. The hint now
+ * tells it.
+ */
+const LARGE_TIMELINE_EVENTS = 80;
+const LARGE_TIMELINE_BYTES = 8000;
 
 /** Keep only the most recent `maxEvents` events; report how many older ones were dropped. */
 export function applyEventBudget(
@@ -28,8 +39,13 @@ export function applyEventBudget(
 
 /** Build a cost hint from a payload + the event count it carries. */
 export function costHint(payload: unknown, events: number, droppedOldest = 0): CostHint {
-  const bytes = JSON.stringify(payload)?.length ?? 0;
-  return droppedOldest > 0 ? { events, bytes, droppedOldest } : { events, bytes };
+  const json = JSON.stringify(payload) ?? '';
+  const bytes = json.length;
+  const base: CostHint = droppedOldest > 0 ? { events, bytes, droppedOldest } : { events, bytes };
+  if (events >= LARGE_TIMELINE_EVENTS || bytes >= LARGE_TIMELINE_BYTES) {
+    base.recommendation = `large timeline (${String(events)} events, ~${String(estimateTokens(json))} tokens) — pass filters:[...] (e.g. ["signal","net"]) or max_events to scope your next call and cut tokens`;
+  }
+  return base;
 }
 
 /**
