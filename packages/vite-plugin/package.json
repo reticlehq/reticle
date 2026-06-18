@@ -46,7 +46,7 @@
   },
   "devDependencies": {
     "@types/babel__core": "^7.20.5",
-    "vite": "^5"
+    "vite": "^7"
   },
   "peerDependencies": {
     "vite": ">=4"
