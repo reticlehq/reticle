@@ -26,7 +26,8 @@ pointer sequence on the element (no coordinate gesture for the HUD to intercept)
 **Never sleep — wait deterministically.** Fixed sleeps are the #1 cause of flaky agent tests. Instead:
 
 - `iris_act_and_wait({ ref, action })` with **no `until`** waits for the page to _settle_ (network +
-  DOM + animation idle) before returning — the one-call replacement for "click then sleep 500ms".
+  structural DOM idle; ambient count-up/spinner churn is ignored so an animated page still settles)
+  before returning — the one-call replacement for "click then sleep 500ms".
 - Need to wait without acting? `iris_wait_for({ predicate: { kind: "settled", quietMs } })`.
 - Waiting for a specific outcome? Pass that consequence as the predicate (`{ signal }` / `{ net }`),
   or `allOf` it with `{ kind: "settled" }` to wait for both the event _and_ the page going quiet.

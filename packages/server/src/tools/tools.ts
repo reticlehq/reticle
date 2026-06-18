@@ -603,7 +603,7 @@ export const TOOLS: ToolDef[] = [
     name: IrisTool.ACT_AND_WAIT,
     description:
       'Act on a ref, then wait for a predicate to hold — one hop for the act->observe->assert loop. ' +
-      'Omit `until` to wait for the page to settle (network/DOM/animation idle) — use this instead of a fixed sleep. ' +
+      'Omit `until` to wait for the page to settle (network + DOM idle) — use this instead of a fixed sleep. ' +
       'Returns { effect } (the action result), { verdict } (predicate pass/evidence/near-miss), ' +
       'and { trace } (the reaction report of everything the app did after the action). ' +
       'timeout_ms 0 evaluates the predicate once without waiting.',
@@ -621,7 +621,7 @@ export const TOOLS: ToolDef[] = [
           'Action-specific arguments: { value } for fill/select, { text } for type/press, { confirmDangerous: true } for a potentially destructive control.',
         ),
       until: PredicateSchema.optional().describe(
-        'Predicate to wait for after the action completes (same shape as iris_assert). OMIT to wait for the page to SETTLE — network/DOM/animation idle — the deterministic default instead of a sleep. To assert a consequence AND settle, allOf them: { kind: "allOf", predicates: [<your predicate>, { kind: "settled" }] }.',
+        'Predicate to wait for after the action completes (same shape as iris_assert). OMIT to wait for the page to SETTLE — network + DOM idle — the deterministic default instead of a sleep. To assert a consequence AND settle, allOf them: { kind: "allOf", predicates: [<your predicate>, { kind: "settled" }] }.',
       ),
       timeout_ms: z
         .number()
@@ -772,7 +772,7 @@ export const TOOLS: ToolDef[] = [
       'Block until a predicate is satisfied (or already true in the recent buffer), else time out. Returns matching evidence or a near-miss diagnosis. By default it only counts events since your last act, so a signal buffered BEFORE the action can never fake a pass; pass `since` (an observe/act cursor) to widen or narrow that window explicitly.',
     inputSchema: {
       predicate: PredicateSchema.describe(
-        'Predicate to wait for: { signal }, { net }, { element }, { kind: "settled", quietMs } (deterministic network/DOM/animation idle — prefer this over a fixed sleep), or a combination via allOf/anyOf.',
+        'Predicate to wait for: { signal }, { net }, { element }, { kind: "settled", quietMs } (deterministic network + DOM idle — prefer this over a fixed sleep), or a combination via allOf/anyOf.',
       ),
       timeout_ms: z.number().optional().describe('Maximum wait in milliseconds. Default: 4000.'),
       since: z

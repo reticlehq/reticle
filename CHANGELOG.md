@@ -9,8 +9,9 @@ All notable changes to **`@syrin/iris`** are documented here. The format follows
 ### Added
 
 - **Deterministic waiting — the `settled` predicate** (`packages/server`). A new predicate
-  `{ kind: "settled", quietMs }` passes once network/DOM/animation activity has been quiet for
-  `quietMs` (default 500ms). Usable in `iris_wait_for` and `iris_assert`, and composable inside
+  `{ kind: "settled", quietMs }` passes once network + structural-DOM activity has been quiet for
+  `quietMs` (default 500ms); ambient `dom.text`/animation churn (count-ups, spinners) is ignored so
+  an animated page can still settle. Usable in `iris_wait_for` and `iris_assert`, and composable inside
   `allOf` with the consequence you expect. Replaces fixed sleeps — the #1 cause of flaky agent tests.
 - **`iris_act_and_wait` auto-settle** (`packages/server`). Omit `until` and the tool waits for the page
   to settle instead of requiring a predicate — "act, then wait for quiet" is now a single zero-config

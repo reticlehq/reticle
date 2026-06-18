@@ -246,12 +246,28 @@ describe('settled predicate (deterministic waiting)', () => {
     expect((r.evidence as { quietForMs: number }).quietForMs).toBe(100);
   });
 
-  it('passes once the quiet gap reaches quietMs (DOM mutation long enough ago)', async () => {
-    // Last DOM text mutation at t=500, now=1000 → 500ms quiet ≥ 200ms required.
-    const session = new FakeSession([ev(EventType.DOM_TEXT, { text: 'hi' }, 500)], undefined, 1000);
+  it('passes once the quiet gap reaches quietMs (structural DOM mutation long enough ago)', async () => {
+    // Last DOM node added at t=500, now=1000 → 500ms quiet ≥ 200ms required.
+    const session = new FakeSession([ev(EventType.DOM_ADDED, {}, 500)], undefined, 1000);
     const r = await evaluatePredicate(session, { kind: 'settled', quietMs: 200 }, 0);
     expect(r.pass).toBe(true);
     expect((r.evidence as { quietForMs: number }).quietForMs).toBe(500);
+  });
+
+  it('ignores ambient dom.text / animation frames so an animated page can still settle', async () => {
+    // A count-up counter + spinner emit a text/anim event EVERY frame — here at t=995/998, only
+    // 2-5ms ago. If these counted as activity the page would never go quiet; they must not.
+    const session = new FakeSession(
+      [
+        ev(EventType.DOM_TEXT, { text: '42' }, 995),
+        ev(EventType.ANIM_START, { name: 'spin' }, 996),
+        ev(EventType.ANIM_END, { name: 'pulse' }, 998),
+      ],
+      undefined,
+      1000,
+    );
+    const r = await evaluatePredicate(session, { kind: 'settled', quietMs: 200 }, 0);
+    expect(r.pass).toBe(true); // settled despite very recent text/anim churn
   });
 
   it('respects the since floor: activity before the floor does not count', async () => {

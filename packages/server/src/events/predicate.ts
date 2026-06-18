@@ -318,17 +318,20 @@ function evalSignal(events: IrisEvent[], p: Extract<Predicate, { kind: 'signal' 
 }
 
 /**
- * Activity that resets the "quiet" timer for a `settled` predicate: any network call, DOM mutation,
- * or animation frame. When the most recent such event is older than `quietMs`, the page is settled.
+ * Activity that resets the "quiet" timer for a `settled` predicate: network calls and STRUCTURAL DOM
+ * mutations (nodes added/removed, attributes changed). Deliberately EXCLUDES `dom.text` and animation
+ * frames: a count-up counter, a spinner, a pulsing dot, or any looping CSS animation emits a text/anim
+ * event every frame forever, so an app with ambient motion would NEVER go quiet (observed live: one
+ * login flooded 319 dom.text events from the dashboard's count-up animations). That is the same trap
+ * that got Playwright's `networkidle` deprecated. Network + structural DOM are the real "the app is
+ * still doing work" signals; for an outcome gated on an animation finishing, assert that specific
+ * consequence (signal/net) instead of relying on settle.
  */
 const SETTLE_ACTIVITY: ReadonlySet<EventType> = new Set([
   EventType.NET_REQUEST,
   EventType.DOM_ADDED,
   EventType.DOM_REMOVED,
   EventType.DOM_ATTR,
-  EventType.DOM_TEXT,
-  EventType.ANIM_START,
-  EventType.ANIM_END,
 ]);
 
 /** Default quiet window — enough to absorb a render+xhr settle without waiting on slow polls. */
