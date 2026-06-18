@@ -36,7 +36,7 @@ One skill file handles everything. First time in a project it runs setup. Every 
 **Paste this into your AI tool:**
 
 ```text
-Follow https://raw.githubusercontent.com/syrinlabs/iris/main/SKILL.md
+Follow https://raw.githubusercontent.com/syrin-labs/iris/main/SKILL.md
 ```
 
 That's it. The agent detects whether Iris is already set up (checks for `.iris.json`), and does the right thing — setup wizard on first run, verification on every run after.
@@ -49,13 +49,13 @@ That's it. The agent detects whether Iris is already set up (checks for `.iris.j
 
 ```bash
 curl --create-dirs -o .claude/skills/iris.md \
-  https://raw.githubusercontent.com/syrinlabs/iris/main/SKILL.md
+  https://raw.githubusercontent.com/syrin-labs/iris/main/SKILL.md
 ```
 
 **OpenCode**
 
 ```bash
-opencode skill add https://raw.githubusercontent.com/syrinlabs/iris/main/SKILL.md
+opencode skill add https://raw.githubusercontent.com/syrin-labs/iris/main/SKILL.md
 ```
 
 Then type `/iris` — setup on first use, test the app on every use after.
