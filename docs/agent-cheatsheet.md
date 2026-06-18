@@ -23,6 +23,19 @@ pointer sequence on the element (no coordinate gesture for the HUD to intercept)
 `occluded:true` when something covers the target, and stays synthetic even with CDP configured
 (use `args:{ native:true }` for a trusted native click).
 
+**Never sleep — wait deterministically.** Fixed sleeps are the #1 cause of flaky agent tests. Instead:
+
+- `iris_act_and_wait({ ref, action })` with **no `until`** waits for the page to _settle_ (network +
+  DOM + animation idle) before returning — the one-call replacement for "click then sleep 500ms".
+- Need to wait without acting? `iris_wait_for({ predicate: { kind: "settled", quietMs } })`.
+- Waiting for a specific outcome? Pass that consequence as the predicate (`{ signal }` / `{ net }`),
+  or `allOf` it with `{ kind: "settled" }` to wait for both the event _and_ the page going quiet.
+
+**Assert a consequence, not just presence.** `{ signal }` / `{ net }` prove the feature actually did
+something; `{ element }` / `{ text }` only prove something is on screen — which a stale render or a
+locator healed to the wrong element can fake. A _passing_ presence-only `iris_assert` returns
+`advice` nudging you to a consequence; heed it on anything that matters.
+
 ## The 4-layer cross-check — never trust a green the state contradicts
 
 A claim is real only when the layers agree. Check more than the UI:
@@ -104,10 +117,16 @@ Both need a **driven browser** (`iris drive <url>` / `IRIS_CDP_URL`); without on
   (`mode:delta`/`unchanged`), ~99% fewer tokens than a full re-snapshot and no stale tree to
   mis-read. Every snapshot/query result carries `cost:{ bytes, tokens }` — re-scope before reading
   if it's large.
+- **Cap broad reads.** `iris_query` takes `limit` (caps descriptors; reports `total`/`truncated`) and
+  `count_only` (just the match count). `iris_network` / `iris_console` take `limit` (most-recent-N,
+  reports `droppedOldest`) and carry the same `cost` hint — so a busy page or wide window never floods
+  your context unnoticed.
 - **A saved flow tells you if it's a real test.** `iris_flow_save` returns `assertions.grade`
   (`asserted` / `presence-only` / `assertion-free`); if it's not `asserted`, add a consequence
   (`iris_annotate` assert-signal/assert-net or a success-state) so it can't pass while broken. On
-  replay, an ambiguous heal (two testids tie) is surfaced, never auto-applied.
+  replay, an ambiguous heal (two testids tie) is surfaced, never auto-applied — and an `apply` heal
+  re-replays the rebound flow and **refuses to write** if the success consequence no longer fires
+  (`status:consequence_broken`): it heals the locator, never the intent.
 - **Predicate schema is not bloated.** The recursive predicate DSL used by `iris_assert` /
   `iris_wait_for` / `iris_act_and_wait` is **factored, not inlined**: when converted to the
   JSON Schema MCP sends, the predicate body is emitted **once** (~2.7k chars ≈ **~685 tokens**
