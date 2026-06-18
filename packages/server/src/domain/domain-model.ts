@@ -18,8 +18,10 @@ import {
   type CapabilitiesContract,
   type FlowFile,
   type FlowStep,
+  type RunRecord,
 } from '@syrin/iris-protocol';
 import { classifyFlowAssertions, FlowAssertionGrade } from '../flows/flow-classify.js';
+import { flowRisk, latestRun, rankByRisk, type FlowRisk } from './flow-risk.js';
 
 export interface DomainFlowSummary {
   name: string;
@@ -30,6 +32,8 @@ export interface DomainFlowSummary {
   warning?: string;
   signals: string[];
   testids: string[];
+  /** Combined run-history + assertion-quality risk (present when run history is supplied). */
+  risk?: FlowRisk;
 }
 
 export interface DomainGaps {
@@ -47,6 +51,8 @@ export interface DomainModel {
   declared: { testids: number; signals: string[]; stores: string[] };
   coverage: { asserted: number; presenceOnly: number; assertionFree: number };
   gaps: DomainGaps;
+  /** Flow names worst-risk first (run-history + assertion quality). Empty without run history. */
+  riskRanked: string[];
   /** One-line headline an agent (or human) can read at a glance. */
   summary: string;
 }
@@ -85,8 +91,10 @@ const EMPTY_CONTRACT: CapabilitiesContract = { testids: [], signals: [], stores:
 export function buildDomainModel(
   flows: readonly FlowFile[],
   contract: CapabilitiesContract | null,
+  runs: readonly RunRecord[] = [],
 ): DomainModel {
   const caps = contract ?? EMPTY_CONTRACT;
+  const hasHistory = runs.length > 0;
 
   const flowSummaries: DomainFlowSummary[] = flows.map((flow) => {
     const c = classifyFlowAssertions(flow);
@@ -99,6 +107,7 @@ export function buildDomainModel(
       testids: flowTestids(flow),
     };
     if (c.warning !== undefined) summary.warning = c.warning;
+    if (hasHistory) summary.risk = flowRisk(c.grade, latestRun(flow.name, runs));
     return summary;
   });
 
@@ -118,12 +127,21 @@ export function buildDomainModel(
     declaredUntestedTestids: caps.testids.filter((t) => !testedTestids.has(t)),
   };
 
+  const riskRanked = hasHistory
+    ? rankByRisk(
+        flowSummaries
+          .filter((f) => f.risk !== undefined)
+          .map((f) => ({ name: f.name, risk: f.risk as FlowRisk })),
+      )
+    : [];
+
   return {
     flowCount: flows.length,
     flows: flowSummaries,
     declared: { testids: caps.testids.length, signals: caps.signals, stores: caps.stores },
     coverage,
     gaps,
+    riskRanked,
     summary: buildSummary(flows.length, coverage, gaps),
   };
 }

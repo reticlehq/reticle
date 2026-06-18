@@ -72,4 +72,35 @@ describe('buildDomainModel', () => {
     expect(m.flowCount).toBe(0);
     expect(m.summary).toContain('No saved flows');
   });
+
+  it('risk-ranks flows worst-first when run history is supplied', () => {
+    const flows = [
+      flow('clean', [testidStep('a')], { signal: 's' }), // asserted + (will pass clean)
+      flow('broken', [testidStep('b')], { signal: 't' }), // asserted but last run errored
+    ];
+    const runs = [
+      { kind: 'flow_replay', name: 'clean', status: 'pass', at: 1 },
+      { kind: 'flow_replay', name: 'broken', status: 'error', at: 2 },
+    ] as Parameters<typeof buildDomainModel>[2];
+    const m = buildDomainModel(flows, null, runs);
+    expect(m.riskRanked[0]).toBe('broken'); // failed run surfaces first
+    expect(m.flows.find((f) => f.name === 'broken')?.risk?.level).toBe('high');
+    expect(m.flows.find((f) => f.name === 'clean')?.risk?.level).toBe('low');
+  });
+
+  it('treats a green assertion-free flow as still risky (false confidence)', () => {
+    const flows = [flow('noassert', [testidStep('a')])]; // assertion-free
+    const runs = [{ kind: 'flow_replay', name: 'noassert', status: 'pass', at: 1 }] as Parameters<
+      typeof buildDomainModel
+    >[2];
+    const m = buildDomainModel(flows, null, runs);
+    // passed clean, but asserts nothing → medium, not low.
+    expect(m.flows[0]?.risk?.level).toBe('medium');
+  });
+
+  it('omits risk entirely when no run history is supplied', () => {
+    const m = buildDomainModel([flow('f', [testidStep('a')], { signal: 's' })], null);
+    expect(m.flows[0]?.risk).toBeUndefined();
+    expect(m.riskRanked).toEqual([]);
+  });
 });

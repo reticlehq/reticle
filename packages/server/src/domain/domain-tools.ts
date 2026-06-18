@@ -45,6 +45,11 @@ export const DOMAIN_TOOLS: ToolDef[] = [
         declaredUntestedSignals: z.array(z.string()),
         declaredUntestedTestids: z.array(z.string()),
       }),
+      riskRanked: z
+        .array(z.string())
+        .describe(
+          'Flow names worst-risk first (run history + assertion quality). Test these first.',
+        ),
       summary: z.string(),
     },
     handler: async (deps: ToolDeps) => {
@@ -55,7 +60,9 @@ export const DOMAIN_TOOLS: ToolDef[] = [
         if (loaded.ok) flows.push(loaded.value);
       }
       const contract = await readContract(deps.fs, deps.irisRoot);
-      return buildDomainModel(flows, contract.ok ? contract.capabilities : null);
+      const project = await deps.project.read();
+      const runs = project.ok ? project.file.runs : [];
+      return buildDomainModel(flows, contract.ok ? contract.capabilities : null, runs);
     },
   },
 ];

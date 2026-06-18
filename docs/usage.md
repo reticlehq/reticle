@@ -264,10 +264,13 @@ Read the app's domain model **before testing**: a synthesis of every saved flow 
 capabilities. Tells you what to test and where the real risk is without crawling the app. Reads
 `.iris/flows/` + `.iris/contract.json` — no browser needed.
 
-- `iris_domain({})` → `{ flowCount, flows: [{ name, steps, grade, asserts, signals, testids, warning? }], declared: { testids, signals, stores }, coverage: { asserted, presenceOnly, assertionFree }, gaps: { unassertedFlows, declaredUntestedSignals, declaredUntestedTestids }, summary }`
+- `iris_domain({})` → `{ flowCount, flows: [{ name, steps, grade, asserts, signals, testids, warning?, risk? }], declared: { testids, signals, stores }, coverage: { asserted, presenceOnly, assertionFree }, gaps: { unassertedFlows, declaredUntestedSignals, declaredUntestedTestids }, riskRanked, summary }`
 - **`gaps`** is the point: `declaredUntestedSignals` are intents the app emits that **no flow
   asserts** (untested behavior); `unassertedFlows` act but verify no consequence. Close them with a
   flow + a consequence assertion (`iris_annotate`).
+- **`riskRanked`** orders flow names worst-first by combining run history (`.iris/project.json`:
+  recently failed/drifted, or passed-with-errors) with assertion quality (a green assertion-free
+  flow is still risky). **Test these first.** Each flow's `risk` carries `{ level, reason, lastStatus? }`.
 
 ### `iris_state`
 
