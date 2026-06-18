@@ -81,6 +81,10 @@ class FakeSession implements FlowReplaySession {
   onEvent(): () => void {
     return () => undefined;
   }
+
+  elapsed(): number {
+    return 0;
+  }
 }
 
 function el(ref: string, testid: string): ElementDescriptor {

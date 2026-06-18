@@ -18,7 +18,12 @@ class FakeSession implements PredicateSession {
       count: 0,
       elements: [],
     }),
+    private readonly nowMs = 0,
   ) {}
+
+  elapsed(): number {
+    return this.nowMs;
+  }
 
   command(name: string, args: Record<string, unknown> = {}): Promise<CommandResult> {
     if (name === IrisCommand.MATCH) {
@@ -209,6 +214,7 @@ describe('predicate engine', () => {
       command: () => Promise.reject(new Error('session disconnected')),
       eventsSince: () => [],
       onEvent: () => () => undefined,
+      elapsed: () => 0,
     };
     const result = await waitForPredicate(
       session,
@@ -216,5 +222,74 @@ describe('predicate engine', () => {
       100,
     );
     expect(result).toEqual({ pass: false, failureReason: 'session disconnected' });
+  });
+});
+
+describe('settled predicate (deterministic waiting)', () => {
+  it('passes when there has been no network/DOM/animation activity since the floor', async () => {
+    // Only a non-activity event (signal) in the buffer → nothing to settle → quiet.
+    const session = new FakeSession([ev(EventType.SIGNAL, { name: 'x' }, 100)], undefined, 1000);
+    const r = await evaluatePredicate(session, { kind: 'settled' }, 0);
+    expect(r.pass).toBe(true);
+  });
+
+  it('fails while the last activity is more recent than quietMs', async () => {
+    // Last network call at t=900, now=1000 → 100ms quiet < 200ms required.
+    const session = new FakeSession(
+      [ev(EventType.NET_REQUEST, { url: '/api/x', status: 200 }, 900)],
+      undefined,
+      1000,
+    );
+    const r = await evaluatePredicate(session, { kind: 'settled', quietMs: 200 }, 0);
+    expect(r.pass).toBe(false);
+    expect(r.failureReason).toContain('not settled');
+    expect((r.evidence as { quietForMs: number }).quietForMs).toBe(100);
+  });
+
+  it('passes once the quiet gap reaches quietMs (DOM mutation long enough ago)', async () => {
+    // Last DOM text mutation at t=500, now=1000 → 500ms quiet ≥ 200ms required.
+    const session = new FakeSession([ev(EventType.DOM_TEXT, { text: 'hi' }, 500)], undefined, 1000);
+    const r = await evaluatePredicate(session, { kind: 'settled', quietMs: 200 }, 0);
+    expect(r.pass).toBe(true);
+    expect((r.evidence as { quietForMs: number }).quietForMs).toBe(500);
+  });
+
+  it('respects the since floor: activity before the floor does not count', async () => {
+    // A burst at t=100, then quiet. Asserting from floor=900 ignores the old burst → settled.
+    const session = new FakeSession(
+      [ev(EventType.DOM_ADDED, {}, 100), ev(EventType.ANIM_START, { name: 'spin' }, 100)],
+      undefined,
+      1000,
+    );
+    expect((await evaluatePredicate(session, { kind: 'settled', quietMs: 200 }, 900)).pass).toBe(
+      true,
+    );
+    // From the start (floor 0) the burst is in scope but it is 900ms old → still settled.
+    expect((await evaluatePredicate(session, { kind: 'settled', quietMs: 200 }, 0)).pass).toBe(
+      true,
+    );
+  });
+
+  it('composes inside allOf with a consequence predicate', async () => {
+    const session = new FakeSession(
+      [
+        ev(EventType.SIGNAL, { name: 'deploy:shipped', data: {} }, 600),
+        ev(EventType.NET_REQUEST, { url: '/api/deploy', status: 200 }, 600),
+      ],
+      undefined,
+      1000,
+    );
+    const r = await evaluatePredicate(
+      session,
+      {
+        kind: 'allOf',
+        predicates: [
+          { kind: 'signal', name: 'deploy:shipped' },
+          { kind: 'settled', quietMs: 300 },
+        ],
+      },
+      0,
+    );
+    expect(r.pass).toBe(true);
   });
 });

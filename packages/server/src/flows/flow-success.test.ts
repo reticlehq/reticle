@@ -16,6 +16,7 @@ function session(events: IrisEvent[], elementPresent = true): FlowReplaySession 
       } as CommandResult),
     eventsSince: () => events,
     onEvent: () => () => undefined,
+    elapsed: () => 0,
   };
 }
 

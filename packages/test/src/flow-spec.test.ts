@@ -108,6 +108,7 @@ function fakeSession(config: FakeSessionConfig): FlowReplaySessionLike {
     command,
     eventsSince: () => events,
     onEvent: () => () => {},
+    elapsed: () => 0,
   };
 }
 
@@ -116,6 +117,7 @@ interface FlowReplaySessionLike {
   command(name: string, args?: Record<string, unknown>): Promise<CommandResult>;
   eventsSince(cursor: number): IrisEvent[];
   onEvent(listener: (event: IrisEvent) => void): () => void;
+  elapsed(): number;
 }
 
 /** A waiter that synchronously evaluates a signal predicate against the fake event buffer. */

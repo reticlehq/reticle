@@ -86,6 +86,9 @@ class FakeSession {
   onEvent(): () => void {
     return () => undefined;
   }
+  elapsed(): number {
+    return 0;
+  }
 }
 
 /** A session where `old` resolves to 0 elements with `present`, and any other testid resolves to 1. */

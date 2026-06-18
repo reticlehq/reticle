@@ -25,6 +25,8 @@ export interface FlowReplaySession {
   command(name: string, args?: Record<string, unknown>): Promise<CommandResult>;
   eventsSince(cursor: number): IrisEvent[];
   onEvent(listener: (event: IrisEvent) => void): () => void;
+  /** Buffer clock (ms since connect) — required by the predicate engine's `settled` check. */
+  elapsed(): number;
 }
 
 /** The injected predicate-waiter (the real waitForPredicate) — reused, never reimplemented. */

@@ -8,6 +8,7 @@ const fakeSession: FlowReplaySession = {
   command: () => Promise.resolve({ kind: 'command_result', id: 'x', ok: true, result: {} }),
   eventsSince: () => [],
   onEvent: () => () => {},
+  elapsed: () => 0,
 };
 
 /** Records the predicate + timeout it was handed, and answers with a scripted verdict. */

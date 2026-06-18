@@ -594,7 +594,7 @@ export const TOOLS: ToolDef[] = [
           'Action-specific arguments: { value } for fill/select, { text } for type/press, { confirmDangerous: true } for a potentially destructive control.',
         ),
       until: PredicateSchema.describe(
-        'Predicate to wait for after the action completes. Same shape accepted by iris_assert.',
+        'Predicate to wait for after the action completes. Same shape accepted by iris_assert. For deterministic waiting instead of a sleep, use { kind: "settled", quietMs } to block until network/DOM/animation activity has been quiet for quietMs (default 500) — or allOf it with the consequence you expect.',
       ),
       timeout_ms: z
         .number()
@@ -741,7 +741,7 @@ export const TOOLS: ToolDef[] = [
       'Block until a predicate is satisfied (or already true in the recent buffer), else time out. Returns matching evidence or a near-miss diagnosis. By default it only counts events since your last act, so a signal buffered BEFORE the action can never fake a pass; pass `since` (an observe/act cursor) to widen or narrow that window explicitly.',
     inputSchema: {
       predicate: PredicateSchema.describe(
-        'Predicate to wait for: { signal }, { net }, { element } or a combination.',
+        'Predicate to wait for: { signal }, { net }, { element }, { kind: "settled", quietMs } (deterministic network/DOM/animation idle — prefer this over a fixed sleep), or a combination via allOf/anyOf.',
       ),
       timeout_ms: z.number().optional().describe('Maximum wait in milliseconds. Default: 4000.'),
       since: z
