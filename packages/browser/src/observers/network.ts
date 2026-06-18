@@ -2,6 +2,7 @@ import { EventType } from '@syrin/iris-protocol';
 import type { Emit, Teardown } from './types.js';
 
 interface XhrMeta {
+  id: string;
   method: string;
   url: string;
   start: number;
@@ -26,13 +27,23 @@ export function installNetwork(emit: Emit): Teardown {
   const origFetch = window.fetch;
   const callFetch = origFetch.bind(window);
 
+  // Correlation id so a NET_PENDING (emitted at request START) can be matched to its
+  // NET_REQUEST completion. A request that never completes leaves an unmatched NET_PENDING —
+  // that is how a hung/in-flight request becomes observable (it never resolves, so the old
+  // completion-only emit saw nothing).
+  let seq = 0;
+  const nextId = (): string => `n${++seq}`;
+
   window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+    const id = nextId();
     const start = performance.now();
     const method = methodOf(input, init);
     const url = urlOf(input);
+    emit(EventType.NET_PENDING, { id, method, url, initiator: 'fetch' });
     try {
       const res = await callFetch(input, init);
       emit(EventType.NET_REQUEST, {
+        id,
         method,
         url,
         status: res.status,
@@ -43,6 +54,7 @@ export function installNetwork(emit: Emit): Teardown {
       return res;
     } catch (error) {
       emit(EventType.NET_REQUEST, {
+        id,
         method,
         url,
         status: 0,
@@ -69,7 +81,7 @@ export function installNetwork(emit: Emit): Teardown {
     url: string | URL,
     ...rest: unknown[]
   ): void {
-    meta.set(this, { method: method.toUpperCase(), url: String(url), start: 0 });
+    meta.set(this, { id: nextId(), method: method.toUpperCase(), url: String(url), start: 0 });
     callOpen.call(this, method, url, ...rest);
   };
 
@@ -80,8 +92,10 @@ export function installNetwork(emit: Emit): Teardown {
     const m = meta.get(this);
     if (m !== undefined) {
       m.start = performance.now();
+      emit(EventType.NET_PENDING, { id: m.id, method: m.method, url: m.url, initiator: 'xhr' });
       this.addEventListener('loadend', () => {
         emit(EventType.NET_REQUEST, {
+          id: m.id,
           method: m.method,
           url: m.url,
           status: this.status,

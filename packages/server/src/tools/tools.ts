@@ -26,6 +26,7 @@ import {
   isConsoleEvent,
   netEmptyHint,
   consoleEmptyHint,
+  reconcileNet,
 } from '../events/event-filters.js';
 import { healthEnvelope, refuseIfThrottled } from '../session/session-health.js';
 import { applyEventBudget, costHint, withSizeCost } from '../session/output-budget.js';
@@ -895,7 +896,8 @@ export const TOOLS: ToolDef[] = [
       const urlContains = asString(args['urlContains']);
       const status = asNumber(args['status']);
       const limit = asNumber(args['limit']);
-      const allNet = session.eventsSince(since).filter((e) => e.type === EventType.NET_REQUEST);
+      // Completed calls + unresolved in-flight requests (a hung request shows as pending).
+      const allNet = reconcileNet(session.eventsSince(since));
       const matched = allNet.filter((e) => matchNet(e, method, urlContains, status));
       // zero-match filter returns what DID fire, not a bare [].
       if (matched.length === 0 && allNet.length > 0) {

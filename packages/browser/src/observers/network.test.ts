@@ -36,7 +36,7 @@ describe('installNetwork (fetch)', () => {
     window.fetch = origFetch;
   });
 
-  it('emits NET_REQUEST for a GET that resolves with a 500 (the regression that prompted this test)', async () => {
+  it('emits NET_PENDING at start then NET_REQUEST for a GET that resolves with a 500', async () => {
     window.fetch = vi.fn(() => Promise.resolve(fakeResponse(500)));
     const { emit, events } = collect();
     teardown = installNetwork(emit);
@@ -44,25 +44,34 @@ describe('installNetwork (fetch)', () => {
     const res = await window.fetch('http://localhost:8787/api/broken/500');
 
     expect(res.status).toBe(500);
-    expect(events).toHaveLength(1);
-    expect(events[0]?.type).toBe(EventType.NET_REQUEST);
+    expect(events).toHaveLength(2);
+    expect(events[0]?.type).toBe(EventType.NET_PENDING);
     expect(events[0]?.data).toMatchObject({
+      method: 'GET',
+      url: 'http://localhost:8787/api/broken/500',
+      initiator: 'fetch',
+    });
+    expect(events[1]?.type).toBe(EventType.NET_REQUEST);
+    expect(events[1]?.data).toMatchObject({
       method: 'GET',
       url: 'http://localhost:8787/api/broken/500',
       status: 500,
       ok: false,
       initiator: 'fetch',
     });
+    // The pending and the completion share a correlation id.
+    expect(events[1]?.data['id']).toBe(events[0]?.data['id']);
   });
 
-  it('captures the method from init for a POST', async () => {
+  it('captures the method from init for a POST (completion is the second event)', async () => {
     window.fetch = vi.fn(() => Promise.resolve(fakeResponse(200)));
     const { emit, events } = collect();
     teardown = installNetwork(emit);
 
     await window.fetch('http://localhost:8787/api/login', { method: 'POST' });
 
-    expect(events[0]?.data).toMatchObject({ method: 'POST', status: 200, ok: true });
+    expect(events[0]?.type).toBe(EventType.NET_PENDING);
+    expect(events[1]?.data).toMatchObject({ method: 'POST', status: 200, ok: true });
   });
 
   it('emits a NET_REQUEST with status 0 and rethrows when the fetch rejects', async () => {
@@ -72,8 +81,25 @@ describe('installNetwork (fetch)', () => {
     teardown = installNetwork(emit);
 
     await expect(window.fetch('http://localhost:8787/api/x')).rejects.toBe(boom);
+    expect(events).toHaveLength(2);
+    expect(events[1]?.data).toMatchObject({ status: 0, ok: false, error: 'network down' });
+  });
+
+  it('emits only NET_PENDING for a request that never resolves (the hung-request case)', () => {
+    // A fetch whose promise never settles — the regression no completion-only logging can see.
+    window.fetch = vi.fn(() => new Promise<Response>(() => {}));
+    const { emit, events } = collect();
+    teardown = installNetwork(emit);
+
+    void window.fetch('http://localhost:8787/api/broken/timeout');
+
     expect(events).toHaveLength(1);
-    expect(events[0]?.data).toMatchObject({ status: 0, ok: false, error: 'network down' });
+    expect(events[0]?.type).toBe(EventType.NET_PENDING);
+    expect(events[0]?.data).toMatchObject({
+      method: 'GET',
+      url: 'http://localhost:8787/api/broken/timeout',
+      initiator: 'fetch',
+    });
   });
 
   it('restores the original fetch on teardown', () => {

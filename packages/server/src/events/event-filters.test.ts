@@ -1,10 +1,43 @@
 import { describe, expect, it } from 'vitest';
 import { EventType, type IrisEvent } from '@syrin/iris-protocol';
-import { consoleEmptyHint, netEmptyHint } from './event-filters.js';
+import { consoleEmptyHint, netEmptyHint, reconcileNet } from './event-filters.js';
 
 function ev(type: EventType, data: Record<string, unknown>, t = 1): IrisEvent {
   return { t, type, sessionId: 's', data };
 }
+
+describe('reconcileNet (in-flight / hung requests)', () => {
+  it('keeps a completed request and drops its matching pending (no double-count)', () => {
+    const events = [
+      ev(EventType.NET_PENDING, { id: 'n1', method: 'GET', url: '/api/x' }, 1),
+      ev(EventType.NET_REQUEST, { id: 'n1', method: 'GET', url: '/api/x', status: 200 }, 2),
+    ];
+    const out = reconcileNet(events);
+    expect(out).toHaveLength(1);
+    expect(out[0]?.type).toBe(EventType.NET_REQUEST);
+    expect(out[0]?.data['status']).toBe(200);
+  });
+
+  it('surfaces a pending with no completion as an in-flight call annotated pending', () => {
+    const events = [
+      ev(EventType.NET_REQUEST, { id: 'n1', method: 'POST', url: '/api/login', status: 200 }, 1),
+      ev(EventType.NET_PENDING, { id: 'n2', method: 'GET', url: '/api/broken/timeout' }, 2),
+    ];
+    const out = reconcileNet(events);
+    expect(out).toHaveLength(2);
+    const hung = out.find((e) => e.data['url'] === '/api/broken/timeout');
+    expect(hung?.data).toMatchObject({ status: 'pending', pending: true });
+  });
+
+  it('orders the reconciled calls by time', () => {
+    const events = [
+      ev(EventType.NET_PENDING, { id: 'n2', url: '/late' }, 5),
+      ev(EventType.NET_REQUEST, { id: 'n1', url: '/early', status: 200 }, 1),
+    ];
+    const out = reconcileNet(events);
+    expect(out.map((e) => e.data['url'])).toEqual(['/early', '/late']);
+  });
+});
 
 describe('near-miss hint builders', () => {
   it('netEmptyHint: reports total + a most-recent-first sample of present calls', () => {

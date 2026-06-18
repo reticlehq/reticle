@@ -52,3 +52,6 @@ GRAPH_REPORT.md
 
 # local registry auth token (never commit)
 .npmrc
+
+# Playwright MCP session dumps (written to cwd during benchmark runs)
+.playwright-mcp/

@@ -12,3 +12,8 @@ apps/e2e/
 # Marketing/benchmark design artifacts — generated cards, compact inline-style
 # HTML/CSS rendered to images/video; not held to the code formatter.
 assets/
+
+# Benchmark generated outputs (raw measured JSON, logs, rendered charts) — data, not code.
+bench/raw/
+bench/logs/
+bench/artifacts/

@@ -26,6 +26,27 @@ export function matchNet(
   return true;
 }
 
+/**
+ * Reconcile network events into completed calls + still-in-flight calls. A NET_PENDING whose
+ * `id` never gets a matching NET_REQUEST is an unresolved/hung request — the case
+ * completion-only logging is blind to. Pending events are annotated `{ status: 'pending',
+ * pending: true }` so a numeric `status` filter excludes them but `urlContains`/`method` match.
+ */
+export function reconcileNet(events: IrisEvent[]): IrisEvent[] {
+  const completed = events.filter((e) => e.type === EventType.NET_REQUEST);
+  const doneIds = new Set(
+    completed.map((e) => asString(e.data['id'])).filter((id): id is string => id !== undefined),
+  );
+  const unresolved = events
+    .filter((e) => {
+      if (e.type !== EventType.NET_PENDING) return false;
+      const id = asString(e.data['id']);
+      return id === undefined || !doneIds.has(id);
+    })
+    .map((e): IrisEvent => ({ ...e, data: { ...e.data, status: 'pending', pending: true } }));
+  return [...completed, ...unresolved].sort((a, b) => a.t - b.t);
+}
+
 /** True for any console.* / uncaught-error event (the iris_console universe). */
 export function isConsoleEvent(e: IrisEvent): boolean {
   return (
