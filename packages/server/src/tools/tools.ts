@@ -32,6 +32,7 @@ import { applyEventBudget, costHint, withSizeCost } from '../session/output-budg
 import { applySnapshotDelta, SnapshotCache } from './snapshot-delta.js';
 import { selectPath, capDepth } from '../session/state-select.js';
 import { asString, asNumber, asRecord, parseInteractive } from './tools-helpers.js';
+import { paginateQueryResult } from './query-paginate.js';
 import type { FileSystemPort } from '../project/fs-port.js';
 import type { FlowStore } from '../flows/flows.js';
 import type { ProjectStore } from '../project/project-store.js';
@@ -359,7 +360,7 @@ export const TOOLS: ToolDef[] = [
   {
     name: IrisTool.QUERY,
     description:
-      'Find elements by Testing-Library semantics. Pass `by` (role|text|label|placeholder|testid|alt) and `value` (the query string). Returns matching refs + descriptors + visibility. On zero matches, also returns hint:{ route, presentTestids[], knownEmptyState } so you can distinguish an empty state from a missing element WITHOUT taking a snapshot.',
+      'Find elements by Testing-Library semantics. Pass `by` (role|text|label|placeholder|testid|alt) and `value` (the query string). Returns matching refs + descriptors + visibility. Pass `limit` to cap descriptors (broad role queries can be large) or `count_only:true` for just the match count — both cut tokens. On zero matches, also returns hint:{ route, presentTestids[], knownEmptyState } so you can distinguish an empty state from a missing element WITHOUT taking a snapshot.',
     inputSchema: {
       by: z.string().describe('Query strategy: role | text | label | placeholder | testid | alt'),
       value: z
@@ -377,19 +378,39 @@ export const TOOLS: ToolDef[] = [
         .string()
         .optional()
         .describe('CSS selector or element ref to restrict the search to a subtree.'),
+      limit: z
+        .number()
+        .optional()
+        .describe(
+          'Cap the returned descriptors to the first N (cuts tokens on broad queries). If more matched, the result carries total + truncated:true so the trim is never silent — narrow with name/scope.',
+        ),
+      count_only: z
+        .boolean()
+        .optional()
+        .describe(
+          'Return just { count } (no element descriptors) — use when you only need "how many match?" and not their refs.',
+        ),
       ...sessionIdShape,
     },
     outputSchema: {
-      elements: z.array(
-        z.object({
-          ref: z.string(),
-          role: z.string(),
-          name: z.string(),
-          value: z.string().optional(),
-          states: z.array(z.string()),
-          visible: z.boolean(),
-        }),
-      ),
+      elements: z
+        .array(
+          z.object({
+            ref: z.string(),
+            role: z.string(),
+            name: z.string(),
+            value: z.string().optional(),
+            states: z.array(z.string()),
+            visible: z.boolean(),
+          }),
+        )
+        .optional(),
+      count: z.number().optional().describe('Match count — present when count_only is set.'),
+      total: z
+        .number()
+        .optional()
+        .describe('Total matches before `limit` truncation — present only when truncated.'),
+      truncated: z.boolean().optional().describe('True when `limit` dropped some matches.'),
       hint: z
         .object({
           route: z.string(),
@@ -403,7 +424,7 @@ export const TOOLS: ToolDef[] = [
       cost: z
         .object({ bytes: z.number(), tokens: z.number() })
         .optional()
-        .describe('Estimated size of this result — narrow with `name`/`scope` if large.'),
+        .describe('Estimated size of this result — narrow with `name`/`scope`/`limit` if large.'),
     },
     handler: (deps, args) =>
       commandOrThrow(deps, asString(args['sessionId']), IrisCommand.QUERY, {
@@ -411,7 +432,11 @@ export const TOOLS: ToolDef[] = [
         value: args['value'],
         name: args['name'],
         scope: args['scope'],
-      }).then(withSizeCost),
+      }).then((result) =>
+        withSizeCost(
+          paginateQueryResult(result, asNumber(args['limit']), args['count_only'] === true),
+        ),
+      ),
   },
   {
     name: IrisTool.INSPECT,
