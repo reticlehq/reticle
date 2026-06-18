@@ -27,6 +27,30 @@ per-step snapshot (100 vs ~7,300 tokens). The bare a11y tree we measured directl
 Playwright MCP's actual payload adds a `[ref=…]` to every node, pushing it to ~7,300. On the
 complex pages Playwright's ecosystem cites (50k+), the gap widens to **~100–500×**.
 
+## Diffed snapshots: pay once, then only for changes
+
+After the first snapshot, pass `iris_snapshot({ diff: true })` to get back **only what changed**
+since your last look of the same scope/mode (`mode:delta` with added/removed lines, or
+`mode:unchanged`). A route change auto-resets to a full snapshot, so you never read a misleading
+cross-page diff.
+
+Measured on a representative 150-row dashboard (the shipped regression benchmark
+`packages/server/src/tools/snapshot-cost.test.ts`, char/4 proxy):
+
+| Payload                            |    Tokens |
+| ---------------------------------- | --------: |
+| Full re-snapshot (150-row table)   | **4,246** |
+| `diff:true` after a one-row change |    **60** |
+| `diff:true` when nothing changed   |    **17** |
+
+**~99% fewer tokens** to re-look after an action — and because a `delta` carries no stale full
+tree, it also removes the 60–80K-token stale-context buildup that makes long-running agents start
+hallucinating selectors that no longer exist.
+
+Every `iris_snapshot`/`iris_query` result also carries `cost:{ bytes, tokens }` (estimated) so you
+can **re-scope before reading** a large body (`mode:interactive`/`status`, a tighter `scope`, or a
+narrower `query`) instead of paying for it first.
+
 ## The honest version
 
 - **Full-tree vs full-tree, the gap is modest (~1.8×):** Iris `full` (4,144) vs Playwright's
