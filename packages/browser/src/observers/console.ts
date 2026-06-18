@@ -27,11 +27,13 @@ export function installConsole(emit: Emit): Teardown {
   const originals = new Map<ConsoleMethod, (...args: unknown[]) => void>();
 
   for (const method of methods) {
-    const original = console[method].bind(console) as (...args: unknown[]) => void;
+    // Store the true original for teardown identity; call through a bound copy.
+    const original = console[method] as (...args: unknown[]) => void;
     originals.set(method, original);
+    const callOriginal = original.bind(console);
     console[method] = (...args: unknown[]): void => {
       emit(METHOD_EVENT[method], { message: stringifyArgs(args) });
-      original(...args);
+      callOriginal(...args);
     };
   }
 
