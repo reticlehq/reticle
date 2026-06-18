@@ -861,11 +861,23 @@ export const TOOLS: ToolDef[] = [
         .describe('HTTP method filter: GET | POST | PUT | DELETE | PATCH etc.'),
       urlContains: z.string().optional().describe('Substring that the request URL must contain.'),
       status: z.number().optional().describe('HTTP status code filter (e.g. 200, 404, 500).'),
+      limit: z
+        .number()
+        .optional()
+        .describe(
+          'Keep only the most recent N matching calls (older are dropped and counted in droppedOldest) — cuts tokens on a wide window.',
+        ),
       ...sessionIdShape,
     },
     outputSchema: {
       calls: z.array(z.unknown()),
+      total: z
+        .number()
+        .optional()
+        .describe('Total matches before `limit` — present only when capped.'),
+      droppedOldest: z.number().optional().describe('How many older matches `limit` dropped.'),
       hint: z.object({ totalInWindow: z.number(), present: z.array(z.string()) }).optional(),
+      cost: z.object({ bytes: z.number(), tokens: z.number() }).optional(),
     },
     handler: (deps, args) => {
       const session = deps.sessions.resolve(asString(args['sessionId']));
@@ -873,13 +885,19 @@ export const TOOLS: ToolDef[] = [
       const method = asString(args['method']);
       const urlContains = asString(args['urlContains']);
       const status = asNumber(args['status']);
+      const limit = asNumber(args['limit']);
       const allNet = session.eventsSince(since).filter((e) => e.type === EventType.NET_REQUEST);
-      const calls = allNet.filter((e) => matchNet(e, method, urlContains, status));
+      const matched = allNet.filter((e) => matchNet(e, method, urlContains, status));
       // zero-match filter returns what DID fire, not a bare [].
-      if (calls.length === 0 && allNet.length > 0) {
-        return Promise.resolve({ calls, hint: netEmptyHint(allNet) });
+      if (matched.length === 0 && allNet.length > 0) {
+        return Promise.resolve(withSizeCost({ calls: matched, hint: netEmptyHint(allNet) }));
       }
-      return Promise.resolve({ calls });
+      const { events: calls, droppedOldest } = applyEventBudget(matched, limit);
+      return Promise.resolve(
+        withSizeCost(
+          droppedOldest > 0 ? { calls, total: matched.length, droppedOldest } : { calls },
+        ),
+      );
     },
   },
   {
@@ -895,23 +913,39 @@ export const TOOLS: ToolDef[] = [
         .number()
         .optional()
         .describe('Cursor from a prior iris_act — scopes the query to log entries after that act.'),
+      limit: z
+        .number()
+        .optional()
+        .describe(
+          'Keep only the most recent N matching entries (older are dropped and counted in droppedOldest) — cuts tokens when a page spams the console.',
+        ),
       ...sessionIdShape,
     },
     outputSchema: {
       logs: z.array(z.unknown()),
+      total: z
+        .number()
+        .optional()
+        .describe('Total matches before `limit` — present only when capped.'),
+      droppedOldest: z.number().optional().describe('How many older matches `limit` dropped.'),
       hint: z.object({ totalInWindow: z.number(), byLevel: z.record(z.number()) }).optional(),
+      cost: z.object({ bytes: z.number(), tokens: z.number() }).optional(),
     },
     handler: (deps, args) => {
       const session = deps.sessions.resolve(asString(args['sessionId']));
       const since = asNumber(args['since']) ?? 0;
       const level = asString(args['level']);
+      const limit = asNumber(args['limit']);
       const allConsole = session.eventsSince(since).filter(isConsoleEvent);
-      const logs = allConsole.filter((e) => matchConsole(e, level));
+      const matched = allConsole.filter((e) => matchConsole(e, level));
       // zero matches at this level → report what levels ARE present (not a bare []).
-      if (logs.length === 0 && allConsole.length > 0) {
-        return Promise.resolve({ logs, hint: consoleEmptyHint(allConsole) });
+      if (matched.length === 0 && allConsole.length > 0) {
+        return Promise.resolve(withSizeCost({ logs: matched, hint: consoleEmptyHint(allConsole) }));
       }
-      return Promise.resolve({ logs });
+      const { events: logs, droppedOldest } = applyEventBudget(matched, limit);
+      return Promise.resolve(
+        withSizeCost(droppedOldest > 0 ? { logs, total: matched.length, droppedOldest } : { logs }),
+      );
     },
   },
   {
