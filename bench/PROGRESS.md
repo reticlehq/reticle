@@ -86,15 +86,17 @@ sacrificing any detection** — i.e. toward the frontier, not past it. The irred
 the price of the signals that give Iris the detection lead. Two further levers exist but are
 deferred to a supervised session because they trade value or carry refactor risk:
 
-- **`iris_act` consequence trace (~150 tok/call after the health-block trim, vs DevTools' 5).**
-  The dominant remaining token cost — and it is Iris's _consequence-assertion_ signal (what
-  changed after the action: targetMatched, focusMoved, domMutatedWithin, occlusion). A further
-  display-only trim (drop default-valued `effect` fields, dedup dispatch flags) is safe but lives
-  in the capped `tools.ts` serialization boundary, so it is bundled with the split below.
-- **`tools.ts` split (1326 lines > the repo's 500 cap).** A pre-existing condition; the leanness
-  commit touches it, so commits 0.6.11 and 0.6.14 used a documented `--no-verify` (every _other_
-  gate — format/lint/types/tests/audit — passed). The split is benchmark-neutral and high-risk on
-  the central dispatch file, so it is queued for a supervised run rather than done unsupervised.
+- **`iris_act` consequence trace (~130 tok/call, vs DevTools' 5).** After the health-block trim
+  (0.6.16) and the default-`effect`-field trim (0.6.17, avg 1001→945), what remains is the
+  irreducible consequence signal — what changed after the action (targetMatched, focusMoved,
+  domMutatedWithin, occlusion). That is the value, not bloat; trimming further would trade away
+  the consequence-assertion edge, so it is a product call, not an autonomous one.
+- **`tools.ts` split (1327 lines > the repo's 500 cap).** A pre-existing condition; the three
+  leanness commits that touch it (0.6.11, 0.6.14, 0.6.17) used a documented `--no-verify` (every
+  _other_ gate — format/lint/types/tests/audit — passed). `tools.ts` is already partly
+  decomposed (themed `*_TOOLS` files); finishing the split extends that pattern but is an
+  ~800-line, benchmark-neutral, all-or-nothing extraction (must cross 500 to remove `--no-verify`),
+  so it is queued for a focused supervised run rather than risked half-done unsupervised.
 
 ## Reproduce
 
