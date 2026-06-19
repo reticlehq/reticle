@@ -9,6 +9,16 @@ import { SERVER_VERSION } from './server-version.js';
 
 const SERVER_INFO = { name: 'iris', version: SERVER_VERSION };
 
+/** First sentence of a tool description (purpose only) for lean profiles — keeps per-turn def cost
+ * down. Cuts at the first sentence-ending period or newline; falls back to a 160-char cap. */
+function firstSentence(description: string): string {
+  const nl = description.indexOf('\n');
+  const base = nl >= 0 ? description.slice(0, nl) : description;
+  const dot = base.search(/\.\s/);
+  const sentence = dot >= 0 ? base.slice(0, dot + 1) : base;
+  return sentence.length > 160 ? `${sentence.slice(0, 159)}…` : sentence;
+}
+
 const ENCODING_ENV = 'IRIS_ENCODING';
 const TOON_VALUE = 'toon';
 
@@ -49,9 +59,13 @@ export function createMcpServer(
   // Cast once to our bridge type so every per-tool call site is typed without `any`.
   const registerTool = server.registerTool.bind(server) as unknown as IrisRegisterTool;
 
+  // On a lean profile, advertise only the first sentence of each tool description. The full prose
+  // is re-sent to the model on EVERY turn; the first sentence carries the tool's purpose, and
+  // param-level schema guidance (kept intact) covers the how. Cuts per-turn token cost in the loop.
+  const terse = profile !== TOOL_PROFILE.FULL;
   for (const tool of filterTools(TOOLS, profile)) {
     const config = {
-      description: tool.description,
+      description: terse ? firstSentence(tool.description) : tool.description,
       inputSchema: tool.inputSchema,
       ...(tool.outputSchema !== undefined ? { outputSchema: tool.outputSchema } : {}),
     };

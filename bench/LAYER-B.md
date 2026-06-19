@@ -96,3 +96,45 @@ DevTools (3/5) on real-agent accuracy. It is still ~2× Playwright on tokens (70
 next lever is trimming Iris's verbose tool descriptions/schemas for lean profiles (Iris ≈600
 tok/tool-def vs Playwright ≈166). Recommendation: agents should run Iris in `core`
 (`IRIS_TOOL_PROFILE=core`); the benchmark now reports both.
+
+## Fix #2 — terser tool defs for lean profiles (and the final result)
+
+The lean `core` def cost is **schema-dominated** (~5.6k of 7.2k tok/turn is the input schemas; only
+~1.3k is descriptions). Stripping schema field-descriptions would save ~1.6k but removes the
+param/enum guidance that helped the agent reach the right call — too risky. So the safe lever:
+advertise only the **first sentence** of each tool description on lean profiles (purpose only;
+param-level schema guidance kept intact). `core` def cost: 7.2k → **6.1k tok/turn**.
+
+### Layer B, final (gpt-4o, 5 scenarios, authoritative OpenAI usage)
+
+| Tool                      | mean tokens / verification | correct verdicts |
+| ------------------------- | -------------------------- | ---------------- |
+| **Iris (core, terse)**    | **54,930**                 | **5 / 5** ✅     |
+| Playwright MCP            | 30,249                     | 4 / 5            |
+| Chrome DevTools MCP       | 32,296                     | 3 / 5            |
+| Iris (full — old default) | 129,882                    | 2 / 5            |
+
+**Iris now wins Layer B on accuracy** — the only tool that gets all five right, including
+missing-modal (which both `full` and the first `core` run failed) and the control (no false
+positive). The arc: **full 130k @ 2/5 → core 70k @ 4/5 → terse-core 55k @ 5/5.** Token cost fell
+from ~4× Playwright to ~1.7×, and accuracy went from worst to best — **entirely from the
+agent-facing contract (profile + terse defs); no detection capability was added or changed.**
+
+### What this means
+
+On the metric that matters for a coding agent — _did it correctly catch the regression_ — Iris is
+now the best of the three in a real agent loop, not just in the scripted ceiling. It is still
+pricier per run (~1.7× Playwright), because its responses carry more signal (content/layout
+snapshots, consequence traces); that buys the +1 regression over Playwright and +2 over DevTools.
+For a developer, catching the bug Playwright/DevTools miss is worth more than the token delta when
+a miss costs a debugging session.
+
+### Recommendation (shipped + next)
+
+- **Shipped:** `core` is now the right agent verify-loop profile, and lean profiles advertise terse
+  descriptions. Agents should run `IRIS_TOOL_PROFILE=core`.
+- **Next (product call):** consider making `core` (or a `standard`) the default for `iris mcp` —
+  weighed against skills that rely on flow/record tools (those should opt into `standard`/`full`).
+- **Further token headroom:** tighter default `iris_observe`/`iris_snapshot` budgets and fewer
+  turns; re-run this harness (`openai-agent-loop.mjs`) after each change — it is the metric that
+  reflects what a real agent experiences.
