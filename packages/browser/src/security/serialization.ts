@@ -7,8 +7,12 @@ const MAX_KEY_LENGTH = 256;
 const MAX_TOTAL_CHARACTERS = Math.floor(TRANSPORT_LIMITS.MAX_MESSAGE_BYTES / 8);
 const MAX_TOTAL_NODES = TRANSPORT_LIMITS.MAX_COLLECTION_ITEMS * 5;
 
+// `token` must match auth CREDENTIALS, not compound design fields. Bare/separated `token(s)` and
+// auth-prefixed tokens (accessToken, auth_token, sessionToken, …) are redacted; `colorToken`,
+// `backgroundToken`, `tokenCount`, `designToken` are NOT — they were false-positives that redacted
+// legitimate iris_inspect/iris_state output.
 const SENSITIVE_KEY =
-  /password|passwd|passcode|secret|token|authorization|api[-_]?key|access[-_]?key|private[-_]?key|client[-_]?secret|credit[-_]?card|card[-_]?number|cvv|cvc|ssn/i;
+  /password|passwd|passcode|secret|(?:(?:access|refresh|auth|bearer|api|id|session|csrf|client)[-_]?tokens?|(?:^|[-_])tokens?(?=$|[-_]))|authorization|api[-_]?key|access[-_]?key|private[-_]?key|client[-_]?secret|credit[-_]?card|card[-_]?number|cvv|cvc|ssn/i;
 
 export function isSensitiveKey(key: string): boolean {
   return SENSITIVE_KEY.test(key);

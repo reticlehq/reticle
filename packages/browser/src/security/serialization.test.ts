@@ -15,6 +15,29 @@ describe('transport serialization', () => {
     });
   });
 
+  it('redacts auth tokens but NOT compound design-token fields', () => {
+    expect(
+      sanitizeForTransport({
+        accessToken: 'secret-abc',
+        authToken: 'secret-def',
+        token: 'secret-ghi',
+        // design fields — must survive (the old /token/ regex falsely redacted these)
+        colorToken: '--accent',
+        backgroundToken: '--surface',
+        tokenCount: 17,
+        offTheme: true,
+      }),
+    ).toEqual({
+      accessToken: REDACTED_VALUE,
+      authToken: REDACTED_VALUE,
+      token: REDACTED_VALUE,
+      colorToken: '--accent',
+      backgroundToken: '--surface',
+      tokenCount: 17,
+      offTheme: true,
+    });
+  });
+
   it('handles BigInt and cycles without throwing', () => {
     const value: Record<string, unknown> = { count: 2n };
     value['self'] = value;
