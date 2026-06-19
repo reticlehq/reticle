@@ -294,11 +294,15 @@ export class IrisAdapter {
 
 // Unified view-navigation + tap + observe so scenarios are tool-agnostic.
 // NAV maps a view id to a testid (Playwright/Iris) and an accessible-name regex (DevTools).
+// DevTools resolves nav by accessible name. Match the LABEL PREFIX (open-quote + word, no closing
+// quote) so a trailing badge count — e.g. the Deployments nav renders "Deployments500" — still
+// resolves. The earlier exact-quote regex missed it, making DevTools fail to reach the view (an
+// apparatus miss, not a real one).
 const NAV = {
-  overview: { testid: 'nav-overview', nameRe: /"Overview"/ },
-  deployments: { testid: 'nav-deployments', nameRe: /"Deployments"/ },
-  compose: { testid: 'nav-compose', nameRe: /"Compose"/ },
-  diagnostics: { testid: 'nav-diagnostics', nameRe: /"Diagnostics"/ },
+  overview: { testid: 'nav-overview', nameRe: /"Overview/ },
+  deployments: { testid: 'nav-deployments', nameRe: /"Deployments/ },
+  compose: { testid: 'nav-compose', nameRe: /"Compose/ },
+  diagnostics: { testid: 'nav-diagnostics', nameRe: /"Diagnostics/ },
 };
 for (const Cls of [PlaywrightAdapter, IrisAdapter]) {
   Cls.prototype.tap = function (spec) {
