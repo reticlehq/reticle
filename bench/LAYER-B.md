@@ -278,21 +278,22 @@ per-regression-run cost is the tokens the agent/CI reads — measured:
 | Flow (5–4 steps) | replay status | replay tokens (deterministic) |
 | ---------------- | ------------- | ----------------------------- |
 | verify-500       | ok            | 192                           |
-| verify-console   | drift         | 180                           |
+| verify-console   | ok            | 192                           |
 | verify-route     | ok            | 156                           |
-| verify-modal     | drift         | 180                           |
-| **mean**         |               | **177**                       |
+| verify-modal     | ok            | 158                           |
+| **mean**         |               | **175**                       |
 
-**Per regression run: Iris replay ~177 tokens vs Playwright re-drive ~30,249 → 171× (DevTools ~32,296 → 182×).**
-Past the 70× target, and it **compounds**: over N runs Iris pays ~author-once + N×177; the competitors
+**Per regression run: Iris replay ~175 tokens vs Playwright re-drive ~30,249 → 173× (DevTools ~32,296 → 184×).**
+Past the 70× target, and it **compounds**: over N runs Iris pays ~author-once + N×175; the competitors
 (no replay) pay N×~30k. The replay is deterministic, so accuracy doesn't drift run-to-run the way
 the LLM agent loop does.
 
-Honesty: 2 of 4 flows replayed clean (`ok`); 2 returned `drift` — the replay's live anchor
-re-resolution flagged a difference (most likely recording fidelity on those two steps, not a real
-app regression). The token _cost_ is ~180 either way; tightening recording fidelity so all four
-return `ok` (and pairing replay with an injected regression to show it CATCHES the break at the same
-~180-token cost) is the next step. Raw: `bench/raw/replay-bench.json`.
+Honesty: all four now replay clean (`ok`) — the earlier 2/4 `drift` was a replay race (a single
+QUERY read an in-flight post-login render as zero and falsely drifted), fixed by the bounded settle
+described below; the cost is unchanged (~175 tok). One recording-fidelity caveat remains: `verify-modal`
+records 4 steps (login → deployments) — the bench rig's fixed 200 ms record delay doesn't reliably
+capture the async-loaded `new-deploy` click, so that flow's replay validates the nav, not the modal.
+Raw: `bench/raw/replay-bench.json`.
 
 ### The three regimes, side by side (per single verification)
 

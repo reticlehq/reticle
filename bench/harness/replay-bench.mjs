@@ -46,12 +46,17 @@ async function recordAndReplay(flow) {
     const rep = await a.c.callTool('iris_flow_replay', { flowName: flow.name });
     const repObj = JSON.parse(rep.text || '{}');
     const m = measure(rep.text || '');
+    const drifted = Array.isArray(repObj.steps)
+      ? repObj.steps.find((s) => s && s.drift)
+      : undefined;
     return {
       flow: flow.name,
       stepCount: savedObj.stepCount ?? null,
       replay_status: repObj.status ?? 'unknown',
       replay_tokens: m.tokens_o200k,
       replay_chars: m.chars,
+      drift_anchor: drifted?.drift?.anchor ?? null,
+      drift_nearest: drifted?.drift?.nearest ?? null,
     };
   } finally {
     await a.stop();
