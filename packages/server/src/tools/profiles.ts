@@ -2,12 +2,17 @@ import { IrisTool } from './tool-names.js';
 import type { ToolDef } from './tools.js';
 
 /**
- * Which MCP tool surface to expose.
- *   core     — look→act→observe→assert loop only (~13 tools). Minimal token cost.
- *   standard — core + the most common extras: inspect, sequences, network/console readers,
- *              wait_for, flows, session lifecycle, scroll (~27 tools). The recommended default
- *              for coding agents that need more than the bare loop.
- *   full     — all tools. Default. No change for existing callers.
+ * Which MCP tool surface to expose. The advertised tool DEFINITIONS are re-sent to the model on
+ * every turn, so a smaller surface is a per-turn token saving that compounds across a loop —
+ * measured ~14.6k tok/turn at full (48 tools) vs ~half that for core. Fewer tools also makes the
+ * model wander less (fewer turns, higher accuracy). See bench/LAYER-B.md.
+ *
+ *   core     — the verify loop a coding agent actually needs: navigate→look→act→observe→assert,
+ *              WITH direct network + console + state observability (the highest-signal checks).
+ *              ~12 tools. The recommended profile for agent-driven verification.
+ *   standard — core + common extras (inspect, sequences, animations, flows, session lifecycle,
+ *              scroll, baselines, …). For agents that need more than the bare loop.
+ *   full     — all tools. The current default for existing callers.
  */
 export const TOOL_PROFILE = {
   CORE: 'core',
@@ -18,20 +23,22 @@ export type ToolProfile = (typeof TOOL_PROFILE)[keyof typeof TOOL_PROFILE];
 
 export const TOOL_PROFILE_ENV = 'IRIS_TOOL_PROFILE';
 
+// The minimal set an agent needs to verify a change end-to-end. Direct network/console tools are
+// included (not just observe): in a real agent loop they are far more discoverable, so the model
+// reaches the right check in fewer turns instead of flailing with observe filters.
 export const CORE_TOOL_NAMES: ReadonlySet<string> = new Set([
   IrisTool.SESSIONS,
+  IrisTool.NAVIGATE,
   IrisTool.SNAPSHOT,
   IrisTool.QUERY,
   IrisTool.ACT,
   IrisTool.ACT_AND_WAIT,
   IrisTool.OBSERVE,
+  IrisTool.NETWORK,
+  IrisTool.CONSOLE,
   IrisTool.WAIT_FOR,
   IrisTool.ASSERT,
   IrisTool.STATE,
-  IrisTool.DIFF,
-  IrisTool.CAPABILITIES,
-  IrisTool.NARRATE,
-  IrisTool.PROJECT,
 ]);
 
 export const STANDARD_TOOL_NAMES: ReadonlySet<string> = new Set([

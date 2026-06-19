@@ -71,3 +71,28 @@ or reliably.** The fix is not more signals; it is a **lean default agent-facing 
   everyone's accuracy equally and is a harness caveat, not an Iris artifact.
 - Iris's tool results were capped at 8000 chars in the harness; without that cap its cost would be
   even higher. So 4× is a floor, not a worst case.
+
+## Fix #1 — the lean `core` profile (measured win)
+
+Root cause located: Iris advertises **48 tools** by default, and the tool _definitions_ are re-sent
+to the model **every turn** — ~14.6k tokens/turn vs Playwright's ~3.8k (23 tools) and DevTools'
+~5.3k (29 tools). Over ~11 turns that alone is ~160k tokens, and the bloated surface makes the
+model wander (more turns, worse verdicts).
+
+Fix: redefine the shipped `core` profile to the actual agent verify-loop — navigate, snapshot,
+query, act, act_and_wait, observe, **network, console**, wait_for, assert, state, sessions (12
+tools, ~7.2k tok/turn). The earlier `core` omitted network/console (relied on `observe`), which
+made the agent flail; adding the direct tools is what recovers accuracy.
+
+Layer B, Iris only (gpt-4o, same 5 scenarios):
+
+| Iris profile       | tools | mean tokens | correct verdicts |
+| ------------------ | ----- | ----------- | ---------------- |
+| full (was default) | 48    | 129,882     | 2 / 5            |
+| **core (curated)** | 12    | **69,956**  | **4 / 5**        |
+
+That **doubles accuracy and nearly halves tokens.** Iris-core now ties Playwright (4/5) and beats
+DevTools (3/5) on real-agent accuracy. It is still ~2× Playwright on tokens (70k vs 30k) — the
+next lever is trimming Iris's verbose tool descriptions/schemas for lean profiles (Iris ≈600
+tok/tool-def vs Playwright ≈166). Recommendation: agents should run Iris in `core`
+(`IRIS_TOOL_PROFILE=core`); the benchmark now reports both.

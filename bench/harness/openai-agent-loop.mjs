@@ -37,9 +37,15 @@ const SERVERS = {
   iris: {
     command: 'node',
     args: ['packages/server/dist/cli.js', 'mcp', '--port', '4455', '--drive', URL],
-    env: { IRIS_PORT: '4455' },
+    env: { IRIS_PORT: '4455', IRIS_TOOL_PROFILE: process.env.BENCH_IRIS_PROFILE ?? 'full' },
   },
 };
+// BENCH_TOOLS=iris,playwright_mcp limits which tools run (cost control). Default: all three.
+const TOOL_SET = (
+  process.env.BENCH_TOOLS
+    ? process.env.BENCH_TOOLS.split(',')
+    : ['playwright_mcp', 'chrome_devtools_mcp', 'iris']
+).map((s) => s.trim());
 
 // Canonical NL task per scenario (verbatim across tools) + expected verdict.
 const TASKS = {
@@ -102,6 +108,7 @@ async function runCell(scenarioId, toolKey) {
   const cfg = SERVERS[toolKey];
   const client = new McpStdioClient(cfg.command, cfg.args, cfg.env);
   const t0 = Date.now();
+  const trace = [];
   let inTok = 0,
     outTok = 0,
     turns = 0,
@@ -142,6 +149,8 @@ async function runCell(scenarioId, toolKey) {
         } catch (e) {
           content = `error: ${String(e).slice(0, 200)}`;
         }
+        if (process.env.BENCH_TRACE)
+          trace.push({ turn: turns, call: tc.function.name, resultChars: content.length });
         messages.push({ role: 'tool', tool_call_id: tc.id, content });
       }
     }
@@ -165,6 +174,7 @@ async function runCell(scenarioId, toolKey) {
       expected_detect: sc.expectIssue,
       confidence: said === sc.expectIssue ? 1 : 0,
       notes: `verdict_excerpt=${verdictText.trim().slice(-140)}`,
+      ...(process.env.BENCH_TRACE ? { trace, verdictFull: verdictText.trim().slice(-600) } : {}),
     };
   } catch (e) {
     return {
@@ -198,7 +208,7 @@ for (const s of scns) {
     inject(reg);
     await new Promise((r) => setTimeout(r, 500));
   }
-  for (const tool of ['playwright_mcp', 'chrome_devtools_mcp', 'iris']) {
+  for (const tool of TOOL_SET) {
     const row = await runCell(s, tool);
     rows.push(row);
     console.log(
