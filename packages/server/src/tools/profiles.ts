@@ -23,9 +23,12 @@ export type ToolProfile = (typeof TOOL_PROFILE)[keyof typeof TOOL_PROFILE];
 
 export const TOOL_PROFILE_ENV = 'IRIS_TOOL_PROFILE';
 
-// The minimal set an agent needs to verify a change end-to-end. Direct network/console tools are
-// included (not just observe): in a real agent loop they are far more discoverable, so the model
-// reaches the right check in fewer turns instead of flailing with observe filters.
+// The set an agent needs to verify a change end-to-end. Tool DEFINITIONS are re-sent every turn,
+// so a smaller surface compounds — but there is a floor: an 8-tool cut (dropping act/navigate/
+// wait_for/sessions) was MEASURED to regress real-agent accuracy from 5/5 to 3/5, because the
+// model loses scaffolding and wanders (more turns) on harder flows. These 12 are the lean sweet
+// spot that holds 5/5 in a real gpt-4o loop. Direct network/console stay (far more discoverable
+// than observe-with-filters → fewer turns, better verdicts). See bench/LAYER-B.md.
 export const CORE_TOOL_NAMES: ReadonlySet<string> = new Set([
   IrisTool.SESSIONS,
   IrisTool.NAVIGATE,

@@ -9,14 +9,31 @@ import { SERVER_VERSION } from './server-version.js';
 
 const SERVER_INFO = { name: 'iris', version: SERVER_VERSION };
 
-/** First sentence of a tool description (purpose only) for lean profiles — keeps per-turn def cost
- * down. Cuts at the first sentence-ending period or newline; falls back to a 160-char cap. */
+/** First sentence of a description (purpose only) for lean profiles — keeps per-turn def cost
+ * down. Cuts at the first sentence-ending period or newline; falls back to a 160-char cap. The
+ * first clause retains the essentials (enum hints like "role | text | label" live there). */
 function firstSentence(description: string): string {
   const nl = description.indexOf('\n');
   const base = nl >= 0 ? description.slice(0, nl) : description;
   const dot = base.search(/\.\s/);
   const sentence = dot >= 0 ? base.slice(0, dot + 1) : base;
   return sentence.length > 160 ? `${sentence.slice(0, 159)}…` : sentence;
+}
+
+/**
+ * Lean copy of a tool's zod input shape for lean profiles: each parameter's description is
+ * truncated to its first sentence via zod's own `.describe()` (which returns a new schema, so the
+ * shared shape is never mutated). The per-parameter prose is the bulk of the re-sent-every-turn
+ * schema cost; the first clause keeps each param's purpose and any enum hints. Params without a
+ * description pass through unchanged.
+ */
+function leanZodShape(shape: z.ZodRawShape): z.ZodRawShape {
+  const out: z.ZodRawShape = {};
+  for (const [key, schema] of Object.entries(shape)) {
+    const desc = schema.description;
+    out[key] = typeof desc === 'string' ? schema.describe(firstSentence(desc)) : schema;
+  }
+  return out;
 }
 
 const ENCODING_ENV = 'IRIS_ENCODING';
@@ -66,7 +83,7 @@ export function createMcpServer(
   for (const tool of filterTools(TOOLS, profile)) {
     const config = {
       description: terse ? firstSentence(tool.description) : tool.description,
-      inputSchema: tool.inputSchema,
+      inputSchema: terse ? leanZodShape(tool.inputSchema) : tool.inputSchema,
       ...(tool.outputSchema !== undefined ? { outputSchema: tool.outputSchema } : {}),
     };
     registerTool(tool.name, config, async (args: Record<string, unknown>) => {
