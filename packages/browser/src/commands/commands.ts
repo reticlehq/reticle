@@ -58,9 +58,19 @@ function inspect(ref: string): unknown {
   const component = identifyComponent(el);
   const view = el.ownerDocument.defaultView;
   const cs = view !== null ? view.getComputedStyle(el) : null;
+  // Computed style the a11y tree is blind to — `cursor` (does it look interactive?), display/
+  // visibility, and color/opacity — so a UI bug that leaves the element "present but unusable"
+  // (dead cursor, invisible, recolored) is observable in one inspect call.
   const styles =
     cs !== null
-      ? { color: cs.color, backgroundColor: cs.backgroundColor, opacity: cs.opacity }
+      ? {
+          color: cs.color,
+          backgroundColor: cs.backgroundColor,
+          opacity: cs.opacity,
+          cursor: cs.cursor,
+          display: cs.display,
+          visibility: cs.visibility,
+        }
       : null;
   return {
     ...describe(el),
@@ -75,9 +85,21 @@ function inspect(ref: string): unknown {
         ? (el.form?.textContent ?? undefined)
         : undefined,
     box: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
+    // True when another element sits over this one's center point — the click would hit the overlay,
+    // not this control (a z-index/overlay bug the DOM tree cannot show).
+    occluded: isOccluded(el, rect),
     styles,
     component,
   };
+}
+
+/** Whether another element covers this one's center point (a transparent overlay / z-index bug). */
+function isOccluded(el: Element, rect: DOMRect): boolean {
+  if (rect.width === 0 || rect.height === 0) return false; // a 0×0 box is a different bug (size)
+  const doc = el.ownerDocument;
+  if (typeof doc.elementFromPoint !== 'function') return false;
+  const top = doc.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2);
+  return top !== null && top !== el && !el.contains(top);
 }
 
 /** Narrowing guard: an adapter returned a ComponentStateResult (has a boolean `ok`). */

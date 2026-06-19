@@ -461,6 +461,21 @@ export const TOOLS: ToolDef[] = [
       box: z
         .object({ x: z.number(), y: z.number(), width: z.number(), height: z.number() })
         .optional(),
+      // True when another element covers this one's center (z-index/overlay bug — unclickable).
+      occluded: z.boolean().optional(),
+      // Computed style the a11y tree omits: cursor/display/visibility/color so a "present but
+      // unusable" UI bug (dead cursor, invisible, recolored) is observable in one inspect.
+      styles: z
+        .object({
+          color: z.string(),
+          backgroundColor: z.string(),
+          opacity: z.string(),
+          cursor: z.string(),
+          display: z.string(),
+          visibility: z.string(),
+        })
+        .partial()
+        .optional(),
       component: z
         .object({ name: z.string().optional(), sourceFile: z.string().optional() })
         .optional(),
