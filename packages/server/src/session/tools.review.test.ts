@@ -113,6 +113,31 @@ describe('iris_review tool — human marks ingested from HUMAN_MARK events', () 
     expect('pendingMarks' in session.info()).toBe(false);
   });
 
+  it('narrates "✓ fixed: <note>" to the live panel when a mark is resolved', async () => {
+    const sends: string[] = [];
+    const socket = { readyState: 1, send: (p: string) => sends.push(p) } as unknown as WebSocket;
+    const session = new Session(HELLO, socket, () => 0);
+    session.pushEvent(markEvent({ note: 'button misaligned' }));
+    const listed = (await reviewTool().handler(depsFor(session), {})) as ReviewShape;
+    await reviewTool().handler(depsFor(session), { resolve: listed.marks[0]?.id });
+
+    const narrate = sends
+      .map((s) => JSON.parse(s) as { name: string; args: { text: string } })
+      .find((m) => m.name === 'narrate');
+    expect(narrate).toBeDefined();
+    expect(narrate?.args.text).toContain('button misaligned');
+    expect(narrate?.args.text).toContain('fixed');
+  });
+
+  it('does NOT narrate when resolve is a no-op (unknown / already-resolved id)', async () => {
+    const sends: string[] = [];
+    const socket = { readyState: 1, send: (p: string) => sends.push(p) } as unknown as WebSocket;
+    const session = new Session(HELLO, socket, () => 0);
+    session.pushEvent(markEvent());
+    await reviewTool().handler(depsFor(session), { resolve: 'm999' });
+    expect(sends.some((s) => s.includes('narrate'))).toBe(false);
+  });
+
   it('all:true includes resolved marks in history', async () => {
     const session = new Session(HELLO, fakeSocket, () => 0);
     session.pushEvent(markEvent());

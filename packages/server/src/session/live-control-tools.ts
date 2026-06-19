@@ -93,7 +93,16 @@ export const LIVE_CONTROL_TOOLS: ToolDef[] = [
     handler: (deps, args) => {
       const session = deps.sessions.resolve(asString(args['sessionId']));
       const resolveId = asString(args['resolve']);
-      const resolved = resolveId !== undefined ? session.resolveMark(resolveId) : undefined;
+      let resolved: boolean | undefined;
+      if (resolveId !== undefined) {
+        // Grab the note BEFORE retiring it so we can close the loop visually for the human.
+        const mark = session.allMarks().find((m) => m.id === resolveId);
+        resolved = session.resolveMark(resolveId);
+        if (resolved && mark !== undefined) {
+          // The human watching the panel sees their flagged bug get marked fixed (fire-and-forget).
+          session.pushNarration(`✓ fixed: ${mark.note}`);
+        }
+      }
       const source = args['all'] === true ? session.allMarks() : session.pendingMarks();
       const marks = source.map((m) => ({ ...m, fix: buildFixHint(m) }));
       const out: { marks: typeof marks; pendingCount: number; resolved?: boolean } = {

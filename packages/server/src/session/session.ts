@@ -173,14 +173,12 @@ export class Session {
       base.cleanup_suggestion =
         'Call iris_end_session to free this session before starting new work.';
     }
-    // Surface human bug reports proactively — the agent sees them in iris_sessions without polling
-    // iris_review. Only present when > 0, so a session with no marks adds nothing to the payload.
+    // Surface human bug reports in iris_sessions (only when > 0, so a clean session adds nothing).
     const marks = this.#review.pendingCount();
     if (marks > 0) {
       base.pendingMarks = marks;
-      base.review_suggestion = `The human flagged ${String(marks)} issue${
-        marks === 1 ? '' : 's'
-      } on this tab — call iris_review to see and fix ${marks === 1 ? 'it' : 'them'}.`;
+      const s = marks === 1 ? '' : 's';
+      base.review_suggestion = `The human flagged ${String(marks)} issue${s} on this tab — call iris_review to see and fix ${marks === 1 ? 'it' : 'them'}.`;
     }
     return base;
   }
@@ -440,6 +438,10 @@ export class Session {
    */
   pushPresenter(state: SessionState, text?: string): void {
     this.#post(IrisCommand.PRESENTER, text === undefined ? { state } : { state, text });
+  }
+  /** Fire-and-forget a narration row to the live panel (so a resolved mark shows "✓ fixed"). */
+  pushNarration(text: string): void {
+    this.#post(IrisCommand.NARRATE, { text, level: 'info' });
   }
 
   /**
