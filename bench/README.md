@@ -63,6 +63,14 @@ node bench/harness/capture-screens.mjs
 
 # 6. Layer B — full agent loop (authoritative usage tokens). REQUIRES a key.
 ANTHROPIC_API_KEY=sk-... node bench/harness/agent-loop.mjs
+
+# 7. Layer C — deterministic regression suite (no API key). Records each flow once, then replays it
+#    with NO model and asserts a declared consequence. This is the RRE / regression story + the
+#    Iris-only catches. Needs the demo (step 1) up; each harness self-drives its own iris session.
+pnpm bench            # bench-all: replay-bench + replay-detect(+consequence/state) + suite-rre +
+                      #   network-cardinality (double-submit) + console-clean + state-blast-radius +
+                      #   replay-determinism (flake rate). Exits non-zero if any dimension regresses.
+pnpm bench:gate       # compare the fresh raws vs the last history.jsonl row; fail on regression
 ```
 
 ## Pinned versions (from raw/run-meta.json)
