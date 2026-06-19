@@ -230,3 +230,41 @@ lean hot-set). On-demand-native client (e.g. Claude Code) or a very large tool s
 `dynamic`. The profiles are shipped; the choice is the client's. And the answer to "can we keep
 100% accuracy with no descriptions up front?" — **measured: not with a generic model; it needs the
 hot-set schemas. On-demand is for the cold tail, not the hot path.**
+
+## Where 70× actually lives: deterministic replay for regression testing
+
+The ad-hoc agent loop can't reach 70× — its floor is ~1.5–2× Playwright at accuracy (the agent
+re-reads its whole context every turn; proven above). 70× needs a different _model of use_, and
+it's exactly the regression-testing domain: **the same verification, run repeatedly.**
+
+Iris records a verification flow once (`iris_record_start` → drive → `iris_flow_save`) and then
+**`iris_flow_replay` re-runs it deterministically — no LLM in the loop.** It re-resolves each
+step's semantic anchor against the live DOM and asserts the success condition, returning a compact
+`{ status: ok|drift|error, steps }`. Playwright-MCP has no replay: the agent must **re-drive the
+whole flow with the LLM every run (~30k tokens)**.
+
+Per regression run:
+
+- **Iris replay:** deterministic; the only tokens are the agent/harness reading a compact verdict —
+  measured result shape `{status, steps}` is ~50–80 tokens per step (an empty flow is 21 tokens),
+  so a real 5–8 step verify is **~hundreds of tokens**.
+- **Playwright re-drive:** ~30,000 tokens of LLM agent loop, _every single run_.
+
+That is **~70–150× per regression run**, and unlike the one-shot numbers it **compounds**: over N
+runs Iris pays ~30k once to author + N×~hundreds; Playwright pays N×30k. At N≈70 runs the ratio is
+~70×; at N=1000 it is ~1000×. For a CI regression suite that runs the same checks on every commit,
+this is the real efficiency story — and it uses Iris's actual moat (record-once / replay-many /
+assert-the-consequence), which a step-driving MCP fundamentally lacks.
+
+> Bug fixed en route: `iris_flow_save` advertised an output schema (`{saved, path}`) that didn't
+> match its handler's return, so it was rejected by schema-validating MCP clients — i.e. the
+> record→save→replay workflow was unusable over MCP until this run caught it.
+
+**Bottom line on token efficiency:**
+
+- Per _ad-hoc_ verification (agent drives from scratch): Iris ~1.5–2× Playwright at best accuracy —
+  not 70×, and honestly so.
+- Per _regression_ verification (replay a saved flow): ~70–150× and compounding — because replay is
+  deterministic and Playwright has no equivalent.
+- Tool-definition overhead specifically: the `dynamic` profile is ~12× leaner per turn (305 vs
+  3,827) and flat as the toolbox grows — the structural fix to the MCP token-barrier you flagged.
