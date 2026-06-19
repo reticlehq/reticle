@@ -61,6 +61,7 @@ export const STANDARD_TOOL_NAMES: ReadonlySet<string> = new Set([
   IrisTool.FLOW_LIST,
   IrisTool.FLOW_LOAD,
   IrisTool.FLOW_REPLAY,
+  IrisTool.FLOW_VERIFY,
   IrisTool.FLOW_HEAL,
   IrisTool.SESSION,
   IrisTool.END_SESSION,

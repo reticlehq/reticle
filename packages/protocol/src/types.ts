@@ -304,6 +304,33 @@ export interface ReplayDecision {
   nextAction: string;
 }
 
+/**
+ * One flow's line in a suite verdict — pass counts as a name; a failure carries the actionable
+ * decision fields so the agent can fix it without re-querying.
+ */
+export interface SuiteFlowResult {
+  flow: string;
+  verdict: 'pass' | 'drift' | 'fail';
+  whatChanged?: string;
+  whereInSource?: string;
+  nextAction?: string;
+}
+
+/**
+ * The consolidated verdict of replaying EVERY known flow — the autonomous loop's "did I break
+ * anything, and what do I fix" answer in one deterministic call. Passing flows are counted; only
+ * failures carry detail (token-cheap). `status` is fail if any flow drifted or errored.
+ */
+export interface SuiteVerdict {
+  status: 'pass' | 'fail';
+  total: number;
+  passed: number;
+  failed: number;
+  summary: string;
+  /** Only the failing flows, with their decision (verdict, what changed, where, next action). */
+  failures: SuiteFlowResult[];
+}
+
 /** The iris_flow_replay envelope. */
 export interface FlowReplayResult {
   name: string;

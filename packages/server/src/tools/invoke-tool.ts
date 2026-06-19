@@ -47,6 +47,7 @@ export const SESSION_EXEMPT_TOOLS: ReadonlySet<string> = new Set([
   IrisTool.CAPABILITIES, // has a fromDisk mode with no live session
   IrisTool.CONTRACT_SAVE, // persists the registry to disk
   IrisTool.FLOW_REPLAY, // returns its own FlowReplayResult contract (+ auto-records a run)
+  IrisTool.FLOW_VERIFY, // returns its own SuiteVerdict contract (replays the whole suite)
   IrisTool.FLOW_SAVE_RECORDED, // reads the recording buffer, writes disk
   IrisTool.FLOW_HEAL, // returns its own FlowHealResult contract
   IrisTool.PROJECT, // reads .iris/project.json

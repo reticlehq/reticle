@@ -5,6 +5,8 @@ import {
   type FlowReplayResult,
   type FlowStepResult,
   type ReplayDecision,
+  type SuiteFlowResult,
+  type SuiteVerdict,
 } from '@syrin/iris-protocol';
 import { classifyFlowAssertions } from './flow-classify.js';
 
@@ -88,4 +90,43 @@ export function buildDecision(result: FlowReplayResult, flow?: FlowFile): Replay
       ? 'the steps ran but the business outcome never fired — check the handler/effect behind the action, not the locator.'
       : 'the action could not complete — check the element state and the handler at the step above.',
   };
+}
+
+/** Map a replay status to the suite verdict's three-state outcome. */
+function suiteVerdictOf(status: ReplayStatus): 'pass' | 'drift' | 'fail' {
+  if (status === ReplayStatus.OK) return 'pass';
+  return status === ReplayStatus.DRIFT ? 'drift' : 'fail';
+}
+
+/**
+ * Aggregate per-flow replays into one suite verdict — the autonomous loop's consolidated answer
+ * after a build: did anything break, and what's the prioritized fix list. Pure: pass the already
+ * decision-annotated replay results + their flows. Passing flows are counted; only failures carry
+ * detail (token-cheap), each with the actionable decision so the agent fixes without re-querying.
+ */
+export function buildSuiteVerdict(
+  runs: ReadonlyArray<{ replay: FlowReplayResult; flow?: FlowFile }>,
+): SuiteVerdict {
+  const failures: SuiteFlowResult[] = [];
+  let passed = 0;
+  for (const { replay, flow } of runs) {
+    if (replay.status === ReplayStatus.OK) {
+      passed += 1;
+      continue;
+    }
+    const decision = replay.decision ?? buildDecision(replay, flow);
+    const row: SuiteFlowResult = { flow: replay.name, verdict: suiteVerdictOf(replay.status) };
+    if (decision.whatChanged !== undefined) row.whatChanged = decision.whatChanged;
+    if (decision.whereInSource !== undefined) row.whereInSource = decision.whereInSource;
+    row.nextAction = decision.nextAction;
+    failures.push(row);
+  }
+  const total = runs.length;
+  const failed = failures.length;
+  const status = failed === 0 ? 'pass' : 'fail';
+  const summary =
+    failed === 0
+      ? `all ${total} flow${total === 1 ? '' : 's'} pass`
+      : `${passed}/${total} flows pass — ${failed} need attention: ${failures.map((f) => f.flow).join(', ')}`;
+  return { status, total, passed, failed, summary, failures };
 }

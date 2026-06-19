@@ -30,6 +30,8 @@ export const IrisTool = {
   FLOW_LIST: 'iris_flow_list',
   FLOW_LOAD: 'iris_flow_load',
   FLOW_REPLAY: 'iris_flow_replay',
+  /** replay EVERY saved flow → one consolidated suite verdict + prioritized fixes (the loop closer). */
+  FLOW_VERIFY: 'iris_flow_verify',
   /** persist the human-recorded flow from the live tab. */
   FLOW_SAVE_RECORDED: 'iris_flow_save_recorded',
   /** propose (+ opt-in apply) a nearest-match rebind for a drifted flow. */

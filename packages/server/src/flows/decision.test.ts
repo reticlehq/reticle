@@ -8,7 +8,7 @@ import {
   type FlowReplayResult,
 } from '@syrin/iris-protocol';
 import { IrisTool } from '../tools/tool-names.js';
-import { buildDecision } from './decision.js';
+import { buildDecision, buildSuiteVerdict } from './decision.js';
 
 function flow(partial: Partial<FlowFile> = {}): FlowFile {
   return { version: FLOW_FILE_VERSION, name: 'f', createdAt: 0, steps: [], ...partial };
@@ -134,5 +134,57 @@ describe('buildDecision — the autonomy envelope', () => {
     expect(d.verdict).toBe('fail');
     expect(d.whatChanged).toBe('flow.success not satisfied');
     expect(d.nextAction).toContain('handler');
+  });
+});
+
+describe('buildSuiteVerdict — the autonomous regression check', () => {
+  const ok = (name: string): FlowReplayResult => ({
+    name,
+    status: ReplayStatus.OK,
+    steps: [{ step: 0, tool: IrisTool.ACT, anchor: 'x', ok: true }],
+  });
+  const drifted = (name: string): FlowReplayResult => ({
+    name,
+    status: ReplayStatus.DRIFT,
+    steps: [
+      {
+        step: 0,
+        tool: IrisTool.ACT,
+        anchor: 'gone',
+        ok: false,
+        drift: {
+          reasonKind: DriftReason.TESTID_NOT_FOUND,
+          reason: 'testid "gone" not found',
+          anchor: 'gone',
+          nearest: 'here',
+        },
+      },
+    ],
+  });
+
+  it('all flows pass → status pass, no failures', () => {
+    const v = buildSuiteVerdict([{ replay: ok('a') }, { replay: ok('b') }]);
+    expect(v.status).toBe('pass');
+    expect(v.total).toBe(2);
+    expect(v.passed).toBe(2);
+    expect(v.failures).toEqual([]);
+    expect(v.summary).toContain('all 2 flows pass');
+  });
+
+  it('a failing flow → status fail, only the failure carries the actionable detail', () => {
+    const v = buildSuiteVerdict([
+      { replay: ok('a') },
+      { replay: drifted('b') },
+      { replay: ok('c') },
+    ]);
+    expect(v.status).toBe('fail');
+    expect(v.passed).toBe(2);
+    expect(v.failed).toBe(1);
+    expect(v.failures).toHaveLength(1);
+    expect(v.failures[0]?.flow).toBe('b');
+    expect(v.failures[0]?.verdict).toBe('drift');
+    expect(v.failures[0]?.nextAction).toContain('here'); // the rebind suggestion
+    expect(v.summary).toContain('2/3 flows pass');
+    expect(v.summary).toContain('b');
   });
 });

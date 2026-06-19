@@ -19,12 +19,12 @@ import {
 import { IrisTool } from '../tools/tool-names.js';
 import { asString } from '../tools/tools-helpers.js';
 import { replayFlow } from './flow-replay.js';
-import { buildDecision } from './decision.js';
+import { buildDecision, buildSuiteVerdict } from './decision.js';
 import { classifyFlowAssertions } from './flow-classify.js';
 import { assertSuccess, dynamicTestids, successLabel } from './flow-success.js';
 import { flowPath } from '../project/iris-dir.js';
 import { applyHealChanges, collectProposals } from './heal.js';
-import type { FlowStepResult } from '@syrin/iris-protocol';
+import type { FlowStepResult, SuiteVerdict } from '@syrin/iris-protocol';
 import { waitForPredicate } from '../events/predicate.js';
 import type { FlowAnnotations } from './flows.js';
 import type { ToolDef, ToolDeps } from '../tools/tools.js';
@@ -83,6 +83,80 @@ async function recordReplayRun(
     evidence: { driftSteps },
     durationMs,
   });
+}
+
+/**
+ * Replay one named flow end to end: load → re-resolve+run each step → assert the success oracle →
+ * status + decision. Shared by iris_flow_replay (single flow) and iris_flow_verify (whole suite) so
+ * both produce identical FlowReplayResults. Every exit path records a run to project.json.
+ */
+export async function replayNamedFlow(
+  deps: ToolDeps,
+  args: Record<string, unknown>,
+): Promise<FlowReplayResult> {
+  const startedAt = deps.now();
+  const name = asString(args['flowName']) ?? '';
+  const loaded = await deps.flows.load(name);
+  if (!loaded.ok) {
+    await recordReplayRun(deps, name, ReplayStatus.ERROR, 0, deps.now() - startedAt);
+    return {
+      name,
+      status: ReplayStatus.ERROR,
+      steps: [],
+      error: { code: loaded.code, message: flowErrorMessage(loaded.code) },
+    };
+  }
+  const session = deps.sessions.resolve(asString(args['sessionId']));
+  // Floor the success oracle at the start of THIS replay so a stale signal from a prior run
+  // in the same session can't fake a pass.
+  const replayFloor = session.elapsed();
+  const steps = await replayFlow(
+    session,
+    loaded.value,
+    waitForPredicate,
+    FLOW_SIGNAL_TIMEOUT_MS,
+    args['confirmDangerous'] === true,
+  );
+  // "green means intent satisfied": when every step ran clean, assert the flow's success
+  // end-condition as a real consequence. A signal/net success that never fires FAILS the replay
+  // even though all locators resolved — the regression a healed-but-wrong locator ships green.
+  const stepsClean = steps.length > 0 && steps.every((s) => s.ok && s.drift === undefined);
+  if (stepsClean && loaded.value.success !== undefined) {
+    const verdict = await assertSuccess(
+      session,
+      loaded.value.success,
+      dynamicTestids(loaded.value),
+      waitForPredicate,
+      FLOW_SIGNAL_TIMEOUT_MS,
+      replayFloor,
+    );
+    const row: FlowStepResult = {
+      step: steps.length,
+      tool: 'success',
+      anchor: successLabel(loaded.value.success),
+      ok: verdict.pass,
+      ...(verdict.pass ? {} : { error: verdict.failureReason ?? 'flow.success not satisfied' }),
+    };
+    steps.push(row);
+  }
+  const driftSteps = steps.filter((s) => s.drift !== undefined).length;
+  const allOk = steps.every((s) => s.ok);
+  const status = driftSteps > 0 ? ReplayStatus.DRIFT : allOk ? ReplayStatus.OK : ReplayStatus.ERROR;
+  await recordReplayRun(deps, name, status, driftSteps, deps.now() - startedAt);
+  const failed = steps.find((step) => !step.ok && step.drift === undefined);
+  if (failed !== undefined) {
+    const errored: FlowReplayResult = {
+      name,
+      status,
+      steps,
+      error: { code: ReplayStatus.ERROR, message: failed.error ?? 'flow action failed' },
+    };
+    errored.decision = buildDecision(errored, loaded.value);
+    return errored;
+  }
+  const result: FlowReplayResult = { name, status, steps };
+  if (status !== ReplayStatus.OK) result.decision = buildDecision(result, loaded.value);
+  return result;
 }
 
 /**
@@ -236,77 +310,50 @@ export const FLOW_TOOLS: ToolDef[] = [
         .optional()
         .describe('Autonomy envelope: verdict + what changed + where + fix + next action.'),
     },
-    handler: async (deps: ToolDeps, args): Promise<FlowReplayResult> => {
-      // deps.now() here is the single clock site for the replay duration (a
-      // handler-level concern, not pure logic), and every exit path records a run to project.json.
-      const startedAt = deps.now();
-      const name = asString(args['flowName']) ?? '';
-      const loaded = await deps.flows.load(name);
-      if (!loaded.ok) {
-        await recordReplayRun(deps, name, ReplayStatus.ERROR, 0, deps.now() - startedAt);
-        return {
-          name,
-          status: ReplayStatus.ERROR,
-          steps: [],
-          error: { code: loaded.code, message: flowErrorMessage(loaded.code) },
-        };
+    // The decision envelope is attached by replayNamedFlow only on drift/fail (clean pass stays
+    // token-flat). Single-flow replay and whole-suite verify share that one implementation.
+    handler: (deps: ToolDeps, args): Promise<FlowReplayResult> => replayNamedFlow(deps, args),
+  },
+  {
+    name: IrisTool.FLOW_VERIFY,
+    description:
+      'Replay EVERY saved flow (or a given subset) and return ONE consolidated suite verdict — the ' +
+      'autonomous regression check to run after a build/change. Deterministic (no LLM per flow). ' +
+      'Returns { status: pass|fail, total, passed, failed, summary, failures:[{ flow, verdict, ' +
+      'whatChanged, whereInSource, nextAction }] } — passing flows are counted, only failures carry ' +
+      'detail (the actionable fix). One call replaces N hand-driven replays.',
+    inputSchema: {
+      names: z
+        .array(z.string())
+        .optional()
+        .describe('Flow names to verify. Omit to verify every saved flow.'),
+      sessionId: z
+        .string()
+        .optional()
+        .describe(
+          'Active session ID from iris_sessions. Omit when only one browser session is open.',
+        ),
+    },
+    outputSchema: {
+      status: z.string().describe('pass | fail'),
+      total: z.number(),
+      passed: z.number(),
+      failed: z.number(),
+      summary: z.string(),
+      failures: z.array(z.unknown()),
+    },
+    handler: async (deps: ToolDeps, args): Promise<SuiteVerdict> => {
+      const requested = Array.isArray(args['names'])
+        ? args['names'].filter((n): n is string => typeof n === 'string')
+        : await deps.flows.list();
+      const sessionId = asString(args['sessionId']);
+      const runs: { replay: FlowReplayResult }[] = [];
+      // Sequential: each flow replays against the same live session; parallel would race the DOM.
+      for (const flowName of requested) {
+        const replay = await replayNamedFlow(deps, { flowName, sessionId });
+        runs.push({ replay });
       }
-      const session = deps.sessions.resolve(asString(args['sessionId']));
-      // Floor the success oracle at the start of THIS replay so a stale signal from a prior run
-      // in the same session can't fake a pass.
-      const replayFloor = session.elapsed();
-      const steps = await replayFlow(
-        session,
-        loaded.value,
-        waitForPredicate,
-        FLOW_SIGNAL_TIMEOUT_MS,
-        args['confirmDangerous'] === true,
-      );
-      // "green means intent satisfied": when every step ran clean, assert the flow's success
-      // end-condition as a real consequence. A signal/net success that never fires FAILS the replay
-      // even though all locators resolved — the regression a healed-but-wrong locator ships green.
-      const stepsClean = steps.length > 0 && steps.every((s) => s.ok && s.drift === undefined);
-      if (stepsClean && loaded.value.success !== undefined) {
-        const verdict = await assertSuccess(
-          session,
-          loaded.value.success,
-          dynamicTestids(loaded.value),
-          waitForPredicate,
-          FLOW_SIGNAL_TIMEOUT_MS,
-          replayFloor,
-        );
-        const row: FlowStepResult = {
-          step: steps.length,
-          tool: 'success',
-          anchor: successLabel(loaded.value.success),
-          ok: verdict.pass,
-          ...(verdict.pass ? {} : { error: verdict.failureReason ?? 'flow.success not satisfied' }),
-        };
-        steps.push(row);
-      }
-      const driftSteps = steps.filter((s) => s.drift !== undefined).length;
-      const allOk = steps.every((s) => s.ok);
-      const status =
-        driftSteps > 0 ? ReplayStatus.DRIFT : allOk ? ReplayStatus.OK : ReplayStatus.ERROR;
-      await recordReplayRun(deps, name, status, driftSteps, deps.now() - startedAt);
-      const failed = steps.find((step) => !step.ok && step.drift === undefined);
-      if (failed !== undefined) {
-        const message = failed.error ?? 'flow action failed';
-        const errored: FlowReplayResult = {
-          name,
-          status,
-          steps,
-          error: { code: ReplayStatus.ERROR, message },
-        };
-        errored.decision = buildDecision(errored, loaded.value);
-        return errored;
-      }
-      const result: FlowReplayResult = { name, status, steps };
-      // Attach the decision envelope only when the agent must ACT (drift) — a clean pass needs no
-      // next-action, and status:ok already says it, so the common path stays token-flat. The
-      // "add a consequence oracle" nudge for a weak pass lives at flow_save, not here.
-      if (status !== ReplayStatus.OK) result.decision = buildDecision(result, loaded.value);
-      return result;
+      return buildSuiteVerdict(runs);
     },
   },
   {
