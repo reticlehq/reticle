@@ -298,6 +298,28 @@ rather than hanging.
 - A wrong `path` returns `{ found:false, availableKeys:[...] }` — the keys that _were_ present where
   the walk stopped — so a mistyped path is self-correcting, not a bare `null`.
 
+### Detecting wasted re-renders (React)
+
+A page can be **thrashing** — committing many React renders a second — while the DOM stays visually
+identical. The DOM/screenshot tools see an idle page; only a tool inside the runtime sees the commit
+rate. Iris exposes it as a registered store you read with `iris_state`:
+
+```ts
+// app entry — MUST run before react-dom loads, so import it FIRST (React reads the devtools hook
+// at renderer-inject time). It augments a real React DevTools hook if present; host-safe (no-ops on
+// any failure, never breaks the app).
+import { installRenderMeter } from '@syrin/iris';
+installRenderMeter();
+```
+
+```jsonc
+iris_state({ store: "__iris_renders", path: "commits" })   // → total React commits (monotonic)
+// read it, do an action (or wait a window), read again → the delta is the commit count for that span.
+```
+
+A render storm shows up as a commit count that climbs with no corresponding DOM mutation — a perf
+regression invisible to any outside-the-page tool.
+
 ### `iris_narrate` / `iris_clock`
 
 Show the agent's intent on the page, and control time (toasts/debounces/auto-dismiss) —
