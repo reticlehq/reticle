@@ -24,7 +24,14 @@ export interface PredicateSession {
 export type Predicate =
   | { kind: 'element'; query: ElementQuery; state?: ElementState; absent?: boolean }
   | { kind: 'text'; contains: string; visible?: boolean; absent?: boolean }
-  | { kind: 'net'; method?: string; urlContains?: string; status?: number; since?: number }
+  | {
+      kind: 'net';
+      method?: string;
+      urlContains?: string;
+      status?: number;
+      since?: number;
+      count?: number;
+    }
   | { kind: 'route'; pathname?: string; contains?: string }
   | { kind: 'console'; level?: string; absent?: boolean; since?: number }
   | { kind: 'animation'; name?: string; target?: string; completed?: boolean }
@@ -55,6 +62,7 @@ export const PredicateSchema = z.lazy(() =>
       urlContains: z.string().optional(),
       status: z.number().optional(),
       since: z.number().optional(),
+      count: z.number().int().nonnegative().optional(),
     }),
     z.object({
       kind: z.literal('route'),
@@ -217,7 +225,7 @@ async function evalElement(
 
 function evalNet(events: IrisEvent[], p: Extract<Predicate, { kind: 'net' }>): EvalResult {
   const since = p.since ?? 0;
-  const hit = events.find((e) => {
+  const matches = events.filter((e) => {
     if (e.type !== EventType.NET_REQUEST || e.t < since) return false;
     const d = e.data;
     if (p.method !== undefined && str(d['method'])?.toUpperCase() !== p.method.toUpperCase()) {
@@ -229,6 +237,18 @@ function evalNet(events: IrisEvent[], p: Extract<Predicate, { kind: 'net' }>): E
     if (p.status !== undefined && num(d['status']) !== p.status) return false;
     return true;
   });
+  // `count` (exact) turns presence into a cardinality assertion — catches the double-submit /
+  // useEffect-double-fire / retry-storm regression class, where the request DID fire (presence passes)
+  // but fired the WRONG number of times. Without `count`, the matcher is presence-only (≥1).
+  if (p.count !== undefined) {
+    return matches.length === p.count
+      ? { pass: true, evidence: { matched: matches.length } }
+      : {
+          pass: false,
+          failureReason: `expected ${String(p.count)} network call(s) matching ${JSON.stringify({ method: p.method, urlContains: p.urlContains, status: p.status })}, saw ${String(matches.length)}`,
+        };
+  }
+  const hit = matches[0];
   return hit !== undefined
     ? { pass: true, evidence: hit.data }
     : { pass: false, failureReason: `no network call matched ${JSON.stringify(p)}` };

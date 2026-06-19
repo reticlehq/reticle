@@ -63,6 +63,21 @@ describe('compileAnnotation pure compiler', () => {
     expect(out.patch?.success?.signal).toBeUndefined();
   });
 
+  it('success-state with a net.count sets flow.success.net (double-submit guard)', () => {
+    const a: Annotation = {
+      kind: AnnotationKind.SUCCESS_STATE,
+      net: { method: 'POST', urlContains: '/api/generate-script', count: 1 },
+    };
+    const out = compileAnnotation(a, 4);
+    expect(out.patch?.success?.net).toEqual({
+      method: 'POST',
+      urlContains: '/api/generate-script',
+      count: 1,
+    });
+    expect(out.patch?.success?.signal).toBeUndefined();
+    expect(describeCompiled(a)).toContain('exactly 1 net /api/generate-script');
+  });
+
   it('assert-state compiles to step.expect.state on the LAST step', () => {
     const a: Annotation = {
       kind: AnnotationKind.ASSERT_STATE,

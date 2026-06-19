@@ -47,8 +47,8 @@ export function compileAnnotation(a: Annotation, stepCount: number): AnnotateOut
         patch: { dynamicAdd: a.testid },
       };
     case AnnotationKind.SUCCESS_STATE: {
-      // Precedence: signal > state > testid (a consequence end-condition beats a presence check).
-      // None of the three → MISSING_FIELD.
+      // Precedence: signal > state > net > testid (a consequence end-condition beats a presence
+      // check). None of them → MISSING_FIELD.
       if (a.signal !== undefined) {
         return flowSuccess(a, { signal: a.signal });
       }
@@ -57,6 +57,9 @@ export function compileAnnotation(a: Annotation, stepCount: number): AnnotateOut
         if (a.store !== undefined) state.store = a.store;
         if (a.equals !== undefined) state.equals = a.equals;
         return flowSuccess(a, { state });
+      }
+      if (a.net !== undefined) {
+        return flowSuccess(a, { net: a.net });
       }
       if (a.testid !== undefined) {
         return flowSuccess(a, { element: { testid: a.testid } });
@@ -118,6 +121,12 @@ export function describeCompiled(a: Annotation): string {
         return `${COMPILED_PREDICATE_PREFIX} succeed when state ${a.statePath}${
           a.equals !== undefined ? ` == ${JSON.stringify(a.equals)}` : ''
         }`;
+      }
+      if (a.net !== undefined) {
+        const target = a.net.urlContains ?? a.net.method ?? 'request';
+        return `${COMPILED_PREDICATE_PREFIX} succeed when ${
+          a.net.count !== undefined ? `exactly ${String(a.net.count)} ` : ''
+        }net ${target}`;
       }
       return `${COMPILED_PREDICATE_PREFIX} succeed when ${a.testid ?? ''} visible`;
     case AnnotationKind.INTENT:

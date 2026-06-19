@@ -27,6 +27,11 @@
  *   render-storm  — re-renders `series` subscribers ~60×/s with identical output: React commits
  *                   every tick but the DOM never mutates. Only iris_state __iris_renders sees it.
  *
+ * Network cardinality (the request fired, but the WRONG number of times):
+ *   double-submit — the Compose action fires `POST /api/generate-script` TWICE. One result renders, so
+ *                   the UI looks right and a presence assertion ("a POST fired") passes. Only a
+ *                   `net.count:1` consequence catches the duplicate.
+ *
  * Tree-shaken out of production; never imported there.
  */
 
@@ -139,6 +144,31 @@ function installRenderStorm(): void {
   }, 16);
 }
 
+/**
+ * Double-submit — a NETWORK-cardinality regression no presence check can see. The Compose action is
+ * supposed to fire exactly ONE `POST /api/generate-script`; this wraps fetch so that request goes out
+ * TWICE (the classic double-submit / useEffect-double-fire / retry-storm bug). The UI looks identical —
+ * one result renders — and a presence assertion ("a POST fired") still passes. Only a `net.count:1`
+ * consequence catches it. Installed AFTER the Iris SDK has patched fetch (see main.tsx order), so the
+ * duplicate is observed by the network buffer; the duplicate is fire-and-forget (errors swallowed) so
+ * it never breaks the app.
+ */
+const DOUBLE_SUBMIT_PATH = '/api/generate-script';
+function installDoubleSubmit(): void {
+  const origFetch = window.fetch.bind(window);
+  window.fetch = (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+    const url =
+      typeof input === 'string' ? input : input instanceof Request ? input.url : input.toString();
+    const method = (
+      init?.method ?? (input instanceof Request ? input.method : 'GET')
+    ).toUpperCase();
+    if (method === 'POST' && url.includes(DOUBLE_SUBMIT_PATH)) {
+      void origFetch(input, init).catch(() => undefined);
+    }
+    return origFetch(input, init);
+  };
+}
+
 /** Inject a transparent overlay covering the target so pointer hits land on the overlay, not it. */
 function installOcclusion(): void {
   const apply = (): void => {
@@ -184,4 +214,5 @@ export function installBugInjector(): void {
   if (bugs.has('state-desync')) installStateDesync();
   if (bugs.has('status-stale')) installStatusDesync();
   if (bugs.has('render-storm')) installRenderStorm();
+  if (bugs.has('double-submit')) installDoubleSubmit();
 }

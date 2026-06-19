@@ -30,8 +30,9 @@ export const ANNOTATE_TOOLS: ToolDef[] = [
       '{ statePath, store?, equals? } → the last step asserts a registered store value (the source ' +
       'of truth no DOM read can reach); mark-dynamic { testid } → the ' +
       "flow records that region as LLM-dynamic (replay won't assert its content); success-state " +
-      '{ signal | statePath(+store,+equals) | testid } → the flow golden end-condition (statePath ' +
-      'asserts a registered store value — the source of truth no DOM read can reach). Folded onto disk by iris_flow_save. ' +
+      '{ signal | statePath(+store,+equals) | net(+count) | testid } → the flow golden end-condition (statePath ' +
+      'asserts a registered store value — the source of truth no DOM read can reach; net asserts a ' +
+      'request fired EXACTLY `count` times — catches double-submit). Folded onto disk by iris_flow_save. ' +
       'Returns { ok:true, target:step|flow, compiled } (e.g. "will assert signal diff:shown") or ' +
       '{ ok:false, code } (annotate_no_recording | annotate_no_step | annotate_unknown_kind | ' +
       'annotate_missing_field). FIRST CUT: structured only — a free natural-language string is ' +
@@ -75,6 +76,17 @@ export const ANNOTATE_TOOLS: ToolDef[] = [
         .record(z.unknown())
         .optional()
         .describe('Key/value pairs the signal payload must match (assert-signal only).'),
+      net: z
+        .object({
+          method: z.string().optional(),
+          urlContains: z.string().optional(),
+          status: z.number().optional(),
+          count: z.number().int().nonnegative().optional(),
+        })
+        .optional()
+        .describe(
+          'Network golden end-condition for success-state: the flow succeeds only when EXACTLY `count` requests match { method?, urlContains?, status? } since the action (omit count = presence). Catches the double-submit / retry-storm regression a presence check passes.',
+        ),
       sessionId: z
         .string()
         .optional()

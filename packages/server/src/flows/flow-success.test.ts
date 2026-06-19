@@ -48,6 +48,27 @@ describe('successToPredicate', () => {
     expect(p?.kind).toBe('allOf');
   });
 
+  it('a net WITHOUT count stays a bare presence predicate (wait-until-true)', () => {
+    expect(successToPredicate({ net: { urlContains: '/api/deploy' } }, NONE)).toEqual({
+      kind: 'net',
+      urlContains: '/api/deploy',
+    });
+  });
+
+  it('net.count gates on `settled` so a double-submit cannot pass on the first transient match', () => {
+    // The cardinality read must happen AFTER the network quiets, else exact count:1 is satisfied the
+    // instant the first request lands (before a duplicate). settled + net is the post-settle gate.
+    expect(
+      successToPredicate({ net: { method: 'POST', urlContains: '/api/deploy', count: 1 } }, NONE),
+    ).toEqual({
+      kind: 'allOf',
+      predicates: [
+        { kind: 'settled' },
+        { kind: 'net', method: 'POST', urlContains: '/api/deploy', count: 1 },
+      ],
+    });
+  });
+
   it('compiles a state-truth success end-condition', () => {
     expect(
       successToPredicate(

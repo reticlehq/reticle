@@ -61,6 +61,50 @@ describe('predicate engine', () => {
     expect(r.pass).toBe(true);
   });
 
+  it('net count: exactly-once passes on one match, fails on a double-submit', async () => {
+    // The regression class: an action that should fire ONE request fires two (double-submit /
+    // useEffect double-fire / a retry storm). Presence-only `net` passes both; `count` catches it.
+    const once = new FakeSession([
+      ev(EventType.NET_REQUEST, { method: 'POST', url: '/api/deploy', status: 200 }),
+    ]);
+    const okPredicate = {
+      kind: 'net' as const,
+      method: 'POST',
+      urlContains: '/api/deploy',
+      count: 1,
+    };
+    expect((await evaluatePredicate(once, okPredicate)).pass).toBe(true);
+
+    const twice = new FakeSession([
+      ev(EventType.NET_REQUEST, { method: 'POST', url: '/api/deploy', status: 200 }),
+      ev(EventType.NET_REQUEST, { method: 'POST', url: '/api/deploy', status: 200 }),
+    ]);
+    const r = await evaluatePredicate(twice, okPredicate);
+    expect(r.pass).toBe(false);
+    expect(r.failureReason).toContain('2');
+  });
+
+  it('net count: an unmatched url is not counted (count scoped to the matcher)', async () => {
+    const session = new FakeSession([
+      ev(EventType.NET_REQUEST, { method: 'POST', url: '/api/deploy', status: 200 }),
+      ev(EventType.NET_REQUEST, { method: 'GET', url: '/api/other', status: 200 }),
+    ]);
+    expect(
+      (await evaluatePredicate(session, { kind: 'net', urlContains: '/api/deploy', count: 1 }))
+        .pass,
+    ).toBe(true);
+  });
+
+  it('net count: respects the since floor (a prior-action request is not counted)', async () => {
+    const session = new FakeSession([
+      ev(EventType.NET_REQUEST, { method: 'POST', url: '/api/deploy', status: 200 }, 10),
+      ev(EventType.NET_REQUEST, { method: 'POST', url: '/api/deploy', status: 200 }, 30),
+    ]);
+    const predicate = { kind: 'net' as const, urlContains: '/api/deploy', count: 1 };
+    expect((await evaluatePredicate(session, predicate)).pass).toBe(false); // both counted = 2
+    expect((await evaluatePredicate(session, predicate, 20)).pass).toBe(true); // floor drops the stale one
+  });
+
   it('since floor: a stale signal before the cursor does NOT fake a pass', async () => {
     // A signal fired at t=10 (e.g. during a PRIOR act). Asserting after a later act (floor=20)
     // must NOT match it — that is the stale-buffer false-pass the honesty fix closes.

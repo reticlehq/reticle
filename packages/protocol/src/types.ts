@@ -188,6 +188,12 @@ export const FlowExpectSchema = z.object({
       method: z.string().optional(),
       urlContains: z.string().optional(),
       status: z.number().optional(),
+      /**
+       * Exact number of matching requests since the action — turns presence into a cardinality
+       * assertion. Catches the double-submit / useEffect-double-fire / retry-storm regression class:
+       * the request fired (presence passes) but fired the WRONG number of times. Omit = presence (≥1).
+       */
+      count: z.number().int().nonnegative().optional(),
     })
     .optional(),
   element: z
@@ -476,6 +482,16 @@ export const AnnotationSchema = z.discriminatedUnion('kind', [
     statePath: z.string().min(1).optional(),
     store: z.string().min(1).optional(),
     equals: z.unknown().optional(),
+    // A network-cardinality golden end-condition: the flow succeeds only when EXACTLY `count` matching
+    // requests fired (omit count = presence). Catches the double-submit / retry-storm regression class.
+    net: z
+      .object({
+        method: z.string().min(1).optional(),
+        urlContains: z.string().min(1).optional(),
+        status: z.number().optional(),
+        count: z.number().int().nonnegative().optional(),
+      })
+      .optional(),
   }),
   z.object({
     kind: z.literal(AnnotationKind.INTENT),

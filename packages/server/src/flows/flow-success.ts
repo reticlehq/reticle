@@ -54,6 +54,14 @@ export function successToPredicate(
     if (success.net.method !== undefined) net.method = success.net.method;
     if (success.net.urlContains !== undefined) net.urlContains = success.net.urlContains;
     if (success.net.status !== undefined) net.status = success.net.status;
+    if (success.net.count !== undefined) {
+      net.count = success.net.count;
+      // A cardinality assertion is inherently POST-SETTLE. The success waiter is wait-until-true, so an
+      // exact count (e.g. 1) is transiently satisfied the instant the FIRST matching request lands —
+      // before a double-submit's duplicate arrives. Gating on `settled` forces the count to be read
+      // only after the network has gone quiet, so the duplicate IS counted and the over-count fails.
+      parts.push({ kind: 'settled' });
+    }
     parts.push(net);
   }
 
