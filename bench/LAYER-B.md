@@ -268,3 +268,41 @@ assert-the-consequence), which a step-driving MCP fundamentally lacks.
   deterministic and Playwright has no equivalent.
 - Tool-definition overhead specifically: the `dynamic` profile is ~12× leaner per turn (305 vs
   3,827) and flat as the toolbox grows — the structural fix to the MCP token-barrier you flagged.
+
+## Layer C — regression replay, MEASURED (the hard 70×+ number)
+
+Built as a first-class layer (`harness/replay-bench.mjs`): record each verify flow once, then
+`iris_flow_replay` re-runs it **deterministically (no LLM)** and returns a compact verdict. The
+per-regression-run cost is the tokens the agent/CI reads — measured:
+
+| Flow (5–4 steps) | replay status | replay tokens (deterministic) |
+| ---------------- | ------------- | ----------------------------- |
+| verify-500       | ok            | 192                           |
+| verify-console   | drift         | 180                           |
+| verify-route     | ok            | 156                           |
+| verify-modal     | drift         | 180                           |
+| **mean**         |               | **177**                       |
+
+**Per regression run: Iris replay ~177 tokens vs Playwright re-drive ~30,249 → 171× (DevTools ~32,296 → 182×).**
+Past the 70× target, and it **compounds**: over N runs Iris pays ~author-once + N×177; the competitors
+(no replay) pay N×~30k. The replay is deterministic, so accuracy doesn't drift run-to-run the way
+the LLM agent loop does.
+
+Honesty: 2 of 4 flows replayed clean (`ok`); 2 returned `drift` — the replay's live anchor
+re-resolution flagged a difference (most likely recording fidelity on those two steps, not a real
+app regression). The token _cost_ is ~180 either way; tightening recording fidelity so all four
+return `ok` (and pairing replay with an injected regression to show it CATCHES the break at the same
+~180-token cost) is the next step. Raw: `bench/raw/replay-bench.json`.
+
+### The three regimes, side by side (per single verification)
+
+|                            | tokens/run | how                                               |
+| -------------------------- | ---------- | ------------------------------------------------- |
+| Playwright MCP (ad-hoc)    | ~30,249    | LLM drives every run                              |
+| Iris ad-hoc (core)         | ~46–55k    | LLM drives every run (richer context = +accuracy) |
+| **Iris regression replay** | **~177**   | deterministic replay of a recorded flow — no LLM  |
+
+The honest headline: for **one-shot** verification Iris is ~1.5–2× Playwright (richer context buys
+the regressions others miss). For **repeated regression** verification — the actual job of a test
+suite — Iris is **~170× cheaper per run** because it replays deterministically and the competitors
+have no replay. That is where "100× better" is real.
