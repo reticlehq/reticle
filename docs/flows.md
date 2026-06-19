@@ -81,9 +81,10 @@ annotations only — see below; free natural-language annotations are future wor
 }
 ```
 
-Each step binds to a **testid/signal anchor**, never a `eXX` ref. A step recorded on an element
-with no `data-testid` is kept with `degraded: true` (a "add a testid here" marker) rather than
-silently dropped.
+Each step binds to a **semantic anchor**, never a `eXX` ref: a `testid`/`signal` when available,
+else an auto-derived `component` anchor (component name + source `file:line`) for an element with no
+testid — so the flow stays stable with zero hand-added testids. Only when none of those resolve is a
+step kept `degraded: true` (a last-resort "add a testid here" marker) rather than silently dropped.
 
 ## Run a flow
 
