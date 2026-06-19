@@ -37,12 +37,16 @@ wins outright where the bug requires seeing the program itself — its state, an
 again deterministically.** Not "Iris sees pixels better"; "Iris sees the program, and over repeated
 runs it is two orders of magnitude cheaper."
 
-- **Decisive wins:** regression-run cost (128–184×, compounding), and any bug whose truth lives in
-  state the app never put in the DOM (UI-vs-store desync). The two fuse: a store-truth assertion is a
-  first-class `state` predicate (`iris_assert`/`iris_act_and_wait`) and a flow `success-state`
-  end-condition, so a desync is caught **deterministically in the cheap replay loop** — not as a
-  one-off manual read-state/read-DOM/compare. State assertions grade as consequences (a wrong element
-  or stale render cannot fake them).
+- **Decisive wins:** (1) **regression-run cost** — 128–184× per run, compounding to 2574× at suite
+  scale; (2) **0% flake** — a deterministic, model-free verdict where competitors re-drive with a
+  sampled LLM every run; and (3) a **declared-consequence family** that catches bugs whose truth never
+  reaches the DOM. A flow's `success` end-condition compiles to a real, post-settle predicate over
+  `signal | state | net{count} | console | state{hold}` — so one cheap replay catches a UI-vs-store
+  **desync**, a dead-handler **state oracle**, a **double-submit** (net cardinality), a silent
+  **console error**, and an action's unintended **blast-radius** mutation. None of these can be faked by
+  a healed-to-wrong-element locator, and the last three are invisible to any out-of-page tool. These
+  fuse with RRE: the catch runs **deterministically in the cheap replay loop**, not as a one-off
+  manual read-and-compare.
 - **Ties (honest):** every visually-observable bug — computed style, geometry, occlusion, color,
   theme — is reachable by any tool with a JS-`evaluate`. Iris is more ergonomic (one native call, no
   JS authoring), not more capable.
