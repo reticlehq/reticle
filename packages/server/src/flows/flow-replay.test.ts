@@ -46,6 +46,7 @@ class FakeSession implements FlowReplaySession {
     private readonly queryScript: (testid: string) => QueryScript,
     private readonly events: IrisEvent[] = [],
     private readonly actOk: (ref: string) => boolean = PASS,
+    private readonly stores: Record<string, unknown> = {},
   ) {}
 
   command(name: string, args: Record<string, unknown> = {}): Promise<CommandResult> {
@@ -70,6 +71,14 @@ class FakeSession implements FlowReplaySession {
         result: {},
         ...(this.actOk(ref) ? {} : { error: 'act failed' }),
       } as CommandResult);
+    }
+    if (name === IrisCommand.STATE_READ) {
+      return Promise.resolve({
+        kind: 'command_result',
+        id: 's',
+        ok: true,
+        result: { stores: this.stores, storeNames: Object.keys(this.stores) },
+      });
     }
     return Promise.resolve({ kind: 'command_result', id: 'x', ok: true, result: {} });
   }
@@ -363,6 +372,34 @@ describe('replayFlow — anchor re-resolution + legible drift', () => {
     expect(last?.drift?.nearest).toBeNull();
     expect(steps).toHaveLength(1); // stopped before the testid step
     expect(session.acts).toEqual([]);
+  });
+
+  it('9: a step expect.state holds against the store → green', async () => {
+    const script = (testid: string): QueryScript => ({ elements: [el(`e-${testid}`, testid)] });
+    const stores = { app: { deployments: [{ status: 'live' }] } };
+    const session = new FakeSession(script, [], PASS, stores);
+    const step: FlowStep = {
+      ...testidStep('ship'),
+      expect: { state: { store: 'app', path: 'deployments.0.status', equals: 'live' } },
+    };
+    const steps = await replayFlow(session, flow([step]), waitForPredicate, FAST);
+    expect(steps.at(-1)?.ok).toBe(true);
+  });
+
+  it('10: a step expect.state that lies about the store drifts (STATE_MISMATCH), not a blind pass', async () => {
+    // The DOM action ran fine, but the store says 'queued' — a deploy that only LOOKS shipped.
+    const script = (testid: string): QueryScript => ({ elements: [el(`e-${testid}`, testid)] });
+    const stores = { app: { deployments: [{ status: 'queued' }] } };
+    const session = new FakeSession(script, [], PASS, stores);
+    const step: FlowStep = {
+      ...testidStep('ship'),
+      expect: { state: { store: 'app', path: 'deployments.0.status', equals: 'live' } },
+    };
+    const steps = await replayFlow(session, flow([step]), waitForPredicate, FAST);
+    const last = steps.at(-1);
+    expect(last?.ok).toBe(false);
+    expect(last?.drift?.reasonKind).toBe(DriftReason.STATE_MISMATCH);
+    expect(last?.drift?.reason).toContain('queued');
   });
 });
 

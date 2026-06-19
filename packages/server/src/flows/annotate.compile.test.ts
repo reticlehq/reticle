@@ -63,6 +63,29 @@ describe('compileAnnotation pure compiler', () => {
     expect(out.patch?.success?.signal).toBeUndefined();
   });
 
+  it('assert-state compiles to step.expect.state on the LAST step', () => {
+    const a: Annotation = {
+      kind: AnnotationKind.ASSERT_STATE,
+      store: 'app',
+      statePath: 'deployments.0.status',
+      equals: 'live',
+    };
+    const out = compileAnnotation(a, 3);
+    expect(out.patch?.stepIndex).toBe(2);
+    expect(out.patch?.stepExpect?.state).toEqual({
+      store: 'app',
+      path: 'deployments.0.status',
+      equals: 'live',
+    });
+    expect(describeCompiled(a)).toContain('assert state deployments.0.status');
+  });
+
+  it('assert-state on zero steps is NO_STEP_TO_ANNOTATE', () => {
+    const a: Annotation = { kind: AnnotationKind.ASSERT_STATE, statePath: 'x' };
+    const out = compileAnnotation(a, 0);
+    expect(out.result.ok).toBe(false);
+  });
+
   it('an assert-* on zero steps is NO_STEP_TO_ANNOTATE (no patch)', () => {
     const a: Annotation = { kind: AnnotationKind.ASSERT_SIGNAL, name: 'x' };
     const out = compileAnnotation(a, 0);

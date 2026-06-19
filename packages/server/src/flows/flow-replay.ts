@@ -7,6 +7,7 @@ import {
   type CommandResult,
   type Drift,
   type FlowAnchor,
+  type FlowExpect,
   type FlowFile,
   type FlowStep,
   type FlowStepResult,
@@ -368,6 +369,32 @@ async function runTestidStep(
   return result;
 }
 
+/**
+ * After a step's anchor resolves + its action runs, an `expect.state` additionally asserts STORE
+ * TRUTH — the source of truth no DOM read can reach. Evaluated with the same predicate engine (waits
+ * up to the timeout so an async store update can settle); a mismatch is legible drift, not a blind
+ * fail. Returns the drift on mismatch, else undefined.
+ */
+async function assertStepState(
+  session: FlowReplaySession,
+  state: NonNullable<FlowExpect['state']>,
+  waitForSignal: WaitForSignal,
+  timeoutMs: number,
+  since: number,
+): Promise<Drift | undefined> {
+  const predicate: Extract<Predicate, { kind: 'state' }> = { kind: 'state', path: state.path };
+  if (state.store !== undefined) predicate.store = state.store;
+  if (state.equals !== undefined) predicate.equals = state.equals;
+  const verdict = await waitForSignal(session, predicate, timeoutMs, since);
+  if (verdict.pass) return undefined;
+  return {
+    reasonKind: DriftReason.STATE_MISMATCH,
+    reason: verdict.failureReason ?? `state '${state.path}' did not hold`,
+    anchor: `state:${state.path}`,
+    nearest: null,
+  };
+}
+
 /** Run one signal-anchored step: wait for the signal predicate, else drift (no nearest for signals). */
 async function runSignalStep(
   session: FlowReplaySession,
@@ -428,6 +455,21 @@ export async function replayFlow(
       result = await runComponentStep(session, step, index, step.anchor, confirmDangerous, sleep);
     } else {
       result = await runTestidStep(session, step, index, label, dynamic, confirmDangerous, sleep);
+    }
+    // A step may additionally assert STORE TRUTH (expect.state) once its action has run — caught
+    // deterministically here, in the same cheap replay loop, with no LLM.
+    if (result.ok && result.drift === undefined && step.expect?.state !== undefined) {
+      const stateDrift = await assertStepState(
+        session,
+        step.expect.state,
+        waitForSignal,
+        signalTimeoutMs,
+        cursorBefore,
+      );
+      if (stateDrift !== undefined) {
+        result.ok = false;
+        result.drift = stateDrift;
+      }
     }
     if (page !== undefined) result.page = page;
     const consequence = summarizeConsequence(

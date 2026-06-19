@@ -223,6 +223,7 @@ export const DriftReason = {
   TESTID_NOT_FOUND: 'testid_not_found', // a testid anchor resolved to zero live elements
   SIGNAL_NOT_OBSERVED: 'signal_not_observed', // a signal anchor never fired within the timeout
   COMPONENT_NOT_FOUND: 'component_not_found', // a component/source auto-anchor resolved to zero live elements
+  STATE_MISMATCH: 'state_mismatch', // a step's expect.state assertion did not hold against the store
 } as const;
 export type DriftReason = (typeof DriftReason)[keyof typeof DriftReason];
 
@@ -239,6 +240,7 @@ export const FLOW_SIGNAL_TIMEOUT_MS = 4000;
 export const AnnotationKind = {
   ASSERT_SIGNAL: 'assert-signal', // → step.expect.signal  (invariant)
   ASSERT_VISIBLE: 'assert-visible', // → step.expect.element (invariant)
+  ASSERT_STATE: 'assert-state', // → step.expect.state   (store-truth invariant on the last step)
   MARK_DYNAMIC: 'mark-dynamic', // → flow.dynamic[]      (don't assert words/content)
   SUCCESS_STATE: 'success-state', // → flow.success        (golden end condition)
   INTENT: 'intent', // → flow.intent         (the business goal this flow exists to verify)

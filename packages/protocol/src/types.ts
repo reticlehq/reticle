@@ -458,6 +458,12 @@ export const AnnotationSchema = z.discriminatedUnion('kind', [
     testid: z.string().min(1),
   }),
   z.object({
+    kind: z.literal(AnnotationKind.ASSERT_STATE),
+    statePath: z.string().min(1),
+    store: z.string().min(1).optional(),
+    equals: z.unknown().optional(),
+  }),
+  z.object({
     kind: z.literal(AnnotationKind.MARK_DYNAMIC),
     testid: z.string().min(1),
   }),

@@ -34,6 +34,13 @@ export function compileAnnotation(a: Annotation, stepCount: number): AnnotateOut
       if (stepCount === 0) return noStep();
       return stepPatch(a, stepCount, { element: { testid: a.testid } });
     }
+    case AnnotationKind.ASSERT_STATE: {
+      if (stepCount === 0) return noStep();
+      const state: FlowExpect['state'] = { path: a.statePath };
+      if (a.store !== undefined) state.store = a.store;
+      if (a.equals !== undefined) state.equals = a.equals;
+      return stepPatch(a, stepCount, { state });
+    }
     case AnnotationKind.MARK_DYNAMIC:
       return {
         result: { ok: true, target: AnnotationTarget.FLOW, compiled: describeCompiled(a) },
@@ -97,6 +104,10 @@ export function describeCompiled(a: Annotation): string {
       return `${COMPILED_PREDICATE_PREFIX} assert signal ${a.name}`;
     case AnnotationKind.ASSERT_VISIBLE:
       return `${COMPILED_PREDICATE_PREFIX} assert ${a.testid} visible`;
+    case AnnotationKind.ASSERT_STATE:
+      return `${COMPILED_PREDICATE_PREFIX} assert state ${a.statePath}${
+        a.equals !== undefined ? ` == ${JSON.stringify(a.equals)}` : ''
+      }`;
     case AnnotationKind.MARK_DYNAMIC:
       return `${COMPILED_PREDICATE_PREFIX} ignore ${a.testid} (dynamic)`;
     case AnnotationKind.SUCCESS_STATE:

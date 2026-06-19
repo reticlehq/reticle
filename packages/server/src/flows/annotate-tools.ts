@@ -26,7 +26,9 @@ export const ANNOTATE_TOOLS: ToolDef[] = [
     description:
       'Attach a STRUCTURED annotation to the active recording, compiling it into the flow. kind: ' +
       'assert-signal { name, dataMatches? } → the last step asserts that signal; assert-visible ' +
-      '{ testid } → the last step asserts that element is present; mark-dynamic { testid } → the ' +
+      '{ testid } → the last step asserts that element is present; assert-state ' +
+      '{ statePath, store?, equals? } → the last step asserts a registered store value (the source ' +
+      'of truth no DOM read can reach); mark-dynamic { testid } → the ' +
       "flow records that region as LLM-dynamic (replay won't assert its content); success-state " +
       '{ signal | statePath(+store,+equals) | testid } → the flow golden end-condition (statePath ' +
       'asserts a registered store value — the source of truth no DOM read can reach). Folded onto disk by iris_flow_save. ' +
@@ -41,7 +43,7 @@ export const ANNOTATE_TOOLS: ToolDef[] = [
       kind: z
         .string()
         .describe(
-          'Annotation kind: assert-signal | assert-visible | mark-dynamic | success-state | intent.',
+          'Annotation kind: assert-signal | assert-visible | assert-state | mark-dynamic | success-state | intent.',
         ),
       name: z.string().optional().describe('Signal name for assert-signal annotations.'),
       text: z
@@ -59,9 +61,12 @@ export const ANNOTATE_TOOLS: ToolDef[] = [
         .string()
         .optional()
         .describe(
-          "Store dot-path for a success-state store-truth end-condition (e.g. 'deployments.0.status'). With `store` and optional `equals` — asserts the app's source of truth, not just the DOM.",
+          "Store dot-path for an assert-state (last step) or success-state (golden end) store-truth assertion (e.g. 'deployments.0.status'). With `store` and optional `equals` — asserts the app's source of truth, not just the DOM.",
         ),
-      store: z.string().optional().describe('Store name for a statePath success-state annotation.'),
+      store: z
+        .string()
+        .optional()
+        .describe('Store name for a statePath assert-state/success-state annotation.'),
       equals: z
         .unknown()
         .optional()
