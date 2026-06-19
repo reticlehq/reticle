@@ -39,6 +39,15 @@ export interface FlowAssertionClassification {
   consequenceSteps: number;
   weakSteps: number;
   successIsConsequence: boolean;
+  /** The flow's declared business goal, if any (the intent annotation). */
+  intent?: string;
+  /**
+   * True only when the flow BOTH declares a business intent AND asserts an observable business
+   * OUTCOME (a consequence — signal/net). This is the "intent + outcome oracle": a flow earns
+   * `intentVerified` when it can actually fail if its declared goal stops being met. A flow with an
+   * intent but only presence-only checks is the dangerous case — it claims a goal it cannot verify.
+   */
+  intentVerified: boolean;
   /** Present for presence-only / assertion-free flows: how to make the flow a real test. */
   warning?: string;
 }
@@ -47,6 +56,8 @@ const ASSERTION_FREE_WARNING =
   'This flow performs actions but asserts no observable consequence — it will pass even if the feature is broken. Add a consequence assertion with iris_annotate (assert-signal / assert-net) or a success-state.';
 const PRESENCE_ONLY_WARNING =
   'This flow only checks element presence, not an observable consequence (signal/network). A locator healed to the wrong element can still pass it. Add a consequence assertion (assert-signal / assert-net / success-state).';
+const INTENT_WITHOUT_OUTCOME_WARNING =
+  'This flow declares a business intent but asserts no observable outcome (signal/network) — it claims to verify a goal it cannot actually check. Add a success-state consequence so the flow fails when the goal stops being met.';
 
 /** signal or net present → the expect verifies a consequence a wrong element cannot fake. */
 function expectIsConsequence(e: FlowExpect | undefined): boolean {
@@ -83,6 +94,9 @@ export function classifyFlowAssertions(flow: FlowFile): FlowAssertionClassificat
   const hasConsequenceAssertion = consequenceSteps > 0 || successIsConsequence;
   const hasAnyAssertion = hasConsequenceAssertion || weakSteps > 0 || successIsWeak;
 
+  const intent = flow.intent;
+  const intentVerified = intent !== undefined && hasConsequenceAssertion;
+
   let grade: FlowAssertionGrade;
   let warning: string | undefined;
   if (hasConsequenceAssertion) {
@@ -94,6 +108,9 @@ export function classifyFlowAssertions(flow: FlowFile): FlowAssertionClassificat
     grade = FlowAssertionGrade.ASSERTION_FREE;
     warning = ASSERTION_FREE_WARNING;
   }
+  // A declared-but-unverifiable business goal is the sharper failure: surface it over the generic
+  // assertion warning, since the flow actively claims to check something it cannot.
+  if (intent !== undefined && !hasConsequenceAssertion) warning = INTENT_WITHOUT_OUTCOME_WARNING;
 
   return {
     grade,
@@ -102,6 +119,8 @@ export function classifyFlowAssertions(flow: FlowFile): FlowAssertionClassificat
     consequenceSteps,
     weakSteps,
     successIsConsequence,
+    ...(intent !== undefined ? { intent } : {}),
+    intentVerified,
     ...(warning !== undefined ? { warning } : {}),
   };
 }

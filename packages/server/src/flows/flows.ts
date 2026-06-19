@@ -117,9 +117,11 @@ export interface FlowAnnotations {
   stepExpect: Map<number, FlowExpect>;
   dynamic: string[];
   success?: FlowExpect;
+  /** The flow's declared business goal (intent annotation). */
+  intent?: string;
 }
 
-/** Apply folded annotations onto an anchored flow (pure): per-step expect, dynamic[], success. */
+/** Apply folded annotations onto an anchored flow (pure): per-step expect, dynamic[], success, intent. */
 function withAnnotations(flow: FlowFile, ann: FlowAnnotations | undefined): FlowFile {
   if (ann === undefined) return flow;
   const steps = flow.steps.map((step, i) => {
@@ -131,6 +133,7 @@ function withAnnotations(flow: FlowFile, ann: FlowAnnotations | undefined): Flow
     out.dynamic = ann.dynamic.map((value) => ({ kind: AnchorKind.TESTID, value }));
   }
   if (ann.success !== undefined) out.success = ann.success;
+  if (ann.intent !== undefined) out.intent = ann.intent;
   return out;
 }
 

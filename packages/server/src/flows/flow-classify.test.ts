@@ -72,3 +72,40 @@ describe('classifyFlowAssertions', () => {
     expect(c.consequenceSteps).toBe(1);
   });
 });
+
+/** flow() variant that also declares a business intent. */
+function intentFlow(steps: FlowStep[], intent: string, success?: FlowExpect): FlowFile {
+  return { ...flow(steps, success), intent };
+}
+
+describe('classifyFlowAssertions — business intent + outcome oracle', () => {
+  it('a flow with no intent is intentVerified=false and carries no intent', () => {
+    const c = classifyFlowAssertions(flow([step({ signal: 'deploy:shipped' })]));
+    expect(c.intent).toBeUndefined();
+    expect(c.intentVerified).toBe(false);
+  });
+
+  it('intent + a consequence success outcome → intentVerified (the goal can actually fail)', () => {
+    const c = classifyFlowAssertions(
+      intentFlow([step()], 'ship a deploy to production', { signal: 'deploy:shipped' }),
+    );
+    expect(c.intent).toBe('ship a deploy to production');
+    expect(c.intentVerified).toBe(true);
+    expect(c.grade).toBe(FlowAssertionGrade.ASSERTED);
+    expect(c.warning).toBeUndefined();
+  });
+
+  it('intent without any observable outcome → NOT verified, with the intent-gap warning', () => {
+    const c = classifyFlowAssertions(intentFlow([step()], 'ship a deploy to production'));
+    expect(c.intentVerified).toBe(false);
+    expect(c.warning).toContain('declares a business intent but asserts no observable outcome');
+  });
+
+  it('intent with only a presence-only check is NOT verified (a healed locator could fake it)', () => {
+    const c = classifyFlowAssertions(
+      intentFlow([step()], 'open the deploy modal', { element: { testid: 'deploy-modal' } }),
+    );
+    expect(c.intentVerified).toBe(false);
+    expect(c.warning).toContain('declares a business intent but asserts no observable outcome');
+  });
+});

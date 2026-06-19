@@ -49,6 +49,12 @@ export function compileAnnotation(a: Annotation, stepCount: number): AnnotateOut
       }
       return { result: { ok: false, code: AnnotationErrorCode.MISSING_FIELD } };
     }
+    case AnnotationKind.INTENT:
+      // Flow-level, allowed with 0 steps (the business goal is declared up front).
+      return {
+        result: { ok: true, target: AnnotationTarget.FLOW, compiled: describeCompiled(a) },
+        patch: { intent: a.text },
+      };
   }
 }
 
@@ -91,5 +97,7 @@ export function describeCompiled(a: Annotation): string {
         return `${COMPILED_PREDICATE_PREFIX} succeed when signal ${a.signal}`;
       }
       return `${COMPILED_PREDICATE_PREFIX} succeed when ${a.testid ?? ''} visible`;
+    case AnnotationKind.INTENT:
+      return `${COMPILED_PREDICATE_PREFIX} intent: ${a.text}`;
   }
 }

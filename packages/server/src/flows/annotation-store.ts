@@ -13,6 +13,7 @@ interface FlowAnnotationBucket {
   dynamic: string[];
   success?: FlowExpect;
   stepExpect: Map<number, FlowExpect>;
+  intent?: string;
 }
 
 export class AnnotationStore {
@@ -37,6 +38,11 @@ export class AnnotationStore {
     return this.#byName.get(name)?.success;
   }
 
+  /** The flow's declared business goal (intent annotation), or undefined. */
+  intent(name: string): string | undefined {
+    return this.#byName.get(name)?.intent;
+  }
+
   /** Per-step expect predicates compiled from assert-* annotations, keyed by step index. */
   stepExpect(name: string): Map<number, FlowExpect> {
     const source = this.#byName.get(name)?.stepExpect;
@@ -52,6 +58,11 @@ export class AnnotationStore {
   /** Set the flow's success expectation (success-state); a later set overwrites. */
   setSuccess(name: string, expect: FlowExpect): void {
     this.#bucket(name).success = expect;
+  }
+
+  /** Set the flow's declared business goal (intent); a later set overwrites. */
+  setIntent(name: string, text: string): void {
+    this.#bucket(name).intent = text;
   }
 
   /** Set one step's expect (assert-signal / assert-visible); a later set on the same index wins. */

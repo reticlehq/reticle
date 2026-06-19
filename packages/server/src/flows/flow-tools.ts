@@ -134,12 +134,14 @@ export const FLOW_TOOLS: ToolDef[] = [
           code: FlowErrorCode.NO_RECORDING,
         });
       }
-      // fold any structured annotations (expect/dynamic/success) onto the saved flow.
+      // fold any structured annotations (expect/dynamic/success/intent) onto the saved flow.
       const success = deps.annotations.success(name);
+      const intent = deps.annotations.intent(name);
       const annotations: FlowAnnotations = {
         stepExpect: deps.annotations.stepExpect(name),
         dynamic: deps.annotations.dynamic(name),
         ...(success !== undefined ? { success } : {}),
+        ...(intent !== undefined ? { intent } : {}),
       };
       return deps.flows.save(program, annotations).then(async (res) => {
         if (!res.ok) return { error: flowErrorMessage(res.code), code: res.code };

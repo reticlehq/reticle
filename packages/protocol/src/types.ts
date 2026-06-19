@@ -274,6 +274,14 @@ export interface FlowReplayResult {
 export const FlowFileSchema = z.object({
   version: z.literal(FLOW_FILE_VERSION),
   name: z.string(),
+  /**
+   * The business goal this flow exists to verify, one line (e.g. "ship a deploy to production").
+   * Optional + back-compat (a flow without it still parses). Set via an `intent` annotation. The
+   * point of "intent + outcome oracle": a flow that declares an intent should also assert an
+   * observable business OUTCOME (a consequence success-state), or it claims to verify a goal it
+   * cannot actually check — flow-classify flags that gap.
+   */
+  intent: z.string().optional(),
   // FUTURE: fixtures/preconditions — schema slot reserved, unpopulated this cut. The recorder
   // never writes it and no fixture runner exists.
   fixture: z.string().optional(),
@@ -364,6 +372,10 @@ export const AnnotationSchema = z.discriminatedUnion('kind', [
     signal: z.string().min(1).optional(),
     testid: z.string().min(1).optional(),
   }),
+  z.object({
+    kind: z.literal(AnnotationKind.INTENT),
+    text: z.string().min(1),
+  }),
 ]);
 export type Annotation = z.infer<typeof AnnotationSchema>;
 
@@ -389,6 +401,8 @@ export interface AnnotatePatch {
   dynamicAdd?: string;
   /** flow.success (success-state). */
   success?: FlowExpect;
+  /** flow.intent (intent) — the business goal this flow exists to verify. */
+  intent?: string;
 }
 
 /** Pure compiler output: the result envelope + (on ok) the patch to apply. */

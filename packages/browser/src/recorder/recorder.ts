@@ -49,6 +49,7 @@ const ANNOTATION_LABEL: Record<AnnotationKind, string> = {
   [AnnotationKind.ASSERT_VISIBLE]: 'assert visible',
   [AnnotationKind.MARK_DYNAMIC]: 'mark dynamic',
   [AnnotationKind.SUCCESS_STATE]: 'success state',
+  [AnnotationKind.INTENT]: 'intent',
 };
 
 /** Annotation kinds whose compilation needs a signal name (from the capabilities <select>). */
@@ -436,6 +437,10 @@ class Recorder implements RecorderHandle {
     if (menu === undefined) return;
     menu.textContent = '';
     for (const kind of Object.values(AnnotationKind)) {
+      // INTENT is free-text (the business goal), not a signal/testid pick — authored via
+      // iris_annotate { kind:'intent', text }. The human toolbar's name field is signal/testid only,
+      // so intent is omitted from this menu rather than shipped as a control that can't capture text.
+      if (kind === AnnotationKind.INTENT) continue;
       const item = document.createElement('button');
       item.setAttribute('data-iris-annkind', kind);
       item.textContent = ANNOTATION_LABEL[kind];

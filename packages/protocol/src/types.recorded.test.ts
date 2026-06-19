@@ -24,6 +24,31 @@ describe('FlowFileSchema', () => {
     const parsed = FlowFileSchema.safeParse(stageA);
     expect(parsed.success).toBe(true);
   });
+
+  it('accepts an optional business intent (and a flow without it still parses)', () => {
+    const base = {
+      version: FLOW_FILE_VERSION,
+      name: 'ship-deploy',
+      createdAt: 1234,
+      steps: [
+        {
+          tool: 'iris_act',
+          anchor: { kind: AnchorKind.TESTID, value: 'new-deploy' },
+          action: ActionType.CLICK,
+          args: {},
+        },
+      ],
+    };
+    const withIntent = FlowFileSchema.safeParse({
+      ...base,
+      intent: 'ship a deploy to production',
+      success: { signal: 'deploy:shipped' },
+    });
+    expect(withIntent.success).toBe(true);
+    if (withIntent.success) expect(withIntent.data.intent).toBe('ship a deploy to production');
+    // back-compat: the same flow without intent still parses
+    expect(FlowFileSchema.safeParse(base).success).toBe(true);
+  });
 });
 
 describe('RecordedFlowSchema (in-page recording payload)', () => {

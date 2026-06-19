@@ -40,9 +40,13 @@ export const ANNOTATE_TOOLS: ToolDef[] = [
       kind: z
         .string()
         .describe(
-          'Annotation kind: assert-signal | assert-visible | mark-dynamic | success-state.',
+          'Annotation kind: assert-signal | assert-visible | mark-dynamic | success-state | intent.',
         ),
       name: z.string().optional().describe('Signal name for assert-signal annotations.'),
+      text: z
+        .string()
+        .optional()
+        .describe("Business goal for an intent annotation, e.g. 'ship a deploy to production'."),
       testid: z
         .string()
         .optional()
@@ -95,6 +99,7 @@ export const ANNOTATE_TOOLS: ToolDef[] = [
       if (patch !== undefined) {
         if (patch.dynamicAdd !== undefined) deps.annotations.addDynamic(name, patch.dynamicAdd);
         if (patch.success !== undefined) deps.annotations.setSuccess(name, patch.success);
+        if (patch.intent !== undefined) deps.annotations.setIntent(name, patch.intent);
         if (patch.stepIndex !== undefined && patch.stepExpect !== undefined) {
           deps.annotations.setStepExpect(name, patch.stepIndex, patch.stepExpect);
         }

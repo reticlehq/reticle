@@ -95,10 +95,22 @@ describe('compileAnnotation pure compiler', () => {
     expect(out.patch?.success?.element).toBeUndefined();
   });
 
+  it('intent compiles to a flow-level patch and is allowed with 0 captured steps', () => {
+    const a: Annotation = { kind: AnnotationKind.INTENT, text: 'ship a deploy to production' };
+    const out = compileAnnotation(a, 0);
+    expect(out.result.ok).toBe(true);
+    if (!out.result.ok) throw new Error('expected ok');
+    expect(out.result.target).toBe(AnnotationTarget.FLOW);
+    expect(out.patch?.intent).toBe('ship a deploy to production');
+  });
+
   it('describeCompiled renders the human confirmation text', () => {
     expect(describeCompiled({ kind: AnnotationKind.ASSERT_SIGNAL, name: 'diff:shown' })).toBe(
       'will assert signal diff:shown',
     );
+    expect(
+      describeCompiled({ kind: AnnotationKind.INTENT, text: 'ship a deploy to production' }),
+    ).toBe('will intent: ship a deploy to production');
     expect(describeCompiled({ kind: AnnotationKind.ASSERT_VISIBLE, testid: 'diff-panel' })).toBe(
       'will assert diff-panel visible',
     );

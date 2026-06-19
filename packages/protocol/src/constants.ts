@@ -239,6 +239,7 @@ export const AnnotationKind = {
   ASSERT_VISIBLE: 'assert-visible', // → step.expect.element (invariant)
   MARK_DYNAMIC: 'mark-dynamic', // → flow.dynamic[]      (don't assert words/content)
   SUCCESS_STATE: 'success-state', // → flow.success        (golden end condition)
+  INTENT: 'intent', // → flow.intent         (the business goal this flow exists to verify)
 } as const;
 export type AnnotationKind = (typeof AnnotationKind)[keyof typeof AnnotationKind];
 
