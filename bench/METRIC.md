@@ -58,8 +58,7 @@ The user's stretch goal is 100×. Stated plainly so we don't fake it:
   non-visual regressions — that is where the "≈100×" lives.
   - _Honesty caveat:_ Iris's per-check figures are the o200k text-token proxy (≈ Anthropic
     text tokens ±~20%); the 1365 is exact Anthropic image tokens. The comparison is
-    directional, not a single flat "100×". Layer B (with an API key) will measure a real
-    screenshot-agent loop head-to-head.
+    directional, not a single flat "100×". Layer B (now measured for the MCP tools; a screenshot-agent variant remains future) — see LAYER-B.md.
 
 We optimize the real metric (VE with the RCR gate) and report the screenshot comparison
 separately and honestly. No fabricated 100×.

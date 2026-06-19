@@ -1,8 +1,10 @@
 # Benchmark-driven hardening — progress log
 
 > What changed while chasing the metric (`METRIC.md`), version by version, all numbers
-> measured by the harness (`history.jsonl`), nothing hand-entered. Layer A (observation cost);
-> Layer B (agent-loop usage) still NOT MEASURED — needs an API key.
+> measured by the harness (`history.jsonl`), nothing hand-entered. This file is **Layer A**
+> (observation cost, scripted recipes = the ceiling). **Layer B (a real gpt-4o agent loop) is now
+> MEASURED** and it _inverts_ this picture — Iris becomes the most expensive and least accurate in
+> practice. Read **`LAYER-B.md`**; it is the most important finding here.
 >
 > This file is the **head-to-head** (regressions all three tools can attempt). For the other half
 > — the runtime signals each tool can observe _at all_, where Iris's app-state / domain-signal /
