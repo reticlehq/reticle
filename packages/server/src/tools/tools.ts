@@ -13,6 +13,7 @@ import {
 import type { Session, SessionManager } from '../session/session.js';
 import type { ElementBox, RealInputArgs, RealInputProvider } from '../input/real-input.js';
 import { isPointerAction } from '../input/real-input.js';
+import { leanActResult } from './act-view.js';
 import { IrisTool } from './tool-names.js';
 import { buildReactionReport } from '../events/reaction.js';
 import { evaluatePredicate, waitForPredicate, PredicateSchema } from '../events/predicate.js';
@@ -531,7 +532,7 @@ export const TOOLS: ToolDef[] = [
           dispatched: true,
           settled: real.settled,
           settleReason: null,
-          result: real.result,
+          result: leanActResult(real.result),
           ...healthEnvelope(session),
         });
       }
@@ -555,7 +556,7 @@ export const TOOLS: ToolDef[] = [
         dispatched: r['dispatched'] ?? true,
         settled: r['settled'] ?? null,
         settleReason: r['settleReason'] ?? null,
-        result: result.result,
+        result: leanActResult(result.result),
         ...(real.fellBack === true ? { warning: ActionWarning.REAL_INPUT_FELL_BACK } : {}),
         ...healthEnvelope(session),
       });
@@ -597,7 +598,7 @@ export const TOOLS: ToolDef[] = [
       return withControl(session, {
         since,
         dispatched: r['count'] !== undefined,
-        result: result.result,
+        result: leanActResult(result.result),
         ...healthEnvelope(session),
       });
     },
