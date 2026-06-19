@@ -373,7 +373,19 @@ against the live DOM + the event buffer.
 
 // An app-emitted signal (webhook/websocket/store change you surfaced via iris.signal)
 { "kind": "signal", "name": "webhook:received", "dataMatches": { "provider": "stripe", "id": "*" } }
+
+// A registered store's VALUE — the source of truth no DOM/network read can reach. Walks a dot-path
+// (numeric array indices) and matches `equals`: a literal, omitted = presence, or a
+// { $gte | $lte | $gt | $lt | $contains | $length } operator pattern. Catches a UI-vs-store desync
+// (a deploy that only LOOKS shipped) deterministically, in one call — no LLM, no DOM scraping.
+{ "kind": "state", "store": "app", "path": "deployments.0.status", "equals": "live" }
 ```
+
+A `state` assertion is graded as a **consequence** (a wrong element or stale render cannot fake it),
+and is usable the same three ways anywhere predicates flow: ad-hoc (`iris_assert` / `iris_act_and_wait`
+`until`), as a flow step invariant (`iris_annotate { kind: "assert-state", statePath, store?, equals? }`),
+and as a flow's golden end-condition (`iris_annotate { kind: "success-state", statePath, … }`). On a
+miss it names the real store value and the keys that were available — legible, not a blind fail.
 
 ### Combinators
 
