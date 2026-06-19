@@ -47,7 +47,7 @@ because the agent pays for the richness again every turn and can drown in it.
 ## The honest synthesis (Layer A + Layer B together)
 
 - **Iris's ceiling is the best** (Layer A: catches every regression, including silent-DOM and CLS
-  the a11y-only tools miss; categorically observes app-state/signals — see `CAPABILITY.md`).
+  the a11y-only tools miss; categorically observes app-state/signals).
 - **Iris's real-agent behavior is the worst of the three** (Layer B: most tokens, fewest correct
   verdicts). The gap between its ceiling and its real behavior is the largest of any tool — and
   that gap, not the ceiling, is what a developer using Claude Code actually experiences today.

@@ -6,15 +6,13 @@ cost, and hard UI/state bugs. Everything here is measured by the harness; nothin
 **Start here: [`SCORECARD.md`](SCORECARD.md)** — the honest one-page standing across all layers
 (wins, ties, and caveats). Depth lives in: `METRIC.md` (chased metric: VE gate + RRE), `LAYER-B.md`
 (real agent loop + Layer C / RRE), `HARD-BENCH.md` (hard UI/state bugs — visual = parity, state-desync
-= Iris-only), `JOURNEY.md` (intent + journey evidence report), `MERMAID.md` (format token study),
-`PROGRESS.md` / `CAPABILITY.md` (Layer A trajectory + capability matrix). Gate: `pnpm bench` /
+= Iris-only), and `METHODOLOGY.md` (full design: controls, scenarios, fairness). Gate: `pnpm bench` /
 `bench:full` / `bench:gate` (fail on regression vs the last `history.jsonl` row).
 
 ## Layout
 
 ```
 METHODOLOGY.md            full design: controls, scenarios, 2 layers, fairness, fixes
-BLOG.md                   the write-up (Layer A results)
 harness/                  all runnable code
   mcp-client.mjs          minimal JSON-RPC stdio MCP client (drives any MCP server, no LLM)
   tokenizer.mjs           exact chars/bytes + tiktoken o200k_base PROXY (labeled, not Anthropic)
@@ -78,7 +76,7 @@ Node v22.14.0, Playwright `chromium-1223`, host Darwin arm64.
   detection vs a fixed rule, across 27/30 cells (cross-component is NOT MEASURED — see below).
 - **NOT MEASURED:** Layer B agent-reasoning tokens (no API key in the run environment);
   `cross-component-regression` (needs a biased per-tool row-counting heuristic);
-  steady-state latency (the measured latency is cold-start-dominated — see BLOG §8).
+  steady-state latency (the measured latency is cold-start-dominated).
 
 ## Teardown gotcha (Iris)
 
