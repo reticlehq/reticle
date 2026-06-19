@@ -33,19 +33,36 @@ a correct probe. That matters in a real agent loop (an agent reading only an a11
 prompt to write the probe) — but it is an ergonomics/Layer-B argument, not a capability gap, and is
 reported as such.
 
-## Batch 2 — the capability gap (in progress)
+## Batch 2 — state/UI desync (THE CAPABILITY GAP — Iris only)
 
-The bugs that need information **outside the rendered DOM**, which a competitor cannot reach even with
-an arbitrary-JS evaluate:
+The bug a DOM tool fundamentally cannot catch: the Deployments nav badge is forced to a wrong count
+(`0`) while the store keeps the real one (`200`). The UI lies about the truth. Catching it needs a
+**source of truth** — the app's state — which the in-source tool reads and an outside-the-page tool
+cannot. Harness: `harness/hard-bench-state.mjs`; raw: `raw/hard-bench-state.json`.
 
-- **theme-violation** — a color that renders fine but is off the app's design-token palette. Catching
-  it requires knowing the theme; Iris reads the app's tokens/store, a competitor would need them injected.
-- **state/UI desync** — UI shows success while the store/server says failure (optimistic update not
-  rolled back). Requires reading framework state; Iris has `iris_state`, competitors would need bespoke
-  fiber-walking.
+| tool                            | reads truth?                             | result                         | cost             |
+| ------------------------------- | ---------------------------------------- | ------------------------------ | ---------------- |
+| **Iris** (`iris_state`)         | **yes — store = 200**                    | **CAUGHT** (200 ≠ displayed 0) | 47 tok           |
+| Playwright (`browser_evaluate`) | no — searched window globals, found none | **missed** (truth=null)        | 295 tok + 168 JS |
+| DevTools (`evaluate_script`)    | no — searched window globals, found none | **missed** (truth=null)        | 21 tok + 168 JS  |
+
+**Honest verdict: this is a true capability gap, not ergonomics.** Both competitors genuinely tried
+to find a source of truth — their evaluate probes `window.store` / `window.useApp` /
+`__REDUX_DEVTOOLS_EXTENSION__` and any `getState()` — and found nothing, because the store is
+registered with Iris (`registerStore`), not exposed on a global. With no truth to compare against,
+the displayed `0` looks like a valid empty state; they **cannot** know the UI is wrong. Iris reads
+the registered store directly and flags the mismatch in one call, at a fraction of the cost.
+
+This is where Iris's in-source position is decisive: **batch 1 (visual/computed-style) is parity —
+any tool with an evaluate can read computed style; batch 2 (state/UI desync) is Iris-only — no amount
+of DOM/JS reaches state the app never put in the DOM.** That is the honest 100×-class differentiator:
+not "Iris sees pixels better," but "Iris sees the program, and the program is the source of truth."
+
+### Still to add (batch 2 continued)
+
+- **theme-violation** — an off-design-token color (Iris reads the app's tokens; a competitor would
+  need them injected). Partially reachable via CSS custom properties, so a narrower edge — measured next.
 - **dropped-field / silent data corruption**, **double-submit / timing**.
-
-This is where the honest data is expected to separate the tools. Built and measured next.
 
 _Token figures are the `o200k` proxy used across the benchmark; "+NN JS" is the agent-authored
 evaluate function the competitor must send (Iris sends only `{ref}`). All cells are genuine
