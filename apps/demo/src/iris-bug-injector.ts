@@ -149,7 +149,7 @@ function installCss(bugs: ReadonlySet<string>): void {
  * Install the hard-bug injector. No-op unless `?iris-bug=` is present. Each id degrades a present,
  * correctly-labelled element so only computed-style / geometry observation can catch it.
  */
-export function installHardBugs(): void {
+export function installBugInjector(): void {
   const raw = new URLSearchParams(window.location.search).get(BUG_PARAM);
   if (raw === null || raw.length === 0) return;
   const bugs = new Set(

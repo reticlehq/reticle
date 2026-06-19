@@ -1,11 +1,11 @@
 # Browser-verification benchmark — reproducibility
 
 Compares **Playwright MCP**, **Chrome DevTools MCP**, and **Iris** across detection, regression-run
-cost, and hard UI/state bugs. Everything here is measured by the harness; nothing is hand-entered.
+cost, and UI/state bugs. Everything here is measured by the harness; nothing is hand-entered.
 
 **Start here: [`SCORECARD.md`](SCORECARD.md)** — the honest one-page standing across all layers
 (wins, ties, and caveats). Depth lives in: `METRIC.md` (chased metric: VE gate + RRE), `LAYER-B.md`
-(real agent loop + Layer C / RRE), `HARD-BENCH.md` (hard UI/state bugs — visual = parity, state-desync
+(real agent loop + Layer C / RRE), `UI-BUG-BENCH.md` (UI/state bugs — visual = parity, state-desync
 = Iris-only), and `METHODOLOGY.md` (full design: controls, scenarios, fairness). Gate: `pnpm bench` /
 `bench:full` / `bench:gate` (fail on regression vs the last `history.jsonl` row).
 

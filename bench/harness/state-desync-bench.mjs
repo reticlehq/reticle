@@ -1,4 +1,4 @@
-// Hard benchmark — batch 2: STATE/UI DESYNC (the capability gap competitors cannot cross).
+// State/UI-desync benchmark (the capability gap competitors cannot cross).
 // A CLASS of two distinct lies, each requiring the app's STATE as source of truth:
 //   state-desync  — a COUNT lies: the Deployments nav badge is forced to 0 while the store keeps the
 //                   real count. Iris reads the store (iris_state) → mismatch; a DOM tool sees a
@@ -216,12 +216,12 @@ for (const [bug, tools] of Object.entries(instances)) {
 }
 
 const summary = {
-  layer: 'Hard batch 2 — state/UI desync CLASS (store truth vs displayed)',
+  layer: 'State/UI desync CLASS (store truth vs displayed)',
   instances,
   detected: tally,
   total: Object.keys(instances).length,
 };
-writeFileSync('bench/raw/hard-bench-state.json', JSON.stringify(summary, null, 2));
+writeFileSync('bench/raw/state-desync-bench.json', JSON.stringify(summary, null, 2));
 console.log(
   `\n=== state-desync class (of ${summary.total}): iris ${tally.iris} | playwright ${tally.playwright} | devtools ${tally.devtools} ===`,
 );

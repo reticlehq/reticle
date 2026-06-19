@@ -1,4 +1,4 @@
-// Hard UI-bug benchmark — the stress dataset. Each bug leaves the element PRESENT with the correct
+// Visual UI-bug benchmark. Each bug leaves the element PRESENT with the correct
 // role+name (a DOM/a11y snapshot says "fine"); only computed style / geometry / occlusion reveals it.
 // Fair 3-tool comparison: each tool observes the target its NATIVE way and we grade detection + cost.
 //   Iris       → iris_inspect (one semantic call; cursor/opacity/box/occluded/bg built in).
@@ -202,8 +202,8 @@ for (const bug of BUGS) {
   rows.push(row);
 }
 
-const summary = { layer: 'Hard (visually-broken-but-present UI bugs)', baseUrl: BASE, rows };
-writeFileSync('bench/raw/hard-bench.json', JSON.stringify(summary, null, 2));
+const summary = { layer: 'Visual (visually-broken-but-present UI bugs)', baseUrl: BASE, rows };
+writeFileSync('bench/raw/visual-bug-bench.json', JSON.stringify(summary, null, 2));
 const det = (t) => rows.filter((r) => r.tools[t]?.detected === true).length;
 console.log(
   `\n=== detection (of ${rows.length}): iris ${det('iris')} | playwright ${det('playwright')} | devtools ${det('devtools')} ===`,

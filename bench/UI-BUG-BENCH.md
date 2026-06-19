@@ -1,9 +1,9 @@
-# Hard UI-bug benchmark (stress dataset) — brutally honest
+# UI-bug benchmark (visual + state) — brutally honest
 
-> Harder bugs than the Layer-A suite: each leaves the element PRESENT with the correct role + name,
+> Tougher bugs than the Layer-A suite: each leaves the element PRESENT with the correct role + name,
 > so a DOM/a11y snapshot reports "fine." Fair 3-tool comparison — each tool observes its NATIVE way.
 > Reported with no flattering: where a competitor matches Iris, it is said plainly.
-> Harness: `harness/hard-bench.mjs`; injector: `apps/demo/src/iris-hard-bugs.ts`; raw: `raw/hard-bench.json`.
+> Harness: `harness/visual-bug-bench.mjs`; injector: `apps/demo/src/iris-bug-injector.ts`; raw: `raw/visual-bug-bench.json`.
 
 ## Batch 1 — visually-broken / off-theme but DOM-present (DETECTION PARITY, ergonomic gap)
 
@@ -41,8 +41,8 @@ not a capability gap — and reported as such.
 The bugs a DOM tool fundamentally cannot catch: the UI renders a plausible, self-consistent value
 that **contradicts the app's state**. Catching either needs a **source of truth** — the store — which
 the in-source tool reads and an outside-the-page tool cannot. Two distinct instances, so this is a
-class of Iris-only catches, not one case. Harness: `harness/hard-bench-state.mjs`; raw:
-`raw/hard-bench-state.json`.
+class of Iris-only catches, not one case. Harness: `harness/state-desync-bench.mjs`; raw:
+`raw/state-desync-bench.json`.
 
 - **`state-desync` (a COUNT lies)** — the Deployments nav badge is forced to `0` while the store keeps
   the real count (`200`). A number on screen looks like a valid empty state.
@@ -95,4 +95,4 @@ boundary — not an inflated "Iris wins everything" — is the value of this dat
 
 _Token figures are the `o200k` proxy used across the benchmark; "+NN JS" is the agent-authored
 evaluate function the competitor must send (Iris sends only `{ref}`). All cells are genuine
-observations (no missing/error) — verified in `raw/hard-bench.json`._
+observations (no missing/error) — verified in `raw/visual-bug-bench.json`._
