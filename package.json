@@ -16,6 +16,9 @@
     "test:unit": "turbo run test:unit",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "bench": "node bench/harness/bench-all.mjs",
+    "bench:full": "node bench/harness/bench-all.mjs --full",
+    "bench:gate": "node bench/harness/gate.mjs",
     "publish": "pnpm build && pnpm -r publish --access public --no-git-checks",
     "publish:dry-run": "pnpm build && pnpm -r publish --access public --no-git-checks --dry-run"
   },
