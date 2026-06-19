@@ -90,6 +90,20 @@ export function nearestTestid(missing: string, present: string[]): string | null
   return best;
 }
 
+/**
+ * Bounded settle for anchor re-resolution. A testid step queries the live DOM for the anchor; if a
+ * render is still in flight (post-login route swap, modal mount, list paint) the element exists but
+ * isn't painted yet, and a single QUERY would read zero and FALSELY drift. We re-query a few times
+ * with a short delay before concluding the anchor is gone — a real regression (renamed/removed
+ * testid) stays missing across every attempt, so this removes flakiness without masking breaks.
+ */
+const ANCHOR_SETTLE_ATTEMPTS = 5;
+const ANCHOR_SETTLE_DELAY_MS = 150;
+
+/** Injected sleeper so tests drive replay with a no-op clock; production waits on a real timer. */
+export type Sleep = (ms: number) => Promise<void>;
+const realSleep: Sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
 /** Extract the live element refs + the zero-match near-miss hint from a QUERY command result. */
 function readQuery(result: CommandResult): { refs: string[]; hint?: QueryEmptyHint } {
   if (!result.ok) return { refs: [] };
@@ -149,6 +163,25 @@ function testidDrift(value: string, hint: QueryEmptyHint | undefined): Drift {
   return drift;
 }
 
+/**
+ * Re-resolve a testid against the live DOM, tolerating an in-flight render: QUERY, and while it
+ * returns zero refs, sleep and retry up to ANCHOR_SETTLE_ATTEMPTS. Returns as soon as refs appear,
+ * so a present anchor costs one query; a genuinely missing one costs the full (bounded) settle and
+ * then drifts. The last result's near-miss hint is returned for the drift record.
+ */
+async function resolveTestid(
+  session: FlowReplaySession,
+  value: string,
+  sleep: Sleep,
+): Promise<{ refs: string[]; hint?: QueryEmptyHint }> {
+  let last = readQuery(await session.command(IrisCommand.QUERY, { by: QueryBy.TESTID, value }));
+  for (let attempt = 1; last.refs.length === 0 && attempt < ANCHOR_SETTLE_ATTEMPTS; attempt += 1) {
+    await sleep(ANCHOR_SETTLE_DELAY_MS);
+    last = readQuery(await session.command(IrisCommand.QUERY, { by: QueryBy.TESTID, value }));
+  }
+  return last;
+}
+
 /** The testid value of a step's primary anchor, for labelling the result row. */
 function anchorLabel(anchor: FlowAnchor): string {
   if (anchor.kind === AnchorKind.TESTID) return anchor.value;
@@ -164,9 +197,9 @@ async function runTestidStep(
   value: string,
   dynamic: ReadonlySet<string>,
   confirmDangerous: boolean,
+  sleep: Sleep,
 ): Promise<FlowStepResult> {
-  const queryResult = await session.command(IrisCommand.QUERY, { by: QueryBy.TESTID, value });
-  const { refs, hint } = readQuery(queryResult);
+  const { refs, hint } = await resolveTestid(session, value, sleep);
   if (refs.length === 0) {
     return {
       step: index,
@@ -194,11 +227,7 @@ async function runTestidStep(
   // is NOT asserted (only the action ran). The skip is scoped strictly to the dynamic set.
   const expectTestid = step.expect?.element?.testid;
   if (expectTestid !== undefined && !dynamic.has(expectTestid)) {
-    const expectQuery = await session.command(IrisCommand.QUERY, {
-      by: QueryBy.TESTID,
-      value: expectTestid,
-    });
-    const expectRefs = readQuery(expectQuery);
+    const expectRefs = await resolveTestid(session, expectTestid, sleep);
     if (expectRefs.refs.length === 0) {
       return {
         step: index,
@@ -250,6 +279,7 @@ export async function replayFlow(
   waitForSignal: WaitForSignal,
   signalTimeoutMs: number,
   confirmDangerous = false,
+  sleep: Sleep = realSleep,
 ): Promise<FlowStepResult[]> {
   const results: FlowStepResult[] = [];
   // testids whose region is LLM-dynamic — their expect-presence is NOT asserted.
@@ -265,7 +295,7 @@ export async function replayFlow(
     if (step.anchor.kind === AnchorKind.SIGNAL) {
       result = await runSignalStep(session, step, index, label, waitForSignal, signalTimeoutMs);
     } else {
-      result = await runTestidStep(session, step, index, label, dynamic, confirmDangerous);
+      result = await runTestidStep(session, step, index, label, dynamic, confirmDangerous, sleep);
     }
     results.push(result);
     if (result.drift !== undefined || !result.ok) break;

@@ -194,6 +194,56 @@ describe('replayFlow — anchor re-resolution + legible drift', () => {
     expect(confirmed.actArgs[0]).toMatchObject({ [DANGEROUS_ACTION_CONFIRM_ARG]: true });
   });
 
+  it('settles an in-flight render: a testid empty at first, then present, resolves (no false drift)', async () => {
+    // The element appears on the 3rd query — an async route swap / list paint, not a regression.
+    let calls = 0;
+    const script = (testid: string): QueryScript => {
+      if (testid !== 'late-button') return { elements: [el(`e-${testid}`, testid)] };
+      calls += 1;
+      return calls < 3
+        ? { elements: [], hint: present(['other']) }
+        : { elements: [el('e-late', testid)] };
+    };
+    const session = new FakeSession(script);
+    const noopSleep = vi.fn((): Promise<void> => Promise.resolve());
+    const steps = await replayFlow(
+      session,
+      flow([testidStep('late-button')]),
+      waitForPredicate,
+      FAST,
+      false,
+      noopSleep,
+    );
+
+    expect(steps[0]?.ok).toBe(true);
+    expect(steps[0]?.drift).toBeUndefined();
+    expect(session.acts).toEqual([{ ref: 'e-late', action: ActionType.CLICK }]);
+    expect(noopSleep).toHaveBeenCalled(); // it actually waited between re-queries
+  });
+
+  it('still drifts when a testid is missing across every settle attempt (a real regression)', async () => {
+    let calls = 0;
+    const script = (): QueryScript => {
+      calls += 1;
+      return { elements: [], hint: present(['nav-overview']) };
+    };
+    const session = new FakeSession(script);
+    const noopSleep = (): Promise<void> => Promise.resolve();
+    const steps = await replayFlow(
+      session,
+      flow([testidStep('nav-compose')]),
+      waitForPredicate,
+      FAST,
+      false,
+      noopSleep,
+    );
+
+    expect(steps[0]?.ok).toBe(false);
+    expect(steps[0]?.drift?.reasonKind).toBe(DriftReason.TESTID_NOT_FOUND);
+    expect(steps[0]?.drift?.nearest).toBe('nav-overview');
+    expect(calls).toBeGreaterThan(1); // it retried before concluding the anchor is gone
+  });
+
   it('6: a signal-expect step waits on the signal predicate (reuses predicate.ts)', async () => {
     const session = new FakeSession(() => ({ elements: [] }), [signalEvent('order-placed')]);
     const waitSpy = vi.fn(waitForPredicate);

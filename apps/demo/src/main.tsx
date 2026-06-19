@@ -3,10 +3,14 @@ import { createRoot } from 'react-dom/client';
 import './styles.css';
 import { App } from './App.js';
 import { installIris } from './iris-dev.js';
+import { installRegressions } from './iris-regress.js';
 
 // Dev-only: give the coding agent eyes into this running dashboard (presenter + capabilities +
 // store). Tree-shaken out of production builds.
-if (import.meta.env.DEV) installIris();
+if (import.meta.env.DEV) {
+  installIris();
+  installRegressions(); // no-op unless ?iris-break=<testids> — controlled regression knob for benchmarks
+}
 
 const rootElement = document.getElementById('root');
 if (rootElement === null) throw new Error('Root element #root not found');

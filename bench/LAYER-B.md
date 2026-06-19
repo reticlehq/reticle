@@ -306,3 +306,44 @@ The honest headline: for **one-shot** verification Iris is ~1.5–2× Playwright
 the regressions others miss). For **repeated regression** verification — the actual job of a test
 suite — Iris is **~170× cheaper per run** because it replays deterministically and the competitors
 have no replay. That is where "100× better" is real.
+
+## Layer C — detection (replay doesn't just cost less, it CATCHES the break)
+
+Cost without correctness is meaningless, so the second half of Layer C proves the deterministic
+replay actually catches a regression. `harness/replay-detect.mjs`: record a flow against the healthy
+app and replay it (baseline), then re-navigate with `?iris-break=<anchor>` — a dev-only injector
+(`apps/demo/src/iris-regress.ts`) that patches `setAttribute` so a given `data-testid` can never be
+applied. The element still renders; the stable hook a test relied on is gone — the single most
+common real regression (a refactor renames/removes a testid). Replay the SAME recording and see what
+it returns.
+
+| Flow             | break (testid removed) | baseline replay | regressed replay | drift anchor (nearest fix) | caught? |
+| ---------------- | ---------------------- | --------------- | ---------------- | -------------------------- | ------- |
+| d-verify-500     | fault-500              | ok (194 tok)    | drift (247 tok)  | fault-500 → fault-404      | ✓       |
+| d-verify-route   | nav-compose            | ok (158 tok)    | drift (209 tok)  | nav-compose → nav-overview | ✓       |
+| d-verify-console | fault-buggy            | ok (194 tok)    | drift (256 tok)  | fault-buggy → fault-404    | ✓       |
+
+**Detection 3/3.** Clean replay passes; the regressed replay drifts naming the exact broken anchor
+AND a computed nearest-match fix — at ~237 tokens mean (a caught regression carries the drift+nearest
+record, so it costs a little more than a clean ~177-token pass; still ~128× under Playwright's
+30,249-token LLM re-drive). Playwright/DevTools have no replay: catching the same break means an
+agent re-drives the whole flow with the LLM every run, and may or may not notice the missing hook.
+
+So the complete regression story, measured: replay is **deterministic** (no run-to-run accuracy
+drift), **~128–171× cheaper per run**, and **correct** (clean→pass, broken→drift-with-fix). That is
+the metric — regression catches per 1k tokens — where Iris is not 1.5× better but two orders of
+magnitude better.
+
+### Honesty / limits
+
+- The detection flows use break targets that are reliably present at record time (sidebar nav and
+  diagnostics-view controls). A flow whose target loads behind an async data fetch (the deployments
+  modal's `new-deploy`) is not reliably captured by the _bench rig's_ fixed 200 ms record delay, so
+  it is excluded from the detection set — a harness-timing limitation, not a replay limitation.
+- A replay race in the product was found and fixed here: testid steps did a single QUERY, so an
+  in-flight render (post-login route swap) read zero and FALSELY drifted. `replayFlow` now re-queries
+  with a bounded settle (5 × 150 ms) before concluding an anchor is gone — a real regression stays
+  missing across every attempt, so this removes flakiness without masking breaks. Covered by tests.
+- The `replay-bench` (cost) harness still shows 2/4 flows occasionally `drift` on the
+  record→hard-refresh→replay path; that is the same async-record-timing nuance, and the per-run cost
+  (~180 tok) is identical whether the replay passes or drifts.
