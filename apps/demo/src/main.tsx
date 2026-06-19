@@ -1,3 +1,4 @@
+import './iris-render-setup.js'; // MUST be first — installs the render meter before react-dom loads
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import './styles.css';

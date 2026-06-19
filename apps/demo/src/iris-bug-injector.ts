@@ -23,6 +23,10 @@
  *                   self-consistent — right color, right dot — so a screenshot/a11y tool sees a
  *                   healthy deploy. Only reading the store reveals the deploy did not actually ship.
  *
+ * Performance (needs the React commit stream — invisible to a DOM tool):
+ *   render-storm  — re-renders `series` subscribers ~60×/s with identical output: React commits
+ *                   every tick but the DOM never mutates. Only iris_state __iris_renders sees it.
+ *
  * Tree-shaken out of production; never imported there.
  */
 
@@ -118,6 +122,18 @@ function installStatusDesync(): void {
   });
 }
 
+/**
+ * Wasted-render storm — the perf regression no DOM tool can see. Every ~16ms we replace `series` with
+ * a NEW array of the SAME values: every component subscribed to it re-renders (~60×/s), but the
+ * rendered output is identical, so React reconciles to no DOM mutation. A screenshot/DOM tool sees a
+ * perfectly idle page; only the React commit meter (iris_state __iris_renders) sees the storm.
+ */
+function installRenderStorm(): void {
+  setInterval(() => {
+    useApp.setState((s) => ({ series: [...s.series] }));
+  }, 16);
+}
+
 /** Inject a transparent overlay covering the target so pointer hits land on the overlay, not it. */
 function installOcclusion(): void {
   const apply = (): void => {
@@ -162,4 +178,5 @@ export function installBugInjector(): void {
   if (bugs.has('occluded')) installOcclusion();
   if (bugs.has('state-desync')) installStateDesync();
   if (bugs.has('status-stale')) installStatusDesync();
+  if (bugs.has('render-storm')) installRenderStorm();
 }
