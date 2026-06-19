@@ -64,14 +64,14 @@ Analysis of the remaining classes shows most are **parity or competitor-reachabl
 truth lives in the DOM / network / CSS variables that any `evaluate` can read. Only truth that lives
 in app **state** (the store) is Iris-only. Stated up front so the data isn't oversold:
 
-- **theme-violation** (injectable now: `?iris-bug=theme-violation` recolors the brand text to a hex
-  no design token uses). Honest expectation: this currently exposes an **Iris GAP, not a win** — Iris
-  has no design-token/palette observation, so a competitor `evaluate` that reads `:root` CSS variables
-  - the element color can check palette membership, while Iris's `inspect` returns the color but not
-    the palette. The real fix is a feature: let the app register its tokens (or enumerate `:root` custom
-    properties in `inspect`) so Iris knows the _intended_ palette semantically — then the in-source edge
-    returns ("Iris knows the design system; a competitor reads raw vars without knowing which is right").
-    Building that feature, then measuring, is the next focused step.
+- **theme-violation** (`?iris-bug=theme-violation` recolors the brand text to a hex no design token
+  uses). **Gap now closed** (`73fd857`): `iris_inspect` enumerates the app's `:root` design tokens and
+  returns `theme.offTheme` — validated live (`offTheme:false` on-theme, `offTheme:true` for the magenta
+  recolor). Honest standing: this is **parity-in-principle, strong-ergonomic-edge in practice** — a
+  competitor CAN read `:root` vars, but checking palette membership needs a ~40-line bespoke evaluate
+  (stylesheet enumeration + color resolution + comparison), whereas Iris surfaces `offTheme` as a
+  one-call native flag. So, like batch 1, capability is reachable by both, but the authoring gap here
+  is far larger (40-line probe vs a built-in field) and an agent is unlikely to write it unprompted.
 - **double-submit / timing** — observable in the network panel by all three tools → expected parity.
 - **dropped-field** — Iris-only ONLY when the UI hides the corruption (i.e. it reduces to state/UI
   desync, already proven); if the wrong value is rendered, it's parity.
