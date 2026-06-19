@@ -97,6 +97,18 @@ if (consequence !== null) {
     consequence.detection_rate,
   ]);
 }
+const stateOracle = readRaw('bench/raw/replay-detect-state.json');
+if (stateOracle !== null) {
+  const r = parseRate(stateOracle.detection_rate);
+  if (r === null || r.detected < r.total) {
+    failures.push(`state-oracle detection not full: ${stateOracle.detection_rate}`);
+  }
+  const lastR = parseRate(lastC?.state_detection);
+  if (lastR !== null && r !== null && r.total < lastR.total) {
+    failures.push(`state-oracle scenarios dropped: ${r.total} < ${lastR.total}`);
+  }
+  scorecard.push(['Layer C state', lastC?.state_detection ?? '—', stateOracle.detection_rate]);
+}
 if (cost !== null) {
   const now = cost.per_run?.iris_replay_mean_tokens ?? null;
   const last = lastC?.replay_mean_tokens ?? null;

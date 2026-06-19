@@ -21,13 +21,18 @@ function layerCBlock() {
   const cost = readRaw('bench/raw/replay-bench.json');
   const selector = readRaw('bench/raw/replay-detect.json');
   const consequence = readRaw('bench/raw/replay-detect-consequence.json');
-  if (cost === null && selector === null && consequence === null) return null;
+  const stateOracle = readRaw('bench/raw/replay-detect-state.json');
+  if (cost === null && selector === null && consequence === null && stateOracle === null) {
+    return null;
+  }
   return {
     replay_mean_tokens: cost?.per_run?.iris_replay_mean_tokens ?? null,
     replay_ratio_vs_playwright: cost?.ratio_vs_playwright ?? null,
     selector_detection: selector?.detection_rate ?? null,
     selector_caught_mean_tokens: selector?.per_run_when_caught?.iris_replay_mean_tokens ?? null,
     consequence_detection: consequence?.detection_rate ?? null,
+    state_detection: stateOracle?.detection_rate ?? null,
+    state_caught_mean_tokens: stateOracle?.per_run_when_caught?.iris_replay_mean_tokens ?? null,
   };
 }
 

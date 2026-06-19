@@ -18,6 +18,7 @@ const LAYER_C = [
   'bench/harness/replay-bench.mjs', // RRE cost: tokens/regression-run
   'bench/harness/replay-detect.mjs', // selector-removal detection (3/3)
   'bench/harness/replay-detect-consequence.mjs', // green-but-wrong detection (2/2)
+  'bench/harness/replay-detect-state.mjs', // store-truth oracle catches a dead handler (state predicate)
 ];
 // Scripted observation cost + detection accuracy. Slow (~12 min) and boots Playwright/DevTools MCPs.
 const LAYER_A = ['bench/harness/run-observation.mjs', 'bench/harness/analyze.mjs'];
