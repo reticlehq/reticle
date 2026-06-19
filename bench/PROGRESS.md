@@ -3,6 +3,10 @@
 > What changed while chasing the metric (`METRIC.md`), version by version, all numbers
 > measured by the harness (`history.jsonl`), nothing hand-entered. Layer A (observation cost);
 > Layer B (agent-loop usage) still NOT MEASURED — needs an API key.
+>
+> This file is the **head-to-head** (regressions all three tools can attempt). For the other half
+> — the runtime signals each tool can observe _at all_, where Iris's app-state / domain-signal /
+> consequence access is categorically beyond the a11y-only tools — see **`CAPABILITY.md`**.
 
 ## The headline
 
