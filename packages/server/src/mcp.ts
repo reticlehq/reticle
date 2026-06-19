@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { isToonable, resultToToon } from '@syrin/iris-protocol';
 import { TOOLS, type ToolDeps } from './tools/tools.js';
 import { filterTools, TOOL_PROFILE, type ToolProfile } from './tools/profiles.js';
+import { buildDynamicTools } from './tools/dynamic-tools.js';
 import { runTool } from './tools/invoke-tool.js';
 import { log } from './log.js';
 import { SERVER_VERSION } from './server-version.js';
@@ -76,11 +77,20 @@ export function createMcpServer(
   // Cast once to our bridge type so every per-tool call site is typed without `any`.
   const registerTool = server.registerTool.bind(server) as unknown as IrisRegisterTool;
 
-  // On a lean profile, advertise only the first sentence of each tool description. The full prose
-  // is re-sent to the model on EVERY turn; the first sentence carries the tool's purpose, and
-  // param-level schema guidance (kept intact) covers the how. Cuts per-turn token cost in the loop.
-  const terse = profile !== TOOL_PROFILE.FULL;
-  for (const tool of filterTools(TOOLS, profile)) {
+  // `dynamic` advertises only the 2 meta-tools (iris_tools + iris_run); real tools load on demand.
+  // core/standard advertise the filtered set with terse descriptions (first sentence + trimmed
+  // param prose) — the full prose is re-sent every turn, and the first clause carries the purpose.
+  const advertised =
+    profile === TOOL_PROFILE.DYNAMIC
+      ? buildDynamicTools(TOOLS)
+      : profile === TOOL_PROFILE.HYBRID
+        ? [...filterTools(TOOLS, TOOL_PROFILE.CORE), ...buildDynamicTools(TOOLS)]
+        : filterTools(TOOLS, profile);
+  const terse =
+    profile === TOOL_PROFILE.CORE ||
+    profile === TOOL_PROFILE.STANDARD ||
+    profile === TOOL_PROFILE.HYBRID;
+  for (const tool of advertised) {
     const config = {
       description: terse ? firstSentence(tool.description) : tool.description,
       inputSchema: terse ? leanZodShape(tool.inputSchema) : tool.inputSchema,

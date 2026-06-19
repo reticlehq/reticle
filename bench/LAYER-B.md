@@ -176,3 +176,57 @@ than Playwright."**
 direction (full → lean halves tokens and lifts accuracy; below-12-tools regresses) is robust.
 Shipped: `core` = the 12-tool lean profile; lean profiles advertise terse tool + parameter
 descriptions. Agents should run `IRIS_TOOL_PROFILE=core`.
+
+## On-demand tool loading — does deferring tool defs beat advertising a lean set?
+
+The tool-definition tax is the core cost, and it only grows as a server adds tools. So: what if we
+DON'T send tool defs at all, and load them on demand (the pattern Claude Code uses for deferred
+tools)? Shipped as two new profiles:
+
+- **`dynamic`** — advertise only `iris_tools` (catalog / load-on-demand) + `iris_run` (dispatch by
+  name). **305 tok/turn** of defs regardless of how many real tools exist (vs Playwright 3,827,
+  core 5,638, full 14,604). The model lists, loads the 2–3 tools it needs, and calls them.
+- **`hybrid`** — the 12 core tools advertised directly + the 2 meta-tools for on-demand reach to
+  the other 36.
+
+### Measured (gpt-4o, Iris only, 5 scenarios)
+
+| Iris config           | def tok/turn  | correct (of 5) | mean total tokens |
+| --------------------- | ------------- | -------------- | ----------------- |
+| core terse (12)       | 5,638         | **5**          | 54,930            |
+| core terse+schema     | 5,638         | 4              | 46,540            |
+| **dynamic (2 meta)**  | **305**       | **2**          | 33,651            |
+| **hybrid (12 + 2)**   | ~5,900        | 3              | 61,836            |
+| full (48)             | 14,604        | 2              | 129,882           |
+| Playwright / DevTools | 3,827 / 5,325 | 4 / 3          | 30,249 / 32,296   |
+
+### The honest answer
+
+**The mechanism works; the accuracy does not — with a model that isn't built for it.** Pure
+`dynamic` is by far the cheapest per-turn surface, but gpt-4o **bails** (gives a premature verdict
+in 2 turns without verifying — hidden-api-500) or **flails** (12–14 turns rediscovering tools, then
+misses — console-error, missing-modal), landing at **2/5**. `hybrid` is the worst of both: the
+meta-tools tempt the model to explore (more turns) on top of core's def cost → **3/5 @ 62k**.
+
+Why: a generic model needs the hot-set's tool schemas **in context** to act decisively. Deferring
+them removes the scaffolding that makes it reliable. The lean `core` profile — the right ~12 tools
+advertised directly, terse — is the reliable optimum (4–5/5 @ ~47–55k).
+
+### The crucial nuance (why this isn't "on-demand is bad")
+
+On-demand loading **does** win in two regimes, and Iris now ships the profile for them:
+
+1. **A harness purpose-built for it.** Claude Code's own ToolSearch/deferred-tools is exactly this
+   pattern and it works — because the agent is trained/prompted to discover-then-call. Our test
+   used a _naive_ OpenAI chat-completions loop with no such scaffolding; that's the gap, not the
+   idea. With an on-demand-native client, `dynamic` (305 tok/turn) is a large win.
+2. **A large catalog with a small hot-set.** `dynamic` is flat as tools grow; advertising scales
+   linearly. For the _verify loop_ specifically, `core` already IS the small hot-set and the cold
+   tools it omits were never used — so deferral saves nothing there. The bigger the toolbox beyond
+   the hot-set, the more `dynamic` pays off.
+
+**Recommendation:** generic MCP client + generic model → `IRIS_TOOL_PROFILE=core` (advertise the
+lean hot-set). On-demand-native client (e.g. Claude Code) or a very large tool surface →
+`dynamic`. The profiles are shipped; the choice is the client's. And the answer to "can we keep
+100% accuracy with no descriptions up front?" — **measured: not with a generic model; it needs the
+hot-set schemas. On-demand is for the cold tail, not the hot path.**

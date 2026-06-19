@@ -15,6 +15,12 @@ import type { ToolDef } from './tools.js';
  *   full     — all tools. The current default for existing callers.
  */
 export const TOOL_PROFILE = {
+  /** dynamic — advertise only 2 meta-tools (iris_tools + iris_run); load real tools on demand.
+   *  Fixed ~hundreds of tokens/turn regardless of how many tools exist. See dynamic-tools.ts. */
+  DYNAMIC: 'dynamic',
+  /** hybrid — the core verify tools advertised directly (so the agent acts reliably) PLUS the 2
+   *  meta-tools for on-demand reach to every other tool. Core accuracy + full reach at ~core cost. */
+  HYBRID: 'hybrid',
   CORE: 'core',
   STANDARD: 'standard',
   FULL: 'full',
@@ -73,6 +79,8 @@ export const STANDARD_TOOL_NAMES: ReadonlySet<string> = new Set([
 
 export function resolveToolProfile(explicit?: string): ToolProfile {
   const raw = explicit ?? process.env[TOOL_PROFILE_ENV];
+  if (raw === TOOL_PROFILE.DYNAMIC) return TOOL_PROFILE.DYNAMIC;
+  if (raw === TOOL_PROFILE.HYBRID) return TOOL_PROFILE.HYBRID;
   if (raw === TOOL_PROFILE.CORE) return TOOL_PROFILE.CORE;
   if (raw === TOOL_PROFILE.STANDARD) return TOOL_PROFILE.STANDARD;
   return TOOL_PROFILE.FULL;
