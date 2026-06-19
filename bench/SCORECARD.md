@@ -50,18 +50,22 @@ runs it is two orders of magnitude cheaper."
 Iris is **not** strictly better. Being inside the page costs it real browser-level fidelity. These are
 genuine competitor advantages — stated so the benchmark can't be accused of cherry-picking:
 
-| Dimension                             | Why the competitor wins                                                                                      | Iris's position                                                                                  |
-| ------------------------------------- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------ |
-| **Trusted input** (`isTrusted`)       | Playwright drives real CDP input — native keyboard/mouse, file pickers, drag — `isTrusted:true`.             | Iris defaults to occlusion-honest **synthetic** dispatch; real input is opt-in (CDP) only.       |
-| **Real pixels** (visual ground truth) | A screenshot is the actual rendered frame — font-load failures, paint order, GPU/compositing bugs.           | Iris reads **computed style/geometry**, not paint — it can miss a bug that only shows in pixels. |
-| **No app cooperation**                | Tests any site with zero install.                                                                            | Iris must embed `@syrin/iris-browser` (dev-only) — can't test a third-party site you don't own.  |
-| **Browser-level scope**               | Multi-tab/popups, cross-origin, downloads, auth dialogs, and network **mock/intercept** (`route`/`fulfill`). | Iris is single-page-runtime-scoped; it observes network but mocking is the app's job.            |
-| **Cross-engine**                      | Runs WebKit / Firefox / Chromium.                                                                            | Iris runs on whatever engine the app runs.                                                       |
+| Dimension                             | Why the competitor wins                                                                                                                                                                                                                                                                      | Iris's position                                                                                                                                                                                                               |
+| ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Trusted input** (`isTrusted`)       | Playwright drives real CDP input — native keyboard/mouse, file pickers, drag — `isTrusted:true`.                                                                                                                                                                                             | Iris defaults to occlusion-honest **synthetic** dispatch; real input is opt-in (CDP) only.                                                                                                                                    |
+| **Real pixels** (visual ground truth) | A screenshot is the actual rendered frame — font-load failures, paint order, GPU/compositing bugs. **Measured:** a stray `filter` re-tint changed 2.3% of pixels — a screenshot-diff CAUGHT it; Iris's always-on `inspect` MISSED it (computed style identical). (`visual-regression-bench`) | Iris reads **computed style/geometry**, not paint — it can miss a bug that only shows in pixels. Iris closes this only when DRIVEN: its opt-in `iris_visual_diff` (CDP) caught the same regression — the always-on SDK can't. |
+| **No app cooperation**                | Tests any site with zero install.                                                                                                                                                                                                                                                            | Iris must embed `@syrin/iris-browser` (dev-only) — can't test a third-party site you don't own.                                                                                                                               |
+| **Browser-level scope**               | Multi-tab/popups, cross-origin, downloads, auth dialogs, and network **mock/intercept** (`route`/`fulfill`).                                                                                                                                                                                 | Iris is single-page-runtime-scoped; it observes network but mocking is the app's job.                                                                                                                                         |
+| **Cross-engine**                      | Runs WebKit / Firefox / Chromium.                                                                                                                                                                                                                                                            | Iris runs on whatever engine the app runs.                                                                                                                                                                                    |
 
-Planned reverse benchmark (so a loss is measured, not just asserted): **pixel/paint** — inject a bug
-visible only in a rendered frame (a `@font-face` that fails to load, or a paint-order/`mix-blend` glitch)
-that leaves computed style unchanged; a screenshot-diff catches it, Iris's `inspect` does not. Needs
-screenshot-diff infra (tracked).
+**Measured reverse benchmark** (a loss measured, not asserted): **pixel/paint** — a stray
+`filter:hue-rotate(90deg) saturate(1.6)` on `html` re-tints the whole rendered page, changing **21,393
+pixels (2.3%)** but leaving every computed-style prop Iris reads (`color`/`backgroundColor`/`opacity`/
+geometry) byte-identical. Result: a screenshot-diff **CAUGHT** it (`matched:false`); Iris's always-on
+`iris_inspect` **MISSED** it (signals identical). This is the screenshot's home turf — Playwright catches
+it natively. Iris matches the catch **only when DRIVEN**: its opt-in `iris_visual_diff` (CDP) produced the
+same `matched:false` verdict. The always-on, no-install SDK is computed-style, not pixels — and that's the
+honest boundary. (`visual-regression-bench`)
 
 ## The in-source advantages (why Iris sees what outside tools can't)
 
@@ -90,4 +94,5 @@ program itself. The structural advantages, each tied to a measured row above whe
 
 `pnpm bench` (deterministic Layer C, fast) · `pnpm bench:full` (+ Layer A) · `pnpm bench:gate`
 (fail on regression vs the last `history.jsonl` row). UI-bug suite: `node bench/harness/visual-bug-bench.mjs`
+· reverse case (screenshot wins, needs `iris drive`): `node bench/harness/visual-regression-bench.mjs`
 and `node bench/harness/state-desync-bench.mjs`. Layer B needs `OPENAI_API_KEY`/`ANTHROPIC_API_KEY`.

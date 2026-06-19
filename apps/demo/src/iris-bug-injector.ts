@@ -55,6 +55,11 @@ const CSS_BUGS: Record<string, string> = {
   // Catching it needs to know the THEME — not just that a color rendered. The brand text goes
   // hot-magenta, a value no design token uses.
   'theme-violation': `${sel('brand')}{color:#ff00ff !important;}`,
+  // A PAINT-level regression (the reverse case — Playwright/screenshot territory): a stray filter
+  // re-tints the entire rendered output. iris_inspect's element props (color/backgroundColor/opacity/
+  // box/cursor) are UNCHANGED — the declared values still apply; the filter only alters the painted
+  // pixels — so the always-on computed-style read misses it. Only a screenshot-diff sees it.
+  'paint-filter': `html{filter:hue-rotate(90deg) saturate(1.6) !important;}`,
 };
 
 /**

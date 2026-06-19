@@ -156,8 +156,12 @@ export const VISUAL_TOOLS: ToolDef[] = [
     },
     outputSchema: {
       ok: z.boolean(),
-      match: z.boolean().optional(),
-      diffPct: z.number().optional(),
+      matched: z.boolean().optional(),
+      changedPixels: z.number().optional(),
+      totalPixels: z.number().optional(),
+      ratio: z.number().optional(),
+      region: rectShape.optional(),
+      dimensionMismatch: z.boolean().optional(),
       diffPath: z.string().optional(),
       reason: z.string().optional(),
     },
@@ -189,10 +193,10 @@ export const VISUAL_TOOLS: ToolDef[] = [
       // Omit the raw diff bytes from the JSON result; persist them and return the path instead.
       const { diffPng: diffBytes, ...verdict } = result;
       if (diffBytes === undefined) {
-        return { ...verdict, reason: VisualReason.DIMENSION_MISMATCH };
+        return { ok: false, ...verdict, reason: VisualReason.DIMENSION_MISMATCH };
       }
       const diffPath = await store.saveDiff(baseline, diffBytes);
-      return { ...verdict, diffPath };
+      return { ok: true, ...verdict, diffPath };
     },
   },
 ];
