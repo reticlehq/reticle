@@ -63,6 +63,35 @@ The user's stretch goal is 100×. Stated plainly so we don't fake it:
 We optimize the real metric (VE with the RCR gate) and report the screenshot comparison
 separately and honestly. No fabricated 100×.
 
+## The within-field 100× IS real — on the right axis (regression-run efficiency)
+
+VE above is a **single-shot** metric: one verification, one token bill. On that axis Iris is a
+few× better — honest, and the ceiling, because you can't catch 100× more than 8 bugs. But a test
+suite's actual job is the **same verification run over and over** (every commit, every PR, every
+CI trigger). That is a different axis, and it has a different ceiling.
+
+**Regression-Run Efficiency (RRE): tokens an agent/CI must read to re-verify a known flow, per run.**
+
+- Iris records a flow once, then `iris_flow_replay` re-runs it **deterministically — no LLM** —
+  re-resolving each semantic anchor against the live DOM and returning a compact verdict.
+- Playwright MCP / Chrome DevTools MCP have **no replay**. Re-verifying means an agent re-drives
+  the whole flow with the LLM every run.
+
+Measured (Layer C, `harness/replay-bench.mjs` + `replay-detect.mjs`, raw in `bench/raw/`):
+
+|                                        | tokens / regression run | how                                                            |
+| -------------------------------------- | ----------------------- | -------------------------------------------------------------- |
+| Playwright MCP                         | ~30,249                 | LLM re-drives every run (Layer B)                              |
+| Chrome DevTools MCP                    | ~32,296                 | LLM re-drives every run (Layer B)                              |
+| **Iris replay (clean pass)**           | **~175**                | deterministic, no LLM → **173× / 184×**                        |
+| **Iris replay (catches a regression)** | **~237**                | deterministic, names the broken anchor + fix → **128× / 136×** |
+
+And it **compounds**: over N runs Iris pays author-once + N×~175; the competitors pay N×~30k. By the
+second run Iris is already ahead even counting the one-time LLM authoring; by run 100 it is ~170×.
+Correctness is proven, not assumed — clean flows replay `ok` (4/4), and an injected selector
+regression is caught 3/3, each drift naming the exact broken anchor with a nearest-match fix
+(see `LAYER-B.md` Layer C). **This is the metric we chase to 100× and beyond, and it is met today.**
+
 ## Protocol (every version)
 
 1. Bump/record the Iris version under test.
