@@ -309,3 +309,130 @@ describe('settled predicate (deterministic waiting)', () => {
     expect(r.pass).toBe(true);
   });
 });
+
+/** Session whose STATE_READ returns a fixed `{ stores }` map — exercises the state predicate. */
+class StateSession implements PredicateSession {
+  constructor(private readonly stores: Record<string, unknown>) {}
+  elapsed(): number {
+    return 0;
+  }
+  command(name: string): Promise<CommandResult> {
+    if (name === IrisCommand.STATE_READ) {
+      return Promise.resolve({
+        kind: 'command_result',
+        id: 'x',
+        ok: true,
+        result: { stores: this.stores, storeNames: Object.keys(this.stores) },
+      });
+    }
+    return Promise.resolve({ kind: 'command_result', id: 'x', ok: true, result: {} });
+  }
+  eventsSince(): IrisEvent[] {
+    return [];
+  }
+  onEvent(): () => void {
+    return () => undefined;
+  }
+}
+
+describe('state predicate — assert store truth', () => {
+  const app = {
+    app: {
+      deployments: [
+        { id: 1, status: 'queued' },
+        { id: 2, status: 'live' },
+      ],
+      count: 2,
+    },
+  };
+
+  it('passes when a dot-path value equals the expected literal', async () => {
+    const r = await evaluatePredicate(new StateSession(app), {
+      kind: 'state',
+      store: 'app',
+      path: 'deployments.0.status',
+      equals: 'queued',
+    });
+    expect(r.pass).toBe(true);
+  });
+
+  it('fails legibly when the displayed value lies about the store (desync)', async () => {
+    // UI showed "live"; the store says "queued". Asserting equals:'live' must fail and name the truth.
+    const r = await evaluatePredicate(new StateSession(app), {
+      kind: 'state',
+      store: 'app',
+      path: 'deployments.0.status',
+      equals: 'live',
+    });
+    expect(r.pass).toBe(false);
+    expect(r.failureReason).toContain('queued');
+  });
+
+  it('supports operator patterns ($gte, $length)', async () => {
+    const session = new StateSession(app);
+    expect(
+      (
+        await evaluatePredicate(session, {
+          kind: 'state',
+          store: 'app',
+          path: 'count',
+          equals: { $gte: 2 },
+        })
+      ).pass,
+    ).toBe(true);
+    expect(
+      (
+        await evaluatePredicate(session, {
+          kind: 'state',
+          store: 'app',
+          path: 'deployments',
+          equals: { $length: 2 },
+        })
+      ).pass,
+    ).toBe(true);
+    expect(
+      (
+        await evaluatePredicate(session, {
+          kind: 'state',
+          store: 'app',
+          path: 'count',
+          equals: { $gte: 5 },
+        })
+      ).pass,
+    ).toBe(false);
+  });
+
+  it('presence check passes when equals is omitted and the path resolves', async () => {
+    const r = await evaluatePredicate(new StateSession(app), {
+      kind: 'state',
+      store: 'app',
+      path: 'deployments.1.id',
+    });
+    expect(r.pass).toBe(true);
+  });
+
+  it('diagnoses a missing path with the keys that WERE available', async () => {
+    const r = await evaluatePredicate(new StateSession(app), {
+      kind: 'state',
+      store: 'app',
+      path: 'deployments.0.nope',
+    });
+    expect(r.pass).toBe(false);
+    expect((r.evidence as { availableKeys?: string[] }).availableKeys).toContain('status');
+  });
+
+  it('defaults to the only store when none is named, but flags ambiguity otherwise', async () => {
+    const single = await evaluatePredicate(new StateSession({ app: { v: 1 } }), {
+      kind: 'state',
+      path: 'v',
+      equals: 1,
+    });
+    expect(single.pass).toBe(true);
+    const ambiguous = await evaluatePredicate(new StateSession({ app: {}, cart: {} }), {
+      kind: 'state',
+      path: 'v',
+    });
+    expect(ambiguous.pass).toBe(false);
+    expect(ambiguous.failureReason).toContain('multiple stores');
+  });
+});

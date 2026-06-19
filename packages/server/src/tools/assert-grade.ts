@@ -27,6 +27,9 @@ function walk(predicate: Predicate): PredicateKinds {
   switch (predicate.kind) {
     case 'signal':
     case 'net':
+    case 'state':
+      // A state assertion verifies the app's own source of truth changed — a consequence a wrong
+      // element or stale render cannot fake (the strongest form of the success-oracle).
       return { consequence: true, presence: false };
     case 'element':
     case 'text':

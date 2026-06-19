@@ -9,6 +9,7 @@ import {
   type MatchResult,
 } from '@syrin/iris-protocol';
 import { z } from 'zod';
+import { selectPath, capDepth } from '../session/state-select.js';
 
 /** The subset of Session the predicate engine needs — keeps it testable with a fake. */
 export interface PredicateSession {
@@ -28,6 +29,7 @@ export type Predicate =
   | { kind: 'console'; level?: string; absent?: boolean; since?: number }
   | { kind: 'animation'; name?: string; target?: string; completed?: boolean }
   | { kind: 'signal'; name?: string; dataMatches?: Record<string, unknown> }
+  | { kind: 'state'; store?: string; path: string; equals?: unknown }
   | { kind: 'settled'; quietMs?: number }
   | { kind: 'allOf'; predicates: Predicate[] }
   | { kind: 'anyOf'; predicates: Predicate[] }
@@ -75,6 +77,12 @@ export const PredicateSchema = z.lazy(() =>
       kind: z.literal('signal'),
       name: z.string().optional(),
       dataMatches: z.record(z.unknown()).optional(),
+    }),
+    z.object({
+      kind: z.literal('state'),
+      store: z.string().optional(),
+      path: z.string(),
+      equals: z.unknown().optional(),
     }),
     z.object({ kind: z.literal('settled'), quietMs: z.number().positive().optional() }),
     z.object({ kind: z.literal('allOf'), predicates: z.array(PredicateSchema) }),
@@ -318,6 +326,56 @@ function evalSignal(events: IrisEvent[], p: Extract<Predicate, { kind: 'signal' 
 }
 
 /**
+ * Assert a value inside a registered store — the deterministic source of truth no DOM/network read
+ * can reach. Reads the store (STATE_READ), walks `path` (dot-path, numeric array indices), and matches
+ * the value against `equals` (a literal, `*` for presence, or a `{$gte,$contains,$length,…}` operator
+ * pattern — same matcher as signal `dataMatches`). This is what turns "the UI lies about the store"
+ * from a manual three-step catch into a one-line, LLM-free regression invariant a flow can carry.
+ */
+async function evalState(
+  session: PredicateSession,
+  p: Extract<Predicate, { kind: 'state' }>,
+): Promise<EvalResult> {
+  const res = await session.command(
+    IrisCommand.STATE_READ,
+    p.store !== undefined ? { store: p.store } : {},
+  );
+  if (!res.ok) return { pass: false, failureReason: 'state read failed' };
+  const stores = ((res.result ?? {}) as { stores?: Record<string, unknown> }).stores ?? {};
+  const names = Object.keys(stores);
+  const storeName = p.store ?? (names.length === 1 ? names[0] : undefined);
+  if (storeName === undefined) {
+    return {
+      pass: false,
+      failureReason:
+        names.length === 0
+          ? 'no registered store to read state from'
+          : `multiple stores (${names.join(', ')}); name one with \`store\``,
+    };
+  }
+  const selection = selectPath(stores[storeName], p.path);
+  if (!selection.found) {
+    return {
+      pass: false,
+      failureReason: `state path '${p.path}' not found in store '${storeName}'`,
+      evidence: { availableKeys: selection.availableKeys },
+    };
+  }
+  const want = p.equals === undefined ? '*' : p.equals;
+  if (matchValue(selection.value, want)) {
+    return {
+      pass: true,
+      evidence: { store: storeName, path: p.path, value: capDepth(selection.value, 1) },
+    };
+  }
+  return {
+    pass: false,
+    failureReason: `state '${p.path}' is ${JSON.stringify(capDepth(selection.value, 0))}, expected ${JSON.stringify(want)}`,
+    evidence: { store: storeName, path: p.path, value: capDepth(selection.value, 1) },
+  };
+}
+
+/**
  * Activity that resets the "quiet" timer for a `settled` predicate: network calls and STRUCTURAL DOM
  * mutations (nodes added/removed, attributes changed). Deliberately EXCLUDES `dom.text` and animation
  * frames: a count-up counter, a spinner, a pulsing dot, or any looping CSS animation emits a text/anim
@@ -407,6 +465,8 @@ export async function evaluatePredicate(
       return evalAnimation(events, predicate);
     case 'signal':
       return evalSignal(events, predicate);
+    case 'state':
+      return evalState(session, predicate);
     case 'settled':
       return evalSettled(events, predicate, session.elapsed());
     case 'allOf': {
