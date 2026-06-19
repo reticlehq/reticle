@@ -11,7 +11,7 @@ A flow is recorded once with a declared business **intent** and the consequence 
 **success**, then replayed. The replay returns the journey — per step, the page it ran on, the action,
 and the observable consequence (domain signal / network call / route change) — plus the verdict:
 
-```
+```text
 intent: inject a 500 server fault from diagnostics and observe it fire
 status: ok   intentVerified: true
 journey:
