@@ -58,6 +58,8 @@ export const IrisTool = {
   RESUME: 'iris_resume',
   /** Live-control: drain the human→agent inbox (explicit poll). */
   MESSAGES: 'iris_messages',
+  /** Human review: list the mistakes the human pinned to elements, and resolve them once fixed. */
+  REVIEW: 'iris_review',
   /** Navigate the connected browser tab to a URL. */
   NAVIGATE: 'iris_navigate',
   /** Reload the connected browser tab (soft or hard). */

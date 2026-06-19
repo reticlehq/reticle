@@ -3,6 +3,7 @@ import {
   EventType,
   HumanControlDataSchema,
   HumanControlKind,
+  HumanMarkDataSchema,
   IrisCommand,
   MessageKind,
   SESSION_HEALTH,
@@ -15,6 +16,7 @@ import {
   type IrisEvent,
 } from '@syrin/iris-protocol';
 import { RingBuffer } from '../events/ring-buffer.js';
+import { ReviewStore, type ReviewMark } from './review-store.js';
 import { buildSessionRecommendation } from './session-recommendation.js';
 
 export interface SessionInfo {
@@ -92,6 +94,8 @@ export class Session {
   /** True when the reaper/disconnect ended this session — such an end is revivable; explicit ends are not. */
   #autoEnded = false;
   readonly #inbox: InboxMessage[] = [];
+  /** Human review marks: mistakes the human pinned to elements, for the agent to drain and fix. */
+  readonly #review = new ReviewStore();
   /** Whether the session_lease has already been returned (fire-once per session). */
   #firstCommandDone = false;
 
@@ -185,6 +189,11 @@ export class Session {
       // Narrow unknown at the boundary; an invalid/unknown control is ignored (never thrown).
       const parsed = HumanControlDataSchema.safeParse(event.data);
       if (parsed.success) this.applyHumanControl(parsed.data);
+    }
+    if (event.type === EventType.HUMAN_MARK) {
+      // A human pinned a mistake to an element. Narrow at the boundary; an invalid mark is ignored.
+      const parsed = HumanMarkDataSchema.safeParse(event.data);
+      if (parsed.success) this.#review.add(parsed.data, this.elapsed());
     }
     if (event.type === EventType.ROUTE_CHANGE) {
       // Keep the reported URL live across SPA navigation. The SDK already emits route.change on
@@ -360,6 +369,28 @@ export class Session {
     return this.#inbox.length;
   }
 
+  // ── Human review marks: the "annotate the bug where you see it" inbox (server-owned) ──────────
+
+  /** Human marks still awaiting a fix (oldest first). Reading does not consume — resolveMark() does. */
+  pendingMarks(): ReviewMark[] {
+    return this.#review.pending();
+  }
+
+  /** Full mark history (pending + resolved), oldest first. */
+  allMarks(): ReviewMark[] {
+    return this.#review.all();
+  }
+
+  /** Count of pending marks — surfaced as the panel badge / a session-health hint. */
+  pendingMarkCount(): number {
+    return this.#review.pendingCount();
+  }
+
+  /** Retire a mark the agent fixed. True on a real pending → resolved transition; false otherwise. */
+  resolveMark(id: string): boolean {
+    return this.#review.resolve(id);
+  }
+
   /**
    * Apply a narrowed human control. `setState` is called only on a GENUINE change, so each real
    * transition pushes exactly one PRESENTER command; no-ops (e.g. resume on active, pause after
@@ -446,111 +477,9 @@ export class Session {
   }
 }
 
-/** Registry of connected sessions with single-active-session ergonomics. */
-export class SessionManager {
-  readonly #sessions = new Map<string, Session>();
-
-  add(session: Session): Session | undefined {
-    const previous = this.#sessions.get(session.id);
-    this.#sessions.set(session.id, session);
-    return previous;
-  }
-
-  remove(session: Session): boolean {
-    if (this.#sessions.get(session.id) !== session) return false;
-    session.rejectAll('session disconnected');
-    return this.#sessions.delete(session.id);
-  }
-
-  get(sessionId: string): Session | undefined {
-    return this.#sessions.get(sessionId);
-  }
-
-  list(): SessionInfo[] {
-    return [...this.#sessions.values()].map((s) => s.info());
-  }
-
-  /** Every connected session — used by the liveness reaper to sweep for idle/disconnected ones. */
-  all(): Session[] {
-    return [...this.#sessions.values()];
-  }
-
-  count(): number {
-    return this.#sessions.size;
-  }
-
-  /**
-   * Resolve the target session. With an explicit id, returns it. With none and exactly
-   * one connected, returns that.
-   *
-   * With none and multiple connected, applies smart auto-selection:
-   *   1. Prefer non-throttled sessions (not hidden + recently heard from).
-   *   2. Within each tier, prefer lowest lastSeenMs (most recently active SDK heartbeat).
-   *   3. If two or more non-throttled sessions are within 1 s of each other, throw —
-   *      genuinely ambiguous, agent must specify sessionId.
-   *   4. If ALL sessions are throttled (e.g. user is working in their editor on another
-   *      desktop), skip the gap check and pick the freshest heartbeat. This lets the agent
-   *      keep working in the background without requiring sessionId every time.
-   */
-  resolve(sessionId?: string): Session {
-    if (sessionId !== undefined) {
-      const found = this.#sessions.get(sessionId);
-      if (found === undefined) {
-        throw new Error(`no connected session with id '${sessionId}'`);
-      }
-      found.markAgentActivity(); // liveness: any targeted tool keeps the session alive / revives it
-      return found;
-    }
-    if (this.#sessions.size === 0) {
-      throw new Error(
-        'no browser session connected — is your app running with @syrin/iris-browser enabled?',
-      );
-    }
-    const all = [...this.#sessions.values()];
-    if (all.length === 1) {
-      const [only] = all;
-      if (only === undefined) throw new Error('session lookup failed');
-      only.markAgentActivity();
-      return only;
-    }
-
-    // Multiple sessions: score each (lower = better candidate for auto-selection).
-    // 0 = non-throttled (visible + recently-heard), 1 = throttled (hidden or stale heartbeat).
-    const scored = all.map((s) => ({ s, score: s.throttled() ? 1 : 0, ms: s.lastSeenMs() }));
-    const bestScore = Math.min(...scored.map((x) => x.score));
-    const candidates = scored.filter((x) => x.score === bestScore);
-
-    // Sort candidates by recency (ascending lastSeenMs = most recently active first).
-    candidates.sort((a, b) => a.ms - b.ms);
-    const [best, runnerUp] = candidates;
-
-    if (best === undefined) throw new Error('session lookup failed');
-
-    // Only auto-select if there is a clear winner.
-    //
-    // When at least one non-throttled (focused/visible) session exists, require a >1 s recency
-    // gap before committing — two tabs that both had recent heartbeats are genuinely ambiguous.
-    //
-    // When ALL candidates are throttled (e.g. the user switched to their editor on another
-    // desktop), the gap requirement is dropped: every session is already in "background" mode
-    // so we just pick the one with the freshest heartbeat and let the agent proceed. Requiring
-    // a gap here only produces spurious "ambiguous" errors while the user works elsewhere.
-    const allThrottled = bestScore === 1;
-    const RECENCY_GAP_MS = allThrottled ? 0 : 1_000;
-    const clearWinner = runnerUp === undefined || best.ms + RECENCY_GAP_MS < runnerUp.ms;
-
-    if (!clearWinner) {
-      // Ambiguous: list sessions with their health so the agent can choose.
-      const detail = all
-        .map(
-          (s) =>
-            `${s.id} (${s.throttled() ? 'throttled' : 'active'}, lastSeenMs=${s.lastSeenMs()})`,
-        )
-        .join(', ');
-      throw new Error(`multiple sessions connected — pass sessionId to target one: ${detail}`);
-    }
-
-    best.s.markAgentActivity();
-    return best.s;
-  }
-}
+/**
+ * Re-exported from session-manager.ts so the public import path (`./session.js`) is unchanged for
+ * the many call sites that resolve a target session. The class lives in its own file to keep both
+ * units under the file-size cap.
+ */
+export { SessionManager } from './session-manager.js';

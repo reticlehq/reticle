@@ -45,7 +45,9 @@ while IFS= read -r f; do
   if grep -nE '(:[[:space:]]*any\b|<any>|as any\b|any\[\])' "$f" >/dev/null; then
     note "${RED}✗ 'any' type in $f${NC}"; fail=1
   fi
-  if grep -nE '\bconsole\.log\b' "$f" >/dev/null; then
+  # Flag console.log CALLS only (followed by `(`), not the substring — a wire constant whose VALUE is
+  # the string 'console.log' (e.g. EventType.CONSOLE_LOG) is legitimate and must not trip the gate.
+  if grep -nE '\bconsole\.log[[:space:]]*\(' "$f" >/dev/null; then
     note "${RED}✗ console.log in $f (use console.warn/error or structured logging)${NC}"; fail=1
   fi
   lines=$(wc -l < "$f" | tr -d ' ')

@@ -65,4 +65,63 @@ export const LIVE_CONTROL_TOOLS: ToolDef[] = [
       return Promise.resolve({ messages: session.drainInbox() });
     },
   },
+  {
+    name: IrisTool.REVIEW,
+    description:
+      'List the mistakes the human pinned to elements on the running page (the "annotate the bug ' +
+      'where you see it" loop), then resolve each once you have fixed it. Each pending mark carries ' +
+      'the human note, the element label, and — when the framework stamped it — the source file:line ' +
+      'to open, plus a ready-to-act `fix` hint. After applying a fix, call again with ' +
+      '`{ resolve: "<id>" }` to retire that mark. Reading does NOT consume a mark, so you can list, ' +
+      'fix, verify, then resolve.',
+    inputSchema: {
+      resolve: z
+        .string()
+        .optional()
+        .describe('A mark id (e.g. "m1") to retire after you have fixed it. Omit to just list.'),
+      all: z
+        .boolean()
+        .optional()
+        .describe('Include already-resolved marks in the listing (default: pending only).'),
+      ...sessionIdShape,
+    },
+    outputSchema: {
+      marks: z.array(z.unknown()),
+      pendingCount: z.number(),
+      resolved: z.boolean().optional(),
+    },
+    handler: (deps, args) => {
+      const session = deps.sessions.resolve(asString(args['sessionId']));
+      const resolveId = asString(args['resolve']);
+      const resolved = resolveId !== undefined ? session.resolveMark(resolveId) : undefined;
+      const source = args['all'] === true ? session.allMarks() : session.pendingMarks();
+      const marks = source.map((m) => ({ ...m, fix: buildFixHint(m) }));
+      const out: { marks: typeof marks; pendingCount: number; resolved?: boolean } = {
+        marks,
+        pendingCount: session.pendingMarkCount(),
+      };
+      if (resolved !== undefined) out.resolved = resolved;
+      return Promise.resolve(out);
+    },
+  },
 ];
+
+/**
+ * The single actionable next-move for a pending mark: point the agent at the source (or the element
+ * label when no file:line was stamped), echo the human's note, and name the resolve call. Keeping
+ * the recovery hint here means the agent is never left guessing what to do with a mark.
+ */
+function buildFixHint(m: {
+  id: string;
+  note: string;
+  label?: string;
+  source?: { file: string; line: number };
+}): string {
+  const where =
+    m.source !== undefined
+      ? `Open ${m.source.file}:${String(m.source.line)}`
+      : m.label !== undefined
+        ? `Find the "${m.label}" element`
+        : 'Find the flagged element';
+  return `${where} and fix: ${m.note}. Then call iris_review { resolve: "${m.id}" }.`;
+}

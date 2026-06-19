@@ -55,6 +55,7 @@ export const SESSION_EXEMPT_TOOLS: ReadonlySet<string> = new Set([
   IrisTool.END_SESSION, // live-control lifecycle
   IrisTool.RESUME, // live-control lifecycle
   IrisTool.MESSAGES, // drains the human→agent inbox
+  IrisTool.REVIEW, // lists/resolves human review marks; own contract, no live-DOM read
   IrisTool.SESSION, // tunes the presenter session (idle-end); own contract
   IrisTool.SCREENSHOT, // own contract; provider-driven, not a live-DOM-health read
   IrisTool.VISUAL_DIFF, // own contract (matched/ratio/region)

@@ -3,6 +3,7 @@ import {
   EventType,
   HumanControlKind,
   IRIS_PROTOCOL_VERSION,
+  MarkAnchorStrategy,
   MessageKind,
   TRANSPORT_LIMITS,
 } from './constants.js';
@@ -19,6 +20,34 @@ export const HumanControlDataSchema = z.object({
   text: z.string().optional(),
 });
 export type HumanControlData = z.infer<typeof HumanControlDataSchema>;
+
+/**
+ * Human review: the narrowed payload of a HUMAN_MARK event. A human flagged a mistake pinned to an
+ * element on the running page; the server safeParses `event.data` against this at the inbound
+ * boundary (unknown → narrowed; never `any`) and stores it for the agent to drain.
+ *
+ * `anchor` is the re-resolvable element address (auto-anchor's string, e.g.
+ * `component:Submit@src/Checkout.tsx:42`); `strategy` is its durability tier; `source` is the
+ * stamped file:line when the framework provided one — the single most useful field for the agent,
+ * because it points straight at the code to fix.
+ */
+export const HumanMarkDataSchema = z.object({
+  note: z.string().min(1).max(TRANSPORT_LIMITS.MAX_MARK_NOTE_LENGTH),
+  anchor: z.string().max(TRANSPORT_LIMITS.MAX_REF_LENGTH),
+  strategy: z.nativeEnum(MarkAnchorStrategy),
+  /** Human-legible element label (role + accessible name / text), to show the agent what was flagged. */
+  label: z.string().max(TRANSPORT_LIMITS.MAX_MARK_LABEL_LENGTH).optional(),
+  /** Source file:line stamped by the framework's compiler/plugin, when available. */
+  source: z
+    .object({
+      file: z.string().max(TRANSPORT_LIMITS.MAX_URL_LENGTH),
+      line: z.number().int().min(0),
+    })
+    .optional(),
+  /** Route/URL the mark was made on, so the agent can reproduce the context. */
+  route: z.string().max(TRANSPORT_LIMITS.MAX_URL_LENGTH).optional(),
+});
+export type HumanMarkData = z.infer<typeof HumanMarkDataSchema>;
 
 /**
  * A normalized observation pushed from the browser into the ring buffer.
