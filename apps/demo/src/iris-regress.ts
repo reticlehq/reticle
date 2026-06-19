@@ -11,6 +11,7 @@
  */
 
 const BREAK_PARAM = 'iris-break';
+const BREAK_CLICK_PARAM = 'iris-break-click';
 const TESTID_ATTR = 'data-testid';
 const STRIPPED_ATTR = 'data-iris-stripped';
 
@@ -44,21 +45,57 @@ function patchSetAttribute(broken: ReadonlySet<string>): void {
 }
 
 /**
- * Install the regression injector. No-op unless `?iris-break=<testids>` is present. Strips any
- * already-rendered matches, then blocks all future writes of those testids — so the regression
- * holds for the whole session, synchronously, with no race against re-renders.
+ * Break the click HANDLER of an element while leaving it fully present in the DOM — the second
+ * class of real regression: a refactor wires up the button but its onClick no longer does anything
+ * (or throws before its effect), so the element renders, a locator resolves, the step "succeeds",
+ * yet the feature is dead. A capture-phase listener on document fires before React's root-delegated
+ * bubble handler and stops the event, so the handler never runs and its consequence never fires.
+ * This is the regression a presence-only test (and a self-healed locator) passes green — only a
+ * flow with a consequence oracle (assert-signal / assert-net / success-state) catches it.
  */
-export function installRegressions(): void {
-  const params = new URLSearchParams(window.location.search);
-  const raw = params.get(BREAK_PARAM);
-  if (raw === null || raw.length === 0) return;
-  const broken = new Set(
+function installBrokenClicks(brokenClicks: ReadonlySet<string>): void {
+  if (brokenClicks.size === 0) return;
+  document.addEventListener(
+    'click',
+    (event) => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      for (const id of brokenClicks) {
+        if (target.closest(`[${TESTID_ATTR}="${id}"]`) !== null) {
+          event.stopImmediatePropagation();
+          event.preventDefault();
+          return;
+        }
+      }
+    },
+    true,
+  );
+}
+
+/** Parse a comma-separated URL param into a set of trimmed, non-empty tokens. */
+function parseSet(params: URLSearchParams, key: string): Set<string> {
+  const raw = params.get(key);
+  if (raw === null || raw.length === 0) return new Set();
+  return new Set(
     raw
       .split(',')
       .map((s) => s.trim())
       .filter((s) => s.length > 0),
   );
-  if (broken.size === 0) return;
-  patchSetAttribute(broken);
-  stripExisting(broken);
+}
+
+/**
+ * Install the regression injector. No-op unless a break param is present.
+ *   ?iris-break=<testids>        strip those data-testids (selector regression → testid drift)
+ *   ?iris-break-click=<testids>  kill those elements' click handlers (consequence regression →
+ *                                element resolves green, but the success/signal oracle fails)
+ */
+export function installRegressions(): void {
+  const params = new URLSearchParams(window.location.search);
+  const broken = parseSet(params, BREAK_PARAM);
+  if (broken.size > 0) {
+    patchSetAttribute(broken);
+    stripExisting(broken);
+  }
+  installBrokenClicks(parseSet(params, BREAK_CLICK_PARAM));
 }

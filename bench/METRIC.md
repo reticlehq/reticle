@@ -88,9 +88,11 @@ Measured (Layer C, `harness/replay-bench.mjs` + `replay-detect.mjs`, raw in `ben
 
 And it **compounds**: over N runs Iris pays author-once + N×~175; the competitors pay N×~30k. By the
 second run Iris is already ahead even counting the one-time LLM authoring; by run 100 it is ~170×.
-Correctness is proven, not assumed — clean flows replay `ok` (4/4), and an injected selector
-regression is caught 3/3, each drift naming the exact broken anchor with a nearest-match fix
-(see `LAYER-B.md` Layer C). **This is the metric we chase to 100× and beyond, and it is met today.**
+Correctness is proven, not assumed — clean flows replay `ok` (4/4), and TWO classes of regression
+are caught: an injected selector removal 3/3 (each drift naming the exact broken anchor with a
+nearest-match fix), AND a green-but-wrong dead-handler regression 2/2 (element still present, no
+drift, but the consequence/success oracle fails — the regression self-healing tools ship green).
+See `LAYER-B.md` Layer C. **This is the metric we chase to 100× and beyond, and it is met today.**
 
 ## Protocol (every version)
 

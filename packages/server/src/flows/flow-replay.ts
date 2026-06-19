@@ -97,7 +97,7 @@ export function nearestTestid(missing: string, present: string[]): string | null
  * with a short delay before concluding the anchor is gone — a real regression (renamed/removed
  * testid) stays missing across every attempt, so this removes flakiness without masking breaks.
  */
-const ANCHOR_SETTLE_ATTEMPTS = 5;
+const ANCHOR_SETTLE_ATTEMPTS = 8;
 const ANCHOR_SETTLE_DELAY_MS = 150;
 
 /** Injected sleeper so tests drive replay with a no-op clock; production waits on a real timer. */

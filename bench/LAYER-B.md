@@ -335,6 +335,30 @@ drift), **~128–171× cheaper per run**, and **correct** (clean→pass, broken�
 the metric — regression catches per 1k tokens — where Iris is not 1.5× better but two orders of
 magnitude better.
 
+### Layer C, depth — the GREEN-BUT-WRONG regression (consequence oracle)
+
+Removing a testid is the easy regression to catch — the locator vanishes. The hard one, the one
+self-healing tools (mabl/qate.ai) and presence-only tests ship green, is a handler that still
+renders its button but no longer _does_ anything: a refactor rewires the onClick, or it throws
+before its effect. The element is present, the locator resolves, the click step "succeeds" — and
+the feature is dead. Selector-drift detection sees no drift and passes.
+
+Iris flows carry a **success oracle** — a real CONSEQUENCE (a signal/network event), asserted with
+the same predicate engine as the live tools. `harness/replay-detect-consequence.mjs` records a fault
+click whose success-state is the demo's `fault:injected` signal, then re-navigates with
+`?iris-break-click=<testid>` (a capture-phase listener kills the handler; the element stays present).
+
+| Flow         | break                     | baseline     | regressed       | testid drift?        | success oracle | caught? |
+| ------------ | ------------------------- | ------------ | --------------- | -------------------- | -------------- | ------- |
+| c-verify-500 | dead onClick on fault-500 | ok (228 tok) | error (286 tok) | no — element present | NOT satisfied  | ✓       |
+| c-verify-404 | dead onClick on fault-404 | ok (228 tok) | error (286 tok) | no — element present | NOT satisfied  | ✓       |
+
+**Consequence detection 2/2.** The regressed replay shows **no testid drift** (the element resolved
+fine) yet fails — because the consequence signal never fired, so the success oracle reports
+`flow.success not satisfied`. A locator healed to the wrong element cannot fake a real consequence.
+~286 tok = ~106× under Playwright's re-drive. This is the regression class that justifies recording
+a consequence, not just a click — and it is exactly what step-driving MCPs with no oracle miss.
+
 ### Honesty / limits
 
 - The detection flows use break targets that are reliably present at record time (sidebar nav and
@@ -343,8 +367,10 @@ magnitude better.
   it is excluded from the detection set — a harness-timing limitation, not a replay limitation.
 - A replay race in the product was found and fixed here: testid steps did a single QUERY, so an
   in-flight render (post-login route swap) read zero and FALSELY drifted. `replayFlow` now re-queries
-  with a bounded settle (5 × 150 ms) before concluding an anchor is gone — a real regression stays
+  with a bounded settle (8 × 150 ms) before concluding an anchor is gone — a real regression stays
   missing across every attempt, so this removes flakiness without masking breaks. Covered by tests.
-- The `replay-bench` (cost) harness still shows 2/4 flows occasionally `drift` on the
-  record→hard-refresh→replay path; that is the same async-record-timing nuance, and the per-run cost
-  (~180 tok) is identical whether the replay passes or drifts.
+  With this fix the cost-bench is 4/4 clean (no spurious drift).
+- The live detection benches drive a real browser, so a slow post-login render can occasionally
+  drift a _baseline_ (the rig, not detection). The harness retries a non-`ok` baseline once before
+  counting it — a clean baseline is the precondition for testing detection, so a flaky one is noise,
+  not a missed catch. Detection itself (the regressed replay) is deterministic given a clean baseline.

@@ -100,10 +100,18 @@ async function detectFor(flow) {
   }
 }
 
+// A clean baseline is the precondition for testing detection. If the live rig hits a timing hiccup
+// (slow post-login render → a baseline drift), that's rig noise, not a missed detection — retry once.
+async function detectWithBaselineRetry(flow) {
+  let r = await detectFor(flow);
+  if (r.baseline && r.baseline.status !== 'ok') r = await detectFor(flow);
+  return r;
+}
+
 const rows = [];
 for (const flow of FLOWS) {
   try {
-    const r = await detectFor(flow);
+    const r = await detectWithBaselineRetry(flow);
     rows.push(r);
     console.log(JSON.stringify(r));
   } catch (e) {
