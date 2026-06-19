@@ -41,7 +41,23 @@ const BUGS = [
     view: 'deployments',
     detect: (o, clean) => clean !== undefined && o.bg !== undefined && o.bg !== clean,
   },
+  {
+    // Off-design-token color. Both tools CAN detect, but the competitor must author the full
+    // palette-enumeration probe (themeFn) — Iris reads inspect.theme.offTheme natively.
+    id: 'theme-violation',
+    testid: 'brand',
+    view: null,
+    detect: (o) => o.offTheme === true,
+    competitorFn: themeFn('brand'),
+  },
 ];
+
+// The bespoke probe a competitor must author to check theme compliance: enumerate the app's :root
+// design tokens, resolve each to rgb, then test the element's color against the palette. Iris does
+// this natively (inspect.theme.offTheme); this is what a competitor pays in JS to match it.
+function themeFn(testid) {
+  return `() => { const el = document.querySelector('[data-testid="${testid}"]'); if (!el) return { missing: true }; const toRgb = (v) => { const s = document.createElement('span'); s.style.color = v; if (s.style.color === '') return null; document.body.appendChild(s); const r = getComputedStyle(s).color; s.remove(); return r; }; const tokens = new Set(); for (const sheet of document.styleSheets) { let rules; try { rules = sheet.cssRules; } catch { continue; } if (!rules) continue; for (const rule of rules) { if (!(rule instanceof CSSStyleRule)) continue; if (!/(^|,)\\s*(:root|html)\\b/.test(rule.selectorText)) continue; for (const p of rule.style) { if (p.startsWith('--')) { const rgb = toRgb(rule.style.getPropertyValue(p).trim()); if (rgb) tokens.add(rgb); } } } } const color = getComputedStyle(el).color; return { color, tokenCount: tokens.size, offTheme: tokens.size > 0 && color !== 'rgba(0, 0, 0, 0)' && !tokens.has(color) }; }`;
+}
 
 // The computed-style/geometry probe both competitors run via their evaluate tool (agent-authored JS).
 function evalFn(testid) {
@@ -90,14 +106,15 @@ async function irisObserve(a, testid) {
       h: Math.round(j.box?.height ?? 0),
       bg: s.backgroundColor,
       occluded: j.occluded,
+      offTheme: j.theme?.offTheme, // native theme-compliance flag (one inspect call)
     },
     tokens: measure(res.text ?? '').tokens_o200k,
   };
 }
 
-/** Competitor: evaluate the computed-style probe; the JS function string is real agent input cost. */
-async function evalObserve(c, toolName, testid) {
-  const fn = evalFn(testid);
+/** Competitor: evaluate a probe (default computed-style, or a bug-specific one); JS is real input cost. */
+async function evalObserve(c, toolName, testid, fnOverride) {
+  const fn = fnOverride ?? evalFn(testid);
   const res = await c.callTool(toolName, { function: fn });
   return {
     obs: parseJson(res.text),
@@ -162,7 +179,12 @@ for (const bug of BUGS) {
     try {
       await withTool(new Adapter(buggedUrl(bug.id)), async (a) => {
         await reach(a, bug);
-        const { obs, tokens, inputTokens } = await evalObserve(a.c, evalTool, bug.testid);
+        const { obs, tokens, inputTokens } = await evalObserve(
+          a.c,
+          evalTool,
+          bug.testid,
+          bug.competitorFn,
+        );
         row.tools[name] = { detected: bug.detect(obs, cleanBg), tokens, inputTokens, obs };
       });
     } catch (e) {
