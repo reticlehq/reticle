@@ -7,7 +7,7 @@
 
 ### Your AI agent writes the code. **Iris tells it whether the code actually works** — with evidence, not screenshots.
 
-<a href="https://syrin.ai/iris"><img src="assets/readme/demo-montage.gif" alt="Iris verifying a running app from the inside — catching a 401 the agent called 'done', pointing at the file:line, then green after a one-line fix" width="840" /></a>
+<a href="https://syrin.ai/iris"><img src="assets/readme/demo-montage.gif" alt="Iris in action — an AI agent verifying a real running app from the inside: pass/fail verdicts with evidence, the file:line to fix, and a regression caught before it shipped" width="840" /></a>
 
 [![npm](https://img.shields.io/npm/v/@syrin/iris?color=8b7bff&labelColor=15131f&logo=npm)](https://www.npmjs.com/package/@syrin/iris)
 [![downloads](https://img.shields.io/npm/dm/@syrin/iris?color=5fd9f5&labelColor=15131f)](https://www.npmjs.com/package/@syrin/iris)
@@ -32,7 +32,7 @@ You don't set this up. **Your agent does.** Paste one line into Claude Code, Cur
 Follow https://raw.githubusercontent.com/syrin-labs/iris/main/SKILL.md
 ```
 
-That's the whole install. The skill detects whether Iris is already wired up — runs the **setup wizard** the first time, then **verifies your app** every time after. Prefer to do it yourself? `npx @syrin/iris init` registers the MCP server for every agent you have, or see [the full install matrix ↓](#-install-the-full-options).
+That's the whole install. The skill detects whether Iris is already wired up — runs the **setup wizard** the first time, then **verifies your app** every time after. Prefer to do it yourself? `npx @syrin/iris init` registers the MCP server for every agent you have, or see [the full install matrix ↓](#-install--the-full-options).
 
 ---
 
