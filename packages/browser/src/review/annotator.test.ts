@@ -111,6 +111,59 @@ describe('Annotator — human marks a mistake on the page', () => {
     expect(emits).toHaveLength(0);
   });
 
+  it('⌘/Ctrl+Enter in the note sends the mark', () => {
+    const { ann, emits } = setup();
+    ann.toggle(true);
+    document.body.insertAdjacentHTML('beforeend', '<button data-testid="cta">Pay</button>');
+    clickAt(document.querySelector('[data-testid="cta"]') as Element);
+    const textarea = popover().querySelector('textarea');
+    if (textarea === null) throw new Error('no textarea');
+    textarea.value = 'misaligned';
+    textarea.dispatchEvent(new Event('input'));
+    textarea.dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: 'Enter',
+        metaKey: true,
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+    expect(emits).toHaveLength(1);
+    expect(emits[0]?.data['note']).toBe('misaligned');
+    expect(document.querySelector('[data-iris-mark="pop"]')).toBeNull();
+  });
+
+  it('⌘/Ctrl+Enter does nothing while the note is empty', () => {
+    const { ann, emits } = setup();
+    ann.toggle(true);
+    document.body.insertAdjacentHTML('beforeend', '<button>Go</button>');
+    clickAt(document.querySelector('button:not([data-iris-mark="fab"])') as Element);
+    const textarea = popover().querySelector('textarea');
+    textarea?.dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: 'Enter',
+        ctrlKey: true,
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+    expect(emits).toHaveLength(0);
+    expect(document.querySelector('[data-iris-mark="pop"]')).not.toBeNull();
+  });
+
+  it('Escape closes an open popover; Escape again exits annotate mode', () => {
+    const { ann } = setup();
+    ann.toggle(true);
+    document.body.insertAdjacentHTML('beforeend', '<button>Go</button>');
+    clickAt(document.querySelector('button:not([data-iris-mark="fab"])') as Element);
+    expect(document.querySelector('[data-iris-mark="pop"]')).not.toBeNull();
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    expect(document.querySelector('[data-iris-mark="pop"]')).toBeNull();
+    expect(ann.active).toBe(true); // still in annotate mode, just closed the popover
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    expect(ann.active).toBe(false); // a second Escape leaves annotate mode
+  });
+
   it('cancel closes the popover without emitting', () => {
     const { ann, emits } = setup();
     ann.toggle(true);

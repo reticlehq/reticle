@@ -55,7 +55,8 @@ ${sel('pop')} textarea{width:100%;box-sizing:border-box;min-height:62px;resize:v
   background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.12);border-radius:9px;color:#e9ebf2;
   font:13px/1.45 "Inter",system-ui,sans-serif;padding:8px;outline:none;}
 ${sel('pop')} textarea:focus{border-color:#7c83ff;}
-${sel('pop')} .iris-mark-row{display:flex;gap:8px;justify-content:flex-end;margin-top:9px;}
+${sel('pop')} .iris-mark-row{display:flex;gap:8px;align-items:center;margin-top:9px;}
+${sel('pop')} .iris-mark-hint{margin-right:auto;color:#6a7186;font-size:10.5px;letter-spacing:.02em;}
 ${sel('pop')} button{font:600 12px/1 "Inter",system-ui,sans-serif;padding:8px 12px;border-radius:9px;cursor:pointer;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.05);color:#cdd2e2;}
 ${sel('pop')} button[data-send]{background:#6366f1;border-color:#7c83ff;color:#fff;}
 ${sel('pop')} button[data-send]:disabled{opacity:.5;cursor:default;}`;
@@ -70,6 +71,7 @@ export class Annotator {
   #active = false;
   #markCount = 0;
   #onClick: ((ev: MouseEvent) => void) | undefined;
+  #onKeydown: ((ev: KeyboardEvent) => void) | undefined;
 
   constructor(deps: AnnotatorDeps) {
     this.#emit = deps.emit;
@@ -109,12 +111,24 @@ export class Annotator {
     // Capture-phase click: intercept the FIRST click on a real page element while active.
     this.#onClick = (ev: MouseEvent): void => this.#handleClick(ev);
     document.addEventListener('click', this.#onClick, { capture: true });
+
+    // Escape is the universal "back out": close an open popover, else leave annotate mode.
+    this.#onKeydown = (ev: KeyboardEvent): void => {
+      if (ev.key !== 'Escape' || !this.#active) return;
+      if (this.#pop !== undefined) this.#closePopover();
+      else this.toggle(false);
+    };
+    document.addEventListener('keydown', this.#onKeydown);
   }
 
   destroy(): void {
     if (this.#onClick !== undefined) {
       document.removeEventListener('click', this.#onClick, { capture: true });
       this.#onClick = undefined;
+    }
+    if (this.#onKeydown !== undefined) {
+      document.removeEventListener('keydown', this.#onKeydown);
+      this.#onKeydown = undefined;
     }
     this.#closePopover();
     document.documentElement.removeAttribute(ACTIVE_ATTR);
@@ -157,7 +171,7 @@ export class Annotator {
         : resolved.label;
     pop.innerHTML = `<div class="iris-mark-where"></div>
       <textarea placeholder="What's wrong here? The agent will read this and fix it."></textarea>
-      <div class="iris-mark-row"><button type="button" data-cancel>Cancel</button>
+      <div class="iris-mark-row"><span class="iris-mark-hint">⌘↵ send · esc cancel</span><button type="button" data-cancel>Cancel</button>
       <button type="button" data-send disabled>Send to agent</button></div>`;
     const whereEl = pop.querySelector('.iris-mark-where');
     if (whereEl !== null) whereEl.textContent = where;
@@ -170,17 +184,28 @@ export class Annotator {
 
     const textarea = pop.querySelector('textarea');
     const send = pop.querySelector<HTMLButtonElement>('button[data-send]');
+    const submit = (): void => {
+      const note = textarea?.value.trim() ?? '';
+      if (note.length === 0) return; // never send an empty mark
+      this.#sendMark(note, resolved, x, y);
+      this.#closePopover();
+    };
     textarea?.addEventListener('input', () => {
       if (send !== null) send.disabled = textarea.value.trim().length === 0;
     });
+    // Keyboard ergonomics devs expect: ⌘/Ctrl+Enter sends, Esc cancels — without leaving the textarea.
+    textarea?.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        this.#closePopover();
+      } else if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        submit();
+      }
+    });
     textarea?.focus();
     pop.querySelector('button[data-cancel]')?.addEventListener('click', () => this.#closePopover());
-    send?.addEventListener('click', () => {
-      const note = textarea?.value.trim() ?? '';
-      if (note.length === 0) return;
-      this.#sendMark(note, resolved, x, y);
-      this.#closePopover();
-    });
+    send?.addEventListener('click', submit);
   }
 
   #sendMark(
