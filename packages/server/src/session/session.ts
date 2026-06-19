@@ -34,6 +34,10 @@ export interface SessionInfo {
   recommendation?: string;
   stale?: boolean;
   cleanup_suggestion?: string;
+  /** present only when the human has flagged bugs on this tab — count of pending review marks. */
+  pendingMarks?: number;
+  /** present with pendingMarks — nudges the agent to drain them with iris_review. */
+  review_suggestion?: string;
 }
 
 /** The health block spliced onto act/assert results. */
@@ -168,6 +172,15 @@ export class Session {
       base.stale = true;
       base.cleanup_suggestion =
         'Call iris_end_session to free this session before starting new work.';
+    }
+    // Surface human bug reports proactively — the agent sees them in iris_sessions without polling
+    // iris_review. Only present when > 0, so a session with no marks adds nothing to the payload.
+    const marks = this.#review.pendingCount();
+    if (marks > 0) {
+      base.pendingMarks = marks;
+      base.review_suggestion = `The human flagged ${String(marks)} issue${
+        marks === 1 ? '' : 's'
+      } on this tab — call iris_review to see and fix ${marks === 1 ? 'it' : 'them'}.`;
     }
     return base;
   }

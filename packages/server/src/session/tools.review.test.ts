@@ -94,6 +94,25 @@ describe('iris_review tool — human marks ingested from HUMAN_MARK events', () 
     expect(listed.pendingCount).toBe(0);
   });
 
+  it('surfaces pending marks in session.info() only when > 0 (zero adds nothing to the payload)', () => {
+    const session = new Session(HELLO, fakeSocket, () => 0);
+    expect('pendingMarks' in session.info()).toBe(false);
+    expect('review_suggestion' in session.info()).toBe(false);
+
+    session.pushEvent(markEvent());
+    session.pushEvent(markEvent({ note: 'second issue' }));
+    const info = session.info();
+    expect(info.pendingMarks).toBe(2);
+    expect(info.review_suggestion).toMatch(/flagged 2 issues/);
+    expect(info.review_suggestion).toMatch(/iris_review/);
+
+    // Resolving a mark drops the count; resolving all removes the fields again.
+    const pending = session.pendingMarks();
+    session.resolveMark(pending[0]?.id ?? '');
+    session.resolveMark(pending[1]?.id ?? '');
+    expect('pendingMarks' in session.info()).toBe(false);
+  });
+
   it('all:true includes resolved marks in history', async () => {
     const session = new Session(HELLO, fakeSocket, () => 0);
     session.pushEvent(markEvent());
