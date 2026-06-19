@@ -269,7 +269,13 @@ export class Iris {
 
     // The "Flag a bug" annotator rides with the presenter (the human surface) unless explicitly off.
     if (options.annotate ?? options.present === true) {
-      this.#annotator = new Annotator({ emit, now: () => Date.now() });
+      const presenter = this.#presenter;
+      this.#annotator = new Annotator({
+        emit,
+        now: () => Date.now(),
+        // Echo the flag into the live panel so the human watches their bug report land in the log.
+        onMark: (note, label) => presenter?.log(LOG_KIND.HUMAN, `🚩 ${label}: ${note}`),
+      });
       this.#annotator.mount();
     }
 

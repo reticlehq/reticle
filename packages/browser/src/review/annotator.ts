@@ -15,6 +15,12 @@ import { resolveMarkAnchor } from './mark-anchor.js';
 export interface AnnotatorDeps {
   emit: (type: EventType, data: Record<string, unknown>) => void;
   now: () => number;
+  /**
+   * Optional: called after a mark is sent so the SDK can echo it into the live presenter panel — the
+   * human sees their flag land in the same activity log they watch the agent in. No-op when the
+   * presenter isn't mounted.
+   */
+  onMark?: (note: string, label: string) => void;
 }
 
 /** Single base attribute on every UI node (varied by VALUE) so `closest('[data-iris-mark]')`
@@ -57,6 +63,7 @@ ${sel('pop')} button[data-send]:disabled{opacity:.5;cursor:default;}`;
 export class Annotator {
   readonly #emit: AnnotatorDeps['emit'];
   readonly #now: AnnotatorDeps['now'];
+  readonly #onMark: AnnotatorDeps['onMark'];
   #root: HTMLElement | undefined;
   #fab: HTMLElement | undefined;
   #pop: HTMLElement | undefined;
@@ -67,6 +74,7 @@ export class Annotator {
   constructor(deps: AnnotatorDeps) {
     this.#emit = deps.emit;
     this.#now = deps.now;
+    this.#onMark = deps.onMark;
   }
 
   /** Whether annotate mode is currently capturing clicks. */
@@ -190,6 +198,7 @@ export class Annotator {
     };
     if (resolved.source !== undefined) data['source'] = resolved.source;
     this.#emit(EventType.HUMAN_MARK, data);
+    this.#onMark?.(note, resolved.label); // echo into the live panel so the human sees the flag land
     this.#markCount += 1;
     this.#dropPin(x, y, this.#markCount);
   }

@@ -81,6 +81,26 @@ describe('Annotator — human marks a mistake on the page', () => {
     expect(ann.markCount).toBe(1);
   });
 
+  it('calls onMark so the SDK can echo the flag into the live panel', () => {
+    const echoes: { note: string; label: string }[] = [];
+    const ann = new Annotator({
+      emit: () => undefined,
+      now: () => 0,
+      onMark: (note, label) => echoes.push({ note, label }),
+    });
+    ann.mount();
+    current = ann;
+    ann.toggle(true);
+    document.body.insertAdjacentHTML('beforeend', '<button data-testid="cta">Pay</button>');
+    clickAt(document.querySelector('[data-testid="cta"]') as Element);
+    const textarea = popover().querySelector('textarea');
+    if (textarea === null) throw new Error('no textarea');
+    textarea.value = 'wrong color';
+    textarea.dispatchEvent(new Event('input'));
+    popover().querySelector<HTMLButtonElement>('button[data-send]')?.click();
+    expect(echoes).toEqual([{ note: 'wrong color', label: 'button "Pay"' }]);
+  });
+
   it('the send button stays disabled until the note is non-empty', () => {
     const { ann, emits } = setup();
     ann.toggle(true);
