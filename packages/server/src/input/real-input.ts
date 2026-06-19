@@ -11,6 +11,7 @@
  */
 import type { Browser, Page } from 'playwright';
 import { ActionType, DriveErrorCode, DRIVE_PLAYWRIGHT_MISSING_MSG } from '@syrin/iris-protocol';
+import { installNetworkMocks, type MockRule } from './network-mock.js';
 
 /** Viewport CSS-px box as returned by the INSPECT command (getBoundingClientRect). */
 export interface ElementBox {
@@ -59,6 +60,13 @@ export interface RealInputProvider {
    * so the visual layer stays opt-in — a provider that cannot screenshot simply omits it.
    */
   screenshot?(sessionUrl: string, opts: ScreenshotOpts): Promise<Uint8Array | undefined>;
+  /**
+   * Install (or replace, or with [] clear) network-mock rules on the correlated page — stub a 500,
+   * force offline, delay a response — for deterministic error/edge-state testing. Returns true when
+   * a page matched and the rules were applied, false when no driven page matches this session.
+   * Optional: a provider with no owned browser simply omits it.
+   */
+  setMocks?(sessionUrl: string, rules: MockRule[]): Promise<boolean>;
 }
 
 /**
@@ -261,6 +269,14 @@ export class CdpRealInputProvider implements RealInputProvider {
     const page = await this.#pageFor(sessionUrl);
     if (page === undefined) return undefined;
     return capturePage(page, opts);
+  }
+
+  /** Apply network-mock rules to the correlated page; false when no driven page matches. */
+  async setMocks(sessionUrl: string, rules: MockRule[]): Promise<boolean> {
+    const page = await this.#pageFor(sessionUrl);
+    if (page === undefined) return false;
+    await installNetworkMocks(page, rules);
+    return true;
   }
 
   /** Best-effort cleanup; idempotent. */

@@ -44,6 +44,8 @@ export const IrisTool = {
   RUN_RECORD: 'iris_run_record',
   /** capture a pixel screenshot (CDP/driven browser) → .iris/visual/<name>.png. */
   SCREENSHOT: 'iris_screenshot',
+  /** stub/intercept network on the driven page (500, offline, delay) for error/edge-state testing. */
+  NETWORK_MOCK: 'iris_network_mock',
   /** perceptual-diff the live page against a saved visual baseline. */
   VISUAL_DIFF: 'iris_visual_diff',
   /** autonomously click every reachable control + report anomalies (no script). */

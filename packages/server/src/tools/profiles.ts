@@ -77,6 +77,7 @@ export const STANDARD_TOOL_NAMES: ReadonlySet<string> = new Set([
   IrisTool.BASELINE_SAVE,
   IrisTool.BASELINE_LIST,
   IrisTool.CONTRACT_SAVE,
+  IrisTool.NETWORK_MOCK,
 ]);
 
 export function resolveToolProfile(explicit?: string): ToolProfile {
