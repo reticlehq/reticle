@@ -1,6 +1,6 @@
 /**
  * Generated file contents and copy-paste snippets for `iris init`. Kept as named constants/builders
- * so the runner never inlines free strings (see dev-skills/conventions.md).
+ * so the runner never inlines free strings.
  */
 
 import { IRIS_DEFAULT_PORT, IRIS_WS_PATH } from '@syrin/iris-protocol';
