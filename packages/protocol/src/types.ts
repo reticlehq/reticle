@@ -26,6 +26,12 @@ export const ElementQuerySchema = z.object({
   placeholder: z.string().optional(),
   testid: z.string().optional(),
   alt: z.string().optional(),
+  /** Component display name (auto-anchor resolution). The nearest enclosing component of the target. */
+  component: z.string().optional(),
+  /** Source location of the target element (auto-anchor resolution) — the precise, granular match. */
+  source: z
+    .object({ file: z.string(), line: z.number(), column: z.number().optional() })
+    .optional(),
   /** CSS selector or ref to scope the search. */
   scope: z.string().optional(),
 });

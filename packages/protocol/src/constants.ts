@@ -584,6 +584,9 @@ export const QueryBy = {
   PLACEHOLDER: 'placeholder',
   TESTID: 'testid',
   ALT: 'alt',
+  /** Resolve by component identity / source location (auto-anchors — addresses any element with
+   * no hand-added testid). Pair with ElementQuery.component and/or .source. */
+  COMPONENT: 'component',
 } as const;
 export type QueryBy = (typeof QueryBy)[keyof typeof QueryBy];
 

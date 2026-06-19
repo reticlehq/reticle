@@ -18,10 +18,17 @@ import {
 } from '@syrin/iris-protocol';
 import { describe, getStates } from './a11y.js';
 import { getCapabilities } from '../registry/capabilities.js';
+import { identifyComponent } from '../registry/adapters.js';
 import { refs } from './refs.js';
 
 const TESTID_ATTR = 'data-testid';
+const SOURCE_ATTR = 'data-iris-source';
 const MAX_PRESENT_TESTIDS = 12;
+/** Bound the fiber-walk fallback so a component-name query can't scan an unbounded DOM. */
+const MAX_COMPONENT_CANDIDATES = 2000;
+/** Likely-actionable elements considered when resolving a component anchor without a source stamp. */
+const COMPONENT_CANDIDATE_SELECTOR =
+  '[data-iris-source], [data-testid], button, a, input, select, textarea, [role]';
 
 function resolveContainer(scope: string | undefined): HTMLElement {
   const body = document.body;
@@ -35,6 +42,56 @@ function resolveContainer(scope: string | undefined): HTMLElement {
     // invalid selector — fall through to body
   }
   return body;
+}
+
+/**
+ * Resolve an element by its SOURCE location — the precise, granular auto-anchor. The babel plugin
+ * stamps `data-iris-source="file:line:column"` on host elements, so a line-level starts-with match
+ * pins the exact JSX element with a single fast attribute selector (no fiber walk). Column is
+ * ignored so a small column drift doesn't unbind the anchor.
+ */
+function findBySource(
+  container: HTMLElement,
+  source: { file: string; line: number },
+): HTMLElement[] {
+  const prefix = `${source.file}:${source.line}:`.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+  try {
+    return Array.from(container.querySelectorAll<HTMLElement>(`[${SOURCE_ATTR}^="${prefix}"]`));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Resolve by component display name when no source stamp is available: scan a bounded set of
+ * likely-actionable elements and keep those whose NEAREST enclosing component (via the registered
+ * framework adapter) matches. Coarser than source (one component renders many hosts) — used as a
+ * fallback / for frameworks without a source plugin.
+ */
+function findByComponentName(container: HTMLElement, component: string): HTMLElement[] {
+  const out: HTMLElement[] = [];
+  let scanned = 0;
+  for (const el of Array.from(
+    container.querySelectorAll<HTMLElement>(COMPONENT_CANDIDATE_SELECTOR),
+  )) {
+    if (scanned >= MAX_COMPONENT_CANDIDATES) break;
+    scanned += 1;
+    const info = identifyComponent(el);
+    if (info !== null && info.componentStack[0] === component) out.push(el);
+  }
+  return out;
+}
+
+/** Auto-anchor resolution: source (precise) first, then component name (coarse fallback). */
+function findByComponent(container: HTMLElement, query: ElementQuery): HTMLElement[] {
+  if (query.source !== undefined) {
+    const bySource = findBySource(container, query.source);
+    if (bySource.length > 0) return bySource;
+  }
+  if (query.component !== undefined && query.component.length > 0) {
+    return findByComponentName(container, query.component);
+  }
+  return [];
 }
 
 /** Run the appropriate Testing-Library query for the given ElementQuery. */
@@ -62,9 +119,18 @@ function findCandidates(query: ElementQuery): HTMLElement[] {
         return queryAllByTestId(container, value, { exact: true });
       case QueryBy.ALT:
         return queryAllByAltText(container, value, { exact: false });
+      case QueryBy.COMPONENT:
+        // value is the component name; .source (if present) still takes precedence inside.
+        return findByComponent(container, { ...query, component: query.component ?? value });
       default:
         return [];
     }
+  }
+
+  // Auto-anchor (component / source) — checked before the role/text fields so a query carrying
+  // both a component anchor and an incidental role resolves by the more durable anchor.
+  if (query.component !== undefined || query.source !== undefined) {
+    return findByComponent(container, query);
   }
 
   // Structured form (role+name, or any single field).
