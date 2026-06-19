@@ -38,6 +38,30 @@ const CSS_BUGS: Record<string, string> = {
   'color-regression': `${sel('new-deploy')}{background:#dc2626 !important;background-color:#dc2626 !important;background-image:none !important;}`,
 };
 
+/**
+ * State/UI desync — the capability gap. The store holds the real deployment count
+ * (store.deployments.length), rendered as the Deployments nav badge. This forces the BADGE to a
+ * wrong value while the store is untouched: the UI lies about the truth. A tool that only sees the
+ * DOM reads a plausible number and cannot know it's wrong; only reading the app's state
+ * (iris_state — the store the app registered with Iris) reveals the mismatch. Re-applied on every
+ * render so React can't restore the real count.
+ */
+const DESYNC_FAKE_COUNT = '0';
+function installStateDesync(): void {
+  const apply = (): void => {
+    const badge = document.querySelector('[data-testid="nav-deployments"] .nav-badge');
+    if (badge !== null && badge.textContent !== DESYNC_FAKE_COUNT) {
+      badge.textContent = DESYNC_FAKE_COUNT;
+    }
+  };
+  apply();
+  new MutationObserver(apply).observe(document.documentElement, {
+    childList: true,
+    subtree: true,
+    characterData: true,
+  });
+}
+
 /** Inject a transparent overlay covering the target so pointer hits land on the overlay, not it. */
 function installOcclusion(): void {
   const apply = (): void => {
@@ -80,4 +104,5 @@ export function installHardBugs(): void {
   );
   installCss(bugs);
   if (bugs.has('occluded')) installOcclusion();
+  if (bugs.has('state-desync')) installStateDesync();
 }

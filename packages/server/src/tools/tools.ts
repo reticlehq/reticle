@@ -1259,12 +1259,23 @@ export const TOOLS: ToolDef[] = [
           store,
         },
       );
+      // Normalize storeNames to a string[] regardless of how the wire delivered it — the
+      // outputSchema requires an array, and a non-array here makes MCP reject the whole result
+      // (so the agent gets nothing instead of the state). Defensive: a string becomes a 1-element array.
+      const root = result as { stores?: Record<string, unknown>; storeNames?: unknown };
+      const names = Array.isArray(root.storeNames)
+        ? root.storeNames.filter((n): n is string => typeof n === 'string')
+        : typeof root.storeNames === 'string' && root.storeNames.length > 0
+          ? [root.storeNames]
+          : [];
+
       const path = asString(args['path']);
       const depth = asNumber(args['depth']);
-      if (path === undefined && depth === undefined) return result; // unchanged shape
+      if (path === undefined && depth === undefined) {
+        return { ...(root as Record<string, unknown>), storeNames: names }; // unchanged shape, safe storeNames
+      }
 
       // Base for the path is the named store's value (else the whole result when no store is given).
-      const root = result as { stores?: Record<string, unknown>; storeNames?: unknown };
       const base = store !== undefined ? (root.stores ?? {})[store] : result;
       const selection = path !== undefined ? selectPath(base, path) : { found: true, value: base };
       const value =
@@ -1274,7 +1285,7 @@ export const TOOLS: ToolDef[] = [
         path,
         ...selection,
         value,
-        storeNames: root.storeNames,
+        storeNames: names,
       };
     },
   },
