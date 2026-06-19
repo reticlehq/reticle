@@ -239,6 +239,12 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
 
   const shared = createSharedServer();
   const bridge = new Bridge({ port, server: shared.httpServer });
+  // `iris status` GETs this for a live, at-a-glance view of connected tabs + their health.
+  shared.attachStatus(() => ({
+    running: true,
+    sessionCount: bridge.sessions.count(),
+    sessions: bridge.sessions.list(),
+  }));
 
   const reaper = new SessionReaper(bridge.sessions);
   reaper.start();

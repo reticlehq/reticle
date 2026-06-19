@@ -1,8 +1,53 @@
 import { describe, expect, it } from 'vitest';
-import { CLI_USAGE, parseCliArgs } from './cli.js';
+import { CLI_USAGE, parseCliArgs, summarizeStatus } from './cli.js';
 
 const PORT = 7333;
 const URL = 'http://localhost:3000';
+
+describe('summarizeStatus', () => {
+  it('reduces the /status payload to a compact per-session health view', () => {
+    const out = summarizeStatus({
+      running: true,
+      sessionCount: 2,
+      sessions: [
+        { sessionId: 'a', url: 'http://localhost:5173/app', throttled: false, pendingMarks: 2 },
+        { sessionId: 'b', url: 'http://localhost:5173/x', throttled: true, stale: true },
+      ],
+    });
+    expect(out.sessionCount).toBe(2);
+    expect(out.sessions).toEqual([
+      {
+        sessionId: 'a',
+        url: 'http://localhost:5173/app',
+        throttled: false,
+        stale: false,
+        pendingMarks: 2,
+      },
+      {
+        sessionId: 'b',
+        url: 'http://localhost:5173/x',
+        throttled: true,
+        stale: true,
+        pendingMarks: 0,
+      },
+    ]);
+  });
+
+  it('degrades a missing/partial body to running with zero sessions (never throws)', () => {
+    expect(summarizeStatus(undefined)).toEqual({ sessionCount: 0, sessions: [] });
+    expect(summarizeStatus({ running: true })).toEqual({ sessionCount: 0, sessions: [] });
+    expect(summarizeStatus({ sessions: 'nope' })).toEqual({ sessionCount: 0, sessions: [] });
+  });
+
+  it('drops malformed session entries but keeps the well-formed ones', () => {
+    const out = summarizeStatus({
+      sessions: [null, 42, { url: 'no id' }, { sessionId: 'ok', url: 'u' }],
+    });
+    expect(out.sessions).toHaveLength(1);
+    expect(out.sessions[0]?.sessionId).toBe('ok');
+    expect(out.sessionCount).toBe(1);
+  });
+});
 
 describe('parseCliArgs', () => {
   it('no args defaults to serve on the default port', () => {

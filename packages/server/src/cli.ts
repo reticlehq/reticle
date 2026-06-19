@@ -1,8 +1,10 @@
 #!/usr/bin/env node
+import * as http from 'node:http';
 import { pathToFileURL } from 'node:url';
 import { realpathSync } from 'node:fs';
 import { IRIS_DEFAULT_PORT } from '@syrin/iris-protocol';
 import { start, startDaemon } from './index.js';
+import { STATUS_PATH } from './http-server.js';
 import { log } from './log.js';
 import { readPid, isAlive, isRunning, removePid, spawnDaemon } from './daemon.js';
 import { waitForDaemon, startMcpProxy, probeDaemon } from './mcp-proxy.js';
@@ -262,13 +264,84 @@ function handleStop(port: number, quiet: boolean): void {
   }, 100);
 }
 
+/** One connected tab as `iris status` reports it — the at-a-glance health line. */
+interface StatusSession {
+  sessionId: string;
+  url: string;
+  throttled: boolean;
+  stale: boolean;
+  pendingMarks: number;
+}
+
+/**
+ * Reduce the daemon's /status JSON to the compact view `iris status` prints. Pure: narrows the
+ * untrusted wire payload (never `any`) and tolerates a missing/partial body so a malformed response
+ * degrades to "running, 0 sessions" instead of throwing.
+ */
+export function summarizeStatus(payload: unknown): {
+  sessionCount: number;
+  sessions: StatusSession[];
+} {
+  if (typeof payload !== 'object' || payload === null) return { sessionCount: 0, sessions: [] };
+  const obj = payload as Record<string, unknown>;
+  const raw = Array.isArray(obj['sessions']) ? obj['sessions'] : [];
+  const sessions = raw
+    .map((s): StatusSession | null => {
+      if (typeof s !== 'object' || s === null) return null;
+      const r = s as Record<string, unknown>;
+      const sessionId = typeof r['sessionId'] === 'string' ? r['sessionId'] : '';
+      if (sessionId === '') return null;
+      return {
+        sessionId,
+        url: typeof r['url'] === 'string' ? r['url'] : '',
+        throttled: r['throttled'] === true,
+        stale: r['stale'] === true,
+        pendingMarks: typeof r['pendingMarks'] === 'number' ? r['pendingMarks'] : 0,
+      };
+    })
+    .filter((s): s is StatusSession => s !== null);
+  const sessionCount =
+    typeof obj['sessionCount'] === 'number' ? obj['sessionCount'] : sessions.length;
+  return { sessionCount, sessions };
+}
+
+/** GET the daemon's /status JSON. Resolves to the parsed body, or undefined on any failure. */
+function fetchStatus(port: number): Promise<unknown> {
+  return new Promise((resolve) => {
+    const req = http.get({ host: '127.0.0.1', port, path: STATUS_PATH, timeout: 1000 }, (res) => {
+      let body = '';
+      res.setEncoding('utf8');
+      res.on('data', (chunk: string) => (body += chunk));
+      res.on('end', () => {
+        try {
+          resolve(JSON.parse(body));
+        } catch {
+          resolve(undefined);
+        }
+      });
+    });
+    req.on('error', () => resolve(undefined));
+    req.on('timeout', () => {
+      req.destroy();
+      resolve(undefined);
+    });
+  });
+}
+
 function handleStatus(port: number): void {
   const pid = readPid(port);
   if (pid === null || !isAlive(pid)) {
     log('iris_status', { port, running: false });
     return;
   }
-  log('iris_status', { port, running: true, pid });
+  // The daemon is up — ask it for live sessions + health so status is at-a-glance, not just a pid.
+  void fetchStatus(port).then((payload) => {
+    if (payload === undefined) {
+      log('iris_status', { port, running: true, pid });
+      return;
+    }
+    log('iris_status', { port, running: true, pid, ...summarizeStatus(payload) });
+  });
 }
 
 function handleDaemonInner(parsed: { port: number; driveUrl?: string; headless: boolean }): void {

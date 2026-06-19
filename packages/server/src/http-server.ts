@@ -6,6 +6,8 @@ import { log } from './log.js';
 // These paths form the agent↔server wire contract. Keep in sync with skill/SKILL.md.
 export const MCP_SSE_PATH = '/mcp/sse';
 export const MCP_MESSAGE_PATH = '/mcp/message';
+/** Local-only daemon introspection — `iris status` GETs this to show sessions + health at a glance. */
+export const STATUS_PATH = '/status';
 
 export interface SharedServer {
   readonly httpServer: http.Server;
@@ -16,6 +18,8 @@ export interface SharedServer {
    * Must be called before listen().
    */
   attachMcp(factory: () => McpServer): void;
+  /** Register the JSON the daemon returns from GET /status (live sessions + health for `iris status`). */
+  attachStatus(provider: () => unknown): void;
   close(): Promise<void>;
 }
 
@@ -31,10 +35,18 @@ export interface SharedServer {
 export function createSharedServer(): SharedServer {
   type McpFactory = () => McpServer;
   let mcpFactory: McpFactory | undefined;
+  let statusProvider: (() => unknown) | undefined;
   const transports = new Map<string, SSEServerTransport>();
 
   const httpServer = http.createServer((req, res) => {
     const url = req.url ?? '/';
+
+    if (req.method === 'GET' && url === STATUS_PATH) {
+      const body = JSON.stringify(statusProvider?.() ?? { running: true });
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(body);
+      return;
+    }
 
     if (req.method === 'GET' && url === MCP_SSE_PATH) {
       if (mcpFactory === undefined) {
@@ -92,6 +104,10 @@ export function createSharedServer(): SharedServer {
     res.end('not found');
   });
 
+  function attachStatus(provider: () => unknown): void {
+    statusProvider = provider;
+  }
+
   function attachMcp(factory: McpFactory): void {
     mcpFactory = factory;
   }
@@ -109,5 +125,5 @@ export function createSharedServer(): SharedServer {
     });
   }
 
-  return { httpServer, attachMcp, close };
+  return { httpServer, attachMcp, attachStatus, close };
 }

@@ -20,6 +20,10 @@ agent work, points at what's wrong, and trusts the green. _In progress._
   a ready-to-act `fix` hint (`Open src/Checkout.tsx:42 and fix: <note>. Then iris_review { resolve: m1 }`),
   reading never consumes a mark, and `resolve` retires it once fixed. Off the deterministic benchmark
   path (human-driven) — `pnpm bench` unchanged.
+- **`iris status` shows sessions + health at a glance** (`packages/server`). The daemon exposes a
+  local `GET /status`; `iris status` now reports each connected tab (url, throttled, stale, pending
+  human marks) and the session count — not just "running: pid". The plan's "no more pkill in a README"
+  daemon DX. Local-only, off the agent/benchmark path.
 - **Actionable error recovery** (`packages/server`). Every tool error returned to the agent now carries
   a `recovery` hint when the failure is recognized — the no-session footgun, multiple/unknown sessions,
   a throttled tab, a missing baseline/recording, the pairing-token config — so the first 5 minutes never
