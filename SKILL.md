@@ -455,6 +455,23 @@ set in ONE deterministic call (no LLM per flow, so it's ~hundreds of tokens, not
   overlay), `styles.cursor`/`opacity`, `box` (0×0), and `theme.offTheme` (color off the design-token
   palette). A snapshot says the element is "there"; inspect says whether a user can actually use it.
 
+### Consume the human's bug reports (`iris_review`)
+
+The dev can click **"Flag a bug"** in the running app, point at an element, and type what's wrong.
+Each flag becomes a **mark** you drain with `iris_review`:
+
+```
+iris_review({ sessionId })
+→ { marks: [{ id: "m1", note: "this button is misaligned", label: "button \"Pay\"",
+              source: { file: "src/Checkout.tsx", line: 42 },
+              fix: "Open src/Checkout.tsx:42 and fix: this button is misaligned. Then iris_review { resolve: \"m1\" }" }],
+    pendingCount: 1 }
+```
+
+Check it at the start of a session and whenever the human may have flagged something. Open the
+`source` file:line, apply the fix the `note` asks for, verify, then `iris_review({ resolve: "m1" })`.
+Reading never consumes a mark, so you can list → fix → verify → resolve.
+
 ---
 
 ## Phase 5 — Report

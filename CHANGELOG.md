@@ -4,6 +4,29 @@ All notable changes to **`@syrin/iris`** are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] — 0.8.0
+
+The "developers love it" release. 0.7.0 won the agent; 0.8.0 wins the human — the dev who watches the
+agent work, points at what's wrong, and trusts the green. _In progress._
+
+### Added
+
+- **Human review marks — "annotate the bug where you see it"** (`packages/browser`, `packages/server`,
+  `packages/protocol`). A dev-only **"Flag a bug"** button rides with the presenter: the human toggles
+  it, clicks the element that looks wrong, types what's wrong, and Iris drops a numbered pin + emits a
+  `HUMAN_MARK`. The mark carries the element's re-resolvable anchor (the same durable address a
+  recorded flow uses) **and the source `file:line`** — so the agent fixes the exact element and code,
+  not a guess. The agent drains marks with the new **`iris_review`** tool: each pending mark comes with
+  a ready-to-act `fix` hint (`Open src/Checkout.tsx:42 and fix: <note>. Then iris_review { resolve: m1 }`),
+  reading never consumes a mark, and `resolve` retires it once fixed. Off the deterministic benchmark
+  path (human-driven) — `pnpm bench` unchanged.
+
+### Changed
+
+- **Internal cohesion split** (no behavior change): `SessionManager` moved to its own
+  `session-manager.ts`, and the on-disk-artifact constants to `flow-constants.ts`, bringing both
+  parent files back under the 500-line cap. All public import paths unchanged (re-exported).
+
 ## [0.7.0] — 2026-06-20
 
 The regression-testing release. Iris's flow `success` is now a **declared, deterministic, post-settle
