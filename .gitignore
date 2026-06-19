@@ -55,3 +55,6 @@ GRAPH_REPORT.md
 
 # Playwright MCP session dumps (written to cwd during benchmark runs)
 .playwright-mcp/
+
+# Agent git worktrees (never track — they are live checkouts)
+.claude/worktrees/
