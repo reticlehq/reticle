@@ -42,6 +42,7 @@ import { actionVerb } from './presenter/presenter-verbs.js';
 import { describe } from './dom/a11y.js';
 import { resetClock } from './timers/clock.js';
 import { installRecorder, type RecorderHandle } from './recorder/recorder.js';
+import { Annotator } from './review/annotator.js';
 import type { Teardown } from './observers/types.js';
 
 export interface IrisConnectOptions {
@@ -73,6 +74,12 @@ export interface IrisConnectOptions {
    * Default off — purely additive, dev-only.
    */
   recorder?: boolean;
+  /**
+   * Mount the "Flag a bug" annotator: the human clicks an element that looks wrong, types what's
+   * wrong, and Iris emits a HUMAN_MARK the agent drains via iris_review. Defaults to ON with the
+   * presenter (it's the human's side of the look→act→assert loop); pass `annotate: false` to suppress.
+   */
+  annotate?: boolean;
   /** Live-control: overridable ended-border fade delay (native timer). Default 4000. */
   endedFadeMs?: number;
   /** Session auto-end after this much agent idle (presenter). Default 5min; agent-tunable via iris_session. */
@@ -164,6 +171,7 @@ export class Iris {
   #overlay: OverlayHandle | undefined;
   #presenter: Presenter | undefined;
   #recorder: RecorderHandle | undefined;
+  #annotator: Annotator | undefined;
   #eventCount = 0;
   #token: string | undefined;
   /** Act-row log handle for the in-flight act/act_sequence, so its outcome stamps the right row. */
@@ -259,6 +267,12 @@ export class Iris {
       this.#recorder.mount();
     }
 
+    // The "Flag a bug" annotator rides with the presenter (the human surface) unless explicitly off.
+    if (options.annotate ?? options.present === true) {
+      this.#annotator = new Annotator({ emit, now: () => Date.now() });
+      this.#annotator.mount();
+    }
+
     this.#transport.connect();
     this.#connected = true;
   }
@@ -301,6 +315,8 @@ export class Iris {
     this.#presenter = undefined;
     this.#recorder?.destroy();
     this.#recorder = undefined;
+    this.#annotator?.destroy();
+    this.#annotator = undefined;
     resetClock(); // restore any frozen timers
     this.#connected = false;
   }

@@ -48,3 +48,5 @@ export { matchQuery, runQuery } from './dom/query.js';
 export { executeAction, executeSequence } from './actions/actions.js';
 export { describe, getRole, getAccessibleName, getStates, isVisible } from './dom/a11y.js';
 export { refs, RefRegistry } from './dom/refs.js';
+export { Annotator, installAnnotator, type AnnotatorDeps } from './review/annotator.js';
+export { resolveMarkAnchor, type MarkAnchor } from './review/mark-anchor.js';
