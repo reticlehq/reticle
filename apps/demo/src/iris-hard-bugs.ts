@@ -36,6 +36,10 @@ const CSS_BUGS: Record<string, string> = {
   'zero-size': `${sel('new-deploy')}{width:0 !important;height:0 !important;padding:0 !important;border:0 !important;overflow:hidden !important;}`,
   // The primary action silently recolored — invisible to structure, caught only vs a visual baseline.
   'color-regression': `${sel('new-deploy')}{background:#dc2626 !important;background-color:#dc2626 !important;background-image:none !important;}`,
+  // Off-design-token color: renders fine, but the hex is not in the app's palette (--accent etc.).
+  // Catching it needs to know the THEME — not just that a color rendered. The brand text goes
+  // hot-magenta, a value no design token uses.
+  'theme-violation': `${sel('brand')}{color:#ff00ff !important;}`,
 };
 
 /**

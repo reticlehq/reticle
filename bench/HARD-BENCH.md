@@ -58,11 +58,27 @@ any tool with an evaluate can read computed style; batch 2 (state/UI desync) is 
 of DOM/JS reaches state the app never put in the DOM.** That is the honest 100×-class differentiator:
 not "Iris sees pixels better," but "Iris sees the program, and the program is the source of truth."
 
-### Still to add (batch 2 continued)
+### Still to add (batch 2 continued) — with honest expectations
 
-- **theme-violation** — an off-design-token color (Iris reads the app's tokens; a competitor would
-  need them injected). Partially reachable via CSS custom properties, so a narrower edge — measured next.
-- **dropped-field / silent data corruption**, **double-submit / timing**.
+Analysis of the remaining classes shows most are **parity or competitor-reachable**, because their
+truth lives in the DOM / network / CSS variables that any `evaluate` can read. Only truth that lives
+in app **state** (the store) is Iris-only. Stated up front so the data isn't oversold:
+
+- **theme-violation** (injectable now: `?iris-bug=theme-violation` recolors the brand text to a hex
+  no design token uses). Honest expectation: this currently exposes an **Iris GAP, not a win** — Iris
+  has no design-token/palette observation, so a competitor `evaluate` that reads `:root` CSS variables
+  - the element color can check palette membership, while Iris's `inspect` returns the color but not
+    the palette. The real fix is a feature: let the app register its tokens (or enumerate `:root` custom
+    properties in `inspect`) so Iris knows the _intended_ palette semantically — then the in-source edge
+    returns ("Iris knows the design system; a competitor reads raw vars without knowing which is right").
+    Building that feature, then measuring, is the next focused step.
+- **double-submit / timing** — observable in the network panel by all three tools → expected parity.
+- **dropped-field** — Iris-only ONLY when the UI hides the corruption (i.e. it reduces to state/UI
+  desync, already proven); if the wrong value is rendered, it's parity.
+
+The honest meta-finding: **Iris's unique capability is detecting UI-vs-state desync.** Everything a
+user can see (DOM, computed style, network) is parity with any evaluate-capable tool. That precise
+boundary — not an inflated "Iris wins everything" — is the value of this dataset.
 
 _Token figures are the `o200k` proxy used across the benchmark; "+NN JS" is the agent-authored
 evaluate function the competitor must send (Iris sends only `{ref}`). All cells are genuine
