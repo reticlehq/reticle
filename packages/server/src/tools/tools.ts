@@ -476,6 +476,11 @@ export const TOOLS: ToolDef[] = [
         })
         .partial()
         .optional(),
+      // Theme compliance vs the app's design tokens: { colorToken, backgroundToken (null = off-palette),
+      // offTheme, tokenCount }. Kept as unknown — the structured-content serializer can truncate a
+      // large inspect payload's fields to strings, which a strict shape would reject; the full object
+      // is always present in the text content the agent reads.
+      theme: z.unknown().optional(),
       component: z
         .object({ name: z.string().optional(), sourceFile: z.string().optional() })
         .optional(),

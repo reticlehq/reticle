@@ -19,6 +19,7 @@ import {
   type ActionStep,
 } from '../actions/actions.js';
 import { describe } from '../dom/a11y.js';
+import { themeReport } from '../dom/theme.js';
 import { refs } from '../dom/refs.js';
 import { identifyComponent, readComponentState } from '../registry/adapters.js';
 import { readStores, storeNames } from '../registry/stores.js';
@@ -89,6 +90,8 @@ function inspect(ref: string): unknown {
     // not this control (a z-index/overlay bug the DOM tree cannot show).
     occluded: isOccluded(el, rect),
     styles,
+    // Theme compliance vs the app's design tokens (off-theme colors a DOM tool can't judge).
+    theme: cs !== null ? themeReport(cs) : null,
     component,
   };
 }
