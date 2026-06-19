@@ -1,0 +1,52 @@
+<!doctype html>
+<html><head><meta charset="utf-8" /><link rel="stylesheet" href="../src/_system.css" /><style>
+  html,body{width:1080px;height:1920px;margin:0}
+  .stage{width:1080px;height:1920px;position:relative;overflow:hidden;font-family:var(--sans);color:#fff;-webkit-font-smoothing:antialiased}
+  /* iris liquid mesh + grain + sheen (matches v0.5.0 set) */
+  .stage::before{content:"";position:absolute;inset:-220px;z-index:0;filter:blur(118px) saturate(142%);background:
+    radial-gradient(24% 18% at 66% 24%, rgba(255,190,86,.96), transparent 64%),
+    radial-gradient(18% 14% at 86% 50%, rgba(220,124,46,.84), transparent 68%),
+    radial-gradient(24% 18% at 44% 8%,  rgba(160,176,72,.74), transparent 70%),
+    radial-gradient(24% 18% at 80% 82%, rgba(60,160,108,.78), transparent 70%),
+    radial-gradient(24% 18% at 22% 46%, rgba(38,124,114,.74), transparent 72%),
+    radial-gradient(20% 16% at 14% 16%, rgba(126,82,44,.74),  transparent 72%),
+    radial-gradient(18% 14% at 40% 88%, rgba(176,150,58,.6),  transparent 74%),
+    radial-gradient(110% 90% at 60% 40%, transparent 52%, rgba(9,7,3,.62) 100%),
+    linear-gradient(160deg,#1b150c 0%,#12130d 52%,#0d1513 100%);}
+  .sheen{position:absolute;inset:0;z-index:1;mix-blend-mode:screen;pointer-events:none;
+    background:linear-gradient(122deg, rgba(255,255,255,.12) 0%, rgba(255,255,255,0) 20%),
+      radial-gradient(46% 26% at 80% 5%, rgba(255,255,255,.12), transparent 60%)}
+  .grain2{position:absolute;inset:0;z-index:2;pointer-events:none;opacity:.24;mix-blend-mode:soft-light;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+  .c{position:absolute;z-index:3}
+  /* top lockup + kicker, centred */
+  .top{left:0;right:0;top:300px;display:flex;flex-direction:column;align-items:center;gap:var(--s5)}
+  .lock{display:flex;align-items:center;gap:var(--s3)}.lock img{height:48px}
+  .lock .sep{color:var(--faint);font-size:38px;font-weight:300}.lock .prod{font-size:38px;font-weight:700}
+  .kick{font-family:var(--mono);font-size:var(--t-base);font-weight:600;letter-spacing:.22em;text-transform:uppercase;color:#f3b24a;
+    display:flex;align-items:center;gap:var(--s3)}
+  .kick .d{width:10px;height:10px;border-radius:2px;transform:rotate(45deg);background:#f3b24a;box-shadow:0 0 12px #f3b24a}
+  /* the recessed screen well — video is overlaid here by ffmpeg: x=40 y=620 w=1000 h=563 */
+  .well{left:40px;top:620px;width:1000px;height:563px;border-radius:28px;
+    background:rgba(6,6,10,.55);box-shadow:0 50px 140px rgba(0,0,0,.6), 0 0 0 1px rgba(255,255,255,.12), inset 0 1px 0 rgba(255,255,255,.1)}
+  /* bottom caption + url */
+  .bottom{left:0;right:0;top:1340px;display:flex;flex-direction:column;align-items:center;gap:var(--s5);text-align:center}
+  .bottom .t{font-family:var(--sans);font-weight:800;letter-spacing:-.025em;font-size:64px;line-height:1.08}
+  .bottom .hi{color:#fff;border-radius:12px;padding:.02em .18em;box-decoration-break:clone;-webkit-box-decoration-break:clone;
+    background:linear-gradient(180deg,rgba(243,178,74,.52),rgba(224,138,60,.34));box-shadow:0 0 0 1px rgba(243,178,74,.3)}
+  .bottom .url{font-family:var(--mono);font-size:var(--t-base);font-weight:600;color:#f3b24a}
+</style></head><body>
+  <div class="stage">
+    <div class="sheen"></div>
+    <div class="grain2"></div>
+    <div class="c top">
+      <div class="lock"><img src="../../wordmark-white.svg" /><span class="sep">/</span><span class="prod">Iris</span></div>
+      <div class="kick"><span class="d"></span>v0.5.0 · live demo</div>
+    </div>
+    <div class="c well"></div>
+    <div class="c bottom">
+      <div class="t">Give your agent a <span class="hi">verdict.</span></div>
+      <div class="url">github.com/syrin-labs/iris</div>
+    </div>
+  </div>
+</body></html>

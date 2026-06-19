@@ -5,7 +5,7 @@ import { compileActStep, compileSequenceStep } from './replay.js';
 
 const step = (tool: string, stable = true): RecordedStep => ({ tool, stable, args: {} });
 
-describe('RecordingStore (G6)', () => {
+describe('RecordingStore', () => {
   it('accumulates captured steps and clears on stop', () => {
     const store = new RecordingStore();
     store.start('flow', 0);

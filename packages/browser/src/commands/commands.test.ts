@@ -124,7 +124,7 @@ describe('command registry (driven by the bridge)', () => {
     unregisterStore('state_app');
   });
 
-  it('STATE_READ with a bogus ref returns a bounded structured failure (no reject) (F5)', () => {
+  it('STATE_READ with a bogus ref returns a bounded structured failure (no reject)', () => {
     let result: StateResult | undefined;
     expect(() => {
       result = run(IrisCommand.STATE_READ, { ref: 'e999999' }) as StateResult;
@@ -166,7 +166,7 @@ describe('command registry (driven by the bridge)', () => {
     expect(result.component).toEqual({ ok: false, reason: ComponentStateReason.UNAVAILABLE });
   });
 
-  it('STATE_READ with a real ref but no readState adapter returns a structured failure (F5)', () => {
+  it('STATE_READ with a real ref but no readState adapter returns a structured failure', () => {
     document.body.innerHTML = '<i>x</i>';
     const el = document.querySelector('i') as HTMLElement;
     const ref = refs.refFor(el);
@@ -183,7 +183,7 @@ describe('command registry (driven by the bridge)', () => {
     unregisterStore('state_ws');
   });
 
-  it('CAPABILITIES returns the registered capabilities (G5)', () => {
+  it('CAPABILITIES returns the registered capabilities', () => {
     registerCapabilities({
       testids: ['item-list'],
       flows: [{ name: 'checkout', steps: ['fill', 'submit'] }],

@@ -14,7 +14,7 @@ export interface ComponentInfo {
 export interface IrisAdapter {
   name: string;
   identify: (el: Element) => ComponentInfo | null;
-  /** Best-effort: read a component's hook state for a DOM element (G2). */
+  /** Best-effort: read a component's hook state for a DOM element. */
   readState?: (el: Element) => unknown;
   /** Best-effort: does the element declare framework enter/leave handlers synthetic hover may not fire? */
   hasHoverHandlers?: (el: Element) => boolean;

@@ -11,7 +11,7 @@ function clearAdapters(): void {
 beforeEach(clearAdapters);
 afterEach(clearAdapters);
 
-describe('elementHasHoverHandlers (F3)', () => {
+describe('elementHasHoverHandlers', () => {
   it('returns false when no adapter is installed', () => {
     expect(elementHasHoverHandlers(document.createElement('div'))).toBe(false);
   });

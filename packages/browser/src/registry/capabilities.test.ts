@@ -9,7 +9,7 @@ async function freshModule(): Promise<CapModule> {
   return import('./capabilities.js');
 }
 
-describe('capability registry (G5)', () => {
+describe('capability registry', () => {
   beforeEach(() => {
     delete (globalThis as { __irisCapabilities?: unknown }).__irisCapabilities;
   });

@@ -162,7 +162,7 @@ describe('query', () => {
   });
 });
 
-describe('query empty hint (F4)', () => {
+describe('query empty hint', () => {
   beforeEach(() => {
     render('');
   });

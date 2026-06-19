@@ -124,7 +124,7 @@ const COMPONENT_UNAVAILABLE: ComponentStateResult = {
 };
 
 /**
- * Stores are the reliable path. The `ref` component read is bounded (F5): a stale ref, no
+ * Stores are the reliable path. The `ref` component read is bounded: a stale ref, no
  * adapter, or an adapter returning a non-conforming value all collapse to a structured
  * `{ ok: false, reason }` — never a raw (possibly circular) object that could hang serialization.
  *

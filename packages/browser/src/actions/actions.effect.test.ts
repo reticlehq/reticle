@@ -170,7 +170,7 @@ describe('command registry passthrough', () => {
   });
 });
 
-describe('action result: hover enter/leave warning (F3)', () => {
+describe('action result: hover enter/leave warning', () => {
   beforeEach(() => {
     adapters.length = 0;
   });
@@ -232,7 +232,7 @@ describe('action result: hover enter/leave warning (F3)', () => {
   });
 });
 
-describe('action result: testid normalization (G6)', () => {
+describe('action result: testid normalization', () => {
   it('includes data-testid of the resolved element', async () => {
     document.body.innerHTML = '<button data-testid="pay-btn">Pay</button>';
     const r = await executeAction(refOf('button'), 'click', { confirmDangerous: true });
