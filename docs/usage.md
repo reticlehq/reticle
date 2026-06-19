@@ -111,11 +111,17 @@ iris_query({ by: "role", value: "button", name: "Save" })   // → ref + descrip
 
 ### `iris_inspect`
 
-Deep detail on one element.
+Deep detail on one element — including the signals a snapshot/a11y tree omits, so you can tell
+"present" from "actually usable / on-theme".
 
 - **args:** `ref`, `sessionId?`.
-- **returns:** descriptor + `tag` + `box` + `styles { color, backgroundColor, opacity }` +
+- **returns:** descriptor + `tag` + `box` + `occluded` (another element covers its center — a
+  z-index/overlay bug) + `styles { color, backgroundColor, opacity, cursor, display, visibility }` +
+  `theme { colorToken, backgroundToken, offTheme, tokenCount }` (compliance vs the app's `:root`
+  design tokens — `offTheme:true` flags an off-palette color) +
   `component { componentStack, source?: { file, line, column } }` (with `@syrin/iris-react`).
+- Use it to catch present-but-broken UI: `opacity:0` / `box` 0×0 / `occluded:true` (invisible or
+  unclickable), `cursor` not `pointer` (dead control), `offTheme:true` (off-design-token color).
 
 ### `iris_act` / `iris_act_sequence`
 
@@ -314,9 +320,19 @@ List interactive elements + console-error count for autonomous exploration — [
 ### Flows, recorder & self-healing (`.iris/`)
 
 `iris_contract_save`, `iris_flow_save` / `iris_flow_save_recorded` / `iris_flow_list` /
-`iris_flow_load` / `iris_flow_replay`, `iris_flow_heal`, `iris_annotate` — record once, replay
-forever (anchored on testid/signal), with legible drift + self-heal. Full guide:
+`iris_flow_load` / `iris_flow_replay` / `iris_flow_verify`, `iris_flow_heal`, `iris_annotate` —
+record once, replay forever (anchored on testid/signal — or an auto-derived component/source anchor
+when there's no testid), with legible drift + self-heal. Full guide:
 [Flows, the recorder & self-healing](flows.md).
+
+- **`iris_flow_verify({ names?, sessionId? })`** — the regression-suite call: replays EVERY saved
+  flow (or a subset) deterministically and returns one verdict
+  `{ status, passed, failed, failures: [{ flow, verdict, whatChanged, whereInSource, nextAction }] }`.
+  Passing flows are counted; only failures carry detail. Run it after any change — one call, no LLM
+  per flow.
+- **Decision envelope:** on a drift/fail, `iris_flow_replay` (and each `iris_flow_verify` failure)
+  returns the actionable fix — `whatChanged`, `whereInSource` (`file:line`), and a one-line
+  `nextAction` (e.g. "rebind the anchor to 'new-deploy', or update the flow if intended").
 
 ### Human-in-the-loop control
 
