@@ -101,11 +101,17 @@ export const FLOW_TOOLS: ToolDef[] = [
           'Name for the flow file (saved to .iris/flows/<flowName>.json). Use again in iris_flow_load/iris_flow_replay.',
         ),
     },
+    // Schema MUST match what the handler actually returns on BOTH paths: success
+    // { name, stepCount, degraded, empty, assertions? } and error { error, code }. The prior schema
+    // declared { saved, path } — fields the handler never returns — so a schema-validating MCP
+    // client rejected every iris_flow_save result ("expected boolean"). Unit tests call the handler
+    // directly and bypass MCP output validation, so only a live MCP run caught it (cf. the same
+    // class of bug fixed for FLOW_LIST above).
     outputSchema: {
-      saved: z.boolean(),
-      path: z.string(),
+      name: z.string().optional(),
       stepCount: z.number().optional(),
       degraded: z.number().optional(),
+      empty: z.boolean().optional(),
       assertions: z
         .object({
           grade: z.string().describe('asserted | presence-only | assertion-free'),
@@ -116,6 +122,8 @@ export const FLOW_TOOLS: ToolDef[] = [
           warning: z.string().optional(),
         })
         .optional(),
+      error: z.string().optional(),
+      code: z.string().optional(),
     },
     handler: (deps: ToolDeps, args) => {
       const name = asString(args['flowName']) ?? '';
@@ -305,10 +313,13 @@ export const FLOW_TOOLS: ToolDef[] = [
           ),
       },
     },
+    // Match the handler's actual return (SaveSummary { name, stepCount, degraded, empty } or
+    // { error, code }) — the prior `flowName` key silently stripped the real `name`/`empty` fields.
     outputSchema: {
-      flowName: z.string().optional(),
+      name: z.string().optional(),
       stepCount: z.number().optional(),
       degraded: z.number().optional(),
+      empty: z.boolean().optional(),
       error: z.string().optional(),
       code: z.string().optional(),
     },
