@@ -220,3 +220,10 @@ export function install(): void {
   installed = true;
   registerAdapter({ name: 'react', identify, readState, hasHoverHandlers });
 }
+
+export {
+  installRenderMeter,
+  resetRenderMeter,
+  getRenderStats,
+  type RenderStats,
+} from './render-meter.js';
