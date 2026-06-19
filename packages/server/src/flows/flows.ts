@@ -45,17 +45,52 @@ function degradedAnchor(): FlowAnchor {
   return { kind: AnchorKind.ROLE, role: DEGRADED_ANCHOR_ROLE };
 }
 
+/**
+ * Build a stable `component` auto-anchor from a normalized step's component/source args. Returns
+ * null when neither is present (caller falls back to degraded). The on-disk anchor carries the
+ * component name + source location — re-resolvable by `iris_query by:'component'` at replay.
+ */
+function componentAnchor(src: Record<string, unknown>): FlowAnchor | null {
+  const component = asString(src['component']);
+  const source = asRecord(src['source']);
+  const hasSource = typeof source['file'] === 'string' && typeof source['line'] === 'number';
+  if (component === undefined && !hasSource) return null;
+  const anchor: Extract<FlowAnchor, { kind: typeof AnchorKind.COMPONENT }> = {
+    kind: AnchorKind.COMPONENT,
+  };
+  if (component !== undefined) anchor.component = component;
+  if (hasSource) {
+    const out: { file: string; line: number; column?: number } = {
+      file: source['file'] as string,
+      line: source['line'] as number,
+    };
+    if (typeof source['column'] === 'number') out.column = source['column'];
+    anchor.source = out;
+  }
+  return anchor;
+}
+
+/** Pick the on-disk anchor for a normalized step: testid > component(auto) > degraded role. */
+function anchorForStep(args: Record<string, unknown>): { anchor: FlowAnchor; degraded: boolean } {
+  const by = asString(args['by']);
+  const value = asString(args['value']);
+  if (by === QueryBy.TESTID && value !== undefined) {
+    return { anchor: { kind: AnchorKind.TESTID, value }, degraded: false };
+  }
+  if (by === QueryBy.COMPONENT) {
+    const anchor = componentAnchor(args);
+    if (anchor !== null) return { anchor, degraded: false };
+  }
+  return { anchor: degradedAnchor(), degraded: true };
+}
+
 /** Convert one normalized sub-step (act_sequence child) into an anchored FlowStep. */
 function subStepToFlowStep(raw: unknown): FlowStep {
   const sub = asRecord(raw);
-  const by = asString(sub['by']);
-  const value = asString(sub['value']);
   const action = asString(sub['action']) as ActionType | undefined;
   const args = asRecord(sub['args']);
-  if (by === QueryBy.TESTID && value !== undefined) {
-    return buildStep(IrisTool.ACT, { kind: AnchorKind.TESTID, value }, action, args, false);
-  }
-  return buildStep(IrisTool.ACT, degradedAnchor(), action, args, true);
+  const { anchor, degraded } = anchorForStep(sub);
+  return buildStep(IrisTool.ACT, anchor, action, args, degraded);
 }
 
 function buildStep(
@@ -88,14 +123,10 @@ export function recordedStepToFlowStep(step: RecordedStep): FlowStep {
     return out;
   }
 
-  const by = asString(step.args['by']);
-  const value = asString(step.args['value']);
   const action = asString(step.args['action']) as ActionType | undefined;
   const args = asRecord(step.args['args']);
-  const out =
-    by === QueryBy.TESTID && value !== undefined
-      ? buildStep(step.tool, { kind: AnchorKind.TESTID, value }, action, args, false)
-      : buildStep(step.tool, degradedAnchor(), action, args, true);
+  const { anchor, degraded } = anchorForStep(step.args);
+  const out = buildStep(step.tool, anchor, action, args, degraded);
   if (step.expect !== undefined) out.expect = step.expect;
   return out;
 }

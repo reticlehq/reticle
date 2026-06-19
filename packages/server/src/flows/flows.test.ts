@@ -272,4 +272,24 @@ describe('recordedStepToFlowStep (pure)', () => {
     // The ref is NOT persisted as a testid value — it's a placeholder ROLE anchor.
     expect(out.anchor).toEqual({ kind: AnchorKind.ROLE, role: DEGRADED_ANCHOR_ROLE });
   });
+
+  it('maps a component (auto-anchor) step to a stable component anchor — not degraded', () => {
+    const out = recordedStepToFlowStep({
+      tool: 'iris_act',
+      stable: true,
+      args: {
+        by: QueryBy.COMPONENT,
+        component: 'NewDeployButton',
+        source: { file: 'src/Deployments.tsx', line: 107 },
+        action: ActionType.CLICK,
+        args: {},
+      },
+    });
+    expect(out.degraded).toBeUndefined();
+    expect(out.anchor).toEqual({
+      kind: AnchorKind.COMPONENT,
+      component: 'NewDeployButton',
+      source: { file: 'src/Deployments.tsx', line: 107 },
+    });
+  });
 });

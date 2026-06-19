@@ -25,6 +25,27 @@ describe('FlowFileSchema', () => {
     expect(parsed.success).toBe(true);
   });
 
+  it('accepts a component (auto-anchor) step — component + source', () => {
+    const flow = {
+      version: FLOW_FILE_VERSION,
+      name: 'auto-anchor-flow',
+      createdAt: 1234,
+      steps: [
+        {
+          tool: 'iris_act',
+          anchor: {
+            kind: AnchorKind.COMPONENT,
+            component: 'NewDeployButton',
+            source: { file: 'src/Deployments.tsx', line: 107, column: 4 },
+          },
+          action: ActionType.CLICK,
+          args: {},
+        },
+      ],
+    };
+    expect(FlowFileSchema.safeParse(flow).success).toBe(true);
+  });
+
   it('accepts an optional business intent (and a flow without it still parses)', () => {
     const base = {
       version: FLOW_FILE_VERSION,

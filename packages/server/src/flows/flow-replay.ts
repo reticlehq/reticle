@@ -165,22 +165,31 @@ function testidDrift(value: string, hint: QueryEmptyHint | undefined): Drift {
 }
 
 /**
- * Re-resolve a testid against the live DOM, tolerating an in-flight render: QUERY, and while it
+ * Re-resolve any QUERY against the live DOM, tolerating an in-flight render: QUERY, and while it
  * returns zero refs, sleep and retry up to ANCHOR_SETTLE_ATTEMPTS. Returns as soon as refs appear,
  * so a present anchor costs one query; a genuinely missing one costs the full (bounded) settle and
  * then drifts. The last result's near-miss hint is returned for the drift record.
  */
-async function resolveTestid(
+async function resolveQuery(
+  session: FlowReplaySession,
+  queryArgs: Record<string, unknown>,
+  sleep: Sleep,
+): Promise<{ refs: string[]; hint?: QueryEmptyHint }> {
+  let last = readQuery(await session.command(IrisCommand.QUERY, queryArgs));
+  for (let attempt = 1; last.refs.length === 0 && attempt < ANCHOR_SETTLE_ATTEMPTS; attempt += 1) {
+    await sleep(ANCHOR_SETTLE_DELAY_MS);
+    last = readQuery(await session.command(IrisCommand.QUERY, queryArgs));
+  }
+  return last;
+}
+
+/** Re-resolve a testid anchor. */
+function resolveTestid(
   session: FlowReplaySession,
   value: string,
   sleep: Sleep,
 ): Promise<{ refs: string[]; hint?: QueryEmptyHint }> {
-  let last = readQuery(await session.command(IrisCommand.QUERY, { by: QueryBy.TESTID, value }));
-  for (let attempt = 1; last.refs.length === 0 && attempt < ANCHOR_SETTLE_ATTEMPTS; attempt += 1) {
-    await sleep(ANCHOR_SETTLE_DELAY_MS);
-    last = readQuery(await session.command(IrisCommand.QUERY, { by: QueryBy.TESTID, value }));
-  }
-  return last;
+  return resolveQuery(session, { by: QueryBy.TESTID, value }, sleep);
 }
 
 /**
@@ -240,11 +249,70 @@ function summarizeConsequence(events: IrisEvent[]): string | undefined {
   return parts.length > 0 ? parts.join('; ') : undefined;
 }
 
-/** The testid value of a step's primary anchor, for labelling the result row. */
+/** A compact, legible label for a component auto-anchor (component@file:line, or its best part). */
+function componentLabel(
+  anchor: Extract<FlowAnchor, { kind: typeof AnchorKind.COMPONENT }>,
+): string {
+  if (anchor.source !== undefined) {
+    const base = anchor.source.file.split('/').pop() ?? anchor.source.file;
+    const loc = `${base}:${anchor.source.line}`;
+    return anchor.component !== undefined ? `${anchor.component}@${loc}` : loc;
+  }
+  return anchor.component ?? anchor.name ?? anchor.role ?? 'component';
+}
+
+/** The value of a step's primary anchor, for labelling the result row. */
 function anchorLabel(anchor: FlowAnchor): string {
   if (anchor.kind === AnchorKind.TESTID) return anchor.value;
   if (anchor.kind === AnchorKind.SIGNAL) return anchor.name;
+  if (anchor.kind === AnchorKind.COMPONENT) return componentLabel(anchor);
   return anchor.name ?? anchor.role;
+}
+
+/** QUERY args for a component auto-anchor — source (precise) + component name (coarse) as given. */
+function componentQueryArgs(
+  anchor: Extract<FlowAnchor, { kind: typeof AnchorKind.COMPONENT }>,
+): Record<string, unknown> {
+  const args: Record<string, unknown> = { by: QueryBy.COMPONENT };
+  if (anchor.component !== undefined) args['component'] = anchor.component;
+  if (anchor.source !== undefined) args['source'] = anchor.source;
+  return args;
+}
+
+/** Run one component-anchored step: re-resolve via QUERY by:'component', ACT on the live ref, else drift. */
+async function runComponentStep(
+  session: FlowReplaySession,
+  step: FlowStep,
+  index: number,
+  anchor: Extract<FlowAnchor, { kind: typeof AnchorKind.COMPONENT }>,
+  confirmDangerous: boolean,
+  sleep: Sleep,
+): Promise<FlowStepResult> {
+  const label = componentLabel(anchor);
+  const { refs } = await resolveQuery(session, componentQueryArgs(anchor), sleep);
+  if (refs.length === 0) {
+    return {
+      step: index,
+      tool: step.tool,
+      anchor: label,
+      ok: false,
+      drift: {
+        reasonKind: DriftReason.COMPONENT_NOT_FOUND,
+        reason: `component anchor "${label}" not found`,
+        anchor: label,
+        nearest: null,
+      },
+    };
+  }
+  const ref = refs[0] ?? '';
+  const act = await session.command(IrisCommand.ACT, {
+    ref,
+    action: step.action ?? '',
+    args: replayActionArgs(step.args, confirmDangerous),
+  });
+  const result: FlowStepResult = { step: index, tool: step.tool, anchor: label, ok: act.ok };
+  if (!act.ok) result.error = act.error ?? 'command failed';
+  return result;
 }
 
 /** Run one testid-anchored step: re-resolve via QUERY, then ACT on the live ref, else drift. */
@@ -356,6 +424,8 @@ export async function replayFlow(
     let result: FlowStepResult;
     if (step.anchor.kind === AnchorKind.SIGNAL) {
       result = await runSignalStep(session, step, index, label, waitForSignal, signalTimeoutMs);
+    } else if (step.anchor.kind === AnchorKind.COMPONENT) {
+      result = await runComponentStep(session, step, index, step.anchor, confirmDangerous, sleep);
     } else {
       result = await runTestidStep(session, step, index, label, dynamic, confirmDangerous, sleep);
     }

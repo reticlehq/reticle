@@ -179,6 +179,7 @@ export const AnchorKind = {
   TESTID: 'testid', // { kind:'testid', value }
   ROLE: 'role', // { kind:'role', role, name? } — best-effort fallback
   SIGNAL: 'signal', // { kind:'signal', name } — wait/assert anchors
+  COMPONENT: 'component', // { kind:'component', component?, source?, role?, name? } — auto-anchor (no testid)
 } as const;
 export type AnchorKind = (typeof AnchorKind)[keyof typeof AnchorKind];
 
@@ -221,6 +222,7 @@ export type ReplayStatus = (typeof ReplayStatus)[keyof typeof ReplayStatus];
 export const DriftReason = {
   TESTID_NOT_FOUND: 'testid_not_found', // a testid anchor resolved to zero live elements
   SIGNAL_NOT_OBSERVED: 'signal_not_observed', // a signal anchor never fired within the timeout
+  COMPONENT_NOT_FOUND: 'component_not_found', // a component/source auto-anchor resolved to zero live elements
 } as const;
 export type DriftReason = (typeof DriftReason)[keyof typeof DriftReason];
 

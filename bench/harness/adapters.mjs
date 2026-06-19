@@ -212,6 +212,18 @@ export class IrisAdapter {
     const r = await this.c.callTool('iris_query', { by: 'testid', value: id });
     return { ref: irisRefForTestid(r.text ?? '', id), rec: rec('iris_query', r) };
   }
+  // Poll until a testid resolves (post-login render is async + variable). Deterministic settle:
+  // a fixed sleep races the auth round-trip, which silently degraded the FIRST nav step at record
+  // time (it had no resolvable testid yet) and made the detection bench flaky. Returns when ready.
+  async _waitForTestid(id, timeoutMs = 6000) {
+    const deadline = Date.now() + timeoutMs;
+    for (;;) {
+      const q = await this._refByTestid(id);
+      if (q.ref) return true;
+      if (Date.now() >= deadline) return false;
+      await sleep(150);
+    }
+  }
   async login() {
     const e = await this._refByTestid('login-email');
     if (e.ref)
@@ -229,7 +241,9 @@ export class IrisAdapter {
       });
     const s = await this._refByTestid('login-submit');
     if (s.ref) await this.c.callTool('iris_act', { ref: s.ref, action: 'click' });
-    await sleep(800);
+    // Wait for the post-login shell (the nav sidebar) to actually render before any nav step,
+    // so the recording captures a real testid anchor instead of a degraded one.
+    await this._waitForTestid('nav-deployments');
   }
   async clickTestid(id) {
     const q = await this._refByTestid(id);

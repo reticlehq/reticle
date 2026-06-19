@@ -189,6 +189,41 @@ describe('replayFlow — anchor re-resolution + legible drift', () => {
     expect(steps[0]?.page).toBeUndefined();
   });
 
+  it('resolves a component (auto-anchor) step and acts on the live ref', async () => {
+    // No testid; the step is anchored by component/source. QUERY by:'component' resolves it.
+    const script = (): QueryScript => ({ elements: [el('e-comp', 'new-deploy')] });
+    const session = new FakeSession(script);
+    const step: FlowStep = {
+      tool: IrisTool.ACT,
+      anchor: {
+        kind: AnchorKind.COMPONENT,
+        component: 'NewDeployButton',
+        source: { file: 'src/Deployments.tsx', line: 107 },
+      },
+      action: ActionType.CLICK,
+      args: {},
+    };
+    const steps = await replayFlow(session, flow([step]), waitForPredicate, FAST);
+    expect(steps[0]?.ok).toBe(true);
+    expect(steps[0]?.anchor).toBe('NewDeployButton@Deployments.tsx:107');
+    expect(session.acts).toEqual([{ ref: 'e-comp', action: ActionType.CLICK }]);
+  });
+
+  it('drifts legibly when a component anchor resolves to nothing (the element/source is gone)', async () => {
+    const session = new FakeSession(() => ({ elements: [] }));
+    const step: FlowStep = {
+      tool: IrisTool.ACT,
+      anchor: { kind: AnchorKind.COMPONENT, component: 'NewDeployButton' },
+      action: ActionType.CLICK,
+      args: {},
+    };
+    const steps = await replayFlow(session, flow([step]), waitForPredicate, FAST);
+    expect(steps[0]?.ok).toBe(false);
+    expect(steps[0]?.drift?.reasonKind).toBe(DriftReason.COMPONENT_NOT_FOUND);
+    expect(steps[0]?.anchor).toBe('NewDeployButton');
+    expect(session.acts).toEqual([]); // stopped at the miss, never acted
+  });
+
   it('2: returns drift with the nearest-match when a testid is renamed', async () => {
     const script = (testid: string): QueryScript =>
       testid === 'chat-send'

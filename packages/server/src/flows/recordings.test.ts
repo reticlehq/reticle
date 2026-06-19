@@ -69,4 +69,24 @@ describe('RecordingStore (G6)', () => {
     );
     expect((sequence.args['steps'] as { args: Record<string, unknown> }[])[0]?.args).toEqual({});
   });
+
+  it('compiles a stable component (auto-anchor) step when the result has no testid but a component/source', () => {
+    const act = compileActStep(
+      { ref: 'e9', action: ActionType.CLICK, args: {} },
+      {
+        component: 'NewDeployButton',
+        source: { file: 'src/Deployments.tsx', line: 107, column: 4 },
+      },
+    );
+    expect(act.stable).toBe(true); // NOT degraded — the auto-anchor keeps it replayable
+    expect(act.args['by']).toBe('component');
+    expect(act.args['component']).toBe('NewDeployButton');
+    expect(act.args['source']).toEqual({ file: 'src/Deployments.tsx', line: 107, column: 4 });
+  });
+
+  it('falls back to a ref-bound (unstable) step only when there is neither testid nor component/source', () => {
+    const act = compileActStep({ ref: 'e9', action: ActionType.CLICK, args: {} }, { effect: {} });
+    expect(act.stable).toBe(false);
+    expect(act.args['ref']).toBe('e9');
+  });
 });

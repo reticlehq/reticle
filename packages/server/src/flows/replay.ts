@@ -22,9 +22,24 @@ export function replayActionArgs(
   return args;
 }
 
-/** Compile a single iris_act invocation into a normalized RecordedStep using the action result's testid. */
+/** The element's source location from an action result, when the framework stamped one. */
+function sourceFromResult(res: Record<string, unknown>): Record<string, unknown> | undefined {
+  const source = asRecord(res['source']);
+  if (typeof source['file'] !== 'string' || typeof source['line'] !== 'number') return undefined;
+  const out: Record<string, unknown> = { file: source['file'], line: source['line'] };
+  if (typeof source['column'] === 'number') out['column'] = source['column'];
+  return out;
+}
+
+/**
+ * Compile a single iris_act invocation into a normalized RecordedStep using the action result. Anchor
+ * priority mirrors synthesizeAnchor: a data-testid is the gold standard; failing that, the element's
+ * component identity / source location (the AUTO-ANCHOR) keeps the step STABLE instead of degrading to
+ * a volatile ref. Only when neither is available is the step ref-bound (in-session only).
+ */
 export function compileActStep(args: Record<string, unknown>, res: unknown): RecordedStep {
-  const testid = asString(asRecord(res)['testid']);
+  const r = asRecord(res);
+  const testid = asString(r['testid']);
   const action = asString(args['action']) ?? '';
   const actArgs = replayActionArgs(args['args']);
   if (testid !== undefined) {
@@ -33,6 +48,14 @@ export function compileActStep(args: Record<string, unknown>, res: unknown): Rec
       stable: true,
       args: { by: QueryBy.TESTID, value: testid, action, args: actArgs },
     };
+  }
+  const component = asString(r['component']);
+  const source = sourceFromResult(r);
+  if (component !== undefined || source !== undefined) {
+    const componentArgs: Record<string, unknown> = { by: QueryBy.COMPONENT, action, args: actArgs };
+    if (component !== undefined) componentArgs['component'] = component;
+    if (source !== undefined) componentArgs['source'] = source;
+    return { tool: IrisTool.ACT, stable: true, args: componentArgs };
   }
   return {
     tool: IrisTool.ACT,

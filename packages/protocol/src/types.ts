@@ -160,6 +160,17 @@ export const FlowAnchorSchema = z.discriminatedUnion('kind', [
     name: z.string().optional(),
   }),
   z.object({ kind: z.literal(AnchorKind.SIGNAL), name: z.string().min(1) }),
+  // Auto-anchor: re-find an element by component identity / source location when it has no testid.
+  // component or source carries the durable signal; role/name are disambiguating extras.
+  z.object({
+    kind: z.literal(AnchorKind.COMPONENT),
+    component: z.string().optional(),
+    source: z
+      .object({ file: z.string(), line: z.number(), column: z.number().optional() })
+      .optional(),
+    role: z.string().optional(),
+    name: z.string().optional(),
+  }),
 ]);
 export type FlowAnchor = z.infer<typeof FlowAnchorSchema>;
 

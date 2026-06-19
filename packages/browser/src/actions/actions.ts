@@ -8,7 +8,7 @@ import {
 } from '@syrin/iris-protocol';
 import { refs } from '../dom/refs.js';
 import { getAccessibleName, isVisible, getStates } from '../dom/a11y.js';
-import { elementHasHoverHandlers } from '../registry/adapters.js';
+import { elementHasHoverHandlers, identifyComponent } from '../registry/adapters.js';
 import { nativeSetTimeout, nativeFrame, settle } from '../timers/native-timers.js';
 
 /**
@@ -58,6 +58,13 @@ export interface ActionResult {
   effect: ActionEffect;
   /** data-testid of the resolved element, when present — lets the server compile a ref-stable replay step. */
   testid?: string;
+  /**
+   * Auto-anchor fallback (attached ONLY when there is no testid): the element's nearest component
+   * name + source location, so the server can compile a stable `component` anchor instead of a
+   * degraded role one — addressing the element across replays with zero hand-added testids.
+   */
+  component?: string;
+  source?: { file: string; line: number; column?: number };
   /** Best-effort caveat the agent should heed (e.g. synthetic hover may not fire enter/leave). */
   warning?: string;
 }
@@ -92,15 +99,39 @@ function requireElement(ref: string): HTMLElement {
   return el;
 }
 
+/** The element's stable anchor: testid (gold), else component/source (auto-anchor). */
+interface CapturedAnchor {
+  testid?: string;
+  component?: string;
+  source?: { file: string; line: number; column?: number };
+}
+
+/**
+ * Capture an element's anchor BEFORE the action runs. Critical: a navigating/destructive action can
+ * unmount the target (login submit, a close button), after which it has no readable attribute — so
+ * reading the anchor post-settle would silently degrade the recorded step. We read it up front while
+ * the element is still mounted.
+ */
+function anchorOf(el: Element): CapturedAnchor {
+  const testid = el.getAttribute('data-testid') ?? undefined;
+  if (testid !== undefined) return { testid };
+  const info = identifyComponent(el);
+  const out: CapturedAnchor = {};
+  const component = info?.componentStack[0];
+  if (component !== undefined) out.component = component;
+  if (info?.source !== undefined) out.source = info.source;
+  return out;
+}
+
 const result = (
   ref: string,
   action: string,
   effect: ActionEffect,
   settled: boolean,
   settleReason: SettleReason | null,
+  anchor: CapturedAnchor,
   warning?: string,
 ): ActionResult => {
-  const testid = refs.resolve(ref)?.getAttribute('data-testid') ?? undefined;
   const base: ActionResult = {
     ok: true as const,
     ref,
@@ -110,7 +141,13 @@ const result = (
     settleReason,
     effect,
   };
-  if (testid !== undefined) base.testid = testid;
+  if (anchor.testid !== undefined) {
+    base.testid = anchor.testid;
+  } else {
+    // No testid — carry the auto-anchor so the recorded step stays stable, not degraded.
+    if (anchor.component !== undefined) base.component = anchor.component;
+    if (anchor.source !== undefined) base.source = anchor.source;
+  }
   if (warning !== undefined) base.warning = warning;
   return base;
 };
@@ -394,6 +431,8 @@ export async function executeAction(
 ): Promise<ActionResult> {
   const el = requireElement(ref);
   assertActionAllowed(el, action, args);
+  // Capture the anchor while the element is still mounted — the action may unmount it (navigation).
+  const anchor = anchorOf(el);
   const visible = isVisible(el);
   const enabled = enabledOf(el);
   const prevFocus = activeRef(el);
@@ -451,7 +490,7 @@ export async function executeAction(
     : action === ActionType.HOVER && elementHasHoverHandlers(el)
       ? ActionWarning.HOVER_NATIVE_ENTER_LEAVE
       : undefined;
-  return result(ref, action, effect, settled, settleReason, warning);
+  return result(ref, action, effect, settled, settleReason, anchor, warning);
 }
 
 const sleep = (ms: number): Promise<void> => new Promise((r) => nativeSetTimeout(r, ms));
