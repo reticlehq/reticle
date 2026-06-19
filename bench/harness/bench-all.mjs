@@ -21,6 +21,7 @@ const LAYER_C = [
   'bench/harness/replay-detect-state.mjs', // store-truth oracle catches a dead handler (state predicate)
   'bench/harness/network-cardinality-bench.mjs', // net.count oracle catches a double-submit (presence passes)
   'bench/harness/console-clean-bench.mjs', // clean-console oracle catches a silent console.error on an action
+  'bench/harness/state-blast-radius-bench.mjs', // state invariant catches an action's unintended store side-effect
   'bench/harness/suite-rre.mjs', // suite-scale RRE: iris_flow_verify read-cost ~constant in K (compounding)
   'bench/harness/replay-determinism.mjs', // flake rate: verdict-deterministic across N replays (0% by construction)
 ];

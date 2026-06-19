@@ -85,6 +85,23 @@ describe('successToPredicate', () => {
     });
   });
 
+  it('a state INVARIANT (hold:true) gates on `settled` so a side-effect leak cannot pass early', () => {
+    // Without the gate, "deployments.0.status == live" is true the instant replay starts (before a
+    // blast-radius side-effect moves it), so a wait-until-true read passes. settled forces post-settle.
+    expect(
+      successToPredicate(
+        { state: { store: 'app', path: 'deployments.0.status', equals: 'live', hold: true } },
+        NONE,
+      ),
+    ).toEqual({
+      kind: 'allOf',
+      predicates: [
+        { kind: 'settled' },
+        { kind: 'state', store: 'app', path: 'deployments.0.status', equals: 'live' },
+      ],
+    });
+  });
+
   it('compiles a state-truth success end-condition', () => {
     expect(
       successToPredicate(

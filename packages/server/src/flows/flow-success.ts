@@ -86,6 +86,11 @@ export function successToPredicate(
     const part: Extract<Predicate, { kind: 'state' }> = { kind: 'state', path: state.path };
     if (state.store !== undefined) part.store = state.store;
     if (state.equals !== undefined) part.equals = state.equals;
+    // `hold` = an INVARIANT ("this state must still hold after the action settles"), vs the default
+    // wait-for-change. A wait-until-true waiter would pass the instant the path already equals the
+    // value — which, for "an unrelated path stayed put", is true BEFORE a side-effect leak fires. Gate
+    // on `settled` so the read happens after the page quiets, by which point the leak has landed.
+    if (state.hold === true) parts.push({ kind: 'settled' });
     parts.push(part);
   }
 

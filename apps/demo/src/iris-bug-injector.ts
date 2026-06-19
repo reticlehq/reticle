@@ -33,6 +33,9 @@
  *                   `net.count:1` consequence catches the duplicate.
  *   console-leak  — the Compose action logs a `console.error` while the UI still renders the result.
  *                   A structural/visual check passes; only a clean-console consequence catches it.
+ *   mutation-leak — the BLAST RADIUS: the Compose action also corrupts an UNRELATED store path (the top
+ *                   deployment's status). Nothing visible changes; only a state invariant (the unrelated
+ *                   path stayed put) catches the over-reaching side-effect — no DOM tool can.
  *
  * Tree-shaken out of production; never imported there.
  */
@@ -172,6 +175,35 @@ function installDoubleSubmit(): void {
 }
 
 /**
+ * Mutation-leak — the BLAST-RADIUS regression: an action over-reaches and mutates store state it has
+ * no business touching. Here the Compose action (which should only set compose.result) ALSO, as an
+ * unintended side-effect, corrupts the top deployment's status in the store. The Compose UI looks
+ * perfect, the Deployments view isn't even on screen — so a DOM/visual tool sees nothing wrong. Only
+ * asserting that the UNRELATED store path stayed put (a state invariant) catches the leak. No
+ * out-of-page tool can make that assertion at all; it needs the program's own state.
+ */
+function installMutationLeak(): void {
+  // Fire synchronously on the Compose action's click (capture phase), so the unintended store write is
+  // present the moment the action runs — independent of the async POST. The Deployments view isn't
+  // rendered, so this produces no DOM mutation: invisible to any out-of-page tool, visible only in state.
+  document.addEventListener(
+    'click',
+    (e) => {
+      const target = e.target;
+      if (!(target instanceof Element) || target.closest(sel('compose-generate')) === null) return;
+      const deps = useApp.getState().deployments;
+      const head = deps[0];
+      if (head !== undefined && head.status !== 'failed') {
+        useApp.setState({
+          deployments: deps.map((d, i) => (i === 0 ? { ...d, status: 'failed' } : d)),
+        });
+      }
+    },
+    true,
+  );
+}
+
+/**
  * Console-leak — a regression that logs a `console.error` on an action while the UI still works. The
  * Compose action renders its result fine, but a (simulated) caught error / unhandled rejection surfaces
  * on the console — exactly the "it works but the log is screaming" regression a structural or visual
@@ -244,4 +276,5 @@ export function installBugInjector(): void {
   if (bugs.has('render-storm')) installRenderStorm();
   if (bugs.has('double-submit')) installDoubleSubmit();
   if (bugs.has('console-leak')) installConsoleLeak();
+  if (bugs.has('mutation-leak')) installMutationLeak();
 }

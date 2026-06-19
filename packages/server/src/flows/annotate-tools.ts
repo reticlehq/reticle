@@ -73,6 +73,12 @@ export const ANNOTATE_TOOLS: ToolDef[] = [
         .unknown()
         .optional()
         .describe('Expected value for statePath: a literal, or a { $gte | $contains | $length }.'),
+      hold: z
+        .boolean()
+        .optional()
+        .describe(
+          'Treat statePath as an INVARIANT that must still hold AFTER the action settles (a blast-radius "this unrelated path must not have moved" check), not a condition to wait for. Without it a wait-until-true read passes before an over-reaching side-effect lands.',
+        ),
       dataMatches: z
         .record(z.unknown())
         .optional()

@@ -56,6 +56,7 @@ export function compileAnnotation(a: Annotation, stepCount: number): AnnotateOut
         const state: FlowExpect['state'] = { path: a.statePath };
         if (a.store !== undefined) state.store = a.store;
         if (a.equals !== undefined) state.equals = a.equals;
+        if (a.hold !== undefined) state.hold = a.hold;
         return flowSuccess(a, { state });
       }
       if (a.net !== undefined) {

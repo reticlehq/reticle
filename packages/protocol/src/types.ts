@@ -226,6 +226,12 @@ export const FlowExpectSchema = z.object({
       store: z.string().optional(),
       path: z.string(),
       equals: z.unknown().optional(),
+      /**
+       * Treat this as an INVARIANT that must still hold AFTER the action settles, rather than a
+       * condition to wait for. Set it for a blast-radius check ("this unrelated path must NOT have
+       * moved") — without it a wait-until-true read passes before an over-reaching side-effect lands.
+       */
+      hold: z.boolean().optional(),
     })
     .optional(),
 });
@@ -494,6 +500,9 @@ export const AnnotationSchema = z.discriminatedUnion('kind', [
     statePath: z.string().min(1).optional(),
     store: z.string().min(1).optional(),
     equals: z.unknown().optional(),
+    // Treat the statePath as an INVARIANT that must hold AFTER settle (a blast-radius "this unrelated
+    // path must not have moved" check), not a condition to wait for.
+    hold: z.boolean().optional(),
     // A network-cardinality golden end-condition: the flow succeeds only when EXACTLY `count` matching
     // requests fired (omit count = presence). Catches the double-submit / retry-storm regression class.
     net: z
