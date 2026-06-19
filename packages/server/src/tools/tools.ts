@@ -10,16 +10,16 @@ import {
   isDangerousActionText,
   SnapshotMode,
 } from '@syrin/iris-protocol';
-import type { Session, SessionManager } from '../session/session.js';
-import type { ElementBox, RealInputArgs, RealInputProvider } from '../input/real-input.js';
+import type { Session } from '../session/session.js';
+import type { ElementBox, RealInputArgs } from '../input/real-input.js';
 import { isPointerAction } from '../input/real-input.js';
 import { leanActResult } from './act-view.js';
 import { IrisTool } from './tool-names.js';
 import { buildReactionReport } from '../events/reaction.js';
 import { evaluatePredicate, waitForPredicate, PredicateSchema } from '../events/predicate.js';
-import { type BaselineStore, normalizeLines, diffLines } from '../project/baselines.js';
+import { diffLines } from '../project/baselines.js';
 import { REPLAY_PROGRAM_VERSION } from '@syrin/iris-protocol';
-import type { RecordingStore, CompiledProgram } from '../flows/recordings.js';
+import type { CompiledProgram } from '../flows/recordings.js';
 import { compileActStep, compileSequenceStep, replayProgram } from '../flows/replay.js';
 import {
   matchNet,
@@ -38,9 +38,6 @@ import { selectPath, capDepth } from '../session/state-select.js';
 import { asString, asNumber, asRecord, parseInteractive } from './tools-helpers.js';
 import { paginateQueryResult } from './query-paginate.js';
 import { isPresenceOnlyAssertion, PRESENCE_ONLY_ADVICE } from './assert-grade.js';
-import type { FileSystemPort } from '../project/fs-port.js';
-import type { FlowStore } from '../flows/flows.js';
-import type { ProjectStore } from '../project/project-store.js';
 import { CONTRACT_TOOLS } from './contract-tools.js';
 import { DOMAIN_TOOLS } from '../domain/domain-tools.js';
 import { BROWSER_TOOLS } from './browser-tools.js';
@@ -53,79 +50,17 @@ import { SESSION_TOOLS } from '../session/session-tools.js';
 import { ANNOTATE_TOOLS } from '../flows/annotate-tools.js';
 import { LIVE_CONTROL_TOOLS } from '../session/live-control-tools.js';
 import { pausedShortCircuit, withControl } from '../session/control-envelope.js';
-import type { AnnotationStore } from '../flows/annotation-store.js';
 import { UPDATE_TOOLS } from '../update/update-tools.js';
+import {
+  type ToolDef,
+  type ToolDeps,
+  sessionIdShape,
+  commandOrThrow,
+  snapshotTree,
+} from './tool-kit.js';
 
-export interface ToolDeps {
-  sessions: SessionManager;
-  baselines: BaselineStore;
-  recordings: RecordingStore;
-  /** on-disk anchored-flow store (.iris/flows/). */
-  flows: FlowStore;
-  /** structured annotations accumulating for the live recording. */
-  annotations: AnnotationStore;
-  /** cross-run outcome memory (.iris/project.json). */
-  project: ProjectStore;
-  /** optional native-input provider. undefined ⇒ everything stays synthetic. */
-  realInput?: RealInputProvider;
-  /** injected filesystem seam (tests pass a fake/temp-dir adapter). */
-  fs: FileSystemPort;
-  /** absolute .iris path (index.ts computes cwd()/.iris). */
-  irisRoot: string;
-  /** injected clock for the contract's generatedAt stamp. */
-  now: () => number;
-}
-
-interface SnapshotResult {
-  tree?: string;
-  status?: { route?: string };
-}
-
-async function snapshotTree(
-  deps: ToolDeps,
-  sessionId: string | undefined,
-): Promise<{ lines: string[]; route: string }> {
-  const session = deps.sessions.resolve(sessionId);
-  const result = await session.command(IrisCommand.SNAPSHOT, { mode: SnapshotMode.FULL });
-  if (!result.ok) throw new Error(result.error ?? 'snapshot failed');
-  const snap = (result.result ?? {}) as SnapshotResult;
-  return { lines: normalizeLines(snap.tree ?? ''), route: snap.status?.route ?? '' };
-}
-
-export interface ToolDef {
-  name: string;
-  description: string;
-  inputSchema: z.ZodRawShape;
-  /**
-   * JSON Schema-compatible output schema for this tool. When present, the MCP server advertises it
-   * in the tools/list response so schema-aware clients (like @syrin/cli) can validate outputs and
-   * compose tool calls safely. Also drives TOON encoding for snapshot/query results.
-   */
-  outputSchema?: z.ZodRawShape;
-  handler: (deps: ToolDeps, args: Record<string, unknown>) => Promise<unknown>;
-}
-
-const sessionIdShape = {
-  sessionId: z
-    .string()
-    .optional()
-    .describe(
-      'Active session ID from iris_sessions. Omit when only one browser session is open — Iris resolves it automatically.',
-    ),
-};
-
-/** Unwrap a browser command result or throw its error so the agent sees a clean failure. */
-async function commandOrThrow(
-  deps: ToolDeps,
-  sessionId: string | undefined,
-  name: string,
-  args: Record<string, unknown>,
-): Promise<unknown> {
-  const session = deps.sessions.resolve(sessionId);
-  const result = await session.command(name, args);
-  if (!result.ok) throw new Error(result.error ?? `command '${name}' failed`);
-  return result.result;
-}
+// Re-exported so tool modules that import these from './tools.js' keep working after the kit move.
+export type { ToolDef, ToolDeps } from './tool-kit.js';
 
 /** Narrow an INSPECT result's `box` into a positive-area ElementBox (else undefined). */
 function asBox(value: unknown): ElementBox | undefined {
