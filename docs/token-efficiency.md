@@ -8,7 +8,7 @@ to ask **narrow questions** instead, so the per-interaction cost stays tiny.
 ## Head-to-head (measured, same page, same moment)
 
 Measured against the demo dashboard (`apps/demo`) **with a 1,000-item list rendered**, after
-login. Token estimate = characters ÷ 4. Reproduce with `node plan/vs-playwright.mjs`.
+login. Token estimate = characters ÷ 4. Reproduce with the benchmark harness — see `bench/README.md`.
 
 | Payload                                                                        |     Tokens |
 | ------------------------------------------------------------------------------ | ---------: |
@@ -87,4 +87,4 @@ the difference between "too expensive to run every change" and "run it on every 
   for cross-browser _driving_; Iris optimizes for cheap, in-app _verification_. They can
   coexist (drive with one, assert with the other).
 
-Run it yourself: `node plan/vs-playwright.mjs` (with the demo + api running).
+Run it yourself: the benchmark harness in `bench/` (see `bench/README.md`), with the demo + api running.

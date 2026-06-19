@@ -761,8 +761,7 @@ actions) is framework-agnostic. React gets component + source mapping; Vue/Svelt
 are on the roadmap.
 
 **Can it judge whether my UI _looks_ good?** No. Iris verifies behavior, not aesthetics.
-Visual/pixel correctness and "does it feel right" remain human (or a visual-diff tool) — see
-[coverage & limits](../plan/11-coverage-and-limits.md) if available.
+Visual/pixel correctness and "does it feel right" remain human (or a visual-diff tool).
 
 **Does it replace Playwright/Cypress?** No — those are your scripted CI suite. Iris is for
 in-loop verification while the agent codes, and for the cases you never automated. They

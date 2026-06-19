@@ -132,6 +132,6 @@ Both need a **driven browser** (`iris drive <url>` / `IRIS_CDP_URL`); without on
   `iris_wait_for` / `iris_act_and_wait` is **factored, not inlined**: when converted to the
   JSON Schema MCP sends, the predicate body is emitted **once** (~2.7k chars ≈ **~685 tokens**
   per tool) and recursion is handled by self-`$ref` (`#/properties/predicate`) — no per-recursion
-  duplication. No action needed. (Measured via `plan/predicate-measure.mjs`.)
+  duplication. No action needed.
 - **Lean clients:** set `IRIS_TOOL_PROFILE=core` to expose only the core tool set above and trim
   tool-definition tokens for context-tight agents.
