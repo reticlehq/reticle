@@ -42,6 +42,37 @@ runs it is two orders of magnitude cheaper."
 - **Within-field 100× is real only on RRE** (repeated regression runs), not on single-shot detection
   (you can't catch 100× more than ~10 bugs). Stated so it can't be misread. (`METRIC.md`)
 
+## Where Playwright / DevTools win (the honest "vice versa")
+
+Iris is **not** strictly better. Being inside the page costs it real browser-level fidelity. These are
+genuine competitor advantages — stated so the benchmark can't be accused of cherry-picking:
+
+| Dimension                             | Why the competitor wins                                                                                      | Iris's position                                                                                  |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------ |
+| **Trusted input** (`isTrusted`)       | Playwright drives real CDP input — native keyboard/mouse, file pickers, drag — `isTrusted:true`.             | Iris defaults to occlusion-honest **synthetic** dispatch; real input is opt-in (CDP) only.       |
+| **Real pixels** (visual ground truth) | A screenshot is the actual rendered frame — font-load failures, paint order, GPU/compositing bugs.           | Iris reads **computed style/geometry**, not paint — it can miss a bug that only shows in pixels. |
+| **No app cooperation**                | Tests any site with zero install.                                                                            | Iris must embed `@syrin/iris-browser` (dev-only) — can't test a third-party site you don't own.  |
+| **Browser-level scope**               | Multi-tab/popups, cross-origin, downloads, auth dialogs, and network **mock/intercept** (`route`/`fulfill`). | Iris is single-page-runtime-scoped; it observes network but mocking is the app's job.            |
+| **Cross-engine**                      | Runs WebKit / Firefox / Chromium.                                                                            | Iris runs on whatever engine the app runs.                                                       |
+
+Planned reverse benchmark (so a loss is measured, not just asserted): **pixel/paint** — inject a bug
+visible only in a rendered frame (a `@font-face` that fails to load, or a paint-order/`mix-blend` glitch)
+that leaves computed style unchanged; a screenshot-diff catches it, Iris's `inspect` does not. Needs
+screenshot-diff infra (tracked).
+
+## The in-source advantages (why Iris sees what outside tools can't)
+
+The DOM is a lossy projection of the program. Sitting in the runtime + source map, Iris reads the
+program itself. The structural advantages, each tied to a measured row above where one exists:
+
+1. **Program state** — store / React state / props / context / memoized values (state/UI-desync 2/2, `state` oracle).
+2. **The app's own events** — domain signals vs inferring intent from DOM churn (signal predicate).
+3. **Causality** — what an action _caused_ (effects/mutations/requests), not just before/after DOM.
+4. **Time** — freeze/advance the app's clock; verify time-gated flows instantly + deterministically (time-travel row).
+5. **Source coordinates** — fiber → component → `file:line` (the agent-fix-loop). _Caveat: host-element `data-iris-source` is a DOM attr a competitor can also read; the component identity/tree is fiber-only._
+6. **Determinism over repeated runs (RRE)** — replay with no LLM; constant-size verdict (128–184× per run, 420×+ at suite scale).
+7. **Semantic action safety** — Iris refuses a destructive action ("Deploy", "Delete") without `confirmDangerous`; an outside tool clicks anything blindly.
+
 ## Caveats (so the data isn't oversold)
 
 - `o200k` is an OpenAI BPE proxy (≈ Anthropic text tokens ±~20%), except Layer B which uses
