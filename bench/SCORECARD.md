@@ -53,6 +53,27 @@ runs it is two orders of magnitude cheaper."
 - **Within-field 100× is real only on RRE** (repeated regression runs), not on single-shot detection
   (you can't catch 100× more than ~10 bugs). Stated so it can't be misread. (`METRIC.md`)
 
+## What Iris does, and at what scale
+
+Iris gives a coding agent four verbs against a running app it owns — **look, act, observe, assert** —
+plus a **replay** loop that turns any recorded flow into a deterministic regression test. The scale that
+matters is not "one check" but "the same check, every edit, forever":
+
+| Capability               | What it is                                                                                               | Measured scale                                                                                  |
+| ------------------------ | -------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| **Look / observe**       | a11y snapshot, query, inspect (+computed style/theme), network, console, React render meter              | **~100–945 tok** per observation vs ~7,300 for a full-tree snapshot (architectural, not pixels) |
+| **Assert (consequence)** | a flow's success compiles to a real predicate: `signal \| state \| net{count} \| console \| state{hold}` | one assertion, **post-settle**, un-fakeable by a healed-to-wrong-element locator                |
+| **Replay (the moat)**    | re-run a recorded flow with **no LLM**, re-resolve anchors, assert the consequence                       | **~175 tok/run, 128–184× cheaper** than an LLM re-drive; **0% flake** over 8 identical runs     |
+| **Suite replay**         | `iris_flow_verify` — one consolidated verdict over K flows                                               | **~47 tok at K=2 and K=4 (constant in K)** → **1287× at 2 flows, 2574× at 4**, grows with K     |
+| **Program-state truth**  | read the store/React state the DOM never showed (desync, dead-handler oracle, blast-radius)              | **5/5 Iris-only catches**; competitors score **0** (no store access) at **~47–472 tok**         |
+| **Time control**         | freeze/advance the app clock to verify a time-gated flow                                                 | **~202 ms** vs a real ≥2,600 ms wait; **scales with the timer** (a 5-min timeout → ~1000×)      |
+| **Source localization**  | fiber → component → `file:line` so the agent edits the right file                                        | **stack 4/4, source 4/4** in one call (component stack is fiber-only → Iris-only)               |
+
+**The one number to chase is RRE** (Regression-Run Efficiency): a test suite's job is the SAME
+verification over and over. Iris pays ~author-once + N×(~47–175 tok); a screenshot/DOM agent pays
+N×(~30k LLM re-drive). At a 4-flow suite that is already **2574×**, and the gap grows with every flow
+and every run — this is the only place a within-field 100× is physically real.
+
 ## Where Playwright / DevTools win (the honest "vice versa")
 
 Iris is **not** strictly better. Being inside the page costs it real browser-level fidelity. These are
@@ -74,6 +95,28 @@ geometry) byte-identical. Result: a screenshot-diff **CAUGHT** it (`matched:fals
 it natively. Iris matches the catch **only when DRIVEN**: its opt-in `iris_visual_diff` (CDP) produced the
 same `matched:false` verdict. The always-on, no-install SDK is computed-style, not pixels — and that's the
 honest boundary. (`visual-regression-bench`)
+
+## When to use Iris — and when to reach for Playwright / DevTools (by persona)
+
+Iris is not a Playwright replacement; it is the **inner-loop verification layer for an agent building an
+app it owns**. Pick by who you are and what you're doing:
+
+| Persona / situation                                                                                                                                      | Use                                 | Why                                                                                                                                       |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| **Coding agent (Claude Code) building a React/Next app you own** — verify each edit                                                                      | **Iris**                            | In-loop, ~100 tok/check, sees program state + source `file:line`, refuses destructive clicks. The loop it's built for.                    |
+| **Regression suite you re-run on every commit / in CI**                                                                                                  | **Iris**                            | Deterministic replay: 0% flake, ~47–175 tok/run, 128–2574× cheaper than re-driving with an LLM. This is the decisive win.                 |
+| **Bug whose truth is in state, not the DOM** (UI-vs-store desync, double-submit, an action's side-effect, a silent console error, a wasted-render storm) | **Iris**                            | No out-of-page tool can see these at all — they live in the program, not the rendered page.                                               |
+| **Testing a third-party site you don't own / can't modify**                                                                                              | **Playwright**                      | Iris must embed a dev-only SDK; it can't instrument code you don't ship.                                                                  |
+| **Cross-browser matrix** (WebKit, Firefox, Chromium)                                                                                                     | **Playwright**                      | Iris runs on whatever engine the app runs; it doesn't drive multiple engines.                                                             |
+| **Trusted native input** (file pickers, drag-drop, real keyboard, `isTrusted:true`)                                                                      | **Playwright**                      | Iris defaults to synthetic dispatch; real input is opt-in (CDP) only.                                                                     |
+| **Pixel/paint visual regression** (font-load, paint order, GPU/compositing)                                                                              | **Playwright** (or Iris **driven**) | A screenshot is the rendered frame; Iris's always-on read is computed-style, not pixels. Iris matches only via opt-in `iris_visual_diff`. |
+| **Protocol-level network/perf debugging on any site** (CDP traces, throttling)                                                                           | **DevTools**                        | DevTools MCP speaks raw CDP; Iris observes app-level network, not the protocol.                                                           |
+| **Multi-tab / popups / cross-origin / downloads / network mocking**                                                                                      | **Playwright**                      | Browser-level scope Iris (single-page-runtime) doesn't own.                                                                               |
+
+**Rule of thumb:** if you **own the app and an agent is building it**, Iris is the cheap, deterministic,
+state-aware inner loop — and the regression suite that never goes flaky. If you're **driving someone
+else's site, many engines, real input, or true pixels**, that's Playwright/DevTools territory. Many teams
+use **both**: Iris for the build-verify-regress loop, Playwright for cross-browser/e2e release gates.
 
 ## The in-source advantages (why Iris sees what outside tools can't)
 
