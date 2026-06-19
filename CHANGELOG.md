@@ -4,6 +4,69 @@ All notable changes to **`@syrin/iris`** are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] — 2026-06-20
+
+The regression-testing release. Iris's flow `success` is now a **declared, deterministic, post-settle
+consequence** over program truth — not just "the element is there" — and the same flow replays with no
+LLM, so a CI gate diffs the verdict exactly (0% flake) at a fraction of the tokens an LLM re-drive costs.
+
+### Added
+
+- **`state` predicate — assert store truth** (`packages/server`, `packages/protocol`). Assert a value
+  inside a registered store the DOM never showed: `{ kind: "state", store?, path, equals? }`, with
+  `equals` a literal or a `{ $gte | $contains | $length }` operator. Available in `iris_assert`,
+  `iris_act_and_wait`, as a per-step `assert-state` invariant, and as a flow `success-state` golden
+  end-condition. Catches a UI-vs-store **desync** and a dead-handler **green-but-wrong** regression that
+  no DOM read can — the success oracle fails when the store didn't change, with no testid drift.
+- **Flow consequence family — `net { count }`, `console { absent }`, `state { hold }`**
+  (`packages/server`, `packages/protocol`). A flow's `success` (via `iris_annotate success-state`) now
+  compiles to a real predicate over more than presence: `net { count }` asserts a request fired EXACTLY
+  N times (catches a **double-submit** / retry-storm a presence check passes); `console { absent }`
+  asserts the action left a **clean console** (catches a silent `console.error`); `state { hold }` asserts
+  an unrelated store path **did not move** (catches an action's unintended **blast-radius** side-effect).
+  Cardinality/absence/invariant predicates are read **post-settle** so a wait-until-true check can't pass
+  before the regression lands.
+- **Design-token awareness in `iris_inspect`** (`packages/server`, `packages/browser`). Inspect now
+  reports theme compliance — `{ colorToken, backgroundToken, offTheme, tokenCount }` — so an
+  off-palette color (a value no design token defines) is observable in one call, not just "a color rendered."
+- **React render meter** (`packages/react`). `installRenderMeter()` augments the React DevTools hook to
+  count commits and registers an `__iris_renders` store; `iris_state` reads the commit rate, so a
+  **wasted-render storm** (re-renders with identical output → no DOM mutation) is visible where a
+  screenshot/DOM tool sees an idle page. `getRenderStats()` / `resetRenderMeter()` exported; host-safe.
+- **Component auto-anchors — address any element with zero hand-added testids** (`packages/browser`,
+  `packages/server`). `iris_query by:"component"` resolves elements by component identity / source
+  location, and recorded flows synthesize a stable `component` anchor (fiber → component → `file:line`)
+  when no `data-testid` resolves, instead of degrading the step.
+- **`iris_flow_verify` — one-call suite regression check** (`packages/server`). Re-verify a K-flow suite
+  and get one consolidated verdict (passing counted, only failures detailed), so an agent's read-cost is
+  roughly constant in suite size.
+- **On-demand tool loading — `dynamic` / `hybrid` MCP profiles** (`packages/server`). Load tool schemas
+  as needed instead of paying for the full set up front, cutting the agent's per-turn token floor.
+- **Richer observation** (`packages/browser`, `packages/server`): a `net.pending` signal for in-flight /
+  hung requests; generic-container text in the snapshot so a silent DOM removal is visible; a grid
+  layout signature so a CLS/layout regression shows up.
+
+### Changed
+
+- **Leaner agent verify loop** (`packages/server`). Terser tool descriptions and compact
+  `iris_network` / `iris_console` projections on the lean profiles roughly halve the per-turn token cost;
+  `core` is the default profile tuned for the build-verify loop.
+
+### Fixed
+
+- **`iris_visual_diff` returned a shape its schema rejected** (`packages/server`). The tool's
+  `outputSchema` declared `{ ok, match, diffPct }` but the handler returned the diff engine's real shape
+  (`{ matched, changedPixels, ratio, … }`) and never set `ok`, so every real diff failed MCP output
+  validation. The schema now matches the handler (`ok` plus the real fields); dimension-mismatch returns
+  `{ ok:false, reason }`.
+- **`iris_flow_save` / `iris_save_recorded` output schemas didn't match their handlers**
+  (`packages/server`), breaking those tools over MCP. Schemas corrected.
+- **`iris_state` output validation + path scoping** (`packages/server`, `packages/protocol`). `iris_state`
+  no longer fails output validation, and `path`/`depth` selection is applied **in-page before transport
+  truncation**, so a scoped read of a large store is no longer truncated to the wrong fields.
+- **Transport sanitizer no longer redacts design-token fields** (`packages/browser`). A broad `token`
+  redaction rule was clobbering `colorToken` / `tokenCount`; it's now scoped to auth-credential patterns.
+
 ## [0.6.10] — 2026-06-18
 
 ### Added
