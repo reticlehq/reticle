@@ -1,6 +1,7 @@
 import {
   AnchorKind,
   DriftReason,
+  EventType,
   IrisCommand,
   QueryBy,
   type CommandResult,
@@ -182,6 +183,20 @@ async function resolveTestid(
   return last;
 }
 
+/**
+ * The route (pathname) currently in effect — the page a step runs on. Reads the latest ROUTE_CHANGE
+ * from the whole event buffer; mirrors the predicate engine's route field order (pathname → to).
+ * Returns undefined when no route has been observed (e.g. a fake session) so `page` stays optional.
+ */
+function currentRoute(session: FlowReplaySession): string | undefined {
+  const routes = session.eventsSince(0).filter((e) => e.type === EventType.ROUTE_CHANGE);
+  const last = routes.at(-1);
+  if (last === undefined) return undefined;
+  const data = last.data ?? {};
+  const pathname = asString(data['pathname']) ?? asString(data['to']);
+  return pathname !== undefined && pathname.length > 0 ? pathname : undefined;
+}
+
 /** The testid value of a step's primary anchor, for labelling the result row. */
 function anchorLabel(anchor: FlowAnchor): string {
   if (anchor.kind === AnchorKind.TESTID) return anchor.value;
@@ -291,12 +306,15 @@ export async function replayFlow(
   let index = 0;
   for (const step of flow.steps) {
     const label = anchorLabel(step.anchor);
+    // The page this step runs on (the journey's "which page") — captured before the action.
+    const page = currentRoute(session);
     let result: FlowStepResult;
     if (step.anchor.kind === AnchorKind.SIGNAL) {
       result = await runSignalStep(session, step, index, label, waitForSignal, signalTimeoutMs);
     } else {
       result = await runTestidStep(session, step, index, label, dynamic, confirmDangerous, sleep);
     }
+    if (page !== undefined) result.page = page;
     results.push(result);
     if (result.drift !== undefined || !result.ok) break;
     index += 1;

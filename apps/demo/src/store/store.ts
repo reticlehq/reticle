@@ -86,6 +86,13 @@ export const useApp = create<AppState>((set, get) => ({
   setView: (view) => {
     set({ view });
     emit(Sig.NAV_CHANGED, { view });
+    // Deep-linkable views: reflect the active view in the URL path so navigation emits a real
+    // route change (Iris reads route changes as the "which page" of each journey step). The query
+    // string is preserved so dev-only knobs like ?iris-break= survive navigation.
+    const target = `/${view}`;
+    if (typeof history !== 'undefined' && location.pathname !== target) {
+      history.pushState({}, '', `${target}${location.search}`);
+    }
   },
   setAuth: (email) => {
     set({ auth: { email } });

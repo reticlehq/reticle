@@ -240,6 +240,12 @@ export interface FlowStepResult {
   tool: string;
   /** The testid/signal value the step is bound to (the re-resolved anchor). */
   anchor: string;
+  /**
+   * The route (pathname) the page was on when this step ran — the "which page" of the journey.
+   * Additive/optional: present when a route is observable, absent in route-less contexts (e.g. a
+   * fake session with no route events). Lets a replay result read as a page-by-page journey.
+   */
+  page?: string;
   ok: boolean;
   error?: string;
   note?: string;

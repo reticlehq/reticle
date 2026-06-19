@@ -111,6 +111,10 @@ function signalEvent(name: string): IrisEvent {
   return { t: 1, type: EventType.SIGNAL, sessionId: 's', data: { name } };
 }
 
+function routeEvent(pathname: string): IrisEvent {
+  return { t: 1, type: EventType.ROUTE_CHANGE, sessionId: 's', data: { pathname } };
+}
+
 const FAST = 60; // short signal timeout so the miss case resolves quickly
 
 describe('replayFlow — anchor re-resolution + legible drift', () => {
@@ -132,6 +136,34 @@ describe('replayFlow — anchor re-resolution + legible drift', () => {
       { ref: 'e-chat-send', action: ActionType.CLICK },
       { ref: 'e-chat-input', action: ActionType.FILL },
     ]);
+  });
+
+  it('captures the page (route) each step ran on — the journey trail', async () => {
+    const script = (testid: string): QueryScript => ({ elements: [el(`e-${testid}`, testid)] });
+    const session = new FakeSession(script, [routeEvent('/deployments')]);
+    const steps = await replayFlow(
+      session,
+      flow([testidStep('new-deploy'), testidStep('deploy-submit')]),
+      waitForPredicate,
+      FAST,
+    );
+
+    expect(steps).toHaveLength(2);
+    // Each resolved step records which page it ran on (read from the latest route change).
+    expect(steps[0]?.page).toBe('/deployments');
+    expect(steps[1]?.page).toBe('/deployments');
+  });
+
+  it('omits page when no route has been observed (stays optional)', async () => {
+    const script = (testid: string): QueryScript => ({ elements: [el(`e-${testid}`, testid)] });
+    const session = new FakeSession(script); // no events → no route
+    const steps = await replayFlow(
+      session,
+      flow([testidStep('chat-send')]),
+      waitForPredicate,
+      FAST,
+    );
+    expect(steps[0]?.page).toBeUndefined();
   });
 
   it('2: returns drift with the nearest-match when a testid is renamed', async () => {
