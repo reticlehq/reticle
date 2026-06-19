@@ -23,13 +23,16 @@ cors-blocked, both detected by all three tools). Numbers from 0.6.15 are on the 
 so VE/avg are not directly comparable to earlier rows (the cheaper network scenarios pull the
 average down). Tracked precisely in `history.jsonl` via `measured_cells`.
 
-**Expanded-suite standings (0.6.15, 10 regressions + control, cross-component NOT MEASURED):**
+**Expanded-suite standings (latest, 0.6.17; 10 regressions + control, cross-component NOT MEASURED):**
 
 | Tool                | Detection accuracy | Caught    | False neg  | Avg tokens | VE   |
 | ------------------- | ------------------ | --------- | ---------- | ---------- | ---- |
-| **Iris**            | **1.0**            | **10/10** | **0**      | 1075       | 9.3  |
+| **Iris**            | **1.0**            | **10/10** | **0**      | 945        | 10.6 |
 | Chrome DevTools MCP | 0.909              | 9/10      | 1 (layout) | 677        | 13.3 |
 | Playwright MCP      | 0.909              | 9/10      | 1 (layout) | 1260       | 7.1  |
+
+Iris leanness across the loop (no detection lost): 1216 (0.6.13) → 1075 (compact net/console) →
+1001 (omit-nominal-health) → **945** (drop default effect fields), VE 6.6 → **10.6**.
 
 **Iris is the only tool with zero false negatives** — it catches every regression, including the
 silent-DOM removal and the CSS/layout (CLS) shift the a11y-only tools structurally miss. DevTools
@@ -56,7 +59,7 @@ false positives for any tool on the control.
 ## The detection–efficiency frontier (the key finding)
 
 After the safe leanness wins (compact network/console at 0.6.14; omit-nominal-health at 0.6.16),
-Iris is at **VE 9.99** vs DevTools **13.3** on the expanded suite. The remaining gap is **not a
+Iris is at **VE 10.6** vs DevTools **13.3** on the expanded suite. The remaining gap is **not a
 bug to optimize away — it is a real frontier**, and naming it is the most useful result here:
 
 > **VE (catches per 1k tokens) structurally rewards observing _less_.** DevTools wins VE by
