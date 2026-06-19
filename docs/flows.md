@@ -102,7 +102,43 @@ iris_flow_replay({ flowName: "create-task" }) // re-resolve each anchor against 
 - `error` — the flow file is missing/invalid, or a resolved action failed. Runtime failures include
   the failed step and a top-level error envelope.
 
-A testid-_preserving_ refactor (you moved markup but kept the testids) still replays green.
+A testid-_preserving_ refactor (you moved markup but kept the testids) still replays green. A step
+whose element has **no testid** is anchored on its component + source location
+(`{ kind: "component", component, source: { file, line } }`) — an auto-derived stable anchor, so a
+flow records cleanly with zero hand-added testids and replay re-resolves it via `iris_query by:'component'`.
+
+### The decision envelope — what to do next, not just pass/fail
+
+On a `drift` or `error`, the replay result carries a `decision` an agent can act on directly:
+
+```jsonc
+decision: {
+  verdict: "drift",
+  whatChanged: "testid \"fault-500\" not found",
+  whereInSource: "src/Diagnostics.tsx:16",   // file:line, from the component/source anchor
+  suggestedFix: "rebind the anchor to \"fault-404\" (closest survivor)",
+  nextAction: "rebind the anchor to \"fault-404\", or update the flow if the change was intended."
+}
+```
+
+This is the feedback a human reviewer used to give — made machine-actionable, so the agent decides
+its next move without one.
+
+## Verify the whole suite in one call
+
+`iris_flow_verify` replays **every** saved flow (or a named subset) deterministically — no LLM per
+flow — and returns one consolidated verdict. This is the regression check to run after any change:
+
+```jsonc
+iris_flow_verify()
+// → { status: "fail", total: 4, passed: 3, failed: 1,
+//     summary: "3/4 flows pass — 1 needs attention: ship-deploy",
+//     failures: [{ flow: "ship-deploy", verdict: "drift",
+//                  whatChanged: "...", whereInSource: "src/...:NN", nextAction: "..." }] }
+```
+
+Passing flows are counted; only failures carry detail (token-cheap). Build → `iris_flow_verify` →
+fix from each failure's `nextAction` → repeat — the autonomous regression loop.
 
 ## Self-healing — the agent maintains the flow
 
@@ -140,16 +176,17 @@ skipping `dynamic` regions — via `@syrin/iris-test`'s `flowsAsSpecs`. See
 
 ## Tool reference
 
-| Tool                                     | Args                   | Returns                                               |
-| ---------------------------------------- | ---------------------- | ----------------------------------------------------- |
-| `iris_contract_save`                     | `{ sessionId? }`       | writes `.iris/contract.json`                          |
-| `iris_record_start` / `iris_record_stop` | `{ recordingName }`    | start/stop capturing the agent's acts                 |
-| `iris_flow_save`                         | `{ flowName }`         | persist the recording → `.iris/flows/<flowName>.json` |
-| `iris_flow_save_recorded`                | `{ flowName? }`        | persist a human-recorded (toolbar) flow               |
-| `iris_flow_list`                         | `{}`                   | flows on disk                                         |
-| `iris_flow_load`                         | `{ flowName }`         | the flow JSON                                         |
-| `iris_flow_replay`                       | `{ flowName }`         | `{ status: ok\|drift\|error, steps, … }`              |
-| `iris_flow_heal`                         | `{ flowName, apply? }` | propose / apply nearest-match rebind                  |
-| `iris_annotate`                          | `{ kind, … }`          | compile a structured annotation into the flow         |
+| Tool                                     | Args                     | Returns                                                 |
+| ---------------------------------------- | ------------------------ | ------------------------------------------------------- |
+| `iris_contract_save`                     | `{ sessionId? }`         | writes `.iris/contract.json`                            |
+| `iris_record_start` / `iris_record_stop` | `{ recordingName }`      | start/stop capturing the agent's acts                   |
+| `iris_flow_save`                         | `{ flowName }`           | persist the recording → `.iris/flows/<flowName>.json`   |
+| `iris_flow_save_recorded`                | `{ flowName? }`          | persist a human-recorded (toolbar) flow                 |
+| `iris_flow_list`                         | `{}`                     | flows on disk                                           |
+| `iris_flow_load`                         | `{ flowName }`           | the flow JSON                                           |
+| `iris_flow_replay`                       | `{ flowName }`           | `{ status, steps, decision? }` (decision on drift/fail) |
+| `iris_flow_verify`                       | `{ names?, sessionId? }` | suite verdict `{ status, passed, failed, failures[] }`  |
+| `iris_flow_heal`                         | `{ flowName, apply? }`   | propose / apply nearest-match rebind                    |
+| `iris_annotate`                          | `{ kind, … }`            | compile a structured annotation into the flow           |
 
 > Flow `name` must be a single safe path segment (no `/`, `\`, `..`, or leading dot).
