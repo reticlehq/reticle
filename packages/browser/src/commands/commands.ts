@@ -6,6 +6,8 @@ import {
   IrisCommand,
   SnapshotMode,
   TRANSPORT_LIMITS,
+  selectPath,
+  capDepth,
   type ComponentStateResult,
   type ElementQuery,
   type ElementState,
@@ -31,6 +33,10 @@ export type CommandHandler = (args: Record<string, unknown>) => unknown;
 
 function str(value: unknown): string | undefined {
   return typeof value === 'string' ? value : undefined;
+}
+
+function num(value: unknown): number | undefined {
+  return typeof value === 'number' ? value : undefined;
 }
 
 function record(value: unknown): Record<string, unknown> {
@@ -121,16 +127,45 @@ const COMPONENT_UNAVAILABLE: ComponentStateResult = {
  * Stores are the reliable path. The `ref` component read is bounded (F5): a stale ref, no
  * adapter, or an adapter returning a non-conforming value all collapse to a structured
  * `{ ok: false, reason }` — never a raw (possibly circular) object that could hang serialization.
+ *
+ * `path`/`depth` are applied HERE, in the page, BEFORE the value crosses the transport — so a scoped
+ * read of a huge store (e.g. `deployments.0.status` on a 500-row store) returns only the small
+ * sub-tree and is never truncated. (Previously selection ran server-side, AFTER the whole store had
+ * already been size-capped in transit, which silently lost any field after a large array.)
  */
-function readState(ref: string | undefined, store: string | undefined): unknown {
+function readState(
+  ref: string | undefined,
+  store: string | undefined,
+  path: string | undefined,
+  depth: number | undefined,
+): unknown {
   const stores = readStores(store);
+  const names = storeNames();
+
+  // Scoped read: walk `path` into the named store (or the whole {stores} when no store is given) and
+  // cap depth — entirely in-page, so only the result crosses the wire.
+  if (path !== undefined || depth !== undefined) {
+    const base = store !== undefined ? stores[store] : { stores, storeNames: names };
+    const selection = path !== undefined ? selectPath(base, path) : { found: true, value: base };
+    const value =
+      selection.found && depth !== undefined ? capDepth(selection.value, depth) : selection.value;
+    return {
+      store,
+      path,
+      found: selection.found,
+      value,
+      ...('availableKeys' in selection ? { availableKeys: selection.availableKeys } : {}),
+      storeNames: names,
+    };
+  }
+
   const result: {
     stores: Record<string, unknown>;
     storeNames: string[];
     component?: ComponentStateResult;
   } = {
     stores,
-    storeNames: storeNames(),
+    storeNames: names,
   };
   if (ref !== undefined && ref.length > 0) {
     const el = refs.resolve(ref);
@@ -212,7 +247,9 @@ export function createCommandRegistry(): Map<string, CommandHandler> {
     }
     return { frozen: isClockFrozen() };
   });
-  reg.set(IrisCommand.STATE_READ, (args) => readState(str(args['ref']), str(args['store'])));
+  reg.set(IrisCommand.STATE_READ, (args) =>
+    readState(str(args['ref']), str(args['store']), str(args['path']), num(args['depth'])),
+  );
   reg.set(IrisCommand.CAPABILITIES, () => getCapabilities());
   reg.set(IrisCommand.SCROLL, (args) => {
     const dy = args['dy'];

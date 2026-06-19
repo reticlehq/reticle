@@ -87,6 +87,43 @@ describe('command registry (driven by the bridge)', () => {
     expect(result.component).toBeUndefined();
   });
 
+  it('STATE_READ scopes a dot-path IN-PAGE before the transport (no whole-store payload)', () => {
+    registerStore('state_app', () => ({
+      deployments: [{ id: 1, status: 'queued' }],
+      requestLog: [{ path: '/api/x', status: 200 }],
+    }));
+    const r = run(IrisCommand.STATE_READ, {
+      store: 'state_app',
+      path: 'deployments.0.status',
+    }) as Record<string, unknown>;
+    expect(r['found']).toBe(true);
+    expect(r['value']).toBe('queued');
+    expect(r['stores']).toBeUndefined(); // the whole store never crosses the wire
+    unregisterStore('state_app');
+  });
+
+  it('STATE_READ depth caps a large sub-tree to a size marker in-page', () => {
+    registerStore('state_app', () => ({ deployments: [1, 2, 3, 4, 5] }));
+    const r = run(IrisCommand.STATE_READ, {
+      store: 'state_app',
+      path: 'deployments',
+      depth: 0,
+    }) as Record<string, unknown>;
+    expect(r['value']).toBe('[Array(5)]');
+    unregisterStore('state_app');
+  });
+
+  it('STATE_READ a missing path returns found:false + the keys that WERE available', () => {
+    registerStore('state_app', () => ({ deployments: [{ status: 'live' }] }));
+    const r = run(IrisCommand.STATE_READ, {
+      store: 'state_app',
+      path: 'deployments.0.nope',
+    }) as Record<string, unknown>;
+    expect(r['found']).toBe(false);
+    expect(r['availableKeys']).toContain('status');
+    unregisterStore('state_app');
+  });
+
   it('STATE_READ with a bogus ref returns a bounded structured failure (no reject) (F5)', () => {
     let result: StateResult | undefined;
     expect(() => {

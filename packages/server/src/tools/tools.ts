@@ -1255,6 +1255,11 @@ export const TOOLS: ToolDef[] = [
     },
     handler: async (deps, args) => {
       const store = asString(args['store']);
+      const path = asString(args['path']);
+      const depth = asNumber(args['depth']);
+      // Forward path/depth so a CURRENT browser SDK scopes the read IN-PAGE, before the transport —
+      // the value never gets size-truncated in transit. (An older SDK ignores them and returns the
+      // whole store; we then scope server-side below as a back-compat fallback.)
       const result = await commandOrThrow(
         deps,
         asString(args['sessionId']),
@@ -1262,25 +1267,36 @@ export const TOOLS: ToolDef[] = [
         {
           ref: args['ref'],
           store,
+          path,
+          depth,
         },
       );
       // Normalize storeNames to a string[] regardless of how the wire delivered it — the
       // outputSchema requires an array, and a non-array here makes MCP reject the whole result
       // (so the agent gets nothing instead of the state). Defensive: a string becomes a 1-element array.
-      const root = result as { stores?: Record<string, unknown>; storeNames?: unknown };
+      const root = result as {
+        stores?: Record<string, unknown>;
+        storeNames?: unknown;
+        found?: unknown;
+      };
       const names = Array.isArray(root.storeNames)
         ? root.storeNames.filter((n): n is string => typeof n === 'string')
         : typeof root.storeNames === 'string' && root.storeNames.length > 0
           ? [root.storeNames]
           : [];
 
-      const path = asString(args['path']);
-      const depth = asNumber(args['depth']);
+      // The browser already scoped it in-page (the `found` shape) — pass through, just safe storeNames.
+      if (typeof root.found === 'boolean') {
+        return { ...(root as Record<string, unknown>), storeNames: names };
+      }
+
       if (path === undefined && depth === undefined) {
         return { ...(root as Record<string, unknown>), storeNames: names }; // unchanged shape, safe storeNames
       }
 
-      // Base for the path is the named store's value (else the whole result when no store is given).
+      // Back-compat: an older browser returned the whole store; scope it here (may already be
+      // size-truncated in transit for a very large store — that is the limitation this fix removes
+      // for current SDKs).
       const base = store !== undefined ? (root.stores ?? {})[store] : result;
       const selection = path !== undefined ? selectPath(base, path) : { found: true, value: base };
       const value =
