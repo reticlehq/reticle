@@ -15,7 +15,7 @@ import { classifyFlowAssertions } from './flow-classify.js';
  *            measured cost (deterministic replay tokens vs an LLM re-drive).
  *
  * Pure: no IO, no clock. Markdown out (mermaid is the one place mermaid earns its tokens — a human
- * renders it; see bench/MERMAID.md). Token figures are passed in (measured by the caller), never faked.
+ * renders it). Token figures are passed in (measured by the caller), never faked.
  */
 
 export interface FlowReportInput {

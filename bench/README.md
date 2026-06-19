@@ -51,18 +51,18 @@ IRIS_PORT=4455 pnpm --filter @syrin/iris-demo exec vite --port 4312 --strictPort
 #    (Left out of the committed tree on purpose; add it to reproduce network-timeout.)
 
 # 3. prove all three servers boot and list tools
-node plan/bench/harness/probe.mjs
+node bench/harness/probe.mjs
 
 # 4. Layer A — observation cost (no API key). ~12 min; spawns each tool's browser per cell.
-node plan/bench/harness/run-observation.mjs
+node bench/harness/run-observation.mjs
 
 # 5. analysis + visuals
-node plan/bench/harness/analyze.mjs
-node plan/bench/harness/charts.mjs && node plan/bench/harness/diagrams.mjs && node plan/bench/harness/svg2png.mjs
-node plan/bench/harness/capture-screens.mjs
+node bench/harness/analyze.mjs
+node bench/harness/charts.mjs && node bench/harness/diagrams.mjs && node bench/harness/svg2png.mjs
+node bench/harness/capture-screens.mjs
 
 # 6. Layer B — full agent loop (authoritative usage tokens). REQUIRES a key.
-ANTHROPIC_API_KEY=sk-... node plan/bench/harness/agent-loop.mjs
+ANTHROPIC_API_KEY=sk-... node bench/harness/agent-loop.mjs
 ```
 
 ## Pinned versions (from raw/run-meta.json)

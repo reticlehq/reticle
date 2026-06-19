@@ -2,7 +2,7 @@
 
 > Status: Phase 1 (design) complete. Phase 2 (harness) built and connectivity-verified.
 > Phase 3 (execution) in pilot. This document is the reproducible spec; numbers live in
-> `plan/bench/raw/*.json` and are never edited by hand.
+> `bench/raw/*.json` and are never edited by hand.
 
 ## Research question
 
@@ -178,15 +178,15 @@ node apps/api/server.mjs &
 pnpm --filter @syrin/iris-demo dev:iris &        # serves demo; bakes __IRIS_PORT__=4400
 
 # 2. verify all three tool servers boot + list tools
-node plan/bench/harness/probe.mjs
+node bench/harness/probe.mjs
 
 # 3. Layer A (no key): observation cost
-node plan/bench/harness/run-observation.mjs            # all scenarios x all tools
+node bench/harness/run-observation.mjs            # all scenarios x all tools
 
 # 4. Layer B (needs key): full agent loop
-ANTHROPIC_API_KEY=... node plan/bench/harness/agent-loop.mjs
+ANTHROPIC_API_KEY=... node bench/harness/agent-loop.mjs
 
-# raw outputs: plan/bench/raw/*.json ; logs: plan/bench/logs/
+# raw outputs: bench/raw/*.json ; logs: bench/logs/
 ```
 
 Pinned versions: `@playwright/mcp@0.0.76`, `chrome-devtools-mcp@1.3.0`, `@syrin/iris-server@0.6.10`,
