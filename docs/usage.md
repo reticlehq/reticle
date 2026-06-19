@@ -362,6 +362,40 @@ when there's no testid), with legible drift + self-heal. Full guide:
 correction, or end the session from the floating panel; the agent receives guidance on its next
 tool call. Full guide: [Human-in-the-loop control](human-control.md).
 
+### `iris_review` — drain the bugs the human flagged on the page
+
+The dev clicks **"Flag a bug"** in the running app, points at the element that looks wrong, and types
+what's wrong (⌘/Ctrl+Enter to send). Each flag becomes a **mark** the agent drains:
+
+```
+iris_review({ sessionId })
+→ { marks: [{ id: "m1", note: "this button is misaligned", label: "button \"Pay\"",
+              source: { file: "src/Checkout.tsx", line: 42 },
+              fix: "Open src/Checkout.tsx:42 and fix: this button is misaligned. Then iris_review { resolve: \"m1\" }" }],
+    pendingCount: 1 }
+```
+
+Each pending mark carries the human note, the element label, the source **`file:line`** (when the
+framework stamped one), and a ready-to-act `fix` hint. Open the file, apply the fix, then
+`iris_review({ resolve: "m1" })` — the human watching the panel sees **"✓ fixed: …"** land. Reading
+never consumes a mark, so you can list → fix → verify → resolve. `iris_sessions` also reports
+`pendingMarks` so you notice flagged bugs during normal orientation.
+
+### `iris_network_mock` — stub the network for error-state testing (driven mode)
+
+On a page Iris drives (`iris drive`), make a request return a 500, force it offline, or delay it — so
+testing error/edge states is one declared rule, no backend changes:
+
+```
+iris_network_mock({ mocks: [{ urlContains: "/api/pay", method: "POST", status: 500 }] })
+→ { applied: true, count: 1 }      // now the checkout POST returns 500 — verify the failure UI
+iris_network_mock({ mocks: [{ urlContains: "/api/feed", abort: true }] })   // simulate offline
+iris_network_mock({ clear: true }) // turn mocking off
+```
+
+First matching rule wins (`urlContains` + optional case-insensitive `method`). Needs a driven browser;
+without one it returns a `recommendation` pointing at `iris drive`.
+
 ---
 
 ## 4. The predicate DSL — full reference

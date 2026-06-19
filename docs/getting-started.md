@@ -422,10 +422,16 @@ Everything below comes from the single `@syrin/iris` install.
 
 **`iris_sessions` is empty / "no browser session connected"**
 
+- Run **`iris status`** — it shows whether the daemon is up and which tabs are connected (url, health,
+  pending flagged bugs) at a glance. No connected sessions means the SDK isn't reaching the bridge.
 - Is your app actually running and open in a browser tab?
 - Is `iris.connect()` running? (Check it's inside your dev guard and the guard is true.)
 - Port mismatch? If you set `IRIS_PORT`, pass the same URL to
   `iris.connect({ url: 'ws://localhost:<port>/iris' })`.
+- Need to restart the daemon? **`iris stop`** cleans it up — no `pkill` needed.
+
+The errors Iris returns to the agent now carry a `recovery` hint for this exact situation (and for
+multiple/unknown sessions, a throttled tab, a missing baseline) — so the agent knows the next move.
 
 **The agent can't find an element**
 

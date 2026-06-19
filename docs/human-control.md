@@ -32,14 +32,33 @@ The floating panel (bottom-center, `present: true`) gives you:
   fades away.
 - **Minimise (▾)** — collapse the panel to a bar that streams only the live line; click the bar
   to restore.
+- **Flag a bug** — the button in the corner. Toggle it on, click the element that looks wrong, type
+  what's wrong (⌘/Ctrl+Enter to send, Esc to back out). Iris pins a numbered marker, logs your flag in
+  the panel, and hands the agent a structured mark.
+
+## Flag a bug — annotate the mistake where you see it
+
+You don't have to describe a bug in prose. **Point at it.** The flag captures the element's
+re-resolvable anchor _and_ the source `file:line` (when the framework stamped one), so the agent fixes
+the exact element and code — not a guess. The loop:
+
+1. **You** flag the element and type the problem → Iris emits a `HUMAN_MARK`.
+2. **The agent** drains it with `iris_review` — note + element label + `source: { file, line }` + a
+   ready-to-act `fix` hint. `iris_sessions` also reports `pendingMarks` so the agent notices flags.
+3. **The agent** opens the file, fixes it, and calls `iris_review({ resolve: "m1" })`.
+4. **You** see **"✓ fixed: \<your note\>"** land in the panel. Flag → fix → confirmation.
+
+See [`iris_review` in the usage guide](usage.md#iris_review--drain-the-bugs-the-human-flagged-on-the-page)
+for the tool shape. Suppress the button with `annotate: false` if you don't want it.
 
 ## From the agent (the tools)
 
-| Tool               | Args                       | Effect                                                     |
-| ------------------ | -------------------------- | ---------------------------------------------------------- |
-| `iris_end_session` | `{ summary?, sessionId? }` | end the session; the panel shows "Session ended · summary" |
-| `iris_resume`      | `{ sessionId? }`           | clear a pause and continue                                 |
-| `iris_messages`    | `{ sessionId? }`           | drain + read pending human messages (explicit poll)        |
+| Tool               | Args                             | Effect                                                     |
+| ------------------ | -------------------------------- | ---------------------------------------------------------- |
+| `iris_end_session` | `{ summary?, sessionId? }`       | end the session; the panel shows "Session ended · summary" |
+| `iris_resume`      | `{ sessionId? }`                 | clear a pause and continue                                 |
+| `iris_messages`    | `{ sessionId? }`                 | drain + read pending human messages (explicit poll)        |
+| `iris_review`      | `{ resolve?, all?, sessionId? }` | list the bugs the human flagged; resolve one once fixed    |
 
 When paused, every action tool short-circuits with the human's guidance, so the agent learns of
 the pause on its very next action. The agent's expected behavior: **read the guidance, adjust
