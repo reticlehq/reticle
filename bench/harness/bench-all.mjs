@@ -19,7 +19,9 @@ const LAYER_C = [
   'bench/harness/replay-detect.mjs', // selector-removal detection (3/3)
   'bench/harness/replay-detect-consequence.mjs', // green-but-wrong detection (2/2)
   'bench/harness/replay-detect-state.mjs', // store-truth oracle catches a dead handler (state predicate)
+  'bench/harness/network-cardinality-bench.mjs', // net.count oracle catches a double-submit (presence passes)
   'bench/harness/suite-rre.mjs', // suite-scale RRE: iris_flow_verify read-cost ~constant in K (compounding)
+  'bench/harness/replay-determinism.mjs', // flake rate: verdict-deterministic across N replays (0% by construction)
 ];
 // Scripted observation cost + detection accuracy. Slow (~12 min) and boots Playwright/DevTools MCPs.
 const LAYER_A = ['bench/harness/run-observation.mjs', 'bench/harness/analyze.mjs'];
