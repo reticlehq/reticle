@@ -197,6 +197,49 @@ function currentRoute(session: FlowReplaySession): string | undefined {
   return pathname !== undefined && pathname.length > 0 ? pathname : undefined;
 }
 
+/** Pathname only (drop origin + query) so a net URL stays terse in the journey. */
+function trimUrl(url: string): string {
+  try {
+    return new URL(url, 'http://x').pathname;
+  } catch {
+    return url.length > 60 ? `${url.slice(0, 59)}…` : url;
+  }
+}
+
+/**
+ * A compact "what happened after this step" summary from the post-action event window — the
+ * journey's consequence column ("→ /deployments", "signal modal:opened", "GET /api/x 500"). Notable
+ * events only (route / domain signal / network / console error), terse and capped to stay token-cheap.
+ */
+function summarizeConsequence(events: IrisEvent[]): string | undefined {
+  const parts: string[] = [];
+  const lastRoute = events.filter((e) => e.type === EventType.ROUTE_CHANGE).at(-1);
+  if (lastRoute !== undefined) {
+    const data = lastRoute.data ?? {};
+    const to = asString(data['pathname']) ?? asString(data['to']);
+    if (to !== undefined && to.length > 0) parts.push(`→ ${to}`);
+  }
+  const signals = new Set<string>();
+  for (const e of events) {
+    if (e.type !== EventType.SIGNAL) continue;
+    const name = asString((e.data ?? {})['name']);
+    if (name !== undefined) signals.add(name);
+  }
+  for (const name of [...signals].slice(0, 2)) parts.push(`signal ${name}`);
+  for (const n of events.filter((e) => e.type === EventType.NET_REQUEST).slice(0, 2)) {
+    const data = n.data ?? {};
+    const method = asString(data['method']) ?? 'GET';
+    const path = trimUrl(asString(data['url']) ?? '');
+    const status = typeof data['status'] === 'number' ? ` ${data['status']}` : '';
+    parts.push(`${method} ${path}${status}`.trim());
+  }
+  const errors = events.filter(
+    (e) => e.type === EventType.CONSOLE_ERROR || e.type === EventType.ERROR_UNCAUGHT,
+  ).length;
+  if (errors > 0) parts.push(`${errors} console error${errors > 1 ? 's' : ''}`);
+  return parts.length > 0 ? parts.join('; ') : undefined;
+}
+
 /** The testid value of a step's primary anchor, for labelling the result row. */
 function anchorLabel(anchor: FlowAnchor): string {
   if (anchor.kind === AnchorKind.TESTID) return anchor.value;
@@ -308,6 +351,8 @@ export async function replayFlow(
     const label = anchorLabel(step.anchor);
     // The page this step runs on (the journey's "which page") — captured before the action.
     const page = currentRoute(session);
+    // Event-time floor so the consequence reflects only THIS step's aftermath, not prior steps'.
+    const cursorBefore = session.elapsed();
     let result: FlowStepResult;
     if (step.anchor.kind === AnchorKind.SIGNAL) {
       result = await runSignalStep(session, step, index, label, waitForSignal, signalTimeoutMs);
@@ -315,6 +360,10 @@ export async function replayFlow(
       result = await runTestidStep(session, step, index, label, dynamic, confirmDangerous, sleep);
     }
     if (page !== undefined) result.page = page;
+    const consequence = summarizeConsequence(
+      session.eventsSince(cursorBefore).filter((e) => e.t >= cursorBefore),
+    );
+    if (consequence !== undefined) result.consequence = consequence;
     results.push(result);
     if (result.drift !== undefined || !result.ok) break;
     index += 1;

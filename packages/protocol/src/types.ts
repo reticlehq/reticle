@@ -246,6 +246,14 @@ export interface FlowStepResult {
    * fake session with no route events). Lets a replay result read as a page-by-page journey.
    */
   page?: string;
+  /**
+   * A compact summary of the observable CONSEQUENCE in the window right after this step ran — the
+   * "what happened" of the journey: a route change, a domain signal (e.g. a modal opening), a
+   * network call, or console errors. Additive/optional and intentionally terse (token-cheap). It
+   * captures what had landed by the time the action settled, so a very-late async effect may not
+   * appear; the asserted consequence (expect/success) is the authoritative pass/fail signal.
+   */
+  consequence?: string;
   ok: boolean;
   error?: string;
   note?: string;

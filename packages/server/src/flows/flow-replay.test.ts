@@ -115,6 +115,10 @@ function routeEvent(pathname: string): IrisEvent {
   return { t: 1, type: EventType.ROUTE_CHANGE, sessionId: 's', data: { pathname } };
 }
 
+function netEvent(method: string, url: string, status: number): IrisEvent {
+  return { t: 1, type: EventType.NET_REQUEST, sessionId: 's', data: { method, url, status } };
+}
+
 const FAST = 60; // short signal timeout so the miss case resolves quickly
 
 describe('replayFlow — anchor re-resolution + legible drift', () => {
@@ -152,6 +156,25 @@ describe('replayFlow — anchor re-resolution + legible drift', () => {
     // Each resolved step records which page it ran on (read from the latest route change).
     expect(steps[0]?.page).toBe('/deployments');
     expect(steps[1]?.page).toBe('/deployments');
+  });
+
+  it('summarizes the consequence after a step — route, signal, and network in one terse line', async () => {
+    const script = (testid: string): QueryScript => ({ elements: [el(`e-${testid}`, testid)] });
+    const session = new FakeSession(script, [
+      routeEvent('/deployments'),
+      signalEvent('modal:opened'),
+      netEvent('POST', 'http://localhost/api/deploys?x=1', 201),
+    ]);
+    const steps = await replayFlow(
+      session,
+      flow([testidStep('new-deploy')]),
+      waitForPredicate,
+      FAST,
+    );
+    const consequence = steps[0]?.consequence ?? '';
+    expect(consequence).toContain('→ /deployments');
+    expect(consequence).toContain('signal modal:opened');
+    expect(consequence).toContain('POST /api/deploys 201'); // origin + query trimmed
   });
 
   it('omits page when no route has been observed (stays optional)', async () => {
