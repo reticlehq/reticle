@@ -425,6 +425,36 @@ iris_query({ sessionId, by: "testid", value: testid })
 
 Flag anything that throws a console error or triggers a `status >= 400` network call.
 
+### Regression suite (record once, re-verify on every change)
+
+For flows worth re-checking forever — the actual test suite — record them, then re-verify the whole
+set in ONE deterministic call (no LLM per flow, so it's ~hundreds of tokens, not a full re-drive):
+
+1. Record + assert the business outcome (not just clicks):
+   ```
+   iris_record_start({ recordingName: "ship-deploy" })
+   → drive the flow with iris_act
+   → iris_annotate({ flow: "ship-deploy", kind: "intent", text: "ship a deploy to production" })
+   → iris_annotate({ flow: "ship-deploy", kind: "success-state", signal: "deploy:shipped" })
+   → iris_record_stop({ recordingName: "ship-deploy" }) → iris_flow_save({ flowName: "ship-deploy" })
+   ```
+2. After any change, re-verify EVERY saved flow at once:
+   ```
+   iris_flow_verify({ sessionId })
+   → { status: "pass"|"fail", passed, failed, failures: [{ flow, verdict, whatChanged, whereInSource, nextAction }] }
+   ```
+   On a failure the envelope tells you exactly what changed, the `file:line`, and the fix
+   (e.g. "rebind to 'new-deploy'") — act on `nextAction` directly. A single flow: `iris_flow_replay({ flowName })`.
+
+### Catch the bugs a DOM/snapshot tool misses
+
+- **UI-vs-state desync** (the UI shows one value, the store holds another — e.g. a count that didn't
+  refresh): read the truth with `iris_state({ sessionId, store, path })` and compare it to what's
+  displayed. A snapshot can't — the source of truth isn't in the DOM.
+- **Present-but-unusable / off-theme controls**: `iris_inspect` returns `occluded` (covered by an
+  overlay), `styles.cursor`/`opacity`, `box` (0×0), and `theme.offTheme` (color off the design-token
+  palette). A snapshot says the element is "there"; inspect says whether a user can actually use it.
+
 ---
 
 ## Phase 5 — Report
