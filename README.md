@@ -549,7 +549,7 @@ Active development (v0.3.x); **dev-only and localhost-only by default**. Observe
 reversible — Iris never breaks the host app. No telemetry. MIT licensed. React 18/19 + Next.js today; the
 core SDK and `signals` are framework-agnostic (Vue/Svelte adapters on the roadmap).
 
-See [`WELCOME.md`](WELCOME.md) to develop.
+See [`CLAUDE.md`](CLAUDE.md) for contributor guidelines.
 
 ## License
 
