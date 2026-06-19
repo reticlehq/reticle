@@ -75,6 +75,7 @@ program itself. The structural advantages, each tied to a measured row above whe
 5. **Source coordinates** — fiber → component → `file:line` (the agent-fix-loop). _Caveat: host-element `data-iris-source` is a DOM attr a competitor can also read; the component identity/tree is fiber-only._
 6. **Determinism over repeated runs (RRE)** — replay with no LLM; constant-size verdict (128–184× per run, 420×+ at suite scale).
 7. **Semantic action safety** — Iris refuses a destructive action ("Deploy", "Delete") without `confirmDangerous`; an outside tool clicks anything blindly.
+8. **Render behavior** — the React commit stream (wasted-render storms / thrashing) an outside tool cannot observe at all; Iris reads the commit rate (`__iris_renders`).
 
 ## Caveats (so the data isn't oversold)
 
