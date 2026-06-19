@@ -29,7 +29,11 @@ again deterministically.** Not "Iris sees pixels better"; "Iris sees the program
 runs it is two orders of magnitude cheaper."
 
 - **Decisive wins:** regression-run cost (128–184×, compounding), and any bug whose truth lives in
-  state the app never put in the DOM (UI-vs-store desync).
+  state the app never put in the DOM (UI-vs-store desync). The two fuse: a store-truth assertion is a
+  first-class `state` predicate (`iris_assert`/`iris_act_and_wait`) and a flow `success-state`
+  end-condition, so a desync is caught **deterministically in the cheap replay loop** — not as a
+  one-off manual read-state/read-DOM/compare. State assertions grade as consequences (a wrong element
+  or stale render cannot fake them).
 - **Ties (honest):** every visually-observable bug — computed style, geometry, occlusion, color,
   theme — is reachable by any tool with a JS-`evaluate`. Iris is more ergonomic (one native call, no
   JS authoring), not more capable.
