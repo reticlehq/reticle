@@ -19,6 +19,7 @@ import {
 import { IrisTool } from '../tools/tool-names.js';
 import { asString } from '../tools/tools-helpers.js';
 import { replayFlow } from './flow-replay.js';
+import { buildDecision } from './decision.js';
 import { classifyFlowAssertions } from './flow-classify.js';
 import { assertSuccess, dynamicTestids, successLabel } from './flow-success.js';
 import { flowPath } from '../project/iris-dir.js';
@@ -223,6 +224,17 @@ export const FLOW_TOOLS: ToolDef[] = [
       steps: z.array(z.unknown()),
       proposals: z.array(z.unknown()).optional(),
       error: z.object({ code: z.string(), message: z.string() }).optional(),
+      decision: z
+        .object({
+          verdict: z.string(),
+          summary: z.string(),
+          whatChanged: z.string().optional(),
+          whereInSource: z.string().optional(),
+          suggestedFix: z.string().optional(),
+          nextAction: z.string(),
+        })
+        .optional()
+        .describe('Autonomy envelope: verdict + what changed + where + fix + next action.'),
     },
     handler: async (deps: ToolDeps, args): Promise<FlowReplayResult> => {
       // deps.now() here is the single clock site for the replay duration (a
@@ -280,14 +292,21 @@ export const FLOW_TOOLS: ToolDef[] = [
       const failed = steps.find((step) => !step.ok && step.drift === undefined);
       if (failed !== undefined) {
         const message = failed.error ?? 'flow action failed';
-        return {
+        const errored: FlowReplayResult = {
           name,
           status,
           steps,
           error: { code: ReplayStatus.ERROR, message },
         };
+        errored.decision = buildDecision(errored, loaded.value);
+        return errored;
       }
-      return { name, status, steps };
+      const result: FlowReplayResult = { name, status, steps };
+      // Attach the decision envelope only when the agent must ACT (drift) — a clean pass needs no
+      // next-action, and status:ok already says it, so the common path stays token-flat. The
+      // "add a consequence oracle" nudge for a weak pass lives at flow_save, not here.
+      if (status !== ReplayStatus.OK) result.decision = buildDecision(result, loaded.value);
+      return result;
     },
   },
   {

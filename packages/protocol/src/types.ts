@@ -283,11 +283,34 @@ export interface FlowStepResult {
   proposal?: HealProposal;
 }
 
+/**
+ * The autonomy decision envelope — the feedback a human used to give, made machine-actionable. From
+ * a replay result it states the verdict, what changed, WHERE in the source to look (file:line, from a
+ * component anchor), a suggested fix, and the single next action — so a coding agent decides its next
+ * move without a human in the loop. Terse by design (token-cheap).
+ */
+export interface ReplayDecision {
+  /** pass = intent held; drift = a locator/anchor missed; fail = an action or the success oracle failed. */
+  verdict: 'pass' | 'drift' | 'fail';
+  /** One-line human/agent summary of the outcome. */
+  summary: string;
+  /** What regressed (the drift reason or failure), when not a pass. */
+  whatChanged?: string;
+  /** Where to look — `file:line` from the failing step's source anchor, or the page route. */
+  whereInSource?: string;
+  /** A concrete fix hint (e.g. rebind to the nearest surviving anchor). */
+  suggestedFix?: string;
+  /** The single next action the agent should take. */
+  nextAction: string;
+}
+
 /** The iris_flow_replay envelope. */
 export interface FlowReplayResult {
   name: string;
   status: ReplayStatus;
   steps: FlowStepResult[];
+  /** The machine-actionable decision derived from this replay (autonomy layer). */
+  decision?: ReplayDecision;
   /** Set when status === 'error' (load failure or resolved action failure). */
   error?: { code: string; message: string };
   /**
