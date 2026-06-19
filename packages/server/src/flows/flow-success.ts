@@ -30,6 +30,7 @@ export function dynamicTestids(flow: FlowFile): Set<string> {
 export function successLabel(success: FlowExpect): string {
   if (success.signal !== undefined) return success.signal;
   if (success.net !== undefined) return success.net.urlContains ?? success.net.method ?? 'net';
+  if (success.state !== undefined) return `state:${success.state.path}`;
   return success.element?.testid ?? success.element?.name ?? success.element?.role ?? 'success';
 }
 
@@ -54,6 +55,14 @@ export function successToPredicate(
     if (success.net.urlContains !== undefined) net.urlContains = success.net.urlContains;
     if (success.net.status !== undefined) net.status = success.net.status;
     parts.push(net);
+  }
+
+  const state = success.state;
+  if (state !== undefined) {
+    const part: Extract<Predicate, { kind: 'state' }> = { kind: 'state', path: state.path };
+    if (state.store !== undefined) part.store = state.store;
+    if (state.equals !== undefined) part.equals = state.equals;
+    parts.push(part);
   }
 
   const element = success.element;

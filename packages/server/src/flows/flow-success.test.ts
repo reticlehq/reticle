@@ -47,6 +47,22 @@ describe('successToPredicate', () => {
     const p = successToPredicate({ signal: 's', net: { urlContains: '/api' } }, NONE);
     expect(p?.kind).toBe('allOf');
   });
+
+  it('compiles a state-truth success end-condition', () => {
+    expect(
+      successToPredicate(
+        { state: { store: 'app', path: 'deployments.0.status', equals: 'live' } },
+        NONE,
+      ),
+    ).toEqual({ kind: 'state', store: 'app', path: 'deployments.0.status', equals: 'live' });
+  });
+
+  it('compiles a presence-only state success (no equals → assert the path resolves)', () => {
+    expect(successToPredicate({ state: { path: 'cart.items' } }, NONE)).toEqual({
+      kind: 'state',
+      path: 'cart.items',
+    });
+  });
 });
 
 describe('assertSuccess — green only when the consequence holds', () => {

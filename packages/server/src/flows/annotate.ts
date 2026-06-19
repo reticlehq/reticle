@@ -40,9 +40,16 @@ export function compileAnnotation(a: Annotation, stepCount: number): AnnotateOut
         patch: { dynamicAdd: a.testid },
       };
     case AnnotationKind.SUCCESS_STATE: {
-      // signal XOR testid; both present prefers signal (documented). Neither → MISSING_FIELD.
+      // Precedence: signal > state > testid (a consequence end-condition beats a presence check).
+      // None of the three → MISSING_FIELD.
       if (a.signal !== undefined) {
         return flowSuccess(a, { signal: a.signal });
+      }
+      if (a.statePath !== undefined) {
+        const state: FlowExpect['state'] = { path: a.statePath };
+        if (a.store !== undefined) state.store = a.store;
+        if (a.equals !== undefined) state.equals = a.equals;
+        return flowSuccess(a, { state });
       }
       if (a.testid !== undefined) {
         return flowSuccess(a, { element: { testid: a.testid } });
@@ -95,6 +102,11 @@ export function describeCompiled(a: Annotation): string {
     case AnnotationKind.SUCCESS_STATE:
       if (a.signal !== undefined) {
         return `${COMPILED_PREDICATE_PREFIX} succeed when signal ${a.signal}`;
+      }
+      if (a.statePath !== undefined) {
+        return `${COMPILED_PREDICATE_PREFIX} succeed when state ${a.statePath}${
+          a.equals !== undefined ? ` == ${JSON.stringify(a.equals)}` : ''
+        }`;
       }
       return `${COMPILED_PREDICATE_PREFIX} succeed when ${a.testid ?? ''} visible`;
     case AnnotationKind.INTENT:

@@ -167,7 +167,11 @@ _checked_ re-run, not a blind macro:
 - `assert-signal` / `assert-visible` → a step `expect` predicate (the invariant).
 - `mark-dynamic` → a `flow.dynamic[]` entry — replay asserts the region's _presence_ but **not
   its words** (the LLM-output case: assert `caption:generated`, ignore the caption text).
-- `success-state` → `flow.success` (the golden end condition).
+- `success-state` → `flow.success` (the golden end condition). Pass `signal`/`testid`, or
+  `statePath` (+ `store`, `equals`) to make the golden condition a **store-truth** assertion — the
+  app's own source of truth, which no DOM read can reach (e.g. `statePath: "deployments.0.status",
+equals: "live"` fails the flow if a deploy only _looks_ shipped on screen). State assertions are
+  graded as consequences, so they satisfy the business-outcome oracle.
 
 ## Flows are your test suite
 

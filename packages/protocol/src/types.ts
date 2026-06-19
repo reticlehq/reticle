@@ -197,6 +197,19 @@ export const FlowExpectSchema = z.object({
       name: z.string().optional(),
     })
     .optional(),
+  /**
+   * Assert a registered store's value — the source of truth no DOM/network read can reach. Compiles
+   * to the predicate engine's `state` predicate. Additive/optional — a flow without it still parses
+   * and the on-disk version stays FLOW_FILE_VERSION 1. `equals` accepts a literal, omitted = presence,
+   * or a `{ $gte | $contains | $length }` operator pattern.
+   */
+  state: z
+    .object({
+      store: z.string().optional(),
+      path: z.string(),
+      equals: z.unknown().optional(),
+    })
+    .optional(),
 });
 export type FlowExpect = z.infer<typeof FlowExpectSchema>;
 
@@ -452,6 +465,11 @@ export const AnnotationSchema = z.discriminatedUnion('kind', [
     kind: z.literal(AnnotationKind.SUCCESS_STATE),
     signal: z.string().min(1).optional(),
     testid: z.string().min(1).optional(),
+    // A store-truth golden end-condition: the flow succeeds when this store path holds (e.g. the
+    // created deployment actually reached status 'live' in the store, not just on screen).
+    statePath: z.string().min(1).optional(),
+    store: z.string().min(1).optional(),
+    equals: z.unknown().optional(),
   }),
   z.object({
     kind: z.literal(AnnotationKind.INTENT),

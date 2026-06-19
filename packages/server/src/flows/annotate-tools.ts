@@ -28,7 +28,8 @@ export const ANNOTATE_TOOLS: ToolDef[] = [
       'assert-signal { name, dataMatches? } → the last step asserts that signal; assert-visible ' +
       '{ testid } → the last step asserts that element is present; mark-dynamic { testid } → the ' +
       "flow records that region as LLM-dynamic (replay won't assert its content); success-state " +
-      '{ signal | testid } → the flow golden end-condition. Folded onto disk by iris_flow_save. ' +
+      '{ signal | statePath(+store,+equals) | testid } → the flow golden end-condition (statePath ' +
+      'asserts a registered store value — the source of truth no DOM read can reach). Folded onto disk by iris_flow_save. ' +
       'Returns { ok:true, target:step|flow, compiled } (e.g. "will assert signal diff:shown") or ' +
       '{ ok:false, code } (annotate_no_recording | annotate_no_step | annotate_unknown_kind | ' +
       'annotate_missing_field). FIRST CUT: structured only — a free natural-language string is ' +
@@ -54,6 +55,17 @@ export const ANNOTATE_TOOLS: ToolDef[] = [
           'data-testid value for assert-visible / mark-dynamic / success-state annotations.',
         ),
       signal: z.string().optional().describe('Signal name for success-state annotations.'),
+      statePath: z
+        .string()
+        .optional()
+        .describe(
+          "Store dot-path for a success-state store-truth end-condition (e.g. 'deployments.0.status'). With `store` and optional `equals` — asserts the app's source of truth, not just the DOM.",
+        ),
+      store: z.string().optional().describe('Store name for a statePath success-state annotation.'),
+      equals: z
+        .unknown()
+        .optional()
+        .describe('Expected value for statePath: a literal, or a { $gte | $contains | $length }.'),
       dataMatches: z
         .record(z.unknown())
         .optional()

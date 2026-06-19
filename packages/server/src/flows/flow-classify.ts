@@ -59,15 +59,21 @@ const PRESENCE_ONLY_WARNING =
 const INTENT_WITHOUT_OUTCOME_WARNING =
   'This flow declares a business intent but asserts no observable outcome (signal/network) — it claims to verify a goal it cannot actually check. Add a success-state consequence so the flow fails when the goal stops being met.';
 
-/** signal or net present → the expect verifies a consequence a wrong element cannot fake. */
+/** signal, net, or state present → the expect verifies a consequence a wrong element cannot fake. */
 function expectIsConsequence(e: FlowExpect | undefined): boolean {
-  return e !== undefined && (e.signal !== undefined || e.net !== undefined);
+  return (
+    e !== undefined && (e.signal !== undefined || e.net !== undefined || e.state !== undefined)
+  );
 }
 
-/** element-only (no signal/net) → presence check, weak. */
+/** element-only (no signal/net/state) → presence check, weak. */
 function expectIsWeak(e: FlowExpect | undefined): boolean {
   return (
-    e !== undefined && e.element !== undefined && e.signal === undefined && e.net === undefined
+    e !== undefined &&
+    e.element !== undefined &&
+    e.signal === undefined &&
+    e.net === undefined &&
+    e.state === undefined
   );
 }
 

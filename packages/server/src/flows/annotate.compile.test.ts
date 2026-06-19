@@ -79,7 +79,36 @@ describe('compileAnnotation pure compiler', () => {
     expect(out.patch?.dynamicAdd).toBe('caption-text');
   });
 
-  it('success-state with neither signal nor testid is MISSING_FIELD', () => {
+  it('success-state with a statePath sets flow.success.state (store-truth end-condition)', () => {
+    const a: Annotation = {
+      kind: AnnotationKind.SUCCESS_STATE,
+      store: 'app',
+      statePath: 'deployments.0.status',
+      equals: 'live',
+    };
+    const out = compileAnnotation(a, 4);
+    expect(out.patch?.success?.state).toEqual({
+      store: 'app',
+      path: 'deployments.0.status',
+      equals: 'live',
+    });
+    expect(describeCompiled(a)).toContain('state deployments.0.status');
+  });
+
+  it('success-state precedence: signal beats statePath beats testid', () => {
+    const a: Annotation = {
+      kind: AnnotationKind.SUCCESS_STATE,
+      signal: 'diff:shown',
+      statePath: 'x',
+      testid: 'd',
+    };
+    expect(compileAnnotation(a, 4).patch?.success?.signal).toBe('diff:shown');
+    const b: Annotation = { kind: AnnotationKind.SUCCESS_STATE, statePath: 'x', testid: 'd' };
+    expect(compileAnnotation(b, 4).patch?.success?.state?.path).toBe('x');
+    expect(compileAnnotation(b, 4).patch?.success?.element).toBeUndefined();
+  });
+
+  it('success-state with neither signal nor statePath nor testid is MISSING_FIELD', () => {
     const a: Annotation = { kind: AnnotationKind.SUCCESS_STATE };
     const out = compileAnnotation(a, 4);
     expect(out.result.ok).toBe(false);
