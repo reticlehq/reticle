@@ -29,6 +29,18 @@ const REGRESSIONS = {
       replaceOnce(F.overview, '{kpis.map((k) => {', '{kpis.slice(0, -1).map((k) => {');
     },
   },
+  'signal-contract-violation': {
+    files: [F.store],
+    apply() {
+      // Drop the NAV_CHANGED domain signal: the view still switches (DOM correct), but the
+      // event contract is silently broken — invisible to DOM/network/console tools.
+      replaceOnce(
+        F.store,
+        '    emit(Sig.NAV_CHANGED, { view });',
+        '    /* NAV_CHANGED signal dropped (regression) — view still switches */',
+      );
+    },
+  },
   'route-transition-break': {
     files: [F.store],
     apply() {

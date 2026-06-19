@@ -49,6 +49,32 @@ This is why "100×" is the wrong frame for the head-to-head (a token ratio on sh
 right frame for these three rows: on app-state, signal-contract, and consequence regressions the
 external tools score **0 by construction** — Iris's advantage there is categorical, not incremental.
 
+## Live demonstration — domain-signal contract (measured)
+
+The "domain signals" row is not just asserted; it is demonstrated by a runnable harness
+(`harness/tier1-signal.mjs`, regression `signal-contract-violation`). The scenario: clicking
+"Compose" must emit the `nav:changed` signal AND switch the view. The regression drops the
+signal emit but leaves the view switch intact — a real "analytics/event silently stopped firing"
+bug with **no DOM/network/console symptom**.
+
+Measured result (Iris, on the instrumented demo):
+
+| Run                        | `nav:changed` fired | Compose view rendered |
+| -------------------------- | ------------------- | --------------------- |
+| baseline (contract intact) | **yes**             | yes                   |
+| regression (emit dropped)  | **no**              | yes                   |
+
+- **Iris: DETECTED** — the signal is present in baseline and absent after the regression
+  (`iris_observe { filters:['signal'] }`).
+- **DOM/a11y tools: BLIND** — the Compose view renders identically in both runs, so there is
+  nothing in the DOM/network/console for them to catch.
+- **Playwright MCP / Chrome DevTools MCP: N/A** — no app-signal observation capability.
+
+This is recorded here, deliberately **outside** the head-to-head accuracy numbers (`PROGRESS.md`):
+it is a capability the competitors cannot attempt, so scoring it against them would be rigging.
+It is the concrete proof of the last three rows above — the regressions where Iris is not "X%
+better" but the _only_ tool that can verify the outcome at all.
+
 ## Honesty notes
 
 - This matrix reflects tool **surfaces**, not a run. The state/signal rows are demonstrated by Iris's
