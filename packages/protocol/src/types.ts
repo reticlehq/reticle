@@ -196,6 +196,18 @@ export const FlowExpectSchema = z.object({
       count: z.number().int().nonnegative().optional(),
     })
     .optional(),
+  /**
+   * Console golden end-condition: assert the action logged (or, with absent:true, did NOT log) a
+   * console message at `level` (default 'error'). `absent:true` is the common case — "the action
+   * completed with a clean console" — catching the regression where an action throws a caught error
+   * / logs an uncaught rejection while the UI still renders fine (a presence check passes it).
+   */
+  console: z
+    .object({
+      level: z.string().optional(),
+      absent: z.boolean().optional(),
+    })
+    .optional(),
   element: z
     .object({
       testid: z.string().optional(),
@@ -490,6 +502,15 @@ export const AnnotationSchema = z.discriminatedUnion('kind', [
         urlContains: z.string().min(1).optional(),
         status: z.number().optional(),
         count: z.number().int().nonnegative().optional(),
+      })
+      .optional(),
+    // A console golden end-condition: with absent:true, "the action completed with a clean console"
+    // (no message at `level`, default 'error') — catches an action that logs a caught error / rejection
+    // while the UI still renders fine.
+    console: z
+      .object({
+        level: z.string().min(1).optional(),
+        absent: z.boolean().optional(),
       })
       .optional(),
   }),

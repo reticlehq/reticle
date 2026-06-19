@@ -47,8 +47,8 @@ export function compileAnnotation(a: Annotation, stepCount: number): AnnotateOut
         patch: { dynamicAdd: a.testid },
       };
     case AnnotationKind.SUCCESS_STATE: {
-      // Precedence: signal > state > net > testid (a consequence end-condition beats a presence
-      // check). None of them → MISSING_FIELD.
+      // Precedence: signal > state > net > console > testid (a consequence end-condition beats a
+      // presence check). None of them → MISSING_FIELD.
       if (a.signal !== undefined) {
         return flowSuccess(a, { signal: a.signal });
       }
@@ -60,6 +60,9 @@ export function compileAnnotation(a: Annotation, stepCount: number): AnnotateOut
       }
       if (a.net !== undefined) {
         return flowSuccess(a, { net: a.net });
+      }
+      if (a.console !== undefined) {
+        return flowSuccess(a, { console: a.console });
       }
       if (a.testid !== undefined) {
         return flowSuccess(a, { element: { testid: a.testid } });
@@ -127,6 +130,12 @@ export function describeCompiled(a: Annotation): string {
         return `${COMPILED_PREDICATE_PREFIX} succeed when ${
           a.net.count !== undefined ? `exactly ${String(a.net.count)} ` : ''
         }net ${target}`;
+      }
+      if (a.console !== undefined) {
+        const level = a.console.level ?? 'error';
+        return `${COMPILED_PREDICATE_PREFIX} succeed when ${
+          a.console.absent === true ? `no console.${level}` : `console.${level}`
+        }`;
       }
       return `${COMPILED_PREDICATE_PREFIX} succeed when ${a.testid ?? ''} visible`;
     case AnnotationKind.INTENT:

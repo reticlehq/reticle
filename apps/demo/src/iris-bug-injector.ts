@@ -31,6 +31,8 @@
  *   double-submit — the Compose action fires `POST /api/generate-script` TWICE. One result renders, so
  *                   the UI looks right and a presence assertion ("a POST fired") passes. Only a
  *                   `net.count:1` consequence catches the duplicate.
+ *   console-leak  — the Compose action logs a `console.error` while the UI still renders the result.
+ *                   A structural/visual check passes; only a clean-console consequence catches it.
  *
  * Tree-shaken out of production; never imported there.
  */
@@ -169,6 +171,32 @@ function installDoubleSubmit(): void {
   };
 }
 
+/**
+ * Console-leak — a regression that logs a `console.error` on an action while the UI still works. The
+ * Compose action renders its result fine, but a (simulated) caught error / unhandled rejection surfaces
+ * on the console — exactly the "it works but the log is screaming" regression a structural or visual
+ * check sails past. A clean-console success consequence (console { absent:true }) catches it. Fires
+ * AFTER the action's own handler (a capture-phase listener + a microtask) so the error lands in the
+ * window the success oracle reads.
+ */
+const CONSOLE_LEAK_TESTID = 'compose-generate';
+function installConsoleLeak(): void {
+  document.addEventListener(
+    'click',
+    (e) => {
+      const target = e.target;
+      if (target instanceof Element && target.closest(sel(CONSOLE_LEAK_TESTID)) !== null) {
+        setTimeout(() => {
+          console.error(
+            '[regression] generate(): unhandled rejection while formatting release note',
+          );
+        }, 0);
+      }
+    },
+    true,
+  );
+}
+
 /** Inject a transparent overlay covering the target so pointer hits land on the overlay, not it. */
 function installOcclusion(): void {
   const apply = (): void => {
@@ -215,4 +243,5 @@ export function installBugInjector(): void {
   if (bugs.has('status-stale')) installStatusDesync();
   if (bugs.has('render-storm')) installRenderStorm();
   if (bugs.has('double-submit')) installDoubleSubmit();
+  if (bugs.has('console-leak')) installConsoleLeak();
 }

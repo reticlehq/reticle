@@ -78,6 +78,16 @@ describe('compileAnnotation pure compiler', () => {
     expect(describeCompiled(a)).toContain('exactly 1 net /api/generate-script');
   });
 
+  it('success-state with a clean-console condition sets flow.success.console', () => {
+    const a: Annotation = {
+      kind: AnnotationKind.SUCCESS_STATE,
+      console: { level: 'error', absent: true },
+    };
+    const out = compileAnnotation(a, 4);
+    expect(out.patch?.success?.console).toEqual({ level: 'error', absent: true });
+    expect(describeCompiled(a)).toContain('no console.error');
+  });
+
   it('assert-state compiles to step.expect.state on the LAST step', () => {
     const a: Annotation = {
       kind: AnnotationKind.ASSERT_STATE,

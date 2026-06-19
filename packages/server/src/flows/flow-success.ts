@@ -30,6 +30,9 @@ export function dynamicTestids(flow: FlowFile): Set<string> {
 export function successLabel(success: FlowExpect): string {
   if (success.signal !== undefined) return success.signal;
   if (success.net !== undefined) return success.net.urlContains ?? success.net.method ?? 'net';
+  if (success.console !== undefined) {
+    return `console:${success.console.absent === true ? 'clean' : (success.console.level ?? 'error')}`;
+  }
   if (success.state !== undefined) return `state:${success.state.path}`;
   return success.element?.testid ?? success.element?.name ?? success.element?.role ?? 'success';
 }
@@ -63,6 +66,19 @@ export function successToPredicate(
       parts.push({ kind: 'settled' });
     }
     parts.push(net);
+  }
+
+  if (success.console !== undefined) {
+    const con: Extract<Predicate, { kind: 'console' }> = { kind: 'console' };
+    if (success.console.level !== undefined) con.level = success.console.level;
+    if (success.console.absent !== undefined) {
+      con.absent = success.console.absent;
+      // An `absent` assertion is post-settle, same as net.count: a wait-until-true waiter sees "no
+      // error yet" at the first poll and passes BEFORE the action's error fires. Gate on `settled` so
+      // the console is read only after the page quiets, by which point any error is in the buffer.
+      if (success.console.absent) parts.push({ kind: 'settled' });
+    }
+    parts.push(con);
   }
 
   const state = success.state;

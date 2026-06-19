@@ -30,9 +30,10 @@ export const ANNOTATE_TOOLS: ToolDef[] = [
       '{ statePath, store?, equals? } → the last step asserts a registered store value (the source ' +
       'of truth no DOM read can reach); mark-dynamic { testid } → the ' +
       "flow records that region as LLM-dynamic (replay won't assert its content); success-state " +
-      '{ signal | statePath(+store,+equals) | net(+count) | testid } → the flow golden end-condition (statePath ' +
-      'asserts a registered store value — the source of truth no DOM read can reach; net asserts a ' +
-      'request fired EXACTLY `count` times — catches double-submit). Folded onto disk by iris_flow_save. ' +
+      '{ signal | statePath(+store,+equals) | net(+count) | console(+absent) | testid } → the flow golden ' +
+      'end-condition (statePath asserts a registered store value — the source of truth no DOM read can ' +
+      'reach; net asserts a request fired EXACTLY `count` times — catches double-submit; console+absent ' +
+      'asserts a clean console — catches an action that logs an error). Folded onto disk by iris_flow_save. ' +
       'Returns { ok:true, target:step|flow, compiled } (e.g. "will assert signal diff:shown") or ' +
       '{ ok:false, code } (annotate_no_recording | annotate_no_step | annotate_unknown_kind | ' +
       'annotate_missing_field). FIRST CUT: structured only — a free natural-language string is ' +
@@ -86,6 +87,15 @@ export const ANNOTATE_TOOLS: ToolDef[] = [
         .optional()
         .describe(
           'Network golden end-condition for success-state: the flow succeeds only when EXACTLY `count` requests match { method?, urlContains?, status? } since the action (omit count = presence). Catches the double-submit / retry-storm regression a presence check passes.',
+        ),
+      console: z
+        .object({
+          level: z.string().optional(),
+          absent: z.boolean().optional(),
+        })
+        .optional()
+        .describe(
+          'Console golden end-condition for success-state: with absent:true the flow succeeds only when the action logged NO console message at `level` (default "error") — "completed with a clean console". Catches an action that logs a caught error/rejection while the UI still renders fine.',
         ),
       sessionId: z
         .string()

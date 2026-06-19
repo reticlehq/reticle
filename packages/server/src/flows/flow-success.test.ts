@@ -69,6 +69,22 @@ describe('successToPredicate', () => {
     });
   });
 
+  it('console.absent gates on `settled` (a clean-console assertion is post-settle)', () => {
+    // Same post-settle reasoning as net.count: an absent assertion is satisfied at the first poll
+    // (no error yet) before the action's error fires, so it must be read only after the page quiets.
+    expect(successToPredicate({ console: { level: 'error', absent: true } }, NONE)).toEqual({
+      kind: 'allOf',
+      predicates: [{ kind: 'settled' }, { kind: 'console', level: 'error', absent: true }],
+    });
+  });
+
+  it('a console PRESENCE assertion (no absent) stays a bare wait-until-true predicate', () => {
+    expect(successToPredicate({ console: { level: 'warn' } }, NONE)).toEqual({
+      kind: 'console',
+      level: 'warn',
+    });
+  });
+
   it('compiles a state-truth success end-condition', () => {
     expect(
       successToPredicate(
