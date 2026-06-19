@@ -19,7 +19,8 @@ const LAYER_C = [
   'bench/harness/replay-detect.mjs', // selector-removal detection (3/3)
   'bench/harness/replay-detect-consequence.mjs', // green-but-wrong detection (2/2)
   'bench/harness/replay-detect-state.mjs', // store-truth oracle catches a dead handler (state predicate)
-  'bench/harness/network-cardinality-bench.mjs', // net.count oracle catches a double-submit (presence passes)
+  'bench/harness/network-cardinality-bench.mjs', // net.count:1 oracle catches a double-submit (presence passes)
+  'bench/harness/forbidden-call-bench.mjs', // net.count:0 oracle catches a must-never-fire call
   'bench/harness/console-clean-bench.mjs', // clean-console oracle catches a silent console.error on an action
   'bench/harness/state-blast-radius-bench.mjs', // state invariant catches an action's unintended store side-effect
   'bench/harness/suite-rre.mjs', // suite-scale RRE: iris_flow_verify read-cost ~constant in K (compounding)

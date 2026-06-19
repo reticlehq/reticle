@@ -33,6 +33,9 @@
  *                   `net.count:1` consequence catches the duplicate.
  *   console-leak  — the Compose action logs a `console.error` while the UI still renders the result.
  *                   A structural/visual check passes; only a clean-console consequence catches it.
+ *   forbidden-call — the Compose action calls a FORBIDDEN endpoint (`/api/legacy-telemetry`) it must
+ *                   never hit (reverted migration / privacy beacon / N+1). Only a `net { count:0 }`
+ *                   consequence ("this must never fire") catches it; nothing visible changes.
  *   mutation-leak — the BLAST RADIUS: the Compose action also corrupts an UNRELATED store path (the top
  *                   deployment's status). Nothing visible changes; only a state invariant (the unrelated
  *                   path stayed put) catches the over-reaching side-effect — no DOM tool can.
@@ -175,6 +178,27 @@ function installDoubleSubmit(): void {
 }
 
 /**
+ * Forbidden-call — the NEGATIVE cardinality regression: an action calls an endpoint it must NOT. The
+ * classic shapes are a reverted API migration (something starts calling the legacy endpoint again), an
+ * analytics/telemetry beacon sneaking onto a privacy-sensitive screen, or an N+1 fan-out. Nothing
+ * visible changes — the request just goes out. The Compose action fires a forbidden POST to
+ * `/api/legacy-telemetry`; only a `net { urlContains, count: 0 }` consequence ("this must never fire")
+ * catches it. Synchronous on the click + through the Iris-patched fetch, so it's observed; fire-and-forget.
+ */
+const FORBIDDEN_CALL_PATH = '/api/legacy-telemetry';
+function installForbiddenCall(): void {
+  document.addEventListener(
+    'click',
+    (e) => {
+      const target = e.target;
+      if (!(target instanceof Element) || target.closest(sel('compose-generate')) === null) return;
+      void window.fetch(FORBIDDEN_CALL_PATH, { method: 'POST', body: '{}' }).catch(() => undefined);
+    },
+    true,
+  );
+}
+
+/**
  * Mutation-leak — the BLAST-RADIUS regression: an action over-reaches and mutates store state it has
  * no business touching. Here the Compose action (which should only set compose.result) ALSO, as an
  * unintended side-effect, corrupts the top deployment's status in the store. The Compose UI looks
@@ -277,4 +301,5 @@ export function installBugInjector(): void {
   if (bugs.has('double-submit')) installDoubleSubmit();
   if (bugs.has('console-leak')) installConsoleLeak();
   if (bugs.has('mutation-leak')) installMutationLeak();
+  if (bugs.has('forbidden-call')) installForbiddenCall();
 }
