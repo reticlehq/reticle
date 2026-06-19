@@ -5,6 +5,7 @@ import { TOOLS, type ToolDeps } from './tools/tools.js';
 import { filterTools, TOOL_PROFILE, type ToolProfile } from './tools/profiles.js';
 import { buildDynamicTools } from './tools/dynamic-tools.js';
 import { runTool } from './tools/invoke-tool.js';
+import { buildErrorPayload } from './tools/error-recovery.js';
 import { log } from './log.js';
 import { SERVER_VERSION } from './server-version.js';
 
@@ -110,9 +111,10 @@ export function createMcpServer(
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         log('tool_error', { tool: tool.name, error: message });
+        // Every error the agent hits should answer "what next?", not just "what broke".
         return {
           isError: true as const,
-          content: [{ type: 'text' as const, text: JSON.stringify({ error: message }) }],
+          content: [{ type: 'text' as const, text: JSON.stringify(buildErrorPayload(message)) }],
         };
       }
     });
