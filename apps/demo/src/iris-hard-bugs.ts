@@ -14,8 +14,19 @@
  *   occluded         — a transparent overlay sits on top (z-index): clicks hit the overlay, not it.
  *   color-regression — the primary action's color silently changed (a baseline-diff visual bug).
  *
+ * State/UI desync (the capability gap — needs the app's STATE as source of truth, unreachable from
+ * the DOM alone). Two distinct instances, so this is a CLASS of Iris-only catches, not one case:
+ *   state-desync  — a COUNT lies: the Deployments nav badge is forced to 0 while the store holds the
+ *                   real count. A number on screen looks plausible; only the store proves it wrong.
+ *   status-stale  — a STATUS lies: the top deployment row shows a different status than the store
+ *                   holds (a failed/in-flight deploy rendered as "live"). The pill is fully
+ *                   self-consistent — right color, right dot — so a screenshot/a11y tool sees a
+ *                   healthy deploy. Only reading the store reveals the deploy did not actually ship.
+ *
  * Tree-shaken out of production; never imported there.
  */
+
+import { useApp } from './store/store.js';
 
 const BUG_PARAM = 'iris-bug';
 const STYLE_ID = 'iris-hard-bug-style';
@@ -57,6 +68,47 @@ function installStateDesync(): void {
     if (badge !== null && badge.textContent !== DESYNC_FAKE_COUNT) {
       badge.textContent = DESYNC_FAKE_COUNT;
     }
+  };
+  apply();
+  new MutationObserver(apply).observe(document.documentElement, {
+    childList: true,
+    subtree: true,
+    characterData: true,
+  });
+}
+
+/**
+ * Status desync — a per-entity STATUS lies (the second, harder desync instance). The top deployment
+ * row (`deployments[0]`, always rendered) has its status pill forced to a value the store does NOT
+ * hold — preferring the reassuring "live" so it reads as "a failed/in-flight deploy looks healthy".
+ * The pill stays fully consistent (correct tone class + dot), so a screenshot or a11y-tree tool sees
+ * a green, shipped deploy. The store keeps the true status; only `iris_state` reveals the lie. The
+ * injector reads the store to pick a guaranteed-different display value, so the mismatch is
+ * deterministic regardless of the seed. Re-applied on every render so React can't restore the truth.
+ */
+const STATUS_DESYNC_ROW_ID = 4000;
+const STATUS_TONE: Record<string, string> = {
+  live: 'badge-success',
+  building: 'badge-info',
+  queued: 'badge-warning',
+  failed: 'badge-danger',
+};
+function installStatusDesync(): void {
+  const apply = (): void => {
+    const real = useApp.getState().deployments[0]?.status;
+    if (real === undefined) return;
+    const lie = real === 'live' ? 'failed' : 'live';
+    const tone = STATUS_TONE[lie];
+    const row = document.querySelector(`[data-testid="row-${String(STATUS_DESYNC_ROW_ID)}"]`);
+    if (row === null) return;
+    const badge = [...row.querySelectorAll('.badge')].find((b) => b.querySelector('.dot') !== null);
+    if (!(badge instanceof HTMLElement)) return;
+    const textNode = [...badge.childNodes].find(
+      (n) => n.nodeType === Node.TEXT_NODE && (n.textContent ?? '').trim().length > 0,
+    );
+    if (textNode !== undefined && textNode.textContent !== lie) textNode.textContent = lie;
+    const className = `badge ${tone ?? ''}`.trim();
+    if (badge.className !== className) badge.className = className;
   };
   apply();
   new MutationObserver(apply).observe(document.documentElement, {
@@ -109,4 +161,5 @@ export function installHardBugs(): void {
   installCss(bugs);
   if (bugs.has('occluded')) installOcclusion();
   if (bugs.has('state-desync')) installStateDesync();
+  if (bugs.has('status-stale')) installStatusDesync();
 }

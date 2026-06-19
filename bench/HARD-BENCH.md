@@ -36,25 +36,37 @@ element observation, whereas the competitor must (1) suspect the bug, (2) know w
 membership) that an agent is unlikely to write unprompted. Real, but an ergonomics/Layer-B argument,
 not a capability gap — and reported as such.
 
-## Batch 2 — state/UI desync (THE CAPABILITY GAP — Iris only)
+## Batch 2 — state/UI desync (THE CAPABILITY GAP — Iris only), now a CLASS of 2
 
-The bug a DOM tool fundamentally cannot catch: the Deployments nav badge is forced to a wrong count
-(`0`) while the store keeps the real one (`200`). The UI lies about the truth. Catching it needs a
-**source of truth** — the app's state — which the in-source tool reads and an outside-the-page tool
-cannot. Harness: `harness/hard-bench-state.mjs`; raw: `raw/hard-bench-state.json`.
+The bugs a DOM tool fundamentally cannot catch: the UI renders a plausible, self-consistent value
+that **contradicts the app's state**. Catching either needs a **source of truth** — the store — which
+the in-source tool reads and an outside-the-page tool cannot. Two distinct instances, so this is a
+class of Iris-only catches, not one case. Harness: `harness/hard-bench-state.mjs`; raw:
+`raw/hard-bench-state.json`.
 
-| tool                            | reads truth?                             | result                         | cost             |
-| ------------------------------- | ---------------------------------------- | ------------------------------ | ---------------- |
-| **Iris** (`iris_state`)         | **yes — store = 200**                    | **CAUGHT** (200 ≠ displayed 0) | 47 tok           |
-| Playwright (`browser_evaluate`) | no — searched window globals, found none | **missed** (truth=null)        | 295 tok + 168 JS |
-| DevTools (`evaluate_script`)    | no — searched window globals, found none | **missed** (truth=null)        | 21 tok + 168 JS  |
+- **`state-desync` (a COUNT lies)** — the Deployments nav badge is forced to `0` while the store keeps
+  the real count (`200`). A number on screen looks like a valid empty state.
+- **`status-stale` (a STATUS lies)** — the top deployment row renders status `live` (correct green
+  tone + dot, fully self-consistent) while the store holds `queued`. A screenshot/a11y tool sees a
+  healthy, shipped deploy; only the store reveals the deploy never shipped.
+
+| instance      | Iris (`iris_state` + read displayed)               | Playwright (`browser_evaluate`)          | DevTools (`evaluate_script`)            |
+| ------------- | -------------------------------------------------- | ---------------------------------------- | --------------------------------------- |
+| state-desync  | **CAUGHT** — store 200 ≠ shown 0, 47 tok           | **missed** — truth=null, 278 tok +152 JS | **missed** — truth=null, 21 tok +152 JS |
+| status-stale  | **CAUGHT** — store `queued` ≠ shown `live`, 67 tok | **missed** — truth=null, 325 tok +187 JS | **missed** — truth=null, 21 tok +187 JS |
+| **detection** | **2/2**                                            | **0/2**                                  | **0/2**                                 |
 
 **Honest verdict: this is a true capability gap, not ergonomics.** Both competitors genuinely tried
 to find a source of truth — their evaluate probes `window.store` / `window.useApp` /
 `__REDUX_DEVTOOLS_EXTENSION__` and any `getState()` — and found nothing, because the store is
-registered with Iris (`registerStore`), not exposed on a global. With no truth to compare against,
-the displayed `0` looks like a valid empty state; they **cannot** know the UI is wrong. Iris reads
-the registered store directly and flags the mismatch in one call, at a fraction of the cost.
+registered with Iris (`registerStore`), not exposed on a global. They read the displayed value
+correctly (`0`, `live`) but have **nothing to compare it against**, so a lying UI looks valid. Iris
+reads the registered store directly and flags each mismatch in one call, at a fraction of the cost.
+
+> Apparatus note (brutal-honest): the first `status-stale` run scored Iris a _miss_ — the harness read
+> `iris_inspect.name` (empty for a table row, which has no aggregated accessible name) instead of
+> `iris_inspect.text` (the visible text Iris already returns). The capability was present; the
+> measurement read the wrong field. Corrected, then re-run. No Iris code changed to make it pass.
 
 This is where Iris's in-source position is decisive: **batch 1 (visual/computed-style) is parity —
 any tool with an evaluate can read computed style; batch 2 (state/UI desync) is Iris-only — no amount
@@ -70,6 +82,9 @@ in app **state** (the store) is Iris-only. Stated up front so the data isn't ove
 - **theme-violation** — DONE and measured (now in the batch-1 table above): parity detection, but the
   competitor probe costs **259 JS tokens** vs Iris's native `offTheme` flag — the suite's largest
   ergonomic gap.
+- **status-stale** — DONE and measured (now in the batch-2 table above): a per-entity STATUS lies
+  while the row stays visually consistent. Iris-only (2/2 in the class); both competitors read the
+  displayed `live` but have no store truth to contradict it.
 - **double-submit / timing** — observable in the network panel by all three tools → expected parity.
 - **dropped-field** — Iris-only ONLY when the UI hides the corruption (i.e. it reduces to state/UI
   desync, already proven); if the wrong value is rendered, it's parity.
