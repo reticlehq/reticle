@@ -8,13 +8,13 @@ apps ship with.
 ## Run it
 
 ```bash
-node examples/generated-app/server.mjs            # everything works (BUG_MODE=none)
-BUG_MODE=mock-data   node examples/generated-app/server.mjs   # POST "succeeds" but nothing persists
-BUG_MODE=dead-delete node examples/generated-app/server.mjs   # DELETE returns 200 but never removes
-BUG_MODE=double-submit node examples/generated-app/server.mjs # the Add button fires POST twice
-BUG_MODE=no-validation node examples/generated-app/server.mjs # "abc" is accepted as an amount
-BUG_MODE=wrong-total node examples/generated-app/server.mjs   # the Total lies (UI ≠ data)
-BUG_MODE=console-error node examples/generated-app/server.mjs # an action logs console.error, UI renders
+node apps/generated-app/server.mjs            # everything works (BUG_MODE=none)
+BUG_MODE=mock-data   node apps/generated-app/server.mjs   # POST "succeeds" but nothing persists
+BUG_MODE=dead-delete node apps/generated-app/server.mjs   # DELETE returns 200 but never removes
+BUG_MODE=double-submit node apps/generated-app/server.mjs # the Add button fires POST twice
+BUG_MODE=no-validation node apps/generated-app/server.mjs # "abc" is accepted as an amount
+BUG_MODE=wrong-total node apps/generated-app/server.mjs   # the Total lies (UI ≠ data)
+BUG_MODE=console-error node apps/generated-app/server.mjs # an action logs console.error, UI renders
 ```
 
 Then open `http://localhost:4500`. Each `BUG_MODE` is exactly one silent-failure class — the kind that
@@ -42,7 +42,7 @@ build exposes for state-truth checks.
 
 ```bash
 # 1. start the buggy app
-BUG_MODE=mock-data node examples/generated-app/server.mjs
+BUG_MODE=mock-data node apps/generated-app/server.mjs
 
 # 2. point Iris at it (drives a headless browser to the preview) + open the verify endpoint
 iris serve --http --http-token dev --drive http://localhost:4500

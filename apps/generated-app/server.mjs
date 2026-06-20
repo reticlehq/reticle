@@ -5,8 +5,8 @@
  * process. Its whole purpose is to be VERIFIED: set BUG_MODE to seed exactly the silent-failure classes
  * vibe-coded apps ship with, then point Iris at it and watch the verdict catch them.
  *
- *   node examples/generated-app/server.mjs                 # everything works (BUG_MODE=none)
- *   BUG_MODE=mock-data node examples/generated-app/server.mjs    # POST "succeeds" but nothing persists
+ *   node apps/generated-app/server.mjs                 # everything works (BUG_MODE=none)
+ *   BUG_MODE=mock-data node apps/generated-app/server.mjs    # POST "succeeds" but nothing persists
  *   BUG_MODE=dead-delete ...     # DELETE returns 200 but never removes (state desync)
  *   BUG_MODE=double-submit ...   # the Add button fires POST twice
  *   BUG_MODE=no-validation ...   # "abc" is accepted as an amount (stores NaN)

@@ -2,7 +2,7 @@
 
 > What actually happens, step by step, when Iris checks an app an AI built — and exactly which
 > "looks-done-but-isn't" failures it catches that a screenshot or "does it look right?" pass misses.
-> Runnable counterpart: `examples/generated-app/` (a deliberately-buggy app). Proof in CI:
+> Runnable counterpart: `apps/generated-app/` (a deliberately-buggy app). Proof in CI:
 > `packages/server/src/runs/generated-app-bugs.test.ts`.
 
 ## The problem Iris is built for
@@ -53,7 +53,7 @@ network, the store/state, emitted signals, the console — then returns a determ
 | **UI-vs-store desync** — the Total lies                        | reads the store, contradicts the displayed value                           |
 | **Blast-radius** — an action corrupts _unrelated_ state        | `state { hold:true }` invariant (invisible to any DOM/pixel tool)          |
 
-The first seven are demonstrated live in `examples/generated-app/` (set `BUG_MODE=…`); all are proven
+The first seven are demonstrated live in `apps/generated-app/` (set `BUG_MODE=…`); all are proven
 against Iris's real verdict logic in CI.
 
 ## "Instrument once" — what a generated-app template adds
