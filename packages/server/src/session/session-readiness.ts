@@ -23,6 +23,17 @@ export interface WaitForReadyOptions {
 const DEFAULT_POLL_MS = 100;
 
 /**
+ * One-line orientation for a FRESH agent — the Iris loop, returned by iris_wait_ready (the first call)
+ * so an agent learns how to drive Iris without reading docs. Named so it is not a free string; kept
+ * terse on purpose (it rides the first response, where token budget is tightest).
+ */
+export const IRIS_LOOP_GUIDE =
+  'Iris loop — LOOK: iris_snapshot / iris_query / iris_inspect · ACT: iris_act (or iris_act_and_wait) · ' +
+  'OBSERVE: iris_observe / iris_wait_for / iris_network / iris_console · ASSERT: iris_assert over program ' +
+  'truth, not just the DOM · REGRESS: iris_record_start → iris_replay, or iris_flow_verify for the whole ' +
+  'suite. The human can flag bugs from the panel — drain them with iris_review and resolve each once fixed.';
+
+/**
  * Resolve `true` as soon as at least one session is connected, or `false` if the timeout elapses
  * first. Returns immediately when a session is already connected (the common, already-ready case —
  * so this never adds latency on the happy path, including the benchmark which always has a session).

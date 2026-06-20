@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { SessionState } from '@syrin/iris-protocol';
 import { IrisTool } from '../tools/tool-names.js';
 import { asNumber, asString } from '../tools/tools-helpers.js';
-import { waitForReady } from './session-readiness.js';
+import { waitForReady, IRIS_LOOP_GUIDE } from './session-readiness.js';
 import { recoveryFor } from '../tools/error-recovery.js';
 import type { ToolDef } from '../tools/tools.js';
 
@@ -135,6 +135,7 @@ export const LIVE_CONTROL_TOOLS: ToolDef[] = [
     outputSchema: {
       ready: z.boolean(),
       sessionCount: z.number(),
+      loop: z.string().optional(),
       recovery: z.string().optional(),
     },
     handler: async (deps, args) => {
@@ -146,7 +147,8 @@ export const LIVE_CONTROL_TOOLS: ToolDef[] = [
         now: deps.now,
         sleep: (ms) => new Promise((res) => setTimeout(res, ms)),
       });
-      if (ready) return { ready: true, sessionCount: deps.sessions.count() };
+      // The first response a fresh agent gets — carry the loop guide so it learns how to drive Iris.
+      if (ready) return { ready: true, sessionCount: deps.sessions.count(), loop: IRIS_LOOP_GUIDE };
       const recovery = recoveryFor('no browser session connected');
       return recovery !== undefined
         ? { ready: false, sessionCount: 0, recovery }

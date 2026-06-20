@@ -18,14 +18,17 @@ function depsWithCount(count: number): ToolDeps {
 interface ReadyShape {
   ready: boolean;
   sessionCount: number;
+  loop?: string;
   recovery?: string;
 }
 
 describe('iris_wait_ready tool', () => {
-  it('returns ready immediately when a session is already connected', async () => {
+  it('returns ready + the loop guide when a session is already connected', async () => {
     const res = (await waitReadyTool().handler(depsWithCount(1), {})) as ReadyShape;
     expect(res.ready).toBe(true);
     expect(res.sessionCount).toBe(1);
+    expect(res.loop).toMatch(/iris_act/);
+    expect(res.loop).toMatch(/iris_review/);
     expect('recovery' in res).toBe(false);
   });
 
