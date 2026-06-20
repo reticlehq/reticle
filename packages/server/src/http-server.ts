@@ -20,6 +20,13 @@ export interface SharedServer {
   attachMcp(factory: () => McpServer): void;
   /** Register the JSON the daemon returns from GET /status (live sessions + health for `iris status`). */
   attachStatus(provider: () => unknown): void;
+  /**
+   * Register a callback fired when the AGENT presence changes — true when the first MCP client (any
+   * agent: Codex/OpenCode/Claude/Hermes) connects, false when the last one disconnects. Agent-
+   * independent: the MCP connection lives exactly as long as the agent session, so its presence IS
+   * "is an agent attached?". The daemon uses this to tell the panel "agent live" vs "agent stopped".
+   */
+  attachAgentPresence(cb: (connected: boolean) => void): void;
   close(): Promise<void>;
 }
 
@@ -36,6 +43,7 @@ export function createSharedServer(): SharedServer {
   type McpFactory = () => McpServer;
   let mcpFactory: McpFactory | undefined;
   let statusProvider: (() => unknown) | undefined;
+  let agentPresence: ((connected: boolean) => void) | undefined;
   const transports = new Map<string, SSEServerTransport>();
 
   const httpServer = http.createServer((req, res) => {
@@ -61,11 +69,13 @@ export function createSharedServer(): SharedServer {
       const transport = new SSEServerTransport(MCP_MESSAGE_PATH, res);
       const sid = transport.sessionId;
       transports.set(sid, transport);
+      if (transports.size === 1) agentPresence?.(true); // first agent attached
       res.on('close', () => {
         transports.delete(sid);
         transport.close().catch(() => undefined);
         mcpServer.close().catch(() => undefined);
         log('mcp_client_disconnected', { sessionId: sid });
+        if (transports.size === 0) agentPresence?.(false); // last agent detached → it's the human's turn
       });
       mcpServer
         .connect(transport)
@@ -108,6 +118,10 @@ export function createSharedServer(): SharedServer {
     statusProvider = provider;
   }
 
+  function attachAgentPresence(cb: (connected: boolean) => void): void {
+    agentPresence = cb;
+  }
+
   function attachMcp(factory: McpFactory): void {
     mcpFactory = factory;
   }
@@ -125,5 +139,5 @@ export function createSharedServer(): SharedServer {
     });
   }
 
-  return { httpServer, attachMcp, attachStatus, close };
+  return { httpServer, attachMcp, attachStatus, attachAgentPresence, close };
 }

@@ -10,8 +10,11 @@ import { log } from '../log.js';
  * receives. A returning agent revives an auto-ended session (see Session.markAgentActivity).
  */
 
-/** Human-facing summary shown in the HUD when the MCP client (the agent) disconnects. */
-export const MCP_DISCONNECT_SUMMARY = 'Session ended — the Iris agent (Claude) disconnected.';
+/**
+ * Human-facing summary shown in the HUD when the MCP client (the agent) disconnects. Agent-neutral:
+ * Iris runs under any agent (Codex/OpenCode/Claude/Hermes), so the copy never names one.
+ */
+export const MCP_DISCONNECT_SUMMARY = 'Session ended — the agent disconnected.';
 
 /** Human-facing summary shown in the HUD when the reaper ends a session. */
 function idleEndSummary(idleMs: number): string {

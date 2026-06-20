@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { IRIS_DEFAULT_PORT, IrisDir } from '@syrin/iris-protocol';
+import { AGENT_STOPPED_NOTICE, IRIS_DEFAULT_PORT, IrisDir } from '@syrin/iris-protocol';
 import { createSharedServer } from './http-server.js';
 import { Bridge } from './bridge.js';
 import { BaselineStore } from './project/baselines.js';
@@ -207,9 +207,9 @@ export async function start(options: StartOptions = {}): Promise<RunningServer> 
       realInput !== undefined ? { ...deps, realInput } : deps,
       profile,
     );
-    // When Claude (the MCP client) disconnects cleanly, end every active session at once so the HUD
-    // doesn't linger. (If Claude instead KILLS this process, the WS dies and the browser self-ends
-    // via SESSION_LIFECYCLE.BRIDGE_LOST_MS — see transport.ts.)
+    // When the agent (the MCP client) disconnects cleanly, end every active session at once so the
+    // HUD doesn't linger. (If the agent instead KILLS this process, the WS dies and the browser
+    // self-ends via SESSION_LIFECYCLE.BRIDGE_LOST_MS — see transport.ts.)
     server.server.onclose = () => {
       endAllSessions(bridge.sessions, MCP_DISCONNECT_SUMMARY);
     };
@@ -245,6 +245,13 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
     sessionCount: bridge.sessions.count(),
     sessions: bridge.sessions.list(),
   }));
+  // Agent-independent presence: the daemon outlives any single agent, so when the LAST agent's MCP
+  // connection drops (it stopped, or is waiting on the human), end every session and push a clear
+  // "go to your terminal" notice to the panel — the human is on the browser and must not lose a typed
+  // prompt into a dead session. A returning agent's next tool call revives the auto-ended session.
+  shared.attachAgentPresence((connected) => {
+    if (!connected) endAllSessions(bridge.sessions, AGENT_STOPPED_NOTICE);
+  });
 
   const reaper = new SessionReaper(bridge.sessions);
   reaper.start();
