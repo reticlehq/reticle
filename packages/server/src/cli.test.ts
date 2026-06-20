@@ -161,6 +161,10 @@ describe('parseCliArgs', () => {
     expect(parseCliArgs(['status'], PORT)).toEqual({ kind: 'status', port: PORT });
   });
 
+  it('license returns license result', () => {
+    expect(parseCliArgs(['license'], PORT)).toEqual({ kind: 'license' });
+  });
+
   it('status --port overrides the port', () => {
     expect(parseCliArgs(['status', '--port', '5000'], PORT)).toEqual({
       kind: 'status',

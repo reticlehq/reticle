@@ -12,7 +12,8 @@ export const CLI_USAGE = `usage:
   iris status [--port N]
   iris open  [url] [--port N]                        (show the app: reuse the connected tab, else open one)
   iris drive <url> [--headed]                       (foreground mode — for debugging)
-  iris mcp   [--port N] [--drive <url>] [--headed]  (MCP stdio proxy — auto-starts daemon if needed)`;
+  iris mcp   [--port N] [--drive <url>] [--headed]  (MCP stdio proxy — auto-starts daemon if needed)
+  iris license                                      (show enterprise license status: active | eval | missing)`;
 
 const INIT_COMMAND = 'init';
 const SERVE_COMMAND = 'serve';
@@ -21,6 +22,7 @@ const STATUS_COMMAND = 'status';
 const OPEN_COMMAND = 'open';
 const DRIVE_COMMAND = 'drive';
 const MCP_COMMAND = 'mcp';
+const LICENSE_COMMAND = 'license';
 export const DAEMON_INNER_COMMAND = '_daemon';
 
 export const HEADED_FLAG = '--headed';
@@ -48,6 +50,7 @@ export type CliResult =
     }
   | { kind: 'stop'; port: number; quiet: boolean }
   | { kind: 'status'; port: number }
+  | { kind: 'license' }
   | { kind: 'open'; port: number; url?: string }
   | {
       kind: '_daemon';
@@ -226,6 +229,8 @@ export function parseCliArgs(argv: string[], defaultPort: number): CliResult {
       const port = parsePortFlag(rest, defaultPort);
       return { kind: 'status', port };
     }
+    case LICENSE_COMMAND:
+      return { kind: 'license' };
     case OPEN_COMMAND: {
       const port = parsePortFlag(rest, defaultPort);
       // The first non-flag arg is the url (optional — omitting reuses a connected tab).

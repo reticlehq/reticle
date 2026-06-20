@@ -16,6 +16,7 @@ import { waitForDaemon, startMcpProxy, probeDaemon } from './mcp-proxy.js';
 import { fetchStatus, summarizeStatus, decideOpen, openInBrowser } from './cli-launch.js';
 import { runInit } from './init/run.js';
 import { buildNodeIo } from './init/node-io.js';
+import { describeLicense } from './license/license.js';
 import type { StartOptions } from './index.js';
 
 import {
@@ -118,6 +119,11 @@ function handleStatus(port: number): void {
     }
     log('iris_status', { port, running: true, pid, ...summarizeStatus(payload) });
   });
+}
+
+/** `iris license` — show enterprise activation resolved from the environment (offline; nothing leaves). */
+function handleLicense(): void {
+  log('iris_license', { ...describeLicense(Date.now()) });
 }
 
 /** Ensure a daemon is reachable on `port` (probe the real port; spawn + wait only if nothing's there). */
@@ -292,6 +298,9 @@ function main(): void {
       break;
     case 'status':
       handleStatus(parsed.port);
+      break;
+    case 'license':
+      handleLicense();
       break;
     case 'open':
       handleOpen(parsed.port, parsed.url);

@@ -11,7 +11,9 @@ Everything under this directory is **Iris Enterprise** code, source-available un
 - Enterprise-only features live here and **nowhere else**. The free server must never `import` from
   `ee/`; the dependency only ever points `ee/ → core`, never the reverse, so the OSS build is always
   complete on its own.
-- Every enterprise feature entry point calls `assertEnterprise(feature)` before doing privileged work.
+- Every enterprise feature entry point calls `assertEnterprise(feature)` (imported from the open-core
+  gate at `../license/license.js`) before doing privileged work. The licensing _mechanism_ is open
+  (FSL) so it's inspectable and the OSS build is complete; only the _features_ here are gated.
 - The wire contract these features speak is still defined in `@syrin/iris-protocol` (Apache-2.0), so
   free and enterprise builds can never drift apart.
 

@@ -2,14 +2,17 @@ import { describe, expect, it } from 'vitest';
 import { generateKeyPairSync } from 'node:crypto';
 import {
   assertEnterprise,
+  assertEnterpriseFromEnv,
+  describeLicense,
   EnterpriseLicenseError,
+  LICENSE_KEY_ENV,
+  LICENSE_PUBLIC_KEY_ENV,
   LicenseStatus,
   signLicenseKey,
   verifyLicenseKey,
   type GateContext,
   type LicensePayload,
 } from './license.js';
-import { recordAuditEvent } from './audit-log.js';
 
 const NOW = 1_700_000_000_000;
 const FUTURE = NOW + 100_000;
@@ -80,12 +83,43 @@ describe('assertEnterprise', () => {
   });
 });
 
-describe('gated example feature', () => {
-  it('recordAuditEvent works in dev and is blocked in unlicensed production', () => {
-    const event = { actor: 'a', action: 'x', at: NOW };
-    expect(recordAuditEvent(event, { requireLicense: false, now: () => NOW })).toEqual(event);
+describe('env-resolved activation (describeLicense / assertEnterpriseFromEnv)', () => {
+  const PUBKEY_PEM = publicKey.export({ type: 'spki', format: 'pem' }).toString();
+  const withPubKey = (over: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv => ({
+    [LICENSE_PUBLIC_KEY_ENV]: PUBKEY_PEM,
+    ...over,
+  });
+
+  it('no issuer key configured → evaluation mode', () => {
+    expect(describeLicense(NOW, {}).status).toBe('eval');
+  });
+
+  it('valid key → active, with org/plan/expiry', () => {
+    const report = describeLicense(NOW, withPubKey({ [LICENSE_KEY_ENV]: key() }));
+    expect(report.status).toBe('active');
+    expect(report.org).toBe('acme');
+  });
+
+  it('issuer key but no license key → missing', () => {
+    expect(describeLicense(NOW, withPubKey()).status).toBe('missing');
+  });
+
+  it('expired and garbage keys are reported distinctly', () => {
+    expect(describeLicense(NOW, withPubKey({ [LICENSE_KEY_ENV]: key({ exp: PAST }) })).status).toBe(
+      'expired',
+    );
+    expect(describeLicense(NOW, withPubKey({ [LICENSE_KEY_ENV]: 'garbage' })).status).toBe(
+      'invalid',
+    );
+  });
+
+  it('assertEnterpriseFromEnv: free in eval, enforced once an issuer key is configured', () => {
+    expect(() => assertEnterpriseFromEnv('audit-log', NOW, {})).not.toThrow();
     expect(() =>
-      recordAuditEvent(event, { requireLicense: true, now: () => NOW, publicKey }),
-    ).toThrow(EnterpriseLicenseError);
+      assertEnterpriseFromEnv('audit-log', NOW, withPubKey({ [LICENSE_KEY_ENV]: key() })),
+    ).not.toThrow();
+    expect(() => assertEnterpriseFromEnv('audit-log', NOW, withPubKey())).toThrow(
+      EnterpriseLicenseError,
+    );
   });
 });

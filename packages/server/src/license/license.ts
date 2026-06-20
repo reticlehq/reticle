@@ -142,3 +142,89 @@ export function assertEnterprise(feature: string, ctx: GateContext): void {
     throw new EnterpriseLicenseError(feature, 'feature-not-licensed');
   }
 }
+
+/** Env names that carry the activation: the operator's key, and the issuer public key baked at release. */
+export const LICENSE_KEY_ENV = 'IRIS_LICENSE_KEY';
+export const LICENSE_PUBLIC_KEY_ENV = 'IRIS_LICENSE_PUBLIC_KEY';
+
+/** The human-facing state of enterprise activation on this machine (what `iris license status` shows). */
+export interface LicenseReport {
+  status: 'active' | 'missing' | 'invalid' | 'expired' | 'eval';
+  org?: string;
+  plan?: string;
+  expiresAt?: number;
+  features?: string[];
+  detail: string;
+}
+
+function loadPublicKey(pem: string | undefined): KeyObject | undefined {
+  if (pem === undefined || pem.length === 0) return undefined;
+  try {
+    return createPublicKey(pem);
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Resolve activation entirely from the environment — the install mechanism: the release bakes the
+ * issuer public key, the operator sets IRIS_LICENSE_KEY. No public key configured ⇒ evaluation mode
+ * (enterprise features run free, dev/test only). Offline, no phone-home.
+ */
+export function describeLicense(now: number, env: NodeJS.ProcessEnv = process.env): LicenseReport {
+  const pem = env[LICENSE_PUBLIC_KEY_ENV];
+  if (pem === undefined || pem.length === 0) {
+    return {
+      status: 'eval',
+      detail: 'evaluation mode — enterprise features run free (no issuer key configured)',
+    };
+  }
+  const publicKey = loadPublicKey(pem);
+  if (publicKey === undefined)
+    return { status: 'invalid', detail: `${LICENSE_PUBLIC_KEY_ENV} is not a valid public key` };
+
+  const check = verifyLicenseKey(env[LICENSE_KEY_ENV], publicKey, now);
+  if (check.status === LicenseStatus.VALID) {
+    const { org, plan, exp, features } = check.payload;
+    return {
+      status: 'active',
+      org,
+      plan,
+      expiresAt: exp,
+      ...(features !== undefined ? { features } : {}),
+      detail: `licensed to ${org} (${plan}), expires ${new Date(exp).toISOString()}`,
+    };
+  }
+  if (check.status === LicenseStatus.MISSING) {
+    return {
+      status: 'missing',
+      detail: `set ${LICENSE_KEY_ENV} to activate enterprise features in production`,
+    };
+  }
+  if (check.status === LicenseStatus.EXPIRED) {
+    return {
+      status: 'expired',
+      detail: 'license expired — renew to keep using enterprise features',
+    };
+  }
+  return { status: 'invalid', detail: `license key rejected (${check.status})` };
+}
+
+/**
+ * Gate an enterprise feature using env-resolved activation. Enforcement is ON only when the issuer
+ * public key is configured (i.e. a real release); without it (dev/repo) features run free in eval mode.
+ */
+export function assertEnterpriseFromEnv(
+  feature: string,
+  now: number,
+  env: NodeJS.ProcessEnv = process.env,
+): void {
+  const publicKey = loadPublicKey(env[LICENSE_PUBLIC_KEY_ENV]);
+  const key = env[LICENSE_KEY_ENV];
+  assertEnterprise(feature, {
+    requireLicense: publicKey !== undefined,
+    now: () => now,
+    ...(key !== undefined ? { key } : {}),
+    ...(publicKey !== undefined ? { publicKey } : {}),
+  });
+}
