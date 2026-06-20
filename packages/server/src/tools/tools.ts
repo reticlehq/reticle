@@ -10,6 +10,7 @@ import { DOMAIN_TOOLS } from '../domain/domain-tools.js';
 import { BROWSER_TOOLS } from './browser-tools.js';
 import { FLOW_TOOLS } from '../flows/flow-tools.js';
 import { PROJECT_TOOLS } from '../project/project-tools.js';
+import { RUN_TOOLS } from '../runs/run-tools.js';
 import { VISUAL_TOOLS } from '../visual/visual-tools.js';
 import { CRAWL_TOOLS } from '../crawl/crawl-tools.js';
 import { SCROLL_TOOLS } from '../input/scroll-tools.js';
@@ -271,6 +272,8 @@ export const TOOLS: ToolDef[] = [
   ...FLOW_TOOLS,
   // iris_project (read history + diff-vs-last) / iris_run_record. See project-tools.ts.
   ...PROJECT_TOOLS,
+  // iris_run_export — export the verification-run verdict artifact (.iris/runs/). See run-tools.ts.
+  ...RUN_TOOLS,
   // iris_screenshot / iris_visual_diff — opt-in, CDP-driven. See visual-tools.ts.
   ...VISUAL_TOOLS,
   ...NETWORK_MOCK_TOOLS,

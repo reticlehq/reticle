@@ -1,4 +1,5 @@
 import { join } from 'node:path';
+import type { Server } from 'node:http';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import {
   AGENT_STOPPED_NOTICE,
@@ -17,6 +18,10 @@ import { FlowStore } from './flows/flows.js';
 import { ProjectStore } from './project/project-store.js';
 import { AnnotationStore } from './flows/annotation-store.js';
 import { createNodeFileSystem } from './project/fs-port.js';
+import { IrisRunner } from './runs/iris-runner.js';
+import { createRunnerPort } from './runs/runner-port.js';
+import { RunStore } from './runs/run-store.js';
+import { startVerifyServer } from './runs/verify-server.js';
 import { createMcpServer } from './mcp.js';
 import { SessionReaper, endAllSessions, MCP_DISCONNECT_SUMMARY } from './session/session-reaper.js';
 import { resolveToolProfile } from './tools/profiles.js';
@@ -92,6 +97,26 @@ export {
 export type { IrisDirPaths, ReadContractResult } from './project/iris-dir.js';
 export { createNodeFileSystem } from './project/fs-port.js';
 export type { FileSystemPort } from './project/fs-port.js';
+// Replay/Verify API — the programmatic surface an OEM/CI pipeline drives (see docs/oem-integration.md).
+export { IrisRunner } from './runs/iris-runner.js';
+export type { RunnerPort, VerifyOptions } from './runs/iris-runner.js';
+export { createRunnerPort, defaultRunId } from './runs/runner-port.js';
+export { buildVerificationRun, computeVerdict } from './runs/build-verification-run.js';
+export type { VerificationRunInput } from './runs/build-verification-run.js';
+export { RunStore } from './runs/run-store.js';
+export type { ReadRunResult } from './runs/run-store.js';
+export { classifyChangedFiles, buildRisks, risksForPath } from './runs/risk-classify.js';
+export type { ChangedFileInput, RiskPolicy } from './runs/risk-classify.js';
+export { buildRepairPacket, buildRepairPackets } from './runs/repair-prompt.js';
+export { redactForProfile, REDACTED } from './runs/profile-redact.js';
+export { handleVerifyRequest, tokenOk, VERIFY_PATH } from './runs/verify-http.js';
+export type { VerifyHttpRequest, VerifyHttpResponse } from './runs/verify-http.js';
+export {
+  createVerifyRequestListener,
+  startVerifyServer,
+  TOKEN_HEADER,
+} from './runs/verify-server.js';
+export type { VerifyServerOptions } from './runs/verify-server.js';
 export { evaluatePredicate, waitForPredicate, PredicateSchema } from './events/predicate.js';
 export type { Predicate, EvalResult } from './events/predicate.js';
 export { buildReactionReport } from './events/reaction.js';
@@ -136,12 +161,23 @@ export interface StartOptions {
   now?: () => number;
   /** 'core' exposes the lean tool surface. Defaults to env IRIS_TOOL_PROFILE, else 'full'. */
   toolProfile?: string;
+  /** Start the OEM/CI verify HTTP endpoint alongside the daemon (`iris serve --http`). */
+  httpVerify?: boolean;
+  /** Port for the verify endpoint. Defaults to IRIS_VERIFY_DEFAULT_PORT. */
+  httpVerifyPort?: number;
+  /** Shared token for the verify endpoint. Defaults to env IRIS_VERIFY_TOKEN, else open (localhost). */
+  httpVerifyToken?: string;
 }
+
+/** Default localhost port for the verify HTTP endpoint (matches docs/oem-verify-harness.mjs). */
+export const IRIS_VERIFY_DEFAULT_PORT = 7331;
 
 export interface RunningServer {
   bridge: Bridge;
   /** the active real-input provider (launched/CDP), if any. */
   realInput?: RealInputProvider;
+  /** the bound port of the verify HTTP endpoint, when `httpVerify` is enabled. */
+  verifyPort?: number;
   close: () => Promise<void>;
 }
 
@@ -320,6 +356,21 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
   const effectiveDeps = realInput !== undefined ? { ...deps, realInput } : deps;
   shared.attachMcp(() => createMcpServer(effectiveDeps, profile));
 
+  // Optional OEM/CI verify endpoint: a host platform POSTs to /verify and gets an IrisVerificationRun,
+  // driving the same flow-replay machinery the agent uses — no MCP stdio, no human. Each verdict is
+  // persisted via RunStore. Localhost-bound + token-guarded. Off unless `iris serve --http`.
+  let verifyHttp: { server: Server; port: number } | undefined;
+  if (options.httpVerify === true) {
+    const runStore = new RunStore(fs, irisRoot);
+    const runner = new IrisRunner(createRunnerPort(effectiveDeps));
+    const token = options.httpVerifyToken ?? process.env['IRIS_VERIFY_TOKEN'] ?? '';
+    verifyHttp = await startVerifyServer(
+      { runner, token, persist: (run) => runStore.write(run) },
+      options.httpVerifyPort ?? IRIS_VERIFY_DEFAULT_PORT,
+    );
+    log('iris_verify_http_started', { port: verifyHttp.port, tokenRequired: token.length > 0 });
+  }
+
   // Replay-from-panel: the human clicks ▶ on a saved flow; run it with NO agent and narrate the
   // verdict into the same activity log they watch the agent in. The page animates via the normal
   // replay path, so they see it re-drive and the ✓/⚠/✗ land.
@@ -354,8 +405,11 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
   return {
     bridge,
     ...(realInput !== undefined ? { realInput } : {}),
+    ...(verifyHttp !== undefined ? { verifyPort: verifyHttp.port } : {}),
     close: async () => {
       reaper.stop();
+      const vh = verifyHttp;
+      if (vh !== undefined) await new Promise<void>((resolve) => vh.server.close(() => resolve()));
       await owned?.dispose();
       await bridge.close();
       await shared.close();

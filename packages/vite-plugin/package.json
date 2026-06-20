@@ -4,7 +4,7 @@
   "private": true,
   "description": "Vite plugin for Iris: dev-only source-map stamping plus auto-injected iris.connect(). apply:'serve' guarantees it never ships to production.",
   "type": "module",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "author": "Iris contributors",
   "repository": {
     "type": "git",

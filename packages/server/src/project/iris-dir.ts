@@ -6,6 +6,7 @@ import {
   FLOW_NAME_PATTERN,
   IrisDir,
   type CapabilitiesContract,
+  type ManifestGovernance,
 } from '@syrin/iris-protocol';
 import type { FileSystemPort } from './fs-port.js';
 
@@ -23,6 +24,8 @@ export interface IrisDirPaths {
   project: string;
   /** .../.iris/visual (PNG baselines + diffs) */
   visual: string;
+  /** .../.iris/runs (verification-run artifacts) */
+  runs: string;
 }
 
 export function irisDirPaths(root: string): IrisDirPaths {
@@ -33,7 +36,21 @@ export function irisDirPaths(root: string): IrisDirPaths {
     baselines: join(root, IrisDir.BASELINES_SUBDIR),
     project: join(root, IrisDir.PROJECT_FILE),
     visual: join(root, IrisDir.VISUAL_SUBDIR),
+    runs: join(root, IrisDir.RUNS_SUBDIR),
   };
+}
+
+/** The verification-run artifact path for `runId` (.iris/runs/<runId>.json). */
+export function runPath(root: string, runId: string): string {
+  return join(root, IrisDir.RUNS_SUBDIR, `${runId}.json`);
+}
+
+/**
+ * A runId must be a single safe path segment — same guard as flow names (rejects '../', '/', '\\',
+ * absolute, dotfiles). uuid-style ids (hyphens/underscores) pass. Guards every disk op before join.
+ */
+export function isValidRunId(runId: string): boolean {
+  return FLOW_NAME_PATTERN.test(runId) && !runId.includes('..');
 }
 
 /** The PNG baseline path for `name` (.iris/visual/<name>.png). */
@@ -88,9 +105,33 @@ function stableSerialize(capabilities: CapabilitiesContract, generatedAt: number
       flows: [...capabilities.flows]
         .map((f) => ({ name: f.name, steps: [...f.steps] }))
         .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0)),
+      ...(capabilities.governance !== undefined
+        ? { governance: serializeGovernance(capabilities.governance) }
+        : {}),
     },
   };
   return `${JSON.stringify(envelope, null, JSON_INDENT)}\n`;
+}
+
+/** Field-ordered, sorted rebuild of declared governance for byte-stable serialization. */
+function serializeGovernance(g: ManifestGovernance): ManifestGovernance {
+  return {
+    ...(g.owner !== undefined ? { owner: g.owner } : {}),
+    ...(g.safety !== undefined ? { safety: [...g.safety].sort() } : {}),
+    ...(g.scope !== undefined ? { scope: [...g.scope].sort() } : {}),
+    ...(g.redact !== undefined ? { redact: [...g.redact].sort() } : {}),
+    ...(g.risk !== undefined
+      ? {
+          risk: [...g.risk]
+            .map((z) => ({
+              surface: z.surface,
+              ...(z.paths !== undefined ? { paths: [...z.paths].sort() } : {}),
+              ...(z.note !== undefined ? { note: z.note } : {}),
+            }))
+            .sort((a, b) => (a.surface < b.surface ? -1 : a.surface > b.surface ? 1 : 0)),
+        }
+      : {}),
+  };
 }
 
 /** Write the contract to .iris/contract.json (auto-creating .iris/ first). */

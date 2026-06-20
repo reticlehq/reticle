@@ -54,6 +54,8 @@ export const IrisDir = {
   PROJECT_FILE: 'project.json',
   /** opt-in pixel baselines — .iris/visual/<name>.png + <name>.diff.png. */
   VISUAL_SUBDIR: 'visual',
+  /** verification-run artifacts — .iris/runs/<runId>.json (the OEM/CI-consumable verdict). */
+  RUNS_SUBDIR: 'runs',
 } as const;
 
 /**

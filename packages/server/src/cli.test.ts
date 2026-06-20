@@ -52,11 +52,21 @@ describe('summarizeStatus', () => {
 
 describe('parseCliArgs', () => {
   it('no args defaults to serve on the default port', () => {
-    expect(parseCliArgs([], PORT)).toEqual({ kind: 'serve', port: PORT, headless: true });
+    expect(parseCliArgs([], PORT)).toEqual({
+      kind: 'serve',
+      port: PORT,
+      headless: true,
+      http: false,
+    });
   });
 
   it('serve with no flags uses the default port', () => {
-    expect(parseCliArgs(['serve'], PORT)).toEqual({ kind: 'serve', port: PORT, headless: true });
+    expect(parseCliArgs(['serve'], PORT)).toEqual({
+      kind: 'serve',
+      port: PORT,
+      headless: true,
+      http: false,
+    });
   });
 
   it('serve --port overrides the port', () => {
@@ -64,6 +74,7 @@ describe('parseCliArgs', () => {
       kind: 'serve',
       port: 5000,
       headless: true,
+      http: false,
     });
   });
 
@@ -73,6 +84,7 @@ describe('parseCliArgs', () => {
       port: PORT,
       driveUrl: URL,
       headless: true,
+      http: false,
     });
   });
 
@@ -82,6 +94,7 @@ describe('parseCliArgs', () => {
       port: PORT,
       driveUrl: URL,
       headless: false,
+      http: false,
     });
   });
 
@@ -214,6 +227,7 @@ describe('parseCliArgs', () => {
       kind: '_daemon',
       port: 5000,
       headless: true,
+      http: false,
     });
   });
 
@@ -223,6 +237,20 @@ describe('parseCliArgs', () => {
       port: PORT,
       driveUrl: URL,
       headless: true,
+      http: false,
+    });
+  });
+
+  it('serve --http with port + token parses the verify-endpoint flags', () => {
+    expect(
+      parseCliArgs(['serve', '--http', '--http-port', '7331', '--http-token', 'sek'], PORT),
+    ).toEqual({
+      kind: 'serve',
+      port: PORT,
+      headless: true,
+      http: true,
+      httpPort: 7331,
+      httpToken: 'sek',
     });
   });
 

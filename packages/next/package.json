@@ -3,7 +3,7 @@
   "version": "0.8.0",
   "private": true,
   "description": "Next.js helper for Iris: keeps SWC, adds source-file mapping via a dev-only webpack pre-loader (data-iris-source).",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "author": "Iris contributors",
   "repository": {
     "type": "git",

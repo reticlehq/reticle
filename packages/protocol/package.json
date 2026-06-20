@@ -21,7 +21,7 @@
   "dependencies": {
     "zod": "^3.24.1"
   },
-  "license": "MIT",
+  "license": "Apache-2.0",
   "author": "Iris contributors",
   "repository": {
     "type": "git",

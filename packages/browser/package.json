@@ -26,7 +26,7 @@
     "@types/jsdom": "^28.0.3",
     "jsdom": "^29.1.1"
   },
-  "license": "MIT",
+  "license": "Apache-2.0",
   "author": "Iris contributors",
   "repository": {
     "type": "git",

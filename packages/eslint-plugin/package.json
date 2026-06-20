@@ -27,7 +27,7 @@
   "devDependencies": {
     "@typescript-eslint/rule-tester": "^8.20.0"
   },
-  "license": "MIT",
+  "license": "Apache-2.0",
   "author": "Iris contributors",
   "repository": {
     "type": "git",

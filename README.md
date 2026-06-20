@@ -11,12 +11,12 @@
 
 [![npm](https://img.shields.io/npm/v/@syrin/iris?color=8b7bff&labelColor=15131f&logo=npm)](https://www.npmjs.com/package/@syrin/iris)
 [![downloads](https://img.shields.io/npm/dm/@syrin/iris?color=5fd9f5&labelColor=15131f)](https://www.npmjs.com/package/@syrin/iris)
-[![license](https://img.shields.io/badge/license-MIT-46d6a0?labelColor=15131f)](LICENSE)
+[![license](https://img.shields.io/badge/license-Apache--2.0%20%2B%20FSL-46d6a0?labelColor=15131f)](LICENSE)
 [![types](https://img.shields.io/npm/types/@syrin/iris?color=ff9f87&labelColor=15131f)](https://www.npmjs.com/package/@syrin/iris)
 
 **Iris gives your coding agent a verdict, not just a view.** The moment it finishes a change, Iris checks — from **inside your real running app** — that the right things actually happened: the API call returned `200`, the modal opened, the route changed, the store updated, **no console error slipped in**. If something silently broke, it says **what**, **why**, and (on React) the exact **`file:line`** to fix.
 
-`TypeScript` · `Model Context Protocol` · `React-first` · **dev-only · localhost-only · no telemetry · MIT**
+`TypeScript` · `Model Context Protocol` · `React-first` · **dev-only · localhost-only · no telemetry · Apache-2.0 SDK**
 
 [⚡ Quickstart](#-quickstart--give-it-to-your-agent) · [▶︎ Watch the demo](https://syrin.ai/iris) · [📊 Benchmarks](#-honest-benchmarks) · [🤔 Iris vs Playwright?](#-when-to-use-iris--and-when-to-reach-for-playwright--devtools) · [📚 Docs](docs/getting-started.md)
 
@@ -279,5 +279,13 @@ Iris is **dev-only** and **localhost-only** by design — the SDK is tree-shaken
 
 ## License
 
-[MIT](LICENSE) © Syrin Labs
+Iris uses a per-package license model so it is safe to embed in your own app and fair to build a business on. Each package's `LICENSE` file is authoritative; see the root [LICENSE](LICENSE) for the full breakdown.
+
+- **Embedded in your app — Apache-2.0.** `@syrin/iris-browser`, `-protocol`, `-react`, `-babel-plugin`, `-next`, `-vite-plugin`, `-eslint-plugin` run inside / compile into your application. Use them anywhere, including in the apps you ship to your own customers. No copyleft; explicit patent grant.
+- **Server / CLI / MCP — FSL-1.1-ALv2.** `@syrin/iris-server` (and `@syrin/iris-test`, the `@syrin/iris` umbrella) are free for any use except offering Iris itself as a competing hosted service; each release converts to Apache-2.0 after two years.
+- **Enterprise features — the Iris Enterprise License.** Source-available under `packages/server/src/ee/`; free for development and evaluation, a subscription license key is required in production.
+
+OEM, embedding, or commercial licensing questions: **hey@syrin.ai**
+
+© 2026 Syrin Labs
 </content>

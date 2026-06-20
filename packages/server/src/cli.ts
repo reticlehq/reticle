@@ -20,7 +20,7 @@ import type { StartOptions } from './index.js';
 
 export const CLI_USAGE = `usage:
   iris init  [--yes] [--dry-run] [--port N] [--no-mcp] [--no-install]  (wire Iris into the project in this directory)
-  iris serve [--port N] [--drive <url>] [--headed]
+  iris serve [--port N] [--drive <url>] [--headed] [--http] [--http-port N] [--http-token T]
   iris stop  [--port N] [--quiet]
   iris status [--port N]
   iris open  [url] [--port N]                        (show the app: reuse the connected tab, else open one)
@@ -44,26 +44,56 @@ const DRY_RUN_FLAG = '--dry-run';
 const YES_FLAG = '--yes';
 const NO_MCP_FLAG = '--no-mcp';
 const NO_INSTALL_FLAG = '--no-install';
+const HTTP_FLAG = '--http';
+const HTTP_PORT_FLAG = '--http-port';
+const HTTP_TOKEN_FLAG = '--http-token';
 
 export type CliResult =
   | { kind: 'init'; port: number | undefined; mcp: boolean; dryRun: boolean; install: boolean }
-  | { kind: 'serve'; port: number; driveUrl?: string; headless: boolean }
+  | {
+      kind: 'serve';
+      port: number;
+      driveUrl?: string;
+      headless: boolean;
+      http: boolean;
+      httpPort?: number;
+      httpToken?: string;
+    }
   | { kind: 'stop'; port: number; quiet: boolean }
   | { kind: 'status'; port: number }
   | { kind: 'open'; port: number; url?: string }
-  | { kind: '_daemon'; port: number; driveUrl?: string; headless: boolean }
+  | {
+      kind: '_daemon';
+      port: number;
+      driveUrl?: string;
+      headless: boolean;
+      http: boolean;
+      httpPort?: number;
+      httpToken?: string;
+    }
   | { kind: 'drive'; port: number; driveUrl: string; headless: boolean }
   | { kind: 'mcp'; port: number; driveUrl?: string; headless: boolean }
   | { kind: 'error'; message: string };
 
 type ServeFlags =
-  | { kind: 'ok'; port: number; driveUrl?: string; headless: boolean }
+  | {
+      kind: 'ok';
+      port: number;
+      driveUrl?: string;
+      headless: boolean;
+      http: boolean;
+      httpPort?: number;
+      httpToken?: string;
+    }
   | { kind: 'error'; message: string };
 
 function parseServeFlags(args: string[], defaultPort: number): ServeFlags {
   let port = defaultPort;
   let driveUrl: string | undefined;
   let headless = true;
+  let http = false;
+  let httpPort: number | undefined;
+  let httpToken: string | undefined;
   let i = 0;
   while (i < args.length) {
     const arg = args[i];
@@ -80,12 +110,33 @@ function parseServeFlags(args: string[], defaultPort: number): ServeFlags {
       if (driveUrl === undefined) return { kind: 'error', message: CLI_USAGE };
     } else if (arg === HEADED_FLAG) {
       headless = false;
+    } else if (arg === HTTP_FLAG) {
+      http = true;
+    } else if (arg === HTTP_PORT_FLAG) {
+      i++;
+      const n = args[i];
+      if (n === undefined) return { kind: 'error', message: CLI_USAGE };
+      const parsed = parseInt(n, 10);
+      if (isNaN(parsed)) return { kind: 'error', message: CLI_USAGE };
+      httpPort = parsed;
+    } else if (arg === HTTP_TOKEN_FLAG) {
+      i++;
+      httpToken = args[i];
+      if (httpToken === undefined) return { kind: 'error', message: CLI_USAGE };
     } else {
       return { kind: 'error', message: CLI_USAGE };
     }
     i++;
   }
-  return { kind: 'ok', port, headless, ...(driveUrl !== undefined ? { driveUrl } : {}) };
+  return {
+    kind: 'ok',
+    port,
+    headless,
+    http,
+    ...(driveUrl !== undefined ? { driveUrl } : {}),
+    ...(httpPort !== undefined ? { httpPort } : {}),
+    ...(httpToken !== undefined ? { httpToken } : {}),
+  };
 }
 
 function parsePortFlag(args: string[], defaultPort: number): number {
@@ -156,7 +207,7 @@ function parseInitFlags(args: string[]): InitFlags {
 
 /** Pure CLI arg parser — exported for unit tests. argv = process.argv.slice(2). */
 export function parseCliArgs(argv: string[], defaultPort: number): CliResult {
-  if (argv.length === 0) return { kind: 'serve', port: defaultPort, headless: true };
+  if (argv.length === 0) return { kind: 'serve', port: defaultPort, headless: true, http: false };
 
   const [cmd, ...rest] = argv;
 
@@ -173,7 +224,10 @@ export function parseCliArgs(argv: string[], defaultPort: number): CliResult {
         kind: 'serve',
         port: r.port,
         headless: r.headless,
+        http: r.http,
         ...(r.driveUrl !== undefined ? { driveUrl: r.driveUrl } : {}),
+        ...(r.httpPort !== undefined ? { httpPort: r.httpPort } : {}),
+        ...(r.httpToken !== undefined ? { httpToken: r.httpToken } : {}),
       };
     }
     case STOP_COMMAND: {
@@ -203,7 +257,10 @@ export function parseCliArgs(argv: string[], defaultPort: number): CliResult {
         kind: '_daemon',
         port: r.port,
         headless: r.headless,
+        http: r.http,
         ...(r.driveUrl !== undefined ? { driveUrl: r.driveUrl } : {}),
+        ...(r.httpPort !== undefined ? { httpPort: r.httpPort } : {}),
+        ...(r.httpToken !== undefined ? { httpToken: r.httpToken } : {}),
       };
     }
     case MCP_COMMAND: {
@@ -235,7 +292,14 @@ function handleInit(parsed: {
   if (!result.ok) process.exit(1);
 }
 
-function handleServe(parsed: { port: number; driveUrl?: string; headless: boolean }): void {
+function handleServe(parsed: {
+  port: number;
+  driveUrl?: string;
+  headless: boolean;
+  http: boolean;
+  httpPort?: number;
+  httpToken?: string;
+}): void {
   if (isRunning(parsed.port)) {
     log('iris_daemon_already_running', { port: parsed.port });
     return;
@@ -251,8 +315,13 @@ function handleServe(parsed: { port: number; driveUrl?: string; headless: boolea
     daemonArgs.push(DRIVE_FLAG, parsed.driveUrl);
     if (!parsed.headless) daemonArgs.push(HEADED_FLAG);
   }
+  if (parsed.http) {
+    daemonArgs.push(HTTP_FLAG);
+    if (parsed.httpPort !== undefined) daemonArgs.push(HTTP_PORT_FLAG, String(parsed.httpPort));
+    if (parsed.httpToken !== undefined) daemonArgs.push(HTTP_TOKEN_FLAG, parsed.httpToken);
+  }
   spawnDaemon(process.execPath, scriptPath, daemonArgs, parsed.port);
-  log('iris_daemon_spawned', { port: parsed.port });
+  log('iris_daemon_spawned', { port: parsed.port, ...(parsed.http ? { http: true } : {}) });
 }
 
 function handleStop(port: number, quiet: boolean): void {
@@ -341,11 +410,25 @@ function handleOpen(requestedPort: number, url: string | undefined): void {
     });
 }
 
-function handleDaemonInner(parsed: { port: number; driveUrl?: string; headless: boolean }): void {
+function handleDaemonInner(parsed: {
+  port: number;
+  driveUrl?: string;
+  headless: boolean;
+  http: boolean;
+  httpPort?: number;
+  httpToken?: string;
+}): void {
   const options: StartOptions = {
     port: parsed.port,
     ...(parsed.driveUrl !== undefined
       ? { driveUrl: parsed.driveUrl, headless: parsed.headless }
+      : {}),
+    ...(parsed.http
+      ? {
+          httpVerify: true,
+          ...(parsed.httpPort !== undefined ? { httpVerifyPort: parsed.httpPort } : {}),
+          ...(parsed.httpToken !== undefined ? { httpVerifyToken: parsed.httpToken } : {}),
+        }
       : {}),
   };
 

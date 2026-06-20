@@ -78,5 +78,7 @@ export const IrisTool = {
   APPLY_UPDATE: 'iris_apply_update',
   /** Restore the previous server version and restart. */
   ROLLBACK: 'iris_rollback',
+  /** Export a verification-run artifact (.iris/runs/<id>.json) — the OEM/CI-consumable verdict. */
+  RUN_EXPORT: 'iris_run_export',
 } as const;
 export type IrisTool = (typeof IrisTool)[keyof typeof IrisTool];

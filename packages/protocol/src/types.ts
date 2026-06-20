@@ -14,6 +14,7 @@ import {
   RunKind,
   RunStatus,
 } from './constants.js';
+import { RiskSurface } from './verification-run.js';
 
 /** A query describing which element(s) to find, Testing-Library style. */
 export const ElementQuerySchema = z.object({
@@ -93,12 +94,41 @@ export const CapabilityFlowSchema = z.object({
   steps: z.array(z.string()),
 });
 
+/**
+ * A declared risk zone — the app naming a surface (auth/payment/db/…) and the paths it covers, so a
+ * host can gate on it. Shares RiskSurface with the verification-run verdict so a declaration and a
+ * detection speak the same vocabulary. ENFORCED LATER — parsed + surfaced now.
+ */
+export const RiskZoneSchema = z.object({
+  surface: z.nativeEnum(RiskSurface),
+  paths: z.array(z.string()).optional(),
+  note: z.string().optional(),
+});
+export type RiskZone = z.infer<typeof RiskZoneSchema>;
+
+/**
+ * Optional governance metadata an app may declare about its testable surface: who owns it, safety
+ * invariants, allowed scopes, store paths/selectors to redact, and declared risk zones. All optional
+ * and additive — a manifest without any of it stays valid (back-compat). Parsed + surfaced now;
+ * enforcement (policy gates, redaction-by-declaration) comes later.
+ */
+export const ManifestGovernanceSchema = z.object({
+  owner: z.string().optional(),
+  safety: z.array(z.string()).optional(),
+  scope: z.array(z.string()).optional(),
+  redact: z.array(z.string()).optional(),
+  risk: z.array(RiskZoneSchema).optional(),
+});
+export type ManifestGovernance = z.infer<typeof ManifestGovernanceSchema>;
+
 /** The app's testable surface — persisted form of the browser Capabilities. */
 export const CapabilitiesSchema = z.object({
   testids: z.array(z.string()),
   signals: z.array(z.string()),
   stores: z.array(z.string()),
   flows: z.array(CapabilityFlowSchema),
+  /** Optional declared governance (owner/safety/scope/redact/risk). Additive — back-compat safe. */
+  governance: ManifestGovernanceSchema.optional(),
 });
 export type CapabilitiesContract = z.infer<typeof CapabilitiesSchema>;
 

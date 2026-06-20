@@ -52,6 +52,7 @@ export const SESSION_EXEMPT_TOOLS: ReadonlySet<string> = new Set([
   IrisTool.FLOW_HEAL, // returns its own FlowHealResult contract
   IrisTool.PROJECT, // reads .iris/project.json
   IrisTool.RUN_RECORD, // writes .iris/project.json
+  IrisTool.RUN_EXPORT, // reads .iris/runs/<id>.json (verification-run artifact)
   IrisTool.END_SESSION, // live-control lifecycle
   IrisTool.YIELD, // live-control lifecycle (hand back to the human between turns)
   IrisTool.RESUME, // live-control lifecycle
