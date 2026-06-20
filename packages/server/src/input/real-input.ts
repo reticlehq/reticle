@@ -67,6 +67,12 @@ export interface RealInputProvider {
    * Optional: a provider with no owned browser simply omits it.
    */
   setMocks?(sessionUrl: string, rules: MockRule[]): Promise<boolean>;
+  /**
+   * Pin the correlated page's viewport to fixed pixel dimensions so a screenshot baseline is
+   * reproducible across machines (the missing piece of CI-stable visual regression, alongside masks
+   * and the frozen clock). Returns true when a page matched, false otherwise. Optional.
+   */
+  setViewport?(sessionUrl: string, size: { width: number; height: number }): Promise<boolean>;
 }
 
 /**
@@ -276,6 +282,14 @@ export class CdpRealInputProvider implements RealInputProvider {
     const page = await this.#pageFor(sessionUrl);
     if (page === undefined) return false;
     await installNetworkMocks(page, rules);
+    return true;
+  }
+
+  /** Pin the correlated page's viewport to fixed dimensions; false when no driven page matches. */
+  async setViewport(sessionUrl: string, size: { width: number; height: number }): Promise<boolean> {
+    const page = await this.#pageFor(sessionUrl);
+    if (page === undefined) return false;
+    await page.setViewportSize({ width: size.width, height: size.height });
     return true;
   }
 

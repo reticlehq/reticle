@@ -14,6 +14,7 @@ import { VISUAL_TOOLS } from '../visual/visual-tools.js';
 import { CRAWL_TOOLS } from '../crawl/crawl-tools.js';
 import { SCROLL_TOOLS } from '../input/scroll-tools.js';
 import { NETWORK_MOCK_TOOLS } from '../input/network-mock-tools.js';
+import { VIEWPORT_TOOLS } from '../input/viewport-tools.js';
 import { SESSION_TOOLS } from '../session/session-tools.js';
 import { ANNOTATE_TOOLS } from '../flows/annotate-tools.js';
 import { LIVE_CONTROL_TOOLS } from '../session/live-control-tools.js';
@@ -273,6 +274,7 @@ export const TOOLS: ToolDef[] = [
   // iris_screenshot / iris_visual_diff — opt-in, CDP-driven. See visual-tools.ts.
   ...VISUAL_TOOLS,
   ...NETWORK_MOCK_TOOLS,
+  ...VIEWPORT_TOOLS,
   // iris_crawl — autonomous click-everything + anomaly report. See crawl-tools.ts.
   ...CRAWL_TOOLS,
   // iris_scroll_to — reveal a virtualized off-screen row. See scroll-tools.ts.

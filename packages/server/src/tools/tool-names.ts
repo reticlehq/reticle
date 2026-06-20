@@ -46,6 +46,8 @@ export const IrisTool = {
   SCREENSHOT: 'iris_screenshot',
   /** stub/intercept network on the driven page (500, offline, delay) for error/edge-state testing. */
   NETWORK_MOCK: 'iris_network_mock',
+  /** pin the driven page's viewport to fixed pixels for reproducible visual baselines. */
+  VIEWPORT: 'iris_viewport',
   /** perceptual-diff the live page against a saved visual baseline. */
   VISUAL_DIFF: 'iris_visual_diff',
   /** autonomously click every reachable control + report anomalies (no script). */

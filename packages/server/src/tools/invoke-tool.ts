@@ -60,6 +60,7 @@ export const SESSION_EXEMPT_TOOLS: ReadonlySet<string> = new Set([
   IrisTool.SCREENSHOT, // own contract; provider-driven, not a live-DOM-health read
   IrisTool.VISUAL_DIFF, // own contract (matched/ratio/region)
   IrisTool.NETWORK_MOCK, // own contract (applied/count); provider-driven, not a live-DOM read
+  IrisTool.VIEWPORT, // own contract (applied/width/height); provider-driven, not a live-DOM read
   IrisTool.ANNOTATE, // annotates a recording's steps; pure disk-side metadata, no live DOM read
 ]);
 

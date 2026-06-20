@@ -27,6 +27,11 @@ agent work, points at what's wrong, and trusts the green. _In progress._
   ready response also carries a one-line **`loop` guide** (look → act → observe → assert → regress, plus
   the human-flag → `iris_review` loop), so a fresh agent learns how to drive Iris on its first call
   without reading docs. Pure, injected clock/sleep; off the benchmark path.
+- **Deterministic visual regression — `iris_viewport`** (`packages/server`). Pin the driven page to a
+  fixed viewport size (clamped to sane bounds) so a screenshot baseline is reproducible across machines
+  — the last missing piece of CI-stable visual diffing, alongside the already-shipped `iris_visual_diff`
+  `masks` (neutralize volatile regions) and a frozen clock (`iris_clock`). Drive-only, additive; off the
+  benchmark path. Provider-driven and tested via a fake page like `iris_network_mock`.
 - **CDP network mock / intercept — `iris_network_mock`** (`packages/server`). On a driven page
   (`iris drive`), stub a request deterministically: return a `500`, force offline (abort), or delay a
   response — so "verify the app handles a failed payment" is one declared rule, no backend changes. The
