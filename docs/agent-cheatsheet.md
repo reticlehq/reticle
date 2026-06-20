@@ -78,8 +78,10 @@ Sessions/perception/verify — what you'll use 90% of the time:
 (`iris_explore` lists controls; `iris_crawl` clicks them all and reports anomalies — **destructive**),
 reveal a virtualized off-screen row (`iris_scroll_to` — when `iris_query` finds nothing because a
 windowed list hasn't rendered it yet),
-visual-check (`iris_screenshot` / `iris_visual_diff`), or hand control to a human
-(`iris_end_session` / `iris_resume` / `iris_messages`).
+visual-check (`iris_screenshot` / `iris_visual_diff`, pinned with `iris_viewport` for reproducible
+baselines), test error/edge states by stubbing the network (`iris_network_mock` — 500 / offline /
+delay, driven mode), or work with a human (`iris_end_session` / `iris_resume` / `iris_messages`, and
+**`iris_review`** to drain + fix the bugs the human flagged from the panel).
 
 ## flows vs baselines vs project.json (the persistence layers)
 
@@ -102,6 +104,9 @@ Both need a **driven browser** (`iris drive <url>` / `IRIS_CDP_URL`); without on
 
 ## Start here
 
+0. Just ran `iris init` / started the dev server? `iris_wait_ready` — blocks until the app connects
+   (instant if it already has) so your first call doesn't lose the race; its reply also carries a
+   one-line `loop` guide.
 1. `iris_sessions` — find the connected tab (omit `sessionId` if there's only one).
 2. `iris_domain` — learn the app BEFORE testing: the saved flows, what each asserts, and the **gaps**
    (declared signals/testids that no flow verifies — untested intent). Tells you what to test and
