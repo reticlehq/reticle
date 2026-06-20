@@ -7,11 +7,13 @@
  */
 
 import {
+  asRunId,
   IrisVerificationRunSchema,
   RUN_RETENTION,
   RUN_RETENTION_SLACK,
   RunReadError,
   type IrisVerificationRun,
+  type RunId,
 } from '@syrin/iris-protocol';
 import type { FileSystemPort } from '../project/fs-port.js';
 import { irisDirPaths, isValidRunId, runPath } from '../project/iris-dir.js';
@@ -82,7 +84,7 @@ export class RunStore {
   }
 
   /** Never throws. Invalid id / missing → MISSING; bad JSON or failed schema → MALFORMED. */
-  async read(runId: string): Promise<ReadRunResult> {
+  async read(runId: RunId): Promise<ReadRunResult> {
     if (!isValidRunId(runId)) return { ok: false, reason: RunReadError.MISSING };
     const path = runPath(this.#root, runId);
     if (!(await this.#fs.exists(path))) return { ok: false, reason: RunReadError.MISSING };
@@ -110,7 +112,7 @@ export class RunStore {
   }
 
   /** List run ids on disk (filenames minus .json). Empty when the runs dir is absent. */
-  async list(): Promise<string[]> {
+  async list(): Promise<RunId[]> {
     const dir = irisDirPaths(this.#root).runs;
     if (!(await this.#fs.exists(dir))) return [];
     let entries: string[];
@@ -119,7 +121,9 @@ export class RunStore {
     } catch {
       return [];
     }
-    return entries.filter((e) => e.endsWith(JSON_EXT)).map((e) => e.slice(0, -JSON_EXT.length));
+    return entries
+      .filter((e) => e.endsWith(JSON_EXT))
+      .map((e) => asRunId(e.slice(0, -JSON_EXT.length)));
   }
 
   /** The most-recent run by createdAt (undefined when none). Powers iris_run_export's default. */

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdtemp, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { RunReadError, type IrisVerificationRun } from '@syrin/iris-protocol';
+import { asRunId, RunReadError, type IrisVerificationRun } from '@syrin/iris-protocol';
 import { buildVerificationRun, type VerificationRunInput } from './build-verification-run.js';
 import { RunStore } from './run-store.js';
 import { createNodeFileSystem, type FileSystemPort } from '../project/fs-port.js';
@@ -44,18 +44,18 @@ describe('RunStore — temp-dir filesystem, never touches the repo', () => {
   it('writes then reads a run round-trip', async () => {
     const run = make('run-1', 1000);
     await store.write(run);
-    const read = await store.read('run-1');
+    const read = await store.read(asRunId('run-1'));
     expect(read.ok).toBe(true);
     if (read.ok) expect(read.run.runId).toBe('run-1');
   });
 
   it('a missing run reads as MISSING (never throws)', async () => {
-    const read = await store.read('nope');
+    const read = await store.read(asRunId('nope'));
     expect(read).toEqual({ ok: false, reason: RunReadError.MISSING });
   });
 
   it('a path-traversal runId is refused as MISSING', async () => {
-    const read = await store.read('../escape');
+    const read = await store.read(asRunId('../escape'));
     expect(read).toEqual({ ok: false, reason: RunReadError.MISSING });
   });
 

@@ -19,11 +19,15 @@ import {
 } from '@syrin/iris-protocol';
 import { redactForProfile } from './profile-redact.js';
 
-/** Everything a caller supplies; schemaVersion/createdAt/verdict are filled/computed by the builder. */
+/**
+ * Everything a caller supplies; schemaVersion/createdAt/verdict are filled/computed by the builder.
+ * runId is a plain string here (string in) — the schema brands it to RunId on the way out (branded out),
+ * so construction sites stay ergonomic while consumers get the nominal type.
+ */
 export type VerificationRunInput = Omit<
   IrisVerificationRun,
-  'schemaVersion' | 'createdAt' | 'verdict'
->;
+  'schemaVersion' | 'createdAt' | 'verdict' | 'runId'
+> & { runId: string };
 
 /**
  * Compute the verdict deterministically from the run's flows, checks, and risks.

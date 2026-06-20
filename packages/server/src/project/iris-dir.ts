@@ -7,6 +7,7 @@ import {
   IrisDir,
   type CapabilitiesContract,
   type ManifestGovernance,
+  type RunId,
 } from '@syrin/iris-protocol';
 import type { FileSystemPort } from './fs-port.js';
 
@@ -49,7 +50,7 @@ export function runPath(root: string, runId: string): string {
  * A runId must be a single safe path segment — same guard as flow names (rejects '../', '/', '\\',
  * absolute, dotfiles). uuid-style ids (hyphens/underscores) pass. Guards every disk op before join.
  */
-export function isValidRunId(runId: string): boolean {
+export function isValidRunId(runId: string): runId is RunId {
   return FLOW_NAME_PATTERN.test(runId) && !runId.includes('..');
 }
 

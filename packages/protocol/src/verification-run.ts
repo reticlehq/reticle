@@ -16,6 +16,15 @@ import { z } from 'zod';
 export const RUN_FILE_VERSION = 1;
 
 /**
+ * A run's identity, branded so it can't be confused with another id (e.g. a flow name) that also feeds
+ * path helpers. The schema brands on parse; mint a fresh one with asRunId at a trusted/validated point.
+ */
+export const RunIdSchema = z.string().brand<'RunId'>();
+export type RunId = z.infer<typeof RunIdSchema>;
+/** Mint a RunId from a raw string — call only at a validated boundary (e.g. behind isValidRunId). */
+export const asRunId = (value: string): RunId => value as RunId;
+
+/**
  * Retention bound for .iris/runs/ so disk stays bounded over a long-running pipeline. Pruned
  * oldest-first only once the count exceeds RUN_RETENTION + RUN_RETENTION_SLACK, then back down to
  * RUN_RETENTION — so the O(n) prune is amortized (≈ once per SLACK writes), not paid on every write.
@@ -275,7 +284,7 @@ export type RunSignature = z.infer<typeof RunSignatureSchema>;
  */
 export const IrisVerificationRunSchema = z.object({
   schemaVersion: z.literal(RUN_FILE_VERSION),
-  runId: z.string(),
+  runId: RunIdSchema,
   createdAt: z.number(), // epoch ms — INJECTED, never computed in pure logic
   durationMs: z.number(),
   profile: z.nativeEnum(RunProfile),

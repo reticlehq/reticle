@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { ReplayStatus, VerdictStatus, type FlowReplayResult } from '@syrin/iris-protocol';
+import { asRunId, ReplayStatus, VerdictStatus, type FlowReplayResult } from '@syrin/iris-protocol';
 import { IrisRunner, type RunnerPort } from './iris-runner.js';
 import { handleVerifyRequest, tokenOk, VERIFY_PATH } from './verify-http.js';
 
@@ -15,7 +15,7 @@ function fakePort(): RunnerPort {
     listFlows: () => Promise.resolve(['login']),
     replayFlow: (name) => Promise.resolve(okReplay(name)),
     now: () => (t += 1),
-    newRunId: () => `run-${(n += 1)}`,
+    newRunId: () => asRunId(`run-${(n += 1)}`),
   };
 }
 

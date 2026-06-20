@@ -8,6 +8,7 @@ import {
   RunTrigger,
   VerdictStatus,
   type FlowReplayResult,
+  asRunId,
 } from '@syrin/iris-protocol';
 import { IrisRunner, type RunnerPort, type VerifyOptions } from './iris-runner.js';
 
@@ -45,7 +46,7 @@ function port(replays: Record<string, FlowReplayResult>, names: string[]): Runne
         : Promise.resolve(r);
     },
     now: () => (t += 1),
-    newRunId: () => `run-${(n += 1)}`,
+    newRunId: () => asRunId(`run-${(n += 1)}`),
   };
 }
 

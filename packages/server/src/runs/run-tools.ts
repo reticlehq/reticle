@@ -3,6 +3,7 @@ import { RunReadError, type IrisVerificationRun } from '@syrin/iris-protocol';
 import { IrisTool } from '../tools/tool-names.js';
 import { asString } from '../tools/tools-helpers.js';
 import { sessionIdShape } from '../tools/tool-kit.js';
+import { isValidRunId } from '../project/iris-dir.js';
 import type { ToolDef, ToolDeps } from '../tools/tools.js';
 import { RunStore } from './run-store.js';
 import { renderRunReport } from './render-report.js';
@@ -40,6 +41,9 @@ export const RUN_TOOLS: ToolDef[] = [
       const runId = asString(args['runId']);
       let run: IrisVerificationRun;
       if (runId !== undefined) {
+        if (!isValidRunId(runId)) {
+          return { error: `no run '${runId}' in .iris/runs/`, reason: RunReadError.MISSING };
+        }
         const read = await store.read(runId);
         if (!read.ok) {
           return {

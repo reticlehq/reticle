@@ -10,7 +10,7 @@
  * same artifact byte-for-byte.
  */
 
-import type { FlowReplayResult, IrisVerificationRun } from '@syrin/iris-protocol';
+import type { FlowReplayResult, IrisVerificationRun, RunId } from '@syrin/iris-protocol';
 import { buildVerificationRun, type VerificationRunInput } from './build-verification-run.js';
 import { mapReplayToFlowResult } from './replay-mapping.js';
 import { buildRepairPackets } from './repair-prompt.js';
@@ -29,8 +29,8 @@ export interface RunnerPort {
   replayFlow(name: string): Promise<FlowReplayResult>;
   /** Injected clock — the single time source (no Date.now in logic, rule 7). */
   now(): number;
-  /** Injected run-id generator (no Math.random in logic) — the live adapter supplies a uuid. */
-  newRunId(): string;
+  /** Injected run-id generator (no Math.random in logic) — the live adapter supplies a branded uuid. */
+  newRunId(): RunId;
 }
 
 /** Run metadata the caller supplies; flows + verdict are produced by verify(). */

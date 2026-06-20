@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import type { Server } from 'node:http';
-import { ReplayStatus, type FlowReplayResult } from '@syrin/iris-protocol';
+import { asRunId, ReplayStatus, type FlowReplayResult } from '@syrin/iris-protocol';
 import { IrisRunner, type RunnerPort } from './iris-runner.js';
 import { startVerifyServer, TOKEN_HEADER } from './verify-server.js';
 import { VERIFY_PATH } from './verify-http.js';
@@ -13,7 +13,7 @@ function fakePort(): RunnerPort {
     replayFlow: (name): Promise<FlowReplayResult> =>
       Promise.resolve({ name, status: ReplayStatus.OK, steps: [] }),
     now: () => (t += 1),
-    newRunId: () => `run-${(n += 1)}`,
+    newRunId: () => asRunId(`run-${(n += 1)}`),
   };
 }
 

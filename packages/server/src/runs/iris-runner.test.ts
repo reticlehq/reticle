@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  asRunId,
   ReplayStatus,
   RiskSurface,
   RunAgentKind,
@@ -38,7 +39,7 @@ function fakePort(replays: Record<string, FlowReplayResult>, names: string[]): R
         : Promise.resolve(r);
     },
     now: () => (t += 1),
-    newRunId: () => `run-${(n += 1)}`,
+    newRunId: () => asRunId(`run-${(n += 1)}`),
   };
 }
 
