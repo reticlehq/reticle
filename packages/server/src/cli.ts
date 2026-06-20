@@ -1,13 +1,19 @@
 #!/usr/bin/env node
-import * as http from 'node:http';
 import { pathToFileURL } from 'node:url';
 import { realpathSync } from 'node:fs';
 import { IRIS_DEFAULT_PORT } from '@syrin/iris-protocol';
 import { start, startDaemon } from './index.js';
-import { STATUS_PATH } from './http-server.js';
 import { log } from './log.js';
-import { readPid, isAlive, isRunning, removePid, spawnDaemon } from './daemon.js';
+import {
+  readPid,
+  isAlive,
+  isRunning,
+  removePid,
+  spawnDaemon,
+  discoverDaemonPort,
+} from './daemon.js';
 import { waitForDaemon, startMcpProxy, probeDaemon } from './mcp-proxy.js';
+import { fetchStatus, summarizeStatus, decideOpen, openInBrowser } from './cli-launch.js';
 import { runInit } from './init/run.js';
 import { buildNodeIo } from './init/node-io.js';
 import type { StartOptions } from './index.js';
@@ -17,6 +23,7 @@ export const CLI_USAGE = `usage:
   iris serve [--port N] [--drive <url>] [--headed]
   iris stop  [--port N] [--quiet]
   iris status [--port N]
+  iris open  [url] [--port N]                        (show the app: reuse the connected tab, else open one)
   iris drive <url> [--headed]                       (foreground mode — for debugging)
   iris mcp   [--port N] [--drive <url>] [--headed]  (MCP stdio proxy — auto-starts daemon if needed)`;
 
@@ -24,6 +31,7 @@ const INIT_COMMAND = 'init';
 const SERVE_COMMAND = 'serve';
 const STOP_COMMAND = 'stop';
 const STATUS_COMMAND = 'status';
+const OPEN_COMMAND = 'open';
 const DRIVE_COMMAND = 'drive';
 const MCP_COMMAND = 'mcp';
 const DAEMON_INNER_COMMAND = '_daemon';
@@ -42,6 +50,7 @@ export type CliResult =
   | { kind: 'serve'; port: number; driveUrl?: string; headless: boolean }
   | { kind: 'stop'; port: number; quiet: boolean }
   | { kind: 'status'; port: number }
+  | { kind: 'open'; port: number; url?: string }
   | { kind: '_daemon'; port: number; driveUrl?: string; headless: boolean }
   | { kind: 'drive'; port: number; driveUrl: string; headless: boolean }
   | { kind: 'mcp'; port: number; driveUrl?: string; headless: boolean }
@@ -176,6 +185,12 @@ export function parseCliArgs(argv: string[], defaultPort: number): CliResult {
       const port = parsePortFlag(rest, defaultPort);
       return { kind: 'status', port };
     }
+    case OPEN_COMMAND: {
+      const port = parsePortFlag(rest, defaultPort);
+      // The first non-flag arg is the url (optional — omitting reuses a connected tab).
+      const url = rest.find((a) => !a.startsWith('--') && a !== String(port));
+      return url !== undefined ? { kind: 'open', port, url } : { kind: 'open', port };
+    }
     case DRIVE_COMMAND: {
       const r = parseDriveSuffix(rest, defaultPort);
       if (r.kind === 'error') return r;
@@ -264,70 +279,6 @@ function handleStop(port: number, quiet: boolean): void {
   }, 100);
 }
 
-/** One connected tab as `iris status` reports it — the at-a-glance health line. */
-interface StatusSession {
-  sessionId: string;
-  url: string;
-  throttled: boolean;
-  stale: boolean;
-  pendingMarks: number;
-}
-
-/**
- * Reduce the daemon's /status JSON to the compact view `iris status` prints. Pure: narrows the
- * untrusted wire payload (never `any`) and tolerates a missing/partial body so a malformed response
- * degrades to "running, 0 sessions" instead of throwing.
- */
-export function summarizeStatus(payload: unknown): {
-  sessionCount: number;
-  sessions: StatusSession[];
-} {
-  if (typeof payload !== 'object' || payload === null) return { sessionCount: 0, sessions: [] };
-  const obj = payload as Record<string, unknown>;
-  const raw = Array.isArray(obj['sessions']) ? obj['sessions'] : [];
-  const sessions = raw
-    .map((s): StatusSession | null => {
-      if (typeof s !== 'object' || s === null) return null;
-      const r = s as Record<string, unknown>;
-      const sessionId = typeof r['sessionId'] === 'string' ? r['sessionId'] : '';
-      if (sessionId === '') return null;
-      return {
-        sessionId,
-        url: typeof r['url'] === 'string' ? r['url'] : '',
-        throttled: r['throttled'] === true,
-        stale: r['stale'] === true,
-        pendingMarks: typeof r['pendingMarks'] === 'number' ? r['pendingMarks'] : 0,
-      };
-    })
-    .filter((s): s is StatusSession => s !== null);
-  const sessionCount =
-    typeof obj['sessionCount'] === 'number' ? obj['sessionCount'] : sessions.length;
-  return { sessionCount, sessions };
-}
-
-/** GET the daemon's /status JSON. Resolves to the parsed body, or undefined on any failure. */
-function fetchStatus(port: number): Promise<unknown> {
-  return new Promise((resolve) => {
-    const req = http.get({ host: '127.0.0.1', port, path: STATUS_PATH, timeout: 1000 }, (res) => {
-      let body = '';
-      res.setEncoding('utf8');
-      res.on('data', (chunk: string) => (body += chunk));
-      res.on('end', () => {
-        try {
-          resolve(JSON.parse(body));
-        } catch {
-          resolve(undefined);
-        }
-      });
-    });
-    req.on('error', () => resolve(undefined));
-    req.on('timeout', () => {
-      req.destroy();
-      resolve(undefined);
-    });
-  });
-}
-
 function handleStatus(port: number): void {
   const pid = readPid(port);
   if (pid === null || !isAlive(pid)) {
@@ -342,6 +293,52 @@ function handleStatus(port: number): void {
     }
     log('iris_status', { port, running: true, pid, ...summarizeStatus(payload) });
   });
+}
+
+/** Ensure a daemon is reachable on `port` (probe the real port; spawn + wait only if nothing's there). */
+function ensureDaemon(port: number): Promise<void> {
+  return probeDaemon(port).then((listening) => {
+    if (listening) return undefined;
+    const scriptPath = process.argv[1];
+    if (scriptPath === undefined) throw new Error('cannot locate the iris daemon script');
+    spawnDaemon(
+      process.execPath,
+      scriptPath,
+      [DAEMON_INNER_COMMAND, PORT_FLAG, String(port)],
+      port,
+    );
+    return waitForDaemon(port);
+  });
+}
+
+/**
+ * `iris open [url]` — the one-command "show me the app". Resolves the port (the requested one if a
+ * daemon's there, else a running daemon it discovers — so the user never hunts for the port), ensures
+ * the daemon, then reuses the already-connected tab or opens a new browser at the url. Idempotent:
+ * re-running never piles up duplicate tabs.
+ */
+function handleOpen(requestedPort: number, url: string | undefined): void {
+  probeDaemon(requestedPort)
+    .then((here) => (here ? requestedPort : (discoverDaemonPort() ?? requestedPort)))
+    .then(async (port) => {
+      await ensureDaemon(port);
+      const { sessions } = summarizeStatus(await fetchStatus(port));
+      const decision = decideOpen(sessions, url);
+      if (decision.action === 'need-url') {
+        log('iris_open', { port, error: 'no app connected — pass a url: iris open <url>' });
+        return;
+      }
+      if (decision.action === 'reuse') {
+        log('iris_open', { port, reusing: decision.url });
+        return;
+      }
+      openInBrowser(decision.url);
+      log('iris_open', { port, opened: decision.url });
+    })
+    .catch((err: unknown) => {
+      log('iris_open', { error: err instanceof Error ? err.message : String(err) });
+      process.exit(1);
+    });
 }
 
 function handleDaemonInner(parsed: { port: number; driveUrl?: string; headless: boolean }): void {
@@ -456,6 +453,9 @@ function main(): void {
       break;
     case 'status':
       handleStatus(parsed.port);
+      break;
+    case 'open':
+      handleOpen(parsed.port, parsed.url);
       break;
     case 'drive':
       handleLegacyDrive(parsed);

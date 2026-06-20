@@ -1,6 +1,14 @@
 import { join } from 'node:path';
 import { homedir } from 'node:os';
-import { mkdirSync, readFileSync, writeFileSync, existsSync, unlinkSync, openSync } from 'node:fs';
+import {
+  mkdirSync,
+  readFileSync,
+  writeFileSync,
+  existsSync,
+  unlinkSync,
+  openSync,
+  readdirSync,
+} from 'node:fs';
 import { spawn } from 'node:child_process';
 
 const IRIS_HOME = join(homedir(), '.iris');
@@ -42,6 +50,26 @@ export function removePid(port: number): void {
 export function isRunning(port: number): boolean {
   const pid = readPid(port);
   return pid !== null && isAlive(pid);
+}
+
+/**
+ * Find the port of a live iris daemon by scanning ~/.iris/daemon-<port>.pid files — so `iris open`
+ * can "find the port" itself instead of making the user reconcile it. Returns the first live one
+ * (lowest port, deterministic), or null when none is running.
+ */
+export function discoverDaemonPort(): number | null {
+  let found: number | null = null;
+  try {
+    for (const file of readdirSync(IRIS_HOME)) {
+      const m = /^daemon-(\d+)\.pid$/.exec(file);
+      if (m === null) continue;
+      const port = Number(m[1]);
+      if (isRunning(port) && (found === null || port < found)) found = port;
+    }
+  } catch {
+    // no ~/.iris yet → nothing running
+  }
+  return found;
 }
 
 /**

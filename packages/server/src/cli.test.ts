@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { CLI_USAGE, parseCliArgs, summarizeStatus } from './cli.js';
+import { CLI_USAGE, parseCliArgs } from './cli.js';
+import { summarizeStatus } from './cli-launch.js';
 
 const PORT = 7333;
 const URL = 'http://localhost:3000';
@@ -151,6 +152,22 @@ describe('parseCliArgs', () => {
     expect(parseCliArgs(['status', '--port', '5000'], PORT)).toEqual({
       kind: 'status',
       port: 5000,
+    });
+  });
+
+  it('open with no url → reuse-a-connected-tab intent (no url field)', () => {
+    expect(parseCliArgs(['open'], PORT)).toEqual({ kind: 'open', port: PORT });
+  });
+
+  it('open <url> carries the url', () => {
+    expect(parseCliArgs(['open', URL], PORT)).toEqual({ kind: 'open', port: PORT, url: URL });
+  });
+
+  it('open <url> --port overrides the port', () => {
+    expect(parseCliArgs(['open', URL, '--port', '5000'], PORT)).toEqual({
+      kind: 'open',
+      port: 5000,
+      url: URL,
     });
   });
 
