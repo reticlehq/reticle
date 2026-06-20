@@ -1,4 +1,4 @@
-import { HumanControlKind, SessionState } from '@syrin/iris-protocol';
+import { HumanControlKind, PresenterTone, SessionState } from '@syrin/iris-protocol';
 import { nativeSetTimeout, nativeClearTimeout } from '../timers/native-timers.js';
 
 // Live-control panel: the two-way control surface inside the floating HUD — Pause/Resume + End
@@ -9,6 +9,9 @@ import { nativeSetTimeout, nativeClearTimeout } from '../timers/native-timers.js
 
 /** data-iris-state attribute on the overlay root; its value is always a SessionState. */
 const DATA_IRIS_STATE = 'data-iris-state';
+/** data-iris-tone attribute on the overlay root; set to "warn" when the agent stopped (auto-end). */
+const DATA_IRIS_TONE = 'data-iris-tone';
+const TONE_WARN = 'warn';
 const DATA_ON = 'data-on';
 const GLOW_OFF = '0';
 
@@ -77,6 +80,15 @@ export const CONTROLS_CSS = `
   box-shadow:inset 0 0 0 3px rgba(246,180,76,.9),inset 0 0 30px 6px rgba(246,180,76,.4);}
 [data-iris-overlay][data-iris-state="ended"] [data-iris-glow][data-on="1"]{animation:none;
   box-shadow:inset 0 0 0 2px rgba(61,215,166,.55);}
+/* Agent-stopped tone: the panel shouts. Amber accent overrides the calm ended-green, a ⚠ leads the
+   banner, and the page border PULSES (vs the static green) so a human on the browser sees "act now". */
+[data-iris-overlay][data-iris-tone="warn"] [data-iris-hud]{--iris-accent:#fb923c;--iris-accent-soft:rgba(251,146,60,.18);}
+[data-iris-overlay][data-iris-tone="warn"] [data-iris-banner]{font-weight:600;color:#fdba74;}
+[data-iris-overlay][data-iris-tone="warn"] [data-iris-banner]::before{content:"\\26A0\\FE0F  ";}
+[data-iris-overlay][data-iris-tone="warn"] [data-iris-glow][data-on="1"]{animation:iris-warn-pulse 1.5s ease-in-out infinite;
+  box-shadow:inset 0 0 0 2px rgba(251,146,60,.7);}
+@keyframes iris-warn-pulse{0%,100%{box-shadow:inset 0 0 0 2px rgba(251,146,60,.32);}
+  50%{box-shadow:inset 0 0 0 3px rgba(251,146,60,.85),inset 0 0 26px 5px rgba(251,146,60,.34);}}
 `;
 
 /** Header markup (controls + badge) injected into .iris-hud-head, after the expand button. */
@@ -238,9 +250,12 @@ export class ControlPanel {
    * optimistic local click and the authoritative server PRESENTER echo. Only the ended-border fade
    * touches a clock, via the injected native timer.
    */
-  setState(state: SessionState, text?: string): void {
+  setState(state: SessionState, text?: string, tone?: PresenterTone): void {
     this.#state = state;
     this.#root?.setAttribute(DATA_IRIS_STATE, state);
+    const warn = tone === PresenterTone.WARN;
+    if (warn) this.#root?.setAttribute(DATA_IRIS_TONE, TONE_WARN);
+    else this.#root?.removeAttribute(DATA_IRIS_TONE);
     if (this.#fadeTimer !== undefined) {
       nativeClearTimeout(this.#fadeTimer);
       this.#fadeTimer = undefined;
@@ -255,10 +270,14 @@ export class ControlPanel {
     if (refs.endBtn !== undefined) refs.endBtn.disabled = ended;
     if (refs.sendBtn !== undefined) refs.sendBtn.disabled = ended;
     if (refs.input !== undefined) refs.input.disabled = ended;
-    // Always lead with "Session ended" so the end is unmistakable; append any agent summary.
+    // A calm end leads with "Session ended"; a warn (agent-stopped) end leads with the notice itself,
+    // since the amber ⚠ styling already conveys "ended" and the notice is the actionable headline.
     if (refs.banner !== undefined) {
-      const summary = text !== undefined && text.trim().length > 0 ? ` · ${text.trim()}` : '';
-      refs.banner.textContent = `${ENDED_BANNER_TEXT}${summary}`;
+      const summary = text !== undefined && text.trim().length > 0 ? text.trim() : '';
+      refs.banner.textContent =
+        warn && summary.length > 0
+          ? summary
+          : `${ENDED_BANNER_TEXT}${summary.length > 0 ? ` · ${summary}` : ''}`;
     }
     if (ended) {
       // End the run: fade out the page BORDER (testing is over) but KEEP the panel so the human can

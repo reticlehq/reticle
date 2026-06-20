@@ -1,4 +1,4 @@
-import { PresenterMode, SessionState } from '@syrin/iris-protocol';
+import { PresenterMode, type PresenterTone, SessionState } from '@syrin/iris-protocol';
 import { refs } from '../dom/refs.js';
 import { actionVerb } from './presenter-verbs.js';
 import { nativeSetTimeout, nativeClearTimeout, nativeNow } from '../timers/native-timers.js';
@@ -153,8 +153,8 @@ export class Presenter {
   }
 
   /** Drive the panel's live-control visual state (server-push / agent path; never emits). */
-  setState(state: SessionState, text?: string): void {
-    this.#panel.setState(state, text);
+  setState(state: SessionState, text?: string, tone?: PresenterTone): void {
+    this.#panel.setState(state, text, tone);
   }
 
   /** Current cap on accumulated log rows. */

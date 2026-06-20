@@ -18,6 +18,7 @@ import {
 import { RingBuffer } from '../events/ring-buffer.js';
 import { ReviewStore, type ReviewMark } from './review-store.js';
 import { buildSessionRecommendation } from './session-recommendation.js';
+import { buildPresenterArgs } from './presenter-args.js';
 
 export interface SessionInfo {
   sessionId: string;
@@ -431,13 +432,11 @@ export class Session {
   }
 
   /**
-   * Push a lifecycle state to the panel, optionally with human-facing `text` (e.g. an end-of-
-   * session summary). Used by the live-control agent tools to sync the presenter on an
-   * agent-initiated end/resume. State changes still flow through `setState`; this is the
-   * text-carrying push.
+   * Push a lifecycle state to the panel with optional human-facing `text`. State changes still flow
+   * through `setState`; an auto-ended session rides a `warn` tone so the panel can shout "agent stopped".
    */
   pushPresenter(state: SessionState, text?: string): void {
-    this.#post(IrisCommand.PRESENTER, text === undefined ? { state } : { state, text });
+    this.#post(IrisCommand.PRESENTER, buildPresenterArgs(state, text, this.#autoEnded));
   }
   /** Fire-and-forget a narration row to the live panel (so a resolved mark shows "✓ fixed"). */
   pushNarration(text: string): void {

@@ -10,6 +10,7 @@ import {
   SessionState,
   TRANSPORT_LIMITS,
   isLoopbackHostname,
+  isPresenterTone,
   type CommandMessage,
   type HelloMessage,
   type IrisEvent,
@@ -373,7 +374,9 @@ export class Iris {
     if (command.name === IrisCommand.PRESENTER) {
       const state = command.args['state'];
       if (isSessionState(state)) {
-        this.#presenter?.setState(state, str(command.args['text']) || undefined);
+        const rawTone = command.args['tone'];
+        const tone = isPresenterTone(rawTone) ? rawTone : undefined;
+        this.#presenter?.setState(state, str(command.args['text']) || undefined, tone);
       }
       return { ok: true, result: { applied: this.#presenter !== undefined } };
     }

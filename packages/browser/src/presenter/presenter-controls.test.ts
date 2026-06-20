@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { HumanControlKind, SessionState } from '@syrin/iris-protocol';
+import { HumanControlKind, PresenterTone, SessionState } from '@syrin/iris-protocol';
 import { Presenter, type ControlIntent } from './presenter.js';
 import { buildSnapshot } from '../dom/snapshot.js';
 import { isIgnored } from '../dom/dom-ignore.js';
@@ -188,6 +188,28 @@ describe('presenter-controls / live-control panel', () => {
     presenter.setState(SessionState.ENDED, 'all green');
     expect(q('[data-iris-banner]')?.textContent).toBe('Session ended · all green');
     expect(onControl).not.toHaveBeenCalled();
+  });
+
+  it('14b warn tone (agent stopped) sets data-iris-tone and leads the banner with the notice', () => {
+    const { presenter } = mount();
+    const panelRoot = q('div[data-iris-overlay]') as HTMLElement; // the <div>, not the <style>
+    presenter.setState(
+      SessionState.ENDED,
+      'Agent stopped — switch to your terminal',
+      PresenterTone.WARN,
+    );
+    expect(panelRoot.getAttribute('data-iris-tone')).toBe('warn');
+    // warn drops the calm "Session ended ·" prefix — the notice itself is the actionable headline
+    expect(q('[data-iris-banner]')?.textContent).toBe('Agent stopped — switch to your terminal');
+  });
+
+  it('14c a calm end clears any prior warn tone', () => {
+    const { presenter } = mount();
+    const panelRoot = q('div[data-iris-overlay]') as HTMLElement;
+    presenter.setState(SessionState.ENDED, 'Agent stopped', PresenterTone.WARN);
+    expect(panelRoot.getAttribute('data-iris-tone')).toBe('warn');
+    presenter.setState(SessionState.ACTIVE);
+    expect(panelRoot.hasAttribute('data-iris-tone')).toBe(false);
   });
 
   it('15 setState is idempotent', () => {
