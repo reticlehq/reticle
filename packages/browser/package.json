@@ -1,6 +1,6 @@
 {
   "name": "@syrin/iris-browser",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "Iris browser SDK — installs observers, builds semantic snapshots, executes actions, talks to the bridge.",
   "type": "module",
   "main": "./dist/index.js",

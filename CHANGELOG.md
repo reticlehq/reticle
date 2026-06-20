@@ -4,10 +4,10 @@ All notable changes to **`@syrin/iris`** are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] — 0.8.0
+## [0.8.0] — 2026-06-20
 
 The "developers love it" release. 0.7.0 won the agent; 0.8.0 wins the human — the dev who watches the
-agent work, points at what's wrong, and trusts the green. _In progress._
+agent work, points at what's wrong, and trusts the green.
 
 ### Added
 
@@ -46,12 +46,42 @@ agent work, points at what's wrong, and trusts the green. _In progress._
   a `recovery` hint when the failure is recognized — the no-session footgun, multiple/unknown sessions,
   a throttled tab, a missing baseline/recording, the pairing-token config — so the first 5 minutes never
   dead-end on "what do I do now?". Conservative: an unrecognized error gets no invented advice.
+- **The panel always reflects the agent's real state — `iris_yield`** (`packages/server`,
+  `packages/browser`, `packages/protocol`). A human watching the browser must never see "live" when the
+  agent has actually stopped. The agent signals its turn boundary with **`iris_yield({ mode: "waiting" })`**
+  (done responding, will resume on your next message) or **`{ mode: "ask", note }`** (blocked, needs your
+  answer — the question shows on the panel); the session is revived automatically on the agent's next
+  call. Taught as the mandatory last step in the session lease, the loop guide, and the skill — and it's
+  **agent-independent** (Codex / OpenCode / Claude / Hermes). The panel renders each handback distinctly
+  via a PRESENTER `tone`: waiting = calm teal ✋, ask = amber ❓ pulse, **agent crashed/disconnected** =
+  amber ⚠ pulse, a clean end = calm green. When the last agent's MCP connection drops, the daemon ends
+  every session and pushes the "switch to your terminal" notice (verified end-to-end through a SIGKILL-ed
+  agent). Off the benchmark path.
+- **Don't lose a panel prompt in the death-race** (`packages/server`, `packages/protocol`). If the human
+  types a message into the panel at the exact moment the agent stops, it would land in a dead inbox; now
+  both the agent-detach and idle paths fold any unread note into the end banner — quoted and labeled
+  `Undelivered (paste into your terminal): "…"` — so the words are surfaced back, not silently dropped.
+- **Replay a saved flow from the panel — no agent** (`packages/browser`, `packages/server`,
+  `packages/protocol`). The daemon pushes the saved-flow names to the HUD on connect; the human clicks
+  **▶** on a flow and it re-runs with no agent in the loop — the page animates via the normal replay path
+  and the ✓ / ⚠ drift / ✗ verdict lands in the same activity log they watch the agent in. The dev plays
+  the regression suite directly. Off the benchmark path (a panel-driven control, not a tool).
 
 ### Changed
 
 - **Internal cohesion split** (no behavior change): `SessionManager` moved to its own
   `session-manager.ts`, and the on-disk-artifact constants to `flow-constants.ts`, bringing both
   parent files back under the 500-line cap. All public import paths unchanged (re-exported).
+
+### Fixed
+
+- **Panel composer is now multi-line** (`packages/browser`). The HUD message box was a single-line
+  `<input>` that sent on any Enter; it's a `<textarea>` now — **Enter sends, Shift+Enter inserts a
+  newline**, and it auto-grows to fit.
+- **Flag mode keeps the right cursors** (`packages/browser`). In "Flag a bug" mode every element showed
+  the crosshair, including the Flag button and its popover — which are clickable; they keep the pointer
+  cursor now. And the hover outline that boxes the element under the cursor no longer snaps jumpily: it
+  **waits for the cursor to rest (~130 ms), then glides into place on an ease** and fades in.
 
 ## [0.7.0] — 2026-06-20
 

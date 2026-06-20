@@ -75,7 +75,7 @@ pnpm bench:gate       # compare the fresh raws vs the last history.jsonl row; fa
 
 ## Pinned versions (from raw/run-meta.json)
 
-`@playwright/mcp@0.0.76`, `chrome-devtools-mcp@1.3.0`, `@syrin/iris-server@0.7.0`,
+`@playwright/mcp@0.0.76`, `chrome-devtools-mcp@1.3.0`, `@syrin/iris-server@0.8.0`,
 Node v22.14.0, Playwright `chromium-1223`, host Darwin arm64.
 
 ## What is and isn't measured

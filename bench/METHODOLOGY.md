@@ -12,7 +12,7 @@ coding agent can use:
 
 1. **Playwright MCP** (`@playwright/mcp@0.0.76`)
 2. **Chrome DevTools MCP** (`chrome-devtools-mcp@1.3.0`)
-3. **Iris** (`@syrin/iris-server` 0.7.0, driven via `iris mcp`)
+3. **Iris** (`@syrin/iris-server` 0.8.0, driven via `iris mcp`)
 
 Hypothesis under test (to be validated OR falsified): _AI coding agents are limited less by
 reasoning than by runtime observability._ We treat this skeptically — see "Threats to validity".
@@ -189,5 +189,5 @@ ANTHROPIC_API_KEY=... node bench/harness/agent-loop.mjs
 # raw outputs: bench/raw/*.json ; logs: bench/logs/
 ```
 
-Pinned versions: `@playwright/mcp@0.0.76`, `chrome-devtools-mcp@1.3.0`, `@syrin/iris-server@0.7.0`,
+Pinned versions: `@playwright/mcp@0.0.76`, `chrome-devtools-mcp@1.3.0`, `@syrin/iris-server@0.8.0`,
 Node v22.14.0, Playwright Chromium `chromium-1223`.
