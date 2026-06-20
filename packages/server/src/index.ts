@@ -109,6 +109,7 @@ export { classifyChangedFiles, buildRisks, risksForPath } from './runs/risk-clas
 export type { ChangedFileInput, RiskPolicy } from './runs/risk-classify.js';
 export { buildRepairPacket, buildRepairPackets } from './runs/repair-prompt.js';
 export { redactForProfile, REDACTED } from './runs/profile-redact.js';
+export { renderRunReport } from './runs/render-report.js';
 export { handleVerifyRequest, tokenOk, VERIFY_PATH } from './runs/verify-http.js';
 export type { VerifyHttpRequest, VerifyHttpResponse } from './runs/verify-http.js';
 export {
