@@ -39,6 +39,7 @@ import {
 import { buildRunState, type PresenterRunState } from './presenter-run-state.js';
 import { moveCursor, ringAround, spawnRipple, pace } from './presenter-effects.js';
 import { GlowController } from './presenter-glow.js';
+import { renderTally, type TallyCounts } from './presenter-tally.js';
 import {
   CONTROLS_HEAD_HTML,
   CONTROLS_BANNER_HTML,
@@ -75,6 +76,9 @@ export class Presenter {
   #hud: HTMLElement | undefined;
   #actLine: HTMLElement | undefined;
   #chip: HTMLElement | undefined;
+  /** Live verdict tally (✓N ✗M) in the header — the running testing score the human watches. */
+  #tally: HTMLElement | undefined;
+  #tallied: TallyCounts = { passes: 0, fails: 0 };
   #liveLine: HTMLElement | undefined;
   #mode: PresenterMode = PresenterMode.IDLE;
 
@@ -177,7 +181,7 @@ export class Presenter {
       <div data-iris-cursor></div>
       <div data-iris-ring></div>
       <div data-iris-hud>
-        <div class="iris-hud-head"><span class="iris-dot"></span><span class="iris-brand">iris</span><span class="iris-chip" data-iris-chip></span><span class="iris-live"></span><span class="iris-head-sp"></span><button type="button" data-iris-min-btn title="Minimise" aria-label="Minimise the panel">⌄</button>${CONTROLS_HEAD_HTML}<span class="iris-maxhint" aria-hidden="true">⌃</span></div>
+        <div class="iris-hud-head"><span class="iris-dot"></span><span class="iris-brand">iris</span><span class="iris-chip" data-iris-chip></span><span class="iris-tally" data-iris-tally hidden></span><span class="iris-live"></span><span class="iris-head-sp"></span><button type="button" data-iris-min-btn title="Minimise" aria-label="Minimise the panel">⌄</button>${CONTROLS_HEAD_HTML}<span class="iris-maxhint" aria-hidden="true">⌃</span></div>
         <div class="iris-act-strip"><span class="iris-act">idle</span></div>
         ${CONTROLS_BANNER_HTML}
         <div ${DATA_IRIS_LOG}></div>
@@ -192,6 +196,7 @@ export class Presenter {
     this.#actLine = root.querySelector<HTMLElement>('.iris-act') ?? undefined;
     this.#log = root.querySelector<HTMLElement>(`[${DATA_IRIS_LOG}]`) ?? undefined;
     this.#chip = root.querySelector<HTMLElement>('[data-iris-chip]') ?? undefined;
+    this.#tally = root.querySelector<HTMLElement>('[data-iris-tally]') ?? undefined;
     this.#liveLine = root.querySelector<HTMLElement>('.iris-live') ?? undefined;
     // Minimise → collapse the panel to a bar (only the live line streams). Click the bar to restore.
     const setMin = (on: boolean): void => root.setAttribute(MIN_ATTR, on ? '1' : '0');
@@ -406,13 +411,20 @@ export class Presenter {
     if (result !== undefined) handle.result(result);
     // Feed the minimised-bar live line so the latest activity always shows when collapsed.
     if (this.#liveLine !== undefined) this.#liveLine.textContent = trimmed;
+    this.#renderTally(); // a row that landed with a verdict updates the header score immediately
     // Wrap the handle so a later outcome stamp updates BOTH the DOM glyph and the run-log entry.
     return {
       result: (r: LogResult): void => {
         handle.result(r);
         entry.result = r;
+        this.#renderTally(); // a deferred ✓/✗ stamp bumps the header tally
       },
     };
+  }
+
+  /** Repaint the header verdict tally from the run log; the side that grew gets a one-shot pop. */
+  #renderTally(): void {
+    this.#tallied = renderTally(this.#tally, this.#runLog, this.#tallied);
   }
 
   /** Back-compat: narration appends to the live log (append-only, never overwrites). */

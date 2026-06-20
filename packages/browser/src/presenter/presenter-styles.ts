@@ -78,6 +78,14 @@ export const PRESENTER_CSS = `
 [data-iris-hud] [data-iris-min-btn]:hover{color:var(--iris-fg);background:rgba(255,255,255,.08);}
 [data-iris-hud] [data-iris-min-btn]:active{transform:scale(.94);}
 [data-iris-hud] .iris-pass{color:var(--iris-ok);}[data-iris-hud] .iris-fail{color:var(--iris-bad);}
+[data-iris-hud] .iris-tally{flex:none;display:inline-flex;align-items:center;gap:8px;font-size:11.5px;
+  font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:.01em;}
+[data-iris-hud] .iris-tally[hidden]{display:none;}
+[data-iris-hud] .iris-tally .iris-t-pass{color:var(--iris-ok);}
+[data-iris-hud] .iris-tally .iris-t-fail{color:var(--iris-bad);}
+[data-iris-hud] .iris-tally [data-z="1"]{opacity:.4;}
+@keyframes iris-tally-pop{0%{transform:scale(1)}38%{transform:scale(1.3)}100%{transform:scale(1)}}
+[data-iris-hud] .iris-tally [data-bump="1"]{display:inline-block;animation:iris-tally-pop .36s cubic-bezier(.16,1,.3,1);}
 [data-iris-hud] .iris-chip{display:none;flex:none;font-size:9px;font-weight:600;letter-spacing:.08em;
   padding:2px 7px;border-radius:6px;vertical-align:middle;}
 [data-iris-hud] .iris-chip[data-mode="reading"]{display:inline-block;color:var(--iris-read);
