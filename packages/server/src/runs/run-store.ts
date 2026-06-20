@@ -31,8 +31,15 @@ export class RunStore {
     this.#root = root;
   }
 
-  /** Write one run artifact. Creates .iris/runs/ first; byte-stable (fixed indent + trailing newline). */
+  /**
+   * Write one run artifact. Creates .iris/runs/ first; byte-stable (fixed indent + trailing newline).
+   * Guards runId as a safe path segment BEFORE building the path — a runId can originate from a caller
+   * (an OEM may set it), so an unsafe value must never escape .iris/runs/ (mirrors the read guard).
+   */
   async write(run: IrisVerificationRun): Promise<void> {
+    if (!isValidRunId(run.runId)) {
+      throw new Error(`refusing to write run with unsafe runId: ${JSON.stringify(run.runId)}`);
+    }
     await this.#fs.mkdir(irisDirPaths(this.#root).runs);
     await this.#fs.writeFile(
       runPath(this.#root, run.runId),

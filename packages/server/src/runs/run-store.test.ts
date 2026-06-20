@@ -72,4 +72,9 @@ describe('RunStore — temp-dir filesystem, never touches the repo', () => {
   it('latest is undefined when no runs exist', async () => {
     expect(await store.latest()).toBeUndefined();
   });
+
+  it('refuses to write a run whose runId is a path-traversal value', async () => {
+    const evil = make('../../etc/evil', 1000);
+    await expect(store.write(evil)).rejects.toThrow(/unsafe runId/);
+  });
 });
