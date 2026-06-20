@@ -42,6 +42,13 @@ ${sel('fab')}[data-on="1"]{color:#fff;border-color:#7c83ff;background:linear-gra
 ${sel('dot')}{width:8px;height:8px;border-radius:50%;background:#ff7a7a;flex:none;}
 ${sel('fab')}[data-on="1"] ${sel('dot')}{background:#fff;}
 html[${ACTIVE_ATTR}] *{cursor:crosshair !important;}
+${sel('hi')}{position:fixed;z-index:${String(Z + 1)};pointer-events:none;display:none;box-sizing:border-box;
+  border:2px solid #7c83ff;border-radius:6px;background:rgba(124,131,255,.12);
+  box-shadow:0 0 0 2px rgba(124,131,255,.22);transition:left .04s ease,top .04s ease,width .04s ease,height .04s ease;}
+${sel('hi')}[data-on="1"]{display:block;}
+${sel('hilabel')}{position:absolute;top:-21px;left:-2px;background:#6366f1;color:#fff;
+  font:600 10.5px/1 "Inter",system-ui,sans-serif;padding:3px 6px;border-radius:5px;white-space:nowrap;
+  max-width:300px;overflow:hidden;text-overflow:ellipsis;}
 ${sel('pin')}{position:fixed;z-index:${String(Z + 1)};width:22px;height:22px;margin:-11px 0 0 -11px;
   border-radius:50% 50% 50% 2px;background:#ff5d5d;border:2px solid #fff;box-shadow:0 4px 12px -2px rgba(0,0,0,.5);
   color:#fff;font:700 11px/18px "Inter",system-ui,sans-serif;text-align:center;pointer-events:none;}
@@ -68,10 +75,14 @@ export class Annotator {
   #root: HTMLElement | undefined;
   #fab: HTMLElement | undefined;
   #pop: HTMLElement | undefined;
+  /** Hover outline box that shows WHICH element a click would flag (agentation-style). */
+  #hi: HTMLElement | undefined;
+  #hiLabel: HTMLElement | undefined;
   #active = false;
   #markCount = 0;
   #onClick: ((ev: MouseEvent) => void) | undefined;
   #onKeydown: ((ev: KeyboardEvent) => void) | undefined;
+  #onMove: ((ev: MouseEvent) => void) | undefined;
 
   constructor(deps: AnnotatorDeps) {
     this.#emit = deps.emit;
@@ -99,10 +110,13 @@ export class Annotator {
     const root = document.createElement('div');
     root.setAttribute(MARK_ATTR, 'root');
     root.innerHTML = `<button type="button" ${MARK_ATTR}="fab" aria-label="Flag a bug for the agent">
-      <span ${MARK_ATTR}="dot"></span><span>Flag a bug</span></button>`;
+      <span ${MARK_ATTR}="dot"></span><span>Flag a bug</span></button>
+      <div ${MARK_ATTR}="hi"><span ${MARK_ATTR}="hilabel"></span></div>`;
     document.body.appendChild(root);
     this.#root = root;
     this.#fab = root.querySelector<HTMLElement>(sel('fab')) ?? undefined;
+    this.#hi = root.querySelector<HTMLElement>(sel('hi')) ?? undefined;
+    this.#hiLabel = root.querySelector<HTMLElement>(sel('hilabel')) ?? undefined;
     this.#fab?.addEventListener('click', (e) => {
       e.stopPropagation();
       this.toggle();
@@ -111,6 +125,10 @@ export class Annotator {
     // Capture-phase click: intercept the FIRST click on a real page element while active.
     this.#onClick = (ev: MouseEvent): void => this.#handleClick(ev);
     document.addEventListener('click', this.#onClick, { capture: true });
+
+    // Hover outline: while active, box the element a click would flag — so you see what you're pointing at.
+    this.#onMove = (ev: MouseEvent): void => this.#handleMove(ev);
+    document.addEventListener('mousemove', this.#onMove, { passive: true, capture: true });
 
     // Escape is the universal "back out": close an open popover, else leave annotate mode.
     this.#onKeydown = (ev: KeyboardEvent): void => {
@@ -130,6 +148,10 @@ export class Annotator {
       document.removeEventListener('keydown', this.#onKeydown);
       this.#onKeydown = undefined;
     }
+    if (this.#onMove !== undefined) {
+      document.removeEventListener('mousemove', this.#onMove, { capture: true });
+      this.#onMove = undefined;
+    }
     this.#closePopover();
     document.documentElement.removeAttribute(ACTIVE_ATTR);
     this.#root?.remove();
@@ -146,6 +168,7 @@ export class Annotator {
     if (this.#active) document.documentElement.setAttribute(ACTIVE_ATTR, '1');
     else {
       document.documentElement.removeAttribute(ACTIVE_ATTR);
+      this.#hideHighlight();
       this.#closePopover();
     }
   }
@@ -160,8 +183,40 @@ export class Annotator {
     this.#openPopover(target, ev.clientX, ev.clientY);
   }
 
+  /** Box the element under the cursor (when active, no popover open) so you see what a click flags. */
+  #handleMove(ev: MouseEvent): void {
+    if (this.#hi === undefined) return;
+    const target = ev.target;
+    const skip =
+      !this.#active ||
+      this.#pop !== undefined ||
+      !(target instanceof Element) ||
+      target.closest(`[${MARK_ATTR}]`) !== null;
+    if (skip) {
+      this.#hi.setAttribute('data-on', '0');
+      return;
+    }
+    const rect = target.getBoundingClientRect();
+    if (rect.width === 0 && rect.height === 0) {
+      this.#hi.setAttribute('data-on', '0');
+      return;
+    }
+    this.#hi.style.left = `${String(rect.left)}px`;
+    this.#hi.style.top = `${String(rect.top)}px`;
+    this.#hi.style.width = `${String(rect.width)}px`;
+    this.#hi.style.height = `${String(rect.height)}px`;
+    this.#hi.setAttribute('data-on', '1');
+    if (this.#hiLabel !== undefined) this.#hiLabel.textContent = describeEl(target);
+  }
+
+  /** Hide the hover outline (annotate mode off, or a popover took over). */
+  #hideHighlight(): void {
+    this.#hi?.setAttribute('data-on', '0');
+  }
+
   #openPopover(el: Element, x: number, y: number): void {
     this.#closePopover();
+    this.#hideHighlight(); // the popover is now the focus; drop the hover box
     const resolved = resolveMarkAnchor(el);
     const pop = document.createElement('div');
     pop.setAttribute(MARK_ATTR, 'pop');
@@ -246,6 +301,20 @@ export class Annotator {
     this.#pop?.remove();
     this.#pop = undefined;
   }
+}
+
+/**
+ * A short label for the hovered element — testid > aria-label > tag + text. Cheap on purpose (runs
+ * on every mousemove, so it does NOT call resolveMarkAnchor; the full anchor is resolved on click).
+ */
+function describeEl(el: Element): string {
+  const testid = el.getAttribute('data-testid');
+  if (testid !== null && testid.length > 0) return testid;
+  const tag = el.tagName.toLowerCase();
+  const aria = el.getAttribute('aria-label');
+  if (aria !== null && aria.length > 0) return `${tag} "${aria}"`;
+  const text = (el.textContent ?? '').trim().replace(/\s+/g, ' ').slice(0, 40);
+  return text.length > 0 ? `${tag} "${text}"` : tag;
 }
 
 /** Construct + mount the annotator (mirrors installRecorder's ergonomics). */

@@ -174,6 +174,36 @@ describe('Annotator — human marks a mistake on the page', () => {
     expect(emits).toHaveLength(0);
   });
 
+  it('hover highlight boxes the element under the cursor (with a label) while active', () => {
+    const { ann } = setup();
+    ann.toggle(true);
+    document.body.insertAdjacentHTML('beforeend', '<button data-testid="cta">Pay now</button>');
+    const btn = document.querySelector('[data-testid="cta"]') as HTMLElement;
+    // jsdom has no layout, so fake the rect the highlight positions over.
+    btn.getBoundingClientRect = () => ({ left: 10, top: 20, width: 100, height: 30 }) as DOMRect;
+    btn.dispatchEvent(new MouseEvent('mousemove', { bubbles: true }));
+    const hi = document.querySelector<HTMLElement>('[data-iris-mark="hi"]');
+    expect(hi?.getAttribute('data-on')).toBe('1');
+    expect(hi?.style.width).toBe('100px');
+    expect(hi?.style.left).toBe('10px');
+    expect(hi?.querySelector('[data-iris-mark="hilabel"]')?.textContent).toBe('cta'); // testid wins
+  });
+
+  it('hover highlight stays off when inactive and hides over its own UI', () => {
+    const { ann } = setup();
+    document.body.insertAdjacentHTML('beforeend', '<button>Go</button>');
+    const btn = document.querySelector('button:not([data-iris-mark="fab"])') as HTMLElement;
+    btn.getBoundingClientRect = () => ({ left: 0, top: 0, width: 50, height: 20 }) as DOMRect;
+    btn.dispatchEvent(new MouseEvent('mousemove', { bubbles: true })); // inactive
+    expect(document.querySelector('[data-iris-mark="hi"]')?.getAttribute('data-on')).toBe('0');
+    // active, but moving over the FAB (our own UI) → still off
+    ann.toggle(true);
+    document
+      .querySelector('[data-iris-mark="fab"]')
+      ?.dispatchEvent(new MouseEvent('mousemove', { bubbles: true }));
+    expect(document.querySelector('[data-iris-mark="hi"]')?.getAttribute('data-on')).toBe('0');
+  });
+
   it('never turns a click on its own UI (the FAB) into a mark', () => {
     const { ann, emits } = setup();
     ann.toggle(true);
