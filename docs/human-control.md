@@ -5,6 +5,15 @@ When you run with the presenter on (`iris.connect({ present: true })`), the floa
 it, send it a correction, or end the session — without leaving the page. There's also a clean,
 unmistakable "session ended" signal for both you and the agent.
 
+## Watch the testing score climb (the live verdict tally)
+
+The panel header shows a running **✓N ✗M** tally — the verdict score, live. It's hidden until the
+first verdict lands, then climbs as the agent verifies: every `iris_assert`, every replayed flow step,
+every pass/fail outcome bumps it, and the side that just grew **pops** so you _feel_ the green (or red)
+arrive. The cursor flies, the log streams the journey, and the score ticks up — you see the agent
+working and the result landing, not just a final checkmark. It persists when the session ends, so the
+last thing on screen is what this run actually verified. Green that's earned, not asserted.
+
 ## The constraint that shapes the design
 
 MCP is **pull-based**: the agent only receives data when it calls a tool. Iris can't freeze the
