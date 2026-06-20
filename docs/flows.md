@@ -94,6 +94,12 @@ iris_flow_load({ flowName: "create-task" })   // → the flow JSON
 iris_flow_replay({ flowName: "create-task" }) // re-resolve each anchor against the LIVE DOM, run it
 ```
 
+**Watch it replay on the page.** When the presenter is on (`present: true`), a replay isn't silent —
+each step drives the real page, so the synthetic cursor flies to the element, the focus ring lands,
+and the activity log streams the journey live. You (or a teammate) literally watch the saved journey
+re-walk itself on your app, then see the verdict land. It's the fastest way to _see_ that a flow still
+works — not just read a green checkmark.
+
 `iris_flow_replay` returns a status:
 
 - `ok` — every anchor resolved and every `expect` held.
