@@ -26,6 +26,7 @@ const PAUSED_BADGE_TEXT = 'PAUSED';
 const ENDED_BANNER_TEXT = 'Session ended';
 const COPY_LABEL = 'Copy run';
 const EXPORT_LABEL = 'Export';
+const FLOWS_LABEL = 'Replay a flow';
 const COPIED_TEXT = 'Copied ✓';
 /** Download filename for the exported run state. */
 const RUN_FILENAME = 'iris-run.json';
@@ -99,6 +100,15 @@ export const CONTROLS_CSS = `
   box-shadow:inset 0 0 0 2px rgba(251,146,60,.7);}
 @keyframes iris-warn-pulse{0%,100%{box-shadow:inset 0 0 0 2px rgba(251,146,60,.32);}
   50%{box-shadow:inset 0 0 0 3px rgba(251,146,60,.85),inset 0 0 26px 5px rgba(251,146,60,.34);}}
+/* Replay-a-flow row: the human re-runs a saved flow with no agent. Hidden until flows are pushed. */
+[data-iris-hud] .iris-flows{display:none;flex-wrap:wrap;gap:6px;padding:9px 12px;border-top:1px solid var(--iris-line2);}
+[data-iris-hud] .iris-flows[data-has="1"]{display:flex;}
+[data-iris-hud] .iris-flows-cap{flex:0 0 100%;margin-bottom:1px;color:var(--iris-faint);font-size:9.5px;letter-spacing:.09em;text-transform:uppercase;}
+[data-iris-hud] .iris-flow{pointer-events:auto;cursor:pointer;display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 10px;
+  border-radius:7px;border:1px solid var(--iris-line);background:rgba(255,255,255,.04);color:var(--iris-muted);
+  font-family:var(--iris-font);font-size:11px;font-weight:500;transition:background .15s,color .15s,border-color .15s,transform .1s;}
+[data-iris-hud] .iris-flow:hover{color:var(--iris-fg);background:var(--iris-accent-soft);border-color:var(--iris-accent);}
+[data-iris-hud] .iris-flow:active{transform:scale(.95);}
 `;
 
 /** Header markup (controls + badge) injected into .iris-hud-head, after the expand button. */
@@ -106,6 +116,9 @@ export const CONTROLS_HEAD_HTML = `<button type="button" data-iris-pause class="
 
 /** Banner markup (between head and log, hidden unless ended). */
 export const CONTROLS_BANNER_HTML = `<div data-iris-banner class="iris-banner">${ENDED_BANNER_TEXT}</div>`;
+
+/** Replay-a-flow row (between log and footer); buttons are filled in by setFlows once flows arrive. */
+export const CONTROLS_FLOWS_HTML = `<div data-iris-flows class="iris-flows"><span class="iris-flows-cap">${FLOWS_LABEL}</span></div>`;
 
 /** Aesthetic send glyph (Feather "send" paper-plane). Inline SVG so it's crisp at any DPI. */
 const SEND_ICON = `<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>`;
@@ -123,6 +136,7 @@ export interface ControlRefs {
   copyBtn: HTMLButtonElement | undefined;
   exportBtn: HTMLButtonElement | undefined;
   exportMsg: HTMLElement | undefined;
+  flows: HTMLElement | undefined;
 }
 
 export function queryControlRefs(root: HTMLElement): ControlRefs {
@@ -135,6 +149,7 @@ export function queryControlRefs(root: HTMLElement): ControlRefs {
     copyBtn: root.querySelector<HTMLButtonElement>('[data-iris-copy]') ?? undefined,
     exportBtn: root.querySelector<HTMLButtonElement>('[data-iris-export]') ?? undefined,
     exportMsg: root.querySelector<HTMLElement>('[data-iris-export-msg]') ?? undefined,
+    flows: root.querySelector<HTMLElement>('[data-iris-flows]') ?? undefined,
   };
 }
 
@@ -166,6 +181,7 @@ export class ControlPanel {
     copyBtn: undefined,
     exportBtn: undefined,
     exportMsg: undefined,
+    flows: undefined,
   };
   #state: SessionState = SessionState.ACTIVE;
   #fadeTimer: number | undefined;
@@ -197,6 +213,15 @@ export class ControlPanel {
       }
     });
     this.#refs.input?.addEventListener('input', () => this.#autosize());
+    // Replay-a-flow: one ▶ click re-runs a saved flow (no agent). Delegated so it covers all chips.
+    this.#refs.flows?.addEventListener('click', (e) => {
+      const target = e.target;
+      if (!(target instanceof HTMLElement)) return;
+      const name = target.closest('[data-iris-replay]')?.getAttribute('data-iris-replay');
+      if (name !== null && name !== undefined && name.length > 0) {
+        this.#host.emit(HumanControlKind.REPLAY, name);
+      }
+    });
     this.#refs.copyBtn?.addEventListener('click', () => this.#onCopy());
     this.#refs.exportBtn?.addEventListener('click', () => this.#onExport());
     this.setState(SessionState.ACTIVE);
@@ -268,6 +293,29 @@ export class ControlPanel {
     if (el === undefined) return;
     el.style.height = 'auto';
     el.style.height = `${String(Math.min(el.scrollHeight, 96))}px`;
+  }
+
+  /** Render the replayable-flow chips from the server push. Each ▶ click re-runs that flow, no agent.
+   *  Takes the raw wire value and narrows it here (the panel is the consumer of this push). */
+  setFlows(flows: unknown): void {
+    const el = this.#refs.flows;
+    if (el === undefined) return;
+    const list: unknown[] = Array.isArray(flows) ? (flows as unknown[]) : [];
+    const names = list
+      .map((f) =>
+        typeof f === 'object' && f !== null ? (f as Record<string, unknown>)['name'] : f,
+      )
+      .filter((n): n is string => typeof n === 'string' && n.length > 0);
+    el.querySelectorAll('[data-iris-replay]').forEach((b) => b.remove()); // rebuild, keep the caption
+    for (const name of names) {
+      const btn = el.ownerDocument.createElement('button');
+      btn.type = 'button';
+      btn.className = 'iris-flow';
+      btn.setAttribute('data-iris-replay', name); // setAttribute → no markup injection from a flow name
+      btn.textContent = `▶ ${name}`;
+      el.appendChild(btn);
+    }
+    el.setAttribute('data-has', names.length > 0 ? '1' : '0');
   }
 
   /**

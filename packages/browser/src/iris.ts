@@ -10,7 +10,6 @@ import {
   SessionState,
   TRANSPORT_LIMITS,
   isLoopbackHostname,
-  isPresenterTone,
   type CommandMessage,
   type HelloMessage,
   type IrisEvent,
@@ -141,13 +140,6 @@ const BRIDGE_LOST_SUMMARY =
  */
 export function resolveSessionLabel(option: string | undefined, gen: () => string): string {
   return option === undefined || option === SESSION_AUTO ? gen() : option;
-}
-
-/** Narrow an unknown command arg into a SessionState (membership check — no `any`, no zod needed). */
-function isSessionState(value: unknown): value is SessionState {
-  return (
-    value === SessionState.ACTIVE || value === SessionState.PAUSED || value === SessionState.ENDED
-  );
 }
 
 /** A short human label for a ref ("button \"Save\"") for the presenter HUD. */
@@ -369,15 +361,11 @@ export class Iris {
       return { ok: true, result: { applied: this.#presenter !== undefined, idleEndMs } };
     }
 
-    // PRESENTER: bridge → browser server-push so an AGENT-driven pause/end mirrors onto the panel.
-    // This calls setState ONLY (never re-emits a control), so a HUMAN_CONTROL echo can't loop.
-    if (command.name === IrisCommand.PRESENTER) {
-      const state = command.args['state'];
-      if (isSessionState(state)) {
-        const rawTone = command.args['tone'];
-        const tone = isPresenterTone(rawTone) ? rawTone : undefined;
-        this.#presenter?.setState(state, str(command.args['text']) || undefined, tone);
-      }
+    // Bridge → browser presenter pushes (PRESENTER state echo / FLOWS replay list). The presenter owns
+    // the parsing; here we only report whether a panel was mounted to apply it. setState-only, so a
+    // PRESENTER echo of a HUMAN_CONTROL can't loop back into a re-emit.
+    if (command.name === IrisCommand.PRESENTER || command.name === IrisCommand.FLOWS) {
+      this.#presenter?.handlePush(command);
       return { ok: true, result: { applied: this.#presenter !== undefined } };
     }
 

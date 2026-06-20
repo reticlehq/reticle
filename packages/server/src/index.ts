@@ -1,6 +1,14 @@
 import { join } from 'node:path';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { AGENT_STOPPED_NOTICE, IRIS_DEFAULT_PORT, IrisDir } from '@syrin/iris-protocol';
+import {
+  AGENT_STOPPED_NOTICE,
+  IRIS_DEFAULT_PORT,
+  IrisCommand,
+  IrisDir,
+  ReplayStatus,
+} from '@syrin/iris-protocol';
+import type { FlowReplayResult } from '@syrin/iris-protocol';
+import { replayNamedFlow } from './flows/flow-tools.js';
 import { createSharedServer } from './http-server.js';
 import { Bridge } from './bridge.js';
 import { BaselineStore } from './project/baselines.js';
@@ -15,6 +23,14 @@ import { resolveToolProfile } from './tools/profiles.js';
 import { CdpRealInputProvider, LaunchedRealInputProvider } from './input/real-input.js';
 import type { OwnedRealInputProvider, RealInputProvider } from './input/real-input.js';
 import { log } from './log.js';
+
+/** A human-facing one-liner for a panel replay verdict — ✓ passed / ⚠ drifted / ✗ errored. */
+function replayVerdictLine(result: FlowReplayResult): string {
+  if (result.status === ReplayStatus.OK) return `✓ "${result.name}" passed`;
+  if (result.status === ReplayStatus.DRIFT)
+    return `⚠ "${result.name}" drifted — a step no longer matches`;
+  return `✗ "${result.name}" failed — ${result.error?.message ?? 'could not replay'}`;
+}
 
 export { IrisTool } from './tools/tool-names.js';
 export { RingBuffer } from './events/ring-buffer.js';
@@ -303,6 +319,30 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
   const profile = resolveToolProfile(options.toolProfile);
   const effectiveDeps = realInput !== undefined ? { ...deps, realInput } : deps;
   shared.attachMcp(() => createMcpServer(effectiveDeps, profile));
+
+  // Replay-from-panel: the human clicks ▶ on a saved flow; run it with NO agent and narrate the
+  // verdict into the same activity log they watch the agent in. The page animates via the normal
+  // replay path, so they see it re-drive and the ✓/⚠/✗ land.
+  bridge.attachReplay((sessionId, flowName) => {
+    const session = bridge.sessions.get(sessionId);
+    if (session === undefined) return;
+    session.pushNarration(`▶ Replaying "${flowName}"…`);
+    replayNamedFlow(effectiveDeps, { flowName, sessionId })
+      .then((result) => session.pushNarration(replayVerdictLine(result)))
+      .catch((error: unknown) => {
+        const message = error instanceof Error ? error.message : String(error);
+        session.pushNarration(`✗ Replay "${flowName}" failed — ${message}`);
+      });
+  });
+  // On connect, hand the panel the replayable-flow names so it can render the ▶ list.
+  bridge.attachSessionReady((session) => {
+    flows
+      .list()
+      .then((names) =>
+        session.command(IrisCommand.FLOWS, { flows: names.map((name) => ({ name })) }),
+      )
+      .catch(() => undefined);
+  });
 
   await new Promise<void>((resolve) => {
     shared.httpServer.once('listening', resolve);

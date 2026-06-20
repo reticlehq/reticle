@@ -1,4 +1,11 @@
-import { PresenterMode, type PresenterTone, SessionState } from '@syrin/iris-protocol';
+import {
+  IrisCommand,
+  PresenterMode,
+  type PresenterTone,
+  SessionState,
+  isPresenterTone,
+  isSessionState,
+} from '@syrin/iris-protocol';
 import { refs } from '../dom/refs.js';
 import { actionVerb } from './presenter-verbs.js';
 import { nativeSetTimeout, nativeClearTimeout, nativeNow } from '../timers/native-timers.js';
@@ -43,6 +50,7 @@ import { renderTally, type TallyCounts } from './presenter-tally.js';
 import {
   CONTROLS_HEAD_HTML,
   CONTROLS_BANNER_HTML,
+  CONTROLS_FLOWS_HTML,
   CONTROLS_FOOT_HTML,
   ENDED_FADE_MS,
   ControlPanel,
@@ -157,6 +165,18 @@ export class Presenter {
     this.#panel.setState(state, text, tone);
   }
 
+  /** Apply a bridge→browser presenter push: PRESENTER (state echo) or FLOWS (replay list, the human's
+   *  no-agent replay surface). Owns the wire parsing so the SDK dispatcher stays a thin router;
+   *  setState-only so an echo can't re-emit. */
+  handlePush(command: { name: string; args: Record<string, unknown> }): void {
+    const a = command.args;
+    if (command.name === IrisCommand.FLOWS) return void this.#panel.setFlows(a['flows']);
+    const state = a['state'];
+    const tone = a['tone'];
+    const text = typeof a['text'] === 'string' && a['text'].length > 0 ? a['text'] : undefined;
+    if (isSessionState(state)) this.setState(state, text, isPresenterTone(tone) ? tone : undefined);
+  }
+
   /** Current cap on accumulated log rows. */
   get logMax(): number {
     return this.#logMax;
@@ -185,6 +205,7 @@ export class Presenter {
         <div class="iris-act-strip"><span class="iris-act">idle</span></div>
         ${CONTROLS_BANNER_HTML}
         <div ${DATA_IRIS_LOG}></div>
+        ${CONTROLS_FLOWS_HTML}
         ${CONTROLS_FOOT_HTML}
       </div>`;
     document.body.appendChild(root);

@@ -207,6 +207,13 @@ export const SessionState = {
 } as const;
 export type SessionState = (typeof SessionState)[keyof typeof SessionState];
 
+/** Narrow an unknown wire value to a SessionState (no zod needed at this membership boundary). */
+export function isSessionState(value: unknown): value is SessionState {
+  return (
+    value === SessionState.ACTIVE || value === SessionState.PAUSED || value === SessionState.ENDED
+  );
+}
+
 /**
  * Sentinel session label meaning "give this tab its own unique id". The SDK maps it (and an absent
  * label) to a per-tab id so several tabs — a human tab + an Iris-driven tour, a Director-cut popup —
@@ -220,6 +227,8 @@ export const HumanControlKind = {
   RESUME: 'resume',
   END: 'end',
   MESSAGE: 'message',
+  /** Human clicked ▶ on a saved flow in the panel — replay it (no agent). `text` carries the name. */
+  REPLAY: 'replay',
 } as const;
 export type HumanControlKind = (typeof HumanControlKind)[keyof typeof HumanControlKind];
 
@@ -267,12 +276,11 @@ export const SESSION_HEALTH = {
  */
 export const SESSION_LIFECYCLE = {
   /**
-   * Default agent-idle window before the server hands the session back to the human as WAITING (the
-   * agent went quiet between turns). Short by design so the panel reflects "your turn" fast; the agent
-   * normally signals this immediately via iris_yield, this is the safety net. Agent-tunable (raise it
-   * for slow apps) via iris_session.
+   * Default agent-idle window before the panel hands back to the human as WAITING. The agent signals
+   * this IMMEDIATELY via iris_yield; this reaper is only the slow backstop for a forgotten yield, so
+   * it's deliberately long (a short window would auto-end a session mid slow-step). iris_session-tunable.
    */
-  IDLE_END_MS: 8_000,
+  IDLE_END_MS: 300_000,
   /** Floor for a tuned idle window (so an agent can't disable the safety net). */
   IDLE_END_MIN_MS: 5_000,
   /** How often the server reaper sweeps sessions for idle/disconnected ones. */
@@ -460,6 +468,8 @@ export const IrisCommand = {
   NAVIGATE: 'navigate',
   /** Reload the page. `args: { hard?: boolean }` — hard clears the cache via location replace trick. */
   REFRESH: 'refresh',
+  /** Bridge → browser: the saved flows the human can replay from the panel. `args: { flows: [{name}] }`. */
+  FLOWS: 'flows',
 } as const;
 export type IrisCommand = (typeof IrisCommand)[keyof typeof IrisCommand];
 

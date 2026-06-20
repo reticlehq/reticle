@@ -222,6 +222,30 @@ describe('presenter-controls / live-control panel', () => {
     expect(panelRoot.getAttribute('data-iris-tone')).toBe('ask');
   });
 
+  const pushFlows = (presenter: Presenter, flows: { name: string }[]): void =>
+    presenter.handlePush({ name: 'flows', args: { flows } });
+
+  it('14e a FLOWS push renders ▶ chips; a click replays that flow (no agent)', () => {
+    const { presenter, onControl } = mount();
+    pushFlows(presenter, [{ name: 'checkout' }, { name: 'login' }]);
+    const flows = q('[data-iris-flows]');
+    expect(flows?.getAttribute('data-has')).toBe('1');
+    const chips = document.querySelectorAll<HTMLElement>('[data-iris-replay]');
+    expect(chips.length).toBe(2);
+    expect(chips[0]?.textContent).toBe('▶ checkout');
+    click(chips[0]);
+    expect(onControl).toHaveBeenCalledWith({ kind: HumanControlKind.REPLAY, text: 'checkout' });
+  });
+
+  it('14f a FLOWS push with no flows hides the row and rebuilds cleanly', () => {
+    const { presenter } = mount();
+    pushFlows(presenter, [{ name: 'a' }, { name: 'b' }]);
+    expect(document.querySelectorAll('[data-iris-replay]').length).toBe(2);
+    pushFlows(presenter, []); // a re-push replaces, never appends
+    expect(document.querySelectorAll('[data-iris-replay]').length).toBe(0);
+    expect(q('[data-iris-flows]')?.getAttribute('data-has')).toBe('0');
+  });
+
   it('15 setState is idempotent', () => {
     const { presenter } = mount();
     presenter.setState(SessionState.PAUSED);

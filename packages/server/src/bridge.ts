@@ -3,6 +3,8 @@ import * as http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { WebSocketServer, type RawData, type WebSocket } from 'ws';
 import {
+  EventType,
+  HumanControlKind,
   IRIS_WS_PATH,
   IrisMessageSchema,
   MessageKind,
@@ -11,6 +13,19 @@ import {
 } from '@syrin/iris-protocol';
 import { Session, SessionManager } from './session/session.js';
 import { log } from './log.js';
+
+/** A human clicked ▶ on a saved flow in the panel — replay it with no agent. Wired by the daemon. */
+export type ReplayRequestHandler = (sessionId: string, flowName: string) => void;
+/** Called once a browser session connects, so the daemon can push it the replayable-flow list. */
+export type SessionReadyHandler = (session: Session) => void;
+
+/** The flow name if this event is a panel ▶ replay request, else undefined. Pure boundary narrowing. */
+function replayRequest(event: { type: string; data: Record<string, unknown> }): string | undefined {
+  if (event.type !== EventType.HUMAN_CONTROL) return undefined;
+  if (event.data['kind'] !== HumanControlKind.REPLAY) return undefined;
+  const name = event.data['text'];
+  return typeof name === 'string' && name.length > 0 ? name : undefined;
+}
 
 export interface BridgeOptions {
   port: number;
@@ -73,6 +88,8 @@ export class Bridge {
   readonly #maxPendingConnections: number;
   readonly #helloTimeoutMs: number;
   #pendingConnections = 0;
+  #onReplay: ReplayRequestHandler | undefined;
+  #onSessionReady: SessionReadyHandler | undefined;
 
   constructor(options: BridgeOptions) {
     const host = options.host ?? '127.0.0.1';
@@ -205,13 +222,18 @@ export class Bridge {
         const replaced = this.sessions.add(session);
         replaced?.disconnect('session replaced by a newer connection');
         log('session_connected', { sessionId: session.id, url: session.url });
+        this.#onSessionReady?.(session); // daemon pushes the replayable-flow list to the panel
         return;
       }
       if (session === undefined) return;
       session.touch();
 
       if (parsed.kind === MessageKind.EVENT) {
-        session.pushEvent(parsed.event);
+        // A panel ▶ replay needs the daemon's flow store, which the Session can't reach — route it to
+        // the daemon-wired handler instead of the in-session control path. Everything else is normal.
+        const replay = replayRequest(parsed.event);
+        if (replay !== undefined) this.#onReplay?.(session.id, replay);
+        else session.pushEvent(parsed.event);
       } else if (parsed.kind === MessageKind.COMMAND_RESULT) {
         session.handleResult(parsed);
       }
@@ -253,6 +275,16 @@ export class Bridge {
       return null;
     }
     return result.data;
+  }
+
+  /** Register the daemon's handler for a panel ▶ replay (it owns the flow store). */
+  attachReplay(handler: ReplayRequestHandler): void {
+    this.#onReplay = handler;
+  }
+
+  /** Register a callback fired when a browser session connects (to push it the replayable flows). */
+  attachSessionReady(handler: SessionReadyHandler): void {
+    this.#onSessionReady = handler;
   }
 
   close(): Promise<void> {
