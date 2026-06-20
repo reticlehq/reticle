@@ -97,7 +97,7 @@ export {
 export type { IrisDirPaths, ReadContractResult } from './project/iris-dir.js';
 export { createNodeFileSystem } from './project/fs-port.js';
 export type { FileSystemPort } from './project/fs-port.js';
-// Replay/Verify API — the programmatic surface an OEM/CI pipeline drives (see docs/oem-integration.md).
+// Replay/Verify API — the programmatic surface an OEM/CI pipeline drives (see docs/integration.md).
 export { IrisRunner } from './runs/iris-runner.js';
 export type { RunnerPort, VerifyOptions } from './runs/iris-runner.js';
 export { createRunnerPort, defaultRunId } from './runs/runner-port.js';

@@ -56,7 +56,7 @@ curl -s localhost:7331/verify -H 'x-iris-token: dev' -H 'content-type: applicati
 > Coverage note (honest): network, console, double-submit, and persistence-after-reload are catchable on
 > this no-build app via the driven browser. The deepest **program-state** checks (blast-radius, store
 > invariants) light up fully once the app embeds `@syrin/iris-browser` and registers its store/signals —
-> a one-time addition to a generated-app template. See `docs/how-iris-verifies-generated-apps.md`.
+> a one-time addition to a generated-app template. See `docs/integration.md`.
 
 ## The point
 

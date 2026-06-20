@@ -18,7 +18,7 @@ fix. We'll credit reporters who wish to be named once a fix has shipped.
 ## Scope
 
 Iris is **dev/preview-only** and **localhost-only** by design, and sends **no telemetry** — see
-[`docs/security.md`](docs/security.md) for the full data-handling posture. The most valuable reports
+[`docs/enterprise.md`](docs/enterprise.md) for the full data-handling posture. The most valuable reports
 concern anything that breaks those properties, for example:
 
 - the browser SDK reaching a production bundle,

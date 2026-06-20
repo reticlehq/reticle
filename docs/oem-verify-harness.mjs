@@ -6,7 +6,7 @@
  * gate your deploy on the verdict. The same artifact your agent's inner loop produces.
  *
  * Prerequisite: the Iris verify endpoint is running and your generated app/preview is connected
- *   (start it with: `iris serve --http --http-token <TOKEN>` — see docs/oem-integration.md).
+ *   (start it with: `iris serve --http --http-token <TOKEN>` — see docs/integration.md).
  *
  * Usage:  IRIS_TOKEN=… node docs/oem-verify-harness.mjs https://preview-url.example
  */
