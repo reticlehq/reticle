@@ -62,6 +62,8 @@ export const IrisTool = {
   MESSAGES: 'iris_messages',
   /** Human review: list the mistakes the human pinned to elements, and resolve them once fixed. */
   REVIEW: 'iris_review',
+  /** First-run readiness: block briefly until the app's SDK connects (smooths the init→connect race). */
+  WAIT_READY: 'iris_wait_ready',
   /** Navigate the connected browser tab to a URL. */
   NAVIGATE: 'iris_navigate',
   /** Reload the connected browser tab (soft or hard). */

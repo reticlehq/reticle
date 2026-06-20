@@ -20,6 +20,11 @@ agent work, points at what's wrong, and trusts the green. _In progress._
   a ready-to-act `fix` hint (`Open src/Checkout.tsx:42 and fix: <note>. Then iris_review { resolve: m1 }`),
   reading never consumes a mark, and `resolve` retires it once fixed. Off the deterministic benchmark
   path (human-driven) — `pnpm bench` unchanged.
+- **First-run readiness — `iris_wait_ready`** (`packages/server`). Call it right after init: it blocks
+  until the app's SDK connects (returns instantly if a session already exists, so zero latency on the
+  happy path and on the benchmark), or times out with a `recovery` hint. Smooths the most common
+  first-5-minutes footgun — the agent's first real call racing the WebSocket connect. Pure, injected
+  clock/sleep; off the benchmark path.
 - **CDP network mock / intercept — `iris_network_mock`** (`packages/server`). On a driven page
   (`iris drive`), stub a request deterministically: return a `500`, force offline (abort), or delay a
   response — so "verify the app handles a failed payment" is one declared rule, no backend changes. The

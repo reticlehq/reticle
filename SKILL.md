@@ -337,7 +337,9 @@ When a session is confirmed, tell the user:
 
 ## Phase 1 — Connect
 
-Call `iris_sessions()`. Three possible states:
+Just ran `iris init` or started the dev server? Call **`iris_wait_ready()`** first — it blocks until
+the app's SDK connects (returns instantly if it already has), so your first real call doesn't lose the
+race with the WebSocket. Then call `iris_sessions()`. Three possible states:
 
 **A. One session → proceed.**
 

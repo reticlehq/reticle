@@ -68,6 +68,7 @@ export const STANDARD_TOOL_NAMES: ReadonlySet<string> = new Set([
   IrisTool.RESUME,
   IrisTool.MESSAGES,
   IrisTool.REVIEW,
+  IrisTool.WAIT_READY,
   IrisTool.SCROLL_TO,
   IrisTool.CRAWL,
   IrisTool.RECORD_START,
