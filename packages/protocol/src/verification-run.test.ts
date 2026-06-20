@@ -133,4 +133,51 @@ describe('IrisVerificationRunSchema', () => {
     });
     expect(parsed.success).toBe(false);
   });
+
+  // CONTRACT LOCK: this frozen v1 artifact is the public wire shape a partner depends on. It must keep
+  // parsing forever within RUN_FILE_VERSION 1 — a failure here means a breaking change that needs a
+  // version bump, not a silent edit. Do not "fix" by editing the fixture; bump the version instead.
+  it('locks v1 back-compat: a frozen full v1 artifact always parses', () => {
+    const frozenV1 = {
+      schemaVersion: 1,
+      runId: 'run-frozen',
+      createdAt: 1_700_000_000_000,
+      durationMs: 1234,
+      profile: 'prod-preview',
+      project: { name: 'app', framework: 'next', commit: 'abc', env: 'ci', previewUrl: 'http://x' },
+      agent: { id: 'pipeline', kind: 'oem-pipeline', model: 'm' },
+      trigger: { kind: 'oem', diffRef: 'sha', note: 'n' },
+      changedFiles: [{ path: 'src/a.ts', changeKind: 'modified', risk: ['payment'] }],
+      flows: [
+        {
+          name: 'checkout',
+          status: 'fail',
+          steps: 4,
+          durationMs: 30,
+          oracle: 'order:saved',
+          failureReason: 'x',
+          evidenceRef: 'e1',
+        },
+      ],
+      checks: [
+        { kind: 'network', predicate: 'POST 200', status: 'fail', evidence: { status: 500 } },
+      ],
+      risks: [{ surface: 'payment', severity: 'high', detail: 'd', gated: true }],
+      evidence: {
+        consoleErrors: [{ level: 'error', message: 'boom', at: 1 }],
+        networkAnomalies: [{ method: 'POST', url: '/x', status: 500, issue: 'i' }],
+        stateAssertions: [{ store: 'cart', path: 'len', expected: 1, actual: 0, ok: false }],
+        timeline: [{ at: 1, kind: 'net', summary: 's' }],
+      },
+      repair: { failurePackets: [{ expected: 'a', actual: 'b', suggestedPrompt: 'fix it' }] },
+      verdict: {
+        status: 'fail',
+        reasons: ['checkout failed'],
+        confidence: 'high',
+        blockingRisks: 1,
+      },
+      signature: { alg: 'ed25519', value: 'sig', signedAt: 2 },
+    };
+    expect(IrisVerificationRunSchema.safeParse(frozenV1).success).toBe(true);
+  });
 });

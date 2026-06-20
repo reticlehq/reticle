@@ -1,4 +1,4 @@
-import { access, mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
+import { access, mkdir, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 
 /**
  * The injectable filesystem seam. Server logic depends on this interface, never on node:fs
@@ -17,6 +17,10 @@ export interface FileSystemPort {
   exists(path: string): Promise<boolean>;
   /** List entries of a directory (for flows/baselines listing). */
   readdir(path: string): Promise<string[]>;
+  /** Atomically replace `to` with `from` (same-FS rename) — for crash-safe writes. */
+  rename(from: string, to: string): Promise<void>;
+  /** Idempotent remove (no throw if absent) — for retention pruning + cleaning temp files. */
+  rm(path: string): Promise<void>;
   /** ENOENT classifier — narrows unknown without `any`, so callers can distinguish missing-file. */
   isNotFound(error: unknown): boolean;
 }
@@ -43,6 +47,10 @@ export function createNodeFileSystem(): FileSystemPort {
       }
     },
     readdir: (path) => readdir(path),
+    rename: (from, to) => rename(from, to),
+    rm: async (path) => {
+      await rm(path, { force: true });
+    },
     isNotFound: (error) => (error as NodeJS.ErrnoException | undefined)?.code === 'ENOENT',
   };
 }

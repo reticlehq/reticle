@@ -8,6 +8,8 @@
 
 import {
   IrisVerificationRunSchema,
+  RUN_RETENTION,
+  RUN_RETENTION_SLACK,
   RunReadError,
   type IrisVerificationRun,
 } from '@syrin/iris-protocol';
@@ -16,19 +18,30 @@ import { irisDirPaths, isValidRunId, runPath } from '../project/iris-dir.js';
 
 const JSON_INDENT = 2;
 const JSON_EXT = '.json';
+const TMP_EXT = '.tmp';
 
 /** Never-throws read result (mirrors ReadProjectResult). */
 export type ReadRunResult =
   | { ok: true; run: IrisVerificationRun }
   | { ok: false; reason: RunReadError };
 
+/** Optional retention overrides (defaults to the protocol caps). Injectable so tests prune fast. */
+export interface RunStoreOptions {
+  retention?: number;
+  slack?: number;
+}
+
 export class RunStore {
   readonly #fs: FileSystemPort;
   readonly #root: string;
+  readonly #retention: number;
+  readonly #slack: number;
 
-  constructor(fs: FileSystemPort, root: string) {
+  constructor(fs: FileSystemPort, root: string, opts: RunStoreOptions = {}) {
     this.#fs = fs;
     this.#root = root;
+    this.#retention = opts.retention ?? RUN_RETENTION;
+    this.#slack = opts.slack ?? RUN_RETENTION_SLACK;
   }
 
   /**
@@ -41,10 +54,31 @@ export class RunStore {
       throw new Error(`refusing to write run with unsafe runId: ${JSON.stringify(run.runId)}`);
     }
     await this.#fs.mkdir(irisDirPaths(this.#root).runs);
-    await this.#fs.writeFile(
-      runPath(this.#root, run.runId),
-      `${JSON.stringify(run, null, JSON_INDENT)}\n`,
-    );
+    // Atomic publish: write a temp file then rename, so a crash mid-write never leaves a half-written
+    // artifact (a partial .json would otherwise read back as MALFORMED).
+    const path = runPath(this.#root, run.runId);
+    const tmp = `${path}${TMP_EXT}`;
+    await this.#fs.writeFile(tmp, `${JSON.stringify(run, null, JSON_INDENT)}\n`);
+    await this.#fs.rename(tmp, path);
+    await this.#pruneOld();
+  }
+
+  /**
+   * Keep .iris/runs/ bounded. Only acts once the count exceeds RUN_RETENTION + SLACK, then deletes the
+   * oldest (by createdAt) back down to RUN_RETENTION — so the read-all is amortized, not per-write.
+   */
+  async #pruneOld(): Promise<void> {
+    const ids = await this.list();
+    if (ids.length <= this.#retention + this.#slack) return;
+    const stamped: Array<{ id: string; at: number }> = [];
+    for (const id of ids) {
+      const result = await this.read(id);
+      stamped.push({ id, at: result.ok ? result.run.createdAt : 0 });
+    }
+    stamped.sort((a, b) => a.at - b.at);
+    for (const { id } of stamped.slice(0, stamped.length - this.#retention)) {
+      await this.#fs.rm(runPath(this.#root, id));
+    }
   }
 
   /** Never throws. Invalid id / missing → MISSING; bad JSON or failed schema → MALFORMED. */

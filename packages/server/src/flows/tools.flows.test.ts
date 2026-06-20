@@ -60,6 +60,18 @@ function memoryFs(): FileSystemPort {
       }
       return Promise.resolve([...names]);
     },
+    rename(from, to) {
+      const v = files.get(from);
+      if (v !== undefined) {
+        files.set(to, v);
+        files.delete(from);
+      }
+      return Promise.resolve();
+    },
+    rm(path) {
+      files.delete(path);
+      return Promise.resolve();
+    },
     isNotFound(error) {
       return (error as NodeJS.ErrnoException | undefined)?.code === 'ENOENT';
     },

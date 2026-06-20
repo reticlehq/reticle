@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { RunReadError, type IrisVerificationRun } from '@syrin/iris-protocol';
@@ -76,5 +76,19 @@ describe('RunStore — temp-dir filesystem, never touches the repo', () => {
   it('refuses to write a run whose runId is a path-traversal value', async () => {
     const evil = make('../../etc/evil', 1000);
     await expect(store.write(evil)).rejects.toThrow(/unsafe runId/);
+  });
+
+  it('prunes oldest runs beyond the retention cap, keeping the newest', async () => {
+    const capped = new RunStore(fs, root, { retention: 3, slack: 1 });
+    for (let i = 1; i <= 5; i += 1) await capped.write(make(`run-${i}`, i * 1000));
+    const ids = (await capped.list()).sort();
+    expect(ids).toEqual(['run-3', 'run-4', 'run-5']); // oldest two pruned
+  });
+
+  it('leaves no .tmp file after a write (atomic publish)', async () => {
+    await store.write(make('run-x', 1));
+    const entries = await readdir(join(root, 'runs'));
+    expect(entries.some((e) => e.endsWith('.tmp'))).toBe(false);
+    expect(entries).toContain('run-x.json');
   });
 });

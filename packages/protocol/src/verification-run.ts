@@ -15,6 +15,14 @@ import { z } from 'zod';
 /** Schema version stamped into every run file so a reader can reject/upgrade old artifacts. */
 export const RUN_FILE_VERSION = 1;
 
+/**
+ * Retention bound for .iris/runs/ so disk stays bounded over a long-running pipeline. Pruned
+ * oldest-first only once the count exceeds RUN_RETENTION + RUN_RETENTION_SLACK, then back down to
+ * RUN_RETENTION — so the O(n) prune is amortized (≈ once per SLACK writes), not paid on every write.
+ */
+export const RUN_RETENTION = 500;
+export const RUN_RETENTION_SLACK = 100;
+
 /** Structured outcome when reading a run file fails (never thrown). Mirrors ProjectReadError. */
 export const RunReadError = {
   MISSING: 'run-missing', // no .iris/runs/<id>.json on disk

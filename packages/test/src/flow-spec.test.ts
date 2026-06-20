@@ -51,6 +51,18 @@ function memoryFs(files: Record<string, string>): FileSystemPort {
           .map((k) => k.slice(path.length + 1))
           .filter((k) => !k.includes('/')),
       ),
+    rename: (from, to) => {
+      const v = store.get(from);
+      if (v !== undefined) {
+        store.set(to, v);
+        store.delete(from);
+      }
+      return Promise.resolve();
+    },
+    rm: (path) => {
+      store.delete(path);
+      return Promise.resolve();
+    },
     isNotFound: (error) => (error as { code?: string } | undefined)?.code === 'ENOENT',
   };
 }
