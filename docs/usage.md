@@ -396,6 +396,22 @@ iris_network_mock({ clear: true }) // turn mocking off
 First matching rule wins (`urlContains` + optional case-insensitive `method`). Needs a driven browser;
 without one it returns a `recommendation` pointing at `iris drive`.
 
+### `iris_viewport` — reproducible visual baselines (driven mode)
+
+Pin the driven page to a fixed viewport so a screenshot baseline is reproducible across machines:
+
+```
+iris_viewport({ width: 1280, height: 800 })   // set once, before iris_screenshot / iris_visual_diff
+→ { applied: true, width: 1280, height: 800 }
+```
+
+This is one of three knobs for **CI-stable visual regression** — set them together:
+
+1. **`iris_viewport({ width, height })`** — same dimensions on every machine.
+2. **`iris_clock({ freeze: true })`** — kill animation/time jitter so the pixels are stable.
+3. **`iris_visual_diff({ baseline, masks: [{ x, y, width, height }] })`** — neutralize volatile
+   regions (clocks, avatars, ids) so only real changes fail.
+
 ---
 
 ## 4. The predicate DSL — full reference
@@ -692,6 +708,24 @@ iris_diff({ baseline: "checkout-ok" })
 ADDED/REMOVED elements plus the current console-error count. Great as a guardrail the agent
 runs after each edit: _"diff against `checkout-ok`; fail if anything interactive was removed
 or console errors increased."_
+
+### Pixel-perfect visual regression that's stable in CI (driven mode)
+
+The semantic `iris_diff` above never flakes. For an actual **pixel** diff (`iris_screenshot` +
+`iris_visual_diff`, driven mode), three knobs make it CI-stable instead of flaky:
+
+```jsonc
+iris_viewport({ width: 1280, height: 800 }) // 1. same size on every machine
+iris_clock({ freeze: true })                // 2. no animation/time jitter
+iris_screenshot({ name: "checkout-ok" })    //    capture the baseline
+// …later, after a change, at the same viewport + frozen clock:
+iris_visual_diff({ baseline: "checkout-ok", masks: [{ x: 0, y: 0, width: 200, height: 24 }] })
+// → { matched: false, changedPixels, ratio, region, diffPath }   // 3. masks ignore volatile regions
+```
+
+Without all three, a pixel diff fails on a different window size, a mid-animation frame, or a live
+clock/avatar — the classic reasons teams give up on screenshot tests. With them, only a real visual
+change fails.
 
 ---
 
