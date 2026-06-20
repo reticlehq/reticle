@@ -9,9 +9,8 @@ import { nativeSetTimeout, nativeClearTimeout } from '../timers/native-timers.js
 
 /** data-iris-state attribute on the overlay root; its value is always a SessionState. */
 const DATA_IRIS_STATE = 'data-iris-state';
-/** data-iris-tone attribute on the overlay root; set to "warn" when the agent stopped (auto-end). */
+/** data-iris-tone on the overlay root — waiting/ask/warn distinguishes how the agent handed back. */
 const DATA_IRIS_TONE = 'data-iris-tone';
-const TONE_WARN = 'warn';
 const DATA_ON = 'data-on';
 const GLOW_OFF = '0';
 
@@ -80,11 +79,21 @@ export const CONTROLS_CSS = `
   box-shadow:inset 0 0 0 3px rgba(246,180,76,.9),inset 0 0 30px 6px rgba(246,180,76,.4);}
 [data-iris-overlay][data-iris-state="ended"] [data-iris-glow][data-on="1"]{animation:none;
   box-shadow:inset 0 0 0 2px rgba(61,215,166,.55);}
-/* Agent-stopped tone: the panel shouts. Amber accent overrides the calm ended-green, a ⚠ leads the
-   banner, and the page border PULSES (vs the static green) so a human on the browser sees "act now". */
+/* Handoff tones tell the human the agent's mode at a glance. waiting = calm teal "your turn" (no
+   alarm); ask = amber "answer me" with a pulse; warn = amber "agent crashed" with a pulse. Each leads
+   the banner with an icon and overrides the calm ended-green accent. */
+[data-iris-overlay][data-iris-tone="waiting"] [data-iris-hud]{--iris-accent:#38bdf8;--iris-accent-soft:rgba(56,189,248,.16);}
+[data-iris-overlay][data-iris-tone="waiting"] [data-iris-banner]{font-weight:600;color:#7dd3fc;}
+[data-iris-overlay][data-iris-tone="waiting"] [data-iris-banner]::before{content:"\\270B  ";}
+[data-iris-overlay][data-iris-tone="waiting"] [data-iris-glow][data-on="1"]{animation:none;
+  box-shadow:inset 0 0 0 2px rgba(56,189,248,.5);}
+[data-iris-overlay][data-iris-tone="ask"] [data-iris-hud],
 [data-iris-overlay][data-iris-tone="warn"] [data-iris-hud]{--iris-accent:#fb923c;--iris-accent-soft:rgba(251,146,60,.18);}
+[data-iris-overlay][data-iris-tone="ask"] [data-iris-banner],
 [data-iris-overlay][data-iris-tone="warn"] [data-iris-banner]{font-weight:600;color:#fdba74;}
+[data-iris-overlay][data-iris-tone="ask"] [data-iris-banner]::before{content:"\\2753  ";}
 [data-iris-overlay][data-iris-tone="warn"] [data-iris-banner]::before{content:"\\26A0\\FE0F  ";}
+[data-iris-overlay][data-iris-tone="ask"] [data-iris-glow][data-on="1"],
 [data-iris-overlay][data-iris-tone="warn"] [data-iris-glow][data-on="1"]{animation:iris-warn-pulse 1.5s ease-in-out infinite;
   box-shadow:inset 0 0 0 2px rgba(251,146,60,.7);}
 @keyframes iris-warn-pulse{0%,100%{box-shadow:inset 0 0 0 2px rgba(251,146,60,.32);}
@@ -253,8 +262,9 @@ export class ControlPanel {
   setState(state: SessionState, text?: string, tone?: PresenterTone): void {
     this.#state = state;
     this.#root?.setAttribute(DATA_IRIS_STATE, state);
-    const warn = tone === PresenterTone.WARN;
-    if (warn) this.#root?.setAttribute(DATA_IRIS_TONE, TONE_WARN);
+    // A handoff tone (waiting/ask/warn) drives a distinct panel treatment; calm/undefined = a plain end.
+    const handoff = tone !== undefined && tone !== PresenterTone.CALM;
+    if (handoff) this.#root?.setAttribute(DATA_IRIS_TONE, tone);
     else this.#root?.removeAttribute(DATA_IRIS_TONE);
     if (this.#fadeTimer !== undefined) {
       nativeClearTimeout(this.#fadeTimer);
@@ -270,12 +280,12 @@ export class ControlPanel {
     if (refs.endBtn !== undefined) refs.endBtn.disabled = ended;
     if (refs.sendBtn !== undefined) refs.sendBtn.disabled = ended;
     if (refs.input !== undefined) refs.input.disabled = ended;
-    // A calm end leads with "Session ended"; a warn (agent-stopped) end leads with the notice itself,
-    // since the amber ⚠ styling already conveys "ended" and the notice is the actionable headline.
+    // A calm end leads with "Session ended"; a handoff (waiting/ask/warn) leads with the notice itself,
+    // since the toned styling already conveys "ended" and the notice is the actionable headline.
     if (refs.banner !== undefined) {
       const summary = text !== undefined && text.trim().length > 0 ? text.trim() : '';
       refs.banner.textContent =
-        warn && summary.length > 0
+        handoff && summary.length > 0
           ? summary
           : `${ENDED_BANNER_TEXT}${summary.length > 0 ? ` · ${summary}` : ''}`;
     }

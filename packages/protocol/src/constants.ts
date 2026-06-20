@@ -266,8 +266,13 @@ export const SESSION_HEALTH = {
  * session itself so the HUD never sits "running" forever.
  */
 export const SESSION_LIFECYCLE = {
-  /** Default agent-idle window before the server reaps a session. Agent-tunable via iris_session. */
-  IDLE_END_MS: 300_000,
+  /**
+   * Default agent-idle window before the server hands the session back to the human as WAITING (the
+   * agent went quiet between turns). Short by design so the panel reflects "your turn" fast; the agent
+   * normally signals this immediately via iris_yield, this is the safety net. Agent-tunable (raise it
+   * for slow apps) via iris_session.
+   */
+  IDLE_END_MS: 8_000,
   /** Floor for a tuned idle window (so an agent can't disable the safety net). */
   IDLE_END_MIN_MS: 5_000,
   /** How often the server reaper sweeps sessions for idle/disconnected ones. */
@@ -465,22 +470,6 @@ export const PresenterMode = {
   ACTING: 'acting',
 } as const;
 export type PresenterMode = (typeof PresenterMode)[keyof typeof PresenterMode];
-
-/**
- * Tone of a PRESENTER push, rides the command as optional `tone`. `warn` makes the panel shout —
- * used when a session auto-ends because the agent stopped or went idle, so the human (who may be on
- * the browser) sees "act now" rather than the calm look of a normal, human-driven end.
- */
-export const PresenterTone = {
-  CALM: 'calm',
-  WARN: 'warn',
-} as const;
-export type PresenterTone = (typeof PresenterTone)[keyof typeof PresenterTone];
-
-/** Narrow an unknown wire value to a PresenterTone (defaults handled by the caller). */
-export function isPresenterTone(value: unknown): value is PresenterTone {
-  return value === PresenterTone.CALM || value === PresenterTone.WARN;
-}
 
 /** Snapshot rendering modes (plan/04). */
 export const SnapshotMode = {

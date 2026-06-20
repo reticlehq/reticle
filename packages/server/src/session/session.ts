@@ -6,6 +6,7 @@ import {
   HumanMarkDataSchema,
   IrisCommand,
   MessageKind,
+  PresenterTone,
   SESSION_HEALTH,
   SESSION_LEASE,
   SESSION_LIFECYCLE,
@@ -273,10 +274,10 @@ export class Session {
    * throttled tab still receives) but flagged auto-ended so a returning agent revives it. No-op if
    * already ended.
    */
-  autoEnd(text?: string): void {
+  autoEnd(text?: string, tone: PresenterTone = PresenterTone.WARN): void {
     if (this.#state === SessionState.ENDED) return;
     this.#autoEnded = true;
-    this.setState(SessionState.ENDED, text);
+    this.setState(SessionState.ENDED, text, tone);
   }
 
   eventsInWindow(windowMs: number): IrisEvent[] {
@@ -359,9 +360,9 @@ export class Session {
    * PRESENTER for a transition. Optional `text` rides the same push (e.g. an end-of-session
    * summary) so a transition never emits two PRESENTER commands.
    */
-  setState(next: SessionState, text?: string): void {
+  setState(next: SessionState, text?: string, tone?: PresenterTone): void {
     this.#state = next;
-    this.pushPresenter(this.#state, text);
+    this.pushPresenter(this.#state, text, tone);
   }
 
   /** Push a human note onto the inbox; empty/whitespace-only text is ignored. Stamped with elapsed t. */
@@ -435,8 +436,8 @@ export class Session {
    * Push a lifecycle state to the panel with optional human-facing `text`. State changes still flow
    * through `setState`; an auto-ended session rides a `warn` tone so the panel can shout "agent stopped".
    */
-  pushPresenter(state: SessionState, text?: string): void {
-    this.#post(IrisCommand.PRESENTER, buildPresenterArgs(state, text, this.#autoEnded));
+  pushPresenter(state: SessionState, text?: string, tone?: PresenterTone): void {
+    this.#post(IrisCommand.PRESENTER, buildPresenterArgs(state, text, tone));
   }
   /** Fire-and-forget a narration row to the live panel (so a resolved mark shows "✓ fixed"). */
   pushNarration(text: string): void {
@@ -455,7 +456,7 @@ export class Session {
       sessionId: this.id,
       opened_at: this.#startedAt,
       IMPORTANT:
-        'Call iris_end_session when your task is fully complete. Do not rely on the idle timeout — explicit cleanup guarantees the next agent starts with a clean slate.',
+        'MANDATORY: the moment you stop driving — finishing a reply or waiting on the human — call iris_yield (mode:"waiting", or "ask" with your question) so the panel never falsely reads "live". Call iris_end_session only when the whole task is done. The session revives on your next action.',
     };
   }
 

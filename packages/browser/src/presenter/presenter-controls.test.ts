@@ -212,6 +212,16 @@ describe('presenter-controls / live-control panel', () => {
     expect(panelRoot.hasAttribute('data-iris-tone')).toBe(false);
   });
 
+  it('14d waiting and ask tones each set their own data-iris-tone', () => {
+    const { presenter } = mount();
+    const panelRoot = q('div[data-iris-overlay]') as HTMLElement;
+    presenter.setState(SessionState.ENDED, 'your turn', PresenterTone.WAITING);
+    expect(panelRoot.getAttribute('data-iris-tone')).toBe('waiting');
+    expect(q('[data-iris-banner]')?.textContent).toBe('your turn');
+    presenter.setState(SessionState.ENDED, 'Use Stripe?', PresenterTone.ASK);
+    expect(panelRoot.getAttribute('data-iris-tone')).toBe('ask');
+  });
+
   it('15 setState is idempotent', () => {
     const { presenter } = mount();
     presenter.setState(SessionState.PAUSED);

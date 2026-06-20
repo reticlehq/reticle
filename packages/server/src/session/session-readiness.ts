@@ -31,7 +31,10 @@ export const IRIS_LOOP_GUIDE =
   'Iris loop — LOOK: iris_snapshot / iris_query / iris_inspect · ACT: iris_act (or iris_act_and_wait) · ' +
   'OBSERVE: iris_observe / iris_wait_for / iris_network / iris_console · ASSERT: iris_assert over program ' +
   'truth, not just the DOM · REGRESS: iris_record_start → iris_replay, or iris_flow_verify for the whole ' +
-  'suite. The human can flag bugs from the panel — drain them with iris_review and resolve each once fixed.';
+  'suite. The human can flag bugs from the panel — drain them with iris_review and resolve each once fixed. ' +
+  'MANDATORY: the moment you stop driving — finishing your reply or waiting on the human — call iris_yield ' +
+  '(mode:"waiting", or mode:"ask" with the question) so the panel shows your real state; iris_end_session ' +
+  'only when the whole task is done. Never leave the panel reading "live" when you have actually stopped.';
 
 /**
  * Resolve `true` as soon as at least one session is connected, or `false` if the timeout elapses

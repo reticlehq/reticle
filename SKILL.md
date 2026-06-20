@@ -211,7 +211,12 @@ Replace `4310` with `IRIS_PORT` in all configs above.
 
 ---
 
-## Step 1b — Register the stop hook (Claude Code only)
+## Step 1b — Register the stop hook (Claude Code only, optional backstop)
+
+Iris is agent-independent: the agent signals its state in-band with `iris_yield` (mandatory — see
+Rules), and the server flips the panel to "waiting" on its own if the agent goes quiet. This Claude
+Code "Stop" hook is an extra belt-and-braces backstop that ends the daemon when the turn ends — skip
+it if you prefer to rely on `iris_yield` + the idle fallback alone.
 
 Write or merge into `.claude/settings.json`:
 
@@ -501,6 +506,7 @@ the `file:line`, and include it in the report.
 
 ## Rules (always apply in Test mode)
 
+- **Always close the session when you stop driving.** The human may be watching the browser, so the panel must reflect your real state — never leave it reading "live" when you've stopped. The moment you finish a turn or need the human, call `iris_yield({ mode: "waiting" })`, or `iris_yield({ mode: "ask", note: "<your question>" })` when you're blocked on them. Call `iris_end_session()` only when the whole task is done. The session revives automatically on your next action, so this is cheap and safe to do every time. (A server-side idle fallback flips the panel to "waiting" if you forget, but signal it yourself — it's immediate and it can say _why_.)
 - Always pass `since` in `iris_assert` — scopes to post-action events, prevents stale buffer fakes.
 - Always assert `{ kind: "console", level: "error", absent: true }` — silent errors are the most common thing agents miss.
 - Batch net + element + signal + console into one `allOf` — don't call `iris_assert` four times.

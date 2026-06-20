@@ -21,6 +21,7 @@ interface SentCommand {
 interface PushedPresenter {
   state: SessionState;
   text?: string;
+  tone?: string;
 }
 
 /** Test-only probes attached to the fake Session. */
@@ -69,6 +70,15 @@ function fakeSession(opts: { state?: SessionState; inbox?: string[] }): FakeSess
     inboxSize: () => inbox.length,
     pushPresenter: (next: SessionState, text?: string) => {
       pushed.push(text === undefined ? { state: next } : { state: next, text });
+    },
+    autoEnd: (text?: string, tone?: string) => {
+      // Mirror the real Session: a revivable end carrying the handoff tone (waiting/ask/warn).
+      state = SessionState.ENDED;
+      pushed.push({
+        state: SessionState.ENDED,
+        ...(text !== undefined ? { text } : {}),
+        ...(tone !== undefined ? { tone } : {}),
+      });
     },
   };
   return Object.assign(stub as Session, { __sent: sent, __pushed: pushed });
@@ -311,6 +321,33 @@ describe('live-control: agent tools', () => {
       sessionId: string;
     };
     expect(res).toEqual({ ended: true, sessionId: 'demo' });
+  });
+
+  it('iris_yield mode:waiting hands back with a waiting tone (revivable)', async () => {
+    const session = fakeSession({ state: SessionState.ACTIVE });
+    const res = (await tool(IrisTool.YIELD).handler(fakeDeps(session), { mode: 'waiting' })) as {
+      yielded: boolean;
+      mode: string;
+      sessionId: string;
+    };
+    expect(res).toEqual({ yielded: true, mode: 'waiting', sessionId: 'demo' });
+    expect(session.getState()).toBe(SessionState.ENDED);
+    const push = session.__pushed.at(-1);
+    expect(push?.state).toBe(SessionState.ENDED);
+    expect(push?.tone).toBe('waiting');
+    expect(push?.text).toContain('your move');
+  });
+
+  it('iris_yield mode:ask carries the question and an ask tone', async () => {
+    const session = fakeSession({ state: SessionState.ACTIVE });
+    const res = (await tool(IrisTool.YIELD).handler(fakeDeps(session), {
+      mode: 'ask',
+      note: 'Use Stripe or Paddle?',
+    })) as { yielded: boolean; mode: string; sessionId: string };
+    expect(res.mode).toBe('ask');
+    const push = session.__pushed.at(-1);
+    expect(push?.tone).toBe('ask');
+    expect(push?.text).toContain('Use Stripe or Paddle?');
   });
 
   it('iris_messages drains the inbox', async () => {

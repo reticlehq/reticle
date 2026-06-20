@@ -1,4 +1,4 @@
-import { SESSION_LIFECYCLE, UNDELIVERED_NOTES_LABEL } from '@syrin/iris-protocol';
+import { PresenterTone, SESSION_LIFECYCLE, UNDELIVERED_NOTES_LABEL } from '@syrin/iris-protocol';
 import type { Session, SessionManager } from './session.js';
 import { log } from '../log.js';
 
@@ -16,12 +16,8 @@ import { log } from '../log.js';
  */
 export const MCP_DISCONNECT_SUMMARY = 'Session ended — the agent disconnected.';
 
-/** Human-facing summary shown in the HUD when the reaper ends a session. */
-function idleEndSummary(idleMs: number): string {
-  const mins = Math.round(idleMs / 60_000);
-  const window = mins >= 1 ? `${String(mins)} min` : `${String(Math.round(idleMs / 1000))}s`;
-  return `Session ended automatically — no agent activity for ${window}.`;
-}
+/** Shown when the agent goes quiet between turns and the session is handed back to the human (WAITING). */
+const IDLE_WAITING_SUMMARY = 'Agent idle — your turn. Continue in your terminal.';
 
 /**
  * Fold any unread human notes into the end-of-session notice. Pure. A prompt typed into the panel in
@@ -34,20 +30,25 @@ export function composeEndedNotice(base: string, undelivered: string[]): string 
   return `${base} · ${UNDELIVERED_NOTES_LABEL} ${notes}`;
 }
 
-/** End a session, surfacing any unread human notes in its end notice instead of dropping them. */
-function endWithUndelivered(session: Session, base: string): void {
+/**
+ * End a session, surfacing any unread human notes in its end notice instead of dropping them. `tone`
+ * tells the panel how to present it: WAITING (agent went quiet) vs WARN (agent crashed/disconnected).
+ */
+function endWithUndelivered(session: Session, base: string, tone: PresenterTone): void {
   const undelivered = session.drainInbox().map((m) => m.text);
-  session.autoEnd(composeEndedNotice(base, undelivered));
+  session.autoEnd(composeEndedNotice(base, undelivered), tone);
 }
 
-/** End every active session whose agent has been idle past its window. Returns the ended ids. */
+/**
+ * Hand back every session whose agent has gone quiet past its window — shown as WAITING (your turn),
+ * not a crash, since the agent is still connected and revives on its next action. Returns the ids.
+ */
 export function reapIdleSessions(sessions: SessionManager): string[] {
   const ended: string[] = [];
   for (const session of sessions.all()) {
     if (session.isEnded()) continue;
-    const idle = session.agentIdleMs();
-    if (idle >= session.idleEndMs()) {
-      endWithUndelivered(session, idleEndSummary(idle));
+    if (session.agentIdleMs() >= session.idleEndMs()) {
+      endWithUndelivered(session, IDLE_WAITING_SUMMARY, PresenterTone.WAITING);
       ended.push(session.id);
     }
   }
@@ -55,12 +56,12 @@ export function reapIdleSessions(sessions: SessionManager): string[] {
   return ended;
 }
 
-/** End every active session immediately (the agent / MCP client disconnected). Returns ended ids. */
+/** End every active session immediately (the agent / MCP client disconnected → WARN). Returns ended ids. */
 export function endAllSessions(sessions: SessionManager, reason: string): string[] {
   const ended: string[] = [];
   for (const session of sessions.all()) {
     if (session.isEnded()) continue;
-    endWithUndelivered(session, reason);
+    endWithUndelivered(session, reason, PresenterTone.WARN);
     ended.push(session.id);
   }
   if (ended.length > 0) log('sessions_ended', { reason, sessions: ended });

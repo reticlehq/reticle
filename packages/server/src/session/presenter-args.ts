@@ -1,19 +1,20 @@
 import { PresenterTone, SessionState } from '@syrin/iris-protocol';
 
 /**
- * Build the args for a PRESENTER push. A session that auto-ended — the agent stopped or went idle —
- * rides a `warn` tone so the panel shouts "act now"; a normal human-driven transition stays calm.
- * Pure; the caller (Session.pushPresenter) owns the wire send.
+ * Build the args for a PRESENTER push. An ended session can carry a `tone` so the panel tells apart
+ * how the agent stopped — waiting (turn done), ask (needs you), warn (crashed) — from a calm "done".
+ * Tone only rides an ended push; live transitions (active/paused) never carry one. Pure.
  */
 export function buildPresenterArgs(
   state: SessionState,
   text: string | undefined,
-  autoEnded: boolean,
+  tone: PresenterTone | undefined,
 ): Record<string, unknown> {
-  const warn = state === SessionState.ENDED && autoEnded;
+  const carriesTone =
+    state === SessionState.ENDED && tone !== undefined && tone !== PresenterTone.CALM;
   return {
     state,
     ...(text !== undefined ? { text } : {}),
-    ...(warn ? { tone: PresenterTone.WARN } : {}),
+    ...(carriesTone ? { tone } : {}),
   };
 }

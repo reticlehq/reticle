@@ -58,6 +58,8 @@ export const IrisTool = {
   SESSION: 'iris_session',
   /** Live-control: end the session (→ ended + push PRESENTER). Handlers live in the tools facet. */
   END_SESSION: 'iris_end_session',
+  /** Live-control: hand the session back to the human between turns (→ waiting/ask, revivable). */
+  YIELD: 'iris_yield',
   /** Live-control: clear a pause (→ active). */
   RESUME: 'iris_resume',
   /** Live-control: drain the human→agent inbox (explicit poll). */

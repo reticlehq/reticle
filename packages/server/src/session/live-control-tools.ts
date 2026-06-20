@@ -1,5 +1,10 @@
 import { z } from 'zod';
-import { SessionState } from '@syrin/iris-protocol';
+import {
+  AGENT_ASK_NOTICE,
+  AGENT_WAITING_NOTICE,
+  PresenterTone,
+  SessionState,
+} from '@syrin/iris-protocol';
 import { IrisTool } from '../tools/tool-names.js';
 import { asNumber, asString } from '../tools/tools-helpers.js';
 import { waitForReady, IRIS_LOOP_GUIDE } from './session-readiness.js';
@@ -34,8 +39,9 @@ export const LIVE_CONTROL_TOOLS: ToolDef[] = [
   {
     name: IrisTool.END_SESSION,
     description:
-      'End this live testing session. Sets the server state to "ended", tells the human panel ' +
-      '(PRESENTER), and stops driving. Optional `summary` is shown in the panel. Idempotent.',
+      'End this session for good — use ONLY when the whole task is complete. Sets state "ended" ' +
+      '(calm, terminal) and shows the optional `summary` on the panel. If you are just finishing a ' +
+      'turn or waiting on the human, call iris_yield instead (revivable). Idempotent.',
     inputSchema: { summary: z.string().optional(), ...sessionIdShape },
     outputSchema: { ended: z.boolean(), sessionId: z.string() },
     handler: (deps, args) => {
@@ -43,6 +49,46 @@ export const LIVE_CONTROL_TOOLS: ToolDef[] = [
       // One PRESENTER push for the transition; the optional summary rides the same push.
       session.setState(SessionState.ENDED, asString(args['summary']));
       return Promise.resolve({ ended: true, sessionId: session.id });
+    },
+  },
+  {
+    name: IrisTool.YIELD,
+    description:
+      'MANDATORY before you stop driving and hand control back to the human — call this whenever you ' +
+      'finish a turn or need to wait on them, so the panel never falsely shows the agent as live. ' +
+      'mode:"waiting" = you are done responding and will continue on their next message. ' +
+      'mode:"ask" = you are blocked and need an answer first; put the question in `note` so it shows ' +
+      'on the panel. The session is REVIVED automatically on your next tool call, so you never need to ' +
+      'reopen it. Use iris_end_session instead only when the whole task is truly complete.',
+    inputSchema: {
+      mode: z
+        .enum([PresenterTone.WAITING, PresenterTone.ASK])
+        .describe('"waiting" = turn done, will resume; "ask" = blocked, need the human to answer.'),
+      note: z
+        .string()
+        .optional()
+        .describe('For mode:"ask", the question to show the human on the panel.'),
+      ...sessionIdShape,
+    },
+    outputSchema: { yielded: z.boolean(), mode: z.string(), sessionId: z.string() },
+    handler: (deps, args) => {
+      const session = deps.sessions.resolve(asString(args['sessionId']));
+      const ask = asString(args['mode']) === PresenterTone.ASK;
+      const note = asString(args['note']);
+      const tone = ask ? PresenterTone.ASK : PresenterTone.WAITING;
+      const text =
+        ask && note !== undefined && note.trim().length > 0
+          ? `${AGENT_ASK_NOTICE}: ${note.trim()}`
+          : ask
+            ? AGENT_ASK_NOTICE
+            : AGENT_WAITING_NOTICE;
+      // autoEnd = revivable end: the panel reflects the handoff now, the agent's next call revives it.
+      session.autoEnd(text, tone);
+      return Promise.resolve({
+        yielded: true,
+        mode: ask ? PresenterTone.ASK : PresenterTone.WAITING,
+        sessionId: session.id,
+      });
     },
   },
   {
