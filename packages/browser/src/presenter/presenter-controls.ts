@@ -54,11 +54,12 @@ export const CONTROLS_CSS = `
   color:var(--iris-accent);border:1px solid var(--iris-accent);background:var(--iris-accent-soft);padding:2px 8px;border-radius:999px;}
 [data-iris-overlay][data-iris-state="paused"] [data-iris-badge]{display:inline-flex;}
 [data-iris-hud] [data-iris-foot]{flex:none;padding:10px 12px 12px;border-top:1px solid var(--iris-line2);background:rgba(0,0,0,.16);}
-[data-iris-hud] .iris-composer{display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.05);
+[data-iris-hud] .iris-composer{display:flex;align-items:flex-end;gap:6px;background:rgba(255,255,255,.05);
   border:1px solid var(--iris-line);border-radius:14px;padding:5px 6px 5px 14px;transition:border-color .15s,box-shadow .15s;}
 [data-iris-hud] .iris-composer:focus-within{border-color:var(--iris-accent);box-shadow:0 0 0 3px var(--iris-accent-soft);}
-[data-iris-hud] .iris-msg{flex:1;min-width:0;pointer-events:auto;background:transparent;border:none;outline:none;
-  color:var(--iris-fg);font-family:var(--iris-font);font-size:13px;height:28px;padding:0;}
+[data-iris-hud] .iris-msg{flex:1;min-width:0;pointer-events:auto;background:transparent;border:none;outline:none;resize:none;
+  color:var(--iris-fg);font-family:var(--iris-font);font-size:13px;line-height:18px;height:18px;min-height:18px;max-height:96px;
+  padding:5px 0;overflow-y:auto;}
 [data-iris-hud] .iris-msg::placeholder{color:var(--iris-faint);}
 [data-iris-hud] .iris-msg:disabled{opacity:.5;}
 [data-iris-hud] .iris-send{flex:none;width:30px;height:30px;padding:0;border-radius:10px;border:none;cursor:pointer;pointer-events:auto;
@@ -110,13 +111,13 @@ export const CONTROLS_BANNER_HTML = `<div data-iris-banner class="iris-banner">$
 const SEND_ICON = `<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>`;
 
 /** Footer markup: a rounded composer pill (input + icon Send), appended after the log div. */
-export const CONTROLS_FOOT_HTML = `<div data-iris-foot><div class="iris-composer"><input data-iris-input class="iris-msg" type="text" placeholder="${INPUT_PLACEHOLDER}" /><button type="button" data-iris-send class="iris-send" aria-label="${CONTROL_LABEL.SEND}">${SEND_ICON}</button></div><div class="iris-export"><button type="button" data-iris-copy class="iris-ctl">${COPY_LABEL}</button><button type="button" data-iris-export class="iris-ctl">${EXPORT_LABEL}</button><span data-iris-export-msg class="iris-export-msg"></span></div></div>`;
+export const CONTROLS_FOOT_HTML = `<div data-iris-foot><div class="iris-composer"><textarea data-iris-input class="iris-msg" rows="1" placeholder="${INPUT_PLACEHOLDER}"></textarea><button type="button" data-iris-send class="iris-send" aria-label="${CONTROL_LABEL.SEND}">${SEND_ICON}</button></div><div class="iris-export"><button type="button" data-iris-copy class="iris-ctl">${COPY_LABEL}</button><button type="button" data-iris-export class="iris-ctl">${EXPORT_LABEL}</button><span data-iris-export-msg class="iris-export-msg"></span></div></div>`;
 
 /** Element refs of the control surface, queried once after the markup is in the DOM. */
 export interface ControlRefs {
   pauseBtn: HTMLButtonElement | undefined;
   endBtn: HTMLButtonElement | undefined;
-  input: HTMLInputElement | undefined;
+  input: HTMLTextAreaElement | undefined;
   sendBtn: HTMLButtonElement | undefined;
   banner: HTMLElement | undefined;
   copyBtn: HTMLButtonElement | undefined;
@@ -128,7 +129,7 @@ export function queryControlRefs(root: HTMLElement): ControlRefs {
   return {
     pauseBtn: root.querySelector<HTMLButtonElement>('[data-iris-pause]') ?? undefined,
     endBtn: root.querySelector<HTMLButtonElement>('[data-iris-end]') ?? undefined,
-    input: root.querySelector<HTMLInputElement>('[data-iris-input]') ?? undefined,
+    input: root.querySelector<HTMLTextAreaElement>('[data-iris-input]') ?? undefined,
     sendBtn: root.querySelector<HTMLButtonElement>('[data-iris-send]') ?? undefined,
     banner: root.querySelector<HTMLElement>('[data-iris-banner]') ?? undefined,
     copyBtn: root.querySelector<HTMLButtonElement>('[data-iris-copy]') ?? undefined,
@@ -189,8 +190,13 @@ export class ControlPanel {
     this.#refs.endBtn?.addEventListener('click', () => this.#onEnd());
     this.#refs.sendBtn?.addEventListener('click', () => this.#onSend());
     this.#refs.input?.addEventListener('keydown', (e) => {
-      if (e instanceof KeyboardEvent && e.key === 'Enter') this.#onSend();
+      // Enter sends; Shift+Enter inserts a newline (falls through to the textarea's default).
+      if (e instanceof KeyboardEvent && e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        this.#onSend();
+      }
     });
+    this.#refs.input?.addEventListener('input', () => this.#autosize());
     this.#refs.copyBtn?.addEventListener('click', () => this.#onCopy());
     this.#refs.exportBtn?.addEventListener('click', () => this.#onExport());
     this.setState(SessionState.ACTIVE);
@@ -252,6 +258,16 @@ export class ControlPanel {
     this.#host.emit(HumanControlKind.MESSAGE, text);
     this.#host.logHuman(text);
     if (this.#refs.input !== undefined) this.#refs.input.value = '';
+    this.#autosize();
+  }
+
+  /** Grow the composer to fit its content (up to the CSS max-height), then shrink back — soothing,
+   *  no scrollbar until it's genuinely long. Driven on input and after a send clears the field. */
+  #autosize(): void {
+    const el = this.#refs.input;
+    if (el === undefined) return;
+    el.style.height = 'auto';
+    el.style.height = `${String(Math.min(el.scrollHeight, 96))}px`;
   }
 
   /**

@@ -1,5 +1,9 @@
 import { EventType } from '@syrin/iris-protocol';
 import { resolveMarkAnchor } from './mark-anchor.js';
+import { nativeSetTimeout, nativeClearTimeout } from '../timers/native-timers.js';
+
+/** The cursor must rest this long before the outline boxes the element under it — calm, not jumpy. */
+const HIGHLIGHT_REST_MS = 130;
 
 /**
  * The human "annotate the bug where you see it" surface. A dev toggles annotate mode, clicks the
@@ -42,10 +46,13 @@ ${sel('fab')}[data-on="1"]{color:#fff;border-color:#7c83ff;background:linear-gra
 ${sel('dot')}{width:8px;height:8px;border-radius:50%;background:#ff7a7a;flex:none;}
 ${sel('fab')}[data-on="1"] ${sel('dot')}{background:#fff;}
 html[${ACTIVE_ATTR}] *{cursor:crosshair !important;}
-${sel('hi')}{position:fixed;z-index:${String(Z + 1)};pointer-events:none;display:none;box-sizing:border-box;
-  border:2px solid #7c83ff;border-radius:6px;background:rgba(124,131,255,.12);
-  box-shadow:0 0 0 2px rgba(124,131,255,.22);transition:left .04s ease,top .04s ease,width .04s ease,height .04s ease;}
-${sel('hi')}[data-on="1"]{display:block;}
+/* The Flag button + its popover are interactive — keep the pointer cursor over them, not crosshair. */
+html[${ACTIVE_ATTR}] ${sel('fab')},html[${ACTIVE_ATTR}] ${sel('fab')} *,html[${ACTIVE_ATTR}] ${sel('pop')},html[${ACTIVE_ATTR}] ${sel('pop')} *{cursor:pointer !important;}
+/* The outline glides to the rested element with an ease (soothing), and fades rather than snapping. */
+${sel('hi')}{position:fixed;z-index:${String(Z + 1)};pointer-events:none;opacity:0;box-sizing:border-box;
+  border:2px solid #7c83ff;border-radius:6px;background:rgba(124,131,255,.12);box-shadow:0 0 0 2px rgba(124,131,255,.22);
+  transition:left .22s cubic-bezier(.22,1,.36,1),top .22s cubic-bezier(.22,1,.36,1),width .22s cubic-bezier(.22,1,.36,1),height .22s cubic-bezier(.22,1,.36,1),opacity .18s ease;}
+${sel('hi')}[data-on="1"]{opacity:1;}
 ${sel('hilabel')}{position:absolute;top:-21px;left:-2px;background:#6366f1;color:#fff;
   font:600 10.5px/1 "Inter",system-ui,sans-serif;padding:3px 6px;border-radius:5px;white-space:nowrap;
   max-width:300px;overflow:hidden;text-overflow:ellipsis;}
@@ -78,6 +85,8 @@ export class Annotator {
   /** Hover outline box that shows WHICH element a click would flag (agentation-style). */
   #hi: HTMLElement | undefined;
   #hiLabel: HTMLElement | undefined;
+  /** Debounce timer — boxes the element only once the cursor rests, so a fast sweep doesn't flicker. */
+  #hiTimer: ReturnType<typeof nativeSetTimeout> | undefined;
   #active = false;
   #markCount = 0;
   #onClick: ((ev: MouseEvent) => void) | undefined;
@@ -127,7 +136,7 @@ export class Annotator {
     document.addEventListener('click', this.#onClick, { capture: true });
 
     // Hover outline: while active, box the element a click would flag — so you see what you're pointing at.
-    this.#onMove = (ev: MouseEvent): void => this.#handleMove(ev);
+    this.#onMove = (ev: MouseEvent): void => this.#scheduleMove(ev);
     document.addEventListener('mousemove', this.#onMove, { passive: true, capture: true });
 
     // Escape is the universal "back out": close an open popover, else leave annotate mode.
@@ -151,6 +160,10 @@ export class Annotator {
     if (this.#onMove !== undefined) {
       document.removeEventListener('mousemove', this.#onMove, { capture: true });
       this.#onMove = undefined;
+    }
+    if (this.#hiTimer !== undefined) {
+      nativeClearTimeout(this.#hiTimer);
+      this.#hiTimer = undefined;
     }
     this.#closePopover();
     document.documentElement.removeAttribute(ACTIVE_ATTR);
@@ -183,6 +196,19 @@ export class Annotator {
     this.#openPopover(target, ev.clientX, ev.clientY);
   }
 
+  /**
+   * Debounce the outline: while the cursor is moving the human is still travelling, so we wait for a
+   * brief rest before boxing the element under it (the box then eases into place via CSS). A pending
+   * timer is replaced on every move, so only the resting position ever paints.
+   */
+  #scheduleMove(ev: MouseEvent): void {
+    if (this.#hiTimer !== undefined) nativeClearTimeout(this.#hiTimer);
+    this.#hiTimer = nativeSetTimeout(() => {
+      this.#hiTimer = undefined;
+      this.#handleMove(ev);
+    }, HIGHLIGHT_REST_MS);
+  }
+
   /** Box the element under the cursor (when active, no popover open) so you see what a click flags. */
   #handleMove(ev: MouseEvent): void {
     if (this.#hi === undefined) return;
@@ -209,8 +235,12 @@ export class Annotator {
     if (this.#hiLabel !== undefined) this.#hiLabel.textContent = describeEl(target);
   }
 
-  /** Hide the hover outline (annotate mode off, or a popover took over). */
+  /** Hide the hover outline (annotate mode off, or a popover took over). Cancels any pending box. */
   #hideHighlight(): void {
+    if (this.#hiTimer !== undefined) {
+      nativeClearTimeout(this.#hiTimer);
+      this.#hiTimer = undefined;
+    }
     this.#hi?.setAttribute('data-on', '0');
   }
 

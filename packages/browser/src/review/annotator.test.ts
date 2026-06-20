@@ -174,7 +174,11 @@ describe('Annotator — human marks a mistake on the page', () => {
     expect(emits).toHaveLength(0);
   });
 
-  it('hover highlight boxes the element under the cursor (with a label) while active', () => {
+  // The outline is debounced — it boxes the element only after the cursor rests (HIGHLIGHT_REST_MS),
+  // so a fast sweep across the page never flickers. Tests wait past that rest before asserting.
+  const restForHighlight = (): Promise<void> => new Promise((r) => setTimeout(r, 170));
+
+  it('hover highlight boxes the element under the cursor (with a label) once it rests', async () => {
     const { ann } = setup();
     ann.toggle(true);
     document.body.insertAdjacentHTML('beforeend', '<button data-testid="cta">Pay now</button>');
@@ -183,24 +187,28 @@ describe('Annotator — human marks a mistake on the page', () => {
     btn.getBoundingClientRect = () => ({ left: 10, top: 20, width: 100, height: 30 }) as DOMRect;
     btn.dispatchEvent(new MouseEvent('mousemove', { bubbles: true }));
     const hi = document.querySelector<HTMLElement>('[data-iris-mark="hi"]');
+    expect(hi?.getAttribute('data-on')).not.toBe('1'); // still travelling — not yet
+    await restForHighlight();
     expect(hi?.getAttribute('data-on')).toBe('1');
     expect(hi?.style.width).toBe('100px');
     expect(hi?.style.left).toBe('10px');
     expect(hi?.querySelector('[data-iris-mark="hilabel"]')?.textContent).toBe('cta'); // testid wins
   });
 
-  it('hover highlight stays off when inactive and hides over its own UI', () => {
+  it('hover highlight stays off when inactive and hides over its own UI', async () => {
     const { ann } = setup();
     document.body.insertAdjacentHTML('beforeend', '<button>Go</button>');
     const btn = document.querySelector('button:not([data-iris-mark="fab"])') as HTMLElement;
     btn.getBoundingClientRect = () => ({ left: 0, top: 0, width: 50, height: 20 }) as DOMRect;
     btn.dispatchEvent(new MouseEvent('mousemove', { bubbles: true })); // inactive
+    await restForHighlight();
     expect(document.querySelector('[data-iris-mark="hi"]')?.getAttribute('data-on')).toBe('0');
     // active, but moving over the FAB (our own UI) → still off
     ann.toggle(true);
     document
       .querySelector('[data-iris-mark="fab"]')
       ?.dispatchEvent(new MouseEvent('mousemove', { bubbles: true }));
+    await restForHighlight();
     expect(document.querySelector('[data-iris-mark="hi"]')?.getAttribute('data-on')).toBe('0');
   });
 
