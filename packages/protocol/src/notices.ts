@@ -15,6 +15,13 @@ export const THROTTLED_WARNING =
 export const AGENT_STOPPED_NOTICE = 'Agent stopped — switch to your terminal to continue.';
 
 /**
+ * Prefixes any human notes typed into the panel but not yet read when the session ends — folded into
+ * the end banner so a prompt sent in the death-race (agent stops mid-keystroke) is surfaced back to
+ * the human, copyable, instead of vanishing into a dead inbox.
+ */
+export const UNDELIVERED_NOTES_LABEL = 'Undelivered (paste into your terminal):';
+
+/**
  * Actionable companion to THROTTLED_WARNING. Surfaced on act/assert results and
  * iris_sessions rows when a tab is hidden/throttled and may be un-focusable/un-recoverable from
  * the in-page SDK + CDP path. Points at the `iris drive` escape hatch (a guaranteed scriptable

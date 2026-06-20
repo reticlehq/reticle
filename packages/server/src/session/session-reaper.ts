@@ -1,5 +1,5 @@
-import { SESSION_LIFECYCLE } from '@syrin/iris-protocol';
-import type { SessionManager } from './session.js';
+import { SESSION_LIFECYCLE, UNDELIVERED_NOTES_LABEL } from '@syrin/iris-protocol';
+import type { Session, SessionManager } from './session.js';
 import { log } from '../log.js';
 
 /**
@@ -23,6 +23,23 @@ function idleEndSummary(idleMs: number): string {
   return `Session ended automatically — no agent activity for ${window}.`;
 }
 
+/**
+ * Fold any unread human notes into the end-of-session notice. Pure. A prompt typed into the panel in
+ * the death-race — the agent stops before draining its inbox — would otherwise vanish silently; here
+ * it rides the end banner so the human can copy it into their terminal. No notes → the base unchanged.
+ */
+export function composeEndedNotice(base: string, undelivered: string[]): string {
+  if (undelivered.length === 0) return base;
+  const notes = undelivered.map((text) => `"${text}"`).join(', ');
+  return `${base} · ${UNDELIVERED_NOTES_LABEL} ${notes}`;
+}
+
+/** End a session, surfacing any unread human notes in its end notice instead of dropping them. */
+function endWithUndelivered(session: Session, base: string): void {
+  const undelivered = session.drainInbox().map((m) => m.text);
+  session.autoEnd(composeEndedNotice(base, undelivered));
+}
+
 /** End every active session whose agent has been idle past its window. Returns the ended ids. */
 export function reapIdleSessions(sessions: SessionManager): string[] {
   const ended: string[] = [];
@@ -30,7 +47,7 @@ export function reapIdleSessions(sessions: SessionManager): string[] {
     if (session.isEnded()) continue;
     const idle = session.agentIdleMs();
     if (idle >= session.idleEndMs()) {
-      session.autoEnd(idleEndSummary(idle));
+      endWithUndelivered(session, idleEndSummary(idle));
       ended.push(session.id);
     }
   }
@@ -43,7 +60,7 @@ export function endAllSessions(sessions: SessionManager, reason: string): string
   const ended: string[] = [];
   for (const session of sessions.all()) {
     if (session.isEnded()) continue;
-    session.autoEnd(reason);
+    endWithUndelivered(session, reason);
     ended.push(session.id);
   }
   if (ended.length > 0) log('sessions_ended', { reason, sessions: ended });

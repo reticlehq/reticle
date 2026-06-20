@@ -7,8 +7,14 @@ import {
   SessionState,
   type HelloMessage,
 } from '@syrin/iris-protocol';
+import { UNDELIVERED_NOTES_LABEL } from '@syrin/iris-protocol';
 import { Session, SessionManager } from './session.js';
-import { reapIdleSessions, endAllSessions, SessionReaper } from './session-reaper.js';
+import {
+  reapIdleSessions,
+  endAllSessions,
+  composeEndedNotice,
+  SessionReaper,
+} from './session-reaper.js';
 
 const fakeSocket = { send: (): void => {} } as unknown as WebSocket;
 
@@ -95,6 +101,42 @@ describe('endAllSessions', () => {
 
     expect(ended).toEqual(['a']);
     expect(a.isEnded()).toBe(true);
+  });
+});
+
+describe('composeEndedNotice', () => {
+  it('returns the base notice unchanged when nothing is undelivered', () => {
+    expect(composeEndedNotice('Session ended.', [])).toBe('Session ended.');
+  });
+
+  it('folds undelivered notes into the notice, quoted and labeled', () => {
+    expect(composeEndedNotice('Agent stopped.', ['fix the date picker', 'and the footer'])).toBe(
+      `Agent stopped. · ${UNDELIVERED_NOTES_LABEL} "fix the date picker", "and the footer"`,
+    );
+  });
+});
+
+describe('endAllSessions surfaces an undelivered panel prompt', () => {
+  it('folds a message the agent never read into the end notice instead of dropping it', () => {
+    const sent: Record<string, unknown>[] = [];
+    const recordingSocket = {
+      readyState: 1,
+      send: (raw: string) => sent.push(JSON.parse(raw) as Record<string, unknown>),
+    } as unknown as WebSocket;
+    const mgr = new SessionManager();
+    const s = new Session(hello('race'), recordingSocket, () => 0);
+    mgr.add(s);
+    s.pushMessage('also fix the date picker on mobile'); // typed in the death-race
+
+    endAllSessions(mgr, 'Agent stopped — switch to your terminal to continue.');
+
+    const presenter = sent.find(
+      (m) => m['name'] === 'presenter' && (m['args'] as { state?: string }).state === 'ended',
+    );
+    const text = (presenter?.['args'] as { text?: string } | undefined)?.text ?? '';
+    expect(text).toContain('also fix the date picker on mobile');
+    expect(text).toContain(UNDELIVERED_NOTES_LABEL);
+    expect(s.inboxSize()).toBe(0); // drained — no duplicate delivery to a returning agent
   });
 });
 
