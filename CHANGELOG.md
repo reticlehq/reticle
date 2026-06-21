@@ -4,6 +4,39 @@ All notable changes to **`@syrin/iris`** are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] — 2026-06-21
+
+The "verify anywhere, ready for enterprises" release. One command verifies a running app from any
+pipeline — no MCP, no human — and enterprise features unlock with an offline license.
+
+### Added
+
+- **`iris verify <url>`** — one-shot, non-MCP verification: drives the preview, replays the saved
+  flows, prints a deterministic verdict, and exits non-zero on fail. The command CI and AI
+  app-builder platforms call without speaking MCP — the same `IrisVerificationRun` artifact the MCP
+  and HTTP paths produce.
+- **Drive a hosted preview** — for a non-localhost URL, Iris re-invokes the page's `iris.connect()`
+  (allow-non-localhost + a one-shot pairing token) so a deployed preview pairs to the local bridge
+  with no app redeploy; `iris verify --storage-state <file>` replays a logged-in session past an
+  auth wall.
+- **Enterprise licensing** — `iris license` shows activation status; offline Ed25519 keys
+  (`IRIS_LICENSE_KEY`) verify locally with **no phone-home**. Open-core split: Apache-2.0 SDK, FSL
+  server/CLI, Iris Enterprise License for `ee/` features.
+- **Branded id types** — `RunId` is nominal end-to-end, so ids can't be confused with flow names.
+
+### Changed
+
+- **Hardened persistence + HTTP boundary** — atomic run writes, bounded `.iris/runs` retention,
+  verify-server request/timeout limits, a frozen contract-lock test, and path-traversal guards on
+  read and write.
+
+### Fixed
+
+- Oracle-backed flows now report **high** confidence — the success consequence propagates into the
+  verdict instead of reading as a smoke test.
+- A localhost preview connects to the bridge without a token mismatch; hosted-preview origins are
+  allow-listed.
+
 ## [0.8.0] — 2026-06-20
 
 The "developers love it" release. 0.7.0 won the agent; 0.8.0 wins the human — the dev who watches the
