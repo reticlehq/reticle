@@ -55,7 +55,8 @@ if (run.verdict.status !== 'pass') {
 } else attachToDeploy(run); // "verified ✓"; set profile:"prod-preview" to redact internals downstream
 ```
 
-Runnable starter: [`oem-verify-harness.mjs`](./oem-verify-harness.mjs).
+Or skip the HTTP server entirely with the one-shot CLI — `iris verify <preview-url>` drives the preview,
+replays the saved flows, prints the verdict, and exits non-zero on fail (ideal for a CI step).
 
 ---
 
