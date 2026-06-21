@@ -11,7 +11,10 @@
  */
 
 import { join, basename } from 'node:path';
+import { randomUUID } from 'node:crypto';
 import {
+  IRIS_DEFAULT_PORT,
+  IRIS_WS_PATH,
   IrisDir,
   RunAgentKind,
   RunFramework,
@@ -155,13 +158,30 @@ interface LiveOpts {
   now: () => number;
 }
 
+function originOf(url: string): string | undefined {
+  try {
+    return new URL(url).origin;
+  } catch {
+    return undefined;
+  }
+}
+
 async function openLiveConnection(opts: LiveOpts): Promise<VerifyConnection> {
+  // Pair a hosted (non-localhost) preview to our loopback bridge: a one-shot token both the bridge
+  // and the injected iris.connect() use, plus the preview's origin on the allow-list (the bridge
+  // rejects foreign origins by default). This is what makes "verify a live Lovable URL" work.
+  const token = randomUUID();
+  const bridgeUrl = `ws://localhost:${String(IRIS_DEFAULT_PORT)}${IRIS_WS_PATH}`;
+  const origin = originOf(opts.url);
   const running = await start({
     driveUrl: opts.url,
     headless: opts.headless,
     mcp: false,
     irisRoot: opts.irisRoot,
     now: opts.now,
+    token,
+    injectConnect: { token, url: bridgeUrl },
+    ...(origin !== undefined ? { allowedOrigins: [origin] } : {}),
   });
   const deps = buildVerifyDeps(running, opts.irisRoot, opts.now);
   const runner = new IrisRunner(createRunnerPort(deps));

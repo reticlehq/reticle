@@ -16,7 +16,10 @@ interface FakePageState {
   url: string;
   gotoCalls: string[];
   mouse: MouseCall[];
+  evalCalls: string[];
+  waitForFunctionCalls: number;
   gotoThrows?: boolean;
+  waitForFunctionThrows?: boolean;
 }
 
 function fakePage(state: FakePageState): unknown {
@@ -26,6 +29,15 @@ function fakePage(state: FakePageState): unknown {
       state.gotoCalls.push(url);
       if (state.gotoThrows === true) return Promise.reject(new Error('goto boom'));
       state.url = url;
+      return Promise.resolve(null);
+    },
+    waitForFunction: () => {
+      state.waitForFunctionCalls += 1;
+      if (state.waitForFunctionThrows === true) return Promise.reject(new Error('no SDK on page'));
+      return Promise.resolve(null);
+    },
+    evaluate: (arg: unknown) => {
+      state.evalCalls.push(String(arg));
       return Promise.resolve(null);
     },
     mouse: {
@@ -93,20 +105,24 @@ function makeLaunch(spy: LaunchSpy) {
 function newSpy(overrides: Partial<LaunchSpy> = {}): LaunchSpy {
   return {
     calls: [],
-    state: { closeCalls: 0, page: { url: DRIVE_URL, gotoCalls: [], mouse: [] } },
+    state: {
+      closeCalls: 0,
+      page: { url: DRIVE_URL, gotoCalls: [], mouse: [], evalCalls: [], waitForFunctionCalls: 0 },
+    },
     ...overrides,
   };
 }
 
 function makeProvider(
   spy: LaunchSpy,
-  opts: { headless?: boolean } = {},
+  opts: { headless?: boolean; injectConnect?: { token: string; url: string } } = {},
 ): LaunchedRealInputProvider {
   return new LaunchedRealInputProvider({
     driveUrl: DRIVE_URL,
     headless: opts.headless ?? true,
     launch: makeLaunch(spy),
     sleep: () => Promise.resolve(),
+    ...(opts.injectConnect !== undefined ? { injectConnect: opts.injectConnect } : {}),
   });
 }
 
@@ -128,6 +144,50 @@ describe('LaunchedRealInputProvider', () => {
     expect(spy.calls).toEqual([{ headless: false }]);
   });
 
+  it('does not inject a connect when injectConnect is unset', async () => {
+    const spy = newSpy();
+    await makeProvider(spy).navigate();
+    expect(spy.state.page.evalCalls).toEqual([]);
+    expect(spy.state.page.waitForFunctionCalls).toBe(0);
+  });
+
+  it('re-invokes the page SDK connect with the token + allowNonLocalhost when injectConnect is set', async () => {
+    const spy = newSpy();
+    const provider = makeProvider(spy, {
+      injectConnect: { token: 'tok-123', url: 'ws://localhost:4400/iris' },
+    });
+    await provider.navigate();
+
+    expect(spy.state.page.waitForFunctionCalls).toBe(1);
+    expect(spy.state.page.evalCalls).toHaveLength(1);
+    const [script] = spy.state.page.evalCalls;
+    expect(script).toContain('__irisInstance.connect');
+    expect(script).toContain('"allowNonLocalhost":true');
+    expect(script).toContain('tok-123');
+    expect(script).toContain('ws://localhost:4400/iris');
+  });
+
+  it('navigate still succeeds when the page exposes no SDK (waitForFunction times out)', async () => {
+    const spy = newSpy({
+      state: {
+        closeCalls: 0,
+        page: {
+          url: DRIVE_URL,
+          gotoCalls: [],
+          mouse: [],
+          evalCalls: [],
+          waitForFunctionCalls: 0,
+          waitForFunctionThrows: true,
+        },
+      },
+    });
+    const provider = makeProvider(spy, {
+      injectConnect: { token: 't', url: 'ws://localhost:4400/iris' },
+    });
+    await expect(provider.navigate()).resolves.toBeUndefined();
+    expect(spy.state.page.evalCalls).toEqual([]);
+  });
+
   it('isAvailableFor returns true for the launched page url', async () => {
     const spy = newSpy();
     const provider = makeProvider(spy);
@@ -138,7 +198,16 @@ describe('LaunchedRealInputProvider', () => {
 
   it('isAvailableFor matches when the page url drifted by fragment', async () => {
     const spy = newSpy({
-      state: { closeCalls: 0, page: { url: `${DRIVE_URL}#section`, gotoCalls: [], mouse: [] } },
+      state: {
+        closeCalls: 0,
+        page: {
+          url: `${DRIVE_URL}#section`,
+          gotoCalls: [],
+          mouse: [],
+          evalCalls: [],
+          waitForFunctionCalls: 0,
+        },
+      },
     });
     const provider = makeProvider(spy);
     await provider.navigate();
@@ -201,7 +270,14 @@ describe('LaunchedRealInputProvider', () => {
     const spy = newSpy({
       state: {
         closeCalls: 0,
-        page: { url: DRIVE_URL, gotoCalls: [], mouse: [], gotoThrows: true },
+        page: {
+          url: DRIVE_URL,
+          gotoCalls: [],
+          mouse: [],
+          evalCalls: [],
+          waitForFunctionCalls: 0,
+          gotoThrows: true,
+        },
       },
     });
     const provider = makeProvider(spy);

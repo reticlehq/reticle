@@ -304,6 +304,16 @@ export class CdpRealInputProvider implements RealInputProvider {
 /** Injected launcher so unit tests stub Playwright without import(). */
 export type LaunchFn = (headless: boolean) => Promise<Browser>;
 
+/**
+ * Force a driven page's already-loaded SDK to connect to our loopback bridge with a pairing token,
+ * overriding the app's own (often localhost-only) iris.connect() — so a hosted preview verifies with
+ * no app redeploy. connect() is a no-op once connected, so re-invoking it is safe.
+ */
+export interface InjectConnectOptions {
+  token: string;
+  url: string;
+}
+
 export interface LaunchedProviderOptions {
   driveUrl: string;
   headless: boolean;
@@ -311,7 +321,11 @@ export interface LaunchedProviderOptions {
   sleep?: SleepFn;
   /** Injected launcher so unit tests can stub Playwright; defaults to dynamic import('playwright'). */
   launch?: LaunchFn;
+  /** When set, re-invoke the page's iris.connect() with these after load (drive-a-hosted-preview). */
+  injectConnect?: InjectConnectOptions;
 }
+
+const INJECT_CONNECT_WAIT_MS = 8_000;
 
 /** The only place the dynamic value import of Playwright lives for the launched (drive) path. */
 const launchedChromium: LaunchFn = async (headless) => {
@@ -337,6 +351,7 @@ export class LaunchedRealInputProvider implements OwnedRealInputProvider {
   readonly #headless: boolean;
   readonly #sleep: SleepFn;
   readonly #launch: LaunchFn;
+  readonly #injectConnect: InjectConnectOptions | undefined;
   #browser: Browser | undefined;
   #page: Page | undefined;
 
@@ -345,6 +360,7 @@ export class LaunchedRealInputProvider implements OwnedRealInputProvider {
     this.#headless = options.headless;
     this.#sleep = options.sleep ?? nodeSleep;
     this.#launch = options.launch ?? launchedChromium;
+    this.#injectConnect = options.injectConnect;
   }
 
   async navigate(): Promise<void> {
@@ -358,6 +374,26 @@ export class LaunchedRealInputProvider implements OwnedRealInputProvider {
         DriveErrorCode.NAVIGATE_FAILED,
         e instanceof Error ? e.message : String(e),
       );
+    }
+    await this.#tryInjectConnect(page);
+  }
+
+  /**
+   * Wait for the page's Iris singleton to exist, then re-invoke connect() with our token + loopback
+   * URL so a hosted (non-localhost) preview pairs to our bridge without the app being reconfigured.
+   * Best-effort: a page with no SDK simply never exposes the global, and we move on.
+   */
+  async #tryInjectConnect(page: Page): Promise<void> {
+    const opts = this.#injectConnect;
+    if (opts === undefined) return;
+    try {
+      await page.waitForFunction('!!globalThis.__irisInstance', {
+        timeout: INJECT_CONNECT_WAIT_MS,
+      });
+      const arg = JSON.stringify({ allowNonLocalhost: true, token: opts.token, url: opts.url });
+      await page.evaluate(`globalThis.__irisInstance.connect(${arg})`);
+    } catch {
+      // No SDK on the page (or it connected already) — the no-session guard in verify reports it.
     }
   }
 

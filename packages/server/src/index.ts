@@ -26,7 +26,11 @@ import { createMcpServer } from './mcp.js';
 import { SessionReaper, endAllSessions, MCP_DISCONNECT_SUMMARY } from './session/session-reaper.js';
 import { resolveToolProfile } from './tools/profiles.js';
 import { CdpRealInputProvider, LaunchedRealInputProvider } from './input/real-input.js';
-import type { OwnedRealInputProvider, RealInputProvider } from './input/real-input.js';
+import type {
+  OwnedRealInputProvider,
+  RealInputProvider,
+  InjectConnectOptions,
+} from './input/real-input.js';
 import { log } from './log.js';
 
 /** A human-facing one-liner for a panel replay verdict — ✓ passed / ⚠ drifted / ✗ errored. */
@@ -156,6 +160,8 @@ export interface StartOptions {
   headless?: boolean;
   /** injected so tests swap in a fake launched provider instead of real Playwright. */
   realInputFactory?: (opts: { driveUrl: string; headless: boolean }) => OwnedRealInputProvider;
+  /** When driving, force the page's SDK to (re)connect to our bridge with this token — verify a hosted preview. */
+  injectConnect?: InjectConnectOptions;
   /** absolute .iris root. Defaults to process.cwd()/.iris. Injectable for tests. */
   irisRoot?: string;
   /** injectable clock for contract.json's generatedAt stamp. Defaults to Date.now. */
@@ -214,10 +220,15 @@ export async function start(options: StartOptions = {}): Promise<RunningServer> 
   const driveUrl = options.driveUrl;
   if (driveUrl !== undefined && driveUrl.length > 0) {
     const headless = options.headless ?? true;
+    const injectConnect = options.injectConnect;
     const factory =
       options.realInputFactory ??
       ((opts) =>
-        new LaunchedRealInputProvider({ driveUrl: opts.driveUrl, headless: opts.headless }));
+        new LaunchedRealInputProvider({
+          driveUrl: opts.driveUrl,
+          headless: opts.headless,
+          ...(injectConnect !== undefined ? { injectConnect } : {}),
+        }));
     const launched = factory({ driveUrl, headless });
     try {
       await launched.navigate();
@@ -314,10 +325,15 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
   const driveUrl = options.driveUrl;
   if (driveUrl !== undefined && driveUrl.length > 0) {
     const headless = options.headless ?? true;
+    const injectConnect = options.injectConnect;
     const factory =
       options.realInputFactory ??
       ((opts) =>
-        new LaunchedRealInputProvider({ driveUrl: opts.driveUrl, headless: opts.headless }));
+        new LaunchedRealInputProvider({
+          driveUrl: opts.driveUrl,
+          headless: opts.headless,
+          ...(injectConnect !== undefined ? { injectConnect } : {}),
+        }));
     const launched = factory({ driveUrl, headless });
     try {
       await launched.navigate();
