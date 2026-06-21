@@ -21,7 +21,7 @@ import { asString } from '../tools/tools-helpers.js';
 import { replayFlow } from './flow-replay.js';
 import { buildDecision, buildSuiteVerdict } from './decision.js';
 import { classifyFlowAssertions } from './flow-classify.js';
-import { assertSuccess, dynamicTestids, successLabel } from './flow-success.js';
+import { assertSuccess, dynamicTestids, successLabel, SUCCESS_STEP_TOOL } from './flow-success.js';
 import { flowPath } from '../project/iris-dir.js';
 import { applyHealChanges, collectProposals } from './heal.js';
 import type { FlowStepResult, SuiteVerdict } from '@syrin/iris-protocol';
@@ -132,7 +132,7 @@ export async function replayNamedFlow(
     );
     const row: FlowStepResult = {
       step: steps.length,
-      tool: 'success',
+      tool: SUCCESS_STEP_TOOL,
       anchor: successLabel(loaded.value.success),
       ok: verdict.pass,
       ...(verdict.pass ? {} : { error: verdict.failureReason ?? 'flow.success not satisfied' }),

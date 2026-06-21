@@ -26,6 +26,9 @@ export function dynamicTestids(flow: FlowFile): Set<string> {
   );
 }
 
+/** The synthetic step.tool a replay appends when it asserts the flow's success oracle. */
+export const SUCCESS_STEP_TOOL = 'success';
+
 /** A short human label for the success end-condition, for result rows. */
 export function successLabel(success: FlowExpect): string {
   if (success.signal !== undefined) return success.signal;

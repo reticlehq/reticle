@@ -11,6 +11,7 @@ import {
   type FlowReplayResult,
   type RunFlowResult,
 } from '@syrin/iris-protocol';
+import { SUCCESS_STEP_TOOL } from '../flows/flow-success.js';
 
 /** OK → PASS; DRIFT/ERROR → FAIL (a healed flow is produced by the heal path, not plain replay). */
 export function runFlowStatusOf(status: ReplayStatus): RunFlowStatus {
@@ -27,11 +28,16 @@ export function mapReplayToFlowResult(replay: FlowReplayResult, durationMs: numb
         replay.error?.message ??
         'flow failed')
       : undefined;
+  // A flow with a success oracle gets a synthetic 'success' step appended by replay; surface its label
+  // as the run's `oracle` so the verdict counts this flow as consequence-backed (→ HIGH confidence),
+  // not a bare smoke click. Without this, an oracle-backed pass reads as MEDIUM and undersells itself.
+  const oracle = replay.steps.find((s) => s.tool === SUCCESS_STEP_TOOL)?.anchor;
   return {
     name: replay.name,
     status,
     steps: replay.steps.length,
     durationMs,
+    ...(oracle !== undefined ? { oracle } : {}),
     ...(failureReason !== undefined ? { failureReason } : {}),
   };
 }

@@ -49,4 +49,28 @@ describe('mapReplayToFlowResult', () => {
     expect(r.status).toBe(RunFlowStatus.FAIL);
     expect(r.failureReason).toBe('boom');
   });
+
+  it('surfaces the oracle label when the replay asserted a success consequence', () => {
+    const r = mapReplayToFlowResult(
+      replay(ReplayStatus.OK, {
+        steps: [
+          { step: 0, tool: 'iris_act', anchor: 'login-submit', ok: true },
+          { step: 1, tool: 'success', anchor: 'auth:granted', ok: true },
+        ],
+      }),
+      9,
+    );
+    expect(r.status).toBe(RunFlowStatus.PASS);
+    expect(r.oracle).toBe('auth:granted');
+  });
+
+  it('leaves oracle undefined for an action-only (smoke) replay', () => {
+    const r = mapReplayToFlowResult(
+      replay(ReplayStatus.OK, {
+        steps: [{ step: 0, tool: 'iris_act', anchor: 'nav-compose', ok: true }],
+      }),
+      4,
+    );
+    expect(r.oracle).toBeUndefined();
+  });
 });
