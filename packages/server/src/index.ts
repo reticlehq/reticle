@@ -178,7 +178,7 @@ export interface StartOptions {
   httpVerifyToken?: string;
 }
 
-/** Default localhost port for the verify HTTP endpoint (matches docs/oem-verify-harness.mjs). */
+/** Default localhost port for the verify HTTP endpoint (see docs/integration.md). */
 export const IRIS_VERIFY_DEFAULT_PORT = 7331;
 
 export interface RunningServer {
