@@ -14,6 +14,7 @@ import {
 } from './daemon.js';
 import { waitForDaemon, startMcpProxy, probeDaemon } from './mcp-proxy.js';
 import { fetchStatus, summarizeStatus, decideOpen, openInBrowser } from './cli-launch.js';
+import { handleVerify } from './cli-verify.js';
 import { runInit } from './init/run.js';
 import { buildNodeIo } from './init/node-io.js';
 import { describeLicense } from './license/license.js';
@@ -307,6 +308,9 @@ function main(): void {
       break;
     case 'drive':
       handleLegacyDrive(parsed);
+      break;
+    case 'verify':
+      handleVerify(parsed);
       break;
     case 'mcp':
       handleMcp(parsed);

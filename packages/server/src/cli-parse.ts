@@ -11,6 +11,7 @@ export const CLI_USAGE = `usage:
   iris stop  [--port N] [--quiet]
   iris status [--port N]
   iris open  [url] [--port N]                        (show the app: reuse the connected tab, else open one)
+  iris verify <url> [--headed] [--timeout N]        (one-shot: drive the URL, verify saved flows, exit 0=pass)
   iris drive <url> [--headed]                       (foreground mode — for debugging)
   iris mcp   [--port N] [--drive <url>] [--headed]  (MCP stdio proxy — auto-starts daemon if needed)
   iris license                                      (show enterprise license status: active | eval | missing)`;
@@ -21,6 +22,7 @@ const STOP_COMMAND = 'stop';
 const STATUS_COMMAND = 'status';
 const OPEN_COMMAND = 'open';
 const DRIVE_COMMAND = 'drive';
+const VERIFY_COMMAND = 'verify';
 const MCP_COMMAND = 'mcp';
 const LICENSE_COMMAND = 'license';
 export const DAEMON_INNER_COMMAND = '_daemon';
@@ -36,6 +38,7 @@ const NO_INSTALL_FLAG = '--no-install';
 export const HTTP_FLAG = '--http';
 export const HTTP_PORT_FLAG = '--http-port';
 export const HTTP_TOKEN_FLAG = '--http-token';
+export const TIMEOUT_FLAG = '--timeout';
 
 export type CliResult =
   | { kind: 'init'; port: number | undefined; mcp: boolean; dryRun: boolean; install: boolean }
@@ -62,6 +65,7 @@ export type CliResult =
       httpToken?: string;
     }
   | { kind: 'drive'; port: number; driveUrl: string; headless: boolean }
+  | { kind: 'verify'; url: string; headless: boolean; timeoutMs?: number }
   | { kind: 'mcp'; port: number; driveUrl?: string; headless: boolean }
   | { kind: 'error'; message: string };
 
@@ -160,6 +164,41 @@ function parseDriveSuffix(args: string[], port: number): DriveSuffix {
   return { kind: 'ok', port, driveUrl, headless };
 }
 
+type VerifySuffix =
+  | { kind: 'ok'; url: string; headless: boolean; timeoutMs?: number }
+  | { kind: 'error'; message: string };
+
+/** Parse `verify <url> [--headed] [--timeout N]`. The first non-flag token is the preview URL. */
+function parseVerifySuffix(args: string[]): VerifySuffix {
+  let headless = true;
+  let url: string | undefined;
+  let timeoutMs: number | undefined;
+  let i = 0;
+  while (i < args.length) {
+    const arg = args[i];
+    if (arg === undefined) break;
+    if (arg === HEADED_FLAG) {
+      headless = false;
+    } else if (arg === TIMEOUT_FLAG) {
+      i++;
+      const n = args[i];
+      if (n === undefined) return { kind: 'error', message: CLI_USAGE };
+      const parsed = parseInt(n, 10);
+      if (isNaN(parsed)) return { kind: 'error', message: CLI_USAGE };
+      timeoutMs = parsed;
+    } else if (arg.startsWith('--')) {
+      return { kind: 'error', message: CLI_USAGE };
+    } else if (url === undefined) {
+      url = arg;
+    } else {
+      return { kind: 'error', message: CLI_USAGE };
+    }
+    i++;
+  }
+  if (url === undefined) return { kind: 'error', message: CLI_USAGE };
+  return { kind: 'ok', url, headless, ...(timeoutMs !== undefined ? { timeoutMs } : {}) };
+}
+
 type InitFlags =
   | { kind: 'ok'; port: number | undefined; mcp: boolean; dryRun: boolean; install: boolean }
   | { kind: 'error'; message: string };
@@ -253,6 +292,16 @@ export function parseCliArgs(argv: string[], defaultPort: number): CliResult {
         ...(r.driveUrl !== undefined ? { driveUrl: r.driveUrl } : {}),
         ...(r.httpPort !== undefined ? { httpPort: r.httpPort } : {}),
         ...(r.httpToken !== undefined ? { httpToken: r.httpToken } : {}),
+      };
+    }
+    case VERIFY_COMMAND: {
+      const r = parseVerifySuffix(rest);
+      if (r.kind === 'error') return r;
+      return {
+        kind: 'verify',
+        url: r.url,
+        headless: r.headless,
+        ...(r.timeoutMs !== undefined ? { timeoutMs: r.timeoutMs } : {}),
       };
     }
     case MCP_COMMAND: {

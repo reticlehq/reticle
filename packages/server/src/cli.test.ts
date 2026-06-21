@@ -98,6 +98,27 @@ describe('parseCliArgs', () => {
     });
   });
 
+  it('verify <url> defaults to headless, no timeout', () => {
+    expect(parseCliArgs(['verify', URL], PORT)).toEqual({
+      kind: 'verify',
+      url: URL,
+      headless: true,
+    });
+  });
+
+  it('verify <url> --headed --timeout sets both', () => {
+    expect(parseCliArgs(['verify', URL, '--headed', '--timeout', '5000'], PORT)).toEqual({
+      kind: 'verify',
+      url: URL,
+      headless: false,
+      timeoutMs: 5000,
+    });
+  });
+
+  it('verify with no url is an error', () => {
+    expect(parseCliArgs(['verify'], PORT)).toEqual({ kind: 'error', message: CLI_USAGE });
+  });
+
   it('init with no flags defaults to mcp + install on, no dry run, no port', () => {
     expect(parseCliArgs(['init'], PORT)).toEqual({
       kind: 'init',
