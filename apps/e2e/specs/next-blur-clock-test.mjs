@@ -1,4 +1,4 @@
-// Real-browser e2e proving M5.5 #1 (synthetic blur -> React onBlur commit) and #3 (fake
+// Real-browser e2e proving the synthetic-blur commit (synthetic blur -> React onBlur commit) and #3 (fake
 // clock advances a time-gated toast) against the real Next.js app on :3100.
 import { chromium } from 'playwright';
 import { start, TOOLS, BaselineStore, RecordingStore } from '@syrin/iris-server';

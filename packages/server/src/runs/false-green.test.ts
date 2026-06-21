@@ -16,10 +16,9 @@ import { IrisRunner, type RunnerPort, type VerifyOptions } from './iris-runner.j
  * The anti-fabrication guarantee — "Iris cannot report green for something it did not actually verify."
  *
  * This is the property a vision/LLM-narrated QA harness lacks: a verdict that is MECHANICAL, derived
- * only from observed replay outcomes, so a broken or unreachable app can never read as PASS. (Cf. the
- * documented case of a competitor reporting 97–100% effectiveness with no test connection at all — see
- * bench/EMERGENT-COMPARISON.md.) These tests are the deterministic, in-CI core of that comparison; the
- * runnable live demo (connected vs severed backend) lives at bench/harness/false-green.mjs.
+ * only from observed replay outcomes, so a broken or unreachable app can never read as PASS. These
+ * tests are the deterministic, in-CI core of that guarantee; the runnable live demo (connected vs
+ * severed backend) lives at bench/harness/false-green.mjs.
  */
 
 const replay = (

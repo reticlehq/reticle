@@ -1,6 +1,6 @@
 # Generated-app reference (verify-me-with-Iris)
 
-A self-contained, full-stack **Expense Tracker** that mimics what an AI app-builder (Emergent-style)
+A self-contained, full-stack **Expense Tracker** that mimics what an AI app-builder
 emits — a frontend + a JSON API + a data store, served from one Node process, no build, no deps. Its job
 is to be **deliberately broken on demand** so you can watch Iris catch the silent failures vibe-coded
 apps ship with.
@@ -60,7 +60,7 @@ curl -s localhost:7331/verify -H 'x-iris-token: dev' -H 'content-type: applicati
 
 ## The point
 
-This is the A/B experiment made concrete (`bench/AB-EXPERIMENT.md`): a builder that ships any of these
+This is the silent-failure problem made concrete: a builder that ships any of these
 modes "looks done" to a screenshot and to the user — until the Pay/Save/Delete doesn't do what it
 claimed. Iris turns each into a deterministic, evidence-backed **fail** with a fix, instead of a
 confident green.

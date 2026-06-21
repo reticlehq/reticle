@@ -1,4 +1,4 @@
-// Real-browser proof of M5.7 status-honesty against apps/next-smoke (:3100).
+// Real-browser proof of status-honesty against apps/next-smoke (:3100).
 // The key scenario: a THROTTLED tab where requestAnimationFrame never fires. We reproduce it
 // by neutering rAF before page load (addInitScript) so the SDK's bound realRaf never resolves —
 // exactly the condition that made iris_act hang to the 8s timeout and report a click as an error.
@@ -34,7 +34,7 @@ await page.addInitScript(() => {
 });
 await page.goto('http://localhost:3100/', { waitUntil: 'networkidle' });
 for (let i = 0; i < 150 && server.bridge.sessions.count() === 0; i++) await sleep(50);
-console.log('\n=== M5.7 status honesty, real Chromium (rAF throttled) ===');
+console.log('\n=== status honesty, real Chromium (rAF throttled) ===');
 
 // F1 — act on a tab where rAF never fires must NOT hang/throw; returns dispatched:true fast.
 const addRef = await refOf('testid', 'add-task');
@@ -91,7 +91,7 @@ try {
 }
 check('F5 state{ref} resolves with structured status (no hang)', f5ok, f5detail);
 
-console.log(`\n${fail === 0 ? '✅ M5.7 STATUS HONESTY PASSED' : `❌ ${fail} FAILED`}  (${pass} passed, ${fail} failed)`);
+console.log(`\n${fail === 0 ? '✅ STATUS HONESTY PASSED' : `❌ ${fail} FAILED`}  (${pass} passed, ${fail} failed)`);
 await browser.close();
 await server.close();
 process.exit(fail === 0 ? 0 : 1);
