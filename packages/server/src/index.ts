@@ -162,6 +162,8 @@ export interface StartOptions {
   realInputFactory?: (opts: { driveUrl: string; headless: boolean }) => OwnedRealInputProvider;
   /** When driving, force the page's SDK to (re)connect to our bridge with this token — verify a hosted preview. */
   injectConnect?: InjectConnectOptions;
+  /** Path to a Playwright storageState JSON so the driven browser starts authenticated (past a login wall). */
+  storageState?: string;
   /** absolute .iris root. Defaults to process.cwd()/.iris. Injectable for tests. */
   irisRoot?: string;
   /** injectable clock for contract.json's generatedAt stamp. Defaults to Date.now. */
@@ -221,6 +223,7 @@ export async function start(options: StartOptions = {}): Promise<RunningServer> 
   if (driveUrl !== undefined && driveUrl.length > 0) {
     const headless = options.headless ?? true;
     const injectConnect = options.injectConnect;
+    const storageState = options.storageState;
     const factory =
       options.realInputFactory ??
       ((opts) =>
@@ -228,6 +231,7 @@ export async function start(options: StartOptions = {}): Promise<RunningServer> 
           driveUrl: opts.driveUrl,
           headless: opts.headless,
           ...(injectConnect !== undefined ? { injectConnect } : {}),
+          ...(storageState !== undefined ? { storageState } : {}),
         }));
     const launched = factory({ driveUrl, headless });
     try {
@@ -326,6 +330,7 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
   if (driveUrl !== undefined && driveUrl.length > 0) {
     const headless = options.headless ?? true;
     const injectConnect = options.injectConnect;
+    const storageState = options.storageState;
     const factory =
       options.realInputFactory ??
       ((opts) =>
@@ -333,6 +338,7 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
           driveUrl: opts.driveUrl,
           headless: opts.headless,
           ...(injectConnect !== undefined ? { injectConnect } : {}),
+          ...(storageState !== undefined ? { storageState } : {}),
         }));
     const launched = factory({ driveUrl, headless });
     try {

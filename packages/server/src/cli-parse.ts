@@ -11,7 +11,7 @@ export const CLI_USAGE = `usage:
   iris stop  [--port N] [--quiet]
   iris status [--port N]
   iris open  [url] [--port N]                        (show the app: reuse the connected tab, else open one)
-  iris verify <url> [--headed] [--timeout N]        (one-shot: drive the URL, verify saved flows, exit 0=pass)
+  iris verify <url> [--headed] [--timeout N] [--storage-state <file>]  (one-shot: drive the URL, verify saved flows, exit 0=pass)
   iris drive <url> [--headed]                       (foreground mode — for debugging)
   iris mcp   [--port N] [--drive <url>] [--headed]  (MCP stdio proxy — auto-starts daemon if needed)
   iris license                                      (show enterprise license status: active | eval | missing)`;
@@ -39,6 +39,7 @@ export const HTTP_FLAG = '--http';
 export const HTTP_PORT_FLAG = '--http-port';
 export const HTTP_TOKEN_FLAG = '--http-token';
 export const TIMEOUT_FLAG = '--timeout';
+export const STORAGE_STATE_FLAG = '--storage-state';
 
 export type CliResult =
   | { kind: 'init'; port: number | undefined; mcp: boolean; dryRun: boolean; install: boolean }
@@ -65,7 +66,7 @@ export type CliResult =
       httpToken?: string;
     }
   | { kind: 'drive'; port: number; driveUrl: string; headless: boolean }
-  | { kind: 'verify'; url: string; headless: boolean; timeoutMs?: number }
+  | { kind: 'verify'; url: string; headless: boolean; timeoutMs?: number; storageState?: string }
   | { kind: 'mcp'; port: number; driveUrl?: string; headless: boolean }
   | { kind: 'error'; message: string };
 
@@ -165,14 +166,18 @@ function parseDriveSuffix(args: string[], port: number): DriveSuffix {
 }
 
 type VerifySuffix =
-  | { kind: 'ok'; url: string; headless: boolean; timeoutMs?: number }
+  | { kind: 'ok'; url: string; headless: boolean; timeoutMs?: number; storageState?: string }
   | { kind: 'error'; message: string };
 
-/** Parse `verify <url> [--headed] [--timeout N]`. The first non-flag token is the preview URL. */
+/**
+ * Parse `verify <url> [--headed] [--timeout N] [--storage-state <file>]`. The first non-flag token is
+ * the preview URL.
+ */
 function parseVerifySuffix(args: string[]): VerifySuffix {
   let headless = true;
   let url: string | undefined;
   let timeoutMs: number | undefined;
+  let storageState: string | undefined;
   let i = 0;
   while (i < args.length) {
     const arg = args[i];
@@ -186,6 +191,11 @@ function parseVerifySuffix(args: string[]): VerifySuffix {
       const parsed = parseInt(n, 10);
       if (isNaN(parsed)) return { kind: 'error', message: CLI_USAGE };
       timeoutMs = parsed;
+    } else if (arg === STORAGE_STATE_FLAG) {
+      i++;
+      const v = args[i];
+      if (v === undefined) return { kind: 'error', message: CLI_USAGE };
+      storageState = v;
     } else if (arg.startsWith('--')) {
       return { kind: 'error', message: CLI_USAGE };
     } else if (url === undefined) {
@@ -196,7 +206,13 @@ function parseVerifySuffix(args: string[]): VerifySuffix {
     i++;
   }
   if (url === undefined) return { kind: 'error', message: CLI_USAGE };
-  return { kind: 'ok', url, headless, ...(timeoutMs !== undefined ? { timeoutMs } : {}) };
+  return {
+    kind: 'ok',
+    url,
+    headless,
+    ...(timeoutMs !== undefined ? { timeoutMs } : {}),
+    ...(storageState !== undefined ? { storageState } : {}),
+  };
 }
 
 type InitFlags =
@@ -302,6 +318,7 @@ export function parseCliArgs(argv: string[], defaultPort: number): CliResult {
         url: r.url,
         headless: r.headless,
         ...(r.timeoutMs !== undefined ? { timeoutMs: r.timeoutMs } : {}),
+        ...(r.storageState !== undefined ? { storageState: r.storageState } : {}),
       };
     }
     case MCP_COMMAND: {

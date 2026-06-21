@@ -156,6 +156,7 @@ interface LiveOpts {
   irisRoot: string;
   projectName: string;
   now: () => number;
+  storageState?: string;
 }
 
 function originOf(url: string): string | undefined {
@@ -182,6 +183,7 @@ async function openLiveConnection(opts: LiveOpts): Promise<VerifyConnection> {
     token,
     injectConnect: { token, url: bridgeUrl },
     ...(origin !== undefined ? { allowedOrigins: [origin] } : {}),
+    ...(opts.storageState !== undefined ? { storageState: opts.storageState } : {}),
   });
   const deps = buildVerifyDeps(running, opts.irisRoot, opts.now);
   const runner = new IrisRunner(createRunnerPort(deps));
@@ -200,7 +202,12 @@ async function openLiveConnection(opts: LiveOpts): Promise<VerifyConnection> {
 }
 
 /** CLI entry — wires the live ports and runs the one-shot verification. Exits the process itself. */
-export function handleVerify(parsed: { url: string; headless: boolean; timeoutMs?: number }): void {
+export function handleVerify(parsed: {
+  url: string;
+  headless: boolean;
+  timeoutMs?: number;
+  storageState?: string;
+}): void {
   const now = (): number => Date.now();
   const irisRoot = join(process.cwd(), IrisDir.ROOT);
   const projectName = basename(process.cwd()) || DEFAULT_PROJECT_NAME;
@@ -212,6 +219,7 @@ export function handleVerify(parsed: { url: string; headless: boolean; timeoutMs
         irisRoot,
         projectName,
         now,
+        ...(parsed.storageState !== undefined ? { storageState: parsed.storageState } : {}),
       }),
     out: (line) => process.stdout.write(`${line}\n`),
     fail: (line) => process.stderr.write(`${line}\n`),

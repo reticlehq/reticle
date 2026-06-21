@@ -323,6 +323,8 @@ export interface LaunchedProviderOptions {
   launch?: LaunchFn;
   /** When set, re-invoke the page's iris.connect() with these after load (drive-a-hosted-preview). */
   injectConnect?: InjectConnectOptions;
+  /** Path to a Playwright storageState JSON (cookies/localStorage) — starts the page authenticated. */
+  storageState?: string;
 }
 
 const INJECT_CONNECT_WAIT_MS = 8_000;
@@ -352,6 +354,7 @@ export class LaunchedRealInputProvider implements OwnedRealInputProvider {
   readonly #sleep: SleepFn;
   readonly #launch: LaunchFn;
   readonly #injectConnect: InjectConnectOptions | undefined;
+  readonly #storageState: string | undefined;
   #browser: Browser | undefined;
   #page: Page | undefined;
 
@@ -361,11 +364,14 @@ export class LaunchedRealInputProvider implements OwnedRealInputProvider {
     this.#sleep = options.sleep ?? nodeSleep;
     this.#launch = options.launch ?? launchedChromium;
     this.#injectConnect = options.injectConnect;
+    this.#storageState = options.storageState;
   }
 
   async navigate(): Promise<void> {
     this.#browser = await this.#launch(this.#headless);
-    const page = await this.#browser.newPage();
+    const page = await this.#browser.newPage(
+      this.#storageState !== undefined ? { storageState: this.#storageState } : undefined,
+    );
     this.#page = page;
     try {
       await page.goto(this.#driveUrl);

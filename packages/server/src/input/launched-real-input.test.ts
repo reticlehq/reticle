@@ -71,11 +71,15 @@ function fakePage(state: FakePageState): unknown {
 interface FakeBrowserState {
   closeCalls: number;
   page: FakePageState;
+  newPageOpts?: unknown;
 }
 
 function fakeBrowser(state: FakeBrowserState): unknown {
   return {
-    newPage: () => Promise.resolve(fakePage(state.page)),
+    newPage: (opts?: unknown) => {
+      state.newPageOpts = opts;
+      return Promise.resolve(fakePage(state.page));
+    },
     close: () => {
       state.closeCalls += 1;
       return Promise.resolve();
@@ -115,7 +119,11 @@ function newSpy(overrides: Partial<LaunchSpy> = {}): LaunchSpy {
 
 function makeProvider(
   spy: LaunchSpy,
-  opts: { headless?: boolean; injectConnect?: { token: string; url: string } } = {},
+  opts: {
+    headless?: boolean;
+    injectConnect?: { token: string; url: string };
+    storageState?: string;
+  } = {},
 ): LaunchedRealInputProvider {
   return new LaunchedRealInputProvider({
     driveUrl: DRIVE_URL,
@@ -123,6 +131,7 @@ function makeProvider(
     launch: makeLaunch(spy),
     sleep: () => Promise.resolve(),
     ...(opts.injectConnect !== undefined ? { injectConnect: opts.injectConnect } : {}),
+    ...(opts.storageState !== undefined ? { storageState: opts.storageState } : {}),
   });
 }
 
@@ -142,6 +151,18 @@ describe('LaunchedRealInputProvider', () => {
     await provider.navigate();
 
     expect(spy.calls).toEqual([{ headless: false }]);
+  });
+
+  it('opens the page with storageState when provided (starts authenticated)', async () => {
+    const spy = newSpy();
+    await makeProvider(spy, { storageState: 'auth.json' }).navigate();
+    expect(spy.state.newPageOpts).toEqual({ storageState: 'auth.json' });
+  });
+
+  it('opens the page with no options when storageState is unset', async () => {
+    const spy = newSpy();
+    await makeProvider(spy).navigate();
+    expect(spy.state.newPageOpts).toBeUndefined();
   });
 
   it('does not inject a connect when injectConnect is unset', async () => {

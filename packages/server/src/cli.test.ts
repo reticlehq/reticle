@@ -119,6 +119,22 @@ describe('parseCliArgs', () => {
     expect(parseCliArgs(['verify'], PORT)).toEqual({ kind: 'error', message: CLI_USAGE });
   });
 
+  it('verify <url> --storage-state captures the auth file path', () => {
+    expect(parseCliArgs(['verify', URL, '--storage-state', 'auth.json'], PORT)).toEqual({
+      kind: 'verify',
+      url: URL,
+      headless: true,
+      storageState: 'auth.json',
+    });
+  });
+
+  it('verify --storage-state with no path is an error', () => {
+    expect(parseCliArgs(['verify', URL, '--storage-state'], PORT)).toEqual({
+      kind: 'error',
+      message: CLI_USAGE,
+    });
+  });
+
   it('init with no flags defaults to mcp + install on, no dry run, no port', () => {
     expect(parseCliArgs(['init'], PORT)).toEqual({
       kind: 'init',
