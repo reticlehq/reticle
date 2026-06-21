@@ -53,6 +53,12 @@ GRAPH_REPORT.md
 # local registry auth token (never commit)
 .npmrc
 
+# Issuer signing keys — the license-minting private key NEVER touches git.
+# (Public keys are baked into a release via env, not committed here either.)
+*.pem
+*.key
+issuer-*.json
+
 # Playwright MCP session dumps (written to cwd during benchmark runs)
 .playwright-mcp/
 
