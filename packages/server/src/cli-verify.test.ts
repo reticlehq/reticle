@@ -8,7 +8,7 @@ import {
   type IrisVerificationRun,
 } from '@syrin/iris-protocol';
 import { buildVerificationRun, type VerificationRunInput } from './runs/build-verification-run.js';
-import { runVerify, type VerifyConnection, type VerifyPorts } from './cli-verify.js';
+import { runVerify, urlParts, type VerifyConnection, type VerifyPorts } from './cli-verify.js';
 
 const NOW = 1_700_000_000_000;
 
@@ -75,6 +75,24 @@ function harness(conn: Partial<VerifyConnection>): { ports: VerifyPorts; rec: Re
 }
 
 const ARGS = { url: 'http://localhost:3000', timeoutMs: 1000 };
+
+describe('urlParts', () => {
+  it('flags localhost / 127.0.0.1 / ::1 as loopback', () => {
+    expect(urlParts('http://localhost:4320').loopback).toBe(true);
+    expect(urlParts('http://127.0.0.1:4320').loopback).toBe(true);
+    expect(urlParts('http://[::1]:4320').loopback).toBe(true);
+  });
+
+  it('flags a hosted preview as non-loopback and returns its origin', () => {
+    const r = urlParts('https://app.lovable.app/x');
+    expect(r.loopback).toBe(false);
+    expect(r.origin).toBe('https://app.lovable.app');
+  });
+
+  it('returns loopback:false for an unparseable url', () => {
+    expect(urlParts('not a url').loopback).toBe(false);
+  });
+});
 
 describe('runVerify', () => {
   it('exits 0 and prints the report when the verdict passes', async () => {

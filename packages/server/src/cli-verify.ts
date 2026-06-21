@@ -15,6 +15,7 @@ import { randomUUID } from 'node:crypto';
 import {
   IRIS_DEFAULT_PORT,
   IRIS_WS_PATH,
+  isLoopbackHostname,
   IrisDir,
   RunAgentKind,
   RunFramework,
@@ -159,30 +160,41 @@ interface LiveOpts {
   storageState?: string;
 }
 
-function originOf(url: string): string | undefined {
+/** Split a drive URL into its origin + whether it's loopback — decides token/injection pairing. */
+export function urlParts(url: string): { origin?: string; loopback: boolean } {
   try {
-    return new URL(url).origin;
+    const u = new URL(url);
+    return { origin: u.origin, loopback: isLoopbackHostname(u.hostname) };
   } catch {
-    return undefined;
+    return { loopback: false };
   }
 }
 
 async function openLiveConnection(opts: LiveOpts): Promise<VerifyConnection> {
-  // Pair a hosted (non-localhost) preview to our loopback bridge: a one-shot token both the bridge
-  // and the injected iris.connect() use, plus the preview's origin on the allow-list (the bridge
-  // rejects foreign origins by default). This is what makes "verify a live Lovable URL" work.
-  const token = randomUUID();
-  const bridgeUrl = `ws://localhost:${String(IRIS_DEFAULT_PORT)}${IRIS_WS_PATH}`;
-  const origin = originOf(opts.url);
+  // A localhost preview connects natively (the app's own iris.connect() is allowed on loopback), so the
+  // bridge stays token-free. A HOSTED (non-localhost) preview is blocked by the SDK's connection policy
+  // and rejected as a foreign origin — so there we pair via a one-shot token both the bridge and the
+  // injected iris.connect() share, plus the preview's origin on the allow-list. That split is what makes
+  // both "verify my dev server" and "verify a live Lovable URL" work from the same command.
+  const { origin, loopback } = urlParts(opts.url);
+  const pairing = loopback
+    ? {}
+    : (() => {
+        const token = randomUUID();
+        const bridgeUrl = `ws://localhost:${String(IRIS_DEFAULT_PORT)}${IRIS_WS_PATH}`;
+        return {
+          token,
+          injectConnect: { token, url: bridgeUrl },
+          ...(origin !== undefined ? { allowedOrigins: [origin] } : {}),
+        };
+      })();
   const running = await start({
     driveUrl: opts.url,
     headless: opts.headless,
     mcp: false,
     irisRoot: opts.irisRoot,
     now: opts.now,
-    token,
-    injectConnect: { token, url: bridgeUrl },
-    ...(origin !== undefined ? { allowedOrigins: [origin] } : {}),
+    ...pairing,
     ...(opts.storageState !== undefined ? { storageState: opts.storageState } : {}),
   });
   const deps = buildVerifyDeps(running, opts.irisRoot, opts.now);
