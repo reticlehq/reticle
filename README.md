@@ -5,7 +5,7 @@
   <img alt="Syrin Iris, eyes for your coding agent" src="assets/readme/lockup-on-light.png" width="400" />
 </picture>
 
-### Your AI agent writes the code. **Iris tells it whether the code actually works**, with evidence, not screenshots.
+### Your AI agent says _"Fixed it."_ It never opened the app.
 
 <a href="https://syrin.ai/iris"><img src="assets/readme/demo-montage.webp" alt="Iris in action, an AI agent verifying a real running app from the inside: pass/fail verdicts with evidence, the file:line to fix, and a regression caught before it shipped" width="840" /></a>
 
@@ -16,7 +16,15 @@
 [![license](https://img.shields.io/badge/license-Apache--2.0%20%2B%20FSL-46d6a0?labelColor=15131f)](LICENSE)
 [![types](https://img.shields.io/npm/types/@syrin/iris?color=5fd9f5&labelColor=15131f)](https://www.npmjs.com/package/@syrin/iris)
 
-**Iris gives your coding agent a verdict, not just a view.** The moment it finishes a change, Iris checks, from **inside your real running app**, that the right things actually happened: the API call returned `200`, the modal opened, the route changed, the store updated, **no console error slipped in**. If something silently broke, it says **what**, **why**, and (on React) the exact **`file:line`** to fix.
+Your agent writes the code, declares victory, and moves on, **without ever opening the running app.** So the broken modal, the silent `500`, and the console error nobody saw all ship anyway, and **you** find out last.
+
+**Iris gives your coding agent eyes.** The instant it finishes a change, Iris verifies your **real running app from the inside** and hands back a **verdict with evidence**, never a screenshot.
+
+**Checks the truth:** API `200`, modal open, route changed, store updated, signal fired.
+
+**Catches the invisible:** a silent `500`, a console error, a double-submit, a UI that lies.
+
+**Points at the fix:** on React, the exact **`file:line`**.
 
 `TypeScript` · `Model Context Protocol` · `React-first` · **dev-only · localhost-only · no telemetry · Apache-2.0 SDK**
 
@@ -156,7 +164,9 @@ Record a flow once; Iris **replays it deterministically on every edit**. Your CI
 
 <img src="assets/readme/bench-complex-app.png" alt="Observing the real Syrin dashboard once: Iris 1,023 tokens vs Chrome DevTools MCP 1,357 vs Playwright MCP 2,193, 2.1x leaner, plus Iris alone asserts success via the app's own signal for 46 tokens" width="840" />
 
-**3 · The kicker, a real bug, caught live.** On that same dashboard, _before we instrumented anything_, Iris's first pass flagged two live **`500`s the UI completely hid**, `GET /projects` and `/recovery/incidents` failing with `column "deleted_at" does not exist` (a missing migration). The page rendered fine; a screenshot would've called it _"done."_ **That is the entire point of Iris.**
+**3 · The kicker: a real bug, caught live.** Before we instrumented anything, Iris's first pass flagged two live **`500`s the UI completely hid** (`GET /projects` and `/recovery/incidents`, a missing `deleted_at` migration).
+
+The page looked perfect. A screenshot would have called it _"done."_ **That is the entire point of Iris.**
 
 ### Iris vs the rest, at a glance
 
