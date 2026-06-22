@@ -191,14 +191,17 @@ MCP tools only appear in Copilot **Agent mode**.
 
 ---
 
-## Step 1b — Register the stop hook (Claude Code only, optional backstop)
+## Step 1b — Stop hook (Claude Code only — skip unless asked)
 
-Iris is agent-independent: the agent signals its state in-band with `iris_yield` (mandatory — see
-Rules), and the server flips the panel to "waiting" on its own if the agent goes quiet. This Claude
-Code "Stop" hook is an extra belt-and-braces backstop that ends the daemon when the turn ends — skip
-it if you prefer to rely on `iris_yield` + the idle fallback alone.
+**Do not add this hook by default.** Killing the daemon after every turn is the most common cause of
+the "Failed to reconnect to iris: -32000" error: the daemon is stopped, Claude Code immediately
+reconnects, and the new daemon sometimes takes longer than expected to boot — the proxy times out and
+exits with code 1, which Claude Code reports as -32000.
 
-Write or merge into `.claude/settings.json`:
+Iris doesn't need the hook. `iris_yield` (mandatory — see Rules) signals turn end in-band, and the
+server flips the panel to "waiting" automatically if the agent goes quiet.
+
+Only add this if the user explicitly asks for the daemon to stop between turns:
 
 ```jsonc
 {
@@ -504,3 +507,48 @@ the `file:line`, and include it in the report.
 - Batch net + element + signal + console into one `allOf` — don't call `iris_assert` four times.
 - Never assert on pixels — use predicates, not `iris_screenshot` (screenshots are for genuinely visual checks only).
 - If the session disconnects mid-test (navigation creates a new session ID) — call `iris_sessions()` again and continue.
+
+---
+
+## Troubleshooting
+
+### "Failed to reconnect to iris: -32000"
+
+This means the `iris mcp` proxy process exited and Claude Code couldn't restart it cleanly. -32000 is
+the JSON-RPC code for a server-side error; here it means the proxy exited with code 1 before the MCP
+handshake completed.
+
+**Most common cause: the Stop hook is killing the daemon between turns.**
+If `~/.claude/settings.json` has a Stop hook running `iris stop --quiet`, remove it. The daemon must
+stay alive across turns — killing it forces a cold-boot spawn on every reconnect, and if that spawn
+takes longer than 10 seconds (cold npx cache, slow disk, first install), the proxy times out and exits
+with code 1. See Step 1b above.
+
+**Fix:**
+
+1. Check for the Stop hook: `cat ~/.claude/settings.json | grep iris`
+   If present, delete that hook entry.
+
+2. Restart the daemon cleanly:
+
+   ```bash
+   npx @syrin/iris stop
+   npx @syrin/iris status   # should show: running: false
+   ```
+
+   Then open Claude Code again — `iris mcp` will spawn a fresh daemon on next connection.
+
+3. If -32000 persists after removing the hook, the daemon may be crashing on startup.
+   Check the log: `cat ~/.iris/daemon-4400.log | tail -30`
+   Look for `iris_daemon_start_failed` or `iris_mcp_proxy_error`. If the port is taken by another
+   process: `lsof -i :4400` to identify it, then kill it and retry.
+
+4. Confirm the MCP config is user-level (not project-level):
+   ```bash
+   cat ~/.claude/claude_mcp_config.json
+   # Should contain: {"mcpServers": {"iris": {"command": "npx", "args": ["@syrin/iris", "mcp"]}}}
+   ```
+   If the project has a `.mcp.json` or `.claude/mcp.json` that overrides the user-level config with
+   different args (e.g., a wrong package version), rename it out of the way.
+
+**Tell the user what you found** so they can confirm which fix applies.
