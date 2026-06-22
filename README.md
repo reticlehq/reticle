@@ -5,7 +5,7 @@
   <img alt="Syrin Iris, eyes for your coding agent" src="assets/readme/lockup-on-light.png" width="280" />
 </picture>
 
-### Your AI agent says _"Fixed it."_ It never opened the app.
+### Your Playwright tests are in CI. Your agent never sees them.
 
 <a href="https://syrin.ai/iris"><img src="assets/readme/demo-montage.webp" alt="Iris in action, an AI agent verifying a real running app from the inside: pass/fail verdicts with evidence, the file:line to fix, and a regression caught before it shipped" width="840" /></a>
 
@@ -22,9 +22,11 @@
 
 ## The problem, the fix, the numbers
 
-**What breaks without Iris:** AI coding agents write and edit code, then call it done — without ever running the app. So silent `500`s, broken modals, and wrong store state all ship. You find out last.
+**The gap:** Your agent edits code, infers it worked, and moves on — it doesn't run your Playwright suite between every change. By the time CI catches something, the agent has already moved on and the context is gone. The broken modal, the silent `500`, the wrong store state — your agent shipped it and called it done.
 
-**What Iris fixes:** It embeds a dev-only SDK in your running app and exposes it to your agent over MCP. The agent can now look, act, observe, and assert against the real runtime — not a screenshot, not the DOM, the actual program truth.
+**Iris closes that gap:** It instruments your running app from the inside and gives your agent a feedback signal after every edit, before it moves on. Not a replacement for Playwright in CI — the thing that runs in the agent's inner loop while it's coding.
+
+**What it reads that Playwright can't:** App store state, custom signals, request cardinality — program truth that never reaches the DOM. A page can look perfect on screen while a `500` fires underneath. Playwright sees the page. Iris sees the program.
 
 **How good is it:**
 
@@ -89,11 +91,11 @@ Iris lets your agent **check its own work**, automatically, on every edit. It ca
 </td>
 <td width="50%" valign="top">
 
-#### If you're a testing expert
+#### If you already have Playwright
 
-Iris is an **in-process verification + deterministic regression layer** for agent-built web apps. It asserts **program truth** (store/React state, network cardinality, emitted signals, console), not just the rendered DOM.
+Your Playwright suite runs in CI. Your agent doesn't. Between every edit it makes and the PR that triggers CI, the agent is flying blind — it edits, assumes, moves on.
 
-Recorded flows **replay with no LLM** → a CI gate that diffs the verdict exactly: **0% flake, ~175 tokens/run.** It complements Playwright; it doesn't replace it.
+Iris is what runs **in the agent's loop**, not yours. Recorded flows replay deterministically with no LLM: **0% flake, ~175 tokens/run.** It feeds the agent a verdict after every change so broken things get caught before context is lost. Playwright gates releases. Iris gates edits.
 
 </td>
 </tr>
