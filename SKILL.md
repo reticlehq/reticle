@@ -518,37 +518,56 @@ This means the `iris mcp` proxy process exited and Claude Code couldn't restart 
 the JSON-RPC code for a server-side error; here it means the proxy exited with code 1 before the MCP
 handshake completed.
 
-**Most common cause: the Stop hook is killing the daemon between turns.**
+**Check version first — stale npx cache is the most common silent culprit.**
+`npx` caches packages locally and may keep running an old version of `@syrin/iris` even after a new
+one is published. An older daemon speaking a different protocol than the new proxy (or vice-versa)
+causes the proxy to exit immediately and Claude Code to report -32000. Always clear the cache and
+force-resolve the latest version before investigating anything else:
+
+```bash
+npx --yes @syrin/iris@latest version   # force-resolves latest and prints version
+npx @syrin/iris stop                   # stop any daemon running the old version
+```
+
+Then reload Claude Code (`/mcp`) so the new version is picked up on next connection.
+
+**Second common cause: the Stop hook is killing the daemon between turns.**
 If `~/.claude/settings.json` has a Stop hook running `iris stop --quiet`, remove it. The daemon must
 stay alive across turns — killing it forces a cold-boot spawn on every reconnect, and if that spawn
 takes longer than 10 seconds (cold npx cache, slow disk, first install), the proxy times out and exits
 with code 1. See Step 1b above.
 
-**Fix:**
+**Fix (in order):**
 
-1. Check for the Stop hook: `cat ~/.claude/settings.json | grep iris`
-   If present, delete that hook entry.
-
-2. Restart the daemon cleanly:
+1. **Force the latest version and clear the stale daemon:**
 
    ```bash
+   npx --yes @syrin/iris@latest version
    npx @syrin/iris stop
-   npx @syrin/iris status   # should show: running: false
    ```
 
-   Then open Claude Code again — `iris mcp` will spawn a fresh daemon on next connection.
+   Reload Claude Code. If -32000 is gone, done.
 
-3. If -32000 persists after removing the hook, the daemon may be crashing on startup.
+2. **Check for the Stop hook:** `cat ~/.claude/settings.json | grep iris`
+   If present, delete that hook entry, then repeat step 1.
+
+3. **If -32000 persists**, the daemon may be crashing on startup.
    Check the log: `cat ~/.iris/daemon-4400.log | tail -30`
    Look for `iris_daemon_start_failed` or `iris_mcp_proxy_error`. If the port is taken by another
    process: `lsof -i :4400` to identify it, then kill it and retry.
 
-4. Confirm the MCP config is user-level (not project-level):
+4. **Confirm the MCP config is user-level** (not project-level) and has no pinned version:
+
    ```bash
    cat ~/.claude/claude_mcp_config.json
    # Should contain: {"mcpServers": {"iris": {"command": "npx", "args": ["@syrin/iris", "mcp"]}}}
    ```
+
    If the project has a `.mcp.json` or `.claude/mcp.json` that overrides the user-level config with
-   different args (e.g., a wrong package version), rename it out of the way.
+   pinned args (e.g., `["@syrin/iris@0.x.y", "mcp"]`), rename it out of the way and re-register:
+
+   ```bash
+   claude mcp add iris -s user -- npx @syrin/iris mcp
+   ```
 
 **Tell the user what you found** so they can confirm which fix applies.
