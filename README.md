@@ -2,7 +2,7 @@
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/readme/lockup-on-dark.png" />
-  <img alt="Syrin Iris, eyes for your coding agent" src="assets/readme/lockup-on-light.png" width="400" />
+  <img alt="Syrin Iris, eyes for your coding agent" src="assets/readme/lockup-on-light.png" width="280" />
 </picture>
 
 ### Your AI agent says _"Fixed it."_ It never opened the app.
@@ -16,33 +16,57 @@
 [![license](https://img.shields.io/badge/license-Apache--2.0%20%2B%20FSL-46d6a0?labelColor=15131f)](LICENSE)
 [![types](https://img.shields.io/npm/types/@syrin/iris?color=5fd9f5&labelColor=15131f)](https://www.npmjs.com/package/@syrin/iris)
 
-Your agent writes the code, declares victory, and moves on, **without ever opening the running app.** So the broken modal, the silent `500`, and the console error nobody saw all ship anyway, and **you** find out last.
-
-**Iris gives your coding agent eyes.** The instant it finishes a change, Iris verifies your **real running app from the inside** and hands back a **verdict with evidence**, never a screenshot.
-
-**Checks the truth:** API `200`, modal open, route changed, store updated, signal fired.
-
-**Catches the invisible:** a silent `500`, a console error, a double-submit, a UI that lies.
-
-**Points at the fix:** on React, the exact **`file:line`**.
-
-`TypeScript` · `Model Context Protocol` · `React-first` · **dev-only · localhost-only · no telemetry · Apache-2.0 SDK**
-
-[Quickstart](#quickstart-give-it-to-your-agent) · [Watch the demo](https://syrin.ai/iris) · [Benchmarks](#honest-benchmarks) · [Iris vs Playwright](#when-to-use-iris-vs-playwright-and-devtools) · [Docs](docs/getting-started.md)
-
 </div>
 
 ---
 
-## Quickstart, give it to your agent
+## The problem, the fix, the numbers
 
-You don't set this up. **Your agent does.** Paste one line into Claude Code, Cursor, OpenCode, or any MCP agent:
+**What breaks without Iris:** AI coding agents write and edit code, then call it done — without ever running the app. So silent `500`s, broken modals, and wrong store state all ship. You find out last.
+
+**What Iris fixes:** It embeds a dev-only SDK in your running app and exposes it to your agent over MCP. The agent can now look, act, observe, and assert against the real runtime — not a screenshot, not the DOM, the actual program truth.
+
+**How good is it:**
+
+| Check                                                 | Result          |
+| ----------------------------------------------------- | --------------- |
+| Bugs caught (10 injected regressions, controlled app) | **10 / 10**     |
+| False positives                                       | **0**           |
+| Cost to re-run a 4-flow regression suite              | **~47 tokens**  |
+| Same suite, LLM re-driven (Playwright/DevTools)       | ~120,000 tokens |
+| **Speed-up**                                          | **2,574×**      |
+| Flake rate on deterministic replay                    | **0%**          |
+| Real app, first pass: live `500`s the UI hid          | **2 caught**    |
+
+One-line proof: before we instrumented anything, Iris's first pass on our own production dashboard flagged two live `500`s — `GET /projects` and `/recovery/incidents` — that the UI completely hid. The page looked perfect. A screenshot would have called it done.
+
+→ [Full benchmark scorecard](bench/SCORECARD.md) · [Reproducible token math](docs/token-efficiency.md)
+
+---
+
+## Install in 30 seconds
+
+**Easiest — paste one line into your agent:**
 
 ```text
 Follow https://raw.githubusercontent.com/syrin-labs/iris/main/SKILL.md
 ```
 
-That's the whole install. The skill detects whether Iris is already wired up, runs the **setup wizard** the first time, then **verifies your app** every time after. Prefer to do it yourself? `npx @syrin/iris init` registers the MCP server for every agent you have, or see [the full install matrix](#install-the-full-options).
+That's it. The skill auto-detects whether Iris is already set up, runs the wizard the first time, and verifies your app every time after. Works with Claude Code, Cursor, OpenCode, and any MCP agent.
+
+**Or via CLI:**
+
+```bash
+npx @syrin/iris init
+```
+
+Registers the MCP server for every agent you have in one shot. → [More install options](#install-the-full-options)
+
+---
+
+`TypeScript` · `Model Context Protocol` · `React-first` · **dev-only · localhost-only · no telemetry · Apache-2.0 SDK**
+
+[How it works](#how-it-works) · [Watch the demo](https://syrin.ai/iris) · [Full benchmarks](#honest-benchmarks) · [Iris vs Playwright](#when-to-use-iris-vs-playwright-and-devtools) · [Docs](docs/getting-started.md)
 
 ---
 
