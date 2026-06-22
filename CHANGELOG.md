@@ -6,10 +6,31 @@ All notable changes to **`@syrin/iris`** are documented here. The format follows
 
 ## [Unreleased]
 
-The "lean responses" pass — same observations, fewer tokens. On the cross-tool detection benchmark
-Iris's average observation cost drops 959 → 815 tokens with detection unchanged at 1.0 and zero false
-positives, lifting Verification Efficiency past the best external tool (12.27 vs 10.55) while remaining
-the only tool that catches every regression.
+## [1.0.0] — 2026-06-22
+
+The 1.0 release. Iris is stable, documented, and benchmarked end to end: every package is versioned
+`1.0.0` under the open-core license split, and the same verify loop that wins on a toy app stays the
+cheapest way to observe a real production dashboard.
+
+The headline is the "lean responses" pass — same observations, fewer tokens. On the cross-tool
+detection benchmark Iris's average observation cost drops 959 → 815 tokens with detection unchanged at
+1.0 and zero false positives, lifting Verification Efficiency past the best external tool (12.27 vs
+10.55) while remaining the only tool that catches every regression. Re-verifying a saved suite costs
+47 tokens with no model and 0% flake, up to **2,574× cheaper** than re-driving it with an LLM.
+
+### Added
+
+- **Honest, reproducible benchmarks with a small-app vs real-app story.** A committed benchmark image
+  set (re-run efficiency, the two-apps small-vs-real comparison, the per-tool cost on the real Syrin
+  dashboard, and a capability matrix) rendered from a public source pipeline (`assets/benchmarks` +
+  a shared design system), with the methodology written up in [`docs/benchmarks.md`](docs/benchmarks.md).
+  On a real production dashboard Iris observes a page for 1,023 tokens vs Chrome DevTools MCP's 1,357
+  and Playwright MCP's 2,193, and is the only tool that asserts success from the app's own signal.
+- **Documentation set** — an [architecture overview](docs/architecture.md), the benchmarks explainer,
+  an expanded [getting-started](docs/getting-started.md), and a Mintlify configuration so the docs
+  publish as a site.
+- **Open-source project hygiene** — `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, issue and pull-request
+  templates, plus contributor / stargazer / forker recognition in the README.
 
 ### Changed
 
@@ -35,6 +56,8 @@ the only tool that catches every regression.
   session id (`SESSION_AUTO`) instead of a shared constant, so two Next apps never silently evict each
   other. A bridge/daemon **port collision now fails fast with a clear error** instead of hanging forever
   and leaving an orphaned process — the `listen()` calls finally handle `EADDRINUSE`.
+- **License files now carry a real copyright.** Filled the Apache-2.0 appendix in every SDK package
+  license so no `[yyyy]` / `[name of copyright owner]` placeholders remain.
 
 ### Security
 
@@ -323,5 +346,10 @@ First public release. Iris gives your coding agent **eyes** into your running we
   common loop; ~1.8× full-tree-vs-full-tree). See [`docs/token-efficiency.md`](docs/token-efficiency.md)
   for the methodology and honest caveats.
 
+[1.0.0]: https://github.com/syrin-labs/iris/releases/tag/v1.0.0
+[0.9.0]: https://github.com/syrin-labs/iris/releases/tag/v0.9.0
+[0.8.0]: https://github.com/syrin-labs/iris/releases/tag/v0.8.0
+[0.7.0]: https://github.com/syrin-labs/iris/releases/tag/v0.7.0
+[0.6.10]: https://github.com/syrin-labs/iris/releases/tag/v0.6.10
 [0.5.0]: https://github.com/syrin-labs/iris/releases/tag/v0.5.0
 [0.4.0]: https://github.com/syrin-labs/iris/releases/tag/v0.4.0
