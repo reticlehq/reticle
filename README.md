@@ -300,6 +300,14 @@ Iris is built in the open, for the long run, not as a weekend project. If it ear
 
 <a href="https://github.com/syrin-labs/iris/graphs/contributors"><img src="https://contrib.rocks/image?repo=syrin-labs/iris" alt="Contributors" /></a>
 
+**Stargazers** thank you for the signal of support.
+
+<a href="https://github.com/syrin-labs/iris/stargazers"><img src="https://bytecrank.com/nastyox/reporoster/php/stargazersSVG.php?user=syrin-labs&amp;repo=iris" alt="Stargazers" /></a>
+
+**Forks** thank you for building on Iris.
+
+<a href="https://github.com/syrin-labs/iris/network/members"><img src="https://bytecrank.com/nastyox/reporoster/php/forkersSVG.php?user=syrin-labs&amp;repo=iris" alt="Forkers" /></a>
+
 </div>
 
 New here? Open an issue, pick one up, or send a PR. See [CONTRIBUTING.md](CONTRIBUTING.md).
