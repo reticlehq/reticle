@@ -1,4 +1,4 @@
-# Iris
+# Syrin Iris
 
 Start by detecting which mode to run:
 
@@ -53,7 +53,7 @@ which zed       2>/dev/null && echo "zed"
 4. Do you already have data-testid attributes on your key elements?
    (If yes, Iris reuses them. If no, we'll add a handful to the most important elements.)
 
-5. How do you want to use Iris?
+5. How do you want to use Syrin Iris?
    a) Quick spot-check — verify a specific thing the agent just built.
    b) Pair programming — present mode on, watch the agent work in the browser.
    c) Full automation — record flows, replay in CI, catch regressions.
@@ -79,7 +79,7 @@ which zed       2>/dev/null && echo "zed"
 
 ## Step 0b — Pick a dedicated Iris testing port
 
-Iris runs its own dev server instance so it never collides with the user's browser session.
+Syrin Iris runs its own dev server instance so it never collides with the user's browser session.
 
 **Default: port 4310.** Check if it's free:
 
@@ -295,7 +295,7 @@ guard. Framework-specific adapters: Vue, Svelte adapters follow the same shape.
 
 ## Step 3b — Add `dev:iris` script
 
-Add to `package.json` scripts so Iris has its own dev server on `IRIS_PORT`:
+Add to `package.json` scripts so Syrin Iris has its own dev server on `IRIS_PORT`:
 
 | Framework        | `dev:iris` value                  |
 | ---------------- | --------------------------------- |
@@ -332,7 +332,7 @@ first — call `iris_end_session()` and navigate: `iris_navigate({ url: "http://
 
 When a session is confirmed, tell the user:
 
-> "Iris is set up. Type `/iris` anytime to verify the app after a change."
+> "Syrin Iris is set up. Type `/iris` anytime to verify the app after a change."
 
 **Setup complete — stop here. Do not proceed to Test mode.**
 
@@ -489,7 +489,7 @@ Reading never consumes a mark, so you can list → fix → verify → resolve.
 ## Phase 5 — Report
 
 ```
-## Iris — <route or feature>
+## Syrin Iris — <route or feature>
 
 **Result: ✅ PASS / ❌ FAIL / ⚠️ PARTIAL**
 
