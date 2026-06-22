@@ -290,21 +290,17 @@ Iris is **dev-only** and **localhost-only** by design, the SDK is tree-shaken ou
 
 ## Community
 
+<div align="center">
+
 Iris is built in the open, for the long run, not as a weekend project. If it earns a place in your workflow, a star helps other developers find it, and everyone who stars, forks, or contributes is credited right here.
 
 <a href="https://star-history.com/#syrin-labs/iris&Date"><img src="https://api.star-history.com/svg?repos=syrin-labs/iris&type=Date" alt="Star history" width="640" /></a>
 
 **Contributors** thank you for every PR.
 
-[![Contributors](https://contrib.rocks/image?repo=syrin-labs/iris)](https://github.com/syrin-labs/iris/graphs/contributors)
+<a href="https://github.com/syrin-labs/iris/graphs/contributors"><img src="https://contrib.rocks/image?repo=syrin-labs/iris" alt="Contributors" /></a>
 
-**Stargazers** thank you for the signal of support.
-
-[![Stargazers](https://reporoster.com/stars/syrin-labs/iris)](https://github.com/syrin-labs/iris/stargazers)
-
-**Forks** thank you for building on Iris.
-
-[![Forkers](https://reporoster.com/forks/syrin-labs/iris)](https://github.com/syrin-labs/iris/network/members)
+</div>
 
 New here? Open an issue, pick one up, or send a PR. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
