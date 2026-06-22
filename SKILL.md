@@ -21,7 +21,7 @@ cat .iris.json 2>/dev/null || echo "NOT_FOUND"
 
 Ask ALL of them in a single message. Do not start installing until you have the answers.
 
-**Before asking Q7**, run the detection commands below to pre-fill a suggestion — but always
+**Before asking Q6**, run the detection commands below to pre-fill a suggestion — but always
 confirm with the user, because they may plan to use a tool that isn't installed yet.
 
 ```bash
@@ -59,13 +59,7 @@ which zed       2>/dev/null && echo "zed"
    c) Full automation — record flows, replay in CI, catch regressions.
    d) All of the above.
 
-6. Do you want to see the browser while the agent tests?
-   a) Yes — show me a real browser window (headed mode).
-   b) No — run silently in the background (headless, default).
-
-   Save as IRIS_HEADED (true / false).
-
-7. Which AI coding tool(s) will you use this project with?
+6. Which AI coding tool(s) will you use this project with?
    (I detected: <list from detection above, or "none found">)
 
    a) Claude Code   b) OpenCode   c) Codex CLI
@@ -74,29 +68,6 @@ which zed       2>/dev/null && echo "zed"
 
    Save as IRIS_HARNESSES.
 ```
-
----
-
-## Step 0b — Pick a dedicated Iris testing port
-
-Syrin Iris runs its own dev server instance so it never collides with the user's browser session.
-
-**Default: port 4310.** Check if it's free:
-
-```bash
-lsof -ti :4310 2>/dev/null | head -1
-```
-
-No output = free. If busy:
-
-```bash
-lsof -i :4310 2>/dev/null | head -5
-```
-
-Ask the user: "Port 4310 is in use by `<process>`. Use 4311 instead, or kill that process?"
-**Never silently pick an occupied port.** Save the confirmed port as `IRIS_PORT`.
-
-Also check the user's regular dev port (from Q3) isn't occupied by something unexpected.
 
 ---
 
@@ -115,25 +86,31 @@ Also check the user's regular dev port (from Q3) isn't occupied by something une
 | VS Code     | `.vscode/mcp.json`                    | `"servers"`          | `"command"` + `"args"` split | no                 |
 | Zed         | `~/.config/zed/settings.json`         | `context_servers`    | `"command"` + `"args"` split | no                 |
 
-**Claude Code — `~/.claude/claude_mcp_config.json`** (user-level, default)
+**Claude Code** (user-level, default)
 
-Register at user level so Iris is available in every project without re-configuring per repo.
-Only write to `.mcp.json` (project root) if the user explicitly asks for project-level registration.
+Register once globally so Iris is available in every project:
+
+```bash
+claude mcp add iris -s user -- npx @syrin/iris mcp
+```
+
+Confirm with `claude mcp list` — `iris` should appear. Tell user to reload Claude Code (`/mcp` to refresh).
+
+**If the `claude` CLI is unavailable**, fall back to writing `~/.claude/claude_mcp_config.json`
+(create if missing, merge `"iris"` if it exists):
 
 ```jsonc
 {
   "mcpServers": {
     "iris": {
       "command": "npx",
-      "args": ["@syrin/iris", "mcp", "--drive", "http://localhost:4310"],
+      "args": ["@syrin/iris", "mcp"],
     },
   },
 }
 ```
 
-Create `~/.claude/claude_mcp_config.json` if it doesn't exist; otherwise merge the `"iris"` entry into the existing `mcpServers` object.
-
-Headed: append `"--headed"` to args. Tell user to reload Claude Code (`/mcp` to refresh).
+Only write to `.mcp.json` (project root) if the user explicitly asks for project-level registration.
 
 **OpenCode — `opencode.json`** (`type:"local"` required; command is one flat array, no `args`)
 
@@ -142,7 +119,7 @@ Headed: append `"--headed"` to args. Tell user to reload Claude Code (`/mcp` to 
   "mcp": {
     "iris": {
       "type": "local",
-      "command": ["npx", "@syrin/iris", "mcp", "--drive", "http://localhost:4310"],
+      "command": ["npx", "@syrin/iris", "mcp"],
     },
   },
 }
@@ -155,7 +132,7 @@ Verify with `opencode mcp list`.
 ```toml
 [mcp_servers.iris]
 command = "npx"
-args    = ["@syrin/iris", "mcp", "--drive", "http://localhost:4310"]
+args    = ["@syrin/iris", "mcp"]
 ```
 
 **Cursor — `.cursor/mcp.json`** (same schema as Claude Code, different path)
@@ -165,7 +142,7 @@ args    = ["@syrin/iris", "mcp", "--drive", "http://localhost:4310"]
   "mcpServers": {
     "iris": {
       "command": "npx",
-      "args": ["@syrin/iris", "mcp", "--drive", "http://localhost:4310"],
+      "args": ["@syrin/iris", "mcp"],
     },
   },
 }
@@ -178,7 +155,7 @@ args    = ["@syrin/iris", "mcp", "--drive", "http://localhost:4310"]
   "mcpServers": {
     "iris": {
       "command": "npx",
-      "args": ["@syrin/iris", "mcp", "--drive", "http://localhost:4310"],
+      "args": ["@syrin/iris", "mcp"],
     },
   },
 }
@@ -191,7 +168,7 @@ args    = ["@syrin/iris", "mcp", "--drive", "http://localhost:4310"]
   "servers": {
     "iris": {
       "command": "npx",
-      "args": ["@syrin/iris", "mcp", "--drive", "http://localhost:4310"],
+      "args": ["@syrin/iris", "mcp"],
     },
   },
 }
@@ -206,13 +183,11 @@ MCP tools only appear in Copilot **Agent mode**.
   "context_servers": {
     "iris": {
       "command": "npx",
-      "args": ["@syrin/iris", "mcp", "--drive", "http://localhost:4310"],
+      "args": ["@syrin/iris", "mcp"],
     },
   },
 }
 ```
-
-Replace `4310` with `IRIS_PORT` in all configs above.
 
 ---
 
@@ -250,59 +225,76 @@ npm install --save-dev @syrin/iris    # swap npm for pnpm/yarn/bun per Q2
 
 ## Step 3 — Wire up the SDK
 
-Add to your app's dev entry point (inside a `DEV` guard — never runs in production):
-
 **Vite + React**
+
+Add the Iris plugin to `vite.config.ts` — it auto-injects `iris.connect()` in dev builds:
+
+```ts
+// vite.config.ts
+import { iris } from '@syrin/iris/vite';
+
+export default defineConfig({
+  plugins: [react(), iris()], // iris() is dev-only, dropped from vite build
+});
+```
+
+Then describe your app's testable surface so the agent knows what to drive (fill in your real values):
 
 ```ts
 // src/iris-dev.ts  (import in main.tsx inside import.meta.env.DEV check)
-import { iris, install, registerCapabilities } from '@syrin/iris';
+import { registerCapabilities } from '@syrin/iris';
 if (import.meta.env.DEV) {
-  install();
-  iris.connect({ session: 'my-app' });
-  registerCapabilities({ testids: [], signals: [], stores: [] });
+  registerCapabilities({
+    testids: [], // your data-testid values, e.g. ['login-btn', 'submit-form']
+    signals: [], // your iris.signal() names, e.g. ['auth:login']
+    stores: [], // your registerStore() names
+  });
 }
 ```
 
 **Next.js (App Router)**
 
+Create `app/iris-dev.tsx`:
+
 ```ts
-// app/iris-dev.tsx  (import in layout.tsx inside a 'use client' + dev check)
 'use client';
 import { useEffect } from 'react';
 export function IrisDev() {
   useEffect(() => {
     if (process.env.NODE_ENV !== 'development') return;
-    import('@syrin/iris').then(({ iris, install, registerCapabilities }) => {
+    void import('@syrin/iris').then(({ iris, install, registerCapabilities }) => {
       install();
-      iris.connect({ session: 'my-app' });
-      registerCapabilities({ testids: [], signals: [], stores: [] });
+      iris.connect();
+      registerCapabilities({
+        testids: [], // your data-testid values
+        signals: [], // your iris.signal() names
+        stores: [], // your registerStore() names
+      });
     });
   }, []);
   return null;
 }
 ```
 
-Add `@syrin/iris/next` → `withIris` to `next.config.mjs` for source mapping.
+Mount it in `app/layout.tsx` (dev-only):
 
-**Other frameworks** — same pattern: import `iris` and call `iris.connect()` inside a dev
-guard. Framework-specific adapters: Vue, Svelte adapters follow the same shape.
+```tsx
+import { IrisDev } from './iris-dev';
+// inside <body>:
+{
+  process.env.NODE_ENV === 'development' ? <IrisDev /> : null;
+}
+```
 
----
+Add `@syrin/iris/next` → `withIris` to `next.config.mjs` for source mapping:
 
-## Step 3b — Add `dev:iris` script
+```ts
+import { withIris } from '@syrin/iris/next';
+export default withIris(nextConfig);
+```
 
-Add to `package.json` scripts so Syrin Iris has its own dev server on `IRIS_PORT`:
-
-| Framework        | `dev:iris` value                  |
-| ---------------- | --------------------------------- |
-| Vite             | `"vite --port 4310"`              |
-| Next.js          | `"next dev --port 4310"`          |
-| Create React App | `"PORT=4310 react-scripts start"` |
-| SvelteKit        | `"vite dev --port 4310"`          |
-| Remix            | `"remix dev --port 4310"`         |
-
-Replace `4310` with `IRIS_PORT`.
+**Other frameworks** — call `iris.connect()` and `install()` inside a dev guard.
+Vanilla / HTML: use a dynamic `import('@syrin/iris')` inside `if (location.hostname === 'localhost')`.
 
 ---
 
@@ -312,20 +304,18 @@ Write `.iris.json` to the project root (commit this):
 
 ```jsonc
 {
-  "port": 4310,
-  "headed": false,
   "framework": "vite-react",
   "harnesses": ["claude-code"],
 }
 ```
 
-Fill in `IRIS_PORT`, `IRIS_HEADED`, framework from Q1, `IRIS_HARNESSES` from Q7.
+Fill in framework from Q1, `IRIS_HARNESSES` from Q6.
 
-Tell the user: **"Run `npm run dev:iris` to start the Iris testing server."**
+Tell the user: **"Run `npm run dev` (your normal dev server) and open the app in your browser."**
 
-Once they confirm it's running, call `iris_sessions()`. You should see a session at
-`http://localhost:<IRIS_PORT>/`. If the URL shows a different port, another app connected
-first — call `iris_end_session()` and navigate: `iris_navigate({ url: "http://localhost:<IRIS_PORT>" })`.
+Once they confirm the app is open, call `iris_wait_ready()` then `iris_sessions()`. You should see a
+session whose URL matches the app's localhost address. If no session appears after a few seconds, the
+SDK is not yet wired — confirm Step 3 was applied and the page has been refreshed.
 
 When a session is confirmed, tell the user:
 
@@ -351,9 +341,9 @@ race with the WebSocket. Then call `iris_sessions()`. Three possible states:
 **A. One session → proceed.**
 
 **B. No sessions:**
-Read `IRIS_PORT` from `.iris.json`. Tell the user:
+Tell the user:
 
-> "No app connected. Run `npm run dev:iris` first, then try `/iris` again."
+> "No app connected. Run your dev server (`npm run dev`) and open the app in your browser, then try `/iris` again."
 > Stop here.
 
 **C. Multiple sessions — ask:**
