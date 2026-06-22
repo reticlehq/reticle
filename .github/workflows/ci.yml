@@ -26,6 +26,7 @@ jobs:
   e2e:
     runs-on: ubuntu-latest
     needs: verify
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -38,3 +39,11 @@ jobs:
       - run: pnpm --filter @syrin/iris-e2e --fail-if-no-match exec playwright install --with-deps chromium
       - name: Run e2e battery (boots api+demo+next-smoke, drives Iris headless)
         run: pnpm --filter @syrin/iris-e2e --fail-if-no-match run e2e:ci
+      - name: Upload server logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-server-logs
+          path: /tmp/e2e-*.log
+          if-no-files-found: ignore
+          retention-days: 7
