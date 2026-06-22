@@ -256,8 +256,7 @@ Add to your app's dev entry point (inside a `DEV` guard — never runs in produc
 
 ```ts
 // src/iris-dev.ts  (import in main.tsx inside import.meta.env.DEV check)
-import { install } from '@syrin/iris/react';
-import { iris, registerCapabilities } from '@syrin/iris';
+import { iris, install, registerCapabilities } from '@syrin/iris';
 if (import.meta.env.DEV) {
   install();
   iris.connect({ session: 'my-app' });
