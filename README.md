@@ -28,6 +28,10 @@
 
 **What it reads that Playwright can't:** App store state, custom signals, request cardinality — program truth that never reaches the DOM. A page can look perfect on screen while a `500` fires underneath. Playwright sees the page. Iris sees the program.
 
+<p align="center">
+  <img src="assets/readme/silent-failures.png" alt="An e-commerce page looks perfectly shipped — but underneath: mock data, a dead click, a hidden 500. Iris catches the failure the UI completely hid." width="560" />
+</p>
+
 **How good is it:**
 
 | Check                                                 | Result          |
@@ -117,6 +121,10 @@ flowchart LR
     style C fill:#1c2433,stroke:#2f3d57,color:#fff
 ```
 
+<p align="center">
+  <img src="assets/readme/verdict-not-view.png" alt="Iris reads the app's runtime truth — network responses, store state, console errors — weighs the evidence, and hands back a PASS or FAIL verdict, not a screenshot." width="560" />
+</p>
+
 One call checks many things at once and comes back with **proof**, deterministic (structured events, not a vision model), cheap (any model, no screenshot), and pointed at the code:
 
 ```jsonc
@@ -134,6 +142,10 @@ iris_assert({
 //     failureReason: "POST /api/order returned 500, expected 200",
 //     source: { file: "src/checkout/PayButton.tsx", line: 42 } }   caught before you ever saw it
 ```
+
+<p align="center">
+  <img src="assets/readme/file-line-fix.png" alt="When something breaks, Iris packages the evidence and the exact file:line into a repair packet and hands it straight to the coding agent." width="560" />
+</p>
 
 ---
 
@@ -175,6 +187,10 @@ Record a flow once; Iris **replays it deterministically on every edit**. Your CI
 ## Honest benchmarks
 
 > We tested Iris **two ways, a controlled toy app and a real production app, and published both**, including where we lose. Every number is produced by a committed harness ([`bench/SCORECARD.md`](bench/SCORECARD.md), reproduce with `pnpm bench`). A from-scratch explainer that teaches you to read it: [`docs/benchmarks.md`](docs/benchmarks.md).
+
+<p align="center">
+  <img src="assets/readme/regression-replay.png" alt="LLM re-drive burns a mountain of tokens replaying every step with the model. Iris records once and replays deterministically — no model, no flake, just a verdict." width="560" />
+</p>
 
 <img src="assets/readme/bench-rerun.png" alt="Re-running a 4-flow test suite costs Iris 47 tokens with no model and 0% flake, versus re-driving the whole thing with an LLM at ~120,000 tokens, up to 2,574x cheaper" width="840" />
 
