@@ -107,7 +107,7 @@ Also check the user's regular dev port (from Q3) isn't occupied by something une
 
 | Tool        | File                                  | Root key             | Command format               | `type` needed?     |
 | ----------- | ------------------------------------- | -------------------- | ---------------------------- | ------------------ |
-| Claude Code | `.mcp.json`                           | `mcpServers`         | `"command"` + `"args"` split | no                 |
+| Claude Code | `~/.claude/claude_mcp_config.json`    | `mcpServers`         | `"command"` + `"args"` split | no                 |
 | OpenCode    | `opencode.json`                       | `mcp`                | `"command"` flat array       | `"local"` required |
 | Codex CLI   | `.codex/config.toml`                  | `[mcp_servers.iris]` | TOML `command` + `args`      | no                 |
 | Cursor      | `.cursor/mcp.json`                    | `mcpServers`         | `"command"` + `"args"` split | no                 |
@@ -115,7 +115,10 @@ Also check the user's regular dev port (from Q3) isn't occupied by something une
 | VS Code     | `.vscode/mcp.json`                    | `"servers"`          | `"command"` + `"args"` split | no                 |
 | Zed         | `~/.config/zed/settings.json`         | `context_servers`    | `"command"` + `"args"` split | no                 |
 
-**Claude Code — `.mcp.json`**
+**Claude Code — `~/.claude/claude_mcp_config.json`** (user-level, default)
+
+Register at user level so Iris is available in every project without re-configuring per repo.
+Only write to `.mcp.json` (project root) if the user explicitly asks for project-level registration.
 
 ```jsonc
 {
@@ -127,6 +130,8 @@ Also check the user's regular dev port (from Q3) isn't occupied by something une
   },
 }
 ```
+
+Create `~/.claude/claude_mcp_config.json` if it doesn't exist; otherwise merge the `"iris"` entry into the existing `mcpServers` object.
 
 Headed: append `"--headed"` to args. Tell user to reload Claude Code (`/mcp` to refresh).
 
