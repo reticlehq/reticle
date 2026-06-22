@@ -1,0 +1,52 @@
+{
+  "$schema": "https://mintlify.com/schema.json",
+  "name": "Iris",
+  "logo": {
+    "light": "/logo/light.svg",
+    "dark": "/logo/dark.svg"
+  },
+  "favicon": "/favicon.svg",
+  "colors": {
+    "primary": "#8b7bff",
+    "light": "#a99bff",
+    "dark": "#6b5bdf",
+    "background": {
+      "dark": "#0b0d12"
+    }
+  },
+  "topbarLinks": [
+    {
+      "name": "GitHub",
+      "url": "https://github.com/syrin-labs/iris"
+    }
+  ],
+  "topbarCtaButton": {
+    "name": "npm",
+    "url": "https://www.npmjs.com/package/@syrin/iris"
+  },
+  "navigation": [
+    {
+      "group": "Get started",
+      "pages": ["getting-started", "local-install", "integrate-with-claude-code"]
+    },
+    {
+      "group": "Integrate",
+      "pages": ["integration", "integration-patterns", "flows", "testing", "human-control"]
+    },
+    {
+      "group": "Concepts",
+      "pages": ["architecture", "benchmarks", "token-efficiency"]
+    },
+    {
+      "group": "Reference",
+      "pages": ["usage", "agent-cheatsheet"]
+    },
+    {
+      "group": "Enterprise",
+      "pages": ["enterprise"]
+    }
+  ],
+  "footerSocials": {
+    "github": "https://github.com/syrin-labs/iris"
+  }
+}

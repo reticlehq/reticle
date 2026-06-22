@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Iris large-DOM benchmark grid</title>
+    <style>
+      body {
+        margin: 0;
+        font:
+          13px/1.4 system-ui,
+          sans-serif;
+        background: #0b0d12;
+        color: #d8dee9;
+      }
+      header {
+        padding: 12px 16px;
+        border-bottom: 1px solid #1c2230;
+      }
+      table {
+        border-collapse: collapse;
+        width: 100%;
+      }
+      th,
+      td {
+        padding: 6px 10px;
+        border-bottom: 1px solid #161b26;
+        text-align: left;
+        white-space: nowrap;
+      }
+      button {
+        background: #2b6cb0;
+        color: #fff;
+        border: 0;
+        border-radius: 4px;
+        padding: 3px 8px;
+        cursor: pointer;
+      }
+      .approved {
+        color: #68d391;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1 data-testid="grid-title">Approvals queue</h1>
+      <span data-testid="approved-count">0 approved</span>
+    </header>
+    <main id="app"></main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

@@ -6,6 +6,8 @@ import {
   IRIS_DEFAULT_PORT,
   IrisCommand,
   IrisDir,
+  IrisEnv,
+  LOOPBACK_HOST,
   ReplayStatus,
 } from '@syrin/iris-protocol';
 import type { FlowReplayResult } from '@syrin/iris-protocol';
@@ -190,12 +192,19 @@ export interface RunningServer {
   close: () => Promise<void>;
 }
 
-/** Start the Iris bridge (browser WS endpoint) and, by default, the MCP stdio server. */
-export async function start(options: StartOptions = {}): Promise<RunningServer> {
-  const port = options.port ?? IRIS_DEFAULT_PORT;
-  const envToken = process.env['IRIS_TOKEN'];
-  const envOrigins = process.env['IRIS_ALLOWED_ORIGINS'];
-  const host = options.host ?? process.env['IRIS_HOST'];
+/**
+ * Resolve the bridge's security options from explicit options first, then the environment. Shared by
+ * both `start()` and `startDaemon()` so the token/host/origin contract is enforced identically on
+ * every entrypoint — a past divergence let daemon mode silently run with auth disabled.
+ */
+export function resolveBridgeSecurity(options: StartOptions): {
+  host?: string;
+  token?: string;
+  allowedOrigins?: string[];
+} {
+  const envToken = process.env[IrisEnv.TOKEN];
+  const envOrigins = process.env[IrisEnv.ALLOWED_ORIGINS];
+  const host = options.host ?? process.env[IrisEnv.HOST];
   const token =
     options.token ?? (envToken !== undefined && envToken.length > 0 ? envToken : undefined);
   const allowedOrigins =
@@ -204,12 +213,17 @@ export async function start(options: StartOptions = {}): Promise<RunningServer> 
       ?.split(',')
       .map((origin) => origin.trim())
       .filter((origin) => origin.length > 0);
-  const bridge = new Bridge({
-    port,
+  return {
     ...(host === undefined ? {} : { host }),
     ...(token === undefined ? {} : { token }),
     ...(allowedOrigins === undefined ? {} : { allowedOrigins }),
-  });
+  };
+}
+
+/** Start the Iris bridge (browser WS endpoint) and, by default, the MCP stdio server. */
+export async function start(options: StartOptions = {}): Promise<RunningServer> {
+  const port = options.port ?? IRIS_DEFAULT_PORT;
+  const bridge = new Bridge({ port, ...resolveBridgeSecurity(options) });
   // Server-authoritative liveness: a Node-side reaper (immune to browser throttling) ends sessions
   // whose agent has gone idle, so a forgotten/crashed agent never leaves the HUD "running" forever.
   const reaper = new SessionReaper(bridge.sessions);
@@ -243,7 +257,7 @@ export async function start(options: StartOptions = {}): Promise<RunningServer> 
     owned = launched;
     realInput = launched;
   } else {
-    const cdpUrl = options.cdpUrl ?? process.env['IRIS_CDP_URL'];
+    const cdpUrl = options.cdpUrl ?? process.env[IrisEnv.CDP_URL];
     if (cdpUrl !== undefined && cdpUrl.length > 0) {
       const cdp = new CdpRealInputProvider({ cdpUrl });
       owned = cdp;
@@ -305,8 +319,12 @@ export async function start(options: StartOptions = {}): Promise<RunningServer> 
 export async function startDaemon(options: StartOptions = {}): Promise<RunningServer> {
   const port = options.port ?? IRIS_DEFAULT_PORT;
 
+  const security = resolveBridgeSecurity(options);
   const shared = createSharedServer();
-  const bridge = new Bridge({ port, server: shared.httpServer });
+  const bridge = new Bridge({ port, server: shared.httpServer, ...security });
+  // The daemon owns listen() (below), so the real bind error is reported there; absorb bridge.ready's
+  // mirror rejection so a port collision can't surface as an unhandled promise rejection.
+  void bridge.ready.catch(() => undefined);
   // `iris status` GETs this for a live, at-a-glance view of connected tabs + their health.
   shared.attachStatus(() => ({
     running: true,
@@ -350,7 +368,7 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
     owned = launched;
     realInput = launched;
   } else {
-    const cdpUrl = options.cdpUrl ?? process.env['IRIS_CDP_URL'];
+    const cdpUrl = options.cdpUrl ?? process.env[IrisEnv.CDP_URL];
     if (cdpUrl !== undefined && cdpUrl.length > 0) {
       const cdp = new CdpRealInputProvider({ cdpUrl });
       owned = cdp;
@@ -386,7 +404,7 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
   if (options.httpVerify === true) {
     const runStore = new RunStore(fs, irisRoot);
     const runner = new IrisRunner(createRunnerPort(effectiveDeps));
-    const token = options.httpVerifyToken ?? process.env['IRIS_VERIFY_TOKEN'] ?? '';
+    const token = options.httpVerifyToken ?? process.env[IrisEnv.VERIFY_TOKEN] ?? '';
     verifyHttp = await startVerifyServer(
       { runner, token, persist: (run) => runStore.write(run) },
       options.httpVerifyPort ?? IRIS_VERIFY_DEFAULT_PORT,
@@ -418,9 +436,21 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
       .catch(() => undefined);
   });
 
-  await new Promise<void>((resolve) => {
-    shared.httpServer.once('listening', resolve);
-    shared.httpServer.listen(port, '127.0.0.1');
+  // Bind with BOTH a 'listening' and an 'error' handler. Without the error path, a port collision
+  // (EADDRINUSE — another daemon already owns this port) emits 'error' with no listener, so the
+  // promise never settles and the daemon hangs forever, orphaning the process and its PID file.
+  await new Promise<void>((resolve, reject) => {
+    const onError = (err: Error): void => {
+      shared.httpServer.removeListener('listening', onListening);
+      reject(err);
+    };
+    const onListening = (): void => {
+      shared.httpServer.removeListener('error', onError);
+      resolve();
+    };
+    shared.httpServer.once('error', onError);
+    shared.httpServer.once('listening', onListening);
+    shared.httpServer.listen(port, security.host ?? LOOPBACK_HOST);
   });
 
   log('mcp_daemon_started', { port });

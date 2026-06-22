@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Documentation
+    url: https://github.com/syrin-labs/iris/tree/main/docs
+    about: Getting started, integration, and the benchmark explainer.
+  - name: Security vulnerability
+    url: https://github.com/syrin-labs/iris/blob/main/SECURITY.md
+    about: Please report security issues privately — do not open a public issue.

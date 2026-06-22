@@ -6,11 +6,12 @@
  */
 
 import * as http from 'node:http';
+import { LOOPBACK_HOST } from '@syrin/iris-protocol';
 import type { IrisVerificationRun } from '@syrin/iris-protocol';
 import type { IrisRunner } from './iris-runner.js';
 import { handleVerifyRequest, type VerifyHttpRequest } from './verify-http.js';
 
-const LOCALHOST = '127.0.0.1';
+const LOCALHOST = LOOPBACK_HOST;
 const MAX_BODY_BYTES = 1_000_000;
 /** Cap how long a single request (and its headers) may take, so a slow/stuck client can't tie up the
  *  endpoint indefinitely (slow-loris hardening). */

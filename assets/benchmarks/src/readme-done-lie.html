@@ -1,0 +1,32 @@
+<!--SIZE:1200x675-->
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="../../marketing/src/_system.css" />
+    <style>
+      html,body{width:1200px;height:675px}
+      .card{width:1200px;height:675px;padding:var(--s12)}
+      .kick{font-family:var(--mono);font-size:15px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--faint)}
+      .mid{margin:auto 0;display:flex;flex-direction:column;align-items:flex-start}
+      .claim{display:inline-flex;align-items:center;gap:var(--s3);background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:var(--r4);padding:var(--s4) var(--s5);font-size:var(--t-sm);color:var(--ink)}
+      .claim b{font-weight:700} .claim .ok{color:#46d6a0;font-weight:800}
+      .big{font-weight:800;letter-spacing:-.03em;font-size:96px;line-height:1;margin-top:var(--s7)}
+      .err{font-family:var(--mono);font-size:var(--t-sm);color:#ff8a8a;margin-top:var(--s6)}
+      .line{font-size:var(--t-base);color:var(--muted);margin-top:var(--s7)}
+      .line b{color:#ffa56b;font-weight:700}
+    </style>
+  </head>
+  <body>
+    <div class="card bg-dark"><div class="grain"></div><div class="layer">
+      <div class="top"><div class="brand"><img src="../../wordmark-white.svg" alt="Syrin" /><span class="sep">/</span><span class="prod">Iris</span></div><span class="kick">the problem</span></div>
+      <div class="mid">
+        <div class="claim"><span>Your agent:</span><b>&ldquo;Fixed it<span class="ok">&nbsp;&check;</span>&rdquo;</b></div>
+        <div class="big">It wasn&rsquo;t.</div>
+        <div class="err">POST /api/order &rarr; 500</div>
+        <div class="line">The agent never opened the app. <b>Iris does.</b></div>
+      </div>
+      <div class="foot coords"><span>measured &middot; reproducible</span><span class="dot"></span><span class="code">github.com/syrin-labs/iris</span></div>
+    </div></div>
+  </body>
+</html>

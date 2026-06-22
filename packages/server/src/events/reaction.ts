@@ -66,3 +66,20 @@ export function buildReactionReport(events: IrisEvent[], windowMs: number): Reac
   }
   return { window_ms: windowMs, events, summary };
 }
+
+/** The lean form of a reaction report: window + counts, WITHOUT the heavy per-event timeline. */
+export interface ReactionDigest {
+  window_ms: number;
+  summary: ReactionSummary;
+}
+
+/**
+ * Drop the per-event `events` array, keeping the window and counts. The counts already answer "what
+ * did the app do?" (DOM added/removed/changed, network, signals…), and a predicate verdict carries
+ * the matching evidence — so a tool returning this digest stays cheap while the full timeline is one
+ * `iris_observe { since }` away when the agent needs it. On a large DOM the events array dominates
+ * the cost (hundreds of tokens of mutations); the digest is a handful.
+ */
+export function summarizeReaction(report: ReactionReport): ReactionDigest {
+  return { window_ms: report.window_ms, summary: report.summary };
+}

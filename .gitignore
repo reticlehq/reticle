@@ -12,6 +12,19 @@ assets/marketing/**/*.gif
 assets/marketing/**/*.png
 assets/benchmarks/*.png
 
+# Image-generation SOURCE split: the benchmark card generators (assets/benchmarks/render.mjs +
+# src/bench-*.html) and the shared design system (assets/marketing/src/_system.css) are PUBLIC —
+# they generate the committed README/docs images. The GTM/marketing source and the old numbered
+# card drafts stay LOCAL (design reference, never shipped to the public repo).
+assets/benchmarks/src/[0-9]*.html
+assets/marketing/render.mjs
+assets/marketing/demo/
+assets/marketing/reels/
+assets/marketing/video/
+assets/marketing/landscape/
+assets/marketing/v0.5.0/
+assets/marketing/src/*.html
+
 # Env
 .env
 .env.*

@@ -11,9 +11,9 @@
 
 [![npm](https://img.shields.io/npm/v/@syrin/iris?color=8b7bff&labelColor=15131f&logo=npm)](https://www.npmjs.com/package/@syrin/iris)
 [![downloads](https://img.shields.io/npm/dm/@syrin/iris?color=5fd9f5&labelColor=15131f)](https://www.npmjs.com/package/@syrin/iris)
-[![license](https://img.shields.io/badge/license-MIT-46d6a0?labelColor=15131f)](https://github.com/syrin-labs/iris/blob/main/LICENSE)
+[![license](https://img.shields.io/badge/license-Apache--2.0%20%2B%20FSL-46d6a0?labelColor=15131f)](https://github.com/syrin-labs/iris/blob/main/LICENSE)
 
-**TypeScript · Model Context Protocol · React-first · dev-only · localhost-only · MIT**
+**TypeScript · Model Context Protocol · React-first · dev-only · localhost-only · open-core (Apache-2.0 SDK + FSL server)**
 
 [Docs & full README](https://github.com/syrin-labs/iris) · [Getting Started](https://github.com/syrin-labs/iris/blob/main/docs/getting-started.md) · [Why it's ~73× cheaper](https://github.com/syrin-labs/iris/blob/main/docs/token-efficiency.md)
 
@@ -94,6 +94,17 @@ The honest version: force Iris to dump the whole tree too and the gap is only ~1
 **not needing the whole tree** — that's architectural.
 [Full methodology + caveats →](https://github.com/syrin-labs/iris/blob/main/docs/token-efficiency.md)
 
+## Benchmarked two ways — a toy app and a real one — both published
+
+<img src="https://cdn.jsdelivr.net/gh/syrin-labs/iris@main/assets/readme/bench-two-apps.png" alt="On a controlled app Iris has the highest Verification Efficiency (12.3 vs 10.6 vs 7.0); on a real production dashboard Iris is the cheapest to observe (1,023 vs 1,357 vs 2,193 tokens)" width="820" />
+
+On a real production app (the [Syrin](https://syrin.ai) dashboard — React 19, auth, live data), Iris
+observed the authenticated app for **1,023 tokens vs Chrome DevTools MCP 1,357 vs Playwright MCP 2,193
+(2.1× leaner)** — and was the **only** tool that could assert login actually succeeded from the app's own
+signal (46 tok, un-fakeable) and read program state the DOM never shows. On the first uninstrumented pass
+it even caught two live `500`s the page completely hid (a missing DB migration). Full honest breakdown,
+including where Iris **loses** (true pixels, sites you don't own): [`docs/benchmarks.md`](https://github.com/syrin-labs/iris/blob/main/docs/benchmarks.md).
+
 ## How is this different?
 
 Everyone now gives agents _eyes_; **Iris gives agents a _verdict_.** Playwright/Cypress are scripted CI
@@ -105,6 +116,6 @@ verify with Iris.**
 
 ---
 
-dev-only and localhost-only by default · no telemetry · tree-shaken out of production · MIT
+dev-only and localhost-only by default · no telemetry · tree-shaken out of production · open-core (Apache-2.0 SDK + FSL server)
 
 **[→ Full documentation on GitHub](https://github.com/syrin-labs/iris)**

@@ -150,11 +150,12 @@ In your entry file (`src/main.tsx`), call `connect()` in dev only:
 ```ts
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { iris } from '@syrin/iris';
+import { iris, SESSION_AUTO } from '@syrin/iris';
 import { App } from './App';
 
 if (import.meta.env.DEV) {
-  iris.connect({ session: 'my-app' }); // connects to ws://localhost:4400 by default
+  // SESSION_AUTO gives this tab a unique session id, so multiple apps/tabs never collide.
+  iris.connect({ session: SESSION_AUTO }); // connects to ws://localhost:4400 by default
 }
 
 createRoot(document.getElementById('root')!).render(
@@ -181,7 +182,10 @@ import { useEffect } from 'react';
 export function IrisDev() {
   useEffect(() => {
     if (process.env.NODE_ENV === 'development') {
-      void import('@syrin/iris').then(({ iris }) => iris.connect({ session: 'my-app' }));
+      // SESSION_AUTO = a unique id per tab, so several Next apps/tabs never collide on one session.
+      void import('@syrin/iris').then(({ iris, SESSION_AUTO }) =>
+        iris.connect({ session: SESSION_AUTO }),
+      );
     }
   }, []);
   return null;
@@ -209,22 +213,56 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 Anywhere your app boots in dev:
 
 ```ts
-import { iris } from '@syrin/iris';
-if (location.hostname === 'localhost') iris.connect({ session: 'my-app' });
+import { iris, SESSION_AUTO } from '@syrin/iris';
+if (location.hostname === 'localhost') iris.connect({ session: SESSION_AUTO });
 ```
 
 Or, with no build step, a script tag pointed at the bridge:
 
 ```html
 <script type="module">
-  import { iris } from 'https://esm.sh/@syrin/iris';
-  iris.connect({ session: 'my-app' });
+  import { iris, SESSION_AUTO } from 'https://esm.sh/@syrin/iris';
+  iris.connect({ session: SESSION_AUTO });
 </script>
 ```
 
 > **Want to watch the agent work?** Add `present: true` to `iris.connect()` for a glowing
 > border, a synthetic cursor that flies to targets, click/hover effects, and a narration HUD.
 > See [usage §16](usage.md#16-presenter-mode-narration--fake-clock-watch--control).
+
+### Running multiple apps at once
+
+It's common to have several apps open in dev — a few Next.js and React projects, or multiple tabs of
+the same app. Iris handles this cleanly **as long as each connection has a unique session id**, which
+is exactly what `SESSION_AUTO` gives you (a fresh id per tab). The examples above all use it, so you
+get this for free. When more than one app is connected, an Iris tool call targets the focused / most
+recently active one automatically, or you can pass an explicit `sessionId` to target a specific app.
+
+**Two separate projects, fully isolated.** If you want each repo to have its own independent Iris
+bridge (separate sessions, separate `.iris/` workspace), give each project its own port. Set the same
+port in both the MCP server config and the app's connection:
+
+```jsonc
+// project-b/.mcp.json — give this project its own bridge port
+{
+  "mcpServers": {
+    "iris": {
+      "command": "npx",
+      "args": ["-y", "@syrin/iris", "mcp"],
+      "env": { "IRIS_PORT": "4401" },
+    },
+  },
+}
+```
+
+```ts
+// project-b's app — dial the same port
+iris.connect({ session: SESSION_AUTO, url: 'ws://localhost:4401/iris' });
+```
+
+Project A stays on the default `4400`, project B on `4401` — they never touch each other. (A port that
+is already in use now fails fast with a clear error instead of hanging, so a misconfiguration is
+obvious.)
 
 ---
 

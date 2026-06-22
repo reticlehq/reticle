@@ -2,13 +2,15 @@ import { describe, expect, it } from 'vitest';
 import { leanActResult } from './act-view.js';
 
 describe('leanActResult', () => {
-  it('drops default-valued effect noise but keeps the consequence signal', () => {
+  it('drops default-valued effect noise (success and false/null defaults) but keeps the consequence signal', () => {
     const r = leanActResult({
       ok: true,
       action: 'click',
       effect: {
+        dispatched: true,
         targetMatched: true,
         visible: true,
+        enabled: true,
         focusMoved: 'null->e17',
         domMutatedWithin: 8,
         defaultPrevented: false,
@@ -18,11 +20,30 @@ describe('leanActResult', () => {
         scrolledIntoView: false,
       },
     }) as { effect: Record<string, unknown> };
+    // A clean, successful action collapses to just its consequence: dispatched/targetMatched/
+    // visible/enabled are all at their uninformative success default (true) and drop out.
     expect(r.effect).toEqual({
-      targetMatched: true,
-      visible: true,
       focusMoved: 'null->e17',
       domMutatedWithin: 8,
+    });
+  });
+
+  it('drops focusMoved when null (the no-focus-change default)', () => {
+    const r = leanActResult({
+      effect: { targetMatched: true, focusMoved: null, domMutatedWithin: 0 },
+    }) as { effect: Record<string, unknown> };
+    expect(r.effect).toEqual({ domMutatedWithin: 0 });
+  });
+
+  it('keeps a success field when it carries signal (the negative case)', () => {
+    const r = leanActResult({
+      effect: { targetMatched: false, visible: false, enabled: false, domMutatedWithin: 0 },
+    }) as { effect: Record<string, unknown> };
+    expect(r.effect).toEqual({
+      targetMatched: false,
+      visible: false,
+      enabled: false,
+      domMutatedWithin: 0,
     });
   });
 

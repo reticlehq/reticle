@@ -4,6 +4,49 @@ All notable changes to **`@syrin/iris`** are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+The "lean responses" pass — same observations, fewer tokens. On the cross-tool detection benchmark
+Iris's average observation cost drops 959 → 815 tokens with detection unchanged at 1.0 and zero false
+positives, lifting Verification Efficiency past the best external tool (12.27 vs 10.55) while remaining
+the only tool that catches every regression.
+
+### Changed
+
+- **`iris_act` collapses a clean action to its consequence** — the effect block now omits fields at
+  their uninformative default (an absent `dispatched`/`targetMatched`/`visible`/`enabled` means `true`;
+  an absent `focusMoved`/`occludedBy` means `null`; an absent `occluded`/`scrolledIntoView`/
+  `valueChanged`/`defaultPrevented` means `false`), so a successful click returns just `domMutatedWithin`
+  and any real signal still surfaces. No information is lost — absence always means the boring value.
+- **MCP tool results serialize as compact JSON by default** — the agent-facing `text` content drops the
+  two-space indentation (the typed `structuredContent` is unchanged), ~40% cheaper on the structured
+  payloads that dominate. Set `IRIS_ENCODING=pretty` for the previous indented form; `IRIS_ENCODING=toon`
+  remains the densest tabular encoding.
+- **`iris_act_and_wait` returns a reaction digest, not the full timeline** — `trace` is now
+  `{ window_ms, summary }` (the counts that answer "what did the app do?") plus a `since` cursor; the full
+  per-event timeline is one `iris_observe { since }` away when the counts aren't enough. On a large DOM the
+  dropped events array was the bulk of the loop cost — a verify loop on a 5,000-row grid falls from ~531 to
+  ~279 tokens with the consequence still asserted from the `row:approved` signal.
+
+### Fixed
+
+- **Multiple apps on one machine no longer collide or orphan the daemon.** Several Next.js / React apps
+  (or browser tabs) can run at once: the `@syrin/iris-next` integration now defaults to a unique per-tab
+  session id (`SESSION_AUTO`) instead of a shared constant, so two Next apps never silently evict each
+  other. A bridge/daemon **port collision now fails fast with a clear error** instead of hanging forever
+  and leaving an orphaned process — the `listen()` calls finally handle `EADDRINUSE`.
+
+### Security
+
+- **Daemon mode now enforces the documented auth contract.** `iris serve` / the MCP daemon previously
+  built its bridge without forwarding the pairing `token`, bind `host`, or origin allow-list, so
+  `IRIS_TOKEN` / `IRIS_HOST` / `IRIS_ALLOWED_ORIGINS` were silently ignored in daemon mode. They are now
+  honored identically to the in-process path. (Residual risk was bounded — the daemon is loopback-pinned —
+  but the advertised control is now actually enforced.)
+- **Every security-critical environment variable is a single named constant** (`IrisEnv` in
+  `@syrin/iris-protocol`). A typo in an inline `'IRIS_TOKEN'` string could previously have disabled auth
+  silently; the names now live in exactly one place.
+
 ## [0.9.0] — 2026-06-21
 
 The "verify anywhere, ready for enterprises" release. One command verifies a running app from any

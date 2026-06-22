@@ -1,12 +1,6 @@
 import { z } from 'zod';
-import {
-  EventType,
-  HumanControlKind,
-  IRIS_PROTOCOL_VERSION,
-  MarkAnchorStrategy,
-  MessageKind,
-  TRANSPORT_LIMITS,
-} from './constants.js';
+import { EventType, IRIS_PROTOCOL_VERSION, MessageKind, TRANSPORT_LIMITS } from './constants.js';
+import { HumanControlKind, MarkAnchorStrategy } from './session-constants.js';
 
 const sessionIdSchema = z.string().min(1).max(TRANSPORT_LIMITS.MAX_SESSION_ID_LENGTH);
 const refSchema = z.string().max(TRANSPORT_LIMITS.MAX_REF_LENGTH);

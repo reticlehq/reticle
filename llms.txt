@@ -93,20 +93,35 @@ network cardinality, console, persistence-after-reload. Layer 2 (`registerStore`
 ## Benchmarks (measured, reproducible)
 
 Everything is produced by a committed harness (`bench/`), comparing Syrin IRIS to **Playwright MCP**
-and **Chrome DevTools MCP**. The chased metric is **Regression-Run Efficiency (RRE)** — tokens an
-agent/CI reads to re-verify a known flow, per run.
+and **Chrome DevTools MCP**. Tested two ways — a controlled toy app AND a real production app — with
+both results published, including where Iris loses. Full from-scratch explainer: `docs/benchmarks.md`.
 
-- **Detection:** RCR 1.0 (catches all 10 scripted regressions; competitors miss one each). Real
-  gpt-4o agent loop: 5/5 vs 4/5 and 3/5.
+**Controlled toy app (10 injected regressions):**
+- **Verification Efficiency (bugs caught per 1k tokens, gated on catching them all): Iris 12.27 vs
+  Chrome DevTools MCP 10.55 vs Playwright MCP 6.97.** Iris detection 1.00 (caught all 10, zero false
+  alarms); DevTools 0.82, Playwright 0.91. Competitors are cheaper per look only because they catch less.
+- Real gpt-4o agent loop: Iris 5/5 vs 4/5 and 3/5.
+
+**Real production app (the Syrin dashboard — React 19, auth, live data, with the SDK embedded):**
+- **Cost to observe the authenticated dashboard once: Iris 1,023 tokens vs DevTools 1,357 vs Playwright
+  2,193 — 2.1× leaner than Playwright MCP, cheapest overall.**
+- **Tier-1, demonstrated live:** only Iris read program state (auth/active-project) and asserted login
+  success via the app's own `auth:logged-in` signal (46 tokens, un-fakeable). The other tools have no
+  access to app state or signals — they can describe the DOM, not give a verdict.
+- **A real bug, caught on the first uninstrumented pass:** `GET /projects` and `/recovery/incidents`
+  returning `500 — column "deleted_at" does not exist` (a missing migration). The page rendered fine; a
+  screenshot would call it "done." This is the core thesis demonstrated on a real, non-cherry-picked app.
+
+**The moat (re-running a regression suite):**
 - **Regression-run cost:** ~175 tokens deterministic vs ~30k–32k (LLM re-drive) → **128–184× cheaper
   per run**, compounding.
-- **Suite-scale:** ~47 tokens to re-verify a suite **constant in K** (one consolidated verdict) →
-  1287× at 2 flows, 2574× at 4, growing with suite size.
+- **Suite-scale:** ~47 tokens to re-verify a suite **constant in K** → 1287× at 2 flows, 2574× at 4.
 - **0% flake:** identical verdict across 8 replays (no model in the regression loop + clock control).
 - **Iris-only capabilities:** UI-vs-store desync, state blast-radius (corruption not even rendered),
   wasted-render storm, deterministic time-travel for time-gated flows.
-- **Honest ties:** anything a user can see in the DOM (visual/computed-style) — parity, with a cost and
-  ergonomic edge.
+- **Honest ties / where Iris loses:** true pixels (paint/font/GPU) → a screenshot is ground truth;
+  driving a site you don't own or other browser engines → Playwright/DevTools. They compose: drive with
+  theirs, assert with Iris.
 
 ## Free vs enterprise (open-core licensing)
 

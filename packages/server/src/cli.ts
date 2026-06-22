@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { pathToFileURL } from 'node:url';
 import { realpathSync } from 'node:fs';
-import { IRIS_DEFAULT_PORT } from '@syrin/iris-protocol';
+import { IRIS_DEFAULT_PORT, IrisEnv } from '@syrin/iris-protocol';
 import { start, startDaemon } from './index.js';
 import { log } from './log.js';
 import {
@@ -279,7 +279,7 @@ function handleLegacyDrive(parsed: { port: number; driveUrl: string; headless: b
 }
 
 function main(): void {
-  const portEnv = process.env['IRIS_PORT'];
+  const portEnv = process.env[IrisEnv.PORT];
   const defaultPort = portEnv === undefined ? IRIS_DEFAULT_PORT : parseInt(portEnv, 10);
   const parsed = parseCliArgs(process.argv.slice(2), defaultPort);
 

@@ -1,5 +1,6 @@
 import * as http from 'node:http';
 import { spawn } from 'node:child_process';
+import { LOOPBACK_HOST } from '@syrin/iris-protocol';
 import { STATUS_PATH } from './http-server.js';
 
 /**
@@ -49,21 +50,27 @@ export function summarizeStatus(payload: unknown): {
   return { sessionCount, sessions };
 }
 
+/** How long the daemon /status probe waits before giving up — a local loopback call is near-instant. */
+const STATUS_PROBE_TIMEOUT_MS = 1000;
+
 /** GET the daemon's /status JSON. Resolves to the parsed body, or undefined on any failure. */
 export function fetchStatus(port: number): Promise<unknown> {
   return new Promise((resolve) => {
-    const req = http.get({ host: '127.0.0.1', port, path: STATUS_PATH, timeout: 1000 }, (res) => {
-      let body = '';
-      res.setEncoding('utf8');
-      res.on('data', (chunk: string) => (body += chunk));
-      res.on('end', () => {
-        try {
-          resolve(JSON.parse(body));
-        } catch {
-          resolve(undefined);
-        }
-      });
-    });
+    const req = http.get(
+      { host: LOOPBACK_HOST, port, path: STATUS_PATH, timeout: STATUS_PROBE_TIMEOUT_MS },
+      (res) => {
+        let body = '';
+        res.setEncoding('utf8');
+        res.on('data', (chunk: string) => (body += chunk));
+        res.on('end', () => {
+          try {
+            resolve(JSON.parse(body));
+          } catch {
+            resolve(undefined);
+          }
+        });
+      },
+    );
     req.on('error', () => resolve(undefined));
     req.on('timeout', () => {
       req.destroy();

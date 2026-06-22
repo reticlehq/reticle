@@ -8,7 +8,9 @@ import { inject, revert, revertAll } from './inject.mjs';
 
 const URL = 'http://localhost:4312/';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const TOOLS = ['playwright', 'devtools', 'iris'];
+// Default: all three tools. Set BENCH_TOOLS=iris (comma-separated) to re-measure one tool's column
+// in isolation — the external tools' numbers are fixed, so an Iris-only pass is enough to recompute VE.
+const TOOLS = (process.env['BENCH_TOOLS'] ?? 'playwright,devtools,iris').split(',');
 
 // Each scenario: steps (run before observe), observe kind, grade mode + regex.
 // mode 'present'  -> detected if rx matches evidence.

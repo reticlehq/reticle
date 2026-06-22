@@ -1,10 +1,25 @@
 import { describe, it, expect } from 'vitest';
 import { EventType, type IrisEvent } from '@syrin/iris-protocol';
-import { buildReactionReport } from './reaction.js';
+import { buildReactionReport, summarizeReaction } from './reaction.js';
 
 function ev(type: EventType, data: Record<string, unknown> = {}): IrisEvent {
   return { t: 1, type, sessionId: 's', data };
 }
+
+describe('summarizeReaction', () => {
+  it('keeps window_ms + counts but drops the heavy events array', () => {
+    const report = buildReactionReport(
+      [ev(EventType.DOM_ADDED), ev(EventType.NET_REQUEST), ev(EventType.SIGNAL)],
+      500,
+    );
+    const lean = summarizeReaction(report);
+    expect(lean).toEqual({
+      window_ms: 500,
+      summary: report.summary,
+    });
+    expect('events' in lean).toBe(false);
+  });
+});
 
 describe('buildReactionReport summary (dom.text/dom.attr folding)', () => {
   // Test E — dom.text and dom.attr both fold into summary.domChanged; neither counts as domAdded.

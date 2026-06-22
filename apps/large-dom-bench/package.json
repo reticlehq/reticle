@@ -1,0 +1,16 @@
+{
+  "name": "@syrin/iris-large-dom-bench",
+  "version": "0.0.0",
+  "private": true,
+  "description": "A deliberately large, non-virtualized DOM (thousands of nodes) used to measure the token wedge: full-snapshot cost vs a targeted verify loop.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite"
+  },
+  "dependencies": {
+    "@syrin/iris-browser": "workspace:*"
+  },
+  "devDependencies": {
+    "vite": "^8.0.16"
+  }
+}

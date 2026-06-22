@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import {
-  IRIS_PROTOCOL_VERSION,
-  MarkAnchorStrategy,
-  MessageKind,
-  TRANSPORT_LIMITS,
-} from './constants.js';
+import { IRIS_PROTOCOL_VERSION, MessageKind, TRANSPORT_LIMITS } from './constants.js';
+import { MarkAnchorStrategy } from './session-constants.js';
 import { HelloMessageSchema, HumanMarkDataSchema } from './messages.js';
 
 function hello(): Record<string, unknown> {

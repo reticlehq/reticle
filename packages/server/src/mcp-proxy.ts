@@ -1,5 +1,6 @@
 import * as http from 'node:http';
 import * as net from 'node:net';
+import { LOOPBACK_HOST } from '@syrin/iris-protocol';
 import { MCP_SSE_PATH } from './http-server.js';
 import { log } from './log.js';
 
@@ -28,7 +29,7 @@ export function probeDaemon(port: number): Promise<boolean> {
       socket.destroy();
       resolve(false);
     });
-    socket.connect(port, '127.0.0.1');
+    socket.connect(port, LOOPBACK_HOST);
   });
 }
 
@@ -73,7 +74,7 @@ function postToSession(url: string, body: string): Promise<void> {
 }
 
 function buildSessionUrl(rawData: string, port: number): string {
-  return rawData.startsWith('/') ? `http://127.0.0.1:${port}${rawData}` : rawData;
+  return rawData.startsWith('/') ? `http://${LOOPBACK_HOST}:${port}${rawData}` : rawData;
 }
 
 /**
@@ -88,7 +89,7 @@ export function startMcpProxy(port: number): Promise<never> {
     const stdinQueue: string[] = [];
 
     // ── SSE reader ──────────────────────────────────────────────────────────
-    const req = http.get({ host: '127.0.0.1', port, path: MCP_SSE_PATH }, (res) => {
+    const req = http.get({ host: LOOPBACK_HOST, port, path: MCP_SSE_PATH }, (res) => {
       res.setEncoding('utf8');
 
       let sseBuffer = '';

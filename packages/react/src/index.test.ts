@@ -74,7 +74,7 @@ describe('react adapter readState', () => {
     expect(result.hooks).toEqual([0, 'x']);
   });
 
-  it('returns a structured failure for a host-only element with no fiber (F5)', () => {
+  it('returns a structured failure for a host-only element with no fiber', () => {
     const result = readState(document.createElement('div'));
     expect(result).toEqual({ ok: false, reason: ComponentStateReason.UNAVAILABLE });
   });
@@ -101,7 +101,7 @@ describe('react adapter readState', () => {
     expect(() => JSON.stringify(result)).not.toThrow();
   });
 
-  it('sanitizes function and DOM-node hook values rather than serializing them raw (F5)', () => {
+  it('sanitizes function and DOM-node hook values rather than serializing them raw', () => {
     const node = document.createElement('div');
     const el = fiberEl({
       memoizedState: () => undefined,
@@ -130,7 +130,7 @@ describe('react adapter readState', () => {
   });
 });
 
-describe('react adapter hasHoverHandlers (F3)', () => {
+describe('react adapter hasHoverHandlers', () => {
   function withProps(props: unknown): Element {
     const el = document.createElement('button');
     const hostFiber = { return: null, type: 'button', elementType: 'button', memoizedProps: props };

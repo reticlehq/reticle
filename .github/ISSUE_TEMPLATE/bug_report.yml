@@ -1,0 +1,74 @@
+name: Bug report
+description: Something in Iris doesn't behave as expected
+labels: ['bug']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug. The more concrete the repro, the faster we can fix it.
+        For security vulnerabilities, **do not** open a public issue — see SECURITY.md instead.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A clear description of the bug and what you expected instead.
+      placeholder: 'I ran `iris drive http://localhost:3000`, then asked the agent to verify the login flow, and…'
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Minimal steps. A link to a minimal repo is ideal.
+      placeholder: |
+        1. Wire Iris into the app with `withIris` / the Vite plugin
+        2. Start the app on port …
+        3. Run …
+        4. Observe …
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Iris version
+      description: Output of `iris --version` (or the `@syrin/iris` version in package.json).
+      placeholder: '1.0.0'
+    validations:
+      required: true
+  - type: dropdown
+    id: framework
+    attributes:
+      label: Framework
+      options:
+        - React + Vite
+        - Next.js
+        - Other React
+        - Other / vanilla
+    validations:
+      required: true
+  - type: dropdown
+    id: mode
+    attributes:
+      label: How is Iris connected?
+      description: In-app SDK (the page embeds @syrin/iris-browser) or driven from outside (`iris drive`)?
+      options:
+        - In-app SDK (iris.connect in my app)
+        - Driven externally (iris drive / --drive)
+        - Both / not sure
+    validations:
+      required: true
+  - type: input
+    id: env
+    attributes:
+      label: OS and Node version
+      placeholder: 'macOS 15.5 · Node 22.14'
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs or tool output
+      description: Paste any error output, the failing tool call, or the daemon log. This is automatically formatted as code.
+      render: shell
+    validations:
+      required: false

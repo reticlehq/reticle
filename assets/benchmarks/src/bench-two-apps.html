@@ -1,0 +1,51 @@
+<!--SIZE:1200x675-->
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="../../marketing/src/_system.css" />
+    <style>
+      html,body{width:1200px;height:675px}
+      .card{width:1200px;height:675px;padding:var(--s12)}
+      .kick{font-family:var(--mono);font-size:15px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--faint)}
+      .mid{margin:auto 0}
+      h1{font-weight:800;letter-spacing:-.03em;line-height:1.1;font-size:42px;text-align:center;margin-bottom:var(--s7)}
+      h1 .hi{--hi:rgba(255,148,86,.58)}
+      .panels{display:flex;gap:var(--s6)}
+      .panel{flex:1;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:var(--r5);padding:var(--s6)}
+      .panel h2{font-size:var(--t-sm);font-weight:700}
+      .panel .s{font-size:14px;color:var(--faint);margin-bottom:var(--s4)}
+      .bar{display:flex;align-items:center;gap:var(--s4);margin:var(--s3) 0}
+      .bar .lab{width:150px;text-align:right;font-size:16px;color:var(--muted)}
+      .bar.win .lab{color:var(--ink);font-weight:700}
+      .track{flex:1;height:24px;border-radius:var(--r2);background:rgba(255,255,255,.05);overflow:hidden}
+      .fill{height:100%;border-radius:var(--r2);background:rgba(255,255,255,.10)}
+      .bar.win .fill{background:linear-gradient(95deg,#ff8a4c,#ffc06e)}
+      .num{width:64px;font-weight:700;font-size:16px;color:var(--faint)}
+      .bar.win .num{color:#ffa56b}
+    </style>
+  </head>
+  <body>
+    <div class="card bg-dark"><div class="grain"></div><div class="layer">
+      <div class="top"><div class="brand"><img src="../../wordmark-white.svg" alt="Syrin" /><span class="sep">/</span><span class="prod">Iris</span></div><span class="kick">one test, two apps</span></div>
+      <div class="mid">
+        <h1>Cheapest on a toy app.<br /><span class="hi">Still cheapest on a real one.</span></h1>
+        <div class="panels">
+          <div class="panel">
+            <h2>Toy app</h2><div class="s">bugs caught per 1k tokens &middot; higher better</div>
+            <div class="bar win"><div class="lab">Iris</div><div class="track"><div class="fill" style="width:100%"></div></div><div class="num">12.3</div></div>
+            <div class="bar"><div class="lab">DevTools MCP</div><div class="track"><div class="fill" style="width:86%"></div></div><div class="num">10.6</div></div>
+            <div class="bar"><div class="lab">Playwright MCP</div><div class="track"><div class="fill" style="width:57%"></div></div><div class="num">7.0</div></div>
+          </div>
+          <div class="panel">
+            <h2>Real app</h2><div class="s">tokens to observe once &middot; lower better</div>
+            <div class="bar win"><div class="lab">Iris</div><div class="track"><div class="fill" style="width:100%"></div></div><div class="num">1,023</div></div>
+            <div class="bar"><div class="lab">DevTools MCP</div><div class="track"><div class="fill" style="width:71%"></div></div><div class="num">1,357</div></div>
+            <div class="bar"><div class="lab">Playwright MCP</div><div class="track"><div class="fill" style="width:9%"></div></div><div class="num">2,193</div></div>
+          </div>
+        </div>
+      </div>
+      <div class="foot coords"><span>measured &middot; reproducible</span><span class="dot"></span><span class="code">github.com/syrin-labs/iris</span></div>
+    </div></div>
+  </body>
+</html>

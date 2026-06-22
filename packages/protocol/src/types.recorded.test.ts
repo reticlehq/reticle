@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ActionType, AnchorKind, FLOW_FILE_VERSION } from './constants.js';
-import { FlowFileSchema, RecordedFlowSchema } from './types.js';
+import { FlowFileSchema, RecordedFlowSchema } from './flow-types.js';
 
 /**
  * Protocol schema tests. Lock back-compat for flow files and the

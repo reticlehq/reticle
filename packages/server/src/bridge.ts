@@ -7,6 +7,7 @@ import {
   HumanControlKind,
   IRIS_WS_PATH,
   IrisMessageSchema,
+  LOOPBACK_HOST,
   MessageKind,
   TRANSPORT_LIMITS,
   isLoopbackHostname,
@@ -92,7 +93,7 @@ export class Bridge {
   #onSessionReady: SessionReadyHandler | undefined;
 
   constructor(options: BridgeOptions) {
-    const host = options.host ?? '127.0.0.1';
+    const host = options.host ?? LOOPBACK_HOST;
     if ((options.token?.length ?? 0) > TRANSPORT_LIMITS.MAX_TOKEN_LENGTH) {
       throw new Error(
         `Iris pairing token exceeds ${String(TRANSPORT_LIMITS.MAX_TOKEN_LENGTH)} characters`,
@@ -128,11 +129,18 @@ export class Bridge {
           done(allowed, 403, 'Forbidden');
         },
       });
-      this.ready = new Promise<number>((resolve) => {
+      // In shared-server mode the daemon owns listen(); but a WebSocketServer bound to a server that
+      // fails to listen (EADDRINUSE) surfaces the error on the WS instance too. Without a listener
+      // that is an unhandled 'error' that can crash/hang the process — so absorb it here and reject
+      // `ready`, mirroring the standalone branch. The daemon's own listen handler reports the failure.
+      this.ready = new Promise<number>((resolve, reject) => {
+        this.#wss.once('error', reject);
         if (srv.listening) {
+          this.#wss.removeListener('error', reject);
           resolve((srv.address() as AddressInfo).port);
         } else {
           srv.once('listening', () => {
+            this.#wss.removeListener('error', reject);
             resolve((srv.address() as AddressInfo).port);
           });
         }
@@ -149,8 +157,13 @@ export class Bridge {
           done(allowed, 403, 'Forbidden');
         },
       });
-      this.ready = new Promise<number>((resolve) => {
+      // Reject on 'error' as well as resolve on 'listening'. A port collision (EADDRINUSE) emits
+      // 'error'; with no listener that becomes an unhandled 'error' (process crash) AND leaves
+      // `ready` pending forever. Surfacing it lets the CLI print "port already in use" cleanly.
+      this.ready = new Promise<number>((resolve, reject) => {
+        this.#wss.once('error', reject);
         this.#wss.on('listening', () => {
+          this.#wss.removeListener('error', reject);
           resolve((this.#wss.address() as AddressInfo).port);
         });
       });

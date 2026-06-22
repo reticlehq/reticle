@@ -19,7 +19,7 @@ import type { ElementBox, RealInputArgs } from '../input/real-input.js';
 import { isPointerAction } from '../input/real-input.js';
 import { leanActResult } from './act-view.js';
 import { IrisTool } from './tool-names.js';
-import { buildReactionReport } from '../events/reaction.js';
+import { buildReactionReport, summarizeReaction } from '../events/reaction.js';
 import { evaluatePredicate, waitForPredicate, PredicateSchema } from '../events/predicate.js';
 import { healthEnvelope, refuseIfThrottled } from '../session/session-health.js';
 import { pausedShortCircuit, withControl } from '../session/control-envelope.js';
@@ -156,7 +156,7 @@ export const ACT_TOOLS: ToolDef[] = [
   {
     name: IrisTool.ACT,
     description:
-      'Execute one action against a ref: click|dblclick|hover|focus|fill|type|clear|select|check|uncheck|submit|press|scrollIntoView. Returns immediately with a `since` cursor — observe the reaction with iris_observe. Carries effect:{dispatched,targetMatched,visible,enabled,focusMoved,valueChanged,domMutatedWithin,occluded,occludedBy,scrolledIntoView} to tell "action missed" from "app didn\'t react"; dispatched=landed, settled=a real frame flushed, and a settle timeout never fails the tool. occluded=true means the click point is covered by another element (a real user could not click it) — synthetic dispatch still delivered the event; scrolledIntoView=true means an off-viewport target was scrolled in first. inputMode is "real" (native CDP, no synthetic effect block) or "synthetic"; clicks default to the occlusion-honest synthetic path even when CDP is configured — pass args.native:true to force a trusted native click (file pickers, clipboard). inputModeReason explains any real→synthetic choice so it is never silent. Full model (real-input, throttled tabs, `iris drive`): docs/usage.md §18.',
+      'Execute one action against a ref: click|dblclick|hover|focus|fill|type|clear|select|check|uncheck|submit|press|scrollIntoView. Returns immediately with a `since` cursor — observe the reaction with iris_observe. Carries effect:{dispatched,targetMatched,visible,enabled,focusMoved,valueChanged,domMutatedWithin,occluded,occludedBy,scrolledIntoView} to tell "action missed" from "app didn\'t react"; dispatched=landed, settled=a real frame flushed, and a settle timeout never fails the tool. Fields at their uninformative default are OMITTED so a clean action collapses to its consequence: an absent dispatched/targetMatched/visible/enabled means true, an absent occluded/scrolledIntoView/valueChanged/defaultPrevented means false, an absent focusMoved/occludedBy means null. occluded=true means the click point is covered by another element (a real user could not click it) — synthetic dispatch still delivered the event; scrolledIntoView=true means an off-viewport target was scrolled in first. inputMode is "real" (native CDP, no synthetic effect block) or "synthetic"; clicks default to the occlusion-honest synthetic path even when CDP is configured — pass args.native:true to force a trusted native click (file pickers, clipboard). inputModeReason explains any real→synthetic choice so it is never silent. Full model (real-input, throttled tabs, `iris drive`): docs/usage.md §18.',
     inputSchema: {
       ref: z.string().describe("Element ref from iris_snapshot or iris_query (e.g. 'e42')."),
       action: z
@@ -292,7 +292,8 @@ export const ACT_TOOLS: ToolDef[] = [
       'Act on a ref, then wait for a predicate to hold — one hop for the act->observe->assert loop. ' +
       'Omit `until` to wait for the page to settle (network + DOM idle) — use this instead of a fixed sleep. ' +
       'Returns { effect } (the action result), { verdict } (predicate pass/evidence/near-miss), ' +
-      'and { trace } (the reaction report of everything the app did after the action). ' +
+      '{ trace } (a digest — window_ms + summary counts of what the app did), and { since } (the act ' +
+      'cursor; pass it to iris_observe for the full per-event timeline when the counts are not enough). ' +
       'timeout_ms 0 evaluates the predicate once without waiting.',
     inputSchema: {
       ref: z.string().describe('Element ref from iris_snapshot or iris_query.'),
@@ -329,7 +330,14 @@ export const ACT_TOOLS: ToolDef[] = [
         evidence: z.unknown().optional(),
         failureReason: z.string().optional(),
       }),
-      trace: z.unknown().describe('Reaction report (same shape as iris_observe summary).'),
+      trace: z
+        .unknown()
+        .describe(
+          'Reaction digest: { window_ms, summary } of what the app did (DOM/network/route/console/signal counts). The full per-event timeline is one iris_observe { since } away.',
+        ),
+      since: z
+        .number()
+        .describe('Cursor for this act — pass to iris_observe/iris_assert for the full timeline.'),
       session: z
         .object({ lastSeenMs: z.number(), throttled: z.boolean(), focused: z.boolean() })
         .optional(),
@@ -362,11 +370,14 @@ export const ACT_TOOLS: ToolDef[] = [
           ? await waitForPredicate(session, until, timeout, since)
           : await evaluatePredicate(session, until, since);
 
-      const trace = buildReactionReport(session.eventsSince(since), session.elapsed() - since);
+      const trace = summarizeReaction(
+        buildReactionReport(session.eventsSince(since), session.elapsed() - since),
+      );
       return withControl(session, {
-        effect: actResult.result,
+        effect: leanActResult(actResult.result),
         verdict,
         trace,
+        since,
         ...healthEnvelope(session),
       });
     },

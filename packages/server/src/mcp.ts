@@ -40,12 +40,21 @@ function leanZodShape(shape: z.ZodRawShape): z.ZodRawShape {
 
 const ENCODING_ENV = 'IRIS_ENCODING';
 const TOON_VALUE = 'toon';
+const PRETTY_VALUE = 'pretty';
 
-function encodeResult(result: unknown, useToon: boolean): string {
-  if (useToon && isToonable(result)) {
+/**
+ * Serialize a tool result to the MCP `text` content block. The agent consumes this text — the
+ * typed contract travels separately as `structuredContent`, unchanged by encoding — so the text
+ * is compact JSON (no indentation) by default: pretty-printing spends a whitespace token on every
+ * field of every line, ~40% overhead on the structured payloads that dominate Iris's cost, for
+ * readability only a human re-reading a raw transcript would notice. Opt into the older indented
+ * form with `IRIS_ENCODING=pretty`; `IRIS_ENCODING=toon` is the even-denser tabular encoding.
+ */
+export function encodeResult(result: unknown, encoding: string): string {
+  if (encoding === TOON_VALUE && isToonable(result)) {
     return resultToToon(result as Record<string, unknown>);
   }
-  return JSON.stringify(result, null, 2);
+  return encoding === PRETTY_VALUE ? JSON.stringify(result, null, 2) : JSON.stringify(result);
 }
 
 /**
@@ -73,7 +82,7 @@ export function createMcpServer(
   deps: ToolDeps,
   profile: ToolProfile = TOOL_PROFILE.FULL,
 ): McpServer {
-  const useToon = (process.env[ENCODING_ENV] ?? '').toLowerCase() === TOON_VALUE;
+  const encoding = (process.env[ENCODING_ENV] ?? '').toLowerCase();
   const server = new McpServer(SERVER_INFO);
   // Cast once to our bridge type so every per-tool call site is typed without `any`.
   const registerTool = server.registerTool.bind(server) as unknown as IrisRegisterTool;
@@ -100,7 +109,7 @@ export function createMcpServer(
     registerTool(tool.name, config, async (args: Record<string, unknown>) => {
       try {
         const result = await runTool(tool, deps, args);
-        const text = encodeResult(result, useToon);
+        const text = encodeResult(result, encoding);
         if (tool.outputSchema !== undefined) {
           return {
             content: [{ type: 'text' as const, text }],

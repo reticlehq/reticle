@@ -1,0 +1,41 @@
+<!--SIZE:1200x675-->
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="../../marketing/src/_system.css" />
+    <style>
+      html,body{width:1200px;height:675px}
+      .card{width:1200px;height:675px;padding:var(--s12)}
+      .kick{font-family:var(--mono);font-size:15px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--faint)}
+      .mid{margin:auto 0}
+      h1{font-weight:800;letter-spacing:-.03em;font-size:40px;margin-bottom:var(--s7)}
+      h1 .hi{--hi:rgba(255,148,86,.58)}
+      .grid{display:grid;grid-template-columns:1fr 160px 160px 160px;row-gap:var(--s1)}
+      .hd{text-align:center;font-size:16px;font-weight:600;color:var(--faint);padding-bottom:var(--s2)}
+      .hd.iris{color:#ffa56b;font-weight:800}
+      .r{display:grid;grid-template-columns:1fr 160px 160px 160px;align-items:center;height:54px;grid-column:1/5}
+      .r:nth-child(odd){background:rgba(255,255,255,.03);border-radius:var(--r2)}
+      .r .k{font-size:17px;color:var(--ink);padding-left:var(--s3)}
+      .r .v{text-align:center;font-size:16px;color:var(--faint)}
+      .r .v.iris{font-size:19px;font-weight:800;color:#ffa56b}
+    </style>
+  </head>
+  <body>
+    <div class="card bg-dark"><div class="grain"></div><div class="layer">
+      <div class="top"><div class="brand"><img src="../../wordmark-white.svg" alt="Syrin" /><span class="sep">/</span><span class="prod">Iris</span></div><span class="kick">iris vs the rest</span></div>
+      <div class="mid">
+        <h1>Not a little better. <span class="hi">A lot.</span></h1>
+        <div class="grid">
+          <div></div><div class="hd iris">Iris</div><div class="hd">Playwright</div><div class="hd">DevTools</div>
+          <div class="r"><div class="k">Re-run a 4-flow suite</div><div class="v iris">47 tok</div><div class="v">~120k</div><div class="v">~129k</div></div>
+          <div class="r"><div class="k">Catch the bug (of 10)</div><div class="v iris">10</div><div class="v">9</div><div class="v">8</div></div>
+          <div class="r"><div class="k">Flaky?</div><div class="v iris">0%</div><div class="v">sampled</div><div class="v">sampled</div></div>
+          <div class="r"><div class="k">Reads app state / signals</div><div class="v iris">yes</div><div class="v">no</div><div class="v">no</div></div>
+          <div class="r"><div class="k">Points to the source line</div><div class="v iris">yes</div><div class="v">no</div><div class="v">no</div></div>
+        </div>
+      </div>
+      <div class="foot coords"><span>measured &middot; reproducible</span><span class="dot"></span><span class="code">github.com/syrin-labs/iris</span></div>
+    </div></div>
+  </body>
+</html>

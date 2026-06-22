@@ -1,0 +1,45 @@
+<!--SIZE:1200x675-->
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="../../marketing/src/_system.css" />
+    <style>
+      html,body{width:1200px;height:675px}
+      .card{width:1200px;height:675px;padding:var(--s12)}
+      .kick{font-family:var(--mono);font-size:15px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--faint)}
+      .mid{margin:auto 0}
+      h1{font-weight:800;letter-spacing:-.03em;font-size:40px;margin-bottom:var(--s6)}
+      h1 .hi{--hi:rgba(255,148,86,.58)}
+      .grid{display:grid;grid-template-columns:1fr 140px 140px 140px;row-gap:var(--s1)}
+      .hd{text-align:center;font-size:15px;font-weight:600;color:var(--faint);padding-bottom:var(--s2)}
+      .hd.iris{color:#ffa56b;font-weight:800}
+      .r{display:grid;grid-template-columns:1fr 140px 140px 140px;align-items:center;height:46px;grid-column:1/5}
+      .r:nth-child(odd){background:rgba(255,255,255,.03);border-radius:var(--r2)}
+      .r .k{font-size:16px;color:var(--ink);padding-left:var(--s3)}
+      .c{text-align:center}
+      .y{color:var(--green);font-size:20px;font-weight:700}
+      .n{color:var(--faint);font-size:18px}
+      .p{color:var(--amber);font-size:13px;font-weight:600}
+    </style>
+  </head>
+  <body>
+    <div class="card bg-dark"><div class="grain"></div><div class="layer">
+      <div class="top"><div class="brand"><img src="../../wordmark-white.svg" alt="Syrin" /><span class="sep">/</span><span class="prod">Iris</span></div><span class="kick">what each tool can do</span></div>
+      <div class="mid">
+        <h1>Eyes everywhere. <span class="hi">A verdict only here.</span></h1>
+        <div class="grid">
+          <div></div><div class="hd iris">Iris</div><div class="hd">Playwright</div><div class="hd">DevTools</div>
+          <div class="r"><div class="k">Verdict from the app&rsquo;s own signal</div><div class="c y">&check;</div><div class="c n">&ndash;</div><div class="c n">&ndash;</div></div>
+          <div class="r"><div class="k">Reads program state, not just DOM</div><div class="c y">&check;</div><div class="c n">&ndash;</div><div class="c n">&ndash;</div></div>
+          <div class="r"><div class="k">Catches non-visual bugs (500, console)</div><div class="c y">&check;</div><div class="c p">partial</div><div class="c p">partial</div></div>
+          <div class="r"><div class="k">DOM node &rarr; source file:line</div><div class="c y">&check;</div><div class="c n">&ndash;</div><div class="c n">&ndash;</div></div>
+          <div class="r"><div class="k">Deterministic replay &middot; 0% flake</div><div class="c y">&check;</div><div class="c n">&ndash;</div><div class="c n">&ndash;</div></div>
+          <div class="r"><div class="k">Drives sites you don&rsquo;t own</div><div class="c n">&ndash;</div><div class="c y">&check;</div><div class="c p">partial</div></div>
+          <div class="r"><div class="k">True pixels (paint, fonts)</div><div class="c p">partial</div><div class="c y">&check;</div><div class="c y">&check;</div></div>
+        </div>
+      </div>
+      <div class="foot coords"><span>measured &middot; reproducible</span><span class="dot"></span><span class="code">github.com/syrin-labs/iris</span></div>
+    </div></div>
+  </body>
+</html>

@@ -1,0 +1,30 @@
+<!--SIZE:1200x675-->
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="../../marketing/src/_system.css" />
+    <style>
+      html,body{width:1200px;height:675px}
+      .card{width:1200px;height:675px;padding:var(--s12)}
+      .kick{font-family:var(--mono);font-size:15px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--faint)}
+      .mid{margin:auto 0;text-align:center;display:flex;flex-direction:column;align-items:center}
+      .big{font-weight:800;letter-spacing:-.04em;line-height:.9;font-size:200px;
+        background:linear-gradient(95deg,#ff8a4c,#ffc06e);-webkit-background-clip:text;background-clip:text;color:transparent}
+      .sub{font-size:var(--t-md);font-weight:700;color:var(--ink);margin-top:var(--s4)}
+      .cmp{font-size:var(--t-sm);color:var(--muted);margin-top:var(--s7);display:flex;gap:var(--s6);align-items:center}
+      .cmp b{color:#ffa56b} .cmp .vs{color:var(--faint)}
+    </style>
+  </head>
+  <body>
+    <div class="card bg-dark"><div class="grain"></div><div class="layer">
+      <div class="top"><div class="brand"><img src="../../wordmark-white.svg" alt="Syrin" /><span class="sep">/</span><span class="prod">Iris</span></div><span class="kick">re-running your test suite</span></div>
+      <div class="mid">
+        <div class="big">2,574&times;</div>
+        <div class="sub">cheaper to re-verify, every commit</div>
+        <div class="cmp"><span><b>Iris</b> 47 tokens &middot; no model &middot; 0% flake</span><span class="vs">vs</span><span>re-driving with an LLM ~120,000</span></div>
+      </div>
+      <div class="foot coords"><span>measured &middot; reproducible</span><span class="dot"></span><span class="code">github.com/syrin-labs/iris</span></div>
+    </div></div>
+  </body>
+</html>
