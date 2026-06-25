@@ -21,7 +21,7 @@ cat .iris.json 2>/dev/null || echo "NOT_FOUND"
 
 Ask ALL of them in a single message. Do not start installing until you have the answers.
 
-**Before asking Q6**, run the detection commands below to pre-fill a suggestion — but always
+**Before asking Q5**, run the detection commands below to pre-fill a suggestion — but always
 confirm with the user, because they may plan to use a tool that isn't installed yet.
 
 ```bash
@@ -47,19 +47,15 @@ which zed       2>/dev/null && echo "zed"
 2. What package manager are you using?
    npm | pnpm | yarn | bun
 
-3. What port does your dev server normally run on?
-   (e.g. 3000, 5173, 8080 — just the number, not the full URL)
+3. What port does your dev server run on?
+   (e.g. 3000, 5173, 8080 — the port number only, not the full URL)
+   Syrin Iris attaches to your running server — you keep running `npm run dev` yourself.
+   Syrin Iris does NOT start or manage your dev server.
 
 4. Do you already have data-testid attributes on your key elements?
-   (If yes, Iris reuses them. If no, we'll add a handful to the most important elements.)
+   (If yes, Syrin Iris reuses them. If no, we'll add a handful to the most important elements.)
 
-5. How do you want to use Syrin Iris?
-   a) Quick spot-check — verify a specific thing the agent just built.
-   b) Pair programming — present mode on, watch the agent work in the browser.
-   c) Full automation — record flows, replay in CI, catch regressions.
-   d) All of the above.
-
-6. Which AI coding tool(s) will you use this project with?
+5. Which AI coding tool(s) will you use this project with?
    (I detected: <list from detection above, or "none found">)
 
    a) Claude Code   b) OpenCode   c) Codex CLI
@@ -73,6 +69,10 @@ which zed       2>/dev/null && echo "zed"
 
 ## Step 1 — Configure the MCP server
 
+> **Fast path (Claude Code + Vite or Next.js):** Run `npx @syrin/iris init --port <Q3 answer>`.
+> This handles Steps 1–4 automatically for Claude Code and Cursor. Jump to Step 4 to validate.
+
+> For all other harnesses or manual control, follow the steps below.
 > There is no single MCP config file all tools share. Each harness has its own file and
 > schema. Write only the ones in `IRIS_HARNESSES`.
 
@@ -88,7 +88,7 @@ which zed       2>/dev/null && echo "zed"
 
 **Claude Code** (user-level, default)
 
-Register once globally so Iris is available in every project:
+Register once globally so Syrin Iris is available in every project:
 
 ```bash
 claude mcp add iris -s user -- npx @syrin/iris mcp
@@ -220,6 +220,11 @@ Only add this if the user explicitly asks for the daemon to stop between turns:
 
 ## Step 2 — Install the SDK
 
+> **Mental model:** The user keeps running their dev server (`npm run dev`) themselves.
+> Syrin Iris embeds a tiny SDK in the app that connects to a local bridge daemon.
+> The agent talks to the daemon over MCP — no Chromium is downloaded or needed for
+> standard agent workflows. Playwright is only required if you explicitly use `--drive` mode.
+
 ```bash
 npm install --save-dev @syrin/iris    # swap npm for pnpm/yarn/bun per Q2
 ```
@@ -303,16 +308,23 @@ Vanilla / HTML: use a dynamic `import('@syrin/iris')` inside `if (location.hostn
 
 ## Step 4 — Save config and validate
 
-Write `.iris.json` to the project root (commit this):
+If you used `iris init` in Step 1, `.iris.json` was already written. Verify with:
+
+```bash
+cat .iris.json
+```
+
+If setting up manually, write `.iris.json` to the project root (commit this — `iris mcp` reads it to pick the right port):
 
 ```jsonc
 {
   "framework": "vite-react",
-  "harnesses": ["claude-code"],
+  "port": 5173,
 }
 ```
 
-Fill in framework from Q1, `IRIS_HARNESSES` from Q6.
+Fill in framework from Q1, port from Q3. Omit `port` if using the default (4400). Each project
+should have its own port so multiple apps can run Syrin Iris simultaneously without conflicts.
 
 Tell the user: **"Run `npm run dev` (your normal dev server) and open the app in your browser."**
 
@@ -346,7 +358,7 @@ race with the WebSocket. Then call `iris_sessions()`. Three possible states:
 **B. No sessions:**
 Tell the user:
 
-> "No app connected. Run your dev server (`npm run dev`) and open the app in your browser, then try `/iris` again."
+> "No app connected. Run your dev server (`npm run dev`) and open the app in your browser, then try `/iris` again. Syrin Iris never starts the dev server for you — that's your job."
 > Stop here.
 
 **C. Multiple sessions — ask:**
@@ -478,6 +490,8 @@ Reading never consumes a mark, so you can list → fix → verify → resolve.
 
 ## Phase 5 — Report
 
+Always refer to the tool as **Syrin Iris** in reports, summaries, and messages to the user.
+
 ```
 ## Syrin Iris — <route or feature>
 
@@ -511,6 +525,40 @@ the `file:line`, and include it in the report.
 ---
 
 ## Troubleshooting
+
+### Multiple projects / port conflicts
+
+Each project should have its own port in `.iris.json`. When `iris mcp` starts, it reads `.iris.json`
+in the current working directory and uses that project's port — so agents in different project
+directories automatically connect to different daemons.
+
+If two projects share the same port, start the second on a different port:
+
+```bash
+npx @syrin/iris stop --port 4400   # stop the other project's daemon if needed
+# Then ensure .iris.json in this project has a unique "port" field
+```
+
+Use `npx @syrin/iris status` to see which daemons are running and which sessions are connected.
+
+### No Chromium / Playwright needed for standard use
+
+Syrin Iris does NOT download Chromium for normal agent workflows. The browser SDK runs inside the
+user's own browser — the agent sees the DOM, network, console, and state through the WebSocket
+bridge. Playwright is only installed if you explicitly call `iris serve --drive <url>` or
+`iris verify`, which launch an autonomous browser for unattended automation.
+
+To attach to a browser the user already has open (zero download, zero extra process):
+
+```bash
+# Start Chrome with remote debugging enabled (user does this once):
+# Mac: /Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --remote-debugging-port=9222
+# Then set IRIS_CDP_URL when starting the daemon:
+IRIS_CDP_URL=http://localhost:9222 npx @syrin/iris mcp
+```
+
+This connects Syrin Iris to the existing Chrome — native clicks and screenshots work without
+Playwright.
 
 ### "Failed to reconnect to iris: -32000"
 

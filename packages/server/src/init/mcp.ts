@@ -4,25 +4,29 @@
  * a checked-in `.mcp.json`. We shell out to the official `claude mcp add -s user` CLI rather than
  * hand-editing `~/.claude.json` (a large stateful file). When the `claude` CLI is absent we print a
  * manual instruction instead.
+ *
+ * The registration is intentionally PORTLESS — `npx @syrin/iris mcp`, never `--port N`. A single
+ * global entry serves every project, so baking a port into it would pin every project to one port
+ * and defeat per-project isolation. Instead `iris mcp` resolves the port at runtime from the
+ * project's `.iris.json` in its CWD (see cli-port.ts). The port belongs to the project, not the
+ * global agent config.
  */
 
 export const MCP_SERVER_NAME = 'iris';
 export const NPX = 'npx';
 const IRIS_PACKAGE = '@syrin/iris';
 const MCP_SUBCOMMAND = 'mcp';
-const PORT_FLAG = '--port';
 export const CLAUDE_CLI = 'claude';
 
-/** Args after `npx` that launch the bridge: `@syrin/iris mcp [--port N]`. Shared across agents. */
-export function npxServerArgs(port: number | undefined): string[] {
-  return port === undefined
-    ? [IRIS_PACKAGE, MCP_SUBCOMMAND]
-    : [IRIS_PACKAGE, MCP_SUBCOMMAND, PORT_FLAG, String(port)];
+/** Args after `npx` that launch the bridge: `@syrin/iris mcp`. Portless — the port comes from
+ * the project's `.iris.json` at runtime, so one global entry works for every project. */
+export function npxServerArgs(): string[] {
+  return [IRIS_PACKAGE, MCP_SUBCOMMAND];
 }
 
 /** The full `npx …` invocation — the tail after `claude mcp add … --`. */
-function serverInvocation(port: number | undefined): string[] {
-  return [NPX, ...npxServerArgs(port)];
+function serverInvocation(): string[] {
+  return [NPX, ...npxServerArgs()];
 }
 
 export interface ClaudeAddCommand {
@@ -32,9 +36,9 @@ export interface ClaudeAddCommand {
   display: string;
 }
 
-/** `claude mcp add iris -s user -- npx @syrin/iris mcp [--port N]` — registers globally for all projects. */
-export function claudeAddCommand(port: number | undefined): ClaudeAddCommand {
-  const tail = serverInvocation(port);
+/** `claude mcp add iris -s user -- npx @syrin/iris mcp` — registers globally for all projects (portless). */
+export function claudeAddCommand(): ClaudeAddCommand {
+  const tail = serverInvocation();
   const args = [MCP_SUBCOMMAND, 'add', MCP_SERVER_NAME, '-s', 'user', '--', ...tail];
   return { command: CLAUDE_CLI, args, display: `${CLAUDE_CLI} ${args.join(' ')}` };
 }
@@ -49,14 +53,14 @@ export function claudeAvailableProbe(): { command: string; args: string[] } {
   return { command: CLAUDE_CLI, args: ['--version'] };
 }
 
-/** Printed when the `claude` CLI isn't available — register Iris globally once, by hand. */
-export function mcpManual(port: number | undefined): string {
-  const tail = serverInvocation(port).join(' ');
-  return `Register the Iris MCP server ONCE, globally (so every project gets it):
+/** Printed when the `claude` CLI isn't available — register Syrin Iris globally once, by hand. */
+export function mcpManual(): string {
+  const tail = serverInvocation().join(' ');
+  return `Register the Syrin Iris MCP server ONCE, globally (so every project gets it):
 
   ${CLAUDE_CLI} ${MCP_SUBCOMMAND} add ${MCP_SERVER_NAME} -s user -- ${tail}
 
 Or, for another agent, add this to its global MCP config (e.g. Cursor's ~/.cursor/mcp.json):
 
-  "${MCP_SERVER_NAME}": { "command": "${NPX}", "args": ${JSON.stringify(serverInvocation(port).slice(1))} }`;
+  "${MCP_SERVER_NAME}": { "command": "${NPX}", "args": ${JSON.stringify(serverInvocation().slice(1))} }`;
 }

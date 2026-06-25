@@ -104,16 +104,17 @@ function gatherPlanInput(options: InitOptions, io: InitIo, pkgRaw: string): Plan
     viteConfig,
     nextConfigFile: firstPresent(rootFiles, NEXT_CONFIG_CANDIDATES),
     nextIrisDevExists: io.exists(NEXT_IRIS_DEV),
+    irisConfigExists: io.exists('.iris.json'),
     options: { port: options.port, mcp: options.mcp, install: options.install },
   };
 }
 
 function restartHint(framework: Framework): string {
   if (framework === Framework.NEXT)
-    return 'Restart `next dev`, then ask your agent: "List Iris sessions".';
+    return 'Restart `next dev`, then ask your agent: "List Syrin Iris sessions".';
   if (framework === Framework.VITE)
-    return 'Restart `vite`, then ask your agent: "List Iris sessions".';
-  return 'Reload your app on localhost, then ask your agent: "List Iris sessions".';
+    return 'Restart `vite`, then ask your agent: "List Syrin Iris sessions".';
+  return 'Reload your app on localhost, then ask your agent: "List Syrin Iris sessions".';
 }
 
 function report(plan: Plan, dryRun: boolean, failed: ReadonlySet<string>, io: InitIo): InitResult {

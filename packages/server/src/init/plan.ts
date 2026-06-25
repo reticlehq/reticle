@@ -15,10 +15,12 @@ import {
   nextIrisDevFile,
   NEXT_IRIS_DEV_PATH,
   nextConfigManual,
+  irisConfigContent,
 } from './snippets.js';
 
 const IRIS_PACKAGE = '@syrin/iris';
 const MCP_TARGET = 'global (claude user scope)';
+const IRIS_CONFIG_FILE = '.iris.json';
 
 export const StepStatus = {
   APPLY: 'apply',
@@ -62,6 +64,8 @@ export interface PlanInput {
   nextConfigFile: string | null;
   /** Whether app/iris-dev.tsx already exists. */
   nextIrisDevExists: boolean;
+  /** Whether .iris.json already exists in the project root (idempotency). */
+  irisConfigExists?: boolean;
   options: { port: number | undefined; mcp: boolean; install: boolean };
 }
 
@@ -78,7 +82,7 @@ function claudeMcpStep(input: PlanInput): Step | null {
       detail: 'iris already registered (install once, used by every project)',
     };
   }
-  const cmd = claudeAddCommand(input.options.port);
+  const cmd = claudeAddCommand();
   return {
     title: CLAUDE_MCP_TITLE,
     target: MCP_TARGET,
@@ -90,7 +94,7 @@ function claudeMcpStep(input: PlanInput): Step | null {
 
 function cursorMcpStep(input: PlanInput): Step | null {
   if (!input.cursorPresent) return null;
-  const r = mergeCursorConfig(input.cursorConfig, input.options.port);
+  const r = mergeCursorConfig(input.cursorConfig);
   if (r.status === CursorMergeStatus.ALREADY) {
     return {
       title: CURSOR_MCP_TITLE,
@@ -104,7 +108,7 @@ function cursorMcpStep(input: PlanInput): Step | null {
       title: CURSOR_MCP_TITLE,
       target: input.cursorConfigPath,
       status: StepStatus.MANUAL,
-      detail: `couldn't parse ${input.cursorConfigPath} — add this server by hand:\n  "iris": ${JSON.stringify(cursorServerEntry(input.options.port))}`,
+      detail: `couldn't parse ${input.cursorConfigPath} — add this server by hand:\n  "iris": ${JSON.stringify(cursorServerEntry())}`,
     };
   }
   return {
@@ -136,7 +140,7 @@ function mcpSteps(input: PlanInput): Step[] {
       title: 'MCP server (global)',
       target: MCP_TARGET,
       status: StepStatus.MANUAL,
-      detail: mcpManual(input.options.port),
+      detail: mcpManual(),
     },
   ];
 }
@@ -240,8 +244,27 @@ function nextSteps(input: PlanInput): Step[] {
   ];
 }
 
+function irisConfigStep(input: PlanInput): Step {
+  if (input.irisConfigExists === true) {
+    return {
+      title: 'Syrin Iris config',
+      target: IRIS_CONFIG_FILE,
+      status: StepStatus.ALREADY,
+      detail: '.iris.json already exists',
+    };
+  }
+  const content = irisConfigContent(input.detection.framework, input.options.port);
+  return {
+    title: 'Syrin Iris config',
+    target: IRIS_CONFIG_FILE,
+    status: StepStatus.APPLY,
+    detail: 'write project config (framework + port)',
+    write: { path: IRIS_CONFIG_FILE, content },
+  };
+}
+
 export function buildPlan(input: PlanInput): Plan {
-  const steps: Step[] = [...mcpSteps(input), installStep(input)];
+  const steps: Step[] = [...mcpSteps(input), installStep(input), irisConfigStep(input)];
   if (input.detection.framework === Framework.VITE) {
     steps.push(...viteSteps(input));
   } else if (input.detection.framework === Framework.NEXT) {

@@ -5,6 +5,7 @@ import { Framework, PackageManager, type Detection } from './detect.js';
 const CLAUDE_STEP = 'MCP server (Claude, global)';
 const CURSOR_STEP = 'MCP server (Cursor, global)';
 const MCP_STEP = 'MCP server (global)';
+const CONFIG_STEP = 'Syrin Iris config';
 
 function detection(framework: Framework, reactMajor = 19): Detection {
   return {
@@ -105,7 +106,7 @@ describe('buildPlan — MCP (global, per detected agent)', () => {
     expect(s.status).toBe(StepStatus.SKIP);
   });
 
-  it('bakes --port into both agents’ registration', () => {
+  it('keeps both agents’ registration portless — the port lives in .iris.json, not the global config', () => {
     const plan = buildPlan(
       input({
         claudeCli: true,
@@ -114,8 +115,13 @@ describe('buildPlan — MCP (global, per detected agent)', () => {
         options: { port: 5000, mcp: true, install: false },
       }),
     );
-    expect(step(plan, CLAUDE_STEP).exec?.args).toContain('5000');
-    expect(step(plan, CURSOR_STEP).write?.content).toContain('5000');
+    // The global MCP registration must NOT pin a port — one entry serves every project.
+    expect(step(plan, CLAUDE_STEP).exec?.args).not.toContain('5000');
+    expect(step(plan, CLAUDE_STEP).exec?.args).not.toContain('--port');
+    expect(step(plan, CURSOR_STEP).write?.content).not.toContain('5000');
+    expect(step(plan, CURSOR_STEP).write?.content).not.toContain('--port');
+    // Instead the port is written to the per-project .iris.json.
+    expect(step(plan, CONFIG_STEP).write?.content).toContain('5000');
   });
 });
 

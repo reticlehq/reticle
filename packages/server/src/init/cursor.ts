@@ -30,8 +30,8 @@ interface CursorConfigShape {
   [key: string]: unknown;
 }
 
-export function cursorServerEntry(port: number | undefined): Record<string, unknown> {
-  return { command: NPX, args: npxServerArgs(port) };
+export function cursorServerEntry(): Record<string, unknown> {
+  return { command: NPX, args: npxServerArgs() };
 }
 
 type ParseResult = { ok: true; config: CursorConfigShape } | { ok: false };
@@ -47,10 +47,7 @@ function parseConfig(existing: string | null): ParseResult {
   }
 }
 
-export function mergeCursorConfig(
-  existing: string | null,
-  port: number | undefined,
-): CursorMergeResult {
+export function mergeCursorConfig(existing: string | null): CursorMergeResult {
   const parsed = parseConfig(existing);
   if (!parsed.ok) {
     return { status: CursorMergeStatus.MANUAL, content: existing ?? '' };
@@ -62,7 +59,7 @@ export function mergeCursorConfig(
   }
   const merged: CursorConfigShape = {
     ...config,
-    mcpServers: { ...servers, [MCP_SERVER_NAME]: cursorServerEntry(port) },
+    mcpServers: { ...servers, [MCP_SERVER_NAME]: cursorServerEntry() },
   };
   return { status: CursorMergeStatus.APPLY, content: `${JSON.stringify(merged, null, 2)}\n` };
 }

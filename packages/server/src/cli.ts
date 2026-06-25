@@ -18,6 +18,7 @@ import { handleVerify } from './cli-verify.js';
 import { runInit } from './init/run.js';
 import { buildNodeIo } from './init/node-io.js';
 import { describeLicense } from './license/license.js';
+import { readProjectPort } from './cli-port.js';
 import type { StartOptions } from './index.js';
 
 import {
@@ -280,7 +281,9 @@ function handleLegacyDrive(parsed: { port: number; driveUrl: string; headless: b
 
 function main(): void {
   const portEnv = process.env[IrisEnv.PORT];
-  const defaultPort = portEnv === undefined ? IRIS_DEFAULT_PORT : parseInt(portEnv, 10);
+  const envPort = portEnv !== undefined ? parseInt(portEnv, 10) : undefined;
+  const projectPort = readProjectPort(process.cwd());
+  const defaultPort = envPort ?? projectPort ?? IRIS_DEFAULT_PORT;
   const parsed = parseCliArgs(process.argv.slice(2), defaultPort);
 
   switch (parsed.kind) {

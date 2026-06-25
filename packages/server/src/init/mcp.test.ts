@@ -3,7 +3,7 @@ import { claudeAddCommand, claudeExistsProbe, mcpManual, MCP_SERVER_NAME } from 
 
 describe('claudeAddCommand', () => {
   it('registers iris at user scope via npx (global, all projects)', () => {
-    const c = claudeAddCommand(undefined);
+    const c = claudeAddCommand();
     expect(c.command).toBe('claude');
     expect(c.args).toEqual([
       'mcp',
@@ -18,22 +18,13 @@ describe('claudeAddCommand', () => {
     ]);
   });
 
-  it('bakes the port into the registered invocation', () => {
-    const c = claudeAddCommand(4500);
-    expect(c.args).toEqual([
-      'mcp',
-      'add',
-      'iris',
-      '-s',
-      'user',
-      '--',
-      'npx',
-      '@syrin/iris',
-      'mcp',
-      '--port',
-      '4500',
-    ]);
-    expect(c.display).toContain('--port 4500');
+  it('is portless — never bakes a port into the global registration', () => {
+    // A single global entry serves every project; the port is resolved per-project from
+    // .iris.json at runtime. Baking --port here would pin all projects to one port.
+    const c = claudeAddCommand();
+    expect(c.args).not.toContain('--port');
+    expect(c.display).not.toContain('--port');
+    expect(c.display).toBe('claude mcp add iris -s user -- npx @syrin/iris mcp');
   });
 });
 
@@ -45,8 +36,9 @@ describe('claudeExistsProbe', () => {
 
 describe('mcpManual', () => {
   it('explains the one-time global registration', () => {
-    const m = mcpManual(undefined);
+    const m = mcpManual();
     expect(m).toContain('claude mcp add iris -s user');
     expect(m).toContain('globally');
+    expect(m).not.toContain('--port');
   });
 });

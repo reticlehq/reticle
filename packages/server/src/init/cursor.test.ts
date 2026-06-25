@@ -10,7 +10,7 @@ function parse(content: string): CursorShape {
 
 describe('mergeCursorConfig', () => {
   it('creates a fresh global config when none exists', () => {
-    const r = mergeCursorConfig(null, undefined);
+    const r = mergeCursorConfig(null);
     expect(r.status).toBe(CursorMergeStatus.APPLY);
     expect(parse(r.content).mcpServers['iris']).toEqual({
       command: 'npx',
@@ -18,21 +18,16 @@ describe('mergeCursorConfig', () => {
     });
   });
 
-  it('bakes the port into the args', () => {
-    const r = mergeCursorConfig(null, 4500);
-    expect(parse(r.content).mcpServers['iris']?.args).toEqual([
-      '@syrin/iris',
-      'mcp',
-      '--port',
-      '4500',
-    ]);
+  it('is portless — the global Cursor entry never bakes in a port', () => {
+    // One global entry per user serves every project; the port is read per-project from
+    // .iris.json at runtime, so pinning a port here would break multi-project isolation.
+    const r = mergeCursorConfig(null);
+    expect(parse(r.content).mcpServers['iris']?.args).toEqual(['@syrin/iris', 'mcp']);
+    expect(parse(r.content).mcpServers['iris']?.args).not.toContain('--port');
   });
 
   it('preserves other servers', () => {
-    const r = mergeCursorConfig(
-      JSON.stringify({ mcpServers: { other: { command: 'x' } } }),
-      undefined,
-    );
+    const r = mergeCursorConfig(JSON.stringify({ mcpServers: { other: { command: 'x' } } }));
     const parsed = parse(r.content);
     expect(parsed.mcpServers['other']).toEqual({ command: 'x' });
     expect(parsed.mcpServers['iris']).toBeDefined();
@@ -40,14 +35,14 @@ describe('mergeCursorConfig', () => {
 
   it('never clobbers an existing iris entry (idempotent)', () => {
     const existing = JSON.stringify({ mcpServers: { iris: { command: 'custom' } } });
-    const r = mergeCursorConfig(existing, undefined);
+    const r = mergeCursorConfig(existing);
     expect(r.status).toBe(CursorMergeStatus.ALREADY);
     expect(r.content).toBe(existing);
   });
 
   it('bails to manual on unparseable jsonc without rewriting', () => {
     const jsonc = '{\n  // servers\n  "mcpServers": {}\n}\n';
-    const r = mergeCursorConfig(jsonc, undefined);
+    const r = mergeCursorConfig(jsonc);
     expect(r.status).toBe(CursorMergeStatus.MANUAL);
     expect(r.content).toBe(jsonc);
   });

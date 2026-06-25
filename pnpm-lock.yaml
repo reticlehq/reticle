@@ -124,6 +124,19 @@ importers:
         specifier: ^1.48.0
         version: 1.60.0
 
+  apps/emergent-demo:
+    dependencies:
+      '@syrin/iris-browser':
+        specifier: workspace:*
+        version: link:../../packages/browser
+    devDependencies:
+      '@syrin/iris-server':
+        specifier: workspace:*
+        version: link:../../packages/server
+      vite:
+        specifier: ^8.0.16
+        version: 8.0.16(@types/node@22.19.20)(esbuild@0.28.1)
+
   apps/large-dom-bench:
     dependencies:
       '@syrin/iris-browser':

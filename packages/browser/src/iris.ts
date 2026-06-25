@@ -131,7 +131,7 @@ function str(value: unknown, fallback = ''): string {
 
 /** HUD summary when the SDK self-ends a session because the bridge (server/agent) became unreachable. */
 const BRIDGE_LOST_SUMMARY =
-  'Session ended — lost connection to Iris (the agent is no longer running).';
+  'Session ended — lost connection to Syrin Iris (the agent is no longer running).';
 
 /**
  * Resolve the session label. An absent label or the `auto` sentinel yields a fresh per-tab id (via
@@ -229,7 +229,7 @@ export class Iris {
       this.#overlay.update({ connected: true, events: 0 });
     }
 
-    if (options.present === true) {
+    if (options.present !== false) {
       const presenterOptions: PresenterOptions = {};
       if (options.pace !== undefined) presenterOptions.paceMs = options.pace;
       if (options.narrationDwellMs !== undefined) {
@@ -261,7 +261,7 @@ export class Iris {
     }
 
     // The "Flag a bug" annotator rides with the presenter (the human surface) unless explicitly off.
-    if (options.annotate ?? options.present === true) {
+    if (options.annotate ?? options.present !== false) {
       const presenter = this.#presenter;
       this.#annotator = new Annotator({
         emit,

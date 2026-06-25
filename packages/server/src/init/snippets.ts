@@ -74,3 +74,10 @@ export function htmlManual(port: number | undefined): string {
 }
 
 export const NEXT_IRIS_DEV_PATH = 'app/iris-dev.tsx';
+
+/** Root-level project config for Syrin Iris. Written by `iris init`; read by `iris mcp` for port. */
+export function irisConfigContent(framework: string, port: number | undefined): string {
+  const fields: Record<string, unknown> = { framework };
+  if (port !== undefined && port !== IRIS_DEFAULT_PORT) fields['port'] = port;
+  return `${JSON.stringify(fields, null, 2)}\n`;
+}
