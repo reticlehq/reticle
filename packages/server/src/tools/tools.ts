@@ -44,24 +44,30 @@ export const TOOLS: ToolDef[] = [
           z.object({
             sessionId: z.string(),
             url: z.string(),
+            projectId: z.string().optional(),
             title: z.string().optional(),
             lastSeenMs: z.number(),
             throttled: z.boolean(),
             focused: z.boolean(),
             hidden: z.boolean(),
             realInputAvailable: z.boolean().optional(),
+            leased: z.boolean().optional(),
             stale: z.boolean().optional(),
             recommendation: z.string().optional(),
           }),
         )
-        .describe('Connected browser sessions with health state.'),
+        .describe(
+          'Connected browser sessions with health state. `projectId` groups sessions by app (stable across port changes); `leased` marks a pool-managed headless context vs a human tab.',
+        ),
     },
     handler: async (deps) => {
       const provider = deps.realInput;
+      const leasedIds = new Set(deps.pool?.leasedSessionIds() ?? []);
       const sessions = await Promise.all(
         deps.sessions.list().map(async (s) => ({
           ...s,
           realInputAvailable: provider !== undefined ? await provider.isAvailableFor(s.url) : false,
+          leased: leasedIds.has(s.sessionId),
         })),
       );
       return { sessions };
