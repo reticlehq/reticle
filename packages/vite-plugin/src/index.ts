@@ -1,6 +1,7 @@
 import { transformSync } from '@babel/core';
 import irisSource from '@syrin/iris-babel-plugin';
 import { IRIS_DEFAULT_PORT, IRIS_WS_PATH } from '@syrin/iris-protocol';
+import { resolveProjectId } from './project-id.js';
 
 export const IRIS_VITE_PLUGIN_NAME = 'iris';
 
@@ -25,6 +26,11 @@ export interface IrisVitePluginOptions {
   port?: number;
   /** Stable session label for the bridge. Defaults to the SDK's auto-generated id. */
   session?: string;
+  /**
+   * Stable project identity. Defaults to one derived from the app's package.json name + root path,
+   * so multi-project session scoping works with zero config. Override only for special setups.
+   */
+  projectId?: string;
   /** Auth token forwarded to connect() when the bridge requires one. */
   token?: string;
   /** Stamp data-iris-source for React 19 source mapping. Default true (harmless on React <=18). */
@@ -80,6 +86,7 @@ function connectArgs(options: IrisVitePluginOptions): string {
   const port = options.port ?? IRIS_DEFAULT_PORT;
   if (port !== IRIS_DEFAULT_PORT) args['url'] = `ws://localhost:${String(port)}${IRIS_WS_PATH}`;
   if (options.session !== undefined) args['session'] = options.session;
+  if (options.projectId !== undefined) args['projectId'] = options.projectId;
   if (options.token !== undefined) args['token'] = options.token;
   return Object.keys(args).length > 0 ? JSON.stringify(args) : '';
 }
@@ -102,6 +109,12 @@ export function connectModuleSource(options: IrisVitePluginOptions): string {
 export function iris(options: IrisVitePluginOptions = {}): IrisVitePlugin {
   const sourceMapping = options.sourceMapping !== false;
   const inject = options.inject !== false;
+  // Resolve the stable projectId once (explicit option, else derived from package.json + cwd) so the
+  // app is identifiable across port changes with zero config.
+  const resolved: IrisVitePluginOptions = {
+    ...options,
+    projectId: resolveProjectId(options.projectId, process.cwd()),
+  };
   return {
     name: IRIS_VITE_PLUGIN_NAME,
     apply: 'serve',
@@ -116,7 +129,7 @@ export function iris(options: IrisVitePluginOptions = {}): IrisVitePlugin {
       return inject && id === IRIS_CONNECT_MODULE ? IRIS_CONNECT_MODULE : null;
     },
     load(id) {
-      return inject && id === IRIS_CONNECT_MODULE ? connectModuleSource(options) : null;
+      return inject && id === IRIS_CONNECT_MODULE ? connectModuleSource(resolved) : null;
     },
     transformIndexHtml() {
       if (!inject) return [];

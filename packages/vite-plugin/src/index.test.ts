@@ -76,4 +76,16 @@ describe('iris vite plugin', () => {
     expect(code).toContain('my-app');
     expect(code).toContain('secret');
   });
+
+  it('auto-stamps a derived projectId with zero config', () => {
+    const code = iris().load?.(IRIS_CONNECT_MODULE);
+    expect(code).toContain('projectId');
+    // The id this monorepo derives for the vite-plugin package starts with a slug of its name.
+    expect(code).toMatch(/projectId":"[a-z0-9-]+-[0-9a-f]{8}"/);
+  });
+
+  it('an explicit projectId option overrides the derived one', () => {
+    const code = iris({ projectId: 'my-fixed-id' }).load?.(IRIS_CONNECT_MODULE);
+    expect(code).toContain('my-fixed-id');
+  });
 });
