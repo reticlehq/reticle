@@ -41,17 +41,26 @@ export interface Lease {
   release(): Promise<void>;
 }
 
+/** Default lease time-to-live: a lease untouched for this long is presumed orphaned and reclaimed. */
+export const DEFAULT_LEASE_TTL_MS = 5 * 60_000;
+
 export interface BrowserPoolOptions {
   /** Max simultaneous leased contexts. Over-cap acquires queue. */
   maxContexts: number;
   /** Stable id generator for lease sessionIds (injected to stay clock-/random-free in logic). */
   genSessionId: () => string;
+  /** Injected clock (ms). Defaults to Date.now; tests pass a controllable one. */
+  now?: () => number;
+  /** A lease untouched for longer than this is reclaimed by sweepExpired(). */
+  leaseTtlMs?: number;
 }
 
 interface ActiveLease {
   context: PooledContext;
   page: PooledPage;
   url: string;
+  /** Last time an agent touched this lease (acquire or any tool call); drives orphan reclaim. */
+  touchedAt: number;
 }
 
 /**
@@ -62,6 +71,8 @@ export class BrowserPool {
   readonly #launch: Launcher;
   readonly #max: number;
   readonly #genId: () => string;
+  readonly #now: () => number;
+  readonly #ttl: number;
 
   #browser: PooledBrowser | undefined;
   #launching: Promise<PooledBrowser> | undefined;
@@ -74,6 +85,8 @@ export class BrowserPool {
     this.#launch = launch;
     this.#max = opts.maxContexts;
     this.#genId = opts.genSessionId;
+    this.#now = opts.now ?? ((): number => Date.now());
+    this.#ttl = opts.leaseTtlMs ?? DEFAULT_LEASE_TTL_MS;
   }
 
   /** Currently leased contexts. */
@@ -96,6 +109,25 @@ export class BrowserPool {
     return this.#release(sessionId);
   }
 
+  /** Mark a lease as still in use (called on agent activity) so the reaper doesn't reclaim it. */
+  touch(sessionId: string): void {
+    const lease = this.#active.get(sessionId);
+    if (lease !== undefined) lease.touchedAt = this.#now();
+  }
+
+  /**
+   * Reclaim leases untouched for longer than the TTL — a hung/crashed agent never holds a slot
+   * forever. Returns the released sessionIds. This is the fault-tolerance backstop for the pool.
+   */
+  async sweepExpired(): Promise<string[]> {
+    const now = this.#now();
+    const expired = [...this.#active.entries()]
+      .filter(([, lease]) => now - lease.touchedAt > this.#ttl)
+      .map(([sessionId]) => sessionId);
+    for (const sessionId of expired) await this.#release(sessionId);
+    return expired;
+  }
+
   /**
    * Lease an isolated context, navigate it to `url`, and return a handle. If the pool is at capacity,
    * waits FIFO until a slot frees (or until `signal` aborts, if provided).
@@ -112,7 +144,7 @@ export class BrowserPool {
       const page = await context.newPage();
       await page.goto(url);
       const sessionId = opts.sessionId ?? this.#genId();
-      this.#active.set(sessionId, { context, page, url });
+      this.#active.set(sessionId, { context, page, url, touchedAt: this.#now() });
       return {
         sessionId,
         url,

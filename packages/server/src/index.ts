@@ -31,6 +31,7 @@ import { CdpRealInputProvider, LaunchedRealInputProvider } from './input/real-in
 import { cpus } from 'node:os';
 import { BrowserPool } from './pool/browser-pool.js';
 import { playwrightLauncher, resolveMaxContexts } from './pool/playwright-launcher.js';
+import { LeaseReaper } from './pool/lease-reaper.js';
 import type {
   OwnedRealInputProvider,
   RealInputProvider,
@@ -252,6 +253,7 @@ export async function start(options: StartOptions = {}): Promise<RunningServer> 
   let owned: { dispose: () => Promise<void> } | undefined;
   let realInput: RealInputProvider | undefined;
   let pool: BrowserPool | undefined;
+  let leaseReaper: LeaseReaper | undefined;
   const driveUrl = options.driveUrl;
   if (driveUrl !== undefined && driveUrl.length > 0) {
     const headless = options.headless ?? true;
@@ -293,6 +295,8 @@ export async function start(options: StartOptions = {}): Promise<RunningServer> 
     const project = new ProjectStore(fs, irisRoot, { now });
     const annotations = new AnnotationStore();
     pool = createBrowserPool(options.headless ?? true);
+    leaseReaper = new LeaseReaper(pool);
+    leaseReaper.start();
     const deps = {
       sessions: bridge.sessions,
       pool,
@@ -325,6 +329,7 @@ export async function start(options: StartOptions = {}): Promise<RunningServer> 
     ...(realInput !== undefined ? { realInput } : {}),
     close: async () => {
       reaper.stop();
+      leaseReaper?.stop();
       await pool?.shutdown();
       await owned?.dispose();
       await bridge.close();
@@ -405,6 +410,8 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
   const project = new ProjectStore(fs, irisRoot, { now });
   const annotations = new AnnotationStore();
   const pool = createBrowserPool(options.headless ?? true);
+  const leaseReaper = new LeaseReaper(pool);
+  leaseReaper.start();
   const deps = {
     sessions: bridge.sessions,
     pool,
@@ -487,6 +494,7 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
       reaper.stop();
       const vh = verifyHttp;
       if (vh !== undefined) await new Promise<void>((resolve) => vh.server.close(() => resolve()));
+      leaseReaper.stop();
       await pool.shutdown();
       await owned?.dispose();
       await bridge.close();

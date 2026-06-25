@@ -82,6 +82,10 @@ export async function runTool(
   deps: ToolDeps,
   args: Record<string, unknown>,
 ): Promise<unknown> {
+  // Heartbeat: any tool call targeting a leased session keeps its pool lease alive, so the
+  // LeaseReaper only reclaims genuinely orphaned (crashed/hung-agent) leases.
+  const targetSession = asString(args['sessionId']);
+  if (targetSession !== undefined) deps.pool?.touch(targetSession);
   const result = await tool.handler(deps, args);
   if (!SESSION_BOUND_TOOLS.has(tool.name)) return result;
   if (!isPlainObject(result) || 'session' in result) return result;

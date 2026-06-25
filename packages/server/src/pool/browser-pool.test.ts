@@ -165,6 +165,52 @@ describe('BrowserPool', () => {
     expect(pool.activeCount()).toBe(1);
   });
 
+  it('sweepExpired reclaims a lease untouched past the TTL; touch keeps it alive', async () => {
+    const { launch } = fakeLauncher();
+    let clock = 1000;
+    const pool = new BrowserPool(launch, {
+      maxContexts: 4,
+      genSessionId: counterIds(),
+      now: () => clock,
+      leaseTtlMs: 500,
+    });
+
+    const stale = await pool.acquire('http://localhost:3000/stale');
+    const fresh = await pool.acquire('http://localhost:3000/fresh');
+    expect(pool.activeCount()).toBe(2);
+
+    // Advance past the TTL, but touch only the fresh lease.
+    clock += 600;
+    pool.touch(fresh.sessionId);
+
+    const reclaimed = await pool.sweepExpired();
+    expect(reclaimed).toEqual([stale.sessionId]);
+    expect(pool.activeCount()).toBe(1);
+    expect(pool.leasedSessionIds()).toEqual([fresh.sessionId]);
+  });
+
+  it('sweepExpired reclaiming a lease frees the slot for a queued acquire', async () => {
+    const { launch } = fakeLauncher();
+    let clock = 0;
+    const pool = new BrowserPool(launch, {
+      maxContexts: 1,
+      genSessionId: counterIds(),
+      now: () => clock,
+      leaseTtlMs: 100,
+    });
+
+    await pool.acquire('http://localhost:3000/1');
+    const queued = pool.acquire('http://localhost:3000/2'); // waits for a slot
+    expect(pool.queuedCount()).toBe(1);
+
+    clock += 200; // first lease goes stale
+    await pool.sweepExpired();
+
+    const l2 = await queued; // the reaped slot lets the queued acquire proceed
+    expect(l2.sessionId).toBeDefined();
+    expect(pool.activeCount()).toBe(1);
+  });
+
   it('a failed context setup frees the slot (queue not deadlocked)', async () => {
     let calls = 0;
     const launch: Launcher = () => {
