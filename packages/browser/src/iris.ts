@@ -50,6 +50,11 @@ export interface IrisConnectOptions {
   url?: string;
   /** Human-friendly session label so the agent can target the right tab. */
   session?: string;
+  /**
+   * Stable project identity, normally stamped by the build plugin (e.g. "acme-web-9f3c1d"). Lets the
+   * agent scope to the right app even when its dev server boots on an unexpected port. Optional.
+   */
+  projectId?: string;
   /** Browser/bridge pairing token. Required when either endpoint is non-localhost. */
   token?: string;
   /** Explicitly allow Iris on a non-localhost page or bridge. Requires token. */
@@ -167,6 +172,7 @@ export class Iris {
   #annotator: Annotator | undefined;
   #eventCount = 0;
   #token: string | undefined;
+  #projectId: string | undefined;
   /** Act-row log handle for the in-flight act/act_sequence, so its outcome stamps the right row. */
   #actHandle: LogHandle | undefined;
 
@@ -193,6 +199,10 @@ export class Iris {
     );
     this.#token =
       options.token !== undefined && options.token.length > 0 ? options.token : undefined;
+    this.#projectId =
+      options.projectId !== undefined && options.projectId.length > 0
+        ? options.projectId
+        : undefined;
     this.#start = performance.now();
     this.#registry = createCommandRegistry();
 
@@ -338,6 +348,7 @@ export class Iris {
       kind: MessageKind.HELLO,
       protocolVersion: IRIS_PROTOCOL_VERSION,
       sessionId: this.#session,
+      ...(this.#projectId === undefined ? {} : { projectId: this.#projectId }),
       url: location.href,
       title: document.title,
       adapters: adapterNames(),

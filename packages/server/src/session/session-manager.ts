@@ -1,6 +1,54 @@
 import { Session, type SessionInfo } from './session.js';
 
 /**
+ * The agent's active project, used to scope auto-selection. `projectId` is the stable build-stamped
+ * identity (authoritative when present); `url` is the app origin, a fallback hint for older SDKs that
+ * don't stamp a projectId. Both optional — an empty scope means "no project filter" (legacy behavior).
+ */
+export interface ResolveScope {
+  projectId?: string;
+  url?: string;
+}
+
+/** The scheme://host:port of a URL, or undefined if it can't be parsed. Used to compare origins. */
+function originOf(url: string | undefined): string | undefined {
+  if (url === undefined) return undefined;
+  try {
+    return new URL(url).origin;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Narrow a session list to those belonging to the scoped project. With a `projectId` the match is by
+ * that stable id (origin ignored — it survives port swaps). With only a `url`, match by origin. With
+ * no scope, return the list unchanged (legacy single-/multi-session behavior).
+ */
+function scopeSessions(sessions: Session[], scope?: ResolveScope): Session[] {
+  if (scope === undefined) return sessions;
+  if (scope.projectId !== undefined) {
+    return sessions.filter((s) => s.projectId === scope.projectId);
+  }
+  const wantOrigin = originOf(scope.url);
+  if (wantOrigin !== undefined) {
+    return sessions.filter((s) => originOf(s.url) === wantOrigin);
+  }
+  return sessions;
+}
+
+/** Honest, scoped error when sessions exist but none match the agent's project. */
+function scopeMissError(scope?: ResolveScope): string {
+  const who =
+    scope?.projectId !== undefined
+      ? `project '${scope.projectId}'`
+      : scope?.url !== undefined
+        ? `your app at ${scope.url}`
+        : 'the active project';
+  return `no browser session for ${who} — is that app running with @syrin/iris enabled? (other apps may be connected, but they won't be driven by mistake)`;
+}
+
+/**
  * Owns the set of connected browser sessions and the smart auto-selection that resolves which one a
  * tool targets when the agent omits an explicit sessionId. Extracted from session.ts so each file
  * stays one cohesive unit (Session = one tab; SessionManager = the registry over all tabs).
@@ -50,7 +98,7 @@ export class SessionManager {
    *      desktop), skip the gap check and pick the freshest heartbeat. This lets the agent
    *      keep working in the background without requiring sessionId every time.
    */
-  resolve(sessionId?: string): Session {
+  resolve(sessionId?: string, scope?: ResolveScope): Session {
     if (sessionId !== undefined) {
       const found = this.#sessions.get(sessionId);
       if (found === undefined) {
@@ -64,7 +112,14 @@ export class SessionManager {
         'no browser session connected — is your app running with @syrin/iris-browser enabled?',
       );
     }
-    const all = [...this.#sessions.values()];
+    // Scope to the agent's active project FIRST, so a stray tab from another app/origin (e.g. a
+    // leftover dashboard on a different port) is structurally unselectable — it never enters the
+    // candidate set, no matter how recently it was heard from. This is the anti-cross-talk guard.
+    const all = scopeSessions([...this.#sessions.values()], scope);
+    if (all.length === 0) {
+      // Sessions exist, but none belong to the scoped project — never fall back to a foreign tab.
+      throw new Error(scopeMissError(scope));
+    }
     if (all.length === 1) {
       const [only] = all;
       if (only === undefined) throw new Error('session lookup failed');

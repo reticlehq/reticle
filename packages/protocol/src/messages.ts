@@ -66,6 +66,13 @@ export const HelloMessageSchema = z.object({
   sessionId: sessionIdSchema,
   url: z.string().max(TRANSPORT_LIMITS.MAX_URL_LENGTH),
   title: z.string().max(TRANSPORT_LIMITS.MAX_TITLE_LENGTH),
+  /**
+   * Stable project identity stamped by the build plugin (e.g. "acme-web-9f3c1d"). Survives port
+   * changes, so session resolution can scope to the right app even when its dev server boots on a
+   * different port than usual. Optional for back-compat with v1.0 SDKs that don't send it; absent
+   * ⇒ resolution falls back to origin + recency.
+   */
+  projectId: sessionIdSchema.optional(),
   adapters: z
     .array(z.string().max(TRANSPORT_LIMITS.MAX_ADAPTER_NAME_LENGTH))
     .max(TRANSPORT_LIMITS.MAX_ADAPTERS),

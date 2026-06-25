@@ -24,6 +24,8 @@ import { buildPresenterArgs } from './presenter-args.js';
 export interface SessionInfo {
   sessionId: string;
   url: string;
+  /** Stable build-stamped project identity; absent for v1.0 SDKs that don't send it. */
+  projectId?: string;
   title: string;
   adapters: string[];
   hasCapabilities: boolean;
@@ -76,6 +78,8 @@ export interface InboxMessage {
  */
 export class Session {
   readonly id: string;
+  /** Stable build-stamped project identity; undefined for v1.0 SDKs that omit it. */
+  readonly projectId: string | undefined;
   url: string;
   title: string;
   adapters: string[];
@@ -107,6 +111,7 @@ export class Session {
 
   constructor(hello: HelloMessage, socket: WebSocket, clock: Clock) {
     this.id = hello.sessionId;
+    this.projectId = hello.projectId;
     this.url = hello.url;
     this.title = hello.title;
     this.adapters = hello.adapters;
@@ -164,6 +169,7 @@ export class Session {
     const base: SessionInfo = {
       sessionId: this.id,
       url: this.url,
+      ...(this.projectId === undefined ? {} : { projectId: this.projectId }),
       title: this.title,
       adapters: this.adapters,
       hasCapabilities: this.hasCapabilities,
