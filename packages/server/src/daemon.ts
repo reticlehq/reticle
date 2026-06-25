@@ -58,6 +58,7 @@ export function isRunning(port: number): boolean {
  * (lowest port, deterministic), or null when none is running.
  */
 export function discoverDaemonPort(): number | null {
+  reclaimStaleDaemons(); // sweep crashed daemons' stale pidfiles before scanning for live ones
   let found: number | null = null;
   try {
     for (const file of readdirSync(IRIS_HOME)) {
@@ -70,6 +71,46 @@ export function discoverDaemonPort(): number | null {
     // no ~/.iris yet → nothing running
   }
   return found;
+}
+
+/**
+ * Sweep ~/.iris for daemon-<port>.pid files whose process is no longer alive and delete them, so a
+ * crashed daemon never leaves a stale pidfile that confuses discovery or makes a port look "taken".
+ * Returns the ports reclaimed. `home` and `pidAlive` are injectable for testing (default to the real
+ * ~/.iris and the process.kill(pid,0) liveness probe).
+ */
+export function reclaimStaleDaemons(
+  home: string = IRIS_HOME,
+  pidAlive: (pid: number) => boolean = isAlive,
+): number[] {
+  const reclaimed: number[] = [];
+  let files: string[];
+  try {
+    files = readdirSync(home);
+  } catch {
+    return reclaimed; // no ~/.iris yet → nothing to reclaim
+  }
+  for (const file of files) {
+    const match = /^daemon-(\d+)\.pid$/.exec(file);
+    if (match === null) continue;
+    const path = join(home, file);
+    let pid: number | null = null;
+    try {
+      pid = parseInt(readFileSync(path, 'utf8').trim(), 10);
+      if (isNaN(pid)) pid = null;
+    } catch {
+      pid = null; // unreadable pidfile counts as stale
+    }
+    if (pid === null || !pidAlive(pid)) {
+      try {
+        unlinkSync(path);
+        reclaimed.push(Number(match[1]));
+      } catch {
+        // racing another reclaimer — fine, it's already gone
+      }
+    }
+  }
+  return reclaimed;
 }
 
 /**
