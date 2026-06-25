@@ -147,6 +147,27 @@ export function resolveSessionLabel(option: string | undefined, gen: () => strin
   return option === undefined || option === SESSION_AUTO ? gen() : option;
 }
 
+/**
+ * Namespaced URL params a pooled/headless launcher appends so it can stamp this tab's identity
+ * (session + project) without the app changing a line of code. Namespaced to avoid clashing with the
+ * app's own query params.
+ */
+export const IRIS_URL_PARAM = { SESSION: '__iris_session', PROJECT: '__iris_project' } as const;
+
+/**
+ * Extract Iris identity overrides from a `location.search` string. Pure (takes the string, not the
+ * window) so it's testable without a DOM. Explicit connect() options still win over these.
+ */
+export function irisParamsFromSearch(search: string): { session?: string; projectId?: string } {
+  const params = new URLSearchParams(search);
+  const out: { session?: string; projectId?: string } = {};
+  const session = params.get(IRIS_URL_PARAM.SESSION);
+  const projectId = params.get(IRIS_URL_PARAM.PROJECT);
+  if (session !== null && session.length > 0) out.session = session;
+  if (projectId !== null && projectId.length > 0) out.projectId = projectId;
+  return out;
+}
+
 /** A short human label for a ref ("button \"Save\"") for the presenter HUD. */
 function refLabel(refId: string): string {
   const el = refs.resolve(refId);
@@ -192,17 +213,17 @@ export class Iris {
       return;
     }
 
-    this.#session = resolveSessionLabel(options.session, () =>
+    // A pooled/headless launcher can stamp identity via namespaced URL params; explicit options win.
+    const urlIdentity = irisParamsFromSearch(window.location.search);
+    this.#session = resolveSessionLabel(options.session ?? urlIdentity.session, () =>
       typeof globalThis.crypto?.randomUUID === 'function'
         ? `s${globalThis.crypto.randomUUID()}`
         : `s${Date.now().toString(36)}`,
     );
     this.#token =
       options.token !== undefined && options.token.length > 0 ? options.token : undefined;
-    this.#projectId =
-      options.projectId !== undefined && options.projectId.length > 0
-        ? options.projectId
-        : undefined;
+    const projectId = options.projectId ?? urlIdentity.projectId;
+    this.#projectId = projectId !== undefined && projectId.length > 0 ? projectId : undefined;
     this.#start = performance.now();
     this.#registry = createCommandRegistry();
 
