@@ -241,6 +241,46 @@ describe('BrowserPool', () => {
     expect(pool.activeCount()).toBe(1);
   });
 
+  it('acquire after shutdown rejects (no zombie browser relaunch)', async () => {
+    const { launch, browsers } = fakeLauncher();
+    const pool = new BrowserPool(launch, { maxContexts: 2, genSessionId: counterIds() });
+    await pool.acquire('http://localhost:3000/');
+    await pool.shutdown();
+    await expect(pool.acquire('http://localhost:3000/')).rejects.toThrow(/shut down/);
+    expect(browsers).toHaveLength(1); // no second browser launched after shutdown
+  });
+
+  it('shutdown rejects queued (over-cap) acquires instead of relaunching for them', async () => {
+    const { launch } = fakeLauncher();
+    const pool = new BrowserPool(launch, { maxContexts: 1, genSessionId: counterIds() });
+    await pool.acquire('http://localhost:3000/1'); // fills the single slot
+    const queued = pool.acquire('http://localhost:3000/2'); // waits
+    const rejected = vi.fn();
+    queued.catch(rejected);
+    await pool.shutdown();
+    await Promise.resolve();
+    await expect(queued).rejects.toThrow(/shut down/);
+  });
+
+  it('aborting a queued acquire removes it from the queue (no slot leak)', async () => {
+    const { launch } = fakeLauncher();
+    const pool = new BrowserPool(launch, { maxContexts: 1, genSessionId: counterIds() });
+    const held = await pool.acquire('http://localhost:3000/held');
+    const controller = new AbortController();
+    const aborted = pool.acquire('http://localhost:3000/aborted', { signal: controller.signal });
+    expect(pool.queuedCount()).toBe(1);
+    controller.abort();
+    await expect(aborted).rejects.toThrow(/aborted/);
+    expect(pool.queuedCount()).toBe(0); // the aborted waiter is gone, not lingering
+
+    // Releasing the held lease must hand the slot to a real new acquire — not waste it on the
+    // abandoned one. A fresh acquire succeeds and reaches full capacity.
+    await held.release();
+    const fresh = await pool.acquire('http://localhost:3000/fresh');
+    expect(fresh.sessionId).toBeDefined();
+    expect(pool.activeCount()).toBe(1);
+  });
+
   it('a failed context setup frees the slot (queue not deadlocked)', async () => {
     let calls = 0;
     const launch: Launcher = () => {

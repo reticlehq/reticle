@@ -76,6 +76,7 @@ export class BrowserPool {
 
   #browser: PooledBrowser | undefined;
   #launching: Promise<PooledBrowser> | undefined;
+  #closed = false;
   readonly #active = new Map<string, ActiveLease>();
   /**
    * Slots claimed-or-active — the real concurrency gate. Incremented SYNCHRONOUSLY the instant an
@@ -144,6 +145,7 @@ export class BrowserPool {
     url: string,
     opts: { signal?: AbortSignal; sessionId?: string } = {},
   ): Promise<Lease> {
+    if (this.#closed) throw new Error('browser pool is shut down');
     // #waitForSlot claims the slot synchronously (bumps #occupied) before returning, so the cap holds
     // even when many acquires race through the gate in the same tick.
     await this.#waitForSlot(opts.signal);
@@ -169,8 +171,9 @@ export class BrowserPool {
     }
   }
 
-  /** Close every context and the browser. Pending waiters are released so they re-evaluate. */
+  /** Close every context and the browser. Pending waiters are rejected (the pool is terminal now). */
   async shutdown(): Promise<void> {
+    this.#closed = true; // set first so any woken waiter rejects instead of relaunching a browser
     const contexts = [...this.#active.values()].map((a) => a.context);
     this.#active.clear();
     this.#occupied = 0;
@@ -202,6 +205,11 @@ export class BrowserPool {
     if (this.#tryClaim()) return Promise.resolve();
     return new Promise<void>((resolve, reject) => {
       const onFree = (): void => {
+        // The pool shut down while we waited → reject rather than relaunch a browser.
+        if (this.#closed) {
+          reject(new Error('browser pool is shut down'));
+          return;
+        }
         // Claim the freed slot; if another woken waiter beat us to it, re-queue.
         if (this.#tryClaim()) resolve();
         else this.#waiters.push(onFree);
@@ -211,9 +219,16 @@ export class BrowserPool {
           reject(new Error('acquire aborted'));
           return;
         }
-        signal.addEventListener('abort', () => reject(new Error('acquire aborted')), {
-          once: true,
-        });
+        signal.addEventListener(
+          'abort',
+          () => {
+            // Remove ourselves from the queue so a later wake doesn't claim a slot we'll never use.
+            const i = this.#waiters.indexOf(onFree);
+            if (i >= 0) this.#waiters.splice(i, 1);
+            reject(new Error('acquire aborted'));
+          },
+          { once: true },
+        );
       }
       this.#waiters.push(onFree);
     });
@@ -227,6 +242,7 @@ export class BrowserPool {
   }
 
   async #ensureBrowser(): Promise<PooledBrowser> {
+    if (this.#closed) throw new Error('browser pool is shut down');
     if (this.#browser !== undefined && this.#browser.isConnected()) return this.#browser;
     // De-dupe concurrent launches: the first acquire to find no browser starts one; the rest await it.
     if (this.#launching === undefined) {
