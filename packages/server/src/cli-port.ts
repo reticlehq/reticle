@@ -29,6 +29,25 @@ export function readProjectPort(cwd: string): number | undefined {
 }
 
 /**
+ * Read the stable projectId stored in the project's .iris.json (written by `iris init`). The daemon
+ * uses it as the default resolve scope so auto-selection stays within the active app. Returns
+ * undefined if the file is absent/unreadable or has no non-empty string projectId.
+ */
+export function readProjectId(cwd: string): string | undefined {
+  try {
+    const raw = readFileSync(`${cwd}/.iris.json`, 'utf8');
+    const config: unknown = JSON.parse(raw);
+    if (typeof config === 'object' && config !== null) {
+      const id = (config as Record<string, unknown>)['projectId'];
+      if (typeof id === 'string' && id.length > 0) return id;
+    }
+  } catch {
+    // .iris.json absent or unreadable — no default scope
+  }
+  return undefined;
+}
+
+/**
  * Resolve the daemon port from all available sources in priority order.
  * Pass `portFlag` when the user explicitly supplied --port; pass `undefined` to fall through.
  */

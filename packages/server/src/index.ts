@@ -32,6 +32,7 @@ import { cpus } from 'node:os';
 import { BrowserPool } from './pool/browser-pool.js';
 import { playwrightLauncher, resolveMaxContexts } from './pool/playwright-launcher.js';
 import { LeaseReaper } from './pool/lease-reaper.js';
+import { readProjectId } from './cli-port.js';
 import type {
   OwnedRealInputProvider,
   RealInputProvider,
@@ -247,6 +248,12 @@ export async function start(options: StartOptions = {}): Promise<RunningServer> 
   // whose agent has gone idle, so a forgotten/crashed agent never leaves the HUD "running" forever.
   const reaper = new SessionReaper(bridge.sessions);
   reaper.start();
+  // Scope auto-selection to the active project (from .iris.json) so a stray tab from another app is
+  // never picked when the agent omits a sessionId. Explicit per-call scope/sessionId still overrides.
+  const activeProjectId = readProjectId(process.cwd());
+  if (activeProjectId !== undefined) {
+    bridge.sessions.setDefaultScope({ projectId: activeProjectId });
+  }
   const baselines = new BaselineStore();
   const recordings = new RecordingStore();
   // drive precedence: driveUrl (launch+own a browser) → CDP (attach) → none.
@@ -368,6 +375,12 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
 
   const reaper = new SessionReaper(bridge.sessions);
   reaper.start();
+  // Scope auto-selection to the active project (from .iris.json) so a stray tab from another app is
+  // never picked when the agent omits a sessionId. Explicit per-call scope/sessionId still overrides.
+  const activeProjectId = readProjectId(process.cwd());
+  if (activeProjectId !== undefined) {
+    bridge.sessions.setDefaultScope({ projectId: activeProjectId });
+  }
 
   let owned: { dispose: () => Promise<void> } | undefined;
   let realInput: RealInputProvider | undefined;

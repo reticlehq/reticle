@@ -55,6 +55,17 @@ function scopeMissError(scope?: ResolveScope): string {
  */
 export class SessionManager {
   readonly #sessions = new Map<string, Session>();
+  /**
+   * The active project's scope, set once from the daemon's .iris.json. When a tool resolves a session
+   * without passing its own scope, this is applied — so auto-selection is project-scoped by default
+   * and a stray tab from another app is never picked, even on the no-sessionId path.
+   */
+  #defaultScope: ResolveScope | undefined;
+
+  /** Set the active project's default resolve scope (called once at daemon wiring). */
+  setDefaultScope(scope: ResolveScope | undefined): void {
+    this.#defaultScope = scope;
+  }
 
   add(session: Session): Session | undefined {
     const previous = this.#sessions.get(session.id);
@@ -115,10 +126,12 @@ export class SessionManager {
     // Scope to the agent's active project FIRST, so a stray tab from another app/origin (e.g. a
     // leftover dashboard on a different port) is structurally unselectable — it never enters the
     // candidate set, no matter how recently it was heard from. This is the anti-cross-talk guard.
-    const all = scopeSessions([...this.#sessions.values()], scope);
+    // An explicit per-call scope wins; otherwise the daemon's active-project default applies.
+    const effectiveScope = scope ?? this.#defaultScope;
+    const all = scopeSessions([...this.#sessions.values()], effectiveScope);
     if (all.length === 0) {
       // Sessions exist, but none belong to the scoped project — never fall back to a foreign tab.
-      throw new Error(scopeMissError(scope));
+      throw new Error(scopeMissError(effectiveScope));
     }
     if (all.length === 1) {
       const [only] = all;

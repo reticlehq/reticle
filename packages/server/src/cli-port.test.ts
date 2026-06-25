@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { readProjectPort, resolvePort } from './cli-port.js';
+import { readProjectId, readProjectPort, resolvePort } from './cli-port.js';
 import { IRIS_DEFAULT_PORT } from '@syrin/iris-protocol';
 
 // ─── readProjectPort ─────────────────────────────────────────────────────────
@@ -120,6 +120,43 @@ describe('readProjectPort', () => {
   it('handles the default port stored explicitly — returns it (caller decides to use it or default)', async () => {
     await writeConfig(JSON.stringify({ port: IRIS_DEFAULT_PORT }));
     expect(readProjectPort(dir)).toBe(IRIS_DEFAULT_PORT);
+  });
+});
+
+// ─── readProjectId ───────────────────────────────────────────────────────────
+
+describe('readProjectId', () => {
+  let dir: string;
+
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), 'iris-projid-'));
+  });
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  async function writeConfig(content: string): Promise<void> {
+    await writeFile(join(dir, '.iris.json'), content, 'utf8');
+  }
+
+  it('returns the projectId from a valid .iris.json', async () => {
+    await writeConfig(JSON.stringify({ framework: 'vite', projectId: 'acme-web-1234abcd' }));
+    expect(readProjectId(dir)).toBe('acme-web-1234abcd');
+  });
+
+  it('returns undefined when absent, empty, or not a string', async () => {
+    expect(readProjectId(dir)).toBeUndefined(); // no file
+    await writeConfig(JSON.stringify({ framework: 'next' }));
+    expect(readProjectId(dir)).toBeUndefined();
+    await writeConfig(JSON.stringify({ projectId: '' }));
+    expect(readProjectId(dir)).toBeUndefined();
+    await writeConfig(JSON.stringify({ projectId: 42 }));
+    expect(readProjectId(dir)).toBeUndefined();
+  });
+
+  it('returns undefined for malformed JSON', async () => {
+    await writeConfig('{ not json');
+    expect(readProjectId(dir)).toBeUndefined();
   });
 });
 

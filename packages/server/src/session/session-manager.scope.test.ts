@@ -108,4 +108,19 @@ describe('project-scoped resolve()', () => {
 
     expect(bridge.sessions.resolve().id).toBe('solo');
   });
+
+  it('a default scope (from .iris.json) is applied when no per-call scope is given', async () => {
+    bridge.sessions.setDefaultScope({ projectId: 'mine' });
+    await connect({ sessionId: 'mine-tab', url: 'http://localhost:3000/', projectId: 'mine' });
+    await connect({ sessionId: 'stray', url: 'http://localhost:4310/', projectId: 'showcase' });
+    await waitForSessions(2);
+
+    // No explicit scope → the default project scope picks the right tab, not the stray one.
+    expect(bridge.sessions.resolve().id).toBe('mine-tab');
+    // A foreign default scope with no matching session throws (never grabs the stray).
+    bridge.sessions.setDefaultScope({ projectId: 'ghost' });
+    expect(() => bridge.sessions.resolve()).toThrow(/ghost/);
+    // An explicit per-call scope still overrides the default.
+    expect(bridge.sessions.resolve(undefined, { projectId: 'showcase' }).id).toBe('stray');
+  });
 });
