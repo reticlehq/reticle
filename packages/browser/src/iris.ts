@@ -165,6 +165,26 @@ export function irisParamsFromSearch(search: string): { session?: string; projec
   return out;
 }
 
+/**
+ * Resolve the session + project identity for a connection: an explicit, non-`auto` option wins;
+ * otherwise a launcher-stamped URL param is used; otherwise undefined (caller generates a per-tab id).
+ * Crucially `auto` is treated like "unset" so an app that passes the auto sentinel still lets a pooled
+ * launcher correlate the lease via __iris_session. Pure for testability.
+ */
+export function resolveConnectIdentity(
+  options: { session?: string; projectId?: string },
+  search: string,
+): { session: string | undefined; projectId: string | undefined } {
+  const url = irisParamsFromSearch(search);
+  const explicitSession =
+    options.session !== undefined && options.session !== SESSION_AUTO ? options.session : undefined;
+  const projectId = options.projectId ?? url.projectId;
+  return {
+    session: explicitSession ?? url.session,
+    projectId: projectId !== undefined && projectId.length > 0 ? projectId : undefined,
+  };
+}
+
 /** A short human label for a ref ("button \"Save\"") for the presenter HUD. */
 function refLabel(refId: string): string {
   const el = refs.resolve(refId);
@@ -210,17 +230,17 @@ export class Iris {
       return;
     }
 
-    // A pooled/headless launcher can stamp identity via namespaced URL params; explicit options win.
-    const urlIdentity = irisParamsFromSearch(window.location.search);
-    this.#session = resolveSessionLabel(options.session ?? urlIdentity.session, () =>
+    // A pooled/headless launcher can stamp identity via namespaced URL params; explicit (non-auto)
+    // options win, but the `auto` sentinel defers to the URL param so leases correlate.
+    const identity = resolveConnectIdentity(options, window.location.search);
+    this.#session = resolveSessionLabel(identity.session, () =>
       typeof globalThis.crypto?.randomUUID === 'function'
         ? `s${globalThis.crypto.randomUUID()}`
         : `s${Date.now().toString(36)}`,
     );
     this.#token =
       options.token !== undefined && options.token.length > 0 ? options.token : undefined;
-    const projectId = options.projectId ?? urlIdentity.projectId;
-    this.#projectId = projectId !== undefined && projectId.length > 0 ? projectId : undefined;
+    this.#projectId = identity.projectId;
     this.#start = performance.now();
     this.#registry = createCommandRegistry();
 

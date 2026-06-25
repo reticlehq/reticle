@@ -4,7 +4,8 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { IRIS_URL_PARAM, irisParamsFromSearch } from './iris.js';
+import { SESSION_AUTO } from '@syrin/iris-protocol';
+import { IRIS_URL_PARAM, irisParamsFromSearch, resolveConnectIdentity } from './iris.js';
 
 describe('irisParamsFromSearch', () => {
   it('extracts session and projectId from namespaced params', () => {
@@ -30,5 +31,31 @@ describe('irisParamsFromSearch', () => {
     expect(irisParamsFromSearch(`?${IRIS_URL_PARAM.PROJECT}=just-project`)).toEqual({
       projectId: 'just-project',
     });
+  });
+});
+
+describe('resolveConnectIdentity', () => {
+  const search = `?${IRIS_URL_PARAM.SESSION}=lease-7&${IRIS_URL_PARAM.PROJECT}=acme`;
+
+  it('an explicit non-auto session option wins over the URL param', () => {
+    expect(resolveConnectIdentity({ session: 'my-tab' }, search).session).toBe('my-tab');
+  });
+
+  it('the auto sentinel defers to the URL param (so leases correlate)', () => {
+    expect(resolveConnectIdentity({ session: SESSION_AUTO }, search).session).toBe('lease-7');
+  });
+
+  it('an absent session option uses the URL param', () => {
+    expect(resolveConnectIdentity({}, search).session).toBe('lease-7');
+  });
+
+  it('no option and no param → undefined (caller generates a per-tab id)', () => {
+    expect(resolveConnectIdentity({ session: SESSION_AUTO }, '').session).toBeUndefined();
+  });
+
+  it('projectId: explicit option wins, else URL param', () => {
+    expect(resolveConnectIdentity({ projectId: 'mine' }, search).projectId).toBe('mine');
+    expect(resolveConnectIdentity({}, search).projectId).toBe('acme');
+    expect(resolveConnectIdentity({}, '').projectId).toBeUndefined();
   });
 });
