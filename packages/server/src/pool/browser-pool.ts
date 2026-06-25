@@ -86,19 +86,32 @@ export class BrowserPool {
     return this.#waiters.length;
   }
 
+  /** The sessionIds of every currently leased context — used to report/group leased sessions. */
+  leasedSessionIds(): string[] {
+    return [...this.#active.keys()];
+  }
+
+  /** Release a lease by its sessionId (closes the context, frees the slot). No-op if unknown. */
+  release(sessionId: string): Promise<void> {
+    return this.#release(sessionId);
+  }
+
   /**
    * Lease an isolated context, navigate it to `url`, and return a handle. If the pool is at capacity,
    * waits FIFO until a slot frees (or until `signal` aborts, if provided).
    */
-  async acquire(url: string, signal?: AbortSignal): Promise<Lease> {
-    await this.#waitForSlot(signal);
+  async acquire(
+    url: string,
+    opts: { signal?: AbortSignal; sessionId?: string } = {},
+  ): Promise<Lease> {
+    await this.#waitForSlot(opts.signal);
     const browser = await this.#ensureBrowser();
     let context: PooledContext | undefined;
     try {
       context = await browser.newContext();
       const page = await context.newPage();
       await page.goto(url);
-      const sessionId = this.#genId();
+      const sessionId = opts.sessionId ?? this.#genId();
       this.#active.set(sessionId, { context, page, url });
       return {
         sessionId,

@@ -28,6 +28,9 @@ import { createMcpServer } from './mcp.js';
 import { SessionReaper, endAllSessions, MCP_DISCONNECT_SUMMARY } from './session/session-reaper.js';
 import { resolveToolProfile } from './tools/profiles.js';
 import { CdpRealInputProvider, LaunchedRealInputProvider } from './input/real-input.js';
+import { cpus } from 'node:os';
+import { BrowserPool } from './pool/browser-pool.js';
+import { playwrightLauncher, resolveMaxContexts } from './pool/playwright-launcher.js';
 import type {
   OwnedRealInputProvider,
   RealInputProvider,
@@ -220,6 +223,21 @@ export function resolveBridgeSecurity(options: StartOptions): {
   };
 }
 
+/**
+ * Build the shared browser pool (one headless Chromium, N capped isolated leased contexts). Lazy —
+ * no Chromium launches until the first lease — so creating it is free even when never used.
+ */
+function createBrowserPool(headless: boolean): BrowserPool {
+  const maxContexts = resolveMaxContexts(process.env[IrisEnv.MAX_CONTEXTS], cpus().length);
+  const genSessionId = (): string =>
+    `lease-${
+      typeof globalThis.crypto?.randomUUID === 'function'
+        ? globalThis.crypto.randomUUID()
+        : String(Date.now())
+    }`;
+  return new BrowserPool(playwrightLauncher({ headless }), { maxContexts, genSessionId });
+}
+
 /** Start the Iris bridge (browser WS endpoint) and, by default, the MCP stdio server. */
 export async function start(options: StartOptions = {}): Promise<RunningServer> {
   const port = options.port ?? IRIS_DEFAULT_PORT;
@@ -233,6 +251,7 @@ export async function start(options: StartOptions = {}): Promise<RunningServer> 
   // drive precedence: driveUrl (launch+own a browser) → CDP (attach) → none.
   let owned: { dispose: () => Promise<void> } | undefined;
   let realInput: RealInputProvider | undefined;
+  let pool: BrowserPool | undefined;
   const driveUrl = options.driveUrl;
   if (driveUrl !== undefined && driveUrl.length > 0) {
     const headless = options.headless ?? true;
@@ -273,8 +292,10 @@ export async function start(options: StartOptions = {}): Promise<RunningServer> 
     const flows = new FlowStore(fs, irisRoot, { now });
     const project = new ProjectStore(fs, irisRoot, { now });
     const annotations = new AnnotationStore();
+    pool = createBrowserPool(options.headless ?? true);
     const deps = {
       sessions: bridge.sessions,
+      pool,
       baselines,
       recordings,
       annotations,
@@ -304,6 +325,7 @@ export async function start(options: StartOptions = {}): Promise<RunningServer> 
     ...(realInput !== undefined ? { realInput } : {}),
     close: async () => {
       reaper.stop();
+      await pool?.shutdown();
       await owned?.dispose();
       await bridge.close();
     },
@@ -382,8 +404,10 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
   const flows = new FlowStore(fs, irisRoot, { now });
   const project = new ProjectStore(fs, irisRoot, { now });
   const annotations = new AnnotationStore();
+  const pool = createBrowserPool(options.headless ?? true);
   const deps = {
     sessions: bridge.sessions,
+    pool,
     baselines: new BaselineStore(),
     recordings: new RecordingStore(),
     annotations,
@@ -463,6 +487,7 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
       reaper.stop();
       const vh = verifyHttp;
       if (vh !== undefined) await new Promise<void>((resolve) => vh.server.close(() => resolve()));
+      await pool.shutdown();
       await owned?.dispose();
       await bridge.close();
       await shared.close();

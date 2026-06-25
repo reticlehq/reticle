@@ -2,6 +2,7 @@ import {
   EventType,
   IRIS_DEFAULT_PORT,
   IRIS_PROTOCOL_VERSION,
+  IRIS_URL_PARAM,
   IRIS_WS_PATH,
   IrisCommand,
   MessageKind,
@@ -147,12 +148,8 @@ export function resolveSessionLabel(option: string | undefined, gen: () => strin
   return option === undefined || option === SESSION_AUTO ? gen() : option;
 }
 
-/**
- * Namespaced URL params a pooled/headless launcher appends so it can stamp this tab's identity
- * (session + project) without the app changing a line of code. Namespaced to avoid clashing with the
- * app's own query params.
- */
-export const IRIS_URL_PARAM = { SESSION: '__iris_session', PROJECT: '__iris_project' } as const;
+// Re-exported from the protocol (the wire contract) so callers/tests can import it from the SDK too.
+export { IRIS_URL_PARAM };
 
 /**
  * Extract Iris identity overrides from a `location.search` string. Pure (takes the string, not the

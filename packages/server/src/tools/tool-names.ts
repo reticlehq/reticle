@@ -80,5 +80,9 @@ export const IrisTool = {
   ROLLBACK: 'iris_rollback',
   /** Export a verification-run artifact (.iris/runs/<id>.json) — the OEM/CI-consumable verdict. */
   RUN_EXPORT: 'iris_run_export',
+  /** Lease a fresh isolated headless context from the shared browser pool (one per flow). */
+  LEASE_ACQUIRE: 'iris_lease_acquire',
+  /** Release a previously leased context, freeing the pool slot. */
+  LEASE_RELEASE: 'iris_lease_release',
 } as const;
 export type IrisTool = (typeof IrisTool)[keyof typeof IrisTool];

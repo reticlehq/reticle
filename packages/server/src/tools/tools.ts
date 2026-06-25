@@ -24,6 +24,7 @@ import { type ToolDef, sessionIdShape, commandOrThrow } from './tool-kit.js';
 import { ACT_TOOLS } from './act-tools.js';
 import { OBSERVE_TOOLS } from './observe-tools.js';
 import { READ_TOOLS } from './read-tools.js';
+import { LEASE_TOOLS } from './lease-tools.js';
 
 // Re-exported so tool modules that import these from './tools.js' keep working after the kit move.
 export type { ToolDef, ToolDeps } from './tool-kit.js';
@@ -295,4 +296,5 @@ export const TOOLS: ToolDef[] = [
   ...ACT_TOOLS,
   ...OBSERVE_TOOLS,
   ...READ_TOOLS,
+  ...LEASE_TOOLS,
 ];

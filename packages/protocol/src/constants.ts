@@ -7,6 +7,18 @@ export const IRIS_DEFAULT_PORT = 4400;
 export const IRIS_WS_PATH = '/iris';
 export const IRIS_PROTOCOL_VERSION = 1;
 
+/**
+ * Namespaced URL params a pooled/headless launcher appends to the app URL so the app's own SDK adopts
+ * the lease's identity (session + project) on connect — no app code changes. Wire contract shared by
+ * the server (BrowserPool/lease tools) and the browser SDK; namespaced to avoid clashing with the
+ * app's own query params.
+ */
+export const IRIS_URL_PARAM = {
+  SESSION: '__iris_session',
+  PROJECT: '__iris_project',
+} as const;
+export type IrisUrlParam = (typeof IRIS_URL_PARAM)[keyof typeof IRIS_URL_PARAM];
+
 /** The loopback bind address. The daemon/bridge bind here by default — never expose Iris off-host. */
 export const LOOPBACK_HOST = '127.0.0.1';
 
@@ -26,6 +38,8 @@ export const IrisEnv = {
   PORT: 'IRIS_PORT',
   /** Attach to an already-running browser over CDP instead of launching one. */
   CDP_URL: 'IRIS_CDP_URL',
+  /** Max simultaneous leased headless contexts in the browser pool (resource cap). */
+  MAX_CONTEXTS: 'IRIS_MAX_CONTEXTS',
   /** Bearer token required by the optional `iris serve --http` verify endpoint. */
   VERIFY_TOKEN: 'IRIS_VERIFY_TOKEN',
 } as const;

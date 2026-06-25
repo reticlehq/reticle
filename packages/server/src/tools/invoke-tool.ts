@@ -64,6 +64,7 @@ export const SESSION_EXEMPT_TOOLS: ReadonlySet<string> = new Set([
   IrisTool.NETWORK_MOCK, // own contract (applied/count); provider-driven, not a live-DOM read
   IrisTool.VIEWPORT, // own contract (applied/width/height); provider-driven, not a live-DOM read
   IrisTool.ANNOTATE, // annotates a recording's steps; pure disk-side metadata, no live DOM read
+  IrisTool.LEASE_RELEASE, // its sessionId is a pool lease id, not a live session; no health splice
 ]);
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {

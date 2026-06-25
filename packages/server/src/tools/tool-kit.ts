@@ -15,9 +15,12 @@ import type { FileSystemPort } from '../project/fs-port.js';
 import type { FlowStore } from '../flows/flows.js';
 import type { ProjectStore } from '../project/project-store.js';
 import type { AnnotationStore } from '../flows/annotation-store.js';
+import type { BrowserPool } from '../pool/browser-pool.js';
 
 export interface ToolDeps {
   sessions: SessionManager;
+  /** shared one-browser/N-context pool for headless leases. undefined ⇒ lease tools report unavailable. */
+  pool?: BrowserPool;
   baselines: BaselineStore;
   recordings: RecordingStore;
   /** on-disk anchored-flow store (.iris/flows/). */
