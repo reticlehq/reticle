@@ -150,6 +150,36 @@ describe('BrowserPool', () => {
     await l3.release();
   });
 
+  it('concurrent burst respects the cap — slots are claimed synchronously at the gate', async () => {
+    // The "10 agents at once" case: many acquires race through the gate in the same tick. The cap
+    // must still hold (regression guard — a non-atomic check let them all slip through before).
+    const { launch } = fakeLauncher();
+    const pool = new BrowserPool(launch, { maxContexts: 2, genSessionId: counterIds() });
+
+    const acquires = Array.from({ length: 6 }, () => pool.acquire('http://localhost:3000/'));
+    await new Promise((r) => setTimeout(r, 0)); // flush all microtasks
+
+    // Only the cap may be active; the rest must be queued — NOT all 6 active.
+    expect(pool.activeCount()).toBe(2);
+    expect(pool.queuedCount()).toBe(4);
+
+    // Drain release-on-resolve; after the first release exactly one queued acquire promotes (cap
+    // still holds at 2), and by the end nothing leaks.
+    let released = 0;
+    for (const acquired of acquires) {
+      const lease = await acquired;
+      await lease.release();
+      released += 1;
+      await new Promise((r) => setTimeout(r, 0));
+      if (released === 1) {
+        expect(pool.activeCount()).toBe(2);
+        expect(pool.queuedCount()).toBe(3);
+      }
+    }
+    expect(pool.activeCount()).toBe(0);
+    expect(pool.queuedCount()).toBe(0);
+  });
+
   it('relaunches the browser after a crash; prior leases are dropped', async () => {
     const { launch, browsers } = fakeLauncher();
     const pool = new BrowserPool(launch, { maxContexts: 4, genSessionId: counterIds() });

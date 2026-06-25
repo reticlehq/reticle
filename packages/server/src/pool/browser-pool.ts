@@ -77,6 +77,14 @@ export class BrowserPool {
   #browser: PooledBrowser | undefined;
   #launching: Promise<PooledBrowser> | undefined;
   readonly #active = new Map<string, ActiveLease>();
+  /**
+   * Slots claimed-or-active — the real concurrency gate. Incremented SYNCHRONOUSLY the instant an
+   * acquire passes the cap check, BEFORE the async context creation, so a burst of concurrent
+   * acquires (the "10 agents at once" case) can't all slip through the gate before any has been
+   * recorded. `#active.size` only reflects fully-created leases; `#occupied` also counts in-flight
+   * ones, and is what the cap is enforced against.
+   */
+  #occupied = 0;
   /** FIFO of acquires waiting for a slot; each resolves when one frees. */
   readonly #waiters: Array<() => void> = [];
 
@@ -136,10 +144,12 @@ export class BrowserPool {
     url: string,
     opts: { signal?: AbortSignal; sessionId?: string } = {},
   ): Promise<Lease> {
+    // #waitForSlot claims the slot synchronously (bumps #occupied) before returning, so the cap holds
+    // even when many acquires race through the gate in the same tick.
     await this.#waitForSlot(opts.signal);
-    const browser = await this.#ensureBrowser();
     let context: PooledContext | undefined;
     try {
+      const browser = await this.#ensureBrowser();
       context = await browser.newContext();
       const page = await context.newPage();
       await page.goto(url);
@@ -151,10 +161,10 @@ export class BrowserPool {
         release: () => this.#release(sessionId),
       };
     } catch (err) {
-      // Setup failed after we claimed the slot — release it so a queued acquire isn't stuck, and
+      // Setup failed after we claimed the slot — give it back so a queued acquire isn't stuck, and
       // close the half-open context.
       if (context !== undefined) await context.close().catch(() => undefined);
-      this.#wake();
+      this.#releaseSlot();
       throw err;
     }
   }
@@ -163,11 +173,12 @@ export class BrowserPool {
   async shutdown(): Promise<void> {
     const contexts = [...this.#active.values()].map((a) => a.context);
     this.#active.clear();
+    this.#occupied = 0;
     await Promise.all(contexts.map((c) => c.close().catch(() => undefined)));
     const browser = this.#browser;
     this.#browser = undefined;
     if (browser !== undefined) await browser.close().catch(() => undefined);
-    while (this.#waiters.length > 0) this.#wake();
+    for (const waiter of this.#waiters.splice(0)) waiter();
   }
 
   async #release(sessionId: string): Promise<void> {
@@ -175,19 +186,25 @@ export class BrowserPool {
     if (lease === undefined) return; // already released or lost to a crash
     this.#active.delete(sessionId);
     await lease.context.close().catch(() => undefined);
-    this.#wake();
+    this.#releaseSlot();
+  }
+
+  /** Synchronously claim a slot if under the cap. Returns true on success (caller proceeds). */
+  #tryClaim(): boolean {
+    if (this.#occupied < this.#max) {
+      this.#occupied += 1;
+      return true;
+    }
+    return false;
   }
 
   #waitForSlot(signal?: AbortSignal): Promise<void> {
-    if (this.#active.size < this.#max) return Promise.resolve();
+    if (this.#tryClaim()) return Promise.resolve();
     return new Promise<void>((resolve, reject) => {
       const onFree = (): void => {
-        // Re-check: another waiter may have taken the slot first; if so, requeue.
-        if (this.#active.size < this.#max) {
-          resolve();
-        } else {
-          this.#waiters.push(onFree);
-        }
+        // Claim the freed slot; if another woken waiter beat us to it, re-queue.
+        if (this.#tryClaim()) resolve();
+        else this.#waiters.push(onFree);
       };
       if (signal !== undefined) {
         if (signal.aborted) {
@@ -202,8 +219,9 @@ export class BrowserPool {
     });
   }
 
-  /** Wake the next waiter (if any) so it can claim the freed slot. */
-  #wake(): void {
+  /** Give back one occupied slot and hand it to the next waiter (which re-claims it synchronously). */
+  #releaseSlot(): void {
+    if (this.#occupied > 0) this.#occupied -= 1;
     const next = this.#waiters.shift();
     if (next !== undefined) next();
   }
@@ -227,6 +245,7 @@ export class BrowserPool {
     if (this.#browser !== crashed) return; // a stale handler from a prior browser
     this.#browser = undefined;
     this.#active.clear();
-    while (this.#waiters.length > 0) this.#wake();
+    this.#occupied = 0; // every slot is gone with the browser
+    for (const waiter of this.#waiters.splice(0)) waiter(); // let them re-claim + relaunch
   }
 }
