@@ -66,7 +66,13 @@ export interface PlanInput {
   nextIrisDevExists: boolean;
   /** Whether .iris.json already exists in the project root (idempotency). */
   irisConfigExists?: boolean;
-  options: { port: number | undefined; mcp: boolean; install: boolean };
+  options: {
+    port: number | undefined;
+    mcp: boolean;
+    install: boolean;
+    /** Stable project identity derived at init (package.json name + root). Baked into snippets/.iris.json. */
+    projectId?: string;
+  };
 }
 
 const CLAUDE_MCP_TITLE = 'MCP server (Claude, global)';
@@ -225,7 +231,10 @@ function nextSteps(input: PlanInput): Step[] {
         target: NEXT_IRIS_DEV_PATH,
         status: StepStatus.APPLY,
         detail: 'create dev-only connect component',
-        write: { path: NEXT_IRIS_DEV_PATH, content: nextIrisDevFile(input.options.port) },
+        write: {
+          path: NEXT_IRIS_DEV_PATH,
+          content: nextIrisDevFile(input.options.port, input.options.projectId),
+        },
       };
   return [
     devFile,
@@ -253,7 +262,11 @@ function irisConfigStep(input: PlanInput): Step {
       detail: '.iris.json already exists',
     };
   }
-  const content = irisConfigContent(input.detection.framework, input.options.port);
+  const content = irisConfigContent(
+    input.detection.framework,
+    input.options.port,
+    input.options.projectId,
+  );
   return {
     title: 'Syrin Iris config',
     target: IRIS_CONFIG_FILE,
@@ -274,7 +287,7 @@ export function buildPlan(input: PlanInput): Plan {
       title: 'Connect snippet',
       target: 'index.html',
       status: StepStatus.MANUAL,
-      detail: htmlManual(input.options.port),
+      detail: htmlManual(input.options.port, input.options.projectId),
     });
   }
   return { framework: input.detection.framework, steps };

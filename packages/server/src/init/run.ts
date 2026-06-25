@@ -8,6 +8,7 @@ import { detect, Framework, type DetectInput } from './detect.js';
 import { buildPlan, StepStatus, type Plan, type PlanInput } from './plan.js';
 import { claudeAvailableProbe, claudeExistsProbe } from './mcp.js';
 import { CURSOR_DIR_RELPATH, CURSOR_MCP_RELPATH } from './cursor.js';
+import { deriveProjectId, packageName } from './project-id.js';
 
 const PACKAGE_JSON = 'package.json';
 const NEXT_IRIS_DEV = 'app/iris-dev.tsx';
@@ -69,6 +70,8 @@ function firstPresent(files: ReadonlySet<string>, candidates: readonly string[])
 
 function gatherPlanInput(options: InitOptions, io: InitIo, pkgRaw: string): PlanInput {
   const pkg: unknown = JSON.parse(pkgRaw);
+  // Stable identity derived from the app's package.json name + root, so it survives port changes.
+  const projectId = deriveProjectId(packageName(pkg), options.cwd);
   const rootFiles = new Set(io.rootFiles());
   const detectInput: DetectInput = {
     pkg: typeof pkg === 'object' && pkg !== null ? pkg : {},
@@ -105,7 +108,7 @@ function gatherPlanInput(options: InitOptions, io: InitIo, pkgRaw: string): Plan
     nextConfigFile: firstPresent(rootFiles, NEXT_CONFIG_CANDIDATES),
     nextIrisDevExists: io.exists(NEXT_IRIS_DEV),
     irisConfigExists: io.exists('.iris.json'),
-    options: { port: options.port, mcp: options.mcp, install: options.install },
+    options: { port: options.port, mcp: options.mcp, install: options.install, projectId },
   };
 }
 
