@@ -16,6 +16,8 @@ import {
   NEXT_IRIS_DEV_PATH,
   nextConfigManual,
   irisConfigContent,
+  svelteKitHooksFile,
+  SVELTEKIT_HOOKS_PATH,
 } from './snippets.js';
 
 const IRIS_PACKAGE = '@syrin/iris';
@@ -64,6 +66,8 @@ export interface PlanInput {
   nextConfigFile: string | null;
   /** Whether app/iris-dev.tsx already exists. */
   nextIrisDevExists: boolean;
+  /** Whether src/hooks.client.ts already exists (SvelteKit idempotency). */
+  svelteKitHooksExists?: boolean;
   /** Whether .iris.json already exists in the project root (idempotency). */
   irisConfigExists?: boolean;
   options: {
@@ -253,6 +257,33 @@ function nextSteps(input: PlanInput): Step[] {
   ];
 }
 
+function svelteKitSteps(input: PlanInput): Step[] {
+  // SvelteKit can't use the Vite-plugin injection (renders via app.html) — wire a client hook that
+  // SvelteKit runs on startup. This is verified to register a session where the plugin does not.
+  if (input.svelteKitHooksExists === true) {
+    return [
+      {
+        title: 'Iris client hook',
+        target: SVELTEKIT_HOOKS_PATH,
+        status: StepStatus.ALREADY,
+        detail: 'file exists',
+      },
+    ];
+  }
+  return [
+    {
+      title: 'Iris client hook',
+      target: SVELTEKIT_HOOKS_PATH,
+      status: StepStatus.APPLY,
+      detail: 'create dev-only client connect (SvelteKit renders via app.html)',
+      write: {
+        path: SVELTEKIT_HOOKS_PATH,
+        content: svelteKitHooksFile(input.options.port, input.options.projectId),
+      },
+    },
+  ];
+}
+
 function irisConfigStep(input: PlanInput): Step {
   if (input.irisConfigExists === true) {
     return {
@@ -282,6 +313,8 @@ export function buildPlan(input: PlanInput): Plan {
     steps.push(...viteSteps(input));
   } else if (input.detection.framework === Framework.NEXT) {
     steps.push(...nextSteps(input));
+  } else if (input.detection.framework === Framework.SVELTEKIT) {
+    steps.push(...svelteKitSteps(input));
   } else {
     steps.push({
       title: 'Connect snippet',

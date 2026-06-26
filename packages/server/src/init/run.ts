@@ -49,6 +49,7 @@ export function resolveLockfiles(
 
 const PACKAGE_JSON = 'package.json';
 const NEXT_IRIS_DEV = 'app/iris-dev.tsx';
+const SVELTEKIT_HOOKS = 'src/hooks.client.ts';
 const VITE_CONFIG_CANDIDATES = [
   'vite.config.ts',
   'vite.config.js',
@@ -145,6 +146,7 @@ function gatherPlanInput(options: InitOptions, io: InitIo, pkgRaw: string): Plan
     viteConfig,
     nextConfigFile: firstPresent(rootFiles, NEXT_CONFIG_CANDIDATES),
     nextIrisDevExists: io.exists(NEXT_IRIS_DEV),
+    svelteKitHooksExists: io.exists(SVELTEKIT_HOOKS),
     irisConfigExists: io.exists('.iris.json'),
     options: { port: options.port, mcp: options.mcp, install: options.install, projectId },
   };
@@ -155,6 +157,8 @@ function restartHint(framework: Framework): string {
     return 'Restart `next dev`, then ask your agent: "List Syrin Iris sessions".';
   if (framework === Framework.VITE)
     return 'Restart `vite`, then ask your agent: "List Syrin Iris sessions".';
+  if (framework === Framework.SVELTEKIT)
+    return 'Restart your dev server (`npm run dev`), then ask your agent: "List Syrin Iris sessions".';
   return 'Reload your app on localhost, then ask your agent: "List Syrin Iris sessions".';
 }
 

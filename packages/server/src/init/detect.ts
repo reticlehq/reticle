@@ -6,6 +6,7 @@
 export const Framework = {
   NEXT: 'next',
   VITE: 'vite',
+  SVELTEKIT: 'sveltekit',
   HTML: 'html',
 } as const;
 export type Framework = (typeof Framework)[keyof typeof Framework];
@@ -42,6 +43,7 @@ export interface Detection {
 
 const NEXT_CONFIGS = ['next.config.js', 'next.config.mjs', 'next.config.ts', 'next.config.cjs'];
 const VITE_CONFIGS = ['vite.config.js', 'vite.config.ts', 'vite.config.mjs', 'vite.config.mts'];
+const SVELTE_CONFIGS = ['svelte.config.js', 'svelte.config.ts', 'svelte.config.mjs'];
 
 function depVersion(pkg: PackageJsonLike, name: string): string | undefined {
   return pkg.dependencies?.[name] ?? pkg.devDependencies?.[name] ?? pkg.peerDependencies?.[name];
@@ -71,6 +73,11 @@ function detectFramework(input: DetectInput): Framework {
   const { pkg, configFiles } = input;
   if (depVersion(pkg, 'next') !== undefined || hasAnyConfig(configFiles, NEXT_CONFIGS)) {
     return Framework.NEXT;
+  }
+  // SvelteKit is Vite-based but renders through app.html, so the Vite plugin's index.html injection
+  // never fires (verified) — it needs a manual client connect. Check BEFORE the generic Vite branch.
+  if (depVersion(pkg, '@sveltejs/kit') !== undefined || hasAnyConfig(configFiles, SVELTE_CONFIGS)) {
+    return Framework.SVELTEKIT;
   }
   if (depVersion(pkg, 'vite') !== undefined || hasAnyConfig(configFiles, VITE_CONFIGS)) {
     return Framework.VITE;

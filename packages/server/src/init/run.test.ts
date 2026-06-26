@@ -158,4 +158,16 @@ describe('runInit', () => {
     runInit(OPTS, io);
     expect(io.written['app/iris-dev.tsx']).toContain('IrisDev');
   });
+
+  it('creates src/hooks.client.ts for a SvelteKit project and does NOT patch vite.config', () => {
+    const io = memoryIo({
+      'package.json': JSON.stringify({ devDependencies: { '@sveltejs/kit': '^2', vite: '^5' } }),
+      'svelte.config.js': 'export default {};\n',
+      'vite.config.ts': `import { sveltekit } from '@sveltejs/kit/vite';\nexport default { plugins: [sveltekit()] };\n`,
+    });
+    runInit(OPTS, io);
+    expect(io.written['src/hooks.client.ts']).toContain('iris.connect(');
+    expect(io.written['src/hooks.client.ts']).toContain('app.html'); // explains why the hook exists
+    expect(io.written['vite.config.ts']).toBeUndefined(); // the Vite plugin is NOT added for SvelteKit
+  });
 });

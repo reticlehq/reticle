@@ -92,6 +92,24 @@ export function htmlManual(port: number | undefined, projectId?: string): string
 }
 
 export const NEXT_IRIS_DEV_PATH = 'app/iris-dev.tsx';
+export const SVELTEKIT_HOOKS_PATH = 'src/hooks.client.ts';
+
+/**
+ * Dev-only client hook that connects Iris in a SvelteKit app. SvelteKit renders through app.html and
+ * never triggers Vite's index.html injection (verified), so the standard plugin can't auto-connect —
+ * a client hook is the reliable path. SvelteKit runs src/hooks.client.ts on the client at startup.
+ */
+export function svelteKitHooksFile(port: number | undefined, projectId?: string): string {
+  return `// Dev-only: connect Iris on the client. SvelteKit renders via app.html, so the Vite-plugin
+// index.html injection doesn't fire — connect from this client hook instead.
+if (import.meta.env.DEV) {
+  void import('@syrin/iris').then(({ iris, install }) => {
+    install();
+    iris.connect(${connectArg(port, projectId)});
+  });
+}
+`;
+}
 
 /**
  * Root-level project config for Syrin Iris. Written by `iris init`; read by `iris mcp` for the port

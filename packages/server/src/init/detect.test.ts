@@ -55,6 +55,21 @@ describe('detect framework', () => {
       Framework.NEXT,
     );
   });
+  it('detects SvelteKit from the @sveltejs/kit dep (even though it ships vite)', () => {
+    expect(
+      detect(input({ pkg: { devDependencies: { '@sveltejs/kit': '^2', vite: '^5' } } })).framework,
+    ).toBe(Framework.SVELTEKIT);
+  });
+  it('detects SvelteKit from svelte.config.js, not the generic vite path', () => {
+    expect(
+      detect(
+        input({
+          pkg: { devDependencies: { vite: '^5' } },
+          configFiles: new Set(['svelte.config.js', 'vite.config.ts']),
+        }),
+      ).framework,
+    ).toBe(Framework.SVELTEKIT);
+  });
 });
 
 describe('detect source mapping need', () => {
