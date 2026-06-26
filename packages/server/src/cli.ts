@@ -13,6 +13,7 @@ import {
   discoverDaemonPort,
 } from './daemon.js';
 import { waitForDaemon, startMcpProxy, probeDaemon } from './mcp-proxy.js';
+import { installDaemonResilience } from './daemon-resilience.js';
 import { fetchStatus, summarizeStatus, decideOpen, openInBrowser } from './cli-launch.js';
 import { handleVerify } from './cli-verify.js';
 import { runInit } from './init/run.js';
@@ -199,6 +200,12 @@ function handleDaemonInner(parsed: {
   startDaemon(options)
     .then((server) => {
       log('iris_daemon_ready', { port: parsed.port, pid: process.pid });
+      // The daemon serves many agents — keep it alive through one agent's stray async error; only a
+      // genuine uncaught throw takes it down (cleanly, so the next `iris mcp` respawns it fresh).
+      installDaemonResilience(process, log, () => {
+        removePid(parsed.port);
+        process.exit(1);
+      });
       const shutdown = (): void => {
         server
           .close()
