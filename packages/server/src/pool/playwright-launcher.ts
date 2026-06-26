@@ -18,8 +18,13 @@ function wrapBrowser(browser: Browser): PooledBrowser {
         newPage: async (): Promise<PooledPage> => {
           const page = await context.newPage();
           return {
-            goto: (url) => page.goto(url),
+            goto: (url, opts) =>
+              page.goto(
+                url,
+                opts?.timeoutMs === undefined ? undefined : { timeout: opts.timeoutMs },
+              ),
             close: () => page.close(),
+            onCrash: (handler) => page.on('crash', handler),
           };
         },
         close: () => context.close(),

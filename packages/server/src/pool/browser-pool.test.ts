@@ -15,21 +15,32 @@ import {
 class FakePage implements PooledPage {
   gotoUrls: string[] = [];
   closed = false;
+  failNav = false;
+  #onCrash: (() => void) | undefined;
   goto(url: string): Promise<unknown> {
     this.gotoUrls.push(url);
-    return Promise.resolve(undefined);
+    return this.failNav ? Promise.reject(new Error('nav timeout')) : Promise.resolve(undefined);
   }
   close(): Promise<void> {
     this.closed = true;
     return Promise.resolve();
+  }
+  onCrash(handler: () => void): void {
+    this.#onCrash = handler;
+  }
+  /** Test helper: simulate this page's renderer crashing. */
+  crash(): void {
+    this.#onCrash?.();
   }
 }
 
 class FakeContext implements PooledContext {
   readonly pages: FakePage[] = [];
   closed = false;
+  constructor(private readonly failNav = false) {}
   newPage(): Promise<PooledPage> {
     const p = new FakePage();
+    p.failNav = this.failNav;
     this.pages.push(p);
     return Promise.resolve(p);
   }
@@ -41,13 +52,14 @@ class FakeContext implements PooledContext {
 
 class FakeBrowser implements PooledBrowser {
   readonly contexts: FakeContext[] = [];
+  failNav = false;
   #connected = true;
   #onDisc: (() => void) | undefined;
   isConnected(): boolean {
     return this.#connected;
   }
   newContext(): Promise<PooledContext> {
-    const c = new FakeContext();
+    const c = new FakeContext(this.failNav);
     this.contexts.push(c);
     return Promise.resolve(c);
   }
@@ -279,6 +291,40 @@ describe('BrowserPool', () => {
     const fresh = await pool.acquire('http://localhost:3000/fresh');
     expect(fresh.sessionId).toBeDefined();
     expect(pool.activeCount()).toBe(1);
+  });
+
+  it('a single page crash reclaims ONLY that lease; the fleet survives', async () => {
+    const { launch, browsers } = fakeLauncher();
+    const pool = new BrowserPool(launch, { maxContexts: 4, genSessionId: counterIds() });
+    await pool.acquire('http://localhost:3000/a');
+    const b = await pool.acquire('http://localhost:3000/b');
+    expect(pool.activeCount()).toBe(2);
+
+    // Crash A's page — a single renderer dying must not take down the shared browser or B.
+    const ctxA = browsers[0]?.contexts[0];
+    ctxA?.pages[0]?.crash();
+    await new Promise((r) => setTimeout(r, 0)); // let the async release settle
+
+    expect(pool.activeCount()).toBe(1);
+    expect(pool.leasedSessionIds()).toEqual([b.sessionId]); // B survives
+    expect(browsers).toHaveLength(1); // browser NOT relaunched (it didn't die)
+    expect(ctxA?.closed).toBe(true); // A's context was closed
+  });
+
+  it('a navigation timeout fails only its own lease and frees the slot', async () => {
+    const { launch, browsers } = fakeLauncher();
+    const pool = new BrowserPool(launch, { maxContexts: 2, genSessionId: counterIds() });
+    await pool.acquire('http://localhost:3000/ok'); // launches the browser, succeeds
+
+    const browser = browsers[0];
+    if (browser !== undefined) browser.failNav = true;
+    await expect(pool.acquire('http://localhost:3000/hangs')).rejects.toThrow('nav timeout');
+    expect(pool.activeCount()).toBe(1); // the good lease is untouched; the bad one didn't leak a slot
+
+    if (browser !== undefined) browser.failNav = false;
+    const ok = await pool.acquire('http://localhost:3000/ok2'); // the freed slot is reusable
+    expect(ok.sessionId).toBeDefined();
+    expect(pool.activeCount()).toBe(2);
   });
 
   it('a failed context setup frees the slot (queue not deadlocked)', async () => {

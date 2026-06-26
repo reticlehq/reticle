@@ -12,8 +12,10 @@
 
 /** The minimal page surface the pool drives. Real Playwright `Page` satisfies this. */
 export interface PooledPage {
-  goto(url: string): Promise<unknown>;
+  goto(url: string, opts?: { timeoutMs?: number }): Promise<unknown>;
   close(): Promise<void>;
+  /** Fires when THIS page's renderer crashes — lets the pool reclaim just this lease, not the fleet. */
+  onCrash(handler: () => void): void;
 }
 
 /** An isolated browsing context (cookies/storage). Real Playwright `BrowserContext` satisfies this. */
@@ -44,6 +46,9 @@ export interface Lease {
 /** Default lease time-to-live: a lease untouched for this long is presumed orphaned and reclaimed. */
 export const DEFAULT_LEASE_TTL_MS = 5 * 60_000;
 
+/** Default cap on how long a lease's initial navigation may take before it fails (frees the slot). */
+export const DEFAULT_NAV_TIMEOUT_MS = 30_000;
+
 export interface BrowserPoolOptions {
   /** Max simultaneous leased contexts. Over-cap acquires queue. */
   maxContexts: number;
@@ -53,6 +58,8 @@ export interface BrowserPoolOptions {
   now?: () => number;
   /** A lease untouched for longer than this is reclaimed by sweepExpired(). */
   leaseTtlMs?: number;
+  /** Per-lease navigation timeout — a page that won't load fails its own lease, never blocks a slot. */
+  navTimeoutMs?: number;
 }
 
 interface ActiveLease {
@@ -73,6 +80,7 @@ export class BrowserPool {
   readonly #genId: () => string;
   readonly #now: () => number;
   readonly #ttl: number;
+  readonly #navTimeout: number;
 
   #browser: PooledBrowser | undefined;
   #launching: Promise<PooledBrowser> | undefined;
@@ -96,6 +104,7 @@ export class BrowserPool {
     this.#genId = opts.genSessionId;
     this.#now = opts.now ?? ((): number => Date.now());
     this.#ttl = opts.leaseTtlMs ?? DEFAULT_LEASE_TTL_MS;
+    this.#navTimeout = opts.navTimeoutMs ?? DEFAULT_NAV_TIMEOUT_MS;
   }
 
   /** Currently leased contexts. */
@@ -149,13 +158,18 @@ export class BrowserPool {
     // #waitForSlot claims the slot synchronously (bumps #occupied) before returning, so the cap holds
     // even when many acquires race through the gate in the same tick.
     await this.#waitForSlot(opts.signal);
+    const sessionId = opts.sessionId ?? this.#genId();
     let context: PooledContext | undefined;
     try {
       const browser = await this.#ensureBrowser();
       context = await browser.newContext();
       const page = await context.newPage();
-      await page.goto(url);
-      const sessionId = opts.sessionId ?? this.#genId();
+      // Per-page crash isolation: if THIS renderer dies, reclaim only this lease — the shared browser
+      // and every other agent's context keep running. (A full browser death is handled by #onCrash.)
+      page.onCrash(() => {
+        void this.#release(sessionId);
+      });
+      await page.goto(url, { timeoutMs: this.#navTimeout });
       this.#active.set(sessionId, { context, page, url, touchedAt: this.#now() });
       return {
         sessionId,
