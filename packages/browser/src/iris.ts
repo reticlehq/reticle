@@ -259,6 +259,16 @@ export class Iris {
           this.#presenter.setState(SessionState.ENDED, BRIDGE_LOST_SUMMARY);
         }
       },
+      // First-connect never succeeded ⇒ the bridge is unreachable at this URL. Tell the developer
+      // exactly what went wrong and how to fix it, instead of retrying silently forever.
+      onUnreachable: ({ url: tried, attempts }) => {
+        globalThis.console.warn(
+          `[Iris] could not reach the bridge at ${tried} after ${String(attempts)} attempts. ` +
+            `Is the Iris daemon running on that port? If your app runs in a container/devcontainer/WSL, ` +
+            `the daemon is on a different host — set the WS URL explicitly (Vite: VITE_IRIS_WS_URL, ` +
+            `or iris.connect({ url })). Still retrying…`,
+        );
+      },
     });
 
     const emit = this.#emit;

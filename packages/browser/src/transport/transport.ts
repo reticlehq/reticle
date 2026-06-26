@@ -34,10 +34,19 @@ export interface TransportDeps {
    * caller (Iris) emits a synthetic TRANSPORT_OVERFLOW event so the agent learns about gaps.
    */
   onOverflow?: (dropped: number) => void;
+  /**
+   * Fired once when the VERY FIRST connection keeps failing (never opened) — i.e. the bridge is
+   * unreachable at this URL, most often a wrong port or a container/WSL network boundary. Distinct
+   * from onConnectionLost (which is about losing an ALREADY-established session). The caller surfaces
+   * an actionable hint instead of retrying silently forever.
+   */
+  onUnreachable?: (detail: { url: string; attempts: number }) => void;
 }
 
 const RECONNECT_DELAY_MS = 1000;
 const MAX_QUEUE = 500;
+/** Warn that the bridge is unreachable after this many consecutive failed INITIAL connects (~3s). */
+const UNREACHABLE_WARN_AFTER = 3;
 
 /** WebSocket client to the bridge. Reconnects across reloads; buffers events while down. */
 export class Transport {
@@ -48,6 +57,12 @@ export class Transport {
   #disconnectedSince: number | undefined;
   /** Whether onConnectionLost has already fired for the current outage (fire-once). */
   #lost = false;
+  /** True once the socket has opened at least once — gates the "unreachable" first-connect warning. */
+  #everConnected = false;
+  /** Consecutive failed INITIAL connects (before any success). */
+  #initialFailures = 0;
+  /** Whether the unreachable warning has fired (fire-once). */
+  #warnedUnreachable = false;
   #overflowCount = 0;
   readonly #deps: TransportDeps;
   readonly #now: () => number;
@@ -69,6 +84,7 @@ export class Transport {
     ws.onopen = (): void => {
       this.#disconnectedSince = undefined; // healthy again — reset the loss timer
       this.#lost = false;
+      this.#everConnected = true; // a real connection happened ⇒ never warn "unreachable"
       // HELLO is SDK-owned schema data. Preserve its pairing token; the generic sanitizer
       // intentionally redacts fields named "token" from app-controlled payloads.
       ws.send(JSON.stringify(this.#deps.hello()));
@@ -83,6 +99,7 @@ export class Transport {
     ws.onclose = (): void => {
       this.#ws = undefined;
       this.#noteOutage();
+      this.#noteInitialFailure();
       if (!this.#closed) nativeSetTimeout(() => this.#reopen(), RECONNECT_DELAY_MS);
     };
     ws.onerror = (): void => {
@@ -94,6 +111,20 @@ export class Transport {
   #reopen(): void {
     if (this.#closed) return;
     this.#open();
+  }
+
+  /**
+   * The first connection has never opened: count failures and, once they cross the threshold, fire
+   * onUnreachable ONCE so the app surfaces an actionable hint (wrong port / container network) rather
+   * than retrying silently forever. Suppressed entirely once any connection has succeeded.
+   */
+  #noteInitialFailure(): void {
+    if (this.#everConnected || this.#warnedUnreachable) return;
+    this.#initialFailures += 1;
+    if (this.#initialFailures >= UNREACHABLE_WARN_AFTER) {
+      this.#warnedUnreachable = true;
+      this.#deps.onUnreachable?.({ url: this.#deps.url, attempts: this.#initialFailures });
+    }
   }
 
   /**
