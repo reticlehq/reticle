@@ -25,6 +25,7 @@ const ORDER = [
   'spec-runner-test',
   'live-control-test',
   'real-world-tests',
+  'multi-agent-lease-test',
 ];
 const present = new Set(readdirSync(specsDir).map((f) => f.replace(/\.mjs$/, '')));
 const specs = ORDER.filter((n) => present.has(n));
