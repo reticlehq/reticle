@@ -39,7 +39,7 @@ function directText(el: Element): string {
   return collapsed.length > TEXT_MAX ? `${collapsed.slice(0, TEXT_MAX)}…` : collapsed;
 }
 
-export interface SnapshotStatus {
+interface SnapshotStatus {
   route: string;
   title: string;
   visibleDialogs: string[];
@@ -52,7 +52,7 @@ export interface SnapshotResult {
   truncated: boolean;
 }
 
-export interface SnapshotOptions {
+interface SnapshotOptions {
   scope?: string | undefined;
   mode?: SnapshotMode | undefined;
   maxNodes?: number | undefined;

@@ -50,7 +50,7 @@ export interface AnchorInput {
   nth?: number;
 }
 
-export interface SynthesizedAnchor {
+interface SynthesizedAnchor {
   strategy: AnchorStrategy;
   /** A compact, human-legible, re-resolvable anchor string. */
   value: string;

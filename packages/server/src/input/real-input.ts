@@ -30,7 +30,7 @@ export interface RealInputArgs {
   steps?: number;
 }
 
-export interface RealInputResult {
+interface RealInputResult {
   /** True if a native gesture was actually driven. */
   performed: boolean;
   /** Center used, for diagnostics/tests. */
@@ -200,7 +200,7 @@ export async function capturePage(page: Page, opts: ScreenshotOpts): Promise<Uin
   return new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
 }
 
-export interface CdpProviderOptions {
+interface CdpProviderOptions {
   cdpUrl: string;
   /** Injected so the settle delay is deterministic in tests; defaults to a real Node timer. */
   sleep?: SleepFn;

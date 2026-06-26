@@ -9,7 +9,7 @@ const IRIS_HOME = join(homedir(), '.iris');
 const MANIFEST_PATH = join(IRIS_HOME, 'update-manifest.json');
 const NPM_REGISTRY = 'https://registry.npmjs.org/@syrin/iris/latest';
 
-export interface UpdateManifest {
+interface UpdateManifest {
   currentVersion: string;
   latestVersion?: string;
   updateAvailable: boolean;

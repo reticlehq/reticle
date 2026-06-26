@@ -47,7 +47,7 @@ export function failFromVerdict(verdict: Verdict, extraEvidence?: Record<string,
 }
 
 /** Run iris_assert for a predicate; resolve on pass, throw the structured failure otherwise. */
-export async function assertPredicate(
+async function assertPredicate(
   invoke: ToolInvoker,
   predicate: Record<string, unknown>,
   timeoutMs: number,

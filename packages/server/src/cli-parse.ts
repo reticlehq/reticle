@@ -38,8 +38,8 @@ const NO_INSTALL_FLAG = '--no-install';
 export const HTTP_FLAG = '--http';
 export const HTTP_PORT_FLAG = '--http-port';
 export const HTTP_TOKEN_FLAG = '--http-token';
-export const TIMEOUT_FLAG = '--timeout';
-export const STORAGE_STATE_FLAG = '--storage-state';
+const TIMEOUT_FLAG = '--timeout';
+const STORAGE_STATE_FLAG = '--storage-state';
 
 export type CliResult =
   | { kind: 'init'; port: number | undefined; mcp: boolean; dryRun: boolean; install: boolean }

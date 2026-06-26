@@ -10,7 +10,7 @@ import { STATUS_PATH } from './http-server.js';
  */
 
 /** One connected tab as `iris status` reports it — the at-a-glance health line. */
-export interface StatusSession {
+interface StatusSession {
   sessionId: string;
   url: string;
   throttled: boolean;
@@ -80,7 +80,7 @@ export function fetchStatus(port: number): Promise<unknown> {
 }
 
 /** What `iris open` should do: reuse an already-connected tab, open a new one, or ask for a url. */
-export type OpenDecision =
+type OpenDecision =
   | { action: 'reuse'; url: string }
   | { action: 'open'; url: string }
   | { action: 'need-url' };

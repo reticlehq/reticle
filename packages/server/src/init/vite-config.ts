@@ -9,7 +9,7 @@ export const VITE_IMPORT = "import { iris } from '@syrin/iris/vite';";
 const IRIS_MARKER = '@syrin/iris/vite';
 
 /** The `iris(...)` call — carries the bridge port so the injected connect() targets it. */
-export function irisPluginCall(port: number | undefined): string {
+function irisPluginCall(port: number | undefined): string {
   return port === undefined ? 'iris()' : `iris({ port: ${String(port)} })`;
 }
 /** Matches the start of a `plugins: [` array literal. */
@@ -24,7 +24,7 @@ export const VitePatchKind = {
 } as const;
 export type VitePatchKind = (typeof VitePatchKind)[keyof typeof VitePatchKind];
 
-export type VitePatch =
+type VitePatch =
   | { kind: typeof VitePatchKind.APPLY; code: string }
   | { kind: typeof VitePatchKind.ALREADY }
   | { kind: typeof VitePatchKind.MANUAL; reason: string };

@@ -15,7 +15,7 @@ export interface CommandOutcome {
   error?: string;
 }
 
-export interface TransportDeps {
+interface TransportDeps {
   url: string;
   hello: () => HelloMessage;
   handleCommand: (command: CommandMessage) => Promise<CommandOutcome>;

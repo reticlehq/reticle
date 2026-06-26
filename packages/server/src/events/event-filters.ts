@@ -50,7 +50,7 @@ export function reconcileNet(events: IrisEvent[]): IrisEvent[] {
 /** Compact network-call summary for iris_network output — drops event plumbing (t, type,
  * sessionId, ref, id, initiator, ok) the agent never needs, keeping only method/url/status/ms.
  * This is the bulk of the token cost: raw IrisEvent objects are ~5x larger than this. */
-export interface NetCallView {
+interface NetCallView {
   method: string;
   url: string;
   status?: number | string;
@@ -69,7 +69,7 @@ export function projectNetCall(e: IrisEvent): NetCallView {
 }
 
 /** Compact console-log summary for iris_console output — { level, text } only. */
-export interface ConsoleLogView {
+interface ConsoleLogView {
   level: string;
   text: string;
 }
@@ -101,7 +101,7 @@ export function matchConsole(e: IrisEvent, level: string | undefined): boolean {
 const HINT_SAMPLE_MAX = 5;
 
 /** One present network call summarized for a zero-match hint. */
-export interface NetCallSummary {
+interface NetCallSummary {
   method: string;
   url: string;
   status?: number;
@@ -112,7 +112,7 @@ export interface NetCallSummary {
  * agent self-corrects ("POST /x 200 matched nothing, but these 3 requests happened") instead of
  * reading a bare []. `allNet` is every net.request in the window (pre-filter).
  */
-export interface NetEmptyHint {
+interface NetEmptyHint {
   totalInWindow: number;
   /** Up to HINT_SAMPLE_MAX present calls (most-recent first). */
   present: NetCallSummary[];
@@ -131,7 +131,7 @@ export function netEmptyHint(allNet: IrisEvent[]): NetEmptyHint {
 }
 
 /** Per-level console counts in the window — the body of a zero-match console hint. */
-export interface ConsoleLevelCounts {
+interface ConsoleLevelCounts {
   log: number;
   warn: number;
   error: number;
@@ -142,7 +142,7 @@ export interface ConsoleLevelCounts {
  * present so the agent knows the page isn't silent ("0 errors, but 3 warns + 5 logs"). `allConsole`
  * is every console/error event in the window (pre-filter).
  */
-export interface ConsoleEmptyHint {
+interface ConsoleEmptyHint {
   totalInWindow: number;
   byLevel: ConsoleLevelCounts;
 }

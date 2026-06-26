@@ -13,7 +13,7 @@ import { spawn } from 'node:child_process';
 
 const IRIS_HOME = join(homedir(), '.iris');
 
-export function pidPath(port: number): string {
+function pidPath(port: number): string {
   return join(IRIS_HOME, `daemon-${port}.pid`);
 }
 

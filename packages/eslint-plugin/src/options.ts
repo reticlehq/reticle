@@ -7,7 +7,7 @@ export interface RawRuleOptions {
   signalCallee?: string | string[];
 }
 
-export interface NormalizedOptions {
+interface NormalizedOptions {
   mutators: ReadonlySet<string>;
   signalCallees: ReadonlySet<string>;
 }

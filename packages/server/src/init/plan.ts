@@ -32,7 +32,7 @@ export const StepStatus = {
 } as const;
 export type StepStatus = (typeof StepStatus)[keyof typeof StepStatus];
 
-export interface Step {
+interface Step {
   title: string;
   target: string;
   status: StepStatus;

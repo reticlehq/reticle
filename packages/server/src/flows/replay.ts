@@ -118,7 +118,7 @@ async function resolveRef(
   return { ref, note: 'replayed by stale ref (not portable across sessions)' };
 }
 
-export interface ReplayStepResult {
+interface ReplayStepResult {
   tool: string;
   ok: boolean;
   error?: string;

@@ -59,7 +59,7 @@ const NEEDS_SIGNAL = new Set<AnnotationKind>([
   AnnotationKind.SUCCESS_STATE,
 ]);
 
-export interface RecorderDeps {
+interface RecorderDeps {
   /** Emit a wire event (Iris.#emit bound). */
   emit: (type: EventType, data: Record<string, unknown>) => void;
   /** Injected clock for FlowFile.createdAt — never Date.now() in pure logic (rule 7). */

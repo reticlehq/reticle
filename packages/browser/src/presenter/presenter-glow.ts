@@ -12,7 +12,7 @@ import {
 } from './presenter-config.js';
 
 /** What the controller needs from the Presenter: the clock, the timing knobs, and a setMode callback. */
-export interface GlowDeps {
+interface GlowDeps {
   now: () => number;
   idleAfterMs: number;
   glowFadeMs: number;

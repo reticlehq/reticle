@@ -18,7 +18,7 @@ import { classifyFlowAssertions } from './flow-classify.js';
  * renders it). Token figures are passed in (measured by the caller), never faked.
  */
 
-export interface FlowReportInput {
+interface FlowReportInput {
   flow: FlowFile;
   replay: FlowReplayResult;
   /** Measured deterministic replay cost (o200k proxy), for the "PROOF / cost" line. Optional. */

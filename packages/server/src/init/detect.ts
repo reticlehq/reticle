@@ -19,7 +19,7 @@ export const PackageManager = {
 } as const;
 export type PackageManager = (typeof PackageManager)[keyof typeof PackageManager];
 
-export interface PackageJsonLike {
+interface PackageJsonLike {
   dependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
   peerDependencies?: Record<string, string>;
@@ -102,7 +102,7 @@ const INSTALL_ARGS: Record<PackageManager, readonly string[]> = {
   [PackageManager.NPM]: ['i', '-D'],
 };
 
-export interface InstallCommand {
+interface InstallCommand {
   command: string;
   args: string[];
 }

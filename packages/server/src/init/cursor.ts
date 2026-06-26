@@ -19,7 +19,7 @@ export const CursorMergeStatus = {
 } as const;
 export type CursorMergeStatus = (typeof CursorMergeStatus)[keyof typeof CursorMergeStatus];
 
-export interface CursorMergeResult {
+interface CursorMergeResult {
   status: CursorMergeStatus;
   /** Full file content to write (2-space JSON, trailing newline). Unchanged when not `apply`. */
   content: string;

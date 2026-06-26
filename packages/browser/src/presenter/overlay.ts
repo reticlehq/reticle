@@ -1,4 +1,4 @@
-export interface OverlayStats {
+interface OverlayStats {
   connected: boolean;
   events: number;
 }

@@ -4,7 +4,7 @@ export interface Baseline {
   route: string;
 }
 
-export interface DiffResult {
+interface DiffResult {
   removed: string[];
   added: string[];
 }

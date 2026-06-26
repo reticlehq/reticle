@@ -55,7 +55,7 @@ export function recoveryFor(message: string): string | undefined {
 }
 
 /** The error envelope sent to the agent: the message, plus a recovery hint when one is known. */
-export interface ErrorPayload {
+interface ErrorPayload {
   error: string;
   recovery?: string;
 }

@@ -39,7 +39,7 @@ export function deriveProjectId(pkgName: string | undefined, rootPath: string): 
 }
 
 /** Read the `name` from the nearest package.json at or above `startDir`, or undefined if none. */
-export function readNearestPackageName(startDir: string): string | undefined {
+function readNearestPackageName(startDir: string): string | undefined {
   let dir = startDir;
   for (let depth = 0; depth < 50; depth++) {
     const pkgPath = join(dir, 'package.json');

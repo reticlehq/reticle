@@ -50,10 +50,10 @@ export const nativeSetInterval = (cb: () => void, ms: number): (() => void) => {
 };
 
 /** Max time we wait for a real animation frame before giving up and resolving anyway. */
-export const FRAME_BUDGET_MS = 200;
+const FRAME_BUDGET_MS = 200;
 
 /** Outcome of a bounded frame/settle wait. */
-export interface FrameOutcome {
+interface FrameOutcome {
   /** true = a real rAF fired within budget; false = the timeout fallback fired. */
   settled: boolean;
 }

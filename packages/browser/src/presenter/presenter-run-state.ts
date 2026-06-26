@@ -22,7 +22,7 @@ export interface PresenterRunState {
 }
 
 /** Everything the controller hands the builder — the live fields a run state is computed from. */
-export interface RunStateInput {
+interface RunStateInput {
   sessionId: string;
   state: SessionState;
   startMs: number | undefined;

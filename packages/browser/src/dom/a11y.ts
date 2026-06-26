@@ -232,7 +232,7 @@ export function isVisible(el: Element): boolean {
 
 const MAX_TEXT = 80;
 
-export function getVisibleText(el: Element): string {
+function getVisibleText(el: Element): string {
   const text = collapse(el.textContent ?? '');
   return text.length > MAX_TEXT ? `${text.slice(0, MAX_TEXT)}…` : text;
 }

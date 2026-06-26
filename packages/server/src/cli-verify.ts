@@ -69,7 +69,7 @@ export interface VerifyPorts {
   exit: (code: number) => void;
 }
 
-export interface VerifyArgs {
+interface VerifyArgs {
   url: string;
   timeoutMs: number;
 }

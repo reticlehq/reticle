@@ -31,7 +31,7 @@ export interface MockRule {
 }
 
 /** What to do with a request after matching: fulfill a canned response, abort it, or let it through. */
-export interface MockOutcome {
+interface MockOutcome {
   kind: 'fulfill' | 'abort' | 'continue';
   status?: number;
   body?: string;

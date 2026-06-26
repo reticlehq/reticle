@@ -127,7 +127,7 @@ const SEND_ICON = `<svg viewBox="0 0 24 24" width="15" height="15" fill="none" s
 export const CONTROLS_FOOT_HTML = `<div data-iris-foot><div class="iris-composer"><textarea data-iris-input class="iris-msg" rows="1" placeholder="${INPUT_PLACEHOLDER}"></textarea><button type="button" data-iris-send class="iris-send" aria-label="${CONTROL_LABEL.SEND}">${SEND_ICON}</button></div><div class="iris-export"><button type="button" data-iris-copy class="iris-ctl">${COPY_LABEL}</button><button type="button" data-iris-export class="iris-ctl">${EXPORT_LABEL}</button><span data-iris-export-msg class="iris-export-msg"></span></div></div>`;
 
 /** Element refs of the control surface, queried once after the markup is in the DOM. */
-export interface ControlRefs {
+interface ControlRefs {
   pauseBtn: HTMLButtonElement | undefined;
   endBtn: HTMLButtonElement | undefined;
   input: HTMLTextAreaElement | undefined;
@@ -139,7 +139,7 @@ export interface ControlRefs {
   flows: HTMLElement | undefined;
 }
 
-export function queryControlRefs(root: HTMLElement): ControlRefs {
+function queryControlRefs(root: HTMLElement): ControlRefs {
   return {
     pauseBtn: root.querySelector<HTMLButtonElement>('[data-iris-pause]') ?? undefined,
     endBtn: root.querySelector<HTMLButtonElement>('[data-iris-end]') ?? undefined,
@@ -154,7 +154,7 @@ export function queryControlRefs(root: HTMLElement): ControlRefs {
 }
 
 /** Host hooks the panel needs from the Presenter (the control callback + activity-log appender). */
-export interface ControlPanelHost {
+interface ControlPanelHost {
   /** Emit a control to the host (onControl). The ONLY emit path — server pushes never call this. */
   emit: (kind: HumanControlKind, text?: string) => void;
   /** Append a local 🧑 row when the human sends a message. */

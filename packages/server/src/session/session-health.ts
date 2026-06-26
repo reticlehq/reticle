@@ -2,7 +2,7 @@ import { THROTTLED_WARNING } from '@syrin/iris-protocol';
 import type { Session, SessionHealth } from './session.js';
 
 /** The `session` (and optional throttled `warning`) block spliced onto act/assert results. */
-export interface HealthEnvelope {
+interface HealthEnvelope {
   session?: SessionHealth;
   warning?: string;
 }

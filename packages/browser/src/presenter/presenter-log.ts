@@ -6,7 +6,7 @@ import { PresenterMode } from '@syrin/iris-protocol';
 // All nodes carry data-iris-* attrs so they're excluded from snapshots (see dom-ignore.ts).
 
 /** Default cap on accumulated activity-log rows (bounds DOM). Presenter-local UI tunable. */
-export const DEFAULT_LOG_MAX = 50;
+const DEFAULT_LOG_MAX = 50;
 /** Activity-log entry kinds (presenter-only UI; never a wire string). */
 export const LOG_KIND = {
   READ: 'read',

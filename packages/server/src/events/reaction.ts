@@ -1,6 +1,6 @@
 import { EventType, type IrisEvent } from '@syrin/iris-protocol';
 
-export interface ReactionSummary {
+interface ReactionSummary {
   total: number;
   network: number;
   domAdded: number;
@@ -12,7 +12,7 @@ export interface ReactionSummary {
   signals: number;
 }
 
-export interface ReactionReport {
+interface ReactionReport {
   window_ms: number;
   events: IrisEvent[];
   summary: ReactionSummary;
@@ -68,7 +68,7 @@ export function buildReactionReport(events: IrisEvent[], windowMs: number): Reac
 }
 
 /** The lean form of a reaction report: window + counts, WITHOUT the heavy per-event timeline. */
-export interface ReactionDigest {
+interface ReactionDigest {
   window_ms: number;
   summary: ReactionSummary;
 }

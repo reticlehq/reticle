@@ -16,7 +16,7 @@ import { nativeSetTimeout, settle } from '../timers/native-timers.js';
  * "my action missed" vs "app didn't react" vs "tool didn't dispatch". All probes are
  * cheap and best-effort (see docs/usage.md §3).
  */
-export interface ActionEffect {
+interface ActionEffect {
   /** We reached dispatch (no throw before it). Typed `true`: if we never dispatch we throw. */
   dispatched: true;
   /** Ref resolved to a still-connected element at read time. */
@@ -45,7 +45,7 @@ export interface ActionEffect {
   scrolledIntoView: boolean;
 }
 
-export interface ActionResult {
+interface ActionResult {
   ok: true;
   ref: string;
   action: string;
@@ -172,7 +172,7 @@ function dangerousActionContext(el: HTMLElement): string {
   ].join(' ');
 }
 
-export function requiresDangerousConfirmation(text: string): boolean {
+function requiresDangerousConfirmation(text: string): boolean {
   return isDangerousActionText(text);
 }
 
@@ -458,7 +458,7 @@ export interface ActionStep {
   args?: Record<string, unknown>;
 }
 
-export interface SequenceStepResult {
+interface SequenceStepResult {
   ref: string;
   action: string;
   /** per-step dispatch/settle outcome (see ActionResult). */

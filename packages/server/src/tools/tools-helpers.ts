@@ -1,6 +1,6 @@
 /** Small pure helpers shared by the MCP tool handlers. */
 
-export interface InteractiveItem {
+interface InteractiveItem {
   ref: string;
   desc: string;
 }

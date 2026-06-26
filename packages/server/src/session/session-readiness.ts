@@ -7,7 +7,7 @@
  * Pure control loop: the session count, clock, and sleep are all injected, so it is unit-tested with
  * no real timers — and in production it polls a real `setTimeout` sleep.
  */
-export interface WaitForReadyOptions {
+interface WaitForReadyOptions {
   /** Live count of connected sessions (SessionManager.count). */
   count: () => number;
   /** Give up after this much elapsed time. */

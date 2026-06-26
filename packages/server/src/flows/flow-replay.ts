@@ -103,7 +103,7 @@ const ANCHOR_SETTLE_ATTEMPTS = 8;
 const ANCHOR_SETTLE_DELAY_MS = 150;
 
 /** Injected sleeper so tests drive replay with a no-op clock; production waits on a real timer. */
-export type Sleep = (ms: number) => Promise<void>;
+type Sleep = (ms: number) => Promise<void>;
 const realSleep: Sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /** Extract the live element refs + the zero-match near-miss hint from a QUERY command result. */

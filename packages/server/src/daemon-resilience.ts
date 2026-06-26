@@ -13,7 +13,7 @@ export interface ProcessLike {
   on(event: string, listener: (arg: unknown) => void): unknown;
 }
 
-export type LogFn = (event: string, data: Record<string, unknown>) => void;
+type LogFn = (event: string, data: Record<string, unknown>) => void;
 
 function describe(value: unknown): string {
   return value instanceof Error ? value.message : String(value);

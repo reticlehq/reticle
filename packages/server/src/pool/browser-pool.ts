@@ -47,9 +47,9 @@ export interface Lease {
 export const DEFAULT_LEASE_TTL_MS = 5 * 60_000;
 
 /** Default cap on how long a lease's initial navigation may take before it fails (frees the slot). */
-export const DEFAULT_NAV_TIMEOUT_MS = 30_000;
+const DEFAULT_NAV_TIMEOUT_MS = 30_000;
 
-export interface BrowserPoolOptions {
+interface BrowserPoolOptions {
   /** Max simultaneous leased contexts. Over-cap acquires queue. */
   maxContexts: number;
   /** Stable id generator for lease sessionIds (injected to stay clock-/random-free in logic). */

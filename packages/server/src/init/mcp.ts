@@ -16,7 +16,7 @@ export const MCP_SERVER_NAME = 'iris';
 export const NPX = 'npx';
 const IRIS_PACKAGE = '@syrin/iris';
 const MCP_SUBCOMMAND = 'mcp';
-export const CLAUDE_CLI = 'claude';
+const CLAUDE_CLI = 'claude';
 
 /** Args after `npx` that launch the bridge: `@syrin/iris mcp`. Portless — the port comes from
  * the project's `.iris.json` at runtime, so one global entry works for every project. */
@@ -29,7 +29,7 @@ function serverInvocation(): string[] {
   return [NPX, ...npxServerArgs()];
 }
 
-export interface ClaudeAddCommand {
+interface ClaudeAddCommand {
   command: string;
   args: string[];
   /** Human-readable form of the same command, for reports and manual fallback. */

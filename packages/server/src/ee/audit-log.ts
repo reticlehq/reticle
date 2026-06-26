@@ -6,7 +6,7 @@
 
 import { assertEnterprise, type GateContext } from '../license/license.js';
 
-export interface AuditEvent {
+interface AuditEvent {
   actor: string;
   action: string;
   at: number;

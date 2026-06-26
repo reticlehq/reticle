@@ -25,7 +25,7 @@ export const LicenseStatus = {
 export type LicenseStatus = (typeof LicenseStatus)[keyof typeof LicenseStatus];
 
 /** The signed claims inside a key. `exp` is epoch ms; `features` (optional) scopes which ee features unlock. */
-export const LicensePayloadSchema = z.object({
+const LicensePayloadSchema = z.object({
   org: z.string(),
   plan: z.string(),
   exp: z.number(),
@@ -33,7 +33,7 @@ export const LicensePayloadSchema = z.object({
 });
 export type LicensePayload = z.infer<typeof LicensePayloadSchema>;
 
-export type LicenseCheck =
+type LicenseCheck =
   | { status: typeof LicenseStatus.VALID; payload: LicensePayload }
   | { status: Exclude<LicenseStatus, typeof LicenseStatus.VALID> };
 
@@ -148,7 +148,7 @@ export const LICENSE_KEY_ENV = 'IRIS_LICENSE_KEY';
 export const LICENSE_PUBLIC_KEY_ENV = 'IRIS_LICENSE_PUBLIC_KEY';
 
 /** The human-facing state of enterprise activation on this machine (what `iris license status` shows). */
-export interface LicenseReport {
+interface LicenseReport {
   status: 'active' | 'missing' | 'invalid' | 'expired' | 'eval';
   org?: string;
   plan?: string;

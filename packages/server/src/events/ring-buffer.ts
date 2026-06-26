@@ -1,6 +1,6 @@
 import { RING_BUFFER_DEFAULTS, type IrisEvent } from '@syrin/iris-protocol';
 
-export interface RingBufferOptions {
+interface RingBufferOptions {
   maxEvents?: number;
   maxAgeMs?: number;
   maxBytes?: number;

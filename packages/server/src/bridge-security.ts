@@ -2,7 +2,7 @@ import { IrisEnv } from '@syrin/iris-protocol';
 import type { StartOptions } from './index.js';
 
 /** The security contract the bridge/daemon enforce: bind host, pairing token, and WS origin allow-list. */
-export interface BridgeSecurity {
+interface BridgeSecurity {
   host?: string;
   token?: string;
   allowedOrigins?: string[];

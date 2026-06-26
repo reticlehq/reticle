@@ -50,7 +50,7 @@ export const CORE_TOOL_NAMES: ReadonlySet<string> = new Set([
   IrisTool.STATE,
 ]);
 
-export const STANDARD_TOOL_NAMES: ReadonlySet<string> = new Set([
+const STANDARD_TOOL_NAMES: ReadonlySet<string> = new Set([
   ...CORE_TOOL_NAMES,
   IrisTool.ACT_SEQUENCE,
   IrisTool.INSPECT,

@@ -5,7 +5,7 @@ import { Session, type SessionInfo } from './session.js';
  * identity (authoritative when present); `url` is the app origin, a fallback hint for older SDKs that
  * don't stamp a projectId. Both optional — an empty scope means "no project filter" (legacy behavior).
  */
-export interface ResolveScope {
+interface ResolveScope {
   projectId?: string;
   url?: string;
 }

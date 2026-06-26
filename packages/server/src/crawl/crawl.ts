@@ -17,7 +17,7 @@ export interface CrawlSession {
   eventsSince(cursor: number): IrisEvent[];
 }
 
-export type CrawlSleep = (ms: number) => Promise<void>;
+type CrawlSleep = (ms: number) => Promise<void>;
 
 export interface CrawlAnomaly {
   kind: CrawlAnomalyKind;

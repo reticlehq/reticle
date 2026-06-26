@@ -6,7 +6,7 @@ import type { IrisEvent } from '@syrin/iris-protocol';
  * size of the payload; `droppedOldest` is present only when a cap actually truncated the timeline —
  * never a silent cap.
  */
-export interface CostHint {
+interface CostHint {
   events: number;
   bytes: number;
   droppedOldest?: number;
@@ -66,7 +66,7 @@ export function estimateTokens(text: string): number {
  * a tighter scope, a more specific query) before spending context on a large body. The token
  * figure is an estimate (see estimateTokens).
  */
-export interface SizeCost {
+interface SizeCost {
   bytes: number;
   tokens: number;
 }

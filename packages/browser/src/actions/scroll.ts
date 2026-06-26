@@ -1,7 +1,7 @@
 import { refs } from '../dom/refs.js';
 
 /** Outcome of one container scroll — enough for the server to drive a find loop. */
-export interface ScrollResult {
+interface ScrollResult {
   /** scrollTop actually moved (false ⇒ already at the end / not scrollable). */
   scrolled: boolean;
   scrollTop: number;

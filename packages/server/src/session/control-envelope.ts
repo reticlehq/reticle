@@ -2,7 +2,7 @@ import { SessionState } from '@syrin/iris-protocol';
 import type { Session } from './session.js';
 
 /** Live-control: the control block spliced onto tool results so the agent sees human steering. */
-export interface ControlEnvelope {
+interface ControlEnvelope {
   state: SessionState;
   /** Drained inbox text, delivered to the agent exactly once. */
   guidance: string[];
@@ -16,7 +16,7 @@ export const PAUSE_HINT =
   'Paused by the human. Address the guidance, then call iris_resume (or wait for the human to resume).';
 
 /** Shape returned by the short-circuit when an action tool refuses while paused. */
-export interface PausedResult {
+interface PausedResult {
   paused: true;
   guidance: string[];
   hint: string;

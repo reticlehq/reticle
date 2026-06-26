@@ -28,7 +28,7 @@ export type ReadRunResult =
   | { ok: false; reason: RunReadError };
 
 /** Optional retention overrides (defaults to the protocol caps). Injectable so tests prune fast. */
-export interface RunStoreOptions {
+interface RunStoreOptions {
   retention?: number;
   slack?: number;
 }

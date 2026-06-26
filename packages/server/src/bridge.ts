@@ -16,9 +16,9 @@ import { tokensMatch } from './token-auth.js';
 import { log } from './log.js';
 
 /** A human clicked ▶ on a saved flow in the panel — replay it with no agent. Wired by the daemon. */
-export type ReplayRequestHandler = (sessionId: string, flowName: string) => void;
+type ReplayRequestHandler = (sessionId: string, flowName: string) => void;
 /** Called once a browser session connects, so the daemon can push it the replayable-flow list. */
-export type SessionReadyHandler = (session: Session) => void;
+type SessionReadyHandler = (session: Session) => void;
 
 /** The flow name if this event is a panel ▶ replay request, else undefined. Pure boundary narrowing. */
 function replayRequest(event: { type: string; data: Record<string, unknown> }): string | undefined {
@@ -28,7 +28,7 @@ function replayRequest(event: { type: string; data: Record<string, unknown> }): 
   return typeof name === 'string' && name.length > 0 ? name : undefined;
 }
 
-export interface BridgeOptions {
+interface BridgeOptions {
   port: number;
   host?: string;
   token?: string;

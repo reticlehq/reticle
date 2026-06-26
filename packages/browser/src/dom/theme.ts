@@ -70,7 +70,7 @@ function isTransparent(rgb: string): boolean {
   return rgb === 'rgba(0, 0, 0, 0)' || rgb === 'transparent';
 }
 
-export interface ThemeReport {
+interface ThemeReport {
   /** Matched design-token name for the text color, or null when the color is off-palette. */
   colorToken: string | null;
   /** Matched design-token name for the background color, or null. */

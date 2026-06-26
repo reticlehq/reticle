@@ -1,7 +1,7 @@
 import { refs } from '../dom/refs.js';
 import { nativeFrame } from '../timers/native-timers.js';
 
-export interface ClickGeometry {
+interface ClickGeometry {
   occluded: boolean;
   occludedBy: string | null;
   scrolledIntoView: boolean;

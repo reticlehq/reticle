@@ -88,7 +88,7 @@ export interface InitIo {
   print(line: string): void;
 }
 
-export interface InitResult {
+interface InitResult {
   ok: boolean;
   applied: number;
   manual: number;
