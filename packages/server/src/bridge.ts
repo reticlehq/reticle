@@ -1,4 +1,3 @@
-import { timingSafeEqual } from 'node:crypto';
 import * as http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { WebSocketServer, type RawData, type WebSocket } from 'ws';
@@ -13,6 +12,7 @@ import {
   isLoopbackHostname,
 } from '@syrin/iris-protocol';
 import { Session, SessionManager } from './session/session.js';
+import { tokensMatch } from './token-auth.js';
 import { log } from './log.js';
 
 /** A human clicked ▶ on a saved flow in the panel — replay it with no agent. Wired by the daemon. */
@@ -52,15 +52,6 @@ function normalizeOrigin(origin: string): string | null {
   } catch {
     return null;
   }
-}
-
-function tokensMatch(expected: string, received: string | undefined): boolean {
-  if (received === undefined) return false;
-  const expectedBytes = Buffer.from(expected);
-  const receivedBytes = Buffer.from(received);
-  return (
-    expectedBytes.length === receivedBytes.length && timingSafeEqual(expectedBytes, receivedBytes)
-  );
 }
 
 /** Normalize ws RawData (string | Buffer | Buffer[] | ArrayBuffer) into a UTF-8 string. */

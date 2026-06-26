@@ -32,7 +32,7 @@ function caseXml(r: SpecResult): string {
   return `${open}</${JUnit.CASE}>`;
 }
 
-/** Render results as a single JUnit `<testsuite>` document (P6/CI consumable). */
+/** Render results as a single JUnit `<testsuite>` document (CI consumable). */
 export function toJUnitXml(results: readonly SpecResult[], opts?: { suite?: string }): string {
   const suite = escapeXml(opts?.suite ?? DEFAULT_JUNIT_SUITE_NAME);
   const s = summarize(results);

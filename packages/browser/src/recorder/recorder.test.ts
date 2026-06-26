@@ -76,7 +76,7 @@ function mount(emit: (t: EventType, d: Record<string, unknown>) => void): Record
 }
 
 describe('recorder capture — semantic anchored steps', () => {
-  it("B1: click on a testid'd button records a testid anchor (never a ref)", () => {
+  it("click on a testid'd button records a testid anchor (never a ref)", () => {
     document.body.innerHTML = `<button data-testid="save">Save</button>`;
     const { emit } = makeEmits();
     mount(emit);

@@ -2,6 +2,7 @@ import * as http from 'node:http';
 import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { log } from './log.js';
+import { isLoopbackPeer, requestToken, tokensMatch } from './token-auth.js';
 
 // These paths form the agent↔server wire contract. Keep in sync with skill/SKILL.md.
 export const MCP_SSE_PATH = '/mcp/sse';
@@ -39,24 +40,46 @@ export interface SharedServer {
  *   POST /mcp/message   → routes MCP messages to an active SSE session
  *   WS   /iris          → browser SDK connections (via WebSocketServer)
  */
-export function createSharedServer(): SharedServer {
+export function createSharedServer(options: { token?: string } = {}): SharedServer {
   type McpFactory = () => McpServer;
   let mcpFactory: McpFactory | undefined;
   let statusProvider: (() => unknown) | undefined;
   let agentPresence: ((connected: boolean) => void) | undefined;
   const transports = new Map<string, SSEServerTransport>();
+  const token = options.token;
+
+  // The agent control plane (MCP transport) and /status carry the same trust as the browser WS: a
+  // loopback peer is trusted (the local stdio proxy and `iris status` always dial 127.0.0.1), but any
+  // non-loopback peer must present the pairing token. Without this, binding the daemon beyond loopback
+  // (IRIS_HOST) would expose iris_act/iris_navigate and session enumeration to the whole network even
+  // though the WS demanded a token. When no token is configured the bind is loopback-only anyway.
+  const authorized = (req: http.IncomingMessage, url: URL): boolean => {
+    if (isLoopbackPeer(req.socket.remoteAddress)) return true;
+    if (token === undefined) return false;
+    return tokensMatch(token, requestToken(req, url));
+  };
 
   const httpServer = http.createServer((req, res) => {
-    const url = req.url ?? '/';
+    const rawUrl = req.url ?? '/';
+    const url = new URL(rawUrl, 'http://localhost');
+    const path = url.pathname;
 
-    if (req.method === 'GET' && url === STATUS_PATH) {
+    if (path === STATUS_PATH || path === MCP_SSE_PATH || path === MCP_MESSAGE_PATH) {
+      if (!authorized(req, url)) {
+        res.writeHead(401, { 'Content-Type': 'text/plain' });
+        res.end('unauthorized');
+        return;
+      }
+    }
+
+    if (req.method === 'GET' && path === STATUS_PATH) {
       const body = JSON.stringify(statusProvider?.() ?? { running: true });
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(body);
       return;
     }
 
-    if (req.method === 'GET' && url === MCP_SSE_PATH) {
+    if (req.method === 'GET' && path === MCP_SSE_PATH) {
       if (mcpFactory === undefined) {
         res.writeHead(503, { 'Content-Type': 'text/plain' });
         res.end('MCP server not ready');
@@ -89,9 +112,8 @@ export function createSharedServer(): SharedServer {
       return;
     }
 
-    if (req.method === 'POST' && url.startsWith(MCP_MESSAGE_PATH)) {
-      const parsed = new URL(url, 'http://localhost');
-      const sessionId = parsed.searchParams.get('sessionId');
+    if (req.method === 'POST' && path === MCP_MESSAGE_PATH) {
+      const sessionId = url.searchParams.get('sessionId');
       if (sessionId === null) {
         res.writeHead(400, { 'Content-Type': 'text/plain' });
         res.end('missing sessionId');

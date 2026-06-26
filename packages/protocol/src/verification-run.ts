@@ -247,7 +247,6 @@ export const VerificationEvidenceSchema = z.object({
     .array(z.object({ at: z.number(), kind: z.string(), summary: z.string() }))
     .default([]),
 });
-export type VerificationEvidence = z.infer<typeof VerificationEvidenceSchema>;
 
 /** One paste-ready fix instruction for the host's coding agent. */
 export const RepairPacketSchema = z.object({
@@ -275,7 +274,6 @@ export const RunSignatureSchema = z.object({
   value: z.string(),
   signedAt: z.number(),
 });
-export type RunSignature = z.infer<typeof RunSignatureSchema>;
 
 /**
  * The top-level verification-run artifact. Stable contract — additive changes only within

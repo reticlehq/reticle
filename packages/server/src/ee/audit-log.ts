@@ -1,7 +1,7 @@
 /**
  * Example enterprise feature (Iris Enterprise License — see ./LICENSE). Demonstrates the pattern every
  * ee feature follows: call assertEnterprise(...) first, then do the privileged work. The body here is a
- * stub — the real audit sink is the hosted control plane (post-v0.9.0). It exists now to prove the gate.
+ * stub — the real audit sink is the hosted control plane. It exists now to prove the gate.
  */
 
 import { assertEnterprise, type GateContext } from '../license/license.js';

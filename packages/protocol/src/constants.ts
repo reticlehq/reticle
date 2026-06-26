@@ -17,7 +17,6 @@ export const IRIS_URL_PARAM = {
   SESSION: '__iris_session',
   PROJECT: '__iris_project',
 } as const;
-export type IrisUrlParam = (typeof IRIS_URL_PARAM)[keyof typeof IRIS_URL_PARAM];
 
 /** The loopback bind address. The daemon/bridge bind here by default — never expose Iris off-host. */
 export const LOOPBACK_HOST = '127.0.0.1';
@@ -43,8 +42,6 @@ export const IrisEnv = {
   /** Bearer token required by the optional `iris serve --http` verify endpoint. */
   VERIFY_TOKEN: 'IRIS_VERIFY_TOKEN',
 } as const;
-
-export type IrisEnvKey = (typeof IrisEnv)[keyof typeof IrisEnv];
 
 /** Hard transport bounds shared by the browser and bridge. */
 export const TRANSPORT_LIMITS = {

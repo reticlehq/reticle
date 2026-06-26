@@ -284,7 +284,6 @@ export const RecordedFlowSchema = z.object({
   name: z.string(),
   flow: FlowFileSchema,
 });
-export type RecordedFlow = z.infer<typeof RecordedFlowSchema>;
 
 /** A concrete, confidence-scored rebind proposed for one drifted step. */
 export interface HealProposal {

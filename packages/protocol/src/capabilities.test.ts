@@ -5,7 +5,7 @@ import { CapabilitiesSchema, RiskSurface } from './index.js';
  *  it must validate the declared risk surfaces against the shared vocabulary. */
 const bare = { testids: ['pay'], signals: ['order:saved'], stores: ['cart'], flows: [] };
 
-describe('CapabilitiesSchema governance (W7 manifest extension)', () => {
+describe('CapabilitiesSchema governance (manifest extension)', () => {
   it('parses a manifest with no governance (back-compat)', () => {
     const parsed = CapabilitiesSchema.safeParse(bare);
     expect(parsed.success).toBe(true);

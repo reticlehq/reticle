@@ -76,16 +76,8 @@ const ROLE_MAP: Record<string, string> = {
   spinbutton: 'spin',
 };
 
-const ROLE_UNMAP: Record<string, string> = Object.fromEntries(
-  Object.entries(ROLE_MAP).map(([full, abbr]) => [abbr, full]),
-);
-
 function abbreviateRole(role: string): string {
   return ROLE_MAP[role] ?? 'el';
-}
-
-function expandRole(abbr: string): string {
-  return ROLE_UNMAP[abbr] ?? abbr;
 }
 
 function encodeStates(states: string[], visible?: boolean): string {
@@ -124,47 +116,6 @@ function encodeStates(states: string[], visible?: boolean): string {
     }
   }
   return flags.length > 0 ? `[${flags.join(',')}]` : '';
-}
-
-function decodeStates(encoded: string): { states: string[]; visible?: boolean } {
-  if (!encoded.startsWith('[') || !encoded.endsWith(']')) return { states: [] };
-  const flags = encoded.slice(1, -1).split(',').filter(Boolean);
-  const states: string[] = [];
-  let visible: boolean | undefined;
-  for (const f of flags) {
-    switch (f) {
-      case 'vis':
-        visible = true;
-        break;
-      case 'hid':
-        visible = false;
-        break;
-      case 'en':
-        states.push('enabled');
-        break;
-      case 'dis':
-        states.push('disabled');
-        break;
-      case 'chk':
-        states.push('checked');
-        break;
-      case 'uch':
-        states.push('unchecked');
-        break;
-      case 'exp':
-        states.push('expanded');
-        break;
-      case 'col':
-        states.push('collapsed');
-        break;
-      case 'focus':
-        states.push('focused');
-        break;
-      default:
-        states.push(f);
-    }
-  }
-  return visible !== undefined ? { states, visible } : { states };
 }
 
 function encodeName(name: string): string {
@@ -207,60 +158,6 @@ export function resultToToon(result: Record<string, unknown>): string {
   const elements = result['elements'];
   if (!Array.isArray(elements)) return JSON.stringify(result);
   return toToon(elements as ToonElement[]);
-}
-
-/** Parse a single TOON line (after the header) into a partial ToonElement. */
-function parseLine(line: string): ToonElement | null {
-  const trimmed = line.trimStart();
-  if (trimmed.length === 0 || trimmed.startsWith('#')) return null;
-  // tokens: type ref "name" [states]? key=val*
-  const tokens = trimmed.match(/\S+|"(?:[^"\\]|\\.)*"/g);
-  if (!tokens || tokens.length < 3) return null;
-  const [typeRaw, ref, nameRaw, ...rest] = tokens as [string, string, string, ...string[]];
-  const role = expandRole(typeRaw);
-  const name = nameRaw.startsWith('"')
-    ? nameRaw.slice(1, -1).replace(/\\"/g, '"').replace(/\\\\/g, '\\')
-    : nameRaw;
-  let stateBlock = '';
-  const attrs: Record<string, string> = {};
-  for (const r of rest) {
-    if (r.startsWith('[')) {
-      stateBlock = r;
-      continue;
-    }
-    const eqIdx = r.indexOf('=');
-    if (eqIdx > 0) {
-      const k = r.slice(0, eqIdx);
-      const v = r
-        .slice(eqIdx + 1)
-        .replace(/^"|"$/g, '')
-        .replace(/\\"/g, '"');
-      attrs[k] = v;
-    }
-  }
-  const { states, visible } = decodeStates(stateBlock);
-  const el: ToonElement = {
-    ref,
-    role,
-    name,
-    states,
-    ...(visible !== undefined ? { visible } : {}),
-  };
-  if (attrs['val'] !== undefined) el.value = attrs['val'];
-  if (attrs['count'] !== undefined) el.childCount = parseInt(attrs['count'], 10);
-  return el;
-}
-
-/** Parse TOON text back to an array of ToonElement (flat, no nesting reconstruction yet). */
-export function fromToon(text: string): ToonElement[] {
-  const lines = text.split('\n');
-  const elements: ToonElement[] = [];
-  for (const line of lines) {
-    if (line.trimStart().startsWith('#')) continue;
-    const el = parseLine(line);
-    if (el !== null) elements.push(el);
-  }
-  return elements;
 }
 
 /** Whether a tool result object should be encoded as TOON (has an elements array). */

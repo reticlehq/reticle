@@ -116,4 +116,3 @@ export const IrisMessageSchema = z.discriminatedUnion('kind', [
   CommandResultSchema,
   EventMessageSchema,
 ]);
-export type IrisMessage = z.infer<typeof IrisMessageSchema>;

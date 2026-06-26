@@ -99,7 +99,6 @@ export const RiskZoneSchema = z.object({
   paths: z.array(z.string()).optional(),
   note: z.string().optional(),
 });
-export type RiskZone = z.infer<typeof RiskZoneSchema>;
 
 /**
  * Optional governance metadata an app may declare about its testable surface: who owns it, safety
@@ -133,7 +132,6 @@ export const ContractFileSchema = z.object({
   generatedAt: z.number(),
   capabilities: CapabilitiesSchema,
 });
-export type ContractFile = z.infer<typeof ContractFileSchema>;
 
 /**
  * Evidence counts captured with a run so the agent can compare runs over time
@@ -144,7 +142,6 @@ export const RunEvidenceSchema = z.object({
   networkErrors: z.number().optional(),
   driftSteps: z.number().optional(),
 });
-export type RunEvidence = z.infer<typeof RunEvidenceSchema>;
 
 /** One persisted run outcome in .iris/project.json. */
 export const RunRecordSchema = z.object({

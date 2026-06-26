@@ -27,9 +27,6 @@ export const nativeClearTimeout = (id: number): void => {
   realClearTimeout?.(id);
 };
 
-export const nativeSleep = (ms: number): Promise<void> =>
-  new Promise((resolve) => nativeSetTimeout(resolve, ms));
-
 /**
  * A self-rescheduling interval built on the bound real timer. We do NOT use
  * `setInterval` because iris_clock can freeze the app's timers — a native, pre-bound

@@ -13,6 +13,7 @@ import {
 import type { FlowReplayResult } from '@syrin/iris-protocol';
 import { replayNamedFlow } from './flows/flow-tools.js';
 import { createSharedServer } from './http-server.js';
+import { resolveBridgeSecurity } from './bridge-security.js';
 import { Bridge } from './bridge.js';
 import { BaselineStore } from './project/baselines.js';
 import { RecordingStore } from './flows/recordings.js';
@@ -201,33 +202,7 @@ export interface RunningServer {
   close: () => Promise<void>;
 }
 
-/**
- * Resolve the bridge's security options from explicit options first, then the environment. Shared by
- * both `start()` and `startDaemon()` so the token/host/origin contract is enforced identically on
- * every entrypoint — a past divergence let daemon mode silently run with auth disabled.
- */
-export function resolveBridgeSecurity(options: StartOptions): {
-  host?: string;
-  token?: string;
-  allowedOrigins?: string[];
-} {
-  const envToken = process.env[IrisEnv.TOKEN];
-  const envOrigins = process.env[IrisEnv.ALLOWED_ORIGINS];
-  const host = options.host ?? process.env[IrisEnv.HOST];
-  const token =
-    options.token ?? (envToken !== undefined && envToken.length > 0 ? envToken : undefined);
-  const allowedOrigins =
-    options.allowedOrigins ??
-    envOrigins
-      ?.split(',')
-      .map((origin) => origin.trim())
-      .filter((origin) => origin.length > 0);
-  return {
-    ...(host === undefined ? {} : { host }),
-    ...(token === undefined ? {} : { token }),
-    ...(allowedOrigins === undefined ? {} : { allowedOrigins }),
-  };
-}
+export { resolveBridgeSecurity } from './bridge-security.js';
 
 /**
  * Build the shared browser pool (one headless Chromium, N capped isolated leased contexts). Lazy —
@@ -358,7 +333,7 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
   const port = options.port ?? IRIS_DEFAULT_PORT;
 
   const security = resolveBridgeSecurity(options);
-  const shared = createSharedServer();
+  const shared = createSharedServer(security.token === undefined ? {} : { token: security.token });
   const bridge = new Bridge({ port, server: shared.httpServer, ...security });
   // The daemon owns listen() (below), so the real bind error is reported there; absorb bridge.ready's
   // mirror rejection so a port collision can't surface as an unhandled promise rejection.

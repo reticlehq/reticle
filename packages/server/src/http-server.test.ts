@@ -56,6 +56,14 @@ describe('GET /status', () => {
     expect(res.status).toBe(200);
     expect(JSON.parse(res.body)).toEqual({ running: true });
   });
+
+  it('still serves a loopback peer with no token even when a token IS configured (local trust)', async () => {
+    // The token gate must never break the local stdio proxy / `iris status`, which always dial 127.0.0.1.
+    shared = createSharedServer({ token: 'a-secret-pairing-token' });
+    const port = await listen(shared);
+    const res = await get(port, STATUS_PATH);
+    expect(res.status).toBe(200);
+  });
 });
 
 /**
