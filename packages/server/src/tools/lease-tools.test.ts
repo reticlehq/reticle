@@ -5,7 +5,12 @@
 
 import { describe, expect, it } from 'vitest';
 import { IRIS_URL_PARAM } from '@syrin/iris-protocol';
-import { LEASE_TOOLS, appendIrisParams, waitForLeasedSession } from './lease-tools.js';
+import {
+  LEASE_TOOLS,
+  appendIrisParams,
+  cleanNavError,
+  waitForLeasedSession,
+} from './lease-tools.js';
 import { IrisTool } from './tool-names.js';
 import type { ToolDeps } from './tool-kit.js';
 import type { BrowserPool, Lease } from '../pool/browser-pool.js';
@@ -62,6 +67,41 @@ describe('appendIrisParams', () => {
     expect(u.searchParams.get('tab')).toBe('2');
     expect(u.searchParams.get(IRIS_URL_PARAM.SESSION)).toBe('lease-9');
     expect(u.searchParams.has(IRIS_URL_PARAM.PROJECT)).toBe(false);
+  });
+});
+
+describe('cleanNavError', () => {
+  it('extracts the net:: code from a noisy Playwright goto error (ANSI + call log stripped)', () => {
+    const raw = `page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:5999/?__iris_session=lease-x\nCall log:\n[2m  - navigating[22m`;
+    expect(cleanNavError(new Error(raw))).toBe('net::ERR_CONNECTION_REFUSED');
+  });
+
+  it('reports a timeout plainly', () => {
+    expect(cleanNavError(new Error('page.goto: Timeout 30000ms exceeded.'))).toBe(
+      'navigation timed out',
+    );
+  });
+
+  it('falls back to a trimmed first line without the url tail', () => {
+    expect(cleanNavError(new Error('page.goto: something odd at http://x/y?z'))).toBe(
+      'something odd',
+    );
+  });
+});
+
+describe('iris_lease_acquire failure surfaces a clean message', () => {
+  it('a navigation failure becomes "could not open <url> — is the app running?"', async () => {
+    const pool = {
+      acquire: () =>
+        Promise.reject(new Error('page.goto: net::ERR_CONNECTION_REFUSED at http://x/')),
+      activeCount: () => 0,
+      queuedCount: () => 0,
+    } as unknown as BrowserPool;
+    await expect(
+      tool(IrisTool.LEASE_ACQUIRE)({ ...baseDeps, pool }, { url: 'http://localhost:3000/' }),
+    ).rejects.toThrow(
+      /could not open http:\/\/localhost:3000\/ — is the app running there\? \(net::ERR_CONNECTION_REFUSED\)/,
+    );
   });
 });
 

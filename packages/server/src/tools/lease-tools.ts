@@ -40,6 +40,27 @@ export function appendIrisParams(url: string, session: string, projectId?: strin
   }
 }
 
+/**
+ * Turn a raw navigation failure (Playwright's `page.goto: net::ERR_… at <url>\nCall log:…`, often
+ * with ANSI codes) into a short, clean reason — so the agent/user sees "is the app running?" instead
+ * of an internals-leaking wall of text.
+ */
+export function cleanNavError(err: unknown): string {
+  const msg = err instanceof Error ? err.message : String(err);
+  // Strip ANSI color codes (ESC[…m) Playwright emits — built via fromCharCode to keep the
+  // control character out of a regex literal (no-control-regex).
+  const ansi = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, 'g');
+  const firstLine = (msg.split('\n')[0] ?? msg).replace(ansi, '');
+  const netCode = /net::[A-Z_]+/.exec(firstLine);
+  if (netCode !== null) return netCode[0];
+  if (/timeout/i.test(firstLine)) return 'navigation timed out';
+  return firstLine
+    .replace(/^page\.goto:\s*/, '')
+    .replace(/\s+at\s+https?:\/\/\S+.*$/, '')
+    .trim()
+    .slice(0, 100);
+}
+
 /** A fresh, collision-resistant lease id. Uses crypto at the I/O boundary (not pure logic). */
 function newLeaseId(): string {
   const uuid =
@@ -107,7 +128,16 @@ export const LEASE_TOOLS: ToolDef[] = [
       const projectId = asString(args['projectId']);
       const sessionId = newLeaseId();
       const navUrl = appendIrisParams(url, sessionId, projectId);
-      const lease = await pool.acquire(navUrl, { sessionId });
+      let lease;
+      try {
+        lease = await pool.acquire(navUrl, { sessionId });
+      } catch (err) {
+        // A raw page.goto failure is noisy and leaks the internal URL params — surface a clean,
+        // actionable message instead.
+        throw new Error(
+          `could not open ${url} — is the app running there? (${cleanNavError(err)})`,
+        );
+      }
       // Wait for the leased tab's SDK to connect so the returned sessionId is usable right away.
       const ready = await waitForLeasedSession(
         () => deps.sessions.get(lease.sessionId) !== undefined,
