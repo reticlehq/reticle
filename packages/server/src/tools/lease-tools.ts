@@ -49,6 +49,29 @@ function newLeaseId(): string {
   return `lease-${uuid}`;
 }
 
+const LEASE_READY_ATTEMPTS = 100;
+const LEASE_READY_POLL_MS = 100;
+const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Poll until the leased tab's SDK has actually registered on the bridge, so the sessionId we return
+ * is immediately usable (the page navigates first, then connects a moment later — without this wait
+ * an agent's very next call could race and hit "no connected session"). Returns whether it connected
+ * in time. `isConnected`, `sleeper`, and `attempts` are injected so this is fast to unit-test.
+ */
+export async function waitForLeasedSession(
+  isConnected: () => boolean,
+  sleeper: (ms: number) => Promise<void> = sleep,
+  attempts: number = LEASE_READY_ATTEMPTS,
+  pollMs: number = LEASE_READY_POLL_MS,
+): Promise<boolean> {
+  for (let i = 0; i < attempts; i++) {
+    if (isConnected()) return true;
+    await sleeper(pollMs);
+  }
+  return isConnected();
+}
+
 export const LEASE_TOOLS: ToolDef[] = [
   {
     name: IrisTool.LEASE_ACQUIRE,
@@ -68,8 +91,12 @@ export const LEASE_TOOLS: ToolDef[] = [
     outputSchema: {
       sessionId: z.string(),
       url: z.string(),
+      ready: z
+        .boolean()
+        .describe('Whether the leased tab connected — false ⇒ the app may not embed @syrin/iris.'),
       leased: z.number().describe('How many contexts are currently leased from the pool.'),
       queued: z.number().describe('How many acquires are waiting for a free slot.'),
+      hint: z.string().optional(),
     },
     handler: async (deps: ToolDeps, args) => {
       const pool = deps.pool;
@@ -81,11 +108,21 @@ export const LEASE_TOOLS: ToolDef[] = [
       const sessionId = newLeaseId();
       const navUrl = appendIrisParams(url, sessionId, projectId);
       const lease = await pool.acquire(navUrl, { sessionId });
+      // Wait for the leased tab's SDK to connect so the returned sessionId is usable right away.
+      const ready = await waitForLeasedSession(
+        () => deps.sessions.get(lease.sessionId) !== undefined,
+      );
       return {
         sessionId: lease.sessionId,
         url,
+        ready,
         leased: pool.activeCount(),
         queued: pool.queuedCount(),
+        ...(ready
+          ? {}
+          : {
+              hint: `leased tab did not connect — is ${url} running with @syrin/iris enabled?`,
+            }),
       };
     },
   },

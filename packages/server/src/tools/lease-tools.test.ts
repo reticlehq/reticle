@@ -5,7 +5,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { IRIS_URL_PARAM } from '@syrin/iris-protocol';
-import { LEASE_TOOLS, appendIrisParams } from './lease-tools.js';
+import { LEASE_TOOLS, appendIrisParams, waitForLeasedSession } from './lease-tools.js';
 import { IrisTool } from './tool-names.js';
 import type { ToolDeps } from './tool-kit.js';
 import type { BrowserPool, Lease } from '../pool/browser-pool.js';
@@ -43,7 +43,9 @@ function fakePool(): {
   return { pool, acquired };
 }
 
-const baseDeps = {} as ToolDeps;
+// A sessions stub where the leased tab is already "connected", so acquire's wait-for-ready resolves
+// immediately (no real polling) in the happy path.
+const baseDeps = { sessions: { get: () => ({ id: 'live' }) } } as unknown as ToolDeps;
 
 describe('appendIrisParams', () => {
   it('adds the namespaced session (and project) params to a normal url', () => {
@@ -63,8 +65,27 @@ describe('appendIrisParams', () => {
   });
 });
 
+describe('waitForLeasedSession', () => {
+  it('resolves true as soon as the tab is connected (no waiting)', async () => {
+    const sleeper = (): Promise<void> => Promise.reject(new Error('should not sleep'));
+    await expect(waitForLeasedSession(() => true, sleeper)).resolves.toBe(true);
+  });
+
+  it('polls then resolves true once the tab connects', async () => {
+    let calls = 0;
+    const connected = (): boolean => ++calls >= 3; // connects on the 3rd check
+    const noWait = (): Promise<void> => Promise.resolve();
+    await expect(waitForLeasedSession(connected, noWait, 10, 0)).resolves.toBe(true);
+  });
+
+  it('resolves false after exhausting attempts (app has no SDK)', async () => {
+    const noWait = (): Promise<void> => Promise.resolve();
+    await expect(waitForLeasedSession(() => false, noWait, 5, 0)).resolves.toBe(false);
+  });
+});
+
 describe('iris_lease_acquire', () => {
-  it('navigates to the app url with a stamped session and returns it', async () => {
+  it('navigates to the app url with a stamped session and returns it ready', async () => {
     const { pool, acquired } = fakePool();
     const result = (await tool(IrisTool.LEASE_ACQUIRE)(
       { ...baseDeps, pool },
@@ -72,10 +93,11 @@ describe('iris_lease_acquire', () => {
         url: 'http://localhost:3000/dashboard',
         projectId: 'acme',
       },
-    )) as { sessionId: string; url: string; leased: number };
+    )) as { sessionId: string; url: string; leased: number; ready: boolean };
 
     expect(result.sessionId).toMatch(/^lease-/);
     expect(result.url).toBe('http://localhost:3000/dashboard'); // clean url returned to the agent
+    expect(result.ready).toBe(true); // the wait-for-connect resolved
     expect(result.leased).toBe(1);
 
     // The pool was navigated to the identity-stamped url, correlated to the returned sessionId.
