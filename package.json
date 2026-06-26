@@ -20,7 +20,8 @@
     "bench:full": "node bench/harness/bench-all.mjs --full",
     "bench:gate": "node bench/harness/gate.mjs",
     "publish": "pnpm build && pnpm -r publish --access public --no-git-checks",
-    "publish:dry-run": "pnpm build && pnpm -r publish --access public --no-git-checks --dry-run"
+    "publish:dry-run": "pnpm build && pnpm -r publish --access public --no-git-checks --dry-run",
+    "test:integration": "vitest run --config vitest.integration.config.ts"
   },
   "pnpm": {
     "overrides": {
@@ -35,6 +36,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.18.0",
+    "@syrin/iris-server": "workspace:*",
     "@types/node": "^22.10.0",
     "@vitest/coverage-v8": "^3.2.6",
     "eslint": "^9.18.0",

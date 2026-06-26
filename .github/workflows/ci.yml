@@ -37,6 +37,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       - run: pnpm --filter @syrin/iris-e2e --fail-if-no-match exec playwright install --with-deps chromium
+      - name: Integration suite (real-Chromium BrowserPool tests)
+        run: pnpm test:integration
       - name: Run e2e battery (boots api+demo+next-smoke, drives Iris headless)
         run: pnpm --filter @syrin/iris-e2e --fail-if-no-match run e2e:ci
       - name: Upload server logs on failure
