@@ -2,8 +2,7 @@
 
 ## Reporting a vulnerability
 
-Please report security issues privately to **hey@syrin.ai** — do not open a public issue for an
-undisclosed vulnerability.
+Please report security issues privately to **hey@syrin.ai** — do not open a public issue for an undisclosed vulnerability.
 
 Include, where possible:
 
@@ -12,14 +11,11 @@ Include, where possible:
 - steps to reproduce (a minimal repro is ideal),
 - any suggested remediation.
 
-We aim to acknowledge reports within **2 business days** and to keep you updated as we investigate and
-fix. We'll credit reporters who wish to be named once a fix has shipped.
+We aim to acknowledge reports within **2 business days** and to keep you updated as we investigate and fix. We'll credit reporters who wish to be named once a fix has shipped.
 
 ## Scope
 
-Iris is **dev/preview-only** and **localhost-only** by design, and sends **no telemetry** — see
-[`docs/enterprise.md`](docs/enterprise.md) for the full data-handling posture. The most valuable reports
-concern anything that breaks those properties, for example:
+Iris is **dev/preview-only** and **localhost-only** by design, and sends **no telemetry** — see [`docs/enterprise.md`](docs/enterprise.md) for the full data-handling posture. The most valuable reports concern anything that breaks those properties, for example:
 
 - the browser SDK reaching a production bundle,
 - the server binding beyond `127.0.0.1` or bypassing the verify-endpoint token,

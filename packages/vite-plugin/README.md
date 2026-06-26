@@ -1,14 +1,10 @@
 # @syrin/iris-vite-plugin
 
-One-line Vite integration for [Iris](https://github.com/syrin-labs/iris). The plugin does the whole
-dev-time wiring for you:
+One-line Vite integration for [Iris](https://github.com/syrin-labs/iris). The plugin does the whole dev-time wiring for you:
 
-- **Source mapping** — stamps `data-iris-source="file:line:col"` on JSX host elements (via
-  [`@syrin/iris-babel-plugin`](https://www.npmjs.com/package/@syrin/iris-babel-plugin)) so
-  `iris_inspect` can report the component's source file — needed on React 19.
+- **Source mapping** — stamps `data-iris-source="file:line:col"` on JSX host elements (via [`@syrin/iris-babel-plugin`](https://www.npmjs.com/package/@syrin/iris-babel-plugin)) so `iris_inspect` can report the component's source file — needed on React 19.
 - **Auto-connect** — injects a dev-only `install(); iris.connect()` so you don't touch your entry file.
-- **Production-safe by construction** — `apply: 'serve'` means Vite drops the plugin entirely from
-  `vite build`. There is no env gate to forget; instrumentation cannot reach a production bundle.
+- **Production-safe by construction** — `apply: 'serve'` means Vite drops the plugin entirely from `vite build`. There is no env gate to forget; instrumentation cannot reach a production bundle.
 
 Usually installed via the umbrella package and imported from its `/vite` subpath:
 
@@ -27,8 +23,7 @@ export default defineConfig({
 });
 ```
 
-That is the entire integration — no entry-file edit, no Babel-plugin wiring, no env gating.
-`npx @syrin/iris init` adds this line for you automatically in a Vite project.
+That is the entire integration — no entry-file edit, no Babel-plugin wiring, no env gating. `npx @syrin/iris init` adds this line for you automatically in a Vite project.
 
 ## Options
 

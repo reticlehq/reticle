@@ -1,7 +1,6 @@
 # Getting Started with Iris
 
-This walks you from zero to your agent verifying your app — step by step, with real code for
-real frameworks. ~10 minutes.
+This walks you from zero to your agent verifying your app — step by step, with real code for real frameworks. ~10 minutes.
 
 - [What you're setting up](#what-youre-setting-up)
 - [Prerequisites](#prerequisites)
@@ -32,11 +31,9 @@ Three pieces, each tiny:
 
 It all ships in **one package, `@syrin/iris`**:
 
-1. **The MCP server** — your agent launches it with `npx @syrin/iris`; it hosts the tools _and_
-   the WebSocket bridge your app connects to. You don't run it by hand; the agent does.
+1. **The MCP server** — your agent launches it with `npx @syrin/iris`; it hosts the tools _and_ the WebSocket bridge your app connects to. You don't run it by hand; the agent does.
 2. **The SDK** — `import { iris } from '@syrin/iris'`, a few lines in your app's dev entry point.
-3. **(Optional) React adapter + source-mapping** — so `iris_inspect` can tell the agent which
-   component/file to edit (also in `@syrin/iris`).
+3. **(Optional) React adapter + source-mapping** — so `iris_inspect` can tell the agent which component/file to edit (also in `@syrin/iris`).
 
 Everything is **dev-only** and **localhost-only**. It's tree-shaken out of production builds.
 
@@ -58,31 +55,22 @@ npx @syrin/iris init
 
 It detects your framework, package manager, and React version, then:
 
-- **registers the Iris MCP server once, globally, for each agent you have installed** — Claude
-  Code (`claude mcp add iris -s user`) and/or Cursor (`~/.cursor/mcp.json`) — so every project on
-  this machine gets it; you never re-add it per project,
+- **registers the Iris MCP server once, globally, for each agent you have installed** — Claude Code (`claude mcp add iris -s user`) and/or Cursor (`~/.cursor/mcp.json`) — so every project on this machine gets it; you never re-add it per project,
 - installs `@syrin/iris` as a dev dependency,
-- **Vite:** adds the `iris()` plugin to your config — which wires source mapping _and_
-  `iris.connect()` for you, so there is nothing else to edit,
-- **Next / other:** creates the dev component and prints the exact `withIris` / mount / connect
-  snippets to paste (it never half-edits a build config).
+- **Vite:** adds the `iris()` plugin to your config — which wires source mapping _and_ `iris.connect()` for you, so there is nothing else to edit,
+- **Next / other:** creates the dev component and prints the exact `withIris` / mount / connect snippets to paste (it never half-edits a build config).
 
-The bridge + MCP server is a single process that serves all your projects, so it's registered at
-**user scope**, not in a per-project `.mcp.json`. Only the SDK (the `iris()` plugin / connect call)
-is added per project.
+The bridge + MCP server is a single process that serves all your projects, so it's registered at **user scope**, not in a per-project `.mcp.json`. Only the SDK (the `iris()` plugin / connect call) is added per project.
 
-Re-running is safe (already-registered/already-patched steps are skipped). Preview without writing
-via `npx @syrin/iris init --dry-run`. Flags: `--port N`, `--no-mcp`, `--no-install`, `--yes`.
+Re-running is safe (already-registered/already-patched steps are skipped). Preview without writing via `npx @syrin/iris init --dry-run`. Flags: `--port N`, `--no-mcp`, `--no-install`, `--yes`.
 
-Then restart your dev server and skip to [Step 4](#step-4--run-it--verify-the-connection). The
-manual steps below explain what `init` sets up, if you prefer to wire it yourself.
+Then restart your dev server and skip to [Step 4](#step-4--run-it--verify-the-connection). The manual steps below explain what `init` sets up, if you prefer to wire it yourself.
 
 ---
 
 ## Step 1 — Connect your coding agent (MCP), once
 
-You don't start the server manually — your agent starts it via MCP. Register Iris **once, at the
-user (global) scope** so every project picks it up — there's nothing to add per project.
+You don't start the server manually — your agent starts it via MCP. Register Iris **once, at the user (global) scope** so every project picks it up — there's nothing to add per project.
 
 **Claude Code** — one command:
 
@@ -90,8 +78,7 @@ user (global) scope** so every project picks it up — there's nothing to add pe
 claude mcp add iris -s user -- npx @syrin/iris mcp
 ```
 
-(`iris init` runs exactly this for you. `-s user` is what makes it global; drop it for a
-project-local registration instead.)
+(`iris init` runs exactly this for you. `-s user` is what makes it global; drop it for a project-local registration instead.)
 
 **Cursor** — add to your global `~/.cursor/mcp.json` (not per-project; `iris init` writes this for you):
 
@@ -103,19 +90,15 @@ project-local registration instead.)
 }
 ```
 
-Other MCP clients (Windsurf, Claude Desktop, …) use the same `command`/`args` shape. Restart
-the agent so it picks up the new server. When it launches Iris, the bridge starts listening
-on `ws://localhost:4400`.
+Other MCP clients (Windsurf, Claude Desktop, …) use the same `command`/`args` shape. Restart the agent so it picks up the new server. When it launches Iris, the bridge starts listening on `ws://localhost:4400`.
 
-> Want a different port? Set `IRIS_PORT` in the server `env` and pass the same URL to
-> `iris.connect({ url })` in Step 2.
+> Want a different port? Set `IRIS_PORT` in the server `env` and pass the same URL to `iris.connect({ url })` in Step 2.
 
 ---
 
 ## Step 2 — Embed the SDK in your app
 
-Install the one package as a dev dependency (it includes the SDK, React adapter, source-mapping
-plugins, the spec runner, and the MCP server):
+Install the one package as a dev dependency (it includes the SDK, React adapter, source-mapping plugins, the spec runner, and the MCP server):
 
 ```bash
 npm i -D @syrin/iris     # or: pnpm add -D @syrin/iris
@@ -125,8 +108,7 @@ Then call `iris.connect()` once, in dev only. Where you put it depends on your f
 
 ### Vite + React
 
-**Recommended — the Vite plugin (one line, does everything).** Add `iris()` to your
-`vite.config.ts`:
+**Recommended — the Vite plugin (one line, does everything).** Add `iris()` to your `vite.config.ts`:
 
 ```ts
 import { defineConfig } from 'vite';
@@ -138,9 +120,7 @@ export default defineConfig({
 });
 ```
 
-This injects `iris.connect()` for you _and_ handles React 19 source mapping (Step 3) — so there's
-no entry-file edit and no separate Babel setup. `apply: 'serve'` means it's dropped from
-`vite build` entirely, so it can never reach production. (This is exactly what `iris init` adds.)
+This injects `iris.connect()` for you _and_ handles React 19 source mapping (Step 3) — so there's no entry-file edit and no separate Babel setup. `apply: 'serve'` means it's dropped from `vite build` entirely, so it can never reach production. (This is exactly what `iris init` adds.)
 
 <details>
 <summary>Prefer to wire it by hand instead of the plugin?</summary>
@@ -165,8 +145,7 @@ createRoot(document.getElementById('root')!).render(
 );
 ```
 
-On React 19 you then also need the source-mapping Babel plugin from Step 3. The Vite plugin
-above bundles both, which is why it's the recommended path.
+On React 19 you then also need the source-mapping Babel plugin from Step 3. The Vite plugin above bundles both, which is why it's the recommended path.
 
 </details>
 
@@ -226,21 +205,13 @@ Or, with no build step, a script tag pointed at the bridge:
 </script>
 ```
 
-> **Want to watch the agent work?** Add `present: true` to `iris.connect()` for a glowing
-> border, a synthetic cursor that flies to targets, click/hover effects, and a narration HUD.
-> See [usage §16](usage.md#16-presenter-mode-narration--fake-clock-watch--control).
+> **Want to watch the agent work?** Add `present: true` to `iris.connect()` for a glowing border, a synthetic cursor that flies to targets, click/hover effects, and a narration HUD. See [usage §16](usage.md#16-presenter-mode-narration--fake-clock-watch--control).
 
 ### Running multiple apps at once
 
-It's common to have several apps open in dev — a few Next.js and React projects, or multiple tabs of
-the same app. Iris handles this cleanly **as long as each connection has a unique session id**, which
-is exactly what `SESSION_AUTO` gives you (a fresh id per tab). The examples above all use it, so you
-get this for free. When more than one app is connected, an Iris tool call targets the focused / most
-recently active one automatically, or you can pass an explicit `sessionId` to target a specific app.
+It's common to have several apps open in dev — a few Next.js and React projects, or multiple tabs of the same app. Iris handles this cleanly **as long as each connection has a unique session id**, which is exactly what `SESSION_AUTO` gives you (a fresh id per tab). The examples above all use it, so you get this for free. When more than one app is connected, an Iris tool call targets the focused / most recently active one automatically, or you can pass an explicit `sessionId` to target a specific app.
 
-**Two separate projects, fully isolated.** If you want each repo to have its own independent Iris
-bridge (separate sessions, separate `.iris/` workspace), give each project its own port. Set the same
-port in both the MCP server config and the app's connection:
+**Two separate projects, fully isolated.** If you want each repo to have its own independent Iris bridge (separate sessions, separate `.iris/` workspace), give each project its own port. Set the same port in both the MCP server config and the app's connection:
 
 ```jsonc
 // project-b/.mcp.json — give this project its own bridge port
@@ -260,17 +231,13 @@ port in both the MCP server config and the app's connection:
 iris.connect({ session: SESSION_AUTO, url: 'ws://localhost:4401/iris' });
 ```
 
-Project A stays on the default `4400`, project B on `4401` — they never touch each other. (A port that
-is already in use now fails fast with a clear error instead of hanging, so a misconfiguration is
-obvious.)
+Project A stays on the default `4400`, project B on `4401` — they never touch each other. (A port that is already in use now fails fast with a clear error instead of hanging, so a misconfiguration is obvious.)
 
 ---
 
 ## Step 3 — (React) component & source-file mapping
 
-This is optional but high-value: it lets `iris_inspect` map a DOM element back to the
-**React component and the source file:line** — so when the agent finds a problem, it knows
-which file to edit. (The React adapter ships with `@syrin/iris` — nothing extra to install.)
+This is optional but high-value: it lets `iris_inspect` map a DOM element back to the **React component and the source file:line** — so when the agent finds a problem, it knows which file to edit. (The React adapter ships with `@syrin/iris` — nothing extra to install.)
 
 ```ts
 import { install as installIrisReact } from '@syrin/iris';
@@ -279,10 +246,7 @@ if (import.meta.env.DEV) installIrisReact(); // call before iris.connect()
 
 **React ≤ 18:** that's all — it uses React's dev `_debugSource`.
 
-**React 19:** React removed `_debugSource`, so the source has to be stamped at build time.
-**If you added the `iris()` Vite plugin in Step 2, this is already handled — skip ahead.**
-Otherwise add the Babel plugin (also bundled in `@syrin/iris`, at `@syrin/iris/babel`) to stamp
-the source onto elements in dev:
+**React 19:** React removed `_debugSource`, so the source has to be stamped at build time. **If you added the `iris()` Vite plugin in Step 2, this is already handled — skip ahead.** Otherwise add the Babel plugin (also bundled in `@syrin/iris`, at `@syrin/iris/babel`) to stamp the source onto elements in dev:
 
 ```ts
 // vite.config.ts
@@ -294,10 +258,7 @@ export default defineConfig({
 });
 ```
 
-> **Next.js:** verified on **Next.js 15 / React 19 (app router, SWC)**. For source-file
-> mapping, use `@syrin/iris/next` instead of the Babel plugin — it adds a **dev-only webpack
-> pre-loader that keeps SWC** and stamps `data-iris-source` so `iris_inspect` returns
-> `file:line` (e.g. `app/page.tsx:30`):
+> **Next.js:** verified on **Next.js 15 / React 19 (app router, SWC)**. For source-file mapping, use `@syrin/iris/next` instead of the Babel plugin — it adds a **dev-only webpack pre-loader that keeps SWC** and stamps `data-iris-source` so `iris_inspect` returns `file:line` (e.g. `app/page.tsx:30`):
 >
 > ```js
 > // next.config.mjs
@@ -307,8 +268,7 @@ export default defineConfig({
 > export default irisNext.withIris(nextConfig); // no-op in production
 > ```
 >
-> Component identity works with or without it (Next's internal wrappers are filtered out so
-> you see your components, e.g. just `Page`).
+> Component identity works with or without it (Next's internal wrappers are filtered out so you see your components, e.g. just `Page`).
 
 ---
 
@@ -334,8 +294,7 @@ If the list is empty, see [Troubleshooting](#troubleshooting).
 
 Now just talk to your agent in plain language. For example:
 
-> "Add a 'Refresh' button to the header that re-fetches the dashboard data, then use Iris to
-> verify clicking it fires `GET /api/dashboard` and shows no console errors."
+> "Add a 'Refresh' button to the header that re-fetches the dashboard data, then use Iris to verify clicking it fires `GET /api/dashboard` and shows no console errors."
 
 What the agent does under the hood:
 
@@ -354,31 +313,23 @@ iris_assert({ timeout_ms: 2000, predicate: { allOf: [
 // → { pass: true }
 ```
 
-You get a real, evidence-backed answer — and if it fails, the agent sees the reason (e.g. the
-call 404'd, or a `TypeError` in `Dashboard.tsx:88`) and can fix it and re-check.
+You get a real, evidence-backed answer — and if it fails, the agent sees the reason (e.g. the call 404'd, or a `TypeError` in `Dashboard.tsx:88`) and can fix it and re-check.
 
-That's the whole loop. From here, the [Usage Guide](usage.md) covers every tool, the full
-predicate DSL, and a dozen real situations (login, long lists, eventual consistency, file
-uploads, LLM calls, regressions, and more).
+That's the whole loop. From here, the [Usage Guide](usage.md) covers every tool, the full predicate DSL, and a dozen real situations (login, long lists, eventual consistency, file uploads, LLM calls, regressions, and more).
 
 ---
 
 ## Step 6 — Make your app agent-legible (optional, high-leverage)
 
-The basics above work with zero app changes. These four additions make the agent dramatically
-faster and let it verify things the DOM can't express — they're what turn Iris from "usable"
-into "magic." All are dev-only.
+The basics above work with zero app changes. These four additions make the agent dramatically faster and let it verify things the DOM can't express — they're what turn Iris from "usable" into "magic." All are dev-only.
 
-**1. Stable `data-testid` on key elements.** Agents target testids more reliably than visible
-text (which changes with copy/i18n). Iris matches testids _exactly_.
+**1. Stable `data-testid` on key elements.** Agents target testids more reliably than visible text (which changes with copy/i18n). Iris matches testids _exactly_.
 
 ```tsx
 <button data-testid="refresh">Refresh</button>
 ```
 
-**2. `iris.signal` for off-DOM facts.** When something matters but isn't visible — a save
-committed, a webhook arrived, an edit applied, an LLM caption finished — emit a signal the
-agent can assert on. This is the single highest-value instrumentation.
+**2. `iris.signal` for off-DOM facts.** When something matters but isn't visible — a save committed, a webhook arrived, an edit applied, an LLM caption finished — emit a signal the agent can assert on. This is the single highest-value instrumentation.
 
 ```ts
 import { iris } from '@syrin/iris';
@@ -386,13 +337,9 @@ onSaved(() => iris.signal('order:saved', { id, total }));
 // agent: iris_assert({ predicate: { kind: 'signal', name: 'order:saved', dataMatches: { id: '*' } } })
 ```
 
-> **Recommended:** instead of importing `iris` into components, inject a `createIrisEmitter()`
-> emitter and pair each commit with `commitAndSignal(...)` so the mutation↔signal can't drift —
-> `iris.signal` stays the primitive underneath. See
-> [integration-patterns.md](integration-patterns.md).
+> **Recommended:** instead of importing `iris` into components, inject a `createIrisEmitter()` emitter and pair each commit with `commitAndSignal(...)` so the mutation↔signal can't drift — `iris.signal` stays the primitive underneath. See [integration-patterns.md](integration-patterns.md).
 
-**3. `registerStore` so the agent reads state directly.** No need to broadcast a signal for
-every fact — expose the store and the agent reads it via `iris_state`.
+**3. `registerStore` so the agent reads state directly.** No need to broadcast a signal for every fact — expose the store and the agent reads it via `iris_state`.
 
 ```ts
 import { registerStore } from '@syrin/iris';
@@ -412,19 +359,11 @@ registerCapabilities({
 // agent: iris_capabilities()  → the whole testable surface
 ```
 
-> **Multi-domain apps:** prefer `registerIrisDomain({ testids, signals, stores })` co-located in
-> one `iris.ts` per domain — each self-registers and `iris_capabilities()` assembles the union, so
-> there's no central map to forget. See [integration-patterns.md](integration-patterns.md).
+> **Multi-domain apps:** prefer `registerIrisDomain({ testids, signals, stores })` co-located in one `iris.ts` per domain — each self-registers and `iris_capabilities()` assembles the union, so there's no central map to forget. See [integration-patterns.md](integration-patterns.md).
 
-> Watch the agent work: pass `present: true` to `iris.connect()` for a glowing border, a
-> cursor that flies to targets, and a HUD; the agent can call `iris_narrate({ text })` to show
-> its intent. See [usage §16](usage.md#16-presenter-mode-narration--fake-clock-watch--control).
+> Watch the agent work: pass `present: true` to `iris.connect()` for a glowing border, a cursor that flies to targets, and a HUD; the agent can call `iris_narrate({ text })` to show its intent. See [usage §16](usage.md#16-presenter-mode-narration--fake-clock-watch--control).
 
-> **Hover-gated UI (tooltips, hover menus, pointer drag)?** Synthetic events can't trigger
-> native `onMouseEnter`. Enable **real input** by launching your browser with
-> `--remote-debugging-port=9222` and setting `IRIS_CDP_URL` in the MCP server `env` — Iris then
-> drives real pointer input and `iris_act` reports `inputMode:"real"`. See
-> [usage §18](usage.md#18-real-input-mode--native-hover--drag-m58).
+> **Hover-gated UI (tooltips, hover menus, pointer drag)?** Synthetic events can't trigger native `onMouseEnter`. Enable **real input** by launching your browser with `--remote-debugging-port=9222` and setting `IRIS_CDP_URL` in the MCP server `env` — Iris then drives real pointer input and `iris_act` reports `inputMode:"real"`. See [usage §18](usage.md#18-real-input-mode--native-hover--drag-m58).
 
 ---
 
@@ -432,15 +371,10 @@ registerCapabilities({
 
 Once the loop works, these turn ad-hoc runs into a maintained suite:
 
-- **[Flows, recorder & self-healing](flows.md)** — record a golden path once; Iris saves it to a
-  git-checked `.iris/` flow anchored on testid+signal, replays it (with legible drift), and
-  `iris_flow_heal` repairs renamed anchors.
-- **[Testing with `@syrin/iris-test`](testing.md)** — declarative `irisTest` specs you run
-  headless / in CI; flows can _become_ the specs.
-- **[Human-in-the-loop control](human-control.md)** — with `present: true`, pause / message /
-  end the agent from the floating panel.
-- **[Integration patterns](integration-patterns.md)** — the recommended zero-prod-bundle emit
-  adapter, store-layer signals, and incremental adoption.
+- **[Flows, recorder & self-healing](flows.md)** — record a golden path once; Iris saves it to a git-checked `.iris/` flow anchored on testid+signal, replays it (with legible drift), and `iris_flow_heal` repairs renamed anchors.
+- **[Testing with `@syrin/iris-test`](testing.md)** — declarative `irisTest` specs you run headless / in CI; flows can _become_ the specs.
+- **[Human-in-the-loop control](human-control.md)** — with `present: true`, pause / message / end the agent from the floating panel.
+- **[Integration patterns](integration-patterns.md)** — the recommended zero-prod-bundle emit adapter, store-layer signals, and incremental adoption.
 
 ---
 
@@ -448,11 +382,11 @@ Once the loop works, these turn ad-hoc runs into a maintained suite:
 
 Everything below comes from the single `@syrin/iris` install.
 
-| Stack                  | SDK connect                                | Source mapping                                          |
-| ---------------------- | ------------------------------------------ | ------------------------------------------------------- |
-| Vite + React (any)     | `iris()` plugin (auto) — or `connect()`    | `iris()` plugin handles it (incl. React 19)             |
-| Next.js (app router)   | `IrisDev` client component in layout (dev) | `@syrin/iris/next` (`withIris`) → component + file:line |
-| Vue / Svelte / vanilla | `iris.connect()` at boot (dev)             | core works; framework adapters on the roadmap           |
+| Stack | SDK connect | Source mapping |
+| --- | --- | --- |
+| Vite + React (any) | `iris()` plugin (auto) — or `connect()` | `iris()` plugin handles it (incl. React 19) |
+| Next.js (app router) | `IrisDev` client component in layout (dev) | `@syrin/iris/next` (`withIris`) → component + file:line |
+| Vue / Svelte / vanilla | `iris.connect()` at boot (dev) | core works; framework adapters on the roadmap |
 
 ---
 
@@ -460,16 +394,13 @@ Everything below comes from the single `@syrin/iris` install.
 
 **`iris_sessions` is empty / "no browser session connected"**
 
-- Run **`iris status`** — it shows whether the daemon is up and which tabs are connected (url, health,
-  pending flagged bugs) at a glance. No connected sessions means the SDK isn't reaching the bridge.
+- Run **`iris status`** — it shows whether the daemon is up and which tabs are connected (url, health, pending flagged bugs) at a glance. No connected sessions means the SDK isn't reaching the bridge.
 - Is your app actually running and open in a browser tab?
 - Is `iris.connect()` running? (Check it's inside your dev guard and the guard is true.)
-- Port mismatch? If you set `IRIS_PORT`, pass the same URL to
-  `iris.connect({ url: 'ws://localhost:<port>/iris' })`.
+- Port mismatch? If you set `IRIS_PORT`, pass the same URL to `iris.connect({ url: 'ws://localhost:<port>/iris' })`.
 - Need to restart the daemon? **`iris stop`** cleans it up — no `pkill` needed.
 
-The errors Iris returns to the agent now carry a `recovery` hint for this exact situation (and for
-multiple/unknown sessions, a throttled tab, a missing baseline) — so the agent knows the next move.
+The errors Iris returns to the agent now carry a `recovery` hint for this exact situation (and for multiple/unknown sessions, a throttled tab, a missing baseline) — so the agent knows the next move.
 
 **The agent can't find an element**
 
@@ -488,5 +419,4 @@ multiple/unknown sessions, a throttled tab, a missing baseline) — so the agent
 
 **Nothing should run in production**
 
-- Keep `iris.connect()` behind a dev guard (`import.meta.env.DEV` / `NODE_ENV`). The package
-  is side-effect free and tree-shakes out when unused.
+- Keep `iris.connect()` behind a dev guard (`import.meta.env.DEV` / `NODE_ENV`). The package is side-effect free and tree-shakes out when unused.

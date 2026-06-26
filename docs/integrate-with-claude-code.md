@@ -1,8 +1,6 @@
 # Integrate Iris with Claude Code (copy-paste prompts)
 
-Two prompts: **(A)** make a coding agent wire Iris into your app, and **(B)** make it _use_
-Iris to verify its own work. Paste them into Claude Code (or Cursor / any MCP agent) from your
-project root. They point the agent at the full docs so it figures out the specifics itself.
+Two prompts: **(A)** make a coding agent wire Iris into your app, and **(B)** make it _use_ Iris to verify its own work. Paste them into Claude Code (or Cursor / any MCP agent) from your project root. They point the agent at the full docs so it figures out the specifics itself.
 
 > Iris is **dev-only + localhost-only**. It never ships to production and no-ops outside dev.
 
@@ -10,8 +8,7 @@ project root. They point the agent at the full docs so it figures out the specif
 
 ## Prompt A — "Integrate Iris into this app"
 
-> ⚙️ Replace the registry line if you're on public npm (drop the `--registry`/`.npmrc` bits).
-> The version is **0.2.0+**.
+> ⚙️ Replace the registry line if you're on public npm (drop the `--registry`/`.npmrc` bits). The version is **0.2.0+**.
 
 ```text
 Integrate Iris (https://… or your local copy) into this app so you can verify your own UI work
@@ -67,8 +64,7 @@ what you wired, the testids/signals/stores you added, and paste the passing veri
 
 ## Prompt B — "Use Iris to verify your work" (operating loop)
 
-Paste this once per session (or put it in `CLAUDE.md` / a skill) so the agent self-verifies
-every UI change instead of guessing.
+Paste this once per session (or put it in `CLAUDE.md` / a skill) so the agent self-verifies every UI change instead of guessing.
 
 ```text
 This project has Iris wired (MCP server "iris"). After ANY UI change, verify it yourself before
@@ -103,10 +99,8 @@ asserting on volatile output. Report evidence, not prose.
 - [ ] the `iris` MCP server is registered (globally via `claude mcp add -s user`); `iris_sessions` shows the app connected.
 - [ ] `iris.connect()` is dev-gated; nothing Iris ships to prod.
 - [ ] React adapter installed + source mapping returns `file:line` from `iris_inspect`.
-- [ ] Key elements have `data-testid`; components depend on an injected `createIrisEmitter()`
-      emitter and commit points use `commitAndSignal(...)` so signals can't drift.
-- [ ] `registerCapabilities(...)` / per-domain `registerIrisDomain(...)` declare the surface;
-      `iris_capabilities()` returns it.
+- [ ] Key elements have `data-testid`; components depend on an injected `createIrisEmitter()` emitter and commit points use `commitAndSignal(...)` so signals can't drift.
+- [ ] `registerCapabilities(...)` / per-domain `registerIrisDomain(...)` declare the surface; `iris_capabilities()` returns it.
 - [ ] One real flow verified end-to-end with `iris_act_and_wait` (evidence + verdict pasted).
 
 ## Upgrading later
@@ -117,5 +111,4 @@ Iris is pre-1.0, so new tools land as minor bumps. Pull the latest explicitly:
 npm i -D @syrin/iris@latest
 ```
 
-(`npm update` alone won't cross a `0.x` minor — use `@latest`.) The full tool list lives in
-[usage.md](usage.md); the loop and predicate DSL are documented there too.
+(`npm update` alone won't cross a `0.x` minor — use `@latest`.) The full tool list lives in [usage.md](usage.md); the loop and predicate DSL are documented there too.

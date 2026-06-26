@@ -4,10 +4,7 @@
 
 ## What Iris is
 
-Iris gives AI coding agents **eyes** into a running web app — without screenshots. The app
-embeds a dev-only SDK that instruments the DOM, network, routing, console, animations, and
-framework state; a local bridge + MCP server exposes that as structured tools the agent
-uses to **look, act, observe, and assert**. See `plan/` for the full design (gitignored).
+Iris gives AI coding agents **eyes** into a running web app — without screenshots. The app embeds a dev-only SDK that instruments the DOM, network, routing, console, animations, and framework state; a local bridge + MCP server exposes that as structured tools the agent uses to **look, act, observe, and assert**. See `plan/` for the full design (gitignored).
 
 ## Monorepo layout
 
@@ -26,15 +23,11 @@ skill/                 — PUBLIC skill for users integrating Iris into their ow
 plan/                  — research/design docs + throwaway test harnesses (ALWAYS gitignored)
 ```
 
-This is **one git repo** at the root (pnpm + turbo monorepo). The TS library packages are
-strict TypeScript; `@syrin/iris-babel-plugin`/`@syrin/iris-next` are plain CJS tooling and `apps/api`/
-`apps/next-smoke` are local fixtures — all excluded from the build/lint/test gates.
+This is **one git repo** at the root (pnpm + turbo monorepo). The TS library packages are strict TypeScript; `@syrin/iris-babel-plugin`/`@syrin/iris-next` are plain CJS tooling and `apps/api`/ `apps/next-smoke` are local fixtures — all excluded from the build/lint/test gates.
 
 ## Service boundaries (who owns what)
 
-- **`@syrin/iris-protocol` is the contract.** Any message that crosses browser ↔ bridge ↔ agent
-  is defined there as a constant + zod schema. Browser and server depend on it; it depends
-  on nothing. Never inline a wire string in `browser` or `server` — add it to `protocol`.
+- **`@syrin/iris-protocol` is the contract.** Any message that crosses browser ↔ bridge ↔ agent is defined there as a constant + zod schema. Browser and server depend on it; it depends on nothing. Never inline a wire string in `browser` or `server` — add it to `protocol`.
 - **`@syrin/iris-browser` only touches the DOM/page.** It never imports Node APIs.
 - **`@syrin/iris-server` only runs in Node.** It never imports DOM APIs.
 - **`@syrin/iris-react` is optional enrichment.** Core must work without it.
@@ -54,19 +47,16 @@ strict TypeScript; `@syrin/iris-babel-plugin`/`@syrin/iris-next` are plain CJS t
 
 ## Naming conventions
 
-| Thing                | Convention                                        | Example                              |
-| -------------------- | ------------------------------------------------- | ------------------------------------ |
-| Package              | `@syrin/<kebab>`                                  | `@syrin/iris-browser`                |
-| File                 | kebab-case                                        | `ring-buffer.ts`                     |
-| Type / class         | PascalCase                                        | `RingBuffer`, `IrisEvent`            |
-| Variable / function  | camelCase                                         | `pushEvent`                          |
-| Constant object      | PascalCase + `as const`                           | `EventType`, `ActionType`            |
+| Thing | Convention | Example |
+| --- | --- | --- |
+| Package | `@syrin/<kebab>` | `@syrin/iris-browser` |
+| File | kebab-case | `ring-buffer.ts` |
+| Type / class | PascalCase | `RingBuffer`, `IrisEvent` |
+| Variable / function | camelCase | `pushEvent` |
+| Constant object | PascalCase + `as const` | `EventType`, `ActionType` |
 | React component file | PascalCase or `create-` prefix for creation flows | `App.tsx`, `create-session-view.tsx` |
-| `useX` function      | ONLY if it calls React hooks                      | else use `apply/build/get/handle`    |
+| `useX` function | ONLY if it calls React hooks | else use `apply/build/get/handle` |
 
 ## Pre/post-coding checklist
 
-**Before coding:** scan for existing code to reuse → identify the constants you'll need and
-add them first → write the failing test.
-**After coding:** refactor with tests green → check file < 500 lines → run
-`pnpm lint && pnpm typecheck && pnpm test:unit` → confirm no `any`, no free strings, no `console.log`.
+**Before coding:** scan for existing code to reuse → identify the constants you'll need and add them first → write the failing test. **After coding:** refactor with tests green → check file < 500 lines → run `pnpm lint && pnpm typecheck && pnpm test:unit` → confirm no `any`, no free strings, no `console.log`.

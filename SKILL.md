@@ -71,15 +71,15 @@ which zed       2>/dev/null && echo "zed"
 
 > For all other harnesses or manual control, follow the steps below. There is no single MCP config file all tools share. Each harness has its own file and schema. Write only the ones in `IRIS_HARNESSES`.
 
-| Tool        | File                                  | Root key             | Command format               | `type` needed?     |
-| ----------- | ------------------------------------- | -------------------- | ---------------------------- | ------------------ |
-| Claude Code | `~/.claude/claude_mcp_config.json`    | `mcpServers`         | `"command"` + `"args"` split | no                 |
-| OpenCode    | `opencode.json`                       | `mcp`                | `"command"` flat array       | `"local"` required |
-| Codex CLI   | `.codex/config.toml`                  | `[mcp_servers.iris]` | TOML `command` + `args`      | no                 |
-| Cursor      | `.cursor/mcp.json`                    | `mcpServers`         | `"command"` + `"args"` split | no                 |
-| Windsurf    | `~/.codeium/windsurf/mcp_config.json` | `mcpServers`         | `"command"` + `"args"` split | no                 |
-| VS Code     | `.vscode/mcp.json`                    | `"servers"`          | `"command"` + `"args"` split | no                 |
-| Zed         | `~/.config/zed/settings.json`         | `context_servers`    | `"command"` + `"args"` split | no                 |
+| Tool | File | Root key | Command format | `type` needed? |
+| --- | --- | --- | --- | --- |
+| Claude Code | `~/.claude/claude_mcp_config.json` | `mcpServers` | `"command"` + `"args"` split | no |
+| OpenCode | `opencode.json` | `mcp` | `"command"` flat array | `"local"` required |
+| Codex CLI | `.codex/config.toml` | `[mcp_servers.iris]` | TOML `command` + `args` | no |
+| Cursor | `.cursor/mcp.json` | `mcpServers` | `"command"` + `"args"` split | no |
+| Windsurf | `~/.codeium/windsurf/mcp_config.json` | `mcpServers` | `"command"` + `"args"` split | no |
+| VS Code | `.vscode/mcp.json` | `"servers"` | `"command"` + `"args"` split | no |
+| Zed | `~/.config/zed/settings.json` | `context_servers` | `"command"` + `"args"` split | no |
 
 **Claude Code** (user-level, default)
 

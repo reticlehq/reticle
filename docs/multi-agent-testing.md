@@ -43,10 +43,10 @@ This is the design target, and it needs no special setup:
 
 ## Knobs
 
-| Env                 | Default                        | Effect                                              |
-| ------------------- | ------------------------------ | --------------------------------------------------- |
-| `IRIS_MAX_CONTEXTS` | `min(8, cpus-1)`               | Max simultaneous leased headless contexts.          |
-| `IRIS_PORT`         | from `.iris.json`, else `4400` | Daemon port (rarely needed — discovery handles it). |
+| Env | Default | Effect |
+| --- | --- | --- |
+| `IRIS_MAX_CONTEXTS` | `min(8, cpus-1)` | Max simultaneous leased headless contexts. |
+| `IRIS_PORT` | from `.iris.json`, else `4400` | Daemon port (rarely needed — discovery handles it). |
 
 ## Why not just open many browsers?
 

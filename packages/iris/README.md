@@ -9,9 +9,7 @@
 
 <a href="https://github.com/syrin-labs/iris"><img src="https://cdn.jsdelivr.net/gh/syrin-labs/iris@main/assets/readme/hero.gif" alt="Iris catches a 401 your agent said was 'done' — pass:false with evidence, then a one-line fix to pass:true" width="760" /></a>
 
-[![npm](https://img.shields.io/npm/v/@syrin/iris?color=8b7bff&labelColor=15131f&logo=npm)](https://www.npmjs.com/package/@syrin/iris)
-[![downloads](https://img.shields.io/npm/dm/@syrin/iris?color=5fd9f5&labelColor=15131f)](https://www.npmjs.com/package/@syrin/iris)
-[![license](https://img.shields.io/badge/license-Apache--2.0%20%2B%20FSL-46d6a0?labelColor=15131f)](https://github.com/syrin-labs/iris/blob/main/LICENSE)
+[![npm](https://img.shields.io/npm/v/@syrin/iris?color=8b7bff&labelColor=15131f&logo=npm)](https://www.npmjs.com/package/@syrin/iris) [![downloads](https://img.shields.io/npm/dm/@syrin/iris?color=5fd9f5&labelColor=15131f)](https://www.npmjs.com/package/@syrin/iris) [![license](https://img.shields.io/badge/license-Apache--2.0%20%2B%20FSL-46d6a0?labelColor=15131f)](https://github.com/syrin-labs/iris/blob/main/LICENSE)
 
 **TypeScript · Model Context Protocol · React-first · dev-only · localhost-only · open-core (Apache-2.0 SDK + FSL server)**
 
@@ -23,16 +21,11 @@
 
 ## The problem: your agent has hands, but no eyes
 
-You ask your AI agent to build a feature. It edits the files, says _"done ✅"_ — and then **you** open the
-browser, click around, and find out it isn't. Every. Single. Time. The agent can't really check its own
-work, so you become its QA department. Screenshots are bad eyes: ~1,500+ tokens through a vision model,
-slow, non-deterministic, and **blind to everything non-visual** — the failed request, the console error,
-the route that didn't change, the webhook that never came.
+You ask your AI agent to build a feature. It edits the files, says _"done ✅"_ — and then **you** open the browser, click around, and find out it isn't. Every. Single. Time. The agent can't really check its own work, so you become its QA department. Screenshots are bad eyes: ~1,500+ tokens through a vision model, slow, non-deterministic, and **blind to everything non-visual** — the failed request, the console error, the route that didn't change, the webhook that never came.
 
 ## The idea: your app already knows what happened — let the agent ask
 
-Iris exposes your running app to your agent over **MCP** as a tight loop — **look → act → observe →
-assert** — and one call checks many things at once and comes back with proof:
+Iris exposes your running app to your agent over **MCP** as a tight loop — **look → act → observe → assert** — and one call checks many things at once and comes back with proof:
 
 ```jsonc
 // The agent clicked "Pay". Did the right things actually happen? One call, ~33 tokens, no screenshot:
@@ -53,8 +46,7 @@ Deterministic (structured events, not pixels), cheap (any model, no vision), and
 
 ## Quickstart
 
-**One install** — SDK, React adapter, source-mapping plugins, spec runner, and the MCP server all ship in
-a single package:
+**One install** — SDK, React adapter, source-mapping plugins, spec runner, and the MCP server all ship in a single package:
 
 ```bash
 npm i -D @syrin/iris
@@ -73,15 +65,11 @@ import { iris } from '@syrin/iris';
 if (import.meta.env.DEV) iris.connect({ session: 'my-app' });
 ```
 
-Run your app and ask your agent: _"add a logout button and verify it works with Iris."_
-→ [Full Getting Started walkthrough](https://github.com/syrin-labs/iris/blob/main/docs/getting-started.md).
+Run your app and ask your agent: _"add a logout button and verify it works with Iris."_ → [Full Getting Started walkthrough](https://github.com/syrin-labs/iris/blob/main/docs/getting-started.md).
 
 ## What it can verify
 
-API calls (`net`) · DOM changes · SPA navigation · console & errors (incl. "**no** errors") · animations ·
-app **signals** (webhooks, store commits, async jobs you surface via `iris.signal()`) · **regressions**
-(baseline now, diff later) · **source mapping** (DOM → React component → file:line). Plus an autonomous
-crawler. ~44 MCP tools in total.
+API calls (`net`) · DOM changes · SPA navigation · console & errors (incl. "**no** errors") · animations · app **signals** (webhooks, store commits, async jobs you surface via `iris.signal()`) · **regressions** (baseline now, diff later) · **source mapping** (DOM → React component → file:line). Plus an autonomous crawler. ~44 MCP tools in total.
 
 ## ~73× fewer tokens than feeding the agent the whole page
 
@@ -90,29 +78,17 @@ crawler. ~44 MCP tools in total.
 | Full accessibility-tree snapshot (e.g. Playwright MCP) |          ~7,300 |
 | **Iris verify loop** (query + observe + assert)        |        **~100** |
 
-The honest version: force Iris to dump the whole tree too and the gap is only ~1.8×. The 73× comes from
-**not needing the whole tree** — that's architectural.
-[Full methodology + caveats →](https://github.com/syrin-labs/iris/blob/main/docs/token-efficiency.md)
+The honest version: force Iris to dump the whole tree too and the gap is only ~1.8×. The 73× comes from **not needing the whole tree** — that's architectural. [Full methodology + caveats →](https://github.com/syrin-labs/iris/blob/main/docs/token-efficiency.md)
 
 ## Benchmarked two ways — a toy app and a real one — both published
 
 <img src="https://cdn.jsdelivr.net/gh/syrin-labs/iris@main/assets/readme/bench-two-apps.png" alt="On a controlled app Iris has the highest Verification Efficiency (12.3 vs 10.6 vs 7.0); on a real production dashboard Iris is the cheapest to observe (1,023 vs 1,357 vs 2,193 tokens)" width="820" />
 
-On a real production app (the [Syrin](https://syrin.ai) dashboard — React 19, auth, live data), Iris
-observed the authenticated app for **1,023 tokens vs Chrome DevTools MCP 1,357 vs Playwright MCP 2,193
-(2.1× leaner)** — and was the **only** tool that could assert login actually succeeded from the app's own
-signal (46 tok, un-fakeable) and read program state the DOM never shows. On the first uninstrumented pass
-it even caught two live `500`s the page completely hid (a missing DB migration). Full honest breakdown,
-including where Iris **loses** (true pixels, sites you don't own): [`docs/benchmarks.md`](https://github.com/syrin-labs/iris/blob/main/docs/benchmarks.md).
+On a real production app (the [Syrin](https://syrin.ai) dashboard — React 19, auth, live data), Iris observed the authenticated app for **1,023 tokens vs Chrome DevTools MCP 1,357 vs Playwright MCP 2,193 (2.1× leaner)** — and was the **only** tool that could assert login actually succeeded from the app's own signal (46 tok, un-fakeable) and read program state the DOM never shows. On the first uninstrumented pass it even caught two live `500`s the page completely hid (a missing DB migration). Full honest breakdown, including where Iris **loses** (true pixels, sites you don't own): [`docs/benchmarks.md`](https://github.com/syrin-labs/iris/blob/main/docs/benchmarks.md).
 
 ## How is this different?
 
-Everyone now gives agents _eyes_; **Iris gives agents a _verdict_.** Playwright/Cypress are scripted CI
-tests you write and maintain. Playwright MCP / Chrome DevTools MCP let an agent _drive_ a separate browser
-(token-heavy snapshots, no first-class assert/regression/source-map). Iris runs _inside_ your real running
-app (your session/auth), returns a verdict-with-evidence in ~100 tokens, sees what screenshots can't,
-catches silent regressions, and points at the file to fix. **They compose: drive with Playwright MCP,
-verify with Iris.**
+Everyone now gives agents _eyes_; **Iris gives agents a _verdict_.** Playwright/Cypress are scripted CI tests you write and maintain. Playwright MCP / Chrome DevTools MCP let an agent _drive_ a separate browser (token-heavy snapshots, no first-class assert/regression/source-map). Iris runs _inside_ your real running app (your session/auth), returns a verdict-with-evidence in ~100 tokens, sees what screenshots can't, catches silent regressions, and points at the file to fix. **They compose: drive with Playwright MCP, verify with Iris.**
 
 ---
 

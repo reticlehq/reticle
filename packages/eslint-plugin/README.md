@@ -1,9 +1,6 @@
 # @syrin/iris-eslint-plugin
 
-Keeps the Iris **signal layer self-enforcing**. When your store mutates user-visible state,
-an `iris.signal(...)` should fire so an agent can assert on the change off-DOM. This plugin
-makes "state changed ⇒ signal fired" a lint rule instead of a convention that rots. It pairs
-with the runtime `commitAndSignal(mutate, signal, data)` helper from `@syrin/iris-browser`.
+Keeps the Iris **signal layer self-enforcing**. When your store mutates user-visible state, an `iris.signal(...)` should fire so an agent can assert on the change off-DOM. This plugin makes "state changed ⇒ signal fired" a lint rule instead of a convention that rots. It pairs with the runtime `commitAndSignal(mutate, signal, data)` helper from `@syrin/iris-browser`.
 
 ## Install
 
@@ -35,8 +32,7 @@ export default [
 ];
 ```
 
-Shortcut: enable the bundled `recommended` config (turns the rule on at `warn` with no-op
-defaults until you configure `mutators`):
+Shortcut: enable the bundled `recommended` config (turns the rule on at `warn` with no-op defaults until you configure `mutators`):
 
 ```js
 import iris from '@syrin/iris-eslint-plugin';
@@ -46,8 +42,7 @@ export default [iris.configs.recommended];
 
 ## Rule: `require-signal-on-mutation`
 
-Flags a function (declaration, expression, or arrow) that calls a configured **mutator** but
-never calls the configured **signal callee** anywhere in that **same** function body.
+Flags a function (declaration, expression, or arrow) that calls a configured **mutator** but never calls the configured **signal callee** anywhere in that **same** function body.
 
 Report message: `store mutation without a mapped Iris signal`.
 
@@ -55,21 +50,16 @@ Report message: `store mutation without a mapped Iris signal`.
 
 `options[0]`:
 
-| Option         | Type                 | Default                    | Meaning                                             |
-| -------------- | -------------------- | -------------------------- | --------------------------------------------------- |
-| `mutators`     | `string[]`           | `[]`                       | Callee names that mutate user-visible state.        |
+| Option | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `mutators` | `string[]` | `[]` | Callee names that mutate user-visible state. |
 | `signalCallee` | `string \| string[]` | `['irisSignal', 'signal']` | Callee name(s) that count as firing an Iris signal. |
 
-With no options, `mutators` is empty, so the rule is a safe **no-op** (it never fires and
-never crashes). Configure `mutators` to switch it on.
+With no options, `mutators` is empty, so the rule is a safe **no-op** (it never fires and never crashes). Configure `mutators` to switch it on.
 
 ### Scoping — per function
 
-Signal-credit is **per function**. A signal called in an enclosing or inner function does
-**not** satisfy a mutator called in a different function. Pair the mutation and the signal in
-the same body (which is exactly what `commitAndSignal(mutate, signal, data)` does). This is
-deliberate: a signal fired in some other scope is not guaranteed to run for the mutation path
-that drifted.
+Signal-credit is **per function**. A signal called in an enclosing or inner function does **not** satisfy a mutator called in a different function. Pair the mutation and the signal in the same body (which is exactly what `commitAndSignal(mutate, signal, data)` does). This is deliberate: a signal fired in some other scope is not guaranteed to run for the mutation path that drifted.
 
 ### Matching — by name
 
@@ -97,7 +87,4 @@ function commit() {
 
 ## How it fits the workflow
 
-The runtime side advertises signals via `registerCapabilities({ signals: [...] })` (G5) and
-fires them with `iris.signal(name, data)`. P5b centralizes that in a Zustand `signalMap` /
-`commitAndSignal` pair. This lint rule is the **static** counterpart that guards those pairs
-so the signal map can't silently fall behind the store.
+The runtime side advertises signals via `registerCapabilities({ signals: [...] })` (G5) and fires them with `iris.signal(name, data)`. P5b centralizes that in a Zustand `signalMap` / `commitAndSignal` pair. This lint rule is the **static** counterpart that guards those pairs so the signal map can't silently fall behind the store.

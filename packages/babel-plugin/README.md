@@ -1,8 +1,6 @@
 # @syrin/iris-babel-plugin
 
-Stamps `data-iris-source="file:line:col"` on JSX host elements so
-[`@syrin/iris-react`](https://www.npmjs.com/package/@syrin/iris-react) can map a DOM node back to its
-**source file** — needed on React 19, which removed `_debugSource`. Dev-only.
+Stamps `data-iris-source="file:line:col"` on JSX host elements so [`@syrin/iris-react`](https://www.npmjs.com/package/@syrin/iris-react) can map a DOM node back to its **source file** — needed on React 19, which removed `_debugSource`. Dev-only.
 
 ```bash
 npm i -D @syrin/iris-babel-plugin
@@ -25,5 +23,4 @@ export default defineConfig({
 module.exports = { plugins: [require('@syrin/iris-babel-plugin').default] };
 ```
 
-After this, `iris_inspect` returns `component.source = { file, line, column }`. Only host
-elements (`<div>`, `<button>`, …) are stamped; components are left untouched. MIT.
+After this, `iris_inspect` returns `component.source = { file, line, column }`. Only host elements (`<div>`, `<button>`, …) are stamped; components are left untouched. MIT.

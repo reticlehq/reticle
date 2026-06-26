@@ -9,12 +9,7 @@
 
 <a href="https://syrin.ai/iris"><img src="assets/readme/demo-montage.webp" alt="Iris in action, an AI agent verifying a real running app from the inside: pass/fail verdicts with evidence, the file:line to fix, and a regression caught before it shipped" width="840" /></a>
 
-[![npm](https://img.shields.io/npm/v/@syrin/iris?color=8b7bff&labelColor=15131f&logo=npm)](https://www.npmjs.com/package/@syrin/iris)
-[![downloads](https://img.shields.io/npm/dm/@syrin/iris?color=5fd9f5&labelColor=15131f)](https://www.npmjs.com/package/@syrin/iris)
-[![stars](https://img.shields.io/github/stars/syrin-labs/iris?color=ff9f87&labelColor=15131f&logo=github)](https://github.com/syrin-labs/iris/stargazers)
-[![forks](https://img.shields.io/github/forks/syrin-labs/iris?color=a594ff&labelColor=15131f&logo=github)](https://github.com/syrin-labs/iris/network/members)
-[![license](https://img.shields.io/badge/license-Apache--2.0%20%2B%20FSL-46d6a0?labelColor=15131f)](LICENSE)
-[![types](https://img.shields.io/npm/types/@syrin/iris?color=5fd9f5&labelColor=15131f)](https://www.npmjs.com/package/@syrin/iris)
+[![npm](https://img.shields.io/npm/v/@syrin/iris?color=8b7bff&labelColor=15131f&logo=npm)](https://www.npmjs.com/package/@syrin/iris) [![downloads](https://img.shields.io/npm/dm/@syrin/iris?color=5fd9f5&labelColor=15131f)](https://www.npmjs.com/package/@syrin/iris) [![stars](https://img.shields.io/github/stars/syrin-labs/iris?color=ff9f87&labelColor=15131f&logo=github)](https://github.com/syrin-labs/iris/stargazers) [![forks](https://img.shields.io/github/forks/syrin-labs/iris?color=a594ff&labelColor=15131f&logo=github)](https://github.com/syrin-labs/iris/network/members) [![license](https://img.shields.io/badge/license-Apache--2.0%20%2B%20FSL-46d6a0?labelColor=15131f)](LICENSE) [![types](https://img.shields.io/npm/types/@syrin/iris?color=5fd9f5&labelColor=15131f)](https://www.npmjs.com/package/@syrin/iris)
 
 </div>
 
@@ -153,15 +148,15 @@ iris_assert({
 
 A screenshot sees pixels. The DOM sees markup. **Iris sees the program**, so it catches the bugs that _look_ fine on screen:
 
-| The bug                                                     | Looks fine on screen? | Iris catches it because it reads…            |
-| ----------------------------------------------------------- | --------------------- | -------------------------------------------- |
-| Pay button silently returns **500**                         | Yes                   | the **network** response, tied to the click  |
-| A **console error** slipped in, UI still renders            | Yes                   | the **console** stream since the action      |
-| The form fired the request **twice** (double-submit)        | Yes                   | request **cardinality** (`net { count: 1 }`) |
-| The badge shows "12" but the **store** holds 0 (UI lies)    | Yes                   | the app's **state**, not the rendered number |
-| A click corrupted **unrelated** data on another screen      | Yes                   | a **state invariant** (blast-radius)         |
-| The component re-renders **60×/sec** with no visible change | Yes                   | the **React commit** stream                  |
-| "Deploy succeeded" but the deploy actually **failed**       | Yes                   | the store's **real** status                  |
+| The bug | Looks fine on screen? | Iris catches it because it reads… |
+| --- | --- | --- |
+| Pay button silently returns **500** | Yes | the **network** response, tied to the click |
+| A **console error** slipped in, UI still renders | Yes | the **console** stream since the action |
+| The form fired the request **twice** (double-submit) | Yes | request **cardinality** (`net { count: 1 }`) |
+| The badge shows "12" but the **store** holds 0 (UI lies) | Yes | the app's **state**, not the rendered number |
+| A click corrupted **unrelated** data on another screen | Yes | a **state invariant** (blast-radius) |
+| The component re-renders **60×/sec** with no visible change | Yes | the **React commit** stream |
+| "Deploy succeeded" but the deploy actually **failed** | Yes | the store's **real** status |
 
 > Most of these are **impossible** for any out-of-the-browser tool to detect: the truth never reaches the DOM.
 
@@ -171,14 +166,14 @@ A screenshot sees pixels. The DOM sees markup. **Iris sees the program**, so it 
 
 Every team has acceptance criteria and "I just eyeball it" steps that never became tests. A test case maps almost **1:1** to an Iris check:
 
-| Your test case (plain English)                  | Iris check                                                     |
-| ----------------------------------------------- | -------------------------------------------------------------- |
+| Your test case (plain English) | Iris check |
+| --- | --- |
 | "Login with valid creds lands on the dashboard" | `net /api/login 200` **and** `element tab "Dashboard" visible` |
-| "Deleting an item removes it from the list"     | `element {text, scope: list}` **absent**                       |
-| "Submitting shows a success toast"              | `text "Saved" visible`                                         |
-| "Paying actually charges the customer"          | `signal "order:saved"` **and** `net /api/charge 200`           |
-| "Checkout fires exactly one charge"             | `net /api/charge { count: 1 }`                                 |
-| "No console errors on checkout"                 | `console level:error absent`                                   |
+| "Deleting an item removes it from the list" | `element {text, scope: list}` **absent** |
+| "Submitting shows a success toast" | `text "Saved" visible` |
+| "Paying actually charges the customer" | `signal "order:saved"` **and** `net /api/charge 200` |
+| "Checkout fires exactly one charge" | `net /api/charge { count: 1 }` |
+| "No console errors on checkout" | `console level:error absent` |
 
 Record a flow once; Iris **replays it deterministically on every edit**. Your CI Playwright suite still gates releases, but Iris is the checklist your agent runs _while it codes_, including the long tail nobody ever automated.
 
@@ -239,14 +234,14 @@ Being inside the page costs real browser-level fidelity. These are genuine compe
 
 ## When to use Iris vs Playwright and DevTools
 
-| You are…                                                            | Reach for                         | Because                                                                       |
-| ------------------------------------------------------------------- | --------------------------------- | ----------------------------------------------------------------------------- |
-| an **agent building a React/Next app you own**, verifying each edit | **Iris**                          | in-loop, ~100 tok/check, sees state + `file:line`, refuses destructive clicks |
-| running a **regression suite on every commit / in CI**              | **Iris**                          | deterministic replay: 0% flake, 128–2574× cheaper than re-driving with an LLM |
-| chasing a bug whose truth is **in state, not the DOM**              | **Iris**                          | desync, double-submit, side-effects, silent errors, no DOM tool sees these    |
-| testing a **third-party site** / **many browsers** / **real input** | **Playwright**                    | Iris can't instrument code you don't ship, or drive other engines             |
-| verifying **true pixels** (visual regression)                       | **Playwright** (or Iris _driven_) | a screenshot is the rendered frame; Iris's always-on read is computed-style   |
-| debugging **protocol-level** network/perf on any site               | **DevTools**                      | DevTools MCP speaks raw CDP                                                   |
+| You are… | Reach for | Because |
+| --- | --- | --- |
+| an **agent building a React/Next app you own**, verifying each edit | **Iris** | in-loop, ~100 tok/check, sees state + `file:line`, refuses destructive clicks |
+| running a **regression suite on every commit / in CI** | **Iris** | deterministic replay: 0% flake, 128–2574× cheaper than re-driving with an LLM |
+| chasing a bug whose truth is **in state, not the DOM** | **Iris** | desync, double-submit, side-effects, silent errors, no DOM tool sees these |
+| testing a **third-party site** / **many browsers** / **real input** | **Playwright** | Iris can't instrument code you don't ship, or drive other engines |
+| verifying **true pixels** (visual regression) | **Playwright** (or Iris _driven_) | a screenshot is the rendered frame; Iris's always-on read is computed-style |
+| debugging **protocol-level** network/perf on any site | **DevTools** | DevTools MCP speaks raw CDP |
 
 > **Rule of thumb:** own the app + an agent is building it → Iris is your cheap, deterministic, state-aware inner loop. Driving someone else's site, many engines, or true pixels → Playwright/DevTools. **Plenty of teams use both.**
 
@@ -328,13 +323,13 @@ if (import.meta.env.DEV) iris.connect({ session: 'my-app' });
 
 A pnpm + turbo monorepo. One umbrella package (`@syrin/iris`) re-exports everything:
 
-| Package                                         | Role                                                                   |
-| ----------------------------------------------- | ---------------------------------------------------------------------- |
-| `@syrin/iris-protocol`                          | the wire contract (zod schemas, constants)                             |
-| `@syrin/iris-browser`                           | the dev-only instrumentation SDK (DOM/network/console/state observers) |
-| `@syrin/iris-server`                            | the bridge + MCP server + the `iris` CLI                               |
-| `@syrin/iris-react`                             | React adapter, DOM ref → component → source `file:line`                |
-| `@syrin/iris-babel-plugin` / `@syrin/iris-next` | stamp source coordinates (React 19 / Next.js)                          |
+| Package | Role |
+| --- | --- |
+| `@syrin/iris-protocol` | the wire contract (zod schemas, constants) |
+| `@syrin/iris-browser` | the dev-only instrumentation SDK (DOM/network/console/state observers) |
+| `@syrin/iris-server` | the bridge + MCP server + the `iris` CLI |
+| `@syrin/iris-react` | React adapter, DOM ref → component → source `file:line` |
+| `@syrin/iris-babel-plugin` / `@syrin/iris-next` | stamp source coordinates (React 19 / Next.js) |
 
 ## Status & safety
 
@@ -374,5 +369,4 @@ Iris uses a per-package license model so it is safe to embed in your own app and
 
 OEM, embedding, or commercial licensing questions: **hey@syrin.ai**
 
-© 2026 Syrin Labs
-</content>
+© 2026 Syrin Labs </content>
