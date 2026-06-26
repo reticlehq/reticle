@@ -4,11 +4,48 @@
  * access goes through `InitIo` so the orchestration is unit-testable with an in-memory IO.
  */
 
+import { dirname, join } from 'node:path';
 import { detect, Framework, type DetectInput } from './detect.js';
 import { buildPlan, StepStatus, type Plan, type PlanInput } from './plan.js';
 import { claudeAvailableProbe, claudeExistsProbe } from './mcp.js';
 import { CURSOR_DIR_RELPATH, CURSOR_MCP_RELPATH } from './cursor.js';
 import { deriveProjectId, packageName } from './project-id.js';
+
+/** Lockfile basenames, in package-manager preference order (mirrors detect.ts). */
+const LOCKFILE_NAMES = [
+  'pnpm-lock.yaml',
+  'yarn.lock',
+  'bun.lockb',
+  'bun.lock',
+  'package-lock.json',
+] as const;
+
+/**
+ * Resolve the lockfiles set used to pick the package manager. A lockfile in the project root wins;
+ * otherwise we walk UP the directory tree (monorepos keep the lockfile at the workspace root, not in
+ * each package) so `iris init` in a sub-package suggests `pnpm add` instead of defaulting to `npm i`.
+ */
+export function resolveLockfiles(
+  rootFiles: ReadonlySet<string>,
+  cwd: string,
+  io: Pick<InitIo, 'exists'>,
+): Set<string> {
+  const set = new Set(rootFiles);
+  if (LOCKFILE_NAMES.some((name) => set.has(name))) return set; // local lockfile is authoritative
+  let dir = cwd;
+  for (let depth = 0; depth < 50; depth++) {
+    for (const name of LOCKFILE_NAMES) {
+      if (io.exists(join(dir, name))) {
+        set.add(name);
+        return set;
+      }
+    }
+    const parent = dirname(dir);
+    if (parent === dir) break; // filesystem root
+    dir = parent;
+  }
+  return set;
+}
 
 const PACKAGE_JSON = 'package.json';
 const NEXT_IRIS_DEV = 'app/iris-dev.tsx';
@@ -76,7 +113,8 @@ function gatherPlanInput(options: InitOptions, io: InitIo, pkgRaw: string): Plan
   const detectInput: DetectInput = {
     pkg: typeof pkg === 'object' && pkg !== null ? pkg : {},
     configFiles: rootFiles,
-    lockfiles: rootFiles,
+    // Walk up for the lockfile so a monorepo sub-package picks the workspace's package manager.
+    lockfiles: resolveLockfiles(rootFiles, options.cwd, io),
   };
   const detection = detect(detectInput);
 

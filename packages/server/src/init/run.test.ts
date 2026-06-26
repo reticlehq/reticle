@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { runInit, type InitIo, type InitOptions } from './run.js';
+import { runInit, resolveLockfiles, type InitIo, type InitOptions } from './run.js';
 
 interface MemoryIo extends InitIo {
   written: Record<string, string>;
@@ -43,6 +43,34 @@ function memoryIo(files: Record<string, string>, opts: MemoryOpts = {}): MemoryI
     print: (l) => lines.push(l),
   };
 }
+
+describe('resolveLockfiles — package-manager detection in a monorepo', () => {
+  it('walks up to the workspace-root lockfile when the sub-package has none', () => {
+    const io = { exists: (p: string) => p === '/repo/pnpm-lock.yaml' };
+    const set = resolveLockfiles(
+      new Set(['package.json', 'vite.config.ts']),
+      '/repo/apps/demo',
+      io,
+    );
+    expect(set.has('pnpm-lock.yaml')).toBe(true);
+  });
+
+  it('a local lockfile wins and short-circuits the walk', () => {
+    const io = {
+      exists: (): boolean => {
+        throw new Error('should not walk when a local lockfile exists');
+      },
+    };
+    const set = resolveLockfiles(new Set(['package-lock.json']), '/x/y', io);
+    expect(set.has('package-lock.json')).toBe(true);
+  });
+
+  it('falls back to just the root files when no lockfile exists anywhere', () => {
+    const io = { exists: (): boolean => false };
+    const set = resolveLockfiles(new Set(['package.json']), '/x/y', io);
+    expect([...set]).toEqual(['package.json']);
+  });
+});
 
 const OPTS: InitOptions = {
   cwd: '/app',
