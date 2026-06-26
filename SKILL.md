@@ -14,15 +14,13 @@ cat .iris.json 2>/dev/null || echo "NOT_FOUND"
 
 # SETUP MODE
 
-> Run this once per project. Writes config files, installs the SDK, and validates the
-> connection. After setup, every subsequent `/iris` goes straight to Test mode.
+> Run this once per project. Writes config files, installs the SDK, and validates the connection. After setup, every subsequent `/iris` goes straight to Test mode.
 
 ## Step 0 — Ask these questions before doing anything
 
 Ask ALL of them in a single message. Do not start installing until you have the answers.
 
-**Before asking Q5**, run the detection commands below to pre-fill a suggestion — but always
-confirm with the user, because they may plan to use a tool that isn't installed yet.
+**Before asking Q5**, run the detection commands below to pre-fill a suggestion — but always confirm with the user, because they may plan to use a tool that isn't installed yet.
 
 ```bash
 which claude    2>/dev/null && echo "claude-code"
@@ -69,12 +67,9 @@ which zed       2>/dev/null && echo "zed"
 
 ## Step 1 — Configure the MCP server
 
-> **Fast path (Claude Code + Vite or Next.js):** Run `npx @syrin/iris init --port <Q3 answer>`.
-> This handles Steps 1–4 automatically for Claude Code and Cursor. Jump to Step 4 to validate.
+> **Fast path (Claude Code + Vite or Next.js):** Run `npx @syrin/iris init --port <Q3 answer>`. This handles Steps 1–4 automatically for Claude Code and Cursor. Jump to Step 4 to validate.
 
-> For all other harnesses or manual control, follow the steps below.
-> There is no single MCP config file all tools share. Each harness has its own file and
-> schema. Write only the ones in `IRIS_HARNESSES`.
+> For all other harnesses or manual control, follow the steps below. There is no single MCP config file all tools share. Each harness has its own file and schema. Write only the ones in `IRIS_HARNESSES`.
 
 | Tool        | File                                  | Root key             | Command format               | `type` needed?     |
 | ----------- | ------------------------------------- | -------------------- | ---------------------------- | ------------------ |
@@ -96,8 +91,7 @@ claude mcp add iris -s user -- npx @syrin/iris mcp
 
 Confirm with `claude mcp list` — `iris` should appear. Tell user to reload Claude Code (`/mcp` to refresh).
 
-**If the `claude` CLI is unavailable**, fall back to writing `~/.claude/claude_mcp_config.json`
-(create if missing, merge `"iris"` if it exists):
+**If the `claude` CLI is unavailable**, fall back to writing `~/.claude/claude_mcp_config.json` (create if missing, merge `"iris"` if it exists):
 
 ```jsonc
 {
@@ -193,13 +187,9 @@ MCP tools only appear in Copilot **Agent mode**.
 
 ## Step 1b — Stop hook (Claude Code only — skip unless asked)
 
-**Do not add this hook by default.** Killing the daemon after every turn is the most common cause of
-the "Failed to reconnect to iris: -32000" error: the daemon is stopped, Claude Code immediately
-reconnects, and the new daemon sometimes takes longer than expected to boot — the proxy times out and
-exits with code 1, which Claude Code reports as -32000.
+**Do not add this hook by default.** Killing the daemon after every turn is the most common cause of the "Failed to reconnect to iris: -32000" error: the daemon is stopped, Claude Code immediately reconnects, and the new daemon sometimes takes longer than expected to boot — the proxy times out and exits with code 1, which Claude Code reports as -32000.
 
-Iris doesn't need the hook. `iris_yield` (mandatory — see Rules) signals turn end in-band, and the
-server flips the panel to "waiting" automatically if the agent goes quiet.
+Iris doesn't need the hook. `iris_yield` (mandatory — see Rules) signals turn end in-band, and the server flips the panel to "waiting" automatically if the agent goes quiet.
 
 Only add this if the user explicitly asks for the daemon to stop between turns:
 
@@ -220,10 +210,7 @@ Only add this if the user explicitly asks for the daemon to stop between turns:
 
 ## Step 2 — Install the SDK
 
-> **Mental model:** The user keeps running their dev server (`npm run dev`) themselves.
-> Syrin Iris embeds a tiny SDK in the app that connects to a local bridge daemon.
-> The agent talks to the daemon over MCP — no Chromium is downloaded or needed for
-> standard agent workflows. Playwright is only required if you explicitly use `--drive` mode.
+> **Mental model:** The user keeps running their dev server (`npm run dev`) themselves. Syrin Iris embeds a tiny SDK in the app that connects to a local bridge daemon. The agent talks to the daemon over MCP — no Chromium is downloaded or needed for standard agent workflows. Playwright is only required if you explicitly use `--drive` mode.
 
 ```bash
 npm install --save-dev @syrin/iris    # swap npm for pnpm/yarn/bun per Q2
@@ -301,8 +288,7 @@ import { withIris } from '@syrin/iris/next';
 export default withIris(nextConfig);
 ```
 
-**Other frameworks** — call `iris.connect()` and `install()` inside a dev guard.
-Vanilla / HTML: use a dynamic `import('@syrin/iris')` inside `if (location.hostname === 'localhost')`.
+**Other frameworks** — call `iris.connect()` and `install()` inside a dev guard. Vanilla / HTML: use a dynamic `import('@syrin/iris')` inside `if (location.hostname === 'localhost')`.
 
 ---
 
@@ -323,14 +309,11 @@ If setting up manually, write `.iris.json` to the project root (commit this — 
 }
 ```
 
-Fill in framework from Q1, port from Q3. Omit `port` if using the default (4400). Each project
-should have its own port so multiple apps can run Syrin Iris simultaneously without conflicts.
+Fill in framework from Q1, port from Q3. Omit `port` if using the default (4400). Each project should have its own port so multiple apps can run Syrin Iris simultaneously without conflicts.
 
 Tell the user: **"Run `npm run dev` (your normal dev server) and open the app in your browser."**
 
-Once they confirm the app is open, call `iris_wait_ready()` then `iris_sessions()`. You should see a
-session whose URL matches the app's localhost address. If no session appears after a few seconds, the
-SDK is not yet wired — confirm Step 3 was applied and the page has been refreshed.
+Once they confirm the app is open, call `iris_wait_ready()` then `iris_sessions()`. You should see a session whose URL matches the app's localhost address. If no session appears after a few seconds, the SDK is not yet wired — confirm Step 3 was applied and the page has been refreshed.
 
 When a session is confirmed, tell the user:
 
@@ -344,22 +327,17 @@ When a session is confirmed, tell the user:
 
 # TEST MODE
 
-> Runs automatically when `.iris.json` exists. Connects to the running app, exercises
-> flows, asserts outcomes, and reports what passed and what broke.
+> Runs automatically when `.iris.json` exists. Connects to the running app, exercises flows, asserts outcomes, and reports what passed and what broke.
 
 ## Phase 1 — Connect
 
-Just ran `iris init` or started the dev server? Call **`iris_wait_ready()`** first — it blocks until
-the app's SDK connects (returns instantly if it already has), so your first real call doesn't lose the
-race with the WebSocket. Then call `iris_sessions()`. Three possible states:
+Just ran `iris init` or started the dev server? Call **`iris_wait_ready()`** first — it blocks until the app's SDK connects (returns instantly if it already has), so your first real call doesn't lose the race with the WebSocket. Then call `iris_sessions()`. Three possible states:
 
 **A. One session → proceed.**
 
-**B. No sessions:**
-Tell the user:
+**B. No sessions:** Tell the user:
 
-> "No app connected. Run your dev server (`npm run dev`) and open the app in your browser, then try `/iris` again. Syrin Iris never starts the dev server for you — that's your job."
-> Stop here.
+> "No app connected. Run your dev server (`npm run dev`) and open the app in your browser, then try `/iris` again. Syrin Iris never starts the dev server for you — that's your job." Stop here.
 
 **C. Multiple sessions — ask:**
 
@@ -441,8 +419,7 @@ Flag anything that throws a console error or triggers a `status >= 400` network 
 
 ### Regression suite (record once, re-verify on every change)
 
-For flows worth re-checking forever — the actual test suite — record them, then re-verify the whole
-set in ONE deterministic call (no LLM per flow, so it's ~hundreds of tokens, not a full re-drive):
+For flows worth re-checking forever — the actual test suite — record them, then re-verify the whole set in ONE deterministic call (no LLM per flow, so it's ~hundreds of tokens, not a full re-drive):
 
 1. Record + assert the business outcome (not just clicks):
    ```
@@ -457,22 +434,16 @@ set in ONE deterministic call (no LLM per flow, so it's ~hundreds of tokens, not
    iris_flow_verify({ sessionId })
    → { status: "pass"|"fail", passed, failed, failures: [{ flow, verdict, whatChanged, whereInSource, nextAction }] }
    ```
-   On a failure the envelope tells you exactly what changed, the `file:line`, and the fix
-   (e.g. "rebind to 'new-deploy'") — act on `nextAction` directly. A single flow: `iris_flow_replay({ flowName })`.
+   On a failure the envelope tells you exactly what changed, the `file:line`, and the fix (e.g. "rebind to 'new-deploy'") — act on `nextAction` directly. A single flow: `iris_flow_replay({ flowName })`.
 
 ### Catch the bugs a DOM/snapshot tool misses
 
-- **UI-vs-state desync** (the UI shows one value, the store holds another — e.g. a count that didn't
-  refresh): read the truth with `iris_state({ sessionId, store, path })` and compare it to what's
-  displayed. A snapshot can't — the source of truth isn't in the DOM.
-- **Present-but-unusable / off-theme controls**: `iris_inspect` returns `occluded` (covered by an
-  overlay), `styles.cursor`/`opacity`, `box` (0×0), and `theme.offTheme` (color off the design-token
-  palette). A snapshot says the element is "there"; inspect says whether a user can actually use it.
+- **UI-vs-state desync** (the UI shows one value, the store holds another — e.g. a count that didn't refresh): read the truth with `iris_state({ sessionId, store, path })` and compare it to what's displayed. A snapshot can't — the source of truth isn't in the DOM.
+- **Present-but-unusable / off-theme controls**: `iris_inspect` returns `occluded` (covered by an overlay), `styles.cursor`/`opacity`, `box` (0×0), and `theme.offTheme` (color off the design-token palette). A snapshot says the element is "there"; inspect says whether a user can actually use it.
 
 ### Consume the human's bug reports (`iris_review`)
 
-The dev can click **"Flag a bug"** in the running app, point at an element, and type what's wrong.
-Each flag becomes a **mark** you drain with `iris_review`:
+The dev can click **"Flag a bug"** in the running app, point at an element, and type what's wrong. Each flag becomes a **mark** you drain with `iris_review`:
 
 ```
 iris_review({ sessionId })
@@ -482,9 +453,7 @@ iris_review({ sessionId })
     pendingCount: 1 }
 ```
 
-Check it at the start of a session and whenever the human may have flagged something. Open the
-`source` file:line, apply the fix the `note` asks for, verify, then `iris_review({ resolve: "m1" })`.
-Reading never consumes a mark, so you can list → fix → verify → resolve.
+Check it at the start of a session and whenever the human may have flagged something. Open the `source` file:line, apply the fix the `note` asks for, verify, then `iris_review({ resolve: "m1" })`. Reading never consumes a mark, so you can list → fix → verify → resolve.
 
 ---
 
@@ -508,8 +477,7 @@ Always refer to the tool as **Syrin Iris** in reports, summaries, and messages t
 **Fix at:** src/lib/api.ts:65   ← from iris_inspect on the failing element
 ```
 
-If something failed, call `iris_inspect({ sessionId, ref })` on the failing element to get
-the `file:line`, and include it in the report.
+If something failed, call `iris_inspect({ sessionId, ref })` on the failing element to get the `file:line`, and include it in the report.
 
 ---
 
@@ -528,9 +496,7 @@ the `file:line`, and include it in the report.
 
 ### Multiple projects / port conflicts
 
-Each project should have its own port in `.iris.json`. When `iris mcp` starts, it reads `.iris.json`
-in the current working directory and uses that project's port — so agents in different project
-directories automatically connect to different daemons.
+Each project should have its own port in `.iris.json`. When `iris mcp` starts, it reads `.iris.json` in the current working directory and uses that project's port — so agents in different project directories automatically connect to different daemons.
 
 If two projects share the same port, start the second on a different port:
 
@@ -543,10 +509,7 @@ Use `npx @syrin/iris status` to see which daemons are running and which sessions
 
 ### No Chromium / Playwright needed for standard use
 
-Syrin Iris does NOT download Chromium for normal agent workflows. The browser SDK runs inside the
-user's own browser — the agent sees the DOM, network, console, and state through the WebSocket
-bridge. Playwright is only installed if you explicitly call `iris serve --drive <url>` or
-`iris verify`, which launch an autonomous browser for unattended automation.
+Syrin Iris does NOT download Chromium for normal agent workflows. The browser SDK runs inside the user's own browser — the agent sees the DOM, network, console, and state through the WebSocket bridge. Playwright is only installed if you explicitly call `iris serve --drive <url>` or `iris verify`, which launch an autonomous browser for unattended automation.
 
 To attach to a browser the user already has open (zero download, zero extra process):
 
@@ -557,20 +520,13 @@ To attach to a browser the user already has open (zero download, zero extra proc
 IRIS_CDP_URL=http://localhost:9222 npx @syrin/iris mcp
 ```
 
-This connects Syrin Iris to the existing Chrome — native clicks and screenshots work without
-Playwright.
+This connects Syrin Iris to the existing Chrome — native clicks and screenshots work without Playwright.
 
 ### "Failed to reconnect to iris: -32000"
 
-This means the `iris mcp` proxy process exited and Claude Code couldn't restart it cleanly. -32000 is
-the JSON-RPC code for a server-side error; here it means the proxy exited with code 1 before the MCP
-handshake completed.
+This means the `iris mcp` proxy process exited and Claude Code couldn't restart it cleanly. -32000 is the JSON-RPC code for a server-side error; here it means the proxy exited with code 1 before the MCP handshake completed.
 
-**Check version first — stale npx cache is the most common silent culprit.**
-`npx` caches packages locally and may keep running an old version of `@syrin/iris` even after a new
-one is published. An older daemon speaking a different protocol than the new proxy (or vice-versa)
-causes the proxy to exit immediately and Claude Code to report -32000. Always clear the cache and
-force-resolve the latest version before investigating anything else:
+**Check version first — stale npx cache is the most common silent culprit.** `npx` caches packages locally and may keep running an old version of `@syrin/iris` even after a new one is published. An older daemon speaking a different protocol than the new proxy (or vice-versa) causes the proxy to exit immediately and Claude Code to report -32000. Always clear the cache and force-resolve the latest version before investigating anything else:
 
 ```bash
 npx --yes @syrin/iris@latest version   # force-resolves latest and prints version
@@ -579,11 +535,7 @@ npx @syrin/iris stop                   # stop any daemon running the old version
 
 Then reload Claude Code (`/mcp`) so the new version is picked up on next connection.
 
-**Second common cause: the Stop hook is killing the daemon between turns.**
-If `~/.claude/settings.json` has a Stop hook running `iris stop --quiet`, remove it. The daemon must
-stay alive across turns — killing it forces a cold-boot spawn on every reconnect, and if that spawn
-takes longer than 10 seconds (cold npx cache, slow disk, first install), the proxy times out and exits
-with code 1. See Step 1b above.
+**Second common cause: the Stop hook is killing the daemon between turns.** If `~/.claude/settings.json` has a Stop hook running `iris stop --quiet`, remove it. The daemon must stay alive across turns — killing it forces a cold-boot spawn on every reconnect, and if that spawn takes longer than 10 seconds (cold npx cache, slow disk, first install), the proxy times out and exits with code 1. See Step 1b above.
 
 **Fix (in order):**
 
@@ -596,13 +548,9 @@ with code 1. See Step 1b above.
 
    Reload Claude Code. If -32000 is gone, done.
 
-2. **Check for the Stop hook:** `cat ~/.claude/settings.json | grep iris`
-   If present, delete that hook entry, then repeat step 1.
+2. **Check for the Stop hook:** `cat ~/.claude/settings.json | grep iris` If present, delete that hook entry, then repeat step 1.
 
-3. **If -32000 persists**, the daemon may be crashing on startup.
-   Check the log: `cat ~/.iris/daemon-4400.log | tail -30`
-   Look for `iris_daemon_start_failed` or `iris_mcp_proxy_error`. If the port is taken by another
-   process: `lsof -i :4400` to identify it, then kill it and retry.
+3. **If -32000 persists**, the daemon may be crashing on startup. Check the log: `cat ~/.iris/daemon-4400.log | tail -30` Look for `iris_daemon_start_failed` or `iris_mcp_proxy_error`. If the port is taken by another process: `lsof -i :4400` to identify it, then kill it and retry.
 
 4. **Confirm the MCP config is user-level** (not project-level) and has no pinned version:
 
@@ -611,8 +559,7 @@ with code 1. See Step 1b above.
    # Should contain: {"mcpServers": {"iris": {"command": "npx", "args": ["@syrin/iris", "mcp"]}}}
    ```
 
-   If the project has a `.mcp.json` or `.claude/mcp.json` that overrides the user-level config with
-   pinned args (e.g., `["@syrin/iris@0.x.y", "mcp"]`), rename it out of the way and re-register:
+   If the project has a `.mcp.json` or `.claude/mcp.json` that overrides the user-level config with pinned args (e.g., `["@syrin/iris@0.x.y", "mcp"]`), rename it out of the way and re-register:
 
    ```bash
    claude mcp add iris -s user -- npx @syrin/iris mcp
