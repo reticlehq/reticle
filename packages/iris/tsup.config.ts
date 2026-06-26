@@ -27,4 +27,10 @@ export default defineConfig({
   splitting: false,
   clean: true,
   shims: false,
+  // The Next webpack pre-loader must ship as a real CJS file webpack can require at runtime. It is
+  // hand-authored (loader.cjs) and copied into dist/ next to next.js + babel.js (which it imports).
+  async onSuccess() {
+    const { copyFile } = await import('node:fs/promises');
+    await copyFile('loader.cjs', 'dist/loader.cjs');
+  },
 });

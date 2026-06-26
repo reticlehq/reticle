@@ -17,6 +17,9 @@ importers:
       '@eslint/js':
         specifier: ^9.18.0
         version: 9.39.4
+      '@syrin/iris':
+        specifier: workspace:*
+        version: link:packages/iris
       '@syrin/iris-server':
         specifier: workspace:*
         version: link:packages/server
