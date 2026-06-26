@@ -1,0 +1,25 @@
+{
+  "name": "@syrin/iris-example-remix",
+  "private": true,
+  "version": "1.1.0",
+  "type": "module",
+  "description": "Minimal React Router 7 (Remix) app — verifies Iris via a dev-only client connect (SSR, no plugin injection).",
+  "scripts": { "dev": "react-router dev" },
+  "dependencies": {
+    "@react-router/node": "8.0.0",
+    "@react-router/serve": "8.0.0",
+    "@syrin/iris": "workspace:*",
+    "isbot": "^5.1.36",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "react-router": "8.0.0"
+  },
+  "devDependencies": {
+    "@react-router/dev": "8.0.0",
+    "@types/node": "^22",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "typescript": "^5.9.0",
+    "vite": "^8.0.3"
+  }
+}

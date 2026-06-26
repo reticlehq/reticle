@@ -18,3 +18,4 @@ assets/
 bench/raw/
 bench/logs/
 bench/artifacts/
+apps/example-*/

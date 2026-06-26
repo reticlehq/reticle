@@ -1,0 +1,10 @@
+{
+  "name": "@syrin/iris-example-react",
+  "private": true,
+  "version": "1.1.0",
+  "type": "module",
+  "description": "Minimal Vite + React app — verifies Iris integration via the iris() Vite plugin.",
+  "scripts": { "dev": "vite --port 5301" },
+  "dependencies": { "@syrin/iris": "workspace:*", "react": "^19.0.0", "react-dom": "^19.0.0" },
+  "devDependencies": { "vite": "^8.0.0", "@vitejs/plugin-react": "^6.0.0" }
+}
