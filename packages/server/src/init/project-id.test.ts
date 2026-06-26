@@ -58,6 +58,15 @@ describe('snippets bake the projectId', () => {
     expect(htmlManual(undefined, 'acme-web-1234abcd')).toContain("projectId: 'acme-web-1234abcd'");
   });
 
+  it('fallback guidance points bundled apps at their entry module, with an honest static-HTML note', () => {
+    const out = htmlManual(undefined, 'acme-web-1234abcd');
+    expect(out).toMatch(/entry module/i); // bundled-app path (CRA/webpack/etc.) — bare import resolves
+    expect(out).toMatch(/Plain static HTML/i); // honest note: needs a bundler/dev-server
+    expect(out).toContain("iris.connect({ projectId: 'acme-web-1234abcd' })");
+    // It must NOT present an index.html bare import as the primary path (the old CRA silent-fail trap).
+    expect(out).not.toMatch(/Add a dev-gated module script at app boot/);
+  });
+
   it('a non-default port and projectId appear together', () => {
     const code = nextIrisDevFile(5000, 'p-1234abcd');
     expect(code).toContain('ws://localhost:5000');

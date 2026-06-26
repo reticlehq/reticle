@@ -67,17 +67,28 @@ export const NEXT_LAYOUT_MANUAL = `Mount <IrisDev /> in your root layout (app/la
   // inside <body>:
   {process.env.NODE_ENV === 'development' ? <IrisDev /> : null}`;
 
-/** Plain-HTML / vanilla connect snippet. */
+/**
+ * Manual connect guidance for projects without a Vite/Next plugin. Most such projects still use a
+ * BUNDLER (CRA, webpack, Parcel, Vue/Svelte CLIs) — for those, the connect goes in the entry MODULE,
+ * where a bare `@syrin/iris` import resolves. A bare import in a plain index.html does NOT resolve in
+ * the browser, so we never tell a bundled app to do that (the old advice silently failed for CRA).
+ */
 export function htmlManual(port: number | undefined, projectId?: string): string {
-  return `Add a dev-gated module script at app boot:
+  const arg = connectArg(port, projectId);
+  return `No Vite/Next plugin detected — wire the dev-only connect by hand. Pick the form for your setup:
 
-  <script type="module">
-    if (location.hostname === 'localhost') {
-      const { iris, install } = await import('@syrin/iris');
-      install();
-      iris.connect(${connectArg(port, projectId)});
-    }
-  </script>`;
+  • Bundled app (Create React App, webpack, Parcel, Vue/Svelte CLI, etc.) — add to your ENTRY module
+    (e.g. src/index.js or src/main.js), where '@syrin/iris' resolves through your bundler:
+
+      if (location.hostname === 'localhost') {
+        const { iris, install } = await import('@syrin/iris');
+        install();
+        iris.connect(${arg});
+      }
+
+  • Plain static HTML with no build step — the browser can't resolve the bare '@syrin/iris' import, so
+    bundle the SDK once (e.g. \`npx esbuild\`) and point a dev-only <script type="module"> at the output,
+    or serve the page through a dev server (Vite) that resolves bare imports.`;
 }
 
 export const NEXT_IRIS_DEV_PATH = 'app/iris-dev.tsx';
