@@ -1,6 +1,6 @@
 {
   "name": "@syrin/iris-server",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Iris bridge + MCP server. Hosts the browser WS endpoint and exposes MCP tools to the coding agent.",
   "type": "module",
   "main": "./dist/index.js",
