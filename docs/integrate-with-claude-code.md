@@ -8,7 +8,7 @@ Two prompts: **(A)** make a coding agent wire Iris into your app, and **(B)** ma
 
 ## Prompt A — "Integrate Iris into this app"
 
-> ⚙️ Replace the registry line if you're on public npm (drop the `--registry`/`.npmrc` bits). The version is **1.1.0**.
+> ⚙️ Replace the registry line if you're on public npm (drop the `--registry`/`.npmrc` bits). The version is **1.2.0**.
 
 ```text
 Integrate Iris (https://… or your local copy) into this app so you can verify your own UI work

@@ -1,6 +1,6 @@
 {
   "name": "@syrin/iris-react",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Iris React adapter — maps a DOM ref to its component stack and source file via the fiber tree.",
   "type": "module",
   "main": "./dist/index.js",
@@ -19,8 +19,8 @@
     "prepack": "tsc -b && find dist -name \"*.test.*\" -delete"
   },
   "dependencies": {
-    "@syrin/iris-protocol": "workspace:*",
-    "@syrin/iris-browser": "workspace:*"
+    "@syrin/iris-browser": "workspace:*",
+    "@syrin/iris-protocol": "workspace:*"
   },
   "peerDependencies": {
     "react": ">=18"

@@ -4,6 +4,10 @@ All notable changes to **`@syrin/iris`** are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.2.0] — 2026-06-27
+
+A polish release on top of multi-agent 1.1.0. The benchmark suite now runs unattended, CI stops going red on dependency advisories it can't control, the daemon-readiness window is tunable for slow machines, and the docs + README are rewritten to lead with value and read for everyone — engineer, QA, and founder alike.
+
 ### Added
 
 - **`IRIS_DAEMON_READY_TIMEOUT_MS`** — tune how long the MCP proxy waits for the daemon to become ready (default 10s) for slow machines / CI.

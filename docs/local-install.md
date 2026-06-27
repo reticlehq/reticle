@@ -10,7 +10,7 @@ From the Iris repo:
 bash scripts/local-registry.sh
 ```
 
-This starts a **fresh** Verdaccio on `http://localhost:4873`, creates a user/token, and publishes all `@syrin/*` packages there at the current version (**1.1.0**):
+This starts a **fresh** Verdaccio on `http://localhost:4873`, creates a user/token, and publishes all `@syrin/*` packages there at the current version (**1.2.0**):
 
 | Package | What you install it for |
 | --- | --- |
@@ -44,7 +44,7 @@ npm i -D @syrin/iris
 
 Then follow [Getting Started](getting-started.md): embed `iris.connect()` (dev only) from `@syrin/iris`, add the MCP server to your agent, and (React) `install()` the adapter from `@syrin/iris`. For the fastest agent loop, also do [Step 6 — make your app agent-legible](getting-started.md) (testids, `iris.signal`, `registerStore`, `registerCapabilities`) and the [integration patterns](integration-patterns.md) (`createIrisEmitter` for zero prod-bundle cost).
 
-> **Upgrading.** The package is currently **1.1.0**; new tools land as minor bumps. `scripts/local-registry.sh` resets Verdaccio and republishes the current version, so pull the latest in your app explicitly — `npm install @syrin/iris@latest`:
+> **Upgrading.** The package is currently **1.2.0**; new tools land as minor bumps. `scripts/local-registry.sh` resets Verdaccio and republishes the current version, so pull the latest in your app explicitly — `npm install @syrin/iris@latest`:
 >
 > ```bash
 > npm i -D @syrin/iris@latest @syrin/iris-eslint-plugin@latest
