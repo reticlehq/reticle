@@ -94,6 +94,15 @@ export const SESSION_LIFECYCLE = {
   REAP_INTERVAL_MS: 5_000,
   /** Browser fallback: continuous failure to reach the bridge for this long ⇒ self-end the session. */
   BRIDGE_LOST_MS: 15_000,
+  /**
+   * Daemon self-shutdown: after this long with NO agent connected, NO browser session, and NO pool
+   * lease, the detached daemon tears itself down (closes Chromium + bridge, frees the port, removes its
+   * pidfile, exits) so Iris never lingers eating resources after the editor closes. Long enough to
+   * survive brief agent reconnects between turns; overridable via IRIS_IDLE_SHUTDOWN_MS (0 = never).
+   */
+  DAEMON_IDLE_SHUTDOWN_MS: 300_000,
+  /** How often the daemon checks whether it has gone idle. Unref'd, so it never keeps the process up. */
+  DAEMON_IDLE_CHECK_MS: 30_000,
 } as const;
 
 /**

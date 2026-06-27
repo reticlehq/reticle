@@ -14,6 +14,7 @@ import {
 } from './daemon.js';
 import { waitForDaemon, startMcpProxy, probeDaemon } from './mcp-proxy.js';
 import { installDaemonResilience } from './daemon-resilience.js';
+import { IdleShutdown, resolveIdleShutdownMs } from './idle-shutdown.js';
 import { fetchStatus, summarizeStatus, decideOpen, openInBrowser } from './cli-launch.js';
 import { handleVerify } from './cli-verify.js';
 import { runInit } from './init/run.js';
@@ -222,6 +223,17 @@ function handleDaemonInner(parsed: {
       };
       process.on('SIGTERM', shutdown);
       process.on('SIGINT', shutdown);
+      // Self-shut-down when idle so a detached daemon (and any headless Chromium it launched) never
+      // lingers on the user's machine after the editor closes. Reuses the same clean shutdown path.
+      const idleShutdown = new IdleShutdown({
+        graceMs: resolveIdleShutdownMs(process.env[IrisEnv.IDLE_SHUTDOWN]),
+        isIdle: server.isIdle ?? (() => false),
+        onShutdown: () => {
+          log('iris_daemon_idle_exit', { port: parsed.port });
+          shutdown();
+        },
+      });
+      idleShutdown.start();
     })
     .catch((error: unknown) => {
       const message = error instanceof Error ? error.message : String(error);

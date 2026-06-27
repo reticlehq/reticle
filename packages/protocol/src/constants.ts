@@ -41,6 +41,9 @@ export const IrisEnv = {
   MAX_CONTEXTS: 'IRIS_MAX_CONTEXTS',
   /** Bearer token required by the optional `iris serve --http` verify endpoint. */
   VERIFY_TOKEN: 'IRIS_VERIFY_TOKEN',
+  /** Ms of continuous idleness (no agent, no browser session, no lease) before the daemon self-exits;
+   * `0` disables. Keeps Iris from lingering on a user's machine after the editor closes. */
+  IDLE_SHUTDOWN: 'IRIS_IDLE_SHUTDOWN_MS',
 } as const;
 
 /** Hard transport bounds shared by the browser and bridge. */

@@ -199,6 +199,9 @@ export interface RunningServer {
   realInput?: RealInputProvider;
   /** the bound port of the verify HTTP endpoint, when `httpVerify` is enabled. */
   verifyPort?: number;
+  /** True when nothing is using the daemon: no agent connected, no browser session, no pool lease.
+   * The daemon entry (cli.ts) polls this to self-shut-down when idle so Iris never lingers. */
+  isIdle?: () => boolean;
   close: () => Promise<void>;
 }
 
@@ -348,7 +351,11 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
   // connection drops (it stopped, or is waiting on the human), end every session and push a clear
   // "go to your terminal" notice to the panel — the human is on the browser and must not lose a typed
   // prompt into a dead session. A returning agent's next tool call revives the auto-ended session.
+  // Track agent presence for the idle-shutdown predicate (below): the daemon is "idle" only when no
+  // agent is attached AND no browser tab is connected AND no pool lease is active.
+  let agentConnected = false;
   shared.attachAgentPresence((connected) => {
+    agentConnected = connected;
     if (!connected) endAllSessions(bridge.sessions, AGENT_STOPPED_NOTICE);
   });
 
@@ -482,6 +489,9 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
     bridge,
     ...(realInput !== undefined ? { realInput } : {}),
     ...(verifyHttp !== undefined ? { verifyPort: verifyHttp.port } : {}),
+    // Idle = nobody is using the daemon: no agent attached, no browser tab connected, no pool lease.
+    // The daemon entry self-shuts-down after this holds for the grace window (see cli.ts / IdleShutdown).
+    isIdle: () => !agentConnected && bridge.sessions.count() === 0 && pool.activeCount() === 0,
     close: async () => {
       reaper.stop();
       const vh = verifyHttp;
