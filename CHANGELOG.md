@@ -6,25 +6,7 @@ All notable changes to **`@syrin/iris`** are documented here. The format follows
 
 ## [1.2.0] — 2026-06-27
 
-A polish release on top of multi-agent 1.1.0. The benchmark suite now runs unattended, CI stops going red on dependency advisories it can't control, the daemon-readiness window is tunable for slow machines, and the docs + README are rewritten to lead with value and read for everyone — engineer, QA, and founder alike.
-
-### Added
-
-- **`IRIS_DAEMON_READY_TIMEOUT_MS`** — tune how long the MCP proxy waits for the daemon to become ready (default 10s) for slow machines / CI.
-
-### Changed
-
-- **Docs lead with value and read for everyone.** README rewritten — value-upfront hero, a "who you are → what you get" table (vibe coder / engineer / QA / founder), and a "How to use it" walkthrough. New [multi-agent testing guide](docs/multi-agent-testing.md); benchmark images + numbers refreshed; benchmark passes renamed to plain names (observation-cost / agent-loop / replay).
-- **The benchmark self-boots.** `pnpm bench` now starts and tears down its own fixtures (demo + api) with env-tunable readiness (`BENCH_*`), so the suite runs unattended.
-- **CI hardened against flaky reds.** The security-audit step is non-blocking (a new transitive advisory no longer fails an unrelated PR), the e2e job retries with cleanup, and pre-commit matches CI step order.
-
-### Removed
-
-- **Unused public exports** — `ObserverType` / `UpdateStatus` (`@syrin/iris-protocol`), `buildClock` (`@syrin/iris-test`), and the test-only `IRIS_VITE_PLUGIN_NAME` re-export from `@syrin/iris/vite`. No real consumers.
-
-## [1.1.0] — 2026-06-26
-
-The multi-agent release. One Chromium now serves many agents at once — a leased browser pool gives each its own isolated context, and project-scoped session identity keeps several apps on one machine from cross-talking. The verify loop is unchanged; this is about running many of them in parallel, safely, from one daemon. Measured: 16 flows across 8 contexts in 5.2s vs 35.4s serial — **6.78× faster**.
+The multi-agent release. One Chromium now serves many agents at once — a leased browser pool gives each its own isolated context, and project-scoped session identity keeps several apps on one machine from cross-talking. Plus a polish pass: the benchmark suite runs unattended, CI stops going red on dependency advisories it can't control, the daemon-readiness window is tunable, and the docs + README are rewritten to lead with value. Measured: 16 flows across 8 contexts in 5.2s vs 35.4s serial — **6.78× faster**.
 
 ### Added
 
@@ -32,10 +14,14 @@ The multi-agent release. One Chromium now serves many agents at once — a lease
 - **Project-scoped session identity** (on by default). Sessions resolve against a stable build-stamped `projectId` (Next / HTML / `.iris.json`, auto-stamped by the Vite plugin), so concurrent apps never steal each other's session.
 - **SvelteKit support in `iris init`** for projects the Vite plugin can't inject into.
 - **Real-Chromium + multi-agent CI suites** — framework-connect tests (Vite/React, Next App Router, Remix, Astro), the browser-pool path, and single-page crash isolation.
+- **`IRIS_DAEMON_READY_TIMEOUT_MS`** — tune how long the MCP proxy waits for the daemon to become ready (default 10s) for slow machines / CI.
 
 ### Changed
 
 - **Daemon resilience + per-page fault isolation.** One bad page can't sink the fleet: page faults are isolated, the pool enforces its cap under burst, aborted acquires clean up, and stale daemon pidfiles are reclaimed (no ghost ports).
+- **Docs lead with value and read for everyone.** README rewritten — value-upfront hero, a "who you are → what you get" table (vibe coder / engineer / QA / founder), and a "How to use it" walkthrough. New [multi-agent testing guide](docs/multi-agent-testing.md); benchmark images + numbers refreshed; benchmark passes renamed to plain names (observation-cost / agent-loop / replay).
+- **The benchmark self-boots.** `pnpm bench` now starts and tears down its own fixtures (demo + api) with env-tunable readiness (`BENCH_*`), so the suite runs unattended.
+- **CI hardened against flaky reds.** The security-audit step is non-blocking (a new transitive advisory no longer fails an unrelated PR), the e2e job retries with cleanup, and pre-commit matches CI step order.
 
 ### Fixed
 
@@ -43,6 +29,10 @@ The multi-agent release. One Chromium now serves many agents at once — a lease
 - **`iris init`** detects the monorepo package manager and gives correct guidance for non-Vite/Next apps (CRA / webpack).
 - **Clearer edge errors** — an unopenable leased URL says why; the browser warns when the bridge is unreachable on first connect.
 - **Skill & docs corrections** for the public integration path (MCP registration, `iris init` flow, stale-`npx` cache as the main `-32000` cause).
+
+### Removed
+
+- **Unused public exports** — `ObserverType` / `UpdateStatus` (`@syrin/iris-protocol`), `buildClock` (`@syrin/iris-test`), and the test-only `IRIS_VITE_PLUGIN_NAME` re-export from `@syrin/iris/vite`. No real consumers.
 
 ## [1.0.0] — 2026-06-22
 
