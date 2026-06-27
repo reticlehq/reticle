@@ -7,6 +7,8 @@
 
 ### Your Playwright tests are in CI. Your agent never sees them.
 
+**Iris gives your coding agent eyes into the running app.** It reads the _program_ — network, store state, signals, the React commit stream — not a screenshot, hands back a pass/fail **verdict with the `file:line` to fix**, and catches the silent bugs a screenshot or DOM tool **structurally cannot see.** Measured: **10/10 bugs caught, 0 false positives, 2,574× cheaper to re-run, and two live `500`s caught on our own production app the first time we pointed it at one.**
+
 <a href="https://syrin.ai/iris"><img src="assets/readme/demo-montage.webp" alt="Iris in action, an AI agent verifying a real running app from the inside: pass/fail verdicts with evidence, the file:line to fix, and a regression caught before it shipped" width="840" /></a>
 
 [![npm](https://img.shields.io/npm/v/@syrin/iris?color=8b7bff&labelColor=15131f&logo=npm)](https://www.npmjs.com/package/@syrin/iris) [![downloads](https://img.shields.io/npm/dm/@syrin/iris?color=5fd9f5&labelColor=15131f)](https://www.npmjs.com/package/@syrin/iris) [![stars](https://img.shields.io/github/stars/syrin-labs/iris?color=ff9f87&labelColor=15131f&logo=github)](https://github.com/syrin-labs/iris/stargazers) [![forks](https://img.shields.io/github/forks/syrin-labs/iris?color=a594ff&labelColor=15131f&logo=github)](https://github.com/syrin-labs/iris/network/members) [![license](https://img.shields.io/badge/license-Apache--2.0%20%2B%20FSL-46d6a0?labelColor=15131f)](LICENSE) [![types](https://img.shields.io/npm/types/@syrin/iris?color=5fd9f5&labelColor=15131f)](https://www.npmjs.com/package/@syrin/iris)
@@ -19,7 +21,7 @@
 
 **The gap:** Your agent edits code, infers it worked, and moves on — it doesn't run your Playwright suite between every change. By the time CI catches something, the agent has already moved on and the context is gone. The broken modal, the silent `500`, the wrong store state — your agent shipped it and called it done.
 
-**Iris closes that gap:** It instruments your running app from the inside and gives your agent a feedback signal after every edit, before it moves on. Not a replacement for Playwright in CI — the thing that runs in the agent's inner loop while it's coding.
+**Iris closes that gap.** It instruments your running app from the inside and feeds your agent a verdict after every edit, before it moves on. This is the layer your CI suite _can't_ be — inside the agent's loop, while it codes. **Playwright gates releases. Iris gates edits.**
 
 **What it reads that Playwright can't:** App store state, custom signals, request cardinality — program truth that never reaches the DOM. A page can look perfect on screen while a `500` fires underneath. Playwright sees the page. Iris sees the program.
 
@@ -27,7 +29,7 @@
   <img src="assets/readme/silent-failures.png" alt="An e-commerce page looks perfectly shipped — but underneath: mock data, a dead click, a hidden 500. Iris catches the failure the UI completely hid." width="560" />
 </p>
 
-**How good is it:**
+**The numbers — every one measured by a committed harness, reproducible with `pnpm bench`, and we publish where we _lose_ too:**
 
 | Check                                                     | Result           |
 | --------------------------------------------------------- | ---------------- |
@@ -40,7 +42,7 @@
 | Real app, first pass: live `500`s the UI hid              | **2 caught**     |
 | Parallel agents on **one** browser (16 flows, 8 contexts) | **6.78× faster** |
 
-One-line proof: before we instrumented anything, Iris's first pass on our own production dashboard flagged two live `500`s — `GET /projects` and `/recovery/incidents` — that the UI completely hid. The page looked perfect. A screenshot would have called it done.
+> **The proof that mattered most:** before we instrumented anything, Iris's _first_ pass on our own production dashboard flagged two live `500`s — `GET /projects` and `/recovery/incidents` — that the UI completely hid. The page looked perfect. A screenshot would have called it done. **That is the entire point of Iris**, and we found it on our own app, not a cherry-picked demo.
 
 → [Full benchmark scorecard](bench/SCORECARD.md) · [Reproducible token math](docs/token-efficiency.md)
 
@@ -68,7 +70,7 @@ Registers the MCP server for every agent you have in one shot. → [More install
 
 `TypeScript` · `Model Context Protocol` · `React-first` · **dev-only · localhost-only · no telemetry · Apache-2.0 SDK**
 
-[How it works](#how-it-works) · [Watch the demo](https://syrin.ai/iris) · [Full benchmarks](#honest-benchmarks) · [Iris vs Playwright](#when-to-use-iris-vs-playwright-and-devtools) · [Docs](docs/getting-started.md)
+[How it works](#how-it-works) · [How to use it](#how-to-use-it) · [Watch the demo](https://syrin.ai/iris) · [Full benchmarks](#honest-benchmarks) · [Iris vs Playwright](#when-to-use-iris-vs-playwright-and-devtools) · [Docs](docs/getting-started.md)
 
 ---
 
@@ -78,28 +80,16 @@ Registers the MCP server for every agent you have in one shot. → [More install
 
 <img src="assets/readme/readme-done-lie.png" alt="Your agent says 'Fixed it.' It wasn't, POST /api/order returned 500. The agent never opened the app; Iris does." width="840" />
 
-<table>
-<tr>
-<td width="50%" valign="top">
+**In one sentence:** your AI coding agent says _"done"_ without ever opening the app — Iris makes it open the app, confirm the thing actually works, and prove it, automatically, on every edit.
 
-#### If you "vibe code" (and don't write tests)
+**The value lands differently depending on who you are — here's yours:**
 
-Your agent says **"done"**, you open the browser, and… the button does nothing. Every time, _you_ are the QA department.
-
-Iris lets your agent **check its own work**, automatically, on every edit. It catches the broken thing **before you ever see it**, and tells the agent how to fix it. You just keep building.
-
-</td>
-<td width="50%" valign="top">
-
-#### If you already have Playwright
-
-Your Playwright suite runs in CI. Your agent doesn't. Between every edit it makes and the PR that triggers CI, the agent is flying blind — it edits, assumes, moves on.
-
-Iris is what runs **in the agent's loop**, not yours. Recorded flows replay deterministically with no LLM: **0% flake, ~175 tokens/run.** It feeds the agent a verdict after every change so broken things get caught before context is lost. Playwright gates releases. Iris gates edits.
-
-</td>
-</tr>
-</table>
+| You are… | What Iris does for you |
+| --- | --- |
+| **Building with AI, don't write tests** ("vibe coding") | Your agent becomes its own QA. It checks its own work on every edit and fixes the break **before you ever see it** — so you stop being the manual tester and just keep building. |
+| **A software engineer** | An in-loop verifier: one call asserts over **network, store state, signals, console, and the React render stream**, returns a pass/fail verdict with the exact **`file:line` to fix**, and replays recorded flows deterministically — no LLM, **0% flake, ~175 tokens/run**. |
+| **In QA** | Every "I just eyeball it" acceptance step becomes a check the agent runs automatically on every edit — including the long tail nobody ever automated. Same flow, same verdict, every run. **Playwright gates releases; Iris gates edits.** |
+| **A founder / engineering leader** | Fewer broken things shipped, agents that **prove their own work**, **2,574× cheaper** regression runs, and a **fleet of agents that verify in parallel** on one browser. Dev-only, localhost-only, **no telemetry** — nothing leaves your machine. |
 
 ---
 
@@ -142,6 +132,28 @@ iris_assert({
 <p align="center">
   <img src="assets/readme/file-line-fix.png" alt="When something breaks, Iris packages the evidence and the exact file:line into a repair packet and hands it straight to the coding agent." width="560" />
 </p>
+
+---
+
+## How to use it
+
+Three steps, then it runs itself:
+
+**1 · Add Iris to your app once.** One plugin line + a dev-only `iris.connect()` (the SDK is tree-shaken out of production builds). Don't want to do it by hand? Paste one line to your agent and it wires everything for you:
+
+```text
+Follow https://raw.githubusercontent.com/syrin-labs/iris/main/SKILL.md
+```
+
+**2 · Ask your agent in plain English.** No test syntax to learn — you describe the outcome, the agent drives your _real_ running app through Iris and hands back proof:
+
+> **You:** "Verify login works — it should call `/api/login`, land on the dashboard, and set the signed-in user."
+>
+> **Agent, via Iris:** clicks **Sign in** → `POST /api/login → 200 (14 ms)` → dashboard rendered → store now holds `auth: { email: "admin@…" }` **✅ PASS** — with that evidence attached. Had it failed, you'd get the failing check **and the `file:line` to fix** instead of a guess.
+
+**3 · Record the flow once; it replays free, forever.** Save that journey as a flow and Iris re-runs it deterministically on every later edit — **no model, 0% flake, ~47 tokens for a whole suite.** That's your regression net, running _inside_ the agent's loop instead of waiting for CI.
+
+→ Full walkthrough: **[Getting Started](docs/getting-started.md)** · every tool & predicate: **[Usage guide](docs/usage.md)**
 
 ---
 
