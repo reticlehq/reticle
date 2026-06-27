@@ -4,27 +4,41 @@ All notable changes to **`@syrin/iris`** are documented here. The format follows
 
 ## [Unreleased]
 
-## [1.1.0] — 2026-06-26
-
-The multi-agent release. One Chromium now serves many agents at once: a leased browser pool hands each agent its own isolated context, and a project-scoped session identity means several apps (or browser tabs) on the same machine never cross-talk or evict one another. The verify loop is unchanged — this is about running many of them in parallel, safely, from a single daemon.
-
 ### Added
 
-- **BrowserPool — one Chromium, N isolated leased contexts.** The daemon now drives a single real browser and leases isolated contexts out of it, so a fleet of agents shares one process instead of launching a browser each. Leases carry a TTL with heartbeat and a reaper that reclaims orphaned leases, and `iris_lease_acquire` waits for the leased tab to actually connect before returning so the caller never races an empty session. `iris_sessions` surfaces `projectId` and `leased` so you can see who holds what.
-- **Project-scoped session identity.** Sessions are now resolved against a stable `projectId` derived and baked at init time (Next / HTML / `.iris.json`), with the Vite plugin auto-stamping a zero-config id and the browser adopting session/projectId from namespaced URL params. Concurrent apps on one machine resolve to their own session instead of silently stealing each other's — backed by a multi-project test battery and `.iris.json`-driven port-resolution priority. Project scoping is on by default.
-- **Real SvelteKit support in `iris init`** for projects the Vite plugin can't inject into directly.
-- **Real-Chromium integration and multi-agent regression suites** committed to the repo: a framework-connect test proving Iris attaches in Vite/React, Next.js App Router, React Router 7 / Remix, and Astro; the browser-pool / multi-agent path as a CI guard; and a single-page crash-isolation test.
+- **`IRIS_DAEMON_READY_TIMEOUT_MS`** — tune how long the MCP proxy waits for the daemon to become ready (default 10s) for slow machines / CI.
 
 ### Changed
 
-- **Daemon resilience and per-page fault isolation.** One bad page can no longer sink the fleet — page faults are isolated, the daemon survives a single agent's stray error and exits cleanly on a real crash, the pool enforces its cap under a concurrent burst (the slot is claimed at the gate), aborted acquires clean up after themselves, and stale daemon pidfiles are reclaimed so there are no more ghost ports.
+- **Docs lead with value and read for everyone.** README rewritten — value-upfront hero, a "who you are → what you get" table (vibe coder / engineer / QA / founder), and a "How to use it" walkthrough. New [multi-agent testing guide](docs/multi-agent-testing.md); benchmark images + numbers refreshed; benchmark passes renamed to plain names (observation-cost / agent-loop / replay).
+- **The benchmark self-boots.** `pnpm bench` now starts and tears down its own fixtures (demo + api) with env-tunable readiness (`BENCH_*`), so the suite runs unattended.
+- **CI hardened against flaky reds.** The security-audit step is non-blocking (a new transitive advisory no longer fails an unrelated PR), the e2e job retries with cleanup, and pre-commit matches CI step order.
+
+### Removed
+
+- **Unused public exports** — `ObserverType` / `UpdateStatus` (`@syrin/iris-protocol`), `buildClock` (`@syrin/iris-test`), and the test-only `IRIS_VITE_PLUGIN_NAME` re-export from `@syrin/iris/vite`. No real consumers.
+
+## [1.1.0] — 2026-06-26
+
+The multi-agent release. One Chromium now serves many agents at once — a leased browser pool gives each its own isolated context, and project-scoped session identity keeps several apps on one machine from cross-talking. The verify loop is unchanged; this is about running many of them in parallel, safely, from one daemon. Measured: 16 flows across 8 contexts in 5.2s vs 35.4s serial — **6.78× faster**.
+
+### Added
+
+- **BrowserPool — one Chromium, N isolated leased contexts.** A fleet of agents shares one browser instead of launching one each. Leases carry a TTL + heartbeat with a reaper for orphans, `iris_lease_acquire` waits for the tab to connect, and `iris_sessions` shows `projectId` + `leased`.
+- **Project-scoped session identity** (on by default). Sessions resolve against a stable build-stamped `projectId` (Next / HTML / `.iris.json`, auto-stamped by the Vite plugin), so concurrent apps never steal each other's session.
+- **SvelteKit support in `iris init`** for projects the Vite plugin can't inject into.
+- **Real-Chromium + multi-agent CI suites** — framework-connect tests (Vite/React, Next App Router, Remix, Astro), the browser-pool path, and single-page crash isolation.
+
+### Changed
+
+- **Daemon resilience + per-page fault isolation.** One bad page can't sink the fleet: page faults are isolated, the pool enforces its cap under burst, aborted acquires clean up, and stale daemon pidfiles are reclaimed (no ghost ports).
 
 ### Fixed
 
-- **`@syrin/iris/next` `withIris` no longer crashes the host build.** A `__require.resolve` in the bundled Next integration broke the consumer's build; `withIris` is now safe to wrap a real Next config with.
-- **`iris init` setup guidance.** It detects the monorepo package manager by walking up for the lockfile, and gives correct setup guidance for bundled non-Vite/Next apps (CRA / webpack) instead of Vite-only instructions.
-- **Clear, actionable errors at the edges** — a leased URL that can't be opened now reports why, and the browser warns actionably when the bridge is unreachable on first connect instead of failing silently.
-- **Skill and docs corrections** for the public integration path: correct Claude Code MCP registration path, current `iris init` flow, removal of a non-existent `@syrin/iris/react` Vite subpath, and stale-`npx`-cache surfaced as the primary `-32000` cause in troubleshooting.
+- **`@syrin/iris/next` `withIris` no longer crashes the host build** (a bundled `__require.resolve`).
+- **`iris init`** detects the monorepo package manager and gives correct guidance for non-Vite/Next apps (CRA / webpack).
+- **Clearer edge errors** — an unopenable leased URL says why; the browser warns when the bridge is unreachable on first connect.
+- **Skill & docs corrections** for the public integration path (MCP registration, `iris init` flow, stale-`npx` cache as the main `-32000` cause).
 
 ## [1.0.0] — 2026-06-22
 
