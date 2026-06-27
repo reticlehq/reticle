@@ -56,6 +56,10 @@ artifact) is transport-agnostic; every consumer hits the same core:
   replays a saved flow with no agent).
 - **Modes:** *explore* (surf/research a running app) · *discover* (read the app's capability contract)
   · *verify* (replay flows → verdict).
+- **Multi-agent concurrency:** a single headless Chromium leases **isolated contexts** (separate
+  cookies/storage/DOM) to N concurrent agents via `iris_lease_acquire` / `iris_lease_release`; the pool
+  caps at `min(8, cores−1)`, queues over-cap work FIFO, and auto-reclaims a lease from any hung/crashed
+  agent. A fleet verifies in parallel with no per-agent browser and no cross-talk.
 
 The **verdict artifact** (`IrisVerificationRun`, defined in `@syrin/iris-protocol`) is stable and
 versioned: `verdict` (pass/fail/partial, confidence, blocking risks, reasons), `flows[]`, `checks[]`,
@@ -117,6 +121,9 @@ both results published, including where Iris loses. Full from-scratch explainer:
   per run**, compounding.
 - **Suite-scale:** ~47 tokens to re-verify a suite **constant in K** → 1287× at 2 flows, 2574× at 4.
 - **0% flake:** identical verdict across 8 replays (no model in the regression loop + clock control).
+- **Multi-agent throughput:** 16 verification flows across 8 isolated leased contexts on ONE Chromium
+  finish in 5.2s vs 35.4s one-at-a-time → **6.78× faster**, ~30s saved per batch, 8-way peak concurrency
+  (`multi-agent-throughput`).
 - **Iris-only capabilities:** UI-vs-store desync, state blast-radius (corruption not even rendered),
   wasted-render storm, deterministic time-travel for time-gated flows.
 - **Honest ties / where Iris loses:** true pixels (paint/font/GPU) → a screenshot is ground truth;

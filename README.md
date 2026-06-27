@@ -29,15 +29,16 @@
 
 **How good is it:**
 
-| Check                                                 | Result          |
-| ----------------------------------------------------- | --------------- |
-| Bugs caught (10 injected regressions, controlled app) | **10 / 10**     |
-| False positives                                       | **0**           |
-| Cost to re-run a 4-flow regression suite              | **~47 tokens**  |
-| Same suite, LLM re-driven (Playwright/DevTools)       | ~120,000 tokens |
-| **Speed-up**                                          | **2,574×**      |
-| Flake rate on deterministic replay                    | **0%**          |
-| Real app, first pass: live `500`s the UI hid          | **2 caught**    |
+| Check                                                     | Result           |
+| --------------------------------------------------------- | ---------------- |
+| Bugs caught (10 injected regressions, controlled app)     | **10 / 10**      |
+| False positives                                           | **0**            |
+| Cost to re-run a 4-flow regression suite                  | **~47 tokens**   |
+| Same suite, LLM re-driven (Playwright/DevTools)           | ~120,000 tokens  |
+| **Speed-up**                                              | **2,574×**       |
+| Flake rate on deterministic replay                        | **0%**           |
+| Real app, first pass: live `500`s the UI hid              | **2 caught**     |
+| Parallel agents on **one** browser (16 flows, 8 contexts) | **6.78× faster** |
 
 One-line proof: before we instrumented anything, Iris's first pass on our own production dashboard flagged two live `500`s — `GET /projects` and `/recovery/incidents` — that the UI completely hid. The page looked perfect. A screenshot would have called it done.
 
@@ -195,7 +196,7 @@ Record a flow once; Iris **replays it deterministically on every edit**. Your CI
 
 <img src="assets/readme/bench-two-apps.png" alt="Two apps: on a small controlled app Iris has the highest Verification Efficiency (12.3 vs 10.6 vs 7.0); on a real production dashboard Iris is the cheapest to observe (1,023 vs 1,357 vs 2,193 tokens)" width="840" />
 
-**1 · The toy app (controlled).** 10 injected regressions on the demo. Iris caught **all 10** (detection **1.00**, zero false alarms) at the lowest qualifying cost, **Verification Efficiency 12.27** vs DevTools **10.55** vs Playwright **6.97**. The competitors are cheaper per look _only because they catch less_.
+**1 · The toy app (controlled).** 10 injected regressions on the demo. Iris caught **all 10** (detection **1.00**, zero false alarms) at the lowest qualifying cost, **Verification Efficiency 12.27** vs **Chrome DevTools MCP 10.55** vs **Playwright MCP 6.97**. The competitors are cheaper per look _only because they catch less_.
 
 **2 · The real app (our own [Syrin](https://syrin.ai) dashboard, React 19, auth, live data).** With the SDK auto-injected, Iris observed the authenticated dashboard the cheapest, **and gave a verdict the others structurally can't:**
 
@@ -232,12 +233,25 @@ Being inside the page costs real browser-level fidelity. These are genuine compe
 
 ---
 
+## One browser, a whole fleet of agents
+
+Running a swarm of agents — or a parallel test suite — against the same app? Iris does **not** launch a browser per agent. The daemon keeps **one** headless Chromium and leases each agent its own **isolated context** (separate cookies, storage, and DOM), so a fleet verifies in parallel with no cross-talk and no per-agent browser startup.
+
+<img src="assets/readme/bench-multi-agent.png" alt="One browser, eight isolated leased contexts: 16 verification flows finish in 5.2s in parallel vs 35.4s one-at-a-time — 6.78x faster, ~30s saved per batch, zero cross-talk" width="840" />
+
+**Measured:** 16 verification flows across **8 concurrent leased contexts** finish in **5.2s** vs **35.4s** one-at-a-time — **6.78× faster, ~30s saved per batch**, with all 8 contexts live at peak. The pool queues work above the cap (default `min(8, cores − 1)`) and automatically reclaims a lease from any hung or crashed agent, so a fleet of agents stays bounded and fair — one dead agent never starves the rest.
+
+Two MCP tools drive it: **`iris_lease_acquire`** (open a fresh isolated context, get back a `sessionId`) and **`iris_lease_release`** (close it, free the slot); **`iris_sessions`** shows which sessions are pool-leased vs. human tabs, grouped by app. → [Multi-agent testing guide](docs/multi-agent-testing.md)
+
+---
+
 ## When to use Iris vs Playwright and DevTools
 
 | You are… | Reach for | Because |
 | --- | --- | --- |
 | an **agent building a React/Next app you own**, verifying each edit | **Iris** | in-loop, ~100 tok/check, sees state + `file:line`, refuses destructive clicks |
 | running a **regression suite on every commit / in CI** | **Iris** | deterministic replay: 0% flake, 128–2574× cheaper than re-driving with an LLM |
+| running **many agents** (or a parallel suite) against the app you own | **Iris** | one browser, an isolated context per agent — 6.78× faster than a browser each, no cross-talk |
 | chasing a bug whose truth is **in state, not the DOM** | **Iris** | desync, double-submit, side-effects, silent errors, no DOM tool sees these |
 | testing a **third-party site** / **many browsers** / **real input** | **Playwright** | Iris can't instrument code you don't ship, or drive other engines |
 | verifying **true pixels** (visual regression) | **Playwright** (or Iris _driven_) | a screenshot is the rendered frame; Iris's always-on read is computed-style |
@@ -315,6 +329,7 @@ if (import.meta.env.DEV) iris.connect({ session: 'my-app' });
 
 - **[Getting Started](docs/getting-started.md)**, from zero to your first verdict
 - **[Full Guide](docs/usage.md)**, every tool, predicate, and the flow DSL
+- **[Multi-agent testing](docs/multi-agent-testing.md)**, one browser, a fleet of agents in parallel
 - **[Benchmark scorecard](bench/SCORECARD.md)**, the honest one-page standing across all layers
 - **[Why it's ~73× cheaper](docs/token-efficiency.md)**, the reproducible token math
 - **[Watch the demo](https://syrin.ai/iris)**

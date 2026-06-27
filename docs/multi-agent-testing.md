@@ -51,3 +51,5 @@ This is the design target, and it needs no special setup:
 ## Why not just open many browsers?
 
 Ten Chromiums is hundreds of MB each and will thrash a laptop. Ten contexts in one browser is a few MB apiece and fully isolated — same correctness, a fraction of the cost. That's the whole point of the pool.
+
+**Measured** (`bench/harness/multi-agent-throughput.mjs`): 16 verification flows that take **35.4s** one-at-a-time finish in **5.2s** across 8 leased contexts on a single Chromium — **6.78× faster**, ~30s saved per batch, with all 8 contexts live at peak. The speed-up scales with agent count up to the cap; the win over launching a browser per agent grows with how much per-agent browser startup you avoid.

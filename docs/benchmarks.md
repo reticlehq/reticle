@@ -165,6 +165,10 @@ On a small page, structured reads and screenshots are both cheap, so the gap is 
 
 That's a **13× difference**, and against a screenshot agent it's larger still: one screenshot at a normal window size is ~**1,365 image tokens** _per look_, a real loop takes several looks, and the screenshot still can't see the non-visual bugs.
 
+### Many agents at once (the parallel wedge)
+
+A fleet of agents (or a parallel suite) verifying the same app doesn't need a browser each. Iris keeps **one** headless Chromium and leases each agent an **isolated context** (separate cookies/storage/DOM). Measured on 16 flows: **35.4s** one-at-a-time vs **5.2s** across 8 leased contexts — **6.78× faster**, ~30s saved per batch, 8-way peak concurrency. The alternative — a browser per agent — costs hundreds of MB and seconds of startup each; the pool's edge grows with agent count up to its cap (`multi-agent-throughput`).
+
 ---
 
 ## Part 6 — Why we believe these numbers (fairness + reproducibility)

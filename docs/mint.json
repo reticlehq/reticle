@@ -31,7 +31,14 @@
     },
     {
       "group": "Integrate",
-      "pages": ["integration", "integration-patterns", "flows", "testing", "human-control"]
+      "pages": [
+        "integration",
+        "integration-patterns",
+        "flows",
+        "testing",
+        "multi-agent-testing",
+        "human-control"
+      ]
     },
     {
       "group": "Concepts",
