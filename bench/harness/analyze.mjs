@@ -4,7 +4,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 
 const rows = JSON.parse(readFileSync('bench/raw/observation-results.json', 'utf8'));
-const TOOLS = ['playwright', 'devtools', 'iris'];
+const TOOLS = ['playwright', 'devtools', 'iris', 'agentbrowser', 'playwrightcli'];
 const measured = rows.filter((r) => r.verdict !== 'NOT MEASURED');
 
 const mean = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : null);

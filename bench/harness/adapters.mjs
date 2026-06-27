@@ -4,9 +4,12 @@
 // locator available, then runs the targeted observation. We measure the payloads
 // the agent would receive; the physical locator used to drive the click does not
 // change those payloads.
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { McpStdioClient } from './mcp-client.mjs';
 import { measure } from './tokenizer.mjs';
 
+const pexecFile = promisify(execFile);
 const LOGIN = { email: 'admin@iris.dev', password: 'password' };
 
 function rec(call, res) {
@@ -292,6 +295,180 @@ export class IrisAdapter {
   }
 }
 
+// ---------- Vercel agent-browser (vercel-labs/agent-browser) ----------
+// A token-efficient browser-automation CLI (Rust core, ref-based accessibility snapshots) that
+// claims ~93% context reduction vs Playwright MCP. Driven exactly like the other tools: a discovery
+// snapshot resolves stable @refs by accessible name (same model as DevTools' uid-by-name), then act,
+// then the targeted observation. CLI, not MCP — invoked via npx, daemon persists state across calls.
+const AGENT_BROWSER_PKG = 'agent-browser@0.31.1';
+/** Resolve a ref from a ref-snapshot line matching nameRe. Format: `role "Name" [ref=eN]`. The prefix
+ * is the tool's ref sigil ('@' for agent-browser, '' for playwright-cli). */
+function refByName(snapText, nameRe, prefix = '@') {
+  for (const ln of snapText.split('\n')) {
+    if (!nameRe.test(ln)) continue;
+    const m = ln.match(/\[ref=(\w+)/);
+    if (m) return `${prefix}${m[1]}`;
+  }
+  return null;
+}
+export class AgentBrowserAdapter {
+  constructor(url) {
+    this.url = url;
+    this.name = 'agent_browser';
+    this.session = 'iris-bench';
+  }
+  async _run(args) {
+    const started = Date.now();
+    let text = '';
+    try {
+      const { stdout } = await pexecFile(
+        'npx',
+        ['-y', AGENT_BROWSER_PKG, ...args, '--session', this.session],
+        { maxBuffer: 64 * 1024 * 1024 },
+      );
+      text = stdout;
+    } catch (e) {
+      // agent-browser exits non-zero on some no-op states; the payload is still on stdout/stderr.
+      text = `${e.stdout ?? ''}${e.stderr ?? ''}`;
+    }
+    return { text, latencyMs: Date.now() - started };
+  }
+  async start() {
+    await this._run(['open', this.url]);
+    await sleep(1500);
+  }
+  async navigate() {
+    return rec('open', await this._run(['open', this.url]));
+  }
+  async snapshot() {
+    // -i = interactive elements only: agent-browser's lean, ref-bearing accessibility snapshot.
+    return rec('snapshot', await this._run(['snapshot', '-i']));
+  }
+  async _snapText() {
+    const r = await this._run(['snapshot', '-i']);
+    return r.text ?? '';
+  }
+  async login() {
+    const snap = await this._snapText();
+    const eRef = refByName(snap, /textbox "Email"/);
+    const pRef = refByName(snap, /textbox "Password"/);
+    const sRef = refByName(snap, /button "Sign in"/);
+    if (eRef) await this._run(['fill', eRef, LOGIN.email]);
+    if (pRef) await this._run(['fill', pRef, LOGIN.password]);
+    if (sRef) await this._run(['click', sRef]);
+    await sleep(800);
+  }
+  // Resolve by accessible name from a fresh discovery snapshot, then click the @ref.
+  async clickByName(nameRe, label) {
+    const snap = await this._snapText();
+    const ref = refByName(snap, nameRe);
+    if (!ref)
+      return {
+        call: 'click',
+        error: `no ref for ${label}`,
+        latency_ms: 0,
+        chars: 0,
+        bytes: 0,
+        tokens_o200k: 0,
+        text: '',
+      };
+    return rec('click', await this._run(['click', ref]));
+  }
+  async console() {
+    return rec('console', await this._run(['console']));
+  }
+  // Restrict to API traffic (xhr/fetch) — its idiomatic lean path, symmetric with DevTools.
+  async network() {
+    return rec('network', await this._run(['network', 'requests', '--type', 'xhr,fetch']));
+  }
+  async networkAll() {
+    return rec('network', await this._run(['network', 'requests']));
+  }
+  async stop() {
+    await this._run(['close']).catch(() => undefined);
+  }
+}
+
+// ---------- Microsoft Playwright CLI (@playwright/cli) ----------
+// The Playwright team's token-efficient CLI ("playwright mcp commands from terminal"): daemon-backed,
+// ref-based YAML accessibility snapshots, claims ~4.6x fewer tokens than Playwright MCP (snapshots can
+// spill to disk). Deterministic + scriptable, so it slots into Layer A. Refs are bare `eN` (no sigil).
+const PLAYWRIGHT_CLI_PKG = '@playwright/cli@0.1.14';
+export class PlaywrightCliAdapter {
+  constructor(url) {
+    this.url = url;
+    this.name = 'playwright_cli';
+    this.session = 'pwcli-bench';
+  }
+  async _run(args) {
+    const started = Date.now();
+    let text = '';
+    try {
+      const { stdout } = await pexecFile(
+        'npx',
+        ['-y', PLAYWRIGHT_CLI_PKG, `-s=${this.session}`, ...args],
+        { maxBuffer: 64 * 1024 * 1024 },
+      );
+      text = stdout;
+    } catch (e) {
+      text = `${e.stdout ?? ''}${e.stderr ?? ''}`;
+    }
+    return { text, latencyMs: Date.now() - started };
+  }
+  async start() {
+    await this._run(['open', this.url]);
+    await sleep(1500);
+  }
+  async navigate() {
+    return rec('goto', await this._run(['goto', this.url]));
+  }
+  async snapshot() {
+    return rec('snapshot', await this._run(['snapshot']));
+  }
+  async _snapText() {
+    const r = await this._run(['snapshot']);
+    return r.text ?? '';
+  }
+  async login() {
+    const snap = await this._snapText();
+    const eRef = refByName(snap, /textbox "Email"/, '');
+    const pRef = refByName(snap, /textbox "Password"/, '');
+    const sRef = refByName(snap, /button "Sign in"/, '');
+    if (eRef) await this._run(['fill', eRef, LOGIN.email]);
+    if (pRef) await this._run(['fill', pRef, LOGIN.password]);
+    if (sRef) await this._run(['click', sRef]);
+    await sleep(800);
+  }
+  async clickByName(nameRe, label) {
+    const snap = await this._snapText();
+    const ref = refByName(snap, nameRe, '');
+    if (!ref)
+      return {
+        call: 'click',
+        error: `no ref for ${label}`,
+        latency_ms: 0,
+        chars: 0,
+        bytes: 0,
+        tokens_o200k: 0,
+        text: '',
+      };
+    return rec('click', await this._run(['click', ref]));
+  }
+  async console() {
+    return rec('console', await this._run(['console']));
+  }
+  // `requests` already hides static assets by default — its idiomatic lean network view (API traffic).
+  async network() {
+    return rec('requests', await this._run(['requests']));
+  }
+  async networkAll() {
+    return rec('requests', await this._run(['requests', '--static']));
+  }
+  async stop() {
+    await this._run(['close']).catch(() => undefined);
+  }
+}
+
 // Unified view-navigation + tap + observe so scenarios are tool-agnostic.
 // NAV maps a view id to a testid (Playwright/Iris) and an accessible-name regex (DevTools).
 // DevTools resolves nav by accessible name. Match the LABEL PREFIX (open-quote + word, no closing
@@ -312,13 +489,22 @@ for (const Cls of [PlaywrightAdapter, IrisAdapter]) {
     return this.clickTestid(NAV[v].testid, v);
   };
 }
-DevtoolsAdapter.prototype.tap = function (spec) {
-  return this.clickByName(spec.nameRe, spec.label ?? spec.testid);
-};
-DevtoolsAdapter.prototype.gotoView = function (v) {
-  return this.clickByName(NAV[v].nameRe, v);
-};
-for (const Cls of [PlaywrightAdapter, DevtoolsAdapter, IrisAdapter]) {
+// DevTools, agent-browser, and playwright-cli all resolve by accessible name from a discovery snapshot.
+for (const Cls of [DevtoolsAdapter, AgentBrowserAdapter, PlaywrightCliAdapter]) {
+  Cls.prototype.tap = function (spec) {
+    return this.clickByName(spec.nameRe, spec.label ?? spec.testid);
+  };
+  Cls.prototype.gotoView = function (v) {
+    return this.clickByName(NAV[v].nameRe, v);
+  };
+}
+for (const Cls of [
+  PlaywrightAdapter,
+  DevtoolsAdapter,
+  IrisAdapter,
+  AgentBrowserAdapter,
+  PlaywrightCliAdapter,
+]) {
   Cls.prototype.observe = function (kind) {
     if (kind === 'console') return this.console();
     if (kind === 'network') return this.network();
@@ -332,5 +518,7 @@ export function makeAdapter(tool, url) {
   if (tool === 'playwright') return new PlaywrightAdapter(url);
   if (tool === 'devtools') return new DevtoolsAdapter(url);
   if (tool === 'iris') return new IrisAdapter(url);
+  if (tool === 'agentbrowser') return new AgentBrowserAdapter(url);
+  if (tool === 'playwrightcli') return new PlaywrightCliAdapter(url);
   throw new Error(`unknown tool ${tool}`);
 }
