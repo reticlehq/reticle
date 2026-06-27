@@ -31,7 +31,7 @@ Enterprise (`ee/`) features ship **inside the open package** — they're source-
 The licensing **mechanism** is open core (inspectable, FSL) — only the **features** under `ee/` are gated:
 
 - **Today:** the activation gate + an example gated feature (audit event recording).
-- **v0.9.0+ roadmap** (the reliably enterprise-only set): **SSO/SAML, SCIM, RBAC / team permissions, audit logs, multi-org management, verify-before-merge policy gates, and the hosted control-plane connectors.** These are the things a security/compliance org pays for; the core verification engine stays free forever.
+- **Roadmap** (the reliably enterprise-only set): **SSO/SAML, SCIM, RBAC / team permissions, audit logs, multi-org management, verify-before-merge policy gates, and the hosted control-plane connectors.** These are the things a security/compliance org pays for; the core verification engine stays free forever.
 
 > What's premium vs free, and pricing, are business decisions for the owner — this doc describes the _mechanism_, not the price list.
 

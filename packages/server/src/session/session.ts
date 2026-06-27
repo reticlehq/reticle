@@ -63,6 +63,9 @@ type Clock = () => number;
 
 const DEFAULT_COMMAND_TIMEOUT_MS = 8000;
 
+/** Prefix on correlated command ids (c1, c2, …) — distinguishes them from mark ids. */
+const COMMAND_ID_PREFIX = 'c';
+
 /** ws readyState for an OPEN socket — guard fire-and-forget pushes against a closing tab. */
 const WS_OPEN = 1;
 
@@ -302,7 +305,7 @@ export class Session {
     timeoutMs: number = DEFAULT_COMMAND_TIMEOUT_MS,
   ): Promise<CommandResult> {
     this.#seq += 1;
-    const id = `c${String(this.#seq)}`;
+    const id = `${COMMAND_ID_PREFIX}${String(this.#seq)}`;
     const payload = JSON.stringify({
       kind: MessageKind.COMMAND,
       id,
@@ -482,7 +485,7 @@ export class Session {
   #post(name: string, args: Record<string, unknown>): void {
     if (this.#socket.readyState !== WS_OPEN) return;
     this.#seq += 1;
-    const id = `c${String(this.#seq)}`;
+    const id = `${COMMAND_ID_PREFIX}${String(this.#seq)}`;
     const payload = JSON.stringify({
       kind: MessageKind.COMMAND,
       id,

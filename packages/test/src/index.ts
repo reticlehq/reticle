@@ -9,7 +9,6 @@ export { IrisSkip, IrisAssertionError, IrisQueryEmptyError, isSkip } from './ski
 export type { AssertionDetail } from './skip.js';
 export { createTestContext } from './test-context.js';
 export type { TestContext, TestContextOptions, Predicate } from './test-context.js';
-export { buildClock } from './clock.js';
 export type { TestClock } from './clock.js';
 export { resolveTestid } from './resolve.js';
 export { expectInputModeReal, InputModeTracker, readInputMode } from './input-mode.js';

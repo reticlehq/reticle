@@ -30,6 +30,9 @@ export interface ReviewMark {
  * Pure in-memory state: no IO, no clock. The id is a monotonic counter (m1, m2, …) so it is
  * deterministic and never depends on Math.random/Date.now; the timestamp is passed in by the caller.
  */
+/** Prefix on review-mark ids (m1, m2, …) — distinguishes them from command ids. */
+const MARK_ID_PREFIX = 'm';
+
 export class ReviewStore {
   readonly #marks: ReviewMark[] = [];
   #seq = 0;
@@ -38,7 +41,7 @@ export class ReviewStore {
   add(data: HumanMarkData, at: number): ReviewMark {
     this.#seq += 1;
     const mark: ReviewMark = {
-      id: `m${String(this.#seq)}`,
+      id: `${MARK_ID_PREFIX}${String(this.#seq)}`,
       note: data.note,
       anchor: data.anchor,
       strategy: data.strategy,

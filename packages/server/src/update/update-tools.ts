@@ -33,8 +33,8 @@ export const UPDATE_TOOLS: ToolDef[] = [
         .optional()
         .describe('The version that would be restored on rollback.'),
     },
-    handler: async (_deps: ToolDeps) => {
-      const manifest = await checkForUpdate(SERVER_VERSION);
+    handler: async (deps: ToolDeps) => {
+      const manifest = await checkForUpdate(SERVER_VERSION, deps.now);
       return {
         currentVersion: manifest.currentVersion,
         ...(manifest.latestVersion !== undefined ? { latestVersion: manifest.latestVersion } : {}),
@@ -66,11 +66,11 @@ export const UPDATE_TOOLS: ToolDef[] = [
       ok: z.boolean(),
       message: z.string().optional(),
     },
-    handler: async (_deps: ToolDeps, args: Record<string, unknown>) => {
+    handler: async (deps: ToolDeps, args: Record<string, unknown>) => {
       if (args['confirm'] !== true) {
         return { ok: false, message: 'Set confirm:true to apply the update' };
       }
-      const manifest = await checkForUpdate(SERVER_VERSION);
+      const manifest = await checkForUpdate(SERVER_VERSION, deps.now);
       if (!manifest.updateAvailable || manifest.latestVersion === undefined) {
         return { ok: false, message: 'No update available — already on the latest version' };
       }

@@ -20,6 +20,17 @@ type ReplayRequestHandler = (sessionId: string, flowName: string) => void;
 /** Called once a browser session connects, so the daemon can push it the replayable-flow list. */
 type SessionReadyHandler = (session: Session) => void;
 
+/** WS close codes + reasons the bridge sends to the SDK (1008 = policy violation, 1013 = try again later). */
+const WS_CLOSE = {
+  TOO_MANY_HANDSHAKES: [1013, 'too many pending handshakes'],
+  HELLO_TIMEOUT: [1008, 'hello timeout'],
+  RATE_EXCEEDED: [1008, 'message rate exceeded'],
+  INVALID_MESSAGE: [1008, 'invalid message'],
+  HELLO_DUPLICATE: [1008, 'hello already received'],
+  AUTH_FAILED: [1008, 'authentication failed'],
+  SESSION_LIMIT: [1013, 'session limit reached'],
+} as const;
+
 /** The flow name if this event is a panel ▶ replay request, else undefined. Pure boundary narrowing. */
 function replayRequest(event: { type: string; data: Record<string, unknown> }): string | undefined {
   if (event.type !== EventType.HUMAN_CONTROL) return undefined;
@@ -167,7 +178,7 @@ export class Bridge {
 
   #onConnection(socket: WebSocket): void {
     if (this.#pendingConnections >= this.#maxPendingConnections) {
-      socket.close(1013, 'too many pending handshakes');
+      socket.close(...WS_CLOSE.TOO_MANY_HANDSHAKES);
       return;
     }
     this.#pendingConnections += 1;
@@ -183,7 +194,7 @@ export class Bridge {
     const helloTimer = setTimeout(() => {
       if (!awaitingHello) return;
       releasePending();
-      socket.close(1008, 'hello timeout');
+      socket.close(...WS_CLOSE.HELLO_TIMEOUT);
     }, this.#helloTimeoutMs);
 
     socket.on('message', (raw) => {
@@ -195,29 +206,29 @@ export class Bridge {
       messagesInWindow += 1;
       if (messagesInWindow > this.#maxMessagesPerSecond) {
         log('message_rate_exceeded', {});
-        socket.close(1008, 'message rate exceeded');
+        socket.close(...WS_CLOSE.RATE_EXCEEDED);
         return;
       }
 
       const parsed = this.#parse(rawToString(raw));
       if (parsed === null) {
-        socket.close(1008, 'invalid message');
+        socket.close(...WS_CLOSE.INVALID_MESSAGE);
         return;
       }
 
       if (parsed.kind === MessageKind.HELLO) {
         if (session !== undefined) {
-          socket.close(1008, 'hello already received');
+          socket.close(...WS_CLOSE.HELLO_DUPLICATE);
           return;
         }
         if (this.#token !== undefined && !tokensMatch(this.#token, parsed.token)) {
           log('authentication_failed', {});
-          socket.close(1008, 'authentication failed');
+          socket.close(...WS_CLOSE.AUTH_FAILED);
           return;
         }
         const existing = this.sessions.get(parsed.sessionId);
         if (existing === undefined && this.sessions.count() >= this.#maxSessions) {
-          socket.close(1013, 'session limit reached');
+          socket.close(...WS_CLOSE.SESSION_LIMIT);
           return;
         }
         clearTimeout(helloTimer);

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { IrisCommand, PresenterMode } from '@syrin/iris-protocol';
-import { modeForCommand } from './iris.js';
+import { modeForCommand } from './iris-presenter-helpers.js';
 
 describe('command-kind classifier', () => {
   it('classifies reads as READING', () => {

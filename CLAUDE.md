@@ -19,7 +19,7 @@ apps/demo              @syrin/iris-demo         — Vite/React dashboard used to
 apps/api               @syrin/iris-api          — Express backend exercising real-world behaviors (CJS-ish .mjs)
 apps/next-smoke        @syrin/iris-next-smoke   — Next.js 15 app verifying Iris on Next
 docs/                  — user-facing docs (getting-started, usage, token-efficiency, local-install)
-skill/                 — PUBLIC skill for users integrating Iris into their own project
+SKILL.md               — PUBLIC skill for users integrating Iris into their own project (the canonical paste-URL)
 plan/                  — research/design docs + throwaway test harnesses (ALWAYS gitignored)
 ```
 

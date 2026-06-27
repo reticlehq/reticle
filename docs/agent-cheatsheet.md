@@ -56,9 +56,9 @@ Sessions/perception/verify — what you'll use 90% of the time:
 | --- | --- | --- |
 | **flows** | `iris_flow_save*` / `iris_flow_replay` / `iris_flow_heal` | Replayable **golden journeys**, anchored to testids/signals — drift is legible and self-heals. |
 | **baselines** | `iris_baseline_save` / `iris_diff` | Structural **"before" snapshots**; `iris_diff` flags regressions against them. |
-| **project.json** | `iris_project` _(0.3.7)_ | Cross-run **run-history** — "did it behave like last run?" read via `iris_project`. |
+| **project.json** | `iris_project` | Cross-run **run-history** — "did it behave like last run?" read via `iris_project`. |
 
-> `iris_project` / `iris_run_record` / `project.json` are the **run-history layer**, landing in **0.3.7**. flows answer "does the journey still work?"; baselines answer "did the structure change?"; project.json answers "is this run consistent with prior runs?".
+> `iris_project` / `iris_run_record` / `project.json` are the **run-history layer**. flows answer "does the journey still work?"; baselines answer "did the structure change?"; project.json answers "is this run consistent with prior runs?".
 
 **Visual layer (opt-in, M11).** `iris_screenshot` saves a PNG baseline to `.iris/visual/<name>.png`; `iris_visual_diff` perceptually compares the live page to it (`{ masks }` to ignore volatile regions, `{ maxRatio }` tolerance) → `{ matched, changedPixels, ratio, region, diffPath }`. It answers "does it **look** right" — complementary to the behavioral layers, never a replacement. Both need a **driven browser** (`iris drive <url>` / `IRIS_CDP_URL`); without one they return `{ ok:false, reason:"no-visual-provider" }` (the always-on SDK ships no screenshotter).
 

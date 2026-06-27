@@ -38,7 +38,7 @@ apps/demo              @syrin/iris-demo         — Vite/React dashboard used to
 apps/api              @syrin/iris-api          — Express backend exercising real-world behaviors
 apps/next-smoke       @syrin/iris-next-smoke   — Next.js 15 app verifying Iris on Next
 docs/                  — user-facing docs (getting-started, usage, token-efficiency, local-install)
-skill/                — public skill for users integrating Iris into their own project
+SKILL.md              — public skill for users integrating Iris into their own project (the canonical paste-URL)
 ```
 
 The TypeScript library packages (`-protocol`, `-browser`, `-server`, `-react`) are **strict TypeScript** and are the focus of the build/lint/test gates. `@syrin/iris-babel-plugin` / `@syrin/iris-next` are plain CJS tooling, and `apps/api` / `apps/next-smoke` are local fixtures — these are excluded from the gates.

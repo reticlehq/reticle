@@ -31,6 +31,9 @@ import { scrollContainer } from '../actions/scroll.js';
 
 export type CommandHandler = (args: Record<string, unknown>) => unknown;
 
+/** Query param appended on a hard reload to bypass the browser cache. */
+const RELOAD_CACHE_BUST_PARAM = '_iris_reload';
+
 function str(value: unknown): string | undefined {
   return typeof value === 'string' ? value : undefined;
 }
@@ -272,7 +275,7 @@ export function createCommandRegistry(): Map<string, CommandHandler> {
     if (args['hard'] === true) {
       // Hard reload: navigate to self with a cache-busting param then replace history.
       const url = new URL(window.location.href);
-      url.searchParams.set('_iris_reload', String(Date.now()));
+      url.searchParams.set(RELOAD_CACHE_BUST_PARAM, String(Date.now()));
       window.location.replace(url.toString());
     } else {
       window.location.reload();

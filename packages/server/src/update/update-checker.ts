@@ -43,9 +43,9 @@ export function saveManifest(manifest: UpdateManifest): void {
   fs.writeFileSync(MANIFEST_PATH, JSON.stringify(manifest, null, 2), 'utf8');
 }
 
-function isCacheFresh(manifest: UpdateManifest): boolean {
+function isCacheFresh(manifest: UpdateManifest, now: () => number): boolean {
   const checked = new Date(manifest.lastChecked).getTime();
-  return Date.now() - checked < UpdateCheckIntervalMs;
+  return now() - checked < UpdateCheckIntervalMs;
 }
 
 function fetchNpmInfo(): Promise<NpmPackageInfo> {
@@ -78,9 +78,12 @@ function fetchNpmInfo(): Promise<NpmPackageInfo> {
  * is older than UpdateCheckIntervalMs. Never throws — falls back to the cached manifest
  * (or a safe "no update" default) when the registry is unreachable.
  */
-export async function checkForUpdate(currentVersion: string): Promise<UpdateManifest> {
+export async function checkForUpdate(
+  currentVersion: string,
+  now: () => number,
+): Promise<UpdateManifest> {
   const cached = loadManifest();
-  if (cached !== null && cached.currentVersion === currentVersion && isCacheFresh(cached)) {
+  if (cached !== null && cached.currentVersion === currentVersion && isCacheFresh(cached, now)) {
     return cached;
   }
 
@@ -91,7 +94,7 @@ export async function checkForUpdate(currentVersion: string): Promise<UpdateMani
       currentVersion,
       latestVersion: info.version,
       updateAvailable,
-      lastChecked: new Date().toISOString(),
+      lastChecked: new Date(now()).toISOString(),
       ...(info.iris?.changelog !== undefined ? { changelog: info.iris.changelog } : {}),
       ...(info.iris?.breakingChanges !== undefined
         ? { breakingChanges: info.iris.breakingChanges }
@@ -108,7 +111,7 @@ export async function checkForUpdate(currentVersion: string): Promise<UpdateMani
     return {
       currentVersion,
       updateAvailable: false,
-      lastChecked: new Date().toISOString(),
+      lastChecked: new Date(now()).toISOString(),
     };
   }
 }

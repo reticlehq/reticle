@@ -7,28 +7,9 @@ import {
 } from '@syrin/iris-protocol';
 import { IrisTool } from './tool-names.js';
 import { asString } from './tools-helpers.js';
+import { sessionIdShape, commandOrThrow } from './tool-kit.js';
 import { irisDirPaths, readContract, writeContract } from '../project/iris-dir.js';
-import type { ToolDef, ToolDeps } from './tools.js';
-
-const sessionIdShape = {
-  sessionId: z
-    .string()
-    .optional()
-    .describe('Active session ID from iris_sessions. Omit when only one browser session is open.'),
-};
-
-/** Unwrap a browser command result or throw its error so the agent sees a clean failure. */
-async function commandOrThrow(
-  deps: ToolDeps,
-  sessionId: string | undefined,
-  name: string,
-  args: Record<string, unknown>,
-): Promise<unknown> {
-  const session = deps.sessions.resolve(sessionId);
-  const result = await session.command(name, args);
-  if (!result.ok) throw new Error(result.error ?? `command '${name}' failed`);
-  return result.result;
-}
+import type { ToolDef } from './tools.js';
 
 /**
  * The capability-contract tools. `iris_capabilities` reads the live session, or the

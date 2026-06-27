@@ -10,7 +10,7 @@ From the Iris repo:
 bash scripts/local-registry.sh
 ```
 
-This starts a **fresh** Verdaccio on `http://localhost:4873`, creates a user/token, and publishes all `@syrin/*` packages there at the current version (**0.3.0**):
+This starts a **fresh** Verdaccio on `http://localhost:4873`, creates a user/token, and publishes all `@syrin/*` packages there at the current version (**1.1.0**):
 
 | Package | What you install it for |
 | --- | --- |
@@ -44,7 +44,7 @@ npm i -D @syrin/iris
 
 Then follow [Getting Started](getting-started.md): embed `iris.connect()` (dev only) from `@syrin/iris`, add the MCP server to your agent, and (React) `install()` the adapter from `@syrin/iris`. For the fastest agent loop, also do [Step 6 — make your app agent-legible](getting-started.md) (testids, `iris.signal`, `registerStore`, `registerCapabilities`) and the [integration patterns](integration-patterns.md) (`createIrisEmitter` for zero prod-bundle cost).
 
-> **Upgrading.** The package is pre-1.0 (currently **0.3.0**), so new tools land as minor bumps. `scripts/local-registry.sh` resets Verdaccio and republishes the current version, so pull the latest in your app explicitly — `npm update` won't cross a `0.x` minor:
+> **Upgrading.** The package is currently **1.1.0**; new tools land as minor bumps. `scripts/local-registry.sh` resets Verdaccio and republishes the current version, so pull the latest in your app explicitly — `npm install @syrin/iris@latest`:
 >
 > ```bash
 > npm i -D @syrin/iris@latest @syrin/iris-eslint-plugin@latest
@@ -77,7 +77,7 @@ export default irisNext.withIris(nextConfig); // dev-only; keeps SWC; adds file:
 
 Mount the SDK from a dev-only client component (see the Next.js section in [Getting Started](getting-started.md)).
 
-## Real input for hover/drag (optional, 0.3.0+)
+## Real input for hover/drag (optional)
 
 Synthetic events can't trigger native `onMouseEnter`/pointer state (hover menus, tooltips, pointer drag). Enable **real input** so the server drives genuine pointer input and `iris_act` reports `inputMode:"real"`:
 
@@ -104,7 +104,7 @@ Synthetic events can't trigger native `onMouseEnter`/pointer state (hover menus,
 
 With neither set, Iris stays synthetic (zero extra deps) and says so via `inputMode`. See [usage §18](usage.md#18-real-input-mode--native-hover--drag-m58).
 
-## Write replayable specs + git-checked flows (0.3.0+)
+## Write replayable specs + git-checked flows
 
 - **Specs:** with `@syrin/iris/test`, turn checks into `irisTest("…", async t => { await t.act(...); await t.expectSignal(...) })` — signal/testid-bound, `iris_clock` for determinism, `t.expectInputModeReal()` to skip-with-reason when real input isn't active. Run them headless via `iris drive` (the same path CI uses).
 - **Flows:** record a flow once and Iris writes it to a git-checked `.iris/flows/<name>.json` (anchored on testid/signal); `iris_flow_replay` re-resolves anchors at run time and reports **legible drift** with a nearest-match; `iris_flow_heal` proposes/applies the rebind. A fresh agent reads `.iris/contract.json` to learn your testable surface without grepping source.
