@@ -430,11 +430,15 @@ For flows worth re-checking forever — the actual test suite — record them, t
    → iris_record_stop({ recordingName: "ship-deploy" }) → iris_flow_save({ flowName: "ship-deploy" })
    ```
 2. After any change, re-verify EVERY saved flow at once:
+
    ```
    iris_flow_verify({ sessionId })
    → { status: "pass"|"fail", passed, failed, failures: [{ flow, verdict, whatChanged, whereInSource, nextAction }] }
    ```
+
    On a failure the envelope tells you exactly what changed, the `file:line`, and the fix (e.g. "rebind to 'new-deploy'") — act on `nextAction` directly. A single flow: `iris_flow_replay({ flowName })`.
+
+   > **Tool profile (default `hybrid`).** Iris advertises the ~12 core verify tools directly and keeps everything else (record/replay/verify/heal, screenshots, network-mock, …) one call away behind two meta-tools — to save ~64% of per-turn tool-schema tokens. Reach a non-core tool with `iris_run({ tool: "iris_flow_verify", args: { sessionId } })`, or `iris_tools` first to list/learn params. Prefer them advertised directly (no `iris_run`)? Set `IRIS_TOOL_PROFILE=standard` (flows + extras direct) or `=full` (all tools).
 
 ### Catch the bugs a DOM/snapshot tool misses
 
