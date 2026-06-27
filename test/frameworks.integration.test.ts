@@ -14,7 +14,7 @@
  */
 
 import { afterEach, describe, expect, it } from 'vitest';
-import { spawn, type ChildProcess } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { chromium } from 'playwright';
 import { start } from '@syrin/iris-server';
 
@@ -40,22 +40,40 @@ async function waitForPort(port: number, timeoutMs: number): Promise<boolean> {
   return false;
 }
 
-let child: ChildProcess | undefined;
+/**
+ * Reap each dev server after its test by killing its process GROUP — `detached:true` makes the spawned
+ * `pid` a group leader, so `-pid` takes the real server with it. IMPORTANT: only native `process.kill`
+ * is used here. Spawning ANY subprocess from a vitest worker (even detached) intermittently closes the
+ * worker's IPC channel (ERR_IPC_CHANNEL_CLOSED). A grandchild that ESCAPES the group (astro, remix) is
+ * therefore freed by PORT in the MAIN process instead — see `globalSetup` in vitest.integration.config.ts,
+ * which clears these fixed ports both before the run (interrupted-run leftovers) and after (this run's
+ * escapees). Between its test and that teardown an escapee is harmless: every app uses a distinct port.
+ */
+const spawned = new Set<number>();
 
-afterEach(() => {
-  if (child?.pid !== undefined) {
+function reapAll(): void {
+  for (const pid of spawned) {
     try {
-      process.kill(-child.pid, 'SIGKILL'); // kill the dev server's whole process group
+      process.kill(-pid, 'SIGKILL'); // the dev server's whole process group
     } catch {
       /* already gone */
     }
   }
-  child = undefined;
-});
+  spawned.clear();
+}
+
+afterEach(reapAll);
 
 /** Boot the app's dev server, then assert a real browser session registers on the bridge. */
 async function assertConnects(pkg: string, port: number): Promise<void> {
-  child = spawn('pnpm', ['--filter', pkg, 'dev'], { cwd: ROOT, stdio: 'ignore', detached: true });
+  const proc = spawn('pnpm', ['--filter', pkg, 'dev'], {
+    cwd: ROOT,
+    stdio: 'ignore',
+    detached: true,
+  });
+  if (proc.pid !== undefined) {
+    spawned.add(proc.pid);
+  }
   const ready = await waitForPort(port, 90_000);
   expect(ready, `${pkg} dev server never came up on :${port}`).toBe(true);
 

@@ -11,5 +11,8 @@ export default defineConfig({
     testTimeout: 60_000,
     hookTimeout: 60_000,
     fileParallelism: false,
+    // Free the suite's fixed ports up-front so a dev server/bridge leaked by a previously interrupted
+    // run can't contaminate this one. Runs in the main process, where spawning is safe.
+    globalSetup: ['./test/global-setup.ts'],
   },
 });
