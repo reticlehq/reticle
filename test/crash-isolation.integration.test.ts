@@ -46,13 +46,18 @@ describe('single-page crash isolation (real Chromium)', () => {
       .catch((e: unknown) => String((e as Error)?.message ?? e));
     await pageA.waitForEvent('crash', { timeout: 2000 }).catch(() => undefined);
 
-    // A crashed renderer can no longer run script — evaluate rejects with "Target crashed/closed".
-    const pageADead = await pageA
-      .evaluate(() => true)
-      .then(() => false)
-      .catch(() => true);
+    // A crashed renderer stops responding: evaluate either rejects ("Target crashed/closed") or
+    // never returns. Bound it — a hang well past a healthy page's instant reply IS the death signal —
+    // so CI (where the crashed target hangs instead of rejecting) can't time the whole test out.
+    const stillAlive = await Promise.race([
+      pageA
+        .evaluate(() => true)
+        .then(() => true)
+        .catch(() => false),
+      new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 3000)),
+    ]);
 
-    const rendererWentDown = crashEvent || pageADead || /crash|closed|target/i.test(navOutcome);
+    const rendererWentDown = crashEvent || !stillAlive || /crash|closed|target/i.test(navOutcome);
     expect(rendererWentDown).toBe(true); // page A's renderer actually went down
     expect(browser.isConnected()).toBe(true); // the shared browser survived one bad page
     // The sibling context is unaffected — the fleet keeps working.
