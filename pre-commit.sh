@@ -89,27 +89,28 @@ done < <(ts_staged)
 step "Build (turbo)"
 if ! pnpm -s build; then note "${RED}✗ build${NC}"; fail=1; else note "${GREEN}✓ build${NC}"; fi
 
-# ----- 3. FORMAT -----------------------------------------------------------
-step "Prettier (format check)"
-if ! pnpm -s format:check; then note "${RED}✗ prettier${NC}"; fail=1; else note "${GREEN}✓ format${NC}"; fi
-
-# ----- 4. LINT -------------------------------------------------------------
+# ----- 3. LINT -------------------------------------------------------------
 step "ESLint"
 if ! pnpm -s lint; then note "${RED}✗ eslint${NC}"; fail=1; else note "${GREEN}✓ lint${NC}"; fi
 
-# ----- 5. TYPES ------------------------------------------------------------
+# ----- 4. TYPES ------------------------------------------------------------
 step "TypeScript (tsc --build)"
 if ! pnpm -s typecheck; then note "${RED}✗ types${NC}"; fail=1; else note "${GREEN}✓ types${NC}"; fi
 
-# ----- 6. TESTS ------------------------------------------------------------
+# ----- 5. TESTS ------------------------------------------------------------
 step "Unit tests (vitest)"
 if ! pnpm -s test:unit; then note "${RED}✗ tests${NC}"; fail=1; else note "${GREEN}✓ tests${NC}"; fi
 
-# ----- 7. AUDIT ------------------------------------------------------------
-# Same gate as CI. Needs network (queries the advisory DB); an offline commit will fail here — that
-# is the intended CI parity, so a high+ vuln is caught before push, not after.
-step "Security audit (--audit-level high)"
-if ! pnpm audit --audit-level high; then note "${RED}✗ audit (high+ vulnerability)${NC}"; fail=1; else note "${GREEN}✓ audit${NC}"; fi
+# ----- 6. AUDIT ------------------------------------------------------------
+# Non-blocking, matching CI: a newly-published advisory on an untouched transitive dep must not block
+# a commit. It still runs and surfaces, so a high+ vuln is visible before push; act on it with a
+# dependency bump / pnpm override, not by blocking the commit.
+step "Security audit (--audit-level high, non-blocking)"
+if ! pnpm audit --audit-level high; then note "${YELLOW}⚠ audit (high+ advisory — non-blocking; review & bump)${NC}"; else note "${GREEN}✓ audit${NC}"; fi
+
+# ----- 7. FORMAT -----------------------------------------------------------
+step "Prettier (format check)"
+if ! pnpm -s format:check; then note "${RED}✗ prettier${NC}"; fail=1; else note "${GREEN}✓ format${NC}"; fi
 
 # ----- 8. SUMMARY ----------------------------------------------------------
 if [ "$fail" -ne 0 ]; then

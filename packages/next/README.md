@@ -20,4 +20,4 @@ const nextConfig = {
 export default irisNext.withIris(nextConfig);
 ```
 
-`withIris` is a **no-op in production** (`NODE_ENV=production`) — it only adds the loader in dev. Component identity (the component stack) works with or without it via [`@syrin/iris-react`](https://www.npmjs.com/package/@syrin/iris-react); this package adds the precise `file:line`. MIT.
+`withIris` is a **no-op in production** (`NODE_ENV=production`) — it only adds the loader in dev. Component identity (the component stack) works with or without it via [`@syrin/iris-react`](https://www.npmjs.com/package/@syrin/iris-react); this package adds the precise `file:line`. Apache-2.0.
