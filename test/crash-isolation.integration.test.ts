@@ -31,13 +31,19 @@ describe('single-page crash isolation (real Chromium)', () => {
     await pageB.goto('data:text/html,<button>B</button>');
 
     let crashed = false;
-    pageA.on('crash', () => {
-      crashed = true;
-    });
+    // Arm the crash listener BEFORE triggering, and wait for the event itself (up to a generous
+    // timeout) rather than a fixed sleep — the renderer-crash → `crash`-event latency varies by
+    // platform and CI load, so a hard 500ms wait is racy on a slow headless-Linux runner.
+    const crashSeen = pageA
+      .waitForEvent('crash', { timeout: 15_000 })
+      .then(() => {
+        crashed = true;
+      })
+      .catch(() => undefined);
 
     // Crash page A's renderer. The navigation rejects when the page goes down — expected.
     await pageA.goto('chrome://crash', { timeout: 3000 }).catch(() => undefined);
-    await new Promise((r) => setTimeout(r, 500));
+    await crashSeen;
 
     expect(crashed).toBe(true); // the pool's reclaim trigger actually fires
     expect(browser.isConnected()).toBe(true); // the shared browser survived one bad page
