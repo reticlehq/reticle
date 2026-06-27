@@ -1,0 +1,23 @@
+{
+  "name": "@syrin/iris-vibe-builder-demo",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "preview": "vite",
+    "build": "vite build",
+    "verify": "node qa/verify-live.mjs",
+    "bench": "node qa/bench.mjs",
+    "repair": "node qa/repair-loop.mjs",
+    "live": "node qa/qa-agent-live.mjs",
+    "self-test": "node qa/self-test.mjs",
+    "demo:all": "node qa/demo-all.mjs"
+  },
+  "dependencies": {
+    "@syrin/iris-browser": "workspace:*"
+  },
+  "devDependencies": {
+    "@syrin/iris-server": "workspace:*",
+    "vite": "^8.0.16"
+  }
+}

@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Builder — AI app builder, verified by Syrin Iris</title>
+    <style>
+      :root {
+        --bg: #0b0e14; --panel: #141925; --line: #2a3445; --text: #e6edf3;
+        --dim: #8b98ad; --accent: #6ea8fe; --pass: #3fb950; --fail: #f85149; --warn: #d29922;
+      }
+      * { box-sizing: border-box; }
+      body { margin: 0; font-family: ui-sans-serif, system-ui, sans-serif; background: var(--bg); color: var(--text); height: 100vh; display: flex; flex-direction: column; }
+      header { padding: 0.8rem 1.2rem; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 0.6rem; }
+      header b { font-size: 1.05rem; }
+      header .tag { font-size: 0.72rem; color: var(--dim); border: 1px solid var(--line); border-radius: 999px; padding: 0.15rem 0.6rem; }
+      main { flex: 1; display: grid; grid-template-columns: 320px 1fr 380px; min-height: 0; }
+      .col { padding: 1rem; overflow: auto; }
+      .col + .col { border-left: 1px solid var(--line); }
+      h2 { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--dim); margin: 0 0 0.7rem; }
+      textarea, select, button { width: 100%; background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 0.6rem; font: inherit; }
+      textarea { resize: vertical; min-height: 84px; }
+      label { display: block; font-size: 0.8rem; color: var(--dim); margin: 0.9rem 0 0.3rem; }
+      button { cursor: pointer; font-weight: 600; margin-top: 0.8rem; transition: border-color 0.15s; }
+      button.primary { background: var(--accent); color: #06101f; border-color: var(--accent); }
+      button:disabled { opacity: 0.5; cursor: not-allowed; }
+      button:not(:disabled):hover { border-color: var(--accent); }
+      iframe { width: 100%; height: 100%; border: 0; background: #fff; border-radius: 8px; }
+      .frame-wrap { height: calc(100% - 2rem); }
+      .placeholder { height: 100%; display: flex; align-items: center; justify-content: center; color: var(--dim); border: 1px dashed var(--line); border-radius: 8px; text-align: center; padding: 2rem; }
+      .gate { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 0.8rem; margin-bottom: 0.8rem; }
+      .gate h3 { margin: 0 0 0.3rem; font-size: 0.9rem; display: flex; justify-content: space-between; align-items: center; }
+      .pill { font-size: 0.72rem; font-weight: 700; padding: 0.15rem 0.55rem; border-radius: 999px; }
+      .pill.pass { background: rgba(63,185,80,0.15); color: var(--pass); }
+      .pill.fail { background: rgba(248,81,73,0.15); color: var(--fail); }
+      .gate p { margin: 0.2rem 0 0; font-size: 0.8rem; color: var(--dim); }
+      .check { display: flex; gap: 0.5rem; font-size: 0.82rem; padding: 0.22rem 0; border-top: 1px solid var(--line); }
+      .check:first-of-type { border-top: 0; }
+      .check .mk { width: 1.1rem; }
+      .check .ok { color: var(--pass); } .check .no { color: var(--fail); }
+      .check small { color: var(--dim); display: block; }
+      .banner { border-radius: 10px; padding: 0.8rem; font-weight: 700; text-align: center; margin-bottom: 0.8rem; }
+      .banner.block { background: rgba(248,81,73,0.13); color: var(--fail); border: 1px solid var(--fail); }
+      .banner.ship { background: rgba(63,185,80,0.13); color: var(--pass); border: 1px solid var(--pass); }
+      .spinner { color: var(--dim); font-size: 0.85rem; }
+      .contrast { font-size: 0.8rem; color: var(--dim); margin-top: 0.4rem; line-height: 1.5; }
+      .contrast b { color: var(--text); }
+    </style>
+  </head>
+  <body>
+    <header>
+      <b>⚒ Builder</b>
+      <span class="tag">AI app builder</span>
+      <span class="tag">QA by Syrin Iris</span>
+    </header>
+    <main>
+      <section class="col">
+        <h2>Prompt</h2>
+        <textarea id="prompt" data-testid="prompt">Build me an expense tracker with categories and a running total.</textarea>
+        <button class="primary" id="generate" data-testid="generate">Generate app →</button>
+        <label for="bug">Simulate what the generation agent produced</label>
+        <select id="bug" data-testid="bug">
+          <option value="none">✓ correct build</option>
+          <option value="mock-data">mock-data — POST 200 but never persists</option>
+          <option value="double-submit">double-submit — Add fires POST twice</option>
+          <option value="console-error">console-error — throws, UI renders</option>
+          <option value="no-validation">no-validation — "abc" accepted</option>
+          <option value="dead-delete">dead-delete — DELETE 200, never removes</option>
+          <option value="wrong-total">wrong-total — Total lies vs data</option>
+        </select>
+        <p class="contrast">Each is a <b>silent</b> failure: the page renders and every request returns 200. A screenshot/HTTP gate sees nothing wrong.</p>
+      </section>
+      <section class="col">
+        <h2>Sandbox preview</h2>
+        <div class="frame-wrap">
+          <div class="placeholder" id="ph">Click “Generate app” to boot the preview.</div>
+          <iframe id="frame" data-testid="preview-frame" style="display: none"></iframe>
+        </div>
+      </section>
+      <section class="col">
+        <h2>QA agent</h2>
+        <label for="engine">Engine</label>
+        <select id="engine" data-testid="engine">
+          <option value="scripted">Scripted — deterministic gate (6/6, 0 cost)</option>
+          <option value="live">Live LLM agent — autonomous reasoning (Groq/Kimi)</option>
+        </select>
+        <button id="verify" data-testid="verify" disabled>Run QA agent on this build</button>
+        <div id="result" data-testid="result" style="margin-top: 1rem"></div>
+      </section>
+    </main>
+    <script type="module" src="/src/builder-ui.ts"></script>
+  </body>
+</html>
