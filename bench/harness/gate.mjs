@@ -1,15 +1,16 @@
 // Benchmark regression gate. Compares the FRESH raw results (written by bench-all.mjs) against the
 // PREVIOUS row in bench/history.jsonl and fails (exit 1) on a regression. Policy (locked with the
-// user): hard gate vs last + an RCR floor. Deterministic layers (A scripted, C replay) block; Layer B
-// (a paid LLM loop) is never gated here.
+// user): hard gate vs last + a catch-rate floor. The deterministic passes (OBSERVATION-COST + REPLAY)
+// block; the AGENT-LOOP pass (a paid LLM loop) is never gated here.
+// (Raw JSON keys keep the legacy A/B/C codes — ranLayerA, layer_c — for data continuity.)
 //
 //   node bench/harness/bench-all.mjs --full && node bench/harness/gate.mjs
 //
 // Hard fails:
-//   - RCR < 1.0, or any false positive (Layer A — only when analysis.json is present this pass)
-//   - VE drops > VE_TOL vs the last row (Layer A)
-//   - selector detection not full, or consequence detection not full (Layer C)
-//   - per-run replay tokens rise > TOKEN_TOL vs the last row (Layer C)
+//   - catch-rate < 1.0, or any false positive (OBSERVATION-COST — only when analysis.json is present)
+//   - efficiency drops > VE_TOL vs the last row (OBSERVATION-COST)
+//   - selector detection not full, or consequence detection not full (REPLAY)
+//   - per-run replay tokens rise > TOKEN_TOL vs the last row (REPLAY)
 import { readFileSync, existsSync } from 'node:fs';
 
 const VE_TOL = 0.03; // VE may dip at most 3% vs last (noise) before it's a regression
@@ -41,7 +42,7 @@ const prev = lastRow();
 const manifest = readRaw('bench/raw/bench-run.json');
 const ranLayerA = manifest === null ? true : manifest.ranLayerA === true;
 
-// ---- Layer A (scripted observation) — only when it was freshly run this pass ----
+// ---- OBSERVATION-COST pass (scripted observation, "Layer A") — only when freshly run this pass ----
 const analysis = ranLayerA ? readRaw('bench/raw/analysis.json') : null;
 if (analysis !== null) {
   const iris = analysis.per_tool?.iris ?? {};
@@ -62,14 +63,14 @@ if (analysis !== null) {
       `VE regressed: ${ve} < ${lastVe} (−${(((lastVe - ve) / lastVe) * 100).toFixed(1)}%)`,
     );
   }
-  scorecard.push(['Layer A RCR', prev?.per_tool?.iris?.rcr ?? '—', rcr]);
-  scorecard.push(['Layer A FP', '0', fp]);
-  scorecard.push(['Layer A VE', lastVe ?? '—', ve]);
+  scorecard.push(['Observe · catch-rate', prev?.per_tool?.iris?.rcr ?? '—', rcr]);
+  scorecard.push(['Observe · false-positives', '0', fp]);
+  scorecard.push(['Observe · efficiency', lastVe ?? '—', ve]);
 } else {
-  scorecard.push(['Layer A', '—', 'not run this pass (advisory skip)']);
+  scorecard.push(['Observation-cost', '—', 'not run this pass (advisory skip)']);
 }
 
-// ---- Layer C (deterministic replay) — always gated when the raws are present ----
+// ---- REPLAY pass (deterministic replay, "Layer C") — always gated when the raws are present ----
 const cost = readRaw('bench/raw/replay-bench.json');
 const selector = readRaw('bench/raw/replay-detect.json');
 const consequence = readRaw('bench/raw/replay-detect-consequence.json');
@@ -84,7 +85,7 @@ if (selector !== null) {
   if (lastR !== null && r !== null && r.total < lastR.total) {
     failures.push(`selector scenarios dropped: ${r.total} < ${lastR.total}`);
   }
-  scorecard.push(['Layer C selector', lastC?.selector_detection ?? '—', selector.detection_rate]);
+  scorecard.push(['Replay · selector', lastC?.selector_detection ?? '—', selector.detection_rate]);
 }
 if (consequence !== null) {
   const r = parseRate(consequence.detection_rate);
@@ -92,7 +93,7 @@ if (consequence !== null) {
     failures.push(`consequence detection not full: ${consequence.detection_rate}`);
   }
   scorecard.push([
-    'Layer C consequence',
+    'Replay · consequence',
     lastC?.consequence_detection ?? '—',
     consequence.detection_rate,
   ]);
@@ -107,7 +108,7 @@ if (stateOracle !== null) {
   if (lastR !== null && r !== null && r.total < lastR.total) {
     failures.push(`state-oracle scenarios dropped: ${r.total} < ${lastR.total}`);
   }
-  scorecard.push(['Layer C state', lastC?.state_detection ?? '—', stateOracle.detection_rate]);
+  scorecard.push(['Replay · state', lastC?.state_detection ?? '—', stateOracle.detection_rate]);
 }
 if (cost !== null) {
   const now = cost.per_run?.iris_replay_mean_tokens ?? null;
@@ -117,7 +118,7 @@ if (cost !== null) {
       `replay tokens rose: ${now} > ${last} (+${(((now - last) / last) * 100).toFixed(1)}%)`,
     );
   }
-  scorecard.push(['Layer C replay tok', last ?? '—', now]);
+  scorecard.push(['Replay · tokens/run', last ?? '—', now]);
 }
 
 // ---- Report ----

@@ -24,6 +24,9 @@ function rec(call, res) {
   };
 }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+/** How long to wait after spawning the iris daemon for the driven browser to load + the SDK to connect.
+ *  Raise on a slow machine/CI via BENCH_IRIS_READY_MS. */
+const IRIS_READY_MS = Number(process.env.BENCH_IRIS_READY_MS ?? '3500');
 
 // ---------- Playwright MCP ----------
 export class PlaywrightAdapter {
@@ -203,7 +206,7 @@ export class IrisAdapter {
       { IRIS_PORT: this.port },
     );
     await this.c.start();
-    await sleep(3500); // driven browser load + SDK connect
+    await sleep(IRIS_READY_MS); // driven browser load + SDK connect (BENCH_IRIS_READY_MS to tune)
   }
   async navigate() {
     return rec('iris_navigate', await this.c.callTool('iris_navigate', { url: this.url }));

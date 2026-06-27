@@ -4,7 +4,17 @@ import { LOOPBACK_HOST } from '@syrin/iris-protocol';
 import { MCP_SSE_PATH } from './http-server.js';
 import { log } from './log.js';
 
-const DAEMON_READY_TIMEOUT_MS = 10_000;
+const DEFAULT_DAEMON_READY_TIMEOUT_MS = 10_000;
+/**
+ * How long to wait for the spawned daemon's port to accept connections before giving up. The default
+ * suits a normal machine; a slow CI/VM (heavy headless-browser launch) can raise it via the
+ * IRIS_DAEMON_READY_TIMEOUT_MS env var. Invalid/absent values fall back to the default.
+ */
+const envDaemonReadyTimeoutMs = Number(process.env['IRIS_DAEMON_READY_TIMEOUT_MS']);
+const DAEMON_READY_TIMEOUT_MS =
+  Number.isFinite(envDaemonReadyTimeoutMs) && envDaemonReadyTimeoutMs > 0
+    ? envDaemonReadyTimeoutMs
+    : DEFAULT_DAEMON_READY_TIMEOUT_MS;
 const DAEMON_POLL_INTERVAL_MS = 100;
 
 function delay(ms: number): Promise<void> {

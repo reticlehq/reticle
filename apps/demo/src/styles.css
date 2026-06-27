@@ -1,6 +1,7 @@
 /* ============================================================================
    Iris showcase dashboard — "mission control" design system.
-   Mirrors src/design/tokens.ts. Deep near-black instrument panel, signature
+   The CSS custom properties in :root below are the source of truth for design
+   values. Deep near-black instrument panel, signature
    iris gradient (cyan → indigo → violet), aurora glow + dotted grid texture,
    hairline-bordered glass, JetBrains-Mono instrumentation.
    ============================================================================ */

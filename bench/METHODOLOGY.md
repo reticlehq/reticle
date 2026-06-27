@@ -128,17 +128,21 @@ These are exactly the kind of subtle measurement bugs that flatter or punish a t
 ## Reproducibility
 
 ```
-# 1. start backends
+# Easiest: run the deterministic suite end-to-end (boots fixtures, gates vs baseline):
+node bench/harness/bench-all.mjs --full && node bench/harness/gate.mjs
+
+# Or run the passes by hand:
+# 1. start backends — api on :8787, demo on :4312; the demo's embedded SDK dials the bench daemon (:4455)
 node apps/api/server.mjs &
-pnpm --filter @syrin/iris-demo dev:iris &        # serves demo; bakes __IRIS_PORT__=4400
+IRIS_PORT=4455 pnpm --filter @syrin/iris-demo exec vite --port 4312 --strictPort &
 
 # 2. verify all three tool servers boot + list tools
 node bench/harness/probe.mjs
 
-# 3. Layer A (no key): observation cost
+# 3. observation-cost pass ("Layer A", no key): tokens each tool injects per look
 node bench/harness/run-observation.mjs            # all scenarios x all tools
 
-# 4. Layer B (needs key): full agent loop
+# 4. agent-loop pass ("Layer B", needs key): full LLM-driven loop, authoritative usage
 ANTHROPIC_API_KEY=... node bench/harness/agent-loop.mjs
 
 # raw outputs: bench/raw/*.json ; logs: bench/logs/

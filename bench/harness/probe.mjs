@@ -2,6 +2,10 @@
 // Proves connectivity and reveals the exact tool surface so recipes are accurate.
 import { McpStdioClient } from './mcp-client.mjs';
 
+// The demo the iris daemon drives — same fixture the rest of the harness uses (override via env).
+const DEMO_PORT = process.env.BENCH_DEMO_PORT ?? '4312';
+const PROBE_IRIS_PORT = process.env.BENCH_PROBE_IRIS_PORT ?? '58460';
+
 const SERVERS = {
   playwright: {
     command: 'npx',
@@ -17,11 +21,11 @@ const SERVERS = {
       'packages/server/dist/cli.js',
       'mcp',
       '--port',
-      '58460',
+      PROBE_IRIS_PORT,
       '--drive',
-      'http://localhost:4311',
+      `http://localhost:${DEMO_PORT}`,
     ],
-    env: { IRIS_PORT: '58460' },
+    env: { IRIS_PORT: PROBE_IRIS_PORT },
   },
 };
 
