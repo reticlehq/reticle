@@ -80,7 +80,7 @@ type IrisRegisterTool = (
 
 export function createMcpServer(
   deps: ToolDeps,
-  profile: ToolProfile = TOOL_PROFILE.FULL,
+  profile: ToolProfile = TOOL_PROFILE.HYBRID,
 ): McpServer {
   const encoding = (process.env[ENCODING_ENV] ?? '').toLowerCase();
   const server = new McpServer(SERVER_INFO);

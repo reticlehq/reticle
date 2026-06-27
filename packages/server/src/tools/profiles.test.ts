@@ -49,8 +49,9 @@ describe('tool profiles', () => {
     expect(resolveToolProfile()).toBe(TOOL_PROFILE.CORE);
   });
 
-  it('7: resolveToolProfile — defaults to FULL, and an unknown value fails open to FULL', () => {
-    expect(resolveToolProfile()).toBe(TOOL_PROFILE.FULL);
-    expect(resolveToolProfile('bogus')).toBe(TOOL_PROFILE.FULL);
+  it('7: resolveToolProfile — defaults to HYBRID, an unknown value fails open to HYBRID, explicit full is honored', () => {
+    expect(resolveToolProfile()).toBe(TOOL_PROFILE.HYBRID);
+    expect(resolveToolProfile('bogus')).toBe(TOOL_PROFILE.HYBRID);
+    expect(resolveToolProfile(TOOL_PROFILE.FULL)).toBe(TOOL_PROFILE.FULL);
   });
 });

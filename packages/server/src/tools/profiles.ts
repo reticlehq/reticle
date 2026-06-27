@@ -12,7 +12,9 @@ import type { ToolDef } from './tools.js';
  *              ~12 tools. The recommended profile for agent-driven verification.
  *   standard — core + common extras (inspect, sequences, animations, flows, session lifecycle,
  *              scroll, baselines, …). For agents that need more than the bare loop.
- *   full     — all tools. The current default for existing callers.
+ *   hybrid   — THE DEFAULT: core verify+oracle tools advertised directly + 2 meta-tools for on-demand
+ *              reach to everything else. Core accuracy/detection at ~64% less schema tax than full.
+ *   full     — all tools advertised directly. Opt in via IRIS_TOOL_PROFILE=full for hard-call scripts.
  */
 export const TOOL_PROFILE = {
   /** dynamic — advertise only 2 meta-tools (iris_tools + iris_run); load real tools on demand.
@@ -89,7 +91,11 @@ export function resolveToolProfile(explicit?: string): ToolProfile {
   if (raw === TOOL_PROFILE.HYBRID) return TOOL_PROFILE.HYBRID;
   if (raw === TOOL_PROFILE.CORE) return TOOL_PROFILE.CORE;
   if (raw === TOOL_PROFILE.STANDARD) return TOOL_PROFILE.STANDARD;
-  return TOOL_PROFILE.FULL;
+  if (raw === TOOL_PROFILE.FULL) return TOOL_PROFILE.FULL;
+  // Default: hybrid — the core verify+oracle tools advertised directly (no detection loss, verified
+  // 10/10 on the regression bench) PLUS the 2 meta-tools for on-demand reach to every other tool. ~64%
+  // less per-turn schema than `full` at the same accuracy. Explicit `full` still opts into all tools.
+  return TOOL_PROFILE.HYBRID;
 }
 
 export function filterTools(tools: ToolDef[], profile: ToolProfile): ToolDef[] {
