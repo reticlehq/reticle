@@ -154,12 +154,12 @@ function gatherPlanInput(options: InitOptions, io: InitIo, pkgRaw: string): Plan
 
 function restartHint(framework: Framework): string {
   if (framework === Framework.NEXT)
-    return 'Restart `next dev`, then ask your agent: "List Reticle Reticle sessions".';
+    return 'Restart `next dev`, then ask your agent: "List Reticle sessions".';
   if (framework === Framework.VITE)
-    return 'Restart `vite`, then ask your agent: "List Reticle Reticle sessions".';
+    return 'Restart `vite`, then ask your agent: "List Reticle sessions".';
   if (framework === Framework.SVELTEKIT)
-    return 'Restart your dev server (`npm run dev`), then ask your agent: "List Reticle Reticle sessions".';
-  return 'Reload your app on localhost, then ask your agent: "List Reticle Reticle sessions".';
+    return 'Restart your dev server (`npm run dev`), then ask your agent: "List Reticle sessions".';
+  return 'Reload your app on localhost, then ask your agent: "List Reticle sessions".';
 }
 
 function report(plan: Plan, dryRun: boolean, failed: ReadonlySet<string>, io: InitIo): InitResult {

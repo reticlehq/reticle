@@ -203,7 +203,7 @@ The regression-testing release. Reticle's flow `success` is now a **declared, de
 
 ## [0.4.0] — 2026-06-11
 
-First public release. Reticle gives your coding agent **eyes** into your running web app and returns a **verdict with evidence** instead of a screenshot.
+First public release. Reticle is the **proof layer for AI agents** — it verifies your running web app from the inside and returns a **verdict with evidence** instead of a screenshot.
 
 ### Added
 

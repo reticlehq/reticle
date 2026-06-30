@@ -53,10 +53,10 @@ export function claudeAvailableProbe(): { command: string; args: string[] } {
   return { command: CLAUDE_CLI, args: ['--version'] };
 }
 
-/** Printed when the `claude` CLI isn't available — register Reticle Reticle globally once, by hand. */
+/** Printed when the `claude` CLI isn't available — register Reticle globally once, by hand. */
 export function mcpManual(): string {
   const tail = serverInvocation().join(' ');
-  return `Register the Reticle Reticle MCP server ONCE, globally (so every project gets it):
+  return `Register the Reticle MCP server ONCE, globally (so every project gets it):
 
   ${CLAUDE_CLI} ${MCP_SUBCOMMAND} add ${MCP_SERVER_NAME} -s user -- ${tail}
 

@@ -1,6 +1,6 @@
 # Reticle — agent cheat-sheet
 
-One screen to get fluent. Reticle gives you **eyes into a running app** — no screenshots, no vision model, evidence not prose. Everything below returns structured data. Full guide: [usage.md](usage.md).
+One screen to get fluent. Reticle is the **proof layer for AI agents** — no screenshots, no vision model, evidence not prose. Everything below returns structured data. Full guide: [usage.md](usage.md).
 
 ## The core loop: look → act → observe → assert
 

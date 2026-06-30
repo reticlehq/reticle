@@ -132,7 +132,7 @@ export function connectionPolicy(
 
 /** HUD summary when the SDK self-ends a session because the bridge (server/agent) became unreachable. */
 const BRIDGE_LOST_SUMMARY =
-  'Session ended — lost connection to Reticle Reticle (the agent is no longer running).';
+  'Session ended — lost connection to Reticle (the agent is no longer running).';
 
 /**
  * Resolve the session label. An absent label or the `auto` sentinel yields a fresh per-tab id (via

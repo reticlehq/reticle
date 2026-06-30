@@ -5,7 +5,7 @@ import { Framework, PackageManager, type Detection } from './detect.js';
 const CLAUDE_STEP = 'MCP server (Claude, global)';
 const CURSOR_STEP = 'MCP server (Cursor, global)';
 const MCP_STEP = 'MCP server (global)';
-const CONFIG_STEP = 'Reticle Reticle config';
+const CONFIG_STEP = 'Reticle config';
 
 function detection(framework: Framework, reactMajor = 19): Detection {
   return {

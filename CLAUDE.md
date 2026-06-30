@@ -4,7 +4,7 @@
 
 ## What Reticle is
 
-Reticle gives AI coding agents **eyes** into a running web app — without screenshots. The app embeds a dev-only SDK that instruments the DOM, network, routing, console, animations, and framework state; a local bridge + MCP server exposes that as structured tools the agent uses to **look, act, observe, and assert**. See `plan/` for the full design (gitignored).
+Reticle is the **proof layer for AI agents** — it verifies a running web app from the inside, without screenshots. The app embeds a dev-only SDK that instruments the DOM, network, routing, console, animations, and framework state; a local bridge + MCP server exposes that as structured tools the agent uses to **look, act, observe, and assert**. See `plan/` for the full design (gitignored).
 
 ## Monorepo layout
 

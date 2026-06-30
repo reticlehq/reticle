@@ -1,4 +1,4 @@
-# Reticle Reticle
+# Reticle
 
 Start by detecting which mode to run:
 
@@ -47,11 +47,11 @@ which zed       2>/dev/null && echo "zed"
 
 3. What port does your dev server run on?
    (e.g. 3000, 5173, 8080 — the port number only, not the full URL)
-   Reticle Reticle attaches to your running server — you keep running `npm run dev` yourself.
-   Reticle Reticle does NOT start or manage your dev server.
+   Reticle attaches to your running server — you keep running `npm run dev` yourself.
+   Reticle does NOT start or manage your dev server.
 
 4. Do you already have data-testid attributes on your key elements?
-   (If yes, Reticle Reticle reuses them. If no, we'll add a handful to the most important elements.)
+   (If yes, Reticle reuses them. If no, we'll add a handful to the most important elements.)
 
 5. Which AI coding tool(s) will you use this project with?
    (I detected: <list from detection above, or "none found">)
@@ -83,7 +83,7 @@ which zed       2>/dev/null && echo "zed"
 
 **Claude Code** (user-level, default)
 
-Register once globally so Reticle Reticle is available in every project:
+Register once globally so Reticle is available in every project:
 
 ```bash
 claude mcp add reticle -s user -- npx @reticle/core mcp
@@ -210,7 +210,7 @@ Only add this if the user explicitly asks for the daemon to stop between turns:
 
 ## Step 2 — Install the SDK
 
-> **Mental model:** The user keeps running their dev server (`npm run dev`) themselves. Reticle Reticle embeds a tiny SDK in the app that connects to a local bridge daemon. The agent talks to the daemon over MCP — no Chromium is downloaded or needed for standard agent workflows. Playwright is only required if you explicitly use `--drive` mode.
+> **Mental model:** The user keeps running their dev server (`npm run dev`) themselves. Reticle embeds a tiny SDK in the app that connects to a local bridge daemon. The agent talks to the daemon over MCP — no Chromium is downloaded or needed for standard agent workflows. Playwright is only required if you explicitly use `--drive` mode.
 
 ```bash
 npm install --save-dev @reticle/core    # swap npm for pnpm/yarn/bun per Q2
@@ -309,7 +309,7 @@ If setting up manually, write `.reticle.json` to the project root (commit this �
 }
 ```
 
-Fill in framework from Q1, port from Q3. Omit `port` if using the default (4400). Each project should have its own port so multiple apps can run Reticle Reticle simultaneously without conflicts.
+Fill in framework from Q1, port from Q3. Omit `port` if using the default (4400). Each project should have its own port so multiple apps can run Reticle simultaneously without conflicts.
 
 Tell the user: **"Run `npm run dev` (your normal dev server) and open the app in your browser."**
 
@@ -317,7 +317,7 @@ Once they confirm the app is open, call `reticle_wait_ready()` then `reticle_ses
 
 When a session is confirmed, tell the user:
 
-> "Reticle Reticle is set up. Type `/reticle` anytime to verify the app after a change."
+> "Reticle is set up. Type `/reticle` anytime to verify the app after a change."
 
 **Setup complete — stop here. Do not proceed to Test mode.**
 
@@ -337,7 +337,7 @@ Just ran `reticle init` or started the dev server? Call **`reticle_wait_ready()`
 
 **B. No sessions:** Tell the user:
 
-> "No app connected. Run your dev server (`npm run dev`) and open the app in your browser, then try `/reticle` again. Reticle Reticle never starts the dev server for you — that's your job." Stop here.
+> "No app connected. Run your dev server (`npm run dev`) and open the app in your browser, then try `/reticle` again. Reticle never starts the dev server for you — that's your job." Stop here.
 
 **C. Multiple sessions — ask:**
 
@@ -463,10 +463,10 @@ Check it at the start of a session and whenever the human may have flagged somet
 
 ## Phase 5 — Report
 
-Always refer to the tool as **Reticle Reticle** in reports, summaries, and messages to the user.
+Always refer to the tool as **Reticle** in reports, summaries, and messages to the user.
 
 ```
-## Reticle Reticle — <route or feature>
+## Reticle — <route or feature>
 
 **Result: ✅ PASS / ❌ FAIL / ⚠️ PARTIAL**
 
@@ -513,7 +513,7 @@ Use `npx @reticle/core status` to see which daemons are running and which sessio
 
 ### No Chromium / Playwright needed for standard use
 
-Reticle Reticle does NOT download Chromium for normal agent workflows. The browser SDK runs inside the user's own browser — the agent sees the DOM, network, console, and state through the WebSocket bridge. Playwright is only installed if you explicitly call `reticle serve --drive <url>` or `reticle verify`, which launch an autonomous browser for unattended automation.
+Reticle does NOT download Chromium for normal agent workflows. The browser SDK runs inside the user's own browser — the agent sees the DOM, network, console, and state through the WebSocket bridge. Playwright is only installed if you explicitly call `reticle serve --drive <url>` or `reticle verify`, which launch an autonomous browser for unattended automation.
 
 To attach to a browser the user already has open (zero download, zero extra process):
 
@@ -524,7 +524,7 @@ To attach to a browser the user already has open (zero download, zero extra proc
 RETICLE_CDP_URL=http://localhost:9222 npx @reticle/core mcp
 ```
 
-This connects Reticle Reticle to the existing Chrome — native clicks and screenshots work without Playwright.
+This connects Reticle to the existing Chrome — native clicks and screenshots work without Playwright.
 
 ### "Failed to reconnect to reticle: -32000"
 

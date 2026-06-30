@@ -1,6 +1,6 @@
 # @reticle/browser
 
-Browser SDK for [Reticle](https://github.com/reticlehq/reticle) — gives AI coding agents eyes into your running web app. Embed it (dev only); it instruments the DOM, network, routes, console, animations, and scroll, and answers the agent's look/act/observe commands over a local bridge.
+Browser SDK for [Reticle](https://github.com/reticlehq/reticle) — the proof layer for AI agents, embedded in your running web app. Embed it (dev only); it instruments the DOM, network, routes, console, animations, and scroll, and answers the agent's look/act/observe commands over a local bridge.
 
 ```bash
 npm i -D @reticle/browser

@@ -112,7 +112,7 @@ if (import.meta.env.DEV) {
 }
 
 /**
- * Root-level project config for Reticle Reticle. Written by `reticle init`; read by `reticle mcp` for the port
+ * Root-level project config for Reticle. Written by `reticle init`; read by `reticle mcp` for the port
  * and by tooling for the stable projectId (the app's identity across port changes).
  */
 export function reticleConfigContent(

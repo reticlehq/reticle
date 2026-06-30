@@ -2,7 +2,7 @@
   "name": "reticle-monorepo",
   "version": "0.0.0",
   "private": true,
-  "description": "Reticle — eyes for coding agents. Observe and verify a running web app over MCP, no screenshots.",
+  "description": "Reticle — the proof layer for AI agents. Observe and verify a running web app over MCP, no screenshots.",
   "packageManager": "pnpm@10.33.2",
   "engines": {
     "node": ">=22.12"

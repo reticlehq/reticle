@@ -1,6 +1,6 @@
 # Contributing to Reticle
 
-Thanks for your interest in Reticle! Reticle gives AI coding agents **eyes** into a running web app — without screenshots. It instruments the DOM, network, routing, console, and framework state in your app, and exposes that to an agent over MCP as a `look → act → observe → assert` loop.
+Thanks for your interest in Reticle! Reticle is the **proof layer for AI agents** — it verifies a running web app from the inside, without screenshots. It instruments the DOM, network, routing, console, and framework state in your app, and exposes that to an agent over MCP as a `look → act → observe → assert` loop.
 
 This guide covers how to set up the repo, the rules we hold the line on, and how to land a change. We aim to make contributing pleasant — if anything here is unclear, open an issue.
 

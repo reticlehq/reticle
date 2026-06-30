@@ -287,7 +287,7 @@ function svelteKitSteps(input: PlanInput): Step[] {
 function reticleConfigStep(input: PlanInput): Step {
   if (input.reticleConfigExists === true) {
     return {
-      title: 'Reticle Reticle config',
+      title: 'Reticle config',
       target: RETICLE_CONFIG_FILE,
       status: StepStatus.ALREADY,
       detail: '.reticle.json already exists',
@@ -299,7 +299,7 @@ function reticleConfigStep(input: PlanInput): Step {
     input.options.projectId,
   );
   return {
-    title: 'Reticle Reticle config',
+    title: 'Reticle config',
     target: RETICLE_CONFIG_FILE,
     status: StepStatus.APPLY,
     detail: 'write project config (framework + port)',

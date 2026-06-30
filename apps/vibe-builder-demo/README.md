@@ -1,7 +1,7 @@
-# Vibe Builder demo — an AI app-builder, with Reticle Reticle as the QA layer
+# Vibe Builder demo — an AI app-builder, with Reticle as the QA layer
 
 This demo replicates the shape of an AI app builder and shows what changes when
-Reticle Reticle is the verification layer. It exists to answer one question directly:
+Reticle is the verification layer. It exists to answer one question directly:
 
 > **Do we perform well in a sandbox preview, driven by an API-style agent — not just a CLI coding agent?**
 
