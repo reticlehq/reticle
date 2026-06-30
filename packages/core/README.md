@@ -1,9 +1,6 @@
 <div align="center">
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://cdn.jsdelivr.net/gh/reticlehq/reticle@main/assets/readme/lockup-on-dark.png" />
-  <img alt="Reticle — the proof layer for AI agents" src="https://cdn.jsdelivr.net/gh/reticlehq/reticle@main/assets/readme/lockup-on-light.png" width="300" />
-</picture>
+<img alt="Reticle — the proof layer for AI agents" src="https://cdn.jsdelivr.net/gh/reticlehq/reticle@main/assets/readme/logo-light.png" width="250" />
 
 ### Your AI writes the code. Reticle tells it whether the code actually works — with evidence, not screenshots.
 
