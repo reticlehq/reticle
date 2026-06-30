@@ -19,7 +19,7 @@ import {
   type FlowFile,
   type FlowStep,
   type RunRecord,
-} from '@syrin/iris-protocol';
+} from '@reticle/protocol';
 import { classifyFlowAssertions, FlowAssertionGrade } from '../flows/flow-classify.js';
 import { successLabel } from '../flows/flow-success.js';
 import { flowRisk, latestRun, rankByRisk, RiskLevel, type FlowRisk } from './flow-risk.js';
@@ -171,7 +171,7 @@ function buildSummary(
   topRisk: { name: string; reason: string } | undefined,
 ): string {
   if (flowCount === 0) {
-    return 'No saved flows yet — record the critical journeys (iris_record_start) so the agent learns the app.';
+    return 'No saved flows yet — record the critical journeys (reticle_record_start) so the agent learns the app.';
   }
   const parts = [
     `${String(flowCount)} flow${flowCount === 1 ? '' : 's'}: ${String(coverage.asserted)} asserted, ${String(coverage.presenceOnly)} presence-only, ${String(coverage.assertionFree)} assertion-free`,

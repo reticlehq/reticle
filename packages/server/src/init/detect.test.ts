@@ -101,7 +101,7 @@ describe('detect package manager', () => {
 
 describe('installCommand', () => {
   it('renders the dev-install command per manager', () => {
-    expect(installCommand(PackageManager.PNPM, '@syrin/iris')).toBe('pnpm add -D @syrin/iris');
-    expect(installCommand(PackageManager.NPM, '@syrin/iris')).toBe('npm i -D @syrin/iris');
+    expect(installCommand(PackageManager.PNPM, '@reticle/core')).toBe('pnpm add -D @reticle/core');
+    expect(installCommand(PackageManager.NPM, '@reticle/core')).toBe('npm i -D @reticle/core');
   });
 });

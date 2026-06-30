@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { WebSocket } from 'ws';
 import {
-  IRIS_PROTOCOL_VERSION,
+  RETICLE_PROTOCOL_VERSION,
   MessageKind,
   EventType,
   SESSION_HEALTH,
@@ -9,13 +9,13 @@ import {
   SessionState,
   UNSCRIPTABLE_TAB_RECOMMENDATION,
   type HelloMessage,
-  type IrisEvent,
-} from '@syrin/iris-protocol';
+  type ReticleEvent,
+} from '@reticle/protocol';
 import { Session, SessionManager } from './session.js';
 
 const HELLO: HelloMessage = {
   kind: MessageKind.HELLO,
-  protocolVersion: IRIS_PROTOCOL_VERSION,
+  protocolVersion: RETICLE_PROTOCOL_VERSION,
   sessionId: 'demo',
   url: 'http://localhost/',
   title: 'Demo',
@@ -37,11 +37,11 @@ function makeSession(): { session: Session; tick: (ms: number) => void } {
 }
 
 describe('SPA navigation keeps session.url live (real-input correlation fix)', () => {
-  const routeEvent = (to: string): IrisEvent =>
+  const routeEvent = (to: string): ReticleEvent =>
     ({
       type: EventType.ROUTE_CHANGE,
       data: { from: 'x', to, pathname: '', search: '', hash: '' },
-    }) as unknown as IrisEvent;
+    }) as unknown as ReticleEvent;
 
   it('updates url on a ROUTE_CHANGE event (so CDP page correlation tracks SPA nav)', () => {
     const { session } = makeSession();
@@ -54,8 +54,11 @@ describe('SPA navigation keeps session.url live (real-input correlation fix)', (
   it('ignores a route event with a missing/empty/non-string `to` (keeps the last good url)', () => {
     const { session } = makeSession();
     session.pushEvent(routeEvent('http://localhost/a'));
-    session.pushEvent({ type: EventType.ROUTE_CHANGE, data: { to: '' } } as unknown as IrisEvent);
-    session.pushEvent({ type: EventType.ROUTE_CHANGE, data: {} } as unknown as IrisEvent);
+    session.pushEvent({
+      type: EventType.ROUTE_CHANGE,
+      data: { to: '' },
+    } as unknown as ReticleEvent);
+    session.pushEvent({ type: EventType.ROUTE_CHANGE, data: {} } as unknown as ReticleEvent);
     expect(session.url).toBe('http://localhost/a');
   });
 });
@@ -142,7 +145,7 @@ describe('server-authoritative liveness', () => {
 
   it('an EXPLICIT end stays terminal even if the agent acts again', () => {
     const { session } = makeSession();
-    session.setState(SessionState.ENDED); // human/agent iris_end_session, not the reaper
+    session.setState(SessionState.ENDED); // human/agent reticle_end_session, not the reaper
     session.markAgentActivity();
     expect(session.getState()).toBe(SessionState.ENDED);
   });

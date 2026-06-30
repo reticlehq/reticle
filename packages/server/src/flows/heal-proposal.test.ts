@@ -4,9 +4,9 @@ import {
   HEAL_CONFIDENCE_MIN,
   type Drift,
   type FlowStepResult,
-} from '@syrin/iris-protocol';
+} from '@reticle/protocol';
 import { collectProposals, confidenceFor, proposeRebind } from './heal.js';
-import { IrisTool } from '../tools/tool-names.js';
+import { ReticleTool } from '../tools/tool-names.js';
 
 /**
  * Pure proposal layer (no fs, no session). Confidence is derived
@@ -48,8 +48,8 @@ describe('ambiguous drift is never auto-healed (heals the locator, never the int
 
   it('collectProposals skips ambiguous drifts', () => {
     const steps: FlowStepResult[] = [
-      { step: 0, tool: IrisTool.ACT, anchor: 'a', ok: false, drift: ambiguousDrift('a', 'ab') },
-      { step: 1, tool: IrisTool.ACT, anchor: 'c', ok: false, drift: testidDrift('c', 'cd') },
+      { step: 0, tool: ReticleTool.ACT, anchor: 'a', ok: false, drift: ambiguousDrift('a', 'ab') },
+      { step: 1, tool: ReticleTool.ACT, anchor: 'c', ok: false, drift: testidDrift('c', 'cd') },
     ];
     const proposals = collectProposals(steps);
     expect(proposals.map((p) => p.step)).toEqual([1]); // only the unambiguous one
@@ -111,10 +111,16 @@ describe('proposeRebind — confident testid rebind, else undefined', () => {
 
 describe('collectProposals — confident proposals across step results', () => {
   function driftStep(step: number, from: string, nearest: string | null): FlowStepResult {
-    return { step, tool: IrisTool.ACT, anchor: from, ok: false, drift: testidDrift(from, nearest) };
+    return {
+      step,
+      tool: ReticleTool.ACT,
+      anchor: from,
+      ok: false,
+      drift: testidDrift(from, nearest),
+    };
   }
   function okStep(step: number, anchor: string): FlowStepResult {
-    return { step, tool: IrisTool.ACT, anchor, ok: true };
+    return { step, tool: ReticleTool.ACT, anchor, ok: true };
   }
 
   it('skips ok steps and low-confidence drift; keeps only confident rebinds in order', () => {

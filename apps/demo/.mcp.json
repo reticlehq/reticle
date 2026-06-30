@@ -1,8 +1,8 @@
 {
   "mcpServers": {
-    "iris": {
+    "reticle": {
       "command": "node",
-      "args": ["../../packages/iris/dist/cli.js", "mcp"]
+      "args": ["../../packages/core/dist/cli.js", "mcp"]
     }
   }
 }

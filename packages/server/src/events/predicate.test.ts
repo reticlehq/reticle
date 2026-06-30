@@ -1,18 +1,18 @@
 import { describe, it, expect } from 'vitest';
 import {
   EventType,
-  IrisCommand,
+  ReticleCommand,
   type CommandResult,
   type ElementQuery,
-  type IrisEvent,
+  type ReticleEvent,
   type MatchResult,
-} from '@syrin/iris-protocol';
+} from '@reticle/protocol';
 import { evaluatePredicate, waitForPredicate, type PredicateSession } from './predicate.js';
 
 /** In-memory session: events from an array, MATCH from a supplied matcher. */
 class FakeSession implements PredicateSession {
   constructor(
-    private readonly events: IrisEvent[],
+    private readonly events: ReticleEvent[],
     private readonly matcher: (query: ElementQuery) => MatchResult = () => ({
       matched: false,
       count: 0,
@@ -26,14 +26,14 @@ class FakeSession implements PredicateSession {
   }
 
   command(name: string, args: Record<string, unknown> = {}): Promise<CommandResult> {
-    if (name === IrisCommand.MATCH) {
+    if (name === ReticleCommand.MATCH) {
       const result = this.matcher(args['query'] ?? {});
       return Promise.resolve({ kind: 'command_result', id: 'x', ok: true, result });
     }
     return Promise.resolve({ kind: 'command_result', id: 'x', ok: true, result: {} });
   }
 
-  eventsSince(cursor = 0): IrisEvent[] {
+  eventsSince(cursor = 0): ReticleEvent[] {
     // Mirror RingBuffer.since: only events at/after the cursor (so the `since` floor is exercised).
     return this.events.filter((e) => e.t >= cursor);
   }
@@ -43,7 +43,7 @@ class FakeSession implements PredicateSession {
   }
 }
 
-function ev(type: EventType, data: Record<string, unknown>, t = 1): IrisEvent {
+function ev(type: EventType, data: Record<string, unknown>, t = 1): ReticleEvent {
   return { t, type, sessionId: 's', data };
 }
 
@@ -361,7 +361,7 @@ class StateSession implements PredicateSession {
     return 0;
   }
   command(name: string): Promise<CommandResult> {
-    if (name === IrisCommand.STATE_READ) {
+    if (name === ReticleCommand.STATE_READ) {
       return Promise.resolve({
         kind: 'command_result',
         id: 'x',
@@ -371,7 +371,7 @@ class StateSession implements PredicateSession {
     }
     return Promise.resolve({ kind: 'command_result', id: 'x', ok: true, result: {} });
   }
-  eventsSince(): IrisEvent[] {
+  eventsSince(): ReticleEvent[] {
     return [];
   }
   onEvent(): () => void {

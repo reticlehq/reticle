@@ -1,5 +1,5 @@
 /**
- * Token-efficiency for iris_query: a `by=role value=button` on a busy page can return dozens of
+ * Token-efficiency for reticle_query: a `by=role value=button` on a busy page can return dozens of
  * element descriptors the agent must read in full. This trims the result the AGENT sees — the most
  * expensive part of a tool call is the bytes that land in its context.
  *

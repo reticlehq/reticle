@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { REDACTED_VALUE } from '@syrin/iris-protocol';
+import { REDACTED_VALUE } from '@reticle/protocol';
 import { buildSnapshot } from './snapshot.js';
 import { describe as describeElement, getValue } from './a11y.js';
 

@@ -7,7 +7,7 @@
       "label": "fully working app",
       "silent": false,
       "blind": "pass",
-      "iris": "pass",
+      "reticle": "pass",
       "caughtBy": []
     },
     {
@@ -15,7 +15,7 @@
       "label": "POST 200 but never persists",
       "silent": true,
       "blind": "pass",
-      "iris": "fail",
+      "reticle": "fail",
       "caughtBy": [
         "store persisted the new expense"
       ]
@@ -25,7 +25,7 @@
       "label": "Add fires the POST twice",
       "silent": true,
       "blind": "pass",
-      "iris": "fail",
+      "reticle": "fail",
       "caughtBy": [
         "POST /api/expenses fires exactly once",
         "store persisted the new expense"
@@ -36,7 +36,7 @@
       "label": "console error, UI renders fine",
       "silent": true,
       "blind": "pass",
-      "iris": "fail",
+      "reticle": "fail",
       "caughtBy": [
         "no console errors during add"
       ]
@@ -46,7 +46,7 @@
       "label": "\"abc\" accepted as an amount",
       "silent": true,
       "blind": "pass",
-      "iris": "fail",
+      "reticle": "fail",
       "caughtBy": [
         "invalid amount creates no expense (server-side validation)"
       ]
@@ -56,7 +56,7 @@
       "label": "DELETE 200 but never removes",
       "silent": true,
       "blind": "pass",
-      "iris": "fail",
+      "reticle": "fail",
       "caughtBy": [
         "delete removes the row from the store"
       ]
@@ -66,7 +66,7 @@
       "label": "displayed Total lies vs data",
       "silent": true,
       "blind": "pass",
-      "iris": "fail",
+      "reticle": "fail",
       "caughtBy": [
         "displayed Total matches store total"
       ]
@@ -74,17 +74,17 @@
   ],
   "stats": {
     "silentFailureClasses": 6,
-    "irisDetected": 6,
-    "irisDetectionRate": "100%",
+    "reticleDetected": 6,
+    "reticleDetectionRate": "100%",
     "blindDetected": 0,
     "blindDetectionRate": "0%",
     "escapedDefectsBlind": 6,
-    "escapedDefectsIris": 0,
-    "falsePositivesIris": 0,
+    "escapedDefectsReticle": 0,
+    "falsePositivesReticle": 0,
     "oneShotGreenLightHonest": {
       "description": "Of the silent-failure builds, how many a gate would (wrongly) green-light for the user.",
       "blindGreenLit": 6,
-      "irisGreenLit": 0
+      "reticleGreenLit": 0
     }
   }
 }

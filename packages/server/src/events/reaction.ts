@@ -1,4 +1,4 @@
-import { EventType, type IrisEvent } from '@syrin/iris-protocol';
+import { EventType, type ReticleEvent } from '@reticle/protocol';
 
 interface ReactionSummary {
   total: number;
@@ -14,12 +14,12 @@ interface ReactionSummary {
 
 interface ReactionReport {
   window_ms: number;
-  events: IrisEvent[];
+  events: ReticleEvent[];
   summary: ReactionSummary;
 }
 
 /** Turn a slice of the event buffer into the structured "what the app did" report (plan/05). */
-export function buildReactionReport(events: IrisEvent[], windowMs: number): ReactionReport {
+export function buildReactionReport(events: ReticleEvent[], windowMs: number): ReactionReport {
   const summary: ReactionSummary = {
     total: events.length,
     network: 0,
@@ -77,7 +77,7 @@ interface ReactionDigest {
  * Drop the per-event `events` array, keeping the window and counts. The counts already answer "what
  * did the app do?" (DOM added/removed/changed, network, signals…), and a predicate verdict carries
  * the matching evidence — so a tool returning this digest stays cheap while the full timeline is one
- * `iris_observe { since }` away when the agent needs it. On a large DOM the events array dominates
+ * `reticle_observe { since }` away when the agent needs it. On a large DOM the events array dominates
  * the cost (hundreds of tokens of mutations); the digest is a handful.
  */
 export function summarizeReaction(report: ReactionReport): ReactionDigest {

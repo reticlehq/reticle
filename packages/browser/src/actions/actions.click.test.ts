@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { ActionWarning } from '@syrin/iris-protocol';
+import { ActionWarning } from '@reticle/protocol';
 import { executeAction } from './actions.js';
 import { refs } from '../dom/refs.js';
 

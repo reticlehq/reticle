@@ -15,11 +15,11 @@ const C = {
   faint: '#8b949e',
   playwright: '#2f81f7',
   devtools: '#e3b341',
-  iris: '#bc8cff',
+  reticle: '#bc8cff',
   accent: '#3fb950',
 };
-const TOOLS = ['playwright', 'devtools', 'iris'];
-const LABEL = { playwright: 'Playwright MCP', devtools: 'Chrome DevTools MCP', iris: 'Iris' };
+const TOOLS = ['playwright', 'devtools', 'reticle'];
+const LABEL = { playwright: 'Playwright MCP', devtools: 'Chrome DevTools MCP', reticle: 'Reticle' };
 const FONT = 'ui-monospace, SFMono-Regular, Menlo, monospace';
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 

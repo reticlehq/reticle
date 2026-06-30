@@ -1,15 +1,15 @@
 #!/usr/bin/env node
 /**
- * Iris Enterprise license issuer — the ISSUER (Syrin) side. Mints offline Ed25519 license keys that
- * `iris license` / assertEnterprise verify locally on a customer's machine. Keep the PRIVATE key secret;
- * never commit or ship it. The PUBLIC key is what gets baked into a release (IRIS_LICENSE_PUBLIC_KEY).
+ * Reticle Enterprise license issuer — the ISSUER (Reticle) side. Mints offline Ed25519 license keys that
+ * `reticle license` / assertEnterprise verify locally on a customer's machine. Keep the PRIVATE key secret;
+ * never commit or ship it. The PUBLIC key is what gets baked into a release (RETICLE_LICENSE_PUBLIC_KEY).
  *
  *   node scripts/issue-license.mjs keygen
  *       → prints a fresh keypair: ship the public PEM, vault the private PEM.
  *
- *   IRIS_LICENSE_PRIVATE_KEY="$(cat issuer-private.pem)" \
+ *   RETICLE_LICENSE_PRIVATE_KEY="$(cat issuer-private.pem)" \
  *   node scripts/issue-license.mjs sign --org "Acme" --plan enterprise --days 365 [--features sso,audit]
- *       → prints the customer's IRIS_LICENSE_KEY.
+ *       → prints the customer's RETICLE_LICENSE_KEY.
  */
 
 import { generateKeyPairSync, createPrivateKey } from 'node:crypto';
@@ -24,7 +24,7 @@ function flag(name) {
 
 if (cmd === 'keygen') {
   const { publicKey, privateKey } = generateKeyPairSync('ed25519');
-  process.stdout.write('# PUBLIC KEY — bake into the release as IRIS_LICENSE_PUBLIC_KEY:\n');
+  process.stdout.write('# PUBLIC KEY — bake into the release as RETICLE_LICENSE_PUBLIC_KEY:\n');
   process.stdout.write(publicKey.export({ type: 'spki', format: 'pem' }).toString());
   process.stdout.write('\n# PRIVATE KEY — keep SECRET (vault). Used only to sign keys:\n');
   process.stdout.write(privateKey.export({ type: 'pkcs8', format: 'pem' }).toString());
@@ -32,9 +32,9 @@ if (cmd === 'keygen') {
 }
 
 if (cmd === 'sign') {
-  const pem = process.env.IRIS_LICENSE_PRIVATE_KEY;
+  const pem = process.env.RETICLE_LICENSE_PRIVATE_KEY;
   if (!pem) {
-    process.stderr.write('error: set IRIS_LICENSE_PRIVATE_KEY (the issuer private key PEM)\n');
+    process.stderr.write('error: set RETICLE_LICENSE_PRIVATE_KEY (the issuer private key PEM)\n');
     process.exit(1);
   }
   const org = flag('org');

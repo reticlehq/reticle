@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { IrisTool } from '../tools/tool-names.js';
+import { ReticleTool } from '../tools/tool-names.js';
 import type { ToolDef, ToolDeps } from '../tools/tools.js';
 import { checkForUpdate } from './update-checker.js';
 import { applyUpdate, rollback, detectExecutionKind } from './updater.js';
@@ -7,18 +7,18 @@ import { SERVER_VERSION } from '../server-version.js';
 
 export const UPDATE_TOOLS: ToolDef[] = [
   {
-    name: IrisTool.VERSION_INFO,
+    name: ReticleTool.VERSION_INFO,
     description:
-      'Returns the running Iris version, latest available version, release changelog, and any breaking changes. Call this at the start of a session or when unexpected tool behavior suggests a version mismatch.',
+      'Returns the running Reticle version, latest available version, release changelog, and any breaking changes. Call this at the start of a session or when unexpected tool behavior suggests a version mismatch.',
     inputSchema: {},
     outputSchema: {
-      currentVersion: z.string().describe('The Iris server version currently running.'),
+      currentVersion: z.string().describe('The Reticle server version currently running.'),
       latestVersion: z.string().optional().describe('Latest published version on npm.'),
       updateAvailable: z.boolean().describe('True when a newer version is available to install.'),
       executionKind: z
         .string()
         .describe(
-          'How iris was launched: "npx" (no install needed — restart applies update), "global" (npm install -g), or "local" (project node_modules).',
+          'How reticle was launched: "npx" (no install needed — restart applies update), "global" (npm install -g), or "local" (project node_modules).',
         ),
       changelog: z.string().optional().describe('Release notes for the latest version.'),
       breakingChanges: z
@@ -52,9 +52,9 @@ export const UPDATE_TOOLS: ToolDef[] = [
     },
   },
   {
-    name: IrisTool.APPLY_UPDATE,
+    name: ReticleTool.APPLY_UPDATE,
     description:
-      'Install the latest Iris server version and restart. Strategy depends on how iris was launched (check executionKind from iris_version_info): "global" and "local" installs run npm install then exit; "npx" just exits — Claude Code restarts and npx re-resolves the latest version from npm automatically. The MCP connection briefly drops during restart.',
+      'Install the latest Reticle server version and restart. Strategy depends on how reticle was launched (check executionKind from reticle_version_info): "global" and "local" installs run npm install then exit; "npx" just exits — Claude Code restarts and npx re-resolves the latest version from npm automatically. The MCP connection briefly drops during restart.',
     inputSchema: {
       confirm: z
         .boolean()
@@ -79,9 +79,9 @@ export const UPDATE_TOOLS: ToolDef[] = [
     },
   },
   {
-    name: IrisTool.ROLLBACK,
+    name: ReticleTool.ROLLBACK,
     description:
-      'Restore the previous Iris server version and restart. Use when an update introduced a regression. The MCP connection will briefly drop — Claude Code restarts the process automatically with the restored binary.',
+      'Restore the previous Reticle server version and restart. Use when an update introduced a regression. The MCP connection will briefly drop — Claude Code restarts the process automatically with the restored binary.',
     inputSchema: {
       confirm: z
         .boolean()

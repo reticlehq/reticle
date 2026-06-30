@@ -2,7 +2,7 @@ import { TestStatus } from './constants.js';
 import { isSkip } from './skip.js';
 import { getRegistered } from './registry.js';
 import { summarize, printSummary } from './summary.js';
-import type { IrisSpec, RunSummary, RunnerOptions, SpecResult } from './types.js';
+import type { ReticleSpec, RunSummary, RunnerOptions, SpecResult } from './types.js';
 
 /** Classify a thrown value: skip (sentinel) vs fail (everything else). */
 function classify(error: unknown): Pick<SpecResult, 'status' | 'error' | 'skipReason'> {
@@ -14,7 +14,7 @@ function classify(error: unknown): Pick<SpecResult, 'status' | 'error' | 'skipRe
 }
 
 /** Run one spec to a result. Never throws — a spec failure is captured, not propagated. */
-export async function runOne(spec: IrisSpec, opts: RunnerOptions): Promise<SpecResult> {
+export async function runOne(spec: ReticleSpec, opts: RunnerOptions): Promise<SpecResult> {
   const start = opts.now();
   let outcome: Pick<SpecResult, 'status' | 'error' | 'skipReason'>;
   try {

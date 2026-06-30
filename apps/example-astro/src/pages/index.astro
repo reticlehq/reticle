@@ -5,17 +5,17 @@ import Counter from '../components/Counter.tsx';
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>Iris × Astro</title>
+    <title>Reticle × Astro</title>
   </head>
   <body>
-    <h1>Iris × Astro</h1>
+    <h1>Reticle × Astro</h1>
     <Counter client:load />
     <script>
-      // Dev-only: connect Iris on the client. Astro bundles this <script>, so the bare import resolves.
+      // Dev-only: connect Reticle on the client. Astro bundles this <script>, so the bare import resolves.
       if (import.meta.env.DEV) {
-        const { iris, install } = await import('@syrin/iris');
+        const { reticle, install } = await import('@reticle/core');
         install();
-        iris.connect({ projectId: 'example-astro' });
+        reticle.connect({ projectId: 'example-astro' });
       }
     </script>
   </body>

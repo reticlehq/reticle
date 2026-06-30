@@ -1,12 +1,13 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { ActionWarning, IrisCommand } from '@syrin/iris-protocol';
+import { ActionWarning, ReticleCommand } from '@reticle/protocol';
 import { executeAction, executeSequence } from './actions.js';
 import { createCommandRegistry } from '../commands/commands.js';
-import { registerAdapter, type IrisAdapter } from '../registry/adapters.js';
+import { registerAdapter, type ReticleAdapter } from '../registry/adapters.js';
 import { refs } from '../dom/refs.js';
 
-const adapters = ((globalThis as unknown as { __irisAdapters?: IrisAdapter[] }).__irisAdapters ??=
-  []);
+const adapters = ((
+  globalThis as unknown as { __reticleAdapters?: ReticleAdapter[] }
+).__reticleAdapters ??= []);
 
 function refOf(selector: string): string {
   const el = document.querySelector(selector);
@@ -163,7 +164,7 @@ describe('command registry passthrough', () => {
     document.body.innerHTML = '<button>Save</button>';
     const ref = refOf('button');
     const reg = createCommandRegistry();
-    const handler = reg.get(IrisCommand.ACT);
+    const handler = reg.get(ReticleCommand.ACT);
     if (handler === undefined) throw new Error('no act handler');
     const out = (await handler({ ref, action: 'click' })) as { effect?: unknown };
     expect(out.effect).toBeDefined();

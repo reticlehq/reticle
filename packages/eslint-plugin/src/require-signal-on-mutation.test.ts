@@ -14,19 +14,19 @@ RuleTester.describe = describe;
 const ruleTester = new RuleTester();
 
 const OPTS: [{ mutators: string[]; signalCallee: string }] = [
-  { mutators: ['set', 'reorderSections', 'addSection'], signalCallee: 'irisSignal' },
+  { mutators: ['set', 'reorderSections', 'addSection'], signalCallee: 'reticleSignal' },
 ];
 
 ruleTester.run(RULE_NAME, requireSignalOnMutation, {
   valid: [
     // mutator + signal in same fn
     {
-      code: `function commit(){ set(x); irisSignal('s'); }`,
+      code: `function commit(){ set(x); reticleSignal('s'); }`,
       options: OPTS,
     },
     // arrow with mutator + signal
     {
-      code: `const f = () => { reorderSections(a, b); irisSignal('r'); };`,
+      code: `const f = () => { reorderSections(a, b); reticleSignal('r'); };`,
       options: OPTS,
     },
     // fn calls neither mutator nor signal
@@ -36,17 +36,17 @@ ruleTester.run(RULE_NAME, requireSignalOnMutation, {
     },
     // signal-only fn (no mutator)
     {
-      code: `function f(){ irisSignal('x'); }`,
+      code: `function f(){ reticleSignal('x'); }`,
       options: OPTS,
     },
     // custom signalCallee respected
     {
-      code: `function f(){ set(1); emitIris('x'); }`,
-      options: [{ mutators: ['set'], signalCallee: 'emitIris' }],
+      code: `function f(){ set(1); emitReticle('x'); }`,
+      options: [{ mutators: ['set'], signalCallee: 'emitReticle' }],
     },
     // member-expression mutator paired with signal
     {
-      code: `function f(){ this.set(1); irisSignal('x'); }`,
+      code: `function f(){ this.set(1); reticleSignal('x'); }`,
       options: OPTS,
     },
     // no options -> empty default mutators -> no-op, no crash
@@ -60,7 +60,7 @@ ruleTester.run(RULE_NAME, requireSignalOnMutation, {
     },
     // nested — signal in inner fn satisfies inner mutator
     {
-      code: `function outer(){ function inner(){ set(1); irisSignal('x'); } }`,
+      code: `function outer(){ function inner(){ set(1); reticleSignal('x'); } }`,
       options: OPTS,
     },
   ],
@@ -103,19 +103,19 @@ ruleTester.run(RULE_NAME, requireSignalOnMutation, {
     },
     // nested — mutator in inner, signal only in OUTER -> inner reported
     {
-      code: `function outer(){ irisSignal('x'); function inner(){ set(1); } }`,
+      code: `function outer(){ reticleSignal('x'); function inner(){ set(1); } }`,
       options: OPTS,
       errors: [
         {
           messageId: MessageId.MUTATION_WITHOUT_SIGNAL,
           line: 1,
-          column: 54,
+          column: 57,
         },
       ],
     },
     // nested — mutator in OUTER, signal only in inner -> outer reported
     {
-      code: `function outer(){ set(1); (function inner(){ irisSignal('x'); })(); }`,
+      code: `function outer(){ set(1); (function inner(){ reticleSignal('x'); })(); }`,
       options: OPTS,
       errors: [
         {
@@ -136,8 +136,8 @@ ruleTester.run(RULE_NAME, requireSignalOnMutation, {
     },
     // custom signalCallee — configured callee absent -> error
     {
-      code: `function f(){ set(1); irisSignal('x'); }`,
-      options: [{ mutators: ['set'], signalCallee: 'emitIris' }],
+      code: `function f(){ set(1); reticleSignal('x'); }`,
+      options: [{ mutators: ['set'], signalCallee: 'emitReticle' }],
       errors: [{ messageId: MessageId.MUTATION_WITHOUT_SIGNAL }],
     },
   ],
@@ -151,9 +151,9 @@ describe('normalizeOptions', () => {
   });
 
   it('string signalCallee coerced to a single-element set', () => {
-    const n = normalizeOptions({ mutators: ['set'], signalCallee: 'emitIris' });
+    const n = normalizeOptions({ mutators: ['set'], signalCallee: 'emitReticle' });
     expect([...n.mutators]).toEqual(['set']);
-    expect([...n.signalCallees]).toEqual(['emitIris']);
+    expect([...n.signalCallees]).toEqual(['emitReticle']);
   });
 
   it('array signalCallee preserved; empty strings dropped', () => {

@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { VISUAL_NO_PROVIDER_RECOMMENDATION, VisualReason } from '@syrin/iris-protocol';
-import { IrisTool } from '../tools/tool-names.js';
+import { VISUAL_NO_PROVIDER_RECOMMENDATION, VisualReason } from '@reticle/protocol';
+import { ReticleTool } from '../tools/tool-names.js';
 import { asString } from '../tools/tools-helpers.js';
 import type { RealInputProvider } from './real-input.js';
 import type { ToolDef, ToolDeps } from '../tools/tools.js';
@@ -9,7 +9,9 @@ const sessionIdShape = {
   sessionId: z
     .string()
     .optional()
-    .describe('Active session ID from iris_sessions. Omit when only one browser session is open.'),
+    .describe(
+      'Active session ID from reticle_sessions. Omit when only one browser session is open.',
+    ),
 };
 
 /** Bounds so a viewport request stays sane (and a typo can't ask for a 1px or 100k-px window). */
@@ -30,12 +32,12 @@ function viewportProvider(deps: ToolDeps): ViewportCapable | undefined {
 
 export const VIEWPORT_TOOLS: ToolDef[] = [
   {
-    name: IrisTool.VIEWPORT,
+    name: ReticleTool.VIEWPORT,
     description:
-      'Pin the DRIVEN page (needs `iris drive`) to a fixed viewport size so a screenshot baseline is ' +
+      'Pin the DRIVEN page (needs `reticle drive`) to a fixed viewport size so a screenshot baseline is ' +
       'reproducible across machines — the missing piece of CI-stable visual regression, alongside ' +
-      'iris_visual_diff `masks` and a frozen clock (iris_clock). Set it once before iris_screenshot / ' +
-      'iris_visual_diff. Returns { applied, width, height } or the no-provider recommendation.',
+      'reticle_visual_diff `masks` and a frozen clock (reticle_clock). Set it once before reticle_screenshot / ' +
+      'reticle_visual_diff. Returns { applied, width, height } or the no-provider recommendation.',
     inputSchema: {
       width: z.number().int().describe('Viewport width in CSS px (e.g. 1280).'),
       height: z.number().int().describe('Viewport height in CSS px (e.g. 800).'),

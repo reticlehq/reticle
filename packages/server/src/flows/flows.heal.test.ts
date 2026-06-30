@@ -12,17 +12,17 @@ import {
   FlowErrorCode,
   FlowFileSchema,
   HealStatus,
-  IrisCommand,
+  ReticleCommand,
   ReplayStatus,
   type CommandResult,
   type ElementDescriptor,
   type FlowFile,
   type FlowHealResult,
-  type IrisEvent,
+  type ReticleEvent,
   type QueryEmptyHint,
-} from '@syrin/iris-protocol';
+} from '@reticle/protocol';
 import { FLOW_TOOLS } from './flow-tools.js';
-import { IrisTool } from '../tools/tool-names.js';
+import { ReticleTool } from '../tools/tool-names.js';
 import { FlowStore } from './flows.js';
 import { ProjectStore } from '../project/project-store.js';
 import { replayFlow } from './flow-replay.js';
@@ -32,7 +32,7 @@ import { createNodeFileSystem } from '../project/fs-port.js';
 import { BaselineStore } from '../project/baselines.js';
 import { RecordingStore } from './recordings.js';
 import { asString } from '../tools/tools-helpers.js';
-import { flowPath } from '../project/iris-dir.js';
+import { flowPath } from '../project/reticle-dir.js';
 import type { FileSystemPort } from '../project/fs-port.js';
 import type { Session, SessionManager } from '../session/session.js';
 import type { ToolDeps } from '../tools/tools.js';
@@ -59,10 +59,10 @@ class FakeSession {
   constructor(
     private readonly script: (testid: string) => QueryScript,
     private readonly actOk = true,
-    private readonly events: IrisEvent[] = [],
+    private readonly events: ReticleEvent[] = [],
   ) {}
   command(name: string, args: Record<string, unknown> = {}): Promise<CommandResult> {
-    if (name === IrisCommand.QUERY) {
+    if (name === ReticleCommand.QUERY) {
       return Promise.resolve({
         kind: 'command_result',
         id: 'q',
@@ -70,7 +70,7 @@ class FakeSession {
         result: this.script(asString(args['value']) ?? ''),
       });
     }
-    if (name === IrisCommand.ACT) {
+    if (name === ReticleCommand.ACT) {
       this.actArgs.push((args['args'] as Record<string, unknown> | undefined) ?? {});
       return Promise.resolve({
         kind: 'command_result',
@@ -82,7 +82,7 @@ class FakeSession {
     }
     return Promise.resolve({ kind: 'command_result', id: 'x', ok: true, result: {} });
   }
-  eventsSince(): IrisEvent[] {
+  eventsSince(): ReticleEvent[] {
     return this.events;
   }
   onEvent(): () => void {
@@ -94,7 +94,7 @@ class FakeSession {
 }
 
 /** A SIGNAL event the success oracle can match (data.name === the flow's success.signal). */
-function signalEvent(name: string): IrisEvent {
+function signalEvent(name: string): ReticleEvent {
   return { t: 0, type: EventType.SIGNAL, sessionId: 's', data: { name, data: {} } };
 }
 
@@ -125,7 +125,7 @@ function renamedSession(old: string, presentTestids: string[]): FakeSession {
 
 function clickStep(testid: string): FlowFile['steps'][number] {
   return {
-    tool: IrisTool.ACT,
+    tool: ReticleTool.ACT,
     anchor: { kind: AnchorKind.TESTID, value: testid },
     action: ActionType.CLICK,
     args: {},
@@ -143,17 +143,17 @@ function fakeDeps(store: FlowStore, session: FakeSession): ToolDeps {
     baselines: new BaselineStore(),
     recordings: new RecordingStore(),
     flows: store,
-    project: new ProjectStore(createNodeFileSystem(), '/virtual/.iris', { now: () => FROZEN }),
+    project: new ProjectStore(createNodeFileSystem(), '/virtual/.reticle', { now: () => FROZEN }),
     annotations: new AnnotationStore(),
     fs: createNodeFileSystem(),
-    irisRoot: '/virtual/.iris',
+    reticleRoot: '/virtual/.reticle',
     now: () => FROZEN,
   };
 }
 
 function healTool() {
-  const t = FLOW_TOOLS.find((x) => x.name === IrisTool.FLOW_HEAL);
-  if (t === undefined) throw new Error('no iris_flow_heal tool');
+  const t = FLOW_TOOLS.find((x) => x.name === ReticleTool.FLOW_HEAL);
+  if (t === undefined) throw new Error('no reticle_flow_heal tool');
   return t;
 }
 
@@ -165,13 +165,13 @@ async function heal(
   return (await healTool().handler(fakeDeps(store, session), args)) as FlowHealResult;
 }
 
-describe('FlowStore.heal + iris_flow_heal', () => {
+describe('FlowStore.heal + reticle_flow_heal', () => {
   let root: string;
   let store: FlowStore;
 
   beforeEach(async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'iris-heal-'));
-    root = join(dir, '.iris');
+    const dir = await mkdtemp(join(tmpdir(), 'reticle-heal-'));
+    root = join(dir, '.reticle');
     store = new FlowStore(createNodeFileSystem(), root, clock);
   });
 
@@ -415,8 +415,8 @@ describe('FlowStore.heal — writer', () => {
   let fsPort: FileSystemPort;
 
   beforeEach(async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'iris-healw-'));
-    root = join(dir, '.iris');
+    const dir = await mkdtemp(join(tmpdir(), 'reticle-healw-'));
+    root = join(dir, '.reticle');
     fsPort = createNodeFileSystem();
     store = new FlowStore(fsPort, root, clock);
   });

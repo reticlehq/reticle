@@ -1,5 +1,5 @@
 name: Bug report
-description: Something in Iris doesn't behave as expected
+description: Something in Reticle doesn't behave as expected
 labels: ['bug']
 body:
   - type: markdown
@@ -12,7 +12,7 @@ body:
     attributes:
       label: What happened?
       description: A clear description of the bug and what you expected instead.
-      placeholder: 'I ran `iris drive http://localhost:3000`, then asked the agent to verify the login flow, and…'
+      placeholder: 'I ran `reticle drive http://localhost:3000`, then asked the agent to verify the login flow, and…'
     validations:
       required: true
   - type: textarea
@@ -21,7 +21,7 @@ body:
       label: Steps to reproduce
       description: Minimal steps. A link to a minimal repo is ideal.
       placeholder: |
-        1. Wire Iris into the app with `withIris` / the Vite plugin
+        1. Wire Reticle into the app with `withReticle` / the Vite plugin
         2. Start the app on port …
         3. Run …
         4. Observe …
@@ -30,8 +30,8 @@ body:
   - type: input
     id: version
     attributes:
-      label: Iris version
-      description: Output of `iris --version` (or the `@syrin/iris` version in package.json).
+      label: Reticle version
+      description: Output of `reticle --version` (or the `@reticle/core` version in package.json).
       placeholder: '1.0.0'
     validations:
       required: true
@@ -49,11 +49,11 @@ body:
   - type: dropdown
     id: mode
     attributes:
-      label: How is Iris connected?
-      description: In-app SDK (the page embeds @syrin/iris-browser) or driven from outside (`iris drive`)?
+      label: How is Reticle connected?
+      description: In-app SDK (the page embeds @reticle/browser) or driven from outside (`reticle drive`)?
       options:
-        - In-app SDK (iris.connect in my app)
-        - Driven externally (iris drive / --drive)
+        - In-app SDK (reticle.connect in my app)
+        - Driven externally (reticle drive / --drive)
         - Both / not sure
     validations:
       required: true

@@ -40,7 +40,7 @@ export function renderTally(
   const dimF = next.fails === 0 ? ' data-z="1"' : '';
   el.removeAttribute('hidden');
   el.innerHTML =
-    `<span class="iris-t-pass"${dimP}${bumpPass}>✓ ${String(next.passes)}</span>` +
-    `<span class="iris-t-fail"${dimF}${bumpFail}>✗ ${String(next.fails)}</span>`;
+    `<span class="reticle-t-pass"${dimP}${bumpPass}>✓ ${String(next.passes)}</span>` +
+    `<span class="reticle-t-fail"${dimF}${bumpFail}>✗ ${String(next.fails)}</span>`;
   return next;
 }

@@ -4,14 +4,14 @@ type CapModule = typeof import('./capabilities.js');
 
 /** The registry binds the global store at module load, so re-import per test for isolation. */
 async function freshModule(): Promise<CapModule> {
-  delete (globalThis as { __irisCapabilities?: unknown }).__irisCapabilities;
+  delete (globalThis as { __reticleCapabilities?: unknown }).__reticleCapabilities;
   vi.resetModules();
   return import('./capabilities.js');
 }
 
 describe('capability registry', () => {
   beforeEach(() => {
-    delete (globalThis as { __irisCapabilities?: unknown }).__irisCapabilities;
+    delete (globalThis as { __reticleCapabilities?: unknown }).__reticleCapabilities;
   });
 
   it('registers then returns the merged object', async () => {

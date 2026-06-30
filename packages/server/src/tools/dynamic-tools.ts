@@ -6,14 +6,14 @@ import { runTool } from './invoke-tool.js';
  * On-demand tool loading for MCP — the answer to the per-turn tool-definition tax.
  *
  * A normal MCP server advertises every tool's full description + schema, and the client re-sends
- * all of them to the model on EVERY turn. Measured here: Iris at ~5.6k–14.6k tokens/turn just for
+ * all of them to the model on EVERY turn. Measured here: Reticle at ~5.6k–14.6k tokens/turn just for
  * definitions, which dominates a real agent loop and only grows as the tool surface grows.
  *
  * The `dynamic` profile advertises just TWO meta-tools (~hundreds of tokens, fixed regardless of
  * how many real tools exist):
- *   iris_tools — discover. No args ⇒ a compact catalog (name + one-line summary) of every tool.
+ *   reticle_tools — discover. No args ⇒ a compact catalog (name + one-line summary) of every tool.
  *                names:[...] ⇒ full description + params for just those tools, loaded on demand.
- *   iris_run   — invoke any tool by name. On a bad/unknown call it returns that tool's params as a
+ *   reticle_run   — invoke any tool by name. On a bad/unknown call it returns that tool's params as a
  *                hint, so the model self-corrects without ever needing the schema up front.
  *
  * The model lists once, loads the 2–3 tools it actually needs, and calls them — paying for tool
@@ -46,16 +46,16 @@ function paramInfo(shape: z.ZodRawShape): ParamInfo[] {
 }
 
 /**
- * Build the two dynamic meta-tools over the full tool table. `iris_run` dispatches through the same
+ * Build the two dynamic meta-tools over the full tool table. `reticle_run` dispatches through the same
  * `runTool` chokepoint as a direct call, so session-health splicing and every other invariant hold.
  */
 export function buildDynamicTools(allTools: ToolDef[]): ToolDef[] {
   const byName = new Map(allTools.map((t) => [t.name, t]));
 
-  const irisTools: ToolDef = {
-    name: 'iris_tools',
+  const reticleTools: ToolDef = {
+    name: 'reticle_tools',
     description:
-      'Discover Iris tools on demand. Call with no arguments to list every tool (name + one-line summary); call with names:["iris_network", …] to load full descriptions and parameters for specific tools. Then invoke them with iris_run. This avoids paying for every tool definition on every turn.',
+      'Discover Reticle tools on demand. Call with no arguments to list every tool (name + one-line summary); call with names:["reticle_network", …] to load full descriptions and parameters for specific tools. Then invoke them with reticle_run. This avoids paying for every tool definition on every turn.',
     inputSchema: {
       names: z
         .array(z.string())
@@ -69,7 +69,7 @@ export function buildDynamicTools(allTools: ToolDef[]): ToolDef[] {
       if (names === undefined || names.length === 0) {
         return Promise.resolve({
           tools: allTools.map((t) => ({ name: t.name, summary: firstSentence(t.description) })),
-          next: 'Load params with iris_tools { names:[…] }, then call iris_run { tool, args }.',
+          next: 'Load params with reticle_tools { names:[…] }, then call reticle_run { tool, args }.',
         });
       }
       return Promise.resolve({
@@ -83,12 +83,12 @@ export function buildDynamicTools(allTools: ToolDef[]): ToolDef[] {
     },
   };
 
-  const irisRun: ToolDef = {
-    name: 'iris_run',
+  const reticleRun: ToolDef = {
+    name: 'reticle_run',
     description:
-      "Invoke any Iris tool by name (discover names/params first with iris_tools). On an unknown tool or bad arguments it returns the available names or the tool's params, so you can correct and retry.",
+      "Invoke any Reticle tool by name (discover names/params first with reticle_tools). On an unknown tool or bad arguments it returns the available names or the tool's params, so you can correct and retry.",
     inputSchema: {
-      tool: z.string().describe('Tool name to invoke, e.g. iris_network.'),
+      tool: z.string().describe('Tool name to invoke, e.g. reticle_network.'),
       args: z.record(z.unknown()).optional().describe('Arguments object for that tool.'),
     },
     handler: async (deps: ToolDeps, args: Record<string, unknown>) => {
@@ -108,11 +108,11 @@ export function buildDynamicTools(allTools: ToolDef[]): ToolDef[] {
           error: error instanceof Error ? error.message : String(error),
           tool: name,
           params: paramInfo(target.inputSchema),
-          hint: 'fix the arguments and call iris_run again',
+          hint: 'fix the arguments and call reticle_run again',
         };
       }
     },
   };
 
-  return [irisTools, irisRun];
+  return [reticleTools, reticleRun];
 }

@@ -1,18 +1,18 @@
 import {
-  IrisCommand,
+  ReticleCommand,
   PresenterMode,
   type PresenterTone,
   SessionState,
   isPresenterTone,
   isSessionState,
-} from '@syrin/iris-protocol';
+} from '@reticle/protocol';
 import { refs } from '../dom/refs.js';
 import { actionVerb } from './presenter-verbs.js';
 import { nativeSetTimeout, nativeClearTimeout, nativeNow } from '../timers/native-timers.js';
 import {
   LOG_KIND,
   CHIP_LABEL,
-  DATA_IRIS_LOG,
+  DATA_RETICLE_LOG,
   HUMAN_ROW_PREFIX,
   clampLogMax,
   formatElapsed,
@@ -72,7 +72,7 @@ export {
 
 // Presenter / transparency layer: a human watches the agent work. Glowing border while
 // active, a synthetic cursor that flies to targets, click/hover/type effects, and a HUD that
-// shows the current action + the agent's narrated intent. All nodes carry data-iris-* attrs
+// shows the current action + the agent's narrated intent. All nodes carry data-reticle-* attrs
 // so they're excluded from snapshots/observers (see dom-ignore.ts).
 
 export class Presenter {
@@ -145,12 +145,12 @@ export class Presenter {
     });
   }
 
-  /** Setter so iris.ts can wire the control callback after construction. */
+  /** Setter so reticle.ts can wire the control callback after construction. */
   setControlHandler(handler: ControlHandler): void {
     this.#onControl = handler;
   }
 
-  /** Current live-control session state mirrored onto the panel (data-iris-state). */
+  /** Current live-control session state mirrored onto the panel (data-reticle-state). */
   get state(): SessionState {
     return this.#panel.state;
   }
@@ -170,7 +170,7 @@ export class Presenter {
    *  setState-only so an echo can't re-emit. */
   handlePush(command: { name: string; args: Record<string, unknown> }): void {
     const a = command.args;
-    if (command.name === IrisCommand.FLOWS) return void this.#panel.setFlows(a['flows']);
+    if (command.name === ReticleCommand.FLOWS) return void this.#panel.setFlows(a['flows']);
     const state = a['state'];
     const tone = a['tone'];
     const text = typeof a['text'] === 'string' && a['text'].length > 0 ? a['text'] : undefined;
@@ -190,42 +190,42 @@ export class Presenter {
   mount(): void {
     if (this.#root !== undefined || typeof document === 'undefined') return;
     const style = document.createElement('style');
-    style.setAttribute('data-iris-overlay', '');
+    style.setAttribute('data-reticle-overlay', '');
     style.textContent = PRESENTER_CSS;
     document.head.appendChild(style);
 
     const root = document.createElement('div');
-    root.setAttribute('data-iris-overlay', '');
+    root.setAttribute('data-reticle-overlay', '');
     root.innerHTML = `
-      <div data-iris-glow></div>
-      <div data-iris-cursor></div>
-      <div data-iris-ring></div>
-      <div data-iris-hud>
-        <div class="iris-hud-head"><span class="iris-dot"></span><span class="iris-brand">iris</span><span class="iris-chip" data-iris-chip></span><span class="iris-tally" data-iris-tally hidden></span><span class="iris-live"></span><span class="iris-head-sp"></span><button type="button" data-iris-min-btn title="Minimise" aria-label="Minimise the panel">⌄</button>${CONTROLS_HEAD_HTML}<span class="iris-maxhint" aria-hidden="true">⌃</span></div>
-        <div class="iris-act-strip"><span class="iris-act">idle</span></div>
+      <div data-reticle-glow></div>
+      <div data-reticle-cursor></div>
+      <div data-reticle-ring></div>
+      <div data-reticle-hud>
+        <div class="reticle-hud-head"><span class="reticle-dot"></span><span class="reticle-brand">reticle</span><span class="reticle-chip" data-reticle-chip></span><span class="reticle-tally" data-reticle-tally hidden></span><span class="reticle-live"></span><span class="reticle-head-sp"></span><button type="button" data-reticle-min-btn title="Minimise" aria-label="Minimise the panel">⌄</button>${CONTROLS_HEAD_HTML}<span class="reticle-maxhint" aria-hidden="true">⌃</span></div>
+        <div class="reticle-act-strip"><span class="reticle-act">idle</span></div>
         ${CONTROLS_BANNER_HTML}
-        <div ${DATA_IRIS_LOG}></div>
+        <div ${DATA_RETICLE_LOG}></div>
         ${CONTROLS_FLOWS_HTML}
         ${CONTROLS_FOOT_HTML}
       </div>`;
     document.body.appendChild(root);
     this.#root = root;
-    this.#glow = root.querySelector<HTMLElement>('[data-iris-glow]') ?? undefined;
-    this.#cursor = root.querySelector<HTMLElement>('[data-iris-cursor]') ?? undefined;
-    this.#ring = root.querySelector<HTMLElement>('[data-iris-ring]') ?? undefined;
-    this.#hud = root.querySelector<HTMLElement>('[data-iris-hud]') ?? undefined;
-    this.#actLine = root.querySelector<HTMLElement>('.iris-act') ?? undefined;
-    this.#log = root.querySelector<HTMLElement>(`[${DATA_IRIS_LOG}]`) ?? undefined;
-    this.#chip = root.querySelector<HTMLElement>('[data-iris-chip]') ?? undefined;
-    this.#tally = root.querySelector<HTMLElement>('[data-iris-tally]') ?? undefined;
-    this.#liveLine = root.querySelector<HTMLElement>('.iris-live') ?? undefined;
+    this.#glow = root.querySelector<HTMLElement>('[data-reticle-glow]') ?? undefined;
+    this.#cursor = root.querySelector<HTMLElement>('[data-reticle-cursor]') ?? undefined;
+    this.#ring = root.querySelector<HTMLElement>('[data-reticle-ring]') ?? undefined;
+    this.#hud = root.querySelector<HTMLElement>('[data-reticle-hud]') ?? undefined;
+    this.#actLine = root.querySelector<HTMLElement>('.reticle-act') ?? undefined;
+    this.#log = root.querySelector<HTMLElement>(`[${DATA_RETICLE_LOG}]`) ?? undefined;
+    this.#chip = root.querySelector<HTMLElement>('[data-reticle-chip]') ?? undefined;
+    this.#tally = root.querySelector<HTMLElement>('[data-reticle-tally]') ?? undefined;
+    this.#liveLine = root.querySelector<HTMLElement>('.reticle-live') ?? undefined;
     // Minimise → collapse the panel to a bar (only the live line streams). Click the bar to restore.
     const setMin = (on: boolean): void => root.setAttribute(MIN_ATTR, on ? '1' : '0');
-    root.querySelector<HTMLElement>('[data-iris-min-btn]')?.addEventListener('click', (e) => {
+    root.querySelector<HTMLElement>('[data-reticle-min-btn]')?.addEventListener('click', (e) => {
       e.stopPropagation(); // don't let the head's maximise handler immediately re-open it
       setMin(true);
     });
-    root.querySelector<HTMLElement>('.iris-hud-head')?.addEventListener('click', () => {
+    root.querySelector<HTMLElement>('.reticle-hud-head')?.addEventListener('click', () => {
       if (root.getAttribute(MIN_ATTR) === '1') setMin(false); // clicking the minimised bar restores
     });
     this.#glowCtl.setElements(this.#glow, this.#cursor);
@@ -243,7 +243,7 @@ export class Presenter {
     this.#logBaseMs = undefined;
     this.#log = undefined;
     this.#root?.remove();
-    document.querySelectorAll('style[data-iris-overlay]').forEach((s) => s.remove());
+    document.querySelectorAll('style[data-reticle-overlay]').forEach((s) => s.remove());
     this.#root = undefined;
   }
 
@@ -303,14 +303,14 @@ export class Presenter {
 
   /**
    * Record agent activity. Idempotent while busy — only the first activity from idle/fading flips
-   * the glow on, so a burst never restarts the iris-pulse animation (no strobe). Subsequent calls
+   * the glow on, so a burst never restarts the reticle-pulse animation (no strobe). Subsequent calls
    * just refresh the last-activity timestamp and re-arm the idle check.
    */
   markActivity(): void {
     this.#glowCtl.markActivity();
   }
 
-  /** Re-arm the quiet-window idle check (kept for iris.ts's finally block). */
+  /** Re-arm the quiet-window idle check (kept for reticle.ts's finally block). */
   scheduleIdle(): void {
     this.#glowCtl.scheduleIdle();
   }
@@ -327,11 +327,11 @@ export class Presenter {
 
   /**
    * Set the presenter intent. READING shows a cyan scan + chip and hides the cursor; ACTING
-   * keeps the warm cursor/ripple + chip; IDLE clears the chip. Drives color via data-iris-mode.
+   * keeps the warm cursor/ripple + chip; IDLE clears the chip. Drives color via data-reticle-mode.
    */
   setMode(mode: PresenterMode): void {
     this.#mode = mode;
-    this.#root?.setAttribute('data-iris-mode', mode);
+    this.#root?.setAttribute('data-reticle-mode', mode);
     if (this.#chip !== undefined) {
       this.#chip.textContent = CHIP_LABEL[mode];
       this.#chip.setAttribute('data-mode', mode);
@@ -384,7 +384,7 @@ export class Presenter {
     }
   }
 
-  /** Agent-tunable idle-end window (iris_session). Floored so it can't be set uselessly small. */
+  /** Agent-tunable idle-end window (reticle_session). Floored so it can't be set uselessly small. */
   setIdleEndMs(ms: number): void {
     if (!Number.isFinite(ms)) return;
     this.#idleEndMs = Math.max(IDLE_END_MIN_MS, Math.floor(ms));
@@ -475,7 +475,7 @@ export class Presenter {
     this.#root?.setAttribute(THROTTLED_ATTR, throttled ? '1' : '0');
     if (throttled && this.#actLine !== undefined) {
       this.#actLine.textContent =
-        'Tab backgrounded — actions throttled. Bring tab to front or use `iris drive`.';
+        'Tab backgrounded — actions throttled. Bring tab to front or use `reticle drive`.';
     }
   }
 

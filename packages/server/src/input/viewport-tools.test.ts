@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { VisualReason } from '@syrin/iris-protocol';
+import { VisualReason } from '@reticle/protocol';
 import { VIEWPORT_TOOLS } from './viewport-tools.js';
-import { IrisTool } from '../tools/tool-names.js';
+import { ReticleTool } from '../tools/tool-names.js';
 import type { RealInputProvider } from './real-input.js';
 import type { SessionManager } from '../session/session.js';
 import type { ToolDeps } from '../tools/tools.js';
 
 function tool() {
-  const t = VIEWPORT_TOOLS.find((x) => x.name === IrisTool.VIEWPORT);
-  if (t === undefined) throw new Error('no iris_viewport tool');
+  const t = VIEWPORT_TOOLS.find((x) => x.name === ReticleTool.VIEWPORT);
+  if (t === undefined) throw new Error('no reticle_viewport tool');
   return t;
 }
 
@@ -27,7 +27,7 @@ interface ViewportResult {
   reason?: string;
 }
 
-describe('iris_viewport tool', () => {
+describe('reticle_viewport tool', () => {
   it('returns the no-provider envelope when nothing is driving the page', async () => {
     const res = (await tool().handler(depsWith(undefined), {
       width: 1280,

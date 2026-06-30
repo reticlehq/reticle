@@ -8,14 +8,14 @@ import {
   RunProfile,
   RunTrigger,
   VerdictStatus,
-} from '@syrin/iris-protocol';
+} from '@reticle/protocol';
 import { buildVerificationRun, type VerificationRunInput } from './build-verification-run.js';
 
 /**
- * The generated-app bug matrix — proof that Iris's verdict catches the silent-failure classes a
- * vibe-coded / AI-generated app (Emergent-style) exhibits. Each case models the evidence Iris observes
+ * The generated-app bug matrix — proof that Reticle's verdict catches the silent-failure classes a
+ * vibe-coded / AI-generated app (Emergent-style) exhibits. Each case models the evidence Reticle observes
  * for that bug and asserts the verdict comes back FAIL with the right signal. Deterministic, no browser
- * — the rigorous, in-CI answer to "how will Iris check what these platforms generate?" Complements
+ * — the rigorous, in-CI answer to "how will Reticle check what these platforms generate?" Complements
  * false-green.test.ts (which proves a verdict can't be fabricated).
  */
 
@@ -37,7 +37,7 @@ const failingCheck = (kind: RunCheckKind, predicate: string) =>
     () => 1,
   );
 
-describe('Iris catches generated-app silent-failure classes', () => {
+describe('Reticle catches generated-app silent-failure classes', () => {
   it('mock data instead of real persistence → state check FAILS (the #1 generated-app complaint)', () => {
     // "Looks saved" but the store/DB never changed — a `state` success-oracle catches it.
     const run = failingCheck(RunCheckKind.STATE, 'store.expenses.length increased after add');

@@ -1,6 +1,6 @@
 import { useApp } from '../store/store.js';
 import { generateScript } from '../lib/api.js';
-import { emit, Sig } from '../lib/iris-bridge.js';
+import { emit, Sig } from '../lib/reticle-bridge.js';
 import { IconSparkles } from '../components/icons.js';
 
 /** Compose a release note via the real LLM endpoint. Title commits on blur; output is dynamic. */
@@ -84,7 +84,7 @@ export function Compose(): React.ReactElement {
         </div>
         {compose.generating ? (
           <div style={{ color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span className="spin" style={{ display: 'inline-flex', color: 'var(--iris2)' }}>
+            <span className="spin" style={{ display: 'inline-flex', color: 'var(--reticle2)' }}>
               <IconSparkles size={16} />
             </span>
             Drafting your release note…

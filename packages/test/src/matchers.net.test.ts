@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { IrisTool } from '@syrin/iris-server';
+import { ReticleTool } from '@reticle/server';
 import { createTestContext } from './test-context.js';
-import { IrisAssertionError } from './skip.js';
+import { ReticleAssertionError } from './skip.js';
 import { PredicateKind } from './constants.js';
-import type { ToolInvoker } from '@syrin/iris-server';
+import type { ToolInvoker } from '@reticle/server';
 
 function fakeInvoker(handlers: Record<string, (args: Record<string, unknown>) => unknown>): {
   invoke: ToolInvoker;
@@ -22,7 +22,7 @@ function fakeInvoker(handlers: Record<string, (args: Record<string, unknown>) =>
 describe('t.expectNet', () => {
   it('passes and sends a net predicate including status', async () => {
     const { invoke, calls } = fakeInvoker({
-      [IrisTool.ASSERT]: () => ({ pass: true, evidence: { method: 'POST', status: 200 } }),
+      [ReticleTool.ASSERT]: () => ({ pass: true, evidence: { method: 'POST', status: 200 } }),
     });
     const t = createTestContext(invoke);
     await expect(t.expectNet('POST', '/chat-script', 200)).resolves.toBeUndefined();
@@ -35,7 +35,7 @@ describe('t.expectNet', () => {
 
   it('omits the status key when status is undefined', async () => {
     const { invoke, calls } = fakeInvoker({
-      [IrisTool.ASSERT]: () => ({ pass: true }),
+      [ReticleTool.ASSERT]: () => ({ pass: true }),
     });
     const t = createTestContext(invoke);
     await t.expectNet('GET', '/me');
@@ -43,16 +43,16 @@ describe('t.expectNet', () => {
     expect('status' in predicate).toBe(false);
   });
 
-  it('throws IrisAssertionError when no call matched', async () => {
+  it('throws ReticleAssertionError when no call matched', async () => {
     const { invoke } = fakeInvoker({
-      [IrisTool.ASSERT]: () => ({ pass: false, failureReason: 'no network call matched ...' }),
+      [ReticleTool.ASSERT]: () => ({ pass: false, failureReason: 'no network call matched ...' }),
     });
     const t = createTestContext(invoke);
     await t.expectNet('POST', '/chat-script', 200).then(
       () => expect.unreachable('should have thrown'),
       (error: unknown) => {
-        expect(error).toBeInstanceOf(IrisAssertionError);
-        expect((error as IrisAssertionError).failureReason).toBe('no network call matched ...');
+        expect(error).toBeInstanceOf(ReticleAssertionError);
+        expect((error as ReticleAssertionError).failureReason).toBe('no network call matched ...');
       },
     );
   });

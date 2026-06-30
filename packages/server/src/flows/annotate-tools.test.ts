@@ -9,9 +9,9 @@ import {
   AnnotationTarget,
   QueryBy,
   type AnnotateResult,
-} from '@syrin/iris-protocol';
+} from '@reticle/protocol';
 import { TOOLS, type ToolDeps } from '../tools/tools.js';
-import { IrisTool } from '../tools/tool-names.js';
+import { ReticleTool } from '../tools/tool-names.js';
 import { BaselineStore } from '../project/baselines.js';
 import { RecordingStore, type RecordedStep } from './recordings.js';
 import { AnnotationStore } from './annotation-store.js';
@@ -46,7 +46,7 @@ function fakeDeps(
     flows: new FlowStore(fs, root, clock),
     project: new ProjectStore(fs, root, clock),
     fs,
-    irisRoot: root,
+    reticleRoot: root,
     now: clock.now,
   };
 }
@@ -59,7 +59,7 @@ function tool(name: string): (typeof TOOLS)[number] {
 
 function actStep(value: string): RecordedStep {
   return {
-    tool: IrisTool.ACT,
+    tool: ReticleTool.ACT,
     stable: true,
     args: { by: QueryBy.TESTID, value, action: ActionType.CLICK, args: {} },
   };
@@ -73,14 +73,14 @@ function recordingWith(name: string, n: number): RecordingStore {
   return recordings;
 }
 
-describe('iris_annotate handler — temp dir, never touches the repo', () => {
+describe('reticle_annotate handler — temp dir, never touches the repo', () => {
   let dir: string;
   let root: string;
   let fs: FileSystemPort;
 
   beforeEach(async () => {
-    dir = await mkdtemp(join(tmpdir(), 'iris-annotate-'));
-    root = join(dir, '.iris');
+    dir = await mkdtemp(join(tmpdir(), 'reticle-annotate-'));
+    root = join(dir, '.reticle');
     fs = createNodeFileSystem();
   });
 
@@ -93,7 +93,7 @@ describe('iris_annotate handler — temp dir, never touches the repo', () => {
     const annotations = new AnnotationStore();
     const deps = fakeDeps(fs, root, recordings, annotations);
 
-    const res = (await tool(IrisTool.ANNOTATE).handler(deps, {
+    const res = (await tool(ReticleTool.ANNOTATE).handler(deps, {
       kind: AnnotationKind.ASSERT_SIGNAL,
       name: 'diff:shown',
     })) as AnnotateResult;
@@ -109,7 +109,7 @@ describe('iris_annotate handler — temp dir, never touches the repo', () => {
     const annotations = new AnnotationStore();
     const deps = fakeDeps(fs, root, recordings, annotations);
 
-    await tool(IrisTool.ANNOTATE).handler(deps, {
+    await tool(ReticleTool.ANNOTATE).handler(deps, {
       kind: AnnotationKind.MARK_DYNAMIC,
       testid: 'caption-text',
     });
@@ -121,7 +121,7 @@ describe('iris_annotate handler — temp dir, never touches the repo', () => {
     const annotations = new AnnotationStore();
     const deps = fakeDeps(fs, root, recordings, annotations);
 
-    await tool(IrisTool.ANNOTATE).handler(deps, {
+    await tool(ReticleTool.ANNOTATE).handler(deps, {
       kind: AnnotationKind.SUCCESS_STATE,
       signal: 'diff:shown',
     });
@@ -133,7 +133,7 @@ describe('iris_annotate handler — temp dir, never touches the repo', () => {
     const annotations = new AnnotationStore();
     const deps = fakeDeps(fs, root, recordings, annotations);
 
-    const res = (await tool(IrisTool.ANNOTATE).handler(deps, {
+    const res = (await tool(ReticleTool.ANNOTATE).handler(deps, {
       kind: AnnotationKind.MARK_DYNAMIC,
       testid: 'x',
     })) as AnnotateResult;
@@ -147,7 +147,7 @@ describe('iris_annotate handler — temp dir, never touches the repo', () => {
     const annotations = new AnnotationStore();
     const deps = fakeDeps(fs, root, recordings, annotations);
 
-    const res = (await tool(IrisTool.ANNOTATE).handler(deps, {
+    const res = (await tool(ReticleTool.ANNOTATE).handler(deps, {
       kind: AnnotationKind.ASSERT_SIGNAL,
       name: 'x',
     })) as AnnotateResult;
@@ -161,7 +161,7 @@ describe('iris_annotate handler — temp dir, never touches the repo', () => {
     const annotations = new AnnotationStore();
     const deps = fakeDeps(fs, root, recordings, annotations);
 
-    const res = (await tool(IrisTool.ANNOTATE).handler(deps, {
+    const res = (await tool(ReticleTool.ANNOTATE).handler(deps, {
       kind: 'frobnicate',
     })) as AnnotateResult;
     expect(res.ok).toBe(false);
@@ -171,7 +171,7 @@ describe('iris_annotate handler — temp dir, never touches the repo', () => {
     expect(annotations.success('default')).toBeUndefined();
   });
 
-  it('annotate then iris_flow_save persists expect+dynamic+success into the FlowFile', async () => {
+  it('annotate then reticle_flow_save persists expect+dynamic+success into the FlowFile', async () => {
     const recordings = recordingWith('checkout', 2);
     // Mirror the agent recording into a compiled program the save tool reads.
     recordings.saveCompiled({
@@ -182,24 +182,24 @@ describe('iris_annotate handler — temp dir, never touches the repo', () => {
     const annotations = new AnnotationStore();
     const deps = fakeDeps(fs, root, recordings, annotations);
 
-    await tool(IrisTool.ANNOTATE).handler(deps, {
+    await tool(ReticleTool.ANNOTATE).handler(deps, {
       flow: 'checkout',
       kind: AnnotationKind.ASSERT_SIGNAL,
       name: 'diff:shown',
     });
-    await tool(IrisTool.ANNOTATE).handler(deps, {
+    await tool(ReticleTool.ANNOTATE).handler(deps, {
       flow: 'checkout',
       kind: AnnotationKind.MARK_DYNAMIC,
       testid: 'caption-text',
     });
-    await tool(IrisTool.ANNOTATE).handler(deps, {
+    await tool(ReticleTool.ANNOTATE).handler(deps, {
       flow: 'checkout',
       kind: AnnotationKind.SUCCESS_STATE,
       signal: 'diff:shown',
     });
-    await tool(IrisTool.FLOW_SAVE).handler(deps, { flowName: 'checkout' });
+    await tool(ReticleTool.FLOW_SAVE).handler(deps, { flowName: 'checkout' });
 
-    const loaded = (await tool(IrisTool.FLOW_LOAD).handler(deps, { flowName: 'checkout' })) as {
+    const loaded = (await tool(ReticleTool.FLOW_LOAD).handler(deps, { flowName: 'checkout' })) as {
       steps: { expect?: { signal?: string } }[];
       dynamic?: { kind: string; value?: string }[];
       success?: { signal?: string };
@@ -215,15 +215,15 @@ describe('iris_annotate handler — temp dir, never touches the repo', () => {
     const annotations = new AnnotationStore();
     const deps = fakeDeps(fs, root, recordings, annotations);
 
-    await tool(IrisTool.ANNOTATE).handler(deps, {
+    await tool(ReticleTool.ANNOTATE).handler(deps, {
       flow: 'dm',
       kind: AnnotationKind.ASSERT_SIGNAL,
       name: 'diff:shown',
       dataMatches: { count: 2 },
     });
-    await tool(IrisTool.FLOW_SAVE).handler(deps, { flowName: 'dm' });
+    await tool(ReticleTool.FLOW_SAVE).handler(deps, { flowName: 'dm' });
 
-    const loaded = (await tool(IrisTool.FLOW_LOAD).handler(deps, { flowName: 'dm' })) as {
+    const loaded = (await tool(ReticleTool.FLOW_LOAD).handler(deps, { flowName: 'dm' })) as {
       steps: { expect?: { signalData?: Record<string, unknown> } }[];
     };
     expect(loaded.steps[0]?.expect?.signalData).toEqual({ count: 2 });

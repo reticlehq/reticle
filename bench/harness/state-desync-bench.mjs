@@ -1,21 +1,21 @@
 // State/UI-desync benchmark (the capability gap competitors cannot cross).
 // A CLASS of two distinct lies, each requiring the app's STATE as source of truth:
 //   state-desync  — a COUNT lies: the Deployments nav badge is forced to 0 while the store keeps the
-//                   real count. Iris reads the store (iris_state) → mismatch; a DOM tool sees a
+//                   real count. Reticle reads the store (reticle_state) → mismatch; a DOM tool sees a
 //                   plausible number and has no truth to compare against.
 //   status-stale  — a STATUS lies: the top deployment row renders a different status than the store
-//                   holds (a failed/in-flight deploy shown as "live", correct color + dot). Iris
+//                   holds (a failed/in-flight deploy shown as "live", correct color + dot). Reticle
 //                   reads deployments[0].status → mismatch; a DOM tool sees a healthy, self-consistent
 //                   pill and cannot know it shipped nothing.
 // Brutal-honest: each competitor attempt genuinely tries the common store globals and finds none —
-// the store was registered with Iris, not hung on window.
+// the store was registered with Reticle, not hung on window.
 import { writeFileSync } from 'node:fs';
-import { PlaywrightAdapter, DevtoolsAdapter, IrisAdapter } from './adapters.mjs';
+import { PlaywrightAdapter, DevtoolsAdapter, ReticleAdapter } from './adapters.mjs';
 import { measure } from './tokenizer.mjs';
 
 const BASE = process.env.BENCH_URL ?? 'http://localhost:4312/';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const buggedUrl = (bug) => `${BASE}${BASE.includes('?') ? '&' : '?'}iris-bug=${bug}`;
+const buggedUrl = (bug) => `${BASE}${BASE.includes('?') ? '&' : '?'}reticle-bug=${bug}`;
 const STATUS_ROW_ID = 4000;
 const STATUS_WORDS = ['building', 'queued', 'failed', 'live'];
 
@@ -75,20 +75,20 @@ async function withTool(adapter, fn) {
 }
 
 // ---------- state-desync (count) ----------
-async function irisCount() {
-  return withTool(new IrisAdapter(buggedUrl('state-desync')), async (a) => {
+async function reticleCount() {
+  return withTool(new ReticleAdapter(buggedUrl('state-desync')), async (a) => {
     await a.login();
     await sleep(700);
     // path scopes the read to the deployments array; depth:0 collapses it to "[Array(N)]" so the
     // count is cheap to read. The store value comes back in `value` (not stores.app).
-    const st = await a.c.callTool('iris_state', { store: 'app', path: 'deployments', depth: 0 });
+    const st = await a.c.callTool('reticle_state', { store: 'app', path: 'deployments', depth: 0 });
     const sj = parseJson(st.text);
     const truth = countOf(sj.value);
     const q = parseJson(
-      (await a.c.callTool('iris_query', { by: 'testid', value: 'nav-deployments' })).text,
+      (await a.c.callTool('reticle_query', { by: 'testid', value: 'nav-deployments' })).text,
     );
     const ins = parseJson(
-      (await a.c.callTool('iris_inspect', { ref: (q.elements ?? [])[0]?.ref })).text,
+      (await a.c.callTool('reticle_inspect', { ref: (q.elements ?? [])[0]?.ref })).text,
     );
     const displayed = digits(ins.name);
     const tokens = measure(st.text ?? '').tokens_o200k + measure(ins.text ?? '').tokens_o200k;
@@ -123,21 +123,21 @@ async function competitorCount(Adapter, evalTool) {
 }
 
 // ---------- status-stale (per-entity status) ----------
-async function irisStatus() {
-  return withTool(new IrisAdapter(buggedUrl('status-stale')), async (a) => {
+async function reticleStatus() {
+  return withTool(new ReticleAdapter(buggedUrl('status-stale')), async (a) => {
     await a.login();
     await a.clickTestid('nav-deployments');
     await sleep(900);
-    const st = await a.c.callTool('iris_state', {
+    const st = await a.c.callTool('reticle_state', {
       store: 'app',
       path: `deployments.0.status`,
     });
     const truth = String(parseJson(st.text).value ?? '').toLowerCase() || null;
     const q = parseJson(
-      (await a.c.callTool('iris_query', { by: 'testid', value: `row-${STATUS_ROW_ID}` })).text,
+      (await a.c.callTool('reticle_query', { by: 'testid', value: `row-${STATUS_ROW_ID}` })).text,
     );
     const ref = (q.elements ?? [])[0]?.ref;
-    const ins = parseJson((await a.c.callTool('iris_inspect', { ref })).text);
+    const ins = parseJson((await a.c.callTool('reticle_inspect', { ref })).text);
     // A row has no aggregated accessible NAME; its rendered status lives in the visible TEXT
     // (`describe` returns `text` = collapsed textContent). Read that to see the displayed pill word.
     const displayed = statusIn(ins.text ?? ins.name);
@@ -187,13 +187,13 @@ const guard = (p) => p.catch((e) => ({ error: String(e).slice(0, 80) }));
 const instances = {};
 // count
 instances['state-desync'] = {
-  iris: await guard(irisCount()),
+  reticle: await guard(reticleCount()),
   playwright: await guard(competitorCount(PlaywrightAdapter, 'browser_evaluate')),
   devtools: await guard(competitorCount(DevtoolsAdapter, 'evaluate_script')),
 };
 // status
 instances['status-stale'] = {
-  iris: await guard(irisStatus()),
+  reticle: await guard(reticleStatus()),
   playwright: await guard(competitorStatus(PlaywrightAdapter, 'browser_evaluate', /Deployments/)),
   devtools: await guard(competitorStatus(DevtoolsAdapter, 'evaluate_script', /Deployments/)),
 };
@@ -205,11 +205,11 @@ const verdict = (r) =>
       ? `ERR(${r.error})`
       : `missed (no truth: ${r?.truth ?? 'null'})`;
 
-const tally = { iris: 0, playwright: 0, devtools: 0 };
+const tally = { reticle: 0, playwright: 0, devtools: 0 };
 for (const [bug, tools] of Object.entries(instances)) {
-  for (const t of ['iris', 'playwright', 'devtools']) if (tools[t]?.detected) tally[t] += 1;
+  for (const t of ['reticle', 'playwright', 'devtools']) if (tools[t]?.detected) tally[t] += 1;
   console.log(
-    `${bug.padEnd(14)} iris ${verdict(instances[bug].iris)} | playwright ${verdict(
+    `${bug.padEnd(14)} reticle ${verdict(instances[bug].reticle)} | playwright ${verdict(
       instances[bug].playwright,
     )} | devtools ${verdict(instances[bug].devtools)}`,
   );
@@ -223,6 +223,6 @@ const summary = {
 };
 writeFileSync('bench/raw/state-desync-bench.json', JSON.stringify(summary, null, 2));
 console.log(
-  `\n=== state-desync class (of ${summary.total}): iris ${tally.iris} | playwright ${tally.playwright} | devtools ${tally.devtools} ===`,
+  `\n=== state-desync class (of ${summary.total}): reticle ${tally.reticle} | playwright ${tally.playwright} | devtools ${tally.devtools} ===`,
 );
 process.exit(0);

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { MarkAnchorStrategy } from '@syrin/iris-protocol';
+import { MarkAnchorStrategy } from '@reticle/protocol';
 import { registerAdapter, type ComponentInfo } from '../registry/adapters.js';
 import { resolveMarkAnchor } from './mark-anchor.js';
 
@@ -24,7 +24,7 @@ describe('resolveMarkAnchor', () => {
   });
 
   it('carries the babel-stamped source file:line even when the anchor is role-based', () => {
-    const el = render('<button data-iris-source="src/Checkout.tsx:42:8">Submit</button>');
+    const el = render('<button data-reticle-source="src/Checkout.tsx:42:8">Submit</button>');
     const m = resolveMarkAnchor(el);
     // No component adapter → role tier, but the source rides along for the agent to open.
     expect(m.strategy).toBe(MarkAnchorStrategy.ROLE);
@@ -32,7 +32,7 @@ describe('resolveMarkAnchor', () => {
   });
 
   it('reads source from the nearest ancestor that carries the stamp', () => {
-    const root = render('<div data-iris-source="src/Card.tsx:10:0"><span>x</span></div>');
+    const root = render('<div data-reticle-source="src/Card.tsx:10:0"><span>x</span></div>');
     const child = root.querySelector('span');
     if (child === null) throw new Error('no child');
     expect(resolveMarkAnchor(child).source).toEqual({ file: 'src/Card.tsx', line: 10 });

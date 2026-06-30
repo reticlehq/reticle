@@ -26,13 +26,13 @@ function layerCBlock() {
     return null;
   }
   return {
-    replay_mean_tokens: cost?.per_run?.iris_replay_mean_tokens ?? null,
+    replay_mean_tokens: cost?.per_run?.reticle_replay_mean_tokens ?? null,
     replay_ratio_vs_playwright: cost?.ratio_vs_playwright ?? null,
     selector_detection: selector?.detection_rate ?? null,
-    selector_caught_mean_tokens: selector?.per_run_when_caught?.iris_replay_mean_tokens ?? null,
+    selector_caught_mean_tokens: selector?.per_run_when_caught?.reticle_replay_mean_tokens ?? null,
     consequence_detection: consequence?.detection_rate ?? null,
     state_detection: stateOracle?.detection_rate ?? null,
-    state_caught_mean_tokens: stateOracle?.per_run_when_caught?.iris_replay_mean_tokens ?? null,
+    state_caught_mean_tokens: stateOracle?.per_run_when_caught?.reticle_replay_mean_tokens ?? null,
   };
 }
 
@@ -87,10 +87,10 @@ appendFileSync('bench/history.jsonl', JSON.stringify(row) + '\n');
 console.log(
   'recorded',
   version,
-  '→ iris VE',
-  perTool.iris?.ve,
+  '→ reticle VE',
+  perTool.reticle?.ve,
   'RCR',
-  perTool.iris?.rcr,
+  perTool.reticle?.rcr,
   layerC !== null
     ? `| Layer C ${layerC.selector_detection} sel, ${layerC.consequence_detection} cons`
     : '',

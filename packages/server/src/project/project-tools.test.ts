@@ -2,9 +2,9 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { ProjectReadError, RunKind, RunStatus } from '@syrin/iris-protocol';
+import { ProjectReadError, RunKind, RunStatus } from '@reticle/protocol';
 import { TOOLS, type ToolDeps } from '../tools/tools.js';
-import { IrisTool } from '../tools/tool-names.js';
+import { ReticleTool } from '../tools/tool-names.js';
 import { BaselineStore } from './baselines.js';
 import { RecordingStore } from '../flows/recordings.js';
 import { FlowStore } from '../flows/flows.js';
@@ -34,7 +34,7 @@ function fakeDeps(fs: FileSystemPort, root: string): ToolDeps {
     project: new ProjectStore(fs, root, clock),
     annotations: new AnnotationStore(),
     fs,
-    irisRoot: root,
+    reticleRoot: root,
     now: clock.now,
   };
 }
@@ -52,8 +52,8 @@ describe('project tools — temp dir, never touches the repo', () => {
   let deps: ToolDeps;
 
   beforeEach(async () => {
-    dir = await mkdtemp(join(tmpdir(), 'iris-proj-tools-'));
-    root = join(dir, '.iris');
+    dir = await mkdtemp(join(tmpdir(), 'reticle-proj-tools-'));
+    root = join(dir, '.reticle');
     fs = createNodeFileSystem();
     deps = fakeDeps(fs, root);
   });
@@ -62,8 +62,8 @@ describe('project tools — temp dir, never touches the repo', () => {
     await rm(dir, { recursive: true, force: true });
   });
 
-  it('1: iris_run_record appends a run, defaulting kind to manual', async () => {
-    const res = (await tool(IrisTool.RUN_RECORD).handler(deps, {
+  it('1: reticle_run_record appends a run, defaulting kind to manual', async () => {
+    const res = (await tool(ReticleTool.RUN_RECORD).handler(deps, {
       name: 'checkout',
       status: RunStatus.PASS,
     })) as { recorded: boolean; runName: string };
@@ -74,21 +74,21 @@ describe('project tools — temp dir, never touches the repo', () => {
     expect(last?.at).toBe(1234);
   });
 
-  it('2: iris_project on empty history returns a structured MISSING error', async () => {
-    const res = (await tool(IrisTool.PROJECT).handler(deps, {})) as { reason?: string };
+  it('2: reticle_project on empty history returns a structured MISSING error', async () => {
+    const res = (await tool(ReticleTool.PROJECT).handler(deps, {})) as { reason?: string };
     expect(res.reason).toBe(ProjectReadError.MISSING);
   });
 
-  it('3: iris_project (no name) returns the full run list', async () => {
+  it('3: reticle_project (no name) returns the full run list', async () => {
     await deps.project.recordRun({ kind: RunKind.MANUAL, name: 'a', status: RunStatus.PASS });
     await deps.project.recordRun({ kind: RunKind.MANUAL, name: 'b', status: RunStatus.FAIL });
-    const res = (await tool(IrisTool.PROJECT).handler(deps, {})) as {
+    const res = (await tool(ReticleTool.PROJECT).handler(deps, {})) as {
       runs: { name: string }[];
     };
     expect(res.runs.map((r) => r.name)).toEqual(['a', 'b']);
   });
 
-  it('4: iris_project { name } returns scoped runs + lastRun + diff-vs-last', async () => {
+  it('4: reticle_project { name } returns scoped runs + lastRun + diff-vs-last', async () => {
     await deps.project.recordRun({
       kind: RunKind.FLOW_REPLAY,
       name: 'checkout',
@@ -101,7 +101,7 @@ describe('project tools — temp dir, never touches the repo', () => {
       status: RunStatus.DRIFT,
       evidence: { driftSteps: 2, consoleErrors: 3 },
     });
-    const res = (await tool(IrisTool.PROJECT).handler(deps, { name: 'checkout' })) as {
+    const res = (await tool(ReticleTool.PROJECT).handler(deps, { name: 'checkout' })) as {
       runs: unknown[];
       lastRun?: { status: string };
       diff?: {
@@ -119,9 +119,9 @@ describe('project tools — temp dir, never touches the repo', () => {
     expect(res.diff?.driftStepsDelta).toBe(2);
   });
 
-  it('5: iris_project { name } with a single run has lastRun but no diff', async () => {
+  it('5: reticle_project { name } with a single run has lastRun but no diff', async () => {
     await deps.project.recordRun({ kind: RunKind.MANUAL, name: 'solo', status: RunStatus.PASS });
-    const res = (await tool(IrisTool.PROJECT).handler(deps, { name: 'solo' })) as {
+    const res = (await tool(ReticleTool.PROJECT).handler(deps, { name: 'solo' })) as {
       lastRun?: unknown;
       diff?: unknown;
     };

@@ -1,4 +1,4 @@
-import { REDACTED_VALUE, TRANSPORT_LIMITS } from '@syrin/iris-protocol';
+import { REDACTED_VALUE, TRANSPORT_LIMITS } from '@reticle/protocol';
 
 const TRUNCATED_VALUE = '[TRUNCATED]';
 const UNSERIALIZABLE_VALUE = '[UNSERIALIZABLE]';
@@ -10,7 +10,7 @@ const MAX_TOTAL_NODES = TRANSPORT_LIMITS.MAX_COLLECTION_ITEMS * 5;
 // `token` must match auth CREDENTIALS, not compound design fields. Bare/separated `token(s)` and
 // auth-prefixed tokens (accessToken, auth_token, sessionToken, …) are redacted; `colorToken`,
 // `backgroundToken`, `tokenCount`, `designToken` are NOT — they were false-positives that redacted
-// legitimate iris_inspect/iris_state output.
+// legitimate reticle_inspect/reticle_state output.
 const SENSITIVE_KEY =
   /password|passwd|passcode|secret|(?:(?:access|refresh|auth|bearer|api|id|session|csrf|client)[-_]?tokens?|(?:^|[-_])tokens?(?=$|[-_]))|authorization|api[-_]?key|access[-_]?key|private[-_]?key|client[-_]?secret|credit[-_]?card|card[-_]?number|cvv|cvc|ssn/i;
 

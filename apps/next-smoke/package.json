@@ -1,8 +1,8 @@
 {
-  "name": "@syrin/iris-next-smoke",
+  "name": "@reticle/next-smoke",
   "version": "0.0.0",
   "private": true,
-  "description": "A real Next.js (app router, React 19) app to smoke-test Iris on Next.",
+  "description": "A real Next.js (app router, React 19) app to smoke-test Reticle on Next.",
   "scripts": {
     "dev": "next dev -p 3100"
   },
@@ -12,9 +12,9 @@
     "react-dom": "^19.0.0"
   },
   "devDependencies": {
-    "@syrin/iris-browser": "workspace:*",
-    "@syrin/iris-next": "workspace:*",
-    "@syrin/iris-react": "workspace:*",
+    "@reticle/browser": "workspace:*",
+    "@reticle/next": "workspace:*",
+    "@reticle/react": "workspace:*",
     "@types/node": "^22.10.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",

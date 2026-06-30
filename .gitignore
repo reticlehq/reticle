@@ -56,8 +56,8 @@ graph.html
 graphify-out/
 GRAPH_REPORT.md
 
-# Iris local runtime artifacts
-.iris/
+# Reticle local runtime artifacts
+.reticle/
 
 # Logs / OS
 *.log

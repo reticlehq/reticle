@@ -3,8 +3,8 @@ import {
   ElementState,
   EventType,
   type ElementQuery,
-  type IrisEvent,
-} from '@syrin/iris-protocol';
+  type ReticleEvent,
+} from '@reticle/protocol';
 import { z } from 'zod';
 
 export type Predicate =
@@ -151,7 +151,10 @@ function dataMatches(actual: Record<string, unknown>, pattern: Record<string, un
   return true;
 }
 
-export function evalNet(events: IrisEvent[], p: Extract<Predicate, { kind: 'net' }>): EvalResult {
+export function evalNet(
+  events: ReticleEvent[],
+  p: Extract<Predicate, { kind: 'net' }>,
+): EvalResult {
   const since = p.since ?? 0;
   const matches = events.filter((e) => {
     if (e.type !== EventType.NET_REQUEST || e.t < since) return false;
@@ -183,7 +186,7 @@ export function evalNet(events: IrisEvent[], p: Extract<Predicate, { kind: 'net'
 }
 
 export function evalRoute(
-  events: IrisEvent[],
+  events: ReticleEvent[],
   p: Extract<Predicate, { kind: 'route' }>,
 ): EvalResult {
   const routes = events.filter((e) => e.type === EventType.ROUTE_CHANGE);
@@ -202,7 +205,7 @@ export function evalRoute(
 }
 
 export function evalConsole(
-  events: IrisEvent[],
+  events: ReticleEvent[],
   p: Extract<Predicate, { kind: 'console' }>,
 ): EvalResult {
   const since = p.since ?? 0;
@@ -235,7 +238,7 @@ export function evalConsole(
 }
 
 export function evalAnimation(
-  events: IrisEvent[],
+  events: ReticleEvent[],
   p: Extract<Predicate, { kind: 'animation' }>,
 ): EvalResult {
   const wantType = p.completed === true ? EventType.ANIM_END : EventType.ANIM_START;
@@ -251,7 +254,7 @@ export function evalAnimation(
 }
 
 export function evalSignal(
-  events: IrisEvent[],
+  events: ReticleEvent[],
   p: Extract<Predicate, { kind: 'signal' }>,
 ): EvalResult {
   const hit = events.find((e) => {
@@ -317,7 +320,7 @@ const DEFAULT_QUIET_MS = 500;
  * poll interval is what eventually flips this to pass once activity stops.
  */
 export function evalSettled(
-  events: IrisEvent[],
+  events: ReticleEvent[],
   p: Extract<Predicate, { kind: 'settled' }>,
   now: number,
 ): EvalResult {

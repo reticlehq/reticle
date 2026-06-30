@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { EventType, type CommandResult, type IrisEvent } from '@syrin/iris-protocol';
+import { EventType, type CommandResult, type ReticleEvent } from '@reticle/protocol';
 import { assertSuccess, successToPredicate, dynamicTestids } from './flow-success.js';
 import { waitForPredicate } from '../events/predicate.js';
 import type { FlowReplaySession } from './flow-replay.js';
 
 /** Minimal session: scripted events drive signal/net predicates; QUERY answers element presence. */
-function session(events: IrisEvent[], elementPresent = true): FlowReplaySession {
+function session(events: ReticleEvent[], elementPresent = true): FlowReplaySession {
   return {
     command: (name): Promise<CommandResult> =>
       Promise.resolve({
@@ -22,7 +22,7 @@ function session(events: IrisEvent[], elementPresent = true): FlowReplaySession 
 
 const FAST = 40;
 const NONE = new Set<string>();
-const sig = (name: string): IrisEvent => ({
+const sig = (name: string): ReticleEvent => ({
   t: 1,
   type: EventType.SIGNAL,
   sessionId: 's',

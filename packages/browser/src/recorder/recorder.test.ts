@@ -8,7 +8,7 @@ import {
   RecordedFlowSchema,
   RecorderPhase,
   type FlowStep,
-} from '@syrin/iris-protocol';
+} from '@reticle/protocol';
 import {
   anchorFor,
   compileRecording,
@@ -18,7 +18,7 @@ import {
   type RecorderHandle,
 } from './recorder.js';
 import { buildSnapshot } from '../dom/snapshot.js';
-import { isIrisOverlay } from '../dom/dom-ignore.js';
+import { isReticleOverlay } from '../dom/dom-ignore.js';
 import { registerCapabilities } from '../registry/capabilities.js';
 
 const NOW = 1000;
@@ -41,10 +41,10 @@ function fire(target: Element, type: string): void {
   target.dispatchEvent(new Event(type, { bubbles: true, cancelable: true }));
 }
 
-/** The recorder's toolbar buttons carry data-iris-action; click one by its action label. */
+/** The recorder's toolbar buttons carry data-reticle-action; click one by its action label. */
 function toolbarButton(action: string): HTMLElement {
   const btn = document.querySelector<HTMLElement>(
-    `[data-iris-overlay] [data-iris-action="${action}"]`,
+    `[data-reticle-overlay] [data-reticle-action="${action}"]`,
   );
   if (btn === null) throw new Error(`no toolbar button ${action}`);
   return btn;
@@ -66,7 +66,7 @@ beforeEach(() => {
 afterEach(() => {
   handle?.destroy();
   handle = undefined;
-  document.querySelectorAll('[data-iris-overlay]').forEach((e) => e.remove());
+  document.querySelectorAll('[data-reticle-overlay]').forEach((e) => e.remove());
 });
 
 function mount(emit: (t: EventType, d: Record<string, unknown>) => void): RecorderHandle {
@@ -166,7 +166,7 @@ describe('recorder capture — semantic anchored steps', () => {
     const parsed = RecordedFlowSchema.safeParse(recorded[0]?.data);
     expect(parsed.success).toBe(true);
     if (parsed.success) expect(parsed.data.flow.steps).toHaveLength(0);
-    const status = document.querySelector('[data-iris-overlay] [data-iris-status]');
+    const status = document.querySelector('[data-reticle-overlay] [data-reticle-status]');
     expect(status?.textContent).toBe(RECORDER_EMPTY_MSG);
   });
 
@@ -227,10 +227,10 @@ describe('recorder capture — semantic anchored steps', () => {
     document.body.innerHTML = `<main><button data-testid="real">Real</button></main>`;
     const { emit } = makeEmits();
     mount(emit);
-    // Every toolbar node is an Iris overlay node.
-    const toolbar = document.querySelector('[data-iris-overlay]') as Element;
-    for (const node of toolbar.querySelectorAll('*')) expect(isIrisOverlay(node)).toBe(true);
-    expect(isIrisOverlay(toolbar)).toBe(true);
+    // Every toolbar node is an Reticle overlay node.
+    const toolbar = document.querySelector('[data-reticle-overlay]') as Element;
+    for (const node of toolbar.querySelectorAll('*')) expect(isReticleOverlay(node)).toBe(true);
+    expect(isReticleOverlay(toolbar)).toBe(true);
     // The snapshot does not leak any toolbar text or the name input.
     const snap = buildSnapshot();
     expect(snap.tree).toContain('Real');
@@ -242,7 +242,7 @@ describe('recorder annotations → flow fields', () => {
   /** Compile directly with a captured step + an annotation list (the pure annotation path). */
   function clickStep(testid: string): FlowStep {
     return {
-      tool: 'iris_act',
+      tool: 'reticle_act',
       anchor: { kind: AnchorKind.TESTID, value: testid },
       action: ActionType.CLICK,
       args: {},
@@ -311,13 +311,13 @@ describe('recorder annotate flow (interactive)', () => {
     // open Annotate menu → choose ASSERT_SIGNAL kind → choose signal → next click is the target
     toolbarButton('annotate').click();
     const kindBtn = document.querySelector<HTMLElement>(
-      `[data-iris-overlay] [data-iris-annkind="${AnnotationKind.ASSERT_SIGNAL}"]`,
+      `[data-reticle-overlay] [data-reticle-annkind="${AnnotationKind.ASSERT_SIGNAL}"]`,
     );
     expect(kindBtn).not.toBeNull();
     expect(handle?.phase()).toBe(RecorderPhase.ANNOTATING);
     kindBtn?.click();
     const select = document.querySelector<HTMLSelectElement>(
-      '[data-iris-overlay] [data-iris-signal]',
+      '[data-reticle-overlay] [data-reticle-signal]',
     );
     expect(select).not.toBeNull();
     if (select !== null) select.value = 'diff:shown';
@@ -336,7 +336,7 @@ describe('recorder annotate flow (interactive)', () => {
     mount(emit);
     handle?.destroy();
     handle = undefined;
-    expect(document.querySelector('[data-iris-overlay]')).toBeNull();
+    expect(document.querySelector('[data-reticle-overlay]')).toBeNull();
   });
 });
 

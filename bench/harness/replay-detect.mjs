@@ -1,10 +1,10 @@
-// Regression-DETECTION benchmark (Layer C, detection half): proves iris_flow_replay is not just
+// Regression-DETECTION benchmark (Layer C, detection half): proves reticle_flow_replay is not just
 // cheap (~180 tok/run, Layer C cost half) but CORRECT — clean replay passes, a real regression is
 // caught, naming the broken anchor, at the same deterministic cost.
 //
 // Method per flow:
 //   1. record the flow once against the healthy app, replay it -> BASELINE verdict + tokens
-//   2. re-navigate to the SAME url with ?iris-break=<anchor> (dev-only injector strips that
+//   2. re-navigate to the SAME url with ?reticle-break=<anchor> (dev-only injector strips that
 //      data-testid — a real "selector regression": element renders, stable hook gone)
 //   3. replay the SAME recorded flow -> REGRESSED verdict + tokens
 //   4. detection holds when baseline replays clean (ok) and the regressed replay drifts naming the
@@ -13,7 +13,7 @@
 // Playwright/DevTools MCP have no replay: catching the same regression means an agent re-drives the
 // whole flow with the LLM every run (~30k tok, Layer B) — and may or may not notice the break.
 import { writeFileSync } from 'node:fs';
-import { IrisAdapter } from './adapters.mjs';
+import { ReticleAdapter } from './adapters.mjs';
 import { measure } from './tokenizer.mjs';
 
 const URL = process.env.BENCH_URL ?? 'http://localhost:4312/';
@@ -48,7 +48,7 @@ async function runSteps(a, flow) {
 
 // Replay the loaded flow once; return its compact verdict + measured tokens.
 async function replayOnce(a, flow) {
-  const rep = await a.c.callTool('iris_flow_replay', { flowName: flow.name });
+  const rep = await a.c.callTool('reticle_flow_replay', { flowName: flow.name });
   const text = rep.text || '';
   let obj = {};
   try {
@@ -69,24 +69,24 @@ async function replayOnce(a, flow) {
 }
 
 async function detectFor(flow) {
-  const a = new IrisAdapter(URL);
+  const a = new ReticleAdapter(URL);
   await a.start();
   try {
     // 1. record clean
-    await a.c.callTool('iris_record_start', { recordingName: flow.name });
+    await a.c.callTool('reticle_record_start', { recordingName: flow.name });
     await runSteps(a, flow);
-    await a.c.callTool('iris_record_stop', { recordingName: flow.name });
-    const saved = await a.c.callTool('iris_flow_save', { flowName: flow.name });
+    await a.c.callTool('reticle_record_stop', { recordingName: flow.name });
+    const saved = await a.c.callTool('reticle_flow_save', { flowName: flow.name });
     const stepCount = JSON.parse(saved.text || '{}').stepCount ?? null;
 
     // 2. baseline replay on the healthy app
-    await a.c.callTool('iris_refresh', { hard: true });
+    await a.c.callTool('reticle_refresh', { hard: true });
     await sleep(1500);
     const baseline = await replayOnce(a, flow);
 
     // 3. inject the regression: same SPA, the flow's anchor's data-testid stripped
-    const brokenUrl = `${URL}${URL.includes('?') ? '&' : '?'}iris-break=${flow.breakId}`;
-    await a.c.callTool('iris_navigate', { url: brokenUrl });
+    const brokenUrl = `${URL}${URL.includes('?') ? '&' : '?'}reticle-break=${flow.breakId}`;
+    await a.c.callTool('reticle_navigate', { url: brokenUrl });
     await sleep(1800);
     const regressed = await replayOnce(a, flow);
 
@@ -129,7 +129,7 @@ const summary = {
   layer: 'C-detection (deterministic replay catches an injected regression)',
   detection_rate: `${detectedCount}/${rows.length}`,
   per_run_when_caught: {
-    iris_replay_mean_tokens: meanRegressedTokens,
+    reticle_replay_mean_tokens: meanRegressedTokens,
     playwright_mcp_redrive_tokens: LLM_REDRIVE.playwright_mcp,
     chrome_devtools_mcp_redrive_tokens: LLM_REDRIVE.chrome_devtools_mcp,
   },

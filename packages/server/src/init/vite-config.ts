@@ -1,16 +1,16 @@
 /**
- * Pure, conservative patcher for a Vite config: add the `@syrin/iris/vite` import and drop
- * `iris()` into the `plugins` array. Only handles the obvious, common shape — anything ambiguous
+ * Pure, conservative patcher for a Vite config: add the `@reticle/core/vite` import and drop
+ * `reticle()` into the `plugins` array. Only handles the obvious, common shape — anything ambiguous
  * bails to a `manual` result so we never half-edit a build config (a broken config is worse than a
  * documented manual step).
  */
 
-export const VITE_IMPORT = "import { iris } from '@syrin/iris/vite';";
-const IRIS_MARKER = '@syrin/iris/vite';
+export const VITE_IMPORT = "import { reticle } from '@reticle/core/vite';";
+const RETICLE_MARKER = '@reticle/core/vite';
 
-/** The `iris(...)` call — carries the bridge port so the injected connect() targets it. */
-function irisPluginCall(port: number | undefined): string {
-  return port === undefined ? 'iris()' : `iris({ port: ${String(port)} })`;
+/** The `reticle(...)` call — carries the bridge port so the injected connect() targets it. */
+function reticlePluginCall(port: number | undefined): string {
+  return port === undefined ? 'reticle()' : `reticle({ port: ${String(port)} })`;
 }
 /** Matches the start of a `plugins: [` array literal. */
 const PLUGINS_ARRAY = /plugins\s*:\s*\[/;
@@ -43,11 +43,11 @@ function insertImport(source: string): string {
 
 function insertPlugin(source: string, port: number | undefined): string {
   // Insert right after the opening `[` of the plugins array.
-  return source.replace(PLUGINS_ARRAY, (match) => `${match}${irisPluginCall(port)}, `);
+  return source.replace(PLUGINS_ARRAY, (match) => `${match}${reticlePluginCall(port)}, `);
 }
 
 export function patchViteConfig(source: string, port?: number): VitePatch {
-  if (source.includes(IRIS_MARKER)) {
+  if (source.includes(RETICLE_MARKER)) {
     return { kind: VitePatchKind.ALREADY };
   }
   if (!PLUGINS_ARRAY.test(source)) {

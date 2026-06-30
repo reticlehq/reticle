@@ -4,20 +4,20 @@ import {
   DriftReason,
   FLOW_FILE_VERSION,
   FlowErrorCode,
-  IrisCommand,
+  ReticleCommand,
   type CommandResult,
   type FlowFile,
-  type IrisEvent,
-} from '@syrin/iris-protocol';
-import type { Clock, EvalResult, FileSystemPort } from '@syrin/iris-server';
-import { FlowStore } from '@syrin/iris-server';
+  type ReticleEvent,
+} from '@reticle/protocol';
+import type { Clock, EvalResult, FileSystemPort } from '@reticle/server';
+import { FlowStore } from '@reticle/server';
 import { SpecKind, SpecMessage, SpecOutcome } from './constants.js';
 import { flowToSpec, flowsAsSpecs } from './flow-spec.js';
 
 const FIXED_MS = 1_700_000_000_000;
 const fixedClock: Clock = { now: () => FIXED_MS };
 
-/** An in-memory FileSystemPort over .iris/flows so a unit test never touches the repo. */
+/** An in-memory FileSystemPort over .reticle/flows so a unit test never touches the repo. */
 function memoryFs(files: Record<string, string>): FileSystemPort {
   const store = new Map<string, string>(Object.entries(files));
   return {
@@ -67,13 +67,13 @@ function memoryFs(files: Record<string, string>): FileSystemPort {
   };
 }
 
-const ROOT = '/tmp/iris-root/.iris';
-const FLOWS_DIR = '/tmp/iris-root/.iris/flows';
+const ROOT = '/tmp/reticle-root/.reticle';
+const FLOWS_DIR = '/tmp/reticle-root/.reticle/flows';
 
 /** A fake replay session: scripted DOM testids + a scripted event buffer (signals/net). */
 interface FakeSessionConfig {
   testids: string[]; // testids present in the fake DOM
-  events?: IrisEvent[]; // event buffer evaluatePredicate reads
+  events?: ReticleEvent[]; // event buffer evaluatePredicate reads
 }
 
 function ok(result: unknown): CommandResult {
@@ -84,7 +84,7 @@ function fakeSession(config: FakeSessionConfig): FlowReplaySessionLike {
   const present = new Set(config.testids);
   const events = config.events ?? [];
   const command = (name: string, args?: Record<string, unknown>): Promise<CommandResult> => {
-    if (name === IrisCommand.QUERY) {
+    if (name === ReticleCommand.QUERY) {
       const raw = args?.['value'];
       const value = typeof raw === 'string' ? raw : '';
       const has = present.has(value);
@@ -97,7 +97,7 @@ function fakeSession(config: FakeSessionConfig): FlowReplaySessionLike {
         }),
       );
     }
-    if (name === IrisCommand.MATCH) {
+    if (name === ReticleCommand.MATCH) {
       const query = (args?.['query'] ?? {}) as { testid?: string };
       const testid = query.testid ?? '';
       const matched = present.has(testid);
@@ -127,13 +127,13 @@ function fakeSession(config: FakeSessionConfig): FlowReplaySessionLike {
 // Local structural alias so the test file doesn't depend on the exact import name surfacing.
 interface FlowReplaySessionLike {
   command(name: string, args?: Record<string, unknown>): Promise<CommandResult>;
-  eventsSince(cursor: number): IrisEvent[];
-  onEvent(listener: (event: IrisEvent) => void): () => void;
+  eventsSince(cursor: number): ReticleEvent[];
+  onEvent(listener: (event: ReticleEvent) => void): () => void;
   elapsed(): number;
 }
 
 /** A waiter that synchronously evaluates a signal predicate against the fake event buffer. */
-function signalWait(events: IrisEvent[]) {
+function signalWait(events: ReticleEvent[]) {
   return (
     _session: FlowReplaySessionLike,
     predicate: { kind: string; name?: string },
@@ -148,8 +148,8 @@ function signalWait(events: IrisEvent[]) {
   };
 }
 
-function signalEvent(name: string): IrisEvent {
-  return { t: 1, type: 'signal', data: { name, data: {} } } as unknown as IrisEvent;
+function signalEvent(name: string): ReticleEvent {
+  return { t: 1, type: 'signal', data: { name, data: {} } } as unknown as ReticleEvent;
 }
 
 function testidStepFlow(opts: {
@@ -165,7 +165,7 @@ function testidStepFlow(opts: {
     createdAt: FIXED_MS,
     steps: [
       {
-        tool: 'iris_act',
+        tool: 'reticle_act',
         anchor: { kind: AnchorKind.TESTID, value: opts.stepTestid },
         action: 'click',
         ...(opts.expectTestid !== undefined
@@ -314,7 +314,7 @@ describe('flowsAsSpecs — enumeration', () => {
   });
 
   it('#7b absent flows dir -> zero specs, no throw', async () => {
-    const fs = memoryFs({ '/tmp/iris-root/.iris/contract.json': '{}' });
+    const fs = memoryFs({ '/tmp/reticle-root/.reticle/contract.json': '{}' });
     const specs = await flowsAsSpecs(ROOT, {
       fs,
       clock: fixedClock,

@@ -24,7 +24,7 @@ export function Sidebar(): React.ReactElement {
       <div className="brand" data-testid="brand">
         <div className="brand-glyph" />
         <div>
-          <div className="brand-name">Iris</div>
+          <div className="brand-name">Reticle</div>
           <div className="brand-sub">mission control</div>
         </div>
       </div>
@@ -46,10 +46,10 @@ export function Sidebar(): React.ReactElement {
       ))}
 
       <div className="sidebar-foot">
-        <div className="session-pill" data-testid="session-pill" title="Iris agent session">
+        <div className="session-pill" data-testid="session-pill" title="Reticle agent session">
           <span className="dot live" />
           <div style={{ lineHeight: 1.25 }}>
-            <div style={{ fontSize: 12.5, fontWeight: 600 }}>Iris connected</div>
+            <div style={{ fontSize: 12.5, fontWeight: 600 }}>Reticle connected</div>
             <div className="brand-sub" style={{ letterSpacing: '0.1em' }}>
               session · demo
             </div>

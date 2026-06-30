@@ -5,7 +5,7 @@ import { Framework, PackageManager, type Detection } from './detect.js';
 const CLAUDE_STEP = 'MCP server (Claude, global)';
 const CURSOR_STEP = 'MCP server (Cursor, global)';
 const MCP_STEP = 'MCP server (global)';
-const CONFIG_STEP = 'Syrin Iris config';
+const CONFIG_STEP = 'Reticle Reticle config';
 
 function detection(framework: Framework, reactMajor = 19): Detection {
   return {
@@ -26,7 +26,7 @@ function input(partial: Partial<PlanInput>): PlanInput {
     cursorConfigPath: partial.cursorConfigPath ?? '/home/u/.cursor/mcp.json',
     viteConfig: partial.viteConfig ?? null,
     nextConfigFile: partial.nextConfigFile ?? null,
-    nextIrisDevExists: partial.nextIrisDevExists ?? false,
+    nextReticleDevExists: partial.nextReticleDevExists ?? false,
     options: partial.options ?? { port: undefined, mcp: true, install: false },
   };
 }
@@ -54,17 +54,17 @@ describe('buildPlan — MCP (global, per detected agent)', () => {
     expect(s.exec?.args).toEqual([
       'mcp',
       'add',
-      'iris',
+      'reticle',
       '-s',
       'user',
       '--',
       'npx',
-      '@syrin/iris',
+      '@reticle/core',
       'mcp',
     ]);
   });
 
-  it('Claude step is ALREADY (idempotent) when iris is already registered', () => {
+  it('Claude step is ALREADY (idempotent) when reticle is already registered', () => {
     const s = step(buildPlan(input({ claudeCli: true, mcpExists: true })), CLAUDE_STEP);
     expect(s.status).toBe(StepStatus.ALREADY);
   });
@@ -74,7 +74,7 @@ describe('buildPlan — MCP (global, per detected agent)', () => {
     const s = step(plan, CURSOR_STEP);
     expect(s.status).toBe(StepStatus.APPLY);
     expect(s.write?.path).toBe('/home/u/.cursor/mcp.json');
-    expect(s.write?.content).toContain('@syrin/iris');
+    expect(s.write?.content).toContain('@reticle/core');
   });
 
   it('registers with BOTH agents when both are present', () => {
@@ -83,8 +83,8 @@ describe('buildPlan — MCP (global, per detected agent)', () => {
     expect(maybeStep(plan, CURSOR_STEP)).toBeDefined();
   });
 
-  it('Cursor step is ALREADY when iris is already in its config', () => {
-    const existing = JSON.stringify({ mcpServers: { iris: { command: 'x' } } });
+  it('Cursor step is ALREADY when reticle is already in its config', () => {
+    const existing = JSON.stringify({ mcpServers: { reticle: { command: 'x' } } });
     const plan = buildPlan(
       input({ claudeCli: false, cursorPresent: true, cursorConfig: existing }),
     );
@@ -106,7 +106,7 @@ describe('buildPlan — MCP (global, per detected agent)', () => {
     expect(s.status).toBe(StepStatus.SKIP);
   });
 
-  it('keeps both agents’ registration portless — the port lives in .iris.json, not the global config', () => {
+  it('keeps both agents’ registration portless — the port lives in .reticle.json, not the global config', () => {
     const plan = buildPlan(
       input({
         claudeCli: true,
@@ -120,7 +120,7 @@ describe('buildPlan — MCP (global, per detected agent)', () => {
     expect(step(plan, CLAUDE_STEP).exec?.args).not.toContain('--port');
     expect(step(plan, CURSOR_STEP).write?.content).not.toContain('5000');
     expect(step(plan, CURSOR_STEP).write?.content).not.toContain('--port');
-    // Instead the port is written to the per-project .iris.json.
+    // Instead the port is written to the per-project .reticle.json.
     expect(step(plan, CONFIG_STEP).write?.content).toContain('5000');
   });
 });
@@ -129,7 +129,7 @@ describe('buildPlan — Vite', () => {
   it('patches the vite config; no separate entry-file step (plugin injects connect)', () => {
     const plan = buildPlan(input({ viteConfig: { path: 'vite.config.ts', source: VITE_SRC } }));
     expect(step(plan, 'Vite plugin').status).toBe(StepStatus.APPLY);
-    expect(step(plan, 'Vite plugin').write?.content).toContain('@syrin/iris/vite');
+    expect(step(plan, 'Vite plugin').write?.content).toContain('@reticle/core/vite');
     expect(plan.steps.some((s) => s.title.includes('entry'))).toBe(false);
   });
 
@@ -138,14 +138,14 @@ describe('buildPlan — Vite', () => {
     expect(step(plan, 'Vite plugin').status).toBe(StepStatus.MANUAL);
   });
 
-  it('bakes --port into the patched iris() call (bridge/SDK port agree)', () => {
+  it('bakes --port into the patched reticle() call (bridge/SDK port agree)', () => {
     const plan = buildPlan(
       input({
         viteConfig: { path: 'vite.config.ts', source: VITE_SRC },
         options: { port: 5000, mcp: true, install: false },
       }),
     );
-    expect(step(plan, 'Vite plugin').write?.content).toContain('iris({ port: 5000 })');
+    expect(step(plan, 'Vite plugin').write?.content).toContain('reticle({ port: 5000 })');
   });
 });
 
@@ -159,25 +159,25 @@ describe('buildPlan — install', () => {
     const s = step(on, 'Install dependency');
     expect(s.status).toBe(StepStatus.APPLY);
     expect(s.exec?.command).toBe('pnpm');
-    expect(s.exec?.args).toEqual(['add', '-D', '@syrin/iris']);
+    expect(s.exec?.args).toEqual(['add', '-D', '@reticle/core']);
   });
 });
 
 describe('buildPlan — Next', () => {
-  it('creates iris-dev.tsx and bails config + mount to manual', () => {
+  it('creates reticle-dev.tsx and bails config + mount to manual', () => {
     const plan = buildPlan(
       input({ detection: detection(Framework.NEXT), nextConfigFile: 'next.config.mjs' }),
     );
-    expect(step(plan, 'IrisDev component').status).toBe(StepStatus.APPLY);
-    expect(step(plan, 'Next config (withIris)').status).toBe(StepStatus.MANUAL);
-    expect(step(plan, 'Mount IrisDev').status).toBe(StepStatus.MANUAL);
+    expect(step(plan, 'ReticleDev component').status).toBe(StepStatus.APPLY);
+    expect(step(plan, 'Next config (withReticle)').status).toBe(StepStatus.MANUAL);
+    expect(step(plan, 'Mount ReticleDev').status).toBe(StepStatus.MANUAL);
   });
 
-  it('marks iris-dev.tsx already when it exists', () => {
+  it('marks reticle-dev.tsx already when it exists', () => {
     const plan = buildPlan(
-      input({ detection: detection(Framework.NEXT), nextIrisDevExists: true }),
+      input({ detection: detection(Framework.NEXT), nextReticleDevExists: true }),
     );
-    expect(step(plan, 'IrisDev component').status).toBe(StepStatus.ALREADY);
+    expect(step(plan, 'ReticleDev component').status).toBe(StepStatus.ALREADY);
   });
 });
 

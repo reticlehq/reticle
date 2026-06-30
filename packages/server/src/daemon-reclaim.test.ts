@@ -12,7 +12,7 @@ import { reclaimStaleDaemons } from './daemon.js';
 let home: string;
 
 beforeEach(() => {
-  home = mkdtempSync(join(tmpdir(), 'iris-reclaim-'));
+  home = mkdtempSync(join(tmpdir(), 'reticle-reclaim-'));
 });
 afterEach(() => {
   rmSync(home, { recursive: true, force: true });

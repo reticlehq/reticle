@@ -2,12 +2,12 @@ import * as fs from 'node:fs';
 import * as https from 'node:https';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
-import { UpdateCheckIntervalMs } from '@syrin/iris-protocol';
+import { UpdateCheckIntervalMs } from '@reticle/protocol';
 import { log } from '../log.js';
 
-const IRIS_HOME = join(homedir(), '.iris');
-const MANIFEST_PATH = join(IRIS_HOME, 'update-manifest.json');
-const NPM_REGISTRY = 'https://registry.npmjs.org/@syrin/iris/latest';
+const RETICLE_HOME = join(homedir(), '.reticle');
+const MANIFEST_PATH = join(RETICLE_HOME, 'update-manifest.json');
+const NPM_REGISTRY = 'https://registry.npmjs.org/@reticle/core/latest';
 
 interface UpdateManifest {
   currentVersion: string;
@@ -22,7 +22,7 @@ interface UpdateManifest {
 
 interface NpmPackageInfo {
   version: string;
-  iris?: {
+  reticle?: {
     changelog?: string;
     breakingChanges?: string[];
   };
@@ -39,7 +39,7 @@ export function loadManifest(): UpdateManifest | null {
 }
 
 export function saveManifest(manifest: UpdateManifest): void {
-  fs.mkdirSync(IRIS_HOME, { recursive: true });
+  fs.mkdirSync(RETICLE_HOME, { recursive: true });
   fs.writeFileSync(MANIFEST_PATH, JSON.stringify(manifest, null, 2), 'utf8');
 }
 
@@ -95,16 +95,16 @@ export async function checkForUpdate(
       latestVersion: info.version,
       updateAvailable,
       lastChecked: new Date(now()).toISOString(),
-      ...(info.iris?.changelog !== undefined ? { changelog: info.iris.changelog } : {}),
-      ...(info.iris?.breakingChanges !== undefined
-        ? { breakingChanges: info.iris.breakingChanges }
+      ...(info.reticle?.changelog !== undefined ? { changelog: info.reticle.changelog } : {}),
+      ...(info.reticle?.breakingChanges !== undefined
+        ? { breakingChanges: info.reticle.breakingChanges }
         : {}),
       ...(cached?.previousVersion !== undefined ? { previousVersion: cached.previousVersion } : {}),
     };
     saveManifest(manifest);
     return manifest;
   } catch (err) {
-    log('iris_update_check_failed', {
+    log('reticle_update_check_failed', {
       error: err instanceof Error ? err.message : String(err),
     });
     if (cached !== null) return { ...cached, currentVersion };

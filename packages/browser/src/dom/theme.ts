@@ -1,6 +1,6 @@
 /**
  * Design-token (theme) awareness — the in-source answer to "is this color on-theme?". A DOM/a11y
- * tool sees a color rendered; it does not know the app's INTENDED palette. Iris reads the design
+ * tool sees a color rendered; it does not know the app's INTENDED palette. Reticle reads the design
  * tokens the app declares as `:root` CSS custom properties and reports, per element, whether its
  * color/background maps to a token or is an off-palette hardcoded value. That is a theme-compliance
  * signal no outside-the-page tool has without re-deriving the palette itself.

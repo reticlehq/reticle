@@ -2,7 +2,7 @@ import { access, mkdir, readdir, readFile, rename, rm, writeFile } from 'node:fs
 
 /**
  * The injectable filesystem seam. Server logic depends on this interface, never on node:fs
- * directly — so tests pass an in-memory or temp-dir adapter and never touch the repo's .iris/.
+ * directly — so tests pass an in-memory or temp-dir adapter and never touch the repo's .reticle/.
  */
 export interface FileSystemPort {
   /** Read a UTF-8 file. Rejects (ENOENT) if absent. */

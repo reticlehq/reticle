@@ -35,7 +35,7 @@ describe('installDaemonResilience', () => {
 
     expect(fatal).toBe(0); // the daemon stays alive for the other agents
     expect(logs).toHaveLength(1);
-    expect(logs[0]?.event).toBe('iris_daemon_unhandled_rejection');
+    expect(logs[0]?.event).toBe('reticle_daemon_unhandled_rejection');
     expect(logs[0]?.data['reason']).toBe('one agent blew up');
   });
 
@@ -51,8 +51,8 @@ describe('installDaemonResilience', () => {
 
     proc.emit('uncaughtException', new Error('truly unexpected'));
 
-    expect(fatal).toBe(1); // exit so the next `iris mcp` respawns a fresh daemon
-    expect(logs[0]?.event).toBe('iris_daemon_uncaught_exception');
+    expect(fatal).toBe(1); // exit so the next `reticle mcp` respawns a fresh daemon
+    expect(logs[0]?.event).toBe('reticle_daemon_uncaught_exception');
     expect(logs[0]?.data['error']).toBe('truly unexpected');
   });
 

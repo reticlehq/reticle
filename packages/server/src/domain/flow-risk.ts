@@ -1,6 +1,6 @@
 /**
  * Risk-rank flows so an agent tests the riskiest first. Risk combines two signals:
- *  - run history (.iris/project.json): a flow whose last run errored/drifted, or passed but with
+ *  - run history (.reticle/project.json): a flow whose last run errored/drifted, or passed but with
  *    console/network errors, is riskier than one that passed clean; a never-run flow is unknown.
  *  - assertion quality (flow-classify): a flow that asserts no consequence is risky EVEN when it
  *    "passes" — a green assertion-free flow is false confidence (Fowler/Dodds), so it can't be
@@ -10,7 +10,7 @@
  * Pure: no IO, no clock.
  */
 
-import { RunStatus, type RunRecord } from '@syrin/iris-protocol';
+import { RunStatus, type RunRecord } from '@reticle/protocol';
 import { FlowAssertionGrade } from '../flows/flow-classify.js';
 
 export const RiskLevel = {

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Real-world integration test for Iris MCP + browser SDK.
+ * Real-world integration test for Reticle MCP + browser SDK.
  *
  * Tests exactly what real users experience:
  *   1. Smart session auto-selection (multiple tabs, one focused vs one hidden)
@@ -12,18 +12,18 @@
  *   7. Update tools
  *
  * How it works (the real-user flow):
- *   - The test finds the URL of whatever the user's real browser has open (from iris_sessions)
+ *   - The test finds the URL of whatever the user's real browser has open (from reticle_sessions)
  *   - Playwright opens a SECOND headless tab to the same URL, creating a second session
  *   - Now we have: user's real browser (focused/active) + Playwright (hidden/throttled)
  *   - This IS the stale-tab scenario! Smart auto-selection should prefer the user's tab
  *
  * Prerequisites:
  *   pnpm build
- *   IRIS_PORT=58432 pnpm --filter @syrin/iris-demo dev   (in a separate terminal)
+ *   RETICLE_PORT=58432 pnpm --filter @reticle/demo dev   (in a separate terminal)
  *   Open http://localhost:<demo-port> in a real browser
  *
  * Usage:
- *   IRIS_PORT=58432 node scripts/integration-test.mjs
+ *   RETICLE_PORT=58432 node scripts/integration-test.mjs
  */
 
 import * as net from 'node:net';
@@ -37,7 +37,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, '..');
 const CLI = path.join(ROOT, 'packages/server/dist/cli.js');
 
-const IRIS_PORT = parseInt(process.env['IRIS_PORT'] ?? '58432');
+const RETICLE_PORT = parseInt(process.env['RETICLE_PORT'] ?? '58432');
 
 // ─── Colours ─────────────────────────────────────────────────────────────────
 const G = '\x1b[32m',
@@ -88,7 +88,7 @@ function probeTcp(port, host = '127.0.0.1') {
   });
 }
 
-// ─── MCP proxy client (uses real iris mcp, exactly as Claude Code does) ──────
+// ─── MCP proxy client (uses real reticle mcp, exactly as Claude Code does) ──────
 let mcpIdCtr = 1;
 let mcpProc = null;
 let mcpCbs = new Map();
@@ -96,8 +96,8 @@ let mcpBuf = '';
 
 function startMcpProxy() {
   stopMcpProxy();
-  mcpProc = spawn(process.execPath, [CLI, 'mcp', '--port', String(IRIS_PORT)], {
-    env: { ...process.env, IRIS_PORT: String(IRIS_PORT) },
+  mcpProc = spawn(process.execPath, [CLI, 'mcp', '--port', String(RETICLE_PORT)], {
+    env: { ...process.env, RETICLE_PORT: String(RETICLE_PORT) },
     stdio: ['pipe', 'pipe', 'pipe'],
   });
   mcpProc.stdout.setEncoding('utf8');
@@ -190,7 +190,7 @@ async function callTool(name, args = {}, timeoutMs = 12_000) {
 
 // ─── Session helpers ──────────────────────────────────────────────────────────
 async function getSessions(timeoutMs = 6_000) {
-  const r = await callTool('iris_sessions', {}, timeoutMs);
+  const r = await callTool('reticle_sessions', {}, timeoutMs);
   return r?.sessions ?? [];
 }
 
@@ -226,14 +226,18 @@ async function waitForSessionCountAtLeast(min, timeoutMs = 15_000) {
 // ─── Daemon helpers ───────────────────────────────────────────────────────────
 async function stopDaemon() {
   try {
-    execFileSync(process.execPath, [CLI, 'stop', '--port', String(IRIS_PORT), '--quiet'], {
+    execFileSync(process.execPath, [CLI, 'stop', '--port', String(RETICLE_PORT), '--quiet'], {
       timeout: 3000,
       env: { ...process.env },
     });
   } catch {
     /* might not be running */
   }
-  const pidFile = path.join(process.env['HOME'] ?? '/tmp', '.iris', `daemon-${IRIS_PORT}.pid`);
+  const pidFile = path.join(
+    process.env['HOME'] ?? '/tmp',
+    '.reticle',
+    `daemon-${RETICLE_PORT}.pid`,
+  );
   try {
     const pid = parseInt(fs.readFileSync(pidFile, 'utf8'));
     if (!isNaN(pid))
@@ -248,7 +252,7 @@ async function stopDaemon() {
   }
   const dl = Date.now() + 3000;
   while (Date.now() < dl) {
-    if (!(await probeTcp(IRIS_PORT))) return;
+    if (!(await probeTcp(RETICLE_PORT))) return;
     await delay(100);
   }
 }
@@ -284,8 +288,8 @@ process.on('SIGTERM', async () => {
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 async function main() {
-  console.log(`${BOLD}Iris Integration Test — real browser + real MCP${X}`);
-  console.log(`  daemon port: ${IRIS_PORT}`);
+  console.log(`${BOLD}Reticle Integration Test — real browser + real MCP${X}`);
+  console.log(`  daemon port: ${RETICLE_PORT}`);
 
   // ── Preflight ────────────────────────────────────────────────────────────
   section('Preflight');
@@ -296,20 +300,20 @@ async function main() {
   }
   ok('CLI built');
 
-  if (!(await probeTcp(IRIS_PORT))) {
+  if (!(await probeTcp(RETICLE_PORT))) {
     fail(
       'Daemon',
-      `nothing on port ${IRIS_PORT} — start with: IRIS_PORT=${IRIS_PORT} pnpm --filter @syrin/iris-demo dev`,
+      `nothing on port ${RETICLE_PORT} — start with: RETICLE_PORT=${RETICLE_PORT} pnpm --filter @reticle/demo dev`,
     );
     process.exit(1);
   }
-  ok(`Daemon on port ${IRIS_PORT}`);
+  ok(`Daemon on port ${RETICLE_PORT}`);
 
   const init = await mcpInit();
-  ok('MCP proxy', `iris v${init.serverInfo?.version}`);
+  ok('MCP proxy', `reticle v${init.serverInfo?.version}`);
 
   // Find the demo URL from existing sessions — this is the URL the USER has open in their
-  // real browser, which IS the correct Iris-connected URL (same IRIS_PORT as daemon).
+  // real browser, which IS the correct Reticle-connected URL (same RETICLE_PORT as daemon).
   let baseSessions = await getSessions();
   info(`Existing sessions: ${baseSessions.length}`);
 
@@ -324,7 +328,7 @@ async function main() {
   if (!demoUrl) {
     warn('No existing browser session — cannot infer demo URL');
     warn('Start the demo and open it in a real browser:');
-    warn(`  IRIS_PORT=${IRIS_PORT} pnpm --filter @syrin/iris-demo dev`);
+    warn(`  RETICLE_PORT=${RETICLE_PORT} pnpm --filter @reticle/demo dev`);
     warn('Then open http://localhost:<port> in Chrome, then re-run this test.');
     warn('Skipping browser-based scenarios (8 and 9 only will run).');
   } else {
@@ -336,7 +340,7 @@ async function main() {
   // ─────────────────────────────────────────────────────────────────────────
   // Scenario 1: Basic tool calls with explicit sessionId
   // ─────────────────────────────────────────────────────────────────────────
-  section('Scenario 1: iris_sessions, iris_snapshot, iris_query (explicit sessionId)');
+  section('Scenario 1: reticle_sessions, reticle_snapshot, reticle_query (explicit sessionId)');
 
   if (baseSessions.length === 0) {
     warn(
@@ -347,24 +351,24 @@ async function main() {
     info(`Using session ${sid} (${baseSessions[0].url})`);
 
     try {
-      const snap = await callTool('iris_snapshot', { sessionId: sid, mode: 'status' });
-      ok('iris_snapshot', `route=${snap?.status?.route} title="${snap?.status?.title}"`);
+      const snap = await callTool('reticle_snapshot', { sessionId: sid, mode: 'status' });
+      ok('reticle_snapshot', `route=${snap?.status?.route} title="${snap?.status?.title}"`);
     } catch (e) {
-      fail('iris_snapshot', e.message);
+      fail('reticle_snapshot', e.message);
     }
 
     try {
-      const q = await callTool('iris_query', { sessionId: sid, by: 'role', value: 'heading' });
-      ok('iris_query', `${q?.elements?.length ?? 0} headings`);
+      const q = await callTool('reticle_query', { sessionId: sid, by: 'role', value: 'heading' });
+      ok('reticle_query', `${q?.elements?.length ?? 0} headings`);
     } catch (e) {
-      fail('iris_query', e.message);
+      fail('reticle_query', e.message);
     }
 
     try {
-      const net = await callTool('iris_network', { sessionId: sid, limit: 5 });
-      ok('iris_network', `${net?.requests?.length ?? 0} recent requests`);
+      const net = await callTool('reticle_network', { sessionId: sid, limit: 5 });
+      ok('reticle_network', `${net?.requests?.length ?? 0} recent requests`);
     } catch (e) {
-      fail('iris_network', e.message);
+      fail('reticle_network', e.message);
     }
   }
 
@@ -383,9 +387,9 @@ async function main() {
     openContexts.push(ctx2);
     const page2 = await ctx2.newPage();
     await page2.goto(demoUrl);
-    // Wait for the iris bridge connection
+    // Wait for the reticle bridge connection
     try {
-      await page2.waitForFunction(() => window.__irisInstance?._state !== 'disconnected', {
+      await page2.waitForFunction(() => window.__reticleInstance?._state !== 'disconnected', {
         timeout: 15_000,
       });
     } catch {
@@ -393,7 +397,7 @@ async function main() {
     }
     await delay(2000); // wait for PAGE_HEALTH heartbeat
 
-    const sessionsNow = await callTool('iris_sessions', {});
+    const sessionsNow = await callTool('reticle_sessions', {});
     info(`Sessions now: ${sessionsNow.sessions.length}`);
     sessionsNow.sessions.forEach((s) =>
       info(
@@ -411,7 +415,7 @@ async function main() {
       warn(
         `Expected ≥2 sessions, got ${sessionsNow.sessions.length} — Playwright tab may not have connected`,
       );
-      warn(`  Is the demo at ${demoUrl} configured with IRIS_PORT=${IRIS_PORT}?`);
+      warn(`  Is the demo at ${demoUrl} configured with RETICLE_PORT=${RETICLE_PORT}?`);
     }
 
     // Test auto-selection
@@ -419,7 +423,7 @@ async function main() {
       // Perfect case: one focused (user's real browser) + one hidden (Playwright)
       // Auto-selection should pick the non-throttled one WITHOUT needing sessionId
       try {
-        const snap = await callTool('iris_snapshot', { mode: 'status' });
+        const snap = await callTool('reticle_snapshot', { mode: 'status' });
         // Verify via the health block in the response — non-throttled session has throttled:false
         const chosenThrottled = snap?.session?.throttled;
         if (chosenThrottled === false) {
@@ -448,7 +452,7 @@ async function main() {
       info('All sessions throttled in headless mode — testing ambiguity error quality');
       if (sessionsNow.sessions.length >= 2) {
         try {
-          await callTool('iris_snapshot', { mode: 'status' });
+          await callTool('reticle_snapshot', { mode: 'status' });
           warn(
             'Expected ambiguity error with all-throttled sessions — got a result (auto-select picked one)',
           );
@@ -473,7 +477,7 @@ async function main() {
     } else if (nonThrottled.length >= 2) {
       // Multiple non-throttled — need to pick by recency
       try {
-        const snap = await callTool('iris_snapshot', { mode: 'status' });
+        const snap = await callTool('reticle_snapshot', { mode: 'status' });
         ok(
           'Auto-selection succeeded among multiple non-throttled sessions',
           `chose ${snap?.session_lease?.sessionId}`,
@@ -490,13 +494,13 @@ async function main() {
     // Always verify explicit sessionId works regardless
     for (const s of sessionsNow.sessions.slice(0, 2)) {
       try {
-        const snap = await callTool('iris_snapshot', { sessionId: s.sessionId, mode: 'status' });
+        const snap = await callTool('reticle_snapshot', { sessionId: s.sessionId, mode: 'status' });
         ok(
-          `iris_snapshot session ${s.sessionId} (throttled=${s.throttled})`,
+          `reticle_snapshot session ${s.sessionId} (throttled=${s.throttled})`,
           snap?.status?.route ?? '?',
         );
       } catch (e) {
-        warn(`iris_snapshot session ${s.sessionId}: ${e.message}`);
+        warn(`reticle_snapshot session ${s.sessionId}: ${e.message}`);
       }
     }
 
@@ -529,7 +533,7 @@ async function main() {
     const page3 = await ctx3.newPage();
     await page3.goto(demoUrl);
     try {
-      await page3.waitForFunction(() => window.__irisInstance?._state !== 'disconnected', {
+      await page3.waitForFunction(() => window.__reticleInstance?._state !== 'disconnected', {
         timeout: 15_000,
       });
     } catch {
@@ -541,9 +545,9 @@ async function main() {
     info(`Sessions before navigation: ${countBefore}`);
 
     // Navigate to same origin with query param (stays on the same Vite app)
-    await page3.goto(demoUrl + '?iris-integration-test=nav');
+    await page3.goto(demoUrl + '?reticle-integration-test=nav');
     try {
-      await page3.waitForFunction(() => window.__irisInstance?._state !== 'disconnected', {
+      await page3.waitForFunction(() => window.__reticleInstance?._state !== 'disconnected', {
         timeout: 10_000,
       });
     } catch {
@@ -580,7 +584,9 @@ async function main() {
     const pageOld = await ctxOld.newPage();
     await pageOld.goto(demoUrl);
     try {
-      await pageOld.waitForFunction(() => window.__irisInstance !== undefined, { timeout: 8_000 });
+      await pageOld.waitForFunction(() => window.__reticleInstance !== undefined, {
+        timeout: 8_000,
+      });
     } catch {
       await delay(2000);
     }
@@ -594,7 +600,9 @@ async function main() {
     const pageNew = await ctxNew.newPage();
     await pageNew.goto(demoUrl);
     try {
-      await pageNew.waitForFunction(() => window.__irisInstance !== undefined, { timeout: 10_000 });
+      await pageNew.waitForFunction(() => window.__reticleInstance !== undefined, {
+        timeout: 10_000,
+      });
     } catch {
       await delay(2000);
     }
@@ -627,7 +635,7 @@ async function main() {
 
   // ─────────────────────────────────────────────────────────────────────────
   // Scenario 5: Health info quality check
-  // iris_sessions must include throttled, focused, lastSeenMs, and recommendation
+  // reticle_sessions must include throttled, focused, lastSeenMs, and recommendation
   // when the tab is hidden/throttled
   // ─────────────────────────────────────────────────────────────────────────
   section('Scenario 5: Session health info completeness');
@@ -658,37 +666,37 @@ async function main() {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // Scenario 6: iris_version_info + update guard
+  // Scenario 6: reticle_version_info + update guard
   // ─────────────────────────────────────────────────────────────────────────
   section('Scenario 6: Version info and update guard');
 
   try {
-    const ver = await callTool('iris_version_info', {});
+    const ver = await callTool('reticle_version_info', {});
     ok(
-      'iris_version_info',
+      'reticle_version_info',
       `v${ver.currentVersion} kind=${ver.executionKind} updateAvailable=${ver.updateAvailable}`,
     );
     if (ver.executionKind === undefined) fail('executionKind missing', JSON.stringify(ver));
   } catch (e) {
-    fail('iris_version_info', e.message);
+    fail('reticle_version_info', e.message);
   }
 
   try {
-    const upd = await callTool('iris_apply_update', { targetVersion: '0.0.0', confirm: false });
+    const upd = await callTool('reticle_apply_update', { targetVersion: '0.0.0', confirm: false });
     upd?.ok === false
-      ? ok('iris_apply_update safety guard (confirm:false → ok:false)')
-      : fail('iris_apply_update guard bypassed', JSON.stringify(upd));
+      ? ok('reticle_apply_update safety guard (confirm:false → ok:false)')
+      : fail('reticle_apply_update guard bypassed', JSON.stringify(upd));
   } catch (e) {
-    fail('iris_apply_update', e.message);
+    fail('reticle_apply_update', e.message);
   }
 
   try {
-    const rb = await callTool('iris_rollback', { confirm: false });
+    const rb = await callTool('reticle_rollback', { confirm: false });
     rb?.ok === false
-      ? ok('iris_rollback safety guard (confirm:false → ok:false)')
-      : fail('iris_rollback guard bypassed', JSON.stringify(rb));
+      ? ok('reticle_rollback safety guard (confirm:false → ok:false)')
+      : fail('reticle_rollback guard bypassed', JSON.stringify(rb));
   } catch (e) {
-    fail('iris_rollback', e.message);
+    fail('reticle_rollback', e.message);
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -709,9 +717,9 @@ async function main() {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // Scenario 8: Proxy auto-start — kill daemon, iris mcp auto-restarts it
+  // Scenario 8: Proxy auto-start — kill daemon, reticle mcp auto-restarts it
   // ─────────────────────────────────────────────────────────────────────────
-  section('Scenario 8: Proxy auto-start (kill daemon → iris mcp auto-restarts)');
+  section('Scenario 8: Proxy auto-start (kill daemon → reticle mcp auto-restarts)');
 
   stopMcpProxy();
   await stopDaemon();
@@ -719,7 +727,7 @@ async function main() {
 
   try {
     const initR = await mcpInit();
-    ok('Proxy connected after auto-start', `iris v${initR.serverInfo?.version}`);
+    ok('Proxy connected after auto-start', `reticle v${initR.serverInfo?.version}`);
     const sessions = await getSessions(8000);
     ok('Tools work after auto-start', `${sessions.length} sessions`);
   } catch (e) {
@@ -736,8 +744,8 @@ async function main() {
       { length: 3 },
       (_, i) =>
         new Promise((resolve, reject) => {
-          const p = spawn(process.execPath, [CLI, 'mcp', '--port', String(IRIS_PORT)], {
-            env: { ...process.env, IRIS_PORT: String(IRIS_PORT) },
+          const p = spawn(process.execPath, [CLI, 'mcp', '--port', String(RETICLE_PORT)], {
+            env: { ...process.env, RETICLE_PORT: String(RETICLE_PORT) },
             stdio: ['pipe', 'pipe', 'pipe'],
           });
           let buf = '';
@@ -781,7 +789,7 @@ async function main() {
     ),
   );
 
-  const allOk = concResults.every((r) => r.status === 'fulfilled' && r.value === 'iris');
+  const allOk = concResults.every((r) => r.status === 'fulfilled' && r.value === 'reticle');
   if (allOk) {
     ok('All 3 concurrent MCP clients connected', concResults.map((r) => r.value).join(', '));
   } else {

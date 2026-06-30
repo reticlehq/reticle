@@ -45,25 +45,25 @@ const ranLayerA = manifest === null ? true : manifest.ranLayerA === true;
 // ---- OBSERVATION-COST pass (scripted observation, "Layer A") — only when freshly run this pass ----
 const analysis = ranLayerA ? readRaw('bench/raw/analysis.json') : null;
 if (analysis !== null) {
-  const iris = analysis.per_tool?.iris ?? {};
+  const reticle = analysis.per_tool?.reticle ?? {};
   const realRegressions = Object.values(analysis.per_scenario ?? {}).filter(
-    (s) => s.expected_detect === true && s.by_tool?.iris?.verdict !== 'NOT MEASURED',
+    (s) => s.expected_detect === true && s.by_tool?.reticle?.verdict !== 'NOT MEASURED',
   ).length;
-  const rcr = realRegressions ? +(iris.true_positives / realRegressions).toFixed(3) : null;
-  const ve = iris.avg_tokens_o200k
-    ? +(iris.true_positives / (iris.avg_tokens_o200k / 1000)).toFixed(2)
+  const rcr = realRegressions ? +(reticle.true_positives / realRegressions).toFixed(3) : null;
+  const ve = reticle.avg_tokens_o200k
+    ? +(reticle.true_positives / (reticle.avg_tokens_o200k / 1000)).toFixed(2)
     : null;
-  const fp = iris.false_positives ?? 0;
+  const fp = reticle.false_positives ?? 0;
 
-  if (rcr === null || rcr < 1.0) failures.push(`RCR floor: iris RCR=${rcr} (must be 1.0)`);
-  if (fp > 0) failures.push(`false positives: iris FP=${fp} (must be 0)`);
-  const lastVe = prev?.per_tool?.iris?.ve ?? null;
+  if (rcr === null || rcr < 1.0) failures.push(`RCR floor: reticle RCR=${rcr} (must be 1.0)`);
+  if (fp > 0) failures.push(`false positives: reticle FP=${fp} (must be 0)`);
+  const lastVe = prev?.per_tool?.reticle?.ve ?? null;
   if (lastVe !== null && ve !== null && ve < lastVe * (1 - VE_TOL)) {
     failures.push(
       `VE regressed: ${ve} < ${lastVe} (−${(((lastVe - ve) / lastVe) * 100).toFixed(1)}%)`,
     );
   }
-  scorecard.push(['Observe · catch-rate', prev?.per_tool?.iris?.rcr ?? '—', rcr]);
+  scorecard.push(['Observe · catch-rate', prev?.per_tool?.reticle?.rcr ?? '—', rcr]);
   scorecard.push(['Observe · false-positives', '0', fp]);
   scorecard.push(['Observe · efficiency', lastVe ?? '—', ve]);
 } else {
@@ -111,7 +111,7 @@ if (stateOracle !== null) {
   scorecard.push(['Replay · state', lastC?.state_detection ?? '—', stateOracle.detection_rate]);
 }
 if (cost !== null) {
-  const now = cost.per_run?.iris_replay_mean_tokens ?? null;
+  const now = cost.per_run?.reticle_replay_mean_tokens ?? null;
   const last = lastC?.replay_mean_tokens ?? null;
   if (last !== null && now !== null && now > last * (1 + TOKEN_TOL)) {
     failures.push(

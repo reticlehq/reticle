@@ -1,13 +1,13 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import type { WebSocket } from 'ws';
 import {
-  IRIS_PROTOCOL_VERSION,
+  RETICLE_PROTOCOL_VERSION,
   MessageKind,
   SESSION_LIFECYCLE,
   SessionState,
   type HelloMessage,
-} from '@syrin/iris-protocol';
-import { UNDELIVERED_NOTES_LABEL } from '@syrin/iris-protocol';
+} from '@reticle/protocol';
+import { UNDELIVERED_NOTES_LABEL } from '@reticle/protocol';
 import { Session, SessionManager } from './session.js';
 import {
   reapIdleSessions,
@@ -21,7 +21,7 @@ const fakeSocket = { send: (): void => {} } as unknown as WebSocket;
 function hello(id: string): HelloMessage {
   return {
     kind: MessageKind.HELLO,
-    protocolVersion: IRIS_PROTOCOL_VERSION,
+    protocolVersion: RETICLE_PROTOCOL_VERSION,
     sessionId: id,
     url: 'http://localhost/',
     title: 'Demo',

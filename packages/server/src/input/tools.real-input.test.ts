@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { ActionWarning, InputMode, InputModeReason, SessionState } from '@syrin/iris-protocol';
-import type { CommandResult } from '@syrin/iris-protocol';
+import { ActionWarning, InputMode, InputModeReason, SessionState } from '@reticle/protocol';
+import type { CommandResult } from '@reticle/protocol';
 import { TOOLS, type ToolDeps } from '../tools/tools.js';
-import { IrisTool } from '../tools/tool-names.js';
+import { ReticleTool } from '../tools/tool-names.js';
 import { BaselineStore } from '../project/baselines.js';
 import { createNodeFileSystem } from '../project/fs-port.js';
 import { RecordingStore } from '../flows/recordings.js';
@@ -85,11 +85,13 @@ function fakeDeps(provider: RealInputProvider | undefined, state: FakeSessionSta
     sessions: sessions as SessionManager,
     baselines: new BaselineStore(),
     recordings: new RecordingStore(),
-    flows: new FlowStore(createNodeFileSystem(), '/tmp/iris-test/.iris', { now: () => 0 }),
-    project: new ProjectStore(createNodeFileSystem(), '/tmp/iris-test/.iris', { now: () => 0 }),
+    flows: new FlowStore(createNodeFileSystem(), '/tmp/reticle-test/.reticle', { now: () => 0 }),
+    project: new ProjectStore(createNodeFileSystem(), '/tmp/reticle-test/.reticle', {
+      now: () => 0,
+    }),
     annotations: new AnnotationStore(),
     fs: createNodeFileSystem(),
-    irisRoot: '/tmp/iris-test/.iris',
+    reticleRoot: '/tmp/reticle-test/.reticle',
     now: () => 0,
   };
   if (provider !== undefined) deps.realInput = provider;
@@ -122,8 +124,8 @@ function makeProvider(available: boolean, options: { throws?: boolean } = {}): R
 }
 
 function actTool() {
-  const tool = TOOLS.find((t) => t.name === IrisTool.ACT);
-  if (tool === undefined) throw new Error('no iris_act tool');
+  const tool = TOOLS.find((t) => t.name === ReticleTool.ACT);
+  if (tool === undefined) throw new Error('no reticle_act tool');
   return tool;
 }
 
@@ -138,7 +140,7 @@ async function runAct(deps: ToolDeps, args: Record<string, unknown>): Promise<Ac
   return (await actTool().handler(deps, args)) as ActResult;
 }
 
-describe('iris_act real-input routing', () => {
+describe('reticle_act real-input routing', () => {
   it('runs a click on the synthetic path by default even with a provider available', async () => {
     // "Don't click, run the code": the occlusion-honest synthetic path is the default for clicks.
     const provider = makeProvider(true);

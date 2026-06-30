@@ -2,7 +2,7 @@ import {
   AnchorKind,
   DriftReason,
   EventType,
-  IrisCommand,
+  ReticleCommand,
   QueryBy,
   type CommandResult,
   type Drift,
@@ -11,9 +11,9 @@ import {
   type FlowFile,
   type FlowStep,
   type FlowStepResult,
-  type IrisEvent,
+  type ReticleEvent,
   type QueryEmptyHint,
-} from '@syrin/iris-protocol';
+} from '@reticle/protocol';
 import type { EvalResult, Predicate } from '../events/predicate.js';
 import { asRecord, asString } from '../tools/tools-helpers.js';
 import { replayActionArgs } from './replay.js';
@@ -25,8 +25,8 @@ import { replayActionArgs } from './replay.js';
  */
 export interface FlowReplaySession {
   command(name: string, args?: Record<string, unknown>): Promise<CommandResult>;
-  eventsSince(cursor: number): IrisEvent[];
-  onEvent(listener: (event: IrisEvent) => void): () => void;
+  eventsSince(cursor: number): ReticleEvent[];
+  onEvent(listener: (event: ReticleEvent) => void): () => void;
   /** Buffer clock (ms since connect) — required by the predicate engine's `settled` check. */
   elapsed(): number;
 }
@@ -176,10 +176,10 @@ async function resolveQuery(
   queryArgs: Record<string, unknown>,
   sleep: Sleep,
 ): Promise<{ refs: string[]; hint?: QueryEmptyHint }> {
-  let last = readQuery(await session.command(IrisCommand.QUERY, queryArgs));
+  let last = readQuery(await session.command(ReticleCommand.QUERY, queryArgs));
   for (let attempt = 1; last.refs.length === 0 && attempt < ANCHOR_SETTLE_ATTEMPTS; attempt += 1) {
     await sleep(ANCHOR_SETTLE_DELAY_MS);
-    last = readQuery(await session.command(IrisCommand.QUERY, queryArgs));
+    last = readQuery(await session.command(ReticleCommand.QUERY, queryArgs));
   }
   return last;
 }
@@ -221,7 +221,7 @@ function trimUrl(url: string): string {
  * journey's consequence column ("→ /deployments", "signal modal:opened", "GET /api/x 500"). Notable
  * events only (route / domain signal / network / console error), terse and capped to stay token-cheap.
  */
-function summarizeConsequence(events: IrisEvent[]): string | undefined {
+function summarizeConsequence(events: ReticleEvent[]): string | undefined {
   const parts: string[] = [];
   const lastRoute = events.filter((e) => e.type === EventType.ROUTE_CHANGE).at(-1);
   if (lastRoute !== undefined) {
@@ -306,7 +306,7 @@ async function runComponentStep(
     };
   }
   const ref = refs[0] ?? '';
-  const act = await session.command(IrisCommand.ACT, {
+  const act = await session.command(ReticleCommand.ACT, {
     ref,
     action: step.action ?? '',
     args: replayActionArgs(step.args, confirmDangerous),
@@ -338,7 +338,7 @@ async function runTestidStep(
   }
   const ref = refs[0] ?? '';
   const note = refs.length > 1 ? `ambiguous testid '${value}', used first match` : undefined;
-  const act = await session.command(IrisCommand.ACT, {
+  const act = await session.command(ReticleCommand.ACT, {
     ref,
     action: step.action ?? '',
     args: replayActionArgs(step.args, confirmDangerous),
@@ -422,7 +422,7 @@ async function runSignalStep(
 
 /**
  * Replay a loaded flow by RE-RESOLVING every step's semantic anchor against the live DOM — never
- * a stale ref. A testid anchor is re-found by iris_query; a signal anchor waits on a predicate.
+ * a stale ref. A testid anchor is re-found by reticle_query; a signal anchor waits on a predicate.
  * On the first anchor MISS the step carries legible drift and replay STOPS, returning the partial
  * results. This is the "whose fault is it" contract, not a blind "command failed".
  */

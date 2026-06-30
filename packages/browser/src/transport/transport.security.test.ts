@@ -2,11 +2,11 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   CommandResultSchema,
   EventType,
-  IRIS_PROTOCOL_VERSION,
+  RETICLE_PROTOCOL_VERSION,
   MessageKind,
   TRANSPORT_LIMITS,
   type HelloMessage,
-} from '@syrin/iris-protocol';
+} from '@reticle/protocol';
 import { Transport } from './transport.js';
 
 class FakeWebSocket {
@@ -43,7 +43,7 @@ class FakeWebSocket {
 
 const hello = (): HelloMessage => ({
   kind: MessageKind.HELLO,
-  protocolVersion: IRIS_PROTOCOL_VERSION,
+  protocolVersion: RETICLE_PROTOCOL_VERSION,
   sessionId: 'session-a',
   url: 'http://localhost/',
   title: 'Test',
@@ -62,7 +62,7 @@ afterEach(() => {
 describe('Transport security', () => {
   it('preserves the SDK-owned pairing token in HELLO', () => {
     const transport = new Transport({
-      url: 'ws://localhost/iris',
+      url: 'ws://localhost/reticle',
       hello: () => ({ ...hello(), token: 'shared-secret' }),
       handleCommand: () => Promise.resolve({ ok: true }),
     });
@@ -75,7 +75,7 @@ describe('Transport security', () => {
   it('ignores malformed and cross-session commands', async () => {
     let handled = 0;
     const transport = new Transport({
-      url: 'ws://localhost/iris',
+      url: 'ws://localhost/reticle',
       hello,
       handleCommand: () => {
         handled += 1;
@@ -101,7 +101,7 @@ describe('Transport security', () => {
     const value: Record<string, unknown> = { password: 'secret', count: 2n };
     value['self'] = value;
     const transport = new Transport({
-      url: 'ws://localhost/iris',
+      url: 'ws://localhost/reticle',
       hello,
       handleCommand: () => Promise.resolve({ ok: true, result: value }),
     });
@@ -129,7 +129,7 @@ describe('Transport security', () => {
 
   it('omits absent optional event fields instead of sending null', () => {
     const transport = new Transport({
-      url: 'ws://localhost/iris',
+      url: 'ws://localhost/reticle',
       hello,
       handleCommand: () => Promise.resolve({ ok: true }),
     });
@@ -151,7 +151,7 @@ describe('Transport security', () => {
 
   it('keeps thrown command errors within the wire schema limit', async () => {
     const transport = new Transport({
-      url: 'ws://localhost/iris',
+      url: 'ws://localhost/reticle',
       hello,
       handleCommand: () => {
         throw new Error('x'.repeat(TRANSPORT_LIMITS.MAX_ERROR_LENGTH + 100));

@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { DriveErrorCode, InputMode, SessionState } from '@syrin/iris-protocol';
-import type { CommandResult } from '@syrin/iris-protocol';
+import { DriveErrorCode, InputMode, SessionState } from '@reticle/protocol';
+import type { CommandResult } from '@reticle/protocol';
 import { start, type RunningServer } from './index.js';
 import { TOOLS, type ToolDeps } from './tools/tools.js';
-import { IrisTool } from './tools/tool-names.js';
+import { ReticleTool } from './tools/tool-names.js';
 import { BaselineStore } from './project/baselines.js';
 import { createNodeFileSystem } from './project/fs-port.js';
 import { RecordingStore } from './flows/recordings.js';
@@ -106,11 +106,13 @@ function depsWith(realInput: RealInputProvider | undefined, state: { actCalls: n
     sessions: sessions as SessionManager,
     baselines: new BaselineStore(),
     recordings: new RecordingStore(),
-    flows: new FlowStore(createNodeFileSystem(), '/tmp/iris-test/.iris', { now: () => 0 }),
-    project: new ProjectStore(createNodeFileSystem(), '/tmp/iris-test/.iris', { now: () => 0 }),
+    flows: new FlowStore(createNodeFileSystem(), '/tmp/reticle-test/.reticle', { now: () => 0 }),
+    project: new ProjectStore(createNodeFileSystem(), '/tmp/reticle-test/.reticle', {
+      now: () => 0,
+    }),
     annotations: new AnnotationStore(),
     fs: createNodeFileSystem(),
-    irisRoot: '/tmp/iris-test/.iris',
+    reticleRoot: '/tmp/reticle-test/.reticle',
     now: () => 0,
   };
   if (realInput !== undefined) deps.realInput = realInput;
@@ -122,7 +124,7 @@ interface ActResult {
 }
 
 async function runClick(deps: ToolDeps): Promise<ActResult> {
-  const tool = TOOLS.find((t) => t.name === IrisTool.ACT);
+  const tool = TOOLS.find((t) => t.name === ReticleTool.ACT);
   if (tool === undefined) throw new Error('no act tool');
   // native:true so the launched provider drives the gesture (clicks default to synthetic otherwise).
   return (await tool.handler(deps, {
@@ -159,7 +161,7 @@ describe('start({ driveUrl }) wiring', () => {
     expect(running.realInput).toBe(fake);
   });
 
-  it('iris_act pointer action routes to the launched provider with inputMode real', async () => {
+  it('reticle_act pointer action routes to the launched provider with inputMode real', async () => {
     const fake = makeFakeLaunched();
     running = await start({
       port: nextPort(),
@@ -175,9 +177,9 @@ describe('start({ driveUrl }) wiring', () => {
     expect(state.actCalls).toBe(0);
   });
 
-  it('start() with neither driveUrl nor IRIS_CDP_URL leaves realInput undefined', async () => {
-    const prev = process.env['IRIS_CDP_URL'];
-    delete process.env['IRIS_CDP_URL'];
+  it('start() with neither driveUrl nor RETICLE_CDP_URL leaves realInput undefined', async () => {
+    const prev = process.env['RETICLE_CDP_URL'];
+    delete process.env['RETICLE_CDP_URL'];
     let factoryCalled = false;
     running = await start({
       port: nextPort(),
@@ -187,7 +189,7 @@ describe('start({ driveUrl }) wiring', () => {
         return makeFakeLaunched();
       },
     });
-    if (prev !== undefined) process.env['IRIS_CDP_URL'] = prev;
+    if (prev !== undefined) process.env['RETICLE_CDP_URL'] = prev;
 
     expect(factoryCalled).toBe(false);
     expect(running.realInput).toBeUndefined();
@@ -199,8 +201,8 @@ describe('start({ driveUrl }) wiring', () => {
   });
 
   it('driveUrl takes precedence and CDP is not connected when both are set', async () => {
-    const prev = process.env['IRIS_CDP_URL'];
-    process.env['IRIS_CDP_URL'] = 'http://localhost:9222';
+    const prev = process.env['RETICLE_CDP_URL'];
+    process.env['RETICLE_CDP_URL'] = 'http://localhost:9222';
     const fake = makeFakeLaunched();
     running = await start({
       port: nextPort(),
@@ -208,8 +210,8 @@ describe('start({ driveUrl }) wiring', () => {
       driveUrl: DRIVE_URL,
       realInputFactory: () => fake,
     });
-    if (prev === undefined) delete process.env['IRIS_CDP_URL'];
-    else process.env['IRIS_CDP_URL'] = prev;
+    if (prev === undefined) delete process.env['RETICLE_CDP_URL'];
+    else process.env['RETICLE_CDP_URL'] = prev;
 
     expect(running.realInput).toBe(fake);
     expect(fake.navigateCalls).toBe(1);

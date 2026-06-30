@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Iris pre-commit quality gate. Symlinked to .git/hooks/pre-commit.
+# Reticle pre-commit quality gate. Symlinked to .git/hooks/pre-commit.
 # Order: safety -> format -> lint -> types -> tests -> summary.
 set -uo pipefail
 

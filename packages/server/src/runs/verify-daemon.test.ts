@@ -5,12 +5,12 @@ import { join } from 'node:path';
 import { startDaemon, type RunningServer } from '../index.js';
 
 /**
- * End-to-end wiring test for `iris serve --http`: start the daemon with the verify endpoint enabled
+ * End-to-end wiring test for `reticle serve --http`: start the daemon with the verify endpoint enabled
  * (ephemeral ports), POST /verify over real HTTP, and confirm a verdict comes back AND a run artifact
- * is persisted to .iris/runs/. No browser/flows needed — an empty suite verifies to PASS, which is
- * enough to prove the CLI→startDaemon→IrisRunner→RunStore wiring end to end.
+ * is persisted to .reticle/runs/. No browser/flows needed — an empty suite verifies to PASS, which is
+ * enough to prove the CLI→startDaemon→ReticleRunner→RunStore wiring end to end.
  */
-describe('iris serve --http (daemon wiring)', () => {
+describe('reticle serve --http (daemon wiring)', () => {
   let server: RunningServer | undefined;
   let root: string | undefined;
 
@@ -22,14 +22,14 @@ describe('iris serve --http (daemon wiring)', () => {
   });
 
   it('starts the verify endpoint, returns a verdict, and persists the run', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'iris-daemon-'));
-    root = join(dir, '.iris');
+    const dir = await mkdtemp(join(tmpdir(), 'reticle-daemon-'));
+    root = join(dir, '.reticle');
     server = await startDaemon({
       port: 0,
       httpVerify: true,
       httpVerifyPort: 0,
       httpVerifyToken: 'sek',
-      irisRoot: root,
+      reticleRoot: root,
       now: () => 1_700_000_000_000,
     });
 
@@ -41,7 +41,7 @@ describe('iris serve --http (daemon wiring)', () => {
 
     const res = await fetch(`${base}/verify`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json', 'x-iris-token': 'sek' },
+      headers: { 'content-type': 'application/json', 'x-reticle-token': 'sek' },
       body: JSON.stringify({ project: { name: 'demo', framework: 'react' } }),
     });
     expect(res.status).toBe(200);

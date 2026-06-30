@@ -1,11 +1,11 @@
 /**
- * Wire-level constants. No free strings anywhere in Iris reference these directly —
+ * Wire-level constants. No free strings anywhere in Reticle reference these directly —
  * every string/number that crosses the browser <-> bridge <-> agent boundary is named here.
  */
 
-export const IRIS_DEFAULT_PORT = 4400;
-export const IRIS_WS_PATH = '/iris';
-export const IRIS_PROTOCOL_VERSION = 1;
+export const RETICLE_DEFAULT_PORT = 4400;
+export const RETICLE_WS_PATH = '/reticle';
+export const RETICLE_PROTOCOL_VERSION = 1;
 
 /**
  * Namespaced URL params a pooled/headless launcher appends to the app URL so the app's own SDK adopts
@@ -13,37 +13,37 @@ export const IRIS_PROTOCOL_VERSION = 1;
  * the server (BrowserPool/lease tools) and the browser SDK; namespaced to avoid clashing with the
  * app's own query params.
  */
-export const IRIS_URL_PARAM = {
-  SESSION: '__iris_session',
-  PROJECT: '__iris_project',
+export const RETICLE_URL_PARAM = {
+  SESSION: '__reticle_session',
+  PROJECT: '__reticle_project',
 } as const;
 
-/** The loopback bind address. The daemon/bridge bind here by default — never expose Iris off-host. */
+/** The loopback bind address. The daemon/bridge bind here by default — never expose Reticle off-host. */
 export const LOOPBACK_HOST = '127.0.0.1';
 
 /**
- * Every environment variable Iris reads, named once. A misspelled inline env string silently
- * disables the control it gates (e.g. a typo'd `IRIS_TOKEN` would disable auth) — so the names live
+ * Every environment variable Reticle reads, named once. A misspelled inline env string silently
+ * disables the control it gates (e.g. a typo'd `RETICLE_TOKEN` would disable auth) — so the names live
  * here and nowhere else. The values are the literal process.env keys.
  */
-export const IrisEnv = {
+export const ReticleEnv = {
   /** Shared-secret the browser SDK must present in HELLO; absent ⇒ loopback-trust only. */
-  TOKEN: 'IRIS_TOKEN',
+  TOKEN: 'RETICLE_TOKEN',
   /** Bridge bind host. Defaults to loopback; setting anything else is opt-in remote exposure. */
-  HOST: 'IRIS_HOST',
+  HOST: 'RETICLE_HOST',
   /** Comma-separated WS Origin allow-list for the bridge. */
-  ALLOWED_ORIGINS: 'IRIS_ALLOWED_ORIGINS',
+  ALLOWED_ORIGINS: 'RETICLE_ALLOWED_ORIGINS',
   /** Bridge/daemon WS port override. */
-  PORT: 'IRIS_PORT',
+  PORT: 'RETICLE_PORT',
   /** Attach to an already-running browser over CDP instead of launching one. */
-  CDP_URL: 'IRIS_CDP_URL',
+  CDP_URL: 'RETICLE_CDP_URL',
   /** Max simultaneous leased headless contexts in the browser pool (resource cap). */
-  MAX_CONTEXTS: 'IRIS_MAX_CONTEXTS',
-  /** Bearer token required by the optional `iris serve --http` verify endpoint. */
-  VERIFY_TOKEN: 'IRIS_VERIFY_TOKEN',
+  MAX_CONTEXTS: 'RETICLE_MAX_CONTEXTS',
+  /** Bearer token required by the optional `reticle serve --http` verify endpoint. */
+  VERIFY_TOKEN: 'RETICLE_VERIFY_TOKEN',
   /** Ms of continuous idleness (no agent, no browser session, no lease) before the daemon self-exits;
-   * `0` disables. Keeps Iris from lingering on a user's machine after the editor closes. */
-  IDLE_SHUTDOWN: 'IRIS_IDLE_SHUTDOWN_MS',
+   * `0` disables. Keeps Reticle from lingering on a user's machine after the editor closes. */
+  IDLE_SHUTDOWN: 'RETICLE_IDLE_SHUTDOWN_MS',
 } as const;
 
 /** Hard transport bounds shared by the browser and bridge. */
@@ -83,42 +83,42 @@ export const DANGEROUS_ACTION_CONFIRM_ARG = 'confirmDangerous';
 /** Schema version stamped onto compiled replay programs. */
 export const REPLAY_PROGRAM_VERSION = 1;
 
-/** The git-checked Iris workspace directory + its layout. No free strings. */
-export const IrisDir = {
-  ROOT: '.iris',
+/** The git-checked Reticle workspace directory + its layout. No free strings. */
+export const ReticleDir = {
+  ROOT: '.reticle',
   CONTRACT_FILE: 'contract.json',
   FLOWS_SUBDIR: 'flows',
   BASELINES_SUBDIR: 'baselines',
   /** cross-run memory — outcomes of past runs (the "did it behave like last time?" file). */
   PROJECT_FILE: 'project.json',
-  /** opt-in pixel baselines — .iris/visual/<name>.png + <name>.diff.png. */
+  /** opt-in pixel baselines — .reticle/visual/<name>.png + <name>.diff.png. */
   VISUAL_SUBDIR: 'visual',
-  /** verification-run artifacts — .iris/runs/<runId>.json (the OEM/CI-consumable verdict). */
+  /** verification-run artifacts — .reticle/runs/<runId>.json (the OEM/CI-consumable verdict). */
   RUNS_SUBDIR: 'runs',
 } as const;
 
 /**
  * Structured reasons a screenshot/visual-diff could not produce a verdict (never
  * thrown as free strings). The visual layer is OPT-IN and CDP/Playwright-driven — it is NEVER
- * bundled into the always-on browser SDK — so NO_PROVIDER is the common "you must `iris drive`" case.
+ * bundled into the always-on browser SDK — so NO_PROVIDER is the common "you must `reticle drive`" case.
  */
 export const VisualReason = {
   NO_PROVIDER: 'no-visual-provider', // no CDP/launched browser → cannot capture pixels
   CAPTURE_FAILED: 'capture-failed', // the page could not be screenshotted
-  BASELINE_MISSING: 'baseline-missing', // iris_visual_diff with no saved baseline of that name
+  BASELINE_MISSING: 'baseline-missing', // reticle_visual_diff with no saved baseline of that name
   DIMENSION_MISMATCH: 'dimension-mismatch', // current vs baseline differ in size — can't pixel-diff
 } as const;
 export type VisualReason = (typeof VisualReason)[keyof typeof VisualReason];
 
 /** Actionable companion to NO_PROVIDER — the visual layer needs a driven browser. */
 export const VISUAL_NO_PROVIDER_RECOMMENDATION =
-  'visual capture needs a driven browser — start with `iris drive <url>` or set IRIS_CDP_URL; the always-on SDK does not ship a screenshotter';
+  'visual capture needs a driven browser — start with `reticle drive <url>` or set RETICLE_CDP_URL; the always-on SDK does not ship a screenshotter';
 
 /** Default per-pixel color-distance threshold (pixelmatch 0..1; higher = more lenient). */
 export const VISUAL_PIXEL_THRESHOLD = 0.1;
 
 /**
- * Autonomous "smart monkey" anomaly classes iris_crawl reports after clicking a
+ * Autonomous "smart monkey" anomaly classes reticle_crawl reports after clicking a
  * reachable control. Named so the agent (and tests) branch on cause, never on message text.
  */
 export const CrawlAnomalyKind = {
@@ -129,8 +129,8 @@ export const CrawlAnomalyKind = {
 export type CrawlAnomalyKind = (typeof CrawlAnomalyKind)[keyof typeof CrawlAnomalyKind];
 
 /**
- * Bounds for iris_scroll_to — how many viewport scrolls to try before giving up on
- * a virtualized/windowed list (which only renders visible rows, so a plain iris_query misses
+ * Bounds for reticle_scroll_to — how many viewport scrolls to try before giving up on
+ * a virtualized/windowed list (which only renders visible rows, so a plain reticle_query misses
  * off-screen items). Each scroll advances ~one viewport; the loop also stops early at the list end.
  */
 export const SCROLL_FIND_DEFAULTS = {
@@ -153,12 +153,12 @@ export const UpdateCheckIntervalMs = 24 * 60 * 60 * 1000;
 /** Schema version stamped into contract.json so a reader can reject/upgrade old files. */
 export const CONTRACT_FILE_VERSION = 1;
 
-/** Arg key on iris_capabilities selecting the on-disk contract over the live session. */
+/** Arg key on reticle_capabilities selecting the on-disk contract over the live session. */
 export const FROM_DISK_ARG = 'fromDisk';
 
 /** Structured outcome when reading contract.json fails (never thrown to the agent). */
 export const ContractReadError = {
-  MISSING: 'contract-missing', // no .iris/contract.json on disk
+  MISSING: 'contract-missing', // no .reticle/contract.json on disk
   MALFORMED: 'contract-malformed', // present but not valid JSON / fails schema
 } as const;
 export type ContractReadError = (typeof ContractReadError)[keyof typeof ContractReadError];
@@ -257,7 +257,7 @@ export const ActionWarning = {
 } as const;
 export type ActionWarning = (typeof ActionWarning)[keyof typeof ActionWarning];
 
-/** Failure modes when Iris launches/drives its own browser (`iris drive`). */
+/** Failure modes when Reticle launches/drives its own browser (`reticle drive`). */
 export const DriveErrorCode = {
   PLAYWRIGHT_MISSING: 'playwright_missing',
   LAUNCH_FAILED: 'launch_failed',
@@ -267,7 +267,7 @@ export type DriveErrorCode = (typeof DriveErrorCode)[keyof typeof DriveErrorCode
 
 /** Human-facing message when the optional playwright dep is absent. */
 export const DRIVE_PLAYWRIGHT_MISSING_MSG =
-  "iris drive needs the optional 'playwright' package — install it: pnpm add -D playwright && npx playwright install chromium";
+  "reticle drive needs the optional 'playwright' package — install it: pnpm add -D playwright && npx playwright install chromium";
 
 /** Actions the executor can perform against a ref (plan/03 + plan/05). */
 export const ActionType = {
@@ -346,7 +346,7 @@ export const QueryBy = {
 export type QueryBy = (typeof QueryBy)[keyof typeof QueryBy];
 
 /** Commands the bridge sends to the browser SDK (the `name` field of a CommandMessage). */
-export const IrisCommand = {
+export const ReticleCommand = {
   SNAPSHOT: 'snapshot',
   QUERY: 'query',
   MATCH: 'match',
@@ -374,7 +374,7 @@ export const IrisCommand = {
   /** Bridge → browser: the saved flows the human can replay from the panel. `args: { flows: [{name}] }`. */
   FLOWS: 'flows',
 } as const;
-export type IrisCommand = (typeof IrisCommand)[keyof typeof IrisCommand];
+export type ReticleCommand = (typeof ReticleCommand)[keyof typeof ReticleCommand];
 
 /** Presenter intent shown to the human watcher: is the agent reading or acting? */
 export const PresenterMode = {

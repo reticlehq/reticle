@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { IRIS_PROTOCOL_VERSION, MessageKind, TRANSPORT_LIMITS } from './constants.js';
+import { RETICLE_PROTOCOL_VERSION, MessageKind, TRANSPORT_LIMITS } from './constants.js';
 import { MarkAnchorStrategy } from './session-constants.js';
 import { HelloMessageSchema, HumanMarkDataSchema } from './messages.js';
 
 function hello(): Record<string, unknown> {
   return {
     kind: MessageKind.HELLO,
-    protocolVersion: IRIS_PROTOCOL_VERSION,
+    protocolVersion: RETICLE_PROTOCOL_VERSION,
     sessionId: 'demo',
     url: 'http://localhost:3000/',
     title: 'Demo',
@@ -23,7 +23,7 @@ describe('HelloMessageSchema', () => {
 
   it('rejects a mismatched protocol version', () => {
     expect(
-      HelloMessageSchema.safeParse({ ...hello(), protocolVersion: IRIS_PROTOCOL_VERSION + 1 })
+      HelloMessageSchema.safeParse({ ...hello(), protocolVersion: RETICLE_PROTOCOL_VERSION + 1 })
         .success,
     ).toBe(false);
   });

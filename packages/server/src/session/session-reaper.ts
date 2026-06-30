@@ -1,4 +1,4 @@
-import { PresenterTone, SESSION_LIFECYCLE, UNDELIVERED_NOTES_LABEL } from '@syrin/iris-protocol';
+import { PresenterTone, SESSION_LIFECYCLE, UNDELIVERED_NOTES_LABEL } from '@reticle/protocol';
 import type { Session, SessionManager } from './session.js';
 import { log } from '../log.js';
 
@@ -12,7 +12,7 @@ import { log } from '../log.js';
 
 /**
  * Human-facing summary shown in the HUD when the MCP client (the agent) disconnects. Agent-neutral:
- * Iris runs under any agent (Codex/OpenCode/Claude/Hermes), so the copy never names one.
+ * Reticle runs under any agent (Codex/OpenCode/Claude/Hermes), so the copy never names one.
  */
 export const MCP_DISCONNECT_SUMMARY = 'Session ended — the agent disconnected.';
 

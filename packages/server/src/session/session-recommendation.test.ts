@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { UNSCRIPTABLE_TAB_RECOMMENDATION } from '@syrin/iris-protocol';
+import { UNSCRIPTABLE_TAB_RECOMMENDATION } from '@reticle/protocol';
 import { buildSessionRecommendation } from './session-recommendation.js';
 
 describe('buildSessionRecommendation', () => {
-  it('recommends iris drive when hidden and throttled', () => {
+  it('recommends reticle drive when hidden and throttled', () => {
     const rec = buildSessionRecommendation({ hidden: true, throttled: true, focused: false });
     expect(rec).toBe(UNSCRIPTABLE_TAB_RECOMMENDATION);
-    expect(rec).toContain('iris drive');
+    expect(rec).toContain('reticle drive');
   });
 
   it('recommends when throttled even if not hidden', () => {
@@ -34,7 +34,7 @@ describe('buildSessionRecommendation', () => {
   });
 
   it('the recommendation is the named UNSCRIPTABLE_TAB_RECOMMENDATION constant', () => {
-    expect(UNSCRIPTABLE_TAB_RECOMMENDATION).toContain('iris drive');
+    expect(UNSCRIPTABLE_TAB_RECOMMENDATION).toContain('reticle drive');
     expect(UNSCRIPTABLE_TAB_RECOMMENDATION).toContain('refocus');
   });
 });

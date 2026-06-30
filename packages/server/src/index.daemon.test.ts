@@ -3,11 +3,11 @@ import * as http from 'node:http';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { IrisEnv, LOOPBACK_HOST } from '@syrin/iris-protocol';
+import { ReticleEnv, LOOPBACK_HOST } from '@reticle/protocol';
 import { resolveBridgeSecurity, startDaemon, type RunningServer } from './index.js';
 
 describe('resolveBridgeSecurity', () => {
-  const ENV_KEYS = [IrisEnv.TOKEN, IrisEnv.HOST, IrisEnv.ALLOWED_ORIGINS] as const;
+  const ENV_KEYS = [ReticleEnv.TOKEN, ReticleEnv.HOST, ReticleEnv.ALLOWED_ORIGINS] as const;
   const saved = new Map<string, string | undefined>();
   for (const k of ENV_KEYS) saved.set(k, process.env[k]);
   afterEach(() => {
@@ -19,24 +19,24 @@ describe('resolveBridgeSecurity', () => {
   });
 
   it('prefers explicit options over the environment', () => {
-    process.env[IrisEnv.TOKEN] = 'from-env';
+    process.env[ReticleEnv.TOKEN] = 'from-env';
     const out = resolveBridgeSecurity({ token: 'from-opts', host: 'localhost' });
     expect(out.token).toBe('from-opts');
     expect(out.host).toBe('localhost');
   });
 
   it('falls back to the environment, parsing the origin allow-list', () => {
-    process.env[IrisEnv.TOKEN] = 'sek';
-    process.env[IrisEnv.ALLOWED_ORIGINS] = 'http://a.test, http://b.test ,';
+    process.env[ReticleEnv.TOKEN] = 'sek';
+    process.env[ReticleEnv.ALLOWED_ORIGINS] = 'http://a.test, http://b.test ,';
     const out = resolveBridgeSecurity({});
     expect(out.token).toBe('sek');
     expect(out.allowedOrigins).toEqual(['http://a.test', 'http://b.test']);
   });
 
   it('omits keys entirely when neither option nor env is set (so Bridge defaults apply)', () => {
-    delete process.env[IrisEnv.TOKEN];
-    delete process.env[IrisEnv.HOST];
-    delete process.env[IrisEnv.ALLOWED_ORIGINS];
+    delete process.env[ReticleEnv.TOKEN];
+    delete process.env[ReticleEnv.HOST];
+    delete process.env[ReticleEnv.ALLOWED_ORIGINS];
     const out = resolveBridgeSecurity({});
     expect('token' in out).toBe(false);
     expect('host' in out).toBe(false);
@@ -68,10 +68,10 @@ describe('startDaemon port collision', () => {
         resolve(typeof addr === 'object' && addr !== null ? addr.port : 0);
       });
     });
-    const dir = await mkdtemp(join(tmpdir(), 'iris-daemon-collide-'));
-    root = join(dir, '.iris');
+    const dir = await mkdtemp(join(tmpdir(), 'reticle-daemon-collide-'));
+    root = join(dir, '.reticle');
     await expect(
-      startDaemon({ port, irisRoot: root, now: () => 1_700_000_000_000 }),
+      startDaemon({ port, reticleRoot: root, now: () => 1_700_000_000_000 }),
     ).rejects.toThrow();
   });
 });

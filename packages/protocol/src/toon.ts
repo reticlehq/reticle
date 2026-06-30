@@ -1,7 +1,7 @@
 /**
  * TOON — Token-Optimized Object Notation.
  *
- * A compact, deterministic, line-oriented text format for Iris snapshots and query results.
+ * A compact, deterministic, line-oriented text format for Reticle snapshots and query results.
  * Losslessly round-trips to/from the internal JSON representation. Not a binary format — Claude
  * must be able to generate and parse it reliably from its training data alone.
  *
@@ -153,7 +153,7 @@ export function toToon(elements: ToonElement[]): string {
   return `# TOON v1\n${encodeTree(elements)}`;
 }
 
-/** Encode a single iris_snapshot or iris_query result object to TOON. */
+/** Encode a single reticle_snapshot or reticle_query result object to TOON. */
 export function resultToToon(result: Record<string, unknown>): string {
   const elements = result['elements'];
   if (!Array.isArray(elements)) return JSON.stringify(result);

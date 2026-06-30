@@ -1,8 +1,8 @@
 {
-  "name": "@syrin/iris-api",
+  "name": "@reticle/api",
   "version": "0.0.0",
   "private": true,
-  "description": "Demo backend for exercising Iris against real-world behaviors (auth, errors, eventual consistency, LLM, uploads).",
+  "description": "Demo backend for exercising Reticle against real-world behaviors (auth, errors, eventual consistency, LLM, uploads).",
   "type": "module",
   "scripts": {
     "start": "node server.mjs",

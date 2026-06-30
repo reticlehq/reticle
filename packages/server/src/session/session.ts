@@ -4,7 +4,7 @@ import {
   HumanControlDataSchema,
   HumanControlKind,
   HumanMarkDataSchema,
-  IrisCommand,
+  ReticleCommand,
   MessageKind,
   PresenterTone,
   SESSION_HEALTH,
@@ -14,8 +14,8 @@ import {
   type CommandResult,
   type HelloMessage,
   type HumanControlData,
-  type IrisEvent,
-} from '@syrin/iris-protocol';
+  type ReticleEvent,
+} from '@reticle/protocol';
 import { RingBuffer } from '../events/ring-buffer.js';
 import { ReviewStore, type ReviewMark } from './review-store.js';
 import { buildSessionRecommendation } from './session-recommendation.js';
@@ -34,13 +34,13 @@ export interface SessionInfo {
   hidden: boolean;
   focused: boolean;
   throttled: boolean;
-  /** present only when hidden/throttled — points at the `iris drive` escape hatch. */
+  /** present only when hidden/throttled — points at the `reticle drive` escape hatch. */
   recommendation?: string;
   stale?: boolean;
   cleanup_suggestion?: string;
   /** present only when the human has flagged bugs on this tab — count of pending review marks. */
   pendingMarks?: number;
-  /** present with pendingMarks — nudges the agent to drain them with iris_review. */
+  /** present with pendingMarks — nudges the agent to drain them with reticle_review. */
   review_suggestion?: string;
 }
 
@@ -49,7 +49,7 @@ export interface SessionHealth {
   lastSeenMs: number;
   throttled: boolean;
   focused: boolean;
-  /** present only when hidden/throttled — points at the `iris drive` escape hatch. */
+  /** present only when hidden/throttled — points at the `reticle drive` escape hatch. */
   recommendation?: string;
 }
 
@@ -93,7 +93,7 @@ export class Session {
   readonly #startedAt: number;
   readonly #buffer = new RingBuffer();
   readonly #pending = new Map<string, PendingCommand>();
-  readonly #listeners = new Set<(event: IrisEvent) => void>();
+  readonly #listeners = new Set<(event: ReticleEvent) => void>();
   #seq = 0;
   #lastSeenAt: number;
   #hidden = false;
@@ -102,7 +102,7 @@ export class Session {
   #lastActCursor: number | undefined;
   /** Liveness: wall-clock of the last AGENT command (distinct from browser chatter / lastSeen). */
   #lastAgentActivityAt: number;
-  /** Server-side mirror of the agent-tuned idle window, so the reaper honors iris_session. */
+  /** Server-side mirror of the agent-tuned idle window, so the reaper honors reticle_session. */
   #idleEndMs: number = SESSION_LIFECYCLE.IDLE_END_MS;
   /** True when the reaper/disconnect ended this session — such an end is revivable; explicit ends are not. */
   #autoEnded = false;
@@ -182,14 +182,14 @@ export class Session {
     if (this.staleMs() > SESSION_LEASE.STALE_AFTER_MS) {
       base.stale = true;
       base.cleanup_suggestion =
-        'Call iris_end_session to free this session before starting new work.';
+        'Call reticle_end_session to free this session before starting new work.';
     }
-    // Surface human bug reports in iris_sessions (only when > 0, so a clean session adds nothing).
+    // Surface human bug reports in reticle_sessions (only when > 0, so a clean session adds nothing).
     const marks = this.#review.pendingCount();
     if (marks > 0) {
       base.pendingMarks = marks;
       const s = marks === 1 ? '' : 's';
-      base.review_suggestion = `The human flagged ${String(marks)} issue${s} on this tab — call iris_review to see and fix ${marks === 1 ? 'it' : 'them'}.`;
+      base.review_suggestion = `The human flagged ${String(marks)} issue${s} on this tab — call reticle_review to see and fix ${marks === 1 ? 'it' : 'them'}.`;
     }
     return base;
   }
@@ -200,7 +200,7 @@ export class Session {
   }
 
   /** Re-stamp an incoming event with server-relative time, buffer it, and fan out. */
-  pushEvent(event: IrisEvent): void {
+  pushEvent(event: ReticleEvent): void {
     if (event.type === EventType.PAGE_HEALTH) {
       const data = event.data;
       const hidden = typeof data['hidden'] === 'boolean' ? data['hidden'] : this.#hidden;
@@ -225,12 +225,12 @@ export class Session {
       if (typeof to === 'string' && to.length > 0) this.url = to;
     }
     const t = this.elapsed();
-    const stamped: IrisEvent = { ...event, t, sessionId: this.id };
+    const stamped: ReticleEvent = { ...event, t, sessionId: this.id };
     this.#buffer.push(stamped, t);
     for (const listener of this.#listeners) listener(stamped);
   }
 
-  eventsSince(cursor: number): IrisEvent[] {
+  eventsSince(cursor: number): ReticleEvent[] {
     return this.#buffer.since(cursor);
   }
 
@@ -252,7 +252,7 @@ export class Session {
   /**
    * Stamp the wall-clock of the latest AGENT command (called whenever a tool resolves this session).
    * If the reaper had auto-ended the session, a fresh command means the agent is alive again, so the
-   * session is REVIVED to ACTIVE. An EXPLICIT end (human/agent iris_end_session) is terminal and is
+   * session is REVIVED to ACTIVE. An EXPLICIT end (human/agent reticle_end_session) is terminal and is
    * never revived here.
    */
   markAgentActivity(): void {
@@ -273,7 +273,7 @@ export class Session {
     return this.#idleEndMs;
   }
 
-  /** Tune the idle window (iris_session). Floored so an agent can't disable the safety net. */
+  /** Tune the idle window (reticle_session). Floored so an agent can't disable the safety net. */
   setIdleEndMs(ms: number): void {
     this.#idleEndMs = Math.max(SESSION_LIFECYCLE.IDLE_END_MIN_MS, Math.floor(ms));
   }
@@ -289,11 +289,11 @@ export class Session {
     this.setState(SessionState.ENDED, text, tone);
   }
 
-  eventsInWindow(windowMs: number): IrisEvent[] {
+  eventsInWindow(windowMs: number): ReticleEvent[] {
     return this.#buffer.window(windowMs, this.elapsed());
   }
 
-  onEvent(listener: (event: IrisEvent) => void): () => void {
+  onEvent(listener: (event: ReticleEvent) => void): () => void {
     this.#listeners.add(listener);
     return () => this.#listeners.delete(listener);
   }
@@ -446,16 +446,16 @@ export class Session {
    * through `setState`; an auto-ended session rides a `warn` tone so the panel can shout "agent stopped".
    */
   pushPresenter(state: SessionState, text?: string, tone?: PresenterTone): void {
-    this.#post(IrisCommand.PRESENTER, buildPresenterArgs(state, text, tone));
+    this.#post(ReticleCommand.PRESENTER, buildPresenterArgs(state, text, tone));
   }
   /** Fire-and-forget a narration row to the live panel (so a resolved mark shows "✓ fixed"). */
   pushNarration(text: string): void {
-    this.#post(IrisCommand.NARRATE, { text, level: 'info' });
+    this.#post(ReticleCommand.NARRATE, { text, level: 'info' });
   }
 
   /**
    * Returns the one-time session lease block on the very first agent command, then undefined
-   * forever after. The lease carries an IMPORTANT reminder to call iris_end_session. Coding agents
+   * forever after. The lease carries an IMPORTANT reminder to call reticle_end_session. Coding agents
    * (Claude Code, Codex) read tool results — they will see this and remember to clean up.
    */
   takeSessionLease(): { sessionId: string; opened_at: number; IMPORTANT: string } | undefined {
@@ -465,7 +465,7 @@ export class Session {
       sessionId: this.id,
       opened_at: this.#startedAt,
       IMPORTANT:
-        'MANDATORY: the moment you stop driving — finishing a reply or waiting on the human — call iris_yield (mode:"waiting", or "ask" with your question) so the panel never falsely reads "live". Call iris_end_session only when the whole task is done. The session revives on your next action.',
+        'MANDATORY: the moment you stop driving — finishing a reply or waiting on the human — call reticle_yield (mode:"waiting", or "ask" with your question) so the panel never falsely reads "live". Call reticle_end_session only when the whole task is done. The session revives on your next action.',
     };
   }
 
@@ -478,7 +478,7 @@ export class Session {
     const ageMs = this.#clock() - this.#startedAt;
     if (ageMs < SESSION_LEASE.WARN_AFTER_MS) return undefined;
     const minutes = Math.floor(ageMs / 60_000);
-    return `Session ${this.id} has been open for ${String(minutes)} minutes. If your task is complete, call iris_end_session now.`;
+    return `Session ${this.id} has been open for ${String(minutes)} minutes. If your task is complete, call reticle_end_session now.`;
   }
 
   /** Fire-and-forget command send — NOT registered in #pending (no correlated result expected). */

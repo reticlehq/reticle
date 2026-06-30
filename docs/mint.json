@@ -1,6 +1,6 @@
 {
   "$schema": "https://mintlify.com/schema.json",
-  "name": "Iris",
+  "name": "Reticle",
   "logo": {
     "light": "/logo/light.svg",
     "dark": "/logo/dark.svg"
@@ -17,12 +17,12 @@
   "topbarLinks": [
     {
       "name": "GitHub",
-      "url": "https://github.com/syrin-labs/iris"
+      "url": "https://github.com/reticlehq/reticle"
     }
   ],
   "topbarCtaButton": {
     "name": "npm",
-    "url": "https://www.npmjs.com/package/@syrin/iris"
+    "url": "https://www.npmjs.com/package/@reticle/core"
   },
   "navigation": [
     {
@@ -54,6 +54,6 @@
     }
   ],
   "footerSocials": {
-    "github": "https://github.com/syrin-labs/iris"
+    "github": "https://github.com/reticlehq/reticle"
   }
 }

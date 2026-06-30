@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { selectPath, capDepth } from './state-select.js';
 import { TOOLS } from '../tools/tools.js';
-import { IrisTool } from '../tools/tool-names.js';
-import { SessionState, type CommandResult } from '@syrin/iris-protocol';
+import { ReticleTool } from '../tools/tool-names.js';
+import { SessionState, type CommandResult } from '@reticle/protocol';
 import type { Session, SessionManager } from './session.js';
 import type { ToolDeps } from '../tools/tools.js';
 
@@ -49,7 +49,7 @@ describe('capDepth', () => {
   });
 });
 
-// ── iris_state wiring ──────────────────────────────────────────────────────────
+// ── reticle_state wiring ──────────────────────────────────────────────────────────
 function fakeDeps(stateResult: unknown): ToolDeps {
   const stub: Partial<Session> = {
     id: 'demo',
@@ -63,12 +63,12 @@ function fakeDeps(stateResult: unknown): ToolDeps {
 }
 
 function stateTool() {
-  const tool = TOOLS.find((t) => t.name === IrisTool.STATE);
-  if (tool === undefined) throw new Error('no iris_state tool');
+  const tool = TOOLS.find((t) => t.name === ReticleTool.STATE);
+  if (tool === undefined) throw new Error('no reticle_state tool');
   return tool;
 }
 
-describe('iris_state path selector', () => {
+describe('reticle_state path selector', () => {
   const result = {
     stores: { workspace: { captionCache: { v3: { text: 'hi' } }, version: 7 } },
     storeNames: ['workspace'],

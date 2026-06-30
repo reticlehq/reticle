@@ -7,7 +7,7 @@ import { isLoopbackPeer, requestToken, tokensMatch } from './token-auth.js';
 // These paths form the agent↔server wire contract. Keep in sync with skill/SKILL.md.
 export const MCP_SSE_PATH = '/mcp/sse';
 export const MCP_MESSAGE_PATH = '/mcp/message';
-/** Local-only daemon introspection — `iris status` GETs this to show sessions + health at a glance. */
+/** Local-only daemon introspection — `reticle status` GETs this to show sessions + health at a glance. */
 export const STATUS_PATH = '/status';
 
 export interface SharedServer {
@@ -19,7 +19,7 @@ export interface SharedServer {
    * Must be called before listen().
    */
   attachMcp(factory: () => McpServer): void;
-  /** Register the JSON the daemon returns from GET /status (live sessions + health for `iris status`). */
+  /** Register the JSON the daemon returns from GET /status (live sessions + health for `reticle status`). */
   attachStatus(provider: () => unknown): void;
   /**
    * Register a callback fired when the AGENT presence changes — true when the first MCP client (any
@@ -38,7 +38,7 @@ export interface SharedServer {
  * Routes:
  *   GET  /mcp/sse       → establishes SSE MCP session
  *   POST /mcp/message   → routes MCP messages to an active SSE session
- *   WS   /iris          → browser SDK connections (via WebSocketServer)
+ *   WS   /reticle          → browser SDK connections (via WebSocketServer)
  */
 export function createSharedServer(options: { token?: string } = {}): SharedServer {
   type McpFactory = () => McpServer;
@@ -49,9 +49,9 @@ export function createSharedServer(options: { token?: string } = {}): SharedServ
   const token = options.token;
 
   // The agent control plane (MCP transport) and /status carry the same trust as the browser WS: a
-  // loopback peer is trusted (the local stdio proxy and `iris status` always dial 127.0.0.1), but any
+  // loopback peer is trusted (the local stdio proxy and `reticle status` always dial 127.0.0.1), but any
   // non-loopback peer must present the pairing token. Without this, binding the daemon beyond loopback
-  // (IRIS_HOST) would expose iris_act/iris_navigate and session enumeration to the whole network even
+  // (RETICLE_HOST) would expose reticle_act/reticle_navigate and session enumeration to the whole network even
   // though the WS demanded a token. When no token is configured the bind is loopback-only anyway.
   const authorized = (req: http.IncomingMessage, url: URL): boolean => {
     if (isLoopbackPeer(req.socket.remoteAddress)) return true;

@@ -1,30 +1,30 @@
-Iris — License overview
-Copyright (c) 2026 Syrin Labs
+Reticle — License overview
+Copyright (c) 2026 Reticle Labs
 
-Iris uses a per-package license model so the SDK is safe to embed in your own
+Reticle uses a per-package license model so the SDK is safe to embed in your own
 application while the server and enterprise features remain protected. The
 license that applies depends on the package. Each package contains its own
 LICENSE file, which is authoritative.
 
 1. Apache License, Version 2.0 — the embeddable SDK
-   Packages: @syrin/iris-protocol, @syrin/iris-browser, @syrin/iris-react,
-   @syrin/iris-babel-plugin, @syrin/iris-next, @syrin/iris-vite-plugin,
-   @syrin/iris-eslint-plugin
+   Packages: @reticle/protocol, @reticle/browser, @reticle/react,
+   @reticle/babel-plugin, @reticle/next, @reticle/vite-plugin,
+   @reticle/eslint-plugin
    These run inside / compile into your application. Use them anywhere,
    including in apps you ship to your own customers. See the LICENSE and
    NOTICE files in each package.
 
 2. Functional Source License, Version 1.1, Apache 2.0 future (FSL-1.1-ALv2)
-   Packages: @syrin/iris-server, @syrin/iris-test, @syrin/iris (umbrella)
+   Packages: @reticle/server, @reticle/test, @reticle/core (umbrella)
    Free for any Permitted Purpose (internal use, development, evaluation,
    non-commercial research/education, professional services). The one
-   restriction is a Competing Use — offering Iris itself as a competing
+   restriction is a Competing Use — offering Reticle itself as a competing
    product or service. Each version converts to Apache-2.0 two years after
    its release. See the LICENSE file in each package.
 
-3. The Iris Enterprise License — enterprise features
+3. The Reticle Enterprise License — enterprise features
    Path: packages/server/src/ee/ (source-available)
-   Free for development and evaluation; production use requires a valid Iris
+   Free for development and evaluation; production use requires a valid Reticle
    Enterprise subscription license key. See packages/server/src/ee/LICENSE.
 
-For OEM / embedding / commercial licensing questions: hey@syrin.ai
+For OEM / embedding / commercial licensing questions: hey@reticle.ai

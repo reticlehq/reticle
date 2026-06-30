@@ -13,8 +13,8 @@ function transform(code: string): string {
   return out?.code ?? '';
 }
 
-describe('iris babel plugin', () => {
-  it('stamps host elements with data-iris-source (file:line:col)', () => {
+describe('reticle babel plugin', () => {
+  it('stamps host elements with data-reticle-source (file:line:col)', () => {
     const out = transform('const x = <button>Hi</button>;');
     expect(out).toContain(SOURCE_ATTR);
     expect(out).toMatch(/src\/Foo\.tsx:1:\d+/);
@@ -27,6 +27,6 @@ describe('iris babel plugin', () => {
 
   it('is idempotent (does not double-stamp)', () => {
     const out = transform(`const x = <div ${SOURCE_ATTR}="existing">x</div>;`);
-    expect((out.match(/data-iris-source/g) ?? []).length).toBe(1);
+    expect((out.match(/data-reticle-source/g) ?? []).length).toBe(1);
   });
 });

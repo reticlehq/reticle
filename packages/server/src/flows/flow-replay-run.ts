@@ -8,8 +8,8 @@ import {
   RunStatus,
   type FlowReplayResult,
   type FlowStepResult,
-  type IrisEvent,
-} from '@syrin/iris-protocol';
+  type ReticleEvent,
+} from '@reticle/protocol';
 import { asString } from '../tools/tools-helpers.js';
 import { replayFlow } from './flow-replay.js';
 import { assertSuccess, dynamicTestids, successLabel, SUCCESS_STEP_TOOL } from './flow-success.js';
@@ -18,8 +18,8 @@ import { waitForPredicate } from '../events/predicate.js';
 import type { ToolDeps } from '../tools/tools.js';
 
 export function latestRecordedFlow(
-  events: IrisEvent[],
-): { name: string; flow: import('@syrin/iris-protocol').FlowFile } | undefined {
+  events: ReticleEvent[],
+): { name: string; flow: import('@reticle/protocol').FlowFile } | undefined {
   for (let i = events.length - 1; i >= 0; i--) {
     const event = events[i];
     if (event?.type !== EventType.FLOW_RECORDED) continue;
@@ -35,11 +35,11 @@ export function flowErrorMessage(code: FlowErrorCode): string {
     case FlowErrorCode.INVALID_NAME:
       return 'invalid flow name — use a single safe segment (letters/digits/-/_), no path separators';
     case FlowErrorCode.NOT_FOUND:
-      return 'no such flow on disk — run iris_flow_list to see saved flows';
+      return 'no such flow on disk — run reticle_flow_list to see saved flows';
     case FlowErrorCode.PARSE_FAILED:
-      return 'flow file is malformed — fix or regenerate it with iris_flow_save';
+      return 'flow file is malformed — fix or regenerate it with reticle_flow_save';
     case FlowErrorCode.NO_RECORDING:
-      return 'no compiled recording by that name — record one (iris_record_start/stop) first';
+      return 'no compiled recording by that name — record one (reticle_record_start/stop) first';
   }
 }
 
@@ -55,7 +55,7 @@ function replayToRunStatus(status: ReplayStatus): RunStatus {
   }
 }
 
-/** Append a flow-replay outcome to .iris/project.json (never throws into replay). */
+/** Append a flow-replay outcome to .reticle/project.json (never throws into replay). */
 async function recordReplayRun(
   deps: ToolDeps,
   name: string,
@@ -74,7 +74,7 @@ async function recordReplayRun(
 
 /**
  * Replay one named flow end to end: load → re-resolve+run each step → assert the success oracle →
- * status + decision. Shared by iris_flow_replay (single flow) and iris_flow_verify (whole suite) so
+ * status + decision. Shared by reticle_flow_replay (single flow) and reticle_flow_verify (whole suite) so
  * both produce identical FlowReplayResults. Every exit path records a run to project.json.
  */
 export async function replayNamedFlow(

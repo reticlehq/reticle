@@ -5,10 +5,10 @@
  * emitted and the error propagates unchanged (no try/finally, which would wrongly emit on throw).
  */
 
-import type { IrisEmitter } from './emitter.js';
+import type { ReticleEmitter } from './emitter.js';
 
 export function commitAndSignal<T>(
-  emitter: IrisEmitter,
+  emitter: ReticleEmitter,
   mutate: () => T,
   name: string,
   data?: Record<string, unknown>,

@@ -6,10 +6,10 @@ import {
   type ProjectFile,
   type ProjectLearned,
   type RunRecord,
-} from '@syrin/iris-protocol';
+} from '@reticle/protocol';
 import type { FileSystemPort } from './fs-port.js';
 import type { Clock } from '../flows/flows.js';
-import { irisDirPaths } from './iris-dir.js';
+import { reticleDirPaths } from './reticle-dir.js';
 
 const JSON_INDENT = 2;
 
@@ -21,7 +21,7 @@ export type ReadProjectResult =
 const EMPTY_PROJECT: ProjectFile = { version: PROJECT_FILE_VERSION, runs: [] };
 
 /**
- * Cross-run outcome memory persisted at .iris/project.json. Models FlowStore:
+ * Cross-run outcome memory persisted at .reticle/project.json. Models FlowStore:
  * injected FileSystemPort + Clock, byte-stable serialize, never-throws read. The clock is the
  * single `at`-stamp site so handlers pass an un-stamped record and no Date.now leaks into logic.
  */
@@ -52,7 +52,7 @@ export class ProjectStore {
 
   /** Never throws. Missing → MISSING. Bad JSON / failed schema → MALFORMED. Mirrors readContract. */
   async read(): Promise<ReadProjectResult> {
-    const path = irisDirPaths(this.#root).project;
+    const path = reticleDirPaths(this.#root).project;
     if (!(await this.#fs.exists(path))) return { ok: false, reason: ProjectReadError.MISSING };
 
     let text: string;
@@ -89,8 +89,8 @@ export class ProjectStore {
     const stamped: RunRecord = { ...record, at: this.#clock.now() };
     const runs = truncate([...base.runs, stamped]);
     const next: ProjectFile = { ...base, runs };
-    await this.#fs.mkdir(irisDirPaths(this.#root).root);
-    await this.#fs.writeFile(irisDirPaths(this.#root).project, this.#serialize(next));
+    await this.#fs.mkdir(reticleDirPaths(this.#root).root);
+    await this.#fs.writeFile(reticleDirPaths(this.#root).project, this.#serialize(next));
   }
 
   /** The most-recent run for `name` (undefined on missing/malformed/none). Powers diff-vs-last. */

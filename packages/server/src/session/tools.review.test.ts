@@ -2,21 +2,21 @@ import { describe, expect, it } from 'vitest';
 import type { WebSocket } from 'ws';
 import {
   EventType,
-  IRIS_PROTOCOL_VERSION,
+  RETICLE_PROTOCOL_VERSION,
   MarkAnchorStrategy,
   MessageKind,
   type HelloMessage,
   type HumanMarkData,
-  type IrisEvent,
-} from '@syrin/iris-protocol';
+  type ReticleEvent,
+} from '@reticle/protocol';
 import { Session, type SessionManager } from './session.js';
 import { LIVE_CONTROL_TOOLS } from './live-control-tools.js';
-import { IrisTool } from '../tools/tool-names.js';
+import { ReticleTool } from '../tools/tool-names.js';
 import type { ToolDeps } from '../tools/tools.js';
 
 const HELLO: HelloMessage = {
   kind: MessageKind.HELLO,
-  protocolVersion: IRIS_PROTOCOL_VERSION,
+  protocolVersion: RETICLE_PROTOCOL_VERSION,
   sessionId: 'demo',
   url: 'http://localhost/checkout',
   title: 'Demo',
@@ -26,7 +26,7 @@ const HELLO: HelloMessage = {
 
 const fakeSocket = { send: (): void => {} } as unknown as WebSocket;
 
-function markEvent(data: Partial<HumanMarkData> = {}): IrisEvent {
+function markEvent(data: Partial<HumanMarkData> = {}): ReticleEvent {
   const mark: HumanMarkData = {
     note: 'Submit button is misaligned',
     anchor: 'component:Submit@src/Checkout.tsx:42',
@@ -36,7 +36,7 @@ function markEvent(data: Partial<HumanMarkData> = {}): IrisEvent {
     route: '/checkout',
     ...data,
   };
-  return { type: EventType.HUMAN_MARK, data: mark } as unknown as IrisEvent;
+  return { type: EventType.HUMAN_MARK, data: mark } as unknown as ReticleEvent;
 }
 
 function depsFor(session: Session): ToolDeps {
@@ -45,8 +45,8 @@ function depsFor(session: Session): ToolDeps {
 }
 
 function reviewTool() {
-  const t = LIVE_CONTROL_TOOLS.find((x) => x.name === IrisTool.REVIEW);
-  if (t === undefined) throw new Error('no iris_review tool');
+  const t = LIVE_CONTROL_TOOLS.find((x) => x.name === ReticleTool.REVIEW);
+  if (t === undefined) throw new Error('no reticle_review tool');
   return t;
 }
 
@@ -56,7 +56,7 @@ interface ReviewShape {
   resolved?: boolean;
 }
 
-describe('iris_review tool — human marks ingested from HUMAN_MARK events', () => {
+describe('reticle_review tool — human marks ingested from HUMAN_MARK events', () => {
   it('lists a pinned mark with a source-aware fix hint, then resolves it', async () => {
     const session = new Session(HELLO, fakeSocket, () => 0);
     session.pushEvent(markEvent());
@@ -68,7 +68,7 @@ describe('iris_review tool — human marks ingested from HUMAN_MARK events', () 
     expect(mark?.note).toBe('Submit button is misaligned');
     expect(mark?.source).toEqual({ file: 'src/Checkout.tsx', line: 42 });
     expect(mark?.fix).toContain('src/Checkout.tsx:42');
-    expect(mark?.fix).toContain('iris_review { resolve:');
+    expect(mark?.fix).toContain('reticle_review { resolve:');
 
     const resolved = (await reviewTool().handler(depsFor(session), {
       resolve: mark?.id,
@@ -104,7 +104,7 @@ describe('iris_review tool — human marks ingested from HUMAN_MARK events', () 
     const info = session.info();
     expect(info.pendingMarks).toBe(2);
     expect(info.review_suggestion).toMatch(/flagged 2 issues/);
-    expect(info.review_suggestion).toMatch(/iris_review/);
+    expect(info.review_suggestion).toMatch(/reticle_review/);
 
     // Resolving a mark drops the count; resolving all removes the fields again.
     const pending = session.pendingMarks();

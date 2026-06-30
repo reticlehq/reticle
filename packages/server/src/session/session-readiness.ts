@@ -1,7 +1,7 @@
 /**
- * First-run readiness: the agent often issues its first tool call in the window between `iris init`
+ * First-run readiness: the agent often issues its first tool call in the window between `reticle init`
  * and the app's SDK actually connecting its WebSocket — so a naive resolve throws "no session". This
- * lets the agent (via iris_wait_ready) BLOCK briefly until a session appears instead of failing the
+ * lets the agent (via reticle_wait_ready) BLOCK briefly until a session appears instead of failing the
  * race, smoothing the most common first-5-minutes footgun.
  *
  * Pure control loop: the session count, clock, and sleep are all injected, so it is unit-tested with
@@ -23,17 +23,17 @@ interface WaitForReadyOptions {
 const DEFAULT_POLL_MS = 100;
 
 /**
- * One-line orientation for a FRESH agent — the Iris loop, returned by iris_wait_ready (the first call)
- * so an agent learns how to drive Iris without reading docs. Named so it is not a free string; kept
+ * One-line orientation for a FRESH agent — the Reticle loop, returned by reticle_wait_ready (the first call)
+ * so an agent learns how to drive Reticle without reading docs. Named so it is not a free string; kept
  * terse on purpose (it rides the first response, where token budget is tightest).
  */
-export const IRIS_LOOP_GUIDE =
-  'Iris loop — LOOK: iris_snapshot / iris_query / iris_inspect · ACT: iris_act (or iris_act_and_wait) · ' +
-  'OBSERVE: iris_observe / iris_wait_for / iris_network / iris_console · ASSERT: iris_assert over program ' +
-  'truth, not just the DOM · REGRESS: iris_record_start → iris_replay, or iris_flow_verify for the whole ' +
-  'suite. The human can flag bugs from the panel — drain them with iris_review and resolve each once fixed. ' +
-  'MANDATORY: the moment you stop driving — finishing your reply or waiting on the human — call iris_yield ' +
-  '(mode:"waiting", or mode:"ask" with the question) so the panel shows your real state; iris_end_session ' +
+export const RETICLE_LOOP_GUIDE =
+  'Reticle loop — LOOK: reticle_snapshot / reticle_query / reticle_inspect · ACT: reticle_act (or reticle_act_and_wait) · ' +
+  'OBSERVE: reticle_observe / reticle_wait_for / reticle_network / reticle_console · ASSERT: reticle_assert over program ' +
+  'truth, not just the DOM · REGRESS: reticle_record_start → reticle_replay, or reticle_flow_verify for the whole ' +
+  'suite. The human can flag bugs from the panel — drain them with reticle_review and resolve each once fixed. ' +
+  'MANDATORY: the moment you stop driving — finishing your reply or waiting on the human — call reticle_yield ' +
+  '(mode:"waiting", or mode:"ask" with the question) so the panel shows your real state; reticle_end_session ' +
   'only when the whole task is done. Never leave the panel reading "live" when you have actually stopped.';
 
 /**

@@ -9,8 +9,8 @@ import {
   RunFramework,
   RunProfile,
   RunTrigger,
-} from '@syrin/iris-protocol';
-import { IrisTool } from '../tools/tool-names.js';
+} from '@reticle/protocol';
+import { ReticleTool } from '../tools/tool-names.js';
 import type { ToolDeps } from '../tools/tools.js';
 import type { SessionManager } from '../session/session.js';
 import { BaselineStore } from '../project/baselines.js';
@@ -36,7 +36,7 @@ function depsFor(root: string): ToolDeps {
     project: new ProjectStore(fs, root, { now }),
     annotations: new AnnotationStore(),
     fs,
-    irisRoot: root,
+    reticleRoot: root,
     now,
   };
 }
@@ -57,15 +57,15 @@ const failingRun = (runId: string): VerificationRunInput => ({
   evidence: { consoleErrors: [], networkAnomalies: [], stateAssertions: [], timeline: [] },
 });
 
-const tool = RUN_TOOLS.find((t) => t.name === IrisTool.RUN_EXPORT);
+const tool = RUN_TOOLS.find((t) => t.name === ReticleTool.RUN_EXPORT);
 
-describe('iris_run_export (MCP persona)', () => {
+describe('reticle_run_export (MCP persona)', () => {
   let root: string;
   let deps: ToolDeps;
 
   beforeEach(async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'iris-runtools-'));
-    root = join(dir, '.iris');
+    const dir = await mkdtemp(join(tmpdir(), 'reticle-runtools-'));
+    root = join(dir, '.reticle');
     deps = depsFor(root);
     await new RunStore(deps.fs, root).write(buildVerificationRun(failingRun('run-a'), () => 1000));
   });
@@ -93,7 +93,7 @@ describe('iris_run_export (MCP persona)', () => {
   it('returns a legible text report with format:"report"', async () => {
     if (tool === undefined) return;
     const out = (await tool.handler(deps, { format: 'report' })) as { report?: string };
-    expect(out.report).toContain('Iris verification — demo');
+    expect(out.report).toContain('Reticle verification — demo');
     expect(out.report).toContain('✗ FAIL');
   });
 

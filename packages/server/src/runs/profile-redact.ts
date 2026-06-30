@@ -6,7 +6,7 @@
  * The trustworthy summary — verdict, flows, risks, counts — is preserved. Pure; keyed on run.profile.
  */
 
-import { RunProfile, type IrisVerificationRun } from '@syrin/iris-protocol';
+import { RunProfile, type ReticleVerificationRun } from '@reticle/protocol';
 
 /** Marker left in place of a redacted value so a consumer can tell it was withheld, not absent. */
 export const REDACTED = '[redacted:prod-preview]';
@@ -15,7 +15,7 @@ export const REDACTED = '[redacted:prod-preview]';
  * Return the run unchanged for DEV; for PROD_PREVIEW return a copy with dev-only fields removed:
  * the repair block (source-naming) is dropped and stateAssertion values are redacted.
  */
-export function redactForProfile(run: IrisVerificationRun): IrisVerificationRun {
+export function redactForProfile(run: ReticleVerificationRun): ReticleVerificationRun {
   if (run.profile !== RunProfile.PROD_PREVIEW) return run;
 
   const evidence = {

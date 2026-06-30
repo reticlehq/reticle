@@ -1,8 +1,8 @@
 /* ============================================================================
-   Iris showcase dashboard — "mission control" design system.
+   Reticle showcase dashboard — "mission control" design system.
    The CSS custom properties in :root below are the source of truth for design
    values. Deep near-black instrument panel, signature
-   iris gradient (cyan → indigo → violet), aurora glow + dotted grid texture,
+   reticle gradient (cyan → indigo → violet), aurora glow + dotted grid texture,
    hairline-bordered glass, JetBrains-Mono instrumentation.
    ============================================================================ */
 @import url('https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
@@ -18,15 +18,15 @@
   --text: #e9ebf2;
   --muted: #9398a8;
   --faint: #5b6072;
-  --iris1: #22d3ee;
-  --iris2: #6366f1;
-  --iris3: #c084fc;
+  --reticle1: #22d3ee;
+  --reticle2: #6366f1;
+  --reticle3: #c084fc;
   --primary: #6366f1;
   --success: #34d399;
   --warning: #f5b544;
   --danger: #fb7185;
   --info: #38bdf8;
-  --iris: linear-gradient(135deg, #22d3ee 0%, #6366f1 52%, #c084fc 100%);
+  --reticle: linear-gradient(135deg, #22d3ee 0%, #6366f1 52%, #c084fc 100%);
   --font-display: 'Hanken Grotesk', ui-sans-serif, system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
   --shadow-lg: 0 24px 60px -20px rgba(0, 0, 0, 0.7);
@@ -52,7 +52,7 @@ body {
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
-  /* Atmosphere: aurora bloom (top-left iris) + faint dotted grid texture. */
+  /* Atmosphere: aurora bloom (top-left reticle) + faint dotted grid texture. */
   background-image:
     radial-gradient(900px 600px at 8% -8%, rgba(99, 102, 241, 0.18), transparent 60%),
     radial-gradient(700px 500px at 98% 4%, rgba(34, 211, 238, 0.1), transparent 55%),
@@ -101,8 +101,8 @@ h4 {
   color: var(--faint);
   font-weight: 500;
 }
-.iris-text {
-  background: var(--iris);
+.reticle-text {
+  background: var(--reticle);
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -135,13 +135,13 @@ h4 {
   width: 30px;
   height: 30px;
   border-radius: 9px;
-  background: var(--iris);
+  background: var(--reticle);
   position: relative;
   box-shadow:
     0 0 0 1px rgba(255, 255, 255, 0.12) inset,
     0 6px 18px -4px rgba(99, 102, 241, 0.6);
   flex: none;
-  animation: irisPulse 5s ease-in-out infinite;
+  animation: reticlePulse 5s ease-in-out infinite;
 }
 .brand-glyph::after {
   content: '';
@@ -156,7 +156,7 @@ h4 {
   position: absolute;
   inset: 13px;
   border-radius: 50%;
-  background: var(--iris);
+  background: var(--reticle);
   z-index: 1;
 }
 .brand-name {
@@ -216,7 +216,7 @@ h4 {
   bottom: 8px;
   width: 3px;
   border-radius: 99px;
-  background: var(--iris);
+  background: var(--reticle);
 }
 .nav-ico {
   width: 17px;
@@ -409,14 +409,14 @@ h4 {
 }
 .btn-primary {
   border: none;
-  background: var(--iris);
+  background: var(--reticle);
   color: #0a0b12;
   font-weight: 700;
   box-shadow: 0 8px 22px -8px rgba(99, 102, 241, 0.7);
 }
 .btn-primary:hover {
   filter: brightness(1.07);
-  background: var(--iris);
+  background: var(--reticle);
 }
 .btn-ghost {
   background: transparent;
@@ -446,7 +446,7 @@ h4 {
     box-shadow 0.15s ease;
 }
 .field:focus {
-  border-color: var(--iris2);
+  border-color: var(--reticle2);
   box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.18);
 }
 .field::placeholder {
@@ -829,7 +829,7 @@ h4 {
     box-shadow: 0 0 0 0 rgba(52, 211, 153, 0);
   }
 }
-@keyframes irisPulse {
+@keyframes reticlePulse {
   0%,
   100% {
     box-shadow:

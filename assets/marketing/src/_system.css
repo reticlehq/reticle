@@ -1,4 +1,4 @@
-/* Iris marketing design system v2 — Inter, soothing gradient mesh, strict 4px grid, no emoji.
+/* Reticle marketing design system v2 — Inter, soothing gradient mesh, strict 4px grid, no emoji.
    Mono is used ONLY for code (commands, paths, API). Everything else is Inter. */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;600;700&display=swap');
@@ -17,7 +17,7 @@
   --mono:'JetBrains Mono',ui-monospace,monospace;
   /* color */
   --ink:#f5f4fb; --muted:#c4c3da; --faint:#a6a5c4;
-  --iris:#8b7bff; --iris-bright:#a594ff; --cyan:#5fd9f5; --blue:#6aa8ff;
+  --reticle:#8b7bff; --reticle-bright:#a594ff; --cyan:#5fd9f5; --blue:#6aa8ff;
   --green:#46d6a0; --red:#ff6b86; --peach:#ff9f87; --amber:#f5c451;
   --ink-on-light:#15131f; --muted-on-light:#56536b;
 }
@@ -26,12 +26,12 @@
 .card{position:relative;overflow:hidden;color:var(--ink);font-family:var(--sans);
   -webkit-font-smoothing:antialiased;text-rendering:geometricPrecision;display:flex;flex-direction:column}
 
-/* ---- living "iris" field: many soft, heavily-overlapping blobs in ANALOGOUS shades of blue,
-   violet, indigo and our iris tone, over a deep blue-violet wash so there are no dark gaps. The
+/* ---- living "reticle" field: many soft, heavily-overlapping blobs in ANALOGOUS shades of blue,
+   violet, indigo and our reticle tone, over a deep blue-violet wash so there are no dark gaps. The
    close hues blend into continuous waves (never discrete spots), and the grain (below) makes it
    feel textured and alive. No contrasting accent colors in the field — those belong to elements. ---- */
-/* The iris field: colored blobs are WARPED by fractal-noise displacement + blur into organic flowing
-   shapes, so nothing reads as a circle. The palette is the spectrum of a human iris (violet, sky blue,
+/* The reticle field: colored blobs are WARPED by fractal-noise displacement + blur into organic flowing
+   shapes, so nothing reads as a circle. The palette is the spectrum of a human reticle (violet, sky blue,
    amber, orange, sand, greenish-amber, indigo, gold). A dark scrim keeps white text readable. */
 .bg-dark{background:
   url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='1200' height='675' preserveAspectRatio='xMidYMid slice'><defs><filter id='lq' x='-300' y='-200' width='1800' height='1075'><feTurbulence type='fractalNoise' baseFrequency='0.0075 0.012' numOctaves='3' seed='17' result='n'/><feDisplacementMap in='SourceGraphic' in2='n' scale='300' xChannelSelector='R' yChannelSelector='G'/><feGaussianBlur stdDeviation='44'/></filter></defs><rect width='1200' height='675' fill='%23080614'/><g filter='url(%23lq)' opacity='0.82'><ellipse cx='230' cy='180' rx='420' ry='340' fill='%23241a5e'/><ellipse cx='560' cy='120' rx='380' ry='300' fill='%231f3a8c'/><ellipse cx='900' cy='200' rx='400' ry='320' fill='%233b2f86'/><ellipse cx='1080' cy='480' rx='360' ry='320' fill='%23173a78'/><ellipse cx='150' cy='520' rx='360' ry='300' fill='%232a2270'/><ellipse cx='470' cy='470' rx='380' ry='300' fill='%23204a9e'/><ellipse cx='760' cy='540' rx='360' ry='280' fill='%23332a7a'/><ellipse cx='350' cy='330' rx='300' ry='250' fill='%234a6fd6' opacity='0.85'/><ellipse cx='990' cy='360' rx='240' ry='220' fill='%235aa0e6' opacity='0.7'/><ellipse cx='660' cy='300' rx='200' ry='180' fill='%236f7bff' opacity='0.65'/><ellipse cx='1030' cy='150' rx='150' ry='150' fill='%239fb35a' opacity='0.42'/><ellipse cx='250' cy='620' rx='140' ry='130' fill='%23e0a64a' opacity='0.34'/></g><rect width='1200' height='675' fill='%23060312' opacity='0.55'/></svg>") center/cover no-repeat,
@@ -63,7 +63,7 @@
 
 /* type helpers — Inter, professional tracking + line-height */
 .display{font-family:var(--sans);font-weight:800;letter-spacing:-.03em;line-height:1.08}
-.eyebrow{font-size:var(--t-xs);font-weight:700;letter-spacing:.01em;color:var(--iris-bright);text-transform:none}
+.eyebrow{font-size:var(--t-xs);font-weight:700;letter-spacing:.01em;color:var(--reticle-bright);text-transform:none}
 .lead{font-size:var(--t-base);line-height:1.55;color:var(--muted);font-weight:450;letter-spacing:-.01em}
 /* highlight marker — editorial emphasis, replaces gradient-on-text. Set --hi per use. */
 .hi{position:relative;white-space:nowrap;z-index:0}
@@ -73,7 +73,7 @@
 
 /* coordinates footer — URL in sans, command in mono */
 .coords{display:flex;align-items:center;gap:var(--s4);font-size:var(--t-mono);font-weight:500;color:var(--faint)}
-.coords .code{color:var(--iris)}
+.coords .code{color:var(--reticle)}
 .coords .dot{width:4px;height:4px;border-radius:50%;background:currentColor;opacity:.5}
 
 .ico{flex:none;display:block;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
@@ -86,7 +86,7 @@
 .reel .big{font-family:var(--sans);font-weight:800;letter-spacing:-.04em;line-height:1;font-size:200px}
 .reel .lock{display:flex;align-items:center;gap:var(--s3)}
 .reel .lock img{height:44px}.reel .lock .sep{color:var(--faint);font-size:34px;font-weight:300}.reel .lock .prod{font-size:34px;font-weight:700}
-.reel .prog{position:absolute;left:0;bottom:0;height:8px;background:linear-gradient(90deg,var(--cyan),var(--iris-bright));width:0}
+.reel .prog{position:absolute;left:0;bottom:0;height:8px;background:linear-gradient(90deg,var(--cyan),var(--reticle-bright));width:0}
 @keyframes sc{0%{opacity:0;transform:translateY(28px) scale(.99)}9%{opacity:1;transform:none}88%{opacity:1}100%{opacity:0;transform:translateY(-18px)}}
 @keyframes hold2{0%{opacity:0;transform:translateY(28px)}20%{opacity:1;transform:none}100%{opacity:1}}
 @keyframes pop2{0%{opacity:0;transform:translateY(14px)}100%{opacity:1;transform:none}}
@@ -117,4 +117,4 @@
 .term .bar{display:flex;align-items:center;gap:var(--s2);padding:var(--s4) var(--s5);border-bottom:1px solid rgba(255,255,255,.08)}
 .term .bar i{width:12px;height:12px;border-radius:50%;display:block}
 .term pre{margin:0;padding:var(--s6);font-family:var(--mono);line-height:1.6;white-space:pre-wrap}
-.k{color:var(--iris-bright)} .s{color:var(--cyan)} .ok{color:var(--green)} .bad{color:var(--red)} .num{color:var(--amber)} .cm{color:var(--faint)}
+.k{color:var(--reticle-bright)} .s{color:var(--cyan)} .ok{color:var(--green)} .bad{color:var(--red)} .num{color:var(--amber)} .cm{color:var(--faint)}

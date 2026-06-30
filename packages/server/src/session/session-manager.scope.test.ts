@@ -9,7 +9,7 @@
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { WebSocket } from 'ws';
-import { IRIS_WS_PATH, LOOPBACK_HOST, MessageKind } from '@syrin/iris-protocol';
+import { RETICLE_WS_PATH, LOOPBACK_HOST, MessageKind } from '@reticle/protocol';
 import { Bridge } from '../bridge.js';
 
 let bridge: Bridge;
@@ -29,7 +29,7 @@ afterEach(async () => {
 /** Connect a raw session announcing a sessionId, url, and (optionally) a stable projectId. */
 function connect(opts: { sessionId: string; url: string; projectId?: string }): Promise<void> {
   return new Promise((resolve) => {
-    const sock = new WebSocket(`ws://${LOOPBACK_HOST}:${String(port)}${IRIS_WS_PATH}`);
+    const sock = new WebSocket(`ws://${LOOPBACK_HOST}:${String(port)}${RETICLE_WS_PATH}`);
     open.push(sock);
     sock.on('open', () => {
       sock.send(
@@ -109,7 +109,7 @@ describe('project-scoped resolve()', () => {
     expect(bridge.sessions.resolve().id).toBe('solo');
   });
 
-  it('a default scope (from .iris.json) is applied when no per-call scope is given', async () => {
+  it('a default scope (from .reticle.json) is applied when no per-call scope is given', async () => {
     bridge.sessions.setDefaultScope({ projectId: 'mine' });
     await connect({ sessionId: 'mine-tab', url: 'http://localhost:3000/', projectId: 'mine' });
     await connect({ sessionId: 'stray', url: 'http://localhost:4310/', projectId: 'showcase' });

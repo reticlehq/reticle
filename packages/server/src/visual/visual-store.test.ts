@@ -13,8 +13,8 @@ describe('VisualStore — temp dir, never touches the repo', () => {
   let store: VisualStore;
 
   beforeEach(async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'iris-visual-'));
-    root = join(dir, '.iris');
+    const dir = await mkdtemp(join(tmpdir(), 'reticle-visual-'));
+    root = join(dir, '.reticle');
     fs = createNodeFileSystem();
     store = new VisualStore(fs, root);
   });
@@ -25,7 +25,7 @@ describe('VisualStore — temp dir, never touches the repo', () => {
 
   it('1: saveBaseline → readBaseline round-trips the exact bytes', async () => {
     const path = await store.saveBaseline('home', PNG_BYTES);
-    expect(path.endsWith(join('.iris', 'visual', 'home.png'))).toBe(true);
+    expect(path.endsWith(join('.reticle', 'visual', 'home.png'))).toBe(true);
     const back = await store.readBaseline('home');
     expect(back).toEqual(PNG_BYTES);
     // bytes really hit disk (not a string round-trip)
@@ -44,7 +44,7 @@ describe('VisualStore — temp dir, never touches the repo', () => {
 
   it('4: saveDiff writes to <name>.diff.png', async () => {
     const path = await store.saveDiff('home', PNG_BYTES);
-    expect(path.endsWith(join('.iris', 'visual', 'home.diff.png'))).toBe(true);
+    expect(path.endsWith(join('.reticle', 'visual', 'home.diff.png'))).toBe(true);
     expect(new Uint8Array(await readFile(path))).toEqual(PNG_BYTES);
   });
 

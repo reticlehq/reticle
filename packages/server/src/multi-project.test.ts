@@ -2,7 +2,7 @@
  * Multi-project / multi-port madman tests.
  *
  * Simulates the real chaos of a vibe-coder juggling multiple apps at once:
- *   - 3+ Iris daemons on different ports running simultaneously
+ *   - 3+ Reticle daemons on different ports running simultaneously
  *   - Browsers connecting to the wrong port
  *   - Daemon started, no browser
  *   - Browser started, no daemon
@@ -19,9 +19,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Bridge } from './bridge.js';
 import { FakeBrowser, callTool, makeDeps, waitUntil } from './bridge.test-harness.js';
-import { IrisTool } from './tools/tool-names.js';
+import { ReticleTool } from './tools/tool-names.js';
 import type { ToolDeps } from './tools/tools.js';
-import { EventType, IRIS_DEFAULT_PORT } from '@syrin/iris-protocol';
+import { EventType, RETICLE_DEFAULT_PORT } from '@reticle/protocol';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -34,7 +34,7 @@ async function startBridge(): Promise<{ bridge: Bridge; port: number; deps: Tool
 }
 
 async function tempDir(): Promise<string> {
-  return mkdtemp(join(tmpdir(), 'iris-multi-'));
+  return mkdtemp(join(tmpdir(), 'reticle-multi-'));
 }
 
 // ─── 1. Port isolation — sessions never bleed across daemons ─────────────────
@@ -54,9 +54,9 @@ describe('port isolation', () => {
     ]);
 
     const [sessA, sessB, sessC] = await Promise.all([
-      callTool(a.deps, IrisTool.SESSIONS),
-      callTool(b.deps, IrisTool.SESSIONS),
-      callTool(c.deps, IrisTool.SESSIONS),
+      callTool(a.deps, ReticleTool.SESSIONS),
+      callTool(b.deps, ReticleTool.SESSIONS),
+      callTool(c.deps, ReticleTool.SESSIONS),
     ]);
 
     // Each daemon sees exactly its own browser
@@ -84,7 +84,7 @@ describe('port isolation', () => {
     await waitUntil(() => projectPort.bridge.sessions.count() === 1);
 
     // Agent mistakenly queries the wrong daemon
-    const wrongSessions = (await callTool(wrongPort.deps, IrisTool.SESSIONS)) as {
+    const wrongSessions = (await callTool(wrongPort.deps, ReticleTool.SESSIONS)) as {
       sessions: unknown[];
     };
     expect(wrongSessions.sessions).toHaveLength(0);
@@ -97,18 +97,18 @@ describe('port isolation', () => {
 // ─── 2. Daemon without app ─────────────────────────────────────────────────────
 
 describe('daemon without app', () => {
-  it('iris_sessions returns empty list when no browser is connected', async () => {
+  it('reticle_sessions returns empty list when no browser is connected', async () => {
     const { bridge, deps } = await startBridge();
-    const result = (await callTool(deps, IrisTool.SESSIONS)) as { sessions: unknown[] };
+    const result = (await callTool(deps, ReticleTool.SESSIONS)) as { sessions: unknown[] };
     expect(result.sessions).toHaveLength(0);
     await bridge.close();
   });
 
-  it('iris_wait_ready resolves immediately when no session (no hang)', async () => {
+  it('reticle_wait_ready resolves immediately when no session (no hang)', async () => {
     const { bridge, deps } = await startBridge();
     // timeoutMs:0 means "check once and return" — the injected now()=>0 clock means the loop
     // exits immediately on the first iteration (0 - 0 >= 0 → true → return count()>0 → false).
-    const result = (await callTool(deps, IrisTool.WAIT_READY, { timeoutMs: 0 })) as {
+    const result = (await callTool(deps, ReticleTool.WAIT_READY, { timeoutMs: 0 })) as {
       ready: boolean;
       sessionCount: number;
     };
@@ -117,9 +117,9 @@ describe('daemon without app', () => {
     await bridge.close();
   });
 
-  it('iris_snapshot throws a clear error when no session is pinned', async () => {
+  it('reticle_snapshot throws a clear error when no session is pinned', async () => {
     const { bridge, deps } = await startBridge();
-    await expect(callTool(deps, IrisTool.SNAPSHOT, {})).rejects.toThrow();
+    await expect(callTool(deps, ReticleTool.SNAPSHOT, {})).rejects.toThrow();
     await bridge.close();
   });
 });
@@ -136,7 +136,7 @@ describe('multiple browsers on same daemon', () => {
     await Promise.all(tabs.map((t) => t.open()));
     await waitUntil(() => bridge.sessions.count() === 4, 3000);
 
-    const result = (await callTool(deps, IrisTool.SESSIONS)) as { sessions: unknown[] };
+    const result = (await callTool(deps, ReticleTool.SESSIONS)) as { sessions: unknown[] };
     expect(result.sessions).toHaveLength(4);
 
     tabs.forEach((t) => t.close());
@@ -223,7 +223,7 @@ describe('daemon killed mid-session', () => {
     await browser2.open();
     await waitUntil(() => bridge2.sessions.count() === 1, 3000);
 
-    const result = (await callTool(deps2, IrisTool.SESSIONS)) as { sessions: unknown[] };
+    const result = (await callTool(deps2, ReticleTool.SESSIONS)) as { sessions: unknown[] };
     expect(result.sessions).toHaveLength(1);
     expect((result.sessions[0] as { sessionId: string }).sessionId).toBe('session-after');
 
@@ -283,7 +283,7 @@ describe('musical chairs', () => {
     await browserB.open();
     await waitUntil(() => bridgeB.sessions.count() === 1, 3000);
 
-    const sessions = (await callTool(depsB, IrisTool.SESSIONS)) as {
+    const sessions = (await callTool(depsB, ReticleTool.SESSIONS)) as {
       sessions: { sessionId: string }[];
     };
     expect(sessions.sessions).toHaveLength(1);
@@ -353,7 +353,7 @@ describe('rapid connect/disconnect cycling', () => {
 
     // After all cycles settle, sessions count should be 0 or very low (stale sessions prune)
     await new Promise<void>((r) => setTimeout(r, 200));
-    const result = (await callTool(deps, IrisTool.SESSIONS)) as { sessions: unknown[] };
+    const result = (await callTool(deps, ReticleTool.SESSIONS)) as { sessions: unknown[] };
     // May have some stale sessions in the ring buffer but should not be accumulating unboundedly
     expect(result.sessions.length).toBeLessThanOrEqual(10);
 
@@ -388,7 +388,7 @@ describe('messy human scenarios', () => {
     const deps = makeDeps(bridge);
 
     // Agent checks: no sessions
-    const before = (await callTool(deps, IrisTool.SESSIONS)) as { sessions: unknown[] };
+    const before = (await callTool(deps, ReticleTool.SESSIONS)) as { sessions: unknown[] };
     expect(before.sessions).toHaveLength(0);
 
     // User eventually opens browser
@@ -397,7 +397,7 @@ describe('messy human scenarios', () => {
     await waitUntil(() => bridge.sessions.count() === 1, 3000);
 
     // Agent checks again: session appears
-    const after = (await callTool(deps, IrisTool.SESSIONS)) as { sessions: unknown[] };
+    const after = (await callTool(deps, ReticleTool.SESSIONS)) as { sessions: unknown[] };
     expect(after.sessions).toHaveLength(1);
 
     browser.close();
@@ -410,11 +410,11 @@ describe('messy human scenarios', () => {
 
     // Override URLs via HELLO message (use custom FakeBrowser subclass pattern)
     const ws = await import('ws');
-    const { IRIS_WS_PATH, MessageKind, LOOPBACK_HOST } = await import('@syrin/iris-protocol');
+    const { RETICLE_WS_PATH, MessageKind, LOOPBACK_HOST } = await import('@reticle/protocol');
 
     function connectWithUrl(sessionId: string, url: string): Promise<void> {
       return new Promise((resolve) => {
-        const sock = new ws.WebSocket(`ws://${LOOPBACK_HOST}:${String(port)}${IRIS_WS_PATH}`);
+        const sock = new ws.WebSocket(`ws://${LOOPBACK_HOST}:${String(port)}${RETICLE_WS_PATH}`);
         sock.on('open', () => {
           sock.send(
             JSON.stringify({
@@ -443,7 +443,7 @@ describe('messy human scenarios', () => {
     await waitUntil(() => bridge.sessions.count() === 3, 3000);
 
     const deps = makeDeps(bridge);
-    const result = (await callTool(deps, IrisTool.SESSIONS)) as {
+    const result = (await callTool(deps, ReticleTool.SESSIONS)) as {
       sessions: { sessionId: string; url: string }[];
     };
 
@@ -476,7 +476,7 @@ describe('messy human scenarios', () => {
     await tab2.open();
     await waitUntil(() => bridge.sessions.count() >= 1, 2000);
 
-    const result = (await callTool(deps, IrisTool.SESSIONS)) as {
+    const result = (await callTool(deps, ReticleTool.SESSIONS)) as {
       sessions: { sessionId: string }[];
     };
     const ids = result.sessions.map((s) => s.sessionId);
@@ -502,7 +502,7 @@ describe('messy human scenarios', () => {
     await expect(bridgeB.ready).rejects.toThrow();
 
     // Project A is still fully functional
-    const resultA = (await callTool(depsA, IrisTool.SESSIONS)) as { sessions: unknown[] };
+    const resultA = (await callTool(depsA, ReticleTool.SESSIONS)) as { sessions: unknown[] };
     expect(resultA.sessions).toHaveLength(1);
 
     browserA.close();
@@ -513,7 +513,7 @@ describe('messy human scenarios', () => {
 // ─── 10. Default port + project port interaction ──────────────────────────────
 
 describe('default port vs project port', () => {
-  it('default port (IRIS_DEFAULT_PORT) is usable as a project port', async () => {
+  it('default port (RETICLE_DEFAULT_PORT) is usable as a project port', async () => {
     // Some projects legitimately use the default port
     const bridge = new Bridge({ port: 0 }); // use 0 to avoid conflict if 4400 is taken
     const port = await bridge.ready;
@@ -523,8 +523,8 @@ describe('default port vs project port', () => {
     expect(bridge.sessions.count()).toBe(1);
     browser.close();
     await bridge.close();
-    // Confirms IRIS_DEFAULT_PORT is not special — it's just a number
-    expect(IRIS_DEFAULT_PORT).toBe(4400);
+    // Confirms RETICLE_DEFAULT_PORT is not special — it's just a number
+    expect(RETICLE_DEFAULT_PORT).toBe(4400);
   });
 
   it('two projects, one on default port and one on custom port, are completely independent', async () => {
@@ -569,9 +569,9 @@ describe('default port vs project port', () => {
   });
 });
 
-// ─── 11. Temp-dir isolation (as iris init would create per project) ────────────
+// ─── 11. Temp-dir isolation (as reticle init would create per project) ────────────
 
-describe('temp-dir isolation (simulates iris init per project)', () => {
+describe('temp-dir isolation (simulates reticle init per project)', () => {
   let dirs: string[] = [];
 
   beforeEach(async () => {
@@ -596,7 +596,7 @@ describe('temp-dir isolation (simulates iris init per project)', () => {
 
     // Verify isolation: each daemon has exactly 1 session, not 3
     for (const [i, s] of stacks.entries()) {
-      const result = (await callTool(s.deps, IrisTool.SESSIONS)) as { sessions: unknown[] };
+      const result = (await callTool(s.deps, ReticleTool.SESSIONS)) as { sessions: unknown[] };
       expect(result.sessions).toHaveLength(1);
       expect((result.sessions[0] as { sessionId: string }).sessionId).toBe(`project-${i}`);
     }

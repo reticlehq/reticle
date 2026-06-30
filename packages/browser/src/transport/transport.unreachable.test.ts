@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { IRIS_PROTOCOL_VERSION, MessageKind, type HelloMessage } from '@syrin/iris-protocol';
+import { RETICLE_PROTOCOL_VERSION, MessageKind, type HelloMessage } from '@reticle/protocol';
 import { Transport } from './transport.js';
 
 /**
@@ -31,7 +31,7 @@ class FakeWebSocket {
 
 const hello = (): HelloMessage => ({
   kind: MessageKind.HELLO,
-  protocolVersion: IRIS_PROTOCOL_VERSION,
+  protocolVersion: RETICLE_PROTOCOL_VERSION,
   sessionId: 's',
   url: 'http://localhost/',
   title: 'T',
@@ -59,7 +59,7 @@ describe('transport unreachable (first-connect) warning', () => {
   it('fires onUnreachable once after repeated initial failures, with the url + attempts', () => {
     const calls: { url: string; attempts: number }[] = [];
     const t = new Transport({
-      url: 'ws://localhost:4400/iris',
+      url: 'ws://localhost:4400/reticle',
       hello,
       handleCommand: () => Promise.resolve({ ok: true }),
       onUnreachable: (d) => calls.push(d),
@@ -69,7 +69,7 @@ describe('transport unreachable (first-connect) warning', () => {
     failNTimes(10);
 
     expect(calls).toHaveLength(1);
-    expect(calls[0]?.url).toBe('ws://localhost:4400/iris');
+    expect(calls[0]?.url).toBe('ws://localhost:4400/reticle');
     expect(calls[0]?.attempts).toBeGreaterThanOrEqual(3);
   });
 

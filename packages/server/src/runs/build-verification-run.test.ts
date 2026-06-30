@@ -12,7 +12,7 @@ import {
   RunProfile,
   RunTrigger,
   VerdictStatus,
-} from '@syrin/iris-protocol';
+} from '@reticle/protocol';
 import {
   buildVerificationRun,
   computeVerdict,

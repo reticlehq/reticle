@@ -1,5 +1,5 @@
 // Present-tense verb for an action label in the presenter HUD (cursor status + act-log row).
-// Presenter-only UI copy — never a wire string. Shared by presenter.ts (cursor) and iris.ts
+// Presenter-only UI copy — never a wire string. Shared by presenter.ts (cursor) and reticle.ts
 // (act-log row) so the two stay in lockstep.
 export function actionVerb(action: string): string {
   switch (action) {

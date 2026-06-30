@@ -1,16 +1,16 @@
-import { HumanControlKind, PresenterTone, SessionState } from '@syrin/iris-protocol';
+import { HumanControlKind, PresenterTone, SessionState } from '@reticle/protocol';
 import { nativeSetTimeout, nativeClearTimeout } from '../timers/native-timers.js';
 
 // Live-control panel: the two-way control surface inside the floating HUD — Pause/Resume + End
-// (header), a message input + Send (footer), and the data-iris-state visual machine. Split out of
+// (header), a message input + Send (footer), and the data-reticle-state visual machine. Split out of
 // presenter.ts to keep both files under the 500-line cap (mirrors the presenter-log.ts split).
-// All nodes carry data-iris-* attrs so they're excluded from snapshots (see dom-ignore.ts). The
+// All nodes carry data-reticle-* attrs so they're excluded from snapshots (see dom-ignore.ts). The
 // strings here are presenter-only UI; the control kinds + state values reuse protocol constants.
 
-/** data-iris-state attribute on the overlay root; its value is always a SessionState. */
-const DATA_IRIS_STATE = 'data-iris-state';
-/** data-iris-tone on the overlay root — waiting/ask/warn distinguishes how the agent handed back. */
-const DATA_IRIS_TONE = 'data-iris-tone';
+/** data-reticle-state attribute on the overlay root; its value is always a SessionState. */
+const DATA_RETICLE_STATE = 'data-reticle-state';
+/** data-reticle-tone on the overlay root — waiting/ask/warn distinguishes how the agent handed back. */
+const DATA_RETICLE_TONE = 'data-reticle-tone';
 const DATA_ON = 'data-on';
 const GLOW_OFF = '0';
 
@@ -29,7 +29,7 @@ const EXPORT_LABEL = 'Export';
 const FLOWS_LABEL = 'Replay a flow';
 const COPIED_TEXT = 'Copied ✓';
 /** Download filename for the exported run state. */
-const RUN_FILENAME = 'iris-run.json';
+const RUN_FILENAME = 'reticle-run.json';
 /** Border fade-out delay after a session ends (native timer; presenter-only tunable). */
 export const ENDED_FADE_MS = 4000;
 
@@ -42,89 +42,89 @@ export type ControlHandler = (intent: ControlIntent) => void;
 
 /** CSS for the control surface (injected with the rest of the presenter stylesheet). */
 export const CONTROLS_CSS = `
-[data-iris-hud] .iris-ctl{pointer-events:auto;cursor:pointer;flex:none;display:inline-flex;align-items:center;justify-content:center;
-  height:26px;padding:0 11px;border-radius:8px;border:1px solid var(--iris-line);background:rgba(255,255,255,.04);
-  color:var(--iris-muted);font-family:var(--iris-font);font-size:11px;font-weight:500;letter-spacing:.01em;line-height:1;
+[data-reticle-hud] .reticle-ctl{pointer-events:auto;cursor:pointer;flex:none;display:inline-flex;align-items:center;justify-content:center;
+  height:26px;padding:0 11px;border-radius:8px;border:1px solid var(--reticle-line);background:rgba(255,255,255,.04);
+  color:var(--reticle-muted);font-family:var(--reticle-font);font-size:11px;font-weight:500;letter-spacing:.01em;line-height:1;
   transition:background .15s,color .15s,border-color .15s,transform .1s;}
-[data-iris-hud] .iris-ctl:hover{color:var(--iris-fg);background:rgba(255,255,255,.09);}
-[data-iris-hud] .iris-ctl:active{transform:scale(.95);}
-[data-iris-hud] .iris-ctl:disabled{opacity:.35;cursor:default;}
-[data-iris-hud] [data-iris-end]{color:#ff9aa2;border-color:rgba(255,107,107,.22);}
-[data-iris-hud] [data-iris-end]:hover{color:#ff7a7a;border-color:rgba(255,107,107,.5);background:rgba(255,107,107,.1);}
-[data-iris-hud] .iris-badge{display:none;align-items:center;flex:none;font-weight:600;letter-spacing:.1em;font-size:9px;
-  color:var(--iris-accent);border:1px solid var(--iris-accent);background:var(--iris-accent-soft);padding:2px 8px;border-radius:999px;}
-[data-iris-overlay][data-iris-state="paused"] [data-iris-badge]{display:inline-flex;}
-[data-iris-hud] [data-iris-foot]{flex:none;padding:10px 12px 12px;border-top:1px solid var(--iris-line2);background:rgba(0,0,0,.16);}
-[data-iris-hud] .iris-composer{display:flex;align-items:flex-end;gap:6px;background:rgba(255,255,255,.05);
-  border:1px solid var(--iris-line);border-radius:14px;padding:5px 6px 5px 14px;transition:border-color .15s,box-shadow .15s;}
-[data-iris-hud] .iris-composer:focus-within{border-color:var(--iris-accent);box-shadow:0 0 0 3px var(--iris-accent-soft);}
-[data-iris-hud] .iris-msg{flex:1;min-width:0;pointer-events:auto;background:transparent;border:none;outline:none;resize:none;
-  color:var(--iris-fg);font-family:var(--iris-font);font-size:13px;line-height:18px;height:18px;min-height:18px;max-height:96px;
+[data-reticle-hud] .reticle-ctl:hover{color:var(--reticle-fg);background:rgba(255,255,255,.09);}
+[data-reticle-hud] .reticle-ctl:active{transform:scale(.95);}
+[data-reticle-hud] .reticle-ctl:disabled{opacity:.35;cursor:default;}
+[data-reticle-hud] [data-reticle-end]{color:#ff9aa2;border-color:rgba(255,107,107,.22);}
+[data-reticle-hud] [data-reticle-end]:hover{color:#ff7a7a;border-color:rgba(255,107,107,.5);background:rgba(255,107,107,.1);}
+[data-reticle-hud] .reticle-badge{display:none;align-items:center;flex:none;font-weight:600;letter-spacing:.1em;font-size:9px;
+  color:var(--reticle-accent);border:1px solid var(--reticle-accent);background:var(--reticle-accent-soft);padding:2px 8px;border-radius:999px;}
+[data-reticle-overlay][data-reticle-state="paused"] [data-reticle-badge]{display:inline-flex;}
+[data-reticle-hud] [data-reticle-foot]{flex:none;padding:10px 12px 12px;border-top:1px solid var(--reticle-line2);background:rgba(0,0,0,.16);}
+[data-reticle-hud] .reticle-composer{display:flex;align-items:flex-end;gap:6px;background:rgba(255,255,255,.05);
+  border:1px solid var(--reticle-line);border-radius:14px;padding:5px 6px 5px 14px;transition:border-color .15s,box-shadow .15s;}
+[data-reticle-hud] .reticle-composer:focus-within{border-color:var(--reticle-accent);box-shadow:0 0 0 3px var(--reticle-accent-soft);}
+[data-reticle-hud] .reticle-msg{flex:1;min-width:0;pointer-events:auto;background:transparent;border:none;outline:none;resize:none;
+  color:var(--reticle-fg);font-family:var(--reticle-font);font-size:13px;line-height:18px;height:18px;min-height:18px;max-height:96px;
   padding:5px 0;overflow-y:auto;}
-[data-iris-hud] .iris-msg::placeholder{color:var(--iris-faint);}
-[data-iris-hud] .iris-msg:disabled{opacity:.5;}
-[data-iris-hud] .iris-send{flex:none;width:30px;height:30px;padding:0;border-radius:10px;border:none;cursor:pointer;pointer-events:auto;
-  background:var(--iris-accent);color:#0b0d14;display:inline-flex;align-items:center;justify-content:center;transition:filter .15s,transform .1s;}
-[data-iris-hud] .iris-send svg{display:block;}
-[data-iris-hud] .iris-send:hover{filter:brightness(1.12);}
-[data-iris-hud] .iris-send:active{transform:scale(.9);}
-[data-iris-hud] .iris-send:disabled{opacity:.4;cursor:default;}
-[data-iris-hud] .iris-banner{display:none;flex:none;padding:8px 15px;color:var(--iris-accent);
-  font-size:11.5px;font-weight:500;border-bottom:1px solid var(--iris-line2);background:var(--iris-accent-soft);}
-[data-iris-overlay][data-iris-state="ended"] [data-iris-banner]{display:block;}
+[data-reticle-hud] .reticle-msg::placeholder{color:var(--reticle-faint);}
+[data-reticle-hud] .reticle-msg:disabled{opacity:.5;}
+[data-reticle-hud] .reticle-send{flex:none;width:30px;height:30px;padding:0;border-radius:10px;border:none;cursor:pointer;pointer-events:auto;
+  background:var(--reticle-accent);color:#0b0d14;display:inline-flex;align-items:center;justify-content:center;transition:filter .15s,transform .1s;}
+[data-reticle-hud] .reticle-send svg{display:block;}
+[data-reticle-hud] .reticle-send:hover{filter:brightness(1.12);}
+[data-reticle-hud] .reticle-send:active{transform:scale(.9);}
+[data-reticle-hud] .reticle-send:disabled{opacity:.4;cursor:default;}
+[data-reticle-hud] .reticle-banner{display:none;flex:none;padding:8px 15px;color:var(--reticle-accent);
+  font-size:11.5px;font-weight:500;border-bottom:1px solid var(--reticle-line2);background:var(--reticle-accent-soft);}
+[data-reticle-overlay][data-reticle-state="ended"] [data-reticle-banner]{display:block;}
 /* Export row: hidden during a live session; revealed when ended so the run can be copied/saved. */
-[data-iris-hud] .iris-export{display:none;align-items:center;gap:8px;margin-top:9px;}
-[data-iris-overlay][data-iris-state="ended"] [data-iris-hud] .iris-export{display:flex;}
-[data-iris-hud] .iris-export-msg{color:var(--iris-ok);font-size:11px;opacity:0;transition:opacity .15s;}
-[data-iris-hud] .iris-export-msg[data-show="1"]{opacity:1;}
-[data-iris-overlay][data-iris-state="paused"] [data-iris-glow][data-on="1"]{animation:none;
+[data-reticle-hud] .reticle-export{display:none;align-items:center;gap:8px;margin-top:9px;}
+[data-reticle-overlay][data-reticle-state="ended"] [data-reticle-hud] .reticle-export{display:flex;}
+[data-reticle-hud] .reticle-export-msg{color:var(--reticle-ok);font-size:11px;opacity:0;transition:opacity .15s;}
+[data-reticle-hud] .reticle-export-msg[data-show="1"]{opacity:1;}
+[data-reticle-overlay][data-reticle-state="paused"] [data-reticle-glow][data-on="1"]{animation:none;
   box-shadow:inset 0 0 0 3px rgba(246,180,76,.9),inset 0 0 30px 6px rgba(246,180,76,.4);}
-[data-iris-overlay][data-iris-state="ended"] [data-iris-glow][data-on="1"]{animation:none;
+[data-reticle-overlay][data-reticle-state="ended"] [data-reticle-glow][data-on="1"]{animation:none;
   box-shadow:inset 0 0 0 2px rgba(61,215,166,.55);}
 /* Handoff tones tell the human the agent's mode at a glance. waiting = calm teal "your turn" (no
    alarm); ask = amber "answer me" with a pulse; warn = amber "agent crashed" with a pulse. Each leads
    the banner with an icon and overrides the calm ended-green accent. */
-[data-iris-overlay][data-iris-tone="waiting"] [data-iris-hud]{--iris-accent:#38bdf8;--iris-accent-soft:rgba(56,189,248,.16);}
-[data-iris-overlay][data-iris-tone="waiting"] [data-iris-banner]{font-weight:600;color:#7dd3fc;}
-[data-iris-overlay][data-iris-tone="waiting"] [data-iris-banner]::before{content:"\\270B  ";}
-[data-iris-overlay][data-iris-tone="waiting"] [data-iris-glow][data-on="1"]{animation:none;
+[data-reticle-overlay][data-reticle-tone="waiting"] [data-reticle-hud]{--reticle-accent:#38bdf8;--reticle-accent-soft:rgba(56,189,248,.16);}
+[data-reticle-overlay][data-reticle-tone="waiting"] [data-reticle-banner]{font-weight:600;color:#7dd3fc;}
+[data-reticle-overlay][data-reticle-tone="waiting"] [data-reticle-banner]::before{content:"\\270B  ";}
+[data-reticle-overlay][data-reticle-tone="waiting"] [data-reticle-glow][data-on="1"]{animation:none;
   box-shadow:inset 0 0 0 2px rgba(56,189,248,.5);}
-[data-iris-overlay][data-iris-tone="ask"] [data-iris-hud],
-[data-iris-overlay][data-iris-tone="warn"] [data-iris-hud]{--iris-accent:#fb923c;--iris-accent-soft:rgba(251,146,60,.18);}
-[data-iris-overlay][data-iris-tone="ask"] [data-iris-banner],
-[data-iris-overlay][data-iris-tone="warn"] [data-iris-banner]{font-weight:600;color:#fdba74;}
-[data-iris-overlay][data-iris-tone="ask"] [data-iris-banner]::before{content:"\\2753  ";}
-[data-iris-overlay][data-iris-tone="warn"] [data-iris-banner]::before{content:"\\26A0\\FE0F  ";}
-[data-iris-overlay][data-iris-tone="ask"] [data-iris-glow][data-on="1"],
-[data-iris-overlay][data-iris-tone="warn"] [data-iris-glow][data-on="1"]{animation:iris-warn-pulse 1.5s ease-in-out infinite;
+[data-reticle-overlay][data-reticle-tone="ask"] [data-reticle-hud],
+[data-reticle-overlay][data-reticle-tone="warn"] [data-reticle-hud]{--reticle-accent:#fb923c;--reticle-accent-soft:rgba(251,146,60,.18);}
+[data-reticle-overlay][data-reticle-tone="ask"] [data-reticle-banner],
+[data-reticle-overlay][data-reticle-tone="warn"] [data-reticle-banner]{font-weight:600;color:#fdba74;}
+[data-reticle-overlay][data-reticle-tone="ask"] [data-reticle-banner]::before{content:"\\2753  ";}
+[data-reticle-overlay][data-reticle-tone="warn"] [data-reticle-banner]::before{content:"\\26A0\\FE0F  ";}
+[data-reticle-overlay][data-reticle-tone="ask"] [data-reticle-glow][data-on="1"],
+[data-reticle-overlay][data-reticle-tone="warn"] [data-reticle-glow][data-on="1"]{animation:reticle-warn-pulse 1.5s ease-in-out infinite;
   box-shadow:inset 0 0 0 2px rgba(251,146,60,.7);}
-@keyframes iris-warn-pulse{0%,100%{box-shadow:inset 0 0 0 2px rgba(251,146,60,.32);}
+@keyframes reticle-warn-pulse{0%,100%{box-shadow:inset 0 0 0 2px rgba(251,146,60,.32);}
   50%{box-shadow:inset 0 0 0 3px rgba(251,146,60,.85),inset 0 0 26px 5px rgba(251,146,60,.34);}}
 /* Replay-a-flow row: the human re-runs a saved flow with no agent. Hidden until flows are pushed. */
-[data-iris-hud] .iris-flows{display:none;flex-wrap:wrap;gap:6px;padding:9px 12px;border-top:1px solid var(--iris-line2);}
-[data-iris-hud] .iris-flows[data-has="1"]{display:flex;}
-[data-iris-hud] .iris-flows-cap{flex:0 0 100%;margin-bottom:1px;color:var(--iris-faint);font-size:9.5px;letter-spacing:.09em;text-transform:uppercase;}
-[data-iris-hud] .iris-flow{pointer-events:auto;cursor:pointer;display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 10px;
-  border-radius:7px;border:1px solid var(--iris-line);background:rgba(255,255,255,.04);color:var(--iris-muted);
-  font-family:var(--iris-font);font-size:11px;font-weight:500;transition:background .15s,color .15s,border-color .15s,transform .1s;}
-[data-iris-hud] .iris-flow:hover{color:var(--iris-fg);background:var(--iris-accent-soft);border-color:var(--iris-accent);}
-[data-iris-hud] .iris-flow:active{transform:scale(.95);}
+[data-reticle-hud] .reticle-flows{display:none;flex-wrap:wrap;gap:6px;padding:9px 12px;border-top:1px solid var(--reticle-line2);}
+[data-reticle-hud] .reticle-flows[data-has="1"]{display:flex;}
+[data-reticle-hud] .reticle-flows-cap{flex:0 0 100%;margin-bottom:1px;color:var(--reticle-faint);font-size:9.5px;letter-spacing:.09em;text-transform:uppercase;}
+[data-reticle-hud] .reticle-flow{pointer-events:auto;cursor:pointer;display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 10px;
+  border-radius:7px;border:1px solid var(--reticle-line);background:rgba(255,255,255,.04);color:var(--reticle-muted);
+  font-family:var(--reticle-font);font-size:11px;font-weight:500;transition:background .15s,color .15s,border-color .15s,transform .1s;}
+[data-reticle-hud] .reticle-flow:hover{color:var(--reticle-fg);background:var(--reticle-accent-soft);border-color:var(--reticle-accent);}
+[data-reticle-hud] .reticle-flow:active{transform:scale(.95);}
 `;
 
-/** Header markup (controls + badge) injected into .iris-hud-head, after the expand button. */
-export const CONTROLS_HEAD_HTML = `<button type="button" data-iris-pause class="iris-ctl">${CONTROL_LABEL.PAUSE}</button><button type="button" data-iris-end class="iris-ctl">${CONTROL_LABEL.END}</button><span data-iris-badge class="iris-badge">${PAUSED_BADGE_TEXT}</span>`;
+/** Header markup (controls + badge) injected into .reticle-hud-head, after the expand button. */
+export const CONTROLS_HEAD_HTML = `<button type="button" data-reticle-pause class="reticle-ctl">${CONTROL_LABEL.PAUSE}</button><button type="button" data-reticle-end class="reticle-ctl">${CONTROL_LABEL.END}</button><span data-reticle-badge class="reticle-badge">${PAUSED_BADGE_TEXT}</span>`;
 
 /** Banner markup (between head and log, hidden unless ended). */
-export const CONTROLS_BANNER_HTML = `<div data-iris-banner class="iris-banner">${ENDED_BANNER_TEXT}</div>`;
+export const CONTROLS_BANNER_HTML = `<div data-reticle-banner class="reticle-banner">${ENDED_BANNER_TEXT}</div>`;
 
 /** Replay-a-flow row (between log and footer); buttons are filled in by setFlows once flows arrive. */
-export const CONTROLS_FLOWS_HTML = `<div data-iris-flows class="iris-flows"><span class="iris-flows-cap">${FLOWS_LABEL}</span></div>`;
+export const CONTROLS_FLOWS_HTML = `<div data-reticle-flows class="reticle-flows"><span class="reticle-flows-cap">${FLOWS_LABEL}</span></div>`;
 
 /** Aesthetic send glyph (Feather "send" paper-plane). Inline SVG so it's crisp at any DPI. */
 const SEND_ICON = `<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>`;
 
 /** Footer markup: a rounded composer pill (input + icon Send), appended after the log div. */
-export const CONTROLS_FOOT_HTML = `<div data-iris-foot><div class="iris-composer"><textarea data-iris-input class="iris-msg" rows="1" placeholder="${INPUT_PLACEHOLDER}"></textarea><button type="button" data-iris-send class="iris-send" aria-label="${CONTROL_LABEL.SEND}">${SEND_ICON}</button></div><div class="iris-export"><button type="button" data-iris-copy class="iris-ctl">${COPY_LABEL}</button><button type="button" data-iris-export class="iris-ctl">${EXPORT_LABEL}</button><span data-iris-export-msg class="iris-export-msg"></span></div></div>`;
+export const CONTROLS_FOOT_HTML = `<div data-reticle-foot><div class="reticle-composer"><textarea data-reticle-input class="reticle-msg" rows="1" placeholder="${INPUT_PLACEHOLDER}"></textarea><button type="button" data-reticle-send class="reticle-send" aria-label="${CONTROL_LABEL.SEND}">${SEND_ICON}</button></div><div class="reticle-export"><button type="button" data-reticle-copy class="reticle-ctl">${COPY_LABEL}</button><button type="button" data-reticle-export class="reticle-ctl">${EXPORT_LABEL}</button><span data-reticle-export-msg class="reticle-export-msg"></span></div></div>`;
 
 /** Element refs of the control surface, queried once after the markup is in the DOM. */
 interface ControlRefs {
@@ -141,15 +141,15 @@ interface ControlRefs {
 
 function queryControlRefs(root: HTMLElement): ControlRefs {
   return {
-    pauseBtn: root.querySelector<HTMLButtonElement>('[data-iris-pause]') ?? undefined,
-    endBtn: root.querySelector<HTMLButtonElement>('[data-iris-end]') ?? undefined,
-    input: root.querySelector<HTMLTextAreaElement>('[data-iris-input]') ?? undefined,
-    sendBtn: root.querySelector<HTMLButtonElement>('[data-iris-send]') ?? undefined,
-    banner: root.querySelector<HTMLElement>('[data-iris-banner]') ?? undefined,
-    copyBtn: root.querySelector<HTMLButtonElement>('[data-iris-copy]') ?? undefined,
-    exportBtn: root.querySelector<HTMLButtonElement>('[data-iris-export]') ?? undefined,
-    exportMsg: root.querySelector<HTMLElement>('[data-iris-export-msg]') ?? undefined,
-    flows: root.querySelector<HTMLElement>('[data-iris-flows]') ?? undefined,
+    pauseBtn: root.querySelector<HTMLButtonElement>('[data-reticle-pause]') ?? undefined,
+    endBtn: root.querySelector<HTMLButtonElement>('[data-reticle-end]') ?? undefined,
+    input: root.querySelector<HTMLTextAreaElement>('[data-reticle-input]') ?? undefined,
+    sendBtn: root.querySelector<HTMLButtonElement>('[data-reticle-send]') ?? undefined,
+    banner: root.querySelector<HTMLElement>('[data-reticle-banner]') ?? undefined,
+    copyBtn: root.querySelector<HTMLButtonElement>('[data-reticle-copy]') ?? undefined,
+    exportBtn: root.querySelector<HTMLButtonElement>('[data-reticle-export]') ?? undefined,
+    exportMsg: root.querySelector<HTMLElement>('[data-reticle-export-msg]') ?? undefined,
+    flows: root.querySelector<HTMLElement>('[data-reticle-flows]') ?? undefined,
   };
 }
 
@@ -167,7 +167,7 @@ interface ControlPanelHost {
 
 /**
  * The live-control panel: owns the control element refs, the SessionState, the ended-fade timer,
- * the DOM wiring, and the data-iris-state visual machine. Split out of Presenter to keep both files
+ * the DOM wiring, and the data-reticle-state visual machine. Split out of Presenter to keep both files
  * under the 500-line cap. A click handler both emits a control AND optimistically applies state; the
  * server's PRESENTER echo re-syncs via setState only (never emits) so a control is delivered once.
  */
@@ -217,7 +217,7 @@ export class ControlPanel {
     this.#refs.flows?.addEventListener('click', (e) => {
       const target = e.target;
       if (!(target instanceof HTMLElement)) return;
-      const name = target.closest('[data-iris-replay]')?.getAttribute('data-iris-replay');
+      const name = target.closest('[data-reticle-replay]')?.getAttribute('data-reticle-replay');
       if (name !== null && name !== undefined && name.length > 0) {
         this.#host.emit(HumanControlKind.REPLAY, name);
       }
@@ -243,7 +243,7 @@ export class ControlPanel {
     }
   }
 
-  /** Download the run state as iris-run.json. */
+  /** Download the run state as reticle-run.json. */
   #onExport(): void {
     const blob = new Blob([this.#runJson()], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -306,12 +306,12 @@ export class ControlPanel {
         typeof f === 'object' && f !== null ? (f as Record<string, unknown>)['name'] : f,
       )
       .filter((n): n is string => typeof n === 'string' && n.length > 0);
-    el.querySelectorAll('[data-iris-replay]').forEach((b) => b.remove()); // rebuild, keep the caption
+    el.querySelectorAll('[data-reticle-replay]').forEach((b) => b.remove()); // rebuild, keep the caption
     for (const name of names) {
       const btn = el.ownerDocument.createElement('button');
       btn.type = 'button';
-      btn.className = 'iris-flow';
-      btn.setAttribute('data-iris-replay', name); // setAttribute → no markup injection from a flow name
+      btn.className = 'reticle-flow';
+      btn.setAttribute('data-reticle-replay', name); // setAttribute → no markup injection from a flow name
       btn.textContent = `▶ ${name}`;
       el.appendChild(btn);
     }
@@ -325,11 +325,11 @@ export class ControlPanel {
    */
   setState(state: SessionState, text?: string, tone?: PresenterTone): void {
     this.#state = state;
-    this.#root?.setAttribute(DATA_IRIS_STATE, state);
+    this.#root?.setAttribute(DATA_RETICLE_STATE, state);
     // A handoff tone (waiting/ask/warn) drives a distinct panel treatment; calm/undefined = a plain end.
     const handoff = tone !== undefined && tone !== PresenterTone.CALM;
-    if (handoff) this.#root?.setAttribute(DATA_IRIS_TONE, tone);
-    else this.#root?.removeAttribute(DATA_IRIS_TONE);
+    if (handoff) this.#root?.setAttribute(DATA_RETICLE_TONE, tone);
+    else this.#root?.removeAttribute(DATA_RETICLE_TONE);
     if (this.#fadeTimer !== undefined) {
       nativeClearTimeout(this.#fadeTimer);
       this.#fadeTimer = undefined;
@@ -364,4 +364,4 @@ export class ControlPanel {
   }
 }
 
-export { DATA_IRIS_STATE };
+export { DATA_RETICLE_STATE };

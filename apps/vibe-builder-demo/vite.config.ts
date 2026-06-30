@@ -7,7 +7,7 @@ import { createBuilderApi } from './qa/builder-api.mjs';
 /**
  * The "generated app" preview for this app-builder demo: an Expense Tracker plus a tiny in-process
  * API, served from one Vite dev server (the analogue of a builder's preview pod). The frontend is
- * instrumented with the Iris SDK (see src/main.ts) so a QA agent can observe real DOM/network/console/
+ * instrumented with the Reticle SDK (see src/main.ts) so a QA agent can observe real DOM/network/console/
  * state — not pixels. Bug class is chosen per-request via the `?bug=` URL param (the page forwards it
  * as an `x-bug` header), so ONE running preview serves all six silent-failure classes. This mirrors
  * `apps/generated-app/server.mjs` but as a real instrumented, bundler-built app.
@@ -28,7 +28,7 @@ interface Expense {
 }
 
 /** The bridge port the page's SDK should dial. Injected so the QA harness can pick a free port. */
-const BRIDGE_PORT = process.env['IRIS_PREVIEW_BRIDGE_PORT'] ?? '4400';
+const BRIDGE_PORT = process.env['RETICLE_PREVIEW_BRIDGE_PORT'] ?? '4400';
 
 function readBug(req: IncomingMessage): string {
   const header = req.headers['x-bug'];
@@ -52,7 +52,7 @@ function apiMiddleware(): Connect.NextHandleFunction {
     if (!url.pathname.startsWith('/api/')) return next();
     const bug = readBug(req);
 
-    if (req.method === 'GET' && url.pathname === '/api/iris-config') {
+    if (req.method === 'GET' && url.pathname === '/api/reticle-config') {
       // The page asks where its local bridge lives — avoids build-time port injection.
       return send(res, 200, { bridgePort: Number(BRIDGE_PORT) });
     }
@@ -105,17 +105,17 @@ function apiMiddleware(): Connect.NextHandleFunction {
 }
 
 export default defineConfig({
-  server: { port: Number(process.env['IRIS_PREVIEW_PORT'] ?? 4310) },
+  server: { port: Number(process.env['RETICLE_PREVIEW_PORT'] ?? 4310) },
   plugins: [
     {
       name: 'vibe-builder-preview-api',
       configureServer(server) {
         server.middlewares.use(apiMiddleware());
-        // The Builder builder API (verify/repair) — the INNER Iris layer, same origin as the UI.
+        // The Builder builder API (verify/repair) — the INNER Reticle layer, same origin as the UI.
         server.middlewares.use(
           createBuilderApi({
-            previewUrl: `http://localhost:${String(process.env['IRIS_PREVIEW_PORT'] ?? 4310)}`,
-            bridgePort: Number(process.env['IRIS_PREVIEW_BRIDGE_PORT'] ?? 4400),
+            previewUrl: `http://localhost:${String(process.env['RETICLE_PREVIEW_PORT'] ?? 4310)}`,
+            bridgePort: Number(process.env['RETICLE_PREVIEW_BRIDGE_PORT'] ?? 4400),
           }),
         );
       },

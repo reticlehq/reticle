@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { IrisTool } from '@syrin/iris-server';
-import { ElementState, QueryBy } from '@syrin/iris-protocol';
+import { ReticleTool } from '@reticle/server';
+import { ElementState, QueryBy } from '@reticle/protocol';
 import { createTestContext } from './test-context.js';
-import { IrisAssertionError } from './skip.js';
+import { ReticleAssertionError } from './skip.js';
 import { PredicateKind } from './constants.js';
-import type { ToolInvoker } from '@syrin/iris-server';
+import type { ToolInvoker } from '@reticle/server';
 
 function fakeInvoker(handlers: Record<string, (args: Record<string, unknown>) => unknown>): {
   invoke: ToolInvoker;
@@ -25,7 +25,7 @@ describe('t.expectElement', () => {
 
   it('passes and sends an element predicate with the state', async () => {
     const { invoke, calls } = fakeInvoker({
-      [IrisTool.ASSERT]: () => ({ pass: true }),
+      [ReticleTool.ASSERT]: () => ({ pass: true }),
     });
     const t = createTestContext(invoke);
     await expect(t.expectElement(query, ElementState.VISIBLE)).resolves.toBeUndefined();
@@ -37,7 +37,7 @@ describe('t.expectElement', () => {
 
   it('omits the state key when state is undefined', async () => {
     const { invoke, calls } = fakeInvoker({
-      [IrisTool.ASSERT]: () => ({ pass: true }),
+      [ReticleTool.ASSERT]: () => ({ pass: true }),
     });
     const t = createTestContext(invoke);
     await t.expectElement(query);
@@ -45,9 +45,9 @@ describe('t.expectElement', () => {
     expect('state' in predicate).toBe(false);
   });
 
-  it('throws IrisAssertionError with wrong-state nearMiss evidence on failure', async () => {
+  it('throws ReticleAssertionError with wrong-state nearMiss evidence on failure', async () => {
     const { invoke } = fakeInvoker({
-      [IrisTool.ASSERT]: () => ({
+      [ReticleTool.ASSERT]: () => ({
         pass: false,
         failureReason: "element exists but not in state 'visible'",
         evidence: { nearMiss: [{ ref: 'e2' }] },
@@ -57,8 +57,8 @@ describe('t.expectElement', () => {
     await t.expectElement(query, ElementState.VISIBLE).then(
       () => expect.unreachable('should have thrown'),
       (error: unknown) => {
-        expect(error).toBeInstanceOf(IrisAssertionError);
-        expect((error as IrisAssertionError).evidence).toEqual({ nearMiss: [{ ref: 'e2' }] });
+        expect(error).toBeInstanceOf(ReticleAssertionError);
+        expect((error as ReticleAssertionError).evidence).toEqual({ nearMiss: [{ ref: 'e2' }] });
       },
     );
   });
@@ -67,7 +67,7 @@ describe('t.expectElement', () => {
 describe('t.expectText', () => {
   it('maps to a text predicate', async () => {
     const { invoke, calls } = fakeInvoker({
-      [IrisTool.ASSERT]: () => ({ pass: true }),
+      [ReticleTool.ASSERT]: () => ({ pass: true }),
     });
     const t = createTestContext(invoke);
     await t.expectText('Saved');
@@ -76,11 +76,11 @@ describe('t.expectText', () => {
     expect(predicate['contains']).toBe('Saved');
   });
 
-  it('throws IrisAssertionError when text is absent', async () => {
+  it('throws ReticleAssertionError when text is absent', async () => {
     const { invoke } = fakeInvoker({
-      [IrisTool.ASSERT]: () => ({ pass: false, failureReason: 'no element matched' }),
+      [ReticleTool.ASSERT]: () => ({ pass: false, failureReason: 'no element matched' }),
     });
     const t = createTestContext(invoke);
-    await expect(t.expectText('Saved')).rejects.toBeInstanceOf(IrisAssertionError);
+    await expect(t.expectText('Saved')).rejects.toBeInstanceOf(ReticleAssertionError);
   });
 });

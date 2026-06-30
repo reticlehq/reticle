@@ -1,22 +1,22 @@
 /**
  * The verification-run assembler. A PURE mapping from already-produced verification results
  * (flow-replay outcomes, standalone checks, risks, evidence, repair packets) into the stable
- * IrisVerificationRun artifact, with a deterministic verdict computed here. The clock is injected
+ * ReticleVerificationRun artifact, with a deterministic verdict computed here. The clock is injected
  * (the single `createdAt` site — never Date.now() in logic, per rule 7). Gathering the inputs from a
  * live session is a separate adapter concern; this file owns the shape + the verdict rules so both
  * the MCP path and the programmatic Replay/Verify API produce byte-identical verdicts.
  */
 
 import {
-  IrisVerificationRunSchema,
+  ReticleVerificationRunSchema,
   RUN_FILE_VERSION,
   RunCheckStatus,
   RunConfidence,
   RunFlowStatus,
   VerdictStatus,
-  type IrisVerificationRun,
+  type ReticleVerificationRun,
   type RunVerdict,
-} from '@syrin/iris-protocol';
+} from '@reticle/protocol';
 import { redactForProfile } from './profile-redact.js';
 
 /**
@@ -25,7 +25,7 @@ import { redactForProfile } from './profile-redact.js';
  * so construction sites stay ergonomic while consumers get the nominal type.
  */
 export type VerificationRunInput = Omit<
-  IrisVerificationRun,
+  ReticleVerificationRun,
   'schemaVersion' | 'createdAt' | 'verdict' | 'runId'
 > & { runId: string };
 
@@ -77,19 +77,19 @@ export function computeVerdict(input: VerificationRunInput): RunVerdict {
 }
 
 /**
- * Assemble the final, schema-valid IrisVerificationRun. Stamps schemaVersion + createdAt (injected
+ * Assemble the final, schema-valid ReticleVerificationRun. Stamps schemaVersion + createdAt (injected
  * clock) and computes the verdict; the result is parsed through the protocol schema so a malformed
  * input can never escape as an "artifact".
  */
 export function buildVerificationRun(
   input: VerificationRunInput,
   now: () => number,
-): IrisVerificationRun {
+): ReticleVerificationRun {
   const run = {
     schemaVersion: RUN_FILE_VERSION,
     createdAt: now(),
     verdict: computeVerdict(input),
     ...input,
   };
-  return redactForProfile(IrisVerificationRunSchema.parse(run));
+  return redactForProfile(ReticleVerificationRunSchema.parse(run));
 }

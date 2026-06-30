@@ -1,6 +1,6 @@
 name: Publish to npm
 
-# Publishes @syrin/iris (the only public package; the rest are private) when a GitHub
+# Publishes @reticle/core (the only public package; the rest are private) when a GitHub
 # Release is published. `pnpm -r publish` skips private packages and any version already
 # on npm, so it is safe to re-run.
 #

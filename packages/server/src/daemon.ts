@@ -11,14 +11,14 @@ import {
 } from 'node:fs';
 import { spawn } from 'node:child_process';
 
-const IRIS_HOME = join(homedir(), '.iris');
+const RETICLE_HOME = join(homedir(), '.reticle');
 
 function pidPath(port: number): string {
-  return join(IRIS_HOME, `daemon-${port}.pid`);
+  return join(RETICLE_HOME, `daemon-${port}.pid`);
 }
 
 export function logPath(port: number): string {
-  return join(IRIS_HOME, `daemon-${port}.log`);
+  return join(RETICLE_HOME, `daemon-${port}.log`);
 }
 
 export function readPid(port: number): number | null {
@@ -38,7 +38,7 @@ export function isAlive(pid: number): boolean {
 }
 
 export function writePid(port: number): void {
-  mkdirSync(IRIS_HOME, { recursive: true });
+  mkdirSync(RETICLE_HOME, { recursive: true });
   writeFileSync(pidPath(port), String(process.pid), 'utf8');
 }
 
@@ -53,7 +53,7 @@ export function isRunning(port: number): boolean {
 }
 
 /**
- * Find the port of a live iris daemon by scanning ~/.iris/daemon-<port>.pid files — so `iris open`
+ * Find the port of a live reticle daemon by scanning ~/.reticle/daemon-<port>.pid files — so `reticle open`
  * can "find the port" itself instead of making the user reconcile it. Returns the first live one
  * (lowest port, deterministic), or null when none is running.
  */
@@ -61,26 +61,26 @@ export function discoverDaemonPort(): number | null {
   reclaimStaleDaemons(); // sweep crashed daemons' stale pidfiles before scanning for live ones
   let found: number | null = null;
   try {
-    for (const file of readdirSync(IRIS_HOME)) {
+    for (const file of readdirSync(RETICLE_HOME)) {
       const m = /^daemon-(\d+)\.pid$/.exec(file);
       if (m === null) continue;
       const port = Number(m[1]);
       if (isRunning(port) && (found === null || port < found)) found = port;
     }
   } catch {
-    // no ~/.iris yet → nothing running
+    // no ~/.reticle yet → nothing running
   }
   return found;
 }
 
 /**
- * Sweep ~/.iris for daemon-<port>.pid files whose process is no longer alive and delete them, so a
+ * Sweep ~/.reticle for daemon-<port>.pid files whose process is no longer alive and delete them, so a
  * crashed daemon never leaves a stale pidfile that confuses discovery or makes a port look "taken".
  * Returns the ports reclaimed. `home` and `pidAlive` are injectable for testing (default to the real
- * ~/.iris and the process.kill(pid,0) liveness probe).
+ * ~/.reticle and the process.kill(pid,0) liveness probe).
  */
 export function reclaimStaleDaemons(
-  home: string = IRIS_HOME,
+  home: string = RETICLE_HOME,
   pidAlive: (pid: number) => boolean = isAlive,
 ): number[] {
   const reclaimed: number[] = [];
@@ -88,7 +88,7 @@ export function reclaimStaleDaemons(
   try {
     files = readdirSync(home);
   } catch {
-    return reclaimed; // no ~/.iris yet → nothing to reclaim
+    return reclaimed; // no ~/.reticle yet → nothing to reclaim
   }
   for (const file of files) {
     const match = /^daemon-(\d+)\.pid$/.exec(file);
@@ -114,7 +114,7 @@ export function reclaimStaleDaemons(
 }
 
 /**
- * Spawn the iris daemon as a detached background process, redirecting output to the log file.
+ * Spawn the reticle daemon as a detached background process, redirecting output to the log file.
  * Writes the PID file from the parent before returning so callers can call isRunning()
  * immediately without a race window.
  */
@@ -124,7 +124,7 @@ export function spawnDaemon(
   args: string[],
   port: number,
 ): void {
-  mkdirSync(IRIS_HOME, { recursive: true });
+  mkdirSync(RETICLE_HOME, { recursive: true });
   const fd = openSync(logPath(port), 'a');
   const child = spawn(nodeExec, [scriptPath, ...args], {
     detached: true,

@@ -2,17 +2,17 @@ import { describe, it, expect } from 'vitest';
 import type { WebSocket } from 'ws';
 import {
   HumanControlKind,
-  IRIS_PROTOCOL_VERSION,
+  RETICLE_PROTOCOL_VERSION,
   MessageKind,
   SessionState,
   type HelloMessage,
-} from '@syrin/iris-protocol';
+} from '@reticle/protocol';
 import { Session } from './session.js';
 import { buildControlEnvelope } from './control-envelope.js';
 
 const HELLO: HelloMessage = {
   kind: MessageKind.HELLO,
-  protocolVersion: IRIS_PROTOCOL_VERSION,
+  protocolVersion: RETICLE_PROTOCOL_VERSION,
   sessionId: 'demo',
   url: 'http://localhost/',
   title: 'Demo',

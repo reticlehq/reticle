@@ -2,7 +2,7 @@
  * On-disk artifact constants: the project history, flow files, replay/drift status, the recorder
  * lifecycle, heal outcomes, and the structured-annotation vocabulary. Split out of constants.ts so
  * each file stays one cohesive unit under the size cap; re-exported from constants.ts (and so from
- * the package index) — every existing `@syrin/iris-protocol` import is unchanged.
+ * the package index) — every existing `@reticle/protocol` import is unchanged.
  */
 
 /**
@@ -13,18 +13,18 @@ export const PROJECT_FILE_VERSION = 1;
 /**
  * Structured outcome when reading project.json fails (never thrown to the agent).
  * Mirrors ContractReadError. NOTE: recordRun() self-heals a MALFORMED file (starts fresh) so a
- * corrupt history never wedges the agent; only the READ path (iris_project) surfaces MALFORMED.
+ * corrupt history never wedges the agent; only the READ path (reticle_project) surfaces MALFORMED.
  */
 export const ProjectReadError = {
-  MISSING: 'project-missing', // no .iris/project.json on disk
+  MISSING: 'project-missing', // no .reticle/project.json on disk
   MALFORMED: 'project-malformed', // present but not valid JSON / fails schema
 } as const;
 export type ProjectReadError = (typeof ProjectReadError)[keyof typeof ProjectReadError];
 
 /** How a run record was produced. */
 export const RunKind = {
-  FLOW_REPLAY: 'flow_replay', // auto-recorded by iris_flow_replay
-  MANUAL: 'manual', // explicitly recorded via iris_run_record
+  FLOW_REPLAY: 'flow_replay', // auto-recorded by reticle_flow_replay
+  MANUAL: 'manual', // explicitly recorded via reticle_run_record
 } as const;
 export type RunKind = (typeof RunKind)[keyof typeof RunKind];
 
@@ -50,7 +50,7 @@ export const PROJECT_RUN_CAP = {
   TOTAL: 200,
 } as const;
 
-/** Schema version stamped onto on-disk flow files (.iris/flows/<name>.json). */
+/** Schema version stamped onto on-disk flow files (.reticle/flows/<name>.json). */
 export const FLOW_FILE_VERSION = 1;
 
 /** How a flow step is anchored to the live DOM at replay time (semantic, never a volatile ref). */
@@ -144,7 +144,7 @@ export const RecordedSaveError = {
 export type RecordedSaveError = (typeof RecordedSaveError)[keyof typeof RecordedSaveError];
 
 /**
- * Outcome of iris_flow_heal (distinct from ReplayStatus — adds heal verbs).
+ * Outcome of reticle_flow_heal (distinct from ReplayStatus — adds heal verbs).
  * Rebinds testid anchors only (role/name/signal re-anchoring is future). A confident nearest-match
  * is required before any disk write — the "never silently rewrite" invariant.
  */

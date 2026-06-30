@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { FLOW_FILE_VERSION, AnchorKind } from '@syrin/iris-protocol';
-import type { FlowFile, FlowStep, FlowExpect } from '@syrin/iris-protocol';
-import { IrisTool } from '../tools/tool-names.js';
+import { FLOW_FILE_VERSION, AnchorKind } from '@reticle/protocol';
+import type { FlowFile, FlowStep, FlowExpect } from '@reticle/protocol';
+import { ReticleTool } from '../tools/tool-names.js';
 import { classifyFlowAssertions, FlowAssertionGrade } from './flow-classify.js';
 
 function step(expect?: FlowExpect): FlowStep {
-  const s: FlowStep = { tool: IrisTool.ACT, anchor: { kind: AnchorKind.TESTID, value: 'x' } };
+  const s: FlowStep = { tool: ReticleTool.ACT, anchor: { kind: AnchorKind.TESTID, value: 'x' } };
   if (expect !== undefined) s.expect = expect;
   return s;
 }
@@ -63,7 +63,7 @@ describe('classifyFlowAssertions', () => {
 
   it('counts expects on act_sequence sub-steps', () => {
     const seq: FlowStep = {
-      tool: IrisTool.ACT_SEQUENCE,
+      tool: ReticleTool.ACT_SEQUENCE,
       anchor: { kind: AnchorKind.TESTID, value: 'x' },
       steps: [step(), step({ signal: 'saved' })],
     };

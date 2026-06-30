@@ -14,7 +14,7 @@ describe('FlowFileSchema', () => {
       createdAt: 1234,
       steps: [
         {
-          tool: 'iris_act',
+          tool: 'reticle_act',
           anchor: { kind: AnchorKind.TESTID, value: 'new-drop' },
           action: ActionType.CLICK,
           args: {},
@@ -32,7 +32,7 @@ describe('FlowFileSchema', () => {
       createdAt: 1234,
       steps: [
         {
-          tool: 'iris_act',
+          tool: 'reticle_act',
           anchor: {
             kind: AnchorKind.COMPONENT,
             component: 'NewDeployButton',
@@ -53,7 +53,7 @@ describe('FlowFileSchema', () => {
       createdAt: 1234,
       steps: [
         {
-          tool: 'iris_act',
+          tool: 'reticle_act',
           anchor: { kind: AnchorKind.TESTID, value: 'new-deploy' },
           action: ActionType.CLICK,
           args: {},
@@ -82,7 +82,7 @@ describe('RecordedFlowSchema (in-page recording payload)', () => {
         createdAt: 1234,
         steps: [
           {
-            tool: 'iris_act',
+            tool: 'reticle_act',
             anchor: { kind: AnchorKind.TESTID, value: 'save' },
             action: ActionType.CLICK,
             args: {},
@@ -106,7 +106,7 @@ describe('RecordedFlowSchema (in-page recording payload)', () => {
         version: FLOW_FILE_VERSION,
         name: 'x',
         createdAt: 0,
-        steps: [{ tool: 'iris_act', anchor: { kind: 'ref', value: 'e34' }, args: {} }],
+        steps: [{ tool: 'reticle_act', anchor: { kind: 'ref', value: 'e34' }, args: {} }],
       },
     };
     expect(RecordedFlowSchema.safeParse(bad).success).toBe(false);

@@ -1,4 +1,4 @@
-import { UNSCRIPTABLE_TAB_RECOMMENDATION } from '@syrin/iris-protocol';
+import { UNSCRIPTABLE_TAB_RECOMMENDATION } from '@reticle/protocol';
 
 /**
  * The session flags the recommendation is derived from. All already exist on every

@@ -5,16 +5,16 @@
 // The action ships the top deployment (row 4000). A working handler sets the STORE's
 // deployments[0].status to 'live'. The flow's success-state asserts that store value via the `state`
 // predicate. We assert deployments[0] (index 0) because it survives the transport's collection cap —
-// a known limitation of server-side path selection on a huge store (see iris-state-path-scoping task).
+// a known limitation of server-side path selection on a huge store (see reticle-state-path-scoping task).
 //
 // Method (mirrors replay-detect-consequence, swapping the SIGNAL oracle for a STATE oracle):
 //   1. record login + nav + open the row menu + Ship, annotate success-state = { statePath, store, equals }
 //   2. baseline replay on the healthy app -> ok (ship sets the store status to 'live')
-//   3. re-navigate with ?iris-break-click=ship-<id> (handler dead, element still present)
+//   3. re-navigate with ?reticle-break-click=ship-<id> (handler dead, element still present)
 //   4. replay -> steps still resolve (NO testid drift), but the store status never changes -> the
 //      state oracle fails -> status error. A presence-only test passes this green; store-truth does not.
 import { writeFileSync } from 'node:fs';
-import { IrisAdapter } from './adapters.mjs';
+import { ReticleAdapter } from './adapters.mjs';
 import { measure } from './tokenizer.mjs';
 
 const URL = process.env.BENCH_URL ?? 'http://localhost:4312/';
@@ -28,7 +28,7 @@ const FLOWS = [
 ];
 
 async function replayOnce(a, flow) {
-  const rep = await a.c.callTool('iris_flow_replay', { flowName: flow.name });
+  const rep = await a.c.callTool('reticle_flow_replay', { flowName: flow.name });
   const text = rep.text || '';
   let obj = {};
   try {
@@ -50,10 +50,10 @@ async function replayOnce(a, flow) {
 }
 
 async function detectFor(flow) {
-  const a = new IrisAdapter(URL);
+  const a = new ReticleAdapter(URL);
   await a.start();
   try {
-    await a.c.callTool('iris_record_start', { recordingName: flow.name });
+    await a.c.callTool('reticle_record_start', { recordingName: flow.name });
     await a.login();
     await a.gotoView('deployments');
     await sleep(300);
@@ -62,25 +62,25 @@ async function detectFor(flow) {
     await a.clickTestid(`ship-${flow.rowId}`);
     await sleep(400);
     // The golden end-condition is STORE TRUTH: the shipped deployment's status in the store.
-    await a.c.callTool('iris_annotate', {
+    await a.c.callTool('reticle_annotate', {
       flow: flow.name,
       kind: 'success-state',
       store: 'app',
       statePath: flow.statePath,
       equals: flow.equals,
     });
-    await a.c.callTool('iris_record_stop', { recordingName: flow.name });
-    const saved = await a.c.callTool('iris_flow_save', { flowName: flow.name });
+    await a.c.callTool('reticle_record_stop', { recordingName: flow.name });
+    const saved = await a.c.callTool('reticle_flow_save', { flowName: flow.name });
     const savedObj = JSON.parse(saved.text || '{}');
 
     // baseline: healthy app — the click logs the request, the store holds the status
-    await a.c.callTool('iris_refresh', { hard: true });
+    await a.c.callTool('reticle_refresh', { hard: true });
     await sleep(1500);
     const baseline = await replayOnce(a, flow);
 
     // regression: ship handler dead, element still present → the store status never changes
-    const brokenUrl = `${URL}${URL.includes('?') ? '&' : '?'}iris-break-click=ship-${flow.rowId}`;
-    await a.c.callTool('iris_navigate', { url: brokenUrl });
+    const brokenUrl = `${URL}${URL.includes('?') ? '&' : '?'}reticle-break-click=ship-${flow.rowId}`;
+    await a.c.callTool('reticle_navigate', { url: brokenUrl });
     await sleep(1800);
     const regressed = await replayOnce(a, flow);
 
@@ -131,7 +131,7 @@ const summary = {
   layer: 'C-state (store-truth oracle catches a dead handler via the `state` predicate)',
   detection_rate: `${detectedCount}/${rows.length}`,
   per_run_when_caught: {
-    iris_replay_mean_tokens: meanTokens,
+    reticle_replay_mean_tokens: meanTokens,
     playwright_mcp_redrive_tokens: LLM_REDRIVE.playwright_mcp,
     chrome_devtools_mcp_redrive_tokens: LLM_REDRIVE.chrome_devtools_mcp,
   },

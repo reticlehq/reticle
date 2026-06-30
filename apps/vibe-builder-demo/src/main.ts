@@ -1,13 +1,13 @@
 /**
  * The instrumented frontend of the "generated" Expense Tracker. This is the one-time integration an
- * AI app-builder adds to its scaffold: import the Iris SDK, expose the app store, and connect to the
- * local bridge in dev. Everything below the `connectIris()` call is ordinary app code.
+ * AI app-builder adds to its scaffold: import the Reticle SDK, expose the app store, and connect to the
+ * local bridge in dev. Everything below the `connectReticle()` call is ordinary app code.
  *
  * Bug class is read from `?bug=` and forwarded to the API as `x-bug` so the QA agent can exercise a
  * specific silent-failure class. Client-side bug classes (double-submit, wrong-total, console-error)
  * are applied here; server-side ones live in vite.config.ts.
  */
-import { iris, registerStore, registerCapabilities } from '@syrin/iris-browser';
+import { reticle, registerStore, registerCapabilities } from '@reticle/browser';
 
 interface Expense {
   id: number;
@@ -18,7 +18,7 @@ interface Expense {
 
 const BUG = new URLSearchParams(location.search).get('bug') ?? 'none';
 
-// The live app store Iris reads via iris_state — the reliable "program truth" layer that pixels miss.
+// The live app store Reticle reads via reticle_state — the reliable "program truth" layer that pixels miss.
 const store = {
   expenses: [] as Expense[],
   get total(): number {
@@ -26,15 +26,15 @@ const store = {
   },
 };
 
-async function connectIris(): Promise<void> {
+async function connectReticle(): Promise<void> {
   registerStore('app', () => ({ expenses: store.expenses, total: store.total }));
   registerCapabilities({
     testids: ['amount', 'category', 'note', 'add', 'err', 'total', 'list', 'del'],
     stores: ['app'],
   });
   // Ask the preview where its local bridge lives, then connect (dev-only).
-  const cfg = (await (await fetch('/api/iris-config')).json()) as { bridgePort: number };
-  iris.connect({ url: `ws://localhost:${String(cfg.bridgePort)}/iris`, session: 'preview' });
+  const cfg = (await (await fetch('/api/reticle-config')).json()) as { bridgePort: number };
+  reticle.connect({ url: `ws://localhost:${String(cfg.bridgePort)}/reticle`, session: 'preview' });
 }
 
 const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
@@ -99,9 +99,9 @@ function wire(): void {
   });
 }
 
-// Only connect to the bridge when the QA harness drives this page (?iris=1). A plain preview (e.g.
+// Only connect to the bridge when the QA harness drives this page (?reticle=1). A plain preview (e.g.
 // embedded in the builder UI's iframe) stays a pure, uninstrumented view — so it never races the
 // harness's own browser for the session, and never spams connection attempts when no bridge is up.
-if (new URLSearchParams(location.search).get('iris') === '1') void connectIris();
+if (new URLSearchParams(location.search).get('reticle') === '1') void connectReticle();
 wire();
 void load();

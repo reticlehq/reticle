@@ -1,6 +1,6 @@
 /**
  * Grade a single assertion predicate as a CONSEQUENCE or a mere PRESENCE check — the same distinction
- * classifyFlowAssertions applies to saved flows, now applied to ad-hoc iris_assert calls.
+ * classifyFlowAssertions applies to saved flows, now applied to ad-hoc reticle_assert calls.
  *
  * Why (grounded, same sources as flow-classify): a test that only checks an element is present is
  * weak — a locator healed to the wrong element, or a stale render, can satisfy it while the feature

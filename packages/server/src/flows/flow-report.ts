@@ -3,7 +3,7 @@ import {
   type FlowFile,
   type FlowReplayResult,
   type FlowStepResult,
-} from '@syrin/iris-protocol';
+} from '@reticle/protocol';
 import { classifyFlowAssertions } from './flow-classify.js';
 
 /**

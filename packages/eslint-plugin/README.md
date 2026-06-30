@@ -1,11 +1,11 @@
-# @syrin/iris-eslint-plugin
+# @reticle/eslint-plugin
 
-Keeps the Iris **signal layer self-enforcing**. When your store mutates user-visible state, an `iris.signal(...)` should fire so an agent can assert on the change off-DOM. This plugin makes "state changed ⇒ signal fired" a lint rule instead of a convention that rots. It pairs with the runtime `commitAndSignal(mutate, signal, data)` helper from `@syrin/iris-browser`.
+Keeps the Reticle **signal layer self-enforcing**. When your store mutates user-visible state, an `reticle.signal(...)` should fire so an agent can assert on the change off-DOM. This plugin makes "state changed ⇒ signal fired" a lint rule instead of a convention that rots. It pairs with the runtime `commitAndSignal(mutate, signal, data)` helper from `@reticle/browser`.
 
 ## Install
 
 ```sh
-pnpm add -D @syrin/iris-eslint-plugin
+pnpm add -D @reticle/eslint-plugin
 ```
 
 Peer dependency: `eslint >= 9` (flat config).
@@ -14,17 +14,17 @@ Peer dependency: `eslint >= 9` (flat config).
 
 ```js
 // eslint.config.mjs
-import iris from '@syrin/iris-eslint-plugin';
+import reticle from '@reticle/eslint-plugin';
 
 export default [
   {
-    plugins: { iris },
+    plugins: { reticle },
     rules: {
-      'iris/require-signal-on-mutation': [
+      'reticle/require-signal-on-mutation': [
         'error',
         {
           mutators: ['set', 'reorderSections', 'addSection'],
-          signalCallee: 'irisSignal',
+          signalCallee: 'reticleSignal',
         },
       ],
     },
@@ -35,16 +35,16 @@ export default [
 Shortcut: enable the bundled `recommended` config (turns the rule on at `warn` with no-op defaults until you configure `mutators`):
 
 ```js
-import iris from '@syrin/iris-eslint-plugin';
+import reticle from '@reticle/eslint-plugin';
 
-export default [iris.configs.recommended];
+export default [reticle.configs.recommended];
 ```
 
 ## Rule: `require-signal-on-mutation`
 
 Flags a function (declaration, expression, or arrow) that calls a configured **mutator** but never calls the configured **signal callee** anywhere in that **same** function body.
 
-Report message: `store mutation without a mapped Iris signal`.
+Report message: `store mutation without a mapped Reticle signal`.
 
 ### Options
 
@@ -53,7 +53,7 @@ Report message: `store mutation without a mapped Iris signal`.
 | Option | Type | Default | Meaning |
 | --- | --- | --- | --- |
 | `mutators` | `string[]` | `[]` | Callee names that mutate user-visible state. |
-| `signalCallee` | `string \| string[]` | `['irisSignal', 'signal']` | Callee name(s) that count as firing an Iris signal. |
+| `signalCallee` | `string \| string[]` | `['reticleSignal', 'signal']` | Callee name(s) that count as firing an Reticle signal. |
 
 With no options, `mutators` is empty, so the rule is a safe **no-op** (it never fires and never crashes). Configure `mutators` to switch it on.
 
@@ -76,15 +76,15 @@ The callee is matched by **name**, ignoring the object:
 // ✅ valid — mutation + signal in the same function
 function commit() {
   set(next);
-  irisSignal('sections:reordered');
+  reticleSignal('sections:reordered');
 }
 
 // ❌ invalid — mutation with no mapped signal
 function commit() {
-  store.set(next); // store mutation without a mapped Iris signal
+  store.set(next); // store mutation without a mapped Reticle signal
 }
 ```
 
 ## How it fits the workflow
 
-The runtime side advertises signals via `registerCapabilities({ signals: [...] })` (G5) and fires them with `iris.signal(name, data)`. P5b centralizes that in a Zustand `signalMap` / `commitAndSignal` pair. This lint rule is the **static** counterpart that guards those pairs so the signal map can't silently fall behind the store.
+The runtime side advertises signals via `registerCapabilities({ signals: [...] })` (G5) and fires them with `reticle.signal(name, data)`. P5b centralizes that in a Zustand `signalMap` / `commitAndSignal` pair. This lint rule is the **static** counterpart that guards those pairs so the signal map can't silently fall behind the store.

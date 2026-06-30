@@ -1,4 +1,4 @@
-import { SESSION_LIFECYCLE } from '@syrin/iris-protocol';
+import { SESSION_LIFECYCLE } from '@reticle/protocol';
 import { log } from './log.js';
 
 export interface IdleShutdownOptions {
@@ -15,8 +15,8 @@ export interface IdleShutdownOptions {
 }
 
 /**
- * Self-terminates an idle daemon so Iris never lingers eating a user's resources (the daemon process,
- * any headless Chromium the pool launched, and the bound port) after the editor closes. The `iris mcp`
+ * Self-terminates an idle daemon so Reticle never lingers eating a user's resources (the daemon process,
+ * any headless Chromium the pool launched, and the bound port) after the editor closes. The `reticle mcp`
  * proxy spawns the daemon DETACHED so it survives between turns — which means nothing else will ever
  * stop it; this watcher is that missing stop. Idle = `isIdle()` true continuously for `graceMs` (long
  * enough to ride out brief agent reconnects between turns). On fire it calls `onShutdown` exactly once.
@@ -51,7 +51,7 @@ export class IdleShutdown {
     this.#idleSince ??= now;
     if (now - this.#idleSince >= this.#graceMs) {
       this.#fired = true;
-      log('iris_daemon_idle_shutdown', { idleMs: now - this.#idleSince });
+      log('reticle_daemon_idle_shutdown', { idleMs: now - this.#idleSince });
       this.#onShutdown();
     }
   }
@@ -70,7 +70,7 @@ export class IdleShutdown {
 }
 
 /**
- * Resolve the idle-shutdown grace from `IRIS_IDLE_SHUTDOWN_MS`: a non-negative integer of milliseconds,
+ * Resolve the idle-shutdown grace from `RETICLE_IDLE_SHUTDOWN_MS`: a non-negative integer of milliseconds,
  * `0` to disable. Anything missing/invalid falls back to the default. Pure.
  */
 export function resolveIdleShutdownMs(raw: string | undefined): number {

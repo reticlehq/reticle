@@ -6,8 +6,8 @@ import {
   ReplayStatus,
   type FlowFile,
   type FlowReplayResult,
-} from '@syrin/iris-protocol';
-import { IrisTool } from '../tools/tool-names.js';
+} from '@reticle/protocol';
+import { ReticleTool } from '../tools/tool-names.js';
 import { buildDecision, buildSuiteVerdict } from './decision.js';
 
 function flow(partial: Partial<FlowFile> = {}): FlowFile {
@@ -19,7 +19,7 @@ describe('buildDecision — the autonomy envelope', () => {
     const result: FlowReplayResult = {
       name: 'ship-deploy',
       status: ReplayStatus.OK,
-      steps: [{ step: 0, tool: IrisTool.ACT, anchor: 'new-deploy', ok: true }],
+      steps: [{ step: 0, tool: ReticleTool.ACT, anchor: 'new-deploy', ok: true }],
     };
     const d = buildDecision(result, flow({ success: { signal: 'deploy:shipped' } }));
     expect(d.verdict).toBe('pass');
@@ -30,7 +30,7 @@ describe('buildDecision — the autonomy envelope', () => {
     const result: FlowReplayResult = {
       name: 'ship-deploy',
       status: ReplayStatus.OK,
-      steps: [{ step: 0, tool: IrisTool.ACT, anchor: 'new-deploy', ok: true }],
+      steps: [{ step: 0, tool: ReticleTool.ACT, anchor: 'new-deploy', ok: true }],
     };
     const d = buildDecision(
       result,
@@ -44,7 +44,7 @@ describe('buildDecision — the autonomy envelope', () => {
     const result: FlowReplayResult = {
       name: 'weak',
       status: ReplayStatus.OK,
-      steps: [{ step: 0, tool: IrisTool.ACT, anchor: 'btn', ok: true }],
+      steps: [{ step: 0, tool: ReticleTool.ACT, anchor: 'btn', ok: true }],
     };
     const d = buildDecision(result, flow());
     expect(d.verdict).toBe('pass');
@@ -58,7 +58,7 @@ describe('buildDecision — the autonomy envelope', () => {
       steps: [
         {
           step: 0,
-          tool: IrisTool.ACT,
+          tool: ReticleTool.ACT,
           anchor: 'NewDeployButton@Deployments.tsx:107',
           ok: false,
           drift: {
@@ -73,7 +73,7 @@ describe('buildDecision — the autonomy envelope', () => {
     const f = flow({
       steps: [
         {
-          tool: IrisTool.ACT,
+          tool: ReticleTool.ACT,
           anchor: {
             kind: AnchorKind.COMPONENT,
             component: 'NewDeployButton',
@@ -97,7 +97,7 @@ describe('buildDecision — the autonomy envelope', () => {
       steps: [
         {
           step: 0,
-          tool: IrisTool.ACT,
+          tool: ReticleTool.ACT,
           anchor: 'submit',
           ok: false,
           drift: {
@@ -119,7 +119,7 @@ describe('buildDecision — the autonomy envelope', () => {
       name: 'verify-500',
       status: ReplayStatus.ERROR,
       steps: [
-        { step: 0, tool: IrisTool.ACT, anchor: 'fault-500', ok: true },
+        { step: 0, tool: ReticleTool.ACT, anchor: 'fault-500', ok: true },
         {
           step: 1,
           tool: 'success',
@@ -141,7 +141,7 @@ describe('buildSuiteVerdict — the autonomous regression check', () => {
   const ok = (name: string): FlowReplayResult => ({
     name,
     status: ReplayStatus.OK,
-    steps: [{ step: 0, tool: IrisTool.ACT, anchor: 'x', ok: true }],
+    steps: [{ step: 0, tool: ReticleTool.ACT, anchor: 'x', ok: true }],
   });
   const drifted = (name: string): FlowReplayResult => ({
     name,
@@ -149,7 +149,7 @@ describe('buildSuiteVerdict — the autonomous regression check', () => {
     steps: [
       {
         step: 0,
-        tool: IrisTool.ACT,
+        tool: ReticleTool.ACT,
         anchor: 'gone',
         ok: false,
         drift: {

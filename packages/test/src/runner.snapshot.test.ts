@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { runSpecs } from './runner.js';
-import { irisTest } from './spec.js';
+import { reticleTest } from './spec.js';
 import { clearRegistry, getRegistered } from './registry.js';
-import type { ToolInvoker } from '@syrin/iris-server';
+import type { ToolInvoker } from '@reticle/server';
 import type { RunnerOptions, SpecContext } from './types.js';
 
 afterEach(() => clearRegistry());
@@ -16,15 +16,15 @@ function baseOptions(): RunnerOptions {
 
 describe('runSpecs', () => {
   it('defaults to the module registry snapshot when specs omitted', async () => {
-    irisTest('first', () => undefined);
-    irisTest('second', () => undefined);
+    reticleTest('first', () => undefined);
+    reticleTest('second', () => undefined);
     const { results } = await runSpecs(baseOptions());
     expect(results.map((r) => r.name)).toEqual(['first', 'second']);
   });
 
   it('a spec that registers another spec mid-run does not mutate the active run', async () => {
-    irisTest('outer', () => {
-      irisTest('late', () => undefined);
+    reticleTest('outer', () => {
+      reticleTest('late', () => undefined);
     });
     const { results } = await runSpecs(baseOptions());
     expect(results.map((r) => r.name)).toEqual(['outer']);

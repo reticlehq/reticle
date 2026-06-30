@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import { runSpecs, runOne } from './runner.js';
-import { IrisSkip } from './skip.js';
+import { ReticleSkip } from './skip.js';
 import { TestStatus } from './constants.js';
-import type { ToolInvoker } from '@syrin/iris-server';
-import type { IrisSpec, RunnerOptions, SpecContext } from './types.js';
+import type { ToolInvoker } from '@reticle/server';
+import type { ReticleSpec, RunnerOptions, SpecContext } from './types.js';
 
 /** A fake invoker that records every call and returns canned results keyed by tool name. */
 function fakeInvoker(canned: Record<string, unknown> = {}): {
@@ -42,7 +42,7 @@ function options(overrides: Partial<RunnerOptions>): RunnerOptions {
 
 describe('runSpecs', () => {
   it('a passing spec reports status pass', async () => {
-    const spec: IrisSpec = { name: 'ok', fn: () => undefined };
+    const spec: ReticleSpec = { name: 'ok', fn: () => undefined };
     const { results } = await runSpecs(
       options({ specs: [spec], now: scriptedClock([1000, 1042]) }),
     );
@@ -54,7 +54,7 @@ describe('runSpecs', () => {
 
   it('runs specs in registration order', async () => {
     const order: string[] = [];
-    const mk = (n: string): IrisSpec => ({
+    const mk = (n: string): ReticleSpec => ({
       name: n,
       fn: () => {
         order.push(n);
@@ -67,7 +67,7 @@ describe('runSpecs', () => {
 
   it('durationMs comes from the injected clock, never Date.now', async () => {
     const dateSpy = vi.spyOn(Date, 'now');
-    const spec: IrisSpec = { name: 'd', fn: () => undefined };
+    const spec: ReticleSpec = { name: 'd', fn: () => undefined };
     const { results } = await runSpecs(options({ specs: [spec], now: scriptedClock([100, 350]) }));
     expect(results[0]?.durationMs).toBe(250);
     expect(dateSpy).not.toHaveBeenCalled();
@@ -75,22 +75,22 @@ describe('runSpecs', () => {
   });
 
   it('each spec gets a fresh t built from the invoker', async () => {
-    const { invoke, calls } = fakeInvoker({ iris_act: { inputMode: 'real' } });
-    const mk = (n: string): IrisSpec => ({
+    const { invoke, calls } = fakeInvoker({ reticle_act: { inputMode: 'real' } });
+    const mk = (n: string): ReticleSpec => ({
       name: n,
       fn: async (t) => {
-        await t.invoke('iris_act', { n });
+        await t.invoke('reticle_act', { n });
       },
     });
     await runSpecs(options({ specs: [mk('a'), mk('b')], invoke }));
     expect(calls).toEqual([
-      { tool: 'iris_act', args: { n: 'a' } },
-      { tool: 'iris_act', args: { n: 'b' } },
+      { tool: 'reticle_act', args: { n: 'a' } },
+      { tool: 'reticle_act', args: { n: 'b' } },
     ]);
   });
 
   it('a throwing spec reports status fail with the error message', async () => {
-    const spec: IrisSpec = {
+    const spec: ReticleSpec = {
       name: 'boom',
       fn: () => {
         throw new Error('boom');
@@ -103,14 +103,14 @@ describe('runSpecs', () => {
   });
 
   it('a spec rejecting a promise reports fail', async () => {
-    const spec: IrisSpec = { name: 'async', fn: () => Promise.reject(new Error('async boom')) };
+    const spec: ReticleSpec = { name: 'async', fn: () => Promise.reject(new Error('async boom')) };
     const { results } = await runSpecs(options({ specs: [spec] }));
     expect(results[0]?.status).toBe(TestStatus.FAIL);
     expect(results[0]?.error).toBe('async boom');
   });
 
   it('a non-Error throw is stringified into error', async () => {
-    const spec: IrisSpec = {
+    const spec: ReticleSpec = {
       name: 'plain',
       fn: () => {
         // eslint-disable-next-line @typescript-eslint/only-throw-error -- deliberately a non-Error throw
@@ -123,7 +123,7 @@ describe('runSpecs', () => {
   });
 
   it('a failing assertion reports fail with the failure reason in error', async () => {
-    const spec: IrisSpec = {
+    const spec: ReticleSpec = {
       name: 'assert',
       fn: () => {
         throw new Error('no signal');
@@ -142,10 +142,10 @@ describe('runSpecs', () => {
   });
 
   it('a spec that skips reports status skip with reason', async () => {
-    const spec: IrisSpec = {
+    const spec: ReticleSpec = {
       name: 'skipme',
       fn: () => {
-        throw new IrisSkip('real input not active');
+        throw new ReticleSkip('real input not active');
       },
     };
     const { results } = await runSpecs(options({ specs: [spec] }));
@@ -155,7 +155,7 @@ describe('runSpecs', () => {
   });
 
   it('one spec failing does not abort the remaining specs', async () => {
-    const mk = (n: string, throws: boolean): IrisSpec => ({
+    const mk = (n: string, throws: boolean): ReticleSpec => ({
       name: n,
       fn: () => {
         if (throws) throw new Error(n);
@@ -172,7 +172,7 @@ describe('runSpecs', () => {
   });
 
   it('duplicate spec names are kept, not collapsed', async () => {
-    const mk = (): IrisSpec => ({ name: 'x', fn: () => undefined });
+    const mk = (): ReticleSpec => ({ name: 'x', fn: () => undefined });
     const { results } = await runSpecs(options({ specs: [mk(), mk()] }));
     expect(results).toHaveLength(2);
     expect(results.every((r) => r.name === 'x')).toBe(true);

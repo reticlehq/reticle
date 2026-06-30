@@ -1,7 +1,7 @@
 {
-  "name": "@syrin/iris-test",
+  "name": "@reticle/test",
   "version": "1.2.0",
-  "description": "Iris test runner: irisTest spec registry + a runner that drives Iris tools without MCP/stdio.",
+  "description": "Reticle test runner: reticleTest spec registry + a runner that drives Reticle tools without MCP/stdio.",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -19,8 +19,8 @@
     "prepack": "tsc -b && find dist -name \"*.test.*\" -delete"
   },
   "dependencies": {
-    "@syrin/iris-protocol": "workspace:*",
-    "@syrin/iris-server": "workspace:*"
+    "@reticle/protocol": "workspace:*",
+    "@reticle/server": "workspace:*"
   },
   "peerDependencies": {
     "vitest": "^3.2.6"
@@ -31,14 +31,14 @@
     }
   },
   "license": "SEE LICENSE IN LICENSE",
-  "author": "Iris contributors",
+  "author": "Reticle contributors",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/syrin-labs/iris.git",
+    "url": "git+https://github.com/reticlehq/reticle.git",
     "directory": "packages/test"
   },
-  "homepage": "https://github.com/syrin-labs/iris#readme",
-  "bugs": "https://github.com/syrin-labs/iris/issues",
+  "homepage": "https://github.com/reticlehq/reticle#readme",
+  "bugs": "https://github.com/reticlehq/reticle/issues",
   "files": [
     "dist",
     "README.md"

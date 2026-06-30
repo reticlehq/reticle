@@ -1,10 +1,10 @@
 /**
- * Observe / wait / assert tools — iris_observe, iris_wait_for, iris_assert, iris_network,
- * iris_console, iris_animations. Split out of tools.ts; assembled back via ...OBSERVE_TOOLS.
+ * Observe / wait / assert tools — reticle_observe, reticle_wait_for, reticle_assert, reticle_network,
+ * reticle_console, reticle_animations. Split out of tools.ts; assembled back via ...OBSERVE_TOOLS.
  */
 import { z } from 'zod';
-import { IrisCommand } from '@syrin/iris-protocol';
-import { IrisTool } from './tool-names.js';
+import { ReticleCommand } from '@reticle/protocol';
+import { ReticleTool } from './tool-names.js';
 import { buildReactionReport } from '../events/reaction.js';
 import { evaluatePredicate, waitForPredicate, PredicateSchema } from '../events/predicate.js';
 import {
@@ -26,7 +26,7 @@ import { type ToolDef, sessionIdShape, commandOrThrow } from './tool-kit.js';
 
 export const OBSERVE_TOOLS: ToolDef[] = [
   {
-    name: IrisTool.OBSERVE,
+    name: ReticleTool.OBSERVE,
     description:
       'Return the timeline of everything the app did in a window (DOM/network/route/console/animation/signal), with a summary. Use after an action. Pass `max_events` to cap the timeline to the most recent N (older events are dropped and counted in cost.droppedOldest). Every result carries a `cost:{events,bytes}` hint so you can self-budget your next call.',
     inputSchema: {
@@ -38,7 +38,7 @@ export const OBSERVE_TOOLS: ToolDef[] = [
         .number()
         .optional()
         .describe(
-          'Cursor from a prior iris_act or iris_observe call. Scopes the event window to exactly that span.',
+          'Cursor from a prior reticle_act or reticle_observe call. Scopes the event window to exactly that span.',
         ),
       filters: z
         .array(z.string())
@@ -108,7 +108,7 @@ export const OBSERVE_TOOLS: ToolDef[] = [
     },
   },
   {
-    name: IrisTool.WAIT_FOR,
+    name: ReticleTool.WAIT_FOR,
     description:
       'Block until a predicate is satisfied (or already true in the recent buffer), else time out. Returns matching evidence or a near-miss diagnosis. By default it only counts events since your last act, so a signal buffered BEFORE the action can never fake a pass; pass `since` (an observe/act cursor) to widen or narrow that window explicitly.',
     inputSchema: {
@@ -119,7 +119,7 @@ export const OBSERVE_TOOLS: ToolDef[] = [
       since: z
         .number()
         .optional()
-        .describe('Cursor from a prior iris_act — scopes the wait to events after that act.'),
+        .describe('Cursor from a prior reticle_act — scopes the wait to events after that act.'),
       ...sessionIdShape,
     },
     outputSchema: {
@@ -141,12 +141,12 @@ export const OBSERVE_TOOLS: ToolDef[] = [
         asNumber(args['timeout_ms']) ?? 4000,
         since,
       );
-      // match iris_assert — wrap with control + session health (throttle matters most while blocking).
+      // match reticle_assert — wrap with control + session health (throttle matters most while blocking).
       return withControl(session, { ...verdict, ...healthEnvelope(session) });
     },
   },
   {
-    name: IrisTool.ASSERT,
+    name: ReticleTool.ASSERT,
     description:
       'Evaluate a predicate (optionally waiting up to timeout_ms). Returns { pass, evidence, failureReason? }. The end of every verify loop. Prefer a { signal } or { net } consequence over { element }/{ text } presence — a passing presence-only assertion returns `advice` because a wrong/healed element can fake it. By default it only counts events since your last act, so a stale buffered signal can never fake a pass; pass `since` (an observe/act cursor) to set the window explicitly.',
     inputSchema: {
@@ -162,7 +162,9 @@ export const OBSERVE_TOOLS: ToolDef[] = [
       since: z
         .number()
         .optional()
-        .describe('Cursor from a prior iris_act — scopes the assertion to events after that act.'),
+        .describe(
+          'Cursor from a prior reticle_act — scopes the assertion to events after that act.',
+        ),
       ...sessionIdShape,
     },
     outputSchema: {
@@ -195,7 +197,7 @@ export const OBSERVE_TOOLS: ToolDef[] = [
     },
   },
   {
-    name: IrisTool.NETWORK,
+    name: ReticleTool.NETWORK,
     description:
       'Filtered list of network calls. Fast path for "did POST /x return 200?". A zero-match filter returns a `hint` { totalInWindow, present[] } of the calls that DID fire, so a miss is diagnosable.',
     inputSchema: {
@@ -203,7 +205,7 @@ export const OBSERVE_TOOLS: ToolDef[] = [
         .number()
         .optional()
         .describe(
-          'Cursor from a prior iris_act — scopes the query to requests fired after that act.',
+          'Cursor from a prior reticle_act — scopes the query to requests fired after that act.',
         ),
       method: z
         .string()
@@ -253,7 +255,7 @@ export const OBSERVE_TOOLS: ToolDef[] = [
     },
   },
   {
-    name: IrisTool.CONSOLE,
+    name: ReticleTool.CONSOLE,
     description:
       'Console/error log. Fast path for "were there any errors during this flow?". When a level filter matches nothing, returns a `hint` { totalInWindow, byLevel } so 0 errors is distinguishable from a silent page.',
     inputSchema: {
@@ -264,7 +266,9 @@ export const OBSERVE_TOOLS: ToolDef[] = [
       since: z
         .number()
         .optional()
-        .describe('Cursor from a prior iris_act — scopes the query to log entries after that act.'),
+        .describe(
+          'Cursor from a prior reticle_act — scopes the query to log entries after that act.',
+        ),
       limit: z
         .number()
         .optional()
@@ -302,13 +306,13 @@ export const OBSERVE_TOOLS: ToolDef[] = [
     },
   },
   {
-    name: IrisTool.ANIMATIONS,
+    name: ReticleTool.ANIMATIONS,
     description: 'Currently running + recently completed animations with targets/timing.',
     inputSchema: { ...sessionIdShape },
     outputSchema: {
       animations: z.array(z.unknown()),
     },
     handler: (deps, args) =>
-      commandOrThrow(deps, asString(args['sessionId']), IrisCommand.ANIMATIONS, {}),
+      commandOrThrow(deps, asString(args['sessionId']), ReticleCommand.ANIMATIONS, {}),
   },
 ];

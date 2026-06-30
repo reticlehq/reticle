@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { IrisCommand, VISUAL_NO_PROVIDER_RECOMMENDATION, VisualReason } from '@syrin/iris-protocol';
-import { IrisTool } from '../tools/tool-names.js';
+import { ReticleCommand, VISUAL_NO_PROVIDER_RECOMMENDATION, VisualReason } from '@reticle/protocol';
+import { ReticleTool } from '../tools/tool-names.js';
 import { asNumber, asRecord, asString } from '../tools/tools-helpers.js';
 import { diffPng, type VisualRect } from './visual-diff.js';
 import { VisualStore } from './visual-store.js';
@@ -11,7 +11,9 @@ const sessionIdShape = {
   sessionId: z
     .string()
     .optional()
-    .describe('Active session ID from iris_sessions. Omit when only one browser session is open.'),
+    .describe(
+      'Active session ID from reticle_sessions. Omit when only one browser session is open.',
+    ),
 };
 const rectShape = z.object({
   x: z.number(),
@@ -65,7 +67,7 @@ async function buildOpts(
   const ref = asString(args['ref']);
   if (ref !== undefined) {
     const session = deps.sessions.resolve(sessionId);
-    const res = await session.command(IrisCommand.INSPECT, { ref });
+    const res = await session.command(ReticleCommand.INSPECT, { ref });
     const box = res.ok ? asBox(res.result) : undefined;
     if (box !== undefined) return { clip: box };
   }
@@ -83,21 +85,21 @@ function rectsFrom(value: unknown): VisualRect[] | undefined {
 }
 
 /**
- * The opt-in pixel layer. Both tools require a DRIVEN browser (iris drive /
- * IRIS_CDP_URL) — the always-on SDK ships no screenshotter — and return a structured NO_PROVIDER
+ * The opt-in pixel layer. Both tools require a DRIVEN browser (reticle drive /
+ * RETICLE_CDP_URL) — the always-on SDK ships no screenshotter — and return a structured NO_PROVIDER
  * envelope (with a recommendation) instead of throwing when none is attached. Behavioral checks
  * stay the default; this is the complementary "does it look right" surface, never bundled in.
  */
 export const VISUAL_TOOLS: ToolDef[] = [
   {
-    name: IrisTool.SCREENSHOT,
+    name: ReticleTool.SCREENSHOT,
     description:
-      'Capture a pixel screenshot of the DRIVEN page (needs `iris drive`/IRIS_CDP_URL — the SDK has no screenshotter) and save it as a visual baseline at .iris/visual/<name>.png. { fullPage } for the whole scroll height, { ref } or { clip:{x,y,width,height} } for one element/region. Returns { saved:true, name, path, bytes } or { ok:false, reason } when no driven browser is attached.',
+      'Capture a pixel screenshot of the DRIVEN page (needs `reticle drive`/RETICLE_CDP_URL — the SDK has no screenshotter) and save it as a visual baseline at .reticle/visual/<name>.png. { fullPage } for the whole scroll height, { ref } or { clip:{x,y,width,height} } for one element/region. Returns { saved:true, name, path, bytes } or { ok:false, reason } when no driven browser is attached.',
     inputSchema: {
       name: z
         .string()
         .describe(
-          'Baseline name — saved as .iris/visual/<name>.png. Use the same name in iris_visual_diff to compare.',
+          'Baseline name — saved as .reticle/visual/<name>.png. Use the same name in reticle_visual_diff to compare.',
         ),
       fullPage: z
         .boolean()
@@ -131,20 +133,20 @@ export const VISUAL_TOOLS: ToolDef[] = [
       const png = await provider.screenshot(session.url, await buildOpts(deps, sessionId, args));
       if (png === undefined) return { ok: false, reason: VisualReason.CAPTURE_FAILED };
       const name = asString(args['name']) ?? 'default';
-      const store = new VisualStore(deps.fs, deps.irisRoot);
+      const store = new VisualStore(deps.fs, deps.reticleRoot);
       const path = await store.saveBaseline(name, png);
       return { ok: true, saved: true, name, path, bytes: png.length };
     },
   },
   {
-    name: IrisTool.VISUAL_DIFF,
+    name: ReticleTool.VISUAL_DIFF,
     description:
-      'Perceptually diff the DRIVEN page against a saved visual baseline (see iris_screenshot). { masks:[{x,y,width,height}] } neutralizes volatile regions; { maxRatio } sets the pass tolerance (default 0). Returns { matched, changedPixels, totalPixels, ratio, region?, diffPath, dimensionMismatch } — the overlay diff is written to .iris/visual/<baseline>.diff.png — or { ok:false, reason } (no-provider / baseline-missing).',
+      'Perceptually diff the DRIVEN page against a saved visual baseline (see reticle_screenshot). { masks:[{x,y,width,height}] } neutralizes volatile regions; { maxRatio } sets the pass tolerance (default 0). Returns { matched, changedPixels, totalPixels, ratio, region?, diffPath, dimensionMismatch } — the overlay diff is written to .reticle/visual/<baseline>.diff.png — or { ok:false, reason } (no-provider / baseline-missing).',
     inputSchema: {
       baseline: z
         .string()
         .describe(
-          'Baseline screenshot name (from iris_screenshot). Used to compare with the current screenshot.',
+          'Baseline screenshot name (from reticle_screenshot). Used to compare with the current screenshot.',
         ),
       fullPage: z.boolean().optional(),
       ref: z.string().optional(),
@@ -169,7 +171,7 @@ export const VISUAL_TOOLS: ToolDef[] = [
       const provider = screenshotProvider(deps);
       if (provider === undefined) return noProvider;
       const baseline = asString(args['baseline']) ?? '';
-      const store = new VisualStore(deps.fs, deps.irisRoot);
+      const store = new VisualStore(deps.fs, deps.reticleRoot);
       const baselineBytes = await store.readBaseline(baseline);
       if (baselineBytes === undefined) return { ok: false, reason: VisualReason.BASELINE_MISSING };
 

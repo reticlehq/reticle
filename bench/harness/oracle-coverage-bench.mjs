@@ -1,6 +1,6 @@
 // Oracle-coverage matrix (the honest best-of-both capstone). Combines two measured benches —
 // signal-vs-mock (backend-contract regressions) + visual-regression (presentation/CSS regression) — to
-// show that the two oracle families are COMPLEMENTARY, and that Iris is the only tool carrying BOTH a
+// show that the two oracle families are COMPLEMENTARY, and that Reticle is the only tool carrying BOTH a
 // signal oracle and a visual oracle, so it covers both bug classes while every competitor covers one.
 // Honest by construction: each cell is backed by a real measured result, including where signal LOSES.
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -12,7 +12,7 @@ const vr = JSON.parse(readFileSync('bench/raw/visual-regression-bench.json', 'ut
 const CLASSES = {
   'backend-contract (renders pixel-identical)': {
     // measured: signal-vs-mock — signal catches all, visual/DOM + network-mock catch none
-    app_signal: sm.oracles.iris_signal.caught === sm.oracles.iris_signal.of, // CAUGHT
+    app_signal: sm.oracles.reticle_signal.caught === sm.oracles.reticle_signal.of, // CAUGHT
     visual_diff: sm.oracles.visual_diff.caught > 0, // MISSED (0/4)
     network_mock: sm.oracles.network_mock.caught > 0, // MISSED (0/4)
     llm_pixel_judge: false, // an LLM over screenshots sees identical pixels → MISSED (same as visual)
@@ -28,7 +28,7 @@ const CLASSES = {
 
 // Each tool's available oracle set (from the competitive research + measured capabilities).
 const TOOL_ORACLES = {
-  iris: ['app_signal', 'visual_diff'], // signal + opt-in iris_visual_diff — BOTH
+  reticle: ['app_signal', 'visual_diff'], // signal + opt-in reticle_visual_diff — BOTH
   'agent-browser': ['visual_diff'], // DOM/snapshot only (no state/diff oracle)
   'playwright-mcp': ['visual_diff'], // toHaveScreenshot/DOM
   'chrome-devtools-mcp': ['visual_diff'], // screenshot + DOM
@@ -63,9 +63,9 @@ const out = {
   },
   rows,
   headline:
-    'The two oracle families are COMPLEMENTARY, not competing. Iris is the only tool carrying BOTH (app-signal + opt-in visual diff), so it covers both bug classes; every competitor carries one oracle family and is structurally blind to the other class.',
+    'The two oracle families are COMPLEMENTARY, not competing. Reticle is the only tool carrying BOTH (app-signal + opt-in visual diff), so it covers both bug classes; every competitor carries one oracle family and is structurally blind to the other class.',
   honest_note:
-    'This is NOT "signals beat pixels". For presentation/CSS bugs the signal oracle is blind and visual wins — Iris needs its visual layer there. The defensible claim is best-of-both coverage, honestly scoped.',
+    'This is NOT "signals beat pixels". For presentation/CSS bugs the signal oracle is blind and visual wins — Reticle needs its visual layer there. The defensible claim is best-of-both coverage, honestly scoped.',
 };
 const w = (s, n) => String(s).padEnd(n);
 console.log(

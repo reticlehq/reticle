@@ -8,9 +8,9 @@ import { inject, revert, revertAll } from './inject.mjs';
 
 const URL = 'http://localhost:4312/';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-// Default: all three tools. Set BENCH_TOOLS=iris (comma-separated) to re-measure one tool's column
-// in isolation — the external tools' numbers are fixed, so an Iris-only pass is enough to recompute VE.
-const TOOLS = (process.env['BENCH_TOOLS'] ?? 'playwright,devtools,iris').split(',');
+// Default: all three tools. Set BENCH_TOOLS=reticle (comma-separated) to re-measure one tool's column
+// in isolation — the external tools' numbers are fixed, so an Reticle-only pass is enough to recompute VE.
+const TOOLS = (process.env['BENCH_TOOLS'] ?? 'playwright,devtools,reticle').split(',');
 
 // Each scenario: steps (run before observe), observe kind, grade mode + regex.
 // mode 'present'  -> detected if rx matches evidence.
@@ -193,7 +193,7 @@ async function runRecipe(adapter, steps, observe) {
 }
 
 // Strip volatile tokens so a snapshot diff reflects SEMANTIC structure, not noise.
-// Without this, all three tools embed per-session junk (Iris: session id/timestamps/cost;
+// Without this, all three tools embed per-session junk (Reticle: session id/timestamps/cost;
 // Playwright: a timestamped console-log filename + ref ids; DevTools: uids/msgids) that
 // makes every snapshot byte-unique and produces false "differences".
 function normalize(s) {

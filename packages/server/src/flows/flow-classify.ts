@@ -19,7 +19,7 @@
  * Pure: no IO, no clock.
  */
 
-import type { FlowExpect, FlowFile, FlowStep } from '@syrin/iris-protocol';
+import type { FlowExpect, FlowFile, FlowStep } from '@reticle/protocol';
 
 export const FlowAssertionGrade = {
   /** At least one step (or the success end-condition) asserts a signal/network consequence. */
@@ -53,7 +53,7 @@ export interface FlowAssertionClassification {
 }
 
 const ASSERTION_FREE_WARNING =
-  'This flow performs actions but asserts no observable consequence — it will pass even if the feature is broken. Add a consequence assertion with iris_annotate (assert-signal / assert-net) or a success-state.';
+  'This flow performs actions but asserts no observable consequence — it will pass even if the feature is broken. Add a consequence assertion with reticle_annotate (assert-signal / assert-net) or a success-state.';
 const PRESENCE_ONLY_WARNING =
   'This flow only checks element presence, not an observable consequence (signal/network). A locator healed to the wrong element can still pass it. Add a consequence assertion (assert-signal / assert-net / success-state).';
 const INTENT_WITHOUT_OUTCOME_WARNING =

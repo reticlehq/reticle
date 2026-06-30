@@ -2,7 +2,7 @@
 
 ## Our pledge
 
-We — contributors and maintainers — pledge to make participation in the Iris project a welcoming, respectful, and harassment-free experience for everyone, regardless of age, body size, disability, ethnicity, gender identity and expression, level of experience, nationality, personal appearance, race, religion, or sexual identity and orientation.
+We — contributors and maintainers — pledge to make participation in the Reticle project a welcoming, respectful, and harassment-free experience for everyone, regardless of age, body size, disability, ethnicity, gender identity and expression, level of experience, nationality, personal appearance, race, religion, or sexual identity and orientation.
 
 ## Our standards
 
@@ -28,7 +28,7 @@ This Code of Conduct applies within all project spaces — the repository, issue
 
 ## Enforcement
 
-Instances of unacceptable behavior may be reported to the project maintainers at **hey@syrin.ai**. All reports will be reviewed and investigated promptly and fairly. Maintainers are obligated to respect the privacy and security of the reporter of any incident.
+Instances of unacceptable behavior may be reported to the project maintainers at **hey@reticle.ai**. All reports will be reviewed and investigated promptly and fairly. Maintainers are obligated to respect the privacy and security of the reporter of any incident.
 
 Maintainers who do not follow or enforce the Code of Conduct in good faith may face temporary or permanent repercussions as determined by other members of the project's leadership.
 

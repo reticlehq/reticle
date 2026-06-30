@@ -1,7 +1,7 @@
 /**
- * Global Cursor registration for `iris init`. Cursor has no CLI, but its global MCP config is a
+ * Global Cursor registration for `reticle init`. Cursor has no CLI, but its global MCP config is a
  * small dedicated file (`~/.cursor/mcp.json`) — safe to merge directly (unlike `~/.claude.json`).
- * We add the `iris` server once at this global path so every project picks it up. Unparseable
+ * We add the `reticle` server once at this global path so every project picks it up. Unparseable
  * (jsonc/comment) files bail to manual rather than being rewritten.
  */
 

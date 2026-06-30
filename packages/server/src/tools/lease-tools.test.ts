@@ -4,14 +4,14 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { IRIS_URL_PARAM } from '@syrin/iris-protocol';
+import { RETICLE_URL_PARAM } from '@reticle/protocol';
 import {
   LEASE_TOOLS,
-  appendIrisParams,
+  appendReticleParams,
   cleanNavError,
   waitForLeasedSession,
 } from './lease-tools.js';
-import { IrisTool } from './tool-names.js';
+import { ReticleTool } from './tool-names.js';
 import type { ToolDeps } from './tool-kit.js';
 import type { BrowserPool, Lease } from '../pool/browser-pool.js';
 
@@ -52,27 +52,27 @@ function fakePool(): {
 // immediately (no real polling) in the happy path.
 const baseDeps = { sessions: { get: () => ({ id: 'live' }) } } as unknown as ToolDeps;
 
-describe('appendIrisParams', () => {
+describe('appendReticleParams', () => {
   it('adds the namespaced session (and project) params to a normal url', () => {
-    const out = appendIrisParams('http://localhost:3000/dash', 'lease-1', 'acme');
+    const out = appendReticleParams('http://localhost:3000/dash', 'lease-1', 'acme');
     const u = new URL(out);
-    expect(u.searchParams.get(IRIS_URL_PARAM.SESSION)).toBe('lease-1');
-    expect(u.searchParams.get(IRIS_URL_PARAM.PROJECT)).toBe('acme');
+    expect(u.searchParams.get(RETICLE_URL_PARAM.SESSION)).toBe('lease-1');
+    expect(u.searchParams.get(RETICLE_URL_PARAM.PROJECT)).toBe('acme');
     expect(u.pathname).toBe('/dash');
   });
 
   it('preserves existing query params', () => {
-    const out = appendIrisParams('http://localhost:3000/?tab=2', 'lease-9');
+    const out = appendReticleParams('http://localhost:3000/?tab=2', 'lease-9');
     const u = new URL(out);
     expect(u.searchParams.get('tab')).toBe('2');
-    expect(u.searchParams.get(IRIS_URL_PARAM.SESSION)).toBe('lease-9');
-    expect(u.searchParams.has(IRIS_URL_PARAM.PROJECT)).toBe(false);
+    expect(u.searchParams.get(RETICLE_URL_PARAM.SESSION)).toBe('lease-9');
+    expect(u.searchParams.has(RETICLE_URL_PARAM.PROJECT)).toBe(false);
   });
 });
 
 describe('cleanNavError', () => {
   it('extracts the net:: code from a noisy Playwright goto error (ANSI + call log stripped)', () => {
-    const raw = `page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:5999/?__iris_session=lease-x\nCall log:\n[2m  - navigating[22m`;
+    const raw = `page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:5999/?__reticle_session=lease-x\nCall log:\n[2m  - navigating[22m`;
     expect(cleanNavError(new Error(raw))).toBe('net::ERR_CONNECTION_REFUSED');
   });
 
@@ -89,7 +89,7 @@ describe('cleanNavError', () => {
   });
 });
 
-describe('iris_lease_acquire failure surfaces a clean message', () => {
+describe('reticle_lease_acquire failure surfaces a clean message', () => {
   it('a navigation failure becomes "could not open <url> — is the app running?"', async () => {
     const pool = {
       acquire: () =>
@@ -98,7 +98,7 @@ describe('iris_lease_acquire failure surfaces a clean message', () => {
       queuedCount: () => 0,
     } as unknown as BrowserPool;
     await expect(
-      tool(IrisTool.LEASE_ACQUIRE)({ ...baseDeps, pool }, { url: 'http://localhost:3000/' }),
+      tool(ReticleTool.LEASE_ACQUIRE)({ ...baseDeps, pool }, { url: 'http://localhost:3000/' }),
     ).rejects.toThrow(
       /could not open http:\/\/localhost:3000\/ — is the app running there\? \(net::ERR_CONNECTION_REFUSED\)/,
     );
@@ -124,10 +124,10 @@ describe('waitForLeasedSession', () => {
   });
 });
 
-describe('iris_lease_acquire', () => {
+describe('reticle_lease_acquire', () => {
   it('navigates to the app url with a stamped session and returns it ready', async () => {
     const { pool, acquired } = fakePool();
-    const result = (await tool(IrisTool.LEASE_ACQUIRE)(
+    const result = (await tool(ReticleTool.LEASE_ACQUIRE)(
       { ...baseDeps, pool },
       {
         url: 'http://localhost:3000/dashboard',
@@ -142,28 +142,28 @@ describe('iris_lease_acquire', () => {
 
     // The pool was navigated to the identity-stamped url, correlated to the returned sessionId.
     const navUrl = new URL(acquired[0]?.url ?? '');
-    expect(navUrl.searchParams.get(IRIS_URL_PARAM.SESSION)).toBe(result.sessionId);
-    expect(navUrl.searchParams.get(IRIS_URL_PARAM.PROJECT)).toBe('acme');
+    expect(navUrl.searchParams.get(RETICLE_URL_PARAM.SESSION)).toBe(result.sessionId);
+    expect(navUrl.searchParams.get(RETICLE_URL_PARAM.PROJECT)).toBe('acme');
     expect(acquired[0]?.sessionId).toBe(result.sessionId);
   });
 
   it('throws a clear error when no pool is available', async () => {
     await expect(
-      tool(IrisTool.LEASE_ACQUIRE)(baseDeps, { url: 'http://localhost:3000/' }),
+      tool(ReticleTool.LEASE_ACQUIRE)(baseDeps, { url: 'http://localhost:3000/' }),
     ).rejects.toThrow(/pool unavailable/i);
   });
 
   it('requires a url', async () => {
     const { pool } = fakePool();
-    await expect(tool(IrisTool.LEASE_ACQUIRE)({ ...baseDeps, pool }, {})).rejects.toThrow(/url/);
+    await expect(tool(ReticleTool.LEASE_ACQUIRE)({ ...baseDeps, pool }, {})).rejects.toThrow(/url/);
   });
 });
 
-describe('iris_lease_release', () => {
+describe('reticle_lease_release', () => {
   it('releases by sessionId and reports the new leased count', async () => {
     const { pool } = fakePool();
-    await tool(IrisTool.LEASE_ACQUIRE)({ ...baseDeps, pool }, { url: 'http://localhost:3000/' });
-    const acq = (await tool(IrisTool.LEASE_ACQUIRE)(
+    await tool(ReticleTool.LEASE_ACQUIRE)({ ...baseDeps, pool }, { url: 'http://localhost:3000/' });
+    const acq = (await tool(ReticleTool.LEASE_ACQUIRE)(
       { ...baseDeps, pool },
       {
         url: 'http://localhost:3000/',
@@ -171,7 +171,7 @@ describe('iris_lease_release', () => {
     )) as { sessionId: string };
     expect(pool.activeCount()).toBe(2);
 
-    const result = (await tool(IrisTool.LEASE_RELEASE)(
+    const result = (await tool(ReticleTool.LEASE_RELEASE)(
       { ...baseDeps, pool },
       {
         sessionId: acq.sessionId,
@@ -183,8 +183,8 @@ describe('iris_lease_release', () => {
   });
 
   it('throws when no pool is available', async () => {
-    await expect(tool(IrisTool.LEASE_RELEASE)(baseDeps, { sessionId: 'lease-x' })).rejects.toThrow(
-      /pool unavailable/i,
-    );
+    await expect(
+      tool(ReticleTool.LEASE_RELEASE)(baseDeps, { sessionId: 'lease-x' }),
+    ).rejects.toThrow(/pool unavailable/i);
   });
 });

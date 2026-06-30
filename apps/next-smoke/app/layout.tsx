@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
-import { IrisDev } from './iris-dev';
+import { ReticleDev } from './reticle-dev';
 
-export const metadata = { title: 'Iris Next.js Smoke Test' };
+export const metadata = { title: 'Reticle Next.js Smoke Test' };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
@@ -14,7 +14,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           margin: 0,
         }}
       >
-        {process.env.NODE_ENV === 'development' ? <IrisDev /> : null}
+        {process.env.NODE_ENV === 'development' ? <ReticleDev /> : null}
         {children}
       </body>
     </html>

@@ -2,7 +2,7 @@
 // discovers interactive controls, clicks them (bounded), and returns a structured anomaly report
 // WITHOUT a script. Bounded (maxSteps) so it always terminates.
 import { chromium } from 'playwright';
-import { start, TOOLS } from '@syrin/iris-server';
+import { start, TOOLS } from '@reticle/server';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let pass = 0,
   fail = 0;
@@ -19,13 +19,13 @@ const p = await b.newPage();
 await p.goto('http://localhost:3100/', { waitUntil: 'networkidle' });
 for (let i = 0; i < 200 && server.bridge.sessions.count() === 0; i++) await sleep(50);
 
-console.log('\n=== N4 EXPLORE: iris_crawl autonomously drives the app (real browser) ===');
+console.log('\n=== N4 EXPLORE: reticle_crawl autonomously drives the app (real browser) ===');
 chk('app SDK connected', server.bridge.sessions.count() > 0);
 
-const report = await T('iris_crawl', { maxSteps: 6, settleMs: 150 });
-chk('iris_crawl discovered interactive controls', report.interactiveFound > 0, `found=${report.interactiveFound}`);
-chk('iris_crawl clicked controls (bounded) and terminated', report.stepsRun > 0 && report.stepsRun <= 6, `steps=${report.stepsRun}`);
-chk('iris_crawl returned a structured anomaly report', Array.isArray(report.anomalies) && typeof report.counts === 'object', JSON.stringify(report.counts));
+const report = await T('reticle_crawl', { maxSteps: 6, settleMs: 150 });
+chk('reticle_crawl discovered interactive controls', report.interactiveFound > 0, `found=${report.interactiveFound}`);
+chk('reticle_crawl clicked controls (bounded) and terminated', report.stepsRun > 0 && report.stepsRun <= 6, `steps=${report.stepsRun}`);
+chk('reticle_crawl returned a structured anomaly report', Array.isArray(report.anomalies) && typeof report.counts === 'object', JSON.stringify(report.counts));
 chk('every visited control is named', Array.isArray(report.visited) && report.visited.length === report.stepsRun);
 
 console.log(`\n${fail === 0 ? '✅ N4 CRAWL VERIFIED' : '❌ FAILED'} (${pass} passed, ${fail} failed) — anomalies: ${report.anomalies.length}`);

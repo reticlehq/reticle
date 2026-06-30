@@ -5,7 +5,7 @@
  * without a circular import — `tools.ts` assembles the groups and re-exports `ToolDef`/`ToolDeps`.
  */
 import { z } from 'zod';
-import { IrisCommand, SnapshotMode } from '@syrin/iris-protocol';
+import { ReticleCommand, SnapshotMode } from '@reticle/protocol';
 import type { SessionManager } from '../session/session.js';
 import type { RealInputProvider } from '../input/real-input.js';
 import type { BaselineStore } from '../project/baselines.js';
@@ -23,18 +23,18 @@ export interface ToolDeps {
   pool?: BrowserPool;
   baselines: BaselineStore;
   recordings: RecordingStore;
-  /** on-disk anchored-flow store (.iris/flows/). */
+  /** on-disk anchored-flow store (.reticle/flows/). */
   flows: FlowStore;
   /** structured annotations accumulating for the live recording. */
   annotations: AnnotationStore;
-  /** cross-run outcome memory (.iris/project.json). */
+  /** cross-run outcome memory (.reticle/project.json). */
   project: ProjectStore;
   /** optional native-input provider. undefined ⇒ everything stays synthetic. */
   realInput?: RealInputProvider;
   /** injected filesystem seam (tests pass a fake/temp-dir adapter). */
   fs: FileSystemPort;
-  /** absolute .iris path (index.ts computes cwd()/.iris). */
-  irisRoot: string;
+  /** absolute .reticle path (index.ts computes cwd()/.reticle). */
+  reticleRoot: string;
   /** injected clock for the contract's generatedAt stamp. */
   now: () => number;
 }
@@ -45,7 +45,7 @@ export interface ToolDef {
   inputSchema: z.ZodRawShape;
   /**
    * JSON Schema-compatible output schema for this tool. When present, the MCP server advertises it
-   * in the tools/list response so schema-aware clients (like @syrin/cli) can validate outputs and
+   * in the tools/list response so schema-aware clients (like @reticle/cli) can validate outputs and
    * compose tool calls safely. Also drives TOON encoding for snapshot/query results.
    */
   outputSchema?: z.ZodRawShape;
@@ -57,7 +57,7 @@ export const sessionIdShape = {
     .string()
     .optional()
     .describe(
-      'Active session ID from iris_sessions. Omit when only one browser session is open — Iris resolves it automatically.',
+      'Active session ID from reticle_sessions. Omit when only one browser session is open — Reticle resolves it automatically.',
     ),
 };
 
@@ -85,7 +85,7 @@ export async function snapshotTree(
   sessionId: string | undefined,
 ): Promise<{ lines: string[]; route: string }> {
   const session = deps.sessions.resolve(sessionId);
-  const result = await session.command(IrisCommand.SNAPSHOT, { mode: SnapshotMode.FULL });
+  const result = await session.command(ReticleCommand.SNAPSHOT, { mode: SnapshotMode.FULL });
   if (!result.ok) throw new Error(result.error ?? 'snapshot failed');
   const snap = (result.result ?? {}) as SnapshotResult;
   return { lines: normalizeLines(snap.tree ?? ''), route: snap.status?.route ?? '' };

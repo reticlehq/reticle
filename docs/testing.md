@@ -1,16 +1,16 @@
-# Testing with `@syrin/iris-test` — declarative, signal-bound specs
+# Testing with `@reticle/test` — declarative, signal-bound specs
 
-Driving Iris interactively is reconnaissance. To turn it into a **repeatable, CI-runnable** suite, write declarative specs with `@syrin/iris-test` (bundled in `@syrin/iris`, importable at `@syrin/iris/test`). Specs bind to **signals and testids — never DOM structure** — so they inherit Iris's refactor-resistance.
+Driving Reticle interactively is reconnaissance. To turn it into a **repeatable, CI-runnable** suite, write declarative specs with `@reticle/test` (bundled in `@reticle/core`, importable at `@reticle/core/test`). Specs bind to **signals and testids — never DOM structure** — so they inherit Reticle's refactor-resistance.
 
 ```ts
-import { irisTest } from '@syrin/iris/test';
+import { reticleTest } from '@reticle/core/test';
 
-irisTest('add a task', async (t) => {
+reticleTest('add a task', async (t) => {
   await t.act('add-task', 'click');
   await t.expectElement({ testid: 'task-list' }, 'visible');
 });
 
-irisTest('ai chat edit', async (t) => {
+reticleTest('ai chat edit', async (t) => {
   await t.fill('chat-input', 'Make the hook punchier');
   await t.act('chat-send', 'click');
   await t.expectNet('POST', '/chat-script', 200);
@@ -20,7 +20,7 @@ irisTest('ai chat edit', async (t) => {
 
 ## The test context `t`
 
-A thin, typed façade over Iris's tools — it resolves testids → refs for you, so specs never touch refs or DOM:
+A thin, typed façade over Reticle's tools — it resolves testids → refs for you, so specs never touch refs or DOM:
 
 | Method | What it does |
 | --- | --- |
@@ -39,17 +39,17 @@ Any failed matcher throws with the structured evidence (near-miss, failure reaso
 
 ## Deterministic + honest
 
-- **`t.clock`** bakes `iris_clock` into the spec, so time-gated UI (a 5s auto-dismiss, a 500ms hover dwell) is tested deterministically instead of racing real timers.
-- **`t.expectInputModeReal()`** — a hover/drag spec asserts native input is active; if it's running synthetic (no CDP), the spec is **skipped with a reason**, never silently passing on a no-op. Enable real input headless with `iris drive` (see [usage §18](usage.md#18-real-input-mode--native-hover--drag-m58)).
+- **`t.clock`** bakes `reticle_clock` into the spec, so time-gated UI (a 5s auto-dismiss, a 500ms hover dwell) is tested deterministically instead of racing real timers.
+- **`t.expectInputModeReal()`** — a hover/drag spec asserts native input is active; if it's running synthetic (no CDP), the spec is **skipped with a reason**, never silently passing on a no-op. Enable real input headless with `reticle drive` (see [usage §18](usage.md#18-real-input-mode--native-hover--drag-m58)).
 
 ## Run a suite (headless, the same path CI uses)
 
 `bootSession` launches a headless real-input browser at your app and gives the runner a programmatic tool invoker (no MCP/stdio):
 
 ```ts
-import { irisTest, bootSession, runSpecs, createTestContext } from '@syrin/iris/test';
+import { reticleTest, bootSession, runSpecs, createTestContext } from '@reticle/core/test';
 
-// … irisTest(...) registrations above …
+// … reticleTest(...) registrations above …
 
 const booted = await bootSession({ driveUrl: 'http://localhost:4310', headless: true });
 const { summary } = await runSpecs({
@@ -65,18 +65,18 @@ process.exit(summary.failed === 0 ? 0 : 1);
 Each spec reports `pass` | `fail` (with evidence) | `skip` (with reason). For CI, emit JUnit:
 
 ```ts
-import { toJUnitXml, writeJUnit } from '@syrin/iris/test';
+import { toJUnitXml, writeJUnit } from '@reticle/core/test';
 ```
 
 ## Flows become specs
 
-`.iris/` flows (see [Flows](flows.md)) can be executed directly as specs — replayed with their `expect`/`success` predicates and skipping `dynamic` (LLM-output) regions — so the recorded map and the suite can't drift apart:
+`.reticle/` flows (see [Flows](flows.md)) can be executed directly as specs — replayed with their `expect`/`success` predicates and skipping `dynamic` (LLM-output) regions — so the recorded map and the suite can't drift apart:
 
 ```ts
-import { flowsAsSpecs } from '@syrin/iris/test';
-// register one irisTest per flow under .iris/flows/
+import { flowsAsSpecs } from '@reticle/core/test';
+// register one reticleTest per flow under .reticle/flows/
 ```
 
 ## Authoring tip: record → prune → commit
 
-You don't have to hand-write steps. Drive the flow once (or record it via the panel), let Iris emit the program, trim it, and commit it as a spec — the regression test is a byproduct of testing, not separate work.
+You don't have to hand-write steps. Drive the flow once (or record it via the panel), let Reticle emit the program, trim it, and commit it as a spec — the regression test is a byproduct of testing, not separate work.

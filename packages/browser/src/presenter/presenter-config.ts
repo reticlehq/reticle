@@ -3,7 +3,7 @@ import { type ControlHandler } from './presenter-controls.js';
 /**
  * Presenter tunables + option surface. Split out of presenter.ts so that file is just the controller
  * under the size cap; these are pure declarations (interfaces + named constants), no behavior. None
- * cross the browser↔bridge↔agent wire, so they live here, not in @syrin/iris-protocol.
+ * cross the browser↔bridge↔agent wire, so they live here, not in @reticle/protocol.
  */
 
 /**
@@ -53,7 +53,7 @@ export const DEFAULT_PACE = 450;
 
 /**
  * Glow state machine phases (exposed via glowPhase() for tests). A burst of activity flips the
- * border IN once on the first activity, holds steady (the slow iris-pulse breathing keeps running
+ * border IN once on the first activity, holds steady (the slow reticle-pulse breathing keeps running
  * uninterrupted — no per-action restart/strobe), then fades OUT once after a quiet window.
  */
 export const GlowPhase = {
@@ -74,7 +74,7 @@ export const HEARTBEAT_MS = 1000;
  */
 export const IDLE_NOTICE_MS = 4000;
 /** Default session-idle-end: after this much quiet the session auto-ends (glow off, panel persists
- *  for analysis). Agent-tweakable via iris_session { idleEndMs } for the app's needs. */
+ *  for analysis). Agent-tweakable via reticle_session { idleEndMs } for the app's needs. */
 export const IDLE_END_MS = 300_000;
 /** Floor for a tweaked idle-end so the agent can't set a uselessly tiny window. */
 export const IDLE_END_MIN_MS = 5_000;
@@ -84,5 +84,5 @@ export const GLOW_ON = '1';
 export const GLOW_OFF = '0';
 export const DATA_ON = 'data-on';
 /** Overlay-root attribute toggled when the panel is minimised to a bar. */
-export const MIN_ATTR = 'data-iris-min';
-export const THROTTLED_ATTR = 'data-iris-throttled';
+export const MIN_ATTR = 'data-reticle-min';
+export const THROTTLED_ATTR = 'data-reticle-throttled';

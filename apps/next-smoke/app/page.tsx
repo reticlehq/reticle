@@ -1,6 +1,6 @@
 'use client';
 import { useState, useRef } from 'react';
-import { iris } from '@syrin/iris-browser';
+import { reticle } from '@reticle/browser';
 
 export default function Page() {
   const [loading, setLoading] = useState(false);
@@ -13,7 +13,7 @@ export default function Page() {
   // Commit-on-blur: the value is only saved when the field loses focus (React onBlur).
   const commit = (value: string) => {
     setCommitted(value);
-    iris.signal('field:committed', { value });
+    reticle.signal('field:committed', { value });
   };
 
   // Auto-dismiss toast: appears, then disappears after 4s (a time-gated UI).
@@ -38,9 +38,9 @@ export default function Page() {
 
   return (
     <main style={{ padding: 40, maxWidth: 720, margin: '0 auto' }}>
-      <h1>Iris Next.js Smoke Test</h1>
+      <h1>Reticle Next.js Smoke Test</h1>
       <p style={{ color: '#9aa3b2' }}>
-        A real Next.js (app router, React 19, SWC) page wired to Iris.
+        A real Next.js (app router, React 19, SWC) page wired to Reticle.
       </p>
 
       <section style={{ marginTop: 24, display: 'flex', gap: 8 }}>
@@ -147,7 +147,7 @@ function SmartSentence(): React.ReactElement {
       data-testid="smart-sentence"
       style={{ padding: 8, border: '1px dashed #2a2f3d', borderRadius: 8, display: 'inline-block' }}
       onMouseEnter={() => {
-        iris.signal('hover:enter', { target: 'smart-sentence' });
+        reticle.signal('hover:enter', { target: 'smart-sentence' });
         timer.current = setTimeout(() => {
           setRevealed(true);
         }, 500);
@@ -172,8 +172,8 @@ function SmartSentence(): React.ReactElement {
 
 /**
  * A genuine windowed list: 500 rows but only the visible window (+ small buffer) is ever in the
- * DOM, so a plain iris_query for an off-screen row (e.g. data-testid="row-400") finds NOTHING until
- * the container is scrolled. This is the fixture iris_scroll_to (N5) must reveal.
+ * DOM, so a plain reticle_query for an off-screen row (e.g. data-testid="row-400") finds NOTHING until
+ * the container is scrolled. This is the fixture reticle_scroll_to (N5) must reveal.
  */
 function VirtualList(): React.ReactElement {
   const ROW_H = 28;

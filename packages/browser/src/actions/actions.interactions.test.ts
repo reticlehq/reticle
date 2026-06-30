@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { EventType } from '@syrin/iris-protocol';
+import { EventType } from '@reticle/protocol';
 import { createCommandRegistry } from '../commands/commands.js';
 import { executeAction } from './actions.js';
 import { installScroll } from '../observers/scroll.js';
@@ -108,9 +108,9 @@ describe('dangerous action confirmation', () => {
 describe('dev overlay', () => {
   it('mounts and unmounts a status chip', () => {
     const handle = installOverlay();
-    expect(document.querySelector('[data-iris-overlay]')).not.toBeNull();
+    expect(document.querySelector('[data-reticle-overlay]')).not.toBeNull();
     handle.update({ connected: true, events: 3 });
     handle.destroy();
-    expect(document.querySelector('[data-iris-overlay]')).toBeNull();
+    expect(document.querySelector('[data-reticle-overlay]')).toBeNull();
   });
 });

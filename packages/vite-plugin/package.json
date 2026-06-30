@@ -1,21 +1,21 @@
 {
-  "name": "@syrin/iris-vite-plugin",
+  "name": "@reticle/vite-plugin",
   "version": "1.2.0",
   "private": true,
-  "description": "Vite plugin for Iris: dev-only source-map stamping plus auto-injected iris.connect(). apply:'serve' guarantees it never ships to production.",
+  "description": "Vite plugin for Reticle: dev-only source-map stamping plus auto-injected reticle.connect(). apply:'serve' guarantees it never ships to production.",
   "type": "module",
   "license": "Apache-2.0",
-  "author": "Iris contributors",
+  "author": "Reticle contributors",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/syrin-labs/iris.git",
+    "url": "git+https://github.com/reticlehq/reticle.git",
     "directory": "packages/vite-plugin"
   },
-  "homepage": "https://github.com/syrin-labs/iris#readme",
-  "bugs": "https://github.com/syrin-labs/iris/issues",
+  "homepage": "https://github.com/reticlehq/reticle#readme",
+  "bugs": "https://github.com/reticlehq/reticle/issues",
   "keywords": [
     "vite-plugin",
-    "iris",
+    "reticle",
     "react",
     "devtools"
   ],
@@ -41,8 +41,8 @@
   },
   "dependencies": {
     "@babel/core": "^7.26.0",
-    "@syrin/iris-babel-plugin": "workspace:*",
-    "@syrin/iris-protocol": "workspace:*"
+    "@reticle/babel-plugin": "workspace:*",
+    "@reticle/protocol": "workspace:*"
   },
   "devDependencies": {
     "@types/babel__core": "^7.20.5",

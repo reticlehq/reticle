@@ -1,4 +1,4 @@
-import type { IrisEvent } from '@syrin/iris-protocol';
+import type { ReticleEvent } from '@reticle/protocol';
 
 /**
  * A self-budgeting hint returned on event-bearing tool results so the agent can decide whether to
@@ -25,9 +25,9 @@ const LARGE_TIMELINE_BYTES = 8000;
 
 /** Keep only the most recent `maxEvents` events; report how many older ones were dropped. */
 export function applyEventBudget(
-  events: IrisEvent[],
+  events: ReticleEvent[],
   maxEvents: number | undefined,
-): { events: IrisEvent[]; droppedOldest: number } {
+): { events: ReticleEvent[]; droppedOldest: number } {
   if (maxEvents === undefined || maxEvents < 0 || events.length <= maxEvents) {
     return { events, droppedOldest: 0 };
   }

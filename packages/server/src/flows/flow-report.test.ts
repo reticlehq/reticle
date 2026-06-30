@@ -4,8 +4,8 @@ import {
   ReplayStatus,
   type FlowFile,
   type FlowReplayResult,
-} from '@syrin/iris-protocol';
-import { IrisTool } from '../tools/tool-names.js';
+} from '@reticle/protocol';
+import { ReticleTool } from '../tools/tool-names.js';
 import { buildFlowReport } from './flow-report.js';
 
 function flow(partial: Partial<FlowFile> = {}): FlowFile {
@@ -18,7 +18,7 @@ const passReplay: FlowReplayResult = {
   steps: [
     {
       step: 0,
-      tool: IrisTool.ACT,
+      tool: ReticleTool.ACT,
       anchor: 'login-submit',
       page: '/',
       ok: true,
@@ -26,7 +26,7 @@ const passReplay: FlowReplayResult = {
     },
     {
       step: 1,
-      tool: IrisTool.ACT,
+      tool: ReticleTool.ACT,
       anchor: 'fault-500',
       page: '/diagnostics',
       ok: true,
@@ -70,7 +70,7 @@ describe('buildFlowReport — human confidence artifact', () => {
       steps: [
         {
           step: 0,
-          tool: IrisTool.ACT,
+          tool: ReticleTool.ACT,
           anchor: 'fault-500',
           page: '/diagnostics',
           ok: false,

@@ -11,7 +11,7 @@ export interface ComponentInfo {
   source?: ComponentSource;
 }
 
-export interface IrisAdapter {
+export interface ReticleAdapter {
   name: string;
   identify: (el: Element) => ComponentInfo | null;
   /** Best-effort: read a component's hook state for a DOM element. */
@@ -22,11 +22,11 @@ export interface IrisAdapter {
 
 // Persist on a global so the registry survives HMR module re-evaluation (otherwise the
 // adapter silently drops after a hot reload and source mapping degrades). See feedback #7.
-const globalStore = globalThis as unknown as { __irisAdapters?: IrisAdapter[] };
-const adapters: IrisAdapter[] = (globalStore.__irisAdapters ??= []);
+const globalStore = globalThis as unknown as { __reticleAdapters?: ReticleAdapter[] };
+const adapters: ReticleAdapter[] = (globalStore.__reticleAdapters ??= []);
 
-/** Called by @syrin/iris-react (and future adapters) to register themselves. */
-export function registerAdapter(adapter: IrisAdapter): void {
+/** Called by @reticle/react (and future adapters) to register themselves. */
+export function registerAdapter(adapter: ReticleAdapter): void {
   if (!adapters.some((a) => a.name === adapter.name)) adapters.push(adapter);
 }
 

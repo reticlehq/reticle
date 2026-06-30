@@ -1,8 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
 import { commitAndSignal } from './commit-and-signal.js';
-import type { IrisEmitter } from './emitter.js';
+import type { ReticleEmitter } from './emitter.js';
 
-function spyEmitter(): IrisEmitter & { signal: ReturnType<typeof vi.fn> } {
+function spyEmitter(): ReticleEmitter & { signal: ReturnType<typeof vi.fn> } {
   return { signal: vi.fn(), state: vi.fn() };
 }
 
@@ -82,7 +82,7 @@ describe('commitAndSignal (P5b drift-proof pairing)', () => {
   });
 
   it('still runs mutate and returns when the emitter is a no-op', () => {
-    const noop: IrisEmitter = { signal: () => undefined, state: () => undefined };
+    const noop: ReticleEmitter = { signal: () => undefined, state: () => undefined };
     let counter = 0;
     const result = commitAndSignal(
       noop,

@@ -1,5 +1,5 @@
-import type { FlowErrorCode } from '@syrin/iris-protocol';
-import type { FlowReplaySession } from '@syrin/iris-server';
+import type { FlowErrorCode } from '@reticle/protocol';
+import type { FlowReplaySession } from '@reticle/server';
 import { FLOW_LOAD_ERROR_PREFIX, SpecKind, SpecOutcome } from './constants.js';
 import { flowsAsSpecs } from './flow-spec.js';
 import type { FlowSpec, FlowsAsSpecsOptions, SpecRunResult } from './flow-spec.js';
@@ -50,9 +50,9 @@ export interface RegisterFlowSpecsOptions extends FlowsAsSpecsOptions {
 
 /**
  * Resolve the default registrar (vitest's `it`) lazily. vitest is an OPTIONAL peer dependency, so the
- * public barrel (`@syrin/iris-test`) must stay importable when vitest is absent — only callers that actually
+ * public barrel (`@reticle/test`) must stay importable when vitest is absent — only callers that actually
  * register flow specs without injecting their own `register` fn need it. A static top-level import
- * would pull vitest into the eager module graph of every `import { irisTest } from '@syrin/iris-test'`.
+ * would pull vitest into the eager module graph of every `import { reticleTest } from '@reticle/test'`.
  */
 async function defaultRegister(): Promise<RegisterFn> {
   const vitest = await import('vitest');
@@ -76,10 +76,10 @@ function specToCase(
 }
 
 /**
- * FLOW2SPEC — register one vitest test per flow under `source`. The agent-readable map (.iris/flows)
+ * FLOW2SPEC — register one vitest test per flow under `source`. The agent-readable map (.reticle/flows)
  * becomes the executable suite: a passing flow registers a green `it`, a malformed file registers a
  * loudly-failing ERROR `it`, an empty dir registers nothing. `getSession` is the seam — the
- * `iris drive` launched session in CI, a fake in unit tests. MUST be awaited at module top level so
+ * `reticle drive` launched session in CI, a fake in unit tests. MUST be awaited at module top level so
  * vitest collects the registered cases.
  */
 export async function registerFlowSpecs(
@@ -95,4 +95,4 @@ export async function registerFlowSpecs(
 }
 
 /** Public alias matching the design's stated entrypoint name. */
-export const irisFlowsAsSpecs = registerFlowSpecs;
+export const reticleFlowsAsSpecs = registerFlowSpecs;

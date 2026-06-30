@@ -8,9 +8,9 @@ import {
   RunKind,
   RunStatus,
   type RunRecord,
-} from '@syrin/iris-protocol';
+} from '@reticle/protocol';
 import { ProjectStore } from './project-store.js';
-import { irisDirPaths } from './iris-dir.js';
+import { reticleDirPaths } from './reticle-dir.js';
 import { createNodeFileSystem, type FileSystemPort } from './fs-port.js';
 
 const FROZEN = 1_700_000_000_000;
@@ -29,8 +29,8 @@ describe('ProjectStore — temp-dir filesystem, never touches the repo', () => {
   let store: ProjectStore;
 
   beforeEach(async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'iris-proj-'));
-    root = join(dir, '.iris');
+    const dir = await mkdtemp(join(tmpdir(), 'reticle-proj-'));
+    root = join(dir, '.reticle');
     fs = createNodeFileSystem();
     store = new ProjectStore(fs, root, frozenClock);
   });
@@ -52,7 +52,7 @@ describe('ProjectStore — temp-dir filesystem, never touches the repo', () => {
 
   it('2: project.json is pretty-printed (2-space) + trailing newline', async () => {
     await store.recordRun(RUN);
-    const text = await readFile(irisDirPaths(root).project, 'utf8');
+    const text = await readFile(reticleDirPaths(root).project, 'utf8');
     expect(text).toContain('\n  "version"');
     expect(text.endsWith('}\n')).toBe(true);
     expect(() => {
@@ -69,13 +69,13 @@ describe('ProjectStore — temp-dir filesystem, never touches the repo', () => {
   });
 
   it('4: byte-stability — equal histories serialize identically regardless of build order', async () => {
-    const storeB = new ProjectStore(fs, join(root, '..', 'b', '.iris'), frozenClock);
+    const storeB = new ProjectStore(fs, join(root, '..', 'b', '.reticle'), frozenClock);
     await store.recordRun(RUN);
     await store.recordRun({ ...RUN, name: 'other', summary: 's' });
     await storeB.recordRun(RUN);
     await storeB.recordRun({ ...RUN, name: 'other', summary: 's' });
-    const a = await readFile(irisDirPaths(root).project, 'utf8');
-    const b = await readFile(irisDirPaths(join(root, '..', 'b', '.iris')).project, 'utf8');
+    const a = await readFile(reticleDirPaths(root).project, 'utf8');
+    const b = await readFile(reticleDirPaths(join(root, '..', 'b', '.reticle')).project, 'utf8');
     expect(a).toBe(b);
   });
 
@@ -122,14 +122,14 @@ describe('ProjectStore — temp-dir filesystem, never touches the repo', () => {
 
   it('9: read on malformed JSON returns MALFORMED (no throw)', async () => {
     await fs.mkdir(root);
-    await writeFile(irisDirPaths(root).project, '{ not json', 'utf8');
+    await writeFile(reticleDirPaths(root).project, '{ not json', 'utf8');
     const r = await store.read();
     expect(r).toEqual({ ok: false, reason: ProjectReadError.MALFORMED });
   });
 
   it('10: recordRun self-heals a MALFORMED file (starts fresh, never wedges)', async () => {
     await fs.mkdir(root);
-    await writeFile(irisDirPaths(root).project, 'totally broken', 'utf8');
+    await writeFile(reticleDirPaths(root).project, 'totally broken', 'utf8');
     await store.recordRun(RUN);
     const r = await store.read();
     expect(r.ok).toBe(true);
@@ -141,7 +141,7 @@ describe('ProjectStore — temp-dir filesystem, never touches the repo', () => {
   it('11: read on valid JSON failing schema returns MALFORMED', async () => {
     await fs.mkdir(root);
     await writeFile(
-      irisDirPaths(root).project,
+      reticleDirPaths(root).project,
       '{"version":1,"runs":[{"kind":"flow_replay","name":"x"}]}',
       'utf8',
     );

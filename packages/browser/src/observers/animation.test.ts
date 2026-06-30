@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { EventType } from '@syrin/iris-protocol';
+import { EventType } from '@reticle/protocol';
 import { installAnimation } from './animation.js';
 import type { Emit } from './types.js';
 
@@ -57,18 +57,18 @@ describe('animation observer: overlay self-pollution', () => {
     expect(events.map((e) => e.type)).toContain(EventType.ANIM_START);
   });
 
-  it('does NOT emit for an element inside the Iris presenter overlay', () => {
+  it('does NOT emit for an element inside the Reticle presenter overlay', () => {
     const overlay = document.createElement('div');
-    overlay.setAttribute('data-iris-overlay', '');
+    overlay.setAttribute('data-reticle-overlay', '');
     const row = document.createElement('div');
     overlay.appendChild(row);
     document.body.appendChild(overlay);
     const { emit, events } = collect();
     teardown = installAnimation(emit);
 
-    // The HUD's own iris-pulse/iris-shimmer keyframes used to flood observed timelines.
-    fireAnim(row, 'animationstart', 'iris-pulse');
-    fireAnim(row, 'animationend', 'iris-pulse');
+    // The HUD's own reticle-pulse/reticle-shimmer keyframes used to flood observed timelines.
+    fireAnim(row, 'animationstart', 'reticle-pulse');
+    fireAnim(row, 'animationend', 'reticle-pulse');
     fireTransitionEnd(row, 'opacity');
 
     expect(events).toHaveLength(0);

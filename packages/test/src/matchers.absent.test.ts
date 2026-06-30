@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { IrisTool } from '@syrin/iris-server';
-import { QueryBy } from '@syrin/iris-protocol';
+import { ReticleTool } from '@reticle/server';
+import { QueryBy } from '@reticle/protocol';
 import { createTestContext } from './test-context.js';
-import { IrisAssertionError } from './skip.js';
+import { ReticleAssertionError } from './skip.js';
 import { CONSOLE_LEVEL_ERROR, PredicateKind } from './constants.js';
-import type { ToolInvoker } from '@syrin/iris-server';
+import type { ToolInvoker } from '@reticle/server';
 
 function fakeInvoker(handlers: Record<string, (args: Record<string, unknown>) => unknown>): {
   invoke: ToolInvoker;
@@ -25,7 +25,7 @@ describe('t.expectAbsent', () => {
 
   it('passes and sends an element predicate with absent:true', async () => {
     const { invoke, calls } = fakeInvoker({
-      [IrisTool.ASSERT]: () => ({ pass: true, evidence: { absent: true } }),
+      [ReticleTool.ASSERT]: () => ({ pass: true, evidence: { absent: true } }),
     });
     const t = createTestContext(invoke);
     await expect(t.expectAbsent(query)).resolves.toBeUndefined();
@@ -35,9 +35,9 @@ describe('t.expectAbsent', () => {
     expect(predicate['absent']).toBe(true);
   });
 
-  it('throws IrisAssertionError carrying the found elements when present', async () => {
+  it('throws ReticleAssertionError carrying the found elements when present', async () => {
     const { invoke } = fakeInvoker({
-      [IrisTool.ASSERT]: () => ({
+      [ReticleTool.ASSERT]: () => ({
         pass: false,
         failureReason: 'expected element to be absent but found 1',
         evidence: [{ ref: 'e1' }],
@@ -47,8 +47,8 @@ describe('t.expectAbsent', () => {
     await t.expectAbsent(query).then(
       () => expect.unreachable('should have thrown'),
       (error: unknown) => {
-        expect(error).toBeInstanceOf(IrisAssertionError);
-        expect((error as IrisAssertionError).evidence).toEqual([{ ref: 'e1' }]);
+        expect(error).toBeInstanceOf(ReticleAssertionError);
+        expect((error as ReticleAssertionError).evidence).toEqual([{ ref: 'e1' }]);
       },
     );
   });
@@ -57,7 +57,7 @@ describe('t.expectAbsent', () => {
 describe('t.expectNoConsoleErrors', () => {
   it('passes and sends a console error-absent predicate', async () => {
     const { invoke, calls } = fakeInvoker({
-      [IrisTool.ASSERT]: () => ({ pass: true }),
+      [ReticleTool.ASSERT]: () => ({ pass: true }),
     });
     const t = createTestContext(invoke);
     await expect(t.expectNoConsoleErrors()).resolves.toBeUndefined();
@@ -67,9 +67,9 @@ describe('t.expectNoConsoleErrors', () => {
     expect(predicate['absent']).toBe(true);
   });
 
-  it('throws IrisAssertionError carrying the error entries on failure', async () => {
+  it('throws ReticleAssertionError carrying the error entries on failure', async () => {
     const { invoke } = fakeInvoker({
-      [IrisTool.ASSERT]: () => ({
+      [ReticleTool.ASSERT]: () => ({
         pass: false,
         failureReason: 'expected no error entries but found 1',
         evidence: [{ msg: 'boom' }],
@@ -79,8 +79,8 @@ describe('t.expectNoConsoleErrors', () => {
     await t.expectNoConsoleErrors().then(
       () => expect.unreachable('should have thrown'),
       (error: unknown) => {
-        expect(error).toBeInstanceOf(IrisAssertionError);
-        expect((error as IrisAssertionError).evidence).toEqual([{ msg: 'boom' }]);
+        expect(error).toBeInstanceOf(ReticleAssertionError);
+        expect((error as ReticleAssertionError).evidence).toEqual([{ msg: 'boom' }]);
       },
     );
   });

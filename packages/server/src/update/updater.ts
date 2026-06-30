@@ -8,9 +8,9 @@ import { log } from '../log.js';
 const NPM_BIN = platform() === 'win32' ? 'npm.cmd' : 'npm';
 const NPM_TIMEOUT_MS = 120_000;
 
-/** How this iris process was launched — determines which npm strategy to use for updates. */
+/** How this reticle process was launched — determines which npm strategy to use for updates. */
 const ExecutionKind = {
-  /** Launched via `npx @syrin/iris` — npm re-resolves the package on restart. */
+  /** Launched via `npx @reticle/core` — npm re-resolves the package on restart. */
   NPX: 'npx',
   /** Installed globally via `npm install -g`. */
   GLOBAL: 'global',
@@ -20,7 +20,7 @@ const ExecutionKind = {
 type ExecutionKind = (typeof ExecutionKind)[keyof typeof ExecutionKind];
 
 /**
- * Infer how iris was launched from process.argv[1].
+ * Infer how reticle was launched from process.argv[1].
  *
  * npm's npx cache stores packages under a path containing `_npx`, which is the
  * most reliable cross-platform signal. Local installs always live inside a
@@ -70,11 +70,11 @@ function runNpm(args: string[], opts: RunNpmOptions = {}): Promise<void> {
 }
 
 async function installVersion(version: string, kind: ExecutionKind): Promise<void> {
-  const pkg = `@syrin/iris@${version}`;
+  const pkg = `@reticle/core@${version}`;
   if (kind === ExecutionKind.NPX) {
     // npx re-resolves the package from npm on the next Claude Code restart — no npm
     // install needed. The restart itself is what triggers the update.
-    log('iris_update_npx_strategy', {
+    log('reticle_update_npx_strategy', {
       note: 'Running via npx — exiting so Claude Code restarts and npx fetches the new version',
     });
     return;
@@ -86,14 +86,14 @@ async function installVersion(version: string, kind: ExecutionKind): Promise<voi
       return;
     }
     // Could not find a project root — fall through to global install as a safe default
-    log('iris_update_local_no_root', { fallback: 'global' });
+    log('reticle_update_local_no_root', { fallback: 'global' });
   }
   await runNpm(['install', '-g', pkg]);
 }
 
 async function installVersionRollback(version: string, kind: ExecutionKind): Promise<void> {
   if (kind === ExecutionKind.NPX) {
-    log('iris_rollback_npx_strategy', {
+    log('reticle_rollback_npx_strategy', {
       note: 'Running via npx — update your .mcp.json args to pin the version you want to restore',
     });
     return;
@@ -113,9 +113,9 @@ export async function applyUpdate(targetVersion: string): Promise<void> {
   }
 
   const kind = detectExecutionKind();
-  log('iris_update_applying', { version: targetVersion, executionKind: kind });
+  log('reticle_update_applying', { version: targetVersion, executionKind: kind });
   await installVersion(targetVersion, kind);
-  log('iris_update_applied', { version: targetVersion, executionKind: kind });
+  log('reticle_update_applied', { version: targetVersion, executionKind: kind });
   process.exit(0);
 }
 
@@ -130,8 +130,8 @@ export async function rollback(): Promise<void> {
   }
   const prev = manifest.previousVersion;
   const kind = detectExecutionKind();
-  log('iris_rollback_applying', { version: prev, executionKind: kind });
+  log('reticle_rollback_applying', { version: prev, executionKind: kind });
   await installVersionRollback(prev, kind);
-  log('iris_rollback_applied', { version: prev, executionKind: kind });
+  log('reticle_rollback_applied', { version: prev, executionKind: kind });
   process.exit(0);
 }

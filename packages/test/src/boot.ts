@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { IrisDir } from '@syrin/iris-protocol';
+import { ReticleDir } from '@reticle/protocol';
 import {
   AnnotationStore,
   BaselineStore,
@@ -9,8 +9,8 @@ import {
   createNodeFileSystem,
   createToolInvoker,
   start,
-} from '@syrin/iris-server';
-import type { RunningServer, ToolDeps, ToolInvoker } from '@syrin/iris-server';
+} from '@reticle/server';
+import type { RunningServer, ToolDeps, ToolInvoker } from '@reticle/server';
 
 export interface BootedRun {
   invoke: ToolInvoker;
@@ -23,8 +23,8 @@ export interface BootOptions {
   /** Launch headless (default true). */
   headless?: boolean;
   port?: number;
-  /** Absolute .iris root. Defaults to cwd()/.iris. Injectable for tests. */
-  irisRoot?: string;
+  /** Absolute .reticle root. Defaults to cwd()/.reticle. Injectable for tests. */
+  reticleRoot?: string;
   /** Injected clock; defaults to Date.now. */
   now?: () => number;
   /** Injectable ToolDeps builder so tests can wire a fake server without real IO. */
@@ -33,21 +33,21 @@ export interface BootOptions {
 
 /**
  * Build ToolDeps from a started server (Option b: zero further server changes). The only place
- * in @syrin/iris-test that touches real IO — and it does so only by delegating to @syrin/iris-server's start.
+ * in @reticle/test that touches real IO — and it does so only by delegating to @reticle/server's start.
  */
 function defaultBuildDeps(server: RunningServer, opts: BootOptions): ToolDeps {
   const fs = createNodeFileSystem();
-  const irisRoot = opts.irisRoot ?? join(process.cwd(), IrisDir.ROOT);
+  const reticleRoot = opts.reticleRoot ?? join(process.cwd(), ReticleDir.ROOT);
   const now = opts.now ?? ((): number => Date.now());
   const base = {
     sessions: server.bridge.sessions,
     baselines: new BaselineStore(),
     recordings: new RecordingStore(),
-    flows: new FlowStore(fs, irisRoot, { now }),
-    project: new ProjectStore(fs, irisRoot, { now }),
+    flows: new FlowStore(fs, reticleRoot, { now }),
+    project: new ProjectStore(fs, reticleRoot, { now }),
     annotations: new AnnotationStore(),
     fs,
-    irisRoot,
+    reticleRoot,
     now,
   };
   return server.realInput !== undefined ? { ...base, realInput: server.realInput } : base;

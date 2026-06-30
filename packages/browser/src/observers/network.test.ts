@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { EventType } from '@syrin/iris-protocol';
+import { EventType } from '@reticle/protocol';
 import { installNetwork } from './network.js';
 import type { Emit, Teardown } from './types.js';
 

@@ -1,4 +1,4 @@
-import { RING_BUFFER_DEFAULTS, type IrisEvent } from '@syrin/iris-protocol';
+import { RING_BUFFER_DEFAULTS, type ReticleEvent } from '@reticle/protocol';
 
 interface RingBufferOptions {
   maxEvents?: number;
@@ -18,7 +18,7 @@ export class RingBuffer {
   readonly #maxEvents: number;
   readonly #maxAgeMs: number;
   readonly #maxBytes: number;
-  #events: IrisEvent[] = [];
+  #events: ReticleEvent[] = [];
   #eventBytes: number[] = [];
   #totalBytes = 0;
   #droppedCount = 0;
@@ -29,7 +29,7 @@ export class RingBuffer {
     this.#maxBytes = options.maxBytes ?? RING_BUFFER_DEFAULTS.MAX_BYTES;
   }
 
-  push(event: IrisEvent, now: number): void {
+  push(event: ReticleEvent, now: number): void {
     this.#events.push(event);
     const bytes = Buffer.byteLength(JSON.stringify(event), 'utf8');
     this.#eventBytes.push(bytes);
@@ -38,12 +38,12 @@ export class RingBuffer {
   }
 
   /** Events at or after a given timestamp cursor. */
-  since(cursor: number): IrisEvent[] {
+  since(cursor: number): ReticleEvent[] {
     return this.#events.slice(this.#lowerBound(cursor));
   }
 
   /** Events within the last `windowMs`, relative to `now`. */
-  window(windowMs: number, now: number): IrisEvent[] {
+  window(windowMs: number, now: number): ReticleEvent[] {
     return this.#events.slice(this.#lowerBound(now - windowMs));
   }
 

@@ -99,7 +99,7 @@ export type FlowExpect = z.infer<typeof FlowExpectSchema>;
 
 /** One step of a flow: an anchored action (+ optional expectation). */
 export interface FlowStep {
-  /** IrisTool.ACT | IrisTool.ACT_SEQUENCE (the server-side tool constant). */
+  /** ReticleTool.ACT | ReticleTool.ACT_SEQUENCE (the server-side tool constant). */
   tool: string;
   anchor: FlowAnchor;
   action?: ActionType;
@@ -150,7 +150,7 @@ export interface Drift {
 export interface FlowStepResult {
   /** 0-based index of this step in the flow. */
   step: number;
-  /** The server-side tool constant the step runs (IrisTool.ACT | ACT_SEQUENCE). */
+  /** The server-side tool constant the step runs (ReticleTool.ACT | ACT_SEQUENCE). */
   tool: string;
   /** The testid/signal value the step is bound to (the re-resolved anchor). */
   anchor: string;
@@ -228,7 +228,7 @@ export interface SuiteVerdict {
   failures: SuiteFlowResult[];
 }
 
-/** The iris_flow_replay envelope. */
+/** The reticle_flow_replay envelope. */
 export interface FlowReplayResult {
   name: string;
   status: ReplayStatus;
@@ -304,7 +304,7 @@ export interface HealChange {
   to: string;
 }
 
-/** The iris_flow_heal envelope. */
+/** The reticle_flow_heal envelope. */
 export interface FlowHealResult {
   name: string;
   status: HealStatus;

@@ -3,24 +3,24 @@ import {
   CapabilitiesSchema,
   ContractReadError,
   FROM_DISK_ARG,
-  IrisCommand,
-} from '@syrin/iris-protocol';
-import { IrisTool } from './tool-names.js';
+  ReticleCommand,
+} from '@reticle/protocol';
+import { ReticleTool } from './tool-names.js';
 import { asString } from './tools-helpers.js';
 import { sessionIdShape, commandOrThrow } from './tool-kit.js';
-import { irisDirPaths, readContract, writeContract } from '../project/iris-dir.js';
+import { reticleDirPaths, readContract, writeContract } from '../project/reticle-dir.js';
 import type { ToolDef } from './tools.js';
 
 /**
- * The capability-contract tools. `iris_capabilities` reads the live session, or the
- * git-checked `.iris/contract.json` when `{ fromDisk:true }`; `iris_contract_save` persists the
+ * The capability-contract tools. `reticle_capabilities` reads the live session, or the
+ * git-checked `.reticle/contract.json` when `{ fromDisk:true }`; `reticle_contract_save` persists the
  * live registry to that file (pretty-printed, stable key order — diffable in PRs).
  */
 export const CONTRACT_TOOLS: ToolDef[] = [
   {
-    name: IrisTool.CAPABILITIES,
+    name: ReticleTool.CAPABILITIES,
     description:
-      'The app-advertised testable surface (iris.describe): testids, signals, stores, and named flows. Call this first to learn what to assert on without reading source. Pass { fromDisk:true } to read the git-checked .iris/contract.json instead of the live session (a fresh agent can learn the surface with no browser attached).',
+      'The app-advertised testable surface (reticle.describe): testids, signals, stores, and named flows. Call this first to learn what to assert on without reading source. Pass { fromDisk:true } to read the git-checked .reticle/contract.json instead of the live session (a fresh agent can learn the surface with no browser attached).',
     inputSchema: { [FROM_DISK_ARG]: z.boolean().optional(), ...sessionIdShape },
     outputSchema: {
       testids: z.array(z.string()),
@@ -33,28 +33,28 @@ export const CONTRACT_TOOLS: ToolDef[] = [
     },
     handler: async (deps, args) => {
       if (args[FROM_DISK_ARG] === true) {
-        const r = await readContract(deps.fs, deps.irisRoot);
+        const r = await readContract(deps.fs, deps.reticleRoot);
         if (!r.ok)
           throw new Error(
             r.reason === ContractReadError.MISSING
-              ? 'no .iris/contract.json on disk — run iris_contract_save first (or omit fromDisk to read the live session)'
-              : '.iris/contract.json is malformed — fix or regenerate it with iris_contract_save',
+              ? 'no .reticle/contract.json on disk — run reticle_contract_save first (or omit fromDisk to read the live session)'
+              : '.reticle/contract.json is malformed — fix or regenerate it with reticle_contract_save',
           );
         return { ...r.capabilities, source: 'disk', generatedAt: r.generatedAt };
       }
       const caps = await commandOrThrow(
         deps,
         asString(args['sessionId']),
-        IrisCommand.CAPABILITIES,
+        ReticleCommand.CAPABILITIES,
         {},
       );
       return { ...(caps as object), source: 'live' };
     },
   },
   {
-    name: IrisTool.CONTRACT_SAVE,
+    name: ReticleTool.CONTRACT_SAVE,
     description:
-      "Persist the app's live capability registry (iris.describe) to .iris/contract.json — git-checked, diffable, readable by a fresh agent via iris_capabilities({ fromDisk:true }). Returns { path, counts }.",
+      "Persist the app's live capability registry (reticle.describe) to .reticle/contract.json — git-checked, diffable, readable by a fresh agent via reticle_capabilities({ fromDisk:true }). Returns { path, counts }.",
     inputSchema: { ...sessionIdShape },
     outputSchema: {
       saved: z.boolean(),
@@ -66,14 +66,14 @@ export const CONTRACT_TOOLS: ToolDef[] = [
       const res = await commandOrThrow(
         deps,
         asString(args['sessionId']),
-        IrisCommand.CAPABILITIES,
+        ReticleCommand.CAPABILITIES,
         {},
       );
       const caps = CapabilitiesSchema.parse(res);
-      await writeContract(deps.fs, deps.irisRoot, caps, deps.now);
+      await writeContract(deps.fs, deps.reticleRoot, caps, deps.now);
       return {
         saved: true,
-        path: irisDirPaths(deps.irisRoot).contract,
+        path: reticleDirPaths(deps.reticleRoot).contract,
         testidCount: caps.testids.length,
         signalCount: caps.signals.length,
       };

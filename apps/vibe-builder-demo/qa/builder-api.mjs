@@ -2,10 +2,10 @@
  * The Builder API as a connect-style middleware, so it can be mounted in the Vite dev server (same
  * origin as the instrumented Builder UI) instead of a separate HTTP server. Endpoints:
  *   GET  /api/builder-config        → { previewUrl }
- *   POST /api/verify { bug, engine } → { bug, blind, iris }   (engine: 'scripted' | 'live')
+ *   POST /api/verify { bug, engine } → { bug, blind, reticle }   (engine: 'scripted' | 'live')
  *   POST /api/repair { bug }       → repair-loop transcript
  *
- * The inner Iris (verify/repair) launches its own bridge + headless browser — this is the INNER
+ * The inner Reticle (verify/repair) launches its own bridge + headless browser — this is the INNER
  * layer of the self-test loop. Runs are serialized (one bridge/browser at a time).
  */
 import { verifyPreview } from './verify-live.mjs';
@@ -65,11 +65,11 @@ export function createBuilderApi({ previewUrl, bridgePort }) {
           send(res, 200, {
             bug,
             blind,
-            iris: { engine: 'live', status: v.status, summary: v.summary, failures: v.failures, steps: v.steps, durationMs: v.durationMs, model: v.model },
+            reticle: { engine: 'live', status: v.status, summary: v.summary, failures: v.failures, steps: v.steps, durationMs: v.durationMs, model: v.model },
           });
         } else {
-          const iris = await verifyPreview({ bug, previewUrl, bridgePort });
-          send(res, 200, { bug, blind, iris: { engine: 'scripted', ...iris } });
+          const reticle = await verifyPreview({ bug, previewUrl, bridgePort });
+          send(res, 200, { bug, blind, reticle: { engine: 'scripted', ...reticle } });
         }
       } catch (err) {
         send(res, 500, { error: err instanceof Error ? err.message : String(err) });

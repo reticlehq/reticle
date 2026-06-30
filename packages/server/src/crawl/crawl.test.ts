@@ -2,10 +2,10 @@ import { describe, expect, it } from 'vitest';
 import {
   CrawlAnomalyKind,
   EventType,
-  IrisCommand,
+  ReticleCommand,
   type CommandResult,
-  type IrisEvent,
-} from '@syrin/iris-protocol';
+  type ReticleEvent,
+} from '@reticle/protocol';
 import { crawl, type CrawlSession } from './crawl.js';
 
 const noSleep = (): Promise<void> => Promise.resolve();
@@ -18,15 +18,15 @@ interface RefScript {
 /** A scripted CrawlSession: SNAPSHOT returns `tree`; each ACT pushes that ref's scripted events. */
 function fakeSession(tree: string, perRef: Record<string, RefScript>): CrawlSession {
   let clock = 0;
-  const buffer: IrisEvent[] = [];
+  const buffer: ReticleEvent[] = [];
   const ok = (result: unknown): Promise<CommandResult> =>
     Promise.resolve({ kind: 'command_result', id: 'c', ok: true, result });
   return {
     elapsed: () => clock,
     eventsSince: (since) => buffer.filter((e) => e.t > since),
     command: (name, args = {}) => {
-      if (name === IrisCommand.SNAPSHOT) return ok({ tree });
-      if (name === IrisCommand.ACT) {
+      if (name === ReticleCommand.SNAPSHOT) return ok({ tree });
+      if (name === ReticleCommand.ACT) {
         const ref = typeof args['ref'] === 'string' ? args['ref'] : '';
         clock += 1;
         for (const e of perRef[ref]?.events ?? []) {

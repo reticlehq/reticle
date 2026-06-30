@@ -8,7 +8,7 @@ import {
   type FlowStepResult,
   type HealChange,
   type HealProposal,
-} from '@syrin/iris-protocol';
+} from '@reticle/protocol';
 import { editDistance } from './flow-replay.js';
 
 /**
@@ -16,7 +16,7 @@ import { editDistance } from './flow-replay.js';
  * computed nearest testid) into a concrete, confidence-scored rebind. No new heuristics enter the
  * trust boundary: confidence is derived only from the existing case-insensitive edit distance, so
  * the "never silently rewrite a bad guess" invariant lives in a single numeric floor
- * (HEAL_CONFIDENCE_MIN). Separated from the iris_flow_heal tool so it is unit-testable without a
+ * (HEAL_CONFIDENCE_MIN). Separated from the reticle_flow_heal tool so it is unit-testable without a
  * live session or the filesystem.
  *
  * FIRST CUT: testid-anchor rebinds only, scored by string distance.
@@ -45,7 +45,7 @@ export function confidenceFor(from: string, to: string): number {
  * Pure: rewrite the named steps' testid anchors (from→to) and return the new flow plus the changes
  * that actually applied. A change whose `from` no longer matches that step's testid anchor is
  * skipped (idempotent / defensive), never throwing. Shared by the on-disk writer (FlowStore.heal)
- * and the in-memory pre-write verification in iris_flow_heal, so both rewrite identically.
+ * and the in-memory pre-write verification in reticle_flow_heal, so both rewrite identically.
  */
 export function applyHealChanges(
   flow: FlowFile,

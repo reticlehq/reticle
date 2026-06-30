@@ -3,8 +3,8 @@
  * explore. Split out of tools.ts; assembled back via ...READ_TOOLS.
  */
 import { z } from 'zod';
-import { EventType, IrisCommand, REPLAY_PROGRAM_VERSION, SnapshotMode } from '@syrin/iris-protocol';
-import { IrisTool } from './tool-names.js';
+import { EventType, ReticleCommand, REPLAY_PROGRAM_VERSION, SnapshotMode } from '@reticle/protocol';
+import { ReticleTool } from './tool-names.js';
 import type { CompiledProgram } from '../flows/recordings.js';
 import { replayProgram } from '../flows/replay.js';
 import { diffLines } from '../project/baselines.js';
@@ -16,19 +16,19 @@ import { type ToolDef, sessionIdShape, commandOrThrow, snapshotTree } from './to
 
 export const READ_TOOLS: ToolDef[] = [
   {
-    name: IrisTool.BASELINE_SAVE,
+    name: ReticleTool.BASELINE_SAVE,
     description:
       'Snapshot the current semantic state under a name, to diff against later (regression detection).',
     inputSchema: {
       name: z
         .string()
         .describe(
-          'Label for this baseline snapshot (e.g. "dashboard-initial"). Use the same name in iris_diff to compare.',
+          'Label for this baseline snapshot (e.g. "dashboard-initial"). Use the same name in reticle_diff to compare.',
         ),
       ...sessionIdShape,
     },
     outputSchema: {
-      baseline: z.string().describe('Saved baseline name — pass to iris_diff to compare.'),
+      baseline: z.string().describe('Saved baseline name — pass to reticle_diff to compare.'),
       lineCount: z.number(),
     },
     handler: async (deps, args) => {
@@ -39,7 +39,7 @@ export const READ_TOOLS: ToolDef[] = [
     },
   },
   {
-    name: IrisTool.BASELINE_LIST,
+    name: ReticleTool.BASELINE_LIST,
     description: 'List saved baseline names.',
     inputSchema: {},
     outputSchema: {
@@ -48,14 +48,14 @@ export const READ_TOOLS: ToolDef[] = [
     handler: (deps) => Promise.resolve({ baselines: deps.baselines.list() }),
   },
   {
-    name: IrisTool.DIFF,
+    name: ReticleTool.DIFF,
     description:
-      'Diff current semantic state vs a saved baseline: REMOVED/ADDED elements + console-error count. Call iris_baseline_list to list saved baselines, iris_baseline_save to create one. Pass `baseline` (name from iris_baseline_list). Answers "did anything silently go missing/break?".',
+      'Diff current semantic state vs a saved baseline: REMOVED/ADDED elements + console-error count. Call reticle_baseline_list to list saved baselines, reticle_baseline_save to create one. Pass `baseline` (name from reticle_baseline_list). Answers "did anything silently go missing/break?".',
     inputSchema: {
       baseline: z
         .string()
         .describe(
-          'Baseline name to compare against. Call iris_baseline_list to get available names; names are created by iris_baseline_save.',
+          'Baseline name to compare against. Call reticle_baseline_list to get available names; names are created by reticle_baseline_save.',
         ),
       ...sessionIdShape,
     },
@@ -82,13 +82,13 @@ export const READ_TOOLS: ToolDef[] = [
     },
   },
   {
-    name: IrisTool.RECORD_START,
+    name: ReticleTool.RECORD_START,
     description: 'Start recording the event timeline under a name (for replay / a flow report).',
     inputSchema: {
       recordingName: z
         .string()
         .describe(
-          'Identifier for this recording. Pass the same name to iris_record_stop and iris_replay.',
+          'Identifier for this recording. Pass the same name to reticle_record_stop and reticle_replay.',
         ),
       ...sessionIdShape,
     },
@@ -105,13 +105,13 @@ export const READ_TOOLS: ToolDef[] = [
     },
   },
   {
-    name: IrisTool.RECORD_STOP,
+    name: ReticleTool.RECORD_STOP,
     description:
       'Stop the recording identified by `recordingName` and return both the reaction report for the span and a compiled, replayable { program: { version, steps:[{tool,args,stable}] } } of the agent acts captured during it.',
     inputSchema: {
       recordingName: z
         .string()
-        .describe('Identifier of an active recording started with iris_record_start.'),
+        .describe('Identifier of an active recording started with reticle_record_start.'),
       ...sessionIdShape,
     },
     outputSchema: {
@@ -147,13 +147,13 @@ export const READ_TOOLS: ToolDef[] = [
     },
   },
   {
-    name: IrisTool.REPLAY,
+    name: ReticleTool.REPLAY,
     description:
       'Re-execute a previously recorded program by recordingName. Re-resolves each step to its element by testid (falling back to the stored ref for unstable steps) and runs the actions in order against the live session. Stops at the first failure. Destructive controls require confirmDangerous:true on every replay; confirmation is never persisted. Returns { ok, steps:[{tool,ok,error?,note?}] }.',
     inputSchema: {
       recordingName: z
         .string()
-        .describe('Name of a compiled recording (from iris_record_stop) to re-execute.'),
+        .describe('Name of a compiled recording (from reticle_record_stop) to re-execute.'),
       confirmDangerous: z
         .boolean()
         .optional()
@@ -183,7 +183,7 @@ export const READ_TOOLS: ToolDef[] = [
     },
   },
   {
-    name: IrisTool.NARRATE,
+    name: ReticleTool.NARRATE,
     description:
       'Narrate your intent on the page (presenter HUD) so the human watching sees what you are about to do and why. Use a short sentence before a meaningful action.',
     inputSchema: {
@@ -200,15 +200,20 @@ export const READ_TOOLS: ToolDef[] = [
     },
     outputSchema: { ok: z.boolean() },
     handler: async (deps, args) => {
-      const result = (await commandOrThrow(deps, asString(args['sessionId']), IrisCommand.NARRATE, {
-        text: args['text'],
-        level: args['level'],
-      })) as Record<string, unknown>;
+      const result = (await commandOrThrow(
+        deps,
+        asString(args['sessionId']),
+        ReticleCommand.NARRATE,
+        {
+          text: args['text'],
+          level: args['level'],
+        },
+      )) as Record<string, unknown>;
       return { ok: true, ...result };
     },
   },
   {
-    name: IrisTool.CLOCK,
+    name: ReticleTool.CLOCK,
     description:
       'Control a fake clock: { freeze:true } to freeze time, { advanceMs:N } to fast-forward timers (toasts, debounces, auto-dismiss), { reset:true } to restore. Lets you test time-gated UI deterministically.',
     inputSchema: {
@@ -230,14 +235,14 @@ export const READ_TOOLS: ToolDef[] = [
       elapsed: z.number().optional(),
     },
     handler: (deps, args) =>
-      commandOrThrow(deps, asString(args['sessionId']), IrisCommand.CLOCK, {
+      commandOrThrow(deps, asString(args['sessionId']), ReticleCommand.CLOCK, {
         freeze: args['freeze'],
         advanceMs: args['advanceMs'],
         reset: args['reset'],
       }),
   },
   {
-    name: IrisTool.STATE,
+    name: ReticleTool.STATE,
     description:
       "Read live framework state without the app pre-broadcasting it. PREFERRED/RELIABLE: `store` reads a registered store (e.g. 'workspace'); omit `store` to read all stores. To avoid paying for a huge store, scope the read: `path` extracts a dot-path sub-tree (e.g. 'captionCache.v3', with numeric array indices), and `depth` collapses anything deeper than N levels to a size marker. A wrong `path` returns { found:false, availableKeys } so it is diagnosable. `ref` attempts a best-effort read of the nearest React component's hook state and is BOUNDED — on failure it returns component: { ok: false, reason: 'component-state-unavailable' }. Without path/depth: returns { stores, storeNames, component? }.",
     inputSchema: {
@@ -284,7 +289,7 @@ export const READ_TOOLS: ToolDef[] = [
       const result = await commandOrThrow(
         deps,
         asString(args['sessionId']),
-        IrisCommand.STATE_READ,
+        ReticleCommand.STATE_READ,
         {
           ref: args['ref'],
           store,
@@ -332,7 +337,7 @@ export const READ_TOOLS: ToolDef[] = [
     },
   },
   {
-    name: IrisTool.EXPLORE,
+    name: ReticleTool.EXPLORE,
     description:
       'Autonomous-exploration helper: list interactive elements (with refs) + current console-error count, so the agent can drive the app and report anomalies.',
     inputSchema: {
@@ -351,7 +356,7 @@ export const READ_TOOLS: ToolDef[] = [
     },
     handler: async (deps, args) => {
       const session = deps.sessions.resolve(asString(args['sessionId']));
-      const result = await session.command(IrisCommand.SNAPSHOT, {
+      const result = await session.command(ReticleCommand.SNAPSHOT, {
         mode: SnapshotMode.INTERACTIVE,
         scope: args['scope'],
       });

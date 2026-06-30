@@ -1,10 +1,10 @@
 {
   "mcpServers": {
-    "iris": {
+    "reticle": {
       "command": "node",
       "args": ["packages/server/dist/cli.js", "mcp"],
       "env": {
-        "IRIS_PORT": "58432"
+        "RETICLE_PORT": "58432"
       }
     }
   }

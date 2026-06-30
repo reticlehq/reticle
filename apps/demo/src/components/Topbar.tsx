@@ -17,7 +17,7 @@ export function Topbar(): React.ReactElement {
   return (
     <header className="topbar">
       <div className="crumb">
-        <span className="eyebrow">Iris</span>
+        <span className="eyebrow">Reticle</span>
         <span className="sep">/</span>
         <h1>{t.title}</h1>
         <span style={{ color: 'var(--faint)', fontSize: 13 }}>{t.sub}</span>
@@ -39,7 +39,7 @@ export function Topbar(): React.ReactElement {
           width: 34,
           height: 34,
           borderRadius: 999,
-          background: 'var(--iris)',
+          background: 'var(--reticle)',
           display: 'grid',
           placeItems: 'center',
           color: '#0a0b12',

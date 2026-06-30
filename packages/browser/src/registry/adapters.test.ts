@@ -1,8 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { registerAdapter, elementHasHoverHandlers, type IrisAdapter } from './adapters.js';
+import { registerAdapter, elementHasHoverHandlers, type ReticleAdapter } from './adapters.js';
 
-const adapters = ((globalThis as unknown as { __irisAdapters?: IrisAdapter[] }).__irisAdapters ??=
-  []);
+const adapters = ((
+  globalThis as unknown as { __reticleAdapters?: ReticleAdapter[] }
+).__reticleAdapters ??= []);
 
 function clearAdapters(): void {
   adapters.length = 0;

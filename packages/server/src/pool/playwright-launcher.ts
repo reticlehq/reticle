@@ -45,7 +45,7 @@ const MAX_CONTEXTS_CEILING = 8;
 const MAX_CONTEXTS_FLOOR = 1;
 
 /**
- * Resolve the pool's concurrency cap. An explicit IRIS_MAX_CONTEXTS wins (clamped to >=1); otherwise
+ * Resolve the pool's concurrency cap. An explicit RETICLE_MAX_CONTEXTS wins (clamped to >=1); otherwise
  * scale with the machine but never above a sane ceiling so a big box can't fan out into a fork bomb.
  * Pure (env value + cpu count passed in) so it's testable.
  */

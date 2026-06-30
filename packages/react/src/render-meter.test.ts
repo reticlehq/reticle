@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { installRenderMeter, resetRenderMeter, getRenderStats } from './render-meter.js';
-import { readStores } from '@syrin/iris-browser';
+import { readStores } from '@reticle/browser';
 
 const HOOK_KEY = '__REACT_DEVTOOLS_GLOBAL_HOOK__';
 
@@ -35,10 +35,10 @@ describe('render meter — counts React commits via the devtools hook', () => {
     expect(getRenderStats().commits).toBe(1);
   });
 
-  it('exposes commits through the __iris_renders registered store (read via iris_state)', () => {
-    const stores = readStores('__iris_renders') as Record<string, { commits: number }>;
-    expect(stores['__iris_renders']).toBeDefined();
-    expect(typeof stores['__iris_renders']?.commits).toBe('number');
+  it('exposes commits through the __reticle_renders registered store (read via reticle_state)', () => {
+    const stores = readStores('__reticle_renders') as Record<string, { commits: number }>;
+    expect(stores['__reticle_renders']).toBeDefined();
+    expect(typeof stores['__reticle_renders']?.commits).toBe('number');
   });
 
   it('a faulting original hook never breaks the commit count (host-safe)', () => {

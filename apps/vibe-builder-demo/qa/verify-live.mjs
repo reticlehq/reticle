@@ -5,7 +5,7 @@
  * the network calls, console log, and live app store — not pixels.
  *
  * It exercises the exact path that was previously untested (CLI coding-agent only): an in-process,
- * API-style consumer of Iris driving a headless sandbox. Each call is fully isolated: its own bridge,
+ * API-style consumer of Reticle driving a headless sandbox. Each call is fully isolated: its own bridge,
  * its own browser, torn down at the end.
  *
  *   BUG=mock-data node qa/verify-live.mjs        # run one bug class
@@ -21,20 +21,20 @@ import {
   ProjectStore,
   createNodeFileSystem,
   LaunchedRealInputProvider,
-} from '@syrin/iris-server';
+} from '@reticle/server';
 import { tmpdir } from 'node:os';
 import { mkdtempSync } from 'node:fs';
 import { join } from 'node:path';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-/** Verdict status mirrors Iris's own pass/warn/fail. */
+/** Verdict status mirrors Reticle's own pass/warn/fail. */
 const PASS = 'pass';
 const FAIL = 'fail';
 
 /**
  * The fix prompt each oracle hands the platform's fixer subagent when it fails — the demo analogue of
- * Iris's `repair.failurePackets[].suggestedPrompt`. Keyed by check name. This is what closes the loop:
+ * Reticle's `repair.failurePackets[].suggestedPrompt`. Keyed by check name. This is what closes the loop:
  * a failure is not just "red", it is an actionable instruction grounded in observed program truth.
  */
 const FIX_PROMPTS = {
@@ -67,26 +67,26 @@ export async function verifyPreview({
   await fetch(`${previewUrl}/api/reset`, { method: 'DELETE', headers: { 'x-bug': bug } });
 
   const server = await start({ port: bridgePort, mcp: false });
-  // `iris=1` tells the page to connect to our bridge — only the harness's own browser does this,
+  // `reticle=1` tells the page to connect to our bridge — only the harness's own browser does this,
   // never a plain preview iframe, so the two never collide on the session.
   const provider = new LaunchedRealInputProvider({
-    driveUrl: `${previewUrl}/?bug=${bug}&iris=1`,
+    driveUrl: `${previewUrl}/?bug=${bug}&reticle=1`,
     headless,
   });
-  await provider.navigate(); // launches Chromium → the page's Iris SDK dials our bridge
+  await provider.navigate(); // launches Chromium → the page's Reticle SDK dials our bridge
 
   const fs = createNodeFileSystem();
-  const irisRoot = mkdtempSync(join(tmpdir(), 'iris-vibe-builder-'));
+  const reticleRoot = mkdtempSync(join(tmpdir(), 'reticle-vibe-builder-'));
   const now = () => Date.now();
   const deps = {
     sessions: server.bridge.sessions,
     baselines: new BaselineStore(),
     recordings: new RecordingStore(),
     annotations: new AnnotationStore(),
-    flows: new FlowStore(fs, irisRoot, { now }),
-    project: new ProjectStore(fs, irisRoot, { now }),
+    flows: new FlowStore(fs, reticleRoot, { now }),
+    project: new ProjectStore(fs, reticleRoot, { now }),
     fs,
-    irisRoot,
+    reticleRoot,
     now,
     realInput: provider,
   };
@@ -95,12 +95,12 @@ export async function verifyPreview({
 
   const checks = [];
   // A failing oracle carries the fix prompt the platform's fixer subagent would receive — the
-  // analogue of Iris's `repair.failurePackets[].suggestedPrompt`.
+  // analogue of Reticle's `repair.failurePackets[].suggestedPrompt`.
   const check = (name, ok, detail) =>
     checks.push({ name, status: ok ? PASS : FAIL, detail, ...(ok ? {} : { fix: FIX_PROMPTS[name] }) });
 
   // Tool-call helpers that tolerate the different field names a tool can use across versions.
-  const expensesOf = async () => findExpenses(await T('iris_state', { store: 'app' })) ?? [];
+  const expensesOf = async () => findExpenses(await T('reticle_state', { store: 'app' })) ?? [];
   const totalOf = (state) => {
     const found = (() => {
       const seen = new Set();
@@ -119,32 +119,32 @@ export async function verifyPreview({
     return found;
   };
   const postCount = async () => {
-    const posts = await T('iris_network', { method: 'POST', urlContains: '/api/expenses' });
+    const posts = await T('reticle_network', { method: 'POST', urlContains: '/api/expenses' });
     const calls = posts.calls ?? posts.requests ?? posts.network ?? [];
     return Array.isArray(calls) ? calls.length : -1;
   };
   const errorCount = async () => {
-    const errs = await T('iris_console', { level: 'error' });
+    const errs = await T('reticle_console', { level: 'error' });
     const list = errs.entries ?? errs.logs ?? errs.console ?? [];
     return Array.isArray(list) ? list.length : -1;
   };
   const fillAndAdd = async (value) => {
-    const amount = (await T('iris_query', { by: 'testid', value: 'amount' })).elements?.[0]?.ref;
+    const amount = (await T('reticle_query', { by: 'testid', value: 'amount' })).elements?.[0]?.ref;
     if (amount === undefined) throw new Error('amount input not found');
-    await T('iris_act', { ref: amount, action: 'clear' });
-    await T('iris_act', { ref: amount, action: 'fill', args: { value } });
-    const add = (await T('iris_query', { by: 'testid', value: 'add' })).elements?.[0]?.ref;
-    await T('iris_act_and_wait', { ref: add, action: 'click' });
+    await T('reticle_act', { ref: amount, action: 'clear' });
+    await T('reticle_act', { ref: amount, action: 'fill', args: { value } });
+    const add = (await T('reticle_query', { by: 'testid', value: 'add' })).elements?.[0]?.ref;
+    await T('reticle_act_and_wait', { ref: add, action: 'click' });
     await sleep(350);
   };
   const readTestidText = async (testid) =>
-    (await T('iris_query', { by: 'testid', value: testid })).elements?.[0]?.name ?? '';
+    (await T('reticle_query', { by: 'testid', value: testid })).elements?.[0]?.name ?? '';
 
   try {
     // Wait for the sandbox browser's SDK to connect.
     for (let i = 0; i < 100 && server.bridge.sessions.count() === 0; i++) await sleep(50);
     if (server.bridge.sessions.count() === 0) throw new Error('sandbox SDK never connected to bridge');
-    await T('iris_wait_ready', { timeoutMs: 10000 });
+    await T('reticle_wait_ready', { timeoutMs: 10000 });
 
     // ── Step A — add a valid expense (amount=42) ──────────────────────────────
     await fillAndAdd('42');
@@ -153,7 +153,7 @@ export async function verifyPreview({
     check('store persisted the new expense', afterAdd.length === 1, `store has ${afterAdd.length}`);
     check('no console errors during add', (await errorCount()) === 0, `${await errorCount()} error(s)`);
     // UI-vs-data: the rendered Total must equal the store's computed total (catches a lying UI).
-    const storeTotal = totalOf(await T('iris_state', { store: 'app' }));
+    const storeTotal = totalOf(await T('reticle_state', { store: 'app' }));
     const shownTotal = (await readTestidText('total')).trim();
     check(
       'displayed Total matches store total',
@@ -174,9 +174,9 @@ export async function verifyPreview({
     // ── Step C — delete a row (only when one exists) ──────────────────────────
     const before = await expensesOf();
     if (before.length > 0) {
-      const del = (await T('iris_query', { by: 'testid', value: 'del' })).elements?.[0]?.ref;
+      const del = (await T('reticle_query', { by: 'testid', value: 'del' })).elements?.[0]?.ref;
       if (del !== undefined) {
-        await T('iris_act_and_wait', { ref: del, action: 'click' });
+        await T('reticle_act_and_wait', { ref: del, action: 'click' });
         await sleep(350);
         const after = await expensesOf();
         check('delete removes the row from the store', after.length < before.length, `len ${before.length}->${after.length}`);
@@ -191,7 +191,7 @@ export async function verifyPreview({
   }
 }
 
-/** Pull the expenses array out of whatever shape iris_state returns. */
+/** Pull the expenses array out of whatever shape reticle_state returns. */
 function findExpenses(state) {
   const seen = new Set();
   const walk = (v) => {

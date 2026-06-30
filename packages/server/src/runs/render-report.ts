@@ -1,5 +1,5 @@
 /**
- * Render an IrisVerificationRun into a legible human/agent-facing report — the "is this actually
+ * Render an ReticleVerificationRun into a legible human/agent-facing report — the "is this actually
  * useful?" moment. Pure + deterministic (no clock, no IO): the same run renders the same text, so it's
  * safe in CI and as a partner-facing artifact. Raw JSON is the contract; this is the read.
  */
@@ -8,11 +8,11 @@ import {
   RunCheckStatus,
   RunFlowStatus,
   VerdictStatus,
-  type IrisVerificationRun,
+  type ReticleVerificationRun,
   type RunCheck,
   type RunFlowResult,
   type RunRisk,
-} from '@syrin/iris-protocol';
+} from '@reticle/protocol';
 
 const VERDICT_GLYPH: Readonly<Record<VerdictStatus, string>> = {
   [VerdictStatus.PASS]: '✓ PASS',
@@ -44,9 +44,9 @@ function riskLine(r: RunRisk): string {
 }
 
 /** Render the run as a plain-text report. Sections with no content are omitted. */
-export function renderRunReport(run: IrisVerificationRun): string {
+export function renderRunReport(run: ReticleVerificationRun): string {
   const out: string[] = [];
-  out.push(`Iris verification — ${run.project.name}  [${run.profile}]`);
+  out.push(`Reticle verification — ${run.project.name}  [${run.profile}]`);
   out.push(
     `Verdict: ${VERDICT_GLYPH[run.verdict.status]}  ·  confidence: ${run.verdict.confidence}` +
       (run.verdict.blockingRisks > 0 ? `  ·  ${run.verdict.blockingRisks} blocking risk(s)` : ''),

@@ -7,7 +7,7 @@ import {
   type ReplayDecision,
   type SuiteFlowResult,
   type SuiteVerdict,
-} from '@syrin/iris-protocol';
+} from '@reticle/protocol';
 import { classifyFlowAssertions } from './flow-classify.js';
 
 /**

@@ -6,14 +6,14 @@ import {
   DriftReason,
   EventType,
   FLOW_FILE_VERSION,
-  IrisCommand,
+  ReticleCommand,
   type CommandResult,
   type ElementDescriptor,
   type FlowFile,
   type FlowStep,
-  type IrisEvent,
+  type ReticleEvent,
   type QueryEmptyHint,
-} from '@syrin/iris-protocol';
+} from '@reticle/protocol';
 import {
   nearestTestid,
   nearestIsAmbiguous,
@@ -22,7 +22,7 @@ import {
 } from './flow-replay.js';
 import { waitForPredicate, type Predicate } from '../events/predicate.js';
 import { asRecord, asString } from '../tools/tools-helpers.js';
-import { IrisTool } from '../tools/tool-names.js';
+import { ReticleTool } from '../tools/tool-names.js';
 
 /** A scripted QUERY response per testid: live elements + (on zero) the present-testids near-miss. */
 interface QueryScript {
@@ -44,13 +44,13 @@ class FakeSession implements FlowReplaySession {
 
   constructor(
     private readonly queryScript: (testid: string) => QueryScript,
-    private readonly events: IrisEvent[] = [],
+    private readonly events: ReticleEvent[] = [],
     private readonly actOk: (ref: string) => boolean = PASS,
     private readonly stores: Record<string, unknown> = {},
   ) {}
 
   command(name: string, args: Record<string, unknown> = {}): Promise<CommandResult> {
-    if (name === IrisCommand.QUERY) {
+    if (name === ReticleCommand.QUERY) {
       const value = asString(args['value']) ?? '';
       this.queries.push(value);
       return Promise.resolve({
@@ -60,7 +60,7 @@ class FakeSession implements FlowReplaySession {
         result: this.queryScript(value),
       });
     }
-    if (name === IrisCommand.ACT) {
+    if (name === ReticleCommand.ACT) {
       const ref = asString(args['ref']) ?? '';
       this.acts.push({ ref, action: asString(args['action']) ?? '' });
       this.actArgs.push(asRecord(args['args']));
@@ -72,7 +72,7 @@ class FakeSession implements FlowReplaySession {
         ...(this.actOk(ref) ? {} : { error: 'act failed' }),
       } as CommandResult);
     }
-    if (name === IrisCommand.STATE_READ) {
+    if (name === ReticleCommand.STATE_READ) {
       return Promise.resolve({
         kind: 'command_result',
         id: 's',
@@ -83,7 +83,7 @@ class FakeSession implements FlowReplaySession {
     return Promise.resolve({ kind: 'command_result', id: 'x', ok: true, result: {} });
   }
 
-  eventsSince(): IrisEvent[] {
+  eventsSince(): ReticleEvent[] {
     return this.events;
   }
 
@@ -105,26 +105,26 @@ function present(testids: string[]): QueryEmptyHint {
 }
 
 function testidStep(value: string, action: ActionType = ActionType.CLICK): FlowStep {
-  return { tool: IrisTool.ACT, anchor: { kind: AnchorKind.TESTID, value }, action, args: {} };
+  return { tool: ReticleTool.ACT, anchor: { kind: AnchorKind.TESTID, value }, action, args: {} };
 }
 
 function signalStep(name: string): FlowStep {
-  return { tool: IrisTool.ACT, anchor: { kind: AnchorKind.SIGNAL, name } };
+  return { tool: ReticleTool.ACT, anchor: { kind: AnchorKind.SIGNAL, name } };
 }
 
 function flow(steps: FlowStep[]): FlowFile {
   return { version: FLOW_FILE_VERSION, name: 'f', createdAt: 0, steps };
 }
 
-function signalEvent(name: string): IrisEvent {
+function signalEvent(name: string): ReticleEvent {
   return { t: 1, type: EventType.SIGNAL, sessionId: 's', data: { name } };
 }
 
-function routeEvent(pathname: string): IrisEvent {
+function routeEvent(pathname: string): ReticleEvent {
   return { t: 1, type: EventType.ROUTE_CHANGE, sessionId: 's', data: { pathname } };
 }
 
-function netEvent(method: string, url: string, status: number): IrisEvent {
+function netEvent(method: string, url: string, status: number): ReticleEvent {
   return { t: 1, type: EventType.NET_REQUEST, sessionId: 's', data: { method, url, status } };
 }
 
@@ -203,7 +203,7 @@ describe('replayFlow — anchor re-resolution + legible drift', () => {
     const script = (): QueryScript => ({ elements: [el('e-comp', 'new-deploy')] });
     const session = new FakeSession(script);
     const step: FlowStep = {
-      tool: IrisTool.ACT,
+      tool: ReticleTool.ACT,
       anchor: {
         kind: AnchorKind.COMPONENT,
         component: 'NewDeployButton',
@@ -221,7 +221,7 @@ describe('replayFlow — anchor re-resolution + legible drift', () => {
   it('drifts legibly when a component anchor resolves to nothing (the element/source is gone)', async () => {
     const session = new FakeSession(() => ({ elements: [] }));
     const step: FlowStep = {
-      tool: IrisTool.ACT,
+      tool: ReticleTool.ACT,
       anchor: { kind: AnchorKind.COMPONENT, component: 'NewDeployButton' },
       action: ActionType.CLICK,
       args: {},

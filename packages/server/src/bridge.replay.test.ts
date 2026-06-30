@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { WebSocket } from 'ws';
-import { EventType, HumanControlKind, IRIS_WS_PATH, MessageKind } from '@syrin/iris-protocol';
+import { EventType, HumanControlKind, RETICLE_WS_PATH, MessageKind } from '@reticle/protocol';
 import { Bridge } from './bridge.js';
 
 /**
@@ -25,7 +25,7 @@ class PanelClient {
     private readonly sessionId: string,
   ) {
     const host = '127.0.0.1';
-    this.#ws = new WebSocket(`ws://${host}:${String(port)}${IRIS_WS_PATH}`);
+    this.#ws = new WebSocket(`ws://${host}:${String(port)}${RETICLE_WS_PATH}`);
   }
   open(): Promise<void> {
     return new Promise((resolve) => {

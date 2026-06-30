@@ -12,7 +12,7 @@ import {
   RunChangeKind,
   type RunChangedFile,
   type RunRisk,
-} from '@syrin/iris-protocol';
+} from '@reticle/protocol';
 
 /** Path heuristics per surface. Order is irrelevant — a path may match several surfaces. */
 const RISK_PATTERNS: ReadonlyArray<{ surface: RiskSurface; pattern: RegExp }> = [
@@ -52,7 +52,7 @@ export function risksForPath(path: string): RiskSurface[] {
   return RISK_PATTERNS.filter((r) => r.pattern.test(path)).map((r) => r.surface);
 }
 
-/** A change set Iris was told about (the live wiring derives this from the diff). */
+/** A change set Reticle was told about (the live wiring derives this from the diff). */
 export interface ChangedFileInput {
   path: string;
   changeKind: RunChangeKind;

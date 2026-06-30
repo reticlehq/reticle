@@ -1,5 +1,5 @@
-import { registerAdapter, type ComponentInfo, type ComponentSource } from '@syrin/iris-browser';
-import { ComponentStateReason, type ComponentStateResult } from '@syrin/iris-protocol';
+import { registerAdapter, type ComponentInfo, type ComponentSource } from '@reticle/browser';
+import { ComponentStateReason, type ComponentStateResult } from '@reticle/protocol';
 
 interface Hook {
   memoizedState: unknown;
@@ -86,8 +86,8 @@ export function identify(el: Element): ComponentInfo | null {
     fiber = fiber.return;
   }
 
-  // React 19 dropped `_debugSource`; fall back to a data-iris-source stamp if present
-  // (added by @syrin/iris-babel-plugin in dev).
+  // React 19 dropped `_debugSource`; fall back to a data-reticle-source stamp if present
+  // (added by @reticle/babel-plugin in dev).
   if (source === undefined) {
     source = sourceFromAttribute(el);
   }
@@ -101,8 +101,8 @@ export function identify(el: Element): ComponentInfo | null {
 }
 
 function sourceFromAttribute(el: Element): ComponentSource | undefined {
-  const stamped = el.closest('[data-iris-source]');
-  const raw = stamped?.getAttribute('data-iris-source');
+  const stamped = el.closest('[data-reticle-source]');
+  const raw = stamped?.getAttribute('data-reticle-source');
   if (raw === null || raw === undefined) return undefined;
   const match = /^(.*):(\d+):(\d+)$/.exec(raw);
   if (match === null) return undefined;
@@ -214,7 +214,7 @@ export function hasHoverHandlers(el: Element): boolean {
 
 let installed = false;
 
-/** Register the React adapter so `iris.inspect` returns component stack + source file. */
+/** Register the React adapter so `reticle.inspect` returns component stack + source file. */
 export function install(): void {
   if (installed) return;
   installed = true;

@@ -6,12 +6,12 @@ import {
   type FlowExpect,
   type FlowFile,
   type FlowStep,
-} from '@syrin/iris-protocol';
-import { IrisTool } from '../tools/tool-names.js';
+} from '@reticle/protocol';
+import { ReticleTool } from '../tools/tool-names.js';
 import { buildDomainModel } from './domain-model.js';
 
 function testidStep(value: string): FlowStep {
-  return { tool: IrisTool.ACT, anchor: { kind: AnchorKind.TESTID, value } };
+  return { tool: ReticleTool.ACT, anchor: { kind: AnchorKind.TESTID, value } };
 }
 
 function flow(name: string, steps: FlowStep[], success?: FlowExpect): FlowFile {

@@ -1,11 +1,11 @@
 /**
  * React render meter — counts commits the way React DevTools does, via the global
  * `__REACT_DEVTOOLS_GLOBAL_HOOK__.onCommitFiberRoot` callback (one call per committed render). This is
- * the Iris-only perf signal: Playwright/DevTools-MCP cannot observe a single React render, so a page
+ * the Reticle-only perf signal: Playwright/DevTools-MCP cannot observe a single React render, so a page
  * that is thrashing (committing many times a second) while the DOM stays visually identical — a
- * wasted-render storm — looks idle to them. Iris sees the commit rate.
+ * wasted-render storm — looks idle to them. Reticle sees the commit rate.
  *
- * Exposed as a registered store (`__iris_renders`) so it reads through the normal `iris_state` path —
+ * Exposed as a registered store (`__reticle_renders`) so it reads through the normal `reticle_state` path —
  * no new wire surface. Total commits is the robust, version-tolerant signal; we deliberately do NOT
  * attribute per-component (React clears the per-fiber work flags during commit, before this fires, so
  * a post-commit walk can't reliably tell which component re-rendered without the profiler build).
@@ -16,10 +16,10 @@
  * complete minimal hook. MUST be installed before `react-dom` initializes (React reads the hook at
  * renderer-inject time) — import this as the first side-effect in the app entry, before React.
  */
-import { registerStore } from '@syrin/iris-browser';
+import { registerStore } from '@reticle/browser';
 
 const HOOK_KEY = '__REACT_DEVTOOLS_GLOBAL_HOOK__';
-const RENDER_STORE = '__iris_renders';
+const RENDER_STORE = '__reticle_renders';
 
 interface DevtoolsHook {
   supportsFiber?: boolean;
@@ -38,7 +38,7 @@ function noop(): void {
   /* React calls these; a no-op keeps a freshly-installed hook complete. */
 }
 
-/** The render stats surfaced via the `__iris_renders` store (read with iris_state). */
+/** The render stats surfaced via the `__reticle_renders` store (read with reticle_state). */
 export interface RenderStats {
   /** Total React commits observed since install (monotonic; diff over a window for a rate). */
   commits: number;
@@ -54,7 +54,7 @@ export function resetRenderMeter(): void {
 }
 
 /**
- * Install (or augment) the React commit hook + register the `__iris_renders` store. Idempotent and
+ * Install (or augment) the React commit hook + register the `__reticle_renders` store. Idempotent and
  * never throws. Call BEFORE react-dom loads.
  */
 export function installRenderMeter(): void {

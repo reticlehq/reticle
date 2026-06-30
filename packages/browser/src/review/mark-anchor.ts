@@ -1,11 +1,11 @@
-import { MarkAnchorStrategy } from '@syrin/iris-protocol';
+import { MarkAnchorStrategy } from '@reticle/protocol';
 import { AnchorStrategy, synthesizeAnchor, type AnchorInput } from '../dom/auto-anchor.js';
 import { getAccessibleName, getRole } from '../dom/a11y.js';
 import { identifyComponent } from '../registry/adapters.js';
 
 /** Attribute names — defined locally per the recorder/query convention (no shared free string). */
 const TESTID_ATTR = 'data-testid';
-const SOURCE_ATTR = 'data-iris-source';
+const SOURCE_ATTR = 'data-reticle-source';
 
 /**
  * The element address carried by a human review mark: a re-resolvable anchor (auto-anchor's most
@@ -28,7 +28,7 @@ const STRATEGY: Record<AnchorStrategy, MarkAnchorStrategy> = {
   [AnchorStrategy.POSITION]: MarkAnchorStrategy.POSITION,
 };
 
-/** Parse a `data-iris-source="file:line:column"` value into `{ file, line }` (column dropped). */
+/** Parse a `data-reticle-source="file:line:column"` value into `{ file, line }` (column dropped). */
 function parseSourceAttr(value: string | null): { file: string; line: number } | undefined {
   if (value === null) return undefined;
   const m = /^(.*):(\d+):(\d+)$/.exec(value);
@@ -57,7 +57,7 @@ function labelFor(el: Element, role: string, name: string): string {
 
 /**
  * Resolve a clicked element into the address a human review mark carries. Reuses the same
- * auto-anchor machinery a recorded flow uses, so a mark pins to the element the way Iris addresses
+ * auto-anchor machinery a recorded flow uses, so a mark pins to the element the way Reticle addresses
  * it everywhere else — and always reports the source file:line when one is available.
  */
 export function resolveMarkAnchor(el: Element): MarkAnchor {

@@ -1,12 +1,12 @@
 'use strict';
-// Webpack pre-loader: applies the Iris babel transform (adds data-iris-source) to the
+// Webpack pre-loader: applies the Reticle babel transform (adds data-reticle-source) to the
 // project's JSX/TSX, then hands the result to next-swc-loader. SWC still does the real
-// compile — we only stamp source locations. Dev-only (wired by withIris).
+// compile — we only stamp source locations. Dev-only (wired by withReticle).
 const babel = require('@babel/core');
 
 let pluginPromise;
 
-module.exports = function irisNextLoader(source, inputMap) {
+module.exports = function reticleNextLoader(source, inputMap) {
   const callback = this.async();
   const filename = this.resourcePath;
 
@@ -15,7 +15,7 @@ module.exports = function irisNextLoader(source, inputMap) {
     return;
   }
 
-  pluginPromise = pluginPromise || import('@syrin/iris-babel-plugin').then((m) => m.default);
+  pluginPromise = pluginPromise || import('@reticle/babel-plugin').then((m) => m.default);
 
   pluginPromise
     .then((plugin) =>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ReplayStatus, RunFlowStatus, type FlowReplayResult } from '@syrin/iris-protocol';
+import { ReplayStatus, RunFlowStatus, type FlowReplayResult } from '@reticle/protocol';
 import { mapReplayToFlowResult, runFlowStatusOf } from './replay-mapping.js';
 
 const replay = (status: ReplayStatus, extra?: Partial<FlowReplayResult>): FlowReplayResult => ({
@@ -54,7 +54,7 @@ describe('mapReplayToFlowResult', () => {
     const r = mapReplayToFlowResult(
       replay(ReplayStatus.OK, {
         steps: [
-          { step: 0, tool: 'iris_act', anchor: 'login-submit', ok: true },
+          { step: 0, tool: 'reticle_act', anchor: 'login-submit', ok: true },
           { step: 1, tool: 'success', anchor: 'auth:granted', ok: true },
         ],
       }),
@@ -67,7 +67,7 @@ describe('mapReplayToFlowResult', () => {
   it('leaves oracle undefined for an action-only (smoke) replay', () => {
     const r = mapReplayToFlowResult(
       replay(ReplayStatus.OK, {
-        steps: [{ step: 0, tool: 'iris_act', anchor: 'nav-compose', ok: true }],
+        steps: [{ step: 0, tool: 'reticle_act', anchor: 'nav-compose', ok: true }],
       }),
       4,
     );

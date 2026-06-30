@@ -4,8 +4,8 @@ import { sanitizeForTransport } from '../security/serialization.js';
 export type StoreGetter = () => unknown;
 
 // Persist on a global so registrations survive HMR re-evaluation (see adapters.ts / feedback #7).
-const globalStore = globalThis as unknown as { __irisStores?: Map<string, StoreGetter> };
-const stores: Map<string, StoreGetter> = (globalStore.__irisStores ??= new Map());
+const globalStore = globalThis as unknown as { __reticleStores?: Map<string, StoreGetter> };
+const stores: Map<string, StoreGetter> = (globalStore.__reticleStores ??= new Map());
 
 /** App calls this once per store: registerStore('workspace', () => useWorkspace.getState()). */
 export function registerStore(name: string, getter: StoreGetter): void {

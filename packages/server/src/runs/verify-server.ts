@@ -6,9 +6,9 @@
  */
 
 import * as http from 'node:http';
-import { LOOPBACK_HOST } from '@syrin/iris-protocol';
-import type { IrisVerificationRun } from '@syrin/iris-protocol';
-import type { IrisRunner } from './iris-runner.js';
+import { LOOPBACK_HOST } from '@reticle/protocol';
+import type { ReticleVerificationRun } from '@reticle/protocol';
+import type { ReticleRunner } from './reticle-runner.js';
 import { handleVerifyRequest, type VerifyHttpRequest } from './verify-http.js';
 
 const LOCALHOST = LOOPBACK_HOST;
@@ -18,15 +18,15 @@ const MAX_BODY_BYTES = 1_000_000;
 const REQUEST_TIMEOUT_MS = 30_000;
 const HEADERS_TIMEOUT_MS = 10_000;
 /** Partner pipelines send the token here (localhost-bound, so this is defence-in-depth, not the wall). */
-export const TOKEN_HEADER = 'x-iris-token';
+export const TOKEN_HEADER = 'x-reticle-token';
 const JSON_HEADERS = { 'Content-Type': 'application/json' } as const;
 
 export interface VerifyServerOptions {
-  runner: IrisRunner;
+  runner: ReticleRunner;
   /** Empty string ⇒ no token required (localhost-only). */
   token: string;
   /** Optional persist hook — the live wiring passes RunStore.write so every verdict is saved. */
-  persist?: (run: IrisVerificationRun) => Promise<void>;
+  persist?: (run: ReticleVerificationRun) => Promise<void>;
 }
 
 function singleHeader(value: string | string[] | undefined): string | undefined {

@@ -1,5 +1,5 @@
 /**
- * The impure shell for `iris init`: gather project files via an injected IO surface, build the
+ * The impure shell for `reticle init`: gather project files via an injected IO surface, build the
  * plan (pure), optionally write the apply-steps, and print a human-readable report. All filesystem
  * access goes through `InitIo` so the orchestration is unit-testable with an in-memory IO.
  */
@@ -23,7 +23,7 @@ const LOCKFILE_NAMES = [
 /**
  * Resolve the lockfiles set used to pick the package manager. A lockfile in the project root wins;
  * otherwise we walk UP the directory tree (monorepos keep the lockfile at the workspace root, not in
- * each package) so `iris init` in a sub-package suggests `pnpm add` instead of defaulting to `npm i`.
+ * each package) so `reticle init` in a sub-package suggests `pnpm add` instead of defaulting to `npm i`.
  */
 export function resolveLockfiles(
   rootFiles: ReadonlySet<string>,
@@ -48,7 +48,7 @@ export function resolveLockfiles(
 }
 
 const PACKAGE_JSON = 'package.json';
-const NEXT_IRIS_DEV = 'app/iris-dev.tsx';
+const NEXT_RETICLE_DEV = 'app/reticle-dev.tsx';
 const SVELTEKIT_HOOKS = 'src/hooks.client.ts';
 const VITE_CONFIG_CANDIDATES = [
   'vite.config.ts',
@@ -145,25 +145,25 @@ function gatherPlanInput(options: InitOptions, io: InitIo, pkgRaw: string): Plan
     cursorConfigPath,
     viteConfig,
     nextConfigFile: firstPresent(rootFiles, NEXT_CONFIG_CANDIDATES),
-    nextIrisDevExists: io.exists(NEXT_IRIS_DEV),
+    nextReticleDevExists: io.exists(NEXT_RETICLE_DEV),
     svelteKitHooksExists: io.exists(SVELTEKIT_HOOKS),
-    irisConfigExists: io.exists('.iris.json'),
+    reticleConfigExists: io.exists('.reticle.json'),
     options: { port: options.port, mcp: options.mcp, install: options.install, projectId },
   };
 }
 
 function restartHint(framework: Framework): string {
   if (framework === Framework.NEXT)
-    return 'Restart `next dev`, then ask your agent: "List Syrin Iris sessions".';
+    return 'Restart `next dev`, then ask your agent: "List Reticle Reticle sessions".';
   if (framework === Framework.VITE)
-    return 'Restart `vite`, then ask your agent: "List Syrin Iris sessions".';
+    return 'Restart `vite`, then ask your agent: "List Reticle Reticle sessions".';
   if (framework === Framework.SVELTEKIT)
-    return 'Restart your dev server (`npm run dev`), then ask your agent: "List Syrin Iris sessions".';
-  return 'Reload your app on localhost, then ask your agent: "List Syrin Iris sessions".';
+    return 'Restart your dev server (`npm run dev`), then ask your agent: "List Reticle Reticle sessions".';
+  return 'Reload your app on localhost, then ask your agent: "List Reticle Reticle sessions".';
 }
 
 function report(plan: Plan, dryRun: boolean, failed: ReadonlySet<string>, io: InitIo): InitResult {
-  io.print(dryRun ? 'iris init (dry run — no files written)' : 'iris init');
+  io.print(dryRun ? 'reticle init (dry run — no files written)' : 'reticle init');
   io.print('');
   let applied = 0;
   let manual = 0;
@@ -203,7 +203,7 @@ function applyEffects(plan: Plan, io: InitIo): Set<string> {
 export function runInit(options: InitOptions, io: InitIo): InitResult {
   const pkgRaw = io.readFile(PACKAGE_JSON);
   if (pkgRaw === null) {
-    io.print('No package.json found. Run `iris init` from your project root.');
+    io.print('No package.json found. Run `reticle init` from your project root.');
     return { ok: false, applied: 0, manual: 0 };
   }
 

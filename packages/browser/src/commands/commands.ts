@@ -3,7 +3,7 @@ import {
   ComponentStateReason,
   DANGEROUS_ACTION_CONFIRM_ARG,
   ElementQuerySchema,
-  IrisCommand,
+  ReticleCommand,
   SnapshotMode,
   TRANSPORT_LIMITS,
   selectPath,
@@ -11,7 +11,7 @@ import {
   type ComponentStateResult,
   type ElementQuery,
   type ElementState,
-} from '@syrin/iris-protocol';
+} from '@reticle/protocol';
 import { buildSnapshot } from '../dom/snapshot.js';
 import { matchQuery, runQuery } from '../dom/query.js';
 import {
@@ -32,7 +32,7 @@ import { scrollContainer } from '../actions/scroll.js';
 export type CommandHandler = (args: Record<string, unknown>) => unknown;
 
 /** Query param appended on a hard reload to bypass the browser cache. */
-const RELOAD_CACHE_BUST_PARAM = '_iris_reload';
+const RELOAD_CACHE_BUST_PARAM = '_reticle_reload';
 
 function str(value: unknown): string | undefined {
   return typeof value === 'string' ? value : undefined;
@@ -210,20 +210,20 @@ export function resolveNavigationUrl(rawUrl: string, baseUrl: string): string | 
 /** Map browser command names to handlers. Used by the transport on each COMMAND. */
 export function createCommandRegistry(): Map<string, CommandHandler> {
   const reg = new Map<string, CommandHandler>();
-  reg.set(IrisCommand.SNAPSHOT, (args) =>
+  reg.set(ReticleCommand.SNAPSHOT, (args) =>
     buildSnapshot({
       scope: str(args['scope']),
       mode: (str(args['mode']) as SnapshotMode | undefined) ?? SnapshotMode.FULL,
     }),
   );
-  reg.set(IrisCommand.QUERY, (args) => runQuery(queryFromArgs(args)));
-  reg.set(IrisCommand.MATCH, (args) =>
+  reg.set(ReticleCommand.QUERY, (args) => runQuery(queryFromArgs(args)));
+  reg.set(ReticleCommand.MATCH, (args) =>
     matchQuery(
       ElementQuerySchema.parse(record(args['query'])),
       str(args['state']) as ElementState | undefined,
     ),
   );
-  reg.set(IrisCommand.ACT, (args) => {
+  reg.set(ReticleCommand.ACT, (args) => {
     const action = str(args['action']) ?? '';
     if (action === ActionType.WEBMCP) {
       const inner = record(args['args']);
@@ -235,12 +235,12 @@ export function createCommandRegistry(): Map<string, CommandHandler> {
     }
     return executeAction(str(args['ref']) ?? '', action, record(args['args']));
   });
-  reg.set(IrisCommand.ACT_SEQUENCE, (args) =>
+  reg.set(ReticleCommand.ACT_SEQUENCE, (args) =>
     executeSequence((Array.isArray(args['steps']) ? args['steps'] : []) as ActionStep[]),
   );
-  reg.set(IrisCommand.INSPECT, (args) => inspect(str(args['ref']) ?? ''));
-  reg.set(IrisCommand.ANIMATIONS, () => listAnimations());
-  reg.set(IrisCommand.CLOCK, (args) => {
+  reg.set(ReticleCommand.INSPECT, (args) => inspect(str(args['ref']) ?? ''));
+  reg.set(ReticleCommand.ANIMATIONS, () => listAnimations());
+  reg.set(ReticleCommand.CLOCK, (args) => {
     if (args['reset'] === true) {
       resetClock();
     } else {
@@ -250,11 +250,11 @@ export function createCommandRegistry(): Map<string, CommandHandler> {
     }
     return { frozen: isClockFrozen() };
   });
-  reg.set(IrisCommand.STATE_READ, (args) =>
+  reg.set(ReticleCommand.STATE_READ, (args) =>
     readState(str(args['ref']), str(args['store']), str(args['path']), num(args['depth'])),
   );
-  reg.set(IrisCommand.CAPABILITIES, () => getCapabilities());
-  reg.set(IrisCommand.SCROLL, (args) => {
+  reg.set(ReticleCommand.CAPABILITIES, () => getCapabilities());
+  reg.set(ReticleCommand.SCROLL, (args) => {
     const dy = args['dy'];
     const fraction = args['fraction'];
     return scrollContainer(
@@ -263,7 +263,7 @@ export function createCommandRegistry(): Map<string, CommandHandler> {
       typeof fraction === 'number' ? fraction : undefined,
     );
   });
-  reg.set(IrisCommand.NAVIGATE, (args) => {
+  reg.set(ReticleCommand.NAVIGATE, (args) => {
     const rawUrl = str(args['url']);
     if (rawUrl === undefined || rawUrl.length === 0) return { ok: false, reason: 'url required' };
     const url = resolveNavigationUrl(rawUrl, window.location.href);
@@ -271,7 +271,7 @@ export function createCommandRegistry(): Map<string, CommandHandler> {
     window.location.assign(url);
     return { ok: true, url };
   });
-  reg.set(IrisCommand.REFRESH, (args) => {
+  reg.set(ReticleCommand.REFRESH, (args) => {
     if (args['hard'] === true) {
       // Hard reload: navigate to self with a cache-busting param then replace history.
       const url = new URL(window.location.href);

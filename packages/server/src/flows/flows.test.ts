@@ -10,9 +10,9 @@ import {
   FlowErrorCode,
   FlowFileSchema,
   QueryBy,
-} from '@syrin/iris-protocol';
+} from '@reticle/protocol';
 import { createNodeFileSystem, type FileSystemPort } from '../project/fs-port.js';
-import { flowPath, irisDirPaths } from '../project/iris-dir.js';
+import { flowPath, reticleDirPaths } from '../project/reticle-dir.js';
 import { FlowStore, recordedStepToFlowStep } from './flows.js';
 import type { CompiledProgram, RecordedStep } from './recordings.js';
 
@@ -29,8 +29,8 @@ describe('FlowStore — temp-dir fs, never touches the repo', () => {
   let store: FlowStore;
 
   beforeEach(async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'iris-flow-'));
-    root = join(dir, '.iris');
+    const dir = await mkdtemp(join(tmpdir(), 'reticle-flow-'));
+    root = join(dir, '.reticle');
     fs = createNodeFileSystem();
     store = new FlowStore(fs, root, clock);
   });
@@ -44,7 +44,7 @@ describe('FlowStore — temp-dir fs, never touches the repo', () => {
   it('1: save then load round-trips a flow with a testid anchor', async () => {
     const p = program('f', [
       {
-        tool: 'iris_act',
+        tool: 'reticle_act',
         stable: true,
         args: { by: QueryBy.TESTID, value: 'chat-send', action: ActionType.CLICK, args: {} },
       },
@@ -69,7 +69,7 @@ describe('FlowStore — temp-dir fs, never touches the repo', () => {
   it('2: save preserves action + args through the anchor conversion', async () => {
     const p = program('f', [
       {
-        tool: 'iris_act',
+        tool: 'reticle_act',
         stable: true,
         args: { by: QueryBy.TESTID, value: 'name', action: ActionType.FILL, args: { value: 'x' } },
       },
@@ -84,7 +84,7 @@ describe('FlowStore — temp-dir fs, never touches the repo', () => {
   it('4: act_sequence with all-testid sub-steps round-trips, none degraded', async () => {
     const p = program('f', [
       {
-        tool: 'iris_act_sequence',
+        tool: 'reticle_act_sequence',
         stable: true,
         args: {
           steps: [
@@ -102,7 +102,7 @@ describe('FlowStore — temp-dir fs, never touches the repo', () => {
     const loaded = await store.load('f');
     if (!loaded.ok) throw new Error('expected ok');
     const top = loaded.value.steps[0];
-    expect(top?.tool).toBe('iris_act_sequence');
+    expect(top?.tool).toBe('reticle_act_sequence');
     expect(top?.steps).toHaveLength(2);
     expect(top?.steps?.[0]?.anchor.kind).toBe(AnchorKind.TESTID);
     expect(top?.steps?.[1]?.anchor.kind).toBe(AnchorKind.TESTID);
@@ -115,7 +115,7 @@ describe('FlowStore — temp-dir fs, never touches the repo', () => {
     expect(await store.list()).toEqual(['a', 'b']);
   });
 
-  it('15: list on an absent .iris/flows dir returns [] (no throw)', async () => {
+  it('15: list on an absent .reticle/flows dir returns [] (no throw)', async () => {
     expect(await store.list()).toEqual([]);
   });
 
@@ -131,7 +131,11 @@ describe('FlowStore — temp-dir fs, never touches the repo', () => {
 
   it('5: a ref-only step is recorded with a best-effort anchor + degraded:true (not dropped)', async () => {
     const p = program('f', [
-      { tool: 'iris_act', stable: false, args: { ref: 'e34', action: ActionType.CLICK, args: {} } },
+      {
+        tool: 'reticle_act',
+        stable: false,
+        args: { ref: 'e34', action: ActionType.CLICK, args: {} },
+      },
     ]);
     const saved = await store.save(p);
     expect(saved).toEqual({
@@ -154,7 +158,7 @@ describe('FlowStore — temp-dir fs, never touches the repo', () => {
 
   it('5b: a degraded step with NO ref still round-trips (save→load symmetric, not corrupt-on-write)', async () => {
     const p = program('f', [
-      { tool: 'iris_act', stable: false, args: { action: ActionType.CLICK, args: {} } },
+      { tool: 'reticle_act', stable: false, args: { action: ActionType.CLICK, args: {} } },
     ]);
     const saved = await store.save(p);
     expect(saved.ok).toBe(true);
@@ -167,7 +171,7 @@ describe('FlowStore — temp-dir fs, never touches the repo', () => {
   it('6: act_sequence with one degraded sub-step marks the parent degraded but keeps both', async () => {
     const p = program('f', [
       {
-        tool: 'iris_act_sequence',
+        tool: 'reticle_act_sequence',
         stable: false,
         args: {
           steps: [
@@ -220,14 +224,14 @@ describe('FlowStore — temp-dir fs, never touches the repo', () => {
   });
 
   it('11: load of a malformed JSON file returns PARSE_FAILED', async () => {
-    await mkdir(irisDirPaths(root).flows, { recursive: true });
+    await mkdir(reticleDirPaths(root).flows, { recursive: true });
     await writeFile(flowPath(root, 'bad'), '{not json', 'utf8');
     const loaded = await store.load('bad');
     expect(loaded).toEqual({ ok: false, code: FlowErrorCode.PARSE_FAILED });
   });
 
   it('12: load of a schema-invalid flow (wrong version) returns PARSE_FAILED', async () => {
-    await mkdir(irisDirPaths(root).flows, { recursive: true });
+    await mkdir(reticleDirPaths(root).flows, { recursive: true });
     await writeFile(
       flowPath(root, 'wrong'),
       JSON.stringify({ version: 99, name: 'wrong', createdAt: 1, steps: [] }),
@@ -252,7 +256,7 @@ describe('FlowStore — temp-dir fs, never touches the repo', () => {
 describe('recordedStepToFlowStep (pure)', () => {
   it('17: maps a testid step purely (no degraded)', () => {
     const out = recordedStepToFlowStep({
-      tool: 'iris_act',
+      tool: 'reticle_act',
       stable: true,
       args: { by: QueryBy.TESTID, value: 'chat-send', action: ActionType.CLICK, args: {} },
     });
@@ -263,7 +267,7 @@ describe('recordedStepToFlowStep (pure)', () => {
 
   it('18: never returns undefined for an unstable step', () => {
     const out = recordedStepToFlowStep({
-      tool: 'iris_act',
+      tool: 'reticle_act',
       stable: false,
       args: { ref: 'e1', action: ActionType.CLICK, args: {} },
     });
@@ -275,7 +279,7 @@ describe('recordedStepToFlowStep (pure)', () => {
 
   it('maps a component (auto-anchor) step to a stable component anchor — not degraded', () => {
     const out = recordedStepToFlowStep({
-      tool: 'iris_act',
+      tool: 'reticle_act',
       stable: true,
       args: {
         by: QueryBy.COMPONENT,

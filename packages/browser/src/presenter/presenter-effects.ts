@@ -28,7 +28,7 @@ export function ringAround(ring: HTMLElement | undefined, rect: DOMRect): void {
 export function spawnRipple(root: HTMLElement | undefined, x: number, y: number): void {
   if (root === undefined) return;
   const r = document.createElement('div');
-  r.setAttribute('data-iris-ripple', '');
+  r.setAttribute('data-reticle-ripple', '');
   r.style.left = `${String(x)}px`;
   r.style.top = `${String(y)}px`;
   root.appendChild(r);

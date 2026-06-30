@@ -93,16 +93,16 @@ describe('runInit', () => {
     expect(io.lines.join('\n')).toContain('No package.json');
   });
 
-  it('registers iris globally via the claude CLI (not a project .mcp.json) and patches vite', () => {
+  it('registers reticle globally via the claude CLI (not a project .mcp.json) and patches vite', () => {
     const io = memoryIo(VITE_FILES);
     const r = runInit(OPTS, io);
     expect(r.ok).toBe(true);
     expect(io.written['.mcp.json']).toBeUndefined();
     expect(io.execCalls.some((c) => c.command === 'claude' && c.args.includes('add'))).toBe(true);
-    expect(io.written['vite.config.ts']).toContain('@syrin/iris/vite');
+    expect(io.written['vite.config.ts']).toContain('@reticle/core/vite');
   });
 
-  it('does not re-register when an iris server already exists (idempotent, install-once)', () => {
+  it('does not re-register when an reticle server already exists (idempotent, install-once)', () => {
     const io = memoryIo(VITE_FILES, { mcpExists: true });
     runInit(OPTS, io);
     expect(io.execCalls.some((c) => c.command === 'claude')).toBe(false);
@@ -118,14 +118,14 @@ describe('runInit', () => {
   it('registers in Cursor global config when Cursor is present', () => {
     const io = memoryIo(VITE_FILES, { claudeAvailable: false, cursor: true });
     runInit(OPTS, io);
-    expect(io.written['/home/u/.cursor/mcp.json']).toContain('@syrin/iris');
+    expect(io.written['/home/u/.cursor/mcp.json']).toContain('@reticle/core');
   });
 
   it('registers with BOTH Claude and Cursor when both are present', () => {
     const io = memoryIo(VITE_FILES, { claudeAvailable: true, cursor: true });
     runInit(OPTS, io);
     expect(io.execCalls.some((c) => c.command === 'claude' && c.args.includes('add'))).toBe(true);
-    expect(io.written['/home/u/.cursor/mcp.json']).toContain('@syrin/iris');
+    expect(io.written['/home/u/.cursor/mcp.json']).toContain('@reticle/core');
   });
 
   it('dry run writes nothing and runs no subprocess', () => {
@@ -140,7 +140,7 @@ describe('runInit', () => {
   it('runs the install when enabled', () => {
     const io = memoryIo({ ...VITE_FILES, 'pnpm-lock.yaml': '' }, { mcpExists: true });
     runInit({ ...OPTS, install: true }, io);
-    expect(io.execCalls).toEqual([{ command: 'pnpm', args: ['add', '-D', '@syrin/iris'] }]);
+    expect(io.execCalls).toEqual([{ command: 'pnpm', args: ['add', '-D', '@reticle/core'] }]);
   });
 
   it('downgrades a failed step to manual with its fallback command', () => {
@@ -150,13 +150,13 @@ describe('runInit', () => {
     expect(r.manual).toBeGreaterThan(0);
   });
 
-  it('creates app/iris-dev.tsx for a Next project', () => {
+  it('creates app/reticle-dev.tsx for a Next project', () => {
     const io = memoryIo({
       'package.json': JSON.stringify({ dependencies: { next: '15', react: '^19' } }),
       'next.config.mjs': 'export default {};\n',
     });
     runInit(OPTS, io);
-    expect(io.written['app/iris-dev.tsx']).toContain('IrisDev');
+    expect(io.written['app/reticle-dev.tsx']).toContain('ReticleDev');
   });
 
   it('creates src/hooks.client.ts for a SvelteKit project and does NOT patch vite.config', () => {
@@ -166,7 +166,7 @@ describe('runInit', () => {
       'vite.config.ts': `import { sveltekit } from '@sveltejs/kit/vite';\nexport default { plugins: [sveltekit()] };\n`,
     });
     runInit(OPTS, io);
-    expect(io.written['src/hooks.client.ts']).toContain('iris.connect(');
+    expect(io.written['src/hooks.client.ts']).toContain('reticle.connect(');
     expect(io.written['src/hooks.client.ts']).toContain('app.html'); // explains why the hook exists
     expect(io.written['vite.config.ts']).toBeUndefined(); // the Vite plugin is NOT added for SvelteKit
   });

@@ -1,15 +1,15 @@
 import * as http from 'node:http';
 import { spawn } from 'node:child_process';
-import { LOOPBACK_HOST } from '@syrin/iris-protocol';
+import { LOOPBACK_HOST } from '@reticle/protocol';
 import { STATUS_PATH } from './http-server.js';
 
 /**
- * CLI launch + status helpers — the daemon-introspection (`iris status`) and the one-command
- * "show me the app" flow (`iris open`). Split out of cli.ts so that file stays under the size cap.
+ * CLI launch + status helpers — the daemon-introspection (`reticle status`) and the one-command
+ * "show me the app" flow (`reticle open`). Split out of cli.ts so that file stays under the size cap.
  * The decision logic is pure (unit-tested); the IO (fetch, OS browser launch) is injected/isolated.
  */
 
-/** One connected tab as `iris status` reports it — the at-a-glance health line. */
+/** One connected tab as `reticle status` reports it — the at-a-glance health line. */
 interface StatusSession {
   sessionId: string;
   url: string;
@@ -19,7 +19,7 @@ interface StatusSession {
 }
 
 /**
- * Reduce the daemon's /status JSON to the compact view `iris status` prints. Pure: narrows the
+ * Reduce the daemon's /status JSON to the compact view `reticle status` prints. Pure: narrows the
  * untrusted wire payload (never `any`) and tolerates a missing/partial body so a malformed response
  * degrades to "running, 0 sessions" instead of throwing.
  */
@@ -79,7 +79,7 @@ export function fetchStatus(port: number): Promise<unknown> {
   });
 }
 
-/** What `iris open` should do: reuse an already-connected tab, open a new one, or ask for a url. */
+/** What `reticle open` should do: reuse an already-connected tab, open a new one, or ask for a url. */
 type OpenDecision =
   | { action: 'reuse'; url: string }
   | { action: 'open'; url: string }
@@ -94,7 +94,7 @@ function sameOrigin(a: string, b: string): boolean {
 }
 
 /**
- * Decide what `iris open [url]` does, given the currently-connected tabs. Pure.
+ * Decide what `reticle open [url]` does, given the currently-connected tabs. Pure.
  * - no url + a tab connected → reuse it (the app is already open; don't spawn a duplicate).
  * - no url + nothing connected → ask for one.
  * - url + a tab already on that origin → reuse it (idempotent — re-running never piles up tabs).

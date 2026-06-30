@@ -10,7 +10,7 @@
  * pay for it; the type-only import is elided by `tsc`, so the build stays green without it.
  */
 import type { Browser, Page } from 'playwright';
-import { ActionType, DriveErrorCode, DRIVE_PLAYWRIGHT_MISSING_MSG } from '@syrin/iris-protocol';
+import { ActionType, DriveErrorCode, DRIVE_PLAYWRIGHT_MISSING_MSG } from '@reticle/protocol';
 import { installNetworkMocks, type MockRule } from './network-mock.js';
 
 /** Viewport CSS-px box as returned by the INSPECT command (getBoundingClientRect). */
@@ -21,7 +21,7 @@ export interface ElementBox {
   height: number;
 }
 
-/** Args forwarded from iris_act (fill value, type text, drag drop-target box). */
+/** Args forwarded from reticle_act (fill value, type text, drag drop-target box). */
 export interface RealInputArgs {
   value?: string;
   text?: string;
@@ -44,7 +44,7 @@ export interface ScreenshotOpts {
   clip?: ElementBox;
 }
 
-/** The capability surface iris_act depends on. A FAKE implementing this is injected in tests. */
+/** The capability surface reticle_act depends on. A FAKE implementing this is injected in tests. */
 export interface RealInputProvider {
   /** Whether a Playwright Page currently matches this SDK session URL. */
   isAvailableFor(sessionUrl: string): Promise<boolean>;
@@ -76,8 +76,8 @@ export interface RealInputProvider {
 }
 
 /**
- * Optional lifecycle a provider that OWNS a browser implements (`iris drive`). The
- * iris_act routing still depends only on `RealInputProvider`; the server uses these to boot/tear-down.
+ * Optional lifecycle a provider that OWNS a browser implements (`reticle drive`). The
+ * reticle_act routing still depends only on `RealInputProvider`; the server uses these to boot/tear-down.
  */
 export interface OwnedRealInputProvider extends RealInputProvider {
   /** Launch + navigate the owned browser. Must reject (never hang) on failure. */
@@ -176,14 +176,14 @@ export async function performGesture(
 }
 
 /**
- * Iris paints its own dev overlay (presenter HUD + border glow) into the page. That chrome is
+ * Reticle paints its own dev overlay (presenter HUD + border glow) into the page. That chrome is
  * time-varying — the activity log and border state change with every command — so capturing it
  * makes a fresh screenshot of an unchanged page differ from its baseline. Hide it during capture
  * (Playwright applies this stylesheet only for the shot, then reverts) so visual baselines reflect
- * the app, not Iris. Disabling animations settles any remaining transitions for determinism.
+ * the app, not Reticle. Disabling animations settles any remaining transitions for determinism.
  */
-const HIDE_IRIS_CHROME_CSS = '[data-iris-overlay]{display:none !important}';
-const SCREENSHOT_DETERMINISM = { style: HIDE_IRIS_CHROME_CSS, animations: 'disabled' } as const;
+const HIDE_RETICLE_CHROME_CSS = '[data-reticle-overlay]{display:none !important}';
+const SCREENSHOT_DETERMINISM = { style: HIDE_RETICLE_CHROME_CSS, animations: 'disabled' } as const;
 
 /**
  * Capture a PNG from a Playwright page. Shared by the CDP + launched providers so the
@@ -306,7 +306,7 @@ export type LaunchFn = (headless: boolean) => Promise<Browser>;
 
 /**
  * Force a driven page's already-loaded SDK to connect to our loopback bridge with a pairing token,
- * overriding the app's own (often localhost-only) iris.connect() — so a hosted preview verifies with
+ * overriding the app's own (often localhost-only) reticle.connect() — so a hosted preview verifies with
  * no app redeploy. connect() is a no-op once connected, so re-invoking it is safe.
  */
 export interface InjectConnectOptions {
@@ -321,7 +321,7 @@ export interface LaunchedProviderOptions {
   sleep?: SleepFn;
   /** Injected launcher so unit tests can stub Playwright; defaults to dynamic import('playwright'). */
   launch?: LaunchFn;
-  /** When set, re-invoke the page's iris.connect() with these after load (drive-a-hosted-preview). */
+  /** When set, re-invoke the page's reticle.connect() with these after load (drive-a-hosted-preview). */
   injectConnect?: InjectConnectOptions;
   /** Path to a Playwright storageState JSON (cookies/localStorage) — starts the page authenticated. */
   storageState?: string;
@@ -346,7 +346,7 @@ const launchedChromium: LaunchFn = async (headless) => {
 
 /**
  * Launches and OWNS a Playwright Chromium, navigates it to `driveUrl`, then drives native
- * input on that page. Headless-capable so @syrin/iris-test / CI can run hover/drag unattended.
+ * input on that page. Headless-capable so @reticle/test / CI can run hover/drag unattended.
  */
 export class LaunchedRealInputProvider implements OwnedRealInputProvider {
   readonly #driveUrl: string;
@@ -385,7 +385,7 @@ export class LaunchedRealInputProvider implements OwnedRealInputProvider {
   }
 
   /**
-   * Wait for the page's Iris singleton to exist, then re-invoke connect() with our token + loopback
+   * Wait for the page's Reticle singleton to exist, then re-invoke connect() with our token + loopback
    * URL so a hosted (non-localhost) preview pairs to our bridge without the app being reconfigured.
    * Best-effort: a page with no SDK simply never exposes the global, and we move on.
    */
@@ -393,11 +393,11 @@ export class LaunchedRealInputProvider implements OwnedRealInputProvider {
     const opts = this.#injectConnect;
     if (opts === undefined) return;
     try {
-      await page.waitForFunction('!!globalThis.__irisInstance', {
+      await page.waitForFunction('!!globalThis.__reticleInstance', {
         timeout: INJECT_CONNECT_WAIT_MS,
       });
       const arg = JSON.stringify({ allowNonLocalhost: true, token: opts.token, url: opts.url });
-      await page.evaluate(`globalThis.__irisInstance.connect(${arg})`);
+      await page.evaluate(`globalThis.__reticleInstance.connect(${arg})`);
     } catch {
       // No SDK on the page (or it connected already) — the no-session guard in verify reports it.
     }

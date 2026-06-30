@@ -5,10 +5,10 @@
 // because they're blind. This makes that legible at a glance.
 import { writeFileSync } from 'node:fs';
 
-// All values measured this session (see plan/iris-improvement-mission.md for provenance per number).
+// All values measured this session (see plan/reticle-improvement-mission.md for provenance per number).
 const TOOLS = [
   {
-    tool: 'iris (core)',
+    tool: 'reticle (core)',
     full_flow_cached: 22661,
     detection: 1.0,
     silent_3: 3,
@@ -18,7 +18,7 @@ const TOOLS = [
     harness: true,
   },
   {
-    tool: 'iris (full, default)',
+    tool: 'reticle (full, default)',
     full_flow_cached: 45088,
     detection: 1.0,
     silent_3: 3,
@@ -96,17 +96,17 @@ const rows = TOOLS.map((t) => ({
 const out = {
   metric: 'competitive scorecard — token cost × detection, plus replay / multi-agent / harness',
   axes_note:
-    'Token efficiency and detection are orthogonal. agent-browser is cheapest AND least accurate (false economy). Iris(core) is the only tool that is both competitive on tokens AND 100% detection AND has a near-free deterministic regression loop. Never claim "leanest" — claim "competitive + only-100% + ~free regression".',
+    'Token efficiency and detection are orthogonal. agent-browser is cheapest AND least accurate (false economy). Reticle(core) is the only tool that is both competitive on tokens AND 100% detection AND has a near-free deterministic regression loop. Never claim "leanest" — claim "competitive + only-100% + ~free regression".',
   silent_regression_note:
-    'Only Iris catches all 3 silent regressions; layout-shift + broken-form-validation are missed by EVERY competitor incl. full-snapshot tools — they need a visual/state oracle the others lack.',
+    'Only Reticle catches all 3 silent regressions; layout-shift + broken-form-validation are missed by EVERY competitor incl. full-snapshot tools — they need a visual/state oracle the others lack.',
   rows,
   takeaways: {
-    only_100pct_detection: 'iris',
-    only_deterministic_replay: 'iris (122 tok/run vs ~LLM re-drive)',
-    only_multi_agent_pool_local: 'iris',
-    only_test_harness: 'iris (@syrin/iris-test, vitest-native)',
+    only_100pct_detection: 'reticle',
+    only_deterministic_replay: 'reticle (122 tok/run vs ~LLM re-drive)',
+    only_multi_agent_pool_local: 'reticle',
+    only_test_harness: 'reticle (@reticle/test, vitest-native)',
     token_leader_but_blind: 'agent-browser (2973 tok, 72.7% detection, 0/3 silent)',
-    biggest_iris_fix:
+    biggest_reticle_fix:
       'default full→core: 45088→22661 tokens (cheaper than playwright-mcp), zero detection loss',
   },
 };

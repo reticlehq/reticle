@@ -2,7 +2,7 @@
  * Inline style strings for the floating recorder toolbar. Browser-local UI
  * text (never crosses the wire), split out of recorder.ts to keep that file under the 500-line cap
  * (mirrors how presenter.ts extracts presenter-log.ts). All toolbar nodes also carry
- * data-iris-overlay, so they are snapshot-excluded via dom-ignore.ts regardless of these styles.
+ * data-reticle-overlay, so they are snapshot-excluded via dom-ignore.ts regardless of these styles.
  */
 
 export const TOOLBAR_CSS = [

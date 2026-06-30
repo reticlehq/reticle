@@ -58,7 +58,7 @@ describe('GET /status', () => {
   });
 
   it('still serves a loopback peer with no token even when a token IS configured (local trust)', async () => {
-    // The token gate must never break the local stdio proxy / `iris status`, which always dial 127.0.0.1.
+    // The token gate must never break the local stdio proxy / `reticle status`, which always dial 127.0.0.1.
     shared = createSharedServer({ token: 'a-secret-pairing-token' });
     const port = await listen(shared);
     const res = await get(port, STATUS_PATH);

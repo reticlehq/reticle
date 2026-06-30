@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { RiskSurface, type CapabilitiesContract } from '@syrin/iris-protocol';
-import { irisDirPaths, readContract, writeContract } from './iris-dir.js';
+import { RiskSurface, type CapabilitiesContract } from '@reticle/protocol';
+import { reticleDirPaths, readContract, writeContract } from './reticle-dir.js';
 import { createNodeFileSystem, type FileSystemPort } from './fs-port.js';
 
 const FROZEN = 1_700_000_000_000;
@@ -26,8 +26,8 @@ describe('contract persistence preserves declared governance', () => {
   let fs: FileSystemPort;
 
   beforeEach(async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'iris-gov-'));
-    root = join(dir, '.iris');
+    const dir = await mkdtemp(join(tmpdir(), 'reticle-gov-'));
+    root = join(dir, '.reticle');
     fs = createNodeFileSystem();
   });
 
@@ -47,9 +47,9 @@ describe('contract persistence preserves declared governance', () => {
 
   it('serializes byte-stably (two writes produce identical bytes)', async () => {
     await writeContract(fs, root, withGovernance, () => FROZEN);
-    const first = await readFile(irisDirPaths(root).contract, 'utf8');
+    const first = await readFile(reticleDirPaths(root).contract, 'utf8');
     await writeContract(fs, root, withGovernance, () => FROZEN);
-    const second = await readFile(irisDirPaths(root).contract, 'utf8');
+    const second = await readFile(reticleDirPaths(root).contract, 'utf8');
     expect(first).toBe(second);
   });
 });

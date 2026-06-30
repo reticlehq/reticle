@@ -1,6 +1,6 @@
-import { IrisTool, type ToolInvoker } from '@syrin/iris-server';
-import { InputMode } from '@syrin/iris-protocol';
-import { IrisSkip } from './skip.js';
+import { ReticleTool, type ToolInvoker } from '@reticle/server';
+import { InputMode } from '@reticle/protocol';
+import { ReticleSkip } from './skip.js';
 import { SKIP_REASON_REAL_INPUT } from './constants.js';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -35,7 +35,7 @@ export class InputModeTracker {
 /**
  * Assert real native input is active. Prefers the last act's reported mode (zero extra page
  * mutation); if no act has run, issues a non-mutating SCROLL_INTO_VIEW probe and reads its mode.
- * On 'synthetic' throws IrisSkip(SKIP_REASON_REAL_INPUT) — the runner turns this into status:'skip'.
+ * On 'synthetic' throws ReticleSkip(SKIP_REASON_REAL_INPUT) — the runner turns this into status:'skip'.
  * It NEVER silently passes on synthetic.
  */
 export async function expectInputModeReal(
@@ -48,17 +48,17 @@ export async function expectInputModeReal(
     mode = await probeInputMode(invoke, sessionId);
   }
   if (mode !== InputMode.REAL) {
-    throw new IrisSkip(SKIP_REASON_REAL_INPUT);
+    throw new ReticleSkip(SKIP_REASON_REAL_INPUT);
   }
 }
 
 /**
- * Read whether native real input is active for the session WITHOUT touching the page: iris_sessions
+ * Read whether native real input is active for the session WITHOUT touching the page: reticle_sessions
  * reports `realInputAvailable` per session (true when a CDP/launched provider matches the tab url).
  * App-agnostic — no assumed testid.
  */
 async function probeInputMode(invoke: ToolInvoker, sessionId?: string): Promise<InputMode> {
-  const result = await invoke(IrisTool.SESSIONS, {});
+  const result = await invoke(ReticleTool.SESSIONS, {});
   const sessions = isRecord(result) && Array.isArray(result['sessions']) ? result['sessions'] : [];
   for (const session of sessions) {
     if (!isRecord(session)) continue;

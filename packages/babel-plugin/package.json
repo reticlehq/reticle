@@ -1,21 +1,21 @@
 {
-  "name": "@syrin/iris-babel-plugin",
+  "name": "@reticle/babel-plugin",
   "version": "1.2.0",
   "private": true,
-  "description": "Babel plugin that stamps data-iris-source=\"file:line:col\" on JSX host elements so @syrin/iris-react can map a DOM node to its source (works on React 19, which dropped _debugSource).",
+  "description": "Babel plugin that stamps data-reticle-source=\"file:line:col\" on JSX host elements so @reticle/react can map a DOM node to its source (works on React 19, which dropped _debugSource).",
   "type": "module",
   "license": "Apache-2.0",
-  "author": "Iris contributors",
+  "author": "Reticle contributors",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/syrin-labs/iris.git",
+    "url": "git+https://github.com/reticlehq/reticle.git",
     "directory": "packages/babel-plugin"
   },
-  "homepage": "https://github.com/syrin-labs/iris#readme",
-  "bugs": "https://github.com/syrin-labs/iris/issues",
+  "homepage": "https://github.com/reticlehq/reticle#readme",
+  "bugs": "https://github.com/reticlehq/reticle/issues",
   "keywords": [
     "babel-plugin",
-    "iris",
+    "reticle",
     "react",
     "source",
     "devtools"

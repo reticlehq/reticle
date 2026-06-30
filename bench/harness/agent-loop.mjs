@@ -48,10 +48,10 @@ const SERVERS = {
     args: ['-y', 'chrome-devtools-mcp@1.3.0', '--headless', '--isolated'],
     env: {},
   },
-  iris: {
+  reticle: {
     command: 'node',
     args: ['packages/server/dist/cli.js', 'mcp', '--port', '4455', '--drive', URL],
-    env: { IRIS_PORT: '4455' },
+    env: { RETICLE_PORT: '4455' },
   },
 };
 
@@ -60,27 +60,27 @@ const TASKS = {
   'hidden-api-500': {
     regression: null,
     expectIssue: true,
-    task: `Open ${URL}, log in with admin@iris.dev / password, go to the Diagnostics page and click the "500 Server Error" fault button. Then determine whether the app made any failing network request. Report PASS if everything is healthy or FAIL if a request failed, with the status code.`,
+    task: `Open ${URL}, log in with admin@reticle.dev / password, go to the Diagnostics page and click the "500 Server Error" fault button. Then determine whether the app made any failing network request. Report PASS if everything is healthy or FAIL if a request failed, with the status code.`,
   },
   'console-error-intact-ui': {
     regression: null,
     expectIssue: true,
-    task: `Open ${URL}, log in with admin@iris.dev / password, go to Diagnostics and click the buggy chart widget. Determine whether the application logged any error. Report PASS (healthy) or FAIL (error) and quote the error.`,
+    task: `Open ${URL}, log in with admin@reticle.dev / password, go to Diagnostics and click the buggy chart widget. Determine whether the application logged any error. Report PASS (healthy) or FAIL (error) and quote the error.`,
   },
   'route-transition-break': {
     regression: 'route-transition-break',
     expectIssue: true,
-    task: `Open ${URL}, log in (admin@iris.dev / password), then click the "Compose" navigation item. Verify the Compose view actually renders (it has a prompt box and a Generate button). Report PASS if it renders, FAIL if navigation did nothing.`,
+    task: `Open ${URL}, log in (admin@reticle.dev / password), then click the "Compose" navigation item. Verify the Compose view actually renders (it has a prompt box and a Generate button). Report PASS if it renders, FAIL if navigation did nothing.`,
   },
   'missing-modal': {
     regression: 'missing-modal',
     expectIssue: true,
-    task: `Open ${URL}, log in (admin@iris.dev / password), go to Deployments and click "New deployment". Verify the new-deployment modal opens. Report PASS if it opens, FAIL if no modal appears.`,
+    task: `Open ${URL}, log in (admin@reticle.dev / password), go to Deployments and click "New deployment". Verify the new-deployment modal opens. Report PASS if it opens, FAIL if no modal appears.`,
   },
   'no-regression-control': {
     regression: null,
     expectIssue: false,
-    task: `Open ${URL}, log in (admin@iris.dev / password), and verify the Overview page is healthy (KPI cards + traffic chart render, no errors). Report PASS if healthy, FAIL if anything is broken.`,
+    task: `Open ${URL}, log in (admin@reticle.dev / password), and verify the Overview page is healthy (KPI cards + traffic chart render, no errors). Report PASS if healthy, FAIL if anything is broken.`,
   },
 };
 
@@ -117,7 +117,7 @@ async function runCell(scenarioId, toolKey) {
     verdictText = '';
   try {
     await client.start();
-    if (toolKey === 'iris') await new Promise((r) => setTimeout(r, 3500));
+    if (toolKey === 'reticle') await new Promise((r) => setTimeout(r, 3500));
     const tools = mcpToolsToAnthropic(await client.listTools());
     const system =
       'You are a verification agent with browser tools. Use them to complete the task, then end your final message with exactly "VERDICT: PASS" or "VERDICT: FAIL".';
@@ -185,7 +185,7 @@ async function runCell(scenarioId, toolKey) {
     };
   } finally {
     await client.stop();
-    if (toolKey === 'iris') {
+    if (toolKey === 'reticle') {
       try {
         const { execFileSync } = await import('node:child_process');
         execFileSync('node', ['packages/server/dist/cli.js', 'stop', '--port', '4455', '--quiet'], {
@@ -207,7 +207,7 @@ for (const s of scns) {
     inject(reg);
     await new Promise((r) => setTimeout(r, 500));
   }
-  for (const tool of ['playwright_mcp', 'chrome_devtools_mcp', 'iris']) {
+  for (const tool of ['playwright_mcp', 'chrome_devtools_mcp', 'reticle']) {
     const row = await runCell(s, tool);
     rows.push(row);
     console.log(

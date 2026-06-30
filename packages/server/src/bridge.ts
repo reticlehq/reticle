@@ -4,13 +4,13 @@ import { WebSocketServer, type RawData, type WebSocket } from 'ws';
 import {
   EventType,
   HumanControlKind,
-  IRIS_WS_PATH,
-  IrisMessageSchema,
+  RETICLE_WS_PATH,
+  ReticleMessageSchema,
   LOOPBACK_HOST,
   MessageKind,
   TRANSPORT_LIMITS,
   isLoopbackHostname,
-} from '@syrin/iris-protocol';
+} from '@reticle/protocol';
 import { Session, SessionManager } from './session/session.js';
 import { tokensMatch } from './token-auth.js';
 import { log } from './log.js';
@@ -98,11 +98,11 @@ export class Bridge {
     const host = options.host ?? LOOPBACK_HOST;
     if ((options.token?.length ?? 0) > TRANSPORT_LIMITS.MAX_TOKEN_LENGTH) {
       throw new Error(
-        `Iris pairing token exceeds ${String(TRANSPORT_LIMITS.MAX_TOKEN_LENGTH)} characters`,
+        `Reticle pairing token exceeds ${String(TRANSPORT_LIMITS.MAX_TOKEN_LENGTH)} characters`,
       );
     }
     if (!isLoopbackHostname(host) && (options.token === undefined || options.token.length === 0)) {
-      throw new Error('a pairing token is required when the Iris bridge binds beyond localhost');
+      throw new Error('a pairing token is required when the Reticle bridge binds beyond localhost');
     }
     this.#clock = options.clock ?? (() => Date.now());
     this.#token =
@@ -123,7 +123,7 @@ export class Bridge {
       const srv = options.server;
       this.#wss = new WebSocketServer({
         server: srv,
-        path: IRIS_WS_PATH,
+        path: RETICLE_WS_PATH,
         maxPayload: TRANSPORT_LIMITS.MAX_MESSAGE_BYTES,
         verifyClient: ({ origin }, done) => {
           const allowed = this.#originAllowed(origin);
@@ -151,7 +151,7 @@ export class Bridge {
       this.#wss = new WebSocketServer({
         port: options.port,
         host,
-        path: IRIS_WS_PATH,
+        path: RETICLE_WS_PATH,
         maxPayload: TRANSPORT_LIMITS.MAX_MESSAGE_BYTES,
         verifyClient: ({ origin }, done) => {
           const allowed = this.#originAllowed(origin);
@@ -277,14 +277,14 @@ export class Bridge {
     return isLoopbackHostname(new URL(normalized).hostname);
   }
 
-  #parse(text: string): ReturnType<typeof IrisMessageSchema.parse> | null {
+  #parse(text: string): ReturnType<typeof ReticleMessageSchema.parse> | null {
     let json: unknown;
     try {
       json = JSON.parse(text);
     } catch {
       return null;
     }
-    const result = IrisMessageSchema.safeParse(json);
+    const result = ReticleMessageSchema.safeParse(json);
     if (!result.success) {
       log('bad_message', { issues: result.error.issues.length });
       return null;

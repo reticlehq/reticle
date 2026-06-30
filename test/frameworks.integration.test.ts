@@ -1,11 +1,11 @@
 /**
- * Framework integration — Iris connects in each React framework example app.
+ * Framework integration — Reticle connects in each React framework example app.
  *
- * For each app in apps/example-*, boots its real dev server, starts an Iris bridge on the default
+ * For each app in apps/example-*, boots its real dev server, starts an Reticle bridge on the default
  * port, points a headless browser at the app, and asserts a session registers. This is the committed
  * proof that the integration paths actually work per framework:
- *   - Vite + React        → the iris() vite plugin (auto projectId + connect injection)
- *   - Next.js App Router  → withIris (source-mapping) + a dev-only client connect
+ *   - Vite + React        → the reticle() vite plugin (auto projectId + connect injection)
+ *   - Next.js App Router  → withReticle (source-mapping) + a dev-only client connect
  *   - React Router 7      → a client connect (SSR, no index.html injection)
  *   - Astro + React       → a client <script> connect (+ es2022 vite target)
  *
@@ -16,7 +16,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { spawn } from 'node:child_process';
 import { chromium } from 'playwright';
-import { start } from '@syrin/iris-server';
+import { start } from '@reticle/server';
 
 const ROOT = process.cwd();
 const BRIDGE_PORT = 4400;
@@ -94,32 +94,32 @@ async function assertConnects(pkg: string, port: number): Promise<void> {
       }
       await sleep(200);
     }
-    expect(connected, `${pkg} never connected an Iris session`).toBe(true);
+    expect(connected, `${pkg} never connected an Reticle session`).toBe(true);
     await browser.close();
   } finally {
     await server.close();
   }
 }
 
-describe('Iris connects in each React framework', () => {
+describe('Reticle connects in each React framework', () => {
   it(
-    'Vite + React (iris() plugin)',
-    () => assertConnects('@syrin/iris-example-react', 5301),
+    'Vite + React (reticle() plugin)',
+    () => assertConnects('@reticle/example-react', 5301),
     120_000,
   );
   it(
-    'Next.js App Router (withIris + client connect)',
-    () => assertConnects('@syrin/iris-example-next', 5302),
+    'Next.js App Router (withReticle + client connect)',
+    () => assertConnects('@reticle/example-next', 5302),
     150_000,
   );
   it(
     'React Router 7 / Remix (client connect)',
-    () => assertConnects('@syrin/iris-example-remix', 5303),
+    () => assertConnects('@reticle/example-remix', 5303),
     120_000,
   );
   it(
     'Astro + React (client script)',
-    () => assertConnects('@syrin/iris-example-astro', 5304),
+    () => assertConnects('@reticle/example-astro', 5304),
     120_000,
   );
 });

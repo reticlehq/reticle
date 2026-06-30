@@ -1,15 +1,15 @@
 /**
- * The live adapter: build a RunnerPort from the real ToolDeps so IrisRunner drives actual flow
+ * The live adapter: build a RunnerPort from the real ToolDeps so ReticleRunner drives actual flow
  * replays against the connected app. Thin glue — it wires deps.flows.list, replayNamedFlow, deps.now,
- * and a uuid generator. The IrisRunner core (tested with a fake port) holds all the orchestration and
+ * and a uuid generator. The ReticleRunner core (tested with a fake port) holds all the orchestration and
  * verdict logic, so this layer carries no decisions.
  */
 
 import { randomUUID } from 'node:crypto';
-import { asRunId, type RunId } from '@syrin/iris-protocol';
+import { asRunId, type RunId } from '@reticle/protocol';
 import { replayNamedFlow } from '../flows/flow-tools.js';
 import type { ToolDeps } from '../tools/tools.js';
-import type { RunnerPort } from './iris-runner.js';
+import type { RunnerPort } from './reticle-runner.js';
 
 /** The default run-id generator — a branded uuid. Isolated so it can be swapped/tested independently. */
 export function defaultRunId(): RunId {

@@ -1,18 +1,18 @@
-import './iris-render-setup.js'; // MUST be first — installs the render meter before react-dom loads
+import './reticle-render-setup.js'; // MUST be first — installs the render meter before react-dom loads
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import './styles.css';
 import { App } from './App.js';
-import { installIris } from './iris-dev.js';
-import { installRegressions } from './iris-regress.js';
-import { installBugInjector } from './iris-bug-injector.js';
+import { installReticle } from './reticle-dev.js';
+import { installRegressions } from './reticle-regress.js';
+import { installBugInjector } from './reticle-bug-injector.js';
 
 // Dev-only: give the coding agent eyes into this running dashboard (presenter + capabilities +
 // store). Tree-shaken out of production builds.
 if (import.meta.env.DEV) {
-  installIris();
-  installRegressions(); // no-op unless ?iris-break=<testids> — controlled regression knob for benchmarks
-  installBugInjector(); // no-op unless ?iris-bug=<ids> — injects UI bugs (computed-style/geometry + state-desync) for the benchmark
+  installReticle();
+  installRegressions(); // no-op unless ?reticle-break=<testids> — controlled regression knob for benchmarks
+  installBugInjector(); // no-op unless ?reticle-bug=<ids> — injects UI bugs (computed-style/geometry + state-desync) for the benchmark
 }
 
 const rootElement = document.getElementById('root');

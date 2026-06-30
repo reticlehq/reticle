@@ -45,7 +45,7 @@ function scopeMissError(scope?: ResolveScope): string {
       : scope?.url !== undefined
         ? `your app at ${scope.url}`
         : 'the active project';
-  return `no browser session for ${who} — is that app running with @syrin/iris enabled? (other apps may be connected, but they won't be driven by mistake)`;
+  return `no browser session for ${who} — is that app running with @reticle/core enabled? (other apps may be connected, but they won't be driven by mistake)`;
 }
 
 /**
@@ -56,7 +56,7 @@ function scopeMissError(scope?: ResolveScope): string {
 export class SessionManager {
   readonly #sessions = new Map<string, Session>();
   /**
-   * The active project's scope, set once from the daemon's .iris.json. When a tool resolves a session
+   * The active project's scope, set once from the daemon's .reticle.json. When a tool resolves a session
    * without passing its own scope, this is applied — so auto-selection is project-scoped by default
    * and a stray tab from another app is never picked, even on the no-sessionId path.
    */
@@ -120,7 +120,7 @@ export class SessionManager {
     }
     if (this.#sessions.size === 0) {
       throw new Error(
-        'no browser session connected — is your app running with @syrin/iris-browser enabled?',
+        'no browser session connected — is your app running with @reticle/browser enabled?',
       );
     }
     // Scope to the agent's active project FIRST, so a stray tab from another app/origin (e.g. a

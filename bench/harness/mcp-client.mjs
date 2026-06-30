@@ -1,5 +1,5 @@
 // Minimal MCP stdio client (JSON-RPC 2.0, newline-delimited framing).
-// Used to drive Playwright MCP / Chrome DevTools MCP / Iris MCP WITHOUT an LLM,
+// Used to drive Playwright MCP / Chrome DevTools MCP / Reticle MCP WITHOUT an LLM,
 // so we can capture the exact tool-response payloads, wall-clock latency, and
 // whether a failure signal is present. This is the "observation-cost" layer and
 // needs no API key. The agent-loop layer (agent-loop.mjs) is separate.
@@ -34,7 +34,7 @@ export class McpStdioClient {
     const init = await this.request('initialize', {
       protocolVersion: '2024-11-05',
       capabilities: {},
-      clientInfo: { name: 'iris-bench', version: '0.0.0' },
+      clientInfo: { name: 'reticle-bench', version: '0.0.0' },
     });
     this.notify('notifications/initialized', {});
     return init;

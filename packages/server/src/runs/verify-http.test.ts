@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { asRunId, ReplayStatus, VerdictStatus, type FlowReplayResult } from '@syrin/iris-protocol';
-import { IrisRunner, type RunnerPort } from './iris-runner.js';
+import { asRunId, ReplayStatus, VerdictStatus, type FlowReplayResult } from '@reticle/protocol';
+import { ReticleRunner, type RunnerPort } from './reticle-runner.js';
 import { handleVerifyRequest, tokenOk, VERIFY_PATH } from './verify-http.js';
 
 function fakePort(): RunnerPort {
@@ -19,7 +19,7 @@ function fakePort(): RunnerPort {
   };
 }
 
-const runner = (): IrisRunner => new IrisRunner(fakePort());
+const runner = (): ReticleRunner => new ReticleRunner(fakePort());
 const post = (
   overrides: Partial<{ token: string; body: unknown; method: string; path: string }> = {},
 ) => ({

@@ -1,4 +1,4 @@
-// Demo backend that intentionally exhibits many real-world behaviors so Iris can be
+// Demo backend that intentionally exhibits many real-world behaviors so Reticle can be
 // tested against them: auth, 404/500/CORS/wrong-format/wrong-data, eventual consistency,
 // a (real-or-mock) LLM call, and a file-scoring endpoint.
 import express from 'express';
@@ -14,8 +14,8 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: '2mb' }));
 
-const VALID = { email: 'admin@iris.dev', password: 'password' };
-const TOKEN = 'iris-demo-token';
+const VALID = { email: 'admin@reticle.dev', password: 'password' };
+const TOKEN = 'reticle-demo-token';
 
 // 1000 seed items + a place for eventually-consistent additions.
 const items = Array.from({ length: 1000 }, (_, i) => ({ id: i + 1, name: `Item ${i + 1}` }));
@@ -121,5 +121,5 @@ app.get('/api/health', (_req, res) => res.json({ ok: true }));
 
 app.listen(PORT, () => {
   // eslint-disable-next-line no-console -- server startup banner
-  console.log(`[iris-api] listening on http://localhost:${PORT} (reflect=${REFLECT_MS}ms)`);
+  console.log(`[reticle-api] listening on http://localhost:${PORT} (reflect=${REFLECT_MS}ms)`);
 });

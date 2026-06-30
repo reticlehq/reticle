@@ -9,7 +9,7 @@ import {
   RunFramework,
   RunProfile,
   RunTrigger,
-} from '@syrin/iris-protocol';
+} from '@reticle/protocol';
 import { buildVerificationRun, type VerificationRunInput } from './build-verification-run.js';
 import { renderRunReport } from './render-report.js';
 
@@ -70,7 +70,7 @@ describe('renderRunReport', () => {
     );
     const report = renderRunReport(run);
 
-    expect(report).toContain('Iris verification — generated-app  [dev]');
+    expect(report).toContain('Reticle verification — generated-app  [dev]');
     expect(report).toContain('✗ FAIL');
     expect(report).toContain('✓ login');
     expect(report).toContain('✗ checkout (4 steps, 30ms) — POST /api/order 500');

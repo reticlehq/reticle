@@ -3,16 +3,16 @@ import {
   ActionType,
   AnchorKind,
   FLOW_FILE_VERSION,
-  IrisCommand,
+  ReticleCommand,
   type CommandResult,
   type ElementDescriptor,
   type FlowFile,
   type FlowStep,
-} from '@syrin/iris-protocol';
+} from '@reticle/protocol';
 import { replayFlow, type FlowReplaySession } from './flow-replay.js';
 import { waitForPredicate } from '../events/predicate.js';
 import { asString } from '../tools/tools-helpers.js';
-import { IrisTool } from '../tools/tool-names.js';
+import { ReticleTool } from '../tools/tool-names.js';
 
 /**
  * Replay must SKIP asserting a `dynamic`-marked region (the LLM-output
@@ -30,7 +30,7 @@ class FakeSession implements FlowReplaySession {
   constructor(private readonly present: Set<string>) {}
 
   command(name: string, args: Record<string, unknown> = {}): Promise<CommandResult> {
-    if (name === IrisCommand.QUERY) {
+    if (name === ReticleCommand.QUERY) {
       const value = asString(args['value']) ?? '';
       const elements = this.present.has(value) ? [el(`e-${value}`, value)] : [];
       return Promise.resolve({
@@ -43,7 +43,7 @@ class FakeSession implements FlowReplaySession {
         },
       });
     }
-    if (name === IrisCommand.ACT) {
+    if (name === ReticleCommand.ACT) {
       this.acts.push(asString(args['ref']) ?? '');
       return Promise.resolve({ kind: 'command_result', id: 'a', ok: true, result: {} });
     }
@@ -65,7 +65,7 @@ class FakeSession implements FlowReplaySession {
 
 function step(value: string, expectTestid?: string): FlowStep {
   const s: FlowStep = {
-    tool: IrisTool.ACT,
+    tool: ReticleTool.ACT,
     anchor: { kind: AnchorKind.TESTID, value },
     action: ActionType.CLICK,
     args: {},

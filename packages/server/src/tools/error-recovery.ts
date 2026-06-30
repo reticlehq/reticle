@@ -12,27 +12,27 @@
 /** The recovery hints, named so they are not free strings and can be asserted in tests. */
 export const RECOVERY = {
   NO_SESSION:
-    'No app is connected to Iris. Ask the human to start their app in dev with @syrin/iris-browser ' +
-    'enabled, then run `iris status` to confirm a session appears. If the app is running but no ' +
+    'No app is connected to Reticle. Ask the human to start their app in dev with @reticle/browser ' +
+    'enabled, then run `reticle status` to confirm a session appears. If the app is running but no ' +
     'session shows, the SDK is not reaching the bridge — check the dev server is up and using the ' +
-    'configured Iris port.',
+    'configured Reticle port.',
   MULTIPLE_SESSIONS:
-    'Several tabs are connected. Call iris_sessions to list them, then pass an explicit sessionId to ' +
+    'Several tabs are connected. Call reticle_sessions to list them, then pass an explicit sessionId to ' +
     'target the one you mean.',
   UNKNOWN_SESSION:
-    'That sessionId is not connected. Call iris_sessions for the current ids and retry with a valid one.',
+    'That sessionId is not connected. Call reticle_sessions for the current ids and retry with a valid one.',
   THROTTLED:
     'The target tab is backgrounded/throttled, so actions may silently no-op. Ask the human to bring ' +
-    'the tab to the front, or run `iris drive <url>` for a guaranteed scriptable context.',
+    'the tab to the front, or run `reticle drive <url>` for a guaranteed scriptable context.',
   MISSING_BASELINE:
-    'That baseline does not exist yet. Call iris_baseline_list to see saved names, or iris_baseline_save ' +
+    'That baseline does not exist yet. Call reticle_baseline_list to see saved names, or reticle_baseline_save ' +
     'to capture one before diffing against it.',
   MISSING_RECORDING:
-    'No recording by that name is in progress. Start one with iris_record_start before annotating, ' +
+    'No recording by that name is in progress. Start one with reticle_record_start before annotating, ' +
     'stopping, or saving it.',
   TOKEN_REQUIRED:
     'The bridge binds beyond localhost and requires a pairing token. Set the same token in the SDK ' +
-    'init (@syrin/iris) and the Iris server config, then reconnect.',
+    'init (@reticle/core) and the Reticle server config, then reconnect.',
 } as const;
 
 /** Ordered match rules; the first hit wins. Substrings track the thrown messages they recover. */

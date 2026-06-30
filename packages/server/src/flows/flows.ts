@@ -5,7 +5,7 @@ import {
   FlowErrorCode,
   FlowFileSchema,
   QueryBy,
-} from '@syrin/iris-protocol';
+} from '@reticle/protocol';
 import type {
   ActionType,
   FlowAnchor,
@@ -13,12 +13,12 @@ import type {
   FlowFile,
   FlowStep,
   HealChange,
-} from '@syrin/iris-protocol';
-import { IrisTool } from '../tools/tool-names.js';
+} from '@reticle/protocol';
+import { ReticleTool } from '../tools/tool-names.js';
 import { applyHealChanges } from './heal.js';
 import type { CompiledProgram, RecordedStep } from './recordings.js';
 import type { FileSystemPort } from '../project/fs-port.js';
-import { flowPath, irisDirPaths, isValidFlowName } from '../project/iris-dir.js';
+import { flowPath, reticleDirPaths, isValidFlowName } from '../project/reticle-dir.js';
 
 /** A monotonic clock injected for createdAt — never call Date.now() inside the store (rule 7). */
 export interface Clock {
@@ -48,7 +48,7 @@ function degradedAnchor(): FlowAnchor {
 /**
  * Build a stable `component` auto-anchor from a normalized step's component/source args. Returns
  * null when neither is present (caller falls back to degraded). The on-disk anchor carries the
- * component name + source location — re-resolvable by `iris_query by:'component'` at replay.
+ * component name + source location — re-resolvable by `reticle_query by:'component'` at replay.
  */
 function componentAnchor(src: Record<string, unknown>): FlowAnchor | null {
   const component = asString(src['component']);
@@ -90,7 +90,7 @@ function subStepToFlowStep(raw: unknown): FlowStep {
   const action = asString(sub['action']) as ActionType | undefined;
   const args = asRecord(sub['args']);
   const { anchor, degraded } = anchorForStep(sub);
-  return buildStep(IrisTool.ACT, anchor, action, args, degraded);
+  return buildStep(ReticleTool.ACT, anchor, action, args, degraded);
 }
 
 function buildStep(
@@ -112,12 +112,12 @@ function buildStep(
  * NEVER silently dropped. ACT_SEQUENCE recurses over its sub-steps.
  */
 export function recordedStepToFlowStep(step: RecordedStep): FlowStep {
-  if (step.tool === IrisTool.ACT_SEQUENCE) {
+  if (step.tool === ReticleTool.ACT_SEQUENCE) {
     const rawSubs = Array.isArray(step.args['steps']) ? step.args['steps'] : [];
     const subs = rawSubs.map(subStepToFlowStep);
     const degraded = subs.some((s) => s.degraded === true);
     const anchor: FlowAnchor = subs[0]?.anchor ?? degradedAnchor();
-    const out: FlowStep = { tool: IrisTool.ACT_SEQUENCE, anchor, steps: subs };
+    const out: FlowStep = { tool: ReticleTool.ACT_SEQUENCE, anchor, steps: subs };
     if (degraded) out.degraded = true;
     if (step.expect !== undefined) out.expect = step.expect;
     return out;
@@ -171,7 +171,7 @@ function withAnnotations(flow: FlowFile, ann: FlowAnnotations | undefined): Flow
 const JSON_INDENT = 2;
 const FLOW_SUFFIX = '.json';
 
-/** Persists anchored flows to .iris/flows/<name>.json. Filesystem + clock are injected. */
+/** Persists anchored flows to .reticle/flows/<name>.json. Filesystem + clock are injected. */
 export class FlowStore {
   readonly #fs: FileSystemPort;
   readonly #root: string;
@@ -212,7 +212,7 @@ export class FlowStore {
       steps,
     };
     const flow = withAnnotations(base, annotations);
-    await this.#fs.mkdir(irisDirPaths(this.#root).flows);
+    await this.#fs.mkdir(reticleDirPaths(this.#root).flows);
     await this.#fs.writeFile(flowPath(this.#root, program.name), this.#serialize(flow));
     const degraded = flow.steps.filter((s) => s.degraded === true).length;
     return {
@@ -236,7 +236,7 @@ export class FlowStore {
     const parsed = FlowFileSchema.safeParse(flow);
     if (!parsed.success) return { ok: false, code: FlowErrorCode.PARSE_FAILED };
     const valid = parsed.data;
-    await this.#fs.mkdir(irisDirPaths(this.#root).flows);
+    await this.#fs.mkdir(reticleDirPaths(this.#root).flows);
     await this.#fs.writeFile(flowPath(this.#root, valid.name), this.#serialize(valid));
     const degraded = valid.steps.filter((s) => s.degraded === true).length;
     return {
@@ -251,7 +251,7 @@ export class FlowStore {
   }
 
   /**
-   * Apply confident testid rebinds to an on-disk flow (the iris_flow_heal
+   * Apply confident testid rebinds to an on-disk flow (the reticle_flow_heal
    * apply path). Loads + validates the flow (so it gets NOT_FOUND / PARSE_FAILED for free), then
    * rewrites ONLY the named steps' testid anchors — preserving createdAt + every other field — and
    * re-serializes byte-stably via the same #serialize() that save() uses. The name guard runs
@@ -275,9 +275,9 @@ export class FlowStore {
     return { ok: true, value: { name, changed: applied } };
   }
 
-  /** List flow names present under .iris/flows (no extension), sorted. [] if absent (no throw). */
+  /** List flow names present under .reticle/flows (no extension), sorted. [] if absent (no throw). */
   async list(): Promise<string[]> {
-    const dir = irisDirPaths(this.#root).flows;
+    const dir = reticleDirPaths(this.#root).flows;
     if (!(await this.#fs.exists(dir))) return [];
     const entries = await this.#fs.readdir(dir);
     return entries

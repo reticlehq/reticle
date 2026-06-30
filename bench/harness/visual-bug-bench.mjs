@@ -1,13 +1,13 @@
 // Visual UI-bug benchmark. Each bug leaves the element PRESENT with the correct
 // role+name (a DOM/a11y snapshot says "fine"); only computed style / geometry / occlusion reveals it.
 // Fair 3-tool comparison: each tool observes the target its NATIVE way and we grade detection + cost.
-//   Iris       → iris_inspect (one semantic call; cursor/opacity/box/occluded/bg built in).
+//   Reticle       → reticle_inspect (one semantic call; cursor/opacity/box/occluded/bg built in).
 //   Playwright → browser_evaluate (the agent must author a getComputedStyle function).
 //   DevTools   → evaluate_script (same).
 // Brutal-honest: we also record each competitor's JS-authoring input cost, and mark any tool that
 // cannot surface a signal as a MISS — no flattering.
 import { writeFileSync } from 'node:fs';
-import { PlaywrightAdapter, DevtoolsAdapter, IrisAdapter, NAV } from './adapters.mjs';
+import { PlaywrightAdapter, DevtoolsAdapter, ReticleAdapter, NAV } from './adapters.mjs';
 import { measure } from './tokenizer.mjs';
 
 const BASE = process.env.BENCH_URL ?? 'http://localhost:4312/';
@@ -43,7 +43,7 @@ const BUGS = [
   },
   {
     // Off-design-token color. Both tools CAN detect, but the competitor must author the full
-    // palette-enumeration probe (themeFn) — Iris reads inspect.theme.offTheme natively.
+    // palette-enumeration probe (themeFn) — Reticle reads inspect.theme.offTheme natively.
     id: 'theme-violation',
     testid: 'brand',
     view: null,
@@ -53,7 +53,7 @@ const BUGS = [
 ];
 
 // The bespoke probe a competitor must author to check theme compliance: enumerate the app's :root
-// design tokens, resolve each to rgb, then test the element's color against the palette. Iris does
+// design tokens, resolve each to rgb, then test the element's color against the palette. Reticle does
 // this natively (inspect.theme.offTheme); this is what a competitor pays in JS to match it.
 function themeFn(testid) {
   return `() => { const el = document.querySelector('[data-testid="${testid}"]'); if (!el) return { missing: true }; const toRgb = (v) => { const s = document.createElement('span'); s.style.color = v; if (s.style.color === '') return null; document.body.appendChild(s); const r = getComputedStyle(s).color; s.remove(); return r; }; const tokens = new Set(); for (const sheet of document.styleSheets) { let rules; try { rules = sheet.cssRules; } catch { continue; } if (!rules) continue; for (const rule of rules) { if (!(rule instanceof CSSStyleRule)) continue; if (!/(^|,)\\s*(:root|html)\\b/.test(rule.selectorText)) continue; for (const p of rule.style) { if (p.startsWith('--')) { const rgb = toRgb(rule.style.getPropertyValue(p).trim()); if (rgb) tokens.add(rgb); } } } } const color = getComputedStyle(el).color; return { color, tokenCount: tokens.size, offTheme: tokens.size > 0 && color !== 'rgba(0, 0, 0, 0)' && !tokens.has(color) }; }`;
@@ -77,7 +77,7 @@ function firstBalanced(text) {
 }
 
 // Tool results are wrapped: Playwright "### Result {json} ### Ran ```js …```", DevTools
-// "returned: ```json {json} ```", Iris raw JSON. Prefer a fenced json block, else the first
+// "returned: ```json {json} ```", Reticle raw JSON. Prefer a fenced json block, else the first
 // balanced object — a greedy match would grab the trailing code and fail to parse.
 function parseJson(text) {
   if (text === undefined || text === null) return {};
@@ -90,12 +90,12 @@ function parseJson(text) {
   }
 }
 
-/** Iris: one iris_inspect → normalized observation. */
-async function irisObserve(a, testid) {
-  const q = parseJson((await a.c.callTool('iris_query', { by: 'testid', value: testid })).text);
+/** Reticle: one reticle_inspect → normalized observation. */
+async function reticleObserve(a, testid) {
+  const q = parseJson((await a.c.callTool('reticle_query', { by: 'testid', value: testid })).text);
   const ref = (q.elements ?? [])[0]?.ref;
   if (ref === undefined) return { obs: { missing: true }, tokens: 0 };
-  const res = await a.c.callTool('iris_inspect', { ref });
+  const res = await a.c.callTool('reticle_inspect', { ref });
   const j = parseJson(res.text);
   const s = j.styles ?? {};
   return {
@@ -142,11 +142,11 @@ async function withTool(adapter, fn) {
 
 /** The bugged demo URL for a given bug id (empty id → the clean app, for baselines). */
 function buggedUrl(bugParam) {
-  return bugParam === '' ? BASE : `${BASE}${BASE.includes('?') ? '&' : '?'}iris-bug=${bugParam}`;
+  return bugParam === '' ? BASE : `${BASE}${BASE.includes('?') ? '&' : '?'}reticle-bug=${bugParam}`;
 }
 
 // Land on the bug's view, logged in, WITH the bug applied. Fairness: every adapter is constructed
-// with the bugged URL, so login (which re-navigates for Playwright/DevTools) keeps ?iris-bug — the
+// with the bugged URL, so login (which re-navigates for Playwright/DevTools) keeps ?reticle-bug — the
 // earlier apparatus dropped it on login and made the competitors observe the healthy app.
 async function reach(a, bug) {
   await a.login();
@@ -160,16 +160,16 @@ async function reach(a, bug) {
 const rows = [];
 for (const bug of BUGS) {
   const row = { bug: bug.id, tools: {} };
-  // Iris (also grab a clean baseline bg first for color-regression).
+  // Reticle (also grab a clean baseline bg first for color-regression).
   let cleanBg;
-  await withTool(new IrisAdapter(buggedUrl('')), async (a) => {
+  await withTool(new ReticleAdapter(buggedUrl('')), async (a) => {
     await reach(a, bug);
-    cleanBg = (await irisObserve(a, bug.testid)).obs.bg;
+    cleanBg = (await reticleObserve(a, bug.testid)).obs.bg;
   });
-  await withTool(new IrisAdapter(buggedUrl(bug.id)), async (a) => {
+  await withTool(new ReticleAdapter(buggedUrl(bug.id)), async (a) => {
     await reach(a, bug);
-    const { obs, tokens } = await irisObserve(a, bug.testid);
-    row.tools.iris = { detected: bug.detect(obs, cleanBg), tokens, obs };
+    const { obs, tokens } = await reticleObserve(a, bug.testid);
+    row.tools.reticle = { detected: bug.detect(obs, cleanBg), tokens, obs };
   });
   // Playwright + DevTools via their evaluate tools — constructed with the bugged URL so login keeps it.
   for (const [name, Adapter, evalTool] of [
@@ -194,7 +194,7 @@ for (const bug of BUGS) {
   console.log(
     JSON.stringify({
       bug: row.bug,
-      iris: row.tools.iris?.detected,
+      reticle: row.tools.reticle?.detected,
       playwright: row.tools.playwright?.detected,
       devtools: row.tools.devtools?.detected,
     }),
@@ -206,6 +206,6 @@ const summary = { layer: 'Visual (visually-broken-but-present UI bugs)', baseUrl
 writeFileSync('bench/raw/visual-bug-bench.json', JSON.stringify(summary, null, 2));
 const det = (t) => rows.filter((r) => r.tools[t]?.detected === true).length;
 console.log(
-  `\n=== detection (of ${rows.length}): iris ${det('iris')} | playwright ${det('playwright')} | devtools ${det('devtools')} ===`,
+  `\n=== detection (of ${rows.length}): reticle ${det('reticle')} | playwright ${det('playwright')} | devtools ${det('devtools')} ===`,
 );
 process.exit(0);

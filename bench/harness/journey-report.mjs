@@ -6,7 +6,7 @@
 // consequence (signal/network/route), plus the outcome verdict (status + intentVerified). Measures
 // the token cost of the whole evidence artifact — this is what a CI run or an agent reads per run.
 import { writeFileSync } from 'node:fs';
-import { IrisAdapter } from './adapters.mjs';
+import { ReticleAdapter } from './adapters.mjs';
 import { measure } from './tokenizer.mjs';
 
 const URL = process.env.BENCH_URL ?? 'http://localhost:4312/';
@@ -20,10 +20,10 @@ const FLOW = {
 };
 
 async function recordReplay() {
-  const a = new IrisAdapter(URL);
+  const a = new ReticleAdapter(URL);
   await a.start();
   try {
-    await a.c.callTool('iris_record_start', { recordingName: FLOW.name });
+    await a.c.callTool('reticle_record_start', { recordingName: FLOW.name });
     await a.login();
     await sleep(500);
     await a.gotoView('diagnostics');
@@ -31,18 +31,20 @@ async function recordReplay() {
     await a.clickTestid('fault-500');
     await sleep(500);
     // Declare the business intent + the consequence that defines success.
-    await a.c.callTool('iris_annotate', { flow: FLOW.name, kind: 'intent', text: FLOW.intent });
-    await a.c.callTool('iris_annotate', {
+    await a.c.callTool('reticle_annotate', { flow: FLOW.name, kind: 'intent', text: FLOW.intent });
+    await a.c.callTool('reticle_annotate', {
       flow: FLOW.name,
       kind: 'success-state',
       signal: FLOW.success,
     });
-    await a.c.callTool('iris_record_stop', { recordingName: FLOW.name });
-    const saved = JSON.parse((await a.c.callTool('iris_flow_save', { flowName: FLOW.name })).text);
+    await a.c.callTool('reticle_record_stop', { recordingName: FLOW.name });
+    const saved = JSON.parse(
+      (await a.c.callTool('reticle_flow_save', { flowName: FLOW.name })).text,
+    );
 
-    await a.c.callTool('iris_refresh', { hard: true });
+    await a.c.callTool('reticle_refresh', { hard: true });
     await sleep(2000);
-    const rep = await a.c.callTool('iris_flow_replay', { flowName: FLOW.name });
+    const rep = await a.c.callTool('reticle_flow_replay', { flowName: FLOW.name });
     return { saved, replayText: rep.text || '', replay: JSON.parse(rep.text || '{}') };
   } finally {
     await a.stop();

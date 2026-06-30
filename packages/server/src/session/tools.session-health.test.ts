@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { SessionState, UNSCRIPTABLE_TAB_RECOMMENDATION } from '@syrin/iris-protocol';
-import type { CommandResult } from '@syrin/iris-protocol';
+import { SessionState, UNSCRIPTABLE_TAB_RECOMMENDATION } from '@reticle/protocol';
+import type { CommandResult } from '@reticle/protocol';
 import { TOOLS, type ToolDeps } from '../tools/tools.js';
-import { IrisTool } from '../tools/tool-names.js';
+import { ReticleTool } from '../tools/tool-names.js';
 import { BaselineStore } from '../project/baselines.js';
 import { createNodeFileSystem } from '../project/fs-port.js';
 import { RecordingStore } from '../flows/recordings.js';
@@ -60,11 +60,13 @@ function fakeDeps(throttled: boolean, listRows: SessionInfo[]): ToolDeps {
     sessions: sessions as SessionManager,
     baselines: new BaselineStore(),
     recordings: new RecordingStore(),
-    flows: new FlowStore(createNodeFileSystem(), '/tmp/iris-test/.iris', { now: () => 0 }),
-    project: new ProjectStore(createNodeFileSystem(), '/tmp/iris-test/.iris', { now: () => 0 }),
+    flows: new FlowStore(createNodeFileSystem(), '/tmp/reticle-test/.reticle', { now: () => 0 }),
+    project: new ProjectStore(createNodeFileSystem(), '/tmp/reticle-test/.reticle', {
+      now: () => 0,
+    }),
     annotations: new AnnotationStore(),
     fs: createNodeFileSystem(),
-    irisRoot: '/tmp/iris-test/.iris',
+    reticleRoot: '/tmp/reticle-test/.reticle',
     now: () => 0,
   };
 }
@@ -106,16 +108,16 @@ const throttledRow: SessionInfo = {
 
 describe('tool results carry the recommendation', () => {
   it('act result surfaces the recommendation for a throttled tab', async () => {
-    const res = (await tool(IrisTool.ACT).handler(fakeDeps(true, []), {
+    const res = (await tool(ReticleTool.ACT).handler(fakeDeps(true, []), {
       ref: 'e1',
       action: 'click',
     })) as HealthBlock;
     expect(res.session?.recommendation).toBe(UNSCRIPTABLE_TAB_RECOMMENDATION);
-    expect(res.session?.recommendation).toContain('iris drive');
+    expect(res.session?.recommendation).toContain('reticle drive');
   });
 
   it('act result has no recommendation for a healthy tab', async () => {
-    const res = (await tool(IrisTool.ACT).handler(fakeDeps(false, []), {
+    const res = (await tool(ReticleTool.ACT).handler(fakeDeps(false, []), {
       ref: 'e1',
       action: 'click',
     })) as HealthBlock;
@@ -124,21 +126,21 @@ describe('tool results carry the recommendation', () => {
   });
 
   it('assert result surfaces the recommendation', async () => {
-    const res = (await tool(IrisTool.ASSERT).handler(fakeDeps(true, []), {
+    const res = (await tool(ReticleTool.ASSERT).handler(fakeDeps(true, []), {
       predicate: { kind: 'console', level: 'error', absent: true },
     })) as HealthBlock;
     expect(res.session?.recommendation).toBe(UNSCRIPTABLE_TAB_RECOMMENDATION);
   });
 
   it('sessions list carries per-row recommendation for an un-scriptable tab', async () => {
-    const res = (await tool(IrisTool.SESSIONS).handler(fakeDeps(false, [throttledRow]), {})) as {
+    const res = (await tool(ReticleTool.SESSIONS).handler(fakeDeps(false, [throttledRow]), {})) as {
       sessions: SessionInfo[];
     };
     expect(res.sessions[0]?.recommendation).toBe(UNSCRIPTABLE_TAB_RECOMMENDATION);
   });
 
   it('sessions list omits recommendation for healthy rows', async () => {
-    const res = (await tool(IrisTool.SESSIONS).handler(fakeDeps(false, [healthyRow]), {})) as {
+    const res = (await tool(ReticleTool.SESSIONS).handler(fakeDeps(false, [healthyRow]), {})) as {
       sessions: SessionInfo[];
     };
     const row = res.sessions[0];
@@ -148,19 +150,19 @@ describe('tool results carry the recommendation', () => {
   // status-honesty audit: every page-driving/observing tool carries session health.
 
   it('act_sequence result surfaces the recommendation for a throttled tab', async () => {
-    const res = (await tool(IrisTool.ACT_SEQUENCE).handler(fakeDeps(true, []), {
+    const res = (await tool(ReticleTool.ACT_SEQUENCE).handler(fakeDeps(true, []), {
       steps: [{ ref: 'e1', action: 'click' }],
     })) as HealthBlock;
     expect(res.session?.recommendation).toBe(UNSCRIPTABLE_TAB_RECOMMENDATION);
   });
 
   it('observe result surfaces the recommendation for a throttled tab', async () => {
-    const res = (await tool(IrisTool.OBSERVE).handler(fakeDeps(true, []), {})) as HealthBlock;
+    const res = (await tool(ReticleTool.OBSERVE).handler(fakeDeps(true, []), {})) as HealthBlock;
     expect(res.session?.recommendation).toBe(UNSCRIPTABLE_TAB_RECOMMENDATION);
   });
 
   it('wait_for result surfaces the recommendation for a throttled tab', async () => {
-    const res = (await tool(IrisTool.WAIT_FOR).handler(fakeDeps(true, []), {
+    const res = (await tool(ReticleTool.WAIT_FOR).handler(fakeDeps(true, []), {
       predicate: { kind: 'console', level: 'error', absent: true },
       timeout_ms: 0,
     })) as HealthBlock;

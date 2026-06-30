@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { register, getRegistered, clearRegistry } from './registry.js';
-import { irisTest } from './spec.js';
+import { reticleTest } from './spec.js';
 
 afterEach(() => clearRegistry());
 
@@ -21,8 +21,8 @@ describe('registry', () => {
     expect(getRegistered()).toHaveLength(2);
   });
 
-  it('irisTest registers a spec by name', () => {
-    irisTest('hello', () => undefined);
+  it('reticleTest registers a spec by name', () => {
+    reticleTest('hello', () => undefined);
     const specs = getRegistered();
     expect(specs).toHaveLength(1);
     expect(specs[0]?.name).toBe('hello');

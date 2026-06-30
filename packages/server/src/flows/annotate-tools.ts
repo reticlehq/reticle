@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { AnnotationErrorCode, AnnotationSchema, type AnnotateResult } from '@syrin/iris-protocol';
-import { IrisTool } from '../tools/tool-names.js';
+import { AnnotationErrorCode, AnnotationSchema, type AnnotateResult } from '@reticle/protocol';
+import { ReticleTool } from '../tools/tool-names.js';
 import { asString } from '../tools/tools-helpers.js';
 import { compileAnnotation } from './annotate.js';
 import type { ToolDef, ToolDeps } from '../tools/tools.js';
@@ -8,9 +8,9 @@ import type { ToolDef, ToolDeps } from '../tools/tools.js';
 const DEFAULT_RECORDING = 'default';
 
 /**
- * The iris_annotate tool. A STRUCTURED annotation (the AnnotationSchema
+ * The reticle_annotate tool. A STRUCTURED annotation (the AnnotationSchema
  * discriminated union) is compiled into the live recording's per-step expect / flow dynamic[] /
- * flow success, which iris_flow_save then folds onto disk. Returns the AnnotateResult envelope
+ * flow success, which reticle_flow_save then folds onto disk. Returns the AnnotateResult envelope
  * with the compiled-predicate confirmation text ("will assert signal diff:shown").
  *
  * FIRST CUT: structured annotations only. A free NATURAL-LANGUAGE annotation never compiles — it
@@ -22,7 +22,7 @@ const DEFAULT_RECORDING = 'default';
  */
 export const ANNOTATE_TOOLS: ToolDef[] = [
   {
-    name: IrisTool.ANNOTATE,
+    name: ReticleTool.ANNOTATE,
     description:
       'Attach a STRUCTURED annotation to the active recording, compiling it into the flow. kind: ' +
       'assert-signal { name, dataMatches? } → the last step asserts that signal; assert-visible ' +
@@ -33,7 +33,7 @@ export const ANNOTATE_TOOLS: ToolDef[] = [
       '{ signal | statePath(+store,+equals) | net(+count) | console(+absent) | testid } → the flow golden ' +
       'end-condition (statePath asserts a registered store value — the source of truth no DOM read can ' +
       'reach; net asserts a request fired EXACTLY `count` times — catches double-submit; console+absent ' +
-      'asserts a clean console — catches an action that logs an error). Folded onto disk by iris_flow_save. ' +
+      'asserts a clean console — catches an action that logs an error). Folded onto disk by reticle_flow_save. ' +
       'Returns { ok:true, target:step|flow, compiled } (e.g. "will assert signal diff:shown") or ' +
       '{ ok:false, code } (annotate_no_recording | annotate_no_step | annotate_unknown_kind | ' +
       'annotate_missing_field). FIRST CUT: structured only — a free natural-language string is ' +
@@ -107,7 +107,7 @@ export const ANNOTATE_TOOLS: ToolDef[] = [
         .string()
         .optional()
         .describe(
-          'Active session ID from iris_sessions. Omit when only one browser session is open.',
+          'Active session ID from reticle_sessions. Omit when only one browser session is open.',
         ),
       annotation: z
         .unknown()

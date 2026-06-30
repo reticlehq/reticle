@@ -1,5 +1,5 @@
 /**
- * Persistence for verification-run artifacts at .iris/runs/<runId>.json. Mirrors ProjectStore:
+ * Persistence for verification-run artifacts at .reticle/runs/<runId>.json. Mirrors ProjectStore:
  * injected FileSystemPort, never-throws read, path-segment guard on the runId (the tool-arg attack
  * surface). One artifact per file (unlike project.json's single rolling file) so a host can attach an
  * individual run to a deploy. The run is already clock-stamped by buildVerificationRun, so the store
@@ -8,15 +8,15 @@
 
 import {
   asRunId,
-  IrisVerificationRunSchema,
+  ReticleVerificationRunSchema,
   RUN_RETENTION,
   RUN_RETENTION_SLACK,
   RunReadError,
-  type IrisVerificationRun,
+  type ReticleVerificationRun,
   type RunId,
-} from '@syrin/iris-protocol';
+} from '@reticle/protocol';
 import type { FileSystemPort } from '../project/fs-port.js';
-import { irisDirPaths, isValidRunId, runPath } from '../project/iris-dir.js';
+import { reticleDirPaths, isValidRunId, runPath } from '../project/reticle-dir.js';
 
 const JSON_INDENT = 2;
 const JSON_EXT = '.json';
@@ -24,7 +24,7 @@ const TMP_EXT = '.tmp';
 
 /** Never-throws read result (mirrors ReadProjectResult). */
 export type ReadRunResult =
-  | { ok: true; run: IrisVerificationRun }
+  | { ok: true; run: ReticleVerificationRun }
   | { ok: false; reason: RunReadError };
 
 /** Optional retention overrides (defaults to the protocol caps). Injectable so tests prune fast. */
@@ -47,15 +47,15 @@ export class RunStore {
   }
 
   /**
-   * Write one run artifact. Creates .iris/runs/ first; byte-stable (fixed indent + trailing newline).
+   * Write one run artifact. Creates .reticle/runs/ first; byte-stable (fixed indent + trailing newline).
    * Guards runId as a safe path segment BEFORE building the path — a runId can originate from a caller
-   * (an OEM may set it), so an unsafe value must never escape .iris/runs/ (mirrors the read guard).
+   * (an OEM may set it), so an unsafe value must never escape .reticle/runs/ (mirrors the read guard).
    */
-  async write(run: IrisVerificationRun): Promise<void> {
+  async write(run: ReticleVerificationRun): Promise<void> {
     if (!isValidRunId(run.runId)) {
       throw new Error(`refusing to write run with unsafe runId: ${JSON.stringify(run.runId)}`);
     }
-    await this.#fs.mkdir(irisDirPaths(this.#root).runs);
+    await this.#fs.mkdir(reticleDirPaths(this.#root).runs);
     // Atomic publish: write a temp file then rename, so a crash mid-write never leaves a half-written
     // artifact (a partial .json would otherwise read back as MALFORMED).
     const path = runPath(this.#root, run.runId);
@@ -66,7 +66,7 @@ export class RunStore {
   }
 
   /**
-   * Keep .iris/runs/ bounded. Only acts once the count exceeds RUN_RETENTION + SLACK, then deletes the
+   * Keep .reticle/runs/ bounded. Only acts once the count exceeds RUN_RETENTION + SLACK, then deletes the
    * oldest (by createdAt) back down to RUN_RETENTION — so the read-all is amortized, not per-write.
    */
   async #pruneOld(): Promise<void> {
@@ -106,14 +106,14 @@ export class RunStore {
       return { ok: false, reason: RunReadError.MALFORMED };
     }
 
-    const result = IrisVerificationRunSchema.safeParse(parsed);
+    const result = ReticleVerificationRunSchema.safeParse(parsed);
     if (!result.success) return { ok: false, reason: RunReadError.MALFORMED };
     return { ok: true, run: result.data };
   }
 
   /** List run ids on disk (filenames minus .json). Empty when the runs dir is absent. */
   async list(): Promise<RunId[]> {
-    const dir = irisDirPaths(this.#root).runs;
+    const dir = reticleDirPaths(this.#root).runs;
     if (!(await this.#fs.exists(dir))) return [];
     let entries: string[];
     try {
@@ -126,10 +126,10 @@ export class RunStore {
       .map((e) => asRunId(e.slice(0, -JSON_EXT.length)));
   }
 
-  /** The most-recent run by createdAt (undefined when none). Powers iris_run_export's default. */
-  async latest(): Promise<IrisVerificationRun | undefined> {
+  /** The most-recent run by createdAt (undefined when none). Powers reticle_run_export's default. */
+  async latest(): Promise<ReticleVerificationRun | undefined> {
     const ids = await this.list();
-    let best: IrisVerificationRun | undefined;
+    let best: ReticleVerificationRun | undefined;
     for (const id of ids) {
       const result = await this.read(id);
       if (result.ok && (best === undefined || result.run.createdAt > best.createdAt)) {

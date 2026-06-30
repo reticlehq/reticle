@@ -1,4 +1,4 @@
-import { SessionState } from '@syrin/iris-protocol';
+import { SessionState } from '@reticle/protocol';
 import type { Session } from './session.js';
 
 /** Live-control: the control block spliced onto tool results so the agent sees human steering. */
@@ -10,10 +10,10 @@ interface ControlEnvelope {
 
 /**
  * Agent-readable hint returned when an action is refused mid-pause. Named, not free — the agent's
- * recovery path (address the guidance, then iris_resume) lives here in exactly one place.
+ * recovery path (address the guidance, then reticle_resume) lives here in exactly one place.
  */
 export const PAUSE_HINT =
-  'Paused by the human. Address the guidance, then call iris_resume (or wait for the human to resume).';
+  'Paused by the human. Address the guidance, then call reticle_resume (or wait for the human to resume).';
 
 /** Shape returned by the short-circuit when an action tool refuses while paused. */
 interface PausedResult {

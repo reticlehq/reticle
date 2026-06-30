@@ -4,17 +4,17 @@ import {
   CrawlAnomalyKind,
   DANGEROUS_ACTION_CONFIRM_ARG,
   EventType,
-  IrisCommand,
+  ReticleCommand,
   type CommandResult,
-  type IrisEvent,
-} from '@syrin/iris-protocol';
+  type ReticleEvent,
+} from '@reticle/protocol';
 import { parseInteractive, asRecord, asNumber, asString } from '../tools/tools-helpers.js';
 
 /** The slice of Session the crawler needs — so tests inject a fake without a live browser. */
 export interface CrawlSession {
   command(name: string, args?: Record<string, unknown>): Promise<CommandResult>;
   elapsed(): number;
-  eventsSince(cursor: number): IrisEvent[];
+  eventsSince(cursor: number): ReticleEvent[];
 }
 
 type CrawlSleep = (ms: number) => Promise<void>;
@@ -46,7 +46,7 @@ export interface CrawlOptions {
 }
 
 /** Any buffer event that proves the app reacted to a click (vs a dead/no-op control). */
-function isActivity(e: IrisEvent): boolean {
+function isActivity(e: ReticleEvent): boolean {
   return (
     e.type === EventType.NET_REQUEST ||
     e.type === EventType.DOM_ADDED ||
@@ -60,11 +60,11 @@ function isActivity(e: IrisEvent): boolean {
   );
 }
 
-function isConsoleError(e: IrisEvent): boolean {
+function isConsoleError(e: ReticleEvent): boolean {
   return e.type === EventType.CONSOLE_ERROR || e.type === EventType.ERROR_UNCAUGHT;
 }
 
-function failedRequests(events: IrisEvent[], floor: number): IrisEvent[] {
+function failedRequests(events: ReticleEvent[], floor: number): ReticleEvent[] {
   return events.filter((e) => {
     if (e.type !== EventType.NET_REQUEST) return false;
     const status = asNumber(e.data['status']);
@@ -87,7 +87,7 @@ export async function crawl(
   const maxSteps = opts.maxSteps ?? CRAWL_DEFAULTS.MAX_STEPS;
   const settleMs = opts.settleMs ?? CRAWL_DEFAULTS.SETTLE_MS;
 
-  const snap = await session.command(IrisCommand.SNAPSHOT, {
+  const snap = await session.command(ReticleCommand.SNAPSHOT, {
     mode: 'interactive',
     ...(opts.scope !== undefined ? { scope: opts.scope } : {}),
   });
@@ -108,7 +108,7 @@ export async function crawl(
     visited.push(item.desc);
 
     const since = session.elapsed();
-    const act = await session.command(IrisCommand.ACT, {
+    const act = await session.command(ReticleCommand.ACT, {
       ref: item.ref,
       action: ActionType.CLICK,
       args: opts.confirmDangerous === true ? { [DANGEROUS_ACTION_CONFIRM_ARG]: true } : {},

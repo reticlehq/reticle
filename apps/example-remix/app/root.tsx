@@ -43,13 +43,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
 }
 
 export default function App() {
-  // Dev-only: connect Iris on the client. React Router SSRs its own HTML, so the Vite-plugin
+  // Dev-only: connect Reticle on the client. React Router SSRs its own HTML, so the Vite-plugin
   // index.html injection doesn't fire — connect from a client effect instead.
   useEffect(() => {
     if (import.meta.env.DEV) {
-      void import("@syrin/iris").then(({ iris, install }) => {
+      void import("@reticle/core").then(({ reticle, install }) => {
         install();
-        iris.connect({ projectId: "example-remix" });
+        reticle.connect({ projectId: "example-remix" });
       });
     }
   }, []);

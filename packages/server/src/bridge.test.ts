@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { EventType, THROTTLED_WARNING } from '@syrin/iris-protocol';
+import { EventType, THROTTLED_WARNING } from '@reticle/protocol';
 import { Bridge } from './bridge.js';
 import { TOOLS, type ToolDeps } from './tools/tools.js';
-import { IrisTool } from './tools/tool-names.js';
+import { ReticleTool } from './tools/tool-names.js';
 import { FakeBrowser, callTool, makeDeps, waitUntil } from './bridge.test-harness.js';
 
 describe('bridge round-trip (north-star)', () => {
@@ -25,7 +25,7 @@ describe('bridge round-trip (north-star)', () => {
   });
 
   it('lists the connected session', async () => {
-    const result = (await callTool(deps, 'iris_sessions')) as { sessions: unknown[] };
+    const result = (await callTool(deps, 'reticle_sessions')) as { sessions: unknown[] };
     expect(result.sessions).toHaveLength(1);
   });
 
@@ -34,10 +34,10 @@ describe('bridge round-trip (north-star)', () => {
     expect(session.hasCapabilities).toBe(true);
   });
 
-  it('iris_capabilities returns the app-advertised testable surface', async () => {
-    const tool = TOOLS.find((t) => t.name === IrisTool.CAPABILITIES);
+  it('reticle_capabilities returns the app-advertised testable surface', async () => {
+    const tool = TOOLS.find((t) => t.name === ReticleTool.CAPABILITIES);
     expect(tool).toBeDefined();
-    const result = (await callTool(deps, IrisTool.CAPABILITIES, {})) as {
+    const result = (await callTool(deps, ReticleTool.CAPABILITIES, {})) as {
       testids: string[];
       signals: string[];
       stores: string[];
@@ -49,9 +49,9 @@ describe('bridge round-trip (north-star)', () => {
     expect(result.flows).toEqual([{ name: 'pay', steps: ['fill', 'click'] }]);
   });
 
-  it('iris_capabilities propagates an unknown-command error from older browsers', async () => {
+  it('reticle_capabilities propagates an unknown-command error from older browsers', async () => {
     browser.handlesCapabilities = false;
-    await expect(callTool(deps, IrisTool.CAPABILITIES, {})).rejects.toThrow(
+    await expect(callTool(deps, ReticleTool.CAPABILITIES, {})).rejects.toThrow(
       /unknown command 'capabilities'/,
     );
     browser.handlesCapabilities = true;
@@ -59,7 +59,7 @@ describe('bridge round-trip (north-star)', () => {
 
   it('acts, observes the reaction, and asserts the full chain', async () => {
     // The agent clicks "Pay".
-    const act = (await callTool(deps, 'iris_act', { ref: 'e7', action: 'click' })) as {
+    const act = (await callTool(deps, 'reticle_act', { ref: 'e7', action: 'click' })) as {
       since: number;
     };
 
@@ -76,17 +76,17 @@ describe('bridge round-trip (north-star)', () => {
 
     await waitUntil(() => bridge.sessions.resolve('demo').eventsSince(0).length >= 3);
 
-    const observe = (await callTool(deps, 'iris_observe', { since: act.since })) as {
+    const observe = (await callTool(deps, 'reticle_observe', { since: act.since })) as {
       summary: { network: number; animations: number };
     };
     expect(observe.summary.network).toBe(1);
     expect(observe.summary.animations).toBe(1);
 
-    const net = (await callTool(deps, 'iris_network', { status: 200 })) as { calls: unknown[] };
+    const net = (await callTool(deps, 'reticle_network', { status: 200 })) as { calls: unknown[] };
     expect(net.calls).toHaveLength(1);
 
     // The single assert that covers the whole expectation.
-    const verdict = (await callTool(deps, 'iris_assert', {
+    const verdict = (await callTool(deps, 'reticle_assert', {
       timeout_ms: 1000,
       predicate: {
         kind: 'allOf',
@@ -101,8 +101,8 @@ describe('bridge round-trip (north-star)', () => {
     expect(verdict.pass, verdict.failureReason).toBe(true);
   });
 
-  it('lifts dispatched/settled/settleReason to the iris_act envelope', async () => {
-    const act = (await callTool(deps, 'iris_act', { ref: 'e7', action: 'click' })) as {
+  it('lifts dispatched/settled/settleReason to the reticle_act envelope', async () => {
+    const act = (await callTool(deps, 'reticle_act', { ref: 'e7', action: 'click' })) as {
       dispatched: unknown;
       settled: unknown;
       settleReason: unknown;
@@ -112,9 +112,9 @@ describe('bridge round-trip (north-star)', () => {
     expect(act.settleReason).toBe(null);
   });
 
-  it('a settle timeout does NOT fail iris_act — it resolves with settled:false', async () => {
+  it('a settle timeout does NOT fail reticle_act — it resolves with settled:false', async () => {
     browser.actSettled = false;
-    const act = (await callTool(deps, 'iris_act', { ref: 'e7', action: 'click' })) as {
+    const act = (await callTool(deps, 'reticle_act', { ref: 'e7', action: 'click' })) as {
       dispatched: unknown;
       settled: unknown;
       settleReason: unknown;
@@ -126,7 +126,7 @@ describe('bridge round-trip (north-star)', () => {
   });
 
   it('reports a failing assert with a reason', async () => {
-    const verdict = (await callTool(deps, 'iris_assert', {
+    const verdict = (await callTool(deps, 'reticle_assert', {
       predicate: { kind: 'route', pathname: '/success' },
     })) as { pass: boolean; failureReason?: string };
     expect(verdict.pass).toBe(false);
@@ -134,22 +134,22 @@ describe('bridge round-trip (north-star)', () => {
   });
 
   it('records a span and returns its reaction report', async () => {
-    await callTool(deps, 'iris_record_start', { recordingName: 'flow' });
+    await callTool(deps, 'reticle_record_start', { recordingName: 'flow' });
     browser.emit(EventType.NET_REQUEST, { method: 'GET', url: '/api/x', status: 200 });
     await waitUntil(() => bridge.sessions.resolve('demo').eventsSince(0).length >= 4);
-    const rec = (await callTool(deps, 'iris_record_stop', { recordingName: 'flow' })) as {
+    const rec = (await callTool(deps, 'reticle_record_stop', { recordingName: 'flow' })) as {
       summary: { network: number };
     };
     expect(rec.summary.network).toBeGreaterThanOrEqual(1);
   });
 
-  it('iris_state is registered and round-trips store + component state', async () => {
-    const tool = TOOLS.find((t) => t.name === IrisTool.STATE);
+  it('reticle_state is registered and round-trips store + component state', async () => {
+    const tool = TOOLS.find((t) => t.name === ReticleTool.STATE);
     expect(tool).toBeDefined();
     expect(tool?.inputSchema['ref']).toBeDefined();
     expect(tool?.inputSchema['store']).toBeDefined();
 
-    const result = (await callTool(deps, IrisTool.STATE, {
+    const result = (await callTool(deps, ReticleTool.STATE, {
       store: 'workspace',
       ref: 'e7',
     })) as { stores: Record<string, unknown>; storeNames: string[]; component?: unknown };
@@ -159,14 +159,14 @@ describe('bridge round-trip (north-star)', () => {
   });
 
   it('explore lists interactive elements with refs', async () => {
-    const result = (await callTool(deps, 'iris_explore', {})) as {
+    const result = (await callTool(deps, 'reticle_explore', {})) as {
       interactive: { ref: string }[];
     };
     expect(result.interactive.length).toBeGreaterThan(0);
     expect(result.interactive[0]?.ref).toMatch(/^e\d+$/);
   });
 
-  it('a hidden session surfaces throttled:true + a warning on an iris_act result', async () => {
+  it('a hidden session surfaces throttled:true + a warning on an reticle_act result', async () => {
     browser.emit(EventType.PAGE_HEALTH, {
       hidden: true,
       focused: false,
@@ -174,7 +174,7 @@ describe('bridge round-trip (north-star)', () => {
     });
     await waitUntil(() => bridge.sessions.resolve('demo').throttled());
 
-    const act = (await callTool(deps, 'iris_act', { ref: 'e7', action: 'click' })) as {
+    const act = (await callTool(deps, 'reticle_act', { ref: 'e7', action: 'click' })) as {
       session: { lastSeenMs: number; throttled: boolean; focused: boolean };
       warning?: string;
     };
@@ -184,18 +184,18 @@ describe('bridge round-trip (north-star)', () => {
     expect(act.warning).toBe(THROTTLED_WARNING);
   });
 
-  it('iris_assert and iris_act_and_wait carry the health envelope when throttled', async () => {
+  it('reticle_assert and reticle_act_and_wait carry the health envelope when throttled', async () => {
     browser.emit(EventType.PAGE_HEALTH, { hidden: true, focused: false, reason: 'blur' });
     await waitUntil(() => bridge.sessions.resolve('demo').throttled());
 
-    const verdict = (await callTool(deps, 'iris_assert', {
+    const verdict = (await callTool(deps, 'reticle_assert', {
       predicate: { kind: 'console', level: 'error', absent: true },
     })) as { pass: boolean; session: { throttled: boolean }; warning?: string };
     expect(verdict.pass).toBe(true);
     expect(verdict.session.throttled).toBe(true);
     expect(verdict.warning).toBe(THROTTLED_WARNING);
 
-    const aw = (await callTool(deps, 'iris_act_and_wait', {
+    const aw = (await callTool(deps, 'reticle_act_and_wait', {
       ref: 'e7',
       action: 'click',
       timeout_ms: 0,
@@ -205,10 +205,10 @@ describe('bridge round-trip (north-star)', () => {
     expect(aw.warning).toBe(THROTTLED_WARNING);
   });
 
-  it('iris_sessions surfaces hidden/focused/throttled', async () => {
+  it('reticle_sessions surfaces hidden/focused/throttled', async () => {
     browser.emit(EventType.PAGE_HEALTH, { hidden: true, focused: false, reason: 'heartbeat' });
     await waitUntil(() => bridge.sessions.resolve('demo').throttled());
-    const result = (await callTool(deps, 'iris_sessions')) as {
+    const result = (await callTool(deps, 'reticle_sessions')) as {
       sessions: { hidden: boolean; focused: boolean; throttled: boolean }[];
     };
     const entry = result.sessions[0];
@@ -220,7 +220,7 @@ describe('bridge round-trip (north-star)', () => {
   it('a visible session has no warning and throttled:false', async () => {
     browser.emit(EventType.PAGE_HEALTH, { hidden: false, focused: true, reason: 'focus' });
     await waitUntil(() => !bridge.sessions.resolve('demo').throttled());
-    const act = (await callTool(deps, 'iris_act', { ref: 'e7', action: 'click' })) as {
+    const act = (await callTool(deps, 'reticle_act', { ref: 'e7', action: 'click' })) as {
       session?: { throttled: boolean; focused: boolean };
       warning?: string;
     };
@@ -234,10 +234,12 @@ describe('bridge round-trip (north-star)', () => {
     await waitUntil(() => bridge.sessions.resolve('demo').throttled());
 
     // Default (warn-only) still resolves so background testing is never broken.
-    await expect(callTool(deps, 'iris_act', { ref: 'e7', action: 'click' })).resolves.toBeDefined();
+    await expect(
+      callTool(deps, 'reticle_act', { ref: 'e7', action: 'click' }),
+    ).resolves.toBeDefined();
     // Opt-in flag hard-fails.
     await expect(
-      callTool(deps, 'iris_act', { ref: 'e7', action: 'click', refuseWhenThrottled: true }),
+      callTool(deps, 'reticle_act', { ref: 'e7', action: 'click', refuseWhenThrottled: true }),
     ).rejects.toThrow(/refusing to act/);
 
     // Restore a healthy state for any later shared assertions.

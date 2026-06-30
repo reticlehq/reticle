@@ -12,7 +12,7 @@ export interface Capabilities {
   flows: CapabilityFlow[];
 }
 
-/** What the host app passes to iris.describe(); all fields optional. */
+/** What the host app passes to reticle.describe(); all fields optional. */
 export interface CapabilitiesInput {
   testids?: string[];
   signals?: string[];
@@ -20,21 +20,21 @@ export interface CapabilitiesInput {
   flows?: CapabilityFlow[];
 }
 
-// Persist on a global so the registry survives HMR module re-evaluation (matches __irisAdapters).
-const globalStore = globalThis as unknown as { __irisCapabilities?: Capabilities };
+// Persist on a global so the registry survives HMR module re-evaluation (matches __reticleAdapters).
+const globalStore = globalThis as unknown as { __reticleCapabilities?: Capabilities };
 
 function empty(): Capabilities {
   return { testids: [], signals: [], stores: [], flows: [] };
 }
 
-const capabilities: Capabilities = (globalStore.__irisCapabilities ??= empty());
+const capabilities: Capabilities = (globalStore.__reticleCapabilities ??= empty());
 
 function mergeUnique(into: string[], add: readonly string[] | undefined): void {
   if (add === undefined) return;
   for (const v of add) if (!into.includes(v)) into.push(v);
 }
 
-/** Called by the host app via iris.describe(). Merges (idempotent), never replaces wholesale. */
+/** Called by the host app via reticle.describe(). Merges (idempotent), never replaces wholesale. */
 export function registerCapabilities(input: CapabilitiesInput): void {
   mergeUnique(capabilities.testids, input.testids);
   mergeUnique(capabilities.signals, input.signals);

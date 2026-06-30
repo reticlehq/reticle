@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { ComponentStateReason, type ComponentStateResult } from '@syrin/iris-protocol';
+import { ComponentStateReason, type ComponentStateResult } from '@reticle/protocol';
 import { identify, readState, hasHoverHandlers } from './index.js';
 
 function PayButton(): null {

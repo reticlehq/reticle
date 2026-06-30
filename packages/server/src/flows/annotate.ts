@@ -6,7 +6,7 @@ import {
   type Annotation,
   type AnnotateOutcome,
   type FlowExpect,
-} from '@syrin/iris-protocol';
+} from '@reticle/protocol';
 
 /**
  * The PURE compiler at the heart of the annotation facet. A structured annotation +

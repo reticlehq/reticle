@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { HumanControlKind, PresenterTone, SessionState } from '@syrin/iris-protocol';
+import { HumanControlKind, PresenterTone, SessionState } from '@reticle/protocol';
 import { Presenter, type ControlIntent } from './presenter.js';
 import { buildSnapshot } from '../dom/snapshot.js';
 import { isIgnored } from '../dom/dom-ignore.js';
@@ -31,23 +31,25 @@ function mount(opts: { endedFadeMs?: number } = {}): Mounted {
   });
   presenter.mount();
   presenter.sessionStart();
-  const root = q('[data-iris-overlay]') as HTMLElement;
+  const root = q('[data-reticle-overlay]') as HTMLElement;
   return { presenter, onControl, root };
 }
 
 afterEach(() => {
-  document.querySelectorAll('[data-iris-overlay]').forEach((e) => e.remove());
+  document.querySelectorAll('[data-reticle-overlay]').forEach((e) => e.remove());
   document.body.innerHTML = '';
 });
 
-const pauseBtn = (): HTMLButtonElement | null => q<HTMLButtonElement>('[data-iris-pause]');
-const endBtn = (): HTMLButtonElement | null => q<HTMLButtonElement>('[data-iris-end]');
-const sendBtn = (): HTMLButtonElement | null => q<HTMLButtonElement>('[data-iris-send]');
-const input = (): HTMLInputElement | null => q<HTMLInputElement>('[data-iris-input]');
+const pauseBtn = (): HTMLButtonElement | null => q<HTMLButtonElement>('[data-reticle-pause]');
+const endBtn = (): HTMLButtonElement | null => q<HTMLButtonElement>('[data-reticle-end]');
+const sendBtn = (): HTMLButtonElement | null => q<HTMLButtonElement>('[data-reticle-send]');
+const input = (): HTMLInputElement | null => q<HTMLInputElement>('[data-reticle-input]');
 const stateAttr = (): string | null =>
-  q('[data-iris-overlay][data-iris-state]')?.getAttribute('data-iris-state') ?? null;
+  q('[data-reticle-overlay][data-reticle-state]')?.getAttribute('data-reticle-state') ?? null;
 const logTexts = (): (string | null)[] =>
-  Array.from(document.querySelectorAll('[data-iris-log] .iris-log-text')).map((e) => e.textContent);
+  Array.from(document.querySelectorAll('[data-reticle-log] .reticle-log-text')).map(
+    (e) => e.textContent,
+  );
 
 describe('presenter-controls / live-control panel', () => {
   it('1 pause click emits {kind:pause} and enters paused', () => {
@@ -62,7 +64,7 @@ describe('presenter-controls / live-control panel', () => {
   it('2 paused panel shows PAUSED badge', () => {
     mount();
     click(pauseBtn());
-    const badge = q('[data-iris-badge]');
+    const badge = q('[data-reticle-badge]');
     expect(badge).not.toBeNull();
     expect(stateAttr()).toBe('paused');
     expect(badge?.textContent).toBe('PAUSED');
@@ -137,7 +139,7 @@ describe('presenter-controls / live-control panel', () => {
     click(endBtn());
     expect(onControl).toHaveBeenCalledWith({ kind: HumanControlKind.END });
     expect(stateAttr()).toBe('ended');
-    const banner = q('[data-iris-banner]');
+    const banner = q('[data-reticle-banner]');
     expect(banner?.textContent).toBe('Session ended');
   });
 
@@ -165,61 +167,61 @@ describe('presenter-controls / live-control panel', () => {
   it('12 ending fades the page border but KEEPS the panel for analysis (+ export row)', async () => {
     mount({ endedFadeMs: 5 });
     click(endBtn());
-    expect(q('[data-iris-hud]')?.getAttribute('data-on')).toBe('1');
+    expect(q('[data-reticle-hud]')?.getAttribute('data-on')).toBe('1');
     await wait(20);
     await flush();
-    expect(q('[data-iris-glow]')?.getAttribute('data-on')).toBe('0'); // border cleared (testing over)
-    expect(q('[data-iris-hud]')?.getAttribute('data-on')).toBe('1'); // panel PERSISTS for analysis
+    expect(q('[data-reticle-glow]')?.getAttribute('data-on')).toBe('0'); // border cleared (testing over)
+    expect(q('[data-reticle-hud]')?.getAttribute('data-on')).toBe('1'); // panel PERSISTS for analysis
     expect(stateAttr()).toBe('ended'); // → CSS reveals the Copy/Export row
-    expect(q('[data-iris-copy]')).not.toBeNull();
-    expect(q('[data-iris-export]')).not.toBeNull();
+    expect(q('[data-reticle-copy]')).not.toBeNull();
+    expect(q('[data-reticle-export]')).not.toBeNull();
   });
 
   it('13 setState(paused) updates panel without emitting (server push)', () => {
     const { presenter, onControl } = mount();
     presenter.setState(SessionState.PAUSED);
     expect(stateAttr()).toBe('paused');
-    expect(q('[data-iris-badge]')?.textContent).toBe('PAUSED');
+    expect(q('[data-reticle-badge]')?.textContent).toBe('PAUSED');
     expect(onControl).not.toHaveBeenCalled();
   });
 
   it('14 setState(ended, summary) leads with "Session ended" and appends the summary', () => {
     const { presenter, onControl } = mount();
     presenter.setState(SessionState.ENDED, 'all green');
-    expect(q('[data-iris-banner]')?.textContent).toBe('Session ended · all green');
+    expect(q('[data-reticle-banner]')?.textContent).toBe('Session ended · all green');
     expect(onControl).not.toHaveBeenCalled();
   });
 
-  it('14b warn tone (agent stopped) sets data-iris-tone and leads the banner with the notice', () => {
+  it('14b warn tone (agent stopped) sets data-reticle-tone and leads the banner with the notice', () => {
     const { presenter } = mount();
-    const panelRoot = q('div[data-iris-overlay]') as HTMLElement; // the <div>, not the <style>
+    const panelRoot = q('div[data-reticle-overlay]') as HTMLElement; // the <div>, not the <style>
     presenter.setState(
       SessionState.ENDED,
       'Agent stopped — switch to your terminal',
       PresenterTone.WARN,
     );
-    expect(panelRoot.getAttribute('data-iris-tone')).toBe('warn');
+    expect(panelRoot.getAttribute('data-reticle-tone')).toBe('warn');
     // warn drops the calm "Session ended ·" prefix — the notice itself is the actionable headline
-    expect(q('[data-iris-banner]')?.textContent).toBe('Agent stopped — switch to your terminal');
+    expect(q('[data-reticle-banner]')?.textContent).toBe('Agent stopped — switch to your terminal');
   });
 
   it('14c a calm end clears any prior warn tone', () => {
     const { presenter } = mount();
-    const panelRoot = q('div[data-iris-overlay]') as HTMLElement;
+    const panelRoot = q('div[data-reticle-overlay]') as HTMLElement;
     presenter.setState(SessionState.ENDED, 'Agent stopped', PresenterTone.WARN);
-    expect(panelRoot.getAttribute('data-iris-tone')).toBe('warn');
+    expect(panelRoot.getAttribute('data-reticle-tone')).toBe('warn');
     presenter.setState(SessionState.ACTIVE);
-    expect(panelRoot.hasAttribute('data-iris-tone')).toBe(false);
+    expect(panelRoot.hasAttribute('data-reticle-tone')).toBe(false);
   });
 
-  it('14d waiting and ask tones each set their own data-iris-tone', () => {
+  it('14d waiting and ask tones each set their own data-reticle-tone', () => {
     const { presenter } = mount();
-    const panelRoot = q('div[data-iris-overlay]') as HTMLElement;
+    const panelRoot = q('div[data-reticle-overlay]') as HTMLElement;
     presenter.setState(SessionState.ENDED, 'your turn', PresenterTone.WAITING);
-    expect(panelRoot.getAttribute('data-iris-tone')).toBe('waiting');
-    expect(q('[data-iris-banner]')?.textContent).toBe('your turn');
+    expect(panelRoot.getAttribute('data-reticle-tone')).toBe('waiting');
+    expect(q('[data-reticle-banner]')?.textContent).toBe('your turn');
     presenter.setState(SessionState.ENDED, 'Use Stripe?', PresenterTone.ASK);
-    expect(panelRoot.getAttribute('data-iris-tone')).toBe('ask');
+    expect(panelRoot.getAttribute('data-reticle-tone')).toBe('ask');
   });
 
   const pushFlows = (presenter: Presenter, flows: { name: string }[]): void =>
@@ -228,9 +230,9 @@ describe('presenter-controls / live-control panel', () => {
   it('14e a FLOWS push renders ▶ chips; a click replays that flow (no agent)', () => {
     const { presenter, onControl } = mount();
     pushFlows(presenter, [{ name: 'checkout' }, { name: 'login' }]);
-    const flows = q('[data-iris-flows]');
+    const flows = q('[data-reticle-flows]');
     expect(flows?.getAttribute('data-has')).toBe('1');
-    const chips = document.querySelectorAll<HTMLElement>('[data-iris-replay]');
+    const chips = document.querySelectorAll<HTMLElement>('[data-reticle-replay]');
     expect(chips.length).toBe(2);
     expect(chips[0]?.textContent).toBe('▶ checkout');
     click(chips[0]);
@@ -240,31 +242,31 @@ describe('presenter-controls / live-control panel', () => {
   it('14f a FLOWS push with no flows hides the row and rebuilds cleanly', () => {
     const { presenter } = mount();
     pushFlows(presenter, [{ name: 'a' }, { name: 'b' }]);
-    expect(document.querySelectorAll('[data-iris-replay]').length).toBe(2);
+    expect(document.querySelectorAll('[data-reticle-replay]').length).toBe(2);
     pushFlows(presenter, []); // a re-push replaces, never appends
-    expect(document.querySelectorAll('[data-iris-replay]').length).toBe(0);
-    expect(q('[data-iris-flows]')?.getAttribute('data-has')).toBe('0');
+    expect(document.querySelectorAll('[data-reticle-replay]').length).toBe(0);
+    expect(q('[data-reticle-flows]')?.getAttribute('data-has')).toBe('0');
   });
 
   it('15 setState is idempotent', () => {
     const { presenter } = mount();
     presenter.setState(SessionState.PAUSED);
     presenter.setState(SessionState.PAUSED);
-    expect(document.querySelectorAll('[data-iris-overlay][data-iris-state="paused"]').length).toBe(
-      1,
-    );
-    expect(q('[data-iris-badge]')?.textContent).toBe('PAUSED');
+    expect(
+      document.querySelectorAll('[data-reticle-overlay][data-reticle-state="paused"]').length,
+    ).toBe(1);
+    expect(q('[data-reticle-badge]')?.textContent).toBe('PAUSED');
   });
 
-  it('16 all control nodes are data-iris-* excluded from snapshot', () => {
+  it('16 all control nodes are data-reticle-* excluded from snapshot', () => {
     mount();
     for (const sel of [
-      '[data-iris-pause]',
-      '[data-iris-end]',
-      '[data-iris-input]',
-      '[data-iris-send]',
-      '[data-iris-badge]',
-      '[data-iris-banner]',
+      '[data-reticle-pause]',
+      '[data-reticle-end]',
+      '[data-reticle-input]',
+      '[data-reticle-send]',
+      '[data-reticle-badge]',
+      '[data-reticle-banner]',
     ]) {
       const el = q(sel);
       expect(el).not.toBeNull();

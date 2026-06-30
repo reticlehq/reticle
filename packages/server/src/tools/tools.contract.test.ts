@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import type { CommandResult } from '@syrin/iris-protocol';
-import { FROM_DISK_ARG } from '@syrin/iris-protocol';
+import type { CommandResult } from '@reticle/protocol';
+import { FROM_DISK_ARG } from '@reticle/protocol';
 import { TOOLS, type ToolDeps } from './tools.js';
-import { IrisTool } from './tool-names.js';
+import { ReticleTool } from './tool-names.js';
 import { BaselineStore } from '../project/baselines.js';
 import { RecordingStore } from '../flows/recordings.js';
 import { FlowStore } from '../flows/flows.js';
@@ -10,18 +10,18 @@ import { ProjectStore } from '../project/project-store.js';
 import { AnnotationStore } from '../flows/annotation-store.js';
 import type { Session, SessionManager } from '../session/session.js';
 import {
-  irisDirPaths,
+  reticleDirPaths,
   readContract,
   writeContract,
   type ReadContractResult,
-} from '../project/iris-dir.js';
+} from '../project/reticle-dir.js';
 import type { FileSystemPort } from '../project/fs-port.js';
 
-const ROOT = '/virtual/.iris';
+const ROOT = '/virtual/.reticle';
 const FROZEN = 1_700_000_000_000;
 
 // Pre-sorted to match the writer's stable (lexicographic) output, so a disk round-trip
-// deep-equals the source. The sorting itself is exercised in iris-dir.test.ts (test 3).
+// deep-equals the source. The sorting itself is exercised in reticle-dir.test.ts (test 3).
 const CAPS = {
   testids: ['cancel', 'save'],
   signals: ['saved'],
@@ -101,7 +101,7 @@ function fakeDeps(fs: FileSystemPort): ToolDeps {
     project: new ProjectStore(fs, ROOT, { now: () => FROZEN }),
     annotations: new AnnotationStore(),
     fs,
-    irisRoot: ROOT,
+    reticleRoot: ROOT,
     now: () => FROZEN,
   };
 }
@@ -112,22 +112,22 @@ function tool(name: string) {
   return t;
 }
 
-describe('iris_contract_save / iris_capabilities fromDisk', () => {
-  it('15: iris_contract_save writes session capabilities to disk', async () => {
+describe('reticle_contract_save / reticle_capabilities fromDisk', () => {
+  it('15: reticle_contract_save writes session capabilities to disk', async () => {
     const fs = memoryFs();
     const deps = fakeDeps(fs);
-    const res = (await tool(IrisTool.CONTRACT_SAVE).handler(deps, {})) as { path: string };
-    expect(res.path).toBe(irisDirPaths(ROOT).contract);
+    const res = (await tool(ReticleTool.CONTRACT_SAVE).handler(deps, {})) as { path: string };
+    expect(res.path).toBe(reticleDirPaths(ROOT).contract);
     const r = await readContract(fs, ROOT);
     expect(r.ok).toBe(true);
     if (!r.ok) throw new Error('expected ok');
     expect(r.capabilities).toEqual(CAPS);
   });
 
-  it('16: iris_capabilities({fromDisk:true}) reads contract.json', async () => {
+  it('16: reticle_capabilities({fromDisk:true}) reads contract.json', async () => {
     const fs = memoryFs();
     await writeContract(fs, ROOT, CAPS, () => FROZEN);
-    const res = (await tool(IrisTool.CAPABILITIES).handler(fakeDeps(fs), {
+    const res = (await tool(ReticleTool.CAPABILITIES).handler(fakeDeps(fs), {
       [FROM_DISK_ARG]: true,
     })) as { source: string; testids: string[]; generatedAt: number };
     expect(res.source).toBe('disk');
@@ -135,25 +135,25 @@ describe('iris_contract_save / iris_capabilities fromDisk', () => {
     expect(res.generatedAt).toBe(FROZEN);
   });
 
-  it('17: iris_capabilities({fromDisk:true}) with no file throws legible MISSING error', async () => {
+  it('17: reticle_capabilities({fromDisk:true}) with no file throws legible MISSING error', async () => {
     const fs = memoryFs();
     await expect(
-      tool(IrisTool.CAPABILITIES).handler(fakeDeps(fs), { [FROM_DISK_ARG]: true }),
-    ).rejects.toThrow(/iris_contract_save/);
+      tool(ReticleTool.CAPABILITIES).handler(fakeDeps(fs), { [FROM_DISK_ARG]: true }),
+    ).rejects.toThrow(/reticle_contract_save/);
   });
 
-  it('18: iris_capabilities({fromDisk:true}) with malformed file throws legible MALFORMED error', async () => {
+  it('18: reticle_capabilities({fromDisk:true}) with malformed file throws legible MALFORMED error', async () => {
     const fs = memoryFs();
     await fs.mkdir(ROOT);
-    await fs.writeFile(irisDirPaths(ROOT).contract, '{ broken');
+    await fs.writeFile(reticleDirPaths(ROOT).contract, '{ broken');
     await expect(
-      tool(IrisTool.CAPABILITIES).handler(fakeDeps(fs), { [FROM_DISK_ARG]: true }),
+      tool(ReticleTool.CAPABILITIES).handler(fakeDeps(fs), { [FROM_DISK_ARG]: true }),
     ).rejects.toThrow(/malformed|regenerate/i);
   });
 
-  it('19: iris_capabilities without fromDisk still hits the live session', async () => {
+  it('19: reticle_capabilities without fromDisk still hits the live session', async () => {
     const fs = memoryFs();
-    const res = (await tool(IrisTool.CAPABILITIES).handler(fakeDeps(fs), {})) as {
+    const res = (await tool(ReticleTool.CAPABILITIES).handler(fakeDeps(fs), {})) as {
       testids: string[];
     };
     expect(res.testids).toEqual(CAPS.testids);
@@ -162,13 +162,13 @@ describe('iris_contract_save / iris_capabilities fromDisk', () => {
     expect(r.ok).toBe(false);
   });
 
-  it('20: iris_contract_save output is byte-stable across two runs with frozen clock', async () => {
+  it('20: reticle_contract_save output is byte-stable across two runs with frozen clock', async () => {
     const fs1 = memoryFs();
     const fs2 = memoryFs();
-    await tool(IrisTool.CONTRACT_SAVE).handler(fakeDeps(fs1), {});
-    await tool(IrisTool.CONTRACT_SAVE).handler(fakeDeps(fs2), {});
-    const a = await fs1.readFile(irisDirPaths(ROOT).contract);
-    const b = await fs2.readFile(irisDirPaths(ROOT).contract);
+    await tool(ReticleTool.CONTRACT_SAVE).handler(fakeDeps(fs1), {});
+    await tool(ReticleTool.CONTRACT_SAVE).handler(fakeDeps(fs2), {});
+    const a = await fs1.readFile(reticleDirPaths(ROOT).contract);
+    const b = await fs2.readFile(reticleDirPaths(ROOT).contract);
     expect(a).toBe(b);
   });
 });

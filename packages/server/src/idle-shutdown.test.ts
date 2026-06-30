@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { SESSION_LIFECYCLE } from '@syrin/iris-protocol';
+import { SESSION_LIFECYCLE } from '@reticle/protocol';
 import { IdleShutdown, resolveIdleShutdownMs } from './idle-shutdown.js';
 
 /** A controllable clock + idle flag, so the watcher is driven deterministically. */

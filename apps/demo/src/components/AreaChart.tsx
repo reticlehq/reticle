@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-/** A premium area chart: iris-gradient fill, glowing stroke, hover crosshair + tooltip. */
+/** A premium area chart: reticle-gradient fill, glowing stroke, hover crosshair + tooltip. */
 export function AreaChart({
   data,
   height = 220,

@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
 import { resolveMaxContexts } from './playwright-launcher.js';
 
 describe('resolveMaxContexts', () => {
-  it('uses IRIS_MAX_CONTEXTS when set', () => {
+  it('uses RETICLE_MAX_CONTEXTS when set', () => {
     expect(resolveMaxContexts('3', 16)).toBe(3);
   });
 

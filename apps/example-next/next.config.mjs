@@ -1,4 +1,4 @@
-import { withIris } from '@syrin/iris/next';
+import { withReticle } from '@reticle/core/next';
 
-// withIris adds the dev-only source-mapping pre-loader (keeps SWC). No-op in production.
-export default withIris({});
+// withReticle adds the dev-only source-mapping pre-loader (keeps SWC). No-op in production.
+export default withReticle({});

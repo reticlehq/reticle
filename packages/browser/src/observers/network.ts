@@ -1,4 +1,4 @@
-import { EventType } from '@syrin/iris-protocol';
+import { EventType } from '@reticle/protocol';
 import type { Emit, Teardown } from './types.js';
 
 interface XhrMeta {

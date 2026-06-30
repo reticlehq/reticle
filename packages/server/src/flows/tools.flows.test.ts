@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import type { CommandResult } from '@syrin/iris-protocol';
-import { ActionType, FlowErrorCode, QueryBy } from '@syrin/iris-protocol';
+import type { CommandResult } from '@reticle/protocol';
+import { ActionType, FlowErrorCode, QueryBy } from '@reticle/protocol';
 import { TOOLS, type ToolDeps } from '../tools/tools.js';
-import { IrisTool } from '../tools/tool-names.js';
+import { ReticleTool } from '../tools/tool-names.js';
 import { BaselineStore } from '../project/baselines.js';
 import { RecordingStore } from './recordings.js';
 import { FlowStore } from './flows.js';
@@ -12,7 +12,7 @@ import type { FileSystemPort } from '../project/fs-port.js';
 import type { Session, SessionManager } from '../session/session.js';
 import type { CompiledProgram, RecordedStep } from './recordings.js';
 
-const ROOT = '/virtual/.iris';
+const ROOT = '/virtual/.reticle';
 
 /** In-memory FileSystemPort — proves the tool wiring without touching the real disk. */
 function memoryFs(): FileSystemPort {
@@ -91,7 +91,7 @@ function fakeDeps(fs: FileSystemPort, recordings: RecordingStore): ToolDeps {
     project: new ProjectStore(fs, ROOT, { now: () => 1234 }),
     annotations: new AnnotationStore(),
     fs,
-    irisRoot: ROOT,
+    reticleRoot: ROOT,
     now: () => 1234,
   };
 }
@@ -106,10 +106,10 @@ function program(name: string, steps: RecordedStep[]): CompiledProgram {
   return { name, version: 1, steps };
 }
 
-describe('iris_flow_save / iris_flow_load handlers', () => {
-  it('19: iris_flow_save with no compiled recording returns NO_RECORDING', async () => {
+describe('reticle_flow_save / reticle_flow_load handlers', () => {
+  it('19: reticle_flow_save with no compiled recording returns NO_RECORDING', async () => {
     const deps = fakeDeps(memoryFs(), new RecordingStore());
-    const res = (await tool(IrisTool.FLOW_SAVE).handler(deps, { flowName: 'missing' })) as {
+    const res = (await tool(ReticleTool.FLOW_SAVE).handler(deps, { flowName: 'missing' })) as {
       error?: string;
       code?: string;
     };
@@ -117,25 +117,25 @@ describe('iris_flow_save / iris_flow_load handlers', () => {
     expect(res.error).toBeDefined();
   });
 
-  it('20: iris_flow_save then iris_flow_load via handlers round-trips', async () => {
+  it('20: reticle_flow_save then reticle_flow_load via handlers round-trips', async () => {
     const recordings = new RecordingStore();
     recordings.saveCompiled(
       program('checkout', [
         {
-          tool: IrisTool.ACT,
+          tool: ReticleTool.ACT,
           stable: true,
           args: { by: QueryBy.TESTID, value: 'pay', action: ActionType.CLICK, args: {} },
         },
       ]),
     );
     const deps = fakeDeps(memoryFs(), recordings);
-    const saved = (await tool(IrisTool.FLOW_SAVE).handler(deps, { flowName: 'checkout' })) as {
+    const saved = (await tool(ReticleTool.FLOW_SAVE).handler(deps, { flowName: 'checkout' })) as {
       name: string;
       stepCount: number;
     };
     expect(saved).toMatchObject({ name: 'checkout', stepCount: 1 });
 
-    const loaded = (await tool(IrisTool.FLOW_LOAD).handler(deps, { flowName: 'checkout' })) as {
+    const loaded = (await tool(ReticleTool.FLOW_LOAD).handler(deps, { flowName: 'checkout' })) as {
       flowName: string;
       steps: { anchor: { kind: string; value?: string } }[];
     };
@@ -144,7 +144,7 @@ describe('iris_flow_save / iris_flow_load handlers', () => {
 
     // FLOW_LIST returns {name, path} objects (matches its outputSchema — schema-validating MCP
     // clients reject bare strings).
-    const list = (await tool(IrisTool.FLOW_LIST).handler(deps, {})) as {
+    const list = (await tool(ReticleTool.FLOW_LIST).handler(deps, {})) as {
       flows: { name: string; path: string }[];
     };
     expect(list.flows.map((f) => f.name)).toEqual(['checkout']);
@@ -156,7 +156,7 @@ describe('iris_flow_save / iris_flow_load handlers', () => {
     recordings.saveCompiled(
       program('withexpect', [
         {
-          tool: IrisTool.ACT,
+          tool: ReticleTool.ACT,
           stable: true,
           args: { by: QueryBy.TESTID, value: 'go', action: ActionType.CLICK, args: {} },
           expect: { signal: 'diff:shown' },
@@ -164,8 +164,10 @@ describe('iris_flow_save / iris_flow_load handlers', () => {
       ]),
     );
     const deps = fakeDeps(memoryFs(), recordings);
-    await tool(IrisTool.FLOW_SAVE).handler(deps, { flowName: 'withexpect' });
-    const loaded = (await tool(IrisTool.FLOW_LOAD).handler(deps, { flowName: 'withexpect' })) as {
+    await tool(ReticleTool.FLOW_SAVE).handler(deps, { flowName: 'withexpect' });
+    const loaded = (await tool(ReticleTool.FLOW_LOAD).handler(deps, {
+      flowName: 'withexpect',
+    })) as {
       steps: { expect?: { signal?: string } }[];
     };
     expect(loaded.steps[0]?.expect?.signal).toBe('diff:shown');

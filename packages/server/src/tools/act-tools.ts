@@ -1,5 +1,5 @@
 /**
- * Action tools — iris_act, iris_act_sequence, iris_act_and_wait — plus the native-input machinery
+ * Action tools — reticle_act, reticle_act_sequence, reticle_act_and_wait — plus the native-input machinery
  * (asBox / tryRealInput). Split out of tools.ts to keep that file under the line cap; assembled back
  * into the tool list there via ...ACT_TOOLS.
  */
@@ -11,14 +11,14 @@ import {
   DANGEROUS_ACTION_CONFIRM_ARG,
   InputMode,
   InputModeReason,
-  IrisCommand,
+  ReticleCommand,
   isDangerousActionText,
-} from '@syrin/iris-protocol';
+} from '@reticle/protocol';
 import type { Session } from '../session/session.js';
 import type { ElementBox, RealInputArgs } from '../input/real-input.js';
 import { isPointerAction } from '../input/real-input.js';
 import { leanActResult } from './act-view.js';
-import { IrisTool } from './tool-names.js';
+import { ReticleTool } from './tool-names.js';
 import { buildReactionReport, summarizeReaction } from '../events/reaction.js';
 import { evaluatePredicate, waitForPredicate, PredicateSchema } from '../events/predicate.js';
 import { healthEnvelope, refuseIfThrottled } from '../session/session-health.js';
@@ -85,7 +85,7 @@ async function tryRealInput(
   if (!(await provider.isAvailableFor(session.url)))
     return synthetic(InputModeReason.PAGE_NOT_CORRELATED);
 
-  const inspected = await commandOrThrow(deps, session.id, IrisCommand.INSPECT, { ref });
+  const inspected = await commandOrThrow(deps, session.id, ReticleCommand.INSPECT, { ref });
   const confirmed = inner[DANGEROUS_ACTION_CONFIRM_ARG] === true;
   const dangerousDescriptorText = (value: unknown): string => {
     const descriptor = asRecord(value);
@@ -114,7 +114,7 @@ async function tryRealInput(
   if (action === ActionType.DRAG) {
     const toRef = asString(inner['toRef']);
     if (toRef === undefined) return synthetic(InputModeReason.DRAG_TARGET_UNRESOLVED);
-    const targetInspected = await commandOrThrow(deps, session.id, IrisCommand.INSPECT, {
+    const targetInspected = await commandOrThrow(deps, session.id, ReticleCommand.INSPECT, {
       ref: toRef,
     });
     if (
@@ -154,11 +154,11 @@ async function tryRealInput(
 
 export const ACT_TOOLS: ToolDef[] = [
   {
-    name: IrisTool.ACT,
+    name: ReticleTool.ACT,
     description:
-      'Execute one action against a ref: click|dblclick|hover|focus|fill|type|clear|select|check|uncheck|submit|press|scrollIntoView. Returns immediately with a `since` cursor — observe the reaction with iris_observe. Carries effect:{dispatched,targetMatched,visible,enabled,focusMoved,valueChanged,domMutatedWithin,occluded,occludedBy,scrolledIntoView} to tell "action missed" from "app didn\'t react"; dispatched=landed, settled=a real frame flushed, and a settle timeout never fails the tool. Fields at their uninformative default are OMITTED so a clean action collapses to its consequence: an absent dispatched/targetMatched/visible/enabled means true, an absent occluded/scrolledIntoView/valueChanged/defaultPrevented means false, an absent focusMoved/occludedBy means null. occluded=true means the click point is covered by another element (a real user could not click it) — synthetic dispatch still delivered the event; scrolledIntoView=true means an off-viewport target was scrolled in first. inputMode is "real" (native CDP, no synthetic effect block) or "synthetic"; clicks default to the occlusion-honest synthetic path even when CDP is configured — pass args.native:true to force a trusted native click (file pickers, clipboard). inputModeReason explains any real→synthetic choice so it is never silent. Full model (real-input, throttled tabs, `iris drive`): docs/usage.md §18.',
+      'Execute one action against a ref: click|dblclick|hover|focus|fill|type|clear|select|check|uncheck|submit|press|scrollIntoView. Returns immediately with a `since` cursor — observe the reaction with reticle_observe. Carries effect:{dispatched,targetMatched,visible,enabled,focusMoved,valueChanged,domMutatedWithin,occluded,occludedBy,scrolledIntoView} to tell "action missed" from "app didn\'t react"; dispatched=landed, settled=a real frame flushed, and a settle timeout never fails the tool. Fields at their uninformative default are OMITTED so a clean action collapses to its consequence: an absent dispatched/targetMatched/visible/enabled means true, an absent occluded/scrolledIntoView/valueChanged/defaultPrevented means false, an absent focusMoved/occludedBy means null. occluded=true means the click point is covered by another element (a real user could not click it) — synthetic dispatch still delivered the event; scrolledIntoView=true means an off-viewport target was scrolled in first. inputMode is "real" (native CDP, no synthetic effect block) or "synthetic"; clicks default to the occlusion-honest synthetic path even when CDP is configured — pass args.native:true to force a trusted native click (file pickers, clipboard). inputModeReason explains any real→synthetic choice so it is never silent. Full model (real-input, throttled tabs, `reticle drive`): docs/usage.md §18.',
     inputSchema: {
-      ref: z.string().describe("Element ref from iris_snapshot or iris_query (e.g. 'e42')."),
+      ref: z.string().describe("Element ref from reticle_snapshot or reticle_query (e.g. 'e42')."),
       action: z
         .string()
         .describe(
@@ -182,7 +182,7 @@ export const ACT_TOOLS: ToolDef[] = [
       since: z
         .number()
         .describe(
-          'Cursor — pass to iris_observe/iris_wait_for/iris_assert to scope reaction queries to this act.',
+          'Cursor — pass to reticle_observe/reticle_wait_for/reticle_assert to scope reaction queries to this act.',
         ),
       dispatched: z.boolean(),
       settled: z.boolean().nullable(),
@@ -220,7 +220,7 @@ export const ACT_TOOLS: ToolDef[] = [
         });
       }
 
-      const result = await session.command(IrisCommand.ACT, {
+      const result = await session.command(ReticleCommand.ACT, {
         ref: args['ref'],
         action: args['action'],
         args: args['args'] ?? {},
@@ -246,14 +246,14 @@ export const ACT_TOOLS: ToolDef[] = [
     },
   },
   {
-    name: IrisTool.ACT_SEQUENCE,
+    name: ReticleTool.ACT_SEQUENCE,
     description:
-      'Run multiple actions in order (fill -> fill -> submit) in one round-trip. Returns per-step effects[] (see iris_act).',
+      'Run multiple actions in order (fill -> fill -> submit) in one round-trip. Returns per-step effects[] (see reticle_act).',
     inputSchema: {
       steps: z
         .array(z.record(z.unknown()))
         .describe(
-          'Ordered list of { ref, action, args? } objects. Each step is equivalent to one iris_act call; put confirmDangerous:true in a destructive step args object.',
+          'Ordered list of { ref, action, args? } objects. Each step is equivalent to one reticle_act call; put confirmDangerous:true in a destructive step args object.',
         ),
       ...sessionIdShape,
     },
@@ -272,7 +272,7 @@ export const ACT_TOOLS: ToolDef[] = [
       if (paused !== undefined) return paused;
       const since = session.elapsed();
       session.markActCursor(since); // honesty: a later wait_for/assert floors at this cursor
-      const result = await session.command(IrisCommand.ACT_SEQUENCE, { steps: args['steps'] });
+      const result = await session.command(ReticleCommand.ACT_SEQUENCE, { steps: args['steps'] });
       if (!result.ok) throw new Error(result.error ?? 'act_sequence failed');
       if (deps.recordings.active().length > 0) {
         deps.recordings.capture(compileSequenceStep(args, result.result));
@@ -287,16 +287,16 @@ export const ACT_TOOLS: ToolDef[] = [
     },
   },
   {
-    name: IrisTool.ACT_AND_WAIT,
+    name: ReticleTool.ACT_AND_WAIT,
     description:
       'Act on a ref, then wait for a predicate to hold — one hop for the act->observe->assert loop. ' +
       'Omit `until` to wait for the page to settle (network + DOM idle) — use this instead of a fixed sleep. ' +
       'Returns { effect } (the action result), { verdict } (predicate pass/evidence/near-miss), ' +
       '{ trace } (a digest — window_ms + summary counts of what the app did), and { since } (the act ' +
-      'cursor; pass it to iris_observe for the full per-event timeline when the counts are not enough). ' +
+      'cursor; pass it to reticle_observe for the full per-event timeline when the counts are not enough). ' +
       'timeout_ms 0 evaluates the predicate once without waiting.',
     inputSchema: {
-      ref: z.string().describe('Element ref from iris_snapshot or iris_query.'),
+      ref: z.string().describe('Element ref from reticle_snapshot or reticle_query.'),
       action: z
         .string()
         .describe(
@@ -309,7 +309,7 @@ export const ACT_TOOLS: ToolDef[] = [
           'Action-specific arguments: { value } for fill/select, { text } for type/press, { confirmDangerous: true } for a potentially destructive control.',
         ),
       until: PredicateSchema.optional().describe(
-        'Predicate to wait for after the action completes (same shape as iris_assert). OMIT to wait for the page to SETTLE — network + DOM idle — the deterministic default instead of a sleep. To assert a consequence AND settle, allOf them: { kind: "allOf", predicates: [<your predicate>, { kind: "settled" }] }.',
+        'Predicate to wait for after the action completes (same shape as reticle_assert). OMIT to wait for the page to SETTLE — network + DOM idle — the deterministic default instead of a sleep. To assert a consequence AND settle, allOf them: { kind: "allOf", predicates: [<your predicate>, { kind: "settled" }] }.',
       ),
       timeout_ms: z
         .number()
@@ -324,7 +324,9 @@ export const ACT_TOOLS: ToolDef[] = [
       ...sessionIdShape,
     },
     outputSchema: {
-      effect: z.unknown().describe('The iris_act result (dispatched, settled, inputMode, etc.).'),
+      effect: z
+        .unknown()
+        .describe('The reticle_act result (dispatched, settled, inputMode, etc.).'),
       verdict: z.object({
         pass: z.boolean(),
         evidence: z.unknown().optional(),
@@ -333,11 +335,13 @@ export const ACT_TOOLS: ToolDef[] = [
       trace: z
         .unknown()
         .describe(
-          'Reaction digest: { window_ms, summary } of what the app did (DOM/network/route/console/signal counts). The full per-event timeline is one iris_observe { since } away.',
+          'Reaction digest: { window_ms, summary } of what the app did (DOM/network/route/console/signal counts). The full per-event timeline is one reticle_observe { since } away.',
         ),
       since: z
         .number()
-        .describe('Cursor for this act — pass to iris_observe/iris_assert for the full timeline.'),
+        .describe(
+          'Cursor for this act — pass to reticle_observe/reticle_assert for the full timeline.',
+        ),
       session: z
         .object({ lastSeenMs: z.number(), throttled: z.boolean(), focused: z.boolean() })
         .optional(),
@@ -357,7 +361,7 @@ export const ACT_TOOLS: ToolDef[] = [
 
       const since = session.elapsed();
       session.markActCursor(since);
-      const actResult = await session.command(IrisCommand.ACT, {
+      const actResult = await session.command(ReticleCommand.ACT, {
         ref: args['ref'],
         action: args['action'],
         args: args['args'] ?? {},

@@ -5,14 +5,14 @@ import {
   RunFramework,
   RunProfile,
   RunTrigger,
-  type IrisVerificationRun,
-} from '@syrin/iris-protocol';
+  type ReticleVerificationRun,
+} from '@reticle/protocol';
 import { buildVerificationRun, type VerificationRunInput } from './runs/build-verification-run.js';
 import { runVerify, urlParts, type VerifyConnection, type VerifyPorts } from './cli-verify.js';
 
 const NOW = 1_700_000_000_000;
 
-function makeRun(flowStatus: RunFlowStatus | undefined): IrisVerificationRun {
+function makeRun(flowStatus: RunFlowStatus | undefined): ReticleVerificationRun {
   const flows =
     flowStatus === undefined
       ? []
@@ -30,7 +30,7 @@ function makeRun(flowStatus: RunFlowStatus | undefined): IrisVerificationRun {
     durationMs: 5,
     profile: RunProfile.PROD_PREVIEW,
     project: { name: 'demo', framework: RunFramework.OTHER, previewUrl: 'http://x' },
-    agent: { id: 'iris-cli', kind: RunAgentKind.OEM_PIPELINE },
+    agent: { id: 'reticle-cli', kind: RunAgentKind.OEM_PIPELINE },
     trigger: { kind: RunTrigger.OEM },
     changedFiles: [],
     flows,

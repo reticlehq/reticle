@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { EventType } from '@syrin/iris-protocol';
+import { EventType } from '@reticle/protocol';
 import { Annotator } from './annotator.js';
 
 interface Emitted {
@@ -24,7 +24,7 @@ function clickAt(el: Element, x = 100, y = 120): void {
 }
 
 function popover(): HTMLElement {
-  const pop = document.querySelector<HTMLElement>('[data-iris-mark="pop"]');
+  const pop = document.querySelector<HTMLElement>('[data-reticle-mark="pop"]');
   if (pop === null) throw new Error('no popover open');
   return pop;
 }
@@ -34,7 +34,7 @@ afterEach(() => {
   current = undefined;
   document.body.innerHTML = '';
   document.head.innerHTML = '';
-  document.documentElement.removeAttribute('data-iris-mark-active');
+  document.documentElement.removeAttribute('data-reticle-mark-active');
 });
 
 describe('Annotator — human marks a mistake on the page', () => {
@@ -43,7 +43,7 @@ describe('Annotator — human marks a mistake on the page', () => {
     document.body.insertAdjacentHTML('beforeend', '<button data-testid="cta">Buy</button>');
     clickAt(document.querySelector('[data-testid="cta"]') as Element);
     expect(ann.active).toBe(false);
-    expect(document.querySelector('[data-iris-mark="pop"]')).toBeNull();
+    expect(document.querySelector('[data-reticle-mark="pop"]')).toBeNull();
     expect(emits).toHaveLength(0);
   });
 
@@ -51,7 +51,7 @@ describe('Annotator — human marks a mistake on the page', () => {
     const { ann } = setup();
     ann.toggle(true);
     expect(ann.active).toBe(true);
-    expect(document.documentElement.getAttribute('data-iris-mark-active')).toBe('1');
+    expect(document.documentElement.getAttribute('data-reticle-mark-active')).toBe('1');
   });
 
   it('click → type → send emits a HUMAN_MARK with anchor, label, source, and route', () => {
@@ -59,7 +59,7 @@ describe('Annotator — human marks a mistake on the page', () => {
     ann.toggle(true);
     document.body.insertAdjacentHTML(
       'beforeend',
-      '<button data-testid="checkout" data-iris-source="src/Checkout.tsx:42:8">Pay</button>',
+      '<button data-testid="checkout" data-reticle-source="src/Checkout.tsx:42:8">Pay</button>',
     );
     clickAt(document.querySelector('[data-testid="checkout"]') as Element);
 
@@ -77,7 +77,7 @@ describe('Annotator — human marks a mistake on the page', () => {
     expect(d?.['source']).toEqual({ file: 'src/Checkout.tsx', line: 42 });
     expect(typeof d?.['route']).toBe('string');
     // The popover closes and a numbered pin confirms the mark landed.
-    expect(document.querySelector('[data-iris-mark="pop"]')).toBeNull();
+    expect(document.querySelector('[data-reticle-mark="pop"]')).toBeNull();
     expect(ann.markCount).toBe(1);
   });
 
@@ -105,7 +105,7 @@ describe('Annotator — human marks a mistake on the page', () => {
     const { ann, emits } = setup();
     ann.toggle(true);
     document.body.insertAdjacentHTML('beforeend', '<button>Go</button>');
-    clickAt(document.querySelector('button:not([data-iris-mark="fab"])') as Element);
+    clickAt(document.querySelector('button:not([data-reticle-mark="fab"])') as Element);
     const send = popover().querySelector<HTMLButtonElement>('button[data-send]');
     expect(send?.disabled).toBe(true);
     expect(emits).toHaveLength(0);
@@ -130,14 +130,14 @@ describe('Annotator — human marks a mistake on the page', () => {
     );
     expect(emits).toHaveLength(1);
     expect(emits[0]?.data['note']).toBe('misaligned');
-    expect(document.querySelector('[data-iris-mark="pop"]')).toBeNull();
+    expect(document.querySelector('[data-reticle-mark="pop"]')).toBeNull();
   });
 
   it('⌘/Ctrl+Enter does nothing while the note is empty', () => {
     const { ann, emits } = setup();
     ann.toggle(true);
     document.body.insertAdjacentHTML('beforeend', '<button>Go</button>');
-    clickAt(document.querySelector('button:not([data-iris-mark="fab"])') as Element);
+    clickAt(document.querySelector('button:not([data-reticle-mark="fab"])') as Element);
     const textarea = popover().querySelector('textarea');
     textarea?.dispatchEvent(
       new KeyboardEvent('keydown', {
@@ -148,17 +148,17 @@ describe('Annotator — human marks a mistake on the page', () => {
       }),
     );
     expect(emits).toHaveLength(0);
-    expect(document.querySelector('[data-iris-mark="pop"]')).not.toBeNull();
+    expect(document.querySelector('[data-reticle-mark="pop"]')).not.toBeNull();
   });
 
   it('Escape closes an open popover; Escape again exits annotate mode', () => {
     const { ann } = setup();
     ann.toggle(true);
     document.body.insertAdjacentHTML('beforeend', '<button>Go</button>');
-    clickAt(document.querySelector('button:not([data-iris-mark="fab"])') as Element);
-    expect(document.querySelector('[data-iris-mark="pop"]')).not.toBeNull();
+    clickAt(document.querySelector('button:not([data-reticle-mark="fab"])') as Element);
+    expect(document.querySelector('[data-reticle-mark="pop"]')).not.toBeNull();
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-    expect(document.querySelector('[data-iris-mark="pop"]')).toBeNull();
+    expect(document.querySelector('[data-reticle-mark="pop"]')).toBeNull();
     expect(ann.active).toBe(true); // still in annotate mode, just closed the popover
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     expect(ann.active).toBe(false); // a second Escape leaves annotate mode
@@ -170,7 +170,7 @@ describe('Annotator — human marks a mistake on the page', () => {
     document.body.insertAdjacentHTML('beforeend', '<a href="#x">link</a>');
     clickAt(document.querySelector('a') as Element);
     popover().querySelector<HTMLButtonElement>('button[data-cancel]')?.click();
-    expect(document.querySelector('[data-iris-mark="pop"]')).toBeNull();
+    expect(document.querySelector('[data-reticle-mark="pop"]')).toBeNull();
     expect(emits).toHaveLength(0);
   });
 
@@ -186,38 +186,38 @@ describe('Annotator — human marks a mistake on the page', () => {
     // jsdom has no layout, so fake the rect the highlight positions over.
     btn.getBoundingClientRect = () => ({ left: 10, top: 20, width: 100, height: 30 }) as DOMRect;
     btn.dispatchEvent(new MouseEvent('mousemove', { bubbles: true }));
-    const hi = document.querySelector<HTMLElement>('[data-iris-mark="hi"]');
+    const hi = document.querySelector<HTMLElement>('[data-reticle-mark="hi"]');
     expect(hi?.getAttribute('data-on')).not.toBe('1'); // still travelling — not yet
     await restForHighlight();
     expect(hi?.getAttribute('data-on')).toBe('1');
     expect(hi?.style.width).toBe('100px');
     expect(hi?.style.left).toBe('10px');
-    expect(hi?.querySelector('[data-iris-mark="hilabel"]')?.textContent).toBe('cta'); // testid wins
+    expect(hi?.querySelector('[data-reticle-mark="hilabel"]')?.textContent).toBe('cta'); // testid wins
   });
 
   it('hover highlight stays off when inactive and hides over its own UI', async () => {
     const { ann } = setup();
     document.body.insertAdjacentHTML('beforeend', '<button>Go</button>');
-    const btn = document.querySelector('button:not([data-iris-mark="fab"])') as HTMLElement;
+    const btn = document.querySelector('button:not([data-reticle-mark="fab"])') as HTMLElement;
     btn.getBoundingClientRect = () => ({ left: 0, top: 0, width: 50, height: 20 }) as DOMRect;
     btn.dispatchEvent(new MouseEvent('mousemove', { bubbles: true })); // inactive
     await restForHighlight();
-    expect(document.querySelector('[data-iris-mark="hi"]')?.getAttribute('data-on')).toBe('0');
+    expect(document.querySelector('[data-reticle-mark="hi"]')?.getAttribute('data-on')).toBe('0');
     // active, but moving over the FAB (our own UI) → still off
     ann.toggle(true);
     document
-      .querySelector('[data-iris-mark="fab"]')
+      .querySelector('[data-reticle-mark="fab"]')
       ?.dispatchEvent(new MouseEvent('mousemove', { bubbles: true }));
     await restForHighlight();
-    expect(document.querySelector('[data-iris-mark="hi"]')?.getAttribute('data-on')).toBe('0');
+    expect(document.querySelector('[data-reticle-mark="hi"]')?.getAttribute('data-on')).toBe('0');
   });
 
   it('never turns a click on its own UI (the FAB) into a mark', () => {
     const { ann, emits } = setup();
     ann.toggle(true);
-    document.querySelector<HTMLElement>('[data-iris-mark="fab"]')?.click();
+    document.querySelector<HTMLElement>('[data-reticle-mark="fab"]')?.click();
     // The FAB click toggles mode off; it must not open a popover or emit.
-    expect(document.querySelector('[data-iris-mark="pop"]')).toBeNull();
+    expect(document.querySelector('[data-reticle-mark="pop"]')).toBeNull();
     expect(emits).toHaveLength(0);
   });
 });

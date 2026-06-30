@@ -5,7 +5,7 @@ import {
   ElementState,
   isDangerousActionText,
   SettleReason,
-} from '@syrin/iris-protocol';
+} from '@reticle/protocol';
 import { refs } from '../dom/refs.js';
 import { getAccessibleName, isVisible, getStates } from '../dom/a11y.js';
 import { elementHasHoverHandlers, identifyComponent } from '../registry/adapters.js';
@@ -334,7 +334,7 @@ async function dispatchFor(
         throw new Error('upload target must be a <input type="file">');
       }
       const file = new File(
-        [asString(args['content'], 'iris test file')],
+        [asString(args['content'], 'reticle test file')],
         asString(args['name'], 'file.txt'),
         {
           type: asString(args['type'], 'text/plain'),

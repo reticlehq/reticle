@@ -1,4 +1,4 @@
-# Getting Started with Iris
+# Getting Started with Reticle
 
 This walks you from zero to your agent verifying your app — step by step, with real code for real frameworks. ~10 minutes.
 
@@ -24,16 +24,16 @@ Three pieces, each tiny:
 
 ```text
 ┌─────────────┐   MCP    ┌──────────────────────┐   WebSocket   ┌─────────────────────┐
-│ coding agent │◀───────▶│  iris bridge + server │◀─────────────▶│ your app + the Iris │
-│ (Claude Code)│  stdio  │   (npx @syrin/iris)   │  localhost    │   SDK (dev only)    │
+│ coding agent │◀───────▶│  reticle bridge + server │◀─────────────▶│ your app + the Reticle │
+│ (Claude Code)│  stdio  │   (npx @reticle/core)   │  localhost    │   SDK (dev only)    │
 └─────────────┘          └──────────────────────┘  :4400        └─────────────────────┘
 ```
 
-It all ships in **one package, `@syrin/iris`**:
+It all ships in **one package, `@reticle/core`**:
 
-1. **The MCP server** — your agent launches it with `npx @syrin/iris`; it hosts the tools _and_ the WebSocket bridge your app connects to. You don't run it by hand; the agent does.
-2. **The SDK** — `import { iris } from '@syrin/iris'`, a few lines in your app's dev entry point.
-3. **(Optional) React adapter + source-mapping** — so `iris_inspect` can tell the agent which component/file to edit (also in `@syrin/iris`).
+1. **The MCP server** — your agent launches it with `npx @reticle/core`; it hosts the tools _and_ the WebSocket bridge your app connects to. You don't run it by hand; the agent does.
+2. **The SDK** — `import { reticle } from '@reticle/core'`, a few lines in your app's dev entry point.
+3. **(Optional) React adapter + source-mapping** — so `reticle_inspect` can tell the agent which component/file to edit (also in `@reticle/core`).
 
 Everything is **dev-only** and **localhost-only**. It's tree-shaken out of production builds.
 
@@ -45,24 +45,24 @@ Everything is **dev-only** and **localhost-only**. It's tree-shaken out of produ
 
 ---
 
-## Fastest path — `iris init`
+## Fastest path — `reticle init`
 
 From your project root:
 
 ```bash
-npx @syrin/iris init
+npx @reticle/core init
 ```
 
 It detects your framework, package manager, and React version, then:
 
-- **registers the Iris MCP server once, globally, for each agent you have installed** — Claude Code (`claude mcp add iris -s user`) and/or Cursor (`~/.cursor/mcp.json`) — so every project on this machine gets it; you never re-add it per project,
-- installs `@syrin/iris` as a dev dependency,
-- **Vite:** adds the `iris()` plugin to your config — which wires source mapping _and_ `iris.connect()` for you, so there is nothing else to edit,
-- **Next / other:** creates the dev component and prints the exact `withIris` / mount / connect snippets to paste (it never half-edits a build config).
+- **registers the Reticle MCP server once, globally, for each agent you have installed** — Claude Code (`claude mcp add reticle -s user`) and/or Cursor (`~/.cursor/mcp.json`) — so every project on this machine gets it; you never re-add it per project,
+- installs `@reticle/core` as a dev dependency,
+- **Vite:** adds the `reticle()` plugin to your config — which wires source mapping _and_ `reticle.connect()` for you, so there is nothing else to edit,
+- **Next / other:** creates the dev component and prints the exact `withReticle` / mount / connect snippets to paste (it never half-edits a build config).
 
-The bridge + MCP server is a single process that serves all your projects, so it's registered at **user scope**, not in a per-project `.mcp.json`. Only the SDK (the `iris()` plugin / connect call) is added per project.
+The bridge + MCP server is a single process that serves all your projects, so it's registered at **user scope**, not in a per-project `.mcp.json`. Only the SDK (the `reticle()` plugin / connect call) is added per project.
 
-Re-running is safe (already-registered/already-patched steps are skipped). Preview without writing via `npx @syrin/iris init --dry-run`. Flags: `--port N`, `--no-mcp`, `--no-install`, `--yes`.
+Re-running is safe (already-registered/already-patched steps are skipped). Preview without writing via `npx @reticle/core init --dry-run`. Flags: `--port N`, `--no-mcp`, `--no-install`, `--yes`.
 
 Then restart your dev server and skip to [Step 4](#step-4--run-it--verify-the-connection). The manual steps below explain what `init` sets up, if you prefer to wire it yourself.
 
@@ -70,29 +70,29 @@ Then restart your dev server and skip to [Step 4](#step-4--run-it--verify-the-co
 
 ## Step 1 — Connect your coding agent (MCP), once
 
-You don't start the server manually — your agent starts it via MCP. Register Iris **once, at the user (global) scope** so every project picks it up — there's nothing to add per project.
+You don't start the server manually — your agent starts it via MCP. Register Reticle **once, at the user (global) scope** so every project picks it up — there's nothing to add per project.
 
 **Claude Code** — one command:
 
 ```bash
-claude mcp add iris -s user -- npx @syrin/iris mcp
+claude mcp add reticle -s user -- npx @reticle/core mcp
 ```
 
-(`iris init` runs exactly this for you. `-s user` is what makes it global; drop it for a project-local registration instead.)
+(`reticle init` runs exactly this for you. `-s user` is what makes it global; drop it for a project-local registration instead.)
 
-**Cursor** — add to your global `~/.cursor/mcp.json` (not per-project; `iris init` writes this for you):
+**Cursor** — add to your global `~/.cursor/mcp.json` (not per-project; `reticle init` writes this for you):
 
 ```jsonc
 {
   "mcpServers": {
-    "iris": { "command": "npx", "args": ["@syrin/iris", "mcp"] },
+    "reticle": { "command": "npx", "args": ["@reticle/core", "mcp"] },
   },
 }
 ```
 
-Other MCP clients (Windsurf, Claude Desktop, …) use the same `command`/`args` shape. Restart the agent so it picks up the new server. When it launches Iris, the bridge starts listening on `ws://localhost:4400`.
+Other MCP clients (Windsurf, Claude Desktop, …) use the same `command`/`args` shape. Restart the agent so it picks up the new server. When it launches Reticle, the bridge starts listening on `ws://localhost:4400`.
 
-> Want a different port? Set `IRIS_PORT` in the server `env` and pass the same URL to `iris.connect({ url })` in Step 2.
+> Want a different port? Set `RETICLE_PORT` in the server `env` and pass the same URL to `reticle.connect({ url })` in Step 2.
 
 ---
 
@@ -101,26 +101,26 @@ Other MCP clients (Windsurf, Claude Desktop, …) use the same `command`/`args` 
 Install the one package as a dev dependency (it includes the SDK, React adapter, source-mapping plugins, the spec runner, and the MCP server):
 
 ```bash
-npm i -D @syrin/iris     # or: pnpm add -D @syrin/iris
+npm i -D @reticle/core     # or: pnpm add -D @reticle/core
 ```
 
-Then call `iris.connect()` once, in dev only. Where you put it depends on your framework.
+Then call `reticle.connect()` once, in dev only. Where you put it depends on your framework.
 
 ### Vite + React
 
-**Recommended — the Vite plugin (one line, does everything).** Add `iris()` to your `vite.config.ts`:
+**Recommended — the Vite plugin (one line, does everything).** Add `reticle()` to your `vite.config.ts`:
 
 ```ts
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
-import { iris } from '@syrin/iris/vite';
+import { reticle } from '@reticle/core/vite';
 
 export default defineConfig({
-  plugins: [react(), iris()],
+  plugins: [react(), reticle()],
 });
 ```
 
-This injects `iris.connect()` for you _and_ handles React 19 source mapping (Step 3) — so there's no entry-file edit and no separate Babel setup. `apply: 'serve'` means it's dropped from `vite build` entirely, so it can never reach production. (This is exactly what `iris init` adds.)
+This injects `reticle.connect()` for you _and_ handles React 19 source mapping (Step 3) — so there's no entry-file edit and no separate Babel setup. `apply: 'serve'` means it's dropped from `vite build` entirely, so it can never reach production. (This is exactly what `reticle init` adds.)
 
 <details>
 <summary>Prefer to wire it by hand instead of the plugin?</summary>
@@ -130,12 +130,12 @@ In your entry file (`src/main.tsx`), call `connect()` in dev only:
 ```ts
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { iris, SESSION_AUTO } from '@syrin/iris';
+import { reticle, SESSION_AUTO } from '@reticle/core';
 import { App } from './App';
 
 if (import.meta.env.DEV) {
   // SESSION_AUTO gives this tab a unique session id, so multiple apps/tabs never collide.
-  iris.connect({ session: SESSION_AUTO }); // connects to ws://localhost:4400 by default
+  reticle.connect({ session: SESSION_AUTO }); // connects to ws://localhost:4400 by default
 }
 
 createRoot(document.getElementById('root')!).render(
@@ -154,16 +154,16 @@ On React 19 you then also need the source-mapping Babel plugin from Step 3. The 
 Create a tiny client component and mount it in your root layout, dev-only:
 
 ```tsx
-// app/iris-dev.tsx
+// app/reticle-dev.tsx
 'use client';
 import { useEffect } from 'react';
 
-export function IrisDev() {
+export function ReticleDev() {
   useEffect(() => {
     if (process.env.NODE_ENV === 'development') {
       // SESSION_AUTO = a unique id per tab, so several Next apps/tabs never collide on one session.
-      void import('@syrin/iris').then(({ iris, SESSION_AUTO }) =>
-        iris.connect({ session: SESSION_AUTO }),
+      void import('@reticle/core').then(({ reticle, SESSION_AUTO }) =>
+        reticle.connect({ session: SESSION_AUTO }),
       );
     }
   }, []);
@@ -173,13 +173,13 @@ export function IrisDev() {
 
 ```tsx
 // app/layout.tsx
-import { IrisDev } from './iris-dev';
+import { ReticleDev } from './reticle-dev';
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
       <body>
-        {process.env.NODE_ENV === 'development' && <IrisDev />}
+        {process.env.NODE_ENV === 'development' && <ReticleDev />}
         {children}
       </body>
     </html>
@@ -192,35 +192,35 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 Anywhere your app boots in dev:
 
 ```ts
-import { iris, SESSION_AUTO } from '@syrin/iris';
-if (location.hostname === 'localhost') iris.connect({ session: SESSION_AUTO });
+import { reticle, SESSION_AUTO } from '@reticle/core';
+if (location.hostname === 'localhost') reticle.connect({ session: SESSION_AUTO });
 ```
 
 Or, with no build step, a script tag pointed at the bridge:
 
 ```html
 <script type="module">
-  import { iris, SESSION_AUTO } from 'https://esm.sh/@syrin/iris';
-  iris.connect({ session: SESSION_AUTO });
+  import { reticle, SESSION_AUTO } from 'https://esm.sh/@reticle/core';
+  reticle.connect({ session: SESSION_AUTO });
 </script>
 ```
 
-> **Want to watch the agent work?** Add `present: true` to `iris.connect()` for a glowing border, a synthetic cursor that flies to targets, click/hover effects, and a narration HUD. See [usage §16](usage.md#16-presenter-mode-narration--fake-clock-watch--control).
+> **Want to watch the agent work?** Add `present: true` to `reticle.connect()` for a glowing border, a synthetic cursor that flies to targets, click/hover effects, and a narration HUD. See [usage §16](usage.md#16-presenter-mode-narration--fake-clock-watch--control).
 
 ### Running multiple apps at once
 
-It's common to have several apps open in dev — a few Next.js and React projects, or multiple tabs of the same app. Iris handles this cleanly **as long as each connection has a unique session id**, which is exactly what `SESSION_AUTO` gives you (a fresh id per tab). The examples above all use it, so you get this for free. When more than one app is connected, an Iris tool call targets the focused / most recently active one automatically, or you can pass an explicit `sessionId` to target a specific app.
+It's common to have several apps open in dev — a few Next.js and React projects, or multiple tabs of the same app. Reticle handles this cleanly **as long as each connection has a unique session id**, which is exactly what `SESSION_AUTO` gives you (a fresh id per tab). The examples above all use it, so you get this for free. When more than one app is connected, an Reticle tool call targets the focused / most recently active one automatically, or you can pass an explicit `sessionId` to target a specific app.
 
-**Two separate projects, fully isolated.** If you want each repo to have its own independent Iris bridge (separate sessions, separate `.iris/` workspace), give each project its own port. Set the same port in both the MCP server config and the app's connection:
+**Two separate projects, fully isolated.** If you want each repo to have its own independent Reticle bridge (separate sessions, separate `.reticle/` workspace), give each project its own port. Set the same port in both the MCP server config and the app's connection:
 
 ```jsonc
 // project-b/.mcp.json — give this project its own bridge port
 {
   "mcpServers": {
-    "iris": {
+    "reticle": {
       "command": "npx",
-      "args": ["-y", "@syrin/iris", "mcp"],
-      "env": { "IRIS_PORT": "4401" },
+      "args": ["-y", "@reticle/core", "mcp"],
+      "env": { "RETICLE_PORT": "4401" },
     },
   },
 }
@@ -228,7 +228,7 @@ It's common to have several apps open in dev — a few Next.js and React project
 
 ```ts
 // project-b's app — dial the same port
-iris.connect({ session: SESSION_AUTO, url: 'ws://localhost:4401/iris' });
+reticle.connect({ session: SESSION_AUTO, url: 'ws://localhost:4401/reticle' });
 ```
 
 Project A stays on the default `4400`, project B on `4401` — they never touch each other. (A port that is already in use now fails fast with a clear error instead of hanging, so a misconfiguration is obvious.)
@@ -237,35 +237,35 @@ Project A stays on the default `4400`, project B on `4401` — they never touch 
 
 ## Step 3 — (React) component & source-file mapping
 
-This is optional but high-value: it lets `iris_inspect` map a DOM element back to the **React component and the source file:line** — so when the agent finds a problem, it knows which file to edit. (The React adapter ships with `@syrin/iris` — nothing extra to install.)
+This is optional but high-value: it lets `reticle_inspect` map a DOM element back to the **React component and the source file:line** — so when the agent finds a problem, it knows which file to edit. (The React adapter ships with `@reticle/core` — nothing extra to install.)
 
 ```ts
-import { install as installIrisReact } from '@syrin/iris';
-if (import.meta.env.DEV) installIrisReact(); // call before iris.connect()
+import { install as installReticleReact } from '@reticle/core';
+if (import.meta.env.DEV) installReticleReact(); // call before reticle.connect()
 ```
 
 **React ≤ 18:** that's all — it uses React's dev `_debugSource`.
 
-**React 19:** React removed `_debugSource`, so the source has to be stamped at build time. **If you added the `iris()` Vite plugin in Step 2, this is already handled — skip ahead.** Otherwise add the Babel plugin (also bundled in `@syrin/iris`, at `@syrin/iris/babel`) to stamp the source onto elements in dev:
+**React 19:** React removed `_debugSource`, so the source has to be stamped at build time. **If you added the `reticle()` Vite plugin in Step 2, this is already handled — skip ahead.** Otherwise add the Babel plugin (also bundled in `@reticle/core`, at `@reticle/core/babel`) to stamp the source onto elements in dev:
 
 ```ts
 // vite.config.ts
 import react from '@vitejs/plugin-react';
-import irisSource from '@syrin/iris/babel';
+import reticleSource from '@reticle/core/babel';
 
 export default defineConfig({
-  plugins: [react({ babel: { plugins: [irisSource] } })],
+  plugins: [react({ babel: { plugins: [reticleSource] } })],
 });
 ```
 
-> **Next.js:** verified on **Next.js 15 / React 19 (app router, SWC)**. For source-file mapping, use `@syrin/iris/next` instead of the Babel plugin — it adds a **dev-only webpack pre-loader that keeps SWC** and stamps `data-iris-source` so `iris_inspect` returns `file:line` (e.g. `app/page.tsx:30`):
+> **Next.js:** verified on **Next.js 15 / React 19 (app router, SWC)**. For source-file mapping, use `@reticle/core/next` instead of the Babel plugin — it adds a **dev-only webpack pre-loader that keeps SWC** and stamps `data-reticle-source` so `reticle_inspect` returns `file:line` (e.g. `app/page.tsx:30`):
 >
 > ```js
 > // next.config.mjs
-> import irisNext from '@syrin/iris/next';
+> import reticleNext from '@reticle/core/next';
 > /** @type {import('next').NextConfig} */
 > const nextConfig = {};
-> export default irisNext.withIris(nextConfig); // no-op in production
+> export default reticleNext.withReticle(nextConfig); // no-op in production
 > ```
 >
 > Component identity works with or without it (Next's internal wrappers are filtered out so you see your components, e.g. just `Page`).
@@ -278,9 +278,9 @@ export default defineConfig({
 2. Open it in the browser (the SDK connects when the page loads).
 3. In your agent, ask it to confirm the connection:
 
-> "List Iris sessions."
+> "List Reticle sessions."
 
-The agent calls `iris_sessions` and should see your tab:
+The agent calls `reticle_sessions` and should see your tab:
 
 ```jsonc
 { "sessions": [{ "sessionId": "my-app", "url": "http://localhost:3000/", "title": "…" }] }
@@ -294,19 +294,19 @@ If the list is empty, see [Troubleshooting](#troubleshooting).
 
 Now just talk to your agent in plain language. For example:
 
-> "Add a 'Refresh' button to the header that re-fetches the dashboard data, then use Iris to verify clicking it fires `GET /api/dashboard` and shows no console errors."
+> "Add a 'Refresh' button to the header that re-fetches the dashboard data, then use Reticle to verify clicking it fires `GET /api/dashboard` and shows no console errors."
 
 What the agent does under the hood:
 
 ```jsonc
 // finds the button it just added
-iris_query({ by: "role", value: "button", name: "Refresh" })   // → ref e12
+reticle_query({ by: "role", value: "button", name: "Refresh" })   // → ref e12
 
 // clicks it
-iris_act({ ref: "e12", action: "click" })                       // → { since: 920 }
+reticle_act({ ref: "e12", action: "click" })                       // → { since: 920 }
 
 // verifies the reaction
-iris_assert({ timeout_ms: 2000, predicate: { allOf: [
+reticle_assert({ timeout_ms: 2000, predicate: { allOf: [
   { kind: "net", method: "GET", urlContains: "/api/dashboard", status: 200, since: 920 },
   { kind: "console", level: "error", absent: true }
 ]}})
@@ -321,49 +321,49 @@ That's the whole loop. From here, the [Usage Guide](usage.md) covers every tool,
 
 ## Step 6 — Make your app agent-legible (optional, high-leverage)
 
-The basics above work with zero app changes. These four additions make the agent dramatically faster and let it verify things the DOM can't express — they're what turn Iris from "usable" into "magic." All are dev-only.
+The basics above work with zero app changes. These four additions make the agent dramatically faster and let it verify things the DOM can't express — they're what turn Reticle from "usable" into "magic." All are dev-only.
 
-**1. Stable `data-testid` on key elements.** Agents target testids more reliably than visible text (which changes with copy/i18n). Iris matches testids _exactly_.
+**1. Stable `data-testid` on key elements.** Agents target testids more reliably than visible text (which changes with copy/i18n). Reticle matches testids _exactly_.
 
 ```tsx
 <button data-testid="refresh">Refresh</button>
 ```
 
-**2. `iris.signal` for off-DOM facts.** When something matters but isn't visible — a save committed, a webhook arrived, an edit applied, an LLM caption finished — emit a signal the agent can assert on. This is the single highest-value instrumentation.
+**2. `reticle.signal` for off-DOM facts.** When something matters but isn't visible — a save committed, a webhook arrived, an edit applied, an LLM caption finished — emit a signal the agent can assert on. This is the single highest-value instrumentation.
 
 ```ts
-import { iris } from '@syrin/iris';
-onSaved(() => iris.signal('order:saved', { id, total }));
-// agent: iris_assert({ predicate: { kind: 'signal', name: 'order:saved', dataMatches: { id: '*' } } })
+import { reticle } from '@reticle/core';
+onSaved(() => reticle.signal('order:saved', { id, total }));
+// agent: reticle_assert({ predicate: { kind: 'signal', name: 'order:saved', dataMatches: { id: '*' } } })
 ```
 
-> **Recommended:** instead of importing `iris` into components, inject a `createIrisEmitter()` emitter and pair each commit with `commitAndSignal(...)` so the mutation↔signal can't drift — `iris.signal` stays the primitive underneath. See [integration-patterns.md](integration-patterns.md).
+> **Recommended:** instead of importing `reticle` into components, inject a `createReticleEmitter()` emitter and pair each commit with `commitAndSignal(...)` so the mutation↔signal can't drift — `reticle.signal` stays the primitive underneath. See [integration-patterns.md](integration-patterns.md).
 
-**3. `registerStore` so the agent reads state directly.** No need to broadcast a signal for every fact — expose the store and the agent reads it via `iris_state`.
+**3. `registerStore` so the agent reads state directly.** No need to broadcast a signal for every fact — expose the store and the agent reads it via `reticle_state`.
 
 ```ts
-import { registerStore } from '@syrin/iris';
+import { registerStore } from '@reticle/core';
 registerStore('cart', () => useCart.getState());
-// agent: iris_state({ store: 'cart' })  → { stores: { cart: {...} } }
+// agent: reticle_state({ store: 'cart' })  → { stores: { cart: {...} } }
 ```
 
 **4. `registerCapabilities` so a fresh agent learns the surface without reading source.**
 
 ```ts
-import { registerCapabilities } from '@syrin/iris';
+import { registerCapabilities } from '@reticle/core';
 registerCapabilities({
   testids: ['refresh', 'cart-open', 'checkout'],
   signals: ['order:saved', 'cart:updated'],
   stores: ['cart'],
 });
-// agent: iris_capabilities()  → the whole testable surface
+// agent: reticle_capabilities()  → the whole testable surface
 ```
 
-> **Multi-domain apps:** prefer `registerIrisDomain({ testids, signals, stores })` co-located in one `iris.ts` per domain — each self-registers and `iris_capabilities()` assembles the union, so there's no central map to forget. See [integration-patterns.md](integration-patterns.md).
+> **Multi-domain apps:** prefer `registerReticleDomain({ testids, signals, stores })` co-located in one `reticle.ts` per domain — each self-registers and `reticle_capabilities()` assembles the union, so there's no central map to forget. See [integration-patterns.md](integration-patterns.md).
 
-> Watch the agent work: pass `present: true` to `iris.connect()` for a glowing border, a cursor that flies to targets, and a HUD; the agent can call `iris_narrate({ text })` to show its intent. See [usage §16](usage.md#16-presenter-mode-narration--fake-clock-watch--control).
+> Watch the agent work: pass `present: true` to `reticle.connect()` for a glowing border, a cursor that flies to targets, and a HUD; the agent can call `reticle_narrate({ text })` to show its intent. See [usage §16](usage.md#16-presenter-mode-narration--fake-clock-watch--control).
 
-> **Hover-gated UI (tooltips, hover menus, pointer drag)?** Synthetic events can't trigger native `onMouseEnter`. Enable **real input** by launching your browser with `--remote-debugging-port=9222` and setting `IRIS_CDP_URL` in the MCP server `env` — Iris then drives real pointer input and `iris_act` reports `inputMode:"real"`. See [usage §18](usage.md#18-real-input-mode--native-hover--drag-m58).
+> **Hover-gated UI (tooltips, hover menus, pointer drag)?** Synthetic events can't trigger native `onMouseEnter`. Enable **real input** by launching your browser with `--remote-debugging-port=9222` and setting `RETICLE_CDP_URL` in the MCP server `env` — Reticle then drives real pointer input and `reticle_act` reports `inputMode:"real"`. See [usage §18](usage.md#18-real-input-mode--native-hover--drag-m58).
 
 ---
 
@@ -371,8 +371,8 @@ registerCapabilities({
 
 Once the loop works, these turn ad-hoc runs into a maintained suite:
 
-- **[Flows, recorder & self-healing](flows.md)** — record a golden path once; Iris saves it to a git-checked `.iris/` flow anchored on testid+signal, replays it (with legible drift), and `iris_flow_heal` repairs renamed anchors.
-- **[Testing with `@syrin/iris-test`](testing.md)** — declarative `irisTest` specs you run headless / in CI; flows can _become_ the specs.
+- **[Flows, recorder & self-healing](flows.md)** — record a golden path once; Reticle saves it to a git-checked `.reticle/` flow anchored on testid+signal, replays it (with legible drift), and `reticle_flow_heal` repairs renamed anchors.
+- **[Testing with `@reticle/test`](testing.md)** — declarative `reticleTest` specs you run headless / in CI; flows can _become_ the specs.
 - **[Human-in-the-loop control](human-control.md)** — with `present: true`, pause / message / end the agent from the floating panel.
 - **[Integration patterns](integration-patterns.md)** — the recommended zero-prod-bundle emit adapter, store-layer signals, and incremental adoption.
 
@@ -380,43 +380,43 @@ Once the loop works, these turn ad-hoc runs into a maintained suite:
 
 ## Common setups at a glance
 
-Everything below comes from the single `@syrin/iris` install.
+Everything below comes from the single `@reticle/core` install.
 
 | Stack | SDK connect | Source mapping |
 | --- | --- | --- |
-| Vite + React (any) | `iris()` plugin (auto) — or `connect()` | `iris()` plugin handles it (incl. React 19) |
-| Next.js (app router) | `IrisDev` client component in layout (dev) | `@syrin/iris/next` (`withIris`) → component + file:line |
-| Vue / Svelte / vanilla | `iris.connect()` at boot (dev) | core works; framework adapters on the roadmap |
+| Vite + React (any) | `reticle()` plugin (auto) — or `connect()` | `reticle()` plugin handles it (incl. React 19) |
+| Next.js (app router) | `ReticleDev` client component in layout (dev) | `@reticle/core/next` (`withReticle`) → component + file:line |
+| Vue / Svelte / vanilla | `reticle.connect()` at boot (dev) | core works; framework adapters on the roadmap |
 
 ---
 
 ## Troubleshooting
 
-**`iris_sessions` is empty / "no browser session connected"**
+**`reticle_sessions` is empty / "no browser session connected"**
 
-- Run **`iris status`** — it shows whether the daemon is up and which tabs are connected (url, health, pending flagged bugs) at a glance. No connected sessions means the SDK isn't reaching the bridge.
+- Run **`reticle status`** — it shows whether the daemon is up and which tabs are connected (url, health, pending flagged bugs) at a glance. No connected sessions means the SDK isn't reaching the bridge.
 - Is your app actually running and open in a browser tab?
-- Is `iris.connect()` running? (Check it's inside your dev guard and the guard is true.)
-- Port mismatch? If you set `IRIS_PORT`, pass the same URL to `iris.connect({ url: 'ws://localhost:<port>/iris' })`.
-- Need to restart the daemon? **`iris stop`** cleans it up — no `pkill` needed.
+- Is `reticle.connect()` running? (Check it's inside your dev guard and the guard is true.)
+- Port mismatch? If you set `RETICLE_PORT`, pass the same URL to `reticle.connect({ url: 'ws://localhost:<port>/reticle' })`.
+- Need to restart the daemon? **`reticle stop`** cleans it up — no `pkill` needed.
 
-The errors Iris returns to the agent now carry a `recovery` hint for this exact situation (and for multiple/unknown sessions, a throttled tab, a missing baseline) — so the agent knows the next move.
+The errors Reticle returns to the agent now carry a `recovery` hint for this exact situation (and for multiple/unknown sessions, a throttled tab, a missing baseline) — so the agent knows the next move.
 
 **The agent can't find an element**
 
-- Ask it to `iris_snapshot({ mode: "interactive" })` to see what's actionable.
+- Ask it to `reticle_snapshot({ mode: "interactive" })` to see what's actionable.
 - Add a `data-testid` to the element for a stable handle.
 - Narrow with `scope` (a CSS selector or a ref).
 
 **Assertions are flaky on async UIs**
 
-- Use `timeout_ms` on `iris_assert` / `iris_wait_for`.
-- Pass the `since` cursor returned by `iris_act` so only post-action events count.
+- Use `timeout_ms` on `reticle_assert` / `reticle_wait_for`.
+- Pass the `since` cursor returned by `reticle_act` so only post-action events count.
 
 **Source file isn't resolving on React 19**
 
-- Wire up `@syrin/iris-babel-plugin` (Step 3). Without it, only component identity is available.
+- Wire up `@reticle/babel-plugin` (Step 3). Without it, only component identity is available.
 
 **Nothing should run in production**
 
-- Keep `iris.connect()` behind a dev guard (`import.meta.env.DEV` / `NODE_ENV`). The package is side-effect free and tree-shakes out when unused.
+- Keep `reticle.connect()` behind a dev guard (`import.meta.env.DEV` / `NODE_ENV`). The package is side-effect free and tree-shakes out when unused.

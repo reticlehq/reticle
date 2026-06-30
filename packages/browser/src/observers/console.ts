@@ -1,5 +1,5 @@
 /* eslint-disable no-console -- this module's whole purpose is to wrap console.{log,warn,error} */
-import { EventType } from '@syrin/iris-protocol';
+import { EventType } from '@reticle/protocol';
 import type { Emit, Teardown } from './types.js';
 import { safeStringify } from '../security/serialization.js';
 

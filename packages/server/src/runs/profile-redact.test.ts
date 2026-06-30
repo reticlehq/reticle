@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { RunAgentKind, RunFramework, RunProfile, RunTrigger } from '@syrin/iris-protocol';
+import { RunAgentKind, RunFramework, RunProfile, RunTrigger } from '@reticle/protocol';
 import { buildVerificationRun, type VerificationRunInput } from './build-verification-run.js';
 import { REDACTED, redactForProfile } from './profile-redact.js';
 

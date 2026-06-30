@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { IrisCommand, SnapshotMode } from '@syrin/iris-protocol';
-import { IrisTool } from './tool-names.js';
+import { ReticleCommand, SnapshotMode } from '@reticle/protocol';
+import { ReticleTool } from './tool-names.js';
 import { withSizeCost } from '../session/output-budget.js';
 import { applySnapshotDelta, SnapshotCache } from './snapshot-delta.js';
 import { asString, asNumber } from './tools-helpers.js';
@@ -29,14 +29,14 @@ import { LEASE_TOOLS } from './lease-tools.js';
 // Re-exported so tool modules that import these from './tools.js' keep working after the kit move.
 export type { ToolDef, ToolDeps } from './tool-kit.js';
 
-/** Per-server last-snapshot cache backing iris_snapshot's diff:true delta mode (route-invalidated). */
+/** Per-server last-snapshot cache backing reticle_snapshot's diff:true delta mode (route-invalidated). */
 const SNAPSHOT_CACHE = new SnapshotCache();
 
 export const TOOLS: ToolDef[] = [
   {
-    name: IrisTool.SESSIONS,
+    name: ReticleTool.SESSIONS,
     description:
-      'List connected browser sessions (tab url/title, sessionId, last-seen, health: hidden/focused/throttled, and `realInputAvailable` — true when native CDP/launched real input is driving this tab), plus a `recommendation` pointing to `iris drive` when a tab is hidden/throttled and may be un-scriptable from here.',
+      'List connected browser sessions (tab url/title, sessionId, last-seen, health: hidden/focused/throttled, and `realInputAvailable` — true when native CDP/launched real input is driving this tab), plus a `recommendation` pointing to `reticle drive` when a tab is hidden/throttled and may be un-scriptable from here.',
     inputSchema: {},
     outputSchema: {
       sessions: z
@@ -74,7 +74,7 @@ export const TOOLS: ToolDef[] = [
     },
   },
   {
-    name: IrisTool.SNAPSHOT,
+    name: ReticleTool.SNAPSHOT,
     description:
       'Semantic accessibility snapshot of the page or a subtree. mode: full|interactive|status. Use to see what is on screen right now. The result carries cost:{ bytes, tokens } (estimated) — if it is large, re-scope (pass `scope`) or use mode:interactive/status instead of reading the whole tree. Pass diff:true after your first snapshot to get back ONLY what changed since your last look (mode:delta with added/removed, or mode:unchanged) — far fewer tokens and no stale tree to mis-read; a route change resets it to a full snapshot automatically.',
     inputSchema: {
@@ -125,7 +125,7 @@ export const TOOLS: ToolDef[] = [
     handler: (deps, args) => {
       const sessionId = asString(args['sessionId']);
       const mode = asString(args['mode']) ?? SnapshotMode.FULL;
-      return commandOrThrow(deps, sessionId, IrisCommand.SNAPSHOT, {
+      return commandOrThrow(deps, sessionId, ReticleCommand.SNAPSHOT, {
         scope: args['scope'],
         mode,
       }).then((raw) =>
@@ -145,7 +145,7 @@ export const TOOLS: ToolDef[] = [
     },
   },
   {
-    name: IrisTool.QUERY,
+    name: ReticleTool.QUERY,
     description:
       'Find elements by Testing-Library semantics. Pass `by` (role|text|label|placeholder|testid|alt) and `value` (the query string). Returns matching refs + descriptors + visibility. Pass `limit` to cap descriptors (broad role queries can be large) or `count_only:true` for just the match count — both cut tokens. On zero matches, also returns hint:{ route, presentTestids[], knownEmptyState } so you can distinguish an empty state from a missing element WITHOUT taking a snapshot.',
     inputSchema: {
@@ -214,7 +214,7 @@ export const TOOLS: ToolDef[] = [
         .describe('Estimated size of this result — narrow with `name`/`scope`/`limit` if large.'),
     },
     handler: (deps, args) =>
-      commandOrThrow(deps, asString(args['sessionId']), IrisCommand.QUERY, {
+      commandOrThrow(deps, asString(args['sessionId']), ReticleCommand.QUERY, {
         by: args['by'],
         value: args['value'],
         name: args['name'],
@@ -226,11 +226,11 @@ export const TOOLS: ToolDef[] = [
       ),
   },
   {
-    name: IrisTool.INSPECT,
+    name: ReticleTool.INSPECT,
     description:
-      'Deep info on one element by ref: full a11y props, visibility, box, and (with @syrin/iris-react) component stack + source file.',
+      'Deep info on one element by ref: full a11y props, visibility, box, and (with @reticle/react) component stack + source file.',
     inputSchema: {
-      ref: z.string().describe("Element ref from iris_snapshot or iris_query (e.g. 'e42')."),
+      ref: z.string().describe("Element ref from reticle_snapshot or reticle_query (e.g. 'e42')."),
       ...sessionIdShape,
     },
     outputSchema: {
@@ -268,36 +268,36 @@ export const TOOLS: ToolDef[] = [
         .optional(),
     },
     handler: (deps, args) =>
-      commandOrThrow(deps, asString(args['sessionId']), IrisCommand.INSPECT, {
+      commandOrThrow(deps, asString(args['sessionId']), ReticleCommand.INSPECT, {
         ref: args['ref'],
       }),
   },
-  // iris_capabilities (live | fromDisk) + iris_contract_save. See contract-tools.ts.
+  // reticle_capabilities (live | fromDisk) + reticle_contract_save. See contract-tools.ts.
   ...CONTRACT_TOOLS,
   ...DOMAIN_TOOLS,
-  // iris_flow_save / iris_flow_list / iris_flow_load. See flow-tools.ts.
+  // reticle_flow_save / reticle_flow_list / reticle_flow_load. See flow-tools.ts.
   ...FLOW_TOOLS,
-  // iris_project (read history + diff-vs-last) / iris_run_record. See project-tools.ts.
+  // reticle_project (read history + diff-vs-last) / reticle_run_record. See project-tools.ts.
   ...PROJECT_TOOLS,
-  // iris_run_export — export the verification-run verdict artifact (.iris/runs/). See run-tools.ts.
+  // reticle_run_export — export the verification-run verdict artifact (.reticle/runs/). See run-tools.ts.
   ...RUN_TOOLS,
-  // iris_screenshot / iris_visual_diff — opt-in, CDP-driven. See visual-tools.ts.
+  // reticle_screenshot / reticle_visual_diff — opt-in, CDP-driven. See visual-tools.ts.
   ...VISUAL_TOOLS,
   ...NETWORK_MOCK_TOOLS,
   ...VIEWPORT_TOOLS,
-  // iris_crawl — autonomous click-everything + anomaly report. See crawl-tools.ts.
+  // reticle_crawl — autonomous click-everything + anomaly report. See crawl-tools.ts.
   ...CRAWL_TOOLS,
-  // iris_scroll_to — reveal a virtualized off-screen row. See scroll-tools.ts.
+  // reticle_scroll_to — reveal a virtualized off-screen row. See scroll-tools.ts.
   ...SCROLL_TOOLS,
-  // Session lifecycle: iris_session — tune the presenter session (idle-end). See session-tools.ts.
+  // Session lifecycle: reticle_session — tune the presenter session (idle-end). See session-tools.ts.
   ...SESSION_TOOLS,
-  // iris_annotate (structured annotation → expect/dynamic/success). See annotate-tools.ts.
+  // reticle_annotate (structured annotation → expect/dynamic/success). See annotate-tools.ts.
   ...ANNOTATE_TOOLS,
-  // Live-control: iris_end_session / iris_resume / iris_messages. See live-control-tools.ts.
+  // Live-control: reticle_end_session / reticle_resume / reticle_messages. See live-control-tools.ts.
   ...LIVE_CONTROL_TOOLS,
-  // iris_navigate / iris_refresh — browser navigation tools. See browser-tools.ts.
+  // reticle_navigate / reticle_refresh — browser navigation tools. See browser-tools.ts.
   ...BROWSER_TOOLS,
-  // iris_version_info / iris_apply_update / iris_rollback — update lifecycle tools.
+  // reticle_version_info / reticle_apply_update / reticle_rollback — update lifecycle tools.
   ...UPDATE_TOOLS,
   ...ACT_TOOLS,
   ...OBSERVE_TOOLS,

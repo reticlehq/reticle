@@ -1,5 +1,5 @@
 /**
- * iris_state path selection + depth capping — pure, shared by the browser SDK (which applies them
+ * reticle_state path selection + depth capping — pure, shared by the browser SDK (which applies them
  * BEFORE the transport so a scoped read of a huge store isn't truncated) and the server (back-compat
  * fallback when an older browser returns the whole store). `selectPath` walks a dot-path (with numeric
  * array indices) and, on a miss, returns the keys that WERE available at the last good level so a wrong

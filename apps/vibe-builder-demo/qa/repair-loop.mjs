@@ -1,10 +1,10 @@
 /**
  * The self-healing loop — the complete the builder value story in one run:
  *
- *   generate (with a bug) → Iris verify → FAIL + failure packet → fixer applies the fix →
- *   Iris re-verify → PASS → gate opens.
+ *   generate (with a bug) → Reticle verify → FAIL + failure packet → fixer applies the fix →
+ *   Reticle re-verify → PASS → gate opens.
  *
- * Honest framing: regenerating the corrected code is the PLATFORM's job (its fixer subagent). Iris's
+ * Honest framing: regenerating the corrected code is the PLATFORM's job (its fixer subagent). Reticle's
  * role is the un-hallucinatable verdict and the grounded failure packet that drives the fixer, then
  * the re-verification that proves the fix actually worked. Here the "fixer" is simulated by swapping
  * the buggy variant for the corrected one — the loop and the evidence are real.

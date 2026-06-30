@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { EventType, IRIS_PROTOCOL_VERSION, MessageKind, TRANSPORT_LIMITS } from './constants.js';
+import { EventType, RETICLE_PROTOCOL_VERSION, MessageKind, TRANSPORT_LIMITS } from './constants.js';
 import { HumanControlKind, MarkAnchorStrategy } from './session-constants.js';
 
 const sessionIdSchema = z.string().min(1).max(TRANSPORT_LIMITS.MAX_SESSION_ID_LENGTH);
@@ -48,7 +48,7 @@ export type HumanMarkData = z.infer<typeof HumanMarkDataSchema>;
  * `t` is a monotonic millisecond timestamp relative to session start (clock injected,
  * never `Date.now()` inside pure logic — see plan engineering standards).
  */
-export const IrisEventSchema = z.object({
+export const ReticleEventSchema = z.object({
   t: z.number(),
   type: z.nativeEnum(EventType),
   sessionId: sessionIdSchema,
@@ -57,12 +57,12 @@ export const IrisEventSchema = z.object({
   /** Event-type-specific payload. Kept open here; refined per observer at the edges. */
   data: z.record(z.unknown()).default({}),
 });
-export type IrisEvent = z.infer<typeof IrisEventSchema>;
+export type ReticleEvent = z.infer<typeof ReticleEventSchema>;
 
 /** Browser announces itself to the bridge on connect. */
 export const HelloMessageSchema = z.object({
   kind: z.literal(MessageKind.HELLO),
-  protocolVersion: z.literal(IRIS_PROTOCOL_VERSION),
+  protocolVersion: z.literal(RETICLE_PROTOCOL_VERSION),
   sessionId: sessionIdSchema,
   url: z.string().max(TRANSPORT_LIMITS.MAX_URL_LENGTH),
   title: z.string().max(TRANSPORT_LIMITS.MAX_TITLE_LENGTH),
@@ -78,7 +78,7 @@ export const HelloMessageSchema = z.object({
     .max(TRANSPORT_LIMITS.MAX_ADAPTERS),
   /** Optional browser/bridge pairing token. Required when the bridge configures one. */
   token: z.string().max(TRANSPORT_LIMITS.MAX_TOKEN_LENGTH).optional(),
-  /** Whether the app has advertised a capability registry (iris.describe). */
+  /** Whether the app has advertised a capability registry (reticle.describe). */
   hasCapabilities: z.boolean().optional(),
 });
 export type HelloMessage = z.infer<typeof HelloMessageSchema>;
@@ -106,11 +106,11 @@ export type CommandResult = z.infer<typeof CommandResultSchema>;
 /** Browser -> bridge streamed observation. */
 export const EventMessageSchema = z.object({
   kind: z.literal(MessageKind.EVENT),
-  event: IrisEventSchema,
+  event: ReticleEventSchema,
 });
 export type EventMessage = z.infer<typeof EventMessageSchema>;
 
-export const IrisMessageSchema = z.discriminatedUnion('kind', [
+export const ReticleMessageSchema = z.discriminatedUnion('kind', [
   HelloMessageSchema,
   CommandMessageSchema,
   CommandResultSchema,

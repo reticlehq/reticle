@@ -2,11 +2,11 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdtemp, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { asRunId, RunReadError, type IrisVerificationRun } from '@syrin/iris-protocol';
+import { asRunId, RunReadError, type ReticleVerificationRun } from '@reticle/protocol';
 import { buildVerificationRun, type VerificationRunInput } from './build-verification-run.js';
 import { RunStore } from './run-store.js';
 import { createNodeFileSystem, type FileSystemPort } from '../project/fs-port.js';
-import { RunAgentKind, RunFramework, RunProfile, RunTrigger } from '@syrin/iris-protocol';
+import { RunAgentKind, RunFramework, RunProfile, RunTrigger } from '@reticle/protocol';
 
 const baseInput = (runId: string): VerificationRunInput => ({
   runId,
@@ -22,7 +22,7 @@ const baseInput = (runId: string): VerificationRunInput => ({
   evidence: { consoleErrors: [], networkAnomalies: [], stateAssertions: [], timeline: [] },
 });
 
-const make = (runId: string, at: number): IrisVerificationRun =>
+const make = (runId: string, at: number): ReticleVerificationRun =>
   buildVerificationRun(baseInput(runId), () => at);
 
 describe('RunStore — temp-dir filesystem, never touches the repo', () => {
@@ -31,8 +31,8 @@ describe('RunStore — temp-dir filesystem, never touches the repo', () => {
   let store: RunStore;
 
   beforeEach(async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'iris-runs-'));
-    root = join(dir, '.iris');
+    const dir = await mkdtemp(join(tmpdir(), 'reticle-runs-'));
+    root = join(dir, '.reticle');
     fs = createNodeFileSystem();
     store = new RunStore(fs, root);
   });

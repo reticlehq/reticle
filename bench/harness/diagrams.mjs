@@ -14,7 +14,7 @@ const C = {
   faint: '#8b949e',
   pw: '#2f81f7',
   dt: '#e3b341',
-  iris: '#bc8cff',
+  reticle: '#bc8cff',
   accent: '#3fb950',
   danger: '#f85149',
 };
@@ -43,14 +43,14 @@ ${arrow(450, 136, 450, 168)}
 <text x="462" y="160" fill="${C.faint}" font-size="10.5" font-family="${FONT}">tool call</text>
 ${box(150, 170, 200, 78, '#10243e', C.pw, 'Playwright MCP', 'a11y snapshot + net/console')}
 ${box(360, 170, 180, 78, '#2b2410', C.dt, 'Chrome DevTools MCP', 'CDP: net/console/perf')}
-${box(560, 170, 200, 78, '#241a36', C.iris, 'Iris', 'in-app SDK + bridge')}
+${box(560, 170, 200, 78, '#241a36', C.reticle, 'Reticle', 'in-app SDK + bridge')}
 ${arrow(250, 248, 360, 300)}${arrow(450, 248, 450, 300)}${arrow(660, 248, 540, 300)}
 ${box(330, 300, 240, 50, C.panel, C.grid, 'Browser runtime (Chromium)', 'the same running app')}
 ${arrow(450, 350, 450, 384)}
 ${box(120, 388, 660, 96, C.panel, C.grid, '', '')}
 <text x="450" y="410" fill="${C.text}" font-size="13" font-family="${FONT}" font-weight="700" text-anchor="middle">Runtime signals</text>
 ${['DOM', 'Network', 'Console', 'Routes'].map((s, i) => `<rect x="${165 + i * 150}" y="424" width="130" height="42" rx="6" fill="#0d1117" stroke="${C.grid}"/><text x="${230 + i * 150}" y="450" fill="${C.accent}" font-size="13" font-family="${FONT}" text-anchor="middle">${s}</text>`).join('')}
-<text x="40" y="${h - 12}" fill="${C.faint}" font-size="10.5" font-family="${FONT}">Playwright/DevTools observe from OUTSIDE the page (a11y tree, CDP). Iris observes from INSIDE (embedded SDK) — more setup, framework-state access, but a shared bridge.</text>
+<text x="40" y="${h - 12}" fill="${C.faint}" font-size="10.5" font-family="${FONT}">Playwright/DevTools observe from OUTSIDE the page (a11y tree, CDP). Reticle observes from INSIDE (embedded SDK) — more setup, framework-state access, but a shared bridge.</text>
 </svg>`;
   W('diagram-architecture.svg', svg);
 }
@@ -61,10 +61,14 @@ function summaryTable() {
   const setup = {
     playwright: 'zero (external)',
     devtools: 'zero (external)',
-    iris: 'embed SDK + port',
+    reticle: 'embed SDK + port',
   };
-  const name = { playwright: 'Playwright MCP', devtools: 'Chrome DevTools MCP', iris: 'Iris' };
-  const rows = ['playwright', 'devtools', 'iris'].map((k) => [
+  const name = {
+    playwright: 'Playwright MCP',
+    devtools: 'Chrome DevTools MCP',
+    reticle: 'Reticle',
+  };
+  const rows = ['playwright', 'devtools', 'reticle'].map((k) => [
     name[k],
     String(t[k].avg_tokens_o200k),
     `${t[k].p95_latency_ms} ms`,
@@ -116,7 +120,7 @@ function tokenFlow() {
   };
   const pw = pick('playwright'),
     dt = pick('devtools'),
-    ir = pick('iris');
+    ir = pick('reticle');
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
 <rect width="${w}" height="${h}" fill="${C.bg}"/>
 <text x="40" y="34" fill="${C.text}" font-size="19" font-family="${FONT}" font-weight="700">Token flow — "did the API call fail?" (hidden-api-500)</text>
@@ -131,7 +135,7 @@ ${lane(200, C.dt, 'Chrome DevTools MCP', dt?.tokens_o200k ?? 0, [
   { l: 'click', tok: 0 },
   { l: 'network fetch/xhr', tok: dt?._obsTokens ?? 0 },
 ])}
-${lane(290, C.iris, 'Iris', ir?.tokens_o200k ?? 0, [
+${lane(290, C.reticle, 'Reticle', ir?.tokens_o200k ?? 0, [
   { l: 'act', tok: 0 },
   { l: 'act', tok: 0 },
   { l: 'network status=500', tok: ir?._obsTokens ?? 0 },
@@ -145,7 +149,7 @@ function socialCards() {
   const titles = [
     'Browser verification for AI coding agents',
     "AI agents don't need better reasoning.\nThey need observability.",
-    'We benchmarked Playwright MCP\nvs DevTools MCP vs Iris',
+    'We benchmarked Playwright MCP\nvs DevTools MCP vs Reticle',
   ];
   titles.forEach((title, i) => {
     const w = 1200,
@@ -153,8 +157,8 @@ function socialCards() {
     const lines = title.split('\n');
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
 <rect width="${w}" height="${h}" fill="${C.bg}"/>
-<rect x="0" y="0" width="${w}" height="6" fill="${C.iris}"/>
-<text x="70" y="90" fill="${C.faint}" font-size="20" font-family="${FONT}">iris · runtime verification benchmark</text>
+<rect x="0" y="0" width="${w}" height="6" fill="${C.reticle}"/>
+<text x="70" y="90" fill="${C.faint}" font-size="20" font-family="${FONT}">reticle · runtime verification benchmark</text>
 ${lines.map((ln, li) => `<text x="70" y="${260 + li * 76}" fill="${C.text}" font-size="62" font-family="${FONT}" font-weight="800">${esc(ln)}</text>`).join('')}
 <text x="70" y="${h - 120}" fill="${C.faint}" font-size="22" font-family="${FONT}">10 regression scenarios · 3 tools · ${a.measured_cells} measured cells · token + latency + detection</text>
 <text x="70" y="${h - 70}" fill="${C.accent}" font-size="22" font-family="${FONT}">evidence, not marketing — methodology + raw JSON published</text>

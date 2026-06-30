@@ -1,4 +1,4 @@
-import { PresenterMode } from '@syrin/iris-protocol';
+import { PresenterMode } from '@reticle/protocol';
 import { nativeSetTimeout, nativeClearTimeout } from '../timers/native-timers.js';
 import {
   GlowPhase,
@@ -27,7 +27,7 @@ interface GlowDeps {
  * behavior is byte-for-byte the same. It holds references to the same `#glow`/`#cursor` nodes the
  * Presenter does (both call setAttribute on those elements — the Presenter owns the SESSION border via
  * data-on; this owns the BUSY shimmer via data-busy). A burst flips the glow IN once, holds it (the
- * slow iris-pulse keeps breathing — no per-action restart/strobe), then fades it OUT once after a quiet
+ * slow reticle-pulse keeps breathing — no per-action restart/strobe), then fades it OUT once after a quiet
  * window.
  */
 export class GlowController {
@@ -82,7 +82,7 @@ export class GlowController {
     this.#armIdleCheck();
   }
 
-  /** Re-arm the quiet-window idle check (kept for iris.ts's finally block). */
+  /** Re-arm the quiet-window idle check (kept for reticle.ts's finally block). */
   scheduleIdle(): void {
     this.#armIdleCheck();
   }

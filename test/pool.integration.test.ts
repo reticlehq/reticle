@@ -11,7 +11,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { BrowserPool, playwrightLauncher, type Launcher } from '@syrin/iris-server';
+import { BrowserPool, playwrightLauncher, type Launcher } from '@reticle/server';
 
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 function counter(): () => string {

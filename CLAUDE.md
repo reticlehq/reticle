@@ -1,36 +1,36 @@
-# CLAUDE.md — Iris
+# CLAUDE.md — Reticle
 
 > Master rules for this codebase. Read this first — the non-negotiables, layout, and conventions.
 
-## What Iris is
+## What Reticle is
 
-Iris gives AI coding agents **eyes** into a running web app — without screenshots. The app embeds a dev-only SDK that instruments the DOM, network, routing, console, animations, and framework state; a local bridge + MCP server exposes that as structured tools the agent uses to **look, act, observe, and assert**. See `plan/` for the full design (gitignored).
+Reticle gives AI coding agents **eyes** into a running web app — without screenshots. The app embeds a dev-only SDK that instruments the DOM, network, routing, console, animations, and framework state; a local bridge + MCP server exposes that as structured tools the agent uses to **look, act, observe, and assert**. See `plan/` for the full design (gitignored).
 
 ## Monorepo layout
 
 ```
-packages/protocol      @syrin/iris-protocol     — shared wire contract, constants, zod schemas
-packages/browser       @syrin/iris-browser      — instrumentation SDK embedded in the app (DOM-side)
-packages/server        @syrin/iris-server       — bridge + MCP server, the `iris` CLI (Node-side)
-packages/react         @syrin/iris-react        — React adapter: DOM ref -> component -> source file
-packages/babel-plugin  @syrin/iris-babel-plugin — stamps data-iris-source (source mapping, React 19)
-packages/next          @syrin/iris-next         — Next.js source mapping (keeps SWC) via withIris (CJS)
-apps/demo              @syrin/iris-demo         — Vite/React dashboard used to dogfood Iris
-apps/api               @syrin/iris-api          — Express backend exercising real-world behaviors (CJS-ish .mjs)
-apps/next-smoke        @syrin/iris-next-smoke   — Next.js 15 app verifying Iris on Next
+packages/protocol      @reticle/protocol     — shared wire contract, constants, zod schemas
+packages/browser       @reticle/browser      — instrumentation SDK embedded in the app (DOM-side)
+packages/server        @reticle/server       — bridge + MCP server, the `reticle` CLI (Node-side)
+packages/react         @reticle/react        — React adapter: DOM ref -> component -> source file
+packages/babel-plugin  @reticle/babel-plugin — stamps data-reticle-source (source mapping, React 19)
+packages/next          @reticle/next         — Next.js source mapping (keeps SWC) via withReticle (CJS)
+apps/demo              @reticle/demo         — Vite/React dashboard used to dogfood Reticle
+apps/api               @reticle/api          — Express backend exercising real-world behaviors (CJS-ish .mjs)
+apps/next-smoke        @reticle/next-smoke   — Next.js 15 app verifying Reticle on Next
 docs/                  — user-facing docs (getting-started, usage, token-efficiency, local-install)
-SKILL.md               — PUBLIC skill for users integrating Iris into their own project (the canonical paste-URL)
-plan/                  — research/design docs + throwaway test harnesses (ALWAYS gitignored)
+SKILL.md               — PUBLIC skill for users integrating Reticle into their own project (the canonical paste-URL)
+plan/                  — research/design docs only, no code (ALWAYS gitignored)
 ```
 
-This is **one git repo** at the root (pnpm + turbo monorepo). The TS library packages are strict TypeScript; `@syrin/iris-babel-plugin`/`@syrin/iris-next` are plain CJS tooling and `apps/api`/ `apps/next-smoke` are local fixtures — all excluded from the build/lint/test gates.
+This is **one git repo** at the root (pnpm + turbo monorepo). The TS library packages are strict TypeScript; `@reticle/babel-plugin`/`@reticle/next` are plain CJS tooling and `apps/api`/ `apps/next-smoke` are local fixtures — all excluded from the build/lint/test gates.
 
 ## Service boundaries (who owns what)
 
-- **`@syrin/iris-protocol` is the contract.** Any message that crosses browser ↔ bridge ↔ agent is defined there as a constant + zod schema. Browser and server depend on it; it depends on nothing. Never inline a wire string in `browser` or `server` — add it to `protocol`.
-- **`@syrin/iris-browser` only touches the DOM/page.** It never imports Node APIs.
-- **`@syrin/iris-server` only runs in Node.** It never imports DOM APIs.
-- **`@syrin/iris-react` is optional enrichment.** Core must work without it.
+- **`@reticle/protocol` is the contract.** Any message that crosses browser ↔ bridge ↔ agent is defined there as a constant + zod schema. Browser and server depend on it; it depends on nothing. Never inline a wire string in `browser` or `server` — add it to `protocol`.
+- **`@reticle/browser` only touches the DOM/page.** It never imports Node APIs.
+- **`@reticle/server` only runs in Node.** It never imports DOM APIs.
+- **`@reticle/react` is optional enrichment.** Core must work without it.
 
 ## Non-negotiable rules
 
@@ -49,9 +49,9 @@ This is **one git repo** at the root (pnpm + turbo monorepo). The TS library pac
 
 | Thing | Convention | Example |
 | --- | --- | --- |
-| Package | `@syrin/<kebab>` | `@syrin/iris-browser` |
+| Package | `@reticle/<kebab>` | `@reticle/browser` |
 | File | kebab-case | `ring-buffer.ts` |
-| Type / class | PascalCase | `RingBuffer`, `IrisEvent` |
+| Type / class | PascalCase | `RingBuffer`, `ReticleEvent` |
 | Variable / function | camelCase | `pushEvent` |
 | Constant object | PascalCase + `as const` | `EventType`, `ActionType` |
 | React component file | PascalCase or `create-` prefix for creation flows | `App.tsx`, `create-session-view.tsx` |

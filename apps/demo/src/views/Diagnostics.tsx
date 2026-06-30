@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useApp } from '../store/store.js';
 import { fault } from '../lib/api.js';
-import { emit, Sig } from '../lib/iris-bridge.js';
+import { emit, Sig } from '../lib/reticle-bridge.js';
 import { IconBolt, IconBug } from '../components/icons.js';
 
 interface FaultDef {

@@ -1,8 +1,8 @@
-import type { FlowExpect } from '@syrin/iris-protocol';
+import type { FlowExpect } from '@reticle/protocol';
 
 /** One captured agent action, normalized for replay. */
 export interface RecordedStep {
-  /** IrisTool.ACT | IrisTool.ACT_SEQUENCE */
+  /** ReticleTool.ACT | ReticleTool.ACT_SEQUENCE */
   tool: string;
   /** Normalized args: refs replaced by { by:'testid', value } where resolvable. */
   args: Record<string, unknown>;
@@ -26,7 +26,7 @@ export interface CompiledProgram {
 
 /**
  * Tracks in-flight recordings (name -> { buffer cursor at record_start, captured steps })
- * and the last compiled program per name (for iris_replay).
+ * and the last compiled program per name (for reticle_replay).
  */
 export class RecordingStore {
   readonly #active = new Map<string, ActiveRecording>();

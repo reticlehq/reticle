@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node ../../packages/iris/dist/cli.js stop --quiet"
+            "command": "node ../../packages/core/dist/cli.js stop --quiet"
           }
         ]
       }

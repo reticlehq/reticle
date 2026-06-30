@@ -1,13 +1,13 @@
 // One command to run the benchmark suite (the regression gate's data-collection half).
 //
-//   node bench/harness/bench-all.mjs            # deterministic REPLAY pass (fast, pure Iris) — default
+//   node bench/harness/bench-all.mjs            # deterministic REPLAY pass (fast, pure Reticle) — default
 //   node bench/harness/bench-all.mjs --full      # + OBSERVATION-COST pass (scripted; slow, boots tool MCPs)
 //   node bench/harness/bench-all.mjs --no-boot    # don't start fixtures (use ones you already have up)
 //
 // The three measurement passes (see bench/SCORECARD.md legend):
 //   - OBSERVATION-COST ("Layer A"): drive each tool's MCP directly, measure the tokens it injects per look.
 //   - AGENT-LOOP       ("Layer B"): a real LLM drives the tool — costs money + needs a key, NEVER run here.
-//   - REPLAY           ("Layer C"): re-run a saved flow with no model — Iris's deterministic floor.
+//   - REPLAY           ("Layer C"): re-run a saved flow with no model — Reticle's deterministic floor.
 //
 // By default this boots the fixtures the passes drive (the demo app + the api backend), health-checks
 // them, runs the EXISTING harness scripts, and tears the fixtures down on exit. Each script writes its
@@ -17,13 +17,13 @@ import { writeFileSync } from 'node:fs';
 
 const FULL = process.argv.includes('--full');
 const NO_BOOT = process.argv.includes('--no-boot');
-const IRIS_PORT = process.env.BENCH_IRIS_PORT ?? '4455';
+const RETICLE_PORT = process.env.BENCH_RETICLE_PORT ?? '4455';
 const API_PORT = process.env.BENCH_API_PORT ?? '8787';
 const DEMO_PORT = process.env.BENCH_DEMO_PORT ?? '4312';
 const FIXTURE_READY_MS = Number(process.env.BENCH_FIXTURE_READY_MS ?? '30000');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// Deterministic, offline, pure-Iris detection scripts — always run (the gate's hard floor).
+// Deterministic, offline, pure-Reticle detection scripts — always run (the gate's hard floor).
 const REPLAY_PASS = [
   'bench/harness/replay-bench.mjs', // re-run cost: tokens per regression-run
   'bench/harness/replay-detect.mjs', // selector-removal detection (3/3)
@@ -33,7 +33,7 @@ const REPLAY_PASS = [
   'bench/harness/forbidden-call-bench.mjs', // net.count:0 oracle catches a must-never-fire call
   'bench/harness/console-clean-bench.mjs', // clean-console oracle catches a silent console.error on an action
   'bench/harness/state-blast-radius-bench.mjs', // state invariant catches an action's unintended store side-effect
-  'bench/harness/suite-rre.mjs', // suite-scale re-run cost: iris_flow_verify read-cost ~constant in K (compounding)
+  'bench/harness/suite-rre.mjs', // suite-scale re-run cost: reticle_flow_verify read-cost ~constant in K (compounding)
   'bench/harness/replay-determinism.mjs', // flake rate: verdict-deterministic across N replays (0% by construction)
 ];
 // Scripted observation cost + detection accuracy. Slow (~12 min) and boots Playwright/DevTools MCPs.
@@ -83,12 +83,12 @@ async function bootFixtures() {
     `bench-all: booting fixtures — api:${API_PORT}, demo:${DEMO_PORT} (pass --no-boot to skip)`,
   );
   spawnFixture('api', 'node', ['apps/api/server.mjs'], { API_PORT });
-  // The demo's embedded Iris SDK dials IRIS_PORT; that must match the daemon each script spawns.
+  // The demo's embedded Reticle SDK dials RETICLE_PORT; that must match the daemon each script spawns.
   spawnFixture(
     'demo',
     'pnpm',
-    ['--filter', '@syrin/iris-demo', 'exec', 'vite', '--port', DEMO_PORT, '--strictPort'],
-    { IRIS_PORT },
+    ['--filter', '@reticle/demo', 'exec', 'vite', '--port', DEMO_PORT, '--strictPort'],
+    { RETICLE_PORT },
   );
   const [apiUp, demoUp] = await Promise.all([
     waitForHttp(`http://localhost:${API_PORT}/api/health`, FIXTURE_READY_MS),
@@ -105,12 +105,16 @@ async function bootFixtures() {
   console.log('✓ fixtures ready');
 }
 
-/** Free any iris daemon left on the bench port so the next script starts from a clean session. */
+/** Free any reticle daemon left on the bench port so the next script starts from a clean session. */
 function cleanupDaemon() {
   try {
-    execFileSync('node', ['packages/server/dist/cli.js', 'stop', '--port', IRIS_PORT, '--quiet'], {
-      stdio: 'ignore',
-    });
+    execFileSync(
+      'node',
+      ['packages/server/dist/cli.js', 'stop', '--port', RETICLE_PORT, '--quiet'],
+      {
+        stdio: 'ignore',
+      },
+    );
   } catch {
     /* none running — fine */
   }

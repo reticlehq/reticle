@@ -4,13 +4,13 @@ import { RECOVERY, buildErrorPayload, recoveryFor } from './error-recovery.js';
 describe('recoveryFor — every known error carries an actionable next move', () => {
   it('maps the no-session footgun to a concrete recovery', () => {
     const hint = recoveryFor(
-      'no browser session connected — is your app running with @syrin/iris-browser enabled?',
+      'no browser session connected — is your app running with @reticle/browser enabled?',
     );
     expect(hint).toBe(RECOVERY.NO_SESSION);
-    expect(hint).toMatch(/iris status/);
+    expect(hint).toMatch(/reticle status/);
   });
 
-  it('maps multiple-sessions to "pass a sessionId from iris_sessions"', () => {
+  it('maps multiple-sessions to "pass a sessionId from reticle_sessions"', () => {
     expect(recoveryFor('multiple sessions connected — pass sessionId to target one: a, b')).toBe(
       RECOVERY.MULTIPLE_SESSIONS,
     );
@@ -20,7 +20,7 @@ describe('recoveryFor — every known error carries an actionable next move', ()
     expect(recoveryFor("no connected session with id 'ghost'")).toBe(RECOVERY.UNKNOWN_SESSION);
   });
 
-  it('maps a throttled-tab refusal to the refocus / iris drive escape hatch', () => {
+  it('maps a throttled-tab refusal to the refocus / reticle drive escape hatch', () => {
     expect(
       recoveryFor(
         'refusing to act: tab throttled; timer/rAF/pointer gestures may silently no-op — refocus before driving',
@@ -36,7 +36,7 @@ describe('recoveryFor — every known error carries an actionable next move', ()
 
   it('maps the pairing-token error to its config fix', () => {
     expect(
-      recoveryFor('a pairing token is required when the Iris bridge binds beyond localhost'),
+      recoveryFor('a pairing token is required when the Reticle bridge binds beyond localhost'),
     ).toBe(RECOVERY.TOKEN_REQUIRED);
   });
 

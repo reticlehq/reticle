@@ -1,7 +1,7 @@
 import type { Page, Route } from 'playwright';
 
 /**
- * CDP network mock/intercept for `iris drive`. Lets an agent or dev deterministically test error and
+ * CDP network mock/intercept for `reticle drive`. Lets an agent or dev deterministically test error and
  * edge states — a 500 on checkout, an offline payment, a slow API — without touching the backend.
  * "Verify the app handles a failed payment" becomes one declared rule.
  *
@@ -89,7 +89,7 @@ export async function applyOutcome(
 const realSleep = (ms: number): Promise<void> => new Promise((res) => setTimeout(res, ms));
 
 /**
- * Install (or replace) the network-mock handler on a driven page. Clears any prior Iris route first,
+ * Install (or replace) the network-mock handler on a driven page. Clears any prior Reticle route first,
  * so calling with a new rule set is idempotent and calling with [] turns mocking off. The handler
  * consults matchMock per request and fulfills/aborts/continues accordingly.
  */

@@ -1,9 +1,9 @@
-import { PresenterMode } from '@syrin/iris-protocol';
+import { PresenterMode } from '@reticle/protocol';
 
 // Activity-log UI for the presenter HUD: a persistent, timestamped, scrollable transcript of
 // every read/act/narration. All strings here are presenter-only UI (chips, glyphs, attrs) — they
 // never cross the browser↔bridge↔agent wire, so they stay as named consts (not protocol consts).
-// All nodes carry data-iris-* attrs so they're excluded from snapshots (see dom-ignore.ts).
+// All nodes carry data-reticle-* attrs so they're excluded from snapshots (see dom-ignore.ts).
 
 /** Default cap on accumulated activity-log rows (bounds DOM). Presenter-local UI tunable. */
 const DEFAULT_LOG_MAX = 50;
@@ -37,33 +37,33 @@ const LOG_CHIP_MODE: Record<LogKind, PresenterMode> = {
   human: PresenterMode.IDLE,
 };
 const RESULT_GLYPH: Record<LogResult, string> = { pass: '✓', fail: '✗' };
-const RESULT_CLASS: Record<LogResult, string> = { pass: 'iris-pass', fail: 'iris-fail' };
+const RESULT_CLASS: Record<LogResult, string> = { pass: 'reticle-pass', fail: 'reticle-fail' };
 
-export const DATA_IRIS_LOG = 'data-iris-log';
-const DATA_IRIS_LOG_ROW = 'data-iris-log-row';
-const DATA_IRIS_LOG_TS = 'data-iris-log-ts';
+export const DATA_RETICLE_LOG = 'data-reticle-log';
+const DATA_RETICLE_LOG_ROW = 'data-reticle-log-row';
+const DATA_RETICLE_LOG_TS = 'data-reticle-log-ts';
 const DATA_KIND = 'data-kind';
-const LOG_TEXT_CLASS = 'iris-log-text';
-const LOG_RES_CLASS = 'iris-res';
-const LOG_CHIP_CLASS = 'iris-chip';
+const LOG_TEXT_CLASS = 'reticle-log-text';
+const LOG_RES_CLASS = 'reticle-res';
+const LOG_CHIP_CLASS = 'reticle-chip';
 
 /** CSS for the log feed (injected with the rest of the presenter stylesheet; vars inherit from the card). */
 export const LOG_CSS = `
-[data-iris-log]{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;display:flex;flex-direction:column;
+[data-reticle-log]{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;display:flex;flex-direction:column;
   gap:7px;padding:12px 14px;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.16) transparent;}
-[data-iris-log]::-webkit-scrollbar{width:9px;}
-[data-iris-log]::-webkit-scrollbar-thumb{background:rgba(255,255,255,.14);border-radius:9px;border:2px solid transparent;background-clip:content-box;}
-[data-iris-log]::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,.26);background-clip:content-box;}
-[data-iris-log-row]{display:flex;align-items:baseline;gap:8px;font-size:12px;line-height:1.45;
-  animation:iris-row-in .26s cubic-bezier(.16,1,.3,1);}
-@keyframes iris-row-in{from{opacity:0;transform:translateY(5px);}to{opacity:1;transform:none;}}
-[data-iris-log-ts]{flex:none;color:var(--iris-faint);font-size:10px;font-variant-numeric:tabular-nums;padding-top:1px;}
-[data-iris-log] .iris-log-text{flex:1;min-width:0;color:#d6dae4;overflow-wrap:anywhere;word-break:break-word;}
-[data-iris-log] .iris-res{flex:none;font-weight:700;}
-[data-iris-log-row][data-kind="human"]{align-self:flex-end;max-width:88%;
-  background:var(--iris-accent-soft);border:1px solid var(--iris-accent);border-radius:13px 13px 4px 13px;padding:6px 11px;}
-[data-iris-log-row][data-kind="human"] [data-iris-log-ts]{display:none;}
-[data-iris-log-row][data-kind="human"] .iris-log-text{color:var(--iris-fg);}
+[data-reticle-log]::-webkit-scrollbar{width:9px;}
+[data-reticle-log]::-webkit-scrollbar-thumb{background:rgba(255,255,255,.14);border-radius:9px;border:2px solid transparent;background-clip:content-box;}
+[data-reticle-log]::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,.26);background-clip:content-box;}
+[data-reticle-log-row]{display:flex;align-items:baseline;gap:8px;font-size:12px;line-height:1.45;
+  animation:reticle-row-in .26s cubic-bezier(.16,1,.3,1);}
+@keyframes reticle-row-in{from{opacity:0;transform:translateY(5px);}to{opacity:1;transform:none;}}
+[data-reticle-log-ts]{flex:none;color:var(--reticle-faint);font-size:10px;font-variant-numeric:tabular-nums;padding-top:1px;}
+[data-reticle-log] .reticle-log-text{flex:1;min-width:0;color:#d6dae4;overflow-wrap:anywhere;word-break:break-word;}
+[data-reticle-log] .reticle-res{flex:none;font-weight:700;}
+[data-reticle-log-row][data-kind="human"]{align-self:flex-end;max-width:88%;
+  background:var(--reticle-accent-soft);border:1px solid var(--reticle-accent);border-radius:13px 13px 4px 13px;padding:6px 11px;}
+[data-reticle-log-row][data-kind="human"] [data-reticle-log-ts]{display:none;}
+[data-reticle-log-row][data-kind="human"] .reticle-log-text{color:var(--reticle-fg);}
 `;
 
 /** Handle returned from logRow/Presenter.log so the caller can stamp the outcome glyph later. */
@@ -109,11 +109,11 @@ export function appendLogRow(
   logMax: number,
 ): LogHandle {
   const row = document.createElement('div');
-  row.setAttribute(DATA_IRIS_LOG_ROW, '');
+  row.setAttribute(DATA_RETICLE_LOG_ROW, '');
   row.setAttribute(DATA_KIND, kind); // styles the human row as an accent chat bubble
 
   const tsEl = document.createElement('span');
-  tsEl.setAttribute(DATA_IRIS_LOG_TS, '');
+  tsEl.setAttribute(DATA_RETICLE_LOG_TS, '');
   tsEl.textContent = ts;
 
   const chip = document.createElement('span');

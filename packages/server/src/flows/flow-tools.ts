@@ -10,16 +10,16 @@ import {
   type FlowReplayResult,
   type HealChange,
   type HealProposal,
-} from '@syrin/iris-protocol';
-import { IrisTool } from '../tools/tool-names.js';
+} from '@reticle/protocol';
+import { ReticleTool } from '../tools/tool-names.js';
 import { asString } from '../tools/tools-helpers.js';
 import { replayFlow } from './flow-replay.js';
 import { buildSuiteVerdict } from './decision.js';
 import { classifyFlowAssertions } from './flow-classify.js';
 import { assertSuccess, dynamicTestids, successLabel } from './flow-success.js';
-import { flowPath } from '../project/iris-dir.js';
+import { flowPath } from '../project/reticle-dir.js';
 import { applyHealChanges, collectProposals } from './heal.js';
-import type { SuiteVerdict } from '@syrin/iris-protocol';
+import type { SuiteVerdict } from '@reticle/protocol';
 import { waitForPredicate } from '../events/predicate.js';
 import type { FlowAnnotations } from './flows.js';
 import type { ToolDef, ToolDeps } from '../tools/tools.js';
@@ -29,20 +29,20 @@ export { replayNamedFlow } from './flow-replay-run.js';
 
 export const FLOW_TOOLS: ToolDef[] = [
   {
-    name: IrisTool.FLOW_SAVE,
+    name: ReticleTool.FLOW_SAVE,
     description:
-      'Persist the last/active recording (by name) as a git-checked, anchor-resolved flow at .iris/flows/<name>.json. Each step is bound to a SEMANTIC anchor (testid/role/signal), never a volatile ref; steps without a resolvable testid are kept with degraded:true (a "add a data-testid here" marker) rather than dropped. Returns { name, stepCount, degraded, empty, assertions } — `assertions.grade` is asserted | presence-only | assertion-free: a flow that only acts (or only checks element presence) will pass even if the feature breaks, so when grade is not "asserted" follow assertions.warning and add a consequence assertion via iris_annotate (assert-signal / assert-net / success-state).',
+      'Persist the last/active recording (by name) as a git-checked, anchor-resolved flow at .reticle/flows/<name>.json. Each step is bound to a SEMANTIC anchor (testid/role/signal), never a volatile ref; steps without a resolvable testid are kept with degraded:true (a "add a data-testid here" marker) rather than dropped. Returns { name, stepCount, degraded, empty, assertions } — `assertions.grade` is asserted | presence-only | assertion-free: a flow that only acts (or only checks element presence) will pass even if the feature breaks, so when grade is not "asserted" follow assertions.warning and add a consequence assertion via reticle_annotate (assert-signal / assert-net / success-state).',
     inputSchema: {
       flowName: z
         .string()
         .describe(
-          'Name for the flow file (saved to .iris/flows/<flowName>.json). Use again in iris_flow_load/iris_flow_replay.',
+          'Name for the flow file (saved to .reticle/flows/<flowName>.json). Use again in reticle_flow_load/reticle_flow_replay.',
         ),
     },
     // Schema MUST match what the handler actually returns on BOTH paths: success
     // { name, stepCount, degraded, empty, assertions? } and error { error, code }. The prior schema
     // declared { saved, path } — fields the handler never returns — so a schema-validating MCP
-    // client rejected every iris_flow_save result ("expected boolean"). Unit tests call the handler
+    // client rejected every reticle_flow_save result ("expected boolean"). Unit tests call the handler
     // directly and bypass MCP output validation, so only a live MCP run caught it (cf. the same
     // class of bug fixed for FLOW_LIST above).
     outputSchema: {
@@ -94,9 +94,9 @@ export const FLOW_TOOLS: ToolDef[] = [
     },
   },
   {
-    name: IrisTool.FLOW_LIST,
+    name: ReticleTool.FLOW_LIST,
     description:
-      'List saved flow names under .iris/flows (a fresh agent learns the demonstrated journeys without a browser).',
+      'List saved flow names under .reticle/flows (a fresh agent learns the demonstrated journeys without a browser).',
     inputSchema: {},
     outputSchema: {
       flows: z.array(
@@ -108,17 +108,17 @@ export const FLOW_TOOLS: ToolDef[] = [
     // received string") — caught driving the live demo.
     handler: (deps: ToolDeps) =>
       deps.flows.list().then((names) => ({
-        flows: names.map((name) => ({ name, path: flowPath(deps.irisRoot, name) })),
+        flows: names.map((name) => ({ name, path: flowPath(deps.reticleRoot, name) })),
       })),
   },
   {
-    name: IrisTool.FLOW_LOAD,
+    name: ReticleTool.FLOW_LOAD,
     description:
-      'Read + validate a saved flow by flowName from .iris/flows/<flowName>.json. Returns the FlowFile (version, flowName, createdAt, anchored steps) or a structured { error, code }.',
+      'Read + validate a saved flow by flowName from .reticle/flows/<flowName>.json. Returns the FlowFile (version, flowName, createdAt, anchored steps) or a structured { error, code }.',
     inputSchema: {
       flowName: z
         .string()
-        .describe('Flow file name (without .json extension) from iris_flow_list.'),
+        .describe('Flow file name (without .json extension) from reticle_flow_list.'),
     },
     outputSchema: {
       flowName: z.string(),
@@ -133,10 +133,10 @@ export const FLOW_TOOLS: ToolDef[] = [
       }),
   },
   {
-    name: IrisTool.FLOW_REPLAY,
+    name: ReticleTool.FLOW_REPLAY,
     description:
-      "Replay a git-checked flow from .iris/flows/<name>.json. RE-RESOLVES each step's semantic " +
-      'anchor (testid via iris_query; signal via predicate) against the LIVE DOM — never reuses a ' +
+      "Replay a git-checked flow from .reticle/flows/<name>.json. RE-RESOLVES each step's semantic " +
+      'anchor (testid via reticle_query; signal via predicate) against the LIVE DOM — never reuses a ' +
       'stale ref. On an anchor MISS returns legible DRIFT { step, anchor, drift:{ reasonKind, reason, ' +
       'nearest } } (the closest surviving testid) and stops — the "whose fault is it" contract. ' +
       'Returns { name, status: ok|drift|error, steps:[...] }; missing/malformed files and action ' +
@@ -144,7 +144,7 @@ export const FLOW_TOOLS: ToolDef[] = [
     inputSchema: {
       flowName: z
         .string()
-        .describe('Flow file name (without .json extension) from iris_flow_list.'),
+        .describe('Flow file name (without .json extension) from reticle_flow_list.'),
       confirmDangerous: z
         .boolean()
         .optional()
@@ -153,7 +153,7 @@ export const FLOW_TOOLS: ToolDef[] = [
         .string()
         .optional()
         .describe(
-          'Active session ID from iris_sessions. Omit when only one browser session is open.',
+          'Active session ID from reticle_sessions. Omit when only one browser session is open.',
         ),
     },
     outputSchema: {
@@ -178,7 +178,7 @@ export const FLOW_TOOLS: ToolDef[] = [
     handler: (deps: ToolDeps, args): Promise<FlowReplayResult> => replayNamedFlow(deps, args),
   },
   {
-    name: IrisTool.FLOW_VERIFY,
+    name: ReticleTool.FLOW_VERIFY,
     description:
       'Replay EVERY saved flow (or a given subset) and return ONE consolidated suite verdict — the ' +
       'autonomous regression check to run after a build/change. Deterministic (no LLM per flow). ' +
@@ -194,7 +194,7 @@ export const FLOW_TOOLS: ToolDef[] = [
         .string()
         .optional()
         .describe(
-          'Active session ID from iris_sessions. Omit when only one browser session is open.',
+          'Active session ID from reticle_sessions. Omit when only one browser session is open.',
         ),
     },
     outputSchema: {
@@ -220,11 +220,11 @@ export const FLOW_TOOLS: ToolDef[] = [
     },
   },
   {
-    name: IrisTool.FLOW_SAVE_RECORDED,
+    name: ReticleTool.FLOW_SAVE_RECORDED,
     description:
       'Persist the HUMAN-recorded flow from the live tab. The recorder toolbar compiles the ' +
       "human's real clicks/inputs into a semantically anchored FlowFile in-page and emits it; this " +
-      'tool reads the LATEST recorded-flow from the session and writes it to .iris/flows/<name>.json ' +
+      'tool reads the LATEST recorded-flow from the session and writes it to .reticle/flows/<name>.json ' +
       '(no recompilation — the browser already resolved every anchor). Pass `name` to override the ' +
       'recorded name. Returns { name, stepCount, degraded, empty } or { error, code } (code ' +
       'flow_no_recorded when no recording is present).',
@@ -240,7 +240,7 @@ export const FLOW_TOOLS: ToolDef[] = [
           .string()
           .optional()
           .describe(
-            'Active session ID from iris_sessions. Omit when only one browser session is open.',
+            'Active session ID from reticle_sessions. Omit when only one browser session is open.',
           ),
       },
     },
@@ -272,11 +272,11 @@ export const FLOW_TOOLS: ToolDef[] = [
     },
   },
   {
-    name: IrisTool.FLOW_HEAL,
+    name: ReticleTool.FLOW_HEAL,
     description:
-      'Self-healing replay. Re-runs iris_flow_replay; on testid DRIFT computes confidence-scored ' +
+      'Self-healing replay. Re-runs reticle_flow_replay; on testid DRIFT computes confidence-scored ' +
       'nearest-match rebind PROPOSALS. With apply:false (default) returns the proposed diff WITHOUT ' +
-      'writing. With apply:true, writes the confident rebind(s) back into .iris/flows/<name>.json and ' +
+      'writing. With apply:true, writes the confident rebind(s) back into .reticle/flows/<name>.json and ' +
       'returns what changed — never silently. Before writing, apply re-replays the healed flow and ' +
       're-asserts its success consequence: if the rebound locator resolves but the consequence no ' +
       'longer fires, the write is REFUSED (status:consequence_broken) — it heals the locator, never ' +
@@ -284,7 +284,7 @@ export const FLOW_TOOLS: ToolDef[] = [
       'untouched). Returns { name, status: healed|drift|unhealable|consequence_broken|' +
       'nothing_to_heal|error, applied, proposals[], changed[], message }.',
     inputSchema: {
-      flowName: z.string().describe('Flow file name to heal (from iris_flow_list).'),
+      flowName: z.string().describe('Flow file name to heal (from reticle_flow_list).'),
       apply: z.boolean().optional(),
       confirmDangerous: z
         .boolean()
@@ -294,7 +294,7 @@ export const FLOW_TOOLS: ToolDef[] = [
         .string()
         .optional()
         .describe(
-          'Active session ID from iris_sessions. Omit when only one browser session is open.',
+          'Active session ID from reticle_sessions. Omit when only one browser session is open.',
         ),
     },
     outputSchema: {
@@ -318,7 +318,7 @@ const HEAL_MESSAGES = {
   DRIFT_DRY: 'confident rebind(s) proposed — re-run with apply:true to write them to disk',
   UNHEALABLE: `drift found, but no nearest match cleared the confidence floor (HEAL_CONFIDENCE_MIN=${HEAL_CONFIDENCE_MIN}); file left untouched — add a data-testid or fix the flow by hand`,
   HEALED_UNVERIFIED:
-    'rewrote drifted testid anchors — but this flow declares no success consequence, so the rebind resolves a locator without proving the intent still holds. Add a success-state assertion (iris_annotate) so future heals can be verified.',
+    'rewrote drifted testid anchors — but this flow declares no success consequence, so the rebind resolves a locator without proving the intent still holds. Add a success-state assertion (reticle_annotate) so future heals can be verified.',
   CONSEQUENCE_BROKEN:
     'rebind resolves the drifted locator to a surviving element, but the healed flow no longer satisfies its success consequence — refusing to write (a heal that loses the intent would ship a green-but-dead test). Fix by hand and verify',
 } as const;

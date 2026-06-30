@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PresenterTone, SessionState } from '@syrin/iris-protocol';
+import { PresenterTone, SessionState } from '@reticle/protocol';
 import { buildPresenterArgs } from './presenter-args.js';
 
 describe('buildPresenterArgs', () => {

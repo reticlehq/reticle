@@ -1,4 +1,4 @@
-import { EventType } from '@syrin/iris-protocol';
+import { EventType } from '@reticle/protocol';
 import { resolveMarkAnchor } from './mark-anchor.js';
 import { nativeSetTimeout, nativeClearTimeout } from '../timers/native-timers.js';
 
@@ -7,11 +7,11 @@ const HIGHLIGHT_REST_MS = 130;
 
 /**
  * The human "annotate the bug where you see it" surface. A dev toggles annotate mode, clicks the
- * element that looks wrong, types what's wrong, and Iris pins a numbered marker + emits a HUMAN_MARK
- * event the agent drains (iris_review). The mark carries the element's re-resolvable anchor and —
+ * element that looks wrong, types what's wrong, and Reticle pins a numbered marker + emits a HUMAN_MARK
+ * event the agent drains (reticle_review). The mark carries the element's re-resolvable anchor and —
  * when available — the source file:line, so the agent fixes the exact element/code, not a guess.
  *
- * Self-contained and dev-only: every node carries a `data-iris-mark` attribute so Iris's own
+ * Self-contained and dev-only: every node carries a `data-reticle-mark` attribute so Reticle's own
  * observers ignore it (see dom-ignore.ts), and clicks on its own UI never become marks.
  */
 
@@ -27,10 +27,10 @@ export interface AnnotatorDeps {
   onMark?: (note: string, label: string) => void;
 }
 
-/** Single base attribute on every UI node (varied by VALUE) so `closest('[data-iris-mark]')`
+/** Single base attribute on every UI node (varied by VALUE) so `closest('[data-reticle-mark]')`
  *  catches the FAB, popover, and pins in one check, and the SDK's observers ignore them all. */
-const MARK_ATTR = 'data-iris-mark';
-const ACTIVE_ATTR = 'data-iris-mark-active';
+const MARK_ATTR = 'data-reticle-mark';
+const ACTIVE_ATTR = 'data-reticle-mark-active';
 const Z = 2147483640;
 const sel = (role: string): string => `[${MARK_ATTR}="${role}"]`;
 
@@ -63,14 +63,14 @@ ${sel('pop')}{position:fixed;z-index:${String(Z + 3)};width:280px;box-sizing:bor
   background:linear-gradient(180deg,rgba(19,22,32,.96),rgba(13,15,22,.96));border:1px solid rgba(255,255,255,.14);
   border-radius:14px;padding:12px;box-shadow:0 24px 60px -16px rgba(0,0,0,.7);
   -webkit-backdrop-filter:blur(24px);backdrop-filter:blur(24px);font:13px/1.5 "Inter",system-ui,sans-serif;color:#e9ebf2;}
-${sel('pop')} .iris-mark-where{color:#9aa0b2;font-size:11.5px;margin-bottom:7px;
+${sel('pop')} .reticle-mark-where{color:#9aa0b2;font-size:11.5px;margin-bottom:7px;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 ${sel('pop')} textarea{width:100%;box-sizing:border-box;min-height:62px;resize:vertical;
   background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.12);border-radius:9px;color:#e9ebf2;
   font:13px/1.45 "Inter",system-ui,sans-serif;padding:8px;outline:none;}
 ${sel('pop')} textarea:focus{border-color:#7c83ff;}
-${sel('pop')} .iris-mark-row{display:flex;gap:8px;align-items:center;margin-top:9px;}
-${sel('pop')} .iris-mark-hint{margin-right:auto;color:#6a7186;font-size:10.5px;letter-spacing:.02em;}
+${sel('pop')} .reticle-mark-row{display:flex;gap:8px;align-items:center;margin-top:9px;}
+${sel('pop')} .reticle-mark-hint{margin-right:auto;color:#6a7186;font-size:10.5px;letter-spacing:.02em;}
 ${sel('pop')} button{font:600 12px/1 "Inter",system-ui,sans-serif;padding:8px 12px;border-radius:9px;cursor:pointer;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.05);color:#cdd2e2;}
 ${sel('pop')} button[data-send]{background:#6366f1;border-color:#7c83ff;color:#fff;}
 ${sel('pop')} button[data-send]:disabled{opacity:.5;cursor:default;}`;
@@ -254,11 +254,11 @@ export class Annotator {
       resolved.source !== undefined
         ? `${resolved.label} · ${resolved.source.file}:${String(resolved.source.line)}`
         : resolved.label;
-    pop.innerHTML = `<div class="iris-mark-where"></div>
+    pop.innerHTML = `<div class="reticle-mark-where"></div>
       <textarea placeholder="What's wrong here? The agent will read this and fix it."></textarea>
-      <div class="iris-mark-row"><span class="iris-mark-hint">⌘↵ send · esc cancel</span><button type="button" data-cancel>Cancel</button>
+      <div class="reticle-mark-row"><span class="reticle-mark-hint">⌘↵ send · esc cancel</span><button type="button" data-cancel>Cancel</button>
       <button type="button" data-send disabled>Send to agent</button></div>`;
-    const whereEl = pop.querySelector('.iris-mark-where');
+    const whereEl = pop.querySelector('.reticle-mark-where');
     if (whereEl !== null) whereEl.textContent = where;
     const left = Math.min(x, window.innerWidth - 296);
     const top = Math.min(y + 12, window.innerHeight - 170);

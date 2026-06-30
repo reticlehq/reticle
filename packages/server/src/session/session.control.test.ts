@@ -3,18 +3,18 @@ import type { WebSocket } from 'ws';
 import {
   EventType,
   HumanControlKind,
-  IRIS_PROTOCOL_VERSION,
-  IrisCommand,
+  RETICLE_PROTOCOL_VERSION,
+  ReticleCommand,
   MessageKind,
   SessionState,
   type CommandResult,
   type HelloMessage,
-} from '@syrin/iris-protocol';
+} from '@reticle/protocol';
 import { Session } from './session.js';
 
 const HELLO: HelloMessage = {
   kind: MessageKind.HELLO,
-  protocolVersion: IRIS_PROTOCOL_VERSION,
+  protocolVersion: RETICLE_PROTOCOL_VERSION,
   sessionId: 'demo',
   url: 'http://localhost/',
   title: 'Demo',
@@ -51,7 +51,7 @@ function makeSession(): {
     },
     sent,
     presenterPushes: () =>
-      sent.filter((m) => m.kind === MessageKind.COMMAND && m.name === IrisCommand.PRESENTER),
+      sent.filter((m) => m.kind === MessageKind.COMMAND && m.name === ReticleCommand.PRESENTER),
   };
 }
 
@@ -135,7 +135,7 @@ describe('Live-control PRESENTER push accounting', () => {
     session.applyHumanControl({ kind: HumanControlKind.PAUSE });
     const pushes = presenterPushes();
     expect(pushes).toHaveLength(1);
-    expect(pushes[0]?.name).toBe(IrisCommand.PRESENTER);
+    expect(pushes[0]?.name).toBe(ReticleCommand.PRESENTER);
     expect(pushes[0]?.args).toEqual({ state: SessionState.PAUSED });
   });
 
@@ -149,9 +149,9 @@ describe('Live-control PRESENTER push accounting', () => {
     const { session, sent } = makeSession();
     session.applyHumanControl({ kind: HumanControlKind.PAUSE });
     // a subsequent real command must still round-trip cleanly
-    const promise = session.command(IrisCommand.SNAPSHOT, {});
+    const promise = session.command(ReticleCommand.SNAPSHOT, {});
     const real = sent.find(
-      (m) => m.kind === MessageKind.COMMAND && m.name === IrisCommand.SNAPSHOT,
+      (m) => m.kind === MessageKind.COMMAND && m.name === ReticleCommand.SNAPSHOT,
     );
     expect(real?.id).toBeDefined();
     const result: CommandResult = {

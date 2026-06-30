@@ -1,8 +1,8 @@
 {
-  "name": "iris-monorepo",
+  "name": "reticle-monorepo",
   "version": "0.0.0",
   "private": true,
-  "description": "Iris — eyes for coding agents. Observe and verify a running web app over MCP, no screenshots.",
+  "description": "Reticle — eyes for coding agents. Observe and verify a running web app over MCP, no screenshots.",
   "packageManager": "pnpm@10.33.2",
   "engines": {
     "node": ">=22.12"
@@ -36,8 +36,8 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.18.0",
-    "@syrin/iris": "workspace:*",
-    "@syrin/iris-server": "workspace:*",
+    "@reticle/core": "workspace:*",
+    "@reticle/server": "workspace:*",
     "@types/node": "^22.10.0",
     "@vitest/coverage-v8": "^3.2.6",
     "eslint": "^9.18.0",

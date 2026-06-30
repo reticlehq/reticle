@@ -1,7 +1,7 @@
 /**
- * `iris verify <url>` — one-shot, non-MCP verification. It boots the engine in drive mode (Iris owns
+ * `reticle verify <url>` — one-shot, non-MCP verification. It boots the engine in drive mode (Reticle owns
  * a browser pointed at the preview URL), waits for the in-page SDK to dial back, replays every saved
- * flow, renders the verdict, and exits 0 on pass / 1 otherwise. The same IrisRunner + verdict the MCP
+ * flow, renders the verdict, and exits 0 on pass / 1 otherwise. The same ReticleRunner + verdict the MCP
  * and HTTP paths use — so a platform/CI agent that can only run a shell command (Lovable, Emergent,
  * GitHub Actions) gets a byte-identical artifact without speaking MCP.
  *
@@ -13,19 +13,19 @@
 import { join, basename } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import {
-  IRIS_DEFAULT_PORT,
-  IRIS_WS_PATH,
+  RETICLE_DEFAULT_PORT,
+  RETICLE_WS_PATH,
   isLoopbackHostname,
-  IrisDir,
+  ReticleDir,
   RunAgentKind,
   RunFramework,
   RunProfile,
   RunTrigger,
   VerdictStatus,
-  type IrisVerificationRun,
-} from '@syrin/iris-protocol';
+  type ReticleVerificationRun,
+} from '@reticle/protocol';
 import { start, type RunningServer } from './index.js';
-import { IrisRunner } from './runs/iris-runner.js';
+import { ReticleRunner } from './runs/reticle-runner.js';
 import { createRunnerPort } from './runs/runner-port.js';
 import { renderRunReport } from './runs/render-report.js';
 import { BaselineStore } from './project/baselines.js';
@@ -42,15 +42,15 @@ const EXIT_FAIL = 1;
 const DEFAULT_SESSION_TIMEOUT_MS = 15_000;
 const SESSION_POLL_MS = 250;
 const DEFAULT_PROJECT_NAME = 'app';
-const VERIFY_AGENT_ID = 'iris-cli';
+const VERIFY_AGENT_ID = 'reticle-cli';
 
 const MSG_NO_SESSION =
-  'No app connected — Iris drove the URL but no @syrin/iris-browser session dialed back.\n' +
-  '  Make sure the SDK is in the build and iris.connect() runs on the preview page' +
+  'No app connected — Reticle drove the URL but no @reticle/browser session dialed back.\n' +
+  '  Make sure the SDK is in the build and reticle.connect() runs on the preview page' +
   ' (for a non-localhost preview: allowNonLocalhost + a pairing token).';
 const MSG_NO_FLOWS =
-  'No saved flows to verify (.iris/flows is empty) — refusing to report a pass for verifying nothing.\n' +
-  '  Record a flow first (iris_record_start → act → iris_flow_save), then re-run verify.';
+  'No saved flows to verify (.reticle/flows is empty) — refusing to report a pass for verifying nothing.\n' +
+  '  Record a flow first (reticle_record_start → act → reticle_flow_save), then re-run verify.';
 const MSG_VERIFY_PREFIX = 'verify failed: ';
 
 /** The live capabilities runVerify needs — faked in tests so the logic runs without a browser. */
@@ -58,7 +58,7 @@ export interface VerifyConnection {
   /** Resolve true once a browser session has connected, or false at timeout. */
   sessionReady(timeoutMs: number): Promise<boolean>;
   listFlows(): Promise<string[]>;
-  verify(): Promise<IrisVerificationRun>;
+  verify(): Promise<ReticleVerificationRun>;
   close(): Promise<void>;
 }
 
@@ -134,17 +134,17 @@ async function waitForSession(
 }
 
 /** Reconstruct the disk-backed ToolDeps over the live bridge + driven browser the daemon owns. */
-function buildVerifyDeps(running: RunningServer, irisRoot: string, now: () => number): ToolDeps {
+function buildVerifyDeps(running: RunningServer, reticleRoot: string, now: () => number): ToolDeps {
   const fs = createNodeFileSystem();
   const deps: ToolDeps = {
     sessions: running.bridge.sessions,
     baselines: new BaselineStore(),
     recordings: new RecordingStore(),
-    flows: new FlowStore(fs, irisRoot, { now }),
+    flows: new FlowStore(fs, reticleRoot, { now }),
     annotations: new AnnotationStore(),
-    project: new ProjectStore(fs, irisRoot, { now }),
+    project: new ProjectStore(fs, reticleRoot, { now }),
     fs,
-    irisRoot,
+    reticleRoot,
     now,
   };
   if (running.realInput !== undefined) deps.realInput = running.realInput;
@@ -154,7 +154,7 @@ function buildVerifyDeps(running: RunningServer, irisRoot: string, now: () => nu
 interface LiveOpts {
   url: string;
   headless: boolean;
-  irisRoot: string;
+  reticleRoot: string;
   projectName: string;
   now: () => number;
   storageState?: string;
@@ -171,17 +171,17 @@ export function urlParts(url: string): { origin?: string; loopback: boolean } {
 }
 
 async function openLiveConnection(opts: LiveOpts): Promise<VerifyConnection> {
-  // A localhost preview connects natively (the app's own iris.connect() is allowed on loopback), so the
+  // A localhost preview connects natively (the app's own reticle.connect() is allowed on loopback), so the
   // bridge stays token-free. A HOSTED (non-localhost) preview is blocked by the SDK's connection policy
   // and rejected as a foreign origin — so there we pair via a one-shot token both the bridge and the
-  // injected iris.connect() share, plus the preview's origin on the allow-list. That split is what makes
+  // injected reticle.connect() share, plus the preview's origin on the allow-list. That split is what makes
   // both "verify my dev server" and "verify a live Lovable URL" work from the same command.
   const { origin, loopback } = urlParts(opts.url);
   const pairing = loopback
     ? {}
     : (() => {
         const token = randomUUID();
-        const bridgeUrl = `ws://localhost:${String(IRIS_DEFAULT_PORT)}${IRIS_WS_PATH}`;
+        const bridgeUrl = `ws://localhost:${String(RETICLE_DEFAULT_PORT)}${RETICLE_WS_PATH}`;
         return {
           token,
           injectConnect: { token, url: bridgeUrl },
@@ -192,13 +192,13 @@ async function openLiveConnection(opts: LiveOpts): Promise<VerifyConnection> {
     driveUrl: opts.url,
     headless: opts.headless,
     mcp: false,
-    irisRoot: opts.irisRoot,
+    reticleRoot: opts.reticleRoot,
     now: opts.now,
     ...pairing,
     ...(opts.storageState !== undefined ? { storageState: opts.storageState } : {}),
   });
-  const deps = buildVerifyDeps(running, opts.irisRoot, opts.now);
-  const runner = new IrisRunner(createRunnerPort(deps));
+  const deps = buildVerifyDeps(running, opts.reticleRoot, opts.now);
+  const runner = new ReticleRunner(createRunnerPort(deps));
   return {
     sessionReady: (timeoutMs) => waitForSession(deps.sessions, timeoutMs, opts.now),
     listFlows: () => deps.flows.list(),
@@ -221,14 +221,14 @@ export function handleVerify(parsed: {
   storageState?: string;
 }): void {
   const now = (): number => Date.now();
-  const irisRoot = join(process.cwd(), IrisDir.ROOT);
+  const reticleRoot = join(process.cwd(), ReticleDir.ROOT);
   const projectName = basename(process.cwd()) || DEFAULT_PROJECT_NAME;
   const ports: VerifyPorts = {
     connect: () =>
       openLiveConnection({
         url: parsed.url,
         headless: parsed.headless,
-        irisRoot,
+        reticleRoot,
         projectName,
         now,
         ...(parsed.storageState !== undefined ? { storageState: parsed.storageState } : {}),

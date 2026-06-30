@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { EventType } from '@syrin/iris-protocol';
+import { EventType } from '@reticle/protocol';
 import { installConsole } from './console.js';
 import type { Emit, Teardown } from './types.js';
 

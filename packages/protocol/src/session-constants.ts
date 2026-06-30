@@ -23,7 +23,7 @@ export function isSessionState(value: unknown): value is SessionState {
 
 /**
  * Sentinel session label meaning "give this tab its own unique id". The SDK maps it (and an absent
- * label) to a per-tab id so several tabs — a human tab + an Iris-driven tour, a Director-cut popup —
+ * label) to a per-tab id so several tabs — a human tab + an Reticle-driven tour, a Director-cut popup —
  * never collide on one session id. Pass an explicit label only when tabs should intentionally share.
  */
 export const SESSION_AUTO = 'auto';
@@ -57,7 +57,7 @@ export type MarkAnchorStrategy = (typeof MarkAnchorStrategy)[keyof typeof MarkAn
 export const MarkStatus = {
   /** Flagged by the human, not yet addressed by the agent. */
   PENDING: 'pending',
-  /** The agent claimed the mark as fixed (iris_review resolve). Terminal. */
+  /** The agent claimed the mark as fixed (reticle_review resolve). Terminal. */
   RESOLVED: 'resolved',
 } as const;
 export type MarkStatus = (typeof MarkStatus)[keyof typeof MarkStatus];
@@ -84,8 +84,8 @@ export const SESSION_HEALTH = {
 export const SESSION_LIFECYCLE = {
   /**
    * Default agent-idle window before the panel hands back to the human as WAITING. The agent signals
-   * this IMMEDIATELY via iris_yield; this reaper is only the slow backstop for a forgotten yield, so
-   * it's deliberately long (a short window would auto-end a session mid slow-step). iris_session-tunable.
+   * this IMMEDIATELY via reticle_yield; this reaper is only the slow backstop for a forgotten yield, so
+   * it's deliberately long (a short window would auto-end a session mid slow-step). reticle_session-tunable.
    */
   IDLE_END_MS: 300_000,
   /** Floor for a tuned idle window (so an agent can't disable the safety net). */
@@ -97,8 +97,8 @@ export const SESSION_LIFECYCLE = {
   /**
    * Daemon self-shutdown: after this long with NO agent connected, NO browser session, and NO pool
    * lease, the detached daemon tears itself down (closes Chromium + bridge, frees the port, removes its
-   * pidfile, exits) so Iris never lingers eating resources after the editor closes. Long enough to
-   * survive brief agent reconnects between turns; overridable via IRIS_IDLE_SHUTDOWN_MS (0 = never).
+   * pidfile, exits) so Reticle never lingers eating resources after the editor closes. Long enough to
+   * survive brief agent reconnects between turns; overridable via RETICLE_IDLE_SHUTDOWN_MS (0 = never).
    */
   DAEMON_IDLE_SHUTDOWN_MS: 300_000,
   /** How often the daemon checks whether it has gone idle. Unref'd, so it never keeps the process up. */
@@ -107,14 +107,14 @@ export const SESSION_LIFECYCLE = {
 
 /**
  * Coding-agent session hygiene thresholds. Coding agents (Claude Code, Codex, Cursor) often
- * complete their task and close their context without calling iris_end_session. These constants
+ * complete their task and close their context without calling reticle_end_session. These constants
  * drive two passive reminder layers: a one-time session_lease on first call, and recurring
  * session_age_warning fields after WARN_AFTER_MS.
  */
 export const SESSION_LEASE = {
   /** ms after which age warnings appear on every session-bound tool result. */
   WARN_AFTER_MS: 600_000, // 10 minutes
-  /** ms after which iris_sessions marks a session as stale. */
+  /** ms after which reticle_sessions marks a session as stale. */
   STALE_AFTER_MS: 1_800_000, // 30 minutes
 } as const;
 

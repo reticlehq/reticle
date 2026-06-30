@@ -8,7 +8,7 @@ What are the tradeoffs in **token usage, verification latency, regression-detect
 
 1. **Playwright MCP** (`@playwright/mcp@0.0.76`)
 2. **Chrome DevTools MCP** (`chrome-devtools-mcp@1.3.0`)
-3. **Iris** (`@syrin/iris-server` 0.8.0, driven via `iris mcp`)
+3. **Reticle** (`@reticle/server` 0.8.0, driven via `reticle mcp`)
 
 Hypothesis under test (to be validated OR falsified): _AI coding agents are limited less by reasoning than by runtime observability._ We treat this skeptically — see "Threats to validity".
 
@@ -18,15 +18,15 @@ Hypothesis under test (to be validated OR falsified): _AI coding agents are limi
 | --- | --- |
 | Same application | `apps/demo` (Vite/React dashboard) + `apps/api` (Express), this repo. |
 | Same hardware | One machine; all tools run locally, back to back. Host recorded in run metadata. |
-| Same browser engine | All three drive **Chromium**. Playwright MCP & Iris use Playwright Chromium (same cache: `chromium-1223`); DevTools MCP uses local Chrome/Chromium via CDP. Engine family identical; channel noted per tool. |
+| Same browser engine | All three drive **Chromium**. Playwright MCP & Reticle use Playwright Chromium (same cache: `chromium-1223`); DevTools MCP uses local Chrome/Chromium via CDP. Engine family identical; channel noted per tool. |
 | Same task prompts | One canonical natural-language verification task per scenario, fed verbatim to each tool's agent loop. Stored in `scenarios/<id>.json`. |
-| Same runtime state | Each scenario resets the app/api to a known seed; the same login (`admin@iris.dev`) and the same navigation path are executed before measurement. |
+| Same runtime state | Each scenario resets the app/api to a known seed; the same login (`admin@reticle.dev`) and the same navigation path are executed before measurement. |
 | Same regressions | Injected by a single deterministic injector (`harness/inject.mjs`) that applies/reverts one named change; the diff for each is recorded under `scenarios/patches/`. |
 | Same evaluation | Detection graded by a fixed rule per scenario (does the captured evidence contain the failure signal?), not by human judgment. |
 
-### Fairness rules (to avoid rigging for Iris)
+### Fairness rules (to avoid rigging for Reticle)
 
-1. Each tool uses its **own idiomatic best path** to the evidence (e.g. Playwright/DevTools reference elements by ref/uid obtained from a snapshot; Iris queries by `data-testid`). We do not force a tool into a non-idiomatic sequence.
+1. Each tool uses its **own idiomatic best path** to the evidence (e.g. Playwright/DevTools reference elements by ref/uid obtained from a snapshot; Reticle queries by `data-testid`). We do not force a tool into a non-idiomatic sequence.
 2. We measure each tool's **default** response for a call. Where a tool supports a cheaper filtered variant (e.g. `browser_network_requests` with a `filter`), we record both the default and the filtered cost and say so — we never silently pick the variant that wins.
 3. No scenario is added or dropped after seeing results to change the headline.
 4. Scenario #10 is a **no-regression control**: any tool that "detects" an issue there scores a false positive.
@@ -69,7 +69,7 @@ The headline metric people want — _tokens per verification cycle_ — only exi
 
 Effort is not a runtime measurement; it is scored on a fixed rubric and labeled an estimate:
 
-- **Setup complexity** — what must exist before the first verification works (e.g. Iris requires the app to embed `@syrin/iris-browser` and the daemon port to match the SDK's dial port — observed empirically in pilot; Playwright/DevTools require nothing from the app).
+- **Setup complexity** — what must exist before the first verification works (e.g. Reticle requires the app to embed `@reticle/browser` and the daemon port to match the SDK's dial port — observed empirically in pilot; Playwright/DevTools require nothing from the app).
 - **Maintenance burden** — selector/recipe fragility across UI change.
 - **Explicit test-writing burden** — how much the engineer must hand-author vs. ask in NL.
 
@@ -92,7 +92,7 @@ Each scenario file (`scenarios/<id>.json`) defines: `setup`, `injected_regressio
 | 11 | wrong-status-404 | Request returns 404 (missing resource / wrong status) | `net` event status 404 | api `/api/broken/404` (built-in fault button) |
 | 12 | cors-blocked | Cross-origin request blocked; fails silently | `net` request fails / status 0 (CORS) | api `/api/broken/cors` (built-in fault button) |
 
-Scenarios 11–12 were added in the regression-depth pass (v0.6.15). Both are **fair** — their discriminator is a network signal every tool can observe — and all three tools detect them, so they broaden the failure-mode taxonomy without biasing the comparison. Iris's detection lead remains attributable solely to layout-shift (#6), the one regression only it catches.
+Scenarios 11–12 were added in the regression-depth pass (v0.6.15). Both are **fair** — their discriminator is a network signal every tool can observe — and all three tools detect them, so they broaden the failure-mode taxonomy without biasing the comparison. Reticle's detection lead remains attributable solely to layout-shift (#6), the one regression only it catches.
 
 ### Per-scenario detail (canonical form)
 
@@ -117,10 +117,10 @@ Scenario #5 is deliberately the pilot because a snapshot-only verification _pass
 
 ## Design corrections made during execution (logged for honesty)
 
-The first full run surfaced three flaws; all were fixed before the reported run, and the fixes make the comparison _fairer to the competitors_, not to Iris:
+The first full run surfaced three flaws; all were fixed before the reported run, and the fixes make the comparison _fairer to the competitors_, not to Reticle:
 
-1. **Snapshot byte-diff was noise-prone.** All three tools embed volatile per-session tokens (Iris: session id / timestamps / `cost`; Playwright: a timestamped console-log _filename_ + `ref=eN` ids; DevTools: `uid`/`msgid`). Naive equality made Playwright appear to "detect" the layout-shift regression when the only difference was a log filename timestamp. Fix: `normalize()` strips volatile tokens before diffing, so a difference reflects real structure. Result: Playwright no longer false-detects CLS.
-2. **Iris network filter was hardcoded to `status:500`**, which cannot match a _pending_ request (no status yet) — it unfairly failed the network-timeout scenario. Fix: Iris now filters by `urlContains:'/api/'` (symmetric with Playwright's `/api/` URL filter), which catches both failed and hanging requests.
+1. **Snapshot byte-diff was noise-prone.** All three tools embed volatile per-session tokens (Reticle: session id / timestamps / `cost`; Playwright: a timestamped console-log _filename_ + `ref=eN` ids; DevTools: `uid`/`msgid`). Naive equality made Playwright appear to "detect" the layout-shift regression when the only difference was a log filename timestamp. Fix: `normalize()` strips volatile tokens before diffing, so a difference reflects real structure. Result: Playwright no longer false-detects CLS.
+2. **Reticle network filter was hardcoded to `status:500`**, which cannot match a _pending_ request (no status yet) — it unfairly failed the network-timeout scenario. Fix: Reticle now filters by `urlContains:'/api/'` (symmetric with Playwright's `/api/` URL filter), which catches both failed and hanging requests.
 3. **cross-component-regression grading was invalid** (it compared two pre-filter snapshots). Reliable detection needs a typed-filter before/after row-count diff that would require a per-tool counting heuristic, biasing the comparison. It is recorded **NOT MEASURED** in Layer A and deferred to Layer B (where the model reasons about it).
 
 These are exactly the kind of subtle measurement bugs that flatter or punish a tool by accident; they are documented here so the run is auditable.
@@ -134,7 +134,7 @@ node bench/harness/bench-all.mjs --full && node bench/harness/gate.mjs
 # Or run the passes by hand:
 # 1. start backends — api on :8787, demo on :4312; the demo's embedded SDK dials the bench daemon (:4455)
 node apps/api/server.mjs &
-IRIS_PORT=4455 pnpm --filter @syrin/iris-demo exec vite --port 4312 --strictPort &
+RETICLE_PORT=4455 pnpm --filter @reticle/demo exec vite --port 4312 --strictPort &
 
 # 2. verify all three tool servers boot + list tools
 node bench/harness/probe.mjs
@@ -148,4 +148,4 @@ ANTHROPIC_API_KEY=... node bench/harness/agent-loop.mjs
 # raw outputs: bench/raw/*.json ; logs: bench/logs/
 ```
 
-Pinned versions: `@playwright/mcp@0.0.76`, `chrome-devtools-mcp@1.3.0`, `@syrin/iris-server@0.8.0`, Node v22.14.0, Playwright Chromium `chromium-1223`.
+Pinned versions: `@playwright/mcp@0.0.76`, `chrome-devtools-mcp@1.3.0`, `@reticle/server@0.8.0`, Node v22.14.0, Playwright Chromium `chromium-1223`.

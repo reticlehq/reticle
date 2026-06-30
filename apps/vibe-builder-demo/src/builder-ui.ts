@@ -1,12 +1,12 @@
 /**
  * The Builder builder UI logic. This is the OUTER app in the self-test loop: it is itself instrumented
- * with the Iris SDK (gated on ?iris=1) so an outer Iris can drive and observe it — while its own "Run
- * QA agent" button triggers the INNER Iris (the /api/verify middleware) against the preview iframe.
+ * with the Reticle SDK (gated on ?reticle=1) so an outer Reticle can drive and observe it — while its own "Run
+ * QA agent" button triggers the INNER Reticle (the /api/verify middleware) against the preview iframe.
  *
  * The `builder` store exposes the builder's state (phase + last verdict) so the outer self-test reads
- * the result via iris_state — program truth on the outer layer, mirroring how the inner layer works.
+ * the result via reticle_state — program truth on the outer layer, mirroring how the inner layer works.
  */
-import { iris, registerStore, registerCapabilities } from '@syrin/iris-browser';
+import { reticle, registerStore, registerCapabilities } from '@reticle/browser';
 
 interface BuilderVerdict {
   status: string;
@@ -22,14 +22,14 @@ const builderState: { phase: string; generated: boolean; lastVerdict: BuilderVer
 };
 
 const params = new URLSearchParams(location.search);
-if (params.get('iris') === '1') {
+if (params.get('reticle') === '1') {
   const bridge = params.get('bridge') ?? '4400';
   registerStore('builder', () => ({ ...builderState }));
   registerCapabilities({
     testids: ['prompt', 'generate', 'bug', 'engine', 'verify', 'result', 'preview-frame'],
     stores: ['builder'],
   });
-  iris.connect({ url: `ws://localhost:${bridge}/iris`, session: 'builder-ui' });
+  reticle.connect({ url: `ws://localhost:${bridge}/reticle`, session: 'builder-ui' });
 }
 
 const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
@@ -80,7 +80,7 @@ function checksHtml(checks: Array<{ name: string; status: string; detail: string
 
 interface VerifyResponse {
   blind: string;
-  iris: {
+  reticle: {
     engine: string;
     status: string;
     durationMs: number;
@@ -98,7 +98,7 @@ $('verify').addEventListener('click', () => {
     btn.disabled = true;
     const engine = engineSel.value;
     builderState.phase = 'verifying';
-    $('result').innerHTML = `<div class="spinner">${engine === 'live' ? 'Live agent reasoning over the sandbox via Iris tools…' : 'Launching headless sandbox, driving the app, reading program truth…'}</div>`;
+    $('result').innerHTML = `<div class="spinner">${engine === 'live' ? 'Live agent reasoning over the sandbox via Reticle tools…' : 'Launching headless sandbox, driving the app, reading program truth…'}</div>`;
     try {
       const r = await fetch('/api/verify', {
         method: 'POST',
@@ -117,12 +117,12 @@ $('verify').addEventListener('click', () => {
   })();
 });
 
-function render({ blind, iris: v }: VerifyResponse): void {
+function render({ blind, reticle: v }: VerifyResponse): void {
   const blocked = v.status === 'fail';
   builderState.phase = 'verified';
   builderState.lastVerdict = { status: v.status, blocked, blind, engine: v.engine, summary: v.summary };
   const banner = blocked
-    ? '<div class="banner block">🚫 Iris blocked this build — it would have shipped broken</div>'
+    ? '<div class="banner block">🚫 Reticle blocked this build — it would have shipped broken</div>'
     : '<div class="banner ship">✅ Verified — safe to ship</div>';
   const live = v.engine === 'live';
   const body = live
@@ -133,7 +133,7 @@ function render({ blind, iris: v }: VerifyResponse): void {
   $('result').innerHTML = `
     ${banner}
     <div class="gate"><h3>Blind gate <span class="pill ${blind === 'pass' ? 'pass' : 'fail'}">${blind.toUpperCase()}</span></h3>
-      <p>HTTP-200 + render only — the pre-Iris floor. Sees nothing wrong with a silent failure.</p></div>
-    <div class="gate"><h3>Iris gate <span style="font-size:0.7rem;color:var(--dim)">${live ? 'live agent' : 'scripted'}</span> <span class="pill ${v.status === 'pass' ? 'pass' : 'fail'}">${v.status.toUpperCase()}</span></h3>${body}</div>
-    <p class="contrast">Blind says <b>ship</b>; Iris says <b>${blocked ? 'block' : 'ship'}</b>. The gap is the escaped defect a user would have hit.</p>`;
+      <p>HTTP-200 + render only — the pre-Reticle floor. Sees nothing wrong with a silent failure.</p></div>
+    <div class="gate"><h3>Reticle gate <span style="font-size:0.7rem;color:var(--dim)">${live ? 'live agent' : 'scripted'}</span> <span class="pill ${v.status === 'pass' ? 'pass' : 'fail'}">${v.status.toUpperCase()}</span></h3>${body}</div>
+    <p class="contrast">Blind says <b>ship</b>; Reticle says <b>${blocked ? 'block' : 'ship'}</b>. The gap is the escaped defect a user would have hit.</p>`;
 }

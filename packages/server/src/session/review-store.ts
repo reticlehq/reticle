@@ -1,4 +1,4 @@
-import { MarkStatus, type HumanMarkData, type MarkAnchorStrategy } from '@syrin/iris-protocol';
+import { MarkStatus, type HumanMarkData, type MarkAnchorStrategy } from '@reticle/protocol';
 
 /**
  * One human review mark: a mistake a human flagged on the running page, pinned to an element, ready
@@ -22,7 +22,7 @@ export interface ReviewMark {
 
 /**
  * Per-session store of human review marks (the "annotate the bug where you see it" inbox). A mark is
- * added when a HUMAN_MARK event arrives, listed by the agent via iris_review, and retired with
+ * added when a HUMAN_MARK event arrives, listed by the agent via reticle_review, and retired with
  * resolve() when the agent claims the fix — distinct from the live-control inbox, which is drained
  * (delivered-once) on read. Marks persist (read does not consume) so the agent can list, fix, and
  * THEN resolve, and a fix can be verified against the same mark.

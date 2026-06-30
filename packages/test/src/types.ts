@@ -1,4 +1,4 @@
-import type { ToolInvoker } from '@syrin/iris-server';
+import type { ToolInvoker } from '@reticle/server';
 import type { TestStatus } from './constants.js';
 
 /**
@@ -11,7 +11,7 @@ export interface SpecContext {
 
 export type SpecFn = (t: SpecContext) => void | Promise<void>;
 
-export interface IrisSpec {
+export interface ReticleSpec {
   readonly name: string;
   readonly fn: SpecFn;
 }
@@ -47,5 +47,5 @@ export interface RunnerOptions {
   /** Injected sink; when present, the runner prints a summary. The runner never touches console. */
   print?: (line: string) => void;
   /** Defaults to a snapshot of the module registry taken at call time. */
-  specs?: readonly IrisSpec[];
+  specs?: readonly ReticleSpec[];
 }

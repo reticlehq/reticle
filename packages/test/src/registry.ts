@@ -1,14 +1,14 @@
-import type { IrisSpec } from './types.js';
+import type { ReticleSpec } from './types.js';
 
 /** Module-level registration list. A list (not a map) so duplicate names are kept, not collapsed. */
-const specs: IrisSpec[] = [];
+const specs: ReticleSpec[] = [];
 
-export function register(spec: IrisSpec): void {
+export function register(spec: ReticleSpec): void {
   specs.push(spec);
 }
 
 /** A frozen snapshot copy so a run that started can ignore later (re-entrant) registrations. */
-export function getRegistered(): readonly IrisSpec[] {
+export function getRegistered(): readonly ReticleSpec[] {
   return [...specs];
 }
 

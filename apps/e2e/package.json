@@ -1,16 +1,16 @@
 {
-  "name": "@syrin/iris-e2e",
+  "name": "@reticle/e2e",
   "version": "0.2.2",
   "private": true,
   "type": "module",
-  "description": "Committed end-to-end battery: boots api+demo+next-smoke and drives Iris in a real (headless) browser. The product's regression safety net.",
+  "description": "Committed end-to-end battery: boots api+demo+next-smoke and drives Reticle in a real (headless) browser. The product's regression safety net.",
   "scripts": {
     "e2e": "node run.mjs",
     "e2e:ci": "bash run-ci.sh"
   },
   "dependencies": {
-    "@syrin/iris-server": "workspace:*",
-    "@syrin/iris-test": "workspace:*",
+    "@reticle/server": "workspace:*",
+    "@reticle/test": "workspace:*",
     "playwright": "^1.48.0"
   }
 }

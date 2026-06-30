@@ -3,9 +3,9 @@
 // The mirror of the double-submit bench. Some endpoints must NEVER be hit on a given action: a legacy
 // API you migrated off, an analytics/telemetry beacon on a privacy-sensitive screen, an N+1 fan-out a
 // refactor reintroduces. Nothing visible changes — the request just goes out. The forbidden-call
-// regression (`?iris-bug=forbidden-call`) makes the Compose action POST to `/api/legacy-telemetry`.
+// regression (`?reticle-bug=forbidden-call`) makes the Compose action POST to `/api/legacy-telemetry`.
 //
-// Iris expresses the rule as a flow success consequence `net { urlContains, count: 0 }` ("this matcher
+// Reticle expresses the rule as a flow success consequence `net { urlContains, count: 0 }` ("this matcher
 // must fire exactly zero times since the action"). On replay the oracle counts matching requests after
 // the page settles: clean = 0 (ok), bugged = 1 (the oracle fails), with NO testid drift. The count read
 // is post-settle (the same gate net.count uses), so a wait-until-true check can't pass at the instant
@@ -14,7 +14,7 @@
 // Honest scope: Playwright/DevTools can observe requests, so raw counting is parity; the win is the same
 // as the rest of the consequence family — a DECLARED, deterministic replay rule, no LLM re-drive.
 import { writeFileSync } from 'node:fs';
-import { IrisAdapter } from './adapters.mjs';
+import { ReticleAdapter } from './adapters.mjs';
 import { measure } from './tokenizer.mjs';
 
 const URL = process.env.BENCH_URL ?? 'http://localhost:4312/';
@@ -31,7 +31,7 @@ const parse = (t) => {
 };
 
 async function replayOnce(a) {
-  const rep = await a.c.callTool('iris_flow_replay', { flowName: FLOW });
+  const rep = await a.c.callTool('reticle_flow_replay', { flowName: FLOW });
   const obj = parse(rep.text);
   const successRow = Array.isArray(obj.steps)
     ? obj.steps.find((s) => s && s.tool === 'success')
@@ -45,18 +45,18 @@ async function replayOnce(a) {
   };
 }
 
-const a = new IrisAdapter(URL);
+const a = new ReticleAdapter(URL);
 await a.start();
 let result;
 try {
   // Record: login → Compose → type a prompt → Generate. Declare the "must never call" consequence.
-  await a.c.callTool('iris_record_start', { recordingName: FLOW });
+  await a.c.callTool('reticle_record_start', { recordingName: FLOW });
   await a.login();
   await a.gotoView('compose');
   await sleep(300);
   const prompt = await a._refByTestid('compose-prompt');
   if (prompt.ref) {
-    await a.c.callTool('iris_act', {
+    await a.c.callTool('reticle_act', {
       ref: prompt.ref,
       action: 'fill',
       args: { value: 'ship the new pricing page' },
@@ -64,18 +64,22 @@ try {
   }
   await a.clickTestid('compose-generate');
   await sleep(1200);
-  const ann = await a.c.callTool('iris_annotate', { flow: FLOW, kind: 'success-state', net: NET });
-  await a.c.callTool('iris_record_stop', { recordingName: FLOW });
-  await a.c.callTool('iris_flow_save', { flowName: FLOW });
+  const ann = await a.c.callTool('reticle_annotate', {
+    flow: FLOW,
+    kind: 'success-state',
+    net: NET,
+  });
+  await a.c.callTool('reticle_record_stop', { recordingName: FLOW });
+  await a.c.callTool('reticle_flow_save', { flowName: FLOW });
 
   // Baseline: healthy app — the forbidden endpoint is never called → the count:0 oracle holds.
-  await a.c.callTool('iris_refresh', { hard: true });
+  await a.c.callTool('reticle_refresh', { hard: true });
   await sleep(1500);
   const baseline = await replayOnce(a);
 
   // Regression: forbidden-call injected — the action POSTs to the forbidden endpoint → the oracle fails.
-  const buggedUrl = `${URL}${URL.includes('?') ? '&' : '?'}iris-bug=forbidden-call`;
-  await a.c.callTool('iris_navigate', { url: buggedUrl });
+  const buggedUrl = `${URL}${URL.includes('?') ? '&' : '?'}reticle-bug=forbidden-call`;
+  await a.c.callTool('reticle_navigate', { url: buggedUrl });
   await sleep(1800);
   const regressed = await replayOnce(a);
 
@@ -98,7 +102,7 @@ try {
 const summary = {
   dimension:
     'Forbidden-call regression (Layer C) — a net.count:0 consequence catches a must-never-fire call',
-  scenario: 'Compose POSTs to a forbidden endpoint it must never hit (?iris-bug=forbidden-call)',
+  scenario: 'Compose POSTs to a forbidden endpoint it must never hit (?reticle-bug=forbidden-call)',
   oracle: 'flow.success net { urlContains:/api/legacy-telemetry, count:0 }',
   ...result,
   per_run_tokens: result.regressed?.tokens ?? null,
@@ -106,7 +110,7 @@ const summary = {
     ? Math.round(LLM_REDRIVE / result.regressed.tokens)
     : null,
   competitor_position:
-    'Playwright/DevTools can observe requests, so raw counting is parity — but only Iris replays "must never call X" as a declared, deterministic consequence with no LLM re-drive, read post-settle so it cannot pass before the call fires.',
+    'Playwright/DevTools can observe requests, so raw counting is parity — but only Reticle replays "must never call X" as a declared, deterministic consequence with no LLM re-drive, read post-settle so it cannot pass before the call fires.',
   honest_verdict: result.detected
     ? `Forbidden-call CAUGHT: clean replay holds (0 calls), bugged replay fails the count:0 oracle (1 call) with no testid drift — caught deterministically at ~${result.regressed.tokens} tok/run.`
     : 'NOT DETECTED — investigate the injector or the net.count:0 oracle before claiming the catch.',

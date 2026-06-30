@@ -1,5 +1,5 @@
 /**
- * Pure assembly of the `iris init` action plan. Given the detection result and the relevant file
+ * Pure assembly of the `reticle init` action plan. Given the detection result and the relevant file
  * contents, produce an ordered list of steps — each marked apply / manual / already / skip. The
  * runner performs the `write` side-effects; this module decides *what* should happen.
  */
@@ -12,17 +12,17 @@ import {
   viteManual,
   htmlManual,
   NEXT_LAYOUT_MANUAL,
-  nextIrisDevFile,
-  NEXT_IRIS_DEV_PATH,
+  nextReticleDevFile,
+  NEXT_RETICLE_DEV_PATH,
   nextConfigManual,
-  irisConfigContent,
+  reticleConfigContent,
   svelteKitHooksFile,
   SVELTEKIT_HOOKS_PATH,
 } from './snippets.js';
 
-const IRIS_PACKAGE = '@syrin/iris';
+const RETICLE_PACKAGE = '@reticle/core';
 const MCP_TARGET = 'global (claude user scope)';
-const IRIS_CONFIG_FILE = '.iris.json';
+const RETICLE_CONFIG_FILE = '.reticle.json';
 
 export const StepStatus = {
   APPLY: 'apply',
@@ -52,7 +52,7 @@ export interface PlanInput {
   detection: Detection;
   /** Whether the `claude` CLI is installed (so we can register the MCP server globally). */
   claudeCli: boolean;
-  /** Whether an `iris` MCP server is already registered with Claude (any scope) — idempotency. */
+  /** Whether an `reticle` MCP server is already registered with Claude (any scope) — idempotency. */
   mcpExists: boolean;
   /** Whether Cursor is installed for this user (its global config dir exists). */
   cursorPresent: boolean;
@@ -64,17 +64,17 @@ export interface PlanInput {
   viteConfig: { path: string; source: string } | null;
   /** Discovered Next config filename (e.g. 'next.config.mjs'), or null. */
   nextConfigFile: string | null;
-  /** Whether app/iris-dev.tsx already exists. */
-  nextIrisDevExists: boolean;
+  /** Whether app/reticle-dev.tsx already exists. */
+  nextReticleDevExists: boolean;
   /** Whether src/hooks.client.ts already exists (SvelteKit idempotency). */
   svelteKitHooksExists?: boolean;
-  /** Whether .iris.json already exists in the project root (idempotency). */
-  irisConfigExists?: boolean;
+  /** Whether .reticle.json already exists in the project root (idempotency). */
+  reticleConfigExists?: boolean;
   options: {
     port: number | undefined;
     mcp: boolean;
     install: boolean;
-    /** Stable project identity derived at init (package.json name + root). Baked into snippets/.iris.json. */
+    /** Stable project identity derived at init (package.json name + root). Baked into snippets/.reticle.json. */
     projectId?: string;
   };
 }
@@ -89,7 +89,7 @@ function claudeMcpStep(input: PlanInput): Step | null {
       title: CLAUDE_MCP_TITLE,
       target: MCP_TARGET,
       status: StepStatus.ALREADY,
-      detail: 'iris already registered (install once, used by every project)',
+      detail: 'reticle already registered (install once, used by every project)',
     };
   }
   const cmd = claudeAddCommand();
@@ -97,7 +97,7 @@ function claudeMcpStep(input: PlanInput): Step | null {
     title: CLAUDE_MCP_TITLE,
     target: MCP_TARGET,
     status: StepStatus.APPLY,
-    detail: 'register iris globally for all projects',
+    detail: 'register reticle globally for all projects',
     exec: { command: cmd.command, args: cmd.args, fallback: cmd.display },
   };
 }
@@ -110,7 +110,7 @@ function cursorMcpStep(input: PlanInput): Step | null {
       title: CURSOR_MCP_TITLE,
       target: input.cursorConfigPath,
       status: StepStatus.ALREADY,
-      detail: 'iris already in Cursor global config',
+      detail: 'reticle already in Cursor global config',
     };
   }
   if (r.status === CursorMergeStatus.MANUAL) {
@@ -118,14 +118,14 @@ function cursorMcpStep(input: PlanInput): Step | null {
       title: CURSOR_MCP_TITLE,
       target: input.cursorConfigPath,
       status: StepStatus.MANUAL,
-      detail: `couldn't parse ${input.cursorConfigPath} — add this server by hand:\n  "iris": ${JSON.stringify(cursorServerEntry())}`,
+      detail: `couldn't parse ${input.cursorConfigPath} — add this server by hand:\n  "reticle": ${JSON.stringify(cursorServerEntry())}`,
     };
   }
   return {
     title: CURSOR_MCP_TITLE,
     target: input.cursorConfigPath,
     status: StepStatus.APPLY,
-    detail: 'register iris in Cursor global config',
+    detail: 'register reticle in Cursor global config',
     write: { path: input.cursorConfigPath, content: r.content },
   };
 }
@@ -157,7 +157,7 @@ function mcpSteps(input: PlanInput): Step[] {
 
 function installStep(input: PlanInput): Step {
   const pm = input.detection.packageManager;
-  const command = installCommand(pm, IRIS_PACKAGE);
+  const command = installCommand(pm, RETICLE_PACKAGE);
   if (!input.options.install) {
     return {
       title: 'Install dependency',
@@ -166,7 +166,7 @@ function installStep(input: PlanInput): Step {
       detail: command,
     };
   }
-  const parts = installCommandParts(pm, IRIS_PACKAGE);
+  const parts = installCommandParts(pm, RETICLE_PACKAGE);
   return {
     title: 'Install dependency',
     target: 'package.json',
@@ -196,7 +196,7 @@ function viteSteps(input: PlanInput): Step[] {
         title: 'Vite plugin',
         target: cfg.path,
         status: StepStatus.ALREADY,
-        detail: 'iris() already in plugins',
+        detail: 'reticle() already in plugins',
       },
     ];
   }
@@ -215,7 +215,7 @@ function viteSteps(input: PlanInput): Step[] {
       title: 'Vite plugin',
       target: cfg.path,
       status: StepStatus.APPLY,
-      detail: 'add iris() to plugins (also injects connect())',
+      detail: 'add reticle() to plugins (also injects connect())',
       write: { path: cfg.path, content: patch.code },
     },
   ];
@@ -223,33 +223,33 @@ function viteSteps(input: PlanInput): Step[] {
 
 function nextSteps(input: PlanInput): Step[] {
   const configFile = input.nextConfigFile ?? 'next.config.mjs';
-  const devFile: Step = input.nextIrisDevExists
+  const devFile: Step = input.nextReticleDevExists
     ? {
-        title: 'IrisDev component',
-        target: NEXT_IRIS_DEV_PATH,
+        title: 'ReticleDev component',
+        target: NEXT_RETICLE_DEV_PATH,
         status: StepStatus.ALREADY,
         detail: 'file exists',
       }
     : {
-        title: 'IrisDev component',
-        target: NEXT_IRIS_DEV_PATH,
+        title: 'ReticleDev component',
+        target: NEXT_RETICLE_DEV_PATH,
         status: StepStatus.APPLY,
         detail: 'create dev-only connect component',
         write: {
-          path: NEXT_IRIS_DEV_PATH,
-          content: nextIrisDevFile(input.options.port, input.options.projectId),
+          path: NEXT_RETICLE_DEV_PATH,
+          content: nextReticleDevFile(input.options.port, input.options.projectId),
         },
       };
   return [
     devFile,
     {
-      title: 'Next config (withIris)',
+      title: 'Next config (withReticle)',
       target: configFile,
       status: StepStatus.MANUAL,
       detail: nextConfigManual(configFile),
     },
     {
-      title: 'Mount IrisDev',
+      title: 'Mount ReticleDev',
       target: 'app/layout.tsx',
       status: StepStatus.MANUAL,
       detail: NEXT_LAYOUT_MANUAL,
@@ -263,7 +263,7 @@ function svelteKitSteps(input: PlanInput): Step[] {
   if (input.svelteKitHooksExists === true) {
     return [
       {
-        title: 'Iris client hook',
+        title: 'Reticle client hook',
         target: SVELTEKIT_HOOKS_PATH,
         status: StepStatus.ALREADY,
         detail: 'file exists',
@@ -272,7 +272,7 @@ function svelteKitSteps(input: PlanInput): Step[] {
   }
   return [
     {
-      title: 'Iris client hook',
+      title: 'Reticle client hook',
       target: SVELTEKIT_HOOKS_PATH,
       status: StepStatus.APPLY,
       detail: 'create dev-only client connect (SvelteKit renders via app.html)',
@@ -284,31 +284,31 @@ function svelteKitSteps(input: PlanInput): Step[] {
   ];
 }
 
-function irisConfigStep(input: PlanInput): Step {
-  if (input.irisConfigExists === true) {
+function reticleConfigStep(input: PlanInput): Step {
+  if (input.reticleConfigExists === true) {
     return {
-      title: 'Syrin Iris config',
-      target: IRIS_CONFIG_FILE,
+      title: 'Reticle Reticle config',
+      target: RETICLE_CONFIG_FILE,
       status: StepStatus.ALREADY,
-      detail: '.iris.json already exists',
+      detail: '.reticle.json already exists',
     };
   }
-  const content = irisConfigContent(
+  const content = reticleConfigContent(
     input.detection.framework,
     input.options.port,
     input.options.projectId,
   );
   return {
-    title: 'Syrin Iris config',
-    target: IRIS_CONFIG_FILE,
+    title: 'Reticle Reticle config',
+    target: RETICLE_CONFIG_FILE,
     status: StepStatus.APPLY,
     detail: 'write project config (framework + port)',
-    write: { path: IRIS_CONFIG_FILE, content },
+    write: { path: RETICLE_CONFIG_FILE, content },
   };
 }
 
 export function buildPlan(input: PlanInput): Plan {
-  const steps: Step[] = [...mcpSteps(input), installStep(input), irisConfigStep(input)];
+  const steps: Step[] = [...mcpSteps(input), installStep(input), reticleConfigStep(input)];
   if (input.detection.framework === Framework.VITE) {
     steps.push(...viteSteps(input));
   } else if (input.detection.framework === Framework.NEXT) {

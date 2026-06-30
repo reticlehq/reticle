@@ -1,11 +1,11 @@
-export { irisTest } from './spec.js';
+export { reticleTest } from './spec.js';
 export { register, getRegistered, clearRegistry } from './registry.js';
 export { runSpecs, runOne } from './runner.js';
 export { summarize, printSummary } from './summary.js';
 export { toJUnitXml, writeJUnit } from './junit.js';
 export { bootSession } from './boot.js';
 export type { BootedRun, BootOptions } from './boot.js';
-export { IrisSkip, IrisAssertionError, IrisQueryEmptyError, isSkip } from './skip.js';
+export { ReticleSkip, ReticleAssertionError, ReticleQueryEmptyError, isSkip } from './skip.js';
 export type { AssertionDetail } from './skip.js';
 export { createTestContext } from './test-context.js';
 export type { TestContext, TestContextOptions, Predicate } from './test-context.js';
@@ -26,20 +26,20 @@ export {
 export type {
   SpecContext,
   SpecFn,
-  IrisSpec,
+  ReticleSpec,
   SpecResult,
   RunSummary,
   ContextFactory,
   RunnerOptions,
 } from './types.js';
 
-// flows under .iris/flows become the runnable suite.
+// flows under .reticle/flows become the runnable suite.
 export { flowToSpec, flowsAsSpecs } from './flow-spec.js';
 export type { FlowSpec, FlowSpecOptions, FlowsAsSpecsOptions, SpecRunResult } from './flow-spec.js';
 export { assertSuccess, successToPredicate } from './success-assert.js';
 export {
   registerFlowSpecs,
-  irisFlowsAsSpecs,
+  reticleFlowsAsSpecs,
   FlowMalformedError,
   SpecFailure,
 } from './register.js';

@@ -1,8 +1,13 @@
 import type { FileSystemPort } from '../project/fs-port.js';
-import { irisDirPaths, isValidFlowName, visualDiffPath, visualPath } from '../project/iris-dir.js';
+import {
+  reticleDirPaths,
+  isValidFlowName,
+  visualDiffPath,
+  visualPath,
+} from '../project/reticle-dir.js';
 
 /**
- * On-disk PNG baselines + diffs under .iris/visual/. Binary sibling of FlowStore — same
+ * On-disk PNG baselines + diffs under .reticle/visual/. Binary sibling of FlowStore — same
  * name guard (rejects path traversal before any join) and injected FileSystemPort, but bytes not text.
  */
 export class VisualStore {
@@ -30,10 +35,10 @@ export class VisualStore {
     return this.#fs.exists(visualPath(this.#root, name));
   }
 
-  /** Write a PNG baseline (auto-creating .iris/visual/). Returns its path; throws on a bad name. */
+  /** Write a PNG baseline (auto-creating .reticle/visual/). Returns its path; throws on a bad name. */
   async saveBaseline(name: string, png: Uint8Array): Promise<string> {
     if (!isValidFlowName(name)) throw new Error(`invalid visual baseline name: ${name}`);
-    await this.#fs.mkdir(irisDirPaths(this.#root).visual);
+    await this.#fs.mkdir(reticleDirPaths(this.#root).visual);
     const path = visualPath(this.#root, name);
     await this.#fs.writeFileBytes(path, png);
     return path;
@@ -52,10 +57,10 @@ export class VisualStore {
     }
   }
 
-  /** Write the overlay diff PNG for `name` (auto-creating .iris/visual/). Returns its path. */
+  /** Write the overlay diff PNG for `name` (auto-creating .reticle/visual/). Returns its path. */
   async saveDiff(name: string, png: Uint8Array): Promise<string> {
     if (!isValidFlowName(name)) throw new Error(`invalid visual baseline name: ${name}`);
-    await this.#fs.mkdir(irisDirPaths(this.#root).visual);
+    await this.#fs.mkdir(reticleDirPaths(this.#root).visual);
     const path = visualDiffPath(this.#root, name);
     await this.#fs.writeFileBytes(path, png);
     return path;

@@ -1,6 +1,6 @@
 /**
- * FLOW2SPEC — the flow success-assertion oracle now lives in @syrin/iris-server so the live MCP
- * `iris_flow_replay` tool and this spec runner share ONE implementation (no divergent oracle).
+ * FLOW2SPEC — the flow success-assertion oracle now lives in @reticle/server so the live MCP
+ * `reticle_flow_replay` tool and this spec runner share ONE implementation (no divergent oracle).
  * Re-exported here to keep the spec-runner's import surface stable.
  */
-export { successToPredicate, assertSuccess } from '@syrin/iris-server';
+export { successToPredicate, assertSuccess } from '@reticle/server';

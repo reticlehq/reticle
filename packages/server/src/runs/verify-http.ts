@@ -14,9 +14,9 @@ import {
   RunFramework,
   RunProfile,
   RunTrigger,
-  type IrisVerificationRun,
-} from '@syrin/iris-protocol';
-import type { IrisRunner, VerifyOptions } from './iris-runner.js';
+  type ReticleVerificationRun,
+} from '@reticle/protocol';
+import type { ReticleRunner, VerifyOptions } from './reticle-runner.js';
 
 /** The POST route a partner pipeline calls to get a verdict. */
 export const VERIFY_PATH = '/verify';
@@ -98,7 +98,7 @@ export interface VerifyHttpRequest {
 
 export interface VerifyHttpResponse {
   status: number;
-  body: { run: IrisVerificationRun } | { error: string };
+  body: { run: ReticleVerificationRun } | { error: string };
 }
 
 /**
@@ -107,9 +107,9 @@ export interface VerifyHttpResponse {
  */
 export async function handleVerifyRequest(
   req: VerifyHttpRequest,
-  runner: IrisRunner,
+  runner: ReticleRunner,
   expectedToken: string,
-  persist?: (run: IrisVerificationRun) => Promise<void>,
+  persist?: (run: ReticleVerificationRun) => Promise<void>,
 ): Promise<VerifyHttpResponse> {
   if (req.path !== VERIFY_PATH) return { status: 404, body: { error: 'not found' } };
   if (req.method !== 'POST') return { status: 405, body: { error: 'method not allowed' } };

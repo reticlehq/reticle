@@ -1,7 +1,7 @@
 import { execSync } from 'node:child_process';
 
 /**
- * Free the fixed ports the integration suite binds — BEFORE the run (clears a dev server / Iris bridge
+ * Free the fixed ports the integration suite binds — BEFORE the run (clears a dev server / Reticle bridge
  * left squatting by a previous run that was hard-killed mid-suite, since a worker's `afterEach` does not
  * fire on interruption — exactly the bridge-on-:4400 contamination we hit) AND AFTER the run via the
  * returned teardown (clears a grandchild dev server that escaped its process group during this run —
@@ -9,7 +9,7 @@ import { execSync } from 'node:child_process';
  * doing the same from a worker intermittently closes the worker's IPC channel. Best-effort, unix-only.
  */
 const PORTS = [
-  4400, // the frameworks test's Iris bridge
+  4400, // the frameworks test's Reticle bridge
   5301,
   5302,
   5303,

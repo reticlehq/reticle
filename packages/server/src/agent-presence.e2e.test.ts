@@ -5,11 +5,11 @@ import { WebSocket } from 'ws';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import {
   AGENT_STOPPED_NOTICE,
-  IRIS_WS_PATH,
-  IrisCommand,
+  RETICLE_WS_PATH,
+  ReticleCommand,
   MessageKind,
   SessionState,
-} from '@syrin/iris-protocol';
+} from '@reticle/protocol';
 import { createSharedServer, MCP_SSE_PATH, type SharedServer } from './http-server.js';
 import { Bridge } from './bridge.js';
 import { endAllSessions } from './session/session-reaper.js';
@@ -62,7 +62,7 @@ class FakeBrowser {
     private readonly sessionId: string,
   ) {
     const host = '127.0.0.1';
-    this.#ws = new WebSocket(`ws://${host}:${String(port)}${IRIS_WS_PATH}`);
+    this.#ws = new WebSocket(`ws://${host}:${String(port)}${RETICLE_WS_PATH}`);
   }
   open(): Promise<void> {
     return new Promise((resolve) => {
@@ -121,7 +121,7 @@ describe('agent presence → panel notice (end to end)', () => {
     agent.destroy();
     await settle();
 
-    const presenter = browser.received.find((c) => c.name === IrisCommand.PRESENTER);
+    const presenter = browser.received.find((c) => c.name === ReticleCommand.PRESENTER);
     expect(presenter).toBeDefined();
     expect(presenter?.args['state']).toBe(SessionState.ENDED);
     expect(presenter?.args['text']).toBe(AGENT_STOPPED_NOTICE);
@@ -140,11 +140,11 @@ describe('agent presence → panel notice (end to end)', () => {
     a.destroy(); // one agent leaves — the other is still driving
     await settle();
 
-    expect(browser.received.some((c) => c.name === IrisCommand.PRESENTER)).toBe(false);
+    expect(browser.received.some((c) => c.name === ReticleCommand.PRESENTER)).toBe(false);
 
     b.destroy(); // now the last agent leaves → the human gets the notice
     await settle();
-    expect(browser.received.some((c) => c.name === IrisCommand.PRESENTER)).toBe(true);
+    expect(browser.received.some((c) => c.name === ReticleCommand.PRESENTER)).toBe(true);
     browser.close();
   });
 });

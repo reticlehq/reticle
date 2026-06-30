@@ -1,9 +1,9 @@
-import { EventType } from '@syrin/iris-protocol';
+import { EventType } from '@reticle/protocol';
 import { refs } from '../dom/refs.js';
 import type { Emit, Teardown } from './types.js';
 
 const THROTTLE_MS = 100;
-const REVEAL_SELECTOR = '[data-iris-reveal], [data-reveal], section';
+const REVEAL_SELECTOR = '[data-reticle-reveal], [data-reveal], section';
 
 /** Observe scroll position + reveal-on-scroll for modern scroll-reactive UIs (plan/03 §8). */
 export function installScroll(emit: Emit): Teardown {

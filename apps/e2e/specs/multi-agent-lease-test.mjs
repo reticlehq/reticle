@@ -7,14 +7,14 @@ import {
   TOOLS,
   BrowserPool,
   playwrightLauncher,
-  appendIrisParams,
+  appendReticleParams,
   BaselineStore,
   RecordingStore,
   FlowStore,
   ProjectStore,
   AnnotationStore,
   createNodeFileSystem,
-} from '@syrin/iris-server';
+} from '@reticle/server';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -36,18 +36,18 @@ const waitUntil = async (fn, ms = 12000) => {
 };
 
 const server = await start({ port: 4400, mcp: false });
-const irisRoot = path.join(os.tmpdir(), `iris-malease-${process.pid}`, '.iris');
+const reticleRoot = path.join(os.tmpdir(), `reticle-malease-${process.pid}`, '.reticle');
 const fs = createNodeFileSystem();
 const now = () => Date.now();
 const deps = {
   sessions: server.bridge.sessions,
   baselines: new BaselineStore(),
   recordings: new RecordingStore(),
-  flows: new FlowStore(fs, irisRoot, { now }),
-  project: new ProjectStore(fs, irisRoot, { now }),
+  flows: new FlowStore(fs, reticleRoot, { now }),
+  project: new ProjectStore(fs, reticleRoot, { now }),
   annotations: new AnnotationStore(),
   fs,
-  irisRoot,
+  reticleRoot,
   now,
 };
 const T = (n, a) => TOOLS.find((t) => t.name === n).handler(deps, a);
@@ -73,7 +73,7 @@ const results = await Promise.allSettled(
   Array.from({ length: 6 }, (_, i) =>
     (async () => {
       const sid = `agent-${process.pid}-${i}`;
-      const navUrl = appendIrisParams(DEMO, sid); // demo's SDK adopts __iris_session
+      const navUrl = appendReticleParams(DEMO, sid); // demo's SDK adopts __reticle_session
       const lease = await pool.acquire(navUrl, { sessionId: sid });
       const connected = await waitUntil(() => server.bridge.sessions.get(sid) !== undefined, 12000);
       if (!connected) {
@@ -82,7 +82,7 @@ const results = await Promise.allSettled(
       }
       seen.add(sid);
       // Conflicting flow: each agent queries the live dashboard and reads its own session's state.
-      const q = await T('iris_query', { sessionId: sid, by: 'role', value: 'button' });
+      const q = await T('reticle_query', { sessionId: sid, by: 'role', value: 'button' });
       const buttons = q.elements?.length ?? 0;
       await sleep(30);
       await lease.release();

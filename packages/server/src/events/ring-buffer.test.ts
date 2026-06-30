@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { EventType, type IrisEvent } from '@syrin/iris-protocol';
+import { EventType, type ReticleEvent } from '@reticle/protocol';
 import { RingBuffer } from './ring-buffer.js';
 
-function ev(t: number): IrisEvent {
+function ev(t: number): ReticleEvent {
   return { t, type: EventType.NET_REQUEST, sessionId: 's', data: {} };
 }
 

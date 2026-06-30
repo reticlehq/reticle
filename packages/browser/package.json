@@ -1,7 +1,7 @@
 {
-  "name": "@syrin/iris-browser",
+  "name": "@reticle/browser",
   "version": "1.2.0",
-  "description": "Iris browser SDK — installs observers, builds semantic snapshots, executes actions, talks to the bridge.",
+  "description": "Reticle browser SDK — installs observers, builds semantic snapshots, executes actions, talks to the bridge.",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -19,7 +19,7 @@
     "prepack": "tsc -b && find dist -name \"*.test.*\" -delete"
   },
   "dependencies": {
-    "@syrin/iris-protocol": "workspace:*",
+    "@reticle/protocol": "workspace:*",
     "@testing-library/dom": "^10.4.1"
   },
   "devDependencies": {
@@ -27,14 +27,14 @@
     "jsdom": "^29.1.1"
   },
   "license": "Apache-2.0",
-  "author": "Iris contributors",
+  "author": "Reticle contributors",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/syrin-labs/iris.git",
+    "url": "git+https://github.com/reticlehq/reticle.git",
     "directory": "packages/browser"
   },
-  "homepage": "https://github.com/syrin-labs/iris#readme",
-  "bugs": "https://github.com/syrin-labs/iris/issues",
+  "homepage": "https://github.com/reticlehq/reticle#readme",
+  "bugs": "https://github.com/reticlehq/reticle/issues",
   "files": [
     "dist",
     "README.md"

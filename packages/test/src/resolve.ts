@@ -1,9 +1,9 @@
-import { IrisTool, type ToolInvoker } from '@syrin/iris-server';
-import { QueryBy } from '@syrin/iris-protocol';
-import { IrisQueryEmptyError } from './skip.js';
+import { ReticleTool, type ToolInvoker } from '@reticle/server';
+import { QueryBy } from '@reticle/protocol';
+import { ReticleQueryEmptyError } from './skip.js';
 import { NO_ELEMENT_FOR_TESTID } from './constants.js';
 
-/** Shape of the iris_query envelope the façade consumes (a narrowed view of QueryResult). */
+/** Shape of the reticle_query envelope the façade consumes (a narrowed view of QueryResult). */
 interface QueryEnvelope {
   elements?: { ref?: unknown }[];
   hint?: { presentTestids?: unknown };
@@ -27,7 +27,7 @@ function asQueryEnvelope(value: unknown): QueryEnvelope {
 
 /**
  * The single testid -> ref chokepoint. Queries by testid; returns the first ref. On zero matches
- * throws IrisQueryEmptyError naming the testid, carrying the query's presentTestids as evidence so
+ * throws ReticleQueryEmptyError naming the testid, carrying the query's presentTestids as evidence so
  * the runner surfaces "you meant one of these" instead of a blank failure.
  */
 export async function resolveTestid(
@@ -40,11 +40,11 @@ export async function resolveTestid(
     value: testid,
     ...(sessionId !== undefined ? { sessionId } : {}),
   };
-  const result = asQueryEnvelope(await invoke(IrisTool.QUERY, args));
+  const result = asQueryEnvelope(await invoke(ReticleTool.QUERY, args));
   const first = result.elements?.[0]?.ref;
   if (typeof first === 'string' && first.length > 0) return first;
 
   const present = result.hint?.presentTestids;
   const detail = present !== undefined ? { evidence: { presentTestids: present } } : undefined;
-  throw new IrisQueryEmptyError(`${NO_ELEMENT_FOR_TESTID} ${testid}`, detail);
+  throw new ReticleQueryEmptyError(`${NO_ELEMENT_FOR_TESTID} ${testid}`, detail);
 }

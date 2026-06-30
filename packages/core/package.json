@@ -1,0 +1,98 @@
+{
+  "name": "@reticle/core",
+  "version": "1.2.0",
+  "description": "One-install Reticle: the dev-only SDK (browser + React adapter) and the spec runner under one package, with subpaths for the source-mapping plugins and the MCP server.",
+  "type": "module",
+  "license": "SEE LICENSE IN LICENSE",
+  "repository": "github:reticlehq/reticle",
+  "publishConfig": {
+    "access": "public"
+  },
+  "bin": {
+    "reticle": "./dist/cli.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./server": {
+      "types": "./dist/server.d.ts",
+      "default": "./dist/server.js"
+    },
+    "./test": {
+      "types": "./dist/test.d.ts",
+      "default": "./dist/test.js"
+    },
+    "./next": {
+      "types": "./dist/next.d.ts",
+      "default": "./dist/next.js"
+    },
+    "./babel": {
+      "types": "./dist/babel.d.ts",
+      "default": "./dist/babel.js"
+    },
+    "./vite": {
+      "types": "./dist/vite.d.ts",
+      "default": "./dist/vite.js"
+    },
+    "./eslint": {
+      "types": "./dist/eslint.d.ts",
+      "default": "./dist/eslint.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@babel/core": "^7.26.0",
+    "@modelcontextprotocol/sdk": "^1.13.0",
+    "@testing-library/dom": "^10.4.1",
+    "@typescript-eslint/utils": "^8.20.0",
+    "ws": "^8.18.0",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@reticle/babel-plugin": "workspace:*",
+    "@reticle/browser": "workspace:*",
+    "@reticle/eslint-plugin": "workspace:*",
+    "@reticle/next": "workspace:*",
+    "@reticle/protocol": "workspace:*",
+    "@reticle/react": "workspace:*",
+    "@reticle/server": "workspace:*",
+    "@reticle/test": "workspace:*",
+    "@reticle/vite-plugin": "workspace:*",
+    "@types/ws": "^8.5.13",
+    "tsup": "^8.3.5",
+    "typescript": "^5.6.0"
+  },
+  "optionalDependencies": {
+    "pixelmatch": "^7.2.0",
+    "playwright": "^1.48.0",
+    "pngjs": "^7.0.0"
+  },
+  "peerDependencies": {
+    "eslint": ">=9",
+    "next": ">=13",
+    "react": ">=18",
+    "vitest": "^3.2.6"
+  },
+  "peerDependenciesMeta": {
+    "eslint": {
+      "optional": true
+    },
+    "next": {
+      "optional": true
+    },
+    "react": {
+      "optional": true
+    },
+    "vitest": {
+      "optional": true
+    }
+  }
+}

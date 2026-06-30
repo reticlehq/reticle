@@ -7,7 +7,7 @@ import { IconArrow, IconBolt, IconDots, IconDrag, IconGit } from './icons.js';
 const ROW_H = 52;
 const BUFFER = 4;
 
-/** Windowed list (only the visible rows mount) → forces iris_scroll_to for off-screen rows. */
+/** Windowed list (only the visible rows mount) → forces reticle_scroll_to for off-screen rows. */
 export function DeployTable({ rows }: { rows: Deployment[] }): React.ReactElement {
   const openDrawer = useApp((s) => s.openDrawer);
   const ship = useApp((s) => s.shipDeployment);

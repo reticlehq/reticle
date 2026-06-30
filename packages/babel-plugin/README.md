@@ -1,26 +1,26 @@
-# @syrin/iris-babel-plugin
+# @reticle/babel-plugin
 
-Stamps `data-iris-source="file:line:col"` on JSX host elements so [`@syrin/iris-react`](https://www.npmjs.com/package/@syrin/iris-react) can map a DOM node back to its **source file** — needed on React 19, which removed `_debugSource`. Dev-only.
+Stamps `data-reticle-source="file:line:col"` on JSX host elements so [`@reticle/react`](https://www.npmjs.com/package/@reticle/react) can map a DOM node back to its **source file** — needed on React 19, which removed `_debugSource`. Dev-only.
 
 ```bash
-npm i -D @syrin/iris-babel-plugin
+npm i -D @reticle/babel-plugin
 ```
 
 **Vite** (`vite.config.ts`):
 
 ```ts
 import react from '@vitejs/plugin-react';
-import irisSource from '@syrin/iris-babel-plugin';
+import reticleSource from '@reticle/babel-plugin';
 
 export default defineConfig({
-  plugins: [react({ babel: { plugins: [irisSource] } })],
+  plugins: [react({ babel: { plugins: [reticleSource] } })],
 });
 ```
 
 **Babel** (`babel.config.js`, dev only):
 
 ```js
-module.exports = { plugins: [require('@syrin/iris-babel-plugin').default] };
+module.exports = { plugins: [require('@reticle/babel-plugin').default] };
 ```
 
-After this, `iris_inspect` returns `component.source = { file, line, column }`. Only host elements (`<div>`, `<button>`, …) are stamped; components are left untouched. MIT.
+After this, `reticle_inspect` returns `component.source = { file, line, column }`. Only host elements (`<div>`, `<button>`, …) are stamped; components are left untouched. MIT.

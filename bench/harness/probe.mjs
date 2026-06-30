@@ -2,9 +2,9 @@
 // Proves connectivity and reveals the exact tool surface so recipes are accurate.
 import { McpStdioClient } from './mcp-client.mjs';
 
-// The demo the iris daemon drives — same fixture the rest of the harness uses (override via env).
+// The demo the reticle daemon drives — same fixture the rest of the harness uses (override via env).
 const DEMO_PORT = process.env.BENCH_DEMO_PORT ?? '4312';
-const PROBE_IRIS_PORT = process.env.BENCH_PROBE_IRIS_PORT ?? '58460';
+const PROBE_RETICLE_PORT = process.env.BENCH_PROBE_RETICLE_PORT ?? '58460';
 
 const SERVERS = {
   playwright: {
@@ -15,17 +15,17 @@ const SERVERS = {
     command: 'npx',
     args: ['-y', 'chrome-devtools-mcp@1.3.0', '--headless', '--isolated'],
   },
-  iris: {
+  reticle: {
     command: 'node',
     args: [
       'packages/server/dist/cli.js',
       'mcp',
       '--port',
-      PROBE_IRIS_PORT,
+      PROBE_RETICLE_PORT,
       '--drive',
       `http://localhost:${DEMO_PORT}`,
     ],
-    env: { IRIS_PORT: PROBE_IRIS_PORT },
+    env: { RETICLE_PORT: PROBE_RETICLE_PORT },
   },
 };
 

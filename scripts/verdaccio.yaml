@@ -1,13 +1,13 @@
-# Local registry config for testing @syrin/* in a real external app without publishing to npm.
-storage: /tmp/iris-verdaccio-storage
+# Local registry config for testing @reticle/* in a real external app without publishing to npm.
+storage: /tmp/reticle-verdaccio-storage
 auth:
   htpasswd:
-    file: /tmp/iris-verdaccio-htpasswd
+    file: /tmp/reticle-verdaccio-htpasswd
 uplinks:
   npmjs:
     url: https://registry.npmjs.org/
 packages:
-  '@syrin/*':
+  '@reticle/*':
     access: $all
     publish: $all
     unpublish: $all

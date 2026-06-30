@@ -1,12 +1,12 @@
 'use strict';
-// withIris(nextConfig): adds a dev-only webpack pre-loader that stamps data-iris-source on
-// your JSX so @syrin/iris-react can report the source file:line — without disabling SWC.
+// withReticle(nextConfig): adds a dev-only webpack pre-loader that stamps data-reticle-source on
+// your JSX so @reticle/react can report the source file:line — without disabling SWC.
 
 /**
  * @param {import('next').NextConfig} [nextConfig]
  * @returns {import('next').NextConfig}
  */
-function withIris(nextConfig = {}) {
+function withReticle(nextConfig = {}) {
   // Production builds are untouched — this is a dev-time aid only.
   if (process.env.NODE_ENV === 'production') return nextConfig;
 
@@ -27,4 +27,4 @@ function withIris(nextConfig = {}) {
   };
 }
 
-module.exports = { withIris };
+module.exports = { withReticle };

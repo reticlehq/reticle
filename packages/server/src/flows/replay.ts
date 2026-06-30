@@ -1,5 +1,5 @@
-import { DANGEROUS_ACTION_CONFIRM_ARG, IrisCommand, QueryBy } from '@syrin/iris-protocol';
-import { IrisTool } from '../tools/tool-names.js';
+import { DANGEROUS_ACTION_CONFIRM_ARG, ReticleCommand, QueryBy } from '@reticle/protocol';
+import { ReticleTool } from '../tools/tool-names.js';
 import type { RecordedStep, CompiledProgram } from './recordings.js';
 import type { Session } from '../session/session.js';
 
@@ -32,7 +32,7 @@ function sourceFromResult(res: Record<string, unknown>): Record<string, unknown>
 }
 
 /**
- * Compile a single iris_act invocation into a normalized RecordedStep using the action result. Anchor
+ * Compile a single reticle_act invocation into a normalized RecordedStep using the action result. Anchor
  * priority mirrors synthesizeAnchor: a data-testid is the gold standard; failing that, the element's
  * component identity / source location (the AUTO-ANCHOR) keeps the step STABLE instead of degrading to
  * a volatile ref. Only when neither is available is the step ref-bound (in-session only).
@@ -44,7 +44,7 @@ export function compileActStep(args: Record<string, unknown>, res: unknown): Rec
   const actArgs = replayActionArgs(args['args']);
   if (testid !== undefined) {
     return {
-      tool: IrisTool.ACT,
+      tool: ReticleTool.ACT,
       stable: true,
       args: { by: QueryBy.TESTID, value: testid, action, args: actArgs },
     };
@@ -55,10 +55,10 @@ export function compileActStep(args: Record<string, unknown>, res: unknown): Rec
     const componentArgs: Record<string, unknown> = { by: QueryBy.COMPONENT, action, args: actArgs };
     if (component !== undefined) componentArgs['component'] = component;
     if (source !== undefined) componentArgs['source'] = source;
-    return { tool: IrisTool.ACT, stable: true, args: componentArgs };
+    return { tool: ReticleTool.ACT, stable: true, args: componentArgs };
   }
   return {
-    tool: IrisTool.ACT,
+    tool: ReticleTool.ACT,
     stable: false,
     args: { ref: asString(args['ref']) ?? '', action, args: actArgs },
   };
@@ -72,7 +72,7 @@ interface CompiledSubStep {
   args: Record<string, unknown>;
 }
 
-/** Compile an iris_act_sequence invocation, normalizing each sub-step to its testid where resolvable. */
+/** Compile an reticle_act_sequence invocation, normalizing each sub-step to its testid where resolvable. */
 export function compileSequenceStep(args: Record<string, unknown>, res: unknown): RecordedStep {
   const inputSteps = Array.isArray(args['steps']) ? args['steps'] : [];
   const resolved = Array.isArray(asRecord(res)['steps'])
@@ -90,7 +90,7 @@ export function compileSequenceStep(args: Record<string, unknown>, res: unknown)
     stable = false;
     return { ref: asString(step['ref']) ?? '', action, args: stepArgs };
   });
-  return { tool: IrisTool.ACT_SEQUENCE, stable, args: { steps: subSteps } };
+  return { tool: ReticleTool.ACT_SEQUENCE, stable, args: { steps: subSteps } };
 }
 
 /** Resolve a recorded sub-step's element to a live ref via testid query, else fall back to its stored ref. */
@@ -101,7 +101,7 @@ async function resolveRef(
   const by = asString(step.by);
   const value = asString(step.value);
   if (by === QueryBy.TESTID && value !== undefined) {
-    const result = await session.command(IrisCommand.QUERY, { by, value });
+    const result = await session.command(ReticleCommand.QUERY, { by, value });
     if (!result.ok) throw new Error(result.error ?? 'query failed');
     const elements = Array.isArray(asRecord(result.result)['elements'])
       ? (asRecord(result.result)['elements'] as unknown[])
@@ -134,7 +134,7 @@ export async function replayProgram(
   const results: ReplayStepResult[] = [];
   for (const step of program.steps) {
     try {
-      if (step.tool === IrisTool.ACT_SEQUENCE) {
+      if (step.tool === ReticleTool.ACT_SEQUENCE) {
         const subs = Array.isArray(step.args['steps']) ? step.args['steps'] : [];
         const notes: string[] = [];
         const liveSteps: { ref: string; action: string; args: Record<string, unknown> }[] = [];
@@ -148,12 +148,12 @@ export async function replayProgram(
             args: replayActionArgs(sub['args'], confirmDangerous),
           });
         }
-        const r = await session.command(IrisCommand.ACT_SEQUENCE, { steps: liveSteps });
+        const r = await session.command(ReticleCommand.ACT_SEQUENCE, { steps: liveSteps });
         results.push(buildResult(step.tool, r.ok, r.error, notes));
         if (!r.ok) break;
       } else {
         const { ref, note } = await resolveRef(session, step.args);
-        const r = await session.command(IrisCommand.ACT, {
+        const r = await session.command(ReticleCommand.ACT, {
           ref,
           action: asString(step.args['action']) ?? '',
           args: replayActionArgs(step.args['args'], confirmDangerous),

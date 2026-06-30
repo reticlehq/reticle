@@ -1,4 +1,4 @@
-import { IrisCommand, SCROLL_FIND_DEFAULTS, type CommandResult } from '@syrin/iris-protocol';
+import { ReticleCommand, SCROLL_FIND_DEFAULTS, type CommandResult } from '@reticle/protocol';
 import { asRecord } from '../tools/tools-helpers.js';
 
 /** The slice of Session scroll-to-find needs — so tests inject a fake without a live browser. */
@@ -39,7 +39,7 @@ async function queryFirst(
   session: ScrollFindSession,
   q: ScrollFindQuery,
 ): Promise<Record<string, unknown> | undefined> {
-  const res = await session.command(IrisCommand.QUERY, {
+  const res = await session.command(ReticleCommand.QUERY, {
     by: q.by,
     value: q.value,
     ...(q.name !== undefined ? { name: q.name } : {}),
@@ -70,7 +70,7 @@ export async function scrollToFind(
   let scrolls = 0;
   if (q.targetIndex !== undefined && q.totalCount !== undefined && q.totalCount > 1) {
     const fraction = Math.min(1, Math.max(0, q.targetIndex / q.totalCount));
-    const sr = await session.command(IrisCommand.SCROLL, {
+    const sr = await session.command(ReticleCommand.SCROLL, {
       ...(q.container !== undefined ? { ref: q.container } : {}),
       fraction,
     });
@@ -86,7 +86,7 @@ export async function scrollToFind(
 
   for (let i = 0; i < max; i += 1) {
     const sr = await session.command(
-      IrisCommand.SCROLL,
+      ReticleCommand.SCROLL,
       q.container !== undefined ? { ref: q.container } : {},
     );
     scrolls += 1;

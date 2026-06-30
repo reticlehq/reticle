@@ -2,7 +2,7 @@
  * Rule: require-signal-on-mutation.
  *
  * Flags a function that CALLS a configured mutator but never calls the
- * signal callee anywhere in that SAME function body. Keeps the Iris signal
+ * signal callee anywhere in that SAME function body. Keeps the Reticle signal
  * layer self-enforcing (pairs with commitAndSignal).
  *
  * Scoping is per-function: a signal in an enclosing or inner function does
@@ -45,7 +45,7 @@ export const requireSignalOnMutation = createRule<Options, MessageIds>({
     type: 'problem',
     docs: {
       description:
-        'Require an Iris signal alongside any user-visible store mutation so the signal layer cannot drift.',
+        'Require an Reticle signal alongside any user-visible store mutation so the signal layer cannot drift.',
     },
     schema: OPTIONS_SCHEMA as [],
     messages: {

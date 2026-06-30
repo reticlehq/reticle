@@ -1,5 +1,5 @@
 {
-  "name": "@syrin/iris-vibe-builder-demo",
+  "name": "@reticle/vibe-builder-demo",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -14,10 +14,10 @@
     "demo:all": "node qa/demo-all.mjs"
   },
   "dependencies": {
-    "@syrin/iris-browser": "workspace:*"
+    "@reticle/browser": "workspace:*"
   },
   "devDependencies": {
-    "@syrin/iris-server": "workspace:*",
+    "@reticle/server": "workspace:*",
     "vite": "^8.0.16"
   }
 }

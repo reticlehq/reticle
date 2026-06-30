@@ -1,9 +1,9 @@
 // Real-browser proof of status-honesty against apps/next-smoke (:3100).
 // The key scenario: a THROTTLED tab where requestAnimationFrame never fires. We reproduce it
 // by neutering rAF before page load (addInitScript) so the SDK's bound realRaf never resolves —
-// exactly the condition that made iris_act hang to the 8s timeout and report a click as an error.
+// exactly the condition that made reticle_act hang to the 8s timeout and report a click as an error.
 import { chromium } from 'playwright';
-import { start, TOOLS, BaselineStore, RecordingStore } from '@syrin/iris-server';
+import { start, TOOLS, BaselineStore, RecordingStore } from '@reticle/server';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const now = () => Number(process.hrtime.bigint() / 1000000n);
@@ -17,7 +17,7 @@ const check = (label, ok, detail = '') => {
 };
 const refOf = async (by, value) => {
   for (let i = 0; i < 30; i++) {
-    const r = (await T('iris_query', { by, value })).elements?.[0]?.ref;
+    const r = (await T('reticle_query', { by, value })).elements?.[0]?.ref;
     if (r) return r;
     await sleep(100);
   }
@@ -41,7 +41,7 @@ const addRef = await refOf('testid', 'add-task');
 const t0 = now();
 let f1ok = false, f1detail = '';
 try {
-  const act = await T('iris_act', { ref: addRef, action: 'click' });
+  const act = await T('reticle_act', { ref: addRef, action: 'click' });
   const ms = now() - t0;
   const r = act.result ?? {};
   f1ok = act.dispatched === true && r.settled === false && r.settleReason === 'timeout' && ms < 4000;
@@ -58,7 +58,7 @@ await page.evaluate(() => {
   document.dispatchEvent(new Event('visibilitychange'));
 });
 await sleep(300);
-const act2 = await T('iris_act', { ref: await refOf('testid', 'add-task'), action: 'click' });
+const act2 = await T('reticle_act', { ref: await refOf('testid', 'add-task'), action: 'click' });
 check('F2 act result carries session health', Boolean(act2.session) && typeof act2.session.lastSeenMs === 'number',
   JSON.stringify(act2.session ?? {}));
 check('F2 hidden tab → throttled:true + warning', act2.session?.throttled === true && typeof act2.warning === 'string',
@@ -73,7 +73,7 @@ await page.evaluate(() => {
 await sleep(200);
 
 // F4 — zero-match query returns a hint (empty-state vs missing), not a bare [].
-const miss = await T('iris_query', { by: 'testid', value: 'definitely-not-here-xyz' });
+const miss = await T('reticle_query', { by: 'testid', value: 'definitely-not-here-xyz' });
 const present = miss.hint?.presentTestids ?? [];
 check('F4 zero-match query returns hint.presentTestids', miss.elements?.length === 0 && Array.isArray(present) && present.length > 0,
   `route=${miss.hint?.route ?? '?'} present=${JSON.stringify(present).slice(0, 70)}`);
@@ -82,7 +82,7 @@ check('F4 zero-match query returns hint.presentTestids', miss.elements?.length =
 const t5 = now();
 let f5ok = false, f5detail = '';
 try {
-  const st = await T('iris_state', { ref: addRef });
+  const st = await T('reticle_state', { ref: addRef });
   const ms = now() - t5;
   f5ok = ms < 4000 && st !== undefined; // resolves (value or {ok:false,reason}) — does not hang
   f5detail = `${JSON.stringify(st).slice(0, 80)} in ${ms}ms`;

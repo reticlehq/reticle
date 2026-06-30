@@ -1,12 +1,12 @@
 {
-  "name": "@syrin/iris-server",
+  "name": "@reticle/server",
   "version": "1.2.0",
-  "description": "Iris bridge + MCP server. Hosts the browser WS endpoint and exposes MCP tools to the coding agent.",
+  "description": "Reticle bridge + MCP server. Hosts the browser WS endpoint and exposes MCP tools to the coding agent.",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "bin": {
-    "iris": "./dist/cli.js"
+    "reticle": "./dist/cli.js"
   },
   "exports": {
     ".": {
@@ -27,7 +27,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.13.0",
-    "@syrin/iris-protocol": "workspace:*",
+    "@reticle/protocol": "workspace:*",
     "ws": "^8.18.0",
     "zod": "^3.24.1"
   },
@@ -41,14 +41,14 @@
     "pngjs": "^7.0.0"
   },
   "license": "SEE LICENSE IN LICENSE",
-  "author": "Iris contributors",
+  "author": "Reticle contributors",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/syrin-labs/iris.git",
+    "url": "git+https://github.com/reticlehq/reticle.git",
     "directory": "packages/server"
   },
-  "homepage": "https://github.com/syrin-labs/iris#readme",
-  "bugs": "https://github.com/syrin-labs/iris/issues",
+  "homepage": "https://github.com/reticlehq/reticle#readme",
+  "bugs": "https://github.com/reticlehq/reticle/issues",
   "files": [
     "dist",
     "README.md"
@@ -59,8 +59,8 @@
     "testing",
     "cli"
   ],
-  "iris": {
-    "changelog": "Smart MCP proxy with auto-start daemon, auto-update, and rollback support. Agents can call iris_version_info, iris_apply_update, and iris_rollback.",
+  "reticle": {
+    "changelog": "Smart MCP proxy with auto-start daemon, auto-update, and rollback support. Agents can call reticle_version_info, reticle_apply_update, and reticle_rollback.",
     "breakingChanges": []
   },
   "private": true

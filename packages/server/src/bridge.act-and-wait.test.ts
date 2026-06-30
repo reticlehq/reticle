@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { EventType } from '@syrin/iris-protocol';
+import { EventType } from '@reticle/protocol';
 import { Bridge } from './bridge.js';
 import { TOOLS, type ToolDeps } from './tools/tools.js';
 import { FakeBrowser, callTool, makeDeps, waitUntil } from './bridge.test-harness.js';
@@ -10,7 +10,7 @@ interface ActAndWaitResult {
   trace: { window_ms: number; summary: { network: number } };
 }
 
-describe('iris_act_and_wait (composite)', () => {
+describe('reticle_act_and_wait (composite)', () => {
   let bridge: Bridge;
   let deps: ToolDeps;
   let browser: FakeBrowser;
@@ -30,7 +30,7 @@ describe('iris_act_and_wait (composite)', () => {
   });
 
   it('is registered with ref/action/until in its schema', () => {
-    const tool = TOOLS.find((t) => t.name === 'iris_act_and_wait');
+    const tool = TOOLS.find((t) => t.name === 'reticle_act_and_wait');
     expect(tool).toBeDefined();
     expect(tool?.inputSchema['ref']).toBeDefined();
     expect(tool?.inputSchema['action']).toBeDefined();
@@ -39,7 +39,7 @@ describe('iris_act_and_wait (composite)', () => {
 
   it('acts and returns effect + passing verdict + trace when the predicate holds', async () => {
     browser.matcher = (q) => q.role === 'dialog' || (q.name ?? '').includes('Order confirmed');
-    const result = (await callTool(deps, 'iris_act_and_wait', {
+    const result = (await callTool(deps, 'reticle_act_and_wait', {
       ref: 'e7',
       action: 'click',
       timeout_ms: 1000,
@@ -59,7 +59,7 @@ describe('iris_act_and_wait (composite)', () => {
 
   it('captures post-act network events in the trace and passes on the late event', async () => {
     // Start the act-and-wait first; the predicate is NOT yet satisfiable.
-    const pending = callTool(deps, 'iris_act_and_wait', {
+    const pending = callTool(deps, 'reticle_act_and_wait', {
       ref: 'e7',
       action: 'click',
       timeout_ms: 2000,
@@ -76,7 +76,7 @@ describe('iris_act_and_wait (composite)', () => {
   });
 
   it('still returns effect + trace when the predicate times out', async () => {
-    const result = (await callTool(deps, 'iris_act_and_wait', {
+    const result = (await callTool(deps, 'reticle_act_and_wait', {
       ref: 'e7',
       action: 'click',
       timeout_ms: 200,
@@ -91,7 +91,7 @@ describe('iris_act_and_wait (composite)', () => {
 
   it('evaluates the predicate once when timeout_ms is 0', async () => {
     browser.matcher = (q) => q.role === 'dialog' || (q.name ?? '').includes('Order confirmed');
-    const result = (await callTool(deps, 'iris_act_and_wait', {
+    const result = (await callTool(deps, 'reticle_act_and_wait', {
       ref: 'e7',
       action: 'click',
       timeout_ms: 0,

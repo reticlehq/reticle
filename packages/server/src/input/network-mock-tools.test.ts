@@ -1,15 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { VisualReason } from '@syrin/iris-protocol';
+import { VisualReason } from '@reticle/protocol';
 import { NETWORK_MOCK_TOOLS } from './network-mock-tools.js';
-import { IrisTool } from '../tools/tool-names.js';
+import { ReticleTool } from '../tools/tool-names.js';
 import type { MockRule } from './network-mock.js';
 import type { RealInputProvider } from './real-input.js';
 import type { SessionManager } from '../session/session.js';
 import type { ToolDeps } from '../tools/tools.js';
 
 function tool() {
-  const t = NETWORK_MOCK_TOOLS.find((x) => x.name === IrisTool.NETWORK_MOCK);
-  if (t === undefined) throw new Error('no iris_network_mock tool');
+  const t = NETWORK_MOCK_TOOLS.find((x) => x.name === ReticleTool.NETWORK_MOCK);
+  if (t === undefined) throw new Error('no reticle_network_mock tool');
   return t;
 }
 
@@ -27,7 +27,7 @@ interface MockResult {
   reason?: string;
 }
 
-describe('iris_network_mock tool', () => {
+describe('reticle_network_mock tool', () => {
   it('returns the no-provider envelope when nothing is driving the page', async () => {
     const res = (await tool().handler(depsWith(undefined), {
       mocks: [{ urlContains: '/api/pay', status: 500 }],

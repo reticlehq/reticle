@@ -1,13 +1,13 @@
 import { useState } from 'react';
 import { useApp } from '../store/store.js';
 import { login } from '../lib/api.js';
-import { emit, Sig } from '../lib/iris-bridge.js';
+import { emit, Sig } from '../lib/reticle-bridge.js';
 import { IconArrow } from './icons.js';
 
 /** Sign-in splash. Real POST /api/login (auth + network showcase). Pre-filled for a one-click demo. */
 export function Login(): React.ReactElement {
   const setAuth = useApp((s) => s.setAuth);
-  const [email, setEmail] = useState('admin@iris.dev');
+  const [email, setEmail] = useState('admin@reticle.dev');
   const [password, setPassword] = useState('password');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -32,7 +32,7 @@ export function Login(): React.ReactElement {
           <div className="brand-glyph" />
           <div>
             <div className="brand-name" style={{ fontSize: 20 }}>
-              Iris
+              Reticle
             </div>
             <div className="brand-sub">mission control</div>
           </div>

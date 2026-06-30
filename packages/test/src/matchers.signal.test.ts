@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { IrisTool } from '@syrin/iris-server';
+import { ReticleTool } from '@reticle/server';
 import { createTestContext } from './test-context.js';
-import { IrisAssertionError } from './skip.js';
+import { ReticleAssertionError } from './skip.js';
 import { DEFAULT_ASSERT_TIMEOUT_MS, PredicateKind } from './constants.js';
-import type { ToolInvoker } from '@syrin/iris-server';
+import type { ToolInvoker } from '@reticle/server';
 
 function fakeInvoker(handlers: Record<string, (args: Record<string, unknown>) => unknown>): {
   invoke: ToolInvoker;
@@ -22,7 +22,7 @@ function fakeInvoker(handlers: Record<string, (args: Record<string, unknown>) =>
 describe('t.expectSignal', () => {
   it('passes and sends a signal predicate when assert passes', async () => {
     const { invoke, calls } = fakeInvoker({
-      [IrisTool.ASSERT]: () => ({ pass: true, evidence: { name: 'section:added' } }),
+      [ReticleTool.ASSERT]: () => ({ pass: true, evidence: { name: 'section:added' } }),
     });
     const t = createTestContext(invoke);
     await expect(t.expectSignal('section:added')).resolves.toBeUndefined();
@@ -33,7 +33,7 @@ describe('t.expectSignal', () => {
 
   it('forwards the dataMatches pattern into the predicate', async () => {
     const { invoke, calls } = fakeInvoker({
-      [IrisTool.ASSERT]: () => ({ pass: true }),
+      [ReticleTool.ASSERT]: () => ({ pass: true }),
     });
     const t = createTestContext(invoke);
     await t.expectSignal('section:added', { id: '*' });
@@ -41,9 +41,9 @@ describe('t.expectSignal', () => {
     expect(predicate['dataMatches']).toEqual({ id: '*' });
   });
 
-  it('throws IrisAssertionError with near-miss evidence on failure', async () => {
+  it('throws ReticleAssertionError with near-miss evidence on failure', async () => {
     const { invoke } = fakeInvoker({
-      [IrisTool.ASSERT]: () => ({
+      [ReticleTool.ASSERT]: () => ({
         pass: false,
         failureReason: "signal 'x' fired 2x but data didn't match",
         evidence: { nearMiss: [{ id: 9 }] },
@@ -53,18 +53,18 @@ describe('t.expectSignal', () => {
     await t.expectSignal('x', { id: 1 }).then(
       () => expect.unreachable('should have thrown'),
       (error: unknown) => {
-        expect(error).toBeInstanceOf(IrisAssertionError);
-        expect((error as IrisAssertionError).failureReason).toBe(
+        expect(error).toBeInstanceOf(ReticleAssertionError);
+        expect((error as ReticleAssertionError).failureReason).toBe(
           "signal 'x' fired 2x but data didn't match",
         );
-        expect((error as IrisAssertionError).evidence).toEqual({ nearMiss: [{ id: 9 }] });
+        expect((error as ReticleAssertionError).evidence).toEqual({ nearMiss: [{ id: 9 }] });
       },
     );
   });
 
   it('applies the default assert timeout', async () => {
     const { invoke, calls } = fakeInvoker({
-      [IrisTool.ASSERT]: () => ({ pass: true }),
+      [ReticleTool.ASSERT]: () => ({ pass: true }),
     });
     const t = createTestContext(invoke);
     await t.expectSignal('section:added');

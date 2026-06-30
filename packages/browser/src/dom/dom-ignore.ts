@@ -1,5 +1,6 @@
-/** Selectors for Iris's own presenter overlay (cursor, HUD, glow) — never observed/snapshotted. */
-const IRIS_OVERLAY = '[data-iris-overlay],[data-iris-cursor],[data-iris-hud],[data-iris-glow]';
+/** Selectors for Reticle's own presenter overlay (cursor, HUD, glow) — never observed/snapshotted. */
+const RETICLE_OVERLAY =
+  '[data-reticle-overlay],[data-reticle-cursor],[data-reticle-hud],[data-reticle-glow]';
 
 /** Known third-party dev overlays to keep out of snapshots (Agentation, Next dev UI). */
 const DEV_OVERLAYS =
@@ -12,16 +13,16 @@ export function setIgnoreSelectors(selectors: string[]): void {
   extraIgnore = selectors.join(',');
 }
 
-/** True if the element is part of Iris's own presenter overlay. */
-export function isIrisOverlay(el: Element): boolean {
-  return el.closest(IRIS_OVERLAY) !== null;
+/** True if the element is part of Reticle's own presenter overlay. */
+export function isReticleOverlay(el: Element): boolean {
+  return el.closest(RETICLE_OVERLAY) !== null;
 }
 
-/** True if the element should be excluded from snapshots/queries (Iris overlay or dev overlay). */
+/** True if the element should be excluded from snapshots/queries (Reticle overlay or dev overlay). */
 export function isIgnored(el: Element): boolean {
   const sel =
     extraIgnore.length > 0
-      ? `${IRIS_OVERLAY},${DEV_OVERLAYS},${extraIgnore}`
-      : `${IRIS_OVERLAY},${DEV_OVERLAYS}`;
+      ? `${RETICLE_OVERLAY},${DEV_OVERLAYS},${extraIgnore}`
+      : `${RETICLE_OVERLAY},${DEV_OVERLAYS}`;
   return el.closest(sel) !== null;
 }

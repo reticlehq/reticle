@@ -26,13 +26,13 @@ const STYLE = [
 /** A tiny in-page status chip: connection + event count. Off by default. */
 export function installOverlay(): OverlayHandle {
   const el = document.createElement('div');
-  el.setAttribute('data-iris-overlay', '');
+  el.setAttribute('data-reticle-overlay', '');
   el.style.cssText = STYLE;
-  el.textContent = 'iris: connecting…';
+  el.textContent = 'reticle: connecting…';
   document.body.appendChild(el);
   return {
     update: (stats) => {
-      el.textContent = `iris ${stats.connected ? '●' : '○'} ${String(stats.events)} events`;
+      el.textContent = `reticle ${stats.connected ? '●' : '○'} ${String(stats.events)} events`;
     },
     destroy: () => {
       el.remove();

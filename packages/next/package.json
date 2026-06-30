@@ -1,18 +1,18 @@
 {
-  "name": "@syrin/iris-next",
+  "name": "@reticle/next",
   "version": "1.2.0",
   "private": true,
-  "description": "Next.js helper for Iris: keeps SWC, adds source-file mapping via a dev-only webpack pre-loader (data-iris-source).",
+  "description": "Next.js helper for Reticle: keeps SWC, adds source-file mapping via a dev-only webpack pre-loader (data-reticle-source).",
   "license": "Apache-2.0",
-  "author": "Iris contributors",
+  "author": "Reticle contributors",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/syrin-labs/iris.git",
+    "url": "git+https://github.com/reticlehq/reticle.git",
     "directory": "packages/next"
   },
-  "homepage": "https://github.com/syrin-labs/iris#readme",
+  "homepage": "https://github.com/reticlehq/reticle#readme",
   "keywords": [
-    "iris",
+    "reticle",
     "next",
     "nextjs",
     "source",
@@ -34,7 +34,7 @@
   ],
   "dependencies": {
     "@babel/core": "^7.26.0",
-    "@syrin/iris-babel-plugin": "workspace:*"
+    "@reticle/babel-plugin": "workspace:*"
   },
   "peerDependencies": {
     "next": ">=13"

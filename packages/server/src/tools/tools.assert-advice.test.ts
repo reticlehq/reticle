@@ -1,17 +1,17 @@
 import { describe, it, expect } from 'vitest';
 import {
   EventType,
-  IrisCommand,
+  ReticleCommand,
   SessionState,
   type CommandResult,
-  type IrisEvent,
-} from '@syrin/iris-protocol';
+  type ReticleEvent,
+} from '@reticle/protocol';
 import { TOOLS, type ToolDeps } from './tools.js';
-import { IrisTool } from './tool-names.js';
+import { ReticleTool } from './tool-names.js';
 import type { Session, SessionManager } from '../session/session.js';
 
 /** A session whose MATCH answers `matched`, and whose buffer is a fixed event list. */
-function depsWith(opts: { matched?: boolean; events?: IrisEvent[] }): ToolDeps {
+function depsWith(opts: { matched?: boolean; events?: ReticleEvent[] }): ToolDeps {
   const matchResult = {
     matched: opts.matched ?? false,
     count: opts.matched === true ? 1 : 0,
@@ -27,7 +27,7 @@ function depsWith(opts: { matched?: boolean; events?: IrisEvent[] }): ToolDeps {
         kind: 'command_result',
         id: 'c',
         ok: true,
-        result: name === IrisCommand.MATCH ? matchResult : {},
+        result: name === ReticleCommand.MATCH ? matchResult : {},
       }),
     eventsSince: () => opts.events ?? [],
     lastActCursor: () => 0,
@@ -40,19 +40,19 @@ function depsWith(opts: { matched?: boolean; events?: IrisEvent[] }): ToolDeps {
 }
 
 function assertTool() {
-  const t = TOOLS.find((x) => x.name === IrisTool.ASSERT);
-  if (t === undefined) throw new Error('no iris_assert tool');
+  const t = TOOLS.find((x) => x.name === ReticleTool.ASSERT);
+  if (t === undefined) throw new Error('no reticle_assert tool');
   return t;
 }
 
-const signal = (name: string): IrisEvent => ({
+const signal = (name: string): ReticleEvent => ({
   t: 1,
   type: EventType.SIGNAL,
   sessionId: 's',
   data: { name, data: {} },
 });
 
-describe('iris_assert presence-only advice', () => {
+describe('reticle_assert presence-only advice', () => {
   it('attaches advice to a PASSING presence-only (element) assertion', async () => {
     const r = (await assertTool().handler(depsWith({ matched: true }), {
       predicate: { kind: 'element', query: { role: 'button' } },

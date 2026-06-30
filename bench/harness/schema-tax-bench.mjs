@@ -2,13 +2,13 @@
 // advertising its tools (name + description + JSON inputSchema). CLIs (agent-browser, playwright-cli)
 // pay ZERO here — that's the bulk of their headline token win, which our per-observation Layer A does
 // not capture. This measures the recurring fixed cost for each MCP server so we can (a) report it as a
-// fair line item and (b) quantify what Iris's lean tool profiles would save.
+// fair line item and (b) quantify what Reticle's lean tool profiles would save.
 import { writeFileSync } from 'node:fs';
 import { McpStdioClient } from './mcp-client.mjs';
 import { measure } from './tokenizer.mjs';
 
 const SERVERS = {
-  iris: { command: 'node', args: ['packages/server/dist/cli.js', 'mcp', '--port', '4477'] },
+  reticle: { command: 'node', args: ['packages/server/dist/cli.js', 'mcp', '--port', '4477'] },
   playwright: {
     command: 'npx',
     args: ['-y', '@playwright/mcp@0.0.76', '--headless', '--isolated'],
@@ -23,7 +23,7 @@ async function measureServer(name, spec) {
   const client = new McpStdioClient(
     spec.command,
     spec.args,
-    name === 'iris' ? { IRIS_PORT: '4477' } : {},
+    name === 'reticle' ? { RETICLE_PORT: '4477' } : {},
   );
   await client.start();
   const tools = await client.listTools();
@@ -53,7 +53,7 @@ results.playwright_cli = { tool_count: 0, schema_tokens: 0, note: 'CLI — no MC
 
 const out = {
   metric: 'per-request MCP tool-schema tax (tokens an agent pays just to have the tools available)',
-  note: 'Recurring fixed cost on every request, separate from per-observation payload. CLIs pay 0. This is the cost the CLI competitors weaponize against MCP servers — Iris pays it too.',
+  note: 'Recurring fixed cost on every request, separate from per-observation payload. CLIs pay 0. This is the cost the CLI competitors weaponize against MCP servers — Reticle pays it too.',
   results,
 };
 console.log(JSON.stringify(out, null, 2));

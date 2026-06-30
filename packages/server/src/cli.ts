@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { pathToFileURL } from 'node:url';
 import { realpathSync } from 'node:fs';
-import { IRIS_DEFAULT_PORT, IrisEnv } from '@syrin/iris-protocol';
+import { RETICLE_DEFAULT_PORT, ReticleEnv } from '@reticle/protocol';
 import { start, startDaemon } from './index.js';
 import { log } from './log.js';
 import {
@@ -62,12 +62,12 @@ function handleServe(parsed: {
   httpToken?: string;
 }): void {
   if (isRunning(parsed.port)) {
-    log('iris_daemon_already_running', { port: parsed.port });
+    log('reticle_daemon_already_running', { port: parsed.port });
     return;
   }
   const scriptPath = process.argv[1];
   if (scriptPath === undefined) {
-    log('iris_serve_no_script', {});
+    log('reticle_serve_no_script', {});
     process.exit(1);
     return;
   }
@@ -82,14 +82,14 @@ function handleServe(parsed: {
     if (parsed.httpToken !== undefined) daemonArgs.push(HTTP_TOKEN_FLAG, parsed.httpToken);
   }
   spawnDaemon(process.execPath, scriptPath, daemonArgs, parsed.port);
-  log('iris_daemon_spawned', { port: parsed.port, ...(parsed.http ? { http: true } : {}) });
+  log('reticle_daemon_spawned', { port: parsed.port, ...(parsed.http ? { http: true } : {}) });
 }
 
 function handleStop(port: number, quiet: boolean): void {
   const pid = readPid(port);
   if (pid === null || !isAlive(pid)) {
     removePid(port);
-    if (!quiet) log('iris_daemon_not_running', { port });
+    if (!quiet) log('reticle_daemon_not_running', { port });
     return;
   }
   process.kill(pid, 'SIGTERM');
@@ -98,12 +98,12 @@ function handleStop(port: number, quiet: boolean): void {
     if (!isAlive(pid)) {
       clearInterval(poll);
       removePid(port);
-      if (!quiet) log('iris_daemon_stopped', { port, pid });
+      if (!quiet) log('reticle_daemon_stopped', { port, pid });
       return;
     }
     if (Date.now() - started > 5000) {
       clearInterval(poll);
-      if (!quiet) log('iris_daemon_stop_timeout', { port, pid });
+      if (!quiet) log('reticle_daemon_stop_timeout', { port, pid });
       process.exit(1);
     }
   }, 100);
@@ -112,22 +112,22 @@ function handleStop(port: number, quiet: boolean): void {
 function handleStatus(port: number): void {
   const pid = readPid(port);
   if (pid === null || !isAlive(pid)) {
-    log('iris_status', { port, running: false });
+    log('reticle_status', { port, running: false });
     return;
   }
   // The daemon is up — ask it for live sessions + health so status is at-a-glance, not just a pid.
   void fetchStatus(port).then((payload) => {
     if (payload === undefined) {
-      log('iris_status', { port, running: true, pid });
+      log('reticle_status', { port, running: true, pid });
       return;
     }
-    log('iris_status', { port, running: true, pid, ...summarizeStatus(payload) });
+    log('reticle_status', { port, running: true, pid, ...summarizeStatus(payload) });
   });
 }
 
-/** `iris license` — show enterprise activation resolved from the environment (offline; nothing leaves). */
+/** `reticle license` — show enterprise activation resolved from the environment (offline; nothing leaves). */
 function handleLicense(): void {
-  log('iris_license', { ...describeLicense(Date.now()) });
+  log('reticle_license', { ...describeLicense(Date.now()) });
 }
 
 /** Ensure a daemon is reachable on `port` (probe the real port; spawn + wait only if nothing's there). */
@@ -135,7 +135,7 @@ function ensureDaemon(port: number): Promise<void> {
   return probeDaemon(port).then((listening) => {
     if (listening) return undefined;
     const scriptPath = process.argv[1];
-    if (scriptPath === undefined) throw new Error('cannot locate the iris daemon script');
+    if (scriptPath === undefined) throw new Error('cannot locate the reticle daemon script');
     spawnDaemon(
       process.execPath,
       scriptPath,
@@ -147,7 +147,7 @@ function ensureDaemon(port: number): Promise<void> {
 }
 
 /**
- * `iris open [url]` — the one-command "show me the app". Resolves the port (the requested one if a
+ * `reticle open [url]` — the one-command "show me the app". Resolves the port (the requested one if a
  * daemon's there, else a running daemon it discovers — so the user never hunts for the port), ensures
  * the daemon, then reuses the already-connected tab or opens a new browser at the url. Idempotent:
  * re-running never piles up duplicate tabs.
@@ -160,18 +160,18 @@ function handleOpen(requestedPort: number, url: string | undefined): void {
       const { sessions } = summarizeStatus(await fetchStatus(port));
       const decision = decideOpen(sessions, url);
       if (decision.action === 'need-url') {
-        log('iris_open', { port, error: 'no app connected — pass a url: iris open <url>' });
+        log('reticle_open', { port, error: 'no app connected — pass a url: reticle open <url>' });
         return;
       }
       if (decision.action === 'reuse') {
-        log('iris_open', { port, reusing: decision.url });
+        log('reticle_open', { port, reusing: decision.url });
         return;
       }
       openInBrowser(decision.url);
-      log('iris_open', { port, opened: decision.url });
+      log('reticle_open', { port, opened: decision.url });
     })
     .catch((err: unknown) => {
-      log('iris_open', { error: err instanceof Error ? err.message : String(err) });
+      log('reticle_open', { error: err instanceof Error ? err.message : String(err) });
       process.exit(1);
     });
 }
@@ -200,9 +200,9 @@ function handleDaemonInner(parsed: {
 
   startDaemon(options)
     .then((server) => {
-      log('iris_daemon_ready', { port: parsed.port, pid: process.pid });
+      log('reticle_daemon_ready', { port: parsed.port, pid: process.pid });
       // The daemon serves many agents — keep it alive through one agent's stray async error; only a
-      // genuine uncaught throw takes it down (cleanly, so the next `iris mcp` respawns it fresh).
+      // genuine uncaught throw takes it down (cleanly, so the next `reticle mcp` respawns it fresh).
       installDaemonResilience(process, log, () => {
         removePid(parsed.port);
         process.exit(1);
@@ -216,7 +216,7 @@ function handleDaemonInner(parsed: {
           })
           .catch((err: unknown) => {
             const message = err instanceof Error ? err.message : String(err);
-            log('iris_daemon_close_error', { error: message });
+            log('reticle_daemon_close_error', { error: message });
             removePid(parsed.port);
             process.exit(1);
           });
@@ -226,10 +226,10 @@ function handleDaemonInner(parsed: {
       // Self-shut-down when idle so a detached daemon (and any headless Chromium it launched) never
       // lingers on the user's machine after the editor closes. Reuses the same clean shutdown path.
       const idleShutdown = new IdleShutdown({
-        graceMs: resolveIdleShutdownMs(process.env[IrisEnv.IDLE_SHUTDOWN]),
+        graceMs: resolveIdleShutdownMs(process.env[ReticleEnv.IDLE_SHUTDOWN]),
         isIdle: server.isIdle ?? (() => false),
         onShutdown: () => {
-          log('iris_daemon_idle_exit', { port: parsed.port });
+          log('reticle_daemon_idle_exit', { port: parsed.port });
           shutdown();
         },
       });
@@ -237,7 +237,7 @@ function handleDaemonInner(parsed: {
     })
     .catch((error: unknown) => {
       const message = error instanceof Error ? error.message : String(error);
-      log('iris_daemon_start_failed', { error: message });
+      log('reticle_daemon_start_failed', { error: message });
       removePid(parsed.port);
       process.exit(1);
     });
@@ -246,7 +246,7 @@ function handleDaemonInner(parsed: {
 /**
  * MCP proxy mode: ensures the daemon is running, then bridges Claude Code's
  * stdin/stdout to the daemon's SSE endpoint. This is the recommended way to
- * configure Iris in .mcp.json — users never need to manage the daemon manually.
+ * configure Reticle in .mcp.json — users never need to manage the daemon manually.
  *
  * Pass --drive <url> to have the daemon launch its own Playwright browser at that
  * URL. The agent then has full autonomous control without relying on the user's browser.
@@ -260,7 +260,7 @@ function handleMcp(opts: { port: number; driveUrl?: string; headless: boolean })
       if (!listening) {
         const scriptPath = process.argv[1];
         if (scriptPath === undefined) {
-          log('iris_mcp_no_script', {});
+          log('reticle_mcp_no_script', {});
           process.exit(1);
           return;
         }
@@ -270,13 +270,16 @@ function handleMcp(opts: { port: number; driveUrl?: string; headless: boolean })
           if (!headless) daemonArgs.push(HEADED_FLAG);
         }
         spawnDaemon(process.execPath, scriptPath, daemonArgs, port);
-        log('iris_mcp_daemon_started', { port, ...(driveUrl !== undefined ? { driveUrl } : {}) });
+        log('reticle_mcp_daemon_started', {
+          port,
+          ...(driveUrl !== undefined ? { driveUrl } : {}),
+        });
       }
       return waitForDaemon(port).then(() => startMcpProxy(port));
     })
     .catch((err: unknown) => {
       const message = err instanceof Error ? err.message : String(err);
-      log('iris_mcp_proxy_error', { error: message });
+      log('reticle_mcp_proxy_error', { error: message });
       process.exit(1);
     });
 }
@@ -289,25 +292,25 @@ function handleLegacyDrive(parsed: { port: number; driveUrl: string; headless: b
   };
   start(options)
     .then(() => {
-      log('iris_started', { port: parsed.port });
+      log('reticle_started', { port: parsed.port });
     })
     .catch((error: unknown) => {
       const message = error instanceof Error ? error.message : String(error);
-      log('iris_start_failed', { error: message });
+      log('reticle_start_failed', { error: message });
       process.exit(1);
     });
 }
 
 function main(): void {
-  const portEnv = process.env[IrisEnv.PORT];
+  const portEnv = process.env[ReticleEnv.PORT];
   const envPort = portEnv !== undefined ? parseInt(portEnv, 10) : undefined;
   const projectPort = readProjectPort(process.cwd());
-  const defaultPort = envPort ?? projectPort ?? IRIS_DEFAULT_PORT;
+  const defaultPort = envPort ?? projectPort ?? RETICLE_DEFAULT_PORT;
   const parsed = parseCliArgs(process.argv.slice(2), defaultPort);
 
   switch (parsed.kind) {
     case 'error':
-      log('iris_usage_error', { message: parsed.message });
+      log('reticle_usage_error', { message: parsed.message });
       process.exit(1);
       break;
     case 'init':
@@ -346,8 +349,8 @@ function main(): void {
 /**
  * True when this module is the process entry point. Resolves argv[1] through the realpath because
  * package managers (notably pnpm) symlink `node_modules/<pkg>` into a store dir: the bin shim runs
- * `node node_modules/@syrin/iris/dist/cli.js` (the symlink) while ESM `import.meta.url` is the
- * realpath. A plain string compare is false there, so `iris <cmd>` would silently no-op.
+ * `node node_modules/@reticle/core/dist/cli.js` (the symlink) while ESM `import.meta.url` is the
+ * realpath. A plain string compare is false there, so `reticle <cmd>` would silently no-op.
  */
 function isEntryPoint(): boolean {
   const argv1 = process.argv[1];

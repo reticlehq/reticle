@@ -1,4 +1,4 @@
-import { EventType, type IrisEvent } from '@syrin/iris-protocol';
+import { EventType, type ReticleEvent } from '@reticle/protocol';
 
 function asString(value: unknown): string | undefined {
   return typeof value === 'string' ? value : undefined;
@@ -8,9 +8,9 @@ function asNumber(value: unknown): number | undefined {
   return typeof value === 'number' ? value : undefined;
 }
 
-/** Match a net.request event against optional method/url/status filters (iris_network). */
+/** Match a net.request event against optional method/url/status filters (reticle_network). */
 export function matchNet(
-  e: IrisEvent,
+  e: ReticleEvent,
   method: string | undefined,
   urlContains: string | undefined,
   status: number | undefined,
@@ -32,7 +32,7 @@ export function matchNet(
  * completion-only logging is blind to. Pending events are annotated `{ status: 'pending',
  * pending: true }` so a numeric `status` filter excludes them but `urlContains`/`method` match.
  */
-export function reconcileNet(events: IrisEvent[]): IrisEvent[] {
+export function reconcileNet(events: ReticleEvent[]): ReticleEvent[] {
   const completed = events.filter((e) => e.type === EventType.NET_REQUEST);
   const doneIds = new Set(
     completed.map((e) => asString(e.data['id'])).filter((id): id is string => id !== undefined),
@@ -43,20 +43,20 @@ export function reconcileNet(events: IrisEvent[]): IrisEvent[] {
       const id = asString(e.data['id']);
       return id === undefined || !doneIds.has(id);
     })
-    .map((e): IrisEvent => ({ ...e, data: { ...e.data, status: 'pending', pending: true } }));
+    .map((e): ReticleEvent => ({ ...e, data: { ...e.data, status: 'pending', pending: true } }));
   return [...completed, ...unresolved].sort((a, b) => a.t - b.t);
 }
 
-/** Compact network-call summary for iris_network output — drops event plumbing (t, type,
+/** Compact network-call summary for reticle_network output — drops event plumbing (t, type,
  * sessionId, ref, id, initiator, ok) the agent never needs, keeping only method/url/status/ms.
- * This is the bulk of the token cost: raw IrisEvent objects are ~5x larger than this. */
+ * This is the bulk of the token cost: raw ReticleEvent objects are ~5x larger than this. */
 interface NetCallView {
   method: string;
   url: string;
   status?: number | string;
   ms?: number;
 }
-export function projectNetCall(e: IrisEvent): NetCallView {
+export function projectNetCall(e: ReticleEvent): NetCallView {
   const status = e.data['status'];
   const ms = asNumber(e.data['durationMs']);
   const view: NetCallView = {
@@ -68,18 +68,18 @@ export function projectNetCall(e: IrisEvent): NetCallView {
   return view;
 }
 
-/** Compact console-log summary for iris_console output — { level, text } only. */
+/** Compact console-log summary for reticle_console output — { level, text } only. */
 interface ConsoleLogView {
   level: string;
   text: string;
 }
-export function projectConsoleLog(e: IrisEvent): ConsoleLogView {
+export function projectConsoleLog(e: ReticleEvent): ConsoleLogView {
   const level = e.type === EventType.ERROR_UNCAUGHT ? 'error' : e.type.replace('console.', '');
   return { level, text: asString(e.data['message']) ?? '' };
 }
 
-/** True for any console.* / uncaught-error event (the iris_console universe). */
-export function isConsoleEvent(e: IrisEvent): boolean {
+/** True for any console.* / uncaught-error event (the reticle_console universe). */
+export function isConsoleEvent(e: ReticleEvent): boolean {
   return (
     e.type === EventType.CONSOLE_LOG ||
     e.type === EventType.CONSOLE_WARN ||
@@ -88,8 +88,8 @@ export function isConsoleEvent(e: IrisEvent): boolean {
   );
 }
 
-/** Match a console/error event against an optional level filter (iris_console). */
-export function matchConsole(e: IrisEvent, level: string | undefined): boolean {
+/** Match a console/error event against an optional level filter (reticle_console). */
+export function matchConsole(e: ReticleEvent, level: string | undefined): boolean {
   if (!isConsoleEvent(e)) return false;
   if (level === undefined) return true;
   return (
@@ -108,7 +108,7 @@ interface NetCallSummary {
 }
 
 /**
- * Near-miss for iris_network: when a filter matched zero calls, describe what DID fire so the
+ * Near-miss for reticle_network: when a filter matched zero calls, describe what DID fire so the
  * agent self-corrects ("POST /x 200 matched nothing, but these 3 requests happened") instead of
  * reading a bare []. `allNet` is every net.request in the window (pre-filter).
  */
@@ -118,7 +118,7 @@ interface NetEmptyHint {
   present: NetCallSummary[];
 }
 
-export function netEmptyHint(allNet: IrisEvent[]): NetEmptyHint {
+export function netEmptyHint(allNet: ReticleEvent[]): NetEmptyHint {
   const present = allNet
     .slice(-HINT_SAMPLE_MAX)
     .reverse()
@@ -138,7 +138,7 @@ interface ConsoleLevelCounts {
 }
 
 /**
- * Near-miss for iris_console: when a level filter matched zero logs, report what levels ARE
+ * Near-miss for reticle_console: when a level filter matched zero logs, report what levels ARE
  * present so the agent knows the page isn't silent ("0 errors, but 3 warns + 5 logs"). `allConsole`
  * is every console/error event in the window (pre-filter).
  */
@@ -147,7 +147,7 @@ interface ConsoleEmptyHint {
   byLevel: ConsoleLevelCounts;
 }
 
-export function consoleEmptyHint(allConsole: IrisEvent[]): ConsoleEmptyHint {
+export function consoleEmptyHint(allConsole: ReticleEvent[]): ConsoleEmptyHint {
   const byLevel: ConsoleLevelCounts = { log: 0, warn: 0, error: 0 };
   for (const e of allConsole) {
     if (e.type === EventType.CONSOLE_LOG) byLevel.log += 1;

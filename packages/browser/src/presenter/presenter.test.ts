@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { PresenterMode } from '@syrin/iris-protocol';
+import { PresenterMode } from '@reticle/protocol';
 import { Presenter } from './presenter.js';
 import { buildSnapshot } from '../dom/snapshot.js';
 import { isIgnored } from '../dom/dom-ignore.js';
@@ -52,7 +52,7 @@ describe('presenter / transparency layer', () => {
     const p = new Presenter({ paceMs: 0 });
     p.mount();
 
-    const hud = document.querySelector('[data-iris-hud]');
+    const hud = document.querySelector('[data-reticle-hud]');
     expect(hud).not.toBeNull();
     expect(isIgnored(hud as Element)).toBe(true);
 
@@ -62,12 +62,12 @@ describe('presenter / transparency layer', () => {
     expect(snap.tree).not.toContain('idle');
 
     p.narrate('Clicking Save to verify the flow');
-    expect(document.querySelector('[data-iris-log] .iris-log-text')?.textContent).toContain(
+    expect(document.querySelector('[data-reticle-log] .reticle-log-text')?.textContent).toContain(
       'Clicking Save',
     );
 
     p.destroy();
-    expect(document.querySelector('[data-iris-overlay]')).toBeNull();
+    expect(document.querySelector('[data-reticle-overlay]')).toBeNull();
   });
 });
 
@@ -79,10 +79,10 @@ describe('presenter reading vs acting', () => {
 
     p.setMode(PresenterMode.READING);
     expect(p.mode).toBe(PresenterMode.READING);
-    const chip = document.querySelector('[data-iris-chip]');
+    const chip = document.querySelector('[data-reticle-chip]');
     expect(chip?.textContent).toBe('READING');
     expect(chip?.getAttribute('data-mode')).toBe('reading');
-    expect(document.querySelector('[data-iris-cursor]')?.getAttribute('data-on')).toBe('0');
+    expect(document.querySelector('[data-reticle-cursor]')?.getAttribute('data-on')).toBe('0');
 
     p.destroy();
   });
@@ -94,7 +94,7 @@ describe('presenter reading vs acting', () => {
 
     p.setMode(PresenterMode.ACTING);
     expect(p.mode).toBe(PresenterMode.ACTING);
-    expect(document.querySelector('[data-iris-chip]')?.textContent).toBe('ACTING');
+    expect(document.querySelector('[data-reticle-chip]')?.textContent).toBe('ACTING');
 
     p.destroy();
   });
@@ -112,11 +112,11 @@ describe('presenter reading vs acting', () => {
   });
 });
 
-const LOG_ROW_SEL = '[data-iris-log] [data-iris-log-row]';
+const LOG_ROW_SEL = '[data-reticle-log] [data-reticle-log-row]';
 const logRows = (): HTMLElement[] =>
   Array.from(document.querySelectorAll<HTMLElement>(LOG_ROW_SEL));
 const rowTexts = (): (string | null)[] =>
-  logRows().map((r) => r.querySelector('.iris-log-text')?.textContent ?? null);
+  logRows().map((r) => r.querySelector('.reticle-log-text')?.textContent ?? null);
 
 describe('presenter v2 activity log', () => {
   it('log() appends a row with mode chip, text, timestamp', () => {
@@ -126,10 +126,10 @@ describe('presenter v2 activity log', () => {
     p.log('read', 'Looking at the page');
     const rows = logRows();
     expect(rows.length).toBe(1);
-    expect(rows[0]?.querySelector('.iris-log-text')?.textContent).toBe('Looking at the page');
-    expect(rows[0]?.querySelector('.iris-chip')?.textContent).toBe('READ');
+    expect(rows[0]?.querySelector('.reticle-log-text')?.textContent).toBe('Looking at the page');
+    expect(rows[0]?.querySelector('.reticle-chip')?.textContent).toBe('READ');
     expect(
-      (rows[0]?.querySelector('[data-iris-log-ts]')?.textContent ?? '').length,
+      (rows[0]?.querySelector('[data-reticle-log-ts]')?.textContent ?? '').length,
     ).toBeGreaterThan(0);
     p.destroy();
   });
@@ -153,7 +153,7 @@ describe('presenter v2 activity log', () => {
     p.log('read', 'snap');
     p.log('act', 'click Save');
     p.log('narration', 'adding a beat');
-    const chips = logRows().map((r) => r.querySelector('.iris-chip')?.textContent ?? '');
+    const chips = logRows().map((r) => r.querySelector('.reticle-chip')?.textContent ?? '');
     expect(chips).toEqual(['READ', 'ACT', '']);
     expect(rowTexts()).toEqual(['snap', 'click Save', 'adding a beat']);
     p.destroy();
@@ -168,7 +168,7 @@ describe('presenter v2 activity log', () => {
     const rows = logRows();
     expect(rows.length).toBe(1);
     expect(rows[0]?.textContent).toContain('✓');
-    expect(rows[0]?.querySelector('.iris-res')?.className).toContain('iris-pass');
+    expect(rows[0]?.querySelector('.reticle-res')?.className).toContain('reticle-pass');
     p.destroy();
   });
 
@@ -180,7 +180,7 @@ describe('presenter v2 activity log', () => {
     handle?.result('fail');
     const rows = logRows();
     expect(rows[0]?.textContent).toContain('✗');
-    expect(rows[0]?.querySelector('.iris-res')?.className).toContain('iris-fail');
+    expect(rows[0]?.querySelector('.reticle-res')?.className).toContain('reticle-fail');
     p.destroy();
   });
 
@@ -262,7 +262,7 @@ describe('presenter v2 activity log', () => {
       p.mount();
       p.log('read', 'a');
       p.log('read', 'b');
-      const ts = logRows().map((r) => r.querySelector('[data-iris-log-ts]')?.textContent ?? '');
+      const ts = logRows().map((r) => r.querySelector('[data-reticle-log-ts]')?.textContent ?? '');
       // Patched wall clock is frozen at 42; injected clock advances >1s/row → rows must differ.
       expect(ts[0]).not.toBe(ts[1]);
       p.destroy();
@@ -280,7 +280,7 @@ describe('presenter v2 activity log', () => {
     p.mount();
     p.log('read', 'a');
     p.log('read', 'b');
-    const ts = logRows().map((r) => r.querySelector('[data-iris-log-ts]')?.textContent ?? '');
+    const ts = logRows().map((r) => r.querySelector('[data-reticle-log-ts]')?.textContent ?? '');
     expect(ts[0]).toBe('0s');
     expect(ts[1]).toBe('2s'); // 2400ms elapsed → "2s"
     p.destroy();
@@ -293,7 +293,7 @@ describe('presenter v2 activity log', () => {
     p.mount();
     p.sessionStart();
     p.status('Inspecting [testid=row-3700]');
-    const act = (): string => document.querySelector('.iris-act')?.textContent ?? '';
+    const act = (): string => document.querySelector('.reticle-act')?.textContent ?? '';
     expect(act()).toBe('Inspecting [testid=row-3700]'); // active → shows the action
 
     clock = 5000; // 5s since the last action — well past idleNoticeMs
@@ -326,10 +326,10 @@ describe('presenter v2 activity log', () => {
     expect(await until(() => p.state === 'ended', 800)).toBe(true);
 
     // The panel (HUD/log) PERSISTS for analysis (only the border fades).
-    expect(document.querySelector('[data-iris-hud]')?.getAttribute('data-on')).toBe('1');
-    expect(document.querySelector('div[data-iris-overlay]')?.getAttribute('data-iris-state')).toBe(
-      'ended',
-    );
+    expect(document.querySelector('[data-reticle-hud]')?.getAttribute('data-on')).toBe('1');
+    expect(
+      document.querySelector('div[data-reticle-overlay]')?.getAttribute('data-reticle-state'),
+    ).toBe('ended');
 
     // The run state is exportable and reflects what happened.
     const rs = p.runState();
@@ -343,7 +343,7 @@ describe('presenter v2 activity log', () => {
     clock = 5200;
     p.sessionStart();
     expect(p.state).toBe('active');
-    expect(document.querySelector('[data-iris-glow]')?.getAttribute('data-on')).toBe('1');
+    expect(document.querySelector('[data-reticle-glow]')?.getAttribute('data-on')).toBe('1');
     p.destroy();
   });
 
@@ -371,17 +371,17 @@ describe('presenter v2 activity log', () => {
     const snap = buildSnapshot({ mode: 'full' });
     expect(snap.tree).toContain('button "Save"');
     expect(snap.tree).not.toContain('secret-narration');
-    const logRoot = document.querySelector('[data-iris-log]');
+    const logRoot = document.querySelector('[data-reticle-log]');
     expect(logRoot).not.toBeNull();
     expect(isIgnored(logRoot as Element)).toBe(true);
     p.destroy();
   });
 
-  it('log container carries data-iris-* and is isIgnored', () => {
+  it('log container carries data-reticle-* and is isIgnored', () => {
     document.body.innerHTML = '';
     const p = new Presenter({});
     p.mount();
-    const logRoot = document.querySelector('[data-iris-log]');
+    const logRoot = document.querySelector('[data-reticle-log]');
     expect(logRoot).not.toBeNull();
     expect(isIgnored(logRoot as Element)).toBe(true);
     p.destroy();
@@ -391,14 +391,14 @@ describe('presenter v2 activity log', () => {
     document.body.innerHTML = '';
     const p = new Presenter({});
     expect(() => p.log('read', 'x')).not.toThrow();
-    expect(document.querySelector('[data-iris-log]')).toBeNull();
+    expect(document.querySelector('[data-reticle-log]')).toBeNull();
   });
 
   it('auto-scroll: newest row sets scrollTop to scrollHeight', () => {
     document.body.innerHTML = '';
     const p = new Presenter({});
     p.mount();
-    const logRoot = document.querySelector('[data-iris-log]') as HTMLElement;
+    const logRoot = document.querySelector('[data-reticle-log]') as HTMLElement;
     for (let i = 0; i < 60; i++) p.log('read', `line ${String(i)}`);
     expect(logRoot.scrollTop).toBe(logRoot.scrollHeight);
     p.destroy();
@@ -414,7 +414,7 @@ describe('presenter v2 activity log', () => {
     const p2 = new Presenter({});
     p2.mount();
     expect(logRows().length).toBe(0);
-    expect(document.querySelector('[data-iris-overlay]')).not.toBeNull();
+    expect(document.querySelector('[data-reticle-overlay]')).not.toBeNull();
     p2.destroy();
   });
 
@@ -425,8 +425,8 @@ describe('presenter v2 activity log', () => {
     p.narrate('hello');
     const rows = logRows();
     expect(rows.length).toBe(1);
-    expect(rows[0]?.querySelector('.iris-log-text')?.textContent).toBe('hello');
-    expect(rows[0]?.querySelector('.iris-chip')?.textContent).toBe('');
+    expect(rows[0]?.querySelector('.reticle-log-text')?.textContent).toBe('hello');
+    expect(rows[0]?.querySelector('.reticle-chip')?.textContent).toBe('');
     p.destroy();
   });
 
@@ -443,9 +443,9 @@ describe('presenter v2 activity log', () => {
 });
 
 const dataOn = (): string | null =>
-  document.querySelector('[data-iris-glow]')?.getAttribute('data-on') ?? null;
+  document.querySelector('[data-reticle-glow]')?.getAttribute('data-on') ?? null;
 const dataBusy = (): string | null =>
-  document.querySelector('[data-iris-glow]')?.getAttribute('data-busy') ?? null;
+  document.querySelector('[data-reticle-glow]')?.getAttribute('data-busy') ?? null;
 
 describe('presenter v2 session border', () => {
   it('1 sessionStart turns the base border on (data-on=1)', () => {
@@ -467,7 +467,7 @@ describe('presenter v2 session border', () => {
       glowFadeMs: FAST_FADE_MS,
     });
     p.mount();
-    const glow = document.querySelector('[data-iris-glow]') as HTMLElement;
+    const glow = document.querySelector('[data-reticle-glow]') as HTMLElement;
     const flips = trackGlowFlips(glow);
     p.sessionStart(); // single data-on=1 write, observed as one enter
     for (let i = 0; i < 10; i++) {
@@ -516,7 +516,7 @@ describe('presenter v2 session border', () => {
       glowFadeMs: FAST_FADE_MS,
     });
     p.mount();
-    const hud = document.querySelector('[data-iris-hud]') as HTMLElement;
+    const hud = document.querySelector('[data-reticle-hud]') as HTMLElement;
     p.sessionStart();
     expect(hud.getAttribute('data-on')).toBe('1'); // shown from session start
     p.status('one');
@@ -533,12 +533,12 @@ describe('presenter v2 session border', () => {
     document.body.innerHTML = '';
     const p = new Presenter({ border: 'session' });
     p.mount();
-    const overlay = document.querySelector('div[data-iris-overlay]') as HTMLElement;
-    const head = document.querySelector('.iris-hud-head') as HTMLElement;
-    (document.querySelector('[data-iris-min-btn]') as HTMLElement).click();
-    expect(overlay.getAttribute('data-iris-min')).toBe('1'); // collapsed to the bar
+    const overlay = document.querySelector('div[data-reticle-overlay]') as HTMLElement;
+    const head = document.querySelector('.reticle-hud-head') as HTMLElement;
+    (document.querySelector('[data-reticle-min-btn]') as HTMLElement).click();
+    expect(overlay.getAttribute('data-reticle-min')).toBe('1'); // collapsed to the bar
     head.click(); // clicking the minimised bar restores the panel
-    expect(overlay.getAttribute('data-iris-min')).toBe('0');
+    expect(overlay.getAttribute('data-reticle-min')).toBe('0');
     p.destroy();
   });
 
@@ -548,7 +548,7 @@ describe('presenter v2 session border', () => {
     p.mount();
     p.log('act', 'Clicking Pay');
     p.log('narration', 'now checking the receipt');
-    expect(document.querySelector('.iris-live')?.textContent).toBe('now checking the receipt');
+    expect(document.querySelector('.reticle-live')?.textContent).toBe('now checking the receipt');
     p.destroy();
   });
 
@@ -566,7 +566,7 @@ describe('presenter v2 session border', () => {
     document.body.innerHTML = '';
     const p = new Presenter({ border: 'session' });
     p.mount();
-    const glow = document.querySelector('[data-iris-glow]') as HTMLElement;
+    const glow = document.querySelector('[data-reticle-glow]') as HTMLElement;
     const flips = trackGlowFlips(glow);
     p.sessionStart();
     p.sessionStart();
@@ -581,7 +581,7 @@ describe('presenter v2 session border', () => {
     document.body.innerHTML = '';
     const p = new Presenter({ border: 'session' });
     p.mount();
-    const glow = document.querySelector('[data-iris-glow]') as HTMLElement;
+    const glow = document.querySelector('[data-reticle-glow]') as HTMLElement;
     const flips = trackGlowFlips(glow);
     expect(() => p.sessionEnd()).not.toThrow();
     expect(flips.exits).toBe(0);
@@ -595,7 +595,7 @@ describe('presenter v2 session border', () => {
     p.mount();
     p.sessionStart();
     p.sessionEnd();
-    const glow = document.querySelector('[data-iris-glow]') as HTMLElement;
+    const glow = document.querySelector('[data-reticle-glow]') as HTMLElement;
     const flips = trackGlowFlips(glow);
     expect(() => p.sessionEnd()).not.toThrow();
     expect(flips.exits).toBe(0);
@@ -631,7 +631,7 @@ describe('presenter v2 session border', () => {
     p.mount();
     p.sessionStart();
     p.setMode(PresenterMode.READING);
-    expect(document.querySelector('[data-iris-mode]')?.getAttribute('data-iris-mode')).toBe(
+    expect(document.querySelector('[data-reticle-mode]')?.getAttribute('data-reticle-mode')).toBe(
       'reading',
     );
     expect(dataOn()).toBe('1');
@@ -650,7 +650,7 @@ describe("presenter v2 border:'busy' back-compat", () => {
       glowFadeMs: FAST_FADE_MS,
     });
     p.mount();
-    const glow = document.querySelector('[data-iris-glow]') as HTMLElement;
+    const glow = document.querySelector('[data-reticle-glow]') as HTMLElement;
     const flips = trackGlowFlips(glow);
     p.status('one');
     expect(dataOn()).toBe('1');
@@ -669,7 +669,7 @@ describe("presenter v2 border:'busy' back-compat", () => {
     document.body.innerHTML = '';
     const p = new Presenter({ border: 'busy' });
     p.mount();
-    const glow = document.querySelector('[data-iris-glow]') as HTMLElement;
+    const glow = document.querySelector('[data-reticle-glow]') as HTMLElement;
     const flips = trackGlowFlips(glow);
     p.sessionStart();
     expect(flips.enters).toBe(0);
@@ -709,7 +709,7 @@ describe('presenter v2 not-mounted safety', () => {
     document.body.innerHTML = '';
     const p = new Presenter({});
     expect(() => p.sessionStart()).not.toThrow();
-    expect(document.querySelector('[data-iris-glow]')).toBeNull();
+    expect(document.querySelector('[data-reticle-glow]')).toBeNull();
   });
 
   it('15 sessionEnd before mount is a safe no-op', () => {
@@ -731,14 +731,14 @@ describe('presenter v2 HUD positioning', () => {
     const p = new Presenter({ paceMs: 0 });
     p.mount();
 
-    const css = document.querySelector('style[data-iris-overlay]')?.textContent ?? '';
+    const css = document.querySelector('style[data-reticle-overlay]')?.textContent ?? '';
     // bottom-center dock (like a chatbox), horizontally centered
     expect(css).toContain('left:50%;right:auto;bottom:20px');
     expect(css).toContain('translateX(-50%)');
     // fixed width + height so the panel doesn't jump with children's text width
     expect(css).toContain('width:384px;height:468px');
     // the feed flexes/scrolls inside the fixed card
-    expect(css).toContain('[data-iris-log]{flex:1;min-height:0;overflow-y:auto');
+    expect(css).toContain('[data-reticle-log]{flex:1;min-height:0;overflow-y:auto');
 
     p.destroy();
   });
@@ -756,7 +756,7 @@ describe('presenter glow state machine', () => {
       glowFadeMs: FAST_FADE_MS,
     });
     p.mount();
-    const glow = document.querySelector('[data-iris-glow]') as HTMLElement;
+    const glow = document.querySelector('[data-reticle-glow]') as HTMLElement;
     const flips = trackGlowFlips(glow);
 
     // 10 rapid activities, each 10ms apart (< idle window): only the first should flip on.
@@ -789,7 +789,7 @@ describe('presenter glow state machine', () => {
       glowFadeMs: FAST_FADE_MS,
     });
     p.mount();
-    const glow = document.querySelector('[data-iris-glow]') as HTMLElement;
+    const glow = document.querySelector('[data-reticle-glow]') as HTMLElement;
     const flips = trackGlowFlips(glow);
 
     p.status('one');
@@ -817,7 +817,7 @@ describe('presenter glow state machine', () => {
       glowFadeMs: 1000, // long fade so we can catch the FADING phase
     });
     p.mount();
-    const glow = document.querySelector('[data-iris-glow]') as HTMLElement;
+    const glow = document.querySelector('[data-reticle-glow]') as HTMLElement;
     const flips = trackGlowFlips(glow);
 
     p.status('one');
@@ -844,7 +844,7 @@ describe('presenter glow state machine', () => {
       glowFadeMs: FAST_FADE_MS,
     });
     p.mount();
-    const glow = document.querySelector('[data-iris-glow]') as HTMLElement;
+    const glow = document.querySelector('[data-reticle-glow]') as HTMLElement;
     const flips = trackGlowFlips(glow);
 
     p.status('first');

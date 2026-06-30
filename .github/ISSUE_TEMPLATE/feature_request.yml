@@ -1,5 +1,5 @@
 name: Feature request
-description: Suggest an idea or improvement for Iris
+description: Suggest an idea or improvement for Reticle
 labels: ['enhancement']
 body:
   - type: textarea

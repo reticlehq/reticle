@@ -65,7 +65,7 @@ export function Sparkline({
   data,
   w = 96,
   h = 36,
-  stroke = 'var(--iris2)',
+  stroke = 'var(--reticle2)',
 }: {
   data: number[];
   w?: number;

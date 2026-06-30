@@ -1,4 +1,4 @@
-/** Thin client for the demo backend (apps/api on :8787). Real fetches → real Iris network events. */
+/** Thin client for the demo backend (apps/api on :8787). Real fetches → real Reticle network events. */
 const BASE = 'http://localhost:8787';
 
 let token = '';

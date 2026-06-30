@@ -15,20 +15,20 @@ import {
   type PresentRegion,
   type QueryEmptyHint,
   type QueryResult,
-} from '@syrin/iris-protocol';
+} from '@reticle/protocol';
 import { describe, getStates } from './a11y.js';
 import { getCapabilities } from '../registry/capabilities.js';
 import { identifyComponent } from '../registry/adapters.js';
 import { refs } from './refs.js';
 
 const TESTID_ATTR = 'data-testid';
-const SOURCE_ATTR = 'data-iris-source';
+const SOURCE_ATTR = 'data-reticle-source';
 const MAX_PRESENT_TESTIDS = 12;
 /** Bound the fiber-walk fallback so a component-name query can't scan an unbounded DOM. */
 const MAX_COMPONENT_CANDIDATES = 2000;
 /** Likely-actionable elements considered when resolving a component anchor without a source stamp. */
 const COMPONENT_CANDIDATE_SELECTOR =
-  '[data-iris-source], [data-testid], button, a, input, select, textarea, [role]';
+  '[data-reticle-source], [data-testid], button, a, input, select, textarea, [role]';
 
 function resolveContainer(scope: string | undefined): HTMLElement {
   const body = document.body;
@@ -46,7 +46,7 @@ function resolveContainer(scope: string | undefined): HTMLElement {
 
 /**
  * Resolve an element by its SOURCE location — the precise, granular auto-anchor. The babel plugin
- * stamps `data-iris-source="file:line:column"` on host elements, so a line-level starts-with match
+ * stamps `data-reticle-source="file:line:column"` on host elements, so a line-level starts-with match
  * pins the exact JSX element with a single fast attribute selector (no fiber walk). Column is
  * ignored so a small column drift doesn't unbind the anchor.
  */

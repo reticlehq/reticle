@@ -1,11 +1,11 @@
 /**
- * The IrisVerificationRun artifact — the stable, versioned contract a host platform (an OEM/design
- * partner) or CI consumes after Iris verifies a generated/edited app. It is assembled from data Iris
+ * The ReticleVerificationRun artifact — the stable, versioned contract a host platform (an OEM/design
+ * partner) or CI consumes after Reticle verifies a generated/edited app. It is assembled from data Reticle
  * already produces (flow replay, asserts, evidence timeline, source mapping); this file only defines
- * the WIRE/DISK shape so it can be frozen under semver. Persisted at `.iris/runs/<runId>.json` and
+ * the WIRE/DISK shape so it can be frozen under semver. Persisted at `.reticle/runs/<runId>.json` and
  * returned by the programmatic Replay/Verify API.
  *
- * Conventions match the rest of `@syrin/iris-protocol`: enums are `as const` objects narrowed with
+ * Conventions match the rest of `@reticle/protocol`: enums are `as const` objects narrowed with
  * `z.nativeEnum`, timestamps are epoch-ms NUMBERS (the clock is injected — never read inside pure
  * logic), no `any` (opaque evidence is `z.unknown()`), and every domain string is a named constant.
  */
@@ -25,7 +25,7 @@ export type RunId = z.infer<typeof RunIdSchema>;
 export const asRunId = (value: string): RunId => value as RunId;
 
 /**
- * Retention bound for .iris/runs/ so disk stays bounded over a long-running pipeline. Pruned
+ * Retention bound for .reticle/runs/ so disk stays bounded over a long-running pipeline. Pruned
  * oldest-first only once the count exceeds RUN_RETENTION + RUN_RETENTION_SLACK, then back down to
  * RUN_RETENTION — so the O(n) prune is amortized (≈ once per SLACK writes), not paid on every write.
  */
@@ -34,7 +34,7 @@ export const RUN_RETENTION_SLACK = 100;
 
 /** Structured outcome when reading a run file fails (never thrown). Mirrors ProjectReadError. */
 export const RunReadError = {
-  MISSING: 'run-missing', // no .iris/runs/<id>.json on disk
+  MISSING: 'run-missing', // no .reticle/runs/<id>.json on disk
   MALFORMED: 'run-malformed', // present but not valid JSON / fails schema
 } as const;
 export type RunReadError = (typeof RunReadError)[keyof typeof RunReadError];
@@ -280,7 +280,7 @@ export const RunSignatureSchema = z.object({
  * RUN_FILE_VERSION 1; a breaking change bumps the version. Arrays default to empty so a minimal
  * run (e.g. a single smoke flow) still validates.
  */
-export const IrisVerificationRunSchema = z.object({
+export const ReticleVerificationRunSchema = z.object({
   schemaVersion: z.literal(RUN_FILE_VERSION),
   runId: RunIdSchema,
   createdAt: z.number(), // epoch ms — INJECTED, never computed in pure logic
@@ -316,4 +316,4 @@ export const IrisVerificationRunSchema = z.object({
   verdict: RunVerdictSchema,
   signature: RunSignatureSchema.optional(),
 });
-export type IrisVerificationRun = z.infer<typeof IrisVerificationRunSchema>;
+export type ReticleVerificationRun = z.infer<typeof ReticleVerificationRunSchema>;

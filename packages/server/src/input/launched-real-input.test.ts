@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DriveErrorCode } from '@syrin/iris-protocol';
+import { DriveErrorCode } from '@reticle/protocol';
 import { DriveError, LaunchedRealInputProvider, boxCenter, type ElementBox } from './real-input.js';
 
 const DRIVE_URL = 'http://localhost:3000/app';
@@ -175,17 +175,17 @@ describe('LaunchedRealInputProvider', () => {
   it('re-invokes the page SDK connect with the token + allowNonLocalhost when injectConnect is set', async () => {
     const spy = newSpy();
     const provider = makeProvider(spy, {
-      injectConnect: { token: 'tok-123', url: 'ws://localhost:4400/iris' },
+      injectConnect: { token: 'tok-123', url: 'ws://localhost:4400/reticle' },
     });
     await provider.navigate();
 
     expect(spy.state.page.waitForFunctionCalls).toBe(1);
     expect(spy.state.page.evalCalls).toHaveLength(1);
     const [script] = spy.state.page.evalCalls;
-    expect(script).toContain('__irisInstance.connect');
+    expect(script).toContain('__reticleInstance.connect');
     expect(script).toContain('"allowNonLocalhost":true');
     expect(script).toContain('tok-123');
-    expect(script).toContain('ws://localhost:4400/iris');
+    expect(script).toContain('ws://localhost:4400/reticle');
   });
 
   it('navigate still succeeds when the page exposes no SDK (waitForFunction times out)', async () => {
@@ -203,7 +203,7 @@ describe('LaunchedRealInputProvider', () => {
       },
     });
     const provider = makeProvider(spy, {
-      injectConnect: { token: 't', url: 'ws://localhost:4400/iris' },
+      injectConnect: { token: 't', url: 'ws://localhost:4400/reticle' },
     });
     await expect(provider.navigate()).resolves.toBeUndefined();
     expect(spy.state.page.evalCalls).toEqual([]);

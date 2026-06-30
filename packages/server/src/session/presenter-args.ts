@@ -1,4 +1,4 @@
-import { PresenterTone, SessionState } from '@syrin/iris-protocol';
+import { PresenterTone, SessionState } from '@reticle/protocol';
 
 /**
  * Build the args for a PRESENTER push. An ended session can carry a `tone` so the panel tells apart

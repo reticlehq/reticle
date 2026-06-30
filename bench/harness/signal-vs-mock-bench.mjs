@@ -4,7 +4,7 @@
 //   Oracle A — visual/DOM diff (Antigravity, Percy, Meticulous's visual layer): sees only painted pixels.
 //   Oracle B — network-mock replay (Meticulous-style): serves RECORDED responses at replay, so a LIVE
 //              backend change never reaches it ("only catches frontend regressions" — their words).
-//   Oracle C — Iris app-signal: asserts on the LIVE network payload / emitted signal.
+//   Oracle C — Reticle app-signal: asserts on the LIVE network payload / emitted signal.
 //
 // Honest by construction: we stand up a real fixture server, RECORD baseline responses (the mock), then
 // flip only the BACKEND (?regress=1) and fetch LIVE. Each oracle's verdict falls out of real data — the
@@ -89,7 +89,7 @@ for (const sc of SCENARIOS) {
   const visual = sc.render(recorded) !== sc.render(live) ? CAUGHT : MISSED;
   // B) network-mock replay: evaluates the RECORDED (mocked) response, never the live one → blind.
   const mock = sc.contract(recorded) ? MISSED : CAUGHT;
-  // C) Iris app-signal: evaluates the LIVE response contract → catches.
+  // C) Reticle app-signal: evaluates the LIVE response contract → catches.
   const signal = sc.contract(live) ? MISSED : CAUGHT;
 
   rows.push({
@@ -97,7 +97,7 @@ for (const sc of SCENARIOS) {
     desc: sc.desc,
     visual_diff: visual,
     network_mock: mock,
-    iris_signal: signal,
+    reticle_signal: signal,
   });
 }
 server.close();
@@ -116,17 +116,17 @@ const out = {
       of: rows.length,
       blind_because: 'replays recorded responses; the live backend change never reaches it',
     },
-    iris_signal: {
-      caught: caughtBy('iris_signal'),
+    reticle_signal: {
+      caught: caughtBy('reticle_signal'),
       of: rows.length,
       asserts: 'the live network payload / emitted signal against the contract',
     },
   },
   rows,
   headline:
-    'Iris is the only all-CAUGHT column. Visual-diff and network-mock oracles certify a broken backend as shipping-ready.',
+    'Reticle is the only all-CAUGHT column. Visual-diff and network-mock oracles certify a broken backend as shipping-ready.',
   honest_caveat:
-    'This wedge is backend-contract / state correctness. The reverse is also true: for pure presentation bugs (CSS overlap, offscreen button, contrast), signals/state are correct and visual-diff wins. The oracles are COMPLEMENTARY — Iris is strictly superior here, strictly inferior on pixel-only bugs and zero-integration/opaque apps.',
+    'This wedge is backend-contract / state correctness. The reverse is also true: for pure presentation bugs (CSS overlap, offscreen button, contrast), signals/state are correct and visual-diff wins. The oracles are COMPLEMENTARY — Reticle is strictly superior here, strictly inferior on pixel-only bugs and zero-integration/opaque apps.',
 };
 console.log(JSON.stringify(out, null, 2));
 writeFileSync('bench/raw/signal-vs-mock.json', JSON.stringify(out, null, 2));

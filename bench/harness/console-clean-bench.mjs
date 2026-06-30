@@ -1,17 +1,17 @@
 // Console-error regression (Layer C): the "it works but the log is screaming" class.
 //
-// The Compose action renders its result fine, but the console-leak regression (`?iris-bug=console-leak`)
+// The Compose action renders its result fine, but the console-leak regression (`?reticle-bug=console-leak`)
 // logs a `console.error` on the action — a caught exception, a failed effect, an unhandled rejection.
 // The visible UI is unchanged, so a structural/visual/presence check passes. Only asserting a CLEAN
-// CONSOLE catches it. Iris expresses that as a flow success consequence `console { absent: true }` (set
-// via iris_annotate success-state); on replay the oracle reads the console after the page settles —
+// CONSOLE catches it. Reticle expresses that as a flow success consequence `console { absent: true }` (set
+// via reticle_annotate success-state); on replay the oracle reads the console after the page settles —
 // clean = pass, an error = fail, with NO testid drift (the button is present and clicks fine).
 //
 // Honest scope: Playwright (page.on('console')) and DevTools can both read console — raw capture is
 // parity. The win is the same as net.count: a DECLARED, deterministic replay consequence (no LLM
 // re-drive), evaluated post-settle so a wait-until-true waiter can't pass before the error fires.
 import { writeFileSync } from 'node:fs';
-import { IrisAdapter } from './adapters.mjs';
+import { ReticleAdapter } from './adapters.mjs';
 import { measure } from './tokenizer.mjs';
 
 const URL = process.env.BENCH_URL ?? 'http://localhost:4312/';
@@ -28,7 +28,7 @@ const parse = (t) => {
 };
 
 async function replayOnce(a) {
-  const rep = await a.c.callTool('iris_flow_replay', { flowName: FLOW });
+  const rep = await a.c.callTool('reticle_flow_replay', { flowName: FLOW });
   const obj = parse(rep.text);
   const successRow = Array.isArray(obj.steps)
     ? obj.steps.find((s) => s && s.tool === 'success')
@@ -42,18 +42,18 @@ async function replayOnce(a) {
   };
 }
 
-const a = new IrisAdapter(URL);
+const a = new ReticleAdapter(URL);
 await a.start();
 let result;
 try {
   // Record: login → Compose → type a prompt → Generate. Declare the clean-console consequence.
-  await a.c.callTool('iris_record_start', { recordingName: FLOW });
+  await a.c.callTool('reticle_record_start', { recordingName: FLOW });
   await a.login();
   await a.gotoView('compose');
   await sleep(300);
   const prompt = await a._refByTestid('compose-prompt');
   if (prompt.ref) {
-    await a.c.callTool('iris_act', {
+    await a.c.callTool('reticle_act', {
       ref: prompt.ref,
       action: 'fill',
       args: { value: 'shipped a faster build pipeline' },
@@ -61,22 +61,22 @@ try {
   }
   await a.clickTestid('compose-generate');
   await sleep(1200);
-  const ann = await a.c.callTool('iris_annotate', {
+  const ann = await a.c.callTool('reticle_annotate', {
     flow: FLOW,
     kind: 'success-state',
     console: CONSOLE,
   });
-  await a.c.callTool('iris_record_stop', { recordingName: FLOW });
-  await a.c.callTool('iris_flow_save', { flowName: FLOW });
+  await a.c.callTool('reticle_record_stop', { recordingName: FLOW });
+  await a.c.callTool('reticle_flow_save', { flowName: FLOW });
 
   // Baseline: healthy app — clean console → the absent:error oracle holds.
-  await a.c.callTool('iris_refresh', { hard: true });
+  await a.c.callTool('reticle_refresh', { hard: true });
   await sleep(1500);
   const baseline = await replayOnce(a);
 
   // Regression: console-leak injected — the action logs a console.error → the oracle fails.
-  const buggedUrl = `${URL}${URL.includes('?') ? '&' : '?'}iris-bug=console-leak`;
-  await a.c.callTool('iris_navigate', { url: buggedUrl });
+  const buggedUrl = `${URL}${URL.includes('?') ? '&' : '?'}reticle-bug=console-leak`;
+  await a.c.callTool('reticle_navigate', { url: buggedUrl });
   await sleep(1800);
   const regressed = await replayOnce(a);
 
@@ -99,7 +99,7 @@ try {
 const summary = {
   dimension:
     'Console-error regression (Layer C) — a clean-console consequence catches a silent log error',
-  scenario: 'Compose renders fine but logs a console.error (?iris-bug=console-leak)',
+  scenario: 'Compose renders fine but logs a console.error (?reticle-bug=console-leak)',
   oracle: 'flow.success console { level:error, absent:true }',
   ...result,
   per_run_tokens: result.regressed?.tokens ?? null,
@@ -107,7 +107,7 @@ const summary = {
     ? Math.round(LLM_REDRIVE / result.regressed.tokens)
     : null,
   competitor_position:
-    'Playwright/DevTools can read the console, so raw capture is parity — but only Iris replays "clean console" as a declared consequence with no LLM re-drive, evaluated post-settle so it cannot pass before the error fires.',
+    'Playwright/DevTools can read the console, so raw capture is parity — but only Reticle replays "clean console" as a declared consequence with no LLM re-drive, evaluated post-settle so it cannot pass before the error fires.',
   honest_verdict: result.detected
     ? `Console-error regression CAUGHT: clean replay holds (no error), bugged replay fails the clean-console oracle with no testid drift — caught deterministically at ~${result.regressed.tokens} tok/run.`
     : 'NOT DETECTED — investigate the injector or the console consequence before claiming the catch.',

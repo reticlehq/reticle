@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { EventType, type IrisEvent } from '@syrin/iris-protocol';
+import { EventType, type ReticleEvent } from '@reticle/protocol';
 import { buildReactionReport, summarizeReaction } from './reaction.js';
 
-function ev(type: EventType, data: Record<string, unknown> = {}): IrisEvent {
+function ev(type: EventType, data: Record<string, unknown> = {}): ReticleEvent {
   return { t: 1, type, sessionId: 's', data };
 }
 

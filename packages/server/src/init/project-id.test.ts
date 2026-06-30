@@ -1,11 +1,11 @@
 /**
- * init-side projectId derivation + snippet/.iris.json baking. The derivation must be algorithmically
+ * init-side projectId derivation + snippet/.reticle.json baking. The derivation must be algorithmically
  * identical to the Vite plugin's so a Vite app's plugin-stamped id matches what init records.
  */
 
 import { describe, expect, it } from 'vitest';
 import { deriveProjectId, packageName, slugifyPackageName, shortHash } from './project-id.js';
-import { irisConfigContent, nextIrisDevFile, htmlManual } from './snippets.js';
+import { reticleConfigContent, nextReticleDevFile, htmlManual } from './snippets.js';
 
 describe('deriveProjectId (init)', () => {
   it('slug of package name + 8-hex root hash', () => {
@@ -38,8 +38,8 @@ describe('deriveProjectId (init)', () => {
 });
 
 describe('snippets bake the projectId', () => {
-  it('.iris.json records projectId', () => {
-    const json = JSON.parse(irisConfigContent('next', undefined, 'acme-web-1234abcd')) as Record<
+  it('.reticle.json records projectId', () => {
+    const json = JSON.parse(reticleConfigContent('next', undefined, 'acme-web-1234abcd')) as Record<
       string,
       unknown
     >;
@@ -48,10 +48,10 @@ describe('snippets bake the projectId', () => {
     expect(json['port']).toBeUndefined(); // default port omitted
   });
 
-  it('Next IrisDev snippet passes projectId to connect()', () => {
-    const code = nextIrisDevFile(undefined, 'acme-web-1234abcd');
+  it('Next ReticleDev snippet passes projectId to connect()', () => {
+    const code = nextReticleDevFile(undefined, 'acme-web-1234abcd');
     expect(code).toContain("projectId: 'acme-web-1234abcd'");
-    expect(code).toContain('iris.connect(');
+    expect(code).toContain('reticle.connect(');
   });
 
   it('HTML snippet passes projectId to connect()', () => {
@@ -62,13 +62,13 @@ describe('snippets bake the projectId', () => {
     const out = htmlManual(undefined, 'acme-web-1234abcd');
     expect(out).toMatch(/entry module/i); // bundled-app path (CRA/webpack/etc.) — bare import resolves
     expect(out).toMatch(/Plain static HTML/i); // honest note: needs a bundler/dev-server
-    expect(out).toContain("iris.connect({ projectId: 'acme-web-1234abcd' })");
+    expect(out).toContain("reticle.connect({ projectId: 'acme-web-1234abcd' })");
     // It must NOT present an index.html bare import as the primary path (the old CRA silent-fail trap).
     expect(out).not.toMatch(/Add a dev-gated module script at app boot/);
   });
 
   it('a non-default port and projectId appear together', () => {
-    const code = nextIrisDevFile(5000, 'p-1234abcd');
+    const code = nextReticleDevFile(5000, 'p-1234abcd');
     expect(code).toContain('ws://localhost:5000');
     expect(code).toContain("projectId: 'p-1234abcd'");
   });

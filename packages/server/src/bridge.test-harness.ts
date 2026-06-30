@@ -1,11 +1,11 @@
 import { WebSocket } from 'ws';
 import {
-  IRIS_WS_PATH,
-  IrisCommand,
+  RETICLE_WS_PATH,
+  ReticleCommand,
   LOOPBACK_HOST,
   MessageKind,
   type ElementQuery,
-} from '@syrin/iris-protocol';
+} from '@reticle/protocol';
 import type { Bridge } from './bridge.js';
 import { BaselineStore } from './project/baselines.js';
 import { createNodeFileSystem } from './project/fs-port.js';
@@ -15,7 +15,7 @@ import { ProjectStore } from './project/project-store.js';
 import { AnnotationStore } from './flows/annotation-store.js';
 import { TOOLS, type ToolDeps } from './tools/tools.js';
 
-/** The app-advertised testable surface a FakeBrowser reports for an iris_capabilities round-trip. */
+/** The app-advertised testable surface a FakeBrowser reports for an reticle_capabilities round-trip. */
 export const FAKE_CAPABILITIES = {
   testids: ['toast'],
   signals: ['webhook:received'],
@@ -23,7 +23,7 @@ export const FAKE_CAPABILITIES = {
   flows: [{ name: 'pay', steps: ['fill', 'click'] }],
 };
 
-/** A stand-in for the real @syrin/iris-browser SDK: replies to commands and emits events. */
+/** A stand-in for the real @reticle/browser SDK: replies to commands and emits events. */
 export class FakeBrowser {
   readonly #ws: WebSocket;
   matcher: (query: ElementQuery) => boolean = () => false;
@@ -43,7 +43,7 @@ export class FakeBrowser {
     private readonly sessionId: string,
     private readonly hasCapabilities = false,
   ) {
-    this.#ws = new WebSocket(`ws://${LOOPBACK_HOST}:${String(port)}${IRIS_WS_PATH}`);
+    this.#ws = new WebSocket(`ws://${LOOPBACK_HOST}:${String(port)}${RETICLE_WS_PATH}`);
   }
 
   open(): Promise<void> {
@@ -84,7 +84,7 @@ export class FakeBrowser {
     const args = (msg['args'] ?? {}) as Record<string, unknown>;
     this.received.push({ name, args });
     let result: unknown = { ok: true };
-    if (name === IrisCommand.ACT) {
+    if (name === ReticleCommand.ACT) {
       result = {
         ok: true,
         ref: args['ref'],
@@ -95,7 +95,7 @@ export class FakeBrowser {
         effect: { dispatched: true },
         ...(this.actHasTestid ? { testid: 'pay-btn' } : {}),
       };
-    } else if (name === IrisCommand.ACT_SEQUENCE) {
+    } else if (name === ReticleCommand.ACT_SEQUENCE) {
       const steps = (Array.isArray(args['steps']) ? args['steps'] : []) as Record<
         string,
         unknown
@@ -108,13 +108,13 @@ export class FakeBrowser {
           ...(this.actHasTestid ? { testid: 'pay-btn' } : {}),
         })),
       };
-    } else if (name === IrisCommand.QUERY) {
+    } else if (name === ReticleCommand.QUERY) {
       result = {
         elements: this.queryResolves
           ? [{ ref: 'e7', role: 'button', name: 'Pay', states: [], visible: true }]
           : [],
       };
-    } else if (name === IrisCommand.MATCH) {
+    } else if (name === ReticleCommand.MATCH) {
       const query = (args['query'] ?? {}) as ElementQuery;
       const matched = this.matcher(query);
       result = {
@@ -132,18 +132,18 @@ export class FakeBrowser {
             ]
           : [],
       };
-    } else if (name === IrisCommand.STATE_READ) {
+    } else if (name === ReticleCommand.STATE_READ) {
       result = {
         stores: { workspace: { tab: args['store'] === 'workspace' ? 'open' : 'all' } },
         storeNames: ['workspace'],
         component: args['ref'] !== undefined ? { component: 'PayButton', hooks: [0] } : undefined,
       };
-    } else if (name === IrisCommand.SNAPSHOT) {
+    } else if (name === ReticleCommand.SNAPSHOT) {
       result = {
         tree: '- button "Pay" (ref=e7)\n- dialog "Order confirmed" (ref=e12)',
         status: { route: '/checkout' },
       };
-    } else if (name === IrisCommand.CAPABILITIES) {
+    } else if (name === ReticleCommand.CAPABILITIES) {
       if (!this.handlesCapabilities) {
         this.#send({
           kind: MessageKind.COMMAND_RESULT,
@@ -191,11 +191,13 @@ export function makeDeps(bridge: Bridge): ToolDeps {
     sessions: bridge.sessions,
     baselines: new BaselineStore(),
     recordings: new RecordingStore(),
-    flows: new FlowStore(createNodeFileSystem(), '/tmp/iris-test/.iris', { now: () => 0 }),
-    project: new ProjectStore(createNodeFileSystem(), '/tmp/iris-test/.iris', { now: () => 0 }),
+    flows: new FlowStore(createNodeFileSystem(), '/tmp/reticle-test/.reticle', { now: () => 0 }),
+    project: new ProjectStore(createNodeFileSystem(), '/tmp/reticle-test/.reticle', {
+      now: () => 0,
+    }),
     annotations: new AnnotationStore(),
     fs: createNodeFileSystem(),
-    irisRoot: '/tmp/iris-test/.iris',
+    reticleRoot: '/tmp/reticle-test/.reticle',
     now: () => 0,
   };
 }

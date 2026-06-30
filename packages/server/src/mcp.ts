@@ -1,6 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { isToonable, resultToToon } from '@syrin/iris-protocol';
+import { isToonable, resultToToon } from '@reticle/protocol';
 import { TOOLS, type ToolDeps } from './tools/tools.js';
 import { filterTools, TOOL_PROFILE, type ToolProfile } from './tools/profiles.js';
 import { buildDynamicTools } from './tools/dynamic-tools.js';
@@ -9,7 +9,7 @@ import { buildErrorPayload } from './tools/error-recovery.js';
 import { log } from './log.js';
 import { SERVER_VERSION } from './server-version.js';
 
-const SERVER_INFO = { name: 'iris', version: SERVER_VERSION };
+const SERVER_INFO = { name: 'reticle', version: SERVER_VERSION };
 
 /** First sentence of a description (purpose only) for lean profiles — keeps per-turn def cost
  * down. Cuts at the first sentence-ending period or newline; falls back to a 160-char cap. The
@@ -38,7 +38,7 @@ function leanZodShape(shape: z.ZodRawShape): z.ZodRawShape {
   return out;
 }
 
-const ENCODING_ENV = 'IRIS_ENCODING';
+const ENCODING_ENV = 'RETICLE_ENCODING';
 const TOON_VALUE = 'toon';
 const PRETTY_VALUE = 'pretty';
 
@@ -46,9 +46,9 @@ const PRETTY_VALUE = 'pretty';
  * Serialize a tool result to the MCP `text` content block. The agent consumes this text — the
  * typed contract travels separately as `structuredContent`, unchanged by encoding — so the text
  * is compact JSON (no indentation) by default: pretty-printing spends a whitespace token on every
- * field of every line, ~40% overhead on the structured payloads that dominate Iris's cost, for
+ * field of every line, ~40% overhead on the structured payloads that dominate Reticle's cost, for
  * readability only a human re-reading a raw transcript would notice. Opt into the older indented
- * form with `IRIS_ENCODING=pretty`; `IRIS_ENCODING=toon` is the even-denser tabular encoding.
+ * form with `RETICLE_ENCODING=pretty`; `RETICLE_ENCODING=toon` is the even-denser tabular encoding.
  */
 export function encodeResult(result: unknown, encoding: string): string {
   if (encoding === TOON_VALUE && isToonable(result)) {
@@ -59,12 +59,12 @@ export function encodeResult(result: unknown, encoding: string): string {
 
 /**
  * Bridge type that erases the MCP SDK's complex generic pairing between outputSchema and handler
- * return type. Iris exposes tool output as text content (for backwards-compatible MCP clients) AND
- * as structuredContent (for schema-aware clients like @syrin/cli). The SDK generics are correct at
+ * return type. Reticle exposes tool output as text content (for backwards-compatible MCP clients) AND
+ * as structuredContent (for schema-aware clients like @reticle/cli). The SDK generics are correct at
  * the protocol level; we break the link here intentionally so we can register all tools
  * dynamically from a ToolDef array without a generic per-tool call site.
  */
-type IrisRegisterTool = (
+type ReticleRegisterTool = (
   name: string,
   config: {
     description: string;
@@ -85,9 +85,9 @@ export function createMcpServer(
   const encoding = (process.env[ENCODING_ENV] ?? '').toLowerCase();
   const server = new McpServer(SERVER_INFO);
   // Cast once to our bridge type so every per-tool call site is typed without `any`.
-  const registerTool = server.registerTool.bind(server) as unknown as IrisRegisterTool;
+  const registerTool = server.registerTool.bind(server) as unknown as ReticleRegisterTool;
 
-  // `dynamic` advertises only the 2 meta-tools (iris_tools + iris_run); real tools load on demand.
+  // `dynamic` advertises only the 2 meta-tools (reticle_tools + reticle_run); real tools load on demand.
   // core/standard advertise the filtered set with terse descriptions (first sentence + trimmed
   // param prose) — the full prose is re-sent every turn, and the first clause carries the purpose.
   const advertised =

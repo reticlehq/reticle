@@ -17,10 +17,10 @@ importers:
       '@eslint/js':
         specifier: ^9.18.0
         version: 9.39.4
-      '@syrin/iris':
+      '@reticle/core':
         specifier: workspace:*
-        version: link:packages/iris
-      '@syrin/iris-server':
+        version: link:packages/core
+      '@reticle/server':
         specifier: workspace:*
         version: link:packages/server
       '@types/node':
@@ -71,10 +71,10 @@ importers:
 
   apps/demo:
     dependencies:
-      '@syrin/iris-browser':
+      '@reticle/browser':
         specifier: workspace:*
         version: link:../../packages/browser
-      '@syrin/iris-react':
+      '@reticle/react':
         specifier: workspace:*
         version: link:../../packages/react
       react:
@@ -90,12 +90,12 @@ importers:
       '@babel/core':
         specifier: ^7.29.7
         version: 7.29.7
+      '@reticle/babel-plugin':
+        specifier: workspace:*
+        version: link:../../packages/babel-plugin
       '@rolldown/plugin-babel':
         specifier: ^0.2.3
         version: 0.2.3(@babel/core@7.29.7)(@babel/runtime@7.29.7)(rolldown@1.0.3)(vite@8.0.16(@types/node@22.19.20)(esbuild@0.28.1))
-      '@syrin/iris-babel-plugin':
-        specifier: workspace:*
-        version: link:../../packages/babel-plugin
       '@types/babel__core':
         specifier: ^7.20.5
         version: 7.20.5
@@ -120,10 +120,10 @@ importers:
 
   apps/e2e:
     dependencies:
-      '@syrin/iris-server':
+      '@reticle/server':
         specifier: workspace:*
         version: link:../../packages/server
-      '@syrin/iris-test':
+      '@reticle/test':
         specifier: workspace:*
         version: link:../../packages/test
       playwright:
@@ -135,9 +135,9 @@ importers:
       '@astrojs/react':
         specifier: ^6.0.0
         version: 6.0.0(@types/node@22.19.20)(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(esbuild@0.28.1)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
-      '@syrin/iris':
+      '@reticle/core':
         specifier: workspace:*
-        version: link:../../packages/iris
+        version: link:../../packages/core
       astro:
         specifier: ^7.0.3
         version: 7.0.3(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1)(@types/node@22.19.20)(rollup@4.61.1)
@@ -150,12 +150,12 @@ importers:
 
   apps/example-next:
     dependencies:
-      '@syrin/iris':
+      '@reticle/core':
         specifier: workspace:*
-        version: link:../../packages/iris
+        version: link:../../packages/core
       next:
         specifier: ^16.0.0
-        version: 16.2.9(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+        version: 16.2.9(@babel/core@7.29.7)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       react:
         specifier: ^19.0.0
         version: 19.2.7
@@ -165,9 +165,9 @@ importers:
 
   apps/example-react:
     dependencies:
-      '@syrin/iris':
+      '@reticle/core':
         specifier: workspace:*
-        version: link:../../packages/iris
+        version: link:../../packages/core
       react:
         specifier: ^19.0.0
         version: 19.2.7
@@ -190,9 +190,9 @@ importers:
       '@react-router/serve':
         specifier: 8.0.0
         version: 8.0.0(react-router@8.0.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(typescript@5.9.3)
-      '@syrin/iris':
+      '@reticle/core':
         specifier: workspace:*
-        version: link:../../packages/iris
+        version: link:../../packages/core
       isbot:
         specifier: ^5.1.36
         version: 5.1.44
@@ -227,7 +227,7 @@ importers:
 
   apps/large-dom-bench:
     dependencies:
-      '@syrin/iris-browser':
+      '@reticle/browser':
         specifier: workspace:*
         version: link:../../packages/browser
     devDependencies:
@@ -247,13 +247,13 @@ importers:
         specifier: ^19.0.0
         version: 19.2.7(react@19.2.7)
     devDependencies:
-      '@syrin/iris-browser':
+      '@reticle/browser':
         specifier: workspace:*
         version: link:../../packages/browser
-      '@syrin/iris-next':
+      '@reticle/next':
         specifier: workspace:*
         version: link:../../packages/next
-      '@syrin/iris-react':
+      '@reticle/react':
         specifier: workspace:*
         version: link:../../packages/react
       '@types/node':
@@ -271,11 +271,11 @@ importers:
 
   apps/vibe-builder-demo:
     dependencies:
-      '@syrin/iris-browser':
+      '@reticle/browser':
         specifier: workspace:*
         version: link:../../packages/browser
     devDependencies:
-      '@syrin/iris-server':
+      '@reticle/server':
         specifier: workspace:*
         version: link:../../packages/server
       vite:
@@ -293,7 +293,7 @@ importers:
 
   packages/browser:
     dependencies:
-      '@syrin/iris-protocol':
+      '@reticle/protocol':
         specifier: workspace:*
         version: link:../protocol
       '@testing-library/dom':
@@ -307,20 +307,7 @@ importers:
         specifier: ^29.1.1
         version: 29.1.1
 
-  packages/eslint-plugin:
-    dependencies:
-      '@typescript-eslint/utils':
-        specifier: ^8.20.0
-        version: 8.60.1(eslint@9.39.4)(typescript@5.9.3)
-      eslint:
-        specifier: '>=9'
-        version: 9.39.4
-    devDependencies:
-      '@typescript-eslint/rule-tester':
-        specifier: ^8.20.0
-        version: 8.60.1(eslint@9.39.4)(typescript@5.9.3)
-
-  packages/iris:
+  packages/core:
     dependencies:
       '@babel/core':
         specifier: ^7.26.0
@@ -339,7 +326,7 @@ importers:
         version: 9.39.4
       next:
         specifier: '>=13'
-        version: 15.5.19(@babel/core@7.29.7)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+        version: 16.2.9(@babel/core@7.29.7)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       react:
         specifier: '>=18'
         version: 19.2.7
@@ -353,31 +340,31 @@ importers:
         specifier: ^3.24.1
         version: 3.25.76
     devDependencies:
-      '@syrin/iris-babel-plugin':
+      '@reticle/babel-plugin':
         specifier: workspace:*
         version: link:../babel-plugin
-      '@syrin/iris-browser':
+      '@reticle/browser':
         specifier: workspace:*
         version: link:../browser
-      '@syrin/iris-eslint-plugin':
+      '@reticle/eslint-plugin':
         specifier: workspace:*
         version: link:../eslint-plugin
-      '@syrin/iris-next':
+      '@reticle/next':
         specifier: workspace:*
         version: link:../next
-      '@syrin/iris-protocol':
+      '@reticle/protocol':
         specifier: workspace:*
         version: link:../protocol
-      '@syrin/iris-react':
+      '@reticle/react':
         specifier: workspace:*
         version: link:../react
-      '@syrin/iris-server':
+      '@reticle/server':
         specifier: workspace:*
         version: link:../server
-      '@syrin/iris-test':
+      '@reticle/test':
         specifier: workspace:*
         version: link:../test
-      '@syrin/iris-vite-plugin':
+      '@reticle/vite-plugin':
         specifier: workspace:*
         version: link:../vite-plugin
       '@types/ws':
@@ -400,12 +387,25 @@ importers:
         specifier: ^7.0.0
         version: 7.0.0
 
+  packages/eslint-plugin:
+    dependencies:
+      '@typescript-eslint/utils':
+        specifier: ^8.20.0
+        version: 8.60.1(eslint@9.39.4)(typescript@5.9.3)
+      eslint:
+        specifier: '>=9'
+        version: 9.39.4
+    devDependencies:
+      '@typescript-eslint/rule-tester':
+        specifier: ^8.20.0
+        version: 8.60.1(eslint@9.39.4)(typescript@5.9.3)
+
   packages/next:
     dependencies:
       '@babel/core':
         specifier: ^7.26.0
         version: 7.29.7
-      '@syrin/iris-babel-plugin':
+      '@reticle/babel-plugin':
         specifier: workspace:*
         version: link:../babel-plugin
       next:
@@ -420,10 +420,10 @@ importers:
 
   packages/react:
     dependencies:
-      '@syrin/iris-browser':
+      '@reticle/browser':
         specifier: workspace:*
         version: link:../browser
-      '@syrin/iris-protocol':
+      '@reticle/protocol':
         specifier: workspace:*
         version: link:../protocol
       react:
@@ -442,7 +442,7 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: ^1.13.0
         version: 1.29.0(zod@3.25.76)
-      '@syrin/iris-protocol':
+      '@reticle/protocol':
         specifier: workspace:*
         version: link:../protocol
       ws:
@@ -471,10 +471,10 @@ importers:
 
   packages/test:
     dependencies:
-      '@syrin/iris-protocol':
+      '@reticle/protocol':
         specifier: workspace:*
         version: link:../protocol
-      '@syrin/iris-server':
+      '@reticle/server':
         specifier: workspace:*
         version: link:../server
       vitest:
@@ -486,10 +486,10 @@ importers:
       '@babel/core':
         specifier: ^7.26.0
         version: 7.29.7
-      '@syrin/iris-babel-plugin':
+      '@reticle/babel-plugin':
         specifier: workspace:*
         version: link:../babel-plugin
-      '@syrin/iris-protocol':
+      '@reticle/protocol':
         specifier: workspace:*
         version: link:../protocol
     devDependencies:
@@ -7408,7 +7408,7 @@ snapshots:
       - '@babel/core'
       - babel-plugin-macros
 
-  next@16.2.9(react-dom@19.2.7(react@19.2.7))(react@19.2.7):
+  next@16.2.9(@babel/core@7.29.7)(react-dom@19.2.7(react@19.2.7))(react@19.2.7):
     dependencies:
       '@next/env': 16.2.9
       '@swc/helpers': 0.5.15

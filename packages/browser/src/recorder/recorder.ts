@@ -10,9 +10,9 @@ import {
   type FlowExpect,
   type FlowFile,
   type FlowStep,
-} from '@syrin/iris-protocol';
+} from '@reticle/protocol';
 import { getAccessibleName, getRole } from '../dom/a11y.js';
-import { isIrisOverlay } from '../dom/dom-ignore.js';
+import { isReticleOverlay } from '../dom/dom-ignore.js';
 import { getCapabilities } from '../registry/capabilities.js';
 import { TOOLBAR_CSS, BTN_CSS, NAME_CSS, STATUS_CSS, MENU_CSS } from './recorder-styles.js';
 
@@ -36,7 +36,7 @@ const STATUS_RECORDING = 'recording…';
 const STATUS_IDLE = 'ready';
 const STATUS_ANNOTATE = 'pick an annotation';
 const TESTID_ATTR = 'data-testid';
-const TOOL = 'iris_act';
+const TOOL = 'reticle_act';
 
 const BUTTON_LABEL = {
   record: 'Record',
@@ -60,7 +60,7 @@ const NEEDS_SIGNAL = new Set<AnnotationKind>([
 ]);
 
 interface RecorderDeps {
-  /** Emit a wire event (Iris.#emit bound). */
+  /** Emit a wire event (Reticle.#emit bound). */
   emit: (type: EventType, data: Record<string, unknown>) => void;
   /** Injected clock for FlowFile.createdAt — never Date.now() in pure logic (rule 7). */
   now: () => number;
@@ -255,7 +255,7 @@ class Recorder implements RecorderHandle {
   #ignore(ev: Event): Element | undefined {
     const target = ev.target;
     if (!(target instanceof Element)) return undefined;
-    if (isIrisOverlay(target)) return undefined;
+    if (isReticleOverlay(target)) return undefined;
     return target;
   }
 
@@ -350,7 +350,7 @@ class Recorder implements RecorderHandle {
   }
 
   #selectedSignal(): string | undefined {
-    const select = this.#menuEl?.querySelector<HTMLSelectElement>('[data-iris-signal]');
+    const select = this.#menuEl?.querySelector<HTMLSelectElement>('[data-reticle-signal]');
     const value = select?.value ?? '';
     return value.length > 0 ? value : undefined;
   }
@@ -388,15 +388,15 @@ class Recorder implements RecorderHandle {
     this.#phase = phase;
   }
 
-  // ---- toolbar DOM (all nodes data-iris-overlay → snapshot-excluded via dom-ignore.ts) ----
+  // ---- toolbar DOM (all nodes data-reticle-overlay → snapshot-excluded via dom-ignore.ts) ----
 
   #buildToolbar(): void {
     const root = document.createElement('div');
-    root.setAttribute('data-iris-overlay', '');
+    root.setAttribute('data-reticle-overlay', '');
     root.style.cssText = TOOLBAR_CSS;
 
     const name = document.createElement('input');
-    name.setAttribute('data-iris-name', '');
+    name.setAttribute('data-reticle-name', '');
     name.setAttribute('placeholder', 'flow name');
     name.style.cssText = NAME_CSS;
     root.appendChild(name);
@@ -408,13 +408,13 @@ class Recorder implements RecorderHandle {
     );
 
     const status = document.createElement('span');
-    status.setAttribute('data-iris-status', '');
+    status.setAttribute('data-reticle-status', '');
     status.style.cssText = STATUS_CSS;
     status.textContent = STATUS_IDLE;
     root.appendChild(status);
 
     const menu = document.createElement('div');
-    menu.setAttribute('data-iris-menu', '');
+    menu.setAttribute('data-reticle-menu', '');
     menu.style.cssText = MENU_CSS;
     root.appendChild(menu);
 
@@ -426,7 +426,7 @@ class Recorder implements RecorderHandle {
 
   #button(action: string, label: string, onClick: () => void): HTMLButtonElement {
     const btn = document.createElement('button');
-    btn.setAttribute('data-iris-action', action);
+    btn.setAttribute('data-reticle-action', action);
     btn.textContent = label;
     btn.style.cssText = BTN_CSS;
     btn.addEventListener('click', onClick);
@@ -439,11 +439,11 @@ class Recorder implements RecorderHandle {
     menu.textContent = '';
     for (const kind of Object.values(AnnotationKind)) {
       // INTENT is free-text (the business goal), not a signal/testid pick — authored via
-      // iris_annotate { kind:'intent', text }. The human toolbar's name field is signal/testid only,
+      // reticle_annotate { kind:'intent', text }. The human toolbar's name field is signal/testid only,
       // so intent is omitted from this menu rather than shipped as a control that can't capture text.
       if (kind === AnnotationKind.INTENT) continue;
       const item = document.createElement('button');
-      item.setAttribute('data-iris-annkind', kind);
+      item.setAttribute('data-reticle-annkind', kind);
       item.textContent = ANNOTATION_LABEL[kind];
       item.style.cssText = BTN_CSS;
       item.addEventListener('click', () => this.#chooseKind(kind));
@@ -457,7 +457,7 @@ class Recorder implements RecorderHandle {
     if (menu === undefined) return;
     if (NEEDS_SIGNAL.has(kind)) {
       const select = document.createElement('select');
-      select.setAttribute('data-iris-signal', '');
+      select.setAttribute('data-reticle-signal', '');
       select.style.cssText = NAME_CSS;
       for (const sig of getCapabilities().signals) {
         const opt = document.createElement('option');
@@ -469,7 +469,7 @@ class Recorder implements RecorderHandle {
     }
     // "Confirm on prior step" path (annotate-on-prior); or the next click selects the target.
     const confirm = document.createElement('button');
-    confirm.setAttribute('data-iris-action', 'annotate-confirm');
+    confirm.setAttribute('data-reticle-action', 'annotate-confirm');
     confirm.textContent = 'on prior step';
     confirm.style.cssText = BTN_CSS;
     confirm.addEventListener('click', () => this.#confirmAnnotationOnPrior());
@@ -485,13 +485,13 @@ class Recorder implements RecorderHandle {
   }
 
   #nameField(): string | undefined {
-    const input = this.#root?.querySelector<HTMLInputElement>('[data-iris-name]');
+    const input = this.#root?.querySelector<HTMLInputElement>('[data-reticle-name]');
     const value = input?.value.trim() ?? '';
     return value.length > 0 ? value : undefined;
   }
 }
 
-/** Install the floating recorder toolbar. Default off; gated by the host (iris.ts recorder flag). */
+/** Install the floating recorder toolbar. Default off; gated by the host (reticle.ts recorder flag). */
 export function installRecorder(deps: RecorderDeps): RecorderHandle {
   return new Recorder(deps);
 }

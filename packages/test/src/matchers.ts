@@ -1,9 +1,9 @@
-import { IrisTool, type ToolInvoker } from '@syrin/iris-server';
-import type { ElementQuery, ElementState } from '@syrin/iris-protocol';
-import { IrisAssertionError } from './skip.js';
+import { ReticleTool, type ToolInvoker } from '@reticle/server';
+import type { ElementQuery, ElementState } from '@reticle/protocol';
+import { ReticleAssertionError } from './skip.js';
 import { CONSOLE_LEVEL_ERROR, DEFAULT_ASSERT_TIMEOUT_MS, PredicateKind } from './constants.js';
 
-/** The verdict envelope returned by iris_assert / the `verdict` field of iris_act_and_wait. */
+/** The verdict envelope returned by reticle_assert / the `verdict` field of reticle_act_and_wait. */
 export interface Verdict {
   pass: boolean;
   evidence?: unknown;
@@ -26,7 +26,7 @@ function asVerdict(value: unknown): Verdict {
 }
 
 /**
- * Throw an IrisAssertionError carrying the verdict's own evidence + failureReason. Used by every
+ * Throw an ReticleAssertionError carrying the verdict's own evidence + failureReason. Used by every
  * `expect*` matcher and by actAndWait, so the runner's single catch boundary marks fail with the
  * predicate engine's structured diagnosis intact. `extraEvidence` lets actAndWait attach its trace.
  */
@@ -40,13 +40,13 @@ export function failFromVerdict(verdict: Verdict, extraEvidence?: Record<string,
           ...(verdict.evidence !== undefined ? { evidence: verdict.evidence } : {}),
         }
       : verdict.evidence;
-  throw new IrisAssertionError(message, {
+  throw new ReticleAssertionError(message, {
     ...(evidence !== undefined ? { evidence } : {}),
     ...(verdict.failureReason !== undefined ? { failureReason: verdict.failureReason } : {}),
   });
 }
 
-/** Run iris_assert for a predicate; resolve on pass, throw the structured failure otherwise. */
+/** Run reticle_assert for a predicate; resolve on pass, throw the structured failure otherwise. */
 async function assertPredicate(
   invoke: ToolInvoker,
   predicate: Record<string, unknown>,
@@ -58,7 +58,7 @@ async function assertPredicate(
     timeout_ms: timeoutMs,
     ...(sessionId !== undefined ? { sessionId } : {}),
   };
-  const verdict = asVerdict(await invoke(IrisTool.ASSERT, args));
+  const verdict = asVerdict(await invoke(ReticleTool.ASSERT, args));
   if (!verdict.pass) failFromVerdict(verdict);
 }
 

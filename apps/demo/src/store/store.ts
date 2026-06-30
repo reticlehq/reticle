@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { emit, Sig } from '../lib/iris-bridge.js';
+import { emit, Sig } from '../lib/reticle-bridge.js';
 import {
   seedActivity,
   seedDeployments,
@@ -87,8 +87,8 @@ export const useApp = create<AppState>((set, get) => ({
     set({ view });
     emit(Sig.NAV_CHANGED, { view });
     // Deep-linkable views: reflect the active view in the URL path so navigation emits a real
-    // route change (Iris reads route changes as the "which page" of each journey step). The query
-    // string is preserved so dev-only knobs like ?iris-break= survive navigation.
+    // route change (Reticle reads route changes as the "which page" of each journey step). The query
+    // string is preserved so dev-only knobs like ?reticle-break= survive navigation.
     const target = `/${view}`;
     if (typeof history !== 'undefined' && location.pathname !== target) {
       history.pushState({}, '', `${target}${location.search}`);
@@ -136,7 +136,7 @@ export const useApp = create<AppState>((set, get) => ({
     set({ deployments: [dep, ...get().deployments] });
     emit(Sig.DEPLOY_CREATED, { id, service, env });
     get().pushToast({ tone: 'info', title: `Deploying ${service}`, detail: `${env} · queued` });
-    // Builds, then goes live after a beat (time-gated — iris_clock can fast-forward this).
+    // Builds, then goes live after a beat (time-gated — reticle_clock can fast-forward this).
     setTimeout(() => {
       set({
         deployments: get().deployments.map((d) => (d.id === id ? { ...d, status: 'live' } : d)),

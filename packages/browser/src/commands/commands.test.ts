@@ -1,10 +1,10 @@
 import { describe, it, expect, vi } from 'vitest';
 import {
   ComponentStateReason,
-  IrisCommand,
+  ReticleCommand,
   type ComponentStateResult,
   type MatchResult,
-} from '@syrin/iris-protocol';
+} from '@reticle/protocol';
 import { createCommandRegistry, resolveNavigationUrl } from './commands.js';
 import { refs } from '../dom/refs.js';
 import { registerStore, unregisterStore } from '../registry/stores.js';
@@ -41,14 +41,14 @@ describe('command registry (driven by the bridge)', () => {
 
   it('SNAPSHOT returns a tree with status', () => {
     document.body.innerHTML = '<button>Save</button>';
-    const result = run(IrisCommand.SNAPSHOT, {}) as { tree: string; status: { route: string } };
+    const result = run(ReticleCommand.SNAPSHOT, {}) as { tree: string; status: { route: string } };
     expect(result.tree).toContain('button "Save"');
     expect(result.status.route).toBeDefined();
   });
 
   it('MATCH finds an element and reports state', () => {
     document.body.innerHTML = '<button disabled>Go</button>';
-    const result = run(IrisCommand.MATCH, {
+    const result = run(ReticleCommand.MATCH, {
       query: { role: 'button', name: 'Go' },
       state: 'disabled',
     }) as MatchResult;
@@ -61,7 +61,7 @@ describe('command registry (driven by the bridge)', () => {
     const onClick = vi.fn();
     button.addEventListener('click', onClick);
     const ref = refs.refFor(button);
-    run(IrisCommand.ACT, { ref, action: 'click' });
+    run(ReticleCommand.ACT, { ref, action: 'click' });
     expect(onClick).toHaveBeenCalledOnce();
   });
 
@@ -69,21 +69,21 @@ describe('command registry (driven by the bridge)', () => {
     document.body.innerHTML = '<a href="/x">Home</a>';
     const link = document.querySelector('a') as HTMLAnchorElement;
     const ref = refs.refFor(link);
-    const result = run(IrisCommand.INSPECT, { ref }) as { role: string; tag: string };
+    const result = run(ReticleCommand.INSPECT, { ref }) as { role: string; tag: string };
     expect(result.role).toBe('link');
     expect(result.tag).toBe('a');
   });
 
   it('STATE_READ returns a registered store and its name', () => {
     registerStore('state_ws', () => ({ count: 7 }));
-    const result = run(IrisCommand.STATE_READ, { store: 'state_ws' }) as StateResult;
+    const result = run(ReticleCommand.STATE_READ, { store: 'state_ws' }) as StateResult;
     expect(result.stores['state_ws']).toEqual({ count: 7 });
     expect(result.storeNames).toContain('state_ws');
     unregisterStore('state_ws');
   });
 
   it('STATE_READ with no ref omits the component key', () => {
-    const result = run(IrisCommand.STATE_READ, {}) as StateResult;
+    const result = run(ReticleCommand.STATE_READ, {}) as StateResult;
     expect(result.component).toBeUndefined();
   });
 
@@ -92,7 +92,7 @@ describe('command registry (driven by the bridge)', () => {
       deployments: [{ id: 1, status: 'queued' }],
       requestLog: [{ path: '/api/x', status: 200 }],
     }));
-    const r = run(IrisCommand.STATE_READ, {
+    const r = run(ReticleCommand.STATE_READ, {
       store: 'state_app',
       path: 'deployments.0.status',
     }) as Record<string, unknown>;
@@ -104,7 +104,7 @@ describe('command registry (driven by the bridge)', () => {
 
   it('STATE_READ depth caps a large sub-tree to a size marker in-page', () => {
     registerStore('state_app', () => ({ deployments: [1, 2, 3, 4, 5] }));
-    const r = run(IrisCommand.STATE_READ, {
+    const r = run(ReticleCommand.STATE_READ, {
       store: 'state_app',
       path: 'deployments',
       depth: 0,
@@ -115,7 +115,7 @@ describe('command registry (driven by the bridge)', () => {
 
   it('STATE_READ a missing path returns found:false + the keys that WERE available', () => {
     registerStore('state_app', () => ({ deployments: [{ status: 'live' }] }));
-    const r = run(IrisCommand.STATE_READ, {
+    const r = run(ReticleCommand.STATE_READ, {
       store: 'state_app',
       path: 'deployments.0.nope',
     }) as Record<string, unknown>;
@@ -127,7 +127,7 @@ describe('command registry (driven by the bridge)', () => {
   it('STATE_READ with a bogus ref returns a bounded structured failure (no reject)', () => {
     let result: StateResult | undefined;
     expect(() => {
-      result = run(IrisCommand.STATE_READ, { ref: 'e999999' }) as StateResult;
+      result = run(ReticleCommand.STATE_READ, { ref: 'e999999' }) as StateResult;
     }).not.toThrow();
     expect(result?.component).toEqual({
       ok: false,
@@ -153,7 +153,7 @@ describe('command registry (driven by the bridge)', () => {
     document.body.innerHTML = `<button ${STATE_ATTR}="ok">Hi</button>`;
     const button = document.querySelector('button') as HTMLButtonElement;
     const ref = refs.refFor(button);
-    const result = run(IrisCommand.STATE_READ, { ref }) as StateResult;
+    const result = run(ReticleCommand.STATE_READ, { ref }) as StateResult;
     expect(result.component).toEqual({ ok: true, hooks: [1] });
     expect(() => JSON.stringify(result)).not.toThrow();
   });
@@ -162,7 +162,7 @@ describe('command registry (driven by the bridge)', () => {
     document.body.innerHTML = `<span ${STATE_ATTR}="raw">Raw</span>`;
     const el = document.querySelector('span') as HTMLElement;
     const ref = refs.refFor(el);
-    const result = run(IrisCommand.STATE_READ, { ref }) as StateResult;
+    const result = run(ReticleCommand.STATE_READ, { ref }) as StateResult;
     expect(result.component).toEqual({ ok: false, reason: ComponentStateReason.UNAVAILABLE });
   });
 
@@ -170,13 +170,13 @@ describe('command registry (driven by the bridge)', () => {
     document.body.innerHTML = '<i>x</i>';
     const el = document.querySelector('i') as HTMLElement;
     const ref = refs.refFor(el);
-    const result = run(IrisCommand.STATE_READ, { ref }) as StateResult;
+    const result = run(ReticleCommand.STATE_READ, { ref }) as StateResult;
     expect(result.component).toEqual({ ok: false, reason: ComponentStateReason.UNAVAILABLE });
   });
 
   it('STATE_READ store path stays the reliable, never-wrapped contract', () => {
     registerStore('state_ws', () => ({ count: 7 }));
-    const result = run(IrisCommand.STATE_READ, { store: 'state_ws' }) as StateResult;
+    const result = run(ReticleCommand.STATE_READ, { store: 'state_ws' }) as StateResult;
     expect(result.stores['state_ws']).toEqual({ count: 7 });
     expect(result.component).toBeUndefined();
     expect(() => JSON.stringify(result)).not.toThrow();
@@ -188,7 +188,7 @@ describe('command registry (driven by the bridge)', () => {
       testids: ['item-list'],
       flows: [{ name: 'checkout', steps: ['fill', 'submit'] }],
     });
-    const result = run(IrisCommand.CAPABILITIES) as {
+    const result = run(ReticleCommand.CAPABILITIES) as {
       testids: string[];
       flows: { name: string; steps: string[] }[];
     };

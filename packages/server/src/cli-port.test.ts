@@ -3,7 +3,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { readProjectId, readProjectPort, resolvePort } from './cli-port.js';
-import { IRIS_DEFAULT_PORT } from '@syrin/iris-protocol';
+import { RETICLE_DEFAULT_PORT } from '@reticle/protocol';
 
 // ─── readProjectPort ─────────────────────────────────────────────────────────
 
@@ -11,22 +11,22 @@ describe('readProjectPort', () => {
   let dir: string;
 
   beforeEach(async () => {
-    dir = await mkdtemp(join(tmpdir(), 'iris-port-'));
+    dir = await mkdtemp(join(tmpdir(), 'reticle-port-'));
   });
   afterEach(async () => {
     await rm(dir, { recursive: true, force: true });
   });
 
   async function writeConfig(content: string): Promise<void> {
-    await writeFile(join(dir, '.iris.json'), content, 'utf8');
+    await writeFile(join(dir, '.reticle.json'), content, 'utf8');
   }
 
-  it('returns the port from a valid .iris.json', async () => {
+  it('returns the port from a valid .reticle.json', async () => {
     await writeConfig(JSON.stringify({ framework: 'vite', port: 4401 }));
     expect(readProjectPort(dir)).toBe(4401);
   });
 
-  it('returns undefined when .iris.json does not exist', () => {
+  it('returns undefined when .reticle.json does not exist', () => {
     expect(readProjectPort(dir)).toBeUndefined();
   });
 
@@ -35,7 +35,7 @@ describe('readProjectPort', () => {
     expect(readProjectPort(empty)).toBeUndefined();
   });
 
-  it('returns undefined when .iris.json has no port field', async () => {
+  it('returns undefined when .reticle.json has no port field', async () => {
     await writeConfig(JSON.stringify({ framework: 'next', harnesses: ['claude-code'] }));
     expect(readProjectPort(dir)).toBeUndefined();
   });
@@ -80,32 +80,32 @@ describe('readProjectPort', () => {
     expect(readProjectPort(dir)).toBe(1);
   });
 
-  it('returns undefined when .iris.json is malformed JSON', async () => {
+  it('returns undefined when .reticle.json is malformed JSON', async () => {
     await writeConfig('{ port: 4401 '); // missing closing brace, also unquoted key
     expect(readProjectPort(dir)).toBeUndefined();
   });
 
-  it('returns undefined when .iris.json is an empty file', async () => {
+  it('returns undefined when .reticle.json is an empty file', async () => {
     await writeConfig('');
     expect(readProjectPort(dir)).toBeUndefined();
   });
 
-  it('returns undefined when .iris.json is a JSON array (not an object)', async () => {
+  it('returns undefined when .reticle.json is a JSON array (not an object)', async () => {
     await writeConfig(JSON.stringify([4401]));
     expect(readProjectPort(dir)).toBeUndefined();
   });
 
-  it('returns undefined when .iris.json is a JSON number at root', async () => {
+  it('returns undefined when .reticle.json is a JSON number at root', async () => {
     await writeConfig('4401');
     expect(readProjectPort(dir)).toBeUndefined();
   });
 
-  it('returns undefined when .iris.json is a JSON string at root', async () => {
+  it('returns undefined when .reticle.json is a JSON string at root', async () => {
     await writeConfig('"4401"');
     expect(readProjectPort(dir)).toBeUndefined();
   });
 
-  it('returns undefined when .iris.json is "null"', async () => {
+  it('returns undefined when .reticle.json is "null"', async () => {
     await writeConfig('null');
     expect(readProjectPort(dir)).toBeUndefined();
   });
@@ -118,8 +118,8 @@ describe('readProjectPort', () => {
   });
 
   it('handles the default port stored explicitly — returns it (caller decides to use it or default)', async () => {
-    await writeConfig(JSON.stringify({ port: IRIS_DEFAULT_PORT }));
-    expect(readProjectPort(dir)).toBe(IRIS_DEFAULT_PORT);
+    await writeConfig(JSON.stringify({ port: RETICLE_DEFAULT_PORT }));
+    expect(readProjectPort(dir)).toBe(RETICLE_DEFAULT_PORT);
   });
 });
 
@@ -129,17 +129,17 @@ describe('readProjectId', () => {
   let dir: string;
 
   beforeEach(async () => {
-    dir = await mkdtemp(join(tmpdir(), 'iris-projid-'));
+    dir = await mkdtemp(join(tmpdir(), 'reticle-projid-'));
   });
   afterEach(async () => {
     await rm(dir, { recursive: true, force: true });
   });
 
   async function writeConfig(content: string): Promise<void> {
-    await writeFile(join(dir, '.iris.json'), content, 'utf8');
+    await writeFile(join(dir, '.reticle.json'), content, 'utf8');
   }
 
-  it('returns the projectId from a valid .iris.json', async () => {
+  it('returns the projectId from a valid .reticle.json', async () => {
     await writeConfig(JSON.stringify({ framework: 'vite', projectId: 'acme-web-1234abcd' }));
     expect(readProjectId(dir)).toBe('acme-web-1234abcd');
   });
@@ -163,7 +163,7 @@ describe('readProjectId', () => {
 // ─── resolvePort ─────────────────────────────────────────────────────────────
 
 describe('resolvePort — priority chain', () => {
-  const DEFAULT = IRIS_DEFAULT_PORT;
+  const DEFAULT = RETICLE_DEFAULT_PORT;
   const PROJECT = 4401;
   const ENV = 4402;
   const FLAG = 4403;
@@ -191,7 +191,7 @@ describe('resolvePort — priority chain', () => {
   });
 });
 
-// ─── Scenario matrix — real .iris.json files in isolated temp dirs ────────────
+// ─── Scenario matrix — real .reticle.json files in isolated temp dirs ────────────
 
 describe('Scenario matrix — port isolation per project', () => {
   let projectA: string;
@@ -200,9 +200,9 @@ describe('Scenario matrix — port isolation per project', () => {
 
   beforeEach(async () => {
     [projectA, projectB, projectC] = await Promise.all([
-      mkdtemp(join(tmpdir(), 'iris-projA-')),
-      mkdtemp(join(tmpdir(), 'iris-projB-')),
-      mkdtemp(join(tmpdir(), 'iris-projC-')),
+      mkdtemp(join(tmpdir(), 'reticle-projA-')),
+      mkdtemp(join(tmpdir(), 'reticle-projB-')),
+      mkdtemp(join(tmpdir(), 'reticle-projC-')),
     ]);
   });
   afterEach(async () => {
@@ -215,9 +215,9 @@ describe('Scenario matrix — port isolation per project', () => {
 
   it('three projects each get their own port — no collisions', async () => {
     await Promise.all([
-      writeFile(join(projectA, '.iris.json'), JSON.stringify({ port: 4401 })),
-      writeFile(join(projectB, '.iris.json'), JSON.stringify({ port: 4402 })),
-      writeFile(join(projectC, '.iris.json'), JSON.stringify({ port: 4403 })),
+      writeFile(join(projectA, '.reticle.json'), JSON.stringify({ port: 4401 })),
+      writeFile(join(projectB, '.reticle.json'), JSON.stringify({ port: 4402 })),
+      writeFile(join(projectC, '.reticle.json'), JSON.stringify({ port: 4403 })),
     ]);
     expect(readProjectPort(projectA)).toBe(4401);
     expect(readProjectPort(projectB)).toBe(4402);
@@ -231,60 +231,80 @@ describe('Scenario matrix — port isolation per project', () => {
     expect(ports.size).toBe(3);
   });
 
-  it('project without .iris.json uses default — does not inherit a sibling port', () => {
-    // projectA has a port; projectB has no .iris.json
+  it('project without .reticle.json uses default — does not inherit a sibling port', () => {
+    // projectA has a port; projectB has no .reticle.json
     // Reading projectB should not somehow pick up projectA's port
     expect(readProjectPort(projectA)).toBeUndefined();
     expect(readProjectPort(projectB)).toBeUndefined();
-    const portA = resolvePort(undefined, undefined, readProjectPort(projectA), IRIS_DEFAULT_PORT);
-    const portB = resolvePort(undefined, undefined, readProjectPort(projectB), IRIS_DEFAULT_PORT);
-    expect(portA).toBe(IRIS_DEFAULT_PORT);
-    expect(portB).toBe(IRIS_DEFAULT_PORT);
+    const portA = resolvePort(
+      undefined,
+      undefined,
+      readProjectPort(projectA),
+      RETICLE_DEFAULT_PORT,
+    );
+    const portB = resolvePort(
+      undefined,
+      undefined,
+      readProjectPort(projectB),
+      RETICLE_DEFAULT_PORT,
+    );
+    expect(portA).toBe(RETICLE_DEFAULT_PORT);
+    expect(portB).toBe(RETICLE_DEFAULT_PORT);
   });
 
-  it('--port flag overrides .iris.json for one project without touching others', async () => {
-    await writeFile(join(projectA, '.iris.json'), JSON.stringify({ port: 4401 }));
-    await writeFile(join(projectB, '.iris.json'), JSON.stringify({ port: 4402 }));
+  it('--port flag overrides .reticle.json for one project without touching others', async () => {
+    await writeFile(join(projectA, '.reticle.json'), JSON.stringify({ port: 4401 }));
+    await writeFile(join(projectB, '.reticle.json'), JSON.stringify({ port: 4402 }));
     // Agent explicitly passes --port 9999 for projectA
-    const portA = resolvePort(9999, undefined, readProjectPort(projectA), IRIS_DEFAULT_PORT);
-    const portB = resolvePort(undefined, undefined, readProjectPort(projectB), IRIS_DEFAULT_PORT);
+    const portA = resolvePort(9999, undefined, readProjectPort(projectA), RETICLE_DEFAULT_PORT);
+    const portB = resolvePort(
+      undefined,
+      undefined,
+      readProjectPort(projectB),
+      RETICLE_DEFAULT_PORT,
+    );
     expect(portA).toBe(9999);
     expect(portB).toBe(4402); // projectB unaffected
   });
 
-  it('IRIS_PORT env var overrides .iris.json across all projects (intentional global override)', async () => {
+  it('RETICLE_PORT env var overrides .reticle.json across all projects (intentional global override)', async () => {
     await Promise.all([
-      writeFile(join(projectA, '.iris.json'), JSON.stringify({ port: 4401 })),
-      writeFile(join(projectB, '.iris.json'), JSON.stringify({ port: 4402 })),
+      writeFile(join(projectA, '.reticle.json'), JSON.stringify({ port: 4401 })),
+      writeFile(join(projectB, '.reticle.json'), JSON.stringify({ port: 4402 })),
     ]);
     const envPort = 7777;
-    const portA = resolvePort(undefined, envPort, readProjectPort(projectA), IRIS_DEFAULT_PORT);
-    const portB = resolvePort(undefined, envPort, readProjectPort(projectB), IRIS_DEFAULT_PORT);
+    const portA = resolvePort(undefined, envPort, readProjectPort(projectA), RETICLE_DEFAULT_PORT);
+    const portB = resolvePort(undefined, envPort, readProjectPort(projectB), RETICLE_DEFAULT_PORT);
     expect(portA).toBe(7777);
     expect(portB).toBe(7777);
   });
 
-  it('updating .iris.json port is picked up on next resolution (no caching)', async () => {
-    await writeFile(join(projectA, '.iris.json'), JSON.stringify({ port: 4401 }));
+  it('updating .reticle.json port is picked up on next resolution (no caching)', async () => {
+    await writeFile(join(projectA, '.reticle.json'), JSON.stringify({ port: 4401 }));
     expect(readProjectPort(projectA)).toBe(4401);
-    await writeFile(join(projectA, '.iris.json'), JSON.stringify({ port: 5555 }));
+    await writeFile(join(projectA, '.reticle.json'), JSON.stringify({ port: 5555 }));
     expect(readProjectPort(projectA)).toBe(5555);
   });
 
-  it('deleting .iris.json falls back to default on next resolution', async () => {
-    await writeFile(join(projectA, '.iris.json'), JSON.stringify({ port: 4401 }));
+  it('deleting .reticle.json falls back to default on next resolution', async () => {
+    await writeFile(join(projectA, '.reticle.json'), JSON.stringify({ port: 4401 }));
     expect(readProjectPort(projectA)).toBe(4401);
     const { rm: rmFile } = await import('node:fs/promises');
-    await rmFile(join(projectA, '.iris.json'));
+    await rmFile(join(projectA, '.reticle.json'));
     expect(readProjectPort(projectA)).toBeUndefined();
   });
 
-  it('corrupting .iris.json mid-run falls back gracefully', async () => {
-    await writeFile(join(projectA, '.iris.json'), JSON.stringify({ port: 4401 }));
+  it('corrupting .reticle.json mid-run falls back gracefully', async () => {
+    await writeFile(join(projectA, '.reticle.json'), JSON.stringify({ port: 4401 }));
     expect(readProjectPort(projectA)).toBe(4401);
-    await writeFile(join(projectA, '.iris.json'), '<<<not json>>>');
+    await writeFile(join(projectA, '.reticle.json'), '<<<not json>>>');
     expect(readProjectPort(projectA)).toBeUndefined();
-    const corrupt = resolvePort(undefined, undefined, readProjectPort(projectA), IRIS_DEFAULT_PORT);
-    expect(corrupt).toBe(IRIS_DEFAULT_PORT);
+    const corrupt = resolvePort(
+      undefined,
+      undefined,
+      readProjectPort(projectA),
+      RETICLE_DEFAULT_PORT,
+    );
+    expect(corrupt).toBe(RETICLE_DEFAULT_PORT);
   });
 });

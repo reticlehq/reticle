@@ -6,5 +6,5 @@ interface PackageJson {
 
 const _pkg: PackageJson = createRequire(import.meta.url)('../package.json') as PackageJson;
 
-/** The Iris server version, read from package.json at startup. */
+/** The Reticle server version, read from package.json at startup. */
 export const SERVER_VERSION: string = _pkg.version;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MarkAnchorStrategy, MarkStatus, type HumanMarkData } from '@syrin/iris-protocol';
+import { MarkAnchorStrategy, MarkStatus, type HumanMarkData } from '@reticle/protocol';
 import { ReviewStore } from './review-store.js';
 
 function mark(note: string, overrides: Partial<HumanMarkData> = {}): HumanMarkData {

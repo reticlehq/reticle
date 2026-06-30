@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { EventType, type IrisEvent } from '@syrin/iris-protocol';
+import { EventType, type ReticleEvent } from '@reticle/protocol';
 import {
   consoleEmptyHint,
   netEmptyHint,
@@ -8,7 +8,7 @@ import {
   projectConsoleLog,
 } from './event-filters.js';
 
-function ev(type: EventType, data: Record<string, unknown>, t = 1): IrisEvent {
+function ev(type: EventType, data: Record<string, unknown>, t = 1): ReticleEvent {
   return { t, type, sessionId: 's', data };
 }
 

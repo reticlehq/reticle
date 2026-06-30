@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { EventType, HealthReason } from '@syrin/iris-protocol';
+import { EventType, HealthReason } from '@reticle/protocol';
 
 afterEach(() => {
   vi.restoreAllMocks();

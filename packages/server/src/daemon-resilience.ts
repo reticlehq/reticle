@@ -5,7 +5,7 @@
  *  - unhandledRejection (a fire-and-forget promise nobody awaited — the common case in async WS/pool
  *    code) → LOG and keep running. One agent's async slip-up can't crash the daemon for everyone.
  *  - uncaughtException (a synchronous throw escaped all try/catch) → the process state is undefined
- *    per Node's guidance, so LOG a clear reason and exit cleanly; the next `iris mcp` respawns a fresh
+ *    per Node's guidance, so LOG a clear reason and exit cleanly; the next `reticle mcp` respawns a fresh
  *    daemon, which beats crashing silently or limping along corrupt.
  */
 
@@ -21,10 +21,10 @@ function describe(value: unknown): string {
 
 export function installDaemonResilience(proc: ProcessLike, log: LogFn, onFatal: () => void): void {
   proc.on('unhandledRejection', (reason: unknown) => {
-    log('iris_daemon_unhandled_rejection', { reason: describe(reason) });
+    log('reticle_daemon_unhandled_rejection', { reason: describe(reason) });
   });
   proc.on('uncaughtException', (err: unknown) => {
-    log('iris_daemon_uncaught_exception', { error: describe(err) });
+    log('reticle_daemon_uncaught_exception', { error: describe(err) });
     onFatal();
   });
 }

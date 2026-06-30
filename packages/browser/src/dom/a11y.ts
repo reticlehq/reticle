@@ -1,4 +1,4 @@
-import { ElementState, REDACTED_VALUE, type ElementDescriptor } from '@syrin/iris-protocol';
+import { ElementState, REDACTED_VALUE, type ElementDescriptor } from '@reticle/protocol';
 import { refs } from './refs.js';
 import { isSensitiveKey } from '../security/serialization.js';
 

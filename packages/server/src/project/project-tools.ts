@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { ProjectReadError, RunKind, RunStatus, type RunRecord } from '@syrin/iris-protocol';
-import { IrisTool } from '../tools/tool-names.js';
+import { ProjectReadError, RunKind, RunStatus, type RunRecord } from '@reticle/protocol';
+import { ReticleTool } from '../tools/tool-names.js';
 import { asString } from '../tools/tools-helpers.js';
 import type { ToolDef, ToolDeps } from '../tools/tools.js';
 
@@ -8,7 +8,9 @@ const sessionIdShape = {
   sessionId: z
     .string()
     .optional()
-    .describe('Active session ID from iris_sessions. Omit when only one browser session is open.'),
+    .describe(
+      'Active session ID from reticle_sessions. Omit when only one browser session is open.',
+    ),
 };
 
 /** The diff between the two most-recent runs for a name — the "did it behave like last time?" answer. */
@@ -61,16 +63,16 @@ function lastTwoFor(runs: RunRecord[], name: string): [RunRecord, RunRecord] | u
 }
 
 /**
- * The cross-run memory tools. `iris_project` reads .iris/project.json (optionally
- * scoped to a name, with a diff-vs-last summary); `iris_run_record` explicitly records an outcome
- * (the manual companion to the auto-record on iris_flow_replay). Both keep the agent's "did this
+ * The cross-run memory tools. `reticle_project` reads .reticle/project.json (optionally
+ * scoped to a name, with a diff-vs-last summary); `reticle_run_record` explicitly records an outcome
+ * (the manual companion to the auto-record on reticle_flow_replay). Both keep the agent's "did this
  * behave like last run?" question answerable without re-deriving it from raw observations.
  */
 export const PROJECT_TOOLS: ToolDef[] = [
   {
-    name: IrisTool.PROJECT,
+    name: ReticleTool.PROJECT,
     description:
-      'Read cross-run history from .iris/project.json — the memory of how past runs behaved. With { name } it also returns the last run for that flow plus a diff-vs-last summary (status change, regressed flag, consoleErrors/driftSteps deltas) so you can answer "did it behave like last time?". Returns { runs, learned?, lastRun?, diff? } or { error, reason } when no/invalid history exists.',
+      'Read cross-run history from .reticle/project.json — the memory of how past runs behaved. With { name } it also returns the last run for that flow plus a diff-vs-last summary (status change, regressed flag, consoleErrors/driftSteps deltas) so you can answer "did it behave like last time?". Returns { runs, learned?, lastRun?, diff? } or { error, reason } when no/invalid history exists.',
     inputSchema: {
       name: z.string().optional().describe('Filter runs by this name. Omit to return all runs.'),
       ...sessionIdShape,
@@ -85,8 +87,8 @@ export const PROJECT_TOOLS: ToolDef[] = [
         return {
           error:
             read.reason === ProjectReadError.MISSING
-              ? 'no .iris/project.json yet — run a flow (iris_flow_replay) or iris_run_record first'
-              : '.iris/project.json is malformed — it will self-heal on the next recorded run',
+              ? 'no .reticle/project.json yet — run a flow (reticle_flow_replay) or reticle_run_record first'
+              : '.reticle/project.json is malformed — it will self-heal on the next recorded run',
           reason: read.reason,
         };
       }
@@ -105,11 +107,11 @@ export const PROJECT_TOOLS: ToolDef[] = [
     },
   },
   {
-    name: IrisTool.RUN_RECORD,
+    name: ReticleTool.RUN_RECORD,
     description:
-      'Explicitly record a run outcome into .iris/project.json (the manual companion to the auto-record on iris_flow_replay). Use it to log the result of an assertion sequence or a manual journey so future runs can diff against it. Returns { recorded:true, name, status }.',
+      'Explicitly record a run outcome into .reticle/project.json (the manual companion to the auto-record on reticle_flow_replay). Use it to log the result of an assertion sequence or a manual journey so future runs can diff against it. Returns { recorded:true, name, status }.',
     inputSchema: {
-      name: z.string().describe('Run name for grouping in iris_project history.'),
+      name: z.string().describe('Run name for grouping in reticle_project history.'),
       status: z.nativeEnum(RunStatus).describe('Outcome: pass | fail | drift | error'),
       kind: z.nativeEnum(RunKind).optional(),
       summary: z.string().optional().describe('One-line human summary of what this run covered.'),

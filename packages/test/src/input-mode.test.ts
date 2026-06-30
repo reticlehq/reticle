@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { IrisTool } from '@syrin/iris-server';
-import { ActionType, InputMode } from '@syrin/iris-protocol';
+import { ReticleTool } from '@reticle/server';
+import { ActionType, InputMode } from '@reticle/protocol';
 import { createTestContext } from './test-context.js';
-import { IrisSkip, isSkip } from './skip.js';
+import { ReticleSkip, isSkip } from './skip.js';
 import { SKIP_REASON_REAL_INPUT } from './constants.js';
-import type { ToolInvoker } from '@syrin/iris-server';
+import type { ToolInvoker } from '@reticle/server';
 
 function fakeInvoker(handlers: Record<string, (args: Record<string, unknown>) => unknown>): {
   invoke: ToolInvoker;
@@ -23,21 +23,21 @@ function fakeInvoker(handlers: Record<string, (args: Record<string, unknown>) =>
 describe('t.expectInputModeReal', () => {
   it('passes when the last act reported inputMode real, without an extra probe', async () => {
     const { invoke, calls } = fakeInvoker({
-      [IrisTool.QUERY]: () => ({ elements: [{ ref: 'e1' }] }),
-      [IrisTool.ACT]: () => ({ inputMode: InputMode.REAL, result: {} }),
+      [ReticleTool.QUERY]: () => ({ elements: [{ ref: 'e1' }] }),
+      [ReticleTool.ACT]: () => ({ inputMode: InputMode.REAL, result: {} }),
     });
     const t = createTestContext(invoke);
     await t.act('add-section', ActionType.CLICK);
-    const actsBefore = calls.filter((c) => c.tool === IrisTool.ACT).length;
+    const actsBefore = calls.filter((c) => c.tool === ReticleTool.ACT).length;
     await expect(t.expectInputModeReal()).resolves.toBeUndefined();
-    const actsAfter = calls.filter((c) => c.tool === IrisTool.ACT).length;
+    const actsAfter = calls.filter((c) => c.tool === ReticleTool.ACT).length;
     expect(actsAfter).toBe(actsBefore); // no probe act issued
   });
 
-  it('throws an IrisSkip when the last act was synthetic', async () => {
+  it('throws an ReticleSkip when the last act was synthetic', async () => {
     const { invoke } = fakeInvoker({
-      [IrisTool.QUERY]: () => ({ elements: [{ ref: 'e1' }] }),
-      [IrisTool.ACT]: () => ({ inputMode: InputMode.SYNTHETIC, result: {} }),
+      [ReticleTool.QUERY]: () => ({ elements: [{ ref: 'e1' }] }),
+      [ReticleTool.ACT]: () => ({ inputMode: InputMode.SYNTHETIC, result: {} }),
     });
     const t = createTestContext(invoke);
     await t.act('add-section', ActionType.CLICK);
@@ -45,41 +45,43 @@ describe('t.expectInputModeReal', () => {
       () => expect.unreachable('should have skipped, not passed'),
       (error: unknown) => {
         expect(isSkip(error)).toBe(true);
-        expect((error as IrisSkip).reason).toBe(SKIP_REASON_REAL_INPUT);
+        expect((error as ReticleSkip).reason).toBe(SKIP_REASON_REAL_INPUT);
       },
     );
   });
 
   it('never silently passes on synthetic (rejects rather than resolves)', async () => {
     const { invoke } = fakeInvoker({
-      [IrisTool.QUERY]: () => ({ elements: [{ ref: 'e1' }] }),
-      [IrisTool.ACT]: () => ({ inputMode: InputMode.SYNTHETIC, result: {} }),
+      [ReticleTool.QUERY]: () => ({ elements: [{ ref: 'e1' }] }),
+      [ReticleTool.ACT]: () => ({ inputMode: InputMode.SYNTHETIC, result: {} }),
     });
     const t = createTestContext(invoke);
     await t.act('add-section', ActionType.CLICK);
-    await expect(t.expectInputModeReal()).rejects.toBeInstanceOf(IrisSkip);
+    await expect(t.expectInputModeReal()).rejects.toBeInstanceOf(ReticleSkip);
   });
 
-  it('reads iris_sessions (no page mutation) when no prior act ran, passing on realInputAvailable', async () => {
+  it('reads reticle_sessions (no page mutation) when no prior act ran, passing on realInputAvailable', async () => {
     const { invoke, calls } = fakeInvoker({
-      [IrisTool.SESSIONS]: () => ({ sessions: [{ sessionId: 's1', realInputAvailable: true }] }),
+      [ReticleTool.SESSIONS]: () => ({ sessions: [{ sessionId: 's1', realInputAvailable: true }] }),
     });
     const t = createTestContext(invoke);
     await expect(t.expectInputModeReal()).resolves.toBeUndefined();
-    expect(calls.find((c) => c.tool === IrisTool.SESSIONS)).toBeDefined();
-    expect(calls.find((c) => c.tool === IrisTool.ACT)).toBeUndefined(); // never touches the page
+    expect(calls.find((c) => c.tool === ReticleTool.SESSIONS)).toBeDefined();
+    expect(calls.find((c) => c.tool === ReticleTool.ACT)).toBeUndefined(); // never touches the page
   });
 
   it('skips when the session reports real input is not available', async () => {
     const { invoke } = fakeInvoker({
-      [IrisTool.SESSIONS]: () => ({ sessions: [{ sessionId: 's1', realInputAvailable: false }] }),
+      [ReticleTool.SESSIONS]: () => ({
+        sessions: [{ sessionId: 's1', realInputAvailable: false }],
+      }),
     });
     const t = createTestContext(invoke);
     await t.expectInputModeReal().then(
       () => expect.unreachable('should have skipped'),
       (error: unknown) => {
         expect(isSkip(error)).toBe(true);
-        expect((error as IrisSkip).reason).toBe(SKIP_REASON_REAL_INPUT);
+        expect((error as ReticleSkip).reason).toBe(SKIP_REASON_REAL_INPUT);
       },
     );
   });

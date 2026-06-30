@@ -1,6 +1,6 @@
 import * as http from 'node:http';
 import * as net from 'node:net';
-import { LOOPBACK_HOST } from '@syrin/iris-protocol';
+import { LOOPBACK_HOST } from '@reticle/protocol';
 import { MCP_SSE_PATH } from './http-server.js';
 import { log } from './log.js';
 
@@ -8,9 +8,9 @@ const DEFAULT_DAEMON_READY_TIMEOUT_MS = 10_000;
 /**
  * How long to wait for the spawned daemon's port to accept connections before giving up. The default
  * suits a normal machine; a slow CI/VM (heavy headless-browser launch) can raise it via the
- * IRIS_DAEMON_READY_TIMEOUT_MS env var. Invalid/absent values fall back to the default.
+ * RETICLE_DAEMON_READY_TIMEOUT_MS env var. Invalid/absent values fall back to the default.
  */
-const envDaemonReadyTimeoutMs = Number(process.env['IRIS_DAEMON_READY_TIMEOUT_MS']);
+const envDaemonReadyTimeoutMs = Number(process.env['RETICLE_DAEMON_READY_TIMEOUT_MS']);
 const DAEMON_READY_TIMEOUT_MS =
   Number.isFinite(envDaemonReadyTimeoutMs) && envDaemonReadyTimeoutMs > 0
     ? envDaemonReadyTimeoutMs
@@ -22,7 +22,7 @@ function delay(ms: number): Promise<void> {
 }
 
 /**
- * Returns true if something is already listening on the iris port.
+ * Returns true if something is already listening on the reticle port.
  * Uses a plain TCP probe so we don't create a side-effectful SSE session
  * inside the daemon just to check reachability.
  */
@@ -52,7 +52,7 @@ export async function waitForDaemon(port: number): Promise<void> {
     await delay(DAEMON_POLL_INTERVAL_MS);
   }
   throw new Error(
-    `iris daemon did not become ready on port ${port} within ${DAEMON_READY_TIMEOUT_MS}ms`,
+    `reticle daemon did not become ready on port ${port} within ${DAEMON_READY_TIMEOUT_MS}ms`,
   );
 }
 
@@ -75,7 +75,7 @@ function postToSession(url: string, body: string): Promise<void> {
       resolve();
     });
     req.on('error', (err) => {
-      log('iris_mcp_proxy_post_error', { error: err.message });
+      log('reticle_mcp_proxy_post_error', { error: err.message });
       resolve();
     });
     req.write(bodyBuf);
@@ -132,12 +132,12 @@ export function startMcpProxy(port: number): Promise<never> {
       });
 
       res.on('end', () => {
-        log('iris_mcp_proxy_sse_ended', { port });
+        log('reticle_mcp_proxy_sse_ended', { port });
         process.exit(0);
       });
 
       res.on('error', (err) => {
-        log('iris_mcp_proxy_sse_error', { error: err.message });
+        log('reticle_mcp_proxy_sse_error', { error: err.message });
         process.exit(1);
       });
     });

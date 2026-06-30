@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  IrisVerificationRunSchema,
+  ReticleVerificationRunSchema,
   RUN_FILE_VERSION,
   RiskSurface,
   RunAgentKind,
@@ -13,7 +13,7 @@ import {
 } from './verification-run.js';
 
 /**
- * Contract tests for the IrisVerificationRun artifact. This is the stable shape an OEM/design partner
+ * Contract tests for the ReticleVerificationRun artifact. This is the stable shape an OEM/design partner
  * consumes, so the tests lock: a minimal run validates, arrays default to empty, a full failing run
  * with risks + a repair packet validates, and bad version/enum values are rejected.
  */
@@ -31,9 +31,9 @@ const minimal = {
   verdict: { status: VerdictStatus.PASS, confidence: 'high' },
 };
 
-describe('IrisVerificationRunSchema', () => {
+describe('ReticleVerificationRunSchema', () => {
   it('parses a minimal run and applies array defaults', () => {
-    const parsed = IrisVerificationRunSchema.safeParse(minimal);
+    const parsed = ReticleVerificationRunSchema.safeParse(minimal);
     expect(parsed.success).toBe(true);
     if (parsed.success) {
       expect(parsed.data.flows).toEqual([]);
@@ -104,7 +104,7 @@ describe('IrisVerificationRunSchema', () => {
         blockingRisks: 1,
       },
     };
-    const parsed = IrisVerificationRunSchema.safeParse(full);
+    const parsed = ReticleVerificationRunSchema.safeParse(full);
     expect(parsed.success).toBe(true);
     if (parsed.success) {
       expect(parsed.data.flows[0]?.status).toBe(RunFlowStatus.FAIL);
@@ -114,12 +114,12 @@ describe('IrisVerificationRunSchema', () => {
   });
 
   it('rejects a wrong schemaVersion', () => {
-    const parsed = IrisVerificationRunSchema.safeParse({ ...minimal, schemaVersion: 999 });
+    const parsed = ReticleVerificationRunSchema.safeParse({ ...minimal, schemaVersion: 999 });
     expect(parsed.success).toBe(false);
   });
 
   it('rejects an unknown verdict status', () => {
-    const parsed = IrisVerificationRunSchema.safeParse({
+    const parsed = ReticleVerificationRunSchema.safeParse({
       ...minimal,
       verdict: { status: 'maybe', confidence: 'high' },
     });
@@ -127,7 +127,7 @@ describe('IrisVerificationRunSchema', () => {
   });
 
   it('rejects an unknown risk surface', () => {
-    const parsed = IrisVerificationRunSchema.safeParse({
+    const parsed = ReticleVerificationRunSchema.safeParse({
       ...minimal,
       risks: [{ surface: 'quantum', severity: 'low', detail: 'x' }],
     });
@@ -178,6 +178,6 @@ describe('IrisVerificationRunSchema', () => {
       },
       signature: { alg: 'ed25519', value: 'sig', signedAt: 2 },
     };
-    expect(IrisVerificationRunSchema.safeParse(frozenV1).success).toBe(true);
+    expect(ReticleVerificationRunSchema.safeParse(frozenV1).success).toBe(true);
   });
 });

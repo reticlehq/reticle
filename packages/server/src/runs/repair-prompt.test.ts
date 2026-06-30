@@ -4,12 +4,12 @@ import {
   type FlowReplayResult,
   type FlowStepResult,
   type ReplayDecision,
-} from '@syrin/iris-protocol';
+} from '@reticle/protocol';
 import { buildRepairPacket, buildRepairPackets } from './repair-prompt.js';
 
 const step = (n: number, ok: boolean): FlowStepResult => ({
   step: n,
-  tool: 'iris_act',
+  tool: 'reticle_act',
   anchor: 'x',
   ok,
 });

@@ -1,10 +1,10 @@
 /**
  * One green-or-red gate for the whole demo — a pre-meeting smoke check. Boots the preview (the Vite
  * server hosting the sandbox + Builder UI + APIs), then runs every layer as a pass/fail step:
- *   • bench       — Iris catches 6/6 silent classes, blind 0/6, 0 false positives
+ *   • bench       — Reticle catches 6/6 silent classes, blind 0/6, 0 false positives
  *   • repair      — self-healing loop reaches green (mock-data)
- *   • self-test   — Iris-tests-Iris, buggy build blocked (scripted) and (live, if LLM_API_KEY set)
- *   • self-test   — Iris-tests-Iris, clean build passes (no false positive)
+ *   • self-test   — Reticle-tests-Reticle, buggy build blocked (scripted) and (live, if LLM_API_KEY set)
+ *   • self-test   — Reticle-tests-Reticle, clean build passes (no false positive)
  * Exits non-zero if any step fails. Tears the preview down on the way out.
  *
  *   node qa/demo-all.mjs
@@ -46,7 +46,7 @@ async function waitForPreview(timeoutMs) {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
     try {
-      const r = await fetch(`${PREVIEW_URL}/api/iris-config`);
+      const r = await fetch(`${PREVIEW_URL}/api/reticle-config`);
       if (r.ok) return true;
     } catch {
       /* not up yet */
@@ -60,19 +60,19 @@ async function waitForPreview(timeoutMs) {
 const vite = spawn(join(APP_DIR, 'node_modules', '.bin', 'vite'), ['--port', String(PREVIEW_PORT), '--strictPort'], {
   cwd: APP_DIR,
   stdio: 'ignore',
-  env: { ...process.env, IRIS_PREVIEW_PORT: String(PREVIEW_PORT), IRIS_PREVIEW_BRIDGE_PORT: String(BRIDGE_PORT) },
+  env: { ...process.env, RETICLE_PREVIEW_PORT: String(PREVIEW_PORT), RETICLE_PREVIEW_BRIDGE_PORT: String(BRIDGE_PORT) },
 });
 
 const results = [];
 try {
   if (!(await waitForPreview(15000))) throw new Error('preview server did not come up on :4318');
 
-  results.push(await run('bench — Iris 6/6 vs blind 0/6', 'bench.mjs'));
+  results.push(await run('bench — Reticle 6/6 vs blind 0/6', 'bench.mjs'));
   results.push(await run('repair — self-healing loop (mock-data)', 'repair-loop.mjs', { BUG: 'mock-data' }));
-  results.push(await run('self-test — Iris⇄Iris, buggy build blocked (scripted)', 'self-test.mjs', { BUG: 'mock-data', ENGINE: 'scripted' }));
-  results.push(await run('self-test — Iris⇄Iris, clean build passes (scripted)', 'self-test.mjs', { BUG: 'none', ENGINE: 'scripted' }));
+  results.push(await run('self-test — Reticle⇄Reticle, buggy build blocked (scripted)', 'self-test.mjs', { BUG: 'mock-data', ENGINE: 'scripted' }));
+  results.push(await run('self-test — Reticle⇄Reticle, clean build passes (scripted)', 'self-test.mjs', { BUG: 'none', ENGINE: 'scripted' }));
   if (hasLiveKey()) {
-    results.push(await run('self-test — Iris⇄Iris, buggy build blocked (LIVE agent)', 'self-test.mjs', { BUG: 'double-submit', ENGINE: 'live' }));
+    results.push(await run('self-test — Reticle⇄Reticle, buggy build blocked (LIVE agent)', 'self-test.mjs', { BUG: 'double-submit', ENGINE: 'live' }));
   } else {
     process.stdout.write('\n(skipping live-agent self-test — no LLM_API_KEY in .env)\n');
   }

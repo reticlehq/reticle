@@ -6,23 +6,23 @@ import {
   ActionType,
   DANGEROUS_ACTION_CONFIRM_ARG,
   FlowErrorCode,
-  IrisCommand,
+  ReticleCommand,
   QueryBy,
   ReplayStatus,
   RunKind,
   RunStatus,
   type CommandResult,
   type FlowReplayResult,
-} from '@syrin/iris-protocol';
+} from '@reticle/protocol';
 import { TOOLS, type ToolDeps } from '../tools/tools.js';
-import { IrisTool } from '../tools/tool-names.js';
+import { ReticleTool } from '../tools/tool-names.js';
 import { BaselineStore } from '../project/baselines.js';
 import { RecordingStore } from './recordings.js';
 import { FlowStore } from './flows.js';
 import { ProjectStore } from '../project/project-store.js';
 import { AnnotationStore } from './annotation-store.js';
 import { createNodeFileSystem, type FileSystemPort } from '../project/fs-port.js';
-import { flowPath } from '../project/iris-dir.js';
+import { flowPath } from '../project/reticle-dir.js';
 import { asRecord, asString } from '../tools/tools-helpers.js';
 import type { Session, SessionManager } from '../session/session.js';
 import type { CompiledProgram, RecordedStep } from './recordings.js';
@@ -40,7 +40,7 @@ function scriptedSession(
   options: ScriptedSessionOptions = {},
 ): Partial<Session> {
   const command = (name: string, args: Record<string, unknown> = {}): Promise<CommandResult> => {
-    if (name === IrisCommand.QUERY) {
+    if (name === ReticleCommand.QUERY) {
       return Promise.resolve({
         kind: 'command_result',
         id: 'q',
@@ -48,7 +48,7 @@ function scriptedSession(
         result: queryScript(asString(args['value']) ?? ''),
       });
     }
-    if (name === IrisCommand.ACT) {
+    if (name === ReticleCommand.ACT) {
       options.actArgs?.push(asRecord(args['args']));
       const ok = options.actOk ?? true;
       return Promise.resolve({
@@ -85,7 +85,7 @@ function fakeDeps(
     project: new ProjectStore(fs, root, clock),
     annotations: new AnnotationStore(),
     fs,
-    irisRoot: root,
+    reticleRoot: root,
     now: clock.now,
   };
 }
@@ -102,20 +102,20 @@ function program(name: string, steps: RecordedStep[]): CompiledProgram {
 
 function actStep(value: string): RecordedStep {
   return {
-    tool: IrisTool.ACT,
+    tool: ReticleTool.ACT,
     stable: true,
     args: { by: QueryBy.TESTID, value, action: ActionType.CLICK, args: {} },
   };
 }
 
-describe('iris_flow_replay handler — temp dir, never touches the repo', () => {
+describe('reticle_flow_replay handler — temp dir, never touches the repo', () => {
   let dir: string;
   let root: string;
   let fs: FileSystemPort;
 
   beforeEach(async () => {
-    dir = await mkdtemp(join(tmpdir(), 'iris-replay-'));
-    root = join(dir, '.iris');
+    dir = await mkdtemp(join(tmpdir(), 'reticle-replay-'));
+    root = join(dir, '.reticle');
     fs = createNodeFileSystem();
   });
 
@@ -134,7 +134,7 @@ describe('iris_flow_replay handler — temp dir, never touches the repo', () => 
     const session = scriptedSession((testid) => ({ elements: [{ ref: `e-${testid}` }] }));
     const deps = fakeDeps(fs, root, session);
 
-    const res = (await tool(IrisTool.FLOW_REPLAY).handler(deps, {
+    const res = (await tool(ReticleTool.FLOW_REPLAY).handler(deps, {
       flowName: 'green',
     })) as FlowReplayResult;
     expect(res.status).toBe(ReplayStatus.OK);
@@ -155,7 +155,7 @@ describe('iris_flow_replay handler — temp dir, never touches the repo', () => 
     }));
     const deps = fakeDeps(fs, root, session);
 
-    const res = (await tool(IrisTool.FLOW_REPLAY).handler(deps, {
+    const res = (await tool(ReticleTool.FLOW_REPLAY).handler(deps, {
       flowName: 'renamed',
     })) as FlowReplayResult;
     expect(res.status).toBe(ReplayStatus.DRIFT);
@@ -167,7 +167,7 @@ describe('iris_flow_replay handler — temp dir, never touches the repo', () => 
     const session = scriptedSession(() => ({ elements: [] }));
     const deps = fakeDeps(fs, root, session);
 
-    const res = (await tool(IrisTool.FLOW_REPLAY).handler(deps, {
+    const res = (await tool(ReticleTool.FLOW_REPLAY).handler(deps, {
       flowName: 'nope',
     })) as FlowReplayResult;
     expect(res.status).toBe(ReplayStatus.ERROR);
@@ -181,7 +181,7 @@ describe('iris_flow_replay handler — temp dir, never touches the repo', () => 
     const session = scriptedSession(() => ({ elements: [] }));
     const deps = fakeDeps(fs, root, session);
 
-    const res = (await tool(IrisTool.FLOW_REPLAY).handler(deps, {
+    const res = (await tool(ReticleTool.FLOW_REPLAY).handler(deps, {
       flowName: 'bad',
     })) as FlowReplayResult;
     expect(res.status).toBe(ReplayStatus.ERROR);
@@ -193,21 +193,21 @@ describe('iris_flow_replay handler — temp dir, never touches the repo', () => 
     const session = scriptedSession(() => ({ elements: [] }));
     const deps = fakeDeps(fs, root, session);
 
-    const res = (await tool(IrisTool.FLOW_REPLAY).handler(deps, {
+    const res = (await tool(ReticleTool.FLOW_REPLAY).handler(deps, {
       flowName: '../escape',
     })) as FlowReplayResult;
     expect(res.status).toBe(ReplayStatus.ERROR);
     expect(res.error?.code).toBe(FlowErrorCode.INVALID_NAME);
   });
 
-  // ---- every replay records a run to .iris/project.json ----
+  // ---- every replay records a run to .reticle/project.json ----
 
   it('F: an ok replay auto-records a pass run with mapped status + driftSteps:0', async () => {
     await saveFlow('green', [actStep('chat-send')]);
     const session = scriptedSession((testid) => ({ elements: [{ ref: `e-${testid}` }] }));
     const deps = fakeDeps(fs, root, session);
 
-    await tool(IrisTool.FLOW_REPLAY).handler(deps, { flowName: 'green' });
+    await tool(ReticleTool.FLOW_REPLAY).handler(deps, { flowName: 'green' });
     const history = await deps.project.read();
     expect(history.ok).toBe(true);
     if (!history.ok) throw new Error('expected history');
@@ -224,7 +224,7 @@ describe('iris_flow_replay handler — temp dir, never touches the repo', () => 
     const session = scriptedSession(() => ({ elements: [] }));
     const deps = fakeDeps(fs, root, session);
 
-    await tool(IrisTool.FLOW_REPLAY).handler(deps, { flowName: 'nope' });
+    await tool(ReticleTool.FLOW_REPLAY).handler(deps, { flowName: 'nope' });
     const last = await deps.project.lastRun('nope');
     expect(last?.status).toBe(RunStatus.ERROR);
     expect(last?.kind).toBe(RunKind.FLOW_REPLAY);
@@ -237,7 +237,7 @@ describe('iris_flow_replay handler — temp dir, never touches the repo', () => 
     });
     const deps = fakeDeps(fs, root, session);
 
-    const res = (await tool(IrisTool.FLOW_REPLAY).handler(deps, {
+    const res = (await tool(ReticleTool.FLOW_REPLAY).handler(deps, {
       flowName: 'action-fails',
     })) as FlowReplayResult;
     expect(res.status).toBe(ReplayStatus.ERROR);
@@ -257,8 +257,8 @@ describe('iris_flow_replay handler — temp dir, never touches the repo', () => 
     });
     const deps = fakeDeps(fs, root, session);
 
-    await tool(IrisTool.FLOW_REPLAY).handler(deps, { flowName: 'dangerous' });
-    await tool(IrisTool.FLOW_REPLAY).handler(deps, {
+    await tool(ReticleTool.FLOW_REPLAY).handler(deps, { flowName: 'dangerous' });
+    await tool(ReticleTool.FLOW_REPLAY).handler(deps, {
       flowName: 'dangerous',
       confirmDangerous: true,
     });

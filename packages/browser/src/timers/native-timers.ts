@@ -1,9 +1,9 @@
 // Native timers captured (bound) at module load, BEFORE any fake-clock patch. The SDK uses
 // these for its own internal waits (presenter pacing, hover dwell, transport reconnect) so
-// that freezing the app's clock (iris_clock) never deadlocks Iris itself.
+// that freezing the app's clock (reticle_clock) never deadlocks Reticle itself.
 //
 // Important: we bind the reference now. Resolving `setTimeout` at call time would pick up the
-// patched (frozen) timer once iris_clock freezes the clock — which would hang the SDK.
+// patched (frozen) timer once reticle_clock freezes the clock — which would hang the SDK.
 const g: typeof globalThis = globalThis;
 
 const realSetTimeout = typeof g.setTimeout === 'function' ? g.setTimeout.bind(g) : null;
@@ -15,7 +15,7 @@ const realPerfNow =
 
 /**
  * Monotonic "now" bound at load. clock.ts deliberately does NOT patch performance.now, so this
- * stays live even when the app clock (iris_clock) is frozen — the presenter state machine relies
+ * stays live even when the app clock (reticle_clock) is frozen — the presenter state machine relies
  * on it. Falls back to 0 in SSR where performance is absent.
  */
 export const nativeNow = (): number => (realPerfNow ? realPerfNow() : 0);
@@ -29,7 +29,7 @@ export const nativeClearTimeout = (id: number): void => {
 
 /**
  * A self-rescheduling interval built on the bound real timer. We do NOT use
- * `setInterval` because iris_clock can freeze the app's timers — a native, pre-bound
+ * `setInterval` because reticle_clock can freeze the app's timers — a native, pre-bound
  * timer keeps the page-health heartbeat ticking so a frozen clock never reads as stale.
  * Returns a stop function.
  */
@@ -83,7 +83,7 @@ export const nativeFrame = (): Promise<void> => boundedFrame().then(() => undefi
 /**
  * "Settle": let the framework flush. Awaits a microtask then one BOUNDED animation frame so a
  * React commit (and the MutationObserver records it triggers) lands before the caller returns.
- * Uses native timers/rAF so a frozen app clock (iris_clock) never stalls it, AND is bounded so a
+ * Uses native timers/rAF so a frozen app clock (reticle_clock) never stalls it, AND is bounded so a
  * throttled/background tab (rAF never fires) never deadlocks. Reports whether a real frame fired.
  */
 export const settle = async (budgetMs = FRAME_BUDGET_MS): Promise<FrameOutcome> => {

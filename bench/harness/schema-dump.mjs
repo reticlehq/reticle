@@ -11,7 +11,13 @@ const WANT = {
     'browser_network_requests',
   ],
   devtools: ['navigate_page', 'fill', 'click', 'list_console_messages', 'list_network_requests'],
-  iris: ['iris_navigate', 'iris_query', 'iris_act', 'iris_console', 'iris_network'],
+  reticle: [
+    'reticle_navigate',
+    'reticle_query',
+    'reticle_act',
+    'reticle_console',
+    'reticle_network',
+  ],
 };
 const SERVERS = {
   playwright: {
@@ -22,10 +28,10 @@ const SERVERS = {
     command: 'npx',
     args: ['-y', 'chrome-devtools-mcp@1.3.0', '--headless', '--isolated'],
   },
-  iris: {
+  reticle: {
     command: 'node',
     args: ['packages/server/dist/cli.js', 'mcp', '--port', '4400'],
-    env: { IRIS_PORT: '4400' },
+    env: { RETICLE_PORT: '4400' },
   },
 };
 const which = process.argv[2];

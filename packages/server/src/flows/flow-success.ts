@@ -8,12 +8,12 @@
  * honored exactly as in replay: a success bound to a dynamic (LLM-output) testid is presence-only,
  * never asserted, so the skip is symmetric across the step layer and the success layer.
  *
- * Lives in iris-server (alongside the predicate engine) so BOTH the live MCP `iris_flow_replay`
- * tool and the `@syrin/iris-test` spec runner share one implementation — no divergent oracle.
+ * Lives in reticle-server (alongside the predicate engine) so BOTH the live MCP `reticle_flow_replay`
+ * tool and the `@reticle/test` spec runner share one implementation — no divergent oracle.
  * Pure: no IO, no clock.
  */
 
-import { AnchorKind, type FlowExpect, type FlowFile } from '@syrin/iris-protocol';
+import { AnchorKind, type FlowExpect, type FlowFile } from '@reticle/protocol';
 import type { EvalResult, Predicate } from '../events/predicate.js';
 import type { FlowReplaySession, WaitForSignal } from './flow-replay.js';
 

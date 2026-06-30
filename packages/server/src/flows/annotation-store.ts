@@ -1,10 +1,10 @@
-import type { FlowExpect } from '@syrin/iris-protocol';
+import type { FlowExpect } from '@reticle/protocol';
 
 /**
  * Holds the flow-level + per-step annotations accumulating during a live
  * recording, keyed by recording name. A CompiledProgram (RecordingStore) carries only steps; the
  * annotations the human/agent attaches (dynamic[], success, per-step expect) live here until
- * iris_flow_save folds them into the on-disk FlowFile.
+ * reticle_flow_save folds them into the on-disk FlowFile.
  *
  * Pure in-memory state — no IO, no clock. One bucket per recording name; cleared on save so a fresh
  * recording of the same name never inherits stale annotations.
@@ -70,7 +70,7 @@ export class AnnotationStore {
     this.#bucket(name).stepExpect.set(index, expect);
   }
 
-  /** Drop a recording's annotations (called after iris_flow_save folds them onto disk). */
+  /** Drop a recording's annotations (called after reticle_flow_save folds them onto disk). */
   clear(name: string): void {
     this.#byName.delete(name);
   }

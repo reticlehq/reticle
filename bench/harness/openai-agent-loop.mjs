@@ -34,17 +34,20 @@ const SERVERS = {
     args: ['-y', 'chrome-devtools-mcp@1.3.0', '--headless', '--isolated'],
     env: {},
   },
-  iris: {
+  reticle: {
     command: 'node',
     args: ['packages/server/dist/cli.js', 'mcp', '--port', '4455', '--drive', URL],
-    env: { IRIS_PORT: '4455', IRIS_TOOL_PROFILE: process.env.BENCH_IRIS_PROFILE ?? 'full' },
+    env: {
+      RETICLE_PORT: '4455',
+      RETICLE_TOOL_PROFILE: process.env.BENCH_RETICLE_PROFILE ?? 'full',
+    },
   },
 };
-// BENCH_TOOLS=iris,playwright_mcp limits which tools run (cost control). Default: all three.
+// BENCH_TOOLS=reticle,playwright_mcp limits which tools run (cost control). Default: all three.
 const TOOL_SET = (
   process.env.BENCH_TOOLS
     ? process.env.BENCH_TOOLS.split(',')
-    : ['playwright_mcp', 'chrome_devtools_mcp', 'iris']
+    : ['playwright_mcp', 'chrome_devtools_mcp', 'reticle']
 ).map((s) => s.trim());
 
 // Canonical NL task per scenario (verbatim across tools) + expected verdict.
@@ -52,27 +55,27 @@ const TASKS = {
   'hidden-api-500': {
     regression: null,
     expectIssue: true,
-    task: `Open ${URL}, log in with admin@iris.dev / password, go to the Diagnostics page and click the "500 Server Error" fault button. Then determine whether the app made any failing network request. End your final message with exactly "VERDICT: PASS" (healthy) or "VERDICT: FAIL" (a request failed).`,
+    task: `Open ${URL}, log in with admin@reticle.dev / password, go to the Diagnostics page and click the "500 Server Error" fault button. Then determine whether the app made any failing network request. End your final message with exactly "VERDICT: PASS" (healthy) or "VERDICT: FAIL" (a request failed).`,
   },
   'console-error-intact-ui': {
     regression: null,
     expectIssue: true,
-    task: `Open ${URL}, log in with admin@iris.dev / password, go to Diagnostics and click the buggy chart widget. Determine whether the application logged any error. End with exactly "VERDICT: PASS" (healthy) or "VERDICT: FAIL" (an error was logged).`,
+    task: `Open ${URL}, log in with admin@reticle.dev / password, go to Diagnostics and click the buggy chart widget. Determine whether the application logged any error. End with exactly "VERDICT: PASS" (healthy) or "VERDICT: FAIL" (an error was logged).`,
   },
   'route-transition-break': {
     regression: 'route-transition-break',
     expectIssue: true,
-    task: `Open ${URL}, log in (admin@iris.dev / password), then click the "Compose" navigation item. Verify the Compose view actually renders (it has a prompt box and a Generate button). End with exactly "VERDICT: PASS" if it renders, "VERDICT: FAIL" if navigation did nothing.`,
+    task: `Open ${URL}, log in (admin@reticle.dev / password), then click the "Compose" navigation item. Verify the Compose view actually renders (it has a prompt box and a Generate button). End with exactly "VERDICT: PASS" if it renders, "VERDICT: FAIL" if navigation did nothing.`,
   },
   'missing-modal': {
     regression: 'missing-modal',
     expectIssue: true,
-    task: `Open ${URL}, log in (admin@iris.dev / password), go to Deployments and click "New deployment". Verify the new-deployment modal opens. End with exactly "VERDICT: PASS" if it opens, "VERDICT: FAIL" if no modal appears.`,
+    task: `Open ${URL}, log in (admin@reticle.dev / password), go to Deployments and click "New deployment". Verify the new-deployment modal opens. End with exactly "VERDICT: PASS" if it opens, "VERDICT: FAIL" if no modal appears.`,
   },
   'no-regression-control': {
     regression: null,
     expectIssue: false,
-    task: `Open ${URL}, log in (admin@iris.dev / password), and verify the Overview page is healthy (KPI cards + traffic chart render, no errors). End with exactly "VERDICT: PASS" if healthy, "VERDICT: FAIL" if anything is broken.`,
+    task: `Open ${URL}, log in (admin@reticle.dev / password), and verify the Overview page is healthy (KPI cards + traffic chart render, no errors). End with exactly "VERDICT: PASS" if healthy, "VERDICT: FAIL" if anything is broken.`,
   },
 };
 
@@ -115,7 +118,7 @@ async function runCell(scenarioId, toolKey) {
     verdictText = '';
   try {
     await client.start();
-    if (toolKey === 'iris') await new Promise((r) => setTimeout(r, 3500));
+    if (toolKey === 'reticle') await new Promise((r) => setTimeout(r, 3500));
     const tools = mcpToolsToOpenAI(await client.listTools());
     const messages = [
       {
@@ -186,7 +189,7 @@ async function runCell(scenarioId, toolKey) {
     };
   } finally {
     await client.stop();
-    if (toolKey === 'iris') {
+    if (toolKey === 'reticle') {
       try {
         const { execFileSync } = await import('node:child_process');
         execFileSync('node', ['packages/server/dist/cli.js', 'stop', '--port', '4455', '--quiet'], {

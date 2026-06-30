@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { IrisCommand, type CommandResult } from '@syrin/iris-protocol';
+import { ReticleCommand, type CommandResult } from '@reticle/protocol';
 import { TOOLS, type ToolDeps } from '../tools/tools.js';
-import { IrisTool } from '../tools/tool-names.js';
+import { ReticleTool } from '../tools/tool-names.js';
 import type { Session, SessionManager } from './session.js';
 
 /** A session that echoes the SESSION_CONFIG args back (what the browser presenter would apply). */
@@ -18,7 +18,7 @@ function configEchoSession(): {
       serverIdleEndMs.push(ms);
     },
     command: (name, args = {}) => {
-      if (name === IrisCommand.SESSION_CONFIG) sent.push(args);
+      if (name === ReticleCommand.SESSION_CONFIG) sent.push(args);
       return Promise.resolve({
         kind: 'command_result',
         id: 'c',
@@ -36,13 +36,13 @@ function tool(name: string) {
   return t;
 }
 
-describe('iris_session tool', () => {
+describe('reticle_session tool', () => {
   it('forwards idleEndMs to the browser AND tunes the server reaper', async () => {
     const { session, sent, serverIdleEndMs } = configEchoSession();
     const sessions: Partial<SessionManager> = { resolve: () => session };
     const deps = { sessions: sessions as SessionManager } as ToolDeps;
 
-    const r = (await tool(IrisTool.SESSION).handler(deps, { idleEndMs: 600000 })) as {
+    const r = (await tool(ReticleTool.SESSION).handler(deps, { idleEndMs: 600000 })) as {
       applied: boolean;
       idleEndMs: number;
     };
@@ -57,7 +57,7 @@ describe('iris_session tool', () => {
     const sessions: Partial<SessionManager> = { resolve: () => session };
     const deps = { sessions: sessions as SessionManager } as ToolDeps;
 
-    await tool(IrisTool.SESSION).handler(deps, {});
+    await tool(ReticleTool.SESSION).handler(deps, {});
     expect(serverIdleEndMs).toEqual([]);
   });
 });

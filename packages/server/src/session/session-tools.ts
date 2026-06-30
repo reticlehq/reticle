@@ -1,32 +1,32 @@
 import { z } from 'zod';
-import { IrisCommand } from '@syrin/iris-protocol';
-import { IrisTool } from '../tools/tool-names.js';
+import { ReticleCommand } from '@reticle/protocol';
+import { ReticleTool } from '../tools/tool-names.js';
 import { asNumber, asString } from '../tools/tools-helpers.js';
 import type { ToolDef, ToolDeps } from '../tools/tools.js';
 
 /**
  * Session lifecycle controls. The presenter session begins on the agent's first action and ends
- * either when the agent ends it (iris_end_session) or after an idle window — and the human keeps the
- * panel (with Copy/Export of the run) afterwards. iris_session lets the AGENT tune that idle window
+ * either when the agent ends it (reticle_end_session) or after an idle window — and the human keeps the
+ * panel (with Copy/Export of the run) afterwards. reticle_session lets the AGENT tune that idle window
  * for the app: raise it for a slow app, lower it for a quick check.
  */
 export const SESSION_TOOLS: ToolDef[] = [
   {
-    name: IrisTool.SESSION,
+    name: ReticleTool.SESSION,
     description:
-      'Tune the presenter session for this app. { idleEndMs } sets how long the session stays open after you go quiet before the panel shows the human you are WAITING (your turn). Default 5min — the SLOW backstop; signal handback IMMEDIATELY with iris_yield instead of waiting for this. Lower it for snappier auto-handback, raise it for a slow app where long gaps between your tool calls are normal. Enforced SERVER-SIDE (immune to background-tab throttling); it also fires if you (the MCP client) disconnect — so a forgotten or crashed session never leaves the HUD reading "live". Going quiet then acting again revives the session automatically. Returns { applied, idleEndMs }.',
+      'Tune the presenter session for this app. { idleEndMs } sets how long the session stays open after you go quiet before the panel shows the human you are WAITING (your turn). Default 5min — the SLOW backstop; signal handback IMMEDIATELY with reticle_yield instead of waiting for this. Lower it for snappier auto-handback, raise it for a slow app where long gaps between your tool calls are normal. Enforced SERVER-SIDE (immune to background-tab throttling); it also fires if you (the MCP client) disconnect — so a forgotten or crashed session never leaves the HUD reading "live". Going quiet then acting again revives the session automatically. Returns { applied, idleEndMs }.',
     inputSchema: {
       idleEndMs: z
         .number()
         .optional()
         .describe(
-          'Idle window in milliseconds after which the panel shows WAITING (your turn). Default: 300000 (5 min) — the slow backstop; prefer iris_yield. Raise for slow apps.',
+          'Idle window in milliseconds after which the panel shows WAITING (your turn). Default: 300000 (5 min) — the slow backstop; prefer reticle_yield. Raise for slow apps.',
         ),
       sessionId: z
         .string()
         .optional()
         .describe(
-          'Active session ID from iris_sessions. Omit when only one browser session is open.',
+          'Active session ID from reticle_sessions. Omit when only one browser session is open.',
         ),
     },
     outputSchema: {
@@ -40,7 +40,7 @@ export const SESSION_TOOLS: ToolDef[] = [
       // authority), so the agent-set window is honored even when the tab is backgrounded.
       if (idleEndMs !== undefined) session.setIdleEndMs(idleEndMs);
       const res = await session.command(
-        IrisCommand.SESSION_CONFIG,
+        ReticleCommand.SESSION_CONFIG,
         idleEndMs !== undefined ? { idleEndMs } : {},
       );
       if (!res.ok) throw new Error(res.error ?? 'session config failed');

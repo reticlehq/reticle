@@ -1,5 +1,5 @@
 /**
- * Pure framework + toolchain detection for `iris init`. No filesystem access — callers pass in
+ * Pure framework + toolchain detection for `reticle init`. No filesystem access — callers pass in
  * the parsed package.json and the set of config/lock filenames present in the project root.
  */
 

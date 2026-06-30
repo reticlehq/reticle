@@ -2,7 +2,7 @@
 
 ## Reporting a vulnerability
 
-Please report security issues privately to **hey@syrin.ai** — do not open a public issue for an undisclosed vulnerability.
+Please report security issues privately to **hey@reticle.ai** — do not open a public issue for an undisclosed vulnerability.
 
 Include, where possible:
 
@@ -15,12 +15,12 @@ We aim to acknowledge reports within **2 business days** and to keep you updated
 
 ## Scope
 
-Iris is **dev/preview-only** and **localhost-only** by design, and sends **no telemetry** — see [`docs/enterprise.md`](docs/enterprise.md) for the full data-handling posture. The most valuable reports concern anything that breaks those properties, for example:
+Reticle is **dev/preview-only** and **localhost-only** by design, and sends **no telemetry** — see [`docs/enterprise.md`](docs/enterprise.md) for the full data-handling posture. The most valuable reports concern anything that breaks those properties, for example:
 
 - the browser SDK reaching a production bundle,
 - the server binding beyond `127.0.0.1` or bypassing the verify-endpoint token,
 - a `prod-preview` artifact leaking source coordinates, raw bodies, or app-state values,
-- path traversal in the on-disk stores (`.iris/flows`, `.iris/runs`, baselines, visual).
+- path traversal in the on-disk stores (`.reticle/flows`, `.reticle/runs`, baselines, visual).
 
 ## Supported versions
 

@@ -1,11 +1,11 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { QueryBy } from '@syrin/iris-protocol';
+import { QueryBy } from '@reticle/protocol';
 import { matchQuery } from './query.js';
 import { registerAdapter, type ComponentInfo } from '../registry/adapters.js';
 
 /**
  * Auto-anchor resolution: address an element by its source location or component identity, with NO
- * hand-added data-testid. Source (the babel-stamped data-iris-source) is the precise path; component
+ * hand-added data-testid. Source (the babel-stamped data-reticle-source) is the precise path; component
  * name is the coarse fallback via the framework adapter.
  */
 function render(html: string): void {
@@ -17,8 +17,8 @@ describe('matchQuery by component / source (auto-anchors)', () => {
 
   it('resolves the exact element by source location (line-level, column-agnostic)', () => {
     render(
-      '<button data-iris-source="src/views/Deployments.tsx:104:10">New deploy</button>' +
-        '<button data-iris-source="src/views/Deployments.tsx:200:4">Cancel</button>',
+      '<button data-reticle-source="src/views/Deployments.tsx:104:10">New deploy</button>' +
+        '<button data-reticle-source="src/views/Deployments.tsx:200:4">Cancel</button>',
     );
     const r = matchQuery({
       by: QueryBy.COMPONENT,
@@ -30,7 +30,7 @@ describe('matchQuery by component / source (auto-anchors)', () => {
   });
 
   it('does not match a different source line', () => {
-    render('<button data-iris-source="src/views/Deployments.tsx:104:10">New deploy</button>');
+    render('<button data-reticle-source="src/views/Deployments.tsx:104:10">New deploy</button>');
     const r = matchQuery({
       by: QueryBy.COMPONENT,
       source: { file: 'src/views/Deployments.tsx', line: 999 },
@@ -60,7 +60,7 @@ describe('matchQuery by component / source (auto-anchors)', () => {
 
   it('source takes precedence over component name when both are present', () => {
     registerAdapter({ name: 'test-fake', identify: (): ComponentInfo | null => null });
-    render('<button data-iris-source="src/A.tsx:5:0">Precise</button>');
+    render('<button data-reticle-source="src/A.tsx:5:0">Precise</button>');
     const r = matchQuery({
       by: QueryBy.COMPONENT,
       source: { file: 'src/A.tsx', line: 5 },

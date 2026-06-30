@@ -1,5 +1,5 @@
 /**
- * Project-identity derivation for `iris init` — the Next/HTML/.iris.json side of the same scheme the
+ * Project-identity derivation for `reticle init` — the Next/HTML/.reticle.json side of the same scheme the
  * Vite plugin uses at build time. Kept algorithmically identical (slug of package.json name + 8-char
  * hash of the absolute root) so a Vite app's plugin-stamped projectId matches what init records.
  */

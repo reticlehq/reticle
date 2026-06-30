@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import type { Server } from 'node:http';
-import { asRunId, ReplayStatus, type FlowReplayResult } from '@syrin/iris-protocol';
-import { IrisRunner, type RunnerPort } from './iris-runner.js';
+import { asRunId, ReplayStatus, type FlowReplayResult } from '@reticle/protocol';
+import { ReticleRunner, type RunnerPort } from './reticle-runner.js';
 import { startVerifyServer, TOKEN_HEADER } from './verify-server.js';
 import { VERIFY_PATH } from './verify-http.js';
 
@@ -26,7 +26,7 @@ describe('startVerifyServer (real socket, localhost)', () => {
   });
 
   async function start(token: string) {
-    const started = await startVerifyServer({ runner: new IrisRunner(fakePort()), token }, 0);
+    const started = await startVerifyServer({ runner: new ReticleRunner(fakePort()), token }, 0);
     server = started.server;
     return `http://127.0.0.1:${started.port}`;
   }

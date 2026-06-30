@@ -41,23 +41,23 @@ async function runDevtools() {
   };
 }
 
-async function runIris() {
+async function runReticle() {
   const c = new McpStdioClient(
     'node',
     ['packages/server/dist/cli.js', 'mcp', '--port', '58462', '--drive', URL],
-    { IRIS_PORT: '58462' },
+    { RETICLE_PORT: '58462' },
   );
   await c.start();
   // Give the driven browser a moment to load + the SDK to connect.
   await new Promise((r) => setTimeout(r, 3000));
-  const snap = await c.callTool('iris_snapshot', { scope: 'page' });
+  const snap = await c.callTool('reticle_snapshot', { scope: 'page' });
   await c.stop();
-  return { tool: 'iris', call: 'iris_snapshot', text: snap.text, latencyMs: snap.latencyMs };
+  return { tool: 'reticle', call: 'reticle_snapshot', text: snap.text, latencyMs: snap.latencyMs };
 }
 
-const runners = { playwright: runPlaywright, devtools: runDevtools, iris: runIris };
+const runners = { playwright: runPlaywright, devtools: runDevtools, reticle: runReticle };
 const which = process.argv[2];
-const list = which ? [which] : ['playwright', 'devtools', 'iris'];
+const list = which ? [which] : ['playwright', 'devtools', 'reticle'];
 
 const rows = [];
 for (const name of list) {

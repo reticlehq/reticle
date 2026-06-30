@@ -1,4 +1,4 @@
-import { VISUAL_PIXEL_THRESHOLD } from '@syrin/iris-protocol';
+import { VISUAL_PIXEL_THRESHOLD } from '@reticle/protocol';
 
 /** A rectangle in image pixel space — a mask to ignore, or the bounding box of what changed. */
 export interface VisualRect {
@@ -18,7 +18,7 @@ export interface DiffOptions {
   masks?: VisualRect[];
 }
 
-/** The verdict of a perceptual diff (also the iris_visual_diff result body). */
+/** The verdict of a perceptual diff (also the reticle_visual_diff result body). */
 export interface VisualDiffResult {
   matched: boolean;
   changedPixels: number;

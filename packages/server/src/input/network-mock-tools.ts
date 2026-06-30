@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { VISUAL_NO_PROVIDER_RECOMMENDATION, VisualReason } from '@syrin/iris-protocol';
-import { IrisTool } from '../tools/tool-names.js';
+import { VISUAL_NO_PROVIDER_RECOMMENDATION, VisualReason } from '@reticle/protocol';
+import { ReticleTool } from '../tools/tool-names.js';
 import { asString } from '../tools/tools-helpers.js';
 import type { RealInputProvider } from './real-input.js';
 import type { MockRule } from './network-mock.js';
@@ -10,7 +10,9 @@ const sessionIdShape = {
   sessionId: z
     .string()
     .optional()
-    .describe('Active session ID from iris_sessions. Omit when only one browser session is open.'),
+    .describe(
+      'Active session ID from reticle_sessions. Omit when only one browser session is open.',
+    ),
 };
 
 /** A provider that can install network mocks — narrows the optional capability so callers branch once. */
@@ -61,9 +63,9 @@ function toRules(value: unknown): MockRule[] {
 
 export const NETWORK_MOCK_TOOLS: ToolDef[] = [
   {
-    name: IrisTool.NETWORK_MOCK,
+    name: ReticleTool.NETWORK_MOCK,
     description:
-      'Stub or intercept network requests on the DRIVEN page (needs `iris drive`): return a 500, ' +
+      'Stub or intercept network requests on the DRIVEN page (needs `reticle drive`): return a 500, ' +
       'force offline (abort), or delay a response — so you can deterministically test error and edge ' +
       'states without touching the backend ("verify the app handles a failed payment"). Pass `mocks` ' +
       '(first matching rule wins); pass an empty array or `clear: true` to turn mocking off.',
@@ -82,7 +84,7 @@ export const NETWORK_MOCK_TOOLS: ToolDef[] = [
     handler: async (deps, args) => {
       const provider = mockProvider(deps);
       if (provider === undefined) {
-        // Mocking needs a browser Iris drives; a synthetic in-page session can't intercept the network.
+        // Mocking needs a browser Reticle drives; a synthetic in-page session can't intercept the network.
         return {
           applied: false,
           count: 0,

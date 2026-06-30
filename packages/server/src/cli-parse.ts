@@ -6,15 +6,15 @@
  */
 
 export const CLI_USAGE = `usage:
-  iris init  [--yes] [--dry-run] [--port N] [--no-mcp] [--no-install]  (wire Iris into the project in this directory)
-  iris serve [--port N] [--drive <url>] [--headed] [--http] [--http-port N] [--http-token T]
-  iris stop  [--port N] [--quiet]
-  iris status [--port N]
-  iris open  [url] [--port N]                        (show the app: reuse the connected tab, else open one)
-  iris verify <url> [--headed] [--timeout N] [--storage-state <file>]  (one-shot: drive the URL, verify saved flows, exit 0=pass)
-  iris drive <url> [--headed]                       (foreground mode — for debugging)
-  iris mcp   [--port N] [--drive <url>] [--headed]  (MCP stdio proxy — auto-starts daemon if needed)
-  iris license                                      (show enterprise license status: active | eval | missing)`;
+  reticle init  [--yes] [--dry-run] [--port N] [--no-mcp] [--no-install]  (wire Reticle into the project in this directory)
+  reticle serve [--port N] [--drive <url>] [--headed] [--http] [--http-port N] [--http-token T]
+  reticle stop  [--port N] [--quiet]
+  reticle status [--port N]
+  reticle open  [url] [--port N]                        (show the app: reuse the connected tab, else open one)
+  reticle verify <url> [--headed] [--timeout N] [--storage-state <file>]  (one-shot: drive the URL, verify saved flows, exit 0=pass)
+  reticle drive <url> [--headed]                       (foreground mode — for debugging)
+  reticle mcp   [--port N] [--drive <url>] [--headed]  (MCP stdio proxy — auto-starts daemon if needed)
+  reticle license                                      (show enterprise license status: active | eval | missing)`;
 
 const INIT_COMMAND = 'init';
 const SERVE_COMMAND = 'serve';

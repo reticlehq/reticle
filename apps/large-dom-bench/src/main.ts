@@ -1,6 +1,6 @@
-import { iris, SESSION_AUTO, registerCapabilities, registerStore } from '@syrin/iris-browser';
+import { reticle, SESSION_AUTO, registerCapabilities, registerStore } from '@reticle/browser';
 
-declare const __IRIS_PORT__: number;
+declare const __RETICLE_PORT__: number;
 
 /**
  * Large-DOM benchmark fixture. Renders a deliberately large, NON-virtualized grid so a full a11y snapshot
@@ -71,7 +71,7 @@ async function approve(id: number): Promise<void> {
   const counter = document.querySelector('[data-testid="approved-count"]');
   if (counter !== null) counter.textContent = `${state.approvedCount} approved`;
   // Tier-1: the success oracle a wrong/healed element can never fake.
-  iris.signal(SIGNAL_APPROVED, { id });
+  reticle.signal(SIGNAL_APPROVED, { id });
 }
 
 function wireDelegation(): void {
@@ -84,12 +84,12 @@ function wireDelegation(): void {
   });
 }
 
-function installIris(): void {
+function installReticle(): void {
   const params = new URLSearchParams(window.location.search);
   const present = !params.has('nopresent');
   const session = params.get('session') ?? SESSION_AUTO;
-  const irisPort = typeof __IRIS_PORT__ !== 'undefined' ? __IRIS_PORT__ : 4455;
-  iris.connect({ session, present, url: `ws://localhost:${irisPort}/iris` });
+  const reticlePort = typeof __RETICLE_PORT__ !== 'undefined' ? __RETICLE_PORT__ : 4455;
+  reticle.connect({ session, present, url: `ws://localhost:${reticlePort}/reticle` });
   registerStore('grid', () => ({
     approvedCount: state.approvedCount,
     rowCount: state.rows.length,
@@ -104,4 +104,4 @@ function installIris(): void {
 
 renderGrid();
 wireDelegation();
-installIris();
+installReticle();

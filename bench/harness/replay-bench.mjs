@@ -1,7 +1,7 @@
 // Regression-replay benchmark (Layer C): the honest home of the 70x+ token claim.
 //
-// Regression testing = the SAME verification run repeatedly. Iris records a flow once, then
-// iris_flow_replay re-runs it DETERMINISTICALLY (no LLM) against the live DOM, re-resolving each
+// Regression testing = the SAME verification run repeatedly. Reticle records a flow once, then
+// reticle_flow_replay re-runs it DETERMINISTICALLY (no LLM) against the live DOM, re-resolving each
 // semantic anchor and asserting the consequence — returning a compact { status, steps } verdict.
 // Playwright MCP / Chrome DevTools MCP have no replay: an agent must re-drive the whole flow with
 // the LLM EVERY run (~30k / ~32k tokens, measured in Layer B).
@@ -10,7 +10,7 @@
 // (the verdict the agent/CI reads — deterministic, no model). Authoring cost (the one-time LLM
 // record) is NOT a per-run cost and is excluded, by design — that's the whole point of regression.
 import { writeFileSync } from 'node:fs';
-import { IrisAdapter } from './adapters.mjs';
+import { ReticleAdapter } from './adapters.mjs';
 import { measure } from './tokenizer.mjs';
 
 const URL = process.env.BENCH_URL ?? 'http://localhost:4312/';
@@ -27,23 +27,23 @@ const FLOWS = [
 ];
 
 async function recordAndReplay(flow) {
-  const a = new IrisAdapter(URL);
+  const a = new ReticleAdapter(URL);
   await a.start();
   try {
-    await a.c.callTool('iris_record_start', { recordingName: flow.name });
+    await a.c.callTool('reticle_record_start', { recordingName: flow.name });
     await a.login();
     for (const s of flow.steps) {
       if (s.view) await a.gotoView(s.view);
       else if (s.tap) await a.clickTestid(s.tap);
       await sleep(200);
     }
-    await a.c.callTool('iris_record_stop', { recordingName: flow.name });
-    const saved = await a.c.callTool('iris_flow_save', { flowName: flow.name });
+    await a.c.callTool('reticle_record_stop', { recordingName: flow.name });
+    const saved = await a.c.callTool('reticle_flow_save', { flowName: flow.name });
     const savedObj = JSON.parse(saved.text || '{}');
     // reset to a fresh load so replay re-runs the whole flow (incl. login) from the top
-    await a.c.callTool('iris_refresh', { hard: true });
+    await a.c.callTool('reticle_refresh', { hard: true });
     await sleep(1500);
-    const rep = await a.c.callTool('iris_flow_replay', { flowName: flow.name });
+    const rep = await a.c.callTool('reticle_flow_replay', { flowName: flow.name });
     const repObj = JSON.parse(rep.text || '{}');
     const m = measure(rep.text || '');
     const drifted = Array.isArray(repObj.steps)
@@ -82,17 +82,17 @@ const meanReplay = measured.length
 const summary = {
   layer: 'C (regression replay — deterministic, no LLM)',
   per_run: {
-    iris_replay_mean_tokens: meanReplay,
+    reticle_replay_mean_tokens: meanReplay,
     playwright_mcp_redrive_tokens: LLM_REDRIVE.playwright_mcp,
     chrome_devtools_mcp_redrive_tokens: LLM_REDRIVE.chrome_devtools_mcp,
   },
   ratio_vs_playwright: meanReplay ? Math.round(LLM_REDRIVE.playwright_mcp / meanReplay) : null,
-  note: 'Iris replay is deterministic (no model). Competitors have no replay — an agent re-drives every run at the Layer B cost. Ratio compounds: over N runs Iris pays ~author-once + N*replay; competitors pay N*re-drive.',
+  note: 'Reticle replay is deterministic (no model). Competitors have no replay — an agent re-drives every run at the Layer B cost. Ratio compounds: over N runs Reticle pays ~author-once + N*replay; competitors pay N*re-drive.',
   rows,
 };
 writeFileSync('bench/raw/replay-bench.json', JSON.stringify(summary, null, 2));
 console.log(
-  '\n=== per-regression-run: Iris replay ~' +
+  '\n=== per-regression-run: Reticle replay ~' +
     meanReplay +
     ' tok vs Playwright ' +
     LLM_REDRIVE.playwright_mcp +

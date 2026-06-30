@@ -1,20 +1,20 @@
 import { relative } from 'node:path';
 import type { PluginObj, PluginPass, types as BabelTypes } from '@babel/core';
 
-export const SOURCE_ATTR = 'data-iris-source';
+export const SOURCE_ATTR = 'data-reticle-source';
 
 interface PluginApi {
   types: typeof BabelTypes;
 }
 
 /**
- * Stamps `data-iris-source="relativeFile:line:col"` on every JSX host element (lowercase
- * tag). @syrin/iris-react reads it to map a DOM node back to its source — needed on React 19,
+ * Stamps `data-reticle-source="relativeFile:line:col"` on every JSX host element (lowercase
+ * tag). @reticle/react reads it to map a DOM node back to its source — needed on React 19,
  * which removed `_debugSource`. Intended for dev builds only.
  */
-export default function irisSourcePlugin({ types: t }: PluginApi): PluginObj<PluginPass> {
+export default function reticleSourcePlugin({ types: t }: PluginApi): PluginObj<PluginPass> {
   return {
-    name: 'iris-source',
+    name: 'reticle-source',
     visitor: {
       JSXOpeningElement(path, state: PluginPass) {
         const node = path.node;

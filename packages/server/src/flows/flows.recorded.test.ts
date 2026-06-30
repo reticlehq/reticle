@@ -11,14 +11,14 @@ import {
   RecordedSaveError,
   type CommandResult,
   type FlowFile,
-  type IrisEvent,
-} from '@syrin/iris-protocol';
+  type ReticleEvent,
+} from '@reticle/protocol';
 import { createNodeFileSystem, type FileSystemPort } from '../project/fs-port.js';
 import { FlowStore } from './flows.js';
 import { ProjectStore } from '../project/project-store.js';
 import { AnnotationStore } from './annotation-store.js';
 import { FLOW_TOOLS } from './flow-tools.js';
-import { IrisTool } from '../tools/tool-names.js';
+import { ReticleTool } from '../tools/tool-names.js';
 import { BaselineStore } from '../project/baselines.js';
 import { RecordingStore } from './recordings.js';
 import type { Session, SessionManager } from '../session/session.js';
@@ -33,14 +33,14 @@ function flowFile(name: string, steps: FlowFile['steps']): FlowFile {
 
 function clickStep(testid: string): FlowFile['steps'][number] {
   return {
-    tool: IrisTool.ACT,
+    tool: ReticleTool.ACT,
     anchor: { kind: AnchorKind.TESTID, value: testid },
     action: ActionType.CLICK,
     args: {},
   };
 }
 
-function recordedEvent(name: string, flow: FlowFile): IrisEvent {
+function recordedEvent(name: string, flow: FlowFile): ReticleEvent {
   return { t: 1, type: EventType.FLOW_RECORDED, sessionId: 's', data: { name, flow } };
 }
 
@@ -50,8 +50,8 @@ describe('FlowStore.saveFlow — temp-dir fs', () => {
   let store: FlowStore;
 
   beforeEach(async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'iris-recorded-'));
-    root = join(dir, '.iris');
+    const dir = await mkdtemp(join(tmpdir(), 'reticle-recorded-'));
+    root = join(dir, '.reticle');
     fs = createNodeFileSystem();
     store = new FlowStore(fs, root, clock);
   });
@@ -92,9 +92,9 @@ describe('FlowStore.saveFlow — temp-dir fs', () => {
   });
 });
 
-// ---- iris_flow_save_recorded handler ----
+// ---- reticle_flow_save_recorded handler ----
 
-function fakeDeps(store: FlowStore, events: IrisEvent[]): ToolDeps {
+function fakeDeps(store: FlowStore, events: ReticleEvent[]): ToolDeps {
   const command = (): Promise<CommandResult> =>
     Promise.resolve({ kind: 'command_result', id: 'c', ok: true, result: {} });
   const session: Partial<Session> = { id: 'demo', command, eventsSince: () => events };
@@ -104,27 +104,27 @@ function fakeDeps(store: FlowStore, events: IrisEvent[]): ToolDeps {
     baselines: new BaselineStore(),
     recordings: new RecordingStore(),
     flows: store,
-    project: new ProjectStore(createNodeFileSystem(), '/virtual/.iris', { now: () => FROZEN }),
+    project: new ProjectStore(createNodeFileSystem(), '/virtual/.reticle', { now: () => FROZEN }),
     annotations: new AnnotationStore(),
     fs: createNodeFileSystem(),
-    irisRoot: '/virtual/.iris',
+    reticleRoot: '/virtual/.reticle',
     now: () => FROZEN,
   };
 }
 
 function recordedTool() {
-  const t = FLOW_TOOLS.find((x) => x.name === IrisTool.FLOW_SAVE_RECORDED);
-  if (t === undefined) throw new Error('no iris_flow_save_recorded tool');
+  const t = FLOW_TOOLS.find((x) => x.name === ReticleTool.FLOW_SAVE_RECORDED);
+  if (t === undefined) throw new Error('no reticle_flow_save_recorded tool');
   return t;
 }
 
-describe('iris_flow_save_recorded handler', () => {
+describe('reticle_flow_save_recorded handler', () => {
   let root: string;
   let store: FlowStore;
 
   beforeEach(async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'iris-recorded-tool-'));
-    root = join(dir, '.iris');
+    const dir = await mkdtemp(join(tmpdir(), 'reticle-recorded-tool-'));
+    root = join(dir, '.reticle');
     store = new FlowStore(createNodeFileSystem(), root, clock);
   });
 
@@ -150,7 +150,7 @@ describe('iris_flow_save_recorded handler', () => {
   });
 
   it('malformed FLOW_RECORDED data → NO_RECORDED_FLOW (never throws)', async () => {
-    const bad: IrisEvent = {
+    const bad: ReticleEvent = {
       t: 1,
       type: EventType.FLOW_RECORDED,
       sessionId: 's',

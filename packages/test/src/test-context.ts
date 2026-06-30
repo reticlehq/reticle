@@ -1,5 +1,5 @@
-import { IrisTool, type ToolInvoker } from '@syrin/iris-server';
-import { ActionType, type ElementQuery, type ElementState } from '@syrin/iris-protocol';
+import { ReticleTool, type ToolInvoker } from '@reticle/server';
+import { ActionType, type ElementQuery, type ElementState } from '@reticle/protocol';
 import { resolveTestid } from './resolve.js';
 import { buildClock, type TestClock } from './clock.js';
 import { InputModeTracker, expectInputModeReal } from './input-mode.js';
@@ -15,7 +15,7 @@ import {
 } from './matchers.js';
 import { DEFAULT_ASSERT_TIMEOUT_MS } from './constants.js';
 
-/** A declarative predicate (the iris_assert/until DSL). Kept structural to avoid a server type dep. */
+/** A declarative predicate (the reticle_assert/until DSL). Kept structural to avoid a server type dep. */
 export type Predicate = Record<string, unknown>;
 
 export interface TestContextOptions {
@@ -91,7 +91,7 @@ export function createTestContext(
       ...(args !== undefined ? { args } : {}),
       ...(sessionId !== undefined ? { sessionId } : {}),
     };
-    const result = await invoke(IrisTool.ACT, actArgs);
+    const result = await invoke(ReticleTool.ACT, actArgs);
     tracker.record(result);
   }
 
@@ -108,7 +108,7 @@ export function createTestContext(
         timeout_ms: timeoutMs,
         ...(sessionId !== undefined ? { sessionId } : {}),
       };
-      const raw = await invoke(IrisTool.ACT_AND_WAIT, waitArgs);
+      const raw = await invoke(ReticleTool.ACT_AND_WAIT, waitArgs);
       const verdict = asVerdict(raw);
       if (!verdict.pass) {
         const trace = (raw as Record<string, unknown>)['trace'];
@@ -128,7 +128,7 @@ export function createTestContext(
         store: storeOrRef,
         ...(sessionId !== undefined ? { sessionId } : {}),
       };
-      return invoke(IrisTool.STATE, args);
+      return invoke(ReticleTool.STATE, args);
     },
     clock: buildClock(invoke, sessionId),
     expectInputModeReal: () => expectInputModeReal(invoke, tracker, sessionId),

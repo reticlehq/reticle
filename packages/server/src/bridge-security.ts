@@ -1,4 +1,4 @@
-import { IrisEnv } from '@syrin/iris-protocol';
+import { ReticleEnv } from '@reticle/protocol';
 import type { StartOptions } from './index.js';
 
 /** The security contract the bridge/daemon enforce: bind host, pairing token, and WS origin allow-list. */
@@ -14,9 +14,9 @@ interface BridgeSecurity {
  * every entrypoint — a past divergence let daemon mode silently run with auth disabled.
  */
 export function resolveBridgeSecurity(options: StartOptions): BridgeSecurity {
-  const envToken = process.env[IrisEnv.TOKEN];
-  const envOrigins = process.env[IrisEnv.ALLOWED_ORIGINS];
-  const host = options.host ?? process.env[IrisEnv.HOST];
+  const envToken = process.env[ReticleEnv.TOKEN];
+  const envOrigins = process.env[ReticleEnv.ALLOWED_ORIGINS];
+  const host = options.host ?? process.env[ReticleEnv.HOST];
   const token =
     options.token ?? (envToken !== undefined && envToken.length > 0 ? envToken : undefined);
   const allowedOrigins =

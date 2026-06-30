@@ -4,8 +4,8 @@ import {
   SESSION_LIFECYCLE,
   type CommandMessage,
   type HelloMessage,
-  type IrisEvent,
-} from '@syrin/iris-protocol';
+  type ReticleEvent,
+} from '@reticle/protocol';
 import { nativeSetTimeout, nativeNow } from '../timers/native-timers.js';
 import { safeStringify } from '../security/serialization.js';
 
@@ -31,7 +31,7 @@ interface TransportDeps {
   onConnectionLost?: () => void;
   /**
    * Called with the cumulative drop count each time the outbound queue overflows. The
-   * caller (Iris) emits a synthetic TRANSPORT_OVERFLOW event so the agent learns about gaps.
+   * caller (Reticle) emits a synthetic TRANSPORT_OVERFLOW event so the agent learns about gaps.
    */
   onOverflow?: (dropped: number) => void;
   /**
@@ -173,7 +173,7 @@ export class Transport {
     );
   }
 
-  sendEvent(event: IrisEvent): void {
+  sendEvent(event: ReticleEvent): void {
     this.#sendRaw(safeStringify({ kind: MessageKind.EVENT, event }));
   }
 

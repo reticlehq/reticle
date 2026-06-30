@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { IrisCommand, type CommandResult } from '@syrin/iris-protocol';
+import { ReticleCommand, type CommandResult } from '@reticle/protocol';
 import { scrollToFind, type ScrollFindSession } from './scroll-find.js';
 
 interface Script {
@@ -18,11 +18,11 @@ function fakeSession(script: Script): { session: ScrollFindSession; scrollArgs: 
     Promise.resolve({ kind: 'command_result', id: 'c', ok: true, result });
   const session: ScrollFindSession = {
     command: (name, args) => {
-      if (name === IrisCommand.QUERY) {
+      if (name === ReticleCommand.QUERY) {
         const found = script.foundAtScroll !== undefined && scrolls >= script.foundAtScroll;
         return ok({ elements: found ? [{ ref: 'e1', desc: 'Row 500' }] : [] });
       }
-      if (name === IrisCommand.SCROLL) {
+      if (name === ReticleCommand.SCROLL) {
         scrolls += 1;
         scrollArgs.push(args);
         return ok({

@@ -49,14 +49,14 @@ describe('real-input pure helpers', () => {
   });
 });
 
-describe('capturePage suppresses Iris chrome for deterministic baselines', () => {
-  it('hides the Iris dev overlay and disables animations during a full-page capture', async () => {
+describe('capturePage suppresses Reticle chrome for deterministic baselines', () => {
+  it('hides the Reticle dev overlay and disables animations during a full-page capture', async () => {
     const calls: Record<string, unknown>[] = [];
     const bytes = await capturePage(recordingPage(calls), { fullPage: true });
     expect(bytes).toBeInstanceOf(Uint8Array);
     expect(calls).toHaveLength(1);
     const opts = calls[0] ?? {};
-    expect(String(opts['style'])).toContain('data-iris-overlay');
+    expect(String(opts['style'])).toContain('data-reticle-overlay');
     expect(String(opts['style'])).toContain('display:none');
     expect(opts['animations']).toBe('disabled');
     expect(opts['fullPage']).toBe(true);
@@ -68,7 +68,7 @@ describe('capturePage suppresses Iris chrome for deterministic baselines', () =>
     await capturePage(recordingPage(calls), { clip });
     const opts = calls[0] ?? {};
     expect(opts['clip']).toEqual(clip);
-    expect(String(opts['style'])).toContain('data-iris-overlay');
+    expect(String(opts['style'])).toContain('data-reticle-overlay');
     expect(opts['fullPage']).toBeUndefined();
   });
 });

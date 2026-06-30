@@ -2,12 +2,12 @@
  * The skip sentinel. MATCHERS' `t.expectInputModeReal()` throws this when the active input mode
  * is not 'real', so the runner reports `status:'skip'` (with the reason) instead of a silent pass.
  */
-export class IrisSkip extends Error {
+export class ReticleSkip extends Error {
   readonly reason: string;
 
   constructor(reason: string) {
     super(reason);
-    this.name = 'IrisSkip';
+    this.name = 'ReticleSkip';
     this.reason = reason;
   }
 }
@@ -21,17 +21,17 @@ export interface AssertionDetail {
 }
 
 /**
- * A failed matcher (e.g. an `iris_assert` returning `{ pass:false, failureReason }`). Carries the
+ * A failed matcher (e.g. an `reticle_assert` returning `{ pass:false, failureReason }`). Carries the
  * reason as its message plus the tool's structured `evidence`/`failureReason`; the runner treats it
  * as an ordinary fail (the message becomes SpecResult.error).
  */
-export class IrisAssertionError extends Error {
+export class ReticleAssertionError extends Error {
   readonly evidence?: unknown;
   readonly failureReason?: string;
 
   constructor(message: string, detail?: AssertionDetail) {
     super(message);
-    this.name = 'IrisAssertionError';
+    this.name = 'ReticleAssertionError';
     // exactOptionalPropertyTypes: only assign optional fields when actually provided.
     if (detail?.evidence !== undefined) this.evidence = detail.evidence;
     if (detail?.failureReason !== undefined) this.failureReason = detail.failureReason;
@@ -42,13 +42,13 @@ export class IrisAssertionError extends Error {
  * Raised when a testid resolves to zero elements (the act/fill chokepoint). A subclass so a runner
  * can special-case "unknown testid" if it wants, but it is still an ordinary fail.
  */
-export class IrisQueryEmptyError extends IrisAssertionError {
+export class ReticleQueryEmptyError extends ReticleAssertionError {
   constructor(message: string, detail?: AssertionDetail) {
     super(message, detail);
-    this.name = 'IrisQueryEmptyError';
+    this.name = 'ReticleQueryEmptyError';
   }
 }
 
-export function isSkip(error: unknown): error is IrisSkip {
-  return error instanceof IrisSkip;
+export function isSkip(error: unknown): error is ReticleSkip {
+  return error instanceof ReticleSkip;
 }

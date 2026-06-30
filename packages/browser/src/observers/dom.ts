@@ -1,7 +1,7 @@
-import { EventType } from '@syrin/iris-protocol';
+import { EventType } from '@reticle/protocol';
 import { getAccessibleName, getRole, isVisible } from '../dom/a11y.js';
 import { refs } from '../dom/refs.js';
-import { isIrisOverlay } from '../dom/dom-ignore.js';
+import { isReticleOverlay } from '../dom/dom-ignore.js';
 import type { Emit, Teardown } from './types.js';
 
 const WATCHED_ATTRS = [
@@ -39,7 +39,7 @@ export function installDom(emit: Emit): Teardown {
           target instanceof Element &&
           record.attributeName !== null &&
           changed < MAX_PER_BATCH &&
-          !isIrisOverlay(target)
+          !isReticleOverlay(target)
         ) {
           changed += 1;
           emit(
@@ -54,7 +54,7 @@ export function installDom(emit: Emit): Teardown {
         // In-place text change inside an existing subtree (wizard steps, inline edits) —
         // childList-only would miss this.
         const parent = record.target.parentElement;
-        if (parent !== null && changed < MAX_PER_BATCH && !isIrisOverlay(parent)) {
+        if (parent !== null && changed < MAX_PER_BATCH && !isReticleOverlay(parent)) {
           changed += 1;
           const text = (record.target.textContent ?? '').trim().slice(0, 80);
           emit(EventType.DOM_TEXT, { text }, refs.refFor(parent));
@@ -63,7 +63,7 @@ export function installDom(emit: Emit): Teardown {
       }
       for (const node of record.addedNodes) {
         if (!(node instanceof Element) || added >= MAX_PER_BATCH) continue;
-        if (isIrisOverlay(node)) continue;
+        if (isReticleOverlay(node)) continue;
         const role = getRole(node);
         const name = getAccessibleName(node);
         if (!isMeaningful(role, name)) continue;
@@ -80,7 +80,7 @@ export function installDom(emit: Emit): Teardown {
       }
       for (const node of record.removedNodes) {
         if (!(node instanceof Element) || removed >= MAX_PER_BATCH) continue;
-        if (isIrisOverlay(node)) continue;
+        if (isReticleOverlay(node)) continue;
         const role = getRole(node);
         const name = getAccessibleName(node);
         if (!isMeaningful(role, name)) continue;

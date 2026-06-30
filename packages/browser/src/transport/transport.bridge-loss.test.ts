@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { IRIS_PROTOCOL_VERSION, MessageKind, type HelloMessage } from '@syrin/iris-protocol';
+import { RETICLE_PROTOCOL_VERSION, MessageKind, type HelloMessage } from '@reticle/protocol';
 import { Transport } from './transport.js';
 
 /**
@@ -33,7 +33,7 @@ class FakeWebSocket {
 
 const hello = (): HelloMessage => ({
   kind: MessageKind.HELLO,
-  protocolVersion: IRIS_PROTOCOL_VERSION,
+  protocolVersion: RETICLE_PROTOCOL_VERSION,
   sessionId: 's',
   url: 'http://localhost/',
   title: 'T',

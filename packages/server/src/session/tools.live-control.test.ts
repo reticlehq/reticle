@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { SessionState } from '@syrin/iris-protocol';
-import type { CommandResult } from '@syrin/iris-protocol';
+import { SessionState } from '@reticle/protocol';
+import type { CommandResult } from '@reticle/protocol';
 import { TOOLS, type ToolDeps } from '../tools/tools.js';
-import { IrisTool } from '../tools/tool-names.js';
+import { ReticleTool } from '../tools/tool-names.js';
 import { BaselineStore } from '../project/baselines.js';
 import { createNodeFileSystem } from '../project/fs-port.js';
 import { RecordingStore } from '../flows/recordings.js';
@@ -90,11 +90,13 @@ function fakeDeps(session: Session): ToolDeps {
     sessions: sessions as SessionManager,
     baselines: new BaselineStore(),
     recordings: new RecordingStore(),
-    flows: new FlowStore(createNodeFileSystem(), '/tmp/iris-test/.iris', { now: () => 0 }),
-    project: new ProjectStore(createNodeFileSystem(), '/tmp/iris-test/.iris', { now: () => 0 }),
+    flows: new FlowStore(createNodeFileSystem(), '/tmp/reticle-test/.reticle', { now: () => 0 }),
+    project: new ProjectStore(createNodeFileSystem(), '/tmp/reticle-test/.reticle', {
+      now: () => 0,
+    }),
     annotations: new AnnotationStore(),
     fs: createNodeFileSystem(),
-    irisRoot: '/tmp/iris-test/.iris',
+    reticleRoot: '/tmp/reticle-test/.reticle',
     now: () => 0,
   };
 }
@@ -122,9 +124,9 @@ interface ControlShape {
 const ACT_ARGS = { ref: 'e1', action: 'click' };
 
 describe('live-control: pause short-circuit', () => {
-  it('iris_act executes normally when active and inbox empty', async () => {
+  it('reticle_act executes normally when active and inbox empty', async () => {
     const session = fakeSession({ state: SessionState.ACTIVE, inbox: [] });
-    const res = (await tool(IrisTool.ACT).handler(fakeDeps(session), ACT_ARGS)) as ControlShape &
+    const res = (await tool(ReticleTool.ACT).handler(fakeDeps(session), ACT_ARGS)) as ControlShape &
       PausedShape;
     expect(res.since).toBe(0);
     expect('result' in res).toBe(true);
@@ -133,9 +135,9 @@ describe('live-control: pause short-circuit', () => {
     expect(session.__sent.filter((c) => c.name === 'act')).toHaveLength(1);
   });
 
-  it('iris_act short-circuits when paused — no ACT dispatched', async () => {
+  it('reticle_act short-circuits when paused — no ACT dispatched', async () => {
     const session = fakeSession({ state: SessionState.PAUSED, inbox: ['fix the form'] });
-    const res = (await tool(IrisTool.ACT).handler(fakeDeps(session), ACT_ARGS)) as PausedShape &
+    const res = (await tool(ReticleTool.ACT).handler(fakeDeps(session), ACT_ARGS)) as PausedShape &
       ControlShape;
     expect(res.paused).toBe(true);
     expect(res.guidance).toEqual(['fix the form']);
@@ -146,17 +148,20 @@ describe('live-control: pause short-circuit', () => {
 
   it('paused short-circuit drains the inbox once', async () => {
     const session = fakeSession({ state: SessionState.PAUSED, inbox: ['a', 'b'] });
-    const first = (await tool(IrisTool.ACT).handler(fakeDeps(session), ACT_ARGS)) as PausedShape;
+    const first = (await tool(ReticleTool.ACT).handler(fakeDeps(session), ACT_ARGS)) as PausedShape;
     expect(first.guidance).toHaveLength(2);
-    const second = (await tool(IrisTool.ACT).handler(fakeDeps(session), ACT_ARGS)) as PausedShape;
+    const second = (await tool(ReticleTool.ACT).handler(
+      fakeDeps(session),
+      ACT_ARGS,
+    )) as PausedShape;
     expect(second.paused).toBe(true);
     expect(second.guidance).toHaveLength(0);
     expect(session.__sent).toHaveLength(0);
   });
 
-  it('iris_act_and_wait short-circuits when paused', async () => {
+  it('reticle_act_and_wait short-circuits when paused', async () => {
     const session = fakeSession({ state: SessionState.PAUSED, inbox: ['stop'] });
-    const res = (await tool(IrisTool.ACT_AND_WAIT).handler(fakeDeps(session), {
+    const res = (await tool(ReticleTool.ACT_AND_WAIT).handler(fakeDeps(session), {
       ...ACT_ARGS,
       until: { kind: 'console', level: 'error', absent: true },
     })) as PausedShape;
@@ -166,9 +171,9 @@ describe('live-control: pause short-circuit', () => {
     expect(session.__sent).toHaveLength(0);
   });
 
-  it('iris_act_sequence short-circuits when paused', async () => {
+  it('reticle_act_sequence short-circuits when paused', async () => {
     const session = fakeSession({ state: SessionState.PAUSED, inbox: ['stop'] });
-    const res = (await tool(IrisTool.ACT_SEQUENCE).handler(fakeDeps(session), {
+    const res = (await tool(ReticleTool.ACT_SEQUENCE).handler(fakeDeps(session), {
       steps: [{ ref: 'e1', action: 'click' }],
     })) as PausedShape;
     expect(res.paused).toBe(true);
@@ -180,7 +185,7 @@ describe('live-control: pause short-circuit', () => {
 describe('live-control: piggyback', () => {
   it('active act with a pending message piggybacks control.guidance', async () => {
     const session = fakeSession({ state: SessionState.ACTIVE, inbox: ['look here'] });
-    const res = (await tool(IrisTool.ACT).handler(fakeDeps(session), ACT_ARGS)) as ControlShape;
+    const res = (await tool(ReticleTool.ACT).handler(fakeDeps(session), ACT_ARGS)) as ControlShape;
     expect(res.since).toBe(0);
     expect('result' in res).toBe(true);
     expect(res.control).toEqual({
@@ -192,21 +197,27 @@ describe('live-control: piggyback', () => {
 
   it('piggyback guidance is delivered once', async () => {
     const session = fakeSession({ state: SessionState.ACTIVE, inbox: ['once'] });
-    const first = (await tool(IrisTool.ACT).handler(fakeDeps(session), ACT_ARGS)) as ControlShape;
+    const first = (await tool(ReticleTool.ACT).handler(
+      fakeDeps(session),
+      ACT_ARGS,
+    )) as ControlShape;
     expect(first.control?.guidance).toHaveLength(1);
-    const second = (await tool(IrisTool.ACT).handler(fakeDeps(session), ACT_ARGS)) as ControlShape;
+    const second = (await tool(ReticleTool.ACT).handler(
+      fakeDeps(session),
+      ACT_ARGS,
+    )) as ControlShape;
     expect('control' in second).toBe(false);
   });
 
   it('active act with empty inbox has no control field', async () => {
     const session = fakeSession({ state: SessionState.ACTIVE, inbox: [] });
-    const res = (await tool(IrisTool.ACT).handler(fakeDeps(session), ACT_ARGS)) as ControlShape;
+    const res = (await tool(ReticleTool.ACT).handler(fakeDeps(session), ACT_ARGS)) as ControlShape;
     expect('control' in res).toBe(false);
   });
 
-  it('iris_act_and_wait piggybacks control when active + pending msg', async () => {
+  it('reticle_act_and_wait piggybacks control when active + pending msg', async () => {
     const session = fakeSession({ state: SessionState.ACTIVE, inbox: ['hi'] });
-    const res = (await tool(IrisTool.ACT_AND_WAIT).handler(fakeDeps(session), {
+    const res = (await tool(ReticleTool.ACT_AND_WAIT).handler(fakeDeps(session), {
       ...ACT_ARGS,
       until: { kind: 'console', level: 'error', absent: true },
       timeout_ms: 0,
@@ -217,9 +228,9 @@ describe('live-control: piggyback', () => {
     expect(res.control?.guidance).toHaveLength(1);
   });
 
-  it('iris_act_and_wait with no `until` defaults to waiting for the page to settle', async () => {
+  it('reticle_act_and_wait with no `until` defaults to waiting for the page to settle', async () => {
     const session = fakeSession({ state: SessionState.ACTIVE, inbox: [] });
-    const res = (await tool(IrisTool.ACT_AND_WAIT).handler(fakeDeps(session), {
+    const res = (await tool(ReticleTool.ACT_AND_WAIT).handler(fakeDeps(session), {
       ...ACT_ARGS,
       timeout_ms: 50,
     })) as ControlShape;
@@ -230,9 +241,9 @@ describe('live-control: piggyback', () => {
     expect(session.__sent.filter((c) => c.name === 'act')).toHaveLength(1);
   });
 
-  it('iris_assert piggybacks control while paused (observe-only)', async () => {
+  it('reticle_assert piggybacks control while paused (observe-only)', async () => {
     const session = fakeSession({ state: SessionState.PAUSED, inbox: ['note'] });
-    const res = (await tool(IrisTool.ASSERT).handler(fakeDeps(session), {
+    const res = (await tool(ReticleTool.ASSERT).handler(fakeDeps(session), {
       predicate: { kind: 'console', level: 'error', absent: true },
     })) as ControlShape;
     expect(res.control).toEqual({
@@ -243,7 +254,7 @@ describe('live-control: piggyback', () => {
 
   it('ended state does not short-circuit act but piggybacks state', async () => {
     const session = fakeSession({ state: SessionState.ENDED, inbox: [] });
-    const res = (await tool(IrisTool.ACT).handler(fakeDeps(session), ACT_ARGS)) as ControlShape &
+    const res = (await tool(ReticleTool.ACT).handler(fakeDeps(session), ACT_ARGS)) as ControlShape &
       PausedShape;
     expect('paused' in res).toBe(false);
     expect(session.__sent.filter((c) => c.name === 'act')).toHaveLength(1);
@@ -254,13 +265,13 @@ describe('live-control: piggyback', () => {
 describe('live-control: read tools stay open while paused', () => {
   it('read tools are NOT blocked by pause — snapshot', async () => {
     const session = fakeSession({ state: SessionState.PAUSED });
-    await tool(IrisTool.SNAPSHOT).handler(fakeDeps(session), {});
+    await tool(ReticleTool.SNAPSHOT).handler(fakeDeps(session), {});
     expect(session.__sent.filter((c) => c.name === 'snapshot')).toHaveLength(1);
   });
 
   it('read tools are NOT blocked by pause — query', async () => {
     const session = fakeSession({ state: SessionState.PAUSED });
-    const res = (await tool(IrisTool.QUERY).handler(fakeDeps(session), {
+    const res = (await tool(ReticleTool.QUERY).handler(fakeDeps(session), {
       by: 'role',
       value: 'button',
     })) as PausedShape;
@@ -270,21 +281,21 @@ describe('live-control: read tools stay open while paused', () => {
 });
 
 describe('live-control: agent tools', () => {
-  it('iris_resume after pause lets the next act execute', async () => {
+  it('reticle_resume after pause lets the next act execute', async () => {
     const session = fakeSession({ state: SessionState.PAUSED });
-    const resume = (await tool(IrisTool.RESUME).handler(fakeDeps(session), {})) as {
+    const resume = (await tool(ReticleTool.RESUME).handler(fakeDeps(session), {})) as {
       ok: boolean;
     };
     expect(resume.ok).toBe(true);
     expect(session.__pushed.at(-1)).toEqual({ state: SessionState.ACTIVE });
-    const act = (await tool(IrisTool.ACT).handler(fakeDeps(session), ACT_ARGS)) as ControlShape;
+    const act = (await tool(ReticleTool.ACT).handler(fakeDeps(session), ACT_ARGS)) as ControlShape;
     expect('result' in act).toBe(true);
     expect(session.__sent.filter((c) => c.name === 'act')).toHaveLength(1);
   });
 
-  it('iris_resume returns ok and pushes PRESENTER', async () => {
+  it('reticle_resume returns ok and pushes PRESENTER', async () => {
     const session = fakeSession({ state: SessionState.PAUSED });
-    const res = (await tool(IrisTool.RESUME).handler(fakeDeps(session), {})) as {
+    const res = (await tool(ReticleTool.RESUME).handler(fakeDeps(session), {})) as {
       ok: boolean;
     };
     expect(res.ok).toBe(true);
@@ -293,9 +304,9 @@ describe('live-control: agent tools', () => {
     expect(session.__pushed).toEqual([{ state: SessionState.ACTIVE }]);
   });
 
-  it('iris_end_session sets ended and pushes PRESENTER', async () => {
+  it('reticle_end_session sets ended and pushes PRESENTER', async () => {
     const session = fakeSession({ state: SessionState.ACTIVE });
-    const res = (await tool(IrisTool.END_SESSION).handler(fakeDeps(session), {
+    const res = (await tool(ReticleTool.END_SESSION).handler(fakeDeps(session), {
       summary: 'done',
     })) as { ended: boolean; sessionId: string };
     expect(res).toEqual({ ended: true, sessionId: 'demo' });
@@ -304,9 +315,9 @@ describe('live-control: agent tools', () => {
     expect(session.__pushed).toEqual([{ state: SessionState.ENDED, text: 'done' }]);
   });
 
-  it('iris_end_session works with no summary', async () => {
+  it('reticle_end_session works with no summary', async () => {
     const session = fakeSession({ state: SessionState.ACTIVE });
-    const res = (await tool(IrisTool.END_SESSION).handler(fakeDeps(session), {})) as {
+    const res = (await tool(ReticleTool.END_SESSION).handler(fakeDeps(session), {})) as {
       ended: boolean;
       sessionId: string;
     };
@@ -314,18 +325,18 @@ describe('live-control: agent tools', () => {
     expect(session.__pushed).toContainEqual({ state: SessionState.ENDED });
   });
 
-  it('iris_end_session is idempotent', async () => {
+  it('reticle_end_session is idempotent', async () => {
     const session = fakeSession({ state: SessionState.ENDED });
-    const res = (await tool(IrisTool.END_SESSION).handler(fakeDeps(session), {})) as {
+    const res = (await tool(ReticleTool.END_SESSION).handler(fakeDeps(session), {})) as {
       ended: boolean;
       sessionId: string;
     };
     expect(res).toEqual({ ended: true, sessionId: 'demo' });
   });
 
-  it('iris_yield mode:waiting hands back with a waiting tone (revivable)', async () => {
+  it('reticle_yield mode:waiting hands back with a waiting tone (revivable)', async () => {
     const session = fakeSession({ state: SessionState.ACTIVE });
-    const res = (await tool(IrisTool.YIELD).handler(fakeDeps(session), { mode: 'waiting' })) as {
+    const res = (await tool(ReticleTool.YIELD).handler(fakeDeps(session), { mode: 'waiting' })) as {
       yielded: boolean;
       mode: string;
       sessionId: string;
@@ -338,9 +349,9 @@ describe('live-control: agent tools', () => {
     expect(push?.text).toContain('your move');
   });
 
-  it('iris_yield mode:ask carries the question and an ask tone', async () => {
+  it('reticle_yield mode:ask carries the question and an ask tone', async () => {
     const session = fakeSession({ state: SessionState.ACTIVE });
-    const res = (await tool(IrisTool.YIELD).handler(fakeDeps(session), {
+    const res = (await tool(ReticleTool.YIELD).handler(fakeDeps(session), {
       mode: 'ask',
       note: 'Use Stripe or Paddle?',
     })) as { yielded: boolean; mode: string; sessionId: string };
@@ -350,16 +361,16 @@ describe('live-control: agent tools', () => {
     expect(push?.text).toContain('Use Stripe or Paddle?');
   });
 
-  it('iris_messages drains the inbox', async () => {
+  it('reticle_messages drains the inbox', async () => {
     const session = fakeSession({ inbox: ['m1', 'm2'] });
-    const first = (await tool(IrisTool.MESSAGES).handler(fakeDeps(session), {})) as {
+    const first = (await tool(ReticleTool.MESSAGES).handler(fakeDeps(session), {})) as {
       messages: InboxMessage[];
     };
     expect(first.messages).toEqual([
       { text: 'm1', t: 0 },
       { text: 'm2', t: 0 },
     ]);
-    const second = (await tool(IrisTool.MESSAGES).handler(fakeDeps(session), {})) as {
+    const second = (await tool(ReticleTool.MESSAGES).handler(fakeDeps(session), {})) as {
       messages: InboxMessage[];
     };
     expect(second.messages).toEqual([]);

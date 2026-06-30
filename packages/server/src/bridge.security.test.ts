@@ -2,11 +2,11 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { WebSocket } from 'ws';
 import {
   EventType,
-  IRIS_PROTOCOL_VERSION,
-  IRIS_WS_PATH,
+  RETICLE_PROTOCOL_VERSION,
+  RETICLE_WS_PATH,
   MessageKind,
   TRANSPORT_LIMITS,
-} from '@syrin/iris-protocol';
+} from '@reticle/protocol';
 import { Bridge } from './bridge.js';
 
 const bridges: Bridge[] = [];
@@ -15,7 +15,7 @@ const sockets: WebSocket[] = [];
 function hello(sessionId: string, token?: string): Record<string, unknown> {
   return {
     kind: MessageKind.HELLO,
-    protocolVersion: IRIS_PROTOCOL_VERSION,
+    protocolVersion: RETICLE_PROTOCOL_VERSION,
     sessionId,
     url: 'http://localhost/',
     title: 'Security test',
@@ -32,7 +32,7 @@ async function makeBridge(options: Omit<ConstructorParameters<typeof Bridge>[0],
 
 function openSocket(port: number, origin?: string): Promise<WebSocket> {
   return new Promise((resolve, reject) => {
-    const socket = new WebSocket(`ws://127.0.0.1:${String(port)}${IRIS_WS_PATH}`, {
+    const socket = new WebSocket(`ws://127.0.0.1:${String(port)}${RETICLE_WS_PATH}`, {
       ...(origin === undefined ? {} : { origin }),
     });
     sockets.push(socket);
@@ -107,7 +107,7 @@ describe('Bridge security boundary', () => {
     socket.send(
       JSON.stringify({
         ...hello('old-client'),
-        protocolVersion: IRIS_PROTOCOL_VERSION + 1,
+        protocolVersion: RETICLE_PROTOCOL_VERSION + 1,
       }),
     );
     expect(await closed).toBe(1008);

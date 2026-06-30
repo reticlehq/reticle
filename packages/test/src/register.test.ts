@@ -2,19 +2,19 @@ import { describe, expect, it } from 'vitest';
 import {
   AnchorKind,
   FLOW_FILE_VERSION,
-  IrisCommand,
+  ReticleCommand,
   type CommandResult,
   type FlowFile,
-  type IrisEvent,
-} from '@syrin/iris-protocol';
-import type { Clock, EvalResult, FileSystemPort } from '@syrin/iris-server';
+  type ReticleEvent,
+} from '@reticle/protocol';
+import type { Clock, EvalResult, FileSystemPort } from '@reticle/server';
 import { FLOW_LOAD_ERROR_PREFIX, SpecMessage } from './constants.js';
 import { registerFlowSpecs } from './register.js';
 
 const FIXED_MS = 1_700_000_000_000;
 const fixedClock: Clock = { now: () => FIXED_MS };
-const ROOT = '/tmp/iris-root/.iris';
-const FLOWS_DIR = '/tmp/iris-root/.iris/flows';
+const ROOT = '/tmp/reticle-root/.reticle';
+const FLOWS_DIR = '/tmp/reticle-root/.reticle/flows';
 
 function memoryFs(files: Record<string, string>): FileSystemPort {
   const store = new Map<string, string>(Object.entries(files));
@@ -67,8 +67,8 @@ function memoryFs(files: Record<string, string>): FileSystemPort {
 
 interface SessionLike {
   command(name: string, args?: Record<string, unknown>): Promise<CommandResult>;
-  eventsSince(cursor: number): IrisEvent[];
-  onEvent(listener: (event: IrisEvent) => void): () => void;
+  eventsSince(cursor: number): ReticleEvent[];
+  onEvent(listener: (event: ReticleEvent) => void): () => void;
   elapsed(): number;
 }
 
@@ -80,7 +80,7 @@ function fakeSession(testids: string[]): SessionLike {
   const present = new Set(testids);
   return {
     command: (name, args) => {
-      if (name === IrisCommand.QUERY) {
+      if (name === ReticleCommand.QUERY) {
         const raw = args?.['value'];
         const value = typeof raw === 'string' ? raw : '';
         const has = present.has(value);
@@ -116,7 +116,11 @@ function flowFor(name: string, stepTestid: string): FlowFile {
     name,
     createdAt: FIXED_MS,
     steps: [
-      { tool: 'iris_act', anchor: { kind: AnchorKind.TESTID, value: stepTestid }, action: 'click' },
+      {
+        tool: 'reticle_act',
+        anchor: { kind: AnchorKind.TESTID, value: stepTestid },
+        action: 'click',
+      },
     ],
   };
 }

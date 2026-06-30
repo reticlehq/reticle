@@ -14,17 +14,17 @@ const N = Number(process.env.STEPS ?? 10); // a fixed 10-step flow (login → na
 // Per-request tool-schema tax (measured, schema-tax.json). CLIs = 0.
 const schemaTax = JSON.parse(readFileSync('bench/raw/schema-tax.json', 'utf8')).results;
 const SCHEMA = {
-  iris_full: schemaTax.iris?.schema_tokens ?? 16014,
-  iris_core: 5583, // measured: core profile, 12 tools
+  reticle_full: schemaTax.reticle?.schema_tokens ?? 16014,
+  reticle_core: 5583, // measured: core profile, 12 tools
   playwright_mcp: schemaTax.playwright?.schema_tokens ?? 3130,
   devtools_mcp: schemaTax.devtools?.schema_tokens ?? 4499,
   agent_browser: 0,
   playwright_cli: 68, // the one-time `--help` the agent reads to learn the CLI (research §b)
 };
-// Median per-step observation payload (tokens) — measured Layer A clean runs (see iris-improvement-mission.md).
+// Median per-step observation payload (tokens) — measured Layer A clean runs (see reticle-improvement-mission.md).
 const OBS = {
-  iris_full: 735,
-  iris_core: 735, // same observation payloads; only the schema differs by profile
+  reticle_full: 735,
+  reticle_core: 735, // same observation payloads; only the schema differs by profile
   playwright_mcp: 1294,
   devtools_mcp: 1031,
   agent_browser: 205,
@@ -59,7 +59,7 @@ const rows = tools.map((t) => {
 });
 rows.sort((a, b) => a.cached_cumulative_input - b.cached_cumulative_input);
 
-// Headline ratios vs the cheapest, and Iris(core) vs Playwright MCP (the claim everyone cites).
+// Headline ratios vs the cheapest, and Reticle(core) vs Playwright MCP (the claim everyone cites).
 const byTool = Object.fromEntries(rows.map((r) => [r.tool, r]));
 const out = {
   metric: `full-flow token MODEL — ${N}-step flow, observation+schema input tokens, cached + uncached`,
@@ -70,15 +70,15 @@ const out = {
     'schema+history cached: write 1.25x once, read 0.1x thereafter (5-min TTL); identical for all tools',
   rows,
   headline: {
-    iris_core_vs_playwright_mcp_cached: +(
-      byTool.playwright_mcp.cached_cumulative_input / byTool.iris_core.cached_cumulative_input
+    reticle_core_vs_playwright_mcp_cached: +(
+      byTool.playwright_mcp.cached_cumulative_input / byTool.reticle_core.cached_cumulative_input
     ).toFixed(2),
-    iris_full_vs_playwright_mcp_cached: +(
-      byTool.playwright_mcp.cached_cumulative_input / byTool.iris_full.cached_cumulative_input
+    reticle_full_vs_playwright_mcp_cached: +(
+      byTool.playwright_mcp.cached_cumulative_input / byTool.reticle_full.cached_cumulative_input
     ).toFixed(2),
     agent_browser_is_leanest_observe:
       'agent-browser stays cheapest on raw observation tokens — but catches only 72.7% of regressions (Layer A). Cheap because blind.',
-    note: 'Iris core ≈ competitive with the MCP substrates on tokens AND uniquely 100% detection + deterministic replay (122 tok/regression-run). Efficiency AND correctness.',
+    note: 'Reticle core ≈ competitive with the MCP substrates on tokens AND uniquely 100% detection + deterministic replay (122 tok/regression-run). Efficiency AND correctness.',
   },
 };
 console.log(JSON.stringify(out, null, 2));

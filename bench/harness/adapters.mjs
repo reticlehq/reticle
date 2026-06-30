@@ -10,7 +10,7 @@ import { McpStdioClient } from './mcp-client.mjs';
 import { measure } from './tokenizer.mjs';
 
 const pexecFile = promisify(execFile);
-const LOGIN = { email: 'admin@iris.dev', password: 'password' };
+const LOGIN = { email: 'admin@reticle.dev', password: 'password' };
 
 function rec(call, res) {
   const m = measure(res.text ?? '');
@@ -24,9 +24,9 @@ function rec(call, res) {
   };
 }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-/** How long to wait after spawning the iris daemon for the driven browser to load + the SDK to connect.
- *  Raise on a slow machine/CI via BENCH_IRIS_READY_MS. */
-const IRIS_READY_MS = Number(process.env.BENCH_IRIS_READY_MS ?? '3500');
+/** How long to wait after spawning the reticle daemon for the driven browser to load + the SDK to connect.
+ *  Raise on a slow machine/CI via BENCH_RETICLE_READY_MS. */
+const RETICLE_READY_MS = Number(process.env.BENCH_RETICLE_READY_MS ?? '3500');
 
 // ---------- Playwright MCP ----------
 export class PlaywrightAdapter {
@@ -178,9 +178,9 @@ export class DevtoolsAdapter {
   }
 }
 
-// ---------- Iris ----------
-function irisRefForTestid(queryText, testid) {
-  // iris_query returns JSON with element descriptors carrying ref + testid.
+// ---------- Reticle ----------
+function reticleRefForTestid(queryText, testid) {
+  // reticle_query returns JSON with element descriptors carrying ref + testid.
   try {
     const j = JSON.parse(queryText);
     const arr = j.elements ?? j.matches ?? j.results ?? [];
@@ -193,30 +193,30 @@ function irisRefForTestid(queryText, testid) {
   const m = queryText.match(/ref[=:"\s]+([a-z]?e?\d+)/i);
   return m ? m[1] : null;
 }
-export class IrisAdapter {
+export class ReticleAdapter {
   constructor(url, port = 4455) {
     this.url = url;
     this.port = String(port);
-    this.name = 'iris';
+    this.name = 'reticle';
   }
   async start() {
     this.c = new McpStdioClient(
       'node',
       ['packages/server/dist/cli.js', 'mcp', '--port', this.port, '--drive', this.url],
-      { IRIS_PORT: this.port },
+      { RETICLE_PORT: this.port },
     );
     await this.c.start();
-    await sleep(IRIS_READY_MS); // driven browser load + SDK connect (BENCH_IRIS_READY_MS to tune)
+    await sleep(RETICLE_READY_MS); // driven browser load + SDK connect (BENCH_RETICLE_READY_MS to tune)
   }
   async navigate() {
-    return rec('iris_navigate', await this.c.callTool('iris_navigate', { url: this.url }));
+    return rec('reticle_navigate', await this.c.callTool('reticle_navigate', { url: this.url }));
   }
   async snapshot() {
-    return rec('iris_snapshot', await this.c.callTool('iris_snapshot', { scope: 'page' }));
+    return rec('reticle_snapshot', await this.c.callTool('reticle_snapshot', { scope: 'page' }));
   }
   async _refByTestid(id) {
-    const r = await this.c.callTool('iris_query', { by: 'testid', value: id });
-    return { ref: irisRefForTestid(r.text ?? '', id), rec: rec('iris_query', r) };
+    const r = await this.c.callTool('reticle_query', { by: 'testid', value: id });
+    return { ref: reticleRefForTestid(r.text ?? '', id), rec: rec('reticle_query', r) };
   }
   // Poll until a testid resolves (post-login render is async + variable). Deterministic settle:
   // a fixed sleep races the auth round-trip, which silently degraded the FIRST nav step at record
@@ -233,20 +233,20 @@ export class IrisAdapter {
   async login() {
     const e = await this._refByTestid('login-email');
     if (e.ref)
-      await this.c.callTool('iris_act', {
+      await this.c.callTool('reticle_act', {
         ref: e.ref,
         action: 'fill',
         args: { value: LOGIN.email },
       });
     const p = await this._refByTestid('login-password');
     if (p.ref)
-      await this.c.callTool('iris_act', {
+      await this.c.callTool('reticle_act', {
         ref: p.ref,
         action: 'fill',
         args: { value: LOGIN.password },
       });
     const s = await this._refByTestid('login-submit');
-    if (s.ref) await this.c.callTool('iris_act', { ref: s.ref, action: 'click' });
+    if (s.ref) await this.c.callTool('reticle_act', { ref: s.ref, action: 'click' });
     // Wait for the post-login shell (the nav sidebar) to actually render before any nav step,
     // so the recording captures a real testid anchor instead of a degraded one.
     await this._waitForTestid('nav-deployments');
@@ -255,7 +255,7 @@ export class IrisAdapter {
     const q = await this._refByTestid(id);
     if (!q.ref)
       return {
-        call: 'iris_act',
+        call: 'reticle_act',
         error: `no ref for ${id}`,
         latency_ms: 0,
         chars: 0,
@@ -263,28 +263,34 @@ export class IrisAdapter {
         tokens_o200k: 0,
         text: '',
       };
-    return rec('iris_act', await this.c.callTool('iris_act', { ref: q.ref, action: 'click' }));
+    return rec(
+      'reticle_act',
+      await this.c.callTool('reticle_act', { ref: q.ref, action: 'click' }),
+    );
   }
   async console() {
-    return rec('iris_console', await this.c.callTool('iris_console', { level: 'error' }));
+    return rec('reticle_console', await this.c.callTool('reticle_console', { level: 'error' }));
   }
   // Filter by URL (symmetric with Playwright's '/api/' filter) so this works for BOTH a
   // failed-status request and a pending/no-status request. Status-only filtering would
   // miss a hanging request (it has no status yet) — that was an unfair earlier handicap.
   async network() {
-    return rec('iris_network', await this.c.callTool('iris_network', { urlContains: '/api/' }));
+    return rec(
+      'reticle_network',
+      await this.c.callTool('reticle_network', { urlContains: '/api/' }),
+    );
   }
   async networkAll() {
-    return rec('iris_network', await this.c.callTool('iris_network', {}));
+    return rec('reticle_network', await this.c.callTool('reticle_network', {}));
   }
   async stop() {
     try {
-      await this.c.callTool('iris_end_session', { summary: 'bench' }, 5000);
+      await this.c.callTool('reticle_end_session', { summary: 'bench' }, 5000);
     } catch {
       /* noop */
     }
     await this.c.stop();
-    // Explicit daemon teardown — iris mcp leaves a persistent daemon + driven browser otherwise.
+    // Explicit daemon teardown — reticle mcp leaves a persistent daemon + driven browser otherwise.
     try {
       const { execFileSync } = await import('node:child_process');
       execFileSync(
@@ -318,7 +324,7 @@ export class AgentBrowserAdapter {
   constructor(url) {
     this.url = url;
     this.name = 'agent_browser';
-    this.session = 'iris-bench';
+    this.session = 'reticle-bench';
   }
   async _run(args) {
     const started = Date.now();
@@ -473,7 +479,7 @@ export class PlaywrightCliAdapter {
 }
 
 // Unified view-navigation + tap + observe so scenarios are tool-agnostic.
-// NAV maps a view id to a testid (Playwright/Iris) and an accessible-name regex (DevTools).
+// NAV maps a view id to a testid (Playwright/Reticle) and an accessible-name regex (DevTools).
 // DevTools resolves nav by accessible name. Match the LABEL PREFIX (open-quote + word, no closing
 // quote) so a trailing badge count — e.g. the Deployments nav renders "Deployments500" — still
 // resolves. The earlier exact-quote regex missed it, making DevTools fail to reach the view (an
@@ -484,7 +490,7 @@ const NAV = {
   compose: { testid: 'nav-compose', nameRe: /"Compose/ },
   diagnostics: { testid: 'nav-diagnostics', nameRe: /"Diagnostics/ },
 };
-for (const Cls of [PlaywrightAdapter, IrisAdapter]) {
+for (const Cls of [PlaywrightAdapter, ReticleAdapter]) {
   Cls.prototype.tap = function (spec) {
     return this.clickTestid(spec.testid, spec.label);
   };
@@ -504,7 +510,7 @@ for (const Cls of [DevtoolsAdapter, AgentBrowserAdapter, PlaywrightCliAdapter]) 
 for (const Cls of [
   PlaywrightAdapter,
   DevtoolsAdapter,
-  IrisAdapter,
+  ReticleAdapter,
   AgentBrowserAdapter,
   PlaywrightCliAdapter,
 ]) {
@@ -520,7 +526,7 @@ export { NAV };
 export function makeAdapter(tool, url) {
   if (tool === 'playwright') return new PlaywrightAdapter(url);
   if (tool === 'devtools') return new DevtoolsAdapter(url);
-  if (tool === 'iris') return new IrisAdapter(url);
+  if (tool === 'reticle') return new ReticleAdapter(url);
   if (tool === 'agentbrowser') return new AgentBrowserAdapter(url);
   if (tool === 'playwrightcli') return new PlaywrightCliAdapter(url);
   throw new Error(`unknown tool ${tool}`);

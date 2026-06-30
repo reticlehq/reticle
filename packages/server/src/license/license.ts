@@ -1,8 +1,8 @@
 /**
- * Enterprise license-key verification + the assertEnterprise gate. ENTERPRISE CODE (Iris Enterprise
+ * Enterprise license-key verification + the assertEnterprise gate. ENTERPRISE CODE (Reticle Enterprise
  * License — see ./LICENSE), not the FSL that covers the rest of the server.
  *
- * Offline + no phone-home (preserves the no-telemetry brand): a key is a signed payload Syrin issues
+ * Offline + no phone-home (preserves the no-telemetry brand): a key is a signed payload Reticle issues
  * with its private key; this verifies it against the issuer's PUBLIC key with Ed25519. Dev/eval is a
  * no-op (requireLicense:false) so the gate never gets in a contributor's way; only a production-mode
  * caller with requireLicense:true must present a valid, unexpired key. The clock is injected (rule 7).
@@ -40,7 +40,7 @@ type LicenseCheck =
 /** A key is `base64url(payloadJson).base64url(ed25519Signature)`. */
 const KEY_SEP = '.';
 
-/** Sign a payload into a license key — the ISSUER side (Syrin's private key). Exposed for the issuer tool + tests. */
+/** Sign a payload into a license key — the ISSUER side (Reticle's private key). Exposed for the issuer tool + tests. */
 export function signLicenseKey(payload: LicensePayload, privateKey: KeyObject): string {
   const json = JSON.stringify(payload);
   const sig = edSign(null, Buffer.from(json, 'utf8'), privateKey);
@@ -97,7 +97,7 @@ export class EnterpriseLicenseError extends Error {
   readonly reason: string;
   constructor(feature: string, reason: string) {
     super(
-      `Iris Enterprise feature "${feature}" requires a valid license (${reason}). Contact hey@syrin.ai.`,
+      `Reticle Enterprise feature "${feature}" requires a valid license (${reason}). Contact hey@reticle.ai.`,
     );
     this.name = 'EnterpriseLicenseError';
     this.feature = feature;
@@ -115,7 +115,7 @@ export interface GateContext {
 
 /** The issuer public key from the environment (set at release / by the operator); undefined if unset. */
 function issuerPublicKey(): KeyObject | undefined {
-  const pem = process.env['IRIS_LICENSE_PUBLIC_KEY'];
+  const pem = process.env['RETICLE_LICENSE_PUBLIC_KEY'];
   if (pem === undefined || pem.length === 0) return undefined;
   try {
     return createPublicKey(pem);
@@ -144,10 +144,10 @@ export function assertEnterprise(feature: string, ctx: GateContext): void {
 }
 
 /** Env names that carry the activation: the operator's key, and the issuer public key baked at release. */
-export const LICENSE_KEY_ENV = 'IRIS_LICENSE_KEY';
-export const LICENSE_PUBLIC_KEY_ENV = 'IRIS_LICENSE_PUBLIC_KEY';
+export const LICENSE_KEY_ENV = 'RETICLE_LICENSE_KEY';
+export const LICENSE_PUBLIC_KEY_ENV = 'RETICLE_LICENSE_PUBLIC_KEY';
 
-/** The human-facing state of enterprise activation on this machine (what `iris license status` shows). */
+/** The human-facing state of enterprise activation on this machine (what `reticle license status` shows). */
 interface LicenseReport {
   status: 'active' | 'missing' | 'invalid' | 'expired' | 'eval';
   org?: string;
@@ -168,7 +168,7 @@ function loadPublicKey(pem: string | undefined): KeyObject | undefined {
 
 /**
  * Resolve activation entirely from the environment — the install mechanism: the release bakes the
- * issuer public key, the operator sets IRIS_LICENSE_KEY. No public key configured ⇒ evaluation mode
+ * issuer public key, the operator sets RETICLE_LICENSE_KEY. No public key configured ⇒ evaluation mode
  * (enterprise features run free, dev/test only). Offline, no phone-home.
  */
 export function describeLicense(now: number, env: NodeJS.ProcessEnv = process.env): LicenseReport {

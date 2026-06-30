@@ -34,7 +34,7 @@ async function shot(name, regression, drive) {
     await c.callTool('browser_type', {
       element: 'email',
       target: '[data-testid="login-email"]',
-      text: 'admin@iris.dev',
+      text: 'admin@reticle.dev',
     });
     await c.callTool('browser_type', {
       element: 'pw',

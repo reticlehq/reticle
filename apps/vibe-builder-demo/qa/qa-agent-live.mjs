@@ -1,9 +1,9 @@
 /**
  * The LIVE QA agent — a real LLM tool-calling loop (vs the scripted driver in verify-live.mjs).
- * An API agent is given the Iris tools as functions and asked to verify the generated app; it decides
+ * An API agent is given the Reticle tools as functions and asked to verify the generated app; it decides
  * which tools to call, reasons over the program-truth it observes, and reports a verdict. This is the
  * autonomous analogue of the builder's QA agent — it runs server-side, in-process, against a real
- * headless sandbox, and reaches Iris's tools directly (no MCP stdio, no human).
+ * headless sandbox, and reaches Reticle's tools directly (no MCP stdio, no human).
  *
  * Provider-portable: any OpenAI-compatible chat-completions endpoint works via env vars.
  *   LLM_BASE_URL  (default https://api.moonshot.ai/v1  — Kimi / Moonshot)
@@ -23,7 +23,7 @@ import {
   ProjectStore,
   createNodeFileSystem,
   LaunchedRealInputProvider,
-} from '@syrin/iris-server';
+} from '@reticle/server';
 import { tmpdir } from 'node:os';
 import { mkdtempSync, readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
@@ -31,7 +31,7 @@ import { fileURLToPath } from 'node:url';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-/** Pull the expenses array out of whatever shape iris_state returns. */
+/** Pull the expenses array out of whatever shape reticle_state returns. */
 function findExpenses(state) {
   const seen = new Set();
   const walk = (v) => {
@@ -72,7 +72,7 @@ const BASE_URL = process.env.LLM_BASE_URL ?? 'https://api.moonshot.ai/v1';
 const MODEL = process.env.LLM_MODEL ?? 'kimi-k2-0711-preview';
 const API_KEY = process.env.LLM_API_KEY ?? process.env.KIMI_API_KEY ?? '';
 
-// ── The Iris tools we expose to the LLM (testid-oriented — refs are resolved internally so the
+// ── The Reticle tools we expose to the LLM (testid-oriented — refs are resolved internally so the
 //    model never handles or invents them). Results are shaped small so the model reasons cleanly. ──
 const LLM_TOOLS = [
   {
@@ -171,46 +171,46 @@ export async function runLiveAgent({ bug = 'none', previewUrl = 'http://localhos
   await fetch(`${previewUrl}/api/reset`, { method: 'DELETE', headers: { 'x-bug': bug } });
 
   const server = await start({ port: bridgePort, mcp: false });
-  const provider = new LaunchedRealInputProvider({ driveUrl: `${previewUrl}/?bug=${bug}&iris=1`, headless });
+  const provider = new LaunchedRealInputProvider({ driveUrl: `${previewUrl}/?bug=${bug}&reticle=1`, headless });
   await provider.navigate();
   const fs = createNodeFileSystem();
-  const irisRoot = mkdtempSync(join(tmpdir(), 'iris-live-'));
+  const reticleRoot = mkdtempSync(join(tmpdir(), 'reticle-live-'));
   const now = () => Date.now();
   const deps = {
     sessions: server.bridge.sessions,
     baselines: new BaselineStore(),
     recordings: new RecordingStore(),
     annotations: new AnnotationStore(),
-    flows: new FlowStore(fs, irisRoot, { now }),
-    project: new ProjectStore(fs, irisRoot, { now }),
+    flows: new FlowStore(fs, reticleRoot, { now }),
+    project: new ProjectStore(fs, reticleRoot, { now }),
     fs,
-    irisRoot,
+    reticleRoot,
     now,
     realInput: provider,
   };
-  const callIris = (name, args) => TOOLS.find((t) => t.name === name).handler(deps, { sessionId: 'preview', ...args });
+  const callReticle = (name, args) => TOOLS.find((t) => t.name === name).handler(deps, { sessionId: 'preview', ...args });
 
   // Resolve a testid → ref internally so the LLM never handles refs (the source of hallucinated refs).
   const refFor = async (testid) => {
-    const r = await callIris('iris_query', { by: 'testid', value: testid });
+    const r = await callReticle('reticle_query', { by: 'testid', value: testid });
     return r.elements?.[0]?.ref;
   };
 
-  /** Dispatch an LLM tool call to Iris and return a SMALL, unambiguous result the model can reason over. */
+  /** Dispatch an LLM tool call to Reticle and return a SMALL, unambiguous result the model can reason over. */
   async function dispatch(name, args) {
     if (name === 'act') {
       const ref = await refFor(args.testid);
       if (ref === undefined) return { ok: false, error: `no element with testid "${args.testid}"` };
       if (args.action === 'click') {
-        await callIris('iris_act_and_wait', { ref, action: 'click' });
+        await callReticle('reticle_act_and_wait', { ref, action: 'click' });
         await sleep(350);
         return { ok: true, acted: `click ${args.testid}` };
       }
-      await callIris('iris_act', { ref, action: args.action, args: args.value !== undefined ? { value: args.value } : {} });
+      await callReticle('reticle_act', { ref, action: args.action, args: args.value !== undefined ? { value: args.value } : {} });
       return { ok: true, acted: `${args.action} ${args.testid}${args.value !== undefined ? `="${args.value}"` : ''}` };
     }
     if (name === 'check_network') {
-      const net = await callIris('iris_network', { method: 'POST', urlContains: '/api/expenses' });
+      const net = await callReticle('reticle_network', { method: 'POST', urlContains: '/api/expenses' });
       const calls = net.calls ?? net.requests ?? net.network ?? [];
       return {
         postCount: Array.isArray(calls) ? calls.length : 0,
@@ -218,12 +218,12 @@ export async function runLiveAgent({ bug = 'none', previewUrl = 'http://localhos
       };
     }
     if (name === 'check_console') {
-      const con = await callIris('iris_console', { level: 'error' });
+      const con = await callReticle('reticle_console', { level: 'error' });
       const list = con.entries ?? con.logs ?? con.console ?? [];
       return { errorCount: Array.isArray(list) ? list.length : 0, messages: (Array.isArray(list) ? list : []).map((e) => e.text ?? e.message ?? String(e)).slice(0, 5) };
     }
     if (name === 'check_state') {
-      const st = await callIris('iris_state', { store: 'app' });
+      const st = await callReticle('reticle_state', { store: 'app' });
       const expenses = findExpenses(st) ?? [];
       const total = expenses.reduce((s, e) => s + (Number.isNaN(e.amount) ? 0 : e.amount), 0);
       return { expenseCount: expenses.length, total };
@@ -234,7 +234,7 @@ export async function runLiveAgent({ bug = 'none', previewUrl = 'http://localhos
   try {
     for (let i = 0; i < 100 && server.bridge.sessions.count() === 0; i++) await sleep(50);
     if (server.bridge.sessions.count() === 0) throw new Error('sandbox SDK never connected');
-    await callIris('iris_wait_ready', { timeoutMs: 10000 });
+    await callReticle('reticle_wait_ready', { timeoutMs: 10000 });
 
     const messages = [
       { role: 'system', content: SYSTEM_PROMPT },

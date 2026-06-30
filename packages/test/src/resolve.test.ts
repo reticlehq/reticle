@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { IrisTool } from '@syrin/iris-server';
-import { QueryBy } from '@syrin/iris-protocol';
+import { ReticleTool } from '@reticle/server';
+import { QueryBy } from '@reticle/protocol';
 import { resolveTestid } from './resolve.js';
-import { IrisQueryEmptyError } from './skip.js';
+import { ReticleQueryEmptyError } from './skip.js';
 import { NO_ELEMENT_FOR_TESTID } from './constants.js';
-import type { ToolInvoker } from '@syrin/iris-server';
+import type { ToolInvoker } from '@reticle/server';
 
 /** A fake invoker scripted per tool name; records every call for assertion. */
 function fakeInvoker(handlers: Record<string, (args: Record<string, unknown>) => unknown>): {
@@ -24,38 +24,40 @@ function fakeInvoker(handlers: Record<string, (args: Record<string, unknown>) =>
 describe('resolveTestid', () => {
   it('returns the first ref of a non-empty query', async () => {
     const { invoke } = fakeInvoker({
-      [IrisTool.QUERY]: () => ({ elements: [{ ref: 'e1' }] }),
+      [ReticleTool.QUERY]: () => ({ elements: [{ ref: 'e1' }] }),
     });
     await expect(resolveTestid(invoke, 'add-section')).resolves.toBe('e1');
   });
 
   it('uses the first of multiple refs', async () => {
     const { invoke } = fakeInvoker({
-      [IrisTool.QUERY]: () => ({ elements: [{ ref: 'e1' }, { ref: 'e2' }] }),
+      [ReticleTool.QUERY]: () => ({ elements: [{ ref: 'e1' }, { ref: 'e2' }] }),
     });
     await expect(resolveTestid(invoke, 'row')).resolves.toBe('e1');
   });
 
   it('queries by testid with the given value', async () => {
     const { invoke, calls } = fakeInvoker({
-      [IrisTool.QUERY]: () => ({ elements: [{ ref: 'e1' }] }),
+      [ReticleTool.QUERY]: () => ({ elements: [{ ref: 'e1' }] }),
     });
     await resolveTestid(invoke, 'add-section');
-    expect(calls[0]?.tool).toBe(IrisTool.QUERY);
+    expect(calls[0]?.tool).toBe(ReticleTool.QUERY);
     expect(calls[0]?.args['by']).toBe(QueryBy.TESTID);
     expect(calls[0]?.args['value']).toBe('add-section');
   });
 
-  it('throws IrisQueryEmptyError on an empty result', async () => {
+  it('throws ReticleQueryEmptyError on an empty result', async () => {
     const { invoke } = fakeInvoker({
-      [IrisTool.QUERY]: () => ({ elements: [], hint: { presentTestids: ['add-row'] } }),
+      [ReticleTool.QUERY]: () => ({ elements: [], hint: { presentTestids: ['add-row'] } }),
     });
-    await expect(resolveTestid(invoke, 'add-section')).rejects.toBeInstanceOf(IrisQueryEmptyError);
+    await expect(resolveTestid(invoke, 'add-section')).rejects.toBeInstanceOf(
+      ReticleQueryEmptyError,
+    );
   });
 
   it('names the missing testid in the thrown message', async () => {
     const { invoke } = fakeInvoker({
-      [IrisTool.QUERY]: () => ({ elements: [] }),
+      [ReticleTool.QUERY]: () => ({ elements: [] }),
     });
     await expect(resolveTestid(invoke, 'add-section')).rejects.toThrow(
       `${NO_ELEMENT_FOR_TESTID} add-section`,
@@ -64,13 +66,13 @@ describe('resolveTestid', () => {
 
   it('carries presentTestids as evidence on the empty error', async () => {
     const { invoke } = fakeInvoker({
-      [IrisTool.QUERY]: () => ({ elements: [], hint: { presentTestids: ['add-sectionn'] } }),
+      [ReticleTool.QUERY]: () => ({ elements: [], hint: { presentTestids: ['add-sectionn'] } }),
     });
     await resolveTestid(invoke, 'add-section').then(
       () => expect.unreachable('should have thrown'),
       (error: unknown) => {
-        expect(error).toBeInstanceOf(IrisQueryEmptyError);
-        expect((error as IrisQueryEmptyError).evidence).toEqual({
+        expect(error).toBeInstanceOf(ReticleQueryEmptyError);
+        expect((error as ReticleQueryEmptyError).evidence).toEqual({
           presentTestids: ['add-sectionn'],
         });
       },
@@ -79,7 +81,7 @@ describe('resolveTestid', () => {
 
   it('forwards sessionId to the query when supplied', async () => {
     const { invoke, calls } = fakeInvoker({
-      [IrisTool.QUERY]: () => ({ elements: [{ ref: 'e1' }] }),
+      [ReticleTool.QUERY]: () => ({ elements: [{ ref: 'e1' }] }),
     });
     await resolveTestid(invoke, 'add-section', 's1');
     expect(calls[0]?.args['sessionId']).toBe('s1');

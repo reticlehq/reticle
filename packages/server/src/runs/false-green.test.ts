@@ -9,11 +9,11 @@ import {
   VerdictStatus,
   type FlowReplayResult,
   asRunId,
-} from '@syrin/iris-protocol';
-import { IrisRunner, type RunnerPort, type VerifyOptions } from './iris-runner.js';
+} from '@reticle/protocol';
+import { ReticleRunner, type RunnerPort, type VerifyOptions } from './reticle-runner.js';
 
 /**
- * The anti-fabrication guarantee — "Iris cannot report green for something it did not actually verify."
+ * The anti-fabrication guarantee — "Reticle cannot report green for something it did not actually verify."
  *
  * This is the property a vision/LLM-narrated QA harness lacks: a verdict that is MECHANICAL, derived
  * only from observed replay outcomes, so a broken or unreachable app can never read as PASS. These
@@ -58,7 +58,7 @@ const opts: Omit<VerifyOptions, 'names'> = {
 
 describe('false-green guarantee', () => {
   it('a healthy flow is the ONLY thing that yields PASS', async () => {
-    const run = await new IrisRunner(
+    const run = await new ReticleRunner(
       port({ checkout: replay('checkout', ReplayStatus.OK) }, []),
     ).verify({
       ...opts,
@@ -68,7 +68,7 @@ describe('false-green guarantee', () => {
   });
 
   it('a severed backend (action could not complete) yields FAIL with evidence, never PASS', async () => {
-    const run = await new IrisRunner(
+    const run = await new ReticleRunner(
       port(
         {
           checkout: replay('checkout', ReplayStatus.ERROR, {
@@ -87,7 +87,7 @@ describe('false-green guarantee', () => {
   });
 
   it('a drifted consequence (the success oracle did not fire) yields FAIL, never PASS', async () => {
-    const run = await new IrisRunner(
+    const run = await new ReticleRunner(
       port(
         {
           checkout: replay('checkout', ReplayStatus.DRIFT, {
@@ -108,7 +108,7 @@ describe('false-green guarantee', () => {
   it('NO combination of broken replays can produce a PASS verdict', async () => {
     const brokenStatuses = [ReplayStatus.ERROR, ReplayStatus.DRIFT];
     for (const s of brokenStatuses) {
-      const run = await new IrisRunner(port({ f: replay('f', s) }, [])).verify({
+      const run = await new ReticleRunner(port({ f: replay('f', s) }, [])).verify({
         ...opts,
         names: ['f'],
       });
@@ -119,14 +119,14 @@ describe('false-green guarantee', () => {
   it('"nothing verified" is NOT a confident pass — empty run is PASS only at LOW confidence', async () => {
     // The honest boundary: with zero flows there is nothing to fail, but the verdict must signal that
     // nothing was actually checked. A deploy gate keys on confidence !== low (or flows.length > 0).
-    const run = await new IrisRunner(port({}, [])).verify(opts);
+    const run = await new ReticleRunner(port({}, [])).verify(opts);
     expect(run.flows).toHaveLength(0);
     expect(run.verdict.status).toBe(VerdictStatus.PASS);
     expect(run.verdict.confidence).toBe(RunConfidence.LOW);
   });
 
   it('a mix of one healthy and one severed flow is PARTIAL (not a blanket PASS)', async () => {
-    const run = await new IrisRunner(
+    const run = await new ReticleRunner(
       port(
         {
           login: replay('login', ReplayStatus.OK),

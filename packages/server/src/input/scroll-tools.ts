@@ -1,17 +1,17 @@
 import { z } from 'zod';
-import { IrisTool } from '../tools/tool-names.js';
+import { ReticleTool } from '../tools/tool-names.js';
 import { asNumber, asString } from '../tools/tools-helpers.js';
 import { scrollToFind, type ScrollFindQuery } from './scroll-find.js';
 import type { ToolDef, ToolDeps } from '../tools/tools.js';
 
 /**
- * iris_scroll_to — the windowed/virtualized-list escape hatch. A plain iris_query
+ * reticle_scroll_to — the windowed/virtualized-list escape hatch. A plain reticle_query
  * only sees rendered nodes, so an off-screen row in a react-window/react-virtualized list returns
  * nothing. This scrolls the container until the row mounts, then returns its ref.
  */
 export const SCROLL_TOOLS: ToolDef[] = [
   {
-    name: IrisTool.SCROLL_TO,
+    name: ReticleTool.SCROLL_TO,
     description:
       'Find an element in a VIRTUALIZED list that has not rendered yet. Pass `by` (role|text|testid|label|placeholder|alt) and `value` (query string) to identify the target row. Scrolls the container until the row mounts, the list ends, or maxScrolls (default 20) is spent. Pass targetIndex + totalCount for bisection — jumps directly to the estimated offset in one scroll (e.g. targetIndex:800 totalCount:1000 jumps to 80% of scrollHeight). Returns { found, element?, scrolls, exhausted }.',
     inputSchema: {
@@ -48,7 +48,7 @@ export const SCROLL_TOOLS: ToolDef[] = [
         .string()
         .optional()
         .describe(
-          'Active session ID from iris_sessions. Omit when only one browser session is open.',
+          'Active session ID from reticle_sessions. Omit when only one browser session is open.',
         ),
     },
     outputSchema: {

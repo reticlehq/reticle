@@ -3,7 +3,7 @@
  * A self-contained "generated app" — a full-stack Expense Tracker that mirrors what an AI app-builder
  * (Emergent-style) emits: a React-ish frontend + a JSON API + a data store, served end to end from one
  * process. Its whole purpose is to be VERIFIED: set BUG_MODE to seed exactly the silent-failure classes
- * vibe-coded apps ship with, then point Iris at it and watch the verdict catch them.
+ * vibe-coded apps ship with, then point Reticle at it and watch the verdict catch them.
  *
  *   node apps/generated-app/server.mjs                 # everything works (BUG_MODE=none)
  *   BUG_MODE=mock-data node apps/generated-app/server.mjs    # POST "succeeds" but nothing persists
@@ -13,7 +13,7 @@
  *   BUG_MODE=wrong-total ...     # the Total lies (UI ≠ data)
  *   BUG_MODE=console-error ...   # an action logs a console.error, UI still renders
  *
- * No build step, no deps — Node only. See README.md for the Iris verification walkthrough.
+ * No build step, no deps — Node only. See README.md for the Reticle verification walkthrough.
  */
 
 import { createServer } from 'node:http';
@@ -99,7 +99,7 @@ li{display:flex;justify-content:space-between;border-bottom:1px solid #eee;paddi
 <ul id="list" data-testid="list"></ul>
 <script>
 const BUG = ${JSON.stringify(bug)};
-// A minimal store an instrumented build would expose to Iris (window.__app for state-truth checks).
+// A minimal store an instrumented build would expose to Reticle (window.__app for state-truth checks).
 const store = { expenses: [], get total(){ return this.expenses.reduce((s,e)=>s+(e.amount||0),0); } };
 window.__app = store;
 const $ = (id) => document.getElementById(id);

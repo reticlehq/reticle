@@ -65,7 +65,7 @@ export interface PresentRegion {
   sample: string[];
 }
 
-/** Diagnostic hint attached to a zero-match iris_query result. */
+/** Diagnostic hint attached to a zero-match reticle_query result. */
 export interface QueryEmptyHint {
   /** location.pathname + location.search at query time. */
   route: string;
@@ -77,7 +77,7 @@ export interface QueryEmptyHint {
   knownEmptyState: boolean;
 }
 
-/** Result of the QUERY command / iris_query tool. `hint` present ONLY on zero matches. */
+/** Result of the QUERY command / reticle_query tool. `hint` present ONLY on zero matches. */
 export interface QueryResult {
   elements: ElementDescriptor[];
   hint?: QueryEmptyHint;
@@ -143,7 +143,7 @@ export const RunEvidenceSchema = z.object({
   driftSteps: z.number().optional(),
 });
 
-/** One persisted run outcome in .iris/project.json. */
+/** One persisted run outcome in .reticle/project.json. */
 export const RunRecordSchema = z.object({
   kind: z.nativeEnum(RunKind),
   name: z.string(),
@@ -172,7 +172,7 @@ export type ProjectFile = z.infer<typeof ProjectFileSchema>;
 
 /**
  * The structured annotation REQUEST a human/agent attaches to the live
- * recording (the server-side `iris_annotate` tool). A discriminated union over the four shipped
+ * recording (the server-side `reticle_annotate` tool). A discriminated union over the four shipped
  * AnnotationKind values. Each variant carries exactly the fields its compilation needs.
  *
  * FIRST CUT boundary (do NOT remove): only this structured union is accepted. A free
@@ -241,7 +241,7 @@ export const AnnotationSchema = z.discriminatedUnion('kind', [
 export type Annotation = z.infer<typeof AnnotationSchema>;
 
 /**
- * The iris_annotate result envelope (discriminated on `ok`, never a free
+ * The reticle_annotate result envelope (discriminated on `ok`, never a free
  * string). On success it names the target (step|flow) + the human compiled-predicate text the
  * recorder confirmation strip shows ("will assert signal diff:shown").
  */

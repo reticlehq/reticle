@@ -31,7 +31,7 @@ export function NewDeployModal(): React.ReactElement | null {
       >
         <div className="row" style={{ justifyContent: 'space-between', marginBottom: 18 }}>
           <div className="row" style={{ gap: 10 }}>
-            <span style={{ color: 'var(--iris2)' }}>
+            <span style={{ color: 'var(--reticle2)' }}>
               <IconRocket size={18} />
             </span>
             <h3 style={{ fontSize: 16 }}>New deployment</h3>

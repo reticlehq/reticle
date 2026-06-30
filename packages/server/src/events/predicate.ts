@@ -1,11 +1,11 @@
 import {
   ElementState,
-  IrisCommand,
+  ReticleCommand,
   type CommandResult,
   type ElementQuery,
-  type IrisEvent,
+  type ReticleEvent,
   type MatchResult,
-} from '@syrin/iris-protocol';
+} from '@reticle/protocol';
 import { selectPath, capDepth } from '../session/state-select.js';
 import {
   PredicateSchema,
@@ -26,8 +26,8 @@ export type { Predicate, EvalResult };
 /** The subset of Session the predicate engine needs — keeps it testable with a fake. */
 export interface PredicateSession {
   command(name: string, args?: Record<string, unknown>): Promise<CommandResult>;
-  eventsSince(cursor: number): IrisEvent[];
-  onEvent(listener: (event: IrisEvent) => void): () => void;
+  eventsSince(cursor: number): ReticleEvent[];
+  onEvent(listener: (event: ReticleEvent) => void): () => void;
   /** Milliseconds since connect — the same clock that stamps event `t` (injected, testable). */
   elapsed(): number;
 }
@@ -37,7 +37,7 @@ async function matchOnce(
   query: ElementQuery,
   state: ElementState | undefined,
 ): Promise<MatchResult> {
-  const res = await session.command(IrisCommand.MATCH, { query, state });
+  const res = await session.command(ReticleCommand.MATCH, { query, state });
   if (!res.ok) return { matched: false, count: 0, elements: [] };
   return (res.result ?? { matched: false, count: 0, elements: [] }) as MatchResult;
 }
@@ -95,7 +95,7 @@ async function evalState(
   p: Extract<Predicate, { kind: 'state' }>,
 ): Promise<EvalResult> {
   const res = await session.command(
-    IrisCommand.STATE_READ,
+    ReticleCommand.STATE_READ,
     p.store !== undefined ? { store: p.store } : {},
   );
   if (!res.ok) return { pass: false, failureReason: 'state read failed' };

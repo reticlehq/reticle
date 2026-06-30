@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { EventType, SessionState, type IrisEvent } from '@syrin/iris-protocol';
+import { EventType, SessionState, type ReticleEvent } from '@reticle/protocol';
 import {
   applyEventBudget,
   costHint,
@@ -8,11 +8,11 @@ import {
   withSizeCost,
 } from './output-budget.js';
 import { TOOLS } from '../tools/tools.js';
-import { IrisTool } from '../tools/tool-names.js';
+import { ReticleTool } from '../tools/tool-names.js';
 import type { Session, SessionManager } from './session.js';
 import type { ToolDeps } from '../tools/tools.js';
 
-function ev(t: number): IrisEvent {
+function ev(t: number): ReticleEvent {
   return { t, type: EventType.DOM_ADDED, sessionId: 's', data: { i: t } };
 }
 
@@ -106,7 +106,7 @@ describe('sizeCost / withSizeCost', () => {
 });
 
 // ── observe wiring ────────────────────────────────────────────────────────────
-function fakeDeps(events: IrisEvent[]): ToolDeps {
+function fakeDeps(events: ReticleEvent[]): ToolDeps {
   const stub: Partial<Session> = {
     id: 'demo',
     eventsInWindow: () => events,
@@ -120,12 +120,12 @@ function fakeDeps(events: IrisEvent[]): ToolDeps {
 }
 
 function observeTool() {
-  const tool = TOOLS.find((t) => t.name === IrisTool.OBSERVE);
-  if (tool === undefined) throw new Error('no iris_observe tool');
+  const tool = TOOLS.find((t) => t.name === ReticleTool.OBSERVE);
+  if (tool === undefined) throw new Error('no reticle_observe tool');
   return tool;
 }
 
-describe('iris_observe output budget', () => {
+describe('reticle_observe output budget', () => {
   it('always returns a cost hint with events + bytes', async () => {
     const deps = fakeDeps([ev(1), ev(2)]);
     const res = (await observeTool().handler(deps, {})) as {
@@ -138,7 +138,7 @@ describe('iris_observe output budget', () => {
   it('caps events to max_events (most recent) and reports droppedOldest', async () => {
     const deps = fakeDeps([ev(1), ev(2), ev(3), ev(4)]);
     const res = (await observeTool().handler(deps, { max_events: 1 })) as {
-      events: IrisEvent[];
+      events: ReticleEvent[];
       cost?: { events: number; droppedOldest?: number };
     };
     expect(res.events.map((e) => e.t)).toEqual([4]);

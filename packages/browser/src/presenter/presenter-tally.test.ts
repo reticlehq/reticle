@@ -33,8 +33,8 @@ describe('renderTally', () => {
     const e = el();
     const out = renderTally(e, [{ result: 'pass' }, { result: 'pass' }, { result: 'fail' }], zero);
     expect(e.hasAttribute('hidden')).toBe(false);
-    expect(e.querySelector('.iris-t-pass')?.textContent).toBe('✓ 2');
-    expect(e.querySelector('.iris-t-fail')?.textContent).toBe('✗ 1');
+    expect(e.querySelector('.reticle-t-pass')?.textContent).toBe('✓ 2');
+    expect(e.querySelector('.reticle-t-fail')?.textContent).toBe('✗ 1');
     expect(out).toEqual({ passes: 2, fails: 1 });
   });
 
@@ -45,20 +45,20 @@ describe('renderTally', () => {
       passes: 1,
       fails: 1,
     });
-    expect(e.querySelector('.iris-t-pass')?.getAttribute('data-bump')).toBe('1');
-    expect(e.querySelector('.iris-t-fail')?.getAttribute('data-bump')).toBeNull();
+    expect(e.querySelector('.reticle-t-pass')?.getAttribute('data-bump')).toBe('1');
+    expect(e.querySelector('.reticle-t-fail')?.getAttribute('data-bump')).toBeNull();
   });
 
   it('dims a zero side', () => {
     const e = el();
     renderTally(e, [{ result: 'pass' }], zero);
-    expect(e.querySelector('.iris-t-fail')?.getAttribute('data-z')).toBe('1');
-    expect(e.querySelector('.iris-t-pass')?.getAttribute('data-z')).toBeNull();
+    expect(e.querySelector('.reticle-t-fail')?.getAttribute('data-z')).toBe('1');
+    expect(e.querySelector('.reticle-t-pass')?.getAttribute('data-z')).toBeNull();
   });
 });
 
 describe('Presenter — live header verdict tally', () => {
-  const tally = (): HTMLElement | null => document.querySelector('[data-iris-tally]');
+  const tally = (): HTMLElement | null => document.querySelector('[data-reticle-tally]');
 
   it('stays hidden until a verdict lands, then counts ✓/✗ live (incl. a deferred stamp)', () => {
     document.body.innerHTML = '';
@@ -68,11 +68,11 @@ describe('Presenter — live header verdict tally', () => {
     expect(tally()?.hasAttribute('hidden')).toBe(true);
     p.log('act', 'click Save', 'pass'); // passing verdict → ✓ 1
     expect(tally()?.hasAttribute('hidden')).toBe(false);
-    expect(tally()?.querySelector('.iris-t-pass')?.textContent).toBe('✓ 1');
+    expect(tally()?.querySelector('.reticle-t-pass')?.textContent).toBe('✓ 1');
     p.log('act', 'submit', 'fail');
     p.log('act', 'retry')?.result('pass'); // a DEFERRED stamp updates the score too
-    expect(tally()?.querySelector('.iris-t-pass')?.textContent).toBe('✓ 2');
-    expect(tally()?.querySelector('.iris-t-fail')?.textContent).toBe('✗ 1');
+    expect(tally()?.querySelector('.reticle-t-pass')?.textContent).toBe('✓ 2');
+    expect(tally()?.querySelector('.reticle-t-fail')?.textContent).toBe('✗ 1');
     p.destroy();
   });
 });

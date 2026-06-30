@@ -3,18 +3,18 @@
 //
 // A refactor leaves the button rendered but its onClick dead (rewired, or throws before its effect).
 // The element is present, a locator resolves, the click step "succeeds" — yet the feature does
-// nothing. Selector-drift detection (replay-detect.mjs) sees no drift and would pass. Iris flows
+// nothing. Selector-drift detection (replay-detect.mjs) sees no drift and would pass. Reticle flows
 // carry a success oracle (assert-signal / success-state) — a real CONSEQUENCE the locator cannot
 // fake — so replay catches it.
 //
 // Method per flow:
 //   1. record login + the action, annotate success-state = the action's consequence signal
 //   2. baseline replay on the healthy app -> status ok (steps resolve AND the signal fires)
-//   3. re-navigate with ?iris-break-click=<testid> (handler dead, element still present)
+//   3. re-navigate with ?reticle-break-click=<testid> (handler dead, element still present)
 //   4. replay -> steps still resolve (NO testid drift), but the success oracle is NOT satisfied ->
 //      status error ("flow.success not satisfied"). That is the green-but-wrong catch.
 import { writeFileSync } from 'node:fs';
-import { IrisAdapter } from './adapters.mjs';
+import { ReticleAdapter } from './adapters.mjs';
 import { measure } from './tokenizer.mjs';
 
 const URL = process.env.BENCH_URL ?? 'http://localhost:4312/';
@@ -29,7 +29,7 @@ const FLOWS = [
 ];
 
 async function replayOnce(a, flow) {
-  const rep = await a.c.callTool('iris_flow_replay', { flowName: flow.name });
+  const rep = await a.c.callTool('reticle_flow_replay', { flowName: flow.name });
   const text = rep.text || '';
   let obj = {};
   try {
@@ -51,33 +51,33 @@ async function replayOnce(a, flow) {
 }
 
 async function detectFor(flow) {
-  const a = new IrisAdapter(URL);
+  const a = new ReticleAdapter(URL);
   await a.start();
   try {
-    await a.c.callTool('iris_record_start', { recordingName: flow.name });
+    await a.c.callTool('reticle_record_start', { recordingName: flow.name });
     await a.login();
     await a.gotoView('diagnostics');
     await sleep(200);
     await a.clickTestid(flow.tap);
     await sleep(400);
     // The flow's golden end-condition is the CONSEQUENCE, not the button's presence.
-    await a.c.callTool('iris_annotate', {
+    await a.c.callTool('reticle_annotate', {
       flow: flow.name,
       kind: 'success-state',
       signal: FAULT_INJECTED,
     });
-    await a.c.callTool('iris_record_stop', { recordingName: flow.name });
-    const saved = await a.c.callTool('iris_flow_save', { flowName: flow.name });
+    await a.c.callTool('reticle_record_stop', { recordingName: flow.name });
+    const saved = await a.c.callTool('reticle_flow_save', { flowName: flow.name });
     const savedObj = JSON.parse(saved.text || '{}');
 
     // baseline: healthy app — steps resolve AND the consequence fires
-    await a.c.callTool('iris_refresh', { hard: true });
+    await a.c.callTool('reticle_refresh', { hard: true });
     await sleep(1500);
     const baseline = await replayOnce(a, flow);
 
     // regression: handler dead, element still present
-    const brokenUrl = `${URL}${URL.includes('?') ? '&' : '?'}iris-break-click=${flow.tap}`;
-    await a.c.callTool('iris_navigate', { url: brokenUrl });
+    const brokenUrl = `${URL}${URL.includes('?') ? '&' : '?'}reticle-break-click=${flow.tap}`;
+    await a.c.callTool('reticle_navigate', { url: brokenUrl });
     await sleep(1800);
     const regressed = await replayOnce(a, flow);
 
@@ -130,7 +130,7 @@ const summary = {
   layer: 'C-consequence (success oracle catches a dead handler — green-but-wrong)',
   detection_rate: `${detectedCount}/${rows.length}`,
   per_run_when_caught: {
-    iris_replay_mean_tokens: meanTokens,
+    reticle_replay_mean_tokens: meanTokens,
     playwright_mcp_redrive_tokens: LLM_REDRIVE.playwright_mcp,
     chrome_devtools_mcp_redrive_tokens: LLM_REDRIVE.chrome_devtools_mcp,
   },
