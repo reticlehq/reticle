@@ -4,6 +4,8 @@ All notable changes to **`@reticlehq/core`** are documented here. The format fol
 
 ## [Unreleased]
 
+## [1.3.0] — 2026-06-30
+
 ### Rebrand: Iris → Reticle (BREAKING)
 
 The project is renamed from **Iris** to **Reticle**. This is a clean rename — no behavior changes — but every public identifier moves, so existing installs must migrate.
