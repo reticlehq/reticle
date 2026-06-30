@@ -1,9 +1,6 @@
 <div align="center">
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="assets/readme/lockup-on-dark.png" />
-  <img alt="Reticle — the proof layer for AI agents" src="assets/readme/lockup-on-light.png" width="280" />
-</picture>
+<img alt="Reticle — the proof layer for AI agents" src="assets/readme/logo-light.png" width="230" />
 
 ### Your Playwright tests are in CI. Your agent never sees them.
 
