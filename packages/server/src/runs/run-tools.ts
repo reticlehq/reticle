@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { RunReadError, type ReticleVerificationRun } from '@reticle/protocol';
+import { RunReadError, type ReticleVerificationRun } from '@reticlehq/protocol';
 import { ReticleTool } from '../tools/tool-names.js';
 import { asString } from '../tools/tools-helpers.js';
 import { sessionIdShape } from '../tools/tool-kit.js';

@@ -1,4 +1,4 @@
-import { DANGEROUS_ACTION_CONFIRM_ARG, ReticleCommand, QueryBy } from '@reticle/protocol';
+import { DANGEROUS_ACTION_CONFIRM_ARG, ReticleCommand, QueryBy } from '@reticlehq/protocol';
 import { ReticleTool } from '../tools/tool-names.js';
 import type { RecordedStep, CompiledProgram } from './recordings.js';
 import type { Session } from '../session/session.js';

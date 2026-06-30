@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { ReticleTool } from '@reticle/server';
-import { ElementState, QueryBy } from '@reticle/protocol';
+import { ReticleTool } from '@reticlehq/server';
+import { ElementState, QueryBy } from '@reticlehq/protocol';
 import { createTestContext } from './test-context.js';
 import { ReticleAssertionError } from './skip.js';
 import { PredicateKind } from './constants.js';
-import type { ToolInvoker } from '@reticle/server';
+import type { ToolInvoker } from '@reticlehq/server';
 
 function fakeInvoker(handlers: Record<string, (args: Record<string, unknown>) => unknown>): {
   invoke: ToolInvoker;

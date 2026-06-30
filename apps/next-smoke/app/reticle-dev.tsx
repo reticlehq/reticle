@@ -7,8 +7,8 @@ export function ReticleDev() {
     if (process.env.NODE_ENV !== 'development') return;
     void (async () => {
       const [browser, react] = await Promise.all([
-        import('@reticle/browser'),
-        import('@reticle/react'),
+        import('@reticlehq/browser'),
+        import('@reticlehq/react'),
       ]);
       const { reticle, registerStore, registerCapabilities } = browser;
       react.install();

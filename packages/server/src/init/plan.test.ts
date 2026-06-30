@@ -59,7 +59,7 @@ describe('buildPlan — MCP (global, per detected agent)', () => {
       'user',
       '--',
       'npx',
-      '@reticle/core',
+      '@reticlehq/core',
       'mcp',
     ]);
   });
@@ -74,7 +74,7 @@ describe('buildPlan — MCP (global, per detected agent)', () => {
     const s = step(plan, CURSOR_STEP);
     expect(s.status).toBe(StepStatus.APPLY);
     expect(s.write?.path).toBe('/home/u/.cursor/mcp.json');
-    expect(s.write?.content).toContain('@reticle/core');
+    expect(s.write?.content).toContain('@reticlehq/core');
   });
 
   it('registers with BOTH agents when both are present', () => {
@@ -129,7 +129,7 @@ describe('buildPlan — Vite', () => {
   it('patches the vite config; no separate entry-file step (plugin injects connect)', () => {
     const plan = buildPlan(input({ viteConfig: { path: 'vite.config.ts', source: VITE_SRC } }));
     expect(step(plan, 'Vite plugin').status).toBe(StepStatus.APPLY);
-    expect(step(plan, 'Vite plugin').write?.content).toContain('@reticle/core/vite');
+    expect(step(plan, 'Vite plugin').write?.content).toContain('@reticlehq/core/vite');
     expect(plan.steps.some((s) => s.title.includes('entry'))).toBe(false);
   });
 
@@ -159,7 +159,7 @@ describe('buildPlan — install', () => {
     const s = step(on, 'Install dependency');
     expect(s.status).toBe(StepStatus.APPLY);
     expect(s.exec?.command).toBe('pnpm');
-    expect(s.exec?.args).toEqual(['add', '-D', '@reticle/core']);
+    expect(s.exec?.args).toEqual(['add', '-D', '@reticlehq/core']);
   });
 });
 

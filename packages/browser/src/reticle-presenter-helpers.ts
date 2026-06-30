@@ -1,4 +1,4 @@
-import { ReticleCommand, PresenterMode } from '@reticle/protocol';
+import { ReticleCommand, PresenterMode } from '@reticlehq/protocol';
 import { refs } from './dom/refs.js';
 import { describe } from './dom/a11y.js';
 

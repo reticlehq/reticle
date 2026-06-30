@@ -1,4 +1,4 @@
-import { HumanControlKind, PresenterTone, SessionState } from '@reticle/protocol';
+import { HumanControlKind, PresenterTone, SessionState } from '@reticlehq/protocol';
 import { nativeSetTimeout, nativeClearTimeout } from '../timers/native-timers.js';
 
 // Live-control panel: the two-way control surface inside the floating HUD — Pause/Resume + End

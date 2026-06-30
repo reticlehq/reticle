@@ -13,7 +13,7 @@ import Counter from '../components/Counter.tsx';
     <script>
       // Dev-only: connect Reticle on the client. Astro bundles this <script>, so the bare import resolves.
       if (import.meta.env.DEV) {
-        const { reticle, install } = await import('@reticle/core');
+        const { reticle, install } = await import('@reticlehq/core');
         install();
         reticle.connect({ projectId: 'example-astro' });
       }

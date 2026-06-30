@@ -1,9 +1,9 @@
-# Testing with `@reticle/test` — declarative, signal-bound specs
+# Testing with `@reticlehq/test` — declarative, signal-bound specs
 
-Driving Reticle interactively is reconnaissance. To turn it into a **repeatable, CI-runnable** suite, write declarative specs with `@reticle/test` (bundled in `@reticle/core`, importable at `@reticle/core/test`). Specs bind to **signals and testids — never DOM structure** — so they inherit Reticle's refactor-resistance.
+Driving Reticle interactively is reconnaissance. To turn it into a **repeatable, CI-runnable** suite, write declarative specs with `@reticlehq/test` (bundled in `@reticlehq/core`, importable at `@reticlehq/core/test`). Specs bind to **signals and testids — never DOM structure** — so they inherit Reticle's refactor-resistance.
 
 ```ts
-import { reticleTest } from '@reticle/core/test';
+import { reticleTest } from '@reticlehq/core/test';
 
 reticleTest('add a task', async (t) => {
   await t.act('add-task', 'click');
@@ -47,7 +47,7 @@ Any failed matcher throws with the structured evidence (near-miss, failure reaso
 `bootSession` launches a headless real-input browser at your app and gives the runner a programmatic tool invoker (no MCP/stdio):
 
 ```ts
-import { reticleTest, bootSession, runSpecs, createTestContext } from '@reticle/core/test';
+import { reticleTest, bootSession, runSpecs, createTestContext } from '@reticlehq/core/test';
 
 // … reticleTest(...) registrations above …
 
@@ -65,7 +65,7 @@ process.exit(summary.failed === 0 ? 0 : 1);
 Each spec reports `pass` | `fail` (with evidence) | `skip` (with reason). For CI, emit JUnit:
 
 ```ts
-import { toJUnitXml, writeJUnit } from '@reticle/core/test';
+import { toJUnitXml, writeJUnit } from '@reticlehq/core/test';
 ```
 
 ## Flows become specs
@@ -73,7 +73,7 @@ import { toJUnitXml, writeJUnit } from '@reticle/core/test';
 `.reticle/` flows (see [Flows](flows.md)) can be executed directly as specs — replayed with their `expect`/`success` predicates and skipping `dynamic` (LLM-output) regions — so the recorded map and the suite can't drift apart:
 
 ```ts
-import { flowsAsSpecs } from '@reticle/core/test';
+import { flowsAsSpecs } from '@reticlehq/core/test';
 // register one reticleTest per flow under .reticle/flows/
 ```
 

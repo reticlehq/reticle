@@ -1,6 +1,6 @@
 import { defineConfig } from 'tsup';
 
-// Bundle the internal @reticle/* packages INTO this one published package.
+// Bundle the internal @reticlehq/* packages INTO this one published package.
 // Third-party deps stay external (declared in package.json); only our own code is inlined.
 export default defineConfig({
   entry: {

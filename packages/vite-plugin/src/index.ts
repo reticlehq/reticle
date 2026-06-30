@@ -1,12 +1,12 @@
 import { transformSync } from '@babel/core';
-import reticleSource from '@reticle/babel-plugin';
-import { RETICLE_DEFAULT_PORT, RETICLE_WS_PATH } from '@reticle/protocol';
+import reticleSource from '@reticlehq/babel-plugin';
+import { RETICLE_DEFAULT_PORT, RETICLE_WS_PATH } from '@reticlehq/protocol';
 import { resolveProjectId } from './project-id.js';
 
 export const RETICLE_VITE_PLUGIN_NAME = 'reticle';
 
 /** The one-install package the host app imports the SDK from. */
-const RETICLE_PACKAGE = '@reticle/core';
+const RETICLE_PACKAGE = '@reticlehq/core';
 /** Files we stamp with source info — JSX/TSX only. */
 const JSX_FILE = /\.[jt]sx$/;
 /** Rollup virtual-module ids start with a NUL byte; never transform those. */
@@ -15,7 +15,7 @@ const NODE_MODULES = 'node_modules';
 
 /**
  * The connect code is served as a real module (not an inline <script>) so that Vite's import
- * pipeline resolves the bare `@reticle/core` specifier. An inline injected script is NOT run through
+ * pipeline resolves the bare `@reticlehq/core` specifier. An inline injected script is NOT run through
  * import resolution, so its bare import would fail in the browser. This path-like id is requested
  * by the injected <script src> and served by the load() hook below.
  */
@@ -101,7 +101,7 @@ export function connectModuleSource(options: ReticleVitePluginOptions): string {
 /**
  * Reticle Vite plugin. Add to your `plugins` array and the entire integration is done:
  *
- *   import { reticle } from '@reticle/core/vite';
+ *   import { reticle } from '@reticlehq/core/vite';
  *   export default defineConfig({ plugins: [react(), reticle()] });
  *
  * `apply: 'serve'` means Vite drops the plugin entirely from `vite build` — production bundles

@@ -1,5 +1,5 @@
-import { ReticleTool, type ToolInvoker } from '@reticle/server';
-import { ActionType, type ElementQuery, type ElementState } from '@reticle/protocol';
+import { ReticleTool, type ToolInvoker } from '@reticlehq/server';
+import { ActionType, type ElementQuery, type ElementState } from '@reticlehq/protocol';
 import { resolveTestid } from './resolve.js';
 import { buildClock, type TestClock } from './clock.js';
 import { InputModeTracker, expectInputModeReal } from './input-mode.js';

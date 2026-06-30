@@ -10,7 +10,7 @@ import {
   FlowErrorCode,
   FlowFileSchema,
   QueryBy,
-} from '@reticle/protocol';
+} from '@reticlehq/protocol';
 import { createNodeFileSystem, type FileSystemPort } from '../project/fs-port.js';
 import { flowPath, reticleDirPaths } from '../project/reticle-dir.js';
 import { FlowStore, recordedStepToFlowStep } from './flows.js';

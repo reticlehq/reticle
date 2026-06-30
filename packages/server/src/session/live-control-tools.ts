@@ -4,7 +4,7 @@ import {
   AGENT_WAITING_NOTICE,
   PresenterTone,
   SessionState,
-} from '@reticle/protocol';
+} from '@reticlehq/protocol';
 import { ReticleTool } from '../tools/tool-names.js';
 import { asNumber, asString } from '../tools/tools-helpers.js';
 import { waitForReady, RETICLE_LOOP_GUIDE } from './session-readiness.js';

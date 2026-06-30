@@ -2,7 +2,7 @@
 // discovers interactive controls, clicks them (bounded), and returns a structured anomaly report
 // WITHOUT a script. Bounded (maxSteps) so it always terminates.
 import { chromium } from 'playwright';
-import { start, TOOLS } from '@reticle/server';
+import { start, TOOLS } from '@reticlehq/server';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let pass = 0,
   fail = 0;

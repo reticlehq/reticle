@@ -13,7 +13,7 @@ import {
   type CommandMessage,
   type HelloMessage,
   type ReticleEvent,
-} from '@reticle/protocol';
+} from '@reticlehq/protocol';
 import { createCommandRegistry, type CommandHandler } from './commands/commands.js';
 import { Transport, type CommandOutcome } from './transport/transport.js';
 import { adapterNames } from './registry/adapters.js';

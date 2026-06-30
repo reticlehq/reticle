@@ -17,10 +17,10 @@ importers:
       '@eslint/js':
         specifier: ^9.18.0
         version: 9.39.4
-      '@reticle/core':
+      '@reticlehq/core':
         specifier: workspace:*
         version: link:packages/core
-      '@reticle/server':
+      '@reticlehq/server':
         specifier: workspace:*
         version: link:packages/server
       '@types/node':
@@ -71,10 +71,10 @@ importers:
 
   apps/demo:
     dependencies:
-      '@reticle/browser':
+      '@reticlehq/browser':
         specifier: workspace:*
         version: link:../../packages/browser
-      '@reticle/react':
+      '@reticlehq/react':
         specifier: workspace:*
         version: link:../../packages/react
       react:
@@ -90,7 +90,7 @@ importers:
       '@babel/core':
         specifier: ^7.29.7
         version: 7.29.7
-      '@reticle/babel-plugin':
+      '@reticlehq/babel-plugin':
         specifier: workspace:*
         version: link:../../packages/babel-plugin
       '@rolldown/plugin-babel':
@@ -120,10 +120,10 @@ importers:
 
   apps/e2e:
     dependencies:
-      '@reticle/server':
+      '@reticlehq/server':
         specifier: workspace:*
         version: link:../../packages/server
-      '@reticle/test':
+      '@reticlehq/test':
         specifier: workspace:*
         version: link:../../packages/test
       playwright:
@@ -135,7 +135,7 @@ importers:
       '@astrojs/react':
         specifier: ^6.0.0
         version: 6.0.0(@types/node@22.19.20)(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(esbuild@0.28.1)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
-      '@reticle/core':
+      '@reticlehq/core':
         specifier: workspace:*
         version: link:../../packages/core
       astro:
@@ -150,7 +150,7 @@ importers:
 
   apps/example-next:
     dependencies:
-      '@reticle/core':
+      '@reticlehq/core':
         specifier: workspace:*
         version: link:../../packages/core
       next:
@@ -165,7 +165,7 @@ importers:
 
   apps/example-react:
     dependencies:
-      '@reticle/core':
+      '@reticlehq/core':
         specifier: workspace:*
         version: link:../../packages/core
       react:
@@ -190,7 +190,7 @@ importers:
       '@react-router/serve':
         specifier: 8.0.0
         version: 8.0.0(react-router@8.0.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(typescript@5.9.3)
-      '@reticle/core':
+      '@reticlehq/core':
         specifier: workspace:*
         version: link:../../packages/core
       isbot:
@@ -227,7 +227,7 @@ importers:
 
   apps/large-dom-bench:
     dependencies:
-      '@reticle/browser':
+      '@reticlehq/browser':
         specifier: workspace:*
         version: link:../../packages/browser
     devDependencies:
@@ -247,13 +247,13 @@ importers:
         specifier: ^19.0.0
         version: 19.2.7(react@19.2.7)
     devDependencies:
-      '@reticle/browser':
+      '@reticlehq/browser':
         specifier: workspace:*
         version: link:../../packages/browser
-      '@reticle/next':
+      '@reticlehq/next':
         specifier: workspace:*
         version: link:../../packages/next
-      '@reticle/react':
+      '@reticlehq/react':
         specifier: workspace:*
         version: link:../../packages/react
       '@types/node':
@@ -271,11 +271,11 @@ importers:
 
   apps/vibe-builder-demo:
     dependencies:
-      '@reticle/browser':
+      '@reticlehq/browser':
         specifier: workspace:*
         version: link:../../packages/browser
     devDependencies:
-      '@reticle/server':
+      '@reticlehq/server':
         specifier: workspace:*
         version: link:../../packages/server
       vite:
@@ -293,7 +293,7 @@ importers:
 
   packages/browser:
     dependencies:
-      '@reticle/protocol':
+      '@reticlehq/protocol':
         specifier: workspace:*
         version: link:../protocol
       '@testing-library/dom':
@@ -340,31 +340,31 @@ importers:
         specifier: ^3.24.1
         version: 3.25.76
     devDependencies:
-      '@reticle/babel-plugin':
+      '@reticlehq/babel-plugin':
         specifier: workspace:*
         version: link:../babel-plugin
-      '@reticle/browser':
+      '@reticlehq/browser':
         specifier: workspace:*
         version: link:../browser
-      '@reticle/eslint-plugin':
+      '@reticlehq/eslint-plugin':
         specifier: workspace:*
         version: link:../eslint-plugin
-      '@reticle/next':
+      '@reticlehq/next':
         specifier: workspace:*
         version: link:../next
-      '@reticle/protocol':
+      '@reticlehq/protocol':
         specifier: workspace:*
         version: link:../protocol
-      '@reticle/react':
+      '@reticlehq/react':
         specifier: workspace:*
         version: link:../react
-      '@reticle/server':
+      '@reticlehq/server':
         specifier: workspace:*
         version: link:../server
-      '@reticle/test':
+      '@reticlehq/test':
         specifier: workspace:*
         version: link:../test
-      '@reticle/vite-plugin':
+      '@reticlehq/vite-plugin':
         specifier: workspace:*
         version: link:../vite-plugin
       '@types/ws':
@@ -405,7 +405,7 @@ importers:
       '@babel/core':
         specifier: ^7.26.0
         version: 7.29.7
-      '@reticle/babel-plugin':
+      '@reticlehq/babel-plugin':
         specifier: workspace:*
         version: link:../babel-plugin
       next:
@@ -420,10 +420,10 @@ importers:
 
   packages/react:
     dependencies:
-      '@reticle/browser':
+      '@reticlehq/browser':
         specifier: workspace:*
         version: link:../browser
-      '@reticle/protocol':
+      '@reticlehq/protocol':
         specifier: workspace:*
         version: link:../protocol
       react:
@@ -442,7 +442,7 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: ^1.13.0
         version: 1.29.0(zod@3.25.76)
-      '@reticle/protocol':
+      '@reticlehq/protocol':
         specifier: workspace:*
         version: link:../protocol
       ws:
@@ -471,10 +471,10 @@ importers:
 
   packages/test:
     dependencies:
-      '@reticle/protocol':
+      '@reticlehq/protocol':
         specifier: workspace:*
         version: link:../protocol
-      '@reticle/server':
+      '@reticlehq/server':
         specifier: workspace:*
         version: link:../server
       vitest:
@@ -486,10 +486,10 @@ importers:
       '@babel/core':
         specifier: ^7.26.0
         version: 7.29.7
-      '@reticle/babel-plugin':
+      '@reticlehq/babel-plugin':
         specifier: workspace:*
         version: link:../babel-plugin
-      '@reticle/protocol':
+      '@reticlehq/protocol':
         specifier: workspace:*
         version: link:../protocol
     devDependencies:

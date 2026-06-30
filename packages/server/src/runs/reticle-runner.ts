@@ -10,7 +10,7 @@
  * same artifact byte-for-byte.
  */
 
-import type { FlowReplayResult, ReticleVerificationRun, RunId } from '@reticle/protocol';
+import type { FlowReplayResult, ReticleVerificationRun, RunId } from '@reticlehq/protocol';
 import { buildVerificationRun, type VerificationRunInput } from './build-verification-run.js';
 import { mapReplayToFlowResult } from './replay-mapping.js';
 import { buildRepairPackets } from './repair-prompt.js';

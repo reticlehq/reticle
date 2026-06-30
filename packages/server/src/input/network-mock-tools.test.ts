@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { VisualReason } from '@reticle/protocol';
+import { VisualReason } from '@reticlehq/protocol';
 import { NETWORK_MOCK_TOOLS } from './network-mock-tools.js';
 import { ReticleTool } from '../tools/tool-names.js';
 import type { MockRule } from './network-mock.js';

@@ -3,7 +3,12 @@
  * explore. Split out of tools.ts; assembled back via ...READ_TOOLS.
  */
 import { z } from 'zod';
-import { EventType, ReticleCommand, REPLAY_PROGRAM_VERSION, SnapshotMode } from '@reticle/protocol';
+import {
+  EventType,
+  ReticleCommand,
+  REPLAY_PROGRAM_VERSION,
+  SnapshotMode,
+} from '@reticlehq/protocol';
 import { ReticleTool } from './tool-names.js';
 import type { CompiledProgram } from '../flows/recordings.js';
 import { replayProgram } from '../flows/replay.js';

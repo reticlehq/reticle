@@ -1,5 +1,5 @@
 {
-  "name": "@reticle/core",
+  "name": "@reticlehq/core",
   "version": "1.2.0",
   "description": "One-install Reticle: the dev-only SDK (browser + React adapter) and the spec runner under one package, with subpaths for the source-mapping plugins and the MCP server.",
   "type": "module",
@@ -57,15 +57,15 @@
     "zod": "^3.24.1"
   },
   "devDependencies": {
-    "@reticle/babel-plugin": "workspace:*",
-    "@reticle/browser": "workspace:*",
-    "@reticle/eslint-plugin": "workspace:*",
-    "@reticle/next": "workspace:*",
-    "@reticle/protocol": "workspace:*",
-    "@reticle/react": "workspace:*",
-    "@reticle/server": "workspace:*",
-    "@reticle/test": "workspace:*",
-    "@reticle/vite-plugin": "workspace:*",
+    "@reticlehq/babel-plugin": "workspace:*",
+    "@reticlehq/browser": "workspace:*",
+    "@reticlehq/eslint-plugin": "workspace:*",
+    "@reticlehq/next": "workspace:*",
+    "@reticlehq/protocol": "workspace:*",
+    "@reticlehq/react": "workspace:*",
+    "@reticlehq/server": "workspace:*",
+    "@reticlehq/test": "workspace:*",
+    "@reticlehq/vite-plugin": "workspace:*",
     "@types/ws": "^8.5.13",
     "tsup": "^8.3.5",
     "typescript": "^5.6.0"

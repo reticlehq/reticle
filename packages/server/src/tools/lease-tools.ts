@@ -10,7 +10,7 @@
  */
 
 import { z } from 'zod';
-import { RETICLE_URL_PARAM } from '@reticle/protocol';
+import { RETICLE_URL_PARAM } from '@reticlehq/protocol';
 import { ReticleTool } from './tool-names.js';
 import type { ToolDef, ToolDeps } from './tool-kit.js';
 import { asString } from './tools-helpers.js';
@@ -97,7 +97,7 @@ export const LEASE_TOOLS: ToolDef[] = [
   {
     name: ReticleTool.LEASE_ACQUIRE,
     description:
-      'Lease a fresh isolated headless browser context from the shared pool and navigate it to the app URL (the app must already be running and embed @reticle/core). Returns the sessionId the leased tab registers — pass it to other tools. The pool keeps all leases in ONE browser and caps concurrency; if at capacity this waits for a free slot. Release with reticle_lease_release when the flow is done.',
+      'Lease a fresh isolated headless browser context from the shared pool and navigate it to the app URL (the app must already be running and embed @reticlehq/core). Returns the sessionId the leased tab registers — pass it to other tools. The pool keeps all leases in ONE browser and caps concurrency; if at capacity this waits for a free slot. Release with reticle_lease_release when the flow is done.',
     inputSchema: {
       url: z
         .string()
@@ -115,7 +115,7 @@ export const LEASE_TOOLS: ToolDef[] = [
       ready: z
         .boolean()
         .describe(
-          'Whether the leased tab connected — false ⇒ the app may not embed @reticle/core.',
+          'Whether the leased tab connected — false ⇒ the app may not embed @reticlehq/core.',
         ),
       leased: z.number().describe('How many contexts are currently leased from the pool.'),
       queued: z.number().describe('How many acquires are waiting for a free slot.'),
@@ -153,7 +153,7 @@ export const LEASE_TOOLS: ToolDef[] = [
         ...(ready
           ? {}
           : {
-              hint: `leased tab did not connect — is ${url} running with @reticle/core enabled?`,
+              hint: `leased tab did not connect — is ${url} running with @reticlehq/core enabled?`,
             }),
       };
     },

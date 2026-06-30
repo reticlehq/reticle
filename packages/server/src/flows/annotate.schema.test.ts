@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { AnnotationKind, AnnotationSchema } from '@reticle/protocol';
+import { AnnotationKind, AnnotationSchema } from '@reticlehq/protocol';
 
 /**
  * Zod validation. The structured discriminated union accepts only the

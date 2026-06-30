@@ -6,7 +6,7 @@ import {
   MessageKind,
   TRANSPORT_LIMITS,
   type HelloMessage,
-} from '@reticle/protocol';
+} from '@reticlehq/protocol';
 import { Transport } from './transport.js';
 
 class FakeWebSocket {

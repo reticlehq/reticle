@@ -1,7 +1,7 @@
 import { Reticle } from './reticle.js';
 
 /**
- * The singleton embedded in the host app: `import { reticle } from '@reticle/browser'`.
+ * The singleton embedded in the host app: `import { reticle } from '@reticlehq/browser'`.
  * Persisted on a global so HMR module re-evaluation reuses the same (already-connected)
  * instance instead of creating a second bridge connection (feedback #7).
  */
@@ -12,12 +12,12 @@ export { Reticle } from './reticle.js';
 export type { ReticleConnectOptions } from './reticle.js';
 
 // Session label sentinel: pass as `session` (or omit it) to get a unique per-tab id (no collisions).
-export { SESSION_AUTO } from '@reticle/protocol';
+export { SESSION_AUTO } from '@reticlehq/protocol';
 
 // Exclude your own dev widgets from snapshots/observers.
 export { setIgnoreSelectors } from './dom/dom-ignore.js';
 
-// Adapter API (used by @reticle/react and other framework adapters).
+// Adapter API (used by @reticlehq/react and other framework adapters).
 export {
   registerAdapter,
   identifyComponent,

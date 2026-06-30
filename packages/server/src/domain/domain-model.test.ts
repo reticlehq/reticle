@@ -6,7 +6,7 @@ import {
   type FlowExpect,
   type FlowFile,
   type FlowStep,
-} from '@reticle/protocol';
+} from '@reticlehq/protocol';
 import { ReticleTool } from '../tools/tool-names.js';
 import { buildDomainModel } from './domain-model.js';
 

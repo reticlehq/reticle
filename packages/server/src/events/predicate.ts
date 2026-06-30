@@ -5,7 +5,7 @@ import {
   type ElementQuery,
   type ReticleEvent,
   type MatchResult,
-} from '@reticle/protocol';
+} from '@reticlehq/protocol';
 import { selectPath, capDepth } from '../session/state-select.js';
 import {
   PredicateSchema,

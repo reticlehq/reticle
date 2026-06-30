@@ -16,7 +16,7 @@ import {
   VerdictStatus,
   type ReticleVerificationRun,
   type RunVerdict,
-} from '@reticle/protocol';
+} from '@reticlehq/protocol';
 import { redactForProfile } from './profile-redact.js';
 
 /**

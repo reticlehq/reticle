@@ -7,7 +7,7 @@ import {
   SessionState,
   type CommandMessage,
   type ReticleEvent,
-} from '@reticle/protocol';
+} from '@reticlehq/protocol';
 
 // Capture the deps Reticle passes to Transport so tests can drive #handleCommand without a real
 // WebSocket server. connect() still calls transport.connect(), which we stub to a no-op.

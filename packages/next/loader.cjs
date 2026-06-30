@@ -15,7 +15,7 @@ module.exports = function reticleNextLoader(source, inputMap) {
     return;
   }
 
-  pluginPromise = pluginPromise || import('@reticle/babel-plugin').then((m) => m.default);
+  pluginPromise = pluginPromise || import('@reticlehq/babel-plugin').then((m) => m.default);
 
   pluginPromise
     .then((plugin) =>

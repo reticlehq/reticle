@@ -10,7 +10,7 @@ import {
   type FlowExpect,
   type FlowFile,
   type FlowStep,
-} from '@reticle/protocol';
+} from '@reticlehq/protocol';
 import { getAccessibleName, getRole } from '../dom/a11y.js';
 import { isReticleOverlay } from '../dom/dom-ignore.js';
 import { getCapabilities } from '../registry/capabilities.js';

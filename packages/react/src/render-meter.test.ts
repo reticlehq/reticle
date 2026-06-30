@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { installRenderMeter, resetRenderMeter, getRenderStats } from './render-meter.js';
-import { readStores } from '@reticle/browser';
+import { readStores } from '@reticlehq/browser';
 
 const HOOK_KEY = '__REACT_DEVTOOLS_GLOBAL_HOOK__';
 

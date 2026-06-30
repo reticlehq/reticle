@@ -12,7 +12,7 @@ import {
   RunProfile,
   RunTrigger,
   VerdictStatus,
-} from '@reticle/protocol';
+} from '@reticlehq/protocol';
 import {
   buildVerificationRun,
   computeVerdict,

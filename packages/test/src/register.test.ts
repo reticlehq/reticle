@@ -6,8 +6,8 @@ import {
   type CommandResult,
   type FlowFile,
   type ReticleEvent,
-} from '@reticle/protocol';
-import type { Clock, EvalResult, FileSystemPort } from '@reticle/server';
+} from '@reticlehq/protocol';
+import type { Clock, EvalResult, FileSystemPort } from '@reticlehq/server';
 import { FLOW_LOAD_ERROR_PREFIX, SpecMessage } from './constants.js';
 import { registerFlowSpecs } from './register.js';
 

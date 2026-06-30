@@ -2,7 +2,7 @@
 // froze at the hello "/" so CDP correlation broke after a client-side pushState and acts fell back
 // to synthetic. After the fix the server consumes route.change and session.url tracks the live URL.
 import { chromium } from 'playwright';
-import { start, TOOLS, BaselineStore, RecordingStore, CdpRealInputProvider } from '@reticle/server';
+import { start, TOOLS, BaselineStore, RecordingStore, CdpRealInputProvider } from '@reticlehq/server';
 const sleep=(ms)=>new Promise(r=>setTimeout(r,ms));
 let pass=0,fail=0; const chk=(l,o,d='')=>{console.log(`   ${o?'✅':'❌'} ${l}${d?'  — '+d:''}`);o?pass++:fail++;};
 const browser=await chromium.launch({headless:true,args:['--remote-debugging-port=9222']});

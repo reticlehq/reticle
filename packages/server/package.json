@@ -1,5 +1,5 @@
 {
-  "name": "@reticle/server",
+  "name": "@reticlehq/server",
   "version": "1.2.0",
   "description": "Reticle bridge + MCP server. Hosts the browser WS endpoint and exposes MCP tools to the coding agent.",
   "type": "module",
@@ -27,7 +27,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.13.0",
-    "@reticle/protocol": "workspace:*",
+    "@reticlehq/protocol": "workspace:*",
     "ws": "^8.18.0",
     "zod": "^3.24.1"
   },

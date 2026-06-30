@@ -4,7 +4,7 @@ import { RECOVERY, buildErrorPayload, recoveryFor } from './error-recovery.js';
 describe('recoveryFor — every known error carries an actionable next move', () => {
   it('maps the no-session footgun to a concrete recovery', () => {
     const hint = recoveryFor(
-      'no browser session connected — is your app running with @reticle/browser enabled?',
+      'no browser session connected — is your app running with @reticlehq/browser enabled?',
     );
     expect(hint).toBe(RECOVERY.NO_SESSION);
     expect(hint).toMatch(/reticle status/);

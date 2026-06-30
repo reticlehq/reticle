@@ -1,4 +1,4 @@
-import { SESSION_LIFECYCLE } from '@reticle/protocol';
+import { SESSION_LIFECYCLE } from '@reticlehq/protocol';
 import { log } from './log.js';
 
 export interface IdleShutdownOptions {

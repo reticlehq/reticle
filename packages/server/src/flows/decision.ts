@@ -7,7 +7,7 @@ import {
   type ReplayDecision,
   type SuiteFlowResult,
   type SuiteVerdict,
-} from '@reticle/protocol';
+} from '@reticlehq/protocol';
 import { classifyFlowAssertions } from './flow-classify.js';
 
 /**

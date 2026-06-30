@@ -7,7 +7,7 @@
  * specific silent-failure class. Client-side bug classes (double-submit, wrong-total, console-error)
  * are applied here; server-side ones live in vite.config.ts.
  */
-import { reticle, registerStore, registerCapabilities } from '@reticle/browser';
+import { reticle, registerStore, registerCapabilities } from '@reticlehq/browser';
 
 interface Expense {
   id: number;

@@ -1,5 +1,5 @@
 import { chromium } from 'playwright';
-import { start, TOOLS, BaselineStore, RecordingStore } from '@reticle/server';
+import { start, TOOLS, BaselineStore, RecordingStore } from '@reticlehq/server';
 const sleep=(ms)=>new Promise(r=>setTimeout(r,ms));
 const deps={sessions:null,baselines:new BaselineStore(),recordings:new RecordingStore()};
 const T=(n,a={})=>TOOLS.find(t=>t.name===n).handler(deps,{sessionId:'next-smoke',...a});

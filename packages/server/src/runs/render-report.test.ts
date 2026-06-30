@@ -9,7 +9,7 @@ import {
   RunFramework,
   RunProfile,
   RunTrigger,
-} from '@reticle/protocol';
+} from '@reticlehq/protocol';
 import { buildVerificationRun, type VerificationRunInput } from './build-verification-run.js';
 import { renderRunReport } from './render-report.js';
 

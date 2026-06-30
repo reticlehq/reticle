@@ -96,7 +96,7 @@ Reticle is **not** strictly better. Being inside the page costs it real browser-
 | --- | --- | --- |
 | **Trusted input** (`isTrusted`) | Playwright drives real CDP input — native keyboard/mouse, file pickers, drag — `isTrusted:true`. | Reticle defaults to occlusion-honest **synthetic** dispatch; real input is opt-in (CDP) only. |
 | **Real pixels** (visual ground truth) | A screenshot is the actual rendered frame — font-load failures, paint order, GPU/compositing bugs. **Measured:** a stray `filter` re-tint changed 2.3% of pixels — a screenshot-diff CAUGHT it; Reticle's always-on `inspect` MISSED it (computed style identical). (`visual-regression-bench`) | Reticle reads **computed style/geometry**, not paint — it can miss a bug that only shows in pixels. Reticle closes this only when DRIVEN: its opt-in `reticle_visual_diff` (CDP) caught the same regression — the always-on SDK can't. |
-| **No app cooperation** | Tests any site with zero install. | Reticle must embed `@reticle/browser` (dev-only) — can't test a third-party site you don't own. |
+| **No app cooperation** | Tests any site with zero install. | Reticle must embed `@reticlehq/browser` (dev-only) — can't test a third-party site you don't own. |
 | **Browser-level scope** | Multi-tab/popups, cross-origin, downloads, auth dialogs, and network **mock/intercept** (`route`/`fulfill`). | Reticle is single-page-runtime-scoped; it observes network but mocking is the app's job. |
 | **Cross-engine** | Runs WebKit / Firefox / Chromium. | Reticle runs on whatever engine the app runs. |
 

@@ -41,7 +41,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
-      - run: pnpm --filter @reticle/e2e --fail-if-no-match exec playwright install --with-deps chromium
+      - run: pnpm --filter @reticlehq/e2e --fail-if-no-match exec playwright install --with-deps chromium
       # Headless Chromium + a multi-service boot flakes on shared runners (timing, resource
       # contention). Retry with a clean slate between attempts so a transient flake doesn't red CI;
       # a real regression still fails (it fails every attempt).
@@ -60,7 +60,7 @@ jobs:
         run: |
           for attempt in 1 2; do
             echo "::group::e2e attempt $attempt"
-            if pnpm --filter @reticle/e2e --fail-if-no-match run e2e:ci; then echo "::endgroup::"; exit 0; fi
+            if pnpm --filter @reticlehq/e2e --fail-if-no-match run e2e:ci; then echo "::endgroup::"; exit 0; fi
             echo "::endgroup::"
             echo "attempt $attempt failed — cleaning up before retry"
             pkill -f "cli.js mcp" || true; pkill -f "cli.js _daemon" || true; pkill -f chrome-headless || true

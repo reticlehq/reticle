@@ -3,7 +3,7 @@
 // .reticle/project.json accumulates flow_replay run records AND reticle_project returns a diff-vs-last.
 import { chromium } from 'playwright';
 import os from 'node:os'; import path from 'node:path'; import nfs from 'node:fs';
-import { start, TOOLS, BaselineStore, RecordingStore, FlowStore, ProjectStore, AnnotationStore, createNodeFileSystem } from '@reticle/server';
+import { start, TOOLS, BaselineStore, RecordingStore, FlowStore, ProjectStore, AnnotationStore, createNodeFileSystem } from '@reticlehq/server';
 const sleep=(ms)=>new Promise(r=>setTimeout(r,ms));
 let pass=0,fail=0; const chk=(l,o,d='')=>{console.log(`   ${o?'✅':'❌'} ${l}${d?'  — '+d:''}`);o?pass++:fail++;};
 const reticleRoot=path.join(os.tmpdir(),`reticle-projhist-${process.pid}`,'.reticle');

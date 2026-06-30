@@ -6,7 +6,7 @@ import {
   type ProjectFile,
   type ProjectLearned,
   type RunRecord,
-} from '@reticle/protocol';
+} from '@reticlehq/protocol';
 import type { FileSystemPort } from './fs-port.js';
 import type { Clock } from '../flows/flows.js';
 import { reticleDirPaths } from './reticle-dir.js';

@@ -1,5 +1,5 @@
 {
-  "name": "@reticle/react",
+  "name": "@reticlehq/react",
   "version": "1.2.0",
   "description": "Reticle React adapter — maps a DOM ref to its component stack and source file via the fiber tree.",
   "type": "module",
@@ -19,8 +19,8 @@
     "prepack": "tsc -b && find dist -name \"*.test.*\" -delete"
   },
   "dependencies": {
-    "@reticle/browser": "workspace:*",
-    "@reticle/protocol": "workspace:*"
+    "@reticlehq/browser": "workspace:*",
+    "@reticlehq/protocol": "workspace:*"
   },
   "peerDependencies": {
     "react": ">=18"

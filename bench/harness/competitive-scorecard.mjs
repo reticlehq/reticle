@@ -104,7 +104,7 @@ const out = {
     only_100pct_detection: 'reticle',
     only_deterministic_replay: 'reticle (122 tok/run vs ~LLM re-drive)',
     only_multi_agent_pool_local: 'reticle',
-    only_test_harness: 'reticle (@reticle/test, vitest-native)',
+    only_test_harness: 'reticle (@reticlehq/test, vitest-native)',
     token_leader_but_blind: 'agent-browser (2973 tok, 72.7% detection, 0/3 silent)',
     biggest_reticle_fix:
       'default full→core: 45088→22661 tokens (cheaper than playwright-mcp), zero detection loss',

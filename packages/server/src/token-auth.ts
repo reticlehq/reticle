@@ -1,6 +1,6 @@
 import { timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
-import { isLoopbackHostname } from '@reticle/protocol';
+import { isLoopbackHostname } from '@reticlehq/protocol';
 
 /** `Authorization: Bearer <token>` prefix and the query-param fallback for clients that can't set headers. */
 const BEARER_PREFIX = 'Bearer ';

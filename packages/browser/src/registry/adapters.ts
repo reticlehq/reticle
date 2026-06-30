@@ -25,7 +25,7 @@ export interface ReticleAdapter {
 const globalStore = globalThis as unknown as { __reticleAdapters?: ReticleAdapter[] };
 const adapters: ReticleAdapter[] = (globalStore.__reticleAdapters ??= []);
 
-/** Called by @reticle/react (and future adapters) to register themselves. */
+/** Called by @reticlehq/react (and future adapters) to register themselves. */
 export function registerAdapter(adapter: ReticleAdapter): void {
   if (!adapters.some((a) => a.name === adapter.name)) adapters.push(adapter);
 }

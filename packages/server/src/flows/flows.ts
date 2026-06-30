@@ -5,7 +5,7 @@ import {
   FlowErrorCode,
   FlowFileSchema,
   QueryBy,
-} from '@reticle/protocol';
+} from '@reticlehq/protocol';
 import type {
   ActionType,
   FlowAnchor,
@@ -13,7 +13,7 @@ import type {
   FlowFile,
   FlowStep,
   HealChange,
-} from '@reticle/protocol';
+} from '@reticlehq/protocol';
 import { ReticleTool } from '../tools/tool-names.js';
 import { applyHealChanges } from './heal.js';
 import type { CompiledProgram, RecordedStep } from './recordings.js';

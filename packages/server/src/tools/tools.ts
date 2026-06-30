@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { ReticleCommand, SnapshotMode } from '@reticle/protocol';
+import { ReticleCommand, SnapshotMode } from '@reticlehq/protocol';
 import { ReticleTool } from './tool-names.js';
 import { withSizeCost } from '../session/output-budget.js';
 import { applySnapshotDelta, SnapshotCache } from './snapshot-delta.js';
@@ -228,7 +228,7 @@ export const TOOLS: ToolDef[] = [
   {
     name: ReticleTool.INSPECT,
     description:
-      'Deep info on one element by ref: full a11y props, visibility, box, and (with @reticle/react) component stack + source file.',
+      'Deep info on one element by ref: full a11y props, visibility, box, and (with @reticlehq/react) component stack + source file.',
     inputSchema: {
       ref: z.string().describe("Element ref from reticle_snapshot or reticle_query (e.g. 'e42')."),
       ...sessionIdShape,

@@ -1,5 +1,5 @@
 {
-  "name": "@reticle/protocol",
+  "name": "@reticlehq/protocol",
   "version": "1.2.0",
   "description": "Shared wire contract, constants, and zod schemas for the Reticle browser SDK <-> bridge channel.",
   "type": "module",

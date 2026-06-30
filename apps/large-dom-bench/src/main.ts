@@ -1,4 +1,4 @@
-import { reticle, SESSION_AUTO, registerCapabilities, registerStore } from '@reticle/browser';
+import { reticle, SESSION_AUTO, registerCapabilities, registerStore } from '@reticlehq/browser';
 
 declare const __RETICLE_PORT__: number;
 

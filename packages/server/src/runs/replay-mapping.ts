@@ -10,7 +10,7 @@ import {
   RunFlowStatus,
   type FlowReplayResult,
   type RunFlowResult,
-} from '@reticle/protocol';
+} from '@reticlehq/protocol';
 import { SUCCESS_STEP_TOOL } from '../flows/flow-success.js';
 
 /** OK → PASS; DRIFT/ERROR → FAIL (a healed flow is produced by the heal path, not plain replay). */

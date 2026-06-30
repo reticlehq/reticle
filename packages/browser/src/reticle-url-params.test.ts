@@ -4,7 +4,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { SESSION_AUTO } from '@reticle/protocol';
+import { SESSION_AUTO } from '@reticlehq/protocol';
 import { RETICLE_URL_PARAM, reticleParamsFromSearch, resolveConnectIdentity } from './reticle.js';
 
 describe('reticleParamsFromSearch', () => {

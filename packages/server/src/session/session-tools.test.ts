@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ReticleCommand, type CommandResult } from '@reticle/protocol';
+import { ReticleCommand, type CommandResult } from '@reticlehq/protocol';
 import { TOOLS, type ToolDeps } from '../tools/tools.js';
 import { ReticleTool } from '../tools/tool-names.js';
 import type { Session, SessionManager } from './session.js';

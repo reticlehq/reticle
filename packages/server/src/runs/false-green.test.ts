@@ -9,7 +9,7 @@ import {
   VerdictStatus,
   type FlowReplayResult,
   asRunId,
-} from '@reticle/protocol';
+} from '@reticlehq/protocol';
 import { ReticleRunner, type RunnerPort, type VerifyOptions } from './reticle-runner.js';
 
 /**

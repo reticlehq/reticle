@@ -1,5 +1,5 @@
 {
-  "name": "@reticle/test",
+  "name": "@reticlehq/test",
   "version": "1.2.0",
   "description": "Reticle test runner: reticleTest spec registry + a runner that drives Reticle tools without MCP/stdio.",
   "type": "module",
@@ -19,8 +19,8 @@
     "prepack": "tsc -b && find dist -name \"*.test.*\" -delete"
   },
   "dependencies": {
-    "@reticle/protocol": "workspace:*",
-    "@reticle/server": "workspace:*"
+    "@reticlehq/protocol": "workspace:*",
+    "@reticlehq/server": "workspace:*"
   },
   "peerDependencies": {
     "vitest": "^3.2.6"

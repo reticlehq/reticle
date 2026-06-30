@@ -9,8 +9,8 @@ import {
   ReticleEnv,
   LOOPBACK_HOST,
   ReplayStatus,
-} from '@reticle/protocol';
-import type { FlowReplayResult } from '@reticle/protocol';
+} from '@reticlehq/protocol';
+import type { FlowReplayResult } from '@reticlehq/protocol';
 import { replayNamedFlow } from './flows/flow-tools.js';
 import { createSharedServer } from './http-server.js';
 import { resolveBridgeSecurity } from './bridge-security.js';

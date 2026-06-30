@@ -6,8 +6,8 @@
  */
 
 import * as http from 'node:http';
-import { LOOPBACK_HOST } from '@reticle/protocol';
-import type { ReticleVerificationRun } from '@reticle/protocol';
+import { LOOPBACK_HOST } from '@reticlehq/protocol';
+import type { ReticleVerificationRun } from '@reticlehq/protocol';
 import type { ReticleRunner } from './reticle-runner.js';
 import { handleVerifyRequest, type VerifyHttpRequest } from './verify-http.js';
 

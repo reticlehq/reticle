@@ -1,11 +1,11 @@
-# @reticle/eslint-plugin
+# @reticlehq/eslint-plugin
 
-Keeps the Reticle **signal layer self-enforcing**. When your store mutates user-visible state, an `reticle.signal(...)` should fire so an agent can assert on the change off-DOM. This plugin makes "state changed ⇒ signal fired" a lint rule instead of a convention that rots. It pairs with the runtime `commitAndSignal(mutate, signal, data)` helper from `@reticle/browser`.
+Keeps the Reticle **signal layer self-enforcing**. When your store mutates user-visible state, an `reticle.signal(...)` should fire so an agent can assert on the change off-DOM. This plugin makes "state changed ⇒ signal fired" a lint rule instead of a convention that rots. It pairs with the runtime `commitAndSignal(mutate, signal, data)` helper from `@reticlehq/browser`.
 
 ## Install
 
 ```sh
-pnpm add -D @reticle/eslint-plugin
+pnpm add -D @reticlehq/eslint-plugin
 ```
 
 Peer dependency: `eslint >= 9` (flat config).
@@ -14,7 +14,7 @@ Peer dependency: `eslint >= 9` (flat config).
 
 ```js
 // eslint.config.mjs
-import reticle from '@reticle/eslint-plugin';
+import reticle from '@reticlehq/eslint-plugin';
 
 export default [
   {
@@ -35,7 +35,7 @@ export default [
 Shortcut: enable the bundled `recommended` config (turns the rule on at `warn` with no-op defaults until you configure `mutators`):
 
 ```js
-import reticle from '@reticle/eslint-plugin';
+import reticle from '@reticlehq/eslint-plugin';
 
 export default [reticle.configs.recommended];
 ```

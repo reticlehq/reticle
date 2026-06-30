@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { runSpecs, runOne } from './runner.js';
 import { ReticleSkip } from './skip.js';
 import { TestStatus } from './constants.js';
-import type { ToolInvoker } from '@reticle/server';
+import type { ToolInvoker } from '@reticlehq/server';
 import type { ReticleSpec, RunnerOptions, SpecContext } from './types.js';
 
 /** A fake invoker that records every call and returns canned results keyed by tool name. */

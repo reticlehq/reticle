@@ -4,15 +4,15 @@ import {
   type FlowErrorCode,
   type FlowFile,
   type FlowStepResult,
-} from '@reticle/protocol';
-import { FlowStore, createNodeFileSystem, replayFlow, waitForPredicate } from '@reticle/server';
+} from '@reticlehq/protocol';
+import { FlowStore, createNodeFileSystem, replayFlow, waitForPredicate } from '@reticlehq/server';
 import type {
   Clock,
   EvalResult,
   FileSystemPort,
   FlowReplaySession,
   WaitForSignal,
-} from '@reticle/server';
+} from '@reticlehq/server';
 import { SpecKind, SpecMessage, SpecOutcome } from './constants.js';
 import { assertSuccess } from './success-assert.js';
 
@@ -41,7 +41,7 @@ export interface FlowSpec {
 }
 
 export interface FlowSpecOptions {
-  /** Defaults to waitForPredicate from @reticle/server (the real engine). */
+  /** Defaults to waitForPredicate from @reticlehq/server (the real engine). */
   waitForSignal?: WaitForSignal;
   /** Defaults to FLOW_SIGNAL_TIMEOUT_MS. Injected so a spec never reads the wall clock. */
   signalTimeoutMs?: number;
@@ -58,7 +58,7 @@ function toDynamicSet(flow: FlowFile): Set<string> {
 
 /**
  * Build one RUNNABLE FlowSpec from an already-loaded FlowFile. Composition only — replay (anchored
- * steps + per-step expect + dynamic skip) comes from @reticle/server's replayFlow; the sole new
+ * steps + per-step expect + dynamic skip) comes from @reticlehq/server's replayFlow; the sole new
  * assertion is flow.success via the same predicate engine.
  */
 export function flowToSpec(flow: FlowFile, opts?: FlowSpecOptions): FlowSpec {

@@ -1,4 +1,4 @@
-import type { EventType } from '@reticle/protocol';
+import type { EventType } from '@reticlehq/protocol';
 
 /** An observer emits normalized events; the orchestrator stamps time + forwards them. */
 export type Emit = (type: EventType, data: Record<string, unknown>, ref?: string) => void;

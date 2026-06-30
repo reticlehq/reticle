@@ -14,7 +14,7 @@ describe('mergeCursorConfig', () => {
     expect(r.status).toBe(CursorMergeStatus.APPLY);
     expect(parse(r.content).mcpServers['reticle']).toEqual({
       command: 'npx',
-      args: ['@reticle/core', 'mcp'],
+      args: ['@reticlehq/core', 'mcp'],
     });
   });
 
@@ -22,7 +22,7 @@ describe('mergeCursorConfig', () => {
     // One global entry per user serves every project; the port is read per-project from
     // .reticle.json at runtime, so pinning a port here would break multi-project isolation.
     const r = mergeCursorConfig(null);
-    expect(parse(r.content).mcpServers['reticle']?.args).toEqual(['@reticle/core', 'mcp']);
+    expect(parse(r.content).mcpServers['reticle']?.args).toEqual(['@reticlehq/core', 'mcp']);
     expect(parse(r.content).mcpServers['reticle']?.args).not.toContain('--port');
   });
 

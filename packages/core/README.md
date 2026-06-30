@@ -9,7 +9,7 @@
 
 <a href="https://github.com/reticlehq/reticle"><img src="https://cdn.jsdelivr.net/gh/reticlehq/reticle@main/assets/readme/hero.gif" alt="Reticle catches a 401 your agent said was 'done' — pass:false with evidence, then a one-line fix to pass:true" width="760" /></a>
 
-[![npm](https://img.shields.io/npm/v/@reticle/core?color=8b7bff&labelColor=15131f&logo=npm)](https://www.npmjs.com/package/@reticle/core) [![downloads](https://img.shields.io/npm/dm/@reticle/core?color=5fd9f5&labelColor=15131f)](https://www.npmjs.com/package/@reticle/core) [![license](https://img.shields.io/badge/license-Apache--2.0%20%2B%20FSL-46d6a0?labelColor=15131f)](https://github.com/reticlehq/reticle/blob/main/LICENSE)
+[![npm](https://img.shields.io/npm/v/@reticlehq/core?color=8b7bff&labelColor=15131f&logo=npm)](https://www.npmjs.com/package/@reticlehq/core) [![downloads](https://img.shields.io/npm/dm/@reticlehq/core?color=5fd9f5&labelColor=15131f)](https://www.npmjs.com/package/@reticlehq/core) [![license](https://img.shields.io/badge/license-Apache--2.0%20%2B%20FSL-46d6a0?labelColor=15131f)](https://github.com/reticlehq/reticle/blob/main/LICENSE)
 
 **TypeScript · Model Context Protocol · React-first · dev-only · localhost-only · open-core (Apache-2.0 SDK + FSL server)**
 
@@ -49,19 +49,19 @@ Deterministic (structured events, not pixels), cheap (any model, no vision), and
 **One install** — SDK, React adapter, source-mapping plugins, spec runner, and the MCP server all ship in a single package:
 
 ```bash
-npm i -D @reticle/core
+npm i -D @reticlehq/core
 ```
 
 **1. Point your agent at the MCP server** (Claude Code `.mcp.json`, Cursor, Windsurf, …):
 
 ```jsonc
-{ "mcpServers": { "reticle": { "command": "npx", "args": ["@reticle/core"] } } }
+{ "mcpServers": { "reticle": { "command": "npx", "args": ["@reticlehq/core"] } } }
 ```
 
 **2. Embed the SDK in your app (dev only):**
 
 ```ts
-import { reticle } from '@reticle/core';
+import { reticle } from '@reticlehq/core';
 if (import.meta.env.DEV) reticle.connect({ session: 'my-app' });
 ```
 

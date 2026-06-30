@@ -1,5 +1,5 @@
-import type { FlowErrorCode } from '@reticle/protocol';
-import type { FlowReplaySession } from '@reticle/server';
+import type { FlowErrorCode } from '@reticlehq/protocol';
+import type { FlowReplaySession } from '@reticlehq/server';
 import { FLOW_LOAD_ERROR_PREFIX, SpecKind, SpecOutcome } from './constants.js';
 import { flowsAsSpecs } from './flow-spec.js';
 import type { FlowSpec, FlowsAsSpecsOptions, SpecRunResult } from './flow-spec.js';
@@ -50,9 +50,9 @@ export interface RegisterFlowSpecsOptions extends FlowsAsSpecsOptions {
 
 /**
  * Resolve the default registrar (vitest's `it`) lazily. vitest is an OPTIONAL peer dependency, so the
- * public barrel (`@reticle/test`) must stay importable when vitest is absent — only callers that actually
+ * public barrel (`@reticlehq/test`) must stay importable when vitest is absent — only callers that actually
  * register flow specs without injecting their own `register` fn need it. A static top-level import
- * would pull vitest into the eager module graph of every `import { reticleTest } from '@reticle/test'`.
+ * would pull vitest into the eager module graph of every `import { reticleTest } from '@reticlehq/test'`.
  */
 async function defaultRegister(): Promise<RegisterFn> {
   const vitest = await import('vitest');

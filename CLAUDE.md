@@ -9,28 +9,28 @@ Reticle is the **proof layer for AI agents** — it verifies a running web app f
 ## Monorepo layout
 
 ```
-packages/protocol      @reticle/protocol     — shared wire contract, constants, zod schemas
-packages/browser       @reticle/browser      — instrumentation SDK embedded in the app (DOM-side)
-packages/server        @reticle/server       — bridge + MCP server, the `reticle` CLI (Node-side)
-packages/react         @reticle/react        — React adapter: DOM ref -> component -> source file
-packages/babel-plugin  @reticle/babel-plugin — stamps data-reticle-source (source mapping, React 19)
-packages/next          @reticle/next         — Next.js source mapping (keeps SWC) via withReticle (CJS)
-apps/demo              @reticle/demo         — Vite/React dashboard used to dogfood Reticle
-apps/api               @reticle/api          — Express backend exercising real-world behaviors (CJS-ish .mjs)
-apps/next-smoke        @reticle/next-smoke   — Next.js 15 app verifying Reticle on Next
+packages/protocol      @reticlehq/protocol     — shared wire contract, constants, zod schemas
+packages/browser       @reticlehq/browser      — instrumentation SDK embedded in the app (DOM-side)
+packages/server        @reticlehq/server       — bridge + MCP server, the `reticle` CLI (Node-side)
+packages/react         @reticlehq/react        — React adapter: DOM ref -> component -> source file
+packages/babel-plugin  @reticlehq/babel-plugin — stamps data-reticle-source (source mapping, React 19)
+packages/next          @reticlehq/next         — Next.js source mapping (keeps SWC) via withReticle (CJS)
+apps/demo              @reticlehq/demo         — Vite/React dashboard used to dogfood Reticle
+apps/api               @reticlehq/api          — Express backend exercising real-world behaviors (CJS-ish .mjs)
+apps/next-smoke        @reticlehq/next-smoke   — Next.js 15 app verifying Reticle on Next
 docs/                  — user-facing docs (getting-started, usage, token-efficiency, local-install)
 SKILL.md               — PUBLIC skill for users integrating Reticle into their own project (the canonical paste-URL)
 plan/                  — research/design docs only, no code (ALWAYS gitignored)
 ```
 
-This is **one git repo** at the root (pnpm + turbo monorepo). The TS library packages are strict TypeScript; `@reticle/babel-plugin`/`@reticle/next` are plain CJS tooling and `apps/api`/ `apps/next-smoke` are local fixtures — all excluded from the build/lint/test gates.
+This is **one git repo** at the root (pnpm + turbo monorepo). The TS library packages are strict TypeScript; `@reticlehq/babel-plugin`/`@reticlehq/next` are plain CJS tooling and `apps/api`/ `apps/next-smoke` are local fixtures — all excluded from the build/lint/test gates.
 
 ## Service boundaries (who owns what)
 
-- **`@reticle/protocol` is the contract.** Any message that crosses browser ↔ bridge ↔ agent is defined there as a constant + zod schema. Browser and server depend on it; it depends on nothing. Never inline a wire string in `browser` or `server` — add it to `protocol`.
-- **`@reticle/browser` only touches the DOM/page.** It never imports Node APIs.
-- **`@reticle/server` only runs in Node.** It never imports DOM APIs.
-- **`@reticle/react` is optional enrichment.** Core must work without it.
+- **`@reticlehq/protocol` is the contract.** Any message that crosses browser ↔ bridge ↔ agent is defined there as a constant + zod schema. Browser and server depend on it; it depends on nothing. Never inline a wire string in `browser` or `server` — add it to `protocol`.
+- **`@reticlehq/browser` only touches the DOM/page.** It never imports Node APIs.
+- **`@reticlehq/server` only runs in Node.** It never imports DOM APIs.
+- **`@reticlehq/react` is optional enrichment.** Core must work without it.
 
 ## Non-negotiable rules
 
@@ -49,7 +49,7 @@ This is **one git repo** at the root (pnpm + turbo monorepo). The TS library pac
 
 | Thing | Convention | Example |
 | --- | --- | --- |
-| Package | `@reticle/<kebab>` | `@reticle/browser` |
+| Package | `@reticlehq/<kebab>` | `@reticlehq/browser` |
 | File | kebab-case | `ring-buffer.ts` |
 | Type / class | PascalCase | `RingBuffer`, `ReticleEvent` |
 | Variable / function | camelCase | `pushEvent` |

@@ -3,7 +3,7 @@
 Heavy, real-environment tests that exercise Reticle against a **real headless Chromium** — kept out of the fast per-package unit gate so `pnpm test:unit` stays quick.
 
 ```bash
-pnpm build            # the tests import the built @reticle/server
+pnpm build            # the tests import the built @reticlehq/server
 pnpm test:integration # runs test/**/*.integration.test.ts via vitest
 ```
 
@@ -15,4 +15,4 @@ pnpm test:integration # runs test/**/*.integration.test.ts via vitest
 ## Related suites
 
 - **Unit tests** (`pnpm test:unit`) — fast, per-package, fake launcher/clock.
-- **E2E battery** (`apps/e2e`, `pnpm --filter @reticle/e2e run e2e:ci`) — boots the demo/api/next-smoke apps and drives Reticle end-to-end, including the multi-agent lease path against the live demo (`specs/multi-agent-lease-test.mjs`) and the SDK/framework integration that needs a running app.
+- **E2E battery** (`apps/e2e`, `pnpm --filter @reticlehq/e2e run e2e:ci`) — boots the demo/api/next-smoke apps and drives Reticle end-to-end, including the multi-agent lease path against the live demo (`specs/multi-agent-lease-test.mjs`) and the SDK/framework integration that needs a running app.

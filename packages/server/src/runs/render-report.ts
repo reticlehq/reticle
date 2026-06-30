@@ -12,7 +12,7 @@ import {
   type RunCheck,
   type RunFlowResult,
   type RunRisk,
-} from '@reticle/protocol';
+} from '@reticlehq/protocol';
 
 const VERDICT_GLYPH: Readonly<Record<VerdictStatus, string>> = {
   [VerdictStatus.PASS]: '✓ PASS',

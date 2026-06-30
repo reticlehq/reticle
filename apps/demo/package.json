@@ -1,5 +1,5 @@
 {
-  "name": "@reticle/demo",
+  "name": "@reticlehq/demo",
   "version": "0.0.0",
   "private": true,
   "description": "A small React dashboard used to dogfood Reticle (tabs, lists, modals, forms, API calls).",
@@ -13,8 +13,8 @@
     "lint": "eslint src"
   },
   "dependencies": {
-    "@reticle/browser": "workspace:*",
-    "@reticle/react": "workspace:*",
+    "@reticlehq/browser": "workspace:*",
+    "@reticlehq/react": "workspace:*",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "zustand": "^5.0.14"
@@ -22,7 +22,7 @@
   "devDependencies": {
     "@babel/core": "^7.29.7",
     "@rolldown/plugin-babel": "^0.2.3",
-    "@reticle/babel-plugin": "workspace:*",
+    "@reticlehq/babel-plugin": "workspace:*",
     "@types/babel__core": "^7.20.5",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",

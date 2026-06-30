@@ -13,7 +13,7 @@ import {
   type FlowStepResult,
   type ReticleEvent,
   type QueryEmptyHint,
-} from '@reticle/protocol';
+} from '@reticlehq/protocol';
 import type { EvalResult, Predicate } from '../events/predicate.js';
 import { asRecord, asString } from '../tools/tools-helpers.js';
 import { replayActionArgs } from './replay.js';

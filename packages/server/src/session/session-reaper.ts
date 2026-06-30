@@ -1,4 +1,4 @@
-import { PresenterTone, SESSION_LIFECYCLE, UNDELIVERED_NOTES_LABEL } from '@reticle/protocol';
+import { PresenterTone, SESSION_LIFECYCLE, UNDELIVERED_NOTES_LABEL } from '@reticlehq/protocol';
 import type { Session, SessionManager } from './session.js';
 import { log } from '../log.js';
 

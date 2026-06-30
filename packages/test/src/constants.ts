@@ -38,7 +38,7 @@ export const SKIP_REASON_REAL_INPUT = 'real input not active — run via reticle
 /** Default wait window for assertion matchers (reticle_assert timeout_ms). */
 export const DEFAULT_ASSERT_TIMEOUT_MS = 4000;
 
-/** Predicate `kind` discriminants the matchers build. Mirrors @reticle/server's Predicate union. */
+/** Predicate `kind` discriminants the matchers build. Mirrors @reticlehq/server's Predicate union. */
 export const PredicateKind = {
   SIGNAL: 'signal',
   NET: 'net',

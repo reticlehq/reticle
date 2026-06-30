@@ -4,7 +4,7 @@ import {
   HEAL_CONFIDENCE_MIN,
   type Drift,
   type FlowStepResult,
-} from '@reticle/protocol';
+} from '@reticlehq/protocol';
 import { collectProposals, confidenceFor, proposeRebind } from './heal.js';
 import { ReticleTool } from '../tools/tool-names.js';
 

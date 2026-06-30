@@ -2,12 +2,12 @@ import * as fs from 'node:fs';
 import * as https from 'node:https';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
-import { UpdateCheckIntervalMs } from '@reticle/protocol';
+import { UpdateCheckIntervalMs } from '@reticlehq/protocol';
 import { log } from '../log.js';
 
 const RETICLE_HOME = join(homedir(), '.reticle');
 const MANIFEST_PATH = join(RETICLE_HOME, 'update-manifest.json');
-const NPM_REGISTRY = 'https://registry.npmjs.org/@reticle/core/latest';
+const NPM_REGISTRY = 'https://registry.npmjs.org/@reticlehq/core/latest';
 
 interface UpdateManifest {
   currentVersion: string;

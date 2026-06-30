@@ -19,7 +19,7 @@ import {
   type FlowFile,
   type FlowStep,
   type RunRecord,
-} from '@reticle/protocol';
+} from '@reticlehq/protocol';
 import { classifyFlowAssertions, FlowAssertionGrade } from '../flows/flow-classify.js';
 import { successLabel } from '../flows/flow-success.js';
 import { flowRisk, latestRun, rankByRisk, RiskLevel, type FlowRisk } from './flow-risk.js';

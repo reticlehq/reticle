@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { RiskSeverity, RiskSurface, RunChangeKind } from '@reticle/protocol';
+import { RiskSeverity, RiskSurface, RunChangeKind } from '@reticlehq/protocol';
 import { buildRisks, classifyChangedFiles, risksForPath } from './risk-classify.js';
 
 describe('risksForPath', () => {

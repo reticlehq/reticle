@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { SESSION_AUTO, TRANSPORT_LIMITS } from '@reticle/protocol';
+import { SESSION_AUTO, TRANSPORT_LIMITS } from '@reticlehq/protocol';
 import { connectionPolicy, resolveSessionLabel } from './reticle.js';
 
 describe('resolveSessionLabel', () => {

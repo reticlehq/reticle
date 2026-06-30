@@ -1,4 +1,4 @@
-import { reticle } from '@reticle/browser';
+import { reticle } from '@reticlehq/browser';
 
 /**
  * Named signals the app emits on every meaningful action. These ARE the contract an Reticle agent

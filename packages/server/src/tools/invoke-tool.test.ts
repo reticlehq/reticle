@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SessionState, UNSCRIPTABLE_TAB_RECOMMENDATION } from '@reticle/protocol';
+import { SessionState, UNSCRIPTABLE_TAB_RECOMMENDATION } from '@reticlehq/protocol';
 import { TOOLS, type ToolDef, type ToolDeps } from './tools.js';
 import { ReticleTool } from './tool-names.js';
 import { runTool, SESSION_BOUND_TOOLS, SESSION_EXEMPT_TOOLS } from './invoke-tool.js';

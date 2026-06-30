@@ -6,7 +6,7 @@ import {
   type ElementQuery,
   type ReticleEvent,
   type MatchResult,
-} from '@reticle/protocol';
+} from '@reticlehq/protocol';
 import { evaluatePredicate, waitForPredicate, type PredicateSession } from './predicate.js';
 
 /** In-memory session: events from an array, MATCH from a supplied matcher. */

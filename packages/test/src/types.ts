@@ -1,4 +1,4 @@
-import type { ToolInvoker } from '@reticle/server';
+import type { ToolInvoker } from '@reticlehq/server';
 import type { TestStatus } from './constants.js';
 
 /**

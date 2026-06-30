@@ -5,7 +5,7 @@ import {
   ElementState,
   isDangerousActionText,
   SettleReason,
-} from '@reticle/protocol';
+} from '@reticlehq/protocol';
 import { refs } from '../dom/refs.js';
 import { getAccessibleName, isVisible, getStates } from '../dom/a11y.js';
 import { elementHasHoverHandlers, identifyComponent } from '../registry/adapters.js';

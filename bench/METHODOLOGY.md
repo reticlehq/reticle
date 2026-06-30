@@ -8,7 +8,7 @@ What are the tradeoffs in **token usage, verification latency, regression-detect
 
 1. **Playwright MCP** (`@playwright/mcp@0.0.76`)
 2. **Chrome DevTools MCP** (`chrome-devtools-mcp@1.3.0`)
-3. **Reticle** (`@reticle/server` 0.8.0, driven via `reticle mcp`)
+3. **Reticle** (`@reticlehq/server` 0.8.0, driven via `reticle mcp`)
 
 Hypothesis under test (to be validated OR falsified): _AI coding agents are limited less by reasoning than by runtime observability._ We treat this skeptically — see "Threats to validity".
 
@@ -69,7 +69,7 @@ The headline metric people want — _tokens per verification cycle_ — only exi
 
 Effort is not a runtime measurement; it is scored on a fixed rubric and labeled an estimate:
 
-- **Setup complexity** — what must exist before the first verification works (e.g. Reticle requires the app to embed `@reticle/browser` and the daemon port to match the SDK's dial port — observed empirically in pilot; Playwright/DevTools require nothing from the app).
+- **Setup complexity** — what must exist before the first verification works (e.g. Reticle requires the app to embed `@reticlehq/browser` and the daemon port to match the SDK's dial port — observed empirically in pilot; Playwright/DevTools require nothing from the app).
 - **Maintenance burden** — selector/recipe fragility across UI change.
 - **Explicit test-writing burden** — how much the engineer must hand-author vs. ask in NL.
 
@@ -134,7 +134,7 @@ node bench/harness/bench-all.mjs --full && node bench/harness/gate.mjs
 # Or run the passes by hand:
 # 1. start backends — api on :8787, demo on :4312; the demo's embedded SDK dials the bench daemon (:4455)
 node apps/api/server.mjs &
-RETICLE_PORT=4455 pnpm --filter @reticle/demo exec vite --port 4312 --strictPort &
+RETICLE_PORT=4455 pnpm --filter @reticlehq/demo exec vite --port 4312 --strictPort &
 
 # 2. verify all three tool servers boot + list tools
 node bench/harness/probe.mjs
@@ -148,4 +148,4 @@ ANTHROPIC_API_KEY=... node bench/harness/agent-loop.mjs
 # raw outputs: bench/raw/*.json ; logs: bench/logs/
 ```
 
-Pinned versions: `@playwright/mcp@0.0.76`, `chrome-devtools-mcp@1.3.0`, `@reticle/server@0.8.0`, Node v22.14.0, Playwright Chromium `chromium-1223`.
+Pinned versions: `@playwright/mcp@0.0.76`, `chrome-devtools-mcp@1.3.0`, `@reticlehq/server@0.8.0`, Node v22.14.0, Playwright Chromium `chromium-1223`.

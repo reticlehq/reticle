@@ -8,7 +8,7 @@ import {
   RunProfile,
   RunTrigger,
   VerdictStatus,
-} from '@reticle/protocol';
+} from '@reticlehq/protocol';
 import { buildVerificationRun, type VerificationRunInput } from './build-verification-run.js';
 
 /**

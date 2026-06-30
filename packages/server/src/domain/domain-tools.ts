@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { FlowFile } from '@reticle/protocol';
+import type { FlowFile } from '@reticlehq/protocol';
 import { ReticleTool } from '../tools/tool-names.js';
 import { readContract } from '../project/reticle-dir.js';
 import { buildDomainModel } from './domain-model.js';

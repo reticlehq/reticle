@@ -1,7 +1,7 @@
 import { defineConfig } from 'astro/config';
 import react from '@astrojs/react';
 
-// `vite.build.target` is bumped to es2022 so Astro doesn't try to down-level the modern @reticle/core
+// `vite.build.target` is bumped to es2022 so Astro doesn't try to down-level the modern @reticlehq/core
 // bundle to its conservative default browser target (which fails on a destructuring transform).
 export default defineConfig({
   integrations: [react()],

@@ -12,7 +12,7 @@ import {
   RunChangeKind,
   type RunChangedFile,
   type RunRisk,
-} from '@reticle/protocol';
+} from '@reticlehq/protocol';
 
 /** Path heuristics per surface. Order is irrelevant — a path may match several surfaces. */
 const RISK_PATTERNS: ReadonlyArray<{ surface: RiskSurface; pattern: RegExp }> = [

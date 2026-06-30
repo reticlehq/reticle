@@ -16,7 +16,7 @@
  * complete minimal hook. MUST be installed before `react-dom` initializes (React reads the hook at
  * renderer-inject time) — import this as the first side-effect in the app entry, before React.
  */
-import { registerStore } from '@reticle/browser';
+import { registerStore } from '@reticlehq/browser';
 
 const HOOK_KEY = '__REACT_DEVTOOLS_GLOBAL_HOOK__';
 const RENDER_STORE = '__reticle_renders';

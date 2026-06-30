@@ -10,7 +10,7 @@ import {
   UNSCRIPTABLE_TAB_RECOMMENDATION,
   type HelloMessage,
   type ReticleEvent,
-} from '@reticle/protocol';
+} from '@reticlehq/protocol';
 import { Session, SessionManager } from './session.js';
 
 const HELLO: HelloMessage = {

@@ -23,7 +23,7 @@ import {
   RunTrigger,
   VerdictStatus,
   type ReticleVerificationRun,
-} from '@reticle/protocol';
+} from '@reticlehq/protocol';
 import { start, type RunningServer } from './index.js';
 import { ReticleRunner } from './runs/reticle-runner.js';
 import { createRunnerPort } from './runs/runner-port.js';
@@ -45,7 +45,7 @@ const DEFAULT_PROJECT_NAME = 'app';
 const VERIFY_AGENT_ID = 'reticle-cli';
 
 const MSG_NO_SESSION =
-  'No app connected — Reticle drove the URL but no @reticle/browser session dialed back.\n' +
+  'No app connected — Reticle drove the URL but no @reticlehq/browser session dialed back.\n' +
   '  Make sure the SDK is in the build and reticle.connect() runs on the preview page' +
   ' (for a non-localhost preview: allowNonLocalhost + a pairing token).';
 const MSG_NO_FLOWS =

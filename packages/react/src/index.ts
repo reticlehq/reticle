@@ -1,5 +1,5 @@
-import { registerAdapter, type ComponentInfo, type ComponentSource } from '@reticle/browser';
-import { ComponentStateReason, type ComponentStateResult } from '@reticle/protocol';
+import { registerAdapter, type ComponentInfo, type ComponentSource } from '@reticlehq/browser';
+import { ComponentStateReason, type ComponentStateResult } from '@reticlehq/protocol';
 
 interface Hook {
   memoizedState: unknown;
@@ -87,7 +87,7 @@ export function identify(el: Element): ComponentInfo | null {
   }
 
   // React 19 dropped `_debugSource`; fall back to a data-reticle-source stamp if present
-  // (added by @reticle/babel-plugin in dev).
+  // (added by @reticlehq/babel-plugin in dev).
   if (source === undefined) {
     source = sourceFromAttribute(el);
   }

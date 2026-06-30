@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { RETICLE_PROTOCOL_VERSION, MessageKind, type HelloMessage } from '@reticle/protocol';
+import { RETICLE_PROTOCOL_VERSION, MessageKind, type HelloMessage } from '@reticlehq/protocol';
 import { Transport } from './transport.js';
 
 /**

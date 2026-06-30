@@ -1,4 +1,4 @@
-import { ReticleEnv } from '@reticle/protocol';
+import { ReticleEnv } from '@reticlehq/protocol';
 import type { StartOptions } from './index.js';
 
 /** The security contract the bridge/daemon enforce: bind host, pairing token, and WS origin allow-list. */

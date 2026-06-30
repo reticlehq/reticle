@@ -1,4 +1,4 @@
-import { ReticleTool, type ToolInvoker } from '@reticle/server';
+import { ReticleTool, type ToolInvoker } from '@reticlehq/server';
 
 /** The deterministic-time facade exposed as `t.clock`. Each call maps to one reticle_clock knob. */
 export interface TestClock {

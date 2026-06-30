@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 #
-# Publish @reticle/* to a LOCAL registry (Verdaccio) so you can install them into a real
+# Publish @reticlehq/* to a LOCAL registry (Verdaccio) so you can install them into a real
 # external app without publishing to public npm. Run from the repo root:
 #
 #   bash scripts/local-registry.sh
 #
 # Then, in your app:
 #   echo '@reticle:registry=http://localhost:4873/' >> .npmrc
-#   npm i -D @reticle/browser @reticle/react @reticle/next
+#   npm i -D @reticlehq/browser @reticlehq/react @reticlehq/next
 #
 set -euo pipefail
 PORT=4873
@@ -30,7 +30,7 @@ TOKEN=$(curl -s -XPUT "${REG}/-/user/org.couchdb.user:reticle" \
   | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{try{process.stdout.write(JSON.parse(d).token||'')}catch{}})")
 [ -n "${TOKEN}" ] || { echo "Failed to obtain a token from Verdaccio"; exit 1; }
 
-echo "==> Publishing @reticle/* to ${REG}"
+echo "==> Publishing @reticlehq/* to ${REG}"
 # Inject the token for this host only, publish, then strip it back out.
 cleanup() { grep -v "localhost:${PORT}" "${HOME}/.npmrc" > "${HOME}/.npmrc.tmp" 2>/dev/null && mv "${HOME}/.npmrc.tmp" "${HOME}/.npmrc" || true; }
 trap cleanup EXIT
@@ -38,9 +38,9 @@ printf '\n//localhost:%s/:_authToken=%s\n' "${PORT}" "${TOKEN}" >> "${HOME}/.npm
 ( cd "${ROOT}" && pnpm -r publish --registry "${REG}" --no-git-checks )
 
 echo ""
-echo "✅ Published @reticle/* to ${REG}"
+echo "✅ Published @reticlehq/* to ${REG}"
 echo ""
 echo "In your external app:"
 echo "  echo '@reticle:registry=${REG}' >> .npmrc"
-echo "  npm i -D @reticle/browser @reticle/react @reticle/next   # + @reticle/babel-plugin for non-Next"
-echo "  npx --registry ${REG} @reticle/server              # run the bridge + MCP server"
+echo "  npm i -D @reticlehq/browser @reticlehq/react @reticlehq/next   # + @reticlehq/babel-plugin for non-Next"
+echo "  npx --registry ${REG} @reticlehq/server              # run the bridge + MCP server"

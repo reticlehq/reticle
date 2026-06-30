@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { ReticleDir } from '@reticle/protocol';
+import { ReticleDir } from '@reticlehq/protocol';
 import {
   AnnotationStore,
   BaselineStore,
@@ -9,8 +9,8 @@ import {
   createNodeFileSystem,
   createToolInvoker,
   start,
-} from '@reticle/server';
-import type { RunningServer, ToolDeps, ToolInvoker } from '@reticle/server';
+} from '@reticlehq/server';
+import type { RunningServer, ToolDeps, ToolInvoker } from '@reticlehq/server';
 
 export interface BootedRun {
   invoke: ToolInvoker;
@@ -33,7 +33,7 @@ export interface BootOptions {
 
 /**
  * Build ToolDeps from a started server (Option b: zero further server changes). The only place
- * in @reticle/test that touches real IO — and it does so only by delegating to @reticle/server's start.
+ * in @reticlehq/test that touches real IO — and it does so only by delegating to @reticlehq/server's start.
  */
 function defaultBuildDeps(server: RunningServer, opts: BootOptions): ToolDeps {
   const fs = createNodeFileSystem();

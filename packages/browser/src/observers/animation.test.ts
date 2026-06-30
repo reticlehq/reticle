@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { EventType } from '@reticle/protocol';
+import { EventType } from '@reticlehq/protocol';
 import { installAnimation } from './animation.js';
 import type { Emit } from './types.js';
 

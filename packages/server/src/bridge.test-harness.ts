@@ -5,7 +5,7 @@ import {
   LOOPBACK_HOST,
   MessageKind,
   type ElementQuery,
-} from '@reticle/protocol';
+} from '@reticlehq/protocol';
 import type { Bridge } from './bridge.js';
 import { BaselineStore } from './project/baselines.js';
 import { createNodeFileSystem } from './project/fs-port.js';
@@ -23,7 +23,7 @@ export const FAKE_CAPABILITIES = {
   flows: [{ name: 'pay', steps: ['fill', 'click'] }],
 };
 
-/** A stand-in for the real @reticle/browser SDK: replies to commands and emits events. */
+/** A stand-in for the real @reticlehq/browser SDK: replies to commands and emits events. */
 export class FakeBrowser {
   readonly #ws: WebSocket;
   matcher: (query: ElementQuery) => boolean = () => false;

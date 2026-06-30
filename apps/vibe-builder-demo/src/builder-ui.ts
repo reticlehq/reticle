@@ -6,7 +6,7 @@
  * The `builder` store exposes the builder's state (phase + last verdict) so the outer self-test reads
  * the result via reticle_state — program truth on the outer layer, mirroring how the inner layer works.
  */
-import { reticle, registerStore, registerCapabilities } from '@reticle/browser';
+import { reticle, registerStore, registerCapabilities } from '@reticlehq/browser';
 
 interface BuilderVerdict {
   status: string;

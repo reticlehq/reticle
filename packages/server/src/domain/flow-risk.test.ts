@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { RunKind, RunStatus, type RunRecord } from '@reticle/protocol';
+import { RunKind, RunStatus, type RunRecord } from '@reticlehq/protocol';
 import { FlowAssertionGrade } from '../flows/flow-classify.js';
 import { flowRisk, latestRun, rankByRisk, RiskLevel } from './flow-risk.js';
 

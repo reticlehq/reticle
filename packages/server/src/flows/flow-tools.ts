@@ -10,7 +10,7 @@ import {
   type FlowReplayResult,
   type HealChange,
   type HealProposal,
-} from '@reticle/protocol';
+} from '@reticlehq/protocol';
 import { ReticleTool } from '../tools/tool-names.js';
 import { asString } from '../tools/tools-helpers.js';
 import { replayFlow } from './flow-replay.js';
@@ -19,7 +19,7 @@ import { classifyFlowAssertions } from './flow-classify.js';
 import { assertSuccess, dynamicTestids, successLabel } from './flow-success.js';
 import { flowPath } from '../project/reticle-dir.js';
 import { applyHealChanges, collectProposals } from './heal.js';
-import type { SuiteVerdict } from '@reticle/protocol';
+import type { SuiteVerdict } from '@reticlehq/protocol';
 import { waitForPredicate } from '../events/predicate.js';
 import type { FlowAnnotations } from './flows.js';
 import type { ToolDef, ToolDeps } from '../tools/tools.js';

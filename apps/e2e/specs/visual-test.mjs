@@ -11,7 +11,7 @@ import {
   RecordingStore,
   LaunchedRealInputProvider,
   createNodeFileSystem,
-} from '@reticle/server';
+} from '@reticlehq/server';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let pass = 0,
   fail = 0;

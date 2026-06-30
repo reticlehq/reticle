@@ -1,6 +1,6 @@
 import * as http from 'node:http';
 import { spawn } from 'node:child_process';
-import { LOOPBACK_HOST } from '@reticle/protocol';
+import { LOOPBACK_HOST } from '@reticlehq/protocol';
 import { STATUS_PATH } from './http-server.js';
 
 /**

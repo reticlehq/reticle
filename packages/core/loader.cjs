@@ -1,11 +1,11 @@
 'use strict';
-// Webpack pre-loader for `@reticle/core/next` — ships INTO the umbrella's dist/ alongside next.js and
+// Webpack pre-loader for `@reticlehq/core/next` — ships INTO the umbrella's dist/ alongside next.js and
 // babel.js. Applies the Reticle source-mapping babel transform (stamps data-reticle-source) to the project's
 // JSX/TSX, then hands the result to next-swc-loader. SWC still does the real compile; we only stamp
 // source locations. Dev-only (wired by withReticle).
 //
 // Authored as plain CJS (module.exports = function) so webpack requires it directly. The babel plugin
-// is NOT imported from the private @reticle/babel-plugin — it's pulled from the umbrella's own
+// is NOT imported from the private @reticlehq/babel-plugin — it's pulled from the umbrella's own
 // bundled ./babel (ESM) via dynamic import, so this loader is self-contained inside the published dist.
 const babel = require('@babel/core');
 

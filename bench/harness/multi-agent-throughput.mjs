@@ -4,7 +4,7 @@
 // so the speedup and peak concurrency are measured, not asserted. Needs the demo at BENCH_URL.
 import { writeFileSync } from 'node:fs';
 import { cpus } from 'node:os';
-import { BrowserPool, playwrightLauncher } from '@reticle/server';
+import { BrowserPool, playwrightLauncher } from '@reticlehq/server';
 
 const URL = process.env.BENCH_URL ?? 'http://localhost:4312/';
 const M = Number(process.env.FLOWS ?? 16); // total flows to run through the pool

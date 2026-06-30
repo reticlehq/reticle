@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { EventType } from '@reticle/protocol';
+import { EventType } from '@reticlehq/protocol';
 import { createCommandRegistry } from '../commands/commands.js';
 import { executeAction } from './actions.js';
 import { installScroll } from '../observers/scroll.js';

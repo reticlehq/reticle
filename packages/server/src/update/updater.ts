@@ -10,7 +10,7 @@ const NPM_TIMEOUT_MS = 120_000;
 
 /** How this reticle process was launched — determines which npm strategy to use for updates. */
 const ExecutionKind = {
-  /** Launched via `npx @reticle/core` — npm re-resolves the package on restart. */
+  /** Launched via `npx @reticlehq/core` — npm re-resolves the package on restart. */
   NPX: 'npx',
   /** Installed globally via `npm install -g`. */
   GLOBAL: 'global',
@@ -70,7 +70,7 @@ function runNpm(args: string[], opts: RunNpmOptions = {}): Promise<void> {
 }
 
 async function installVersion(version: string, kind: ExecutionKind): Promise<void> {
-  const pkg = `@reticle/core@${version}`;
+  const pkg = `@reticlehq/core@${version}`;
   if (kind === ExecutionKind.NPX) {
     // npx re-resolves the package from npm on the next Claude Code restart — no npm
     // install needed. The restart itself is what triggers the update.

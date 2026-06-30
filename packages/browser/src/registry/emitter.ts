@@ -2,7 +2,7 @@
  * The injected-emitter pattern (P5a): host-app components depend on a tiny structural interface
  * instead of importing the SDK directly. The real emitter proxies to the connected `reticle`
  * singleton; when Reticle isn't connected (or isn't loaded) every call is a SAFE NO-OP — so nothing
- * breaks in production or before `reticle.connect()`, and `@reticle/browser` stays out of the prod bundle.
+ * breaks in production or before `reticle.connect()`, and `@reticlehq/browser` stays out of the prod bundle.
  */
 
 import { reticle } from '../index.js';

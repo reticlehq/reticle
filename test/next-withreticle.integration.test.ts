@@ -1,11 +1,11 @@
 /**
- * Smoke test for the umbrella's `@reticle/core/next` export — the regression guard for the v1.0/1.1 bug
+ * Smoke test for the umbrella's `@reticlehq/core/next` export — the regression guard for the v1.0/1.1 bug
  * where `withReticle` crashed a Next host with `__require.resolve is not a function`.
  *
  * It exercises the PUBLISHED shape (imported via the package's ./next export, ESM): the module loads
  * without a require.resolve crash, the webpack hook points at a loader that is ACTUALLY SHIPPED on
  * disk, and that loader transforms JSX (stamping data-reticle-source) using the bundled babel plugin —
- * NOT the private @reticle/babel-plugin. The old smoke used the private @reticle/next package,
+ * NOT the private @reticlehq/babel-plugin. The old smoke used the private @reticlehq/next package,
  * which is exactly why this slipped through; this imports the umbrella like a real consumer does.
  *
  * Requires the workspace to be built (it imports the built dist). Run via `pnpm test:integration`.
@@ -15,7 +15,7 @@ import { describe, expect, it } from 'vitest';
 import { existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
 // Imported through the package's ./next export — ESM, exactly as a Next host does.
-import { withReticle } from '@reticle/core/next';
+import { withReticle } from '@reticlehq/core/next';
 
 interface LoaderRule {
   use?: { loader?: string }[];
@@ -39,7 +39,7 @@ function reticleLoaderPath(config: MutableConfig): string {
   return loader;
 }
 
-describe('@reticle/core/next — withReticle (ESM smoke)', () => {
+describe('@reticlehq/core/next — withReticle (ESM smoke)', () => {
   it('loads under ESM and returns a config with a webpack hook (no require.resolve crash)', () => {
     expect(typeof withReticle).toBe('function');
   });

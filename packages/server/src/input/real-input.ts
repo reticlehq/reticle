@@ -10,7 +10,7 @@
  * pay for it; the type-only import is elided by `tsc`, so the build stays green without it.
  */
 import type { Browser, Page } from 'playwright';
-import { ActionType, DriveErrorCode, DRIVE_PLAYWRIGHT_MISSING_MSG } from '@reticle/protocol';
+import { ActionType, DriveErrorCode, DRIVE_PLAYWRIGHT_MISSING_MSG } from '@reticlehq/protocol';
 import { installNetworkMocks, type MockRule } from './network-mock.js';
 
 /** Viewport CSS-px box as returned by the INSPECT command (getBoundingClientRect). */
@@ -346,7 +346,7 @@ const launchedChromium: LaunchFn = async (headless) => {
 
 /**
  * Launches and OWNS a Playwright Chromium, navigates it to `driveUrl`, then drives native
- * input on that page. Headless-capable so @reticle/test / CI can run hover/drag unattended.
+ * input on that page. Headless-capable so @reticlehq/test / CI can run hover/drag unattended.
  */
 export class LaunchedRealInputProvider implements OwnedRealInputProvider {
   readonly #driveUrl: string;

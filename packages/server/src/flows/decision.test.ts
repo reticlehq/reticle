@@ -6,7 +6,7 @@ import {
   ReplayStatus,
   type FlowFile,
   type FlowReplayResult,
-} from '@reticle/protocol';
+} from '@reticlehq/protocol';
 import { ReticleTool } from '../tools/tool-names.js';
 import { buildDecision, buildSuiteVerdict } from './decision.js';
 

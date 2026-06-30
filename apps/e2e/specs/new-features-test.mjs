@@ -15,7 +15,7 @@ import {
   ProjectStore,
   AnnotationStore,
   createNodeFileSystem,
-} from '@reticle/server';
+} from '@reticlehq/server';
 import os from 'node:os';
 import path from 'node:path';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));

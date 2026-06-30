@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import type { Server } from 'node:http';
-import { asRunId, ReplayStatus, type FlowReplayResult } from '@reticle/protocol';
+import { asRunId, ReplayStatus, type FlowReplayResult } from '@reticlehq/protocol';
 import { ReticleRunner, type RunnerPort } from './reticle-runner.js';
 import { startVerifyServer, TOKEN_HEADER } from './verify-server.js';
 import { VERIFY_PATH } from './verify-http.js';

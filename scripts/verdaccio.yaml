@@ -1,4 +1,4 @@
-# Local registry config for testing @reticle/* in a real external app without publishing to npm.
+# Local registry config for testing @reticlehq/* in a real external app without publishing to npm.
 storage: /tmp/reticle-verdaccio-storage
 auth:
   htpasswd:
@@ -7,7 +7,7 @@ uplinks:
   npmjs:
     url: https://registry.npmjs.org/
 packages:
-  '@reticle/*':
+  '@reticlehq/*':
     access: $all
     publish: $all
     unpublish: $all

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { EventType, ReticleCommand } from '@reticle/protocol';
+import { EventType, ReticleCommand } from '@reticlehq/protocol';
 import { Bridge } from './bridge.js';
 import { TOOLS, type ToolDeps } from './tools/tools.js';
 import { ReticleTool } from './tools/tool-names.js';

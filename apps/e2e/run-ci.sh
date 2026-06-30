@@ -7,9 +7,9 @@ cd "$ROOT"
 echo "==> starting api (:8787), demo (:4310), next-smoke (:3100)"
 REFLECT_MS=6000 node apps/api/server.mjs > /tmp/e2e-api.log 2>&1 &
 API=$!
-pnpm --filter @reticle/demo dev > /tmp/e2e-demo.log 2>&1 &
+pnpm --filter @reticlehq/demo dev > /tmp/e2e-demo.log 2>&1 &
 DEMO=$!
-pnpm --filter @reticle/next-smoke dev > /tmp/e2e-next.log 2>&1 &
+pnpm --filter @reticlehq/next-smoke dev > /tmp/e2e-next.log 2>&1 &
 NEXT=$!
 cleanup() { kill "$API" "$DEMO" "$NEXT" 2>/dev/null || true; }
 trap cleanup EXIT

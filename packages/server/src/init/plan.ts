@@ -20,7 +20,7 @@ import {
   SVELTEKIT_HOOKS_PATH,
 } from './snippets.js';
 
-const RETICLE_PACKAGE = '@reticle/core';
+const RETICLE_PACKAGE = '@reticlehq/core';
 const MCP_TARGET = 'global (claude user scope)';
 const RETICLE_CONFIG_FILE = '.reticle.json';
 

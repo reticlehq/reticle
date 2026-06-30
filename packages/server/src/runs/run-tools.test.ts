@@ -9,7 +9,7 @@ import {
   RunFramework,
   RunProfile,
   RunTrigger,
-} from '@reticle/protocol';
+} from '@reticlehq/protocol';
 import { ReticleTool } from '../tools/tool-names.js';
 import type { ToolDeps } from '../tools/tools.js';
 import type { SessionManager } from '../session/session.js';

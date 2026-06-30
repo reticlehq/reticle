@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { ActionWarning, ReticleCommand } from '@reticle/protocol';
+import { ActionWarning, ReticleCommand } from '@reticlehq/protocol';
 import { executeAction, executeSequence } from './actions.js';
 import { createCommandRegistry } from '../commands/commands.js';
 import { registerAdapter, type ReticleAdapter } from '../registry/adapters.js';

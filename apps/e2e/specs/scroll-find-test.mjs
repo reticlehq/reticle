@@ -2,7 +2,7 @@
 // the visible window of 500 rows, so a plain reticle_query for an off-screen row finds nothing;
 // reticle_scroll_to must scroll the container until that row mounts, then return it.
 import { chromium } from 'playwright';
-import { start, TOOLS } from '@reticle/server';
+import { start, TOOLS } from '@reticlehq/server';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let pass = 0,
   fail = 0;

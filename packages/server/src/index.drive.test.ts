@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { DriveErrorCode, InputMode, SessionState } from '@reticle/protocol';
-import type { CommandResult } from '@reticle/protocol';
+import { DriveErrorCode, InputMode, SessionState } from '@reticlehq/protocol';
+import type { CommandResult } from '@reticlehq/protocol';
 import { start, type RunningServer } from './index.js';
 import { TOOLS, type ToolDeps } from './tools/tools.js';
 import { ReticleTool } from './tools/tool-names.js';

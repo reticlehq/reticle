@@ -23,7 +23,7 @@ The server resolves `.reticle/` from the working directory it runs in (your proj
 In your app, declare what's testable (see [Step 6 in Getting Started](getting-started.md)):
 
 ```ts
-import { registerCapabilities } from '@reticle/core';
+import { registerCapabilities } from '@reticlehq/core';
 registerCapabilities({
   testids: ['add-task', 'checkout'],
   signals: ['order:saved'],
@@ -146,7 +146,7 @@ With `apply: false` the flow file is **never modified** — you get the proposed
 
 ## Flows are your test suite
 
-`.reticle/` flows can be executed as CI specs — replayed with their `expect`/`success` predicates, skipping `dynamic` regions — via `@reticle/test`'s `flowsAsSpecs`. See [Testing with Reticle](testing.md).
+`.reticle/` flows can be executed as CI specs — replayed with their `expect`/`success` predicates, skipping `dynamic` regions — via `@reticlehq/test`'s `flowsAsSpecs`. See [Testing with Reticle](testing.md).
 
 ## Tool reference
 

@@ -1,5 +1,5 @@
 {
-  "name": "@reticle/e2e",
+  "name": "@reticlehq/e2e",
   "version": "0.2.2",
   "private": true,
   "type": "module",
@@ -9,8 +9,8 @@
     "e2e:ci": "bash run-ci.sh"
   },
   "dependencies": {
-    "@reticle/server": "workspace:*",
-    "@reticle/test": "workspace:*",
+    "@reticlehq/server": "workspace:*",
+    "@reticlehq/test": "workspace:*",
     "playwright": "^1.48.0"
   }
 }

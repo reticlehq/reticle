@@ -4,7 +4,7 @@ import {
   EventType,
   type ElementQuery,
   type ReticleEvent,
-} from '@reticle/protocol';
+} from '@reticlehq/protocol';
 import { z } from 'zod';
 
 export type Predicate =

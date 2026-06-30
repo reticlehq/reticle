@@ -1,5 +1,5 @@
 {
-  "name": "@reticle/next",
+  "name": "@reticlehq/next",
   "version": "1.2.0",
   "private": true,
   "description": "Next.js helper for Reticle: keeps SWC, adds source-file mapping via a dev-only webpack pre-loader (data-reticle-source).",
@@ -34,7 +34,7 @@
   ],
   "dependencies": {
     "@babel/core": "^7.26.0",
-    "@reticle/babel-plugin": "workspace:*"
+    "@reticlehq/babel-plugin": "workspace:*"
   },
   "peerDependencies": {
     "next": ">=13"

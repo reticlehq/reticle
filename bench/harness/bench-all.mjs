@@ -87,7 +87,7 @@ async function bootFixtures() {
   spawnFixture(
     'demo',
     'pnpm',
-    ['--filter', '@reticle/demo', 'exec', 'vite', '--port', DEMO_PORT, '--strictPort'],
+    ['--filter', '@reticlehq/demo', 'exec', 'vite', '--port', DEMO_PORT, '--strictPort'],
     { RETICLE_PORT },
   );
   const [apiUp, demoUp] = await Promise.all([

@@ -11,7 +11,7 @@ import {
   type ComponentStateResult,
   type ElementQuery,
   type ElementState,
-} from '@reticle/protocol';
+} from '@reticlehq/protocol';
 import { buildSnapshot } from '../dom/snapshot.js';
 import { matchQuery, runQuery } from '../dom/query.js';
 import {

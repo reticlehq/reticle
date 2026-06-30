@@ -15,7 +15,7 @@ import {
   RunProfile,
   RunTrigger,
   type ReticleVerificationRun,
-} from '@reticle/protocol';
+} from '@reticlehq/protocol';
 import type { ReticleRunner, VerifyOptions } from './reticle-runner.js';
 
 /** The POST route a partner pipeline calls to get a verdict. */

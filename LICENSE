@@ -7,15 +7,15 @@ license that applies depends on the package. Each package contains its own
 LICENSE file, which is authoritative.
 
 1. Apache License, Version 2.0 — the embeddable SDK
-   Packages: @reticle/protocol, @reticle/browser, @reticle/react,
-   @reticle/babel-plugin, @reticle/next, @reticle/vite-plugin,
-   @reticle/eslint-plugin
+   Packages: @reticlehq/protocol, @reticlehq/browser, @reticlehq/react,
+   @reticlehq/babel-plugin, @reticlehq/next, @reticlehq/vite-plugin,
+   @reticlehq/eslint-plugin
    These run inside / compile into your application. Use them anywhere,
    including in apps you ship to your own customers. See the LICENSE and
    NOTICE files in each package.
 
 2. Functional Source License, Version 1.1, Apache 2.0 future (FSL-1.1-ALv2)
-   Packages: @reticle/server, @reticle/test, @reticle/core (umbrella)
+   Packages: @reticlehq/server, @reticlehq/test, @reticlehq/core (umbrella)
    Free for any Permitted Purpose (internal use, development, evaluation,
    non-commercial research/education, professional services). The one
    restriction is a Competing Use — offering Reticle itself as a competing

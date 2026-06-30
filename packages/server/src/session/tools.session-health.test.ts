@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { SessionState, UNSCRIPTABLE_TAB_RECOMMENDATION } from '@reticle/protocol';
-import type { CommandResult } from '@reticle/protocol';
+import { SessionState, UNSCRIPTABLE_TAB_RECOMMENDATION } from '@reticlehq/protocol';
+import type { CommandResult } from '@reticlehq/protocol';
 import { TOOLS, type ToolDeps } from '../tools/tools.js';
 import { ReticleTool } from '../tools/tool-names.js';
 import { BaselineStore } from '../project/baselines.js';

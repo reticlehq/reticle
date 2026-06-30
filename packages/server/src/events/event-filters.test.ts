@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { EventType, type ReticleEvent } from '@reticle/protocol';
+import { EventType, type ReticleEvent } from '@reticlehq/protocol';
 import {
   consoleEmptyHint,
   netEmptyHint,

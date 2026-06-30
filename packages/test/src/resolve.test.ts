@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { ReticleTool } from '@reticle/server';
-import { QueryBy } from '@reticle/protocol';
+import { ReticleTool } from '@reticlehq/server';
+import { QueryBy } from '@reticlehq/protocol';
 import { resolveTestid } from './resolve.js';
 import { ReticleQueryEmptyError } from './skip.js';
 import { NO_ELEMENT_FOR_TESTID } from './constants.js';
-import type { ToolInvoker } from '@reticle/server';
+import type { ToolInvoker } from '@reticlehq/server';
 
 /** A fake invoker scripted per tool name; records every call for assertion. */
 function fakeInvoker(handlers: Record<string, (args: Record<string, unknown>) => unknown>): {

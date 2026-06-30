@@ -1,4 +1,4 @@
-import { VISUAL_PIXEL_THRESHOLD } from '@reticle/protocol';
+import { VISUAL_PIXEL_THRESHOLD } from '@reticlehq/protocol';
 
 /** A rectangle in image pixel space — a mask to ignore, or the bounding box of what changed. */
 export interface VisualRect {

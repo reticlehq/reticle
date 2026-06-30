@@ -3,7 +3,7 @@
  * reticle_console, reticle_animations. Split out of tools.ts; assembled back via ...OBSERVE_TOOLS.
  */
 import { z } from 'zod';
-import { ReticleCommand } from '@reticle/protocol';
+import { ReticleCommand } from '@reticlehq/protocol';
 import { ReticleTool } from './tool-names.js';
 import { buildReactionReport } from '../events/reaction.js';
 import { evaluatePredicate, waitForPredicate, PredicateSchema } from '../events/predicate.js';

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { toJUnitXml, writeJUnit } from './junit.js';
 import { TestStatus } from './constants.js';
-import type { FileSystemPort } from '@reticle/server';
+import type { FileSystemPort } from '@reticlehq/server';
 import type { SpecResult } from './types.js';
 
 const mixed: SpecResult[] = [

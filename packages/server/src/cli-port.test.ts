@@ -3,7 +3,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { readProjectId, readProjectPort, resolvePort } from './cli-port.js';
-import { RETICLE_DEFAULT_PORT } from '@reticle/protocol';
+import { RETICLE_DEFAULT_PORT } from '@reticlehq/protocol';
 
 // ─── readProjectPort ─────────────────────────────────────────────────────────
 

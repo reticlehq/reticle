@@ -1,6 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { isToonable, resultToToon } from '@reticle/protocol';
+import { isToonable, resultToToon } from '@reticlehq/protocol';
 import { TOOLS, type ToolDeps } from './tools/tools.js';
 import { filterTools, TOOL_PROFILE, type ToolProfile } from './tools/profiles.js';
 import { buildDynamicTools } from './tools/dynamic-tools.js';
@@ -60,7 +60,7 @@ export function encodeResult(result: unknown, encoding: string): string {
 /**
  * Bridge type that erases the MCP SDK's complex generic pairing between outputSchema and handler
  * return type. Reticle exposes tool output as text content (for backwards-compatible MCP clients) AND
- * as structuredContent (for schema-aware clients like @reticle/cli). The SDK generics are correct at
+ * as structuredContent (for schema-aware clients like @reticlehq/cli). The SDK generics are correct at
  * the protocol level; we break the link here intentionally so we can register all tools
  * dynamically from a ToolDef array without a generic per-tool call site.
  */

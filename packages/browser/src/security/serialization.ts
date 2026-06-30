@@ -1,4 +1,4 @@
-import { REDACTED_VALUE, TRANSPORT_LIMITS } from '@reticle/protocol';
+import { REDACTED_VALUE, TRANSPORT_LIMITS } from '@reticlehq/protocol';
 
 const TRUNCATED_VALUE = '[TRUNCATED]';
 const UNSERIALIZABLE_VALUE = '[UNSERIALIZABLE]';

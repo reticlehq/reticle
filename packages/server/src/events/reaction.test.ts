@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { EventType, type ReticleEvent } from '@reticle/protocol';
+import { EventType, type ReticleEvent } from '@reticlehq/protocol';
 import { buildReactionReport, summarizeReaction } from './reaction.js';
 
 function ev(type: EventType, data: Record<string, unknown> = {}): ReticleEvent {

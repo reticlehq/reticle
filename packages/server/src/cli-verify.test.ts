@@ -6,7 +6,7 @@ import {
   RunProfile,
   RunTrigger,
   type ReticleVerificationRun,
-} from '@reticle/protocol';
+} from '@reticlehq/protocol';
 import { buildVerificationRun, type VerificationRunInput } from './runs/build-verification-run.js';
 import { runVerify, urlParts, type VerifyConnection, type VerifyPorts } from './cli-verify.js';
 

@@ -12,7 +12,7 @@
 /** The recovery hints, named so they are not free strings and can be asserted in tests. */
 export const RECOVERY = {
   NO_SESSION:
-    'No app is connected to Reticle. Ask the human to start their app in dev with @reticle/browser ' +
+    'No app is connected to Reticle. Ask the human to start their app in dev with @reticlehq/browser ' +
     'enabled, then run `reticle status` to confirm a session appears. If the app is running but no ' +
     'session shows, the SDK is not reaching the bridge — check the dev server is up and using the ' +
     'configured Reticle port.',
@@ -32,7 +32,7 @@ export const RECOVERY = {
     'stopping, or saving it.',
   TOKEN_REQUIRED:
     'The bridge binds beyond localhost and requires a pairing token. Set the same token in the SDK ' +
-    'init (@reticle/core) and the Reticle server config, then reconnect.',
+    'init (@reticlehq/core) and the Reticle server config, then reconnect.',
 } as const;
 
 /** Ordered match rules; the first hit wins. Substrings track the thrown messages they recover. */

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PresenterTone, SessionState } from '@reticle/protocol';
+import { PresenterTone, SessionState } from '@reticlehq/protocol';
 import { buildPresenterArgs } from './presenter-args.js';
 
 describe('buildPresenterArgs', () => {

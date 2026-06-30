@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { FlowExpect } from '@reticle/protocol';
-import type { EvalResult, FlowReplaySession, Predicate, WaitForSignal } from '@reticle/server';
+import type { FlowExpect } from '@reticlehq/protocol';
+import type { EvalResult, FlowReplaySession, Predicate, WaitForSignal } from '@reticlehq/server';
 import { assertSuccess, successToPredicate } from './success-assert.js';
 
 /** A no-op session — assertSuccess delegates all evaluation to the injected waitForSignal. */

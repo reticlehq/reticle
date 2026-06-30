@@ -1,6 +1,6 @@
-import { reticle, SESSION_AUTO } from '@reticle/browser';
-import { install as installReactAdapter } from '@reticle/react';
-import { registerCapabilities, registerStore } from '@reticle/browser';
+import { reticle, SESSION_AUTO } from '@reticlehq/browser';
+import { install as installReactAdapter } from '@reticlehq/react';
+import { registerCapabilities, registerStore } from '@reticlehq/browser';
 import { Sig } from './lib/reticle-bridge.js';
 import { useApp } from './store/store.js';
 

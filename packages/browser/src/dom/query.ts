@@ -15,7 +15,7 @@ import {
   type PresentRegion,
   type QueryEmptyHint,
   type QueryResult,
-} from '@reticle/protocol';
+} from '@reticlehq/protocol';
 import { describe, getStates } from './a11y.js';
 import { getCapabilities } from '../registry/capabilities.js';
 import { identifyComponent } from '../registry/adapters.js';

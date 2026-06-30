@@ -8,9 +8,9 @@ import {
   type CommandResult,
   type FlowFile,
   type ReticleEvent,
-} from '@reticle/protocol';
-import type { Clock, EvalResult, FileSystemPort } from '@reticle/server';
-import { FlowStore } from '@reticle/server';
+} from '@reticlehq/protocol';
+import type { Clock, EvalResult, FileSystemPort } from '@reticlehq/server';
+import { FlowStore } from '@reticlehq/server';
 import { SpecKind, SpecMessage, SpecOutcome } from './constants.js';
 import { flowToSpec, flowsAsSpecs } from './flow-spec.js';
 

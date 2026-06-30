@@ -11,7 +11,7 @@
 
 <a href="https://reticle.ai/reticle"><img src="assets/readme/demo-montage.webp" alt="Reticle in action, an AI agent verifying a real running app from the inside: pass/fail verdicts with evidence, the file:line to fix, and a regression caught before it shipped" width="840" /></a>
 
-[![npm](https://img.shields.io/npm/v/@reticle/core?color=8b7bff&labelColor=15131f&logo=npm)](https://www.npmjs.com/package/@reticle/core) [![downloads](https://img.shields.io/npm/dm/@reticle/core?color=5fd9f5&labelColor=15131f)](https://www.npmjs.com/package/@reticle/core) [![stars](https://img.shields.io/github/stars/reticlehq/reticle?color=ff9f87&labelColor=15131f&logo=github)](https://github.com/reticlehq/reticle/stargazers) [![forks](https://img.shields.io/github/forks/reticlehq/reticle?color=a594ff&labelColor=15131f&logo=github)](https://github.com/reticlehq/reticle/network/members) [![license](https://img.shields.io/badge/license-Apache--2.0%20%2B%20FSL-46d6a0?labelColor=15131f)](LICENSE) [![types](https://img.shields.io/npm/types/@reticle/core?color=5fd9f5&labelColor=15131f)](https://www.npmjs.com/package/@reticle/core)
+[![npm](https://img.shields.io/npm/v/@reticlehq/core?color=8b7bff&labelColor=15131f&logo=npm)](https://www.npmjs.com/package/@reticlehq/core) [![downloads](https://img.shields.io/npm/dm/@reticlehq/core?color=5fd9f5&labelColor=15131f)](https://www.npmjs.com/package/@reticlehq/core) [![stars](https://img.shields.io/github/stars/reticlehq/reticle?color=ff9f87&labelColor=15131f&logo=github)](https://github.com/reticlehq/reticle/stargazers) [![forks](https://img.shields.io/github/forks/reticlehq/reticle?color=a594ff&labelColor=15131f&logo=github)](https://github.com/reticlehq/reticle/network/members) [![license](https://img.shields.io/badge/license-Apache--2.0%20%2B%20FSL-46d6a0?labelColor=15131f)](LICENSE) [![types](https://img.shields.io/npm/types/@reticlehq/core?color=5fd9f5&labelColor=15131f)](https://www.npmjs.com/package/@reticlehq/core)
 
 </div>
 
@@ -61,7 +61,7 @@ That's it. The skill auto-detects whether Reticle is already set up, runs the wi
 **Or via CLI:**
 
 ```bash
-npx @reticle/core init
+npx @reticlehq/core init
 ```
 
 Registers the MCP server for every agent you have in one shot. → [More install options](#install-the-full-options)
@@ -69,7 +69,7 @@ Registers the MCP server for every agent you have in one shot. → [More install
 **Or register the MCP server directly in Claude Code:**
 
 ```bash
-claude mcp add reticle -s user -- npx @reticle/core mcp
+claude mcp add reticle -s user -- npx @reticlehq/core mcp
 ```
 
 Then **restart Claude Code** (or run `/mcp` to refresh) so it picks up the server.
@@ -320,30 +320,30 @@ Then type `/reticle`, setup on first use, test the app on every use after.
 **1. Install** (one package re-exports the whole graph, SDK, React adapter, source-mapping plugins, spec runner):
 
 ```bash
-npm i -D @reticle/core        # or pnpm / yarn / bun
+npm i -D @reticlehq/core        # or pnpm / yarn / bun
 ```
 
-**2. Register the MCP server** with your agent, `npx @reticle/core` _is_ the server:
+**2. Register the MCP server** with your agent, `npx @reticlehq/core` _is_ the server:
 
 ```bash
 # Claude Code — add it, then restart Claude Code
-claude mcp add reticle -s user -- npx @reticle/core mcp
+claude mcp add reticle -s user -- npx @reticlehq/core mcp
 ```
 
 Or register it by hand:
 
 ```jsonc
 // Claude Code, .mcp.json
-{ "mcpServers": { "reticle": { "command": "npx", "args": ["@reticle/core", "mcp"] } } }
+{ "mcpServers": { "reticle": { "command": "npx", "args": ["@reticlehq/core", "mcp"] } } }
 ```
 
 **3. Connect the dev-only SDK** from your app's entry point (the SDK is tree-shaken out of production):
 
 ```ts
 // main.tsx / your dev entry, dev only
-import { reticle } from '@reticle/core';
+import { reticle } from '@reticlehq/core';
 if (import.meta.env.DEV) reticle.connect({ session: 'my-app' });
-// React? add `import { install } from "@reticle/core"; install()` before connect for component → file:line.
+// React? add `import { install } from "@reticlehq/core"; install()` before connect for component → file:line.
 ```
 
 **4.** Tell your agent to verify. Full walkthrough → [Getting Started](docs/getting-started.md).
@@ -363,15 +363,15 @@ if (import.meta.env.DEV) reticle.connect({ session: 'my-app' });
 
 ## What's inside
 
-A pnpm + turbo monorepo. One umbrella package (`@reticle/core`) re-exports everything:
+A pnpm + turbo monorepo. One umbrella package (`@reticlehq/core`) re-exports everything:
 
 | Package | Role |
 | --- | --- |
-| `@reticle/protocol` | the wire contract (zod schemas, constants) |
-| `@reticle/browser` | the dev-only instrumentation SDK (DOM/network/console/state observers) |
-| `@reticle/server` | the bridge + MCP server + the `reticle` CLI |
-| `@reticle/react` | React adapter, DOM ref → component → source `file:line` |
-| `@reticle/babel-plugin` / `@reticle/next` | stamp source coordinates (React 19 / Next.js) |
+| `@reticlehq/protocol` | the wire contract (zod schemas, constants) |
+| `@reticlehq/browser` | the dev-only instrumentation SDK (DOM/network/console/state observers) |
+| `@reticlehq/server` | the bridge + MCP server + the `reticle` CLI |
+| `@reticlehq/react` | React adapter, DOM ref → component → source `file:line` |
+| `@reticlehq/babel-plugin` / `@reticlehq/next` | stamp source coordinates (React 19 / Next.js) |
 
 ## Status & safety
 
@@ -405,8 +405,8 @@ New here? Open an issue, pick one up, or send a PR. See [CONTRIBUTING.md](CONTRI
 
 Reticle uses a per-package license model so it is safe to embed in your own app and fair to build a business on. Each package's `LICENSE` file is authoritative; see the root [LICENSE](LICENSE) for the full breakdown.
 
-- **Embedded in your app, Apache-2.0.** `@reticle/browser`, `-protocol`, `-react`, `-babel-plugin`, `-next`, `-vite-plugin`, `-eslint-plugin` run inside / compile into your application. Use them anywhere, including in the apps you ship to your own customers. No copyleft; explicit patent grant.
-- **Server / CLI / MCP, FSL-1.1-ALv2.** `@reticle/server` (and `@reticle/test`, the `@reticle/core` umbrella) are free for any use except offering Reticle itself as a competing hosted service; each release converts to Apache-2.0 after two years.
+- **Embedded in your app, Apache-2.0.** `@reticlehq/browser`, `-protocol`, `-react`, `-babel-plugin`, `-next`, `-vite-plugin`, `-eslint-plugin` run inside / compile into your application. Use them anywhere, including in the apps you ship to your own customers. No copyleft; explicit patent grant.
+- **Server / CLI / MCP, FSL-1.1-ALv2.** `@reticlehq/server` (and `@reticlehq/test`, the `@reticlehq/core` umbrella) are free for any use except offering Reticle itself as a competing hosted service; each release converts to Apache-2.0 after two years.
 - **Enterprise features, the Reticle Enterprise License.** Source-available under `packages/server/src/ee/`; free for development and evaluation, a subscription license key is required in production.
 
 OEM, embedding, or commercial licensing questions: **hey@reticle.ai**

@@ -5,7 +5,7 @@
  * without a circular import — `tools.ts` assembles the groups and re-exports `ToolDef`/`ToolDeps`.
  */
 import { z } from 'zod';
-import { ReticleCommand, SnapshotMode } from '@reticle/protocol';
+import { ReticleCommand, SnapshotMode } from '@reticlehq/protocol';
 import type { SessionManager } from '../session/session.js';
 import type { RealInputProvider } from '../input/real-input.js';
 import type { BaselineStore } from '../project/baselines.js';
@@ -45,7 +45,7 @@ export interface ToolDef {
   inputSchema: z.ZodRawShape;
   /**
    * JSON Schema-compatible output schema for this tool. When present, the MCP server advertises it
-   * in the tools/list response so schema-aware clients (like @reticle/cli) can validate outputs and
+   * in the tools/list response so schema-aware clients (like @reticlehq/cli) can validate outputs and
    * compose tool calls safely. Also drives TOON encoding for snapshot/query results.
    */
   outputSchema?: z.ZodRawShape;

@@ -9,7 +9,7 @@ interface PluginApi {
 
 /**
  * Stamps `data-reticle-source="relativeFile:line:col"` on every JSX host element (lowercase
- * tag). @reticle/react reads it to map a DOM node back to its source — needed on React 19,
+ * tag). @reticlehq/react reads it to map a DOM node back to its source — needed on React 19,
  * which removed `_debugSource`. Intended for dev builds only.
  */
 export default function reticleSourcePlugin({ types: t }: PluginApi): PluginObj<PluginPass> {

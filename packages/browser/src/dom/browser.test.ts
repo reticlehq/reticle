@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { ElementState, SnapshotMode } from '@reticle/protocol';
+import { ElementState, SnapshotMode } from '@reticlehq/protocol';
 import { getAccessibleName, getRole, getStates } from './a11y.js';
 import { buildSnapshot } from './snapshot.js';
 import { matchQuery, runQuery } from './query.js';

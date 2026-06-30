@@ -16,7 +16,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { spawn } from 'node:child_process';
 import { chromium } from 'playwright';
-import { start } from '@reticle/server';
+import { start } from '@reticlehq/server';
 
 const ROOT = process.cwd();
 const BRIDGE_PORT = 4400;
@@ -104,22 +104,22 @@ async function assertConnects(pkg: string, port: number): Promise<void> {
 describe('Reticle connects in each React framework', () => {
   it(
     'Vite + React (reticle() plugin)',
-    () => assertConnects('@reticle/example-react', 5301),
+    () => assertConnects('@reticlehq/example-react', 5301),
     120_000,
   );
   it(
     'Next.js App Router (withReticle + client connect)',
-    () => assertConnects('@reticle/example-next', 5302),
+    () => assertConnects('@reticlehq/example-next', 5302),
     150_000,
   );
   it(
     'React Router 7 / Remix (client connect)',
-    () => assertConnects('@reticle/example-remix', 5303),
+    () => assertConnects('@reticlehq/example-remix', 5303),
     120_000,
   );
   it(
     'Astro + React (client script)',
-    () => assertConnects('@reticle/example-astro', 5304),
+    () => assertConnects('@reticlehq/example-astro', 5304),
     120_000,
   );
 });

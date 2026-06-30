@@ -101,7 +101,9 @@ describe('detect package manager', () => {
 
 describe('installCommand', () => {
   it('renders the dev-install command per manager', () => {
-    expect(installCommand(PackageManager.PNPM, '@reticle/core')).toBe('pnpm add -D @reticle/core');
-    expect(installCommand(PackageManager.NPM, '@reticle/core')).toBe('npm i -D @reticle/core');
+    expect(installCommand(PackageManager.PNPM, '@reticlehq/core')).toBe(
+      'pnpm add -D @reticlehq/core',
+    );
+    expect(installCommand(PackageManager.NPM, '@reticlehq/core')).toBe('npm i -D @reticlehq/core');
   });
 });

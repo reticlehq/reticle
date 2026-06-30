@@ -29,7 +29,7 @@ artifacts/                charts + diagrams (SVG + PNG) + screens/ (real PNGs + 
 
 - Node v22+, pnpm, `python3` with `tiktoken` (proxy tokenizer; harness degrades gracefully without it).
 - Playwright Chromium installed (`pnpm exec playwright install chromium`), local Chrome (DevTools MCP).
-- `@reticle/server` built: `pnpm build` (the harness runs `node packages/server/dist/cli.js mcp`).
+- `@reticlehq/server` built: `pnpm build` (the harness runs `node packages/server/dist/cli.js mcp`).
 
 ## Run it
 
@@ -40,7 +40,7 @@ To run the fixtures + harness scripts by hand instead (e.g. for the manual obser
 ```bash
 # 1. backend + a dedicated demo whose embedded Reticle SDK dials port 4455
 node apps/api/server.mjs &
-RETICLE_PORT=4455 pnpm --filter @reticle/demo exec vite --port 4312 --strictPort &
+RETICLE_PORT=4455 pnpm --filter @reticlehq/demo exec vite --port 4312 --strictPort &
 
 # 2. (scenario 9 only) add the hanging endpoint to apps/api/server.mjs before /api/health,
 #    then restart the api. This is the ONLY source change the benchmark needs in the app:
@@ -74,7 +74,7 @@ pnpm bench:gate       # compare the fresh raws vs the last history.jsonl row; fa
 
 ## Pinned versions (from raw/run-meta.json)
 
-`@playwright/mcp@0.0.76`, `chrome-devtools-mcp@1.3.0`, `@reticle/server@0.8.0`, Node v22.14.0, Playwright `chromium-1223`, host Darwin arm64.
+`@playwright/mcp@0.0.76`, `chrome-devtools-mcp@1.3.0`, `@reticlehq/server@0.8.0`, Node v22.14.0, Playwright `chromium-1223`, host Darwin arm64.
 
 ## What is and isn't measured
 

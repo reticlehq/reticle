@@ -1,4 +1,4 @@
-import { PresenterMode } from '@reticle/protocol';
+import { PresenterMode } from '@reticlehq/protocol';
 import { nativeSetTimeout, nativeClearTimeout } from '../timers/native-timers.js';
 import {
   GlowPhase,

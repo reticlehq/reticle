@@ -1,6 +1,6 @@
 'use client';
 import { useState, useRef } from 'react';
-import { reticle } from '@reticle/browser';
+import { reticle } from '@reticlehq/browser';
 
 export default function Page() {
   const [loading, setLoading] = useState(false);

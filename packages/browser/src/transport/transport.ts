@@ -5,7 +5,7 @@ import {
   type CommandMessage,
   type HelloMessage,
   type ReticleEvent,
-} from '@reticle/protocol';
+} from '@reticlehq/protocol';
 import { nativeSetTimeout, nativeNow } from '../timers/native-timers.js';
 import { safeStringify } from '../security/serialization.js';
 

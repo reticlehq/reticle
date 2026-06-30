@@ -1,4 +1,4 @@
-import type { ReticleEvent } from '@reticle/protocol';
+import type { ReticleEvent } from '@reticlehq/protocol';
 
 /**
  * A self-budgeting hint returned on event-bearing tool results so the agent can decide whether to

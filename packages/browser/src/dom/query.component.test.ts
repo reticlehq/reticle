@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { QueryBy } from '@reticle/protocol';
+import { QueryBy } from '@reticlehq/protocol';
 import { matchQuery } from './query.js';
 import { registerAdapter, type ComponentInfo } from '../registry/adapters.js';
 

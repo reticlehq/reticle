@@ -1,6 +1,6 @@
-// '@reticle/core/next' → the Next.js dev-only source-mapping wrapper.
+// '@reticlehq/core/next' → the Next.js dev-only source-mapping wrapper.
 //
-// This is a SELF-CONTAINED ESM implementation (not a re-export of the CJS @reticle/next package),
+// This is a SELF-CONTAINED ESM implementation (not a re-export of the CJS @reticlehq/next package),
 // because the umbrella publishes ESM under "type":"module". The webpack pre-loader must live as a real
 // file on disk (webpack requires it in a worker), so it ships as dist/loader.cjs and we resolve its
 // path via import.meta.url — NOT require.resolve, which is undefined when Next loads next.config.ts as
@@ -26,7 +26,7 @@ interface NextConfigLike {
  * Wrap your Next config to stamp `data-reticle-source` on JSX in dev (so reticle_inspect maps DOM → file:line)
  * without disabling SWC. Production builds are untouched. Usage:
  *
- *   import { withReticle } from '@reticle/core/next';
+ *   import { withReticle } from '@reticlehq/core/next';
  *   export default withReticle(nextConfig);
  */
 export function withReticle(nextConfig: NextConfigLike = {}): NextConfigLike {

@@ -10,7 +10,7 @@ Your app, in dev, embeds a tiny **SDK** that instruments the page (DOM, network,
 
 ```
 ┌─────────────────┐     MCP (stdio/SSE)     ┌──────────────────────────┐     WebSocket      ┌────────────────────┐
-│   AI agent      │ ──────────────────────► │   @reticle/server     │ ◄────────────────► │  @reticle/browser│
+│   AI agent      │ ──────────────────────► │   @reticlehq/server     │ ◄────────────────► │  @reticlehq/browser│
 │ (Claude Code,   │   reticle_query/act/...    │   bridge + MCP + CLI      │   commands/events  │  (SDK in your app)  │
 │  Cursor, ...)   │ ◄────────────────────── │   (Node)                 │                    │   (the DOM)         │
 └─────────────────┘     tool results        └──────────────────────────┘                    └────────────────────┘
@@ -26,14 +26,14 @@ Reticle is a pnpm + Turborepo monorepo. The split is not cosmetic — each bound
 
 | Package | Runs in | Responsibility | Hard rule |
 | --- | --- | --- | --- |
-| `@reticle/protocol` | both | The **wire contract**: every constant + zod schema crossing any boundary | Depends on nothing |
-| `@reticle/browser` | the browser | Instrument the page; execute commands; emit events | Never imports Node APIs |
-| `@reticle/server` | Node | The bridge, the MCP server, the `reticle` CLI, flow/run storage | Never imports DOM APIs |
-| `@reticle/react` | the browser | Optional: map a DOM node → React component → source `file:line` | Core works without it |
-| `@reticle/babel-plugin`, `@reticle/next` | build time | Stamp `data-reticle-source` for source mapping | Plain tooling |
-| `@reticle/core` | — | The single published package; re-exports the above under subpaths | — |
+| `@reticlehq/protocol` | both | The **wire contract**: every constant + zod schema crossing any boundary | Depends on nothing |
+| `@reticlehq/browser` | the browser | Instrument the page; execute commands; emit events | Never imports Node APIs |
+| `@reticlehq/server` | Node | The bridge, the MCP server, the `reticle` CLI, flow/run storage | Never imports DOM APIs |
+| `@reticlehq/react` | the browser | Optional: map a DOM node → React component → source `file:line` | Core works without it |
+| `@reticlehq/babel-plugin`, `@reticlehq/next` | build time | Stamp `data-reticle-source` for source mapping | Plain tooling |
+| `@reticlehq/core` | — | The single published package; re-exports the above under subpaths | — |
 
-**Why protocol-as-contract matters:** because the browser and the server are two different runtimes (a DOM and a Node process) that must agree exactly on every message, the temptation is to inline a string like `"net.request"` in both. That's how drift and silent breakage start. Instead, every such string and shape lives once in `@reticle/protocol` as a named constant + a zod schema. The browser and server both import it; neither can invent a message the other doesn't understand. The server zod-parses **every** inbound WebSocket message — malformed input closes the socket rather than flowing into logic.
+**Why protocol-as-contract matters:** because the browser and the server are two different runtimes (a DOM and a Node process) that must agree exactly on every message, the temptation is to inline a string like `"net.request"` in both. That's how drift and silent breakage start. Instead, every such string and shape lives once in `@reticlehq/protocol` as a named constant + a zod schema. The browser and server both import it; neither can invent a message the other doesn't understand. The server zod-parses **every** inbound WebSocket message — malformed input closes the socket rather than flowing into logic.
 
 ---
 

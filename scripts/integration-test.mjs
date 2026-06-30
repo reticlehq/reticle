@@ -19,7 +19,7 @@
  *
  * Prerequisites:
  *   pnpm build
- *   RETICLE_PORT=58432 pnpm --filter @reticle/demo dev   (in a separate terminal)
+ *   RETICLE_PORT=58432 pnpm --filter @reticlehq/demo dev   (in a separate terminal)
  *   Open http://localhost:<demo-port> in a real browser
  *
  * Usage:
@@ -303,7 +303,7 @@ async function main() {
   if (!(await probeTcp(RETICLE_PORT))) {
     fail(
       'Daemon',
-      `nothing on port ${RETICLE_PORT} — start with: RETICLE_PORT=${RETICLE_PORT} pnpm --filter @reticle/demo dev`,
+      `nothing on port ${RETICLE_PORT} — start with: RETICLE_PORT=${RETICLE_PORT} pnpm --filter @reticlehq/demo dev`,
     );
     process.exit(1);
   }
@@ -328,7 +328,7 @@ async function main() {
   if (!demoUrl) {
     warn('No existing browser session — cannot infer demo URL');
     warn('Start the demo and open it in a real browser:');
-    warn(`  RETICLE_PORT=${RETICLE_PORT} pnpm --filter @reticle/demo dev`);
+    warn(`  RETICLE_PORT=${RETICLE_PORT} pnpm --filter @reticlehq/demo dev`);
     warn('Then open http://localhost:<port> in Chrome, then re-run this test.');
     warn('Skipping browser-based scenarios (8 and 9 only will run).');
   } else {

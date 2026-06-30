@@ -1,6 +1,6 @@
 import * as http from 'node:http';
 import * as net from 'node:net';
-import { LOOPBACK_HOST } from '@reticle/protocol';
+import { LOOPBACK_HOST } from '@reticlehq/protocol';
 import { MCP_SSE_PATH } from './http-server.js';
 import { log } from './log.js';
 

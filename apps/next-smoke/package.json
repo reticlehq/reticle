@@ -1,5 +1,5 @@
 {
-  "name": "@reticle/next-smoke",
+  "name": "@reticlehq/next-smoke",
   "version": "0.0.0",
   "private": true,
   "description": "A real Next.js (app router, React 19) app to smoke-test Reticle on Next.",
@@ -12,9 +12,9 @@
     "react-dom": "^19.0.0"
   },
   "devDependencies": {
-    "@reticle/browser": "workspace:*",
-    "@reticle/next": "workspace:*",
-    "@reticle/react": "workspace:*",
+    "@reticlehq/browser": "workspace:*",
+    "@reticlehq/next": "workspace:*",
+    "@reticlehq/react": "workspace:*",
     "@types/node": "^22.10.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",

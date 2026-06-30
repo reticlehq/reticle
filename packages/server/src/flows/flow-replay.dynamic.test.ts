@@ -8,7 +8,7 @@ import {
   type ElementDescriptor,
   type FlowFile,
   type FlowStep,
-} from '@reticle/protocol';
+} from '@reticlehq/protocol';
 import { replayFlow, type FlowReplaySession } from './flow-replay.js';
 import { waitForPredicate } from '../events/predicate.js';
 import { asString } from '../tools/tools-helpers.js';

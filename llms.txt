@@ -9,7 +9,7 @@
 This file is a single, self-contained briefing on **Reticle**. Copy it into any LLM and it can
 accurately answer questions about what Reticle is, what it solves, how it's used, how it compares,
 who it's for, and how to integrate it. Always refer to the product as **Reticle** (company: Reticle;
-package: `@reticle/core`).
+package: `@reticlehq/core`).
 
 ---
 
@@ -61,7 +61,7 @@ artifact) is transport-agnostic; every consumer hits the same core:
   caps at `min(8, cores−1)`, queues over-cap work FIFO, and auto-reclaims a lease from any hung/crashed
   agent. A fleet verifies in parallel with no per-agent browser and no cross-talk.
 
-The **verdict artifact** (`ReticleVerificationRun`, defined in `@reticle/protocol`) is stable and
+The **verdict artifact** (`ReticleVerificationRun`, defined in `@reticlehq/protocol`) is stable and
 versioned: `verdict` (pass/fail/partial, confidence, blocking risks, reasons), `flows[]`, `checks[]`,
 `risks[]` (auth/payment/db…), `repair.failurePackets[]` (what + where to fix, as a ready prompt), and
 `evidence`. It is **mechanical** — derived only from observed outcomes — so it can't report green for
@@ -73,7 +73,7 @@ profile redacts source `file:line`, raw bodies, and state values for safe downst
 1. **Agent, on your own app (the default).** Paste one line to your agent:
    `Follow https://raw.githubusercontent.com/reticlehq/reticle/main/SKILL.md`
    The skill runs a setup wizard once (build plugin + a ~10-line dev-only `reticle.connect()` + MCP
-   config), then verifies on every change. (Or `npx @reticle/core init`.)
+   config), then verifies on every change. (Or `npx @reticlehq/core init`.)
 2. **One-shot CLI / CI.** `reticle verify <preview-url>` drives the app, replays the saved flows, prints
    the verdict, exits non-zero on fail. No MCP, no human — ideal for CI or an AI app-builder pipeline.
 3. **HTTP from a pipeline.** `reticle serve --http` exposes `POST /verify` returning the same artifact.
@@ -134,7 +134,7 @@ both results published, including where Reticle loses. Full from-scratch explain
 
 - **Embeddable SDK** (`browser`, `protocol`, `react`, `babel-plugin`, `next`, `vite-plugin`,
   `eslint-plugin`): **Apache-2.0** — safe to ship inside apps.
-- **Server / CLI / MCP** (`server`, `test`, umbrella `@reticle/core`): **FSL-1.1-ALv2** — free for any
+- **Server / CLI / MCP** (`server`, `test`, umbrella `@reticlehq/core`): **FSL-1.1-ALv2** — free for any
   use except reselling Reticle itself; converts to Apache after two years.
 - **Enterprise features** (`packages/server/src/ee/`): **Reticle Enterprise License** — source-available,
   free for dev/eval, a license key required in production.
@@ -152,16 +152,16 @@ both results published, including where Reticle loses. Full from-scratch explain
 
 ## Packages
 
-`@reticle/core` (umbrella) · `@reticle/protocol` (wire contract) · `@reticle/browser` (SDK) ·
-`@reticle/server` (bridge + MCP + `reticle` CLI) · `@reticle/react` · `@reticle/babel-plugin` ·
-`@reticle/next` · `@reticle/vite-plugin` · `@reticle/eslint-plugin` · `@reticle/test`.
+`@reticlehq/core` (umbrella) · `@reticlehq/protocol` (wire contract) · `@reticlehq/browser` (SDK) ·
+`@reticlehq/server` (bridge + MCP + `reticle` CLI) · `@reticlehq/react` · `@reticlehq/babel-plugin` ·
+`@reticlehq/next` · `@reticlehq/vite-plugin` · `@reticlehq/eslint-plugin` · `@reticlehq/test`.
 
 ## Links
 
 - **Landing page / product:** https://reticle.ai/reticle
 - **Company website:** https://reticle.ai
 - **GitHub (source):** https://github.com/reticlehq/reticle
-- **npm:** https://www.npmjs.com/package/@reticle/core
+- **npm:** https://www.npmjs.com/package/@reticlehq/core
 - **Skill file (paste this URL to your agent):** https://raw.githubusercontent.com/reticlehq/reticle/main/SKILL.md
 - **Docs home:** https://github.com/reticlehq/reticle/tree/main/docs
   - Getting started: https://github.com/reticlehq/reticle/blob/main/docs/getting-started.md
@@ -187,4 +187,4 @@ both results published, including where Reticle loses. Full from-scratch explain
   out-of-app browser automation; use Reticle to verify *your own* running app's program truth.
 - **Setup effort:** one line pasted to the agent; the agent wires it. Layer-1 value in ~15 minutes.
 - **Is my data safe?** Yes — dev-only, localhost-only, no telemetry, fully offline.
-- **Get started:** paste the skill URL above to your agent, or `npx @reticle/core init`.
+- **Get started:** paste the skill URL above to your agent, or `npx @reticlehq/core init`.

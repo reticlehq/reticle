@@ -1,6 +1,6 @@
 // Drive the real Next.js app (apps/next-smoke, :3100) with Reticle to de-risk Next.
 import { chromium } from 'playwright';
-import { start, TOOLS, BaselineStore, RecordingStore } from '@reticle/server';
+import { start, TOOLS, BaselineStore, RecordingStore } from '@reticlehq/server';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const deps = { sessions: null, baselines: new BaselineStore(), recordings: new RecordingStore() };
@@ -56,7 +56,7 @@ const verdict = await T('reticle_assert', {
 });
 check('GET /api/ping 200 + modal visible + "pong" + no console errors', verdict.pass, verdict.failureReason ?? '');
 
-console.log('\nTASK C — component identity via @reticle/react (Next + SWC)');
+console.log('\nTASK C — component identity via @reticlehq/react (Next + SWC)');
 const info = await T('reticle_inspect', { ref: await refOf('testid', 'ping-button') });
 check('component identity resolved', Array.isArray(info.component?.componentStack) && info.component.componentStack.length > 0,
   info.component ? info.component.componentStack.join(' < ') : 'none');

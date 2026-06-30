@@ -20,7 +20,7 @@ One call replays the app's key journeys and asserts **program truth** — networ
 ### A. A team, agent on your own app (~10 min)
 
 ```bash
-npm i -D @reticle/core
+npm i -D @reticlehq/core
 ```
 
 Paste to your agent (Claude Code / Cursor / any MCP agent): `Follow https://raw.githubusercontent.com/reticlehq/reticle/main/SKILL.md` It runs the wizard once (Vite/Next plugin + SDK init + MCP config), then verifies on every change. (Or `npx reticle init`.) Run your dev server, then ask the agent to _"verify it with Reticle."_
@@ -55,7 +55,7 @@ Or skip the HTTP server entirely with the one-shot CLI — `reticle verify <prev
 
 ## In-app SDK integration — the effort, by layer
 
-Reticle embeds a **dev/preview-only** SDK (`@reticle/browser`, Apache-2.0, tree-shaken from production). For a platform you add this **once to your generated-app template** → every generated app is verifiable.
+Reticle embeds a **dev/preview-only** SDK (`@reticlehq/browser`, Apache-2.0, tree-shaken from production). For a platform you add this **once to your generated-app template** → every generated app is verifiable.
 
 | Layer | What you add | Unlocks | Effort |
 | --- | --- | --- | --- |
@@ -90,7 +90,7 @@ The shape is identical (in-app SDK in the template → verify in the sandbox →
 
 ### Emergent (Kubernetes pod per build, reverse-proxied preview URL)
 
-1. Add `@reticle/browser` + `registerStore`/`reticle.signal` to the generated-app **scaffold** (one time).
+1. Add `@reticlehq/browser` + `registerStore`/`reticle.signal` to the generated-app **scaffold** (one time).
 2. In the build pod, alongside the preview: `reticle serve --http --http-token "$POD_TOKEN" --drive "$PREVIEW_URL"` (or import `ReticleRunner` in-process).
 3. In the orchestrator's generate→test→iterate loop, `POST /verify` after the preview boots.
 4. FAIL → route `repair.failurePackets[].suggestedPrompt` to the fixer subagent → re-verify (closes the loop). PASS → publish + attach the `prod-preview` run as the user-facing "verified ✓".
@@ -113,7 +113,7 @@ The shape is identical (in-app SDK in the template → verify in the sandbox →
 
 ## The verdict artifact
 
-`POST /verify` (and `reticle_run_export`) return a stable, versioned `ReticleVerificationRun` (defined in `@reticle/protocol`): `verdict` (pass/fail/partial, confidence, blockingRisks), `flows[]`, `checks[]`, `risks[]` (auth/payment/db/…), `repair.failurePackets[]` (what + where to fix), `evidence`. Render a legible report with `renderRunReport()` or `reticle_run_export { format: "report" }`. Profiles: `dev` (full) vs `prod-preview` (source + state redacted for downstream sharing).
+`POST /verify` (and `reticle_run_export`) return a stable, versioned `ReticleVerificationRun` (defined in `@reticlehq/protocol`): `verdict` (pass/fail/partial, confidence, blockingRisks), `flows[]`, `checks[]`, `risks[]` (auth/payment/db/…), `repair.failurePackets[]` (what + where to fix), `evidence`. Render a legible report with `renderRunReport()` or `reticle_run_export { format: "report" }`. Profiles: `dev` (full) vs `prod-preview` (source + state redacted for downstream sharing).
 
 **Why trust it:** the verdict is mechanical — derived only from observed outcomes — so it can't report green for something it never ran (a severed backend reads as _fail_, never a confident pass). Proof: `packages/server/src/runs/false-green.test.ts`.
 

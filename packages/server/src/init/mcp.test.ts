@@ -13,7 +13,7 @@ describe('claudeAddCommand', () => {
       'user',
       '--',
       'npx',
-      '@reticle/core',
+      '@reticlehq/core',
       'mcp',
     ]);
   });
@@ -24,7 +24,7 @@ describe('claudeAddCommand', () => {
     const c = claudeAddCommand();
     expect(c.args).not.toContain('--port');
     expect(c.display).not.toContain('--port');
-    expect(c.display).toBe('claude mcp add reticle -s user -- npx @reticle/core mcp');
+    expect(c.display).toBe('claude mcp add reticle -s user -- npx @reticlehq/core mcp');
   });
 });
 

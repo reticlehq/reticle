@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { runSpecs } from './runner.js';
 import { reticleTest } from './spec.js';
 import { clearRegistry, getRegistered } from './registry.js';
-import type { ToolInvoker } from '@reticle/server';
+import type { ToolInvoker } from '@reticlehq/server';
 import type { RunnerOptions, SpecContext } from './types.js';
 
 afterEach(() => clearRegistry());

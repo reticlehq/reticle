@@ -94,7 +94,7 @@ reticle_query({ by: "role", value: "button", name: "Save" })   // → ref + desc
 Deep detail on one element — including the signals a snapshot/a11y tree omits, so you can tell "present" from "actually usable / on-theme".
 
 - **args:** `ref`, `sessionId?`.
-- **returns:** descriptor + `tag` + `box` + `occluded` (another element covers its center — a z-index/overlay bug) + `styles { color, backgroundColor, opacity, cursor, display, visibility }` + `theme { colorToken, backgroundToken, offTheme, tokenCount }` (compliance vs the app's `:root` design tokens — `offTheme:true` flags an off-palette color) + `component { componentStack, source?: { file, line, column } }` (with `@reticle/react`).
+- **returns:** descriptor + `tag` + `box` + `occluded` (another element covers its center — a z-index/overlay bug) + `styles { color, backgroundColor, opacity, cursor, display, visibility }` + `theme { colorToken, backgroundToken, offTheme, tokenCount }` (compliance vs the app's `:root` design tokens — `offTheme:true` flags an off-palette color) + `component { componentStack, source?: { file, line, column } }` (with `@reticlehq/react`).
 - Use it to catch present-but-broken UI: `opacity:0` / `box` 0×0 / `occluded:true` (invisible or unclickable), `cursor` not `pointer` (dead control), `offTheme:true` (off-design-token color).
 
 ### `reticle_act` / `reticle_act_sequence`
@@ -220,7 +220,7 @@ A page can be **thrashing** — committing many React renders a second — while
 // app entry — MUST run before react-dom loads, so import it FIRST (React reads the devtools hook
 // at renderer-inject time). It augments a real React DevTools hook if present; host-safe (no-ops on
 // any failure, never breaks the app).
-import { installRenderMeter } from '@reticle/core';
+import { installRenderMeter } from '@reticlehq/core';
 installRenderMeter();
 ```
 
@@ -537,11 +537,11 @@ reticle_assert({ timeout_ms: 30000, predicate: {
 
 #### Keeping signals from drifting (lint)
 
-Signals only help if you actually emit one whenever user-visible state changes. The `@reticle/eslint-plugin` package ships one rule, `reticle/require-signal-on-mutation`, that flags any function which calls a configured store **mutator** but never fires the **signal callee** in the same body — so the signal map can't silently fall behind the store.
+Signals only help if you actually emit one whenever user-visible state changes. The `@reticlehq/eslint-plugin` package ships one rule, `reticle/require-signal-on-mutation`, that flags any function which calls a configured store **mutator** but never fires the **signal callee** in the same body — so the signal map can't silently fall behind the store.
 
 ```js
 // eslint.config.mjs
-import reticle from '@reticle/eslint-plugin';
+import reticle from '@reticlehq/eslint-plugin';
 
 export default [
   {
@@ -814,7 +814,7 @@ Performs the action (with settle so React commits land in the window), waits for
 No need to broadcast a signal for every fact. Register stores in your app:
 
 ```ts
-import { registerStore } from '@reticle/core';
+import { registerStore } from '@reticlehq/core';
 registerStore('workspace', () => useWorkspace.getState());
 ```
 
@@ -835,7 +835,7 @@ Store reads are the reliable path; ref reads degrade to a structured failure rat
 Declare it once so the agent learns the surface without reading source:
 
 ```ts
-import { registerCapabilities } from '@reticle/core';
+import { registerCapabilities } from '@reticlehq/core';
 registerCapabilities({ testids: [...], signals: [...], stores: [...], flows: [...] });
 ```
 
@@ -893,7 +893,7 @@ Point Reticle's server at a Chrome DevTools (CDP) endpoint; it then drives **rea
      "mcpServers": {
        "reticle": {
          "command": "npx",
-         "args": ["@reticle/core"],
+         "args": ["@reticlehq/core"],
          "env": { "RETICLE_CDP_URL": "http://localhost:9222" },
        },
      },

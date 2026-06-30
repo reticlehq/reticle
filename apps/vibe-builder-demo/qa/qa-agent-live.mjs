@@ -23,7 +23,7 @@ import {
   ProjectStore,
   createNodeFileSystem,
   LaunchedRealInputProvider,
-} from '@reticle/server';
+} from '@reticlehq/server';
 import { tmpdir } from 'node:os';
 import { mkdtempSync, readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';

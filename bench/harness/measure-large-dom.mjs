@@ -6,7 +6,7 @@
 // drives the large grid and measures, with NO model and NO API key:
 //   - the full page snapshot (reticle_snapshot scope:page)   — the baseline a screenshot/whole-tree tool pays
 //   - the verify loop (query -> act_and_wait -> assert)   — what Reticle actually pays per check
-// Run apps/large-dom-bench first:  pnpm --filter @reticle/large-dom-bench dev   (defaults to :4313)
+// Run apps/large-dom-bench first:  pnpm --filter @reticlehq/large-dom-bench dev   (defaults to :4313)
 import { writeFileSync } from 'node:fs';
 import { McpStdioClient } from './mcp-client.mjs';
 import { measure } from './tokenizer.mjs';

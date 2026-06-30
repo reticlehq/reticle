@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to **`@reticle/core`** are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+All notable changes to **`@reticlehq/core`** are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
@@ -10,9 +10,9 @@ The project is renamed from **Iris** to **Reticle**. This is a clean rename — 
 
 | What | Before | After |
 | --- | --- | --- |
-| Install | `@syrin/iris` | `@reticle/core` |
-| Scoped packages | `@syrin/iris-*` | `@reticle/*` (e.g. `@reticle/protocol`, `@reticle/react`) |
-| Subpath imports | `@syrin/iris/server`, `/next`, `/babel`, `/vite`, `/eslint`, `/test` | `@reticle/core/server`, `…` |
+| Install | `@syrin/iris` | `@reticlehq/core` |
+| Scoped packages | `@syrin/iris-*` | `@reticlehq/*` (e.g. `@reticlehq/protocol`, `@reticlehq/react`) |
+| Subpath imports | `@syrin/iris/server`, `/next`, `/babel`, `/vite`, `/eslint`, `/test` | `@reticlehq/core/server`, `…` |
 | CLI binary | `iris` | `reticle` (`reticle init`, `reticle mcp`) |
 | MCP server name | `iris` | `reticle` (update your `.mcp.json` / client config) |
 | MCP tools | `iris_*` (e.g. `iris_observe`, `iris_assert`) | `reticle_*` (`reticle_observe`, `reticle_assert`) |
@@ -24,10 +24,10 @@ The project is renamed from **Iris** to **Reticle**. This is a clean rename — 
 
 **Migrate:**
 
-1. `npm rm @syrin/iris && npm i -D @reticle/core` (swap any direct `@syrin/iris-*` deps for `@reticle/*`).
+1. `npm rm @syrin/iris && npm i -D @reticlehq/core` (swap any direct `@syrin/iris-*` deps for `@reticlehq/*`).
 2. Rename `.iris.json` → `.reticle.json` and the `.iris/` directory → `.reticle/` — recorded flows/baselines carry over unchanged.
-3. Update your MCP client config: server key `iris` → `reticle`, command `npx @reticle/core mcp`, and any `IRIS_*` env vars → `RETICLE_*`. Agents calling tools by name move from `iris_*` to `reticle_*`.
-4. Find/replace `withIris` → `withReticle` and any `@syrin/iris` imports → `@reticle/core`.
+3. Update your MCP client config: server key `iris` → `reticle`, command `npx @reticlehq/core mcp`, and any `IRIS_*` env vars → `RETICLE_*`. Agents calling tools by name move from `iris_*` to `reticle_*`.
+4. Find/replace `withIris` → `withReticle` and any `@syrin/iris` imports → `@reticlehq/core`.
 
 ## [1.2.0] — 2026-06-27
 
@@ -50,14 +50,14 @@ The multi-agent release. One Chromium now serves many agents at once — a lease
 
 ### Fixed
 
-- **`@reticle/core/next` `withReticle` no longer crashes the host build** (a bundled `__require.resolve`).
+- **`@reticlehq/core/next` `withReticle` no longer crashes the host build** (a bundled `__require.resolve`).
 - **`reticle init`** detects the monorepo package manager and gives correct guidance for non-Vite/Next apps (CRA / webpack).
 - **Clearer edge errors** — an unopenable leased URL says why; the browser warns when the bridge is unreachable on first connect.
 - **Skill & docs corrections** for the public integration path (MCP registration, `reticle init` flow, stale-`npx` cache as the main `-32000` cause).
 
 ### Removed
 
-- **Unused public exports** — `ObserverType` / `UpdateStatus` (`@reticle/protocol`), `buildClock` (`@reticle/test`), and the test-only `RETICLE_VITE_PLUGIN_NAME` re-export from `@reticle/core/vite`. No real consumers.
+- **Unused public exports** — `ObserverType` / `UpdateStatus` (`@reticlehq/protocol`), `buildClock` (`@reticlehq/test`), and the test-only `RETICLE_VITE_PLUGIN_NAME` re-export from `@reticlehq/core/vite`. No real consumers.
 
 ## [1.0.0] — 2026-06-22
 
@@ -79,13 +79,13 @@ The headline is the "lean responses" pass — same observations, fewer tokens. O
 
 ### Fixed
 
-- **Multiple apps on one machine no longer collide or orphan the daemon.** Several Next.js / React apps (or browser tabs) can run at once: the `@reticle/next` integration now defaults to a unique per-tab session id (`SESSION_AUTO`) instead of a shared constant, so two Next apps never silently evict each other. A bridge/daemon **port collision now fails fast with a clear error** instead of hanging forever and leaving an orphaned process — the `listen()` calls finally handle `EADDRINUSE`.
+- **Multiple apps on one machine no longer collide or orphan the daemon.** Several Next.js / React apps (or browser tabs) can run at once: the `@reticlehq/next` integration now defaults to a unique per-tab session id (`SESSION_AUTO`) instead of a shared constant, so two Next apps never silently evict each other. A bridge/daemon **port collision now fails fast with a clear error** instead of hanging forever and leaving an orphaned process — the `listen()` calls finally handle `EADDRINUSE`.
 - **License files now carry a real copyright.** Filled the Apache-2.0 appendix in every SDK package license so no `[yyyy]` / `[name of copyright owner]` placeholders remain.
 
 ### Security
 
 - **Daemon mode now enforces the documented auth contract.** `reticle serve` / the MCP daemon previously built its bridge without forwarding the pairing `token`, bind `host`, or origin allow-list, so `RETICLE_TOKEN` / `RETICLE_HOST` / `RETICLE_ALLOWED_ORIGINS` were silently ignored in daemon mode. They are now honored identically to the in-process path. (Residual risk was bounded — the daemon is loopback-pinned — but the advertised control is now actually enforced.)
-- **Every security-critical environment variable is a single named constant** (`ReticleEnv` in `@reticle/protocol`). A typo in an inline `'RETICLE_TOKEN'` string could previously have disabled auth silently; the names now live in exactly one place.
+- **Every security-critical environment variable is a single named constant** (`ReticleEnv` in `@reticlehq/protocol`). A typo in an inline `'RETICLE_TOKEN'` string could previously have disabled auth silently; the names now live in exactly one place.
 
 ## [0.9.0] — 2026-06-21
 
@@ -213,9 +213,9 @@ First public release. Reticle is the **proof layer for AI agents** — it verifi
 - **Regression detection** — `reticle_baseline_save` + `reticle_diff` to catch silently removed elements or new console errors before they ship.
 - **Source mapping** — DOM element → React component → `file:line`, on React 18/19 and Next.js (keeps SWC).
 - **Autonomous crawler** (`reticle_crawl`) that clicks every reachable control and classifies what breaks.
-- **Declarative spec runner** (`@reticle/core/test`) for signal-bound, headless verification specs.
+- **Declarative spec runner** (`@reticlehq/core/test`) for signal-bound, headless verification specs.
 - **The `reticle` CLI** — bridge + MCP server, plus `reticle drive` for a launched browser.
-- **Single package, subpaths** — `@reticle/core` ships the browser SDK (`.`), the server (`./server`), the spec runner (`./test`), source mapping (`./next`, `./babel`), and the lint rule (`./eslint`) — one install.
+- **Single package, subpaths** — `@reticlehq/core` ships the browser SDK (`.`), the server (`./server`), the spec runner (`./test`), source mapping (`./next`, `./babel`), and the lint rule (`./eslint`) — one install.
 
 ### Notes
 

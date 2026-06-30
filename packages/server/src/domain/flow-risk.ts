@@ -10,7 +10,7 @@
  * Pure: no IO, no clock.
  */
 
-import { RunStatus, type RunRecord } from '@reticle/protocol';
+import { RunStatus, type RunRecord } from '@reticlehq/protocol';
 import { FlowAssertionGrade } from '../flows/flow-classify.js';
 
 export const RiskLevel = {

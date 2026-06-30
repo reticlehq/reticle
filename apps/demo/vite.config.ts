@@ -1,7 +1,7 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import babel from '@rolldown/plugin-babel';
-import reticleSource from '@reticle/babel-plugin';
+import reticleSource from '@reticlehq/babel-plugin';
 
 // The Reticle showcase dashboard runs on a dedicated port (4310) so it never collides with other
 // local apps (e.g. AlianPost on :3000). `reticle drive http://localhost:4310` opens it in a real

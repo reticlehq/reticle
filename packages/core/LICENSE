@@ -1,4 +1,4 @@
-NOTE: @reticle/core is an umbrella package that bundles other Reticle packages.
+NOTE: @reticlehq/core is an umbrella package that bundles other Reticle packages.
 The embeddable SDK packages it re-exports are Apache-2.0; the server it
 includes is under the Functional Source License below, which is the most
 restrictive term and therefore governs the bundle. See the root LICENSE for

@@ -6,7 +6,7 @@ The basics in [Getting Started](getting-started.md) work with **zero app changes
 - [2 — Inject the emitter (zero prod bundle)](#2--inject-the-emitter-zero-prod-bundle)
 - [3 — Emit signals from the store layer, not N call sites](#3--emit-signals-from-the-store-layer-not-n-call-sites)
 - [4 — Self-registering domains (`registerReticleDomain`)](#4--self-registering-domains-registerreticledomain)
-- [5 — Keep the signal layer from rotting (`@reticle/eslint-plugin`)](#5--keep-the-signal-layer-from-rotting-reticleeslint-plugin)
+- [5 — Keep the signal layer from rotting (`@reticlehq/eslint-plugin`)](#5--keep-the-signal-layer-from-rotting-reticleeslint-plugin)
 - [6 — Limitation: un-scriptable tabs → `reticle drive`](#6--limitation-un-scriptable-tabs--reticle-drive)
 - [Checklist](#checklist)
 
@@ -21,7 +21,7 @@ Adoption is **free → cheap → targeted**. You don't instrument everything; yo
 **2. Advertise the surface from your existing constants (cheap).** You already keep a `TestIds` constant object for your E2E suite — pass it straight in. Now `reticle_capabilities()` tells a fresh agent your whole surface without reading source.
 
 ```ts
-import { registerCapabilities } from '@reticle/browser';
+import { registerCapabilities } from '@reticlehq/browser';
 import { TestIds } from '../e2e/test-ids'; // the same constants your Playwright suite uses
 
 registerCapabilities({
@@ -34,7 +34,7 @@ registerCapabilities({
 **3. Add signals only at the ~20 commit points that matter (targeted).** Emit `reticle.signal(name, data)` at the moments the DOM can't show — a save committed, a webhook arrived, an edit applied, an async generation finished. You instrument the off-DOM facts you'd otherwise eyeball, not every line.
 
 ```ts
-import { reticle } from '@reticle/browser';
+import { reticle } from '@reticlehq/browser';
 onSaved(() => reticle.signal('order:saved', { id, total }));
 // agent: reticle_assert({ predicate: { kind: 'signal', name: 'order:saved', dataMatches: { id: '*' } } })
 ```
@@ -43,11 +43,11 @@ That's day-one usefulness with no rewrite. The rest of this doc is how to do ste
 
 ## 2 — Inject the emitter (zero prod bundle)
 
-The #1 objection: _"I don't want a test tool in my production bundle."_ The answer: components never import `@reticle/browser`. They depend on a tiny structural interface, `ReticleEmitter` (`{ signal, state }`), and the real emitter is injected once at the top. `createReticleEmitter()` returns an emitter that proxies to the connected `reticle` singleton and is a **safe no-op** until `reticle.connect()` runs — so nothing breaks in production or before connect, and **`@reticle/browser` stays out of the prod bundle.**
+The #1 objection: _"I don't want a test tool in my production bundle."_ The answer: components never import `@reticlehq/browser`. They depend on a tiny structural interface, `ReticleEmitter` (`{ signal, state }`), and the real emitter is injected once at the top. `createReticleEmitter()` returns an emitter that proxies to the connected `reticle` singleton and is a **safe no-op** until `reticle.connect()` runs — so nothing breaks in production or before connect, and **`@reticlehq/browser` stays out of the prod bundle.**
 
 ```ts
-// app/emit.ts — the one place that touches @reticle/browser
-import { createReticleEmitter } from '@reticle/browser';
+// app/emit.ts — the one place that touches @reticlehq/browser
+import { createReticleEmitter } from '@reticlehq/browser';
 export const emit = createReticleEmitter(); // no-op until reticle.connect()
 ```
 
@@ -86,7 +86,7 @@ function dispatch(action: keyof typeof signalFor, run: () => State): void {
 **Pattern B — `commitAndSignal` (lighter).** When you don't want a middleware, pair the mutation and its signal in one call that can't drift. It runs `mutate()`, emits the signal exactly once, and returns the mutation's value.
 
 ```ts
-import { commitAndSignal } from '@reticle/browser';
+import { commitAndSignal } from '@reticlehq/browser';
 import { emit } from '../emit';
 
 const next = commitAndSignal(
@@ -109,7 +109,7 @@ Rather than maintaining one central flat-map of the whole testable surface (and 
 
 ```ts
 // features/sections/reticle.ts — co-locate a domain's testids + signals in one module
-import { registerReticleDomain } from '@reticle/browser';
+import { registerReticleDomain } from '@reticlehq/browser';
 
 export const SectionTestIds = { list: 'section-list', add: 'section-add' } as const;
 export const SectionSignals = { reordered: 'section:reordered' } as const;
@@ -123,13 +123,13 @@ registerReticleDomain({
 
 ```ts
 // features/search/reticle.ts
-import { registerReticleDomain } from '@reticle/browser';
+import { registerReticleDomain } from '@reticlehq/browser';
 registerReticleDomain({ testids: ['search-input'], signals: ['search:ran'] });
 ```
 
 Importing both modules in dev makes `reticle_capabilities()` return the merged surface (`testids: ['section-list', 'section-add', 'search-input']`, `signals: ['section:reordered', 'search:ran']`, `stores: ['workspace']`). `registerReticleDomain` is a thin convenience over `registerCapabilities` — same merge-idempotent, HMR-safe semantics — so it composes with §1's "use your existing constants." (Named flows stay an explicit `registerCapabilities({ flows })` concern — their last-writer-wins semantics don't fit "accumulate from many domains.")
 
-## 5 — Keep the signal layer from rotting (`@reticle/eslint-plugin`)
+## 5 — Keep the signal layer from rotting (`@reticlehq/eslint-plugin`)
 
 A signal layer silently rots: someone adds a mutation path and forgets the signal, and the agent's contract breaks with no error. The lint rule catches it at the only moment that's cheap — review.
 
@@ -137,7 +137,7 @@ The rule **`reticle/require-signal-on-mutation`** flags a function that calls a 
 
 ```js
 // eslint.config.js (flat config)
-import reticle from '@reticle/eslint-plugin';
+import reticle from '@reticlehq/eslint-plugin';
 
 export default [
   {
@@ -162,8 +162,8 @@ When that happens, `reticle_sessions` and every act/assert result carry a `sessi
 
 ## Checklist
 
-- [ ] One `app/emit.ts` is the **only** module importing `@reticle/browser`; components import the emitter.
-- [ ] `reticle.connect()` is dev-gated; the prod bundle has no `@reticle/browser`.
+- [ ] One `app/emit.ts` is the **only** module importing `@reticlehq/browser`; components import the emitter.
+- [ ] `reticle.connect()` is dev-gated; the prod bundle has no `@reticlehq/browser`.
 - [ ] Signals fire from the store layer (middleware or `commitAndSignal`); view-level exceptions are explicit.
 - [ ] Each domain self-registers via `registerReticleDomain`; `reticle_capabilities()` returns the full surface.
 - [ ] Existing Playwright/Cypress testids are reused, not duplicated.

@@ -9,7 +9,7 @@ import {
   ReticleCommand,
   MessageKind,
   SessionState,
-} from '@reticle/protocol';
+} from '@reticlehq/protocol';
 import { createSharedServer, MCP_SSE_PATH, type SharedServer } from './http-server.js';
 import { Bridge } from './bridge.js';
 import { endAllSessions } from './session/session-reaper.js';

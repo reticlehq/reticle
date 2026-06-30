@@ -1,4 +1,4 @@
-/** @reticle/eslint-plugin — flat-config plugin export. */
+/** @reticlehq/eslint-plugin — flat-config plugin export. */
 
 import { requireSignalOnMutation } from './require-signal-on-mutation.js';
 import { PLUGIN_NAME, RULE_NAME } from './constants.js';

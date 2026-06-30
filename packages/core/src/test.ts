@@ -1,2 +1,2 @@
-// The declarative spec runner — `import { reticleTest, bootSession } from '@reticle/core/test'`.
-export * from '@reticle/test';
+// The declarative spec runner — `import { reticleTest, bootSession } from '@reticlehq/core/test'`.
+export * from '@reticlehq/test';

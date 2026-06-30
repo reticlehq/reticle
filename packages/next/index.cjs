@@ -1,6 +1,6 @@
 'use strict';
 // withReticle(nextConfig): adds a dev-only webpack pre-loader that stamps data-reticle-source on
-// your JSX so @reticle/react can report the source file:line — without disabling SWC.
+// your JSX so @reticlehq/react can report the source file:line — without disabling SWC.
 
 /**
  * @param {import('next').NextConfig} [nextConfig]

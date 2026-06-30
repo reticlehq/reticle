@@ -45,7 +45,7 @@ function scopeMissError(scope?: ResolveScope): string {
       : scope?.url !== undefined
         ? `your app at ${scope.url}`
         : 'the active project';
-  return `no browser session for ${who} — is that app running with @reticle/core enabled? (other apps may be connected, but they won't be driven by mistake)`;
+  return `no browser session for ${who} — is that app running with @reticlehq/core enabled? (other apps may be connected, but they won't be driven by mistake)`;
 }
 
 /**
@@ -120,7 +120,7 @@ export class SessionManager {
     }
     if (this.#sessions.size === 0) {
       throw new Error(
-        'no browser session connected — is your app running with @reticle/browser enabled?',
+        'no browser session connected — is your app running with @reticlehq/browser enabled?',
       );
     }
     // Scope to the agent's active project FIRST, so a stray tab from another app/origin (e.g. a

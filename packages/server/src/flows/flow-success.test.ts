@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { EventType, type CommandResult, type ReticleEvent } from '@reticle/protocol';
+import { EventType, type CommandResult, type ReticleEvent } from '@reticlehq/protocol';
 import { assertSuccess, successToPredicate, dynamicTestids } from './flow-success.js';
 import { waitForPredicate } from '../events/predicate.js';
 import type { FlowReplaySession } from './flow-replay.js';

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { ActionType, DANGEROUS_ACTION_CONFIRM_ARG } from '@reticle/protocol';
+import { ActionType, DANGEROUS_ACTION_CONFIRM_ARG } from '@reticlehq/protocol';
 import { RecordingStore, type RecordedStep, type CompiledProgram } from './recordings.js';
 import { compileActStep, compileSequenceStep } from './replay.js';
 

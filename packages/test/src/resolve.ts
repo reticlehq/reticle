@@ -1,5 +1,5 @@
-import { ReticleTool, type ToolInvoker } from '@reticle/server';
-import { QueryBy } from '@reticle/protocol';
+import { ReticleTool, type ToolInvoker } from '@reticlehq/server';
+import { QueryBy } from '@reticlehq/protocol';
 import { ReticleQueryEmptyError } from './skip.js';
 import { NO_ELEMENT_FOR_TESTID } from './constants.js';
 

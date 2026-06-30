@@ -9,11 +9,11 @@
  * never asserted, so the skip is symmetric across the step layer and the success layer.
  *
  * Lives in reticle-server (alongside the predicate engine) so BOTH the live MCP `reticle_flow_replay`
- * tool and the `@reticle/test` spec runner share one implementation — no divergent oracle.
+ * tool and the `@reticlehq/test` spec runner share one implementation — no divergent oracle.
  * Pure: no IO, no clock.
  */
 
-import { AnchorKind, type FlowExpect, type FlowFile } from '@reticle/protocol';
+import { AnchorKind, type FlowExpect, type FlowFile } from '@reticlehq/protocol';
 import type { EvalResult, Predicate } from '../events/predicate.js';
 import type { FlowReplaySession, WaitForSignal } from './flow-replay.js';
 

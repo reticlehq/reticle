@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { AnnotationErrorCode, AnnotationSchema, type AnnotateResult } from '@reticle/protocol';
+import { AnnotationErrorCode, AnnotationSchema, type AnnotateResult } from '@reticlehq/protocol';
 import { ReticleTool } from '../tools/tool-names.js';
 import { asString } from '../tools/tools-helpers.js';
 import { compileAnnotation } from './annotate.js';

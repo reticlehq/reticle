@@ -1,4 +1,4 @@
-import { SessionState } from '@reticle/protocol';
+import { SessionState } from '@reticlehq/protocol';
 import type { Session } from './session.js';
 
 /** Live-control: the control block spliced onto tool results so the agent sees human steering. */

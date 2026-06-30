@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { pathToFileURL } from 'node:url';
 import { realpathSync } from 'node:fs';
-import { RETICLE_DEFAULT_PORT, ReticleEnv } from '@reticle/protocol';
+import { RETICLE_DEFAULT_PORT, ReticleEnv } from '@reticlehq/protocol';
 import { start, startDaemon } from './index.js';
 import { log } from './log.js';
 import {
@@ -349,7 +349,7 @@ function main(): void {
 /**
  * True when this module is the process entry point. Resolves argv[1] through the realpath because
  * package managers (notably pnpm) symlink `node_modules/<pkg>` into a store dir: the bin shim runs
- * `node node_modules/@reticle/core/dist/cli.js` (the symlink) while ESM `import.meta.url` is the
+ * `node node_modules/@reticlehq/core/dist/cli.js` (the symlink) while ESM `import.meta.url` is the
  * realpath. A plain string compare is false there, so `reticle <cmd>` would silently no-op.
  */
 function isEntryPoint(): boolean {

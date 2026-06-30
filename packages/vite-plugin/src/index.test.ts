@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { SOURCE_ATTR } from '@reticle/babel-plugin';
-import { RETICLE_DEFAULT_PORT } from '@reticle/protocol';
+import { SOURCE_ATTR } from '@reticlehq/babel-plugin';
+import { RETICLE_DEFAULT_PORT } from '@reticlehq/protocol';
 import { reticle, RETICLE_VITE_PLUGIN_NAME, RETICLE_CONNECT_MODULE } from './index.js';
 
 describe('reticle vite plugin', () => {
@@ -42,12 +42,12 @@ describe('reticle vite plugin', () => {
     expect(tag?.attrs?.['src']).toBe(RETICLE_CONNECT_MODULE);
   });
 
-  it('serves the connect module via resolveId + load with a real @reticle/core import', () => {
+  it('serves the connect module via resolveId + load with a real @reticlehq/core import', () => {
     const plugin = reticle();
     expect(plugin.resolveId?.(RETICLE_CONNECT_MODULE)).toBe(RETICLE_CONNECT_MODULE);
     expect(plugin.resolveId?.('some/other/id')).toBeNull();
     const code = plugin.load?.(RETICLE_CONNECT_MODULE);
-    expect(code).toContain("from '@reticle/core'");
+    expect(code).toContain("from '@reticlehq/core'");
     expect(code).toContain('install()');
     expect(code).toContain('reticle.connect(');
   });
