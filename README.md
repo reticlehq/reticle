@@ -1,6 +1,11 @@
 <div align="center">
 
-<img alt="Reticle — the proof layer for AI agents" src="assets/readme/dark-logo.png" width="230" />
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark-logo.png" />
+  <img alt="Reticle" src="assets/readme/light-logo.png" width="80" />
+</picture>
+
+# Reticle
 
 ### Your Playwright tests are in CI. Your agent never sees them.
 
