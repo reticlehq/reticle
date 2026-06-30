@@ -41,7 +41,7 @@ Every `reticle_snapshot`/`reticle_query` result also carries `cost:{ bytes, toke
 - **Full-tree vs full-tree, the gap is modest (~1.8×):** Reticle `full` (4,144) vs Playwright's with-refs snapshot (~7,300). Reticle collapses generic wrapper nodes, but both include every list item. If you force Reticle to dump the whole page each step, you don't save much.
 - **The savings come from _not needing_ the full tree.** Playwright MCP's primary perception primitive is "return the accessibility tree"; Reticle's is "answer a specific question" (`query`/`assert`/`observe`/scoped or interactive `snapshot`). The win is architectural, not a cleverer serializer.
 - **Cost scales with interactive elements + what you look at, not total DOM.** The 1,000 list items cost ~0 in `interactive` mode because they aren't interactive.
-- **This is tool-output tokens only.** The agent's own reasoning tokens dominate either way — which is the point: keep the eyes cheap so the budget goes to thinking.
+- **This is tool-output tokens only.** The agent's own reasoning tokens dominate either way — which is the point: keep observation cheap so the budget goes to thinking.
 
 ## Why it matters in practice
 

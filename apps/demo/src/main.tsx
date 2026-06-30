@@ -7,7 +7,7 @@ import { installReticle } from './reticle-dev.js';
 import { installRegressions } from './reticle-regress.js';
 import { installBugInjector } from './reticle-bug-injector.js';
 
-// Dev-only: give the coding agent eyes into this running dashboard (presenter + capabilities +
+// Dev-only: wire the proof layer into this running dashboard (presenter + capabilities +
 // store). Tree-shaken out of production builds.
 if (import.meta.env.DEV) {
   installReticle();

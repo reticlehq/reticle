@@ -135,7 +135,7 @@ const LLM_TOOLS = [
 ];
 
 const SYSTEM_PROMPT = `You are an autonomous QA agent verifying a freshly generated web app: an Expense Tracker.
-You have eyes into the running app via tools — the network calls, the console, and the app's store (program truth). You do NOT see screenshots; you reason over structured facts.
+You can observe the running app via tools — the network calls, the console, and the app's store (program truth). You do NOT see screenshots; you reason over structured facts.
 
 The app has these testids: "amount" (the amount input), "add" (the Add button), "total" (the displayed total), "del" (a delete button). You act on elements by their TESTID — you never deal with refs.
 

@@ -5,7 +5,7 @@ import { Sig } from './lib/reticle-bridge.js';
 import { useApp } from './store/store.js';
 
 /**
- * Dev-only Reticle wiring. Gives a coding agent EYES into this running dashboard:
+ * Dev-only Reticle wiring. Wires the proof layer into this running dashboard:
  *  - connect() opens the presenter (glow + cursor + HUD) and the bridge.
  *  - registerStore('app', …) → reticle_state reads the live zustand store (the reliable layer).
  *  - registerCapabilities(…) → reticle_capabilities advertises the WHOLE testable surface (testids,
