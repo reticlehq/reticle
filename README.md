@@ -66,6 +66,14 @@ npx @reticle/core init
 
 Registers the MCP server for every agent you have in one shot. → [More install options](#install-the-full-options)
 
+**Or register the MCP server directly in Claude Code:**
+
+```bash
+claude mcp add reticle -s user -- npx @reticle/core mcp
+```
+
+Then **restart Claude Code** (or run `/mcp` to refresh) so it picks up the server.
+
 ---
 
 `TypeScript` · `Model Context Protocol` · `React-first` · **dev-only · localhost-only · no telemetry · Apache-2.0 SDK**
@@ -317,9 +325,16 @@ npm i -D @reticle/core        # or pnpm / yarn / bun
 
 **2. Register the MCP server** with your agent, `npx @reticle/core` _is_ the server:
 
+```bash
+# Claude Code — add it, then restart Claude Code
+claude mcp add reticle -s user -- npx @reticle/core mcp
+```
+
+Or register it by hand:
+
 ```jsonc
 // Claude Code, .mcp.json
-{ "mcpServers": { "reticle": { "command": "npx", "args": ["@reticle/core"] } } }
+{ "mcpServers": { "reticle": { "command": "npx", "args": ["@reticle/core", "mcp"] } } }
 ```
 
 **3. Connect the dev-only SDK** from your app's entry point (the SDK is tree-shaken out of production):

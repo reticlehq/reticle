@@ -89,7 +89,7 @@ Register once globally so Reticle is available in every project:
 claude mcp add reticle -s user -- npx @reticle/core mcp
 ```
 
-Confirm with `claude mcp list` — `reticle` should appear. Tell user to reload Claude Code (`/mcp` to refresh).
+Confirm with `claude mcp list` — `reticle` should appear. **After adding, restart Claude Code** (or run `/mcp` to refresh) so it picks up the server.
 
 **If the `claude` CLI is unavailable**, fall back to writing `~/.claude/claude_mcp_config.json` (create if missing, merge `"reticle"` if it exists):
 
