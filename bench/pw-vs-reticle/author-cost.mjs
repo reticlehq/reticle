@@ -90,7 +90,8 @@ function reticleDrive(bug) {
 }
 
 (async () => {
-  const bugs = BUGS.slice(0, argLimit());
+  const _ids = (process.env.BENCH_IDS ?? "").split(",").map(s=>s.trim()).filter(Boolean);
+  const bugs = _ids.length ? BUGS.filter(b=>_ids.includes(b.id)) : BUGS.slice(0, argLimit());
   const rows = [];
   for (const bug of bugs) {
     const a = await authorPlaywright(bug);

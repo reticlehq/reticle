@@ -121,6 +121,7 @@ async function runCell(bug, toolKey, variant) {
         content: `Verify: ${bug.intent}. Navigate to ${url} (log in with admin@reticle.dev / password if a login form appears — the fields are pre-filled). Use the tools to decide if this holds or is broken. End by calling report_verdict with {holds:boolean, evidence:string}.`,
       },
     ];
+    let forced = false;
     for (turns = 0; turns < MAX_TURNS; turns++) {
       const resp = await callOpenAI(messages, tools);
       inTok += resp.usage?.prompt_tokens ?? 0;
@@ -129,7 +130,16 @@ async function runCell(bug, toolKey, variant) {
       if (!msg) break;
       messages.push(msg);
       const calls = msg.tool_calls ?? [];
-      if (calls.length === 0) break;
+      // Model replied with prose instead of a tool call: if it never gave a verdict, force one
+      // (fair to both tools — otherwise a chatty turn scores as a non-detection).
+      if (calls.length === 0) {
+        if (verdict === null && !forced) {
+          forced = true;
+          messages.push({ role: 'user', content: 'You did not call report_verdict. Based only on what you have already observed, call report_verdict NOW — holds:true if the property holds, holds:false if it is broken.' });
+          continue;
+        }
+        break;
+      }
       let done = false;
       for (const tc of calls) {
         let args = {};
@@ -219,7 +229,8 @@ function scorecard(agg) {
 }
 
 (async () => {
-  const bugs = BUGS.slice(0, argLimit());
+  const _ids = (process.env.BENCH_IDS ?? "").split(",").map(s=>s.trim()).filter(Boolean);
+  const bugs = _ids.length ? BUGS.filter(b=>_ids.includes(b.id)) : BUGS.slice(0, argLimit());
   const procs = await ensureApp();
   await sleep(1000);
   const rows = [];
