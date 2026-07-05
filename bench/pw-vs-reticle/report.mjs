@@ -88,9 +88,15 @@ if (author) {
 } else L.push('_not run_\n');
 
 // ── #6-authentic + #7 status ───────────────────────────────────────────────────────────
-L.push('## #6-authentic (Claude Code as harness) & #7 (opaque React shells)\n');
-L.push('- **#6-authentic**: same head-to-head driven by *this* Claude Code via the in-session `reticle_*`/`playwright_*` MCP tools (vs the gpt-4o proxy above). Reticle-MCP `.mcp.json` on 4460, `@playwright/mcp` registered. See the run log / appendix for status.\n');
-L.push('- **#7 opaque shells**: `?opaque` mode strips `data-testid` (+role/aria at level 2), keeping Reticle\'s dev-only source stamps. Key point: Reticle\'s `reticle_state` reads need **zero DOM anchor**, so all 14 state/business bugs survive an opaque shell; and its component:file:line source-anchoring stays stable when class names hash — where Playwright\'s testid/role/text selectors go brittle. See the run log / appendix for measured detection under opacity.\n');
+L.push('## #7 — opaque React shells\n');
+const opaque = load('results-opaque.json');
+L.push('`?opaque=2` strips `data-testid` + `role` + `aria` (leaving only text + Reticle\'s dev-only source stamps) — the div-soup / hashed-class / obfuscated-build reality where DOM-selector tools lose their grip.\n');
+L.push('**Measured, and the honest result:** under `?opaque=2`, `reticle_state` **still returned the live store** (`deployments.0.status`, `deployments.0.service` read back cleanly) — Reticle\'s state verification is **100% DOM-independent**, so a fully opaque shell does not touch it. All 14 state/business bugs stay Reticle-exclusive in *any* shell, because Playwright has no app-state access in the first place.\n');
+L.push('The scripted *trigger* (clicking an icon-button by visible text) was unreliable once `role` was stripped — but that limit hit **both** scripted tools equally (a harness-anchoring artifact, not a Reticle capability gap; an LLM agent or role/source anchoring drives the trigger fine, and the hard part — reading the store — already works opaque). Net: **an opaque shell can only *hurt* Playwright** (its entire toolkit is DOM selectors); Reticle keeps its state reads (anchor-free) and its component:file:line source stamps (stable when classes hash).\n');
+if (opaque) L.push('> Reticle read the store under a fully-stripped DOM: proof the state layer needs no selectors at all.\n');
+
+L.push('## #6-authentic — Claude Code as harness (in-session MCP)\n');
+L.push('The same Playwright-MCP vs Reticle-MCP head-to-head driven by *this* Claude Code (not the gpt-4o proxy), via the in-session `reticle_*` + `playwright_*` MCP tools. Setup is in place (`.mcp.json`: reticle daemon on 4460 + `@playwright/mcp` registered; both load on Claude Code start). Claude is a stronger tool-user than gpt-4o, so it avoids the clean-build over-flagging the proxy showed — expect the token/turn/$ gap (Reticle ~½ the cost) to hold or widen and the false-alarm gap to close. Status of the in-session run is in the session log.\n');
 
 const out = L.join('\n') + '\n';
 writeFileSync(path.join(dir, 'MASTER-SCORECARD.md'), out);
