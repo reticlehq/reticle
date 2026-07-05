@@ -96,7 +96,7 @@ L.push('The scripted *trigger* (clicking an icon-button by visible text) was unr
 if (opaque) L.push('> Reticle read the store under a fully-stripped DOM: proof the state layer needs no selectors at all.\n');
 
 L.push('## #6-authentic — Claude Code as harness (in-session MCP)\n');
-L.push('The same Playwright-MCP vs Reticle-MCP head-to-head driven by *this* Claude Code (not the gpt-4o proxy), via the in-session `reticle_*` + `playwright_*` MCP tools. Setup is in place (`.mcp.json`: reticle daemon on 4460 + `@playwright/mcp` registered; both load on Claude Code start). Claude is a stronger tool-user than gpt-4o, so it avoids the clean-build over-flagging the proxy showed — expect the token/turn/$ gap (Reticle ~½ the cost) to hold or widen and the false-alarm gap to close. Status of the in-session run is in the session log.\n');
+The same Playwright-MCP vs Reticle-MCP head-to-head driven by *this* Claude Code (not the gpt-4o proxy), via the in-session `reticle_*` + `playwright_*` MCP tools. Setup is in place (`.mcp.json`: reticle daemon on 4460 + `@playwright/mcp` registered; both load on Claude Code start). **Not run autonomously:** both in-session MCP servers were killed during the proxy run\'s process cleanup and only respawn via an interactive `/mcp` reconnect (you were asleep). To run it: `/mcp` (reconnect reticle + playwright), then ask to drive the head-to-head in-session. Expectation: Claude is a stronger tool-user than gpt-4o, so the token/turn/$ gap (Reticle ~½ the cost) holds or widens and the proxy\'s clean-build over-flagging disappears. The gpt-4o proxy above already answers the head-to-head quantitatively.\n');
 
 const out = L.join('\n') + '\n';
 writeFileSync(path.join(dir, 'MASTER-SCORECARD.md'), out);
