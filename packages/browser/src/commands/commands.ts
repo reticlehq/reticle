@@ -105,13 +105,27 @@ function inspect(ref: string): unknown {
   };
 }
 
-/** Whether another element covers this one's center point (a transparent overlay / z-index bug). */
+/** True if the node (or an ancestor) is part of Reticle's own injected UI (HUD, glow, cursor, flag
+ * button, …). Reticle's overlay must never count as occluding the app — a control sitting under the
+ * HUD is a false "occluded" reading, since the HUD is not part of the app the user actually sees. */
+function isReticleUi(node: Element | null): boolean {
+  for (let n: Element | null = node; n !== null; n = n.parentElement) {
+    for (const attr of Array.from(n.attributes)) {
+      if (attr.name.startsWith('data-reticle')) return true;
+    }
+  }
+  return false;
+}
+
+/** Whether a NON-Reticle element covers this one's center point (a transparent overlay / z-index bug). */
 function isOccluded(el: Element, rect: DOMRect): boolean {
   if (rect.width === 0 || rect.height === 0) return false; // a 0×0 box is a different bug (size)
   const doc = el.ownerDocument;
   if (typeof doc.elementFromPoint !== 'function') return false;
   const top = doc.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2);
-  return top !== null && top !== el && !el.contains(top);
+  // Reticle's own HUD sits at a high z-index and must never read as occluding the app.
+  if (top === null || isReticleUi(top)) return false;
+  return top !== el && !el.contains(top);
 }
 
 /** Narrowing guard: an adapter returned a ComponentStateResult (has a boolean `ok`). */
