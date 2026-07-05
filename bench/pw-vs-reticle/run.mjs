@@ -26,7 +26,7 @@ async function ensure(name, healthUrl, cmd, args, err) {
 }
 
 // The bench-app does a real POST /api/login to apps/api (:8787); both must be up.
-async function ensureApp() {
+export async function ensureApp() {
   const api = await ensure('apps/api', `${API_ORIGIN}/api/health`, 'node', ['apps/api/server.mjs'], 'apps/api did not come up on 8787');
   const app = await ensure('apps/bench-app', APP_ORIGIN, 'pnpm', ['--filter', '@reticlehq/bench-app', 'dev'], 'bench-app did not come up on 4312');
   return [api, app].filter(Boolean);
@@ -78,13 +78,18 @@ function scorecard(rows, agg) {
   return lines.join('\n') + '\n';
 }
 
-(async () => {
+const isMain = process.argv[1] === fileURLToPath(import.meta.url);
+if (isMain) (async () => {
+  // BENCH_IDS=id1,id2 runs only those bugs (smoke); otherwise the whole 52.
+  const only = (process.env.BENCH_IDS ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+  const suite = only.length ? BUGS.filter((b) => only.includes(b.id)) : BUGS;
+  console.log(`suite: ${suite.length} bug(s)`);
   const procs = await ensureApp();
   await sleep(1000);
   console.log('running reticle-script harness…');
-  const reticleRows = await runReticle(BUGS);
+  const reticleRows = await runReticle(suite);
   console.log('running playwright-script harness…');
-  const pwRows = await runPlaywright(BUGS);
+  const pwRows = await runPlaywright(suite);
   const rows = [...reticleRows, ...pwRows];
   const agg = aggregate(rows);
   writeFileSync(path.join(__dirname, 'results.json'), JSON.stringify({ rows, agg }, null, 2));

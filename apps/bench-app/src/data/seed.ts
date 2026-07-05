@@ -70,9 +70,10 @@ const STATUSES: DeployStatus[] = ['live', 'live', 'live', 'building', 'queued', 
 
 const pick = <T>(arr: readonly T[], r: number): T => arr[Math.floor(r * arr.length)] as T;
 
-/** 150 deployments — a realistic list, and under reticle_state's 200-item array-serialization cap
- * so the benchmark's state-count oracle can read the true length. */
-export function seedDeployments(count = 150): Deployment[] {
+/** 40 deployments — small enough that the WHOLE store fits under reticle_state's transport node
+ * budget (MAX_TOTAL_NODES=1000). A larger array exhausts the budget and every store slice
+ * serialized after `deployments` collapses to "[TRUNCATED]", making those paths unreadable. */
+export function seedDeployments(count = 40): Deployment[] {
   const r = rng(0xc0ffee);
   const out: Deployment[] = [];
   for (let i = 0; i < count; i += 1) {

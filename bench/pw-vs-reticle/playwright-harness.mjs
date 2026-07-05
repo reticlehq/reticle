@@ -16,7 +16,7 @@ export async function runPlaywright(bugs) {
 
   for (const bug of bugs) {
     for (const variant of ['clean', 'buggy']) {
-      const url = variant === 'buggy' ? bugUrl(bug.id) : bugUrl('');
+      const url = variant === 'buggy' ? (bug.url ?? bugUrl(bug.id)) : bugUrl('');
       const t0 = Date.now();
       let bytes = 0, caught = false, note = '';
       const consoleErrors = [];
@@ -93,6 +93,19 @@ export async function runPlaywright(bugs) {
           await sleep(300);
           caught = false; // off-screen store mutation, no DOM signal exists for Playwright to read
           note = 'no app-state access — off-screen store mutation is invisible to the DOM';
+        } else if (c.kind === 'domText') {
+          const ok = await waitFor(c.testid);
+          const txt = ok ? (await page.locator(sel(c.testid)).first().innerText().catch(() => '')).replace(/\s+/g, ' ').trim() : '';
+          bytes += txt.length;
+          caught = ok && txt ? !txt.includes(String(c.expected)) : false;
+          note = ok ? `text="${txt.slice(0, 40)}" expected~="${c.expected}"` : 'element not found';
+        } else if (c.kind === 'stateEqualsAfter') {
+          await fillPrep(c.prep);
+          const ok = await waitFor(c.steps[0]);
+          if (ok) await click(c.steps[0]);
+          await sleep(400);
+          caught = false; // the invariant lives in the store; Playwright has no access to assert it
+          note = 'no app-state access — store invariant not assertable from the DOM';
         }
         if (!caught && (note.includes('not found') || note.includes('not reached'))) note += diag;
       } catch (e) { note = `ERR ${e.message}`; }

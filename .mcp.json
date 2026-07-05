@@ -4,8 +4,12 @@
       "command": "node",
       "args": ["packages/server/dist/cli.js", "mcp"],
       "env": {
-        "RETICLE_PORT": "58432"
+        "RETICLE_PORT": "4460"
       }
+    },
+    "playwright": {
+      "command": "npx",
+      "args": ["@playwright/mcp@0.0.76"]
     }
   }
 }

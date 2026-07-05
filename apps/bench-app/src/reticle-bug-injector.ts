@@ -1,87 +1,252 @@
 /**
- * Dev-only HARD-bug injector — the difficult, UI-level regressions for the stress benchmark. Unlike
+ * Dev-only HARD-bug injector — the difficult, intent-level regressions for the stress benchmark. Unlike
  * reticle-regress.ts (which strips testids / kills handlers), these leave the element fully PRESENT in
  * the DOM with the correct role + accessible name, so a structural or a11y-tree tool reports
- * everything fine. Only reading computed style / geometry — or hovering and comparing — reveals the
- * break. This is the data that separates "the element exists" from "a user can actually use it."
+ * everything fine. Only reading computed style / geometry, the network buffer, the console, or the
+ * app's own STATE reveals the break. This is the data that separates "the element exists" from "a user
+ * can actually use it, and the program did the right thing."
  *
  *   ?reticle-bug=<id>[,<id>...]
  *
- * Catalog (each targets a known testid; the element stays in the DOM, correctly labelled):
- *   cursor-missing   — an interactive control loses cursor:pointer (looks dead to the mouse).
- *   invisible        — opacity:0: present, focusable, occupies layout, but the user sees nothing.
- *   zero-size        — collapsed to 0×0 (overflow hidden): in the a11y tree, unclickable in reality.
- *   occluded         — a transparent overlay sits on top (z-index): clicks hit the overlay, not it.
- *   color-regression — the primary action's color silently changed (a baseline-diff visual bug).
+ * The catalog is organised as a handful of generic installers driven by lookup tables, so a new bug is
+ * one table row, not a new function:
  *
- * State/UI desync (the capability gap — needs the app's STATE as source of truth, unreachable from
- * the DOM alone). Two distinct instances, so this is a CLASS of Reticle-only catches, not one case:
- *   state-desync  — a COUNT lies: the Deployments nav badge is forced to 0 while the store holds the
- *                   real count. A number on screen looks plausible; only the store proves it wrong.
- *   status-stale  — a STATUS lies: the top deployment row shows a different status than the store
- *                   holds (a failed/in-flight deploy rendered as "live"). The pill is fully
- *                   self-consistent — right color, right dot — so a screenshot/a11y tool sees a
- *                   healthy deploy. Only reading the store reveals the deploy did not actually ship.
+ *   CSS_BUGS      — a control loses interactivity/visibility via computed style (opacity:0, 0×0,
+ *                   recolor) or the whole page is re-tinted (a paint-only regression). Caught by a
+ *                   geometry/computed-style read (both tools) or a pixel diff (screenshot only).
+ *   OCCLUDE       — a transparent overlay covers a control so clicks land on the overlay, not it.
+ *   TAMPER        — an action writes store state it should not (blast radius) or writes a WRONG value
+ *                   (a business-logic invariant: a KPI number, a created row's field). The corruption
+ *                   is off-screen, so no DOM/pixel tool can see it; only reading the store proves it.
+ *   CONSOLE_LEAKS — an action logs a console.error while the UI still renders fine.
+ *   EXTRA_FETCH   — an action fires a request it must NOT (a forbidden endpoint / privacy beacon) or
+ *                   fires its own request one extra time (double-submit). Caught by a network count.
+ *   DOM_TEXT      — a displayed label/number is silently wrong (a mock-data / copy regression).
  *
- * Performance (needs the React commit stream — invisible to a DOM tool):
- *   render-storm  — re-renders `series` subscribers ~60×/s with identical output: React commits
- *                   every tick but the DOM never mutates. Only reticle_state __reticle_renders sees it.
- *
- * Network cardinality (the request fired, but the WRONG number of times):
- *   double-submit — the Compose action fires `POST /api/generate-script` TWICE. One result renders, so
- *                   the UI looks right and a presence assertion ("a POST fired") passes. Only a
- *                   `net.count:1` consequence catches the duplicate.
- *   console-leak  — the Compose action logs a `console.error` while the UI still renders the result.
- *                   A structural/visual check passes; only a clean-console consequence catches it.
- *   forbidden-call — the Compose action calls a FORBIDDEN endpoint (`/api/legacy-telemetry`) it must
- *                   never hit (reverted migration / privacy beacon / N+1). Only a `net { count:0 }`
- *                   consequence ("this must never fire") catches it; nothing visible changes.
- *   mutation-leak — the BLAST RADIUS: the Compose action also corrupts an UNRELATED store path (the top
- *                   deployment's status). Nothing visible changes; only a state invariant (the unrelated
- *                   path stayed put) catches the over-reaching side-effect — no DOM tool can.
+ * Two always-on desync installers keep the DOM self-consistent while lying about the truth:
+ *   state-desync  — the Deployments nav badge is forced to a wrong count while the store holds the real
+ *                   one. Only reading the store reveals the mismatch.
+ *   status-stale  — the top deployment row shows a status the store does NOT hold (a failed/in-flight
+ *                   deploy rendered as "live"). The pill is fully self-consistent, so a screenshot/a11y
+ *                   tool sees a healthy deploy; only the store reveals the lie.
+ *   render-storm  — re-renders `series` subscribers ~60×/s with identical output: React commits every
+ *                   tick but the DOM never mutates. Only the React commit meter sees it.
  *
  * Tree-shaken out of production; never imported there.
  */
 
 import { useApp } from './store/store.js';
+import type { Deployment } from './data/seed.js';
 
 const BUG_PARAM = 'reticle-bug';
 const STYLE_ID = 'reticle-hard-bug-style';
-const OVERLAY_ID = 'reticle-hard-bug-overlay';
+const API_BASE = 'http://localhost:8787';
+/** Sentinels a tamper writes so the corruption is deterministic regardless of the seed. */
+const LEAK_TEXT = '__reticle_leak__';
+const LEAK_ID = 987654;
+const CONSOLE_MSG = '[regression] handler: unhandled rejection while formatting result';
 
-/** CSS selector for a testid (also matches the parked attr so a bug survives the reticle-break injector). */
+/** CSS selector for a testid. The target testid is fixed per bug for a stable benchmark. */
 function sel(testid: string): string {
   return `[data-testid="${testid}"]`;
 }
 
-/** Each bug → the CSS rule(s) it injects. The target testid is fixed per bug for a stable benchmark. */
+/** Collapse a control to 0×0 (present in the a11y tree, unclickable in reality). */
+function collapse(testid: string): string {
+  return `${sel(testid)}{width:0 !important;height:0 !important;padding:0 !important;border:0 !important;overflow:hidden !important;}`;
+}
+/** Make a control fully transparent (present, focusable, laid out, but the user sees nothing). */
+function fade(testid: string): string {
+  return `${sel(testid)}{opacity:0 !important;}`;
+}
+
+/** Each CSS bug → the rule(s) it injects. Visual/geometry regressions that leave the element present. */
 const CSS_BUGS: Record<string, string> = {
-  // An interactive nav control that no longer signals interactivity to the pointer.
+  // An interactive nav control that no longer signals interactivity to the pointer (neither harness
+  // inspects cursor, so this ships in the injector but is not scored — kept for manual demos).
   'cursor-missing': `${sel('nav-compose')}{cursor:default !important;}`,
-  // Present + focusable + laid out, but visually gone — the classic "it's there in the DOM" trap.
-  invisible: `${sel('new-deploy')}{opacity:0 !important;}`,
-  // Collapsed to nothing: a11y tree still lists it; a real click can never land.
-  'zero-size': `${sel('new-deploy')}{width:0 !important;height:0 !important;padding:0 !important;border:0 !important;overflow:hidden !important;}`,
-  // The primary action silently recolored — invisible to structure, caught only vs a visual baseline.
+  // The primary action silently recolored / off-token — visible only vs a baseline (no color oracle in
+  // the fixed check vocabulary, so these are demo-only, not registered).
   'color-regression': `${sel('new-deploy')}{background:#dc2626 !important;background-color:#dc2626 !important;background-image:none !important;}`,
-  // Off-design-token color: renders fine, but the hex is not in the app's palette (--accent etc.).
-  // Catching it needs to know the THEME — not just that a color rendered. The brand text goes
-  // hot-magenta, a value no design token uses.
   'theme-violation': `${sel('brand')}{color:#ff00ff !important;}`,
-  // A PAINT-level regression (the reverse case — Playwright/screenshot territory): a stray filter
-  // re-tints the entire rendered output. reticle_inspect's element props (color/backgroundColor/opacity/
-  // box/cursor) are UNCHANGED — the declared values still apply; the filter only alters the painted
-  // pixels — so the always-on computed-style read misses it. Only a screenshot-diff sees it.
+
+  // Present + laid out, but visually gone — the classic "it's there in the DOM" trap.
+  invisible: fade('new-deploy'),
+  'nav-compose-invisible': fade('nav-compose'),
+  'nav-overview-invisible': fade('nav-overview'),
+  'nav-deployments-invisible': fade('nav-deployments'),
+  'cmdk-invisible': fade('cmdk-open'),
+  'env-filter-invisible': fade('env-filter'),
+  'login-invisible': fade('login-submit'),
+
+  // Collapsed to nothing: a11y tree still lists it; a real click can never land.
+  'zero-size': collapse('new-deploy'),
+  'nav-overview-collapsed': collapse('nav-overview'),
+  'nav-diagnostics-collapsed': collapse('nav-diagnostics'),
+  'cmdk-collapsed': collapse('cmdk-open'),
+  'env-filter-collapsed': collapse('env-filter'),
+  'login-collapsed': collapse('login-submit'),
+
+  // PAINT-level regressions (screenshot territory): a stray filter re-tints the whole rendered output.
+  // Computed element props (color/backgroundColor/opacity/box) are UNCHANGED — the filter only alters
+  // painted pixels — so a computed-style read misses it. Only a screenshot-diff sees it.
   'paint-filter': `html{filter:hue-rotate(90deg) saturate(1.6) !important;}`,
+  'paint-invert': `html{filter:invert(1) hue-rotate(180deg) !important;}`,
+};
+
+/** Occlusion bugs → the control a transparent overlay is placed over. */
+const OCCLUDE: Record<string, string> = {
+  occluded: 'new-deploy',
+  'nav-deployments-occluded': 'nav-deployments',
+  'cmdk-occluded': 'cmdk-open',
 };
 
 /**
- * State/UI desync — the capability gap. The store holds the real deployment count
- * (store.deployments.length), rendered as the Deployments nav badge. This forces the BADGE to a
- * wrong value while the store is untouched: the UI lies about the truth. A tool that only sees the
- * DOM reads a plausible number and cannot know it's wrong; only reading the app's state
- * (reticle_state — the store the app registered with Reticle) reveals the mismatch. Re-applied on every
- * render so React can't restore the real count.
+ * Store-tamper bugs. An action either writes a value it has no business touching (blast radius) or
+ * writes a WRONG value (a business-logic invariant). Fired from the trigger control's click. `defer`
+ * runs the write in a macrotask so it lands AFTER the action's own handler — needed when we corrupt the
+ * value the action itself just produced (e.g. the freshly-created deployment row). The corrupted slice
+ * is always off-screen for the acting view, so no DOM/pixel tool can observe it; only a state read can.
+ */
+interface Tamper {
+  trigger: string;
+  defer: boolean;
+  run: () => void;
+}
+// Corrupt one field of the top deployment (deployments[0]). The deploy TABLE renders service, commit,
+// env, status, region and duration — but NOT `author`/`createdAt` — and the table isn't mounted at all
+// on the Compose view, so a field corrupted there is off-screen for the acting view. Only a store read
+// sees it. (kpis/selectedId/filter and other post-`deployments` slices can't be read: the 150-row array
+// exhausts the transport's node budget, so they serialize to "[TRUNCATED]"; deployments[0] is walked
+// first and stays readable — hence the retarget onto it.)
+const setDep0 = (patch: Partial<Deployment>): (() => void) => (): void => {
+  useApp.setState((s) => ({ deployments: s.deployments.map((d, i) => (i === 0 ? { ...d, ...patch } : d)) }));
+};
+const setHeadStatus = (): void => {
+  const deps = useApp.getState().deployments;
+  if (deps[0] !== undefined && deps[0].status !== 'failed') {
+    useApp.setState({ deployments: deps.map((d, i) => (i === 0 ? { ...d, status: 'failed' } : d)) });
+  }
+};
+const TAMPER: Record<string, Tamper> = {
+  // --- Blast radius: an action mutates an UNRELATED store path (reticle-only) -----------------------
+  'mutation-leak': { trigger: 'compose-generate', defer: false, run: setHeadStatus },
+  'generate-blast-filter': {
+    trigger: 'compose-generate',
+    defer: false,
+    run: () => useApp.setState((s) => ({ filter: { ...s.filter, query: LEAK_TEXT } })),
+  },
+  'generate-blast-selected': {
+    trigger: 'compose-generate',
+    defer: false,
+    run: () => useApp.setState({ selectedId: LEAK_ID }),
+  },
+  'generate-blast-drawer': {
+    trigger: 'compose-generate',
+    defer: false,
+    run: () => useApp.setState({ drawerId: LEAK_ID }),
+  },
+  'nav-blast-prompt': {
+    trigger: 'nav-diagnostics',
+    defer: false,
+    run: () => useApp.setState((s) => ({ compose: { ...s.compose, prompt: LEAK_TEXT } })),
+  },
+  'nav-blast-title': {
+    trigger: 'nav-diagnostics',
+    defer: false,
+    run: () => useApp.setState((s) => ({ compose: { ...s.compose, title: LEAK_TEXT } })),
+  },
+  // Opening the new-deploy modal corrupts the top deployment's author (never shown in the deploy table).
+  'newdeploy-blast-kpi': { trigger: 'new-deploy', defer: false, run: setDep0({ author: LEAK_TEXT }) },
+
+  // --- Business-logic invariant: the action produces a WRONG value (reticle-only) ------------------
+  // An unrelated Compose action corrupts a field of the top deployment; the deploy table isn't mounted
+  // on Compose, so the wrong value never renders — only a store read proves the invariant broken.
+  'kpi-deploys-tamper': { trigger: 'compose-generate', defer: false, run: setDep0({ service: 'corrupted-svc' }) },
+  'kpi-success-tamper': { trigger: 'compose-generate', defer: false, run: setDep0({ region: 'nowhere' }) },
+  'kpi-p95-tamper': { trigger: 'compose-generate', defer: false, run: setDep0({ durationMs: 999999 }) },
+  'kpi-services-tamper': { trigger: 'compose-generate', defer: false, run: setDep0({ commit: '0000000' }) },
+  // A freshly-created deployment gets a wrong author/timestamp in the store; neither field renders in
+  // the deploy list, so the row looks correct while the record is wrong.
+  'create-wrong-author': {
+    trigger: 'deploy-submit',
+    defer: true,
+    run: () =>
+      useApp.setState((s) => ({
+        deployments: s.deployments.map((d, i) => (i === 0 ? { ...d, author: 'ghost' } : d)),
+      })),
+  },
+  'create-wrong-createdat': {
+    trigger: 'deploy-submit',
+    defer: true,
+    run: () =>
+      useApp.setState((s) => ({
+        deployments: s.deployments.map((d, i) => (i === 0 ? { ...d, createdAt: 'last year' } : d)),
+      })),
+  },
+};
+
+/** Console-leak bugs → the control whose click emits a console.error (UI still renders fine). */
+const CONSOLE_LEAKS: Record<string, string> = {
+  'console-leak': 'compose-generate',
+  'console-leak-newdeploy': 'new-deploy',
+  'console-leak-diagnostics': 'nav-diagnostics',
+  'console-leak-cmdk': 'cmdk-open',
+  'console-leak-env': 'env-filter',
+  'console-leak-login': 'login-submit',
+};
+
+/**
+ * Extra-fetch bugs. On the trigger's click, fire one more request. A FORBIDDEN url (a reverted API
+ * migration, a privacy beacon, an N+1 fan-out) must never fire — a net count of 0 catches the extra.
+ * A DOUBLE url is the action's own endpoint fired a second time — a net count of 1 catches the extra.
+ */
+interface ExtraFetch {
+  trigger: string;
+  url: string;
+  method: 'GET' | 'POST';
+}
+const EXTRA_FETCH: Record<string, ExtraFetch> = {
+  // Forbidden (must never fire; expected count 0).
+  'forbidden-call': { trigger: 'compose-generate', url: '/api/legacy-telemetry', method: 'POST' },
+  'forbidden-500-newdeploy': {
+    trigger: 'new-deploy',
+    url: `${API_BASE}/api/broken/500`,
+    method: 'GET',
+  },
+  'login-beacon': { trigger: 'login-submit', url: '/api/legacy-telemetry', method: 'POST' },
+  'nav-beacon': { trigger: 'nav-overview', url: '/api/legacy-telemetry', method: 'POST' },
+  'compose-cors-leak': {
+    trigger: 'compose-generate',
+    url: `${API_BASE}/api/broken/cors`,
+    method: 'GET',
+  },
+  // Double (the action's own request fired twice; expected count 1).
+  'double-submit': {
+    trigger: 'compose-generate',
+    url: `${API_BASE}/api/generate-script`,
+    method: 'POST',
+  },
+  'double-login': { trigger: 'login-submit', url: `${API_BASE}/api/login`, method: 'POST' },
+  'double-fault-500': {
+    trigger: 'fault-500',
+    url: `${API_BASE}/api/broken/500`,
+    method: 'GET',
+  },
+};
+
+/** DOM-text bugs → a testid whose displayed label/number is silently overwritten with a wrong value. */
+const DOM_TEXT: Record<string, { testid: string; wrong: string }> = {
+  'brand-typo': { testid: 'brand', wrong: 'Retcile mission control' },
+  'session-pill-typo': { testid: 'session-pill', wrong: 'Agent offline' },
+  'console-count-lie': { testid: 'console-count', wrong: '7 err' },
+  'nav-label-typo': { testid: 'nav-compose', wrong: 'Composr' },
+};
+
+/**
+ * State/UI desync — the store holds the real deployment count (deployments.length), rendered as the
+ * Deployments nav badge. This forces the BADGE to a wrong value while the store is untouched: the UI
+ * lies. Only reading the app's state reveals the mismatch. Re-applied on every render.
  */
 const DESYNC_FAKE_COUNT = '0';
 function installStateDesync(): void {
@@ -100,13 +265,10 @@ function installStateDesync(): void {
 }
 
 /**
- * Status desync — a per-entity STATUS lies (the second, harder desync instance). The top deployment
- * row (`deployments[0]`, always rendered) has its status pill forced to a value the store does NOT
- * hold — preferring the reassuring "live" so it reads as "a failed/in-flight deploy looks healthy".
- * The pill stays fully consistent (correct tone class + dot), so a screenshot or a11y-tree tool sees
- * a green, shipped deploy. The store keeps the true status; only `reticle_state` reveals the lie. The
- * injector reads the store to pick a guaranteed-different display value, so the mismatch is
- * deterministic regardless of the seed. Re-applied on every render so React can't restore the truth.
+ * Status desync — the top deployment row (deployments[0], always rendered) has its status pill forced
+ * to a value the store does NOT hold, preferring the reassuring "live". The pill stays self-consistent
+ * (correct tone class + dot), so a screenshot/a11y-tree tool sees a healthy deploy. Only a state read
+ * reveals the lie. The injector reads the store to pick a guaranteed-different value.
  */
 const STATUS_DESYNC_ROW_ID = 4000;
 const STATUS_TONE: Record<string, string> = {
@@ -141,10 +303,9 @@ function installStatusDesync(): void {
 }
 
 /**
- * Wasted-render storm — the perf regression no DOM tool can see. Every ~16ms we replace `series` with
- * a NEW array of the SAME values: every component subscribed to it re-renders (~60×/s), but the
- * rendered output is identical, so React reconciles to no DOM mutation. A screenshot/DOM tool sees a
- * perfectly idle page; only the React commit meter (reticle_state __reticle_renders) sees the storm.
+ * Wasted-render storm — every ~16ms we replace `series` with a NEW array of the SAME values: every
+ * component subscribed to it re-renders (~60×/s), but the rendered output is identical, so React
+ * reconciles to no DOM mutation. Only the React commit meter sees the storm.
  */
 function installRenderStorm(): void {
   setInterval(() => {
@@ -152,122 +313,77 @@ function installRenderStorm(): void {
   }, 16);
 }
 
-/**
- * Double-submit — a NETWORK-cardinality regression no presence check can see. The Compose action is
- * supposed to fire exactly ONE `POST /api/generate-script`; this wraps fetch so that request goes out
- * TWICE (the classic double-submit / useEffect-double-fire / retry-storm bug). The UI looks identical —
- * one result renders — and a presence assertion ("a POST fired") still passes. Only a `net.count:1`
- * consequence catches it. Installed AFTER the Reticle SDK has patched fetch (see main.tsx order), so the
- * duplicate is observed by the network buffer; the duplicate is fire-and-forget (errors swallowed) so
- * it never breaks the app.
- */
-const DOUBLE_SUBMIT_PATH = '/api/generate-script';
-function installDoubleSubmit(): void {
-  const origFetch = window.fetch.bind(window);
-  window.fetch = (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
-    const url =
-      typeof input === 'string' ? input : input instanceof Request ? input.url : input.toString();
-    const method = (
-      init?.method ?? (input instanceof Request ? input.method : 'GET')
-    ).toUpperCase();
-    if (method === 'POST' && url.includes(DOUBLE_SUBMIT_PATH)) {
-      void origFetch(input, init).catch(() => undefined);
-    }
-    return origFetch(input, init);
-  };
-}
-
-/**
- * Forbidden-call — the NEGATIVE cardinality regression: an action calls an endpoint it must NOT. The
- * classic shapes are a reverted API migration (something starts calling the legacy endpoint again), an
- * analytics/telemetry beacon sneaking onto a privacy-sensitive screen, or an N+1 fan-out. Nothing
- * visible changes — the request just goes out. The Compose action fires a forbidden POST to
- * `/api/legacy-telemetry`; only a `net { urlContains, count: 0 }` consequence ("this must never fire")
- * catches it. Synchronous on the click + through the Reticle-patched fetch, so it's observed; fire-and-forget.
- */
-const FORBIDDEN_CALL_PATH = '/api/legacy-telemetry';
-function installForbiddenCall(): void {
-  document.addEventListener(
-    'click',
-    (e) => {
-      const target = e.target;
-      if (!(target instanceof Element) || target.closest(sel('compose-generate')) === null) return;
-      void window.fetch(FORBIDDEN_CALL_PATH, { method: 'POST', body: '{}' }).catch(() => undefined);
-    },
-    true,
-  );
-}
-
-/**
- * Mutation-leak — the BLAST-RADIUS regression: an action over-reaches and mutates store state it has
- * no business touching. Here the Compose action (which should only set compose.result) ALSO, as an
- * unintended side-effect, corrupts the top deployment's status in the store. The Compose UI looks
- * perfect, the Deployments view isn't even on screen — so a DOM/visual tool sees nothing wrong. Only
- * asserting that the UNRELATED store path stayed put (a state invariant) catches the leak. No
- * out-of-page tool can make that assertion at all; it needs the program's own state.
- */
-function installMutationLeak(): void {
-  // Fire synchronously on the Compose action's click (capture phase), so the unintended store write is
-  // present the moment the action runs — independent of the async POST. The Deployments view isn't
-  // rendered, so this produces no DOM mutation: invisible to any out-of-page tool, visible only in state.
-  document.addEventListener(
-    'click',
-    (e) => {
-      const target = e.target;
-      if (!(target instanceof Element) || target.closest(sel('compose-generate')) === null) return;
-      const deps = useApp.getState().deployments;
-      const head = deps[0];
-      if (head !== undefined && head.status !== 'failed') {
-        useApp.setState({
-          deployments: deps.map((d, i) => (i === 0 ? { ...d, status: 'failed' } : d)),
-        });
-      }
-    },
-    true,
-  );
-}
-
-/**
- * Console-leak — a regression that logs a `console.error` on an action while the UI still works. The
- * Compose action renders its result fine, but a (simulated) caught error / unhandled rejection surfaces
- * on the console — exactly the "it works but the log is screaming" regression a structural or visual
- * check sails past. A clean-console success consequence (console { absent:true }) catches it. Fires
- * AFTER the action's own handler (a capture-phase listener + a microtask) so the error lands in the
- * window the success oracle reads.
- */
-const CONSOLE_LEAK_TESTID = 'compose-generate';
-function installConsoleLeak(): void {
-  document.addEventListener(
-    'click',
-    (e) => {
-      const target = e.target;
-      if (target instanceof Element && target.closest(sel(CONSOLE_LEAK_TESTID)) !== null) {
-        setTimeout(() => {
-          console.error(
-            '[regression] generate(): unhandled rejection while formatting release note',
-          );
-        }, 0);
-      }
-    },
-    true,
-  );
-}
-
 /** Inject a transparent overlay covering the target so pointer hits land on the overlay, not it. */
-function installOcclusion(): void {
+function installOcclusion(testid: string): void {
+  const overlayId = `reticle-hard-bug-overlay-${testid}`;
   const apply = (): void => {
-    const target = document.querySelector(sel('new-deploy'));
-    if (target === null || document.getElementById(OVERLAY_ID) !== null) return;
+    const target = document.querySelector(sel(testid));
+    if (target === null || document.getElementById(overlayId) !== null) return;
     const rect = target.getBoundingClientRect();
     const overlay = document.createElement('div');
-    overlay.id = OVERLAY_ID;
+    overlay.id = overlayId;
     overlay.style.cssText = `position:fixed;left:${rect.left}px;top:${rect.top}px;width:${rect.width}px;height:${rect.height}px;z-index:99999;background:transparent;`;
     document.body.appendChild(overlay);
   };
-  // Re-apply after render + on resize so the overlay tracks the target.
-  const observer = new MutationObserver(apply);
-  observer.observe(document.documentElement, { childList: true, subtree: true });
+  new MutationObserver(apply).observe(document.documentElement, { childList: true, subtree: true });
   apply();
+}
+
+/**
+ * One capture-phase click listener drives every action-triggered bug (tamper / console leak / extra
+ * fetch). Capture phase fires before React's root-delegated handler, so a synchronous tamper is present
+ * the moment the action runs; a deferred tamper is scheduled to land right after. Fire-and-forget:
+ * errors are swallowed so a bug never breaks the app. No-op when nothing is active.
+ */
+function installClickBugs(bugs: ReadonlySet<string>): void {
+  const tampers = [...bugs].map((id) => TAMPER[id]).filter((t): t is Tamper => t !== undefined);
+  const leaks = [...bugs].map((id) => CONSOLE_LEAKS[id]).filter((t): t is string => t !== undefined);
+  const fetches = [...bugs]
+    .map((id) => EXTRA_FETCH[id])
+    .filter((f): f is ExtraFetch => f !== undefined);
+  if (tampers.length === 0 && leaks.length === 0 && fetches.length === 0) return;
+  document.addEventListener(
+    'click',
+    (e) => {
+      const target = e.target;
+      if (!(target instanceof Element)) return;
+      const hit = (t: string): boolean => target.closest(sel(t)) !== null;
+      for (const t of tampers) {
+        if (!hit(t.trigger)) continue;
+        if (t.defer) setTimeout(t.run, 0);
+        else t.run();
+      }
+      for (const trigger of leaks) {
+        if (hit(trigger)) setTimeout(() => console.error(CONSOLE_MSG), 0);
+      }
+      for (const f of fetches) {
+        if (!hit(f.trigger)) continue;
+        const init: RequestInit = f.method === 'POST' ? { method: 'POST', body: '{}' } : { method: 'GET' };
+        void window.fetch(f.url, init).catch(() => undefined);
+      }
+    },
+    true,
+  );
+}
+
+/** Silently overwrite a labelled element's text with a wrong value; re-applied so React can't restore. */
+function installDomTextBugs(bugs: ReadonlySet<string>): void {
+  const active = [...bugs]
+    .map((id) => DOM_TEXT[id])
+    .filter((b): b is { testid: string; wrong: string } => b !== undefined);
+  if (active.length === 0) return;
+  const apply = (): void => {
+    for (const b of active) {
+      const el = document.querySelector(sel(b.testid));
+      if (el !== null && el.textContent !== b.wrong) el.textContent = b.wrong;
+    }
+  };
+  apply();
+  new MutationObserver(apply).observe(document.documentElement, {
+    childList: true,
+    subtree: true,
+    characterData: true,
+  });
 }
 
 /** Append the combined CSS for the active CSS-based bugs into one <style>. */
@@ -282,7 +398,8 @@ function installCss(bugs: ReadonlySet<string>): void {
 
 /**
  * Install the hard-bug injector. No-op unless `?reticle-bug=` is present. Each id degrades a present,
- * correctly-labelled element so only computed-style / geometry observation can catch it.
+ * correctly-labelled element (or the store behind it) so only observation of style/geometry, the
+ * network, the console, or the app's state can catch it.
  */
 export function installBugInjector(): void {
   const raw = new URLSearchParams(window.location.search).get(BUG_PARAM);
@@ -294,12 +411,12 @@ export function installBugInjector(): void {
       .filter((s) => s.length > 0),
   );
   installCss(bugs);
-  if (bugs.has('occluded')) installOcclusion();
+  for (const [id, testid] of Object.entries(OCCLUDE)) {
+    if (bugs.has(id)) installOcclusion(testid);
+  }
   if (bugs.has('state-desync')) installStateDesync();
   if (bugs.has('status-stale')) installStatusDesync();
   if (bugs.has('render-storm')) installRenderStorm();
-  if (bugs.has('double-submit')) installDoubleSubmit();
-  if (bugs.has('console-leak')) installConsoleLeak();
-  if (bugs.has('mutation-leak')) installMutationLeak();
-  if (bugs.has('forbidden-call')) installForbiddenCall();
+  installClickBugs(bugs);
+  installDomTextBugs(bugs);
 }

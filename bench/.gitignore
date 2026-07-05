@@ -1,3 +1,8 @@
 raw/
 logs/
 artifacts/
+
+# benchmark run artifacts (regenerated per run)
+pw-vs-reticle/results*.json
+pw-vs-reticle/SCORECARD*.md
+pw-vs-reticle/MASTER-SCORECARD.md

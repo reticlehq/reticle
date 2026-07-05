@@ -69,6 +69,49 @@ importers:
         specifier: ^4.21.2
         version: 4.22.2
 
+  apps/bench-app:
+    dependencies:
+      '@reticlehq/browser':
+        specifier: workspace:*
+        version: link:../../packages/browser
+      '@reticlehq/react':
+        specifier: workspace:*
+        version: link:../../packages/react
+      react:
+        specifier: ^19.0.0
+        version: 19.2.7
+      react-dom:
+        specifier: ^19.0.0
+        version: 19.2.7(react@19.2.7)
+      zustand:
+        specifier: ^5.0.14
+        version: 5.0.14(@types/react@19.2.17)(react@19.2.7)
+    devDependencies:
+      '@babel/core':
+        specifier: ^7.29.7
+        version: 7.29.7
+      '@reticlehq/babel-plugin':
+        specifier: workspace:*
+        version: link:../../packages/babel-plugin
+      '@rolldown/plugin-babel':
+        specifier: ^0.2.3
+        version: 0.2.3(@babel/core@7.29.7)(@babel/runtime@7.29.7)(rolldown@1.0.3)(vite@8.0.16(@types/node@22.19.20)(esbuild@0.28.1))
+      '@types/babel__core':
+        specifier: ^7.20.5
+        version: 7.20.5
+      '@types/react':
+        specifier: ^19.0.0
+        version: 19.2.17
+      '@types/react-dom':
+        specifier: ^19.0.0
+        version: 19.2.3(@types/react@19.2.17)
+      '@vitejs/plugin-react':
+        specifier: ^6.0.2
+        version: 6.0.2(@rolldown/plugin-babel@0.2.3(@babel/core@7.29.7)(@babel/runtime@7.29.7)(rolldown@1.0.3)(vite@8.0.16(@types/node@22.19.20)(esbuild@0.28.1)))(vite@8.0.16(@types/node@22.19.20)(esbuild@0.28.1))
+      vite:
+        specifier: ^8.0.16
+        version: 8.0.16(@types/node@22.19.20)(esbuild@0.28.1)
+
   apps/demo:
     dependencies:
       react:
@@ -5348,7 +5391,6 @@ snapshots:
     optionalDependencies:
       '@babel/runtime': 7.29.7
       vite: 8.0.16(@types/node@22.19.20)(esbuild@0.28.1)
-    optional: true
 
   '@rolldown/pluginutils@1.0.0-rc.3': {}
 
