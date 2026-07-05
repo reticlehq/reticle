@@ -1,0 +1,332 @@
+{
+  "rows": [
+    {
+      "harness": "reticle-script",
+      "bug": "invisible",
+      "category": "ui-visual",
+      "variant": "clean",
+      "caught": false,
+      "expect": "both",
+      "bytes": 3505,
+      "ms": 2448,
+      "note": "occluded=false box=113.796875x54 opacity=1"
+    },
+    {
+      "harness": "reticle-script",
+      "bug": "invisible",
+      "category": "ui-visual",
+      "variant": "buggy",
+      "caught": true,
+      "expect": "both",
+      "bytes": 3153,
+      "ms": 2431,
+      "note": "occluded=false box=113.796875x54 opacity=0"
+    },
+    {
+      "harness": "reticle-script",
+      "bug": "occluded",
+      "category": "ui-visual",
+      "variant": "clean",
+      "caught": false,
+      "expect": "both",
+      "bytes": 3131,
+      "ms": 2435,
+      "note": "occluded=false box=113.796875x54 opacity=1"
+    },
+    {
+      "harness": "reticle-script",
+      "bug": "occluded",
+      "category": "ui-visual",
+      "variant": "buggy",
+      "caught": true,
+      "expect": "both",
+      "bytes": 3171,
+      "ms": 2443,
+      "note": "occluded=true box=113.796875x54 opacity=1"
+    },
+    {
+      "harness": "reticle-script",
+      "bug": "paint-filter",
+      "category": "ui-paint",
+      "variant": "clean",
+      "caught": false,
+      "expect": "playwright-only",
+      "bytes": 1976,
+      "ms": 1719,
+      "note": "reticle script has no pixel diff (inspect computed-styles unchanged)"
+    },
+    {
+      "harness": "reticle-script",
+      "bug": "paint-filter",
+      "category": "ui-paint",
+      "variant": "buggy",
+      "caught": false,
+      "expect": "playwright-only",
+      "bytes": 1997,
+      "ms": 1716,
+      "note": "reticle script has no pixel diff (inspect computed-styles unchanged)"
+    },
+    {
+      "harness": "reticle-script",
+      "bug": "state-desync",
+      "category": "state",
+      "variant": "clean",
+      "caught": false,
+      "expect": "reticle-only",
+      "bytes": 20101,
+      "ms": 1721,
+      "note": "storeLen=150 badge=150"
+    },
+    {
+      "harness": "reticle-script",
+      "bug": "state-desync",
+      "category": "state",
+      "variant": "buggy",
+      "caught": true,
+      "expect": "reticle-only",
+      "bytes": 20197,
+      "ms": 1723,
+      "note": "storeLen=150 badge=0"
+    },
+    {
+      "harness": "reticle-script",
+      "bug": "console-leak",
+      "category": "console",
+      "variant": "clean",
+      "caught": false,
+      "expect": "both",
+      "bytes": 3563,
+      "ms": 3948,
+      "note": "errors=0"
+    },
+    {
+      "harness": "reticle-script",
+      "bug": "console-leak",
+      "category": "console",
+      "variant": "buggy",
+      "caught": true,
+      "expect": "both",
+      "bytes": 3723,
+      "ms": 3952,
+      "note": "errors=1"
+    },
+    {
+      "harness": "reticle-script",
+      "bug": "double-submit",
+      "category": "network",
+      "variant": "clean",
+      "caught": false,
+      "expect": "both",
+      "bytes": 3737,
+      "ms": 4141,
+      "note": "count=1 expected=1"
+    },
+    {
+      "harness": "reticle-script",
+      "bug": "double-submit",
+      "category": "network",
+      "variant": "buggy",
+      "caught": true,
+      "expect": "both",
+      "bytes": 3855,
+      "ms": 4160,
+      "note": "count=2 expected=1"
+    },
+    {
+      "harness": "reticle-script",
+      "bug": "mutation-leak",
+      "category": "state-blast-radius",
+      "variant": "clean",
+      "caught": false,
+      "expect": "reticle-only",
+      "bytes": 3761,
+      "ms": 3956,
+      "note": "before=\"queued\" after=\"queued\""
+    },
+    {
+      "harness": "reticle-script",
+      "bug": "mutation-leak",
+      "category": "state-blast-radius",
+      "variant": "buggy",
+      "caught": true,
+      "expect": "reticle-only",
+      "bytes": 3813,
+      "ms": 3951,
+      "note": "before=\"queued\" after=\"failed\""
+    },
+    {
+      "harness": "playwright-script",
+      "bug": "invisible",
+      "category": "ui-visual",
+      "variant": "clean",
+      "caught": false,
+      "expect": "both",
+      "bytes": 115,
+      "ms": 31696,
+      "note": "box=124.5x36 opacity=1 occluded=false"
+    },
+    {
+      "harness": "playwright-script",
+      "bug": "invisible",
+      "category": "ui-visual",
+      "variant": "buggy",
+      "caught": true,
+      "expect": "both",
+      "bytes": 115,
+      "ms": 31616,
+      "note": "box=124.5x36 opacity=0 occluded=false"
+    },
+    {
+      "harness": "playwright-script",
+      "bug": "occluded",
+      "category": "ui-visual",
+      "variant": "clean",
+      "caught": false,
+      "expect": "both",
+      "bytes": 115,
+      "ms": 31618,
+      "note": "box=124.5x36 opacity=1 occluded=false"
+    },
+    {
+      "harness": "playwright-script",
+      "bug": "occluded",
+      "category": "ui-visual",
+      "variant": "buggy",
+      "caught": true,
+      "expect": "both",
+      "bytes": 114,
+      "ms": 31560,
+      "note": "box=124.5x36 opacity=1 occluded=true"
+    },
+    {
+      "harness": "playwright-script",
+      "bug": "paint-filter",
+      "category": "ui-paint",
+      "variant": "clean",
+      "caught": false,
+      "expect": "playwright-only",
+      "bytes": 335045,
+      "ms": 31639,
+      "note": "baseline captured (335045B)"
+    },
+    {
+      "harness": "playwright-script",
+      "bug": "paint-filter",
+      "category": "ui-paint",
+      "variant": "buggy",
+      "caught": true,
+      "expect": "playwright-only",
+      "bytes": 401913,
+      "ms": 31623,
+      "note": "png-byte diff ratio=0.995 (shot 401913B)"
+    },
+    {
+      "harness": "playwright-script",
+      "bug": "state-desync",
+      "category": "state",
+      "variant": "clean",
+      "caught": false,
+      "expect": "reticle-only",
+      "bytes": 3,
+      "ms": 31134,
+      "note": "badge=\"150\" — no app-state access to compare against"
+    },
+    {
+      "harness": "playwright-script",
+      "bug": "state-desync",
+      "category": "state",
+      "variant": "buggy",
+      "caught": false,
+      "expect": "reticle-only",
+      "bytes": 1,
+      "ms": 31167,
+      "note": "badge=\"0\" — no app-state access to compare against"
+    },
+    {
+      "harness": "playwright-script",
+      "bug": "console-leak",
+      "category": "console",
+      "variant": "clean",
+      "caught": false,
+      "expect": "both",
+      "bytes": 0,
+      "ms": 32287,
+      "note": "errors=0"
+    },
+    {
+      "harness": "playwright-script",
+      "bug": "console-leak",
+      "category": "console",
+      "variant": "buggy",
+      "caught": true,
+      "expect": "both",
+      "bytes": 74,
+      "ms": 32283,
+      "note": "errors=1"
+    },
+    {
+      "harness": "playwright-script",
+      "bug": "double-submit",
+      "category": "network",
+      "variant": "clean",
+      "caught": false,
+      "expect": "both",
+      "bytes": 69,
+      "ms": 32456,
+      "note": "count=1 expected=1"
+    },
+    {
+      "harness": "playwright-script",
+      "bug": "double-submit",
+      "category": "network",
+      "variant": "buggy",
+      "caught": true,
+      "expect": "both",
+      "bytes": 137,
+      "ms": 32487,
+      "note": "count=2 expected=1"
+    },
+    {
+      "harness": "playwright-script",
+      "bug": "mutation-leak",
+      "category": "state-blast-radius",
+      "variant": "clean",
+      "caught": false,
+      "expect": "reticle-only",
+      "bytes": 0,
+      "ms": 31845,
+      "note": "no app-state access — off-screen store mutation is invisible to the DOM"
+    },
+    {
+      "harness": "playwright-script",
+      "bug": "mutation-leak",
+      "category": "state-blast-radius",
+      "variant": "buggy",
+      "caught": false,
+      "expect": "reticle-only",
+      "bytes": 0,
+      "ms": 31847,
+      "note": "no app-state access — off-screen store mutation is invisible to the DOM"
+    }
+  ],
+  "agg": {
+    "reticle-script": {
+      "bugs": 7,
+      "caught": 6,
+      "expected": 6,
+      "caughtOfExpected": 6,
+      "falsePositives": 0,
+      "avgBytes": 5701,
+      "avgMs": 2911
+    },
+    "playwright-script": {
+      "bugs": 7,
+      "caught": 5,
+      "expected": 5,
+      "caughtOfExpected": 5,
+      "falsePositives": 0,
+      "avgBytes": 57479,
+      "avgMs": 31798
+    }
+  }
+}
