@@ -6,3 +6,6 @@ artifacts/
 pw-vs-reticle/results*.json
 pw-vs-reticle/SCORECARD*.md
 pw-vs-reticle/MASTER-SCORECARD.md
+
+# local API keys — never committed
+.env
