@@ -201,7 +201,7 @@ export class Presenter {
       <div data-reticle-cursor></div>
       <div data-reticle-ring></div>
       <div data-reticle-hud>
-        <div class="reticle-hud-head"><span class="reticle-dot"></span><span class="reticle-brand">reticle</span><span class="reticle-chip" data-reticle-chip></span><span class="reticle-tally" data-reticle-tally hidden></span><span class="reticle-live"></span><span class="reticle-head-sp"></span><button type="button" data-reticle-min-btn title="Minimise" aria-label="Minimise the panel">⌄</button>${CONTROLS_HEAD_HTML}<span class="reticle-maxhint" aria-hidden="true">⌃</span></div>
+        <div class="reticle-hud-head"><span class="reticle-dot"></span><span class="reticle-brand">Reticle</span><span class="reticle-chip" data-reticle-chip></span><span class="reticle-tally" data-reticle-tally hidden></span><span class="reticle-live"></span><span class="reticle-head-sp"></span><button type="button" data-reticle-min-btn title="Minimise" aria-label="Minimise the panel">⌄</button>${CONTROLS_HEAD_HTML}<span class="reticle-maxhint" aria-hidden="true">⌃</span></div>
         <div class="reticle-act-strip"><span class="reticle-act">idle</span></div>
         ${CONTROLS_BANNER_HTML}
         <div ${DATA_RETICLE_LOG}></div>

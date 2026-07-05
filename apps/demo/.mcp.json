@@ -1,8 +1,0 @@
-{
-  "mcpServers": {
-    "reticle": {
-      "command": "node",
-      "args": ["../../packages/core/dist/cli.js", "mcp"]
-    }
-  }
-}

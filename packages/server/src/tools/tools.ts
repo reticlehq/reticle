@@ -41,11 +41,15 @@ export const TOOLS: ToolDef[] = [
     outputSchema: {
       sessions: z
         .array(
+          // Keep in sync with SessionInfo (session.ts) plus the handler-added realInputAvailable/leased.
+          // A strict MCP client validates this against the payload, so an undeclared field is a hard error.
           z.object({
             sessionId: z.string(),
             url: z.string(),
             projectId: z.string().optional(),
             title: z.string().optional(),
+            adapters: z.array(z.string()),
+            hasCapabilities: z.boolean(),
             lastSeenMs: z.number(),
             throttled: z.boolean(),
             focused: z.boolean(),
@@ -53,6 +57,9 @@ export const TOOLS: ToolDef[] = [
             realInputAvailable: z.boolean().optional(),
             leased: z.boolean().optional(),
             stale: z.boolean().optional(),
+            cleanup_suggestion: z.string().optional(),
+            pendingMarks: z.number().optional(),
+            review_suggestion: z.string().optional(),
             recommendation: z.string().optional(),
           }),
         )

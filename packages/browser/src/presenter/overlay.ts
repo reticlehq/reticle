@@ -28,11 +28,11 @@ export function installOverlay(): OverlayHandle {
   const el = document.createElement('div');
   el.setAttribute('data-reticle-overlay', '');
   el.style.cssText = STYLE;
-  el.textContent = 'reticle: connecting…';
+  el.textContent = 'Reticle: connecting…';
   document.body.appendChild(el);
   return {
     update: (stats) => {
-      el.textContent = `reticle ${stats.connected ? '●' : '○'} ${String(stats.events)} events`;
+      el.textContent = `Reticle ${stats.connected ? '●' : '○'} ${String(stats.events)} events`;
     },
     destroy: () => {
       el.remove();

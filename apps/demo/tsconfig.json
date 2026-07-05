@@ -7,6 +7,5 @@
     "noEmit": true,
     "composite": false
   },
-  "include": ["src/**/*", "vite.config.ts"],
-  "references": [{ "path": "../../packages/browser" }, { "path": "../../packages/react" }]
+  "include": ["src/**/*", "vite.config.ts"]
 }

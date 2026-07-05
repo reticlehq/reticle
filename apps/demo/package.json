@@ -2,33 +2,24 @@
   "name": "@reticlehq/demo",
   "version": "0.0.0",
   "private": true,
-  "description": "A small React dashboard used to dogfood Reticle (tabs, lists, modals, forms, API calls).",
+  "description": "A minimal Vite + React app for testing the Reticle install experience end-to-end.",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "dev:reticle": "vite --port 4310",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc -b",
-    "lint": "eslint src"
+    "typecheck": "tsc -b"
   },
   "dependencies": {
-    "@reticlehq/browser": "workspace:*",
-    "@reticlehq/react": "workspace:*",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "zustand": "^5.0.14"
   },
   "devDependencies": {
-    "@babel/core": "^7.29.7",
-    "@rolldown/plugin-babel": "^0.2.3",
-    "@reticlehq/babel-plugin": "workspace:*",
-    "@types/babel__core": "^7.20.5",
+    "@reticlehq/core": "workspace:*",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^6.0.2",
-    "agentation": "^3.0.2",
-    "agentation-mcp": "^1.2.0",
     "vite": "^8.0.16"
   }
 }

@@ -247,6 +247,16 @@ if (import.meta.env.DEV) {
 }
 ```
 
+To emit `reticle.signal()` from app code (components, stores), **never import `reticle` statically** — a top-level `import { reticle } from '@reticlehq/core'` drags the whole dev-only SDK into your production bundle. Funnel signals through a dev-guarded helper so `import.meta.env.DEV` dead-code-eliminates it in prod:
+
+```ts
+// src/reticle.ts — import { signal } from './reticle' in your components
+export function signal(name: string, data?: Record<string, unknown>): void {
+  if (!import.meta.env.DEV) return;
+  void import('@reticlehq/core').then(({ reticle }) => reticle.signal(name, data));
+}
+```
+
 **Next.js (App Router)**
 
 Create `app/reticle-dev.tsx`:
@@ -313,7 +323,7 @@ Fill in framework from Q1, port from Q3. Omit `port` if using the default (4400)
 
 Tell the user: **"Run `npm run dev` (your normal dev server) and open the app in your browser."**
 
-Once they confirm the app is open, call `reticle_wait_ready()` then `reticle_sessions()`. You should see a session whose URL matches the app's localhost address. If no session appears after a few seconds, the SDK is not yet wired — confirm Step 3 was applied and the page has been refreshed.
+Once they confirm the app is open, call `reticle_run({ tool: "reticle_wait_ready" })` (or poll `reticle_sessions()`), then `reticle_sessions()`. You should see a session whose URL matches the app's localhost address. If no session appears after a few seconds, the SDK is not yet wired — confirm Step 3 was applied and the page has been refreshed.
 
 When a session is confirmed, tell the user:
 
@@ -331,7 +341,7 @@ When a session is confirmed, tell the user:
 
 ## Phase 1 — Connect
 
-Just ran `reticle init` or started the dev server? Call **`reticle_wait_ready()`** first — it blocks until the app's SDK connects (returns instantly if it already has), so your first real call doesn't lose the race with the WebSocket. Then call `reticle_sessions()`. Three possible states:
+Just ran `reticle init` or started the dev server? Block until the app's SDK connects first, so your first real call doesn't lose the race with the WebSocket — call **`reticle_run({ tool: "reticle_wait_ready" })`** (in the default `hybrid` profile `reticle_wait_ready` isn't advertised directly; reach it via `reticle_run`), or just poll **`reticle_sessions()`** until your tab appears. Then, with `reticle_sessions()`, there are three possible states:
 
 **A. One session → proceed.**
 
@@ -353,10 +363,12 @@ Call these in parallel:
 
 ```
 reticle_snapshot({ sessionId, maxDepth: 3 })
-reticle_capabilities({ sessionId })
+reticle_run({ tool: "reticle_capabilities", args: { sessionId } })   // not advertised in the default hybrid profile — reach it via reticle_run
 reticle_network({ sessionId, limit: 10 })
 reticle_console({ sessionId, limit: 20 })
 ```
+
+> **Default `hybrid` profile:** only the ~14 core verify tools are advertised directly. Anything else the skill names — `reticle_wait_ready`, `reticle_capabilities`, `reticle_yield`, `reticle_review`, `reticle_inspect`, the flow/record tools — is reached with `reticle_run({ tool, args })` (or list params first with `reticle_tools`). To advertise them all directly instead, set `RETICLE_TOOL_PROFILE=standard` (flows + extras) or `=full` (everything).
 
 Build a mental model:
 
@@ -396,7 +408,7 @@ Then pick a mode:
    ```
 4. Assert — always use `since` from the act result:
    ```
-   reticle_assert({ sessionId, since, timeout_ms: 5000, predicate: { allOf: [
+   reticle_assert({ sessionId, since, timeout_ms: 5000, predicate: { kind: "allOf", predicates: [
      { kind: "net",     method: "POST", urlContains: "/api/...", status: 200 },
      { kind: "element", query: { role: "...", name: "..." }, state: "visible" },
      { kind: "signal",  name: "..." },
