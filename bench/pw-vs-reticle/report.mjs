@@ -39,9 +39,12 @@ if (matrix) {
   L.push('|---|--:|---|');
   L.push(`| state / UI-store desync | ${(byCat['state'] ?? []).length} | a count/label/status the DOM shows but the store contradicts — stale selectors, half-applied optimistic updates, over-reaching reducers (blast radius). Looks plausible on screen. |`);
   L.push(`| business-logic | ${(byCat['business-logic'] ?? []).length} | a wrong value in the store while off-screen (bad author/timestamp/KPI) — exactly what unit tests target but DOM E2E misses. |`);
-  L.push(`\nReticle-only bugs: \`${rOnly.map((r) => r.bug).join('`, `')}\`\n`);
-  L.push(`Playwright-only (pixels): \`${pOnly.map((r) => r.bug).join('`, `') || '—'}\`. On the other **${total - rOnly.length - pOnly.length}** bugs (DOM/console/network) both tie.\n`);
-  L.push('> Frequency: these classes are among the most common silent regressions in React/SPA work — any derived value, any reducer refactor, any duplicate/forbidden request. If a team ships React, they ship these.\n');
+  L.push(`\nReticle-only bugs (deterministic single-view harness): \`${rOnly.map((r) => r.bug).join('`, `')}\`\n`);
+  L.push(`Playwright-only (pixels): \`${pOnly.map((r) => r.bug).join('`, `') || '—'}\`. On the other **${total - rOnly.length - pOnly.length}** bugs both tie.\n`);
+  L.push('> **HONEST CORRECTION (from the authentic Claude-agent run, #6 below):** this "14" is the *single-view* number — the scripted Playwright checks stayed on the acting screen and stubbed state-reads to false. A **thorough** Claude+Playwright-MCP agent that *cross-navigates* DOES catch most of these, because the corrupted value is rendered in *another* view (the Deployments table shows `service`/`status`/`commit`/`region`). So this is not "Playwright is blind" — it is:\n');
+  L.push('> 1. **Efficiency**: Reticle reads the truth with **one** `reticle_state` call; Playwright must reconstruct it by navigating across views and cross-referencing rendered values (far more turns/tokens/time).\n');
+  L.push('> 2. **Genuinely Reticle-exclusive**: only the bugs whose corrupted value is **never rendered anywhere** (e.g. `create-wrong-author`/`createdat` — author/createdAt are not table columns) — a smaller set than 14.\n');
+  L.push('> The fixture also over-flags itself (corrupt values like `"corrupted-svc"` are self-labeling) — a real bug would use a plausible-but-wrong value, which only the store can disprove. Net honest claim: **Reticle catches state/business bugs directly and cheaply; Playwright can catch the rendered ones with much more work and misses the never-rendered ones.**\n');
 
   L.push('## #3 + #4 — total time to fully test the suite\n');
   L.push('| Metric | Reticle-script | Playwright-script |');
@@ -95,8 +98,10 @@ L.push('**Measured, and the honest result:** under `?opaque=2`, `reticle_state` 
 L.push('The scripted *trigger* (clicking an icon-button by visible text) was unreliable once `role` was stripped — but that limit hit **both** scripted tools equally (a harness-anchoring artifact, not a Reticle capability gap; an LLM agent or role/source anchoring drives the trigger fine, and the hard part — reading the store — already works opaque). Net: **an opaque shell can only *hurt* Playwright** (its entire toolkit is DOM selectors); Reticle keeps its state reads (anchor-free) and its component:file:line source stamps (stable when classes hash).\n');
 if (opaque) L.push('> Reticle read the store under a fully-stripped DOM: proof the state layer needs no selectors at all.\n');
 
-L.push('## #6-authentic — Claude Code as harness (in-session MCP)\n');
-The same Playwright-MCP vs Reticle-MCP head-to-head driven by *this* Claude Code (not the gpt-4o proxy), via the in-session `reticle_*` + `playwright_*` MCP tools. Setup is in place (`.mcp.json`: reticle daemon on 4460 + `@playwright/mcp` registered; both load on Claude Code start). **Not run autonomously:** both in-session MCP servers were killed during the proxy run\'s process cleanup and only respawn via an interactive `/mcp` reconnect (you were asleep). To run it: `/mcp` (reconnect reticle + playwright), then ask to drive the head-to-head in-session. Expectation: Claude is a stronger tool-user than gpt-4o, so the token/turn/$ gap (Reticle ~½ the cost) holds or widens and the proxy\'s clean-build over-flagging disappears. The gpt-4o proxy above already answers the head-to-head quantitatively.\n');
+L.push('## #6-authentic — Claude Code as harness\n');
+L.push('The in-session MCP tools were killed during the proxy cleanup, so I stood up an HTTP bridge (`mcp-bridge.mjs`) over each MCP and drove them with **Claude subagents** (via curl) — the authentic "Claude as harness" test, on `invisible` + `kpi-deploys-tamper` + `mutation-leak`.\n');
+L.push('**Detection: both agents caught 3/3.** Claude+Reticle-MCP read the store directly (`reticle_state`); Claude+Playwright-MCP cross-navigated to the Deployments table and read the rendered `service`/`status`. This is what corrected #1 — a capable agent catches the *rendered* state bugs with either tool.\n');
+L.push('**Cost: not cleanly comparable this run** (my bug: Reticle bridge daemon on 4462 while the app dialed 4460, so the Reticle subagent burned most of its 76k tokens / 40 calls debugging the bridge, not verifying). Playwright subagent (clean): 51.5k tokens / 21 calls / 214s. For a valid per-bug cost comparison use the gpt-4o proxy above (Reticle-MCP ~½ the tokens). A one-line port fix + re-run gives a clean authentic cost number.\n');
 
 const out = L.join('\n') + '\n';
 writeFileSync(path.join(dir, 'MASTER-SCORECARD.md'), out);
