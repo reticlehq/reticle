@@ -131,6 +131,9 @@ export const useApp = create<AppState>((set, get) => ({
       author: get().auth?.email.split('@')[0] ?? 'you',
       commit: id.toString(16).slice(0, 7),
       createdAt: 'just now',
+      // Never rendered — a fresh deploy is not yet costed (0) and its checksum mirrors the commit.
+      costUsd: 0,
+      checksum: id.toString(16).slice(0, 7),
     };
     // Optimistic: the row is in the store immediately (state) before it "settles" in the UI.
     set({ deployments: [dep, ...get().deployments] });

@@ -13,6 +13,12 @@ export interface Deployment {
   author: string;
   commit: string;
   createdAt: string;
+  // Internal bookkeeping that lives in the store but is NEVER rendered in any view/component
+  // (audited: absent from DeployTable, DeployDrawer, Overview, and every other JSX). These exist so a
+  // store-tamper regression can corrupt a field with NO on-screen shadow — a DOM/pixel tool has
+  // nothing to read, only a state read proves the value wrong.
+  costUsd: number;
+  checksum: string;
 }
 
 export interface Kpi {
@@ -91,6 +97,10 @@ export function seedDeployments(count = 40): Deployment[] {
         .padStart(7, '0')
         .slice(0, 7),
       createdAt: `${Math.floor(r() * 59)}m ago`,
+      // Deterministic, never-rendered. Not drawn from the PRNG so the visible dashboard is unchanged
+      // and the exact value is knowable for a state-invariant oracle. row0: 1200 / '9a3f00'.
+      costUsd: 1200 + i * 15,
+      checksum: (0x9a3f00 + i).toString(16),
     });
   }
   return out;

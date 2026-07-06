@@ -41,10 +41,20 @@ import type { Deployment } from './data/seed.js';
 const BUG_PARAM = 'reticle-bug';
 const STYLE_ID = 'reticle-hard-bug-style';
 const API_BASE = 'http://localhost:8787';
-/** Sentinels a tamper writes so the corruption is deterministic regardless of the seed. */
-const LEAK_TEXT = '__reticle_leak__';
-const LEAK_ID = 987654;
 const CONSOLE_MSG = '[regression] handler: unhandled rejection while formatting result';
+
+/**
+ * Plausible-but-wrong values a tamper writes into NEVER-RENDERED store paths. Each looks completely
+ * ordinary — a normal cost figure, a normal build checksum, a normal deployment id — so ONLY comparing
+ * it to the store's real/expected value reveals the corruption. Nothing here is self-labelling: a DOM
+ * or pixel tool that somehow saw the value would see nothing suspicious. Chosen to differ from every
+ * seeded value (costs 1200/1215…, checksums 9a3f0x…, new-row checksum 2328, new-row cost 0) and from
+ * the seeded deployment ids (3961–4000), so the write is always a real change and the phantom id
+ * highlights/opens nothing on screen.
+ */
+const WRONG_COST = 4200;
+const WRONG_CHECKSUM = 'b7c9d10';
+const PHANTOM_DEPLOY_ID = 3800;
 
 /** CSS selector for a testid. The target testid is fixed per bug for a stable benchmark. */
 function sel(testid: string): string {
@@ -113,77 +123,49 @@ interface Tamper {
   defer: boolean;
   run: () => void;
 }
-// Corrupt one field of the top deployment (deployments[0]). The deploy TABLE renders service, commit,
-// env, status, region and duration — but NOT `author`/`createdAt` — and the table isn't mounted at all
-// on the Compose view, so a field corrupted there is off-screen for the acting view. Only a store read
-// sees it. (kpis/selectedId/filter and other post-`deployments` slices can't be read: the 150-row array
-// exhausts the transport's node budget, so they serialize to "[TRUNCATED]"; deployments[0] is walked
-// first and stays readable — hence the retarget onto it.)
-const setDep0 = (patch: Partial<Deployment>): (() => void) => (): void => {
-  useApp.setState((s) => ({ deployments: s.deployments.map((d, i) => (i === 0 ? { ...d, ...patch } : d)) }));
-};
-const setHeadStatus = (): void => {
-  const deps = useApp.getState().deployments;
-  if (deps[0] !== undefined && deps[0].status !== 'failed') {
-    useApp.setState({ deployments: deps.map((d, i) => (i === 0 ? { ...d, status: 'failed' } : d)) });
-  }
+// Corrupt one field of the deployment at index `i`. EVERY *displayed* Deployment field is rendered
+// somewhere — the deploy TABLE shows service/commit/env/status/region/duration, and the DETAIL DRAWER
+// (openable from any row) additionally shows author/createdAt/id — so none of them is safe: a
+// cross-navigating DOM agent can read them all. The only never-rendered fields are the internal
+// `costUsd`/`checksum` (audited absent from all JSX; see seed.ts), so every tamper below writes one of
+// those, or a top-level scalar (`selectedId`/`drawerId`) that has no textual rendering. The value is
+// plausible, so only a store read — not a DOM/pixel read — can prove it wrong.
+const setDep = (i: number, patch: Partial<Deployment>): (() => void) => (): void => {
+  useApp.setState((s) => ({ deployments: s.deployments.map((d, idx) => (idx === i ? { ...d, ...patch } : d)) }));
 };
 const TAMPER: Record<string, Tamper> = {
-  // --- Blast radius: an action mutates an UNRELATED store path (reticle-only) -----------------------
-  'mutation-leak': { trigger: 'compose-generate', defer: false, run: setHeadStatus },
-  'generate-blast-filter': {
-    trigger: 'compose-generate',
-    defer: false,
-    run: () => useApp.setState((s) => ({ filter: { ...s.filter, query: LEAK_TEXT } })),
-  },
+  // --- Blast radius: an action mutates an UNRELATED, never-rendered store path (reticle-only) -------
+  'mutation-leak': { trigger: 'compose-generate', defer: false, run: setDep(0, { checksum: WRONG_CHECKSUM }) },
+  'generate-blast-filter': { trigger: 'compose-generate', defer: false, run: setDep(0, { costUsd: WRONG_COST }) },
   'generate-blast-selected': {
     trigger: 'compose-generate',
     defer: false,
-    run: () => useApp.setState({ selectedId: LEAK_ID }),
+    // A phantom id: selectedId only drives a row's `.sel` class, and this id matches no seeded row, so
+    // nothing highlights — same as the clean (null) build. Only the store reveals the stray write.
+    run: () => useApp.setState({ selectedId: PHANTOM_DEPLOY_ID }),
   },
   'generate-blast-drawer': {
     trigger: 'compose-generate',
     defer: false,
-    run: () => useApp.setState({ drawerId: LEAK_ID }),
+    // drawerId opens the detail drawer only when it matches a deployment; a phantom id opens nothing,
+    // so the DOM is identical to clean. Only the store shows the drawer was "opened" in state.
+    run: () => useApp.setState({ drawerId: PHANTOM_DEPLOY_ID }),
   },
-  'nav-blast-prompt': {
-    trigger: 'nav-diagnostics',
-    defer: false,
-    run: () => useApp.setState((s) => ({ compose: { ...s.compose, prompt: LEAK_TEXT } })),
-  },
-  'nav-blast-title': {
-    trigger: 'nav-diagnostics',
-    defer: false,
-    run: () => useApp.setState((s) => ({ compose: { ...s.compose, title: LEAK_TEXT } })),
-  },
-  // Opening the new-deploy modal corrupts the top deployment's author (never shown in the deploy table).
-  'newdeploy-blast-kpi': { trigger: 'new-deploy', defer: false, run: setDep0({ author: LEAK_TEXT }) },
+  'nav-blast-prompt': { trigger: 'nav-diagnostics', defer: false, run: setDep(0, { checksum: WRONG_CHECKSUM }) },
+  'nav-blast-title': { trigger: 'nav-diagnostics', defer: false, run: setDep(0, { costUsd: WRONG_COST }) },
+  'newdeploy-blast-kpi': { trigger: 'new-deploy', defer: false, run: setDep(0, { costUsd: WRONG_COST }) },
 
-  // --- Business-logic invariant: the action produces a WRONG value (reticle-only) ------------------
-  // An unrelated Compose action corrupts a field of the top deployment; the deploy table isn't mounted
-  // on Compose, so the wrong value never renders — only a store read proves the invariant broken.
-  'kpi-deploys-tamper': { trigger: 'compose-generate', defer: false, run: setDep0({ service: 'corrupted-svc' }) },
-  'kpi-success-tamper': { trigger: 'compose-generate', defer: false, run: setDep0({ region: 'nowhere' }) },
-  'kpi-p95-tamper': { trigger: 'compose-generate', defer: false, run: setDep0({ durationMs: 999999 }) },
-  'kpi-services-tamper': { trigger: 'compose-generate', defer: false, run: setDep0({ commit: '0000000' }) },
-  // A freshly-created deployment gets a wrong author/timestamp in the store; neither field renders in
-  // the deploy list, so the row looks correct while the record is wrong.
-  'create-wrong-author': {
-    trigger: 'deploy-submit',
-    defer: true,
-    run: () =>
-      useApp.setState((s) => ({
-        deployments: s.deployments.map((d, i) => (i === 0 ? { ...d, author: 'ghost' } : d)),
-      })),
-  },
-  'create-wrong-createdat': {
-    trigger: 'deploy-submit',
-    defer: true,
-    run: () =>
-      useApp.setState((s) => ({
-        deployments: s.deployments.map((d, i) => (i === 0 ? { ...d, createdAt: 'last year' } : d)),
-      })),
-  },
+  // --- Business-logic invariant: the action produces a WRONG never-rendered value (reticle-only) ---
+  // An unrelated Compose action corrupts an internal field of a deployment; the field renders nowhere,
+  // so the wrong value never shows — only a store read proves the invariant broken.
+  'kpi-deploys-tamper': { trigger: 'compose-generate', defer: false, run: setDep(0, { costUsd: WRONG_COST }) },
+  'kpi-success-tamper': { trigger: 'compose-generate', defer: false, run: setDep(0, { checksum: WRONG_CHECKSUM }) },
+  'kpi-p95-tamper': { trigger: 'compose-generate', defer: false, run: setDep(1, { costUsd: WRONG_COST }) },
+  'kpi-services-tamper': { trigger: 'compose-generate', defer: false, run: setDep(1, { checksum: WRONG_CHECKSUM }) },
+  // A freshly-created deployment gets a wrong internal cost/checksum in the store; neither renders in
+  // the row or drawer, so the row looks correct while the record is wrong.
+  'create-wrong-author': { trigger: 'deploy-submit', defer: true, run: setDep(0, { checksum: WRONG_CHECKSUM }) },
+  'create-wrong-createdat': { trigger: 'deploy-submit', defer: true, run: setDep(0, { costUsd: WRONG_COST }) },
 };
 
 /** Console-leak bugs → the control whose click emits a console.error (UI still renders fine). */
