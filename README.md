@@ -7,9 +7,11 @@
 
 # Reticle
 
-### Your Playwright tests are in CI. Your agent never sees them.
+### Reticle is the proof layer for AI agents.
 
-**Reticle is the proof layer for AI agents.** It reads the _program_ — network, store state, signals, the React commit stream — not a screenshot, hands back a pass/fail **verdict with the `file:line` to fix**, and catches the silent bugs a screenshot or DOM tool **structurally cannot see.** Measured: **10/10 bugs caught, 0 false positives, 2,574× cheaper to re-run, and two live `500`s caught on our own production app the first time we pointed it at one.**
+It reads the _program_ — network, store state, signals, the React commit stream — not a screenshot, hands back a pass/fail **verdict with the `file:line` to fix**, and catches the silent bugs a screenshot or DOM tool **structurally cannot see.**
+
+Measured: **10/10 bugs caught, 0 false positives, 2,574× cheaper to re-run, and two live `500`s caught on our own production app the first time we pointed it at one.**
 
 <a href="https://reticle.sh"><img src="assets/readme/demo-montage.webp" alt="Reticle in action, an AI agent verifying a real running app from the inside: pass/fail verdicts with evidence, the file:line to fix, and a regression caught before it shipped" width="840" /></a>
 
