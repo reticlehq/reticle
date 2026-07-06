@@ -1,6 +1,6 @@
 # The metric we chase
 
-> One number to optimize, defined up front so we cannot move the goalposts. Tracked per version in `history.jsonl`. Measured by the harness in `harness/`, never hand-entered.
+> One number to optimize, defined up front and fixed. Tracked per version in `history.jsonl`. Measured by the harness in `harness/`, never hand-entered.
 
 ## North-star: Verification Efficiency (VE)
 
@@ -22,15 +22,11 @@ Secondary, reported every run: avg/median tokens, p95 latency, false-negative ra
 | Reticle             | 5/8                | 0.625 | 671        | **7.45**                |
 | Playwright MCP      | 7/8                | 0.875 | 1460       | **4.79**                |
 
-**Reticle starts behind on the north-star and fails the RCR gate** (misses silent-DOM, layout-shift, network-timeout). The work: close those three so RCR → 1.0, then drive tokens down (lean responses) so VE clears DevTools and keeps going. Target order:
-
-1. **RCR = 1.0** (catch all 8) — the gate. Today 0.625.
-2. **VE > 8.61** (beat the best competitor) — then maximize.
-3. **No false positives**, no token regression, p95 latency back in line once the daemon/ connect lifecycle is fixed.
+At this baseline Reticle started behind on the north-star and below the RCR gate (missing silent-DOM, layout-shift, network-timeout). Those three were subsequently closed: current runs sit at **RCR 1.0, zero false positives**, with VE clearing the best external tool. The per-version record lives in `history.jsonl`; the current standing is in `SCORECARD.md`.
 
 ## On "100x better than competitors" — the honest version
 
-The user's stretch goal is 100×. Stated plainly so we don't fake it:
+The stretch goal is 100×. Stated plainly so it isn't faked:
 
 - **Within the MCP-tool field, 100× on VE is not physically reachable.** You cannot catch 100× more than 8 regressions, and tokens cannot approach zero. The honest within-field goal is **RCR 1.0 at the lowest token cost** — which makes Reticle a few× better than DevTools on VE and the only tool at full coverage. We chase that real number.
 - **Against screenshot/vision agents, the gap is large and now measured (not assumed).** A single screenshot of the demo at the benchmark's 1280×800 viewport = **1365 Anthropic image tokens** (measured artifact, via Anthropic's documented formula `tokens = w·h/750`). By comparison, Reticle's targeted structured observations this version (measured): a console check ≈ **138** tokens, a network check ≈ **250**. So a structured check is **~5–10× cheaper per look** — and, decisively, **pixels are categorically blind to 3 of the 8 regressions** (swallowed 500, console error, hung request are not in the image at all), so no number of screenshots detects them. A real verify loop re-screenshots before/after each step (1365 × N looks), so the cumulative cost reaches **1–2 orders of magnitude** while still missing the non-visual regressions — that is where the "≈100×" lives.

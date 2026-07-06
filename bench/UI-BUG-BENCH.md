@@ -39,15 +39,6 @@ The bugs a DOM tool fundamentally cannot catch: the UI renders a plausible, self
 
 This is where Reticle's in-source position is decisive: **batch 1 (visual/computed-style) is parity — any tool with an evaluate can read computed style; batch 2 (state/UI desync) is Reticle-only — no amount of DOM/JS reaches state the app never put in the DOM.** That is the honest 100×-class differentiator: not "Reticle sees pixels better," but "Reticle sees the program, and the program is the source of truth."
 
-### Still to add (batch 2 continued) — with honest expectations
-
-Analysis of the remaining classes shows most are **parity or competitor-reachable**, because their truth lives in the DOM / network / CSS variables that any `evaluate` can read. Only truth that lives in app **state** (the store) is Reticle-only. Stated up front so the data isn't oversold:
-
-- **theme-violation** — DONE and measured (now in the batch-1 table above): parity detection, but the competitor probe costs **259 JS tokens** vs Reticle's native `offTheme` flag — the suite's largest ergonomic gap.
-- **status-stale** — DONE and measured (now in the batch-2 table above): a per-entity STATUS lies while the row stays visually consistent. Reticle-only (2/2 in the class); both competitors read the displayed `live` but have no store truth to contradict it.
-- **double-submit / timing** — observable in the network panel by all three tools → expected parity.
-- **dropped-field** — Reticle-only ONLY when the UI hides the corruption (i.e. it reduces to state/UI desync, already proven); if the wrong value is rendered, it's parity.
-
 The honest meta-finding: **Reticle's unique capability is detecting UI-vs-state desync.** Everything a user can see (DOM, computed style, network) is parity with any evaluate-capable tool. That precise boundary — not an inflated "Reticle wins everything" — is the value of this dataset.
 
 _Token figures are the `o200k` proxy used across the benchmark; "+NN JS" is the agent-authored evaluate function the competitor must send (Reticle sends only `{ref}`). All cells are genuine observations (no missing/error) — verified in `raw/visual-bug-bench.json`._

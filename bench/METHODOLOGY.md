@@ -1,6 +1,6 @@
 # Browser verification for AI coding agents — benchmark methodology
 
-> Status: Phase 1 (design) complete. Phase 2 (harness) built and connectivity-verified. Phase 3 (execution) in pilot. This document is the reproducible spec; numbers live in `bench/raw/*.json` and are never edited by hand.
+> This document is the reproducible spec; numbers live in `bench/raw/*.json` and are never edited by hand.
 
 ## Research question
 
