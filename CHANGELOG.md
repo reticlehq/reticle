@@ -12,9 +12,9 @@ The project is renamed from **Iris** to **Reticle**. This is a clean rename — 
 
 | What | Before | After |
 | --- | --- | --- |
-| Install | `@syrin/iris` | `@reticlehq/core` |
-| Scoped packages | `@syrin/iris-*` | `@reticlehq/*` (e.g. `@reticlehq/protocol`, `@reticlehq/react`) |
-| Subpath imports | `@syrin/iris/server`, `/next`, `/babel`, `/vite`, `/eslint`, `/test` | `@reticlehq/core/server`, `…` |
+| Install | `iris` | `@reticlehq/core` |
+| Scoped packages | `iris-*` | `@reticlehq/*` (e.g. `@reticlehq/protocol`, `@reticlehq/react`) |
+| Subpath imports | `iris/server`, `/next`, `/babel`, `/vite`, `/eslint`, `/test` | `@reticlehq/core/server`, `…` |
 | CLI binary | `iris` | `reticle` (`reticle init`, `reticle mcp`) |
 | MCP server name | `iris` | `reticle` (update your `.mcp.json` / client config) |
 | MCP tools | `iris_*` (e.g. `iris_observe`, `iris_assert`) | `reticle_*` (`reticle_observe`, `reticle_assert`) |
@@ -26,10 +26,10 @@ The project is renamed from **Iris** to **Reticle**. This is a clean rename — 
 
 **Migrate:**
 
-1. `npm rm @syrin/iris && npm i -D @reticlehq/core` (swap any direct `@syrin/iris-*` deps for `@reticlehq/*`).
+1. `npm rm iris && npm i -D @reticlehq/core` (swap any direct `iris-*` deps for `@reticlehq/*`).
 2. Rename `.iris.json` → `.reticle.json` and the `.iris/` directory → `.reticle/` — recorded flows/baselines carry over unchanged.
 3. Update your MCP client config: server key `iris` → `reticle`, command `npx @reticlehq/core mcp`, and any `IRIS_*` env vars → `RETICLE_*`. Agents calling tools by name move from `iris_*` to `reticle_*`.
-4. Find/replace `withIris` → `withReticle` and any `@syrin/iris` imports → `@reticlehq/core`.
+4. Find/replace `withIris` → `withReticle` and any `iris` imports → `@reticlehq/core`.
 
 ## [1.2.0] — 2026-06-27
 
