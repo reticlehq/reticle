@@ -3,9 +3,15 @@ logs/
 artifacts/
 
 # benchmark run artifacts (regenerated per run)
+results-*.json
+results*.json
 pw-vs-reticle/results*.json
 pw-vs-reticle/SCORECARD*.md
 pw-vs-reticle/MASTER-SCORECARD.md
 
 # local API keys — never committed
 .env
+
+# logs / OS cruft
+*.log
+.DS_Store
