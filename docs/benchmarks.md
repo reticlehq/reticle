@@ -113,7 +113,7 @@ Measured on the observation-cost pass (numbers regenerate from `bench/raw/`):
 
 ### 5b — A real production app (the Reticle dashboard)
 
-A toy app is a fair lab, but it's small. The harder, more honest test is a **real, complex app** — the [Reticle](https://reticle.ai) dashboard itself: React 19, authentication, live data, ~15 routes, a node-graph view, virtualized lists. We embedded the SDK (the Vite plugin) and drove the authenticated app with all three tools. Observing it **once** (the primary snapshot + the network log):
+A toy app is a fair lab, but it's small. The harder, more honest test is a **real, complex app** — the [Reticle](https://reticle.sh) dashboard itself: React 19, authentication, live data, ~15 routes, a node-graph view, virtualized lists. We embedded the SDK (the Vite plugin) and drove the authenticated app with all three tools. Observing it **once** (the primary snapshot + the network log):
 
 ![Observing the real Reticle dashboard once — Reticle 1,023 tokens vs DevTools 1,357 vs Playwright 2,193, and Reticle alone asserts success via the app's own signal](../assets/readme/bench-complex-app.png)
 

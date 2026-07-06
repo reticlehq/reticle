@@ -11,7 +11,7 @@
 
 **Reticle is the proof layer for AI agents.** It reads the _program_ — network, store state, signals, the React commit stream — not a screenshot, hands back a pass/fail **verdict with the `file:line` to fix**, and catches the silent bugs a screenshot or DOM tool **structurally cannot see.** Measured: **10/10 bugs caught, 0 false positives, 2,574× cheaper to re-run, and two live `500`s caught on our own production app the first time we pointed it at one.**
 
-<a href="https://reticle.ai/reticle"><img src="assets/readme/demo-montage.webp" alt="Reticle in action, an AI agent verifying a real running app from the inside: pass/fail verdicts with evidence, the file:line to fix, and a regression caught before it shipped" width="840" /></a>
+<a href="https://reticle.sh"><img src="assets/readme/demo-montage.webp" alt="Reticle in action, an AI agent verifying a real running app from the inside: pass/fail verdicts with evidence, the file:line to fix, and a regression caught before it shipped" width="840" /></a>
 
 [![npm](https://img.shields.io/npm/v/@reticlehq/core?color=8b7bff&labelColor=15131f&logo=npm)](https://www.npmjs.com/package/@reticlehq/core) [![downloads](https://img.shields.io/npm/dm/@reticlehq/core?color=5fd9f5&labelColor=15131f)](https://www.npmjs.com/package/@reticlehq/core) [![stars](https://img.shields.io/github/stars/reticlehq/reticle?color=ff9f87&labelColor=15131f&logo=github)](https://github.com/reticlehq/reticle/stargazers) [![forks](https://img.shields.io/github/forks/reticlehq/reticle?color=a594ff&labelColor=15131f&logo=github)](https://github.com/reticlehq/reticle/network/members) [![license](https://img.shields.io/badge/license-Apache--2.0%20%2B%20FSL-46d6a0?labelColor=15131f)](LICENSE) [![types](https://img.shields.io/npm/types/@reticlehq/core?color=5fd9f5&labelColor=15131f)](https://www.npmjs.com/package/@reticlehq/core)
 
@@ -80,7 +80,7 @@ Then **restart Claude Code** (or run `/mcp` to refresh) so it picks up the serve
 
 `TypeScript` · `Model Context Protocol` · `React-first` · **dev-only · localhost-only · no telemetry · Apache-2.0 SDK**
 
-[How it works](#how-it-works) · [How to use it](#how-to-use-it) · [Watch the demo](https://reticle.ai/reticle) · [Full benchmarks](#honest-benchmarks) · [Reticle vs Playwright](#when-to-use-reticle-vs-playwright-and-devtools) · [Docs](docs/getting-started.md)
+[How it works](#how-it-works) · [How to use it](#how-to-use-it) · [Watch the demo](https://reticle.sh) · [Full benchmarks](#honest-benchmarks) · [Reticle vs Playwright](#when-to-use-reticle-vs-playwright-and-devtools) · [Docs](docs/getting-started.md)
 
 ---
 
@@ -220,7 +220,7 @@ Record a flow once; Reticle **replays it deterministically on every edit**. Your
 
 **1 · The toy app (controlled).** 10 injected regressions on the demo. Reticle caught **all 10** (detection **1.00**, zero false alarms) at the lowest qualifying cost, **Verification Efficiency 12.27** vs **Chrome DevTools MCP 10.55** vs **Playwright MCP 6.97**. The competitors are cheaper per look _only because they catch less_.
 
-**2 · The real app (our own [Reticle](https://reticle.ai) dashboard, React 19, auth, live data).** With the SDK auto-injected, Reticle observed the authenticated dashboard the cheapest, **and gave a verdict the others structurally can't:**
+**2 · The real app (our own [Reticle](https://reticle.sh) dashboard, React 19, auth, live data).** With the SDK auto-injected, Reticle observed the authenticated dashboard the cheapest, **and gave a verdict the others structurally can't:**
 
 <img src="assets/readme/bench-complex-app.png" alt="Observing the real Reticle dashboard once: Reticle 1,023 tokens vs Chrome DevTools MCP 1,357 vs Playwright MCP 2,193, 2.1x leaner, plus Reticle alone asserts success via the app's own signal for 46 tokens" width="840" />
 
@@ -361,7 +361,7 @@ if (import.meta.env.DEV) reticle.connect({ session: 'my-app' });
 - **[Multi-agent testing](docs/multi-agent-testing.md)**, one browser, a fleet of agents in parallel
 - **[Benchmark scorecard](bench/SCORECARD.md)**, the honest one-page standing across all layers
 - **[Why it's ~73× cheaper](docs/token-efficiency.md)**, the reproducible token math
-- **[Watch the demo](https://reticle.ai/reticle)**
+- **[Watch the demo](https://reticle.sh)**
 
 ## What's inside
 
