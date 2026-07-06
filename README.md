@@ -411,6 +411,6 @@ Reticle uses a per-package license model so it is safe to embed in your own app 
 - **Server / CLI / MCP, FSL-1.1-ALv2.** `@reticlehq/server` (and `@reticlehq/test`, the `@reticlehq/core` umbrella) are free for any use except offering Reticle itself as a competing hosted service; each release converts to Apache-2.0 after two years.
 - **Enterprise features, the Reticle Enterprise License.** Source-available under `packages/server/src/ee/`; free for development and evaluation, a subscription license key is required in production.
 
-OEM, embedding, or commercial licensing questions: **hey@reticle.ai**
+OEM, embedding, or commercial licensing questions: **[hey@reticle.sh](mailto:hey@reticle.sh)**
 
 © 2026 Reticle Labs </content>

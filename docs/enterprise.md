@@ -8,7 +8,7 @@ Enterprise (`ee/`) features ship **inside the open package** — they're source-
 
 **The flow, end to end:**
 
-1. **Buy** — contact **hey@reticle.ai**; we issue you a signed license key (org, plan, expiry, feature set).
+1. **Buy** — contact **[hey@reticle.sh](mailto:hey@reticle.sh)**; we issue you a signed license key (org, plan, expiry, feature set).
 2. **Install** — set it on the machine running the Reticle server:
    ```bash
    export RETICLE_LICENSE_KEY="<your key>"
@@ -24,7 +24,7 @@ Enterprise (`ee/`) features ship **inside the open package** — they're source-
 4. **Unlock** — enterprise features now run in production; without a valid key they refuse to run there (a clear error, never a silent half-feature). In eval/dev they always run free.
 5. **Renew** — keys carry an expiry; `reticle license` warns before it lapses.
 
-> Procuring a license: contact **hey@reticle.ai**. Keys are issued offline and signed with Ed25519; the activation you run (`reticle license`) verifies them locally with no network call.
+> Procuring a license: contact **[hey@reticle.sh](mailto:hey@reticle.sh)**. Keys are issued offline and signed with Ed25519; the activation you run (`reticle license`) verifies them locally with no network call.
 
 ## What's gated (and the roadmap)
 
@@ -59,4 +59,4 @@ The honest one-pager a security review needs. Reticle is built so the answer to 
 | Server / CLI / MCP (`server`, `test`, umbrella) | **FSL-1.1-ALv2** | free for any use except reselling Reticle itself; converts to Apache after 2 years |
 | Enterprise features (`packages/server/src/ee/`) | **Reticle Enterprise License** | source-available; free for dev/eval, license key required in production |
 
-Embedding / OEM / enterprise: **hey@reticle.ai**.
+Embedding / OEM / enterprise: **[hey@reticle.sh](mailto:hey@reticle.sh)**.
