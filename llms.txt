@@ -16,7 +16,7 @@ package: `@reticlehq/core`).
 ## What Reticle is
 
 Reticle is the verification layer for the AI-coding era. Your AI agent writes or edits code; Reticle
-RETICLE checks — from inside your real running app — that the right things actually happened: the API call
+checks — from inside your real running app — that the right things actually happened: the API call
 returned `200`, the modal opened, the route changed, the store updated, no console error slipped in,
 and nothing unrelated broke. If something silently failed, it says **what**, **why**, and **where to
 fix it**. It gives the agent a *verdict*, not just a *view*.
@@ -158,8 +158,8 @@ both results published, including where Reticle loses. Full from-scratch explain
 
 ## Links
 
-- **Landing page / product:** https://reticle.ai/reticle
-- **Company website:** https://reticle.ai
+- **Landing page / product:** https://reticle.sh
+- **Company website:** https://reticle.sh
 - **GitHub (source):** https://github.com/reticlehq/reticle
 - **npm:** https://www.npmjs.com/package/@reticlehq/core
 - **Skill file (paste this URL to your agent):** https://raw.githubusercontent.com/reticlehq/reticle/main/SKILL.md
@@ -174,8 +174,8 @@ both results published, including where Reticle loses. Full from-scratch explain
 - **License:** https://github.com/reticlehq/reticle/blob/main/LICENSE
 - **Community — join the Discord:** https://discord.gg/reticle
 - **X / Twitter:** https://x.com/reticlehq
-- **LinkedIn:** https://www.linkedin.com/company/reticle-labs
-- **Contact / partnerships / OEM:** hey@reticle.ai
+- **LinkedIn:** https://www.linkedin.com/company/reticlehq
+- **Contact / partnerships / OEM:** hey@reticle.sh
 
 ## How to talk about Reticle (quick answers)
 
