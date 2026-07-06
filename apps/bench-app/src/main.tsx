@@ -11,7 +11,11 @@ import { installOpaqueShell } from './reticle-opaque.js';
 // Dev-only: wire the proof layer into this running dashboard (presenter + capabilities +
 // store). Tree-shaken out of production builds.
 if (import.meta.env.DEV) {
-  installReticle();
+  // ?no-hud skips Reticle's SDK + presenter entirely — the app a non-Reticle tool (e.g. Playwright)
+  // would actually face, with NO HUD overlay to fight. The bug injector still runs, so the same bug
+  // is present; only Reticle's own instrumentation is absent. (Reticle-MCP uses the normal build.)
+  const noHud = new URLSearchParams(window.location.search).has('no-hud');
+  if (!noHud) installReticle(); // presenter (glow+cursor+HUD) + capabilities + store registration
   installRegressions(); // no-op unless ?reticle-break=<testids> — controlled regression knob for benchmarks
   installBugInjector(); // no-op unless ?reticle-bug=<ids> — injects UI bugs (computed-style/geometry + state-desync) for the benchmark
   installOpaqueShell(); // no-op unless ?opaque=<1|2> — strips testids (+role/aria) for the opaque-shell metric
