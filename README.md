@@ -393,11 +393,11 @@ Reticle is built in the open, for the long run, not as a weekend project. If it 
 
 **Stargazers** thank you for the signal of support.
 
-<a href="https://github.com/reticlehq/reticle/stargazers"><img src="https://bytecrank.com/nastyox/reporoster/php/stargazersSVG.php?user=reticle-labs&amp;repo=reticle" alt="Stargazers" /></a>
+<a href="https://github.com/reticlehq/reticle/stargazers"><img src="https://bytecrank.com/nastyox/reporoster/php/stargazersSVG.php?user=reticlehq&amp;repo=reticle" alt="Stargazers" /></a>
 
 **Forks** thank you for building on Reticle.
 
-<a href="https://github.com/reticlehq/reticle/network/members"><img src="https://bytecrank.com/nastyox/reporoster/php/forkersSVG.php?user=reticle-labs&amp;repo=reticle" alt="Forkers" /></a>
+<a href="https://github.com/reticlehq/reticle/network/members"><img src="https://bytecrank.com/nastyox/reporoster/php/forkersSVG.php?user=reticlehq&amp;repo=reticle" alt="Forkers" /></a>
 
 </div>
 
