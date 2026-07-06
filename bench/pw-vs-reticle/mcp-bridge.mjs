@@ -15,7 +15,7 @@ const port = Number(portStr);
 
 const client =
   tool === 'reticle'
-    ? new McpStdioClient('node', [path.join(REPO, 'packages/server/dist/cli.js'), 'mcp', '--port', '4462', '--drive', driveUrl ?? 'http://localhost:4312/'], { RETICLE_PORT: '4462', RETICLE_TOOL_PROFILE: 'core' })
+    ? new McpStdioClient('node', [path.join(REPO, 'packages/server/dist/cli.js'), 'mcp', '--port', '4460', '--drive', driveUrl ?? 'http://localhost:4312/'], { RETICLE_PORT: '4460', RETICLE_TOOL_PROFILE: 'core' })
     : new McpStdioClient('npx', ['-y', '@playwright/mcp@0.0.76', '--headless', '--isolated'], {});
 
 await client.start();
