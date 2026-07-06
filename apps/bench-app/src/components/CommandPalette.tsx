@@ -64,7 +64,6 @@ export function CommandPalette(): React.ReactElement | null {
         },
       },
     ],
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );
 
