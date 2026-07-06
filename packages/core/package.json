@@ -1,6 +1,6 @@
 {
   "name": "@reticlehq/core",
-  "version": "1.3.0",
+  "version": "1.3.1",
   "description": "One-install Reticle: the dev-only SDK (browser + React adapter) and the spec runner under one package, with subpaths for the source-mapping plugins and the MCP server.",
   "type": "module",
   "license": "SEE LICENSE IN LICENSE",

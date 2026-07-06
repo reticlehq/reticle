@@ -4,6 +4,19 @@ All notable changes to **`@reticlehq/core`** are documented here. The format fol
 
 ## [Unreleased]
 
+## [1.3.1] — 2026-07-06
+
+Bug-fix release. No breaking changes; drop-in over 1.3.0.
+
+### Fixed
+
+- **`reticle_sessions` now declares every field it returns** (`adapters`, `hasCapabilities`, `cleanup_suggestion`, `pendingMarks`, `review_suggestion`, and the input/lease fields). A strict MCP client validates tool output against the declared schema, so the previously-undeclared fields could trigger a hard validation error on the client side; they are now part of the contract. (`@reticlehq/server`)
+- **The Reticle HUD no longer counts itself as an occluder** in `reticle_inspect` / `reticle_act` hit-tests. The dev-only presenter overlay could produce false-positive `occluded: true` readings for elements it visually covered; hit-testing now skips Reticle's own UI. (`@reticlehq/browser`)
+
+### Changed
+
+- HUD label capitalized to **Reticle** (was lowercase `reticle`). Display-only. (`@reticlehq/browser`)
+
 ## [1.3.0] — 2026-06-30
 
 ### Rebrand: Iris → Reticle (BREAKING)
