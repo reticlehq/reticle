@@ -452,10 +452,12 @@ For flows worth re-checking forever — the actual test suite — record them, t
 
    > **Tool profile (default `hybrid`).** Reticle advertises the ~12 core verify tools directly and keeps everything else (record/replay/verify/heal, screenshots, network-mock, …) one call away behind two meta-tools — to save ~64% of per-turn tool-schema tokens. Reach a non-core tool with `reticle_run({ tool: "reticle_flow_verify", args: { sessionId } })`, or `reticle_tools` first to list/learn params. Prefer them advertised directly (no `reticle_run`)? Set `RETICLE_TOOL_PROFILE=standard` (flows + extras direct) or `=full` (all tools).
 
-### Catch the bugs a DOM/snapshot tool misses
+### Read program truth in one call — instead of reconstructing it from the DOM
 
-- **UI-vs-state desync** (the UI shows one value, the store holds another — e.g. a count that didn't refresh): read the truth with `reticle_state({ sessionId, store, path })` and compare it to what's displayed. A snapshot can't — the source of truth isn't in the DOM.
-- **Present-but-unusable / off-theme controls**: `reticle_inspect` returns `occluded` (covered by an overlay), `styles.cursor`/`opacity`, `box` (0×0), and `theme.offTheme` (color off the design-token palette). A snapshot says the element is "there"; inspect says whether a user can actually use it.
+Reticle's edge over a DOM/screenshot tool is **efficiency and robustness**, not that it sees things nothing else can. A capable browser-automation agent *can* reach app state by running JS in the page (e.g. walking the React fiber via `browser_evaluate`) — but that's fragile (breaks on minified prod builds, non-React stores, framework-internals changes) and costs ~10× the tool-calls/tokens/time. Reticle reads the same truth with **one typed call**, stably:
+
+- **UI-vs-state desync** (the UI shows one value, the store holds another — e.g. a count that didn't refresh, or a value corrupted in the store but rendered in no view): `reticle_state({ sessionId, store, path })` returns it directly. A pure snapshot can't see it; an agent spelunking framework internals can, but at far higher cost — measured head-to-head, Reticle-MCP caught a never-rendered store tamper in **4 tool calls / 45s** where a Playwright-MCP agent needed **45 calls / ~9min** reverse-engineering the React fiber.
+- **Present-but-unusable / off-theme controls**: `reticle_inspect` returns `occluded` (covered by an overlay), `styles.cursor`/`opacity`, `box` (0×0), and `theme.offTheme` (color off the design-token palette) — the "is it actually usable / on-brand?" read, in one call.
 
 ### Consume the human's bug reports (`reticle_review`)
 
