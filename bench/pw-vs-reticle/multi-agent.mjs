@@ -31,23 +31,46 @@ const PORT = process.env.BENCH_RETICLE_PORT ?? '4460';
 const MAX_BROWSERS = Number(process.env.MAX_BROWSERS ?? 8); // hard cap on concurrent chrome/contexts
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const parseText = (t) => { try { return JSON.parse(t); } catch { return t; } };
-const stopDaemon = () => { try { execSync(`node ${JSON.stringify(CLI)} stop --port ${PORT} --quiet`, { stdio: 'ignore' }); } catch {} };
+const parseText = (t) => {
+  try {
+    return JSON.parse(t);
+  } catch {
+    return t;
+  }
+};
+const stopDaemon = () => {
+  try {
+    execSync(`node ${JSON.stringify(CLI)} stop --port ${PORT} --quiet`, { stdio: 'ignore' });
+  } catch {}
+};
 
 // round-robin shard so each worker gets a balanced slice
-const shard = (arr, c) => { const out = Array.from({ length: c }, () => []); arr.forEach((x, i) => out[i % c].push(x)); return out; };
+const shard = (arr, c) => {
+  const out = Array.from({ length: c }, () => []);
+  arr.forEach((x, i) => out[i % c].push(x));
+  return out;
+};
 
 // --- args ---
 const argv = process.argv.slice(2);
-const flag = (name, def) => { const i = argv.indexOf(`--${name}`); return i >= 0 ? argv[i + 1] : def; };
+const flag = (name, def) => {
+  const i = argv.indexOf(`--${name}`);
+  return i >= 0 ? argv[i + 1] : def;
+};
 const LIMIT = Number(flag('limit', BUGS.length));
-const LEVELS = flag('levels', flag('concurrency', '1,3')).split(',').map((n) => Number(n.trim())).filter((n) => n > 0);
+const LEVELS = flag('levels', flag('concurrency', '1,3'))
+  .split(',')
+  .map((n) => Number(n.trim()))
+  .filter((n) => n > 0);
 const WORKLOAD = BUGS.slice(0, LIMIT);
 
 // ============================ RETICLE ============================
 async function reticleLevel(C, bugs) {
   stopDaemon();
-  const client = new McpStdioClient('node', [CLI, 'mcp', '--port', PORT], { RETICLE_PORT: PORT, RETICLE_TOOL_PROFILE: 'full' });
+  const client = new McpStdioClient('node', [CLI, 'mcp', '--port', PORT], {
+    RETICLE_PORT: PORT,
+    RETICLE_TOOL_PROFILE: 'full',
+  });
   await client.start();
   const call = async (name, args) => parseText((await client.callTool(name, args)).text ?? '');
 
@@ -56,7 +79,11 @@ async function reticleLevel(C, bugs) {
   for (let i = 0; i < C; i++) {
     const profile = path.join(os.tmpdir(), `rmab-${process.pid}-${C}-${i}`);
     const landing = `${APP_ORIGIN}/?w=${i}`;
-    const p = spawn(CHROME, ['--headless=new', '--disable-gpu', '--no-first-run', `--user-data-dir=${profile}`, landing], { stdio: 'ignore', detached: true });
+    const p = spawn(
+      CHROME,
+      ['--headless=new', '--disable-gpu', '--no-first-run', `--user-data-dir=${profile}`, landing],
+      { stdio: 'ignore', detached: true },
+    );
     p.unref();
     chromes.push(p);
   }
@@ -75,17 +102,27 @@ async function reticleLevel(C, bugs) {
 
   const worker = async (i, myBugs) => {
     const state = { sid: sids[i] };
-    const refOf = async (t) => (await call('reticle_query', { sessionId: state.sid, by: 'testid', value: t }))?.elements?.[0]?.ref;
+    const refOf = async (t) =>
+      (await call('reticle_query', { sessionId: state.sid, by: 'testid', value: t }))?.elements?.[0]
+        ?.ref;
     const waitRef = async (t, timeoutMs = 6000) => {
       const deadline = Date.now() + timeoutMs;
-      for (;;) { const r = await refOf(t); if (r) return r; if (Date.now() >= deadline) return undefined; await sleep(150); }
+      for (;;) {
+        const r = await refOf(t);
+        if (r) return r;
+        if (Date.now() >= deadline) return undefined;
+        await sleep(150);
+      }
     };
     const goto = async (url) => {
       await call('reticle_navigate', { sessionId: state.sid, url });
       for (let k = 0; k < 40; k++) {
         const s = await call('reticle_sessions', {});
         const f = (s?.sessions ?? []).find((x) => x.url === url && !x.throttled);
-        if (f) { state.sid = f.sessionId; break; }
+        if (f) {
+          state.sid = f.sessionId;
+          break;
+        }
         await sleep(250);
       }
       await sleep(400);
@@ -93,10 +130,22 @@ async function reticleLevel(C, bugs) {
     const doPrep = async (prep) => {
       if (!prep?.fill) return;
       const ref = await waitRef(prep.fill);
-      if (ref) { await call('reticle_act', { sessionId: state.sid, ref, action: 'fill', args: { value: prep.text } }); await sleep(200); }
+      if (ref) {
+        await call('reticle_act', {
+          sessionId: state.sid,
+          ref,
+          action: 'fill',
+          args: { value: prep.text },
+        });
+        await sleep(200);
+      }
     };
     const clickSteps = async (steps) => {
-      for (const t of steps) { const ref = await waitRef(t); if (ref) await call('reticle_act', { sessionId: state.sid, ref, action: 'click' }); await sleep(250); }
+      for (const t of steps) {
+        const ref = await waitRef(t);
+        if (ref) await call('reticle_act', { sessionId: state.sid, ref, action: 'click' });
+        await sleep(250);
+      }
     };
 
     let caught = 0;
@@ -106,7 +155,9 @@ async function reticleLevel(C, bugs) {
         await goto(url);
         await clickSteps(bug.setup);
         if (await runReticleCheck(call, state, waitRef, doPrep, bug)) caught++;
-      } catch { /* a worker error shouldn't sink the whole level */ }
+      } catch {
+        /* a worker error shouldn't sink the whole level */
+      }
     }
     return caught;
   };
@@ -115,8 +166,14 @@ async function reticleLevel(C, bugs) {
   const counts = await Promise.all(shard(bugs, C).map((s, i) => worker(i, s)));
   const ms = Date.now() - t0;
 
-  try { await client.stop(); } catch {}
-  for (const c of chromes) { try { process.kill(-c.pid); } catch {} }
+  try {
+    await client.stop();
+  } catch {}
+  for (const c of chromes) {
+    try {
+      process.kill(-c.pid);
+    } catch {}
+  }
   stopDaemon();
   return { ms, caught: counts.reduce((a, b) => a + b, 0), peak: C };
 }
@@ -129,15 +186,24 @@ async function runReticleCheck(call, state, waitRef, doPrep, bug) {
     const ref = await waitRef(c.testid);
     if (!ref) return false;
     const ins = await call('reticle_inspect', { sessionId: sid(), ref });
-    const b = ins?.box; const st = ins?.styles ?? {};
-    return ins.occluded === true || (b && (b.width === 0 || b.height === 0)) || st.opacity === '0' || ins.visible === false;
+    const b = ins?.box;
+    const st = ins?.styles ?? {};
+    return (
+      ins.occluded === true ||
+      (b && (b.width === 0 || b.height === 0)) ||
+      st.opacity === '0' ||
+      ins.visible === false
+    );
   }
   if (c.kind === 'paint') return false; // no pixel diff from the reticle script
   if (c.kind === 'domCountMatchesState') {
     const stv = await call('reticle_state', { sessionId: sid(), store: 'app', path: c.statePath });
     const v = stv?.value;
     const truth = Array.isArray(v) ? v.length : Number((JSON.stringify(v).match(/\d+/) ?? [])[0]);
-    const snap = await call('reticle_snapshot', { sessionId: sid(), scope: `[data-testid="${c.testid}"]` });
+    const snap = await call('reticle_snapshot', {
+      sessionId: sid(),
+      scope: `[data-testid="${c.testid}"]`,
+    });
     const domNum = Number((String(snap?.tree ?? '').match(/\d+/g) ?? [])[0]);
     return Number.isFinite(truth) && Number.isFinite(domNum) && truth !== domNum;
   }
@@ -147,7 +213,11 @@ async function runReticleCheck(call, state, waitRef, doPrep, bug) {
     if (!ref) return false;
     const act0 = await call('reticle_act', { sessionId: sid(), ref, action: 'click' });
     await sleep(400);
-    const con = await call('reticle_console', { sessionId: sid(), level: 'error', since: act0?.since });
+    const con = await call('reticle_console', {
+      sessionId: sid(),
+      level: 'error',
+      since: act0?.since,
+    });
     return (con?.logs ?? []).length > 0;
   }
   if (c.kind === 'netCountAfter') {
@@ -171,8 +241,15 @@ async function runReticleCheck(call, state, waitRef, doPrep, bug) {
     return JSON.stringify(pre?.value) !== JSON.stringify(post?.value);
   }
   if (c.kind === 'domText') {
-    const snap = await call('reticle_snapshot', { sessionId: sid(), scope: `[data-testid="${c.testid}"]` });
-    const txt = String(snap?.tree ?? '').replace(/\(ref=[^)]*\)/g, '').replace(/[-•"]/g, ' ').replace(/\s+/g, ' ').trim();
+    const snap = await call('reticle_snapshot', {
+      sessionId: sid(),
+      scope: `[data-testid="${c.testid}"]`,
+    });
+    const txt = String(snap?.tree ?? '')
+      .replace(/\(ref=[^)]*\)/g, '')
+      .replace(/[-•"]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
     return !!txt && !txt.includes(String(c.expected));
   }
   if (c.kind === 'stateEqualsAfter') {
@@ -196,31 +273,67 @@ async function playwrightLevel(C, bugs) {
   const worker = async (myBugs) => {
     const ctx = await browser.newContext({ reducedMotion: 'reduce' });
     const page = await ctx.newPage();
-    peak.cur += 1; peak.max = Math.max(peak.max, peak.cur);
-    const consoleErrors = []; const requests = [];
-    page.on('console', (m) => { if (m.type() === 'error') consoleErrors.push(m.text()); });
+    peak.cur += 1;
+    peak.max = Math.max(peak.max, peak.cur);
+    const consoleErrors = [];
+    const requests = [];
+    page.on('console', (m) => {
+      if (m.type() === 'error') consoleErrors.push(m.text());
+    });
     page.on('request', (r) => requests.push({ url: r.url(), method: r.method() }));
-    const click = async (t) => { try { await page.locator(sel(t)).click({ timeout: 4000, force: true }); } catch {} };
-    const waitFor = async (t, ms = 6000) => { try { await page.locator(sel(t)).first().waitFor({ state: 'attached', timeout: ms }); return true; } catch { return false; } };
-    const fillPrep = async (prep) => { if (prep?.fill) { await page.fill(sel(prep.fill), prep.text).catch(() => {}); await sleep(200); } };
+    const click = async (t) => {
+      try {
+        await page.locator(sel(t)).click({ timeout: 4000, force: true });
+      } catch {}
+    };
+    const waitFor = async (t, ms = 6000) => {
+      try {
+        await page.locator(sel(t)).first().waitFor({ state: 'attached', timeout: ms });
+        return true;
+      } catch {
+        return false;
+      }
+    };
+    const fillPrep = async (prep) => {
+      if (prep?.fill) {
+        await page.fill(sel(prep.fill), prep.text).catch(() => {});
+        await sleep(200);
+      }
+    };
 
     let caught = 0;
     for (const bug of myBugs) {
       try {
         await page.goto(bugUrl(bug.id), { waitUntil: 'domcontentloaded', timeout: 8000 });
         await sleep(600);
-        for (const t of bug.setup) { await waitFor(t); await click(t); await sleep(400); }
+        for (const t of bug.setup) {
+          await waitFor(t);
+          await click(t);
+          await sleep(400);
+        }
         const c = bug.check;
         if (c.kind === 'usable') {
           const ok = await waitFor(c.testid, 6000);
           const loc = page.locator(sel(c.testid)).first();
           const box = ok ? await loc.boundingBox().catch(() => null) : null;
-          const info = ok ? await loc.evaluate((el) => {
-            const s = getComputedStyle(el); const r = el.getBoundingClientRect();
-            const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
-            return { opacity: s.opacity, occluded: top !== el && !el.contains(top) };
-          }).catch(() => null) : null;
-          if (ok && (!box || box.width === 0 || box.height === 0 || (info && (info.opacity === '0' || info.occluded)))) caught++;
+          const info = ok
+            ? await loc
+                .evaluate((el) => {
+                  const s = getComputedStyle(el);
+                  const r = el.getBoundingClientRect();
+                  const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+                  return { opacity: s.opacity, occluded: top !== el && !el.contains(top) };
+                })
+                .catch(() => null)
+            : null;
+          if (
+            ok &&
+            (!box ||
+              box.width === 0 ||
+              box.height === 0 ||
+              (info && (info.opacity === '0' || info.occluded)))
+          )
+            caught++;
         } else if (c.kind === 'paint') {
           await sleep(400);
           await page.screenshot({ fullPage: false }); // pay the pixel cost; no baseline in a buggy-only run
@@ -237,15 +350,29 @@ async function playwrightLevel(C, bugs) {
           requests.length = 0;
           if (ok) await click(c.steps[0]);
           await sleep(700);
-          const n = requests.filter((r) => r.method === c.method && r.url.includes(c.urlContains)).length;
+          const n = requests.filter(
+            (r) => r.method === c.method && r.url.includes(c.urlContains),
+          ).length;
           if (ok && n !== c.expected) caught++;
         } else if (c.kind === 'domText') {
           const ok = await waitFor(c.testid);
-          const txt = ok ? (await page.locator(sel(c.testid)).first().innerText().catch(() => '')).replace(/\s+/g, ' ').trim() : '';
+          const txt = ok
+            ? (
+                await page
+                  .locator(sel(c.testid))
+                  .first()
+                  .innerText()
+                  .catch(() => '')
+              )
+                .replace(/\s+/g, ' ')
+                .trim()
+            : '';
           if (ok && txt && !txt.includes(String(c.expected))) caught++;
         }
         // domCountMatchesState / stateInvariantAfter / stateEqualsAfter: Playwright can't read app state -> never caught
-      } catch { /* keep the worker alive */ }
+      } catch {
+        /* keep the worker alive */
+      }
     }
     peak.cur -= 1;
     await ctx.close().catch(() => {});
@@ -265,7 +392,12 @@ async function playwrightLevel(C, bugs) {
   await sleep(1000);
 
   const levels = LEVELS.map((c) => Math.min(c, MAX_BROWSERS));
-  levels.forEach((c, i) => { if (c !== LEVELS[i]) console.log(`CAP: concurrency ${LEVELS[i]} exceeds MAX_BROWSERS=${MAX_BROWSERS}, capped to ${c}`); });
+  levels.forEach((c, i) => {
+    if (c !== LEVELS[i])
+      console.log(
+        `CAP: concurrency ${LEVELS[i]} exceeds MAX_BROWSERS=${MAX_BROWSERS}, capped to ${c}`,
+      );
+  });
 
   const out = { workload: WORKLOAD.length, levels, reticle: {}, playwright: {} };
 
@@ -273,12 +405,16 @@ async function playwrightLevel(C, bugs) {
     console.log(`\n[reticle] C=${C} — ${WORKLOAD.length} bugs across ${C} sessions…`);
     const r = await reticleLevel(C, WORKLOAD);
     out.reticle[C] = r;
-    console.log(`[reticle] C=${C}: ${r.ms}ms, caught=${r.caught}/${WORKLOAD.length}, peakTabs=${r.peak}`);
+    console.log(
+      `[reticle] C=${C}: ${r.ms}ms, caught=${r.caught}/${WORKLOAD.length}, peakTabs=${r.peak}`,
+    );
 
     console.log(`[playwright] C=${C} — ${WORKLOAD.length} bugs across ${C} contexts…`);
     const p = await playwrightLevel(C, WORKLOAD);
     out.playwright[C] = p;
-    console.log(`[playwright] C=${C}: ${p.ms}ms, caught=${p.caught}/${WORKLOAD.length}, peakContexts=${p.peak}`);
+    console.log(
+      `[playwright] C=${C}: ${p.ms}ms, caught=${p.caught}/${WORKLOAD.length}, peakContexts=${p.peak}`,
+    );
   }
 
   // derive throughput + speedup
@@ -287,10 +423,11 @@ async function playwrightLevel(C, bugs) {
     for (const C of levels) {
       const e = out[tool][C];
       e.bugsPerSec = +(WORKLOAD.length / (e.ms / 1000)).toFixed(3);
-      e.speedup = +((out[tool][base].ms) / e.ms).toFixed(2);
+      e.speedup = +(out[tool][base].ms / e.ms).toFixed(2);
     }
   };
-  derive('reticle'); derive('playwright');
+  derive('reticle');
+  derive('playwright');
 
   writeFileSync(path.join(__dirname, 'results-multiagent.json'), JSON.stringify(out, null, 2));
 
@@ -301,17 +438,31 @@ async function playwrightLevel(C, bugs) {
     return `| ${tool} | ${cells} | ${out[tool][top].speedup}x | ${out[tool][top].bugsPerSec} |`;
   };
   console.log('\n=== Multi-agent throughput ===');
-  console.log(`| Tool | ${levels.map((C) => `C=${C} total`).join(' | ')} | C=${top} speedup | bugs/sec @ C=${top} |`);
+  console.log(
+    `| Tool | ${levels.map((C) => `C=${C} total`).join(' | ')} | C=${top} speedup | bugs/sec @ C=${top} |`,
+  );
   console.log(`|---|${levels.map(() => '--:').join('|')}|--:|--:|`);
   console.log(fmt('reticle'));
   console.log(fmt('playwright'));
 
   const ratio = out.playwright[top].ms / out.reticle[top].ms;
-  console.log(`\nHEADLINE: Reticle is ${ratio.toFixed(1)}x ${ratio >= 1 ? 'faster than' : 'slower than'} Playwright at C=${top}.`);
+  console.log(
+    `\nHEADLINE: Reticle is ${ratio.toFixed(1)}x ${ratio >= 1 ? 'faster than' : 'slower than'} Playwright at C=${top}.`,
+  );
   if (out.reticle[top].caught === 0 || out.playwright[top].caught === 0) {
-    console.log('WARNING: a tool caught 0 bugs — workers may not be reaching the app; timing is suspect.');
+    console.log(
+      'WARNING: a tool caught 0 bugs — workers may not be reaching the app; timing is suspect.',
+    );
   }
 
-  for (const p of procs) { try { process.kill(-p.pid); } catch {} }
+  for (const p of procs) {
+    try {
+      process.kill(-p.pid);
+    } catch {}
+  }
   process.exit(0);
-})().catch((e) => { console.error('MULTI-AGENT RUN ERROR', e); stopDaemon(); process.exit(1); });
+})().catch((e) => {
+  console.error('MULTI-AGENT RUN ERROR', e);
+  stopDaemon();
+  process.exit(1);
+});

@@ -30,7 +30,11 @@ const RETICLE_PORT = process.env.BENCH_HH_RETICLE_PORT ?? '4461';
 const RETICLE_READY_MS = Number(process.env.BENCH_RETICLE_READY_MS ?? '3500');
 
 // Per-token pricing (USD). Defaults = gpt-4o; override per provider (deepseek-chat ≈ 0.27 in / 1.10 out).
-const PRICE = { inputPerM: Number(process.env.BENCH_LLM_IN ?? 2.5), outputPerM: Number(process.env.BENCH_LLM_OUT ?? 10), per: 1_000_000 };
+const PRICE = {
+  inputPerM: Number(process.env.BENCH_LLM_IN ?? 2.5),
+  outputPerM: Number(process.env.BENCH_LLM_OUT ?? 10),
+  per: 1_000_000,
+};
 const dollars = (inTok, outTok) =>
   (inTok / PRICE.per) * PRICE.inputPerM + (outTok / PRICE.per) * PRICE.outputPerM;
 
@@ -41,18 +45,31 @@ const argLimit = () => {
 };
 
 if (!KEY) {
-  console.log('NOT MEASURED (set OPENAI_API_KEY) — mcp-head-to-head needs a real gpt-4o agent loop.');
+  console.log(
+    'NOT MEASURED (set OPENAI_API_KEY) — mcp-head-to-head needs a real gpt-4o agent loop.',
+  );
   process.exit(0);
 }
 
 // MCP server per tool. Reticle bakes the driven URL into --drive, so it is spawned per cell.
 function serverFor(toolKey, url) {
   if (toolKey === 'playwright_mcp') {
-    return { command: 'npx', args: ['-y', '@playwright/mcp@0.0.76', '--headless', '--isolated'], env: {} };
+    return {
+      command: 'npx',
+      args: ['-y', '@playwright/mcp@0.0.76', '--headless', '--isolated'],
+      env: {},
+    };
   }
   return {
     command: 'node',
-    args: [path.join(REPO, 'packages/server/dist/cli.js'), 'mcp', '--port', RETICLE_PORT, '--drive', url],
+    args: [
+      path.join(REPO, 'packages/server/dist/cli.js'),
+      'mcp',
+      '--port',
+      RETICLE_PORT,
+      '--drive',
+      url,
+    ],
     env: { RETICLE_PORT, RETICLE_TOOL_PROFILE: process.env.BENCH_RETICLE_PROFILE ?? 'full' },
   };
 }
@@ -105,7 +122,11 @@ async function runCell(bug, toolKey, variant) {
   const cfg = serverFor(toolKey, url);
   const client = new McpStdioClient(cfg.command, cfg.args, cfg.env);
   const t0 = Date.now();
-  let inTok = 0, outTok = 0, turns = 0, verdict = null, evidence = '';
+  let inTok = 0,
+    outTok = 0,
+    turns = 0,
+    verdict = null,
+    evidence = '';
   try {
     await client.start();
     if (toolKey === 'reticle') await sleep(RETICLE_READY_MS); // driven browser load + SDK connect
@@ -135,7 +156,11 @@ async function runCell(bug, toolKey, variant) {
       if (calls.length === 0) {
         if (verdict === null && !forced) {
           forced = true;
-          messages.push({ role: 'user', content: 'You did not call report_verdict. Based only on what you have already observed, call report_verdict NOW — holds:true if the property holds, holds:false if it is broken.' });
+          messages.push({
+            role: 'user',
+            content:
+              'You did not call report_verdict. Based only on what you have already observed, call report_verdict NOW — holds:true if the property holds, holds:false if it is broken.',
+          });
           continue;
         }
         break;
@@ -143,7 +168,11 @@ async function runCell(bug, toolKey, variant) {
       let done = false;
       for (const tc of calls) {
         let args = {};
-        try { args = JSON.parse(tc.function.arguments || '{}'); } catch { /* */ }
+        try {
+          args = JSON.parse(tc.function.arguments || '{}');
+        } catch {
+          /* */
+        }
         if (tc.function.name === 'report_verdict') {
           verdict = typeof args.holds === 'boolean' ? args.holds : null;
           evidence = String(args.evidence ?? '').slice(0, 300);
@@ -166,18 +195,38 @@ async function runCell(bug, toolKey, variant) {
     const detected = variant === 'buggy' ? verdict === false : null;
     const falsePositive = variant === 'clean' ? verdict === false : null;
     return {
-      bug: bug.id, category: bug.category, tool: toolKey, variant, model: MODEL,
-      input_tokens: inTok, output_tokens: outTok, total_tokens: inTok + outTok,
-      turns, latency_ms: Date.now() - t0, cost_usd: dollars(inTok, outTok),
-      verdict_holds: verdict, detected, false_positive: falsePositive,
+      bug: bug.id,
+      category: bug.category,
+      tool: toolKey,
+      variant,
+      model: MODEL,
+      input_tokens: inTok,
+      output_tokens: outTok,
+      total_tokens: inTok + outTok,
+      turns,
+      latency_ms: Date.now() - t0,
+      cost_usd: dollars(inTok, outTok),
+      verdict_holds: verdict,
+      detected,
+      false_positive: falsePositive,
       evidence: evidence.slice(0, 200),
     };
   } catch (e) {
     return {
-      bug: bug.id, category: bug.category, tool: toolKey, variant, model: MODEL,
-      input_tokens: inTok, output_tokens: outTok, total_tokens: inTok + outTok,
-      turns, latency_ms: Date.now() - t0, cost_usd: dollars(inTok, outTok),
-      verdict_holds: null, detected: null, false_positive: null,
+      bug: bug.id,
+      category: bug.category,
+      tool: toolKey,
+      variant,
+      model: MODEL,
+      input_tokens: inTok,
+      output_tokens: outTok,
+      total_tokens: inTok + outTok,
+      turns,
+      latency_ms: Date.now() - t0,
+      cost_usd: dollars(inTok, outTok),
+      verdict_holds: null,
+      detected: null,
+      false_positive: null,
       evidence: `error: ${String(e).slice(0, 160)}`,
     };
   } finally {
@@ -185,8 +234,20 @@ async function runCell(bug, toolKey, variant) {
     if (toolKey === 'reticle') {
       try {
         const { execFileSync } = await import('node:child_process');
-        execFileSync('node', [path.join(REPO, 'packages/server/dist/cli.js'), 'stop', '--port', RETICLE_PORT, '--quiet'], { stdio: 'ignore' });
-      } catch { /* */ }
+        execFileSync(
+          'node',
+          [
+            path.join(REPO, 'packages/server/dist/cli.js'),
+            'stop',
+            '--port',
+            RETICLE_PORT,
+            '--quiet',
+          ],
+          { stdio: 'ignore' },
+        );
+      } catch {
+        /* */
+      }
     }
   }
 }
@@ -212,10 +273,13 @@ function aggregate(rows) {
 }
 
 function scorecard(agg) {
-  const P = agg.playwright_mcp, R = agg.reticle;
+  const P = agg.playwright_mcp,
+    R = agg.reticle;
   const L = [];
   L.push('# MCP head-to-head — gpt-4o agent loop (Playwright-MCP vs Reticle-MCP)\n');
-  L.push(`Model: ${MODEL}. Each bug run on both the buggy and clean build, both tools. Cost at gpt-4o rates ($${PRICE.inputPerM}/1M in, $${PRICE.outputPerM}/1M out).\n`);
+  L.push(
+    `Model: ${MODEL}. Each bug run on both the buggy and clean build, both tools. Cost at gpt-4o rates ($${PRICE.inputPerM}/1M in, $${PRICE.outputPerM}/1M out).\n`,
+  );
   L.push('| Metric | Playwright-MCP | Reticle-MCP |');
   L.push('|---|--:|--:|');
   L.push(`| Detection rate (buggy) | ${P.detectionRate} | ${R.detectionRate} |`);
@@ -229,8 +293,11 @@ function scorecard(agg) {
 }
 
 (async () => {
-  const _ids = (process.env.BENCH_IDS ?? "").split(",").map(s=>s.trim()).filter(Boolean);
-  const bugs = _ids.length ? BUGS.filter(b=>_ids.includes(b.id)) : BUGS.slice(0, argLimit());
+  const _ids = (process.env.BENCH_IDS ?? '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const bugs = _ids.length ? BUGS.filter((b) => _ids.includes(b.id)) : BUGS.slice(0, argLimit());
   const procs = await ensureApp();
   await sleep(1000);
   const rows = [];
@@ -239,19 +306,39 @@ function scorecard(agg) {
       for (const tool of ['playwright_mcp', 'reticle']) {
         const row = await runCell(bug, tool, variant);
         rows.push(row);
-        console.log(JSON.stringify({
-          bug: row.bug, tool: row.tool, v: row.variant, tot: row.total_tokens,
-          turns: row.turns, holds: row.verdict_holds, det: row.detected, $: row.cost_usd.toFixed(4),
-        }));
+        console.log(
+          JSON.stringify({
+            bug: row.bug,
+            tool: row.tool,
+            v: row.variant,
+            tot: row.total_tokens,
+            turns: row.turns,
+            holds: row.verdict_holds,
+            det: row.detected,
+            $: row.cost_usd.toFixed(4),
+          }),
+        );
       }
     }
   }
   const agg = aggregate(rows);
-  writeFileSync(path.join(__dirname, 'results-mcp.json'), JSON.stringify({ rows, agg, price: PRICE }, null, 2));
+  writeFileSync(
+    path.join(__dirname, 'results-mcp.json'),
+    JSON.stringify({ rows, agg, price: PRICE }, null, 2),
+  );
   const md = scorecard(agg);
   writeFileSync(path.join(__dirname, 'SCORECARD-MCP.md'), md);
   console.log('\n' + md);
   console.table(agg);
-  for (const p of procs) { try { process.kill(-p.pid); } catch { /* */ } }
+  for (const p of procs) {
+    try {
+      process.kill(-p.pid);
+    } catch {
+      /* */
+    }
+  }
   process.exit(0);
-})().catch((e) => { console.error('HEAD-TO-HEAD ERROR', e); process.exit(1); });
+})().catch((e) => {
+  console.error('HEAD-TO-HEAD ERROR', e);
+  process.exit(1);
+});

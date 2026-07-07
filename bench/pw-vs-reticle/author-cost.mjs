@@ -22,7 +22,11 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const KEY = process.env.OPENAI_API_KEY ?? process.env.DEEPSEEK_API_KEY ?? process.env.LLM_API_KEY;
 const LLM_URL = process.env.BENCH_LLM_URL ?? 'https://api.openai.com/v1/chat/completions';
 const MODEL = process.env.BENCH_LLM_MODEL ?? process.env.BENCH_OPENAI_MODEL ?? 'gpt-4o';
-const PRICE = { inputPerM: Number(process.env.BENCH_LLM_IN ?? 2.5), outputPerM: Number(process.env.BENCH_LLM_OUT ?? 10), per: 1_000_000 };
+const PRICE = {
+  inputPerM: Number(process.env.BENCH_LLM_IN ?? 2.5),
+  outputPerM: Number(process.env.BENCH_LLM_OUT ?? 10),
+  per: 1_000_000,
+};
 const dollars = (inTok, outTok) =>
   (inTok / PRICE.per) * PRICE.inputPerM + (outTok / PRICE.per) * PRICE.outputPerM;
 const argLimit = () => {
@@ -31,7 +35,9 @@ const argLimit = () => {
 };
 
 if (!KEY) {
-  console.log('NOT MEASURED (set OPENAI_API_KEY) — author-cost needs a real gpt-4o call to author the Playwright test.');
+  console.log(
+    'NOT MEASURED (set OPENAI_API_KEY) — author-cost needs a real gpt-4o call to author the Playwright test.',
+  );
   process.exit(0);
 }
 
@@ -41,7 +47,9 @@ function testidsFor(bug) {
   if (bug.check?.testid) ids.add(bug.check.testid);
   if (bug.check?.prep?.fill) ids.add(bug.check.prep.fill);
   for (const s of bug.check?.steps ?? []) ids.add(s);
-  ids.add('login-email'); ids.add('login-password'); ids.add('login-submit');
+  ids.add('login-email');
+  ids.add('login-password');
+  ids.add('login-submit');
   return [...ids];
 }
 
@@ -86,44 +94,61 @@ function reticleDrive(bug) {
     const { rows } = JSON.parse(readFileSync(f, 'utf8'));
     const r = rows.find((x) => x.bug === bug.id && x.tool === 'reticle' && x.variant === 'buggy');
     return r ? { tokens: r.total_tokens, ms: r.latency_ms, cost: r.cost_usd } : null;
-  } catch { return null; }
+  } catch {
+    return null;
+  }
 }
 
 (async () => {
-  const _ids = (process.env.BENCH_IDS ?? "").split(",").map(s=>s.trim()).filter(Boolean);
-  const bugs = _ids.length ? BUGS.filter(b=>_ids.includes(b.id)) : BUGS.slice(0, argLimit());
+  const _ids = (process.env.BENCH_IDS ?? '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const bugs = _ids.length ? BUGS.filter((b) => _ids.includes(b.id)) : BUGS.slice(0, argLimit());
   const rows = [];
   for (const bug of bugs) {
     const a = await authorPlaywright(bug);
     const drive = reticleDrive(bug);
     const row = {
-      bug: bug.id, category: bug.category,
+      bug: bug.id,
+      category: bug.category,
       playwright: {
-        authoring_input_tokens: a.inTok, authoring_output_tokens: a.outTok,
-        authoring_total_tokens: a.inTok + a.outTok, authoring_ms: a.ms,
-        authoring_cost_usd: +dollars(a.inTok, a.outTok).toFixed(4), spec_chars: a.chars,
+        authoring_input_tokens: a.inTok,
+        authoring_output_tokens: a.outTok,
+        authoring_total_tokens: a.inTok + a.outTok,
+        authoring_ms: a.ms,
+        authoring_cost_usd: +dollars(a.inTok, a.outTok).toFixed(4),
+        spec_chars: a.chars,
       },
       reticle: {
-        authoring_total_tokens: 0, authoring_ms: 0, authoring_cost_usd: 0,
-        drive_total_tokens: drive?.tokens ?? null, drive_ms: drive?.ms ?? null,
+        authoring_total_tokens: 0,
+        authoring_ms: 0,
+        authoring_cost_usd: 0,
+        drive_total_tokens: drive?.tokens ?? null,
+        drive_ms: drive?.ms ?? null,
         drive_cost_usd: drive?.cost ?? null,
       },
       tokens_wasted_authoring: a.inTok + a.outTok, // vs Reticle's 0
       ms_wasted_authoring: a.ms,
     };
     rows.push(row);
-    console.log(JSON.stringify({
-      bug: row.bug, pw_author_tok: row.playwright.authoring_total_tokens,
-      pw_author_ms: row.playwright.authoring_ms, reticle_author_tok: 0,
-      reticle_drive_tok: row.reticle.drive_total_tokens,
-    }));
+    console.log(
+      JSON.stringify({
+        bug: row.bug,
+        pw_author_tok: row.playwright.authoring_total_tokens,
+        pw_author_ms: row.playwright.authoring_ms,
+        reticle_author_tok: 0,
+        reticle_drive_tok: row.reticle.drive_total_tokens,
+      }),
+    );
   }
 
   const totWastedTok = rows.reduce((a, r) => a + r.tokens_wasted_authoring, 0);
   const totWastedMs = rows.reduce((a, r) => a + r.ms_wasted_authoring, 0);
   const totWastedUsd = +rows.reduce((a, r) => a + r.playwright.authoring_cost_usd, 0).toFixed(4);
   const agg = {
-    bugs: rows.length, model: MODEL,
+    bugs: rows.length,
+    model: MODEL,
     avgAuthoringTokens: Math.round(totWastedTok / (rows.length || 1)),
     avgAuthoringMs: Math.round(totWastedMs / (rows.length || 1)),
     totalTokensWastedAuthoring: totWastedTok,
@@ -131,15 +156,24 @@ function reticleDrive(bug) {
     totalUsdWastedAuthoring: totWastedUsd,
     reticleAuthoringTokens: 0,
   };
-  writeFileSync(path.join(__dirname, 'results-author.json'), JSON.stringify({ rows, agg, price: PRICE }, null, 2));
+  writeFileSync(
+    path.join(__dirname, 'results-author.json'),
+    JSON.stringify({ rows, agg, price: PRICE }, null, 2),
+  );
 
   const L = [];
   L.push('\n# Author-cost — Playwright "write the test first" tax vs Reticle direct-drive\n');
-  L.push(`Model: ${MODEL}. Playwright path pays to author a .spec.ts before verifying; Reticle drives MCP tools directly (0 authoring tokens).\n`);
-  L.push('| Bug | PW author tokens | PW author ms | PW author $ | Reticle author tokens | Reticle drive tokens |');
+  L.push(
+    `Model: ${MODEL}. Playwright path pays to author a .spec.ts before verifying; Reticle drives MCP tools directly (0 authoring tokens).\n`,
+  );
+  L.push(
+    '| Bug | PW author tokens | PW author ms | PW author $ | Reticle author tokens | Reticle drive tokens |',
+  );
   L.push('|---|--:|--:|--:|--:|--:|');
   for (const r of rows) {
-    L.push(`| ${r.bug} | ${r.playwright.authoring_total_tokens} | ${r.playwright.authoring_ms} | $${r.playwright.authoring_cost_usd} | 0 | ${r.reticle.drive_total_tokens ?? '—'} |`);
+    L.push(
+      `| ${r.bug} | ${r.playwright.authoring_total_tokens} | ${r.playwright.authoring_ms} | $${r.playwright.authoring_cost_usd} | 0 | ${r.reticle.drive_total_tokens ?? '—'} |`,
+    );
   }
   L.push('\n## Aggregate\n');
   L.push('| Metric | Value |');
@@ -159,4 +193,7 @@ function reticleDrive(bug) {
   console.log(md);
   console.table(agg);
   process.exit(0);
-})().catch((e) => { console.error('AUTHOR-COST ERROR', e); process.exit(1); });
+})().catch((e) => {
+  console.error('AUTHOR-COST ERROR', e);
+  process.exit(1);
+});

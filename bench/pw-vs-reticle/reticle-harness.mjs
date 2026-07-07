@@ -14,19 +14,29 @@ const CLI = path.join(REPO, 'packages', 'core', 'dist', 'cli.js');
 const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const PORT = process.env.BENCH_RETICLE_PORT ?? '4460';
 
-const parseText = (t) => { try { return JSON.parse(t); } catch { return t; } };
+const parseText = (t) => {
+  try {
+    return JSON.parse(t);
+  } catch {
+    return t;
+  }
+};
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 export async function runReticle(bugs) {
-  const client = new McpStdioClient(
-    'node', [CLI, 'mcp', '--port', PORT],
-    { RETICLE_PORT: PORT, RETICLE_TOOL_PROFILE: 'full' },
-  );
+  const client = new McpStdioClient('node', [CLI, 'mcp', '--port', PORT], {
+    RETICLE_PORT: PORT,
+    RETICLE_TOOL_PROFILE: 'full',
+  });
   await client.start();
 
   // one headless Chrome; we reticle_navigate it to each bug URL (fresh SDK session per load).
   const profile = path.join(os.tmpdir(), `rbench-${process.pid}`);
-  const chrome = spawn(CHROME, ['--headless=new', '--disable-gpu', '--no-first-run', `--user-data-dir=${profile}`, APP_ORIGIN], { stdio: 'ignore', detached: true });
+  const chrome = spawn(
+    CHROME,
+    ['--headless=new', '--disable-gpu', '--no-first-run', `--user-data-dir=${profile}`, APP_ORIGIN],
+    { stdio: 'ignore', detached: true },
+  );
   chrome.unref();
 
   let bytes = 0;
@@ -49,8 +59,12 @@ export async function runReticle(bugs) {
     await call('reticle_navigate', { sessionId: sid, url });
     for (let i = 0; i < 30; i++) {
       const s = await call('reticle_sessions', {});
-      const focused = (s?.sessions ?? []).find((x) => x.url === url && !x.throttled) ?? (s?.sessions ?? [])[0];
-      if (focused) { sid = focused.sessionId; if (i > 1) break; }
+      const focused =
+        (s?.sessions ?? []).find((x) => x.url === url && !x.throttled) ?? (s?.sessions ?? [])[0];
+      if (focused) {
+        sid = focused.sessionId;
+        if (i > 1) break;
+      }
       await sleep(300);
     }
     await sleep(400); // let the app render + SDK register capabilities
@@ -73,7 +87,15 @@ export async function runReticle(bugs) {
   const doPrep = async (prep) => {
     if (!prep?.fill) return;
     const ref = await waitRef(prep.fill);
-    if (ref) { await call('reticle_act', { sessionId: sid, ref, action: 'fill', args: { value: prep.text } }); await sleep(200); }
+    if (ref) {
+      await call('reticle_act', {
+        sessionId: sid,
+        ref,
+        action: 'fill',
+        args: { value: prep.text },
+      });
+      await sleep(200);
+    }
   };
   // Benchmark controls carry real labels ("New deploy", "Deploy"); the browser's destructive-action
   // guard blocks those synthetic clicks unless the caller confirms. The harness is a deterministic
@@ -82,7 +104,8 @@ export async function runReticle(bugs) {
   const clickSteps = async (steps) => {
     for (const t of steps) {
       const ref = await waitRef(t);
-      if (ref) await call('reticle_act', { sessionId: sid, ref, action: 'click', args: CLICK_ARGS });
+      if (ref)
+        await call('reticle_act', { sessionId: sid, ref, action: 'click', args: CLICK_ARGS });
       await sleep(250);
     }
   };
@@ -93,7 +116,8 @@ export async function runReticle(bugs) {
       const url = variant === 'buggy' ? (bug.url ?? bugUrl(bug.id)) : bugUrl('');
       const before = bytes;
       const t0 = Date.now();
-      let caught = false, note = '';
+      let caught = false,
+        note = '';
       try {
         await goto(url);
         await clickSteps(bug.setup);
@@ -101,46 +125,90 @@ export async function runReticle(bugs) {
         if (c.kind === 'usable') {
           const ref = await waitRef(c.testid);
           const ins = ref ? await call('reticle_inspect', { sessionId: sid, ref }) : null;
-          const b = ins?.box; const st = ins?.styles ?? {};
-          caught = !ref ? false : ins.occluded === true || (b && (b.width === 0 || b.height === 0)) || st.opacity === '0' || ins.visible === false;
-          note = ins ? `occluded=${ins.occluded} box=${b?.width}x${b?.height} opacity=${st.opacity}` : 'element not found';
+          const b = ins?.box;
+          const st = ins?.styles ?? {};
+          caught = !ref
+            ? false
+            : ins.occluded === true ||
+              (b && (b.width === 0 || b.height === 0)) ||
+              st.opacity === '0' ||
+              ins.visible === false;
+          note = ins
+            ? `occluded=${ins.occluded} box=${b?.width}x${b?.height} opacity=${st.opacity}`
+            : 'element not found';
         } else if (c.kind === 'paint') {
-          caught = false; note = 'reticle script has no pixel diff (inspect computed-styles unchanged)';
+          caught = false;
+          note = 'reticle script has no pixel diff (inspect computed-styles unchanged)';
         } else if (c.kind === 'domCountMatchesState') {
           // truth: the real store array length (depth-0 markers cap the display, so read the array).
-          const st = await call('reticle_state', { sessionId: sid, store: 'app', path: c.statePath, depth: 8 });
+          const st = await call('reticle_state', {
+            sessionId: sid,
+            store: 'app',
+            path: c.statePath,
+            depth: 8,
+          });
           const v = st?.value;
-          const truth = Array.isArray(v) ? v.length : Number((JSON.stringify(v).match(/\d+/) ?? [])[0]);
+          const truth = Array.isArray(v)
+            ? v.length
+            : Number((JSON.stringify(v).match(/\d+/) ?? [])[0]);
           // display: read ONLY the snapshot tree text (not JSON metadata) for the badge number.
-          const snap = await call('reticle_snapshot', { sessionId: sid, scope: `[data-testid="${c.testid}"]` });
+          const snap = await call('reticle_snapshot', {
+            sessionId: sid,
+            scope: `[data-testid="${c.testid}"]`,
+          });
           const domNum = Number((String(snap?.tree ?? '').match(/\d+/g) ?? [])[0]);
           caught = Number.isFinite(truth) && Number.isFinite(domNum) && truth !== domNum;
           note = `storeLen=${truth} badge=${domNum}`;
         } else if (c.kind === 'consoleCleanAfter') {
           await doPrep(c.prep);
           const ref = await waitRef(c.steps[0]);
-          const act0 = ref ? await call('reticle_act', { sessionId: sid, ref, action: 'click', args: CLICK_ARGS }) : {};
+          const act0 = ref
+            ? await call('reticle_act', { sessionId: sid, ref, action: 'click', args: CLICK_ARGS })
+            : {};
           await sleep(400);
-          const con = await call('reticle_console', { sessionId: sid, level: 'error', since: act0?.since });
+          const con = await call('reticle_console', {
+            sessionId: sid,
+            level: 'error',
+            since: act0?.since,
+          });
           const errs = (con?.logs ?? []).length;
           caught = ref ? errs > 0 : false;
           note = ref ? `errors=${errs}` : 'compose-generate not reached';
         } else if (c.kind === 'netCountAfter') {
           await doPrep(c.prep);
           const ref = await waitRef(c.steps[0]);
-          const act0 = ref ? await call('reticle_act', { sessionId: sid, ref, action: 'click', args: CLICK_ARGS }) : {};
+          const act0 = ref
+            ? await call('reticle_act', { sessionId: sid, ref, action: 'click', args: CLICK_ARGS })
+            : {};
           await sleep(600);
-          const net = await call('reticle_network', { sessionId: sid, method: c.method, limit: 50 });
-          const n = (net?.calls ?? []).filter((e) => String(e.url ?? '').includes(c.urlContains)).length;
+          const net = await call('reticle_network', {
+            sessionId: sid,
+            method: c.method,
+            limit: 50,
+          });
+          const n = (net?.calls ?? []).filter((e) =>
+            String(e.url ?? '').includes(c.urlContains),
+          ).length;
           caught = ref ? n !== c.expected : false;
           note = ref ? `count=${n} expected=${c.expected}` : 'compose-generate not reached';
         } else if (c.kind === 'stateInvariantAfter') {
-          const pre = await call('reticle_state', { sessionId: sid, store: 'app', path: c.statePath, depth: 8 });
+          const pre = await call('reticle_state', {
+            sessionId: sid,
+            store: 'app',
+            path: c.statePath,
+            depth: 8,
+          });
           await doPrep(c.prep);
           const ref = await waitRef(c.steps[0]);
-          if (ref) await call('reticle_act', { sessionId: sid, ref, action: 'click', args: CLICK_ARGS });
+          if (ref)
+            await call('reticle_act', { sessionId: sid, ref, action: 'click', args: CLICK_ARGS });
           await sleep(400);
-          const post = await call('reticle_state', { sessionId: sid, store: 'app', path: c.statePath, depth: 8 });
+          const post = await call('reticle_state', {
+            sessionId: sid,
+            store: 'app',
+            path: c.statePath,
+            depth: 8,
+          });
           caught = ref ? JSON.stringify(pre?.value) !== JSON.stringify(post?.value) : false;
           note = `before=${JSON.stringify(pre?.value)} after=${JSON.stringify(post?.value)}`;
         } else if (c.kind === 'domText') {
@@ -150,24 +218,48 @@ export async function runReticle(bugs) {
           // back to `.name` — the same string the label carries.
           const q = await call('reticle_query', { sessionId: sid, by: 'testid', value: c.testid });
           const el0 = q?.elements?.[0];
-          const txt = String(el0?.text ?? el0?.name ?? '').replace(/\s+/g, ' ').trim();
+          const txt = String(el0?.text ?? el0?.name ?? '')
+            .replace(/\s+/g, ' ')
+            .trim();
           caught = !txt ? false : !txt.includes(String(c.expected));
           note = `text="${txt.slice(0, 40)}" expected~="${c.expected}"`;
         } else if (c.kind === 'stateEqualsAfter') {
           await doPrep(c.prep);
           const ref = await waitRef(c.steps[0]);
-          if (ref) await call('reticle_act', { sessionId: sid, ref, action: 'click', args: CLICK_ARGS });
+          if (ref)
+            await call('reticle_act', { sessionId: sid, ref, action: 'click', args: CLICK_ARGS });
           await sleep(400);
-          const post = await call('reticle_state', { sessionId: sid, store: 'app', path: c.statePath, depth: 8 });
+          const post = await call('reticle_state', {
+            sessionId: sid,
+            store: 'app',
+            path: c.statePath,
+            depth: 8,
+          });
           caught = ref ? JSON.stringify(post?.value) !== JSON.stringify(c.expected) : false;
           note = `after=${JSON.stringify(post?.value)} expected=${JSON.stringify(c.expected)}`;
         }
-      } catch (e) { note = `ERR ${e.message}`; }
-      results.push({ harness: 'reticle-script', bug: bug.id, category: bug.category, variant, caught, expect: bug.expect, bytes: bytes - before, ms: Date.now() - t0, note });
+      } catch (e) {
+        note = `ERR ${e.message}`;
+      }
+      results.push({
+        harness: 'reticle-script',
+        bug: bug.id,
+        category: bug.category,
+        variant,
+        caught,
+        expect: bug.expect,
+        bytes: bytes - before,
+        ms: Date.now() - t0,
+        note,
+      });
     }
   }
 
-  try { await client.stop(); } catch {}
-  try { process.kill(-chrome.pid); } catch {}
+  try {
+    await client.stop();
+  } catch {}
+  try {
+    process.kill(-chrome.pid);
+  } catch {}
   return results;
 }

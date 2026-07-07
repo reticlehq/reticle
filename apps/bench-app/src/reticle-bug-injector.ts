@@ -130,13 +130,25 @@ interface Tamper {
 // `costUsd`/`checksum` (audited absent from all JSX; see seed.ts), so every tamper below writes one of
 // those, or a top-level scalar (`selectedId`/`drawerId`) that has no textual rendering. The value is
 // plausible, so only a store read — not a DOM/pixel read — can prove it wrong.
-const setDep = (i: number, patch: Partial<Deployment>): (() => void) => (): void => {
-  useApp.setState((s) => ({ deployments: s.deployments.map((d, idx) => (idx === i ? { ...d, ...patch } : d)) }));
-};
+const setDep =
+  (i: number, patch: Partial<Deployment>): (() => void) =>
+  (): void => {
+    useApp.setState((s) => ({
+      deployments: s.deployments.map((d, idx) => (idx === i ? { ...d, ...patch } : d)),
+    }));
+  };
 const TAMPER: Record<string, Tamper> = {
   // --- Blast radius: an action mutates an UNRELATED, never-rendered store path (reticle-only) -------
-  'mutation-leak': { trigger: 'compose-generate', defer: false, run: setDep(0, { checksum: WRONG_CHECKSUM }) },
-  'generate-blast-filter': { trigger: 'compose-generate', defer: false, run: setDep(0, { costUsd: WRONG_COST }) },
+  'mutation-leak': {
+    trigger: 'compose-generate',
+    defer: false,
+    run: setDep(0, { checksum: WRONG_CHECKSUM }),
+  },
+  'generate-blast-filter': {
+    trigger: 'compose-generate',
+    defer: false,
+    run: setDep(0, { costUsd: WRONG_COST }),
+  },
   'generate-blast-selected': {
     trigger: 'compose-generate',
     defer: false,
@@ -151,21 +163,57 @@ const TAMPER: Record<string, Tamper> = {
     // so the DOM is identical to clean. Only the store shows the drawer was "opened" in state.
     run: () => useApp.setState({ drawerId: PHANTOM_DEPLOY_ID }),
   },
-  'nav-blast-prompt': { trigger: 'nav-diagnostics', defer: false, run: setDep(0, { checksum: WRONG_CHECKSUM }) },
-  'nav-blast-title': { trigger: 'nav-diagnostics', defer: false, run: setDep(0, { costUsd: WRONG_COST }) },
-  'newdeploy-blast-kpi': { trigger: 'new-deploy', defer: false, run: setDep(0, { costUsd: WRONG_COST }) },
+  'nav-blast-prompt': {
+    trigger: 'nav-diagnostics',
+    defer: false,
+    run: setDep(0, { checksum: WRONG_CHECKSUM }),
+  },
+  'nav-blast-title': {
+    trigger: 'nav-diagnostics',
+    defer: false,
+    run: setDep(0, { costUsd: WRONG_COST }),
+  },
+  'newdeploy-blast-kpi': {
+    trigger: 'new-deploy',
+    defer: false,
+    run: setDep(0, { costUsd: WRONG_COST }),
+  },
 
   // --- Business-logic invariant: the action produces a WRONG never-rendered value (reticle-only) ---
   // An unrelated Compose action corrupts an internal field of a deployment; the field renders nowhere,
   // so the wrong value never shows — only a store read proves the invariant broken.
-  'kpi-deploys-tamper': { trigger: 'compose-generate', defer: false, run: setDep(0, { costUsd: WRONG_COST }) },
-  'kpi-success-tamper': { trigger: 'compose-generate', defer: false, run: setDep(0, { checksum: WRONG_CHECKSUM }) },
-  'kpi-p95-tamper': { trigger: 'compose-generate', defer: false, run: setDep(1, { costUsd: WRONG_COST }) },
-  'kpi-services-tamper': { trigger: 'compose-generate', defer: false, run: setDep(1, { checksum: WRONG_CHECKSUM }) },
+  'kpi-deploys-tamper': {
+    trigger: 'compose-generate',
+    defer: false,
+    run: setDep(0, { costUsd: WRONG_COST }),
+  },
+  'kpi-success-tamper': {
+    trigger: 'compose-generate',
+    defer: false,
+    run: setDep(0, { checksum: WRONG_CHECKSUM }),
+  },
+  'kpi-p95-tamper': {
+    trigger: 'compose-generate',
+    defer: false,
+    run: setDep(1, { costUsd: WRONG_COST }),
+  },
+  'kpi-services-tamper': {
+    trigger: 'compose-generate',
+    defer: false,
+    run: setDep(1, { checksum: WRONG_CHECKSUM }),
+  },
   // A freshly-created deployment gets a wrong internal cost/checksum in the store; neither renders in
   // the row or drawer, so the row looks correct while the record is wrong.
-  'create-wrong-author': { trigger: 'deploy-submit', defer: true, run: setDep(0, { checksum: WRONG_CHECKSUM }) },
-  'create-wrong-createdat': { trigger: 'deploy-submit', defer: true, run: setDep(0, { costUsd: WRONG_COST }) },
+  'create-wrong-author': {
+    trigger: 'deploy-submit',
+    defer: true,
+    run: setDep(0, { checksum: WRONG_CHECKSUM }),
+  },
+  'create-wrong-createdat': {
+    trigger: 'deploy-submit',
+    defer: true,
+    run: setDep(0, { costUsd: WRONG_COST }),
+  },
 };
 
 /** Console-leak bugs → the control whose click emits a console.error (UI still renders fine). */
@@ -319,7 +367,9 @@ function installOcclusion(testid: string): void {
  */
 function installClickBugs(bugs: ReadonlySet<string>): void {
   const tampers = [...bugs].map((id) => TAMPER[id]).filter((t): t is Tamper => t !== undefined);
-  const leaks = [...bugs].map((id) => CONSOLE_LEAKS[id]).filter((t): t is string => t !== undefined);
+  const leaks = [...bugs]
+    .map((id) => CONSOLE_LEAKS[id])
+    .filter((t): t is string => t !== undefined);
   const fetches = [...bugs]
     .map((id) => EXTRA_FETCH[id])
     .filter((f): f is ExtraFetch => f !== undefined);
@@ -340,7 +390,8 @@ function installClickBugs(bugs: ReadonlySet<string>): void {
       }
       for (const f of fetches) {
         if (!hit(f.trigger)) continue;
-        const init: RequestInit = f.method === 'POST' ? { method: 'POST', body: '{}' } : { method: 'GET' };
+        const init: RequestInit =
+          f.method === 'POST' ? { method: 'POST', body: '{}' } : { method: 'GET' };
         void window.fetch(f.url, init).catch(() => undefined);
       }
     },

@@ -195,7 +195,8 @@ export const BUGS = [
     // line is honestly "both".
     id: 'state-desync',
     category: 'state',
-    intent: 'the Deployments nav badge count agrees with the store (also shown as the toolbar "N of N")',
+    intent:
+      'the Deployments nav badge count agrees with the store (also shown as the toolbar "N of N")',
     setup: ['login-submit'],
     check: { kind: 'domCountMatchesState', testid: 'nav-deployments', statePath: 'deployments' },
     expect: 'both',
@@ -203,17 +204,29 @@ export const BUGS = [
   {
     id: 'mutation-leak',
     category: 'state',
-    intent: 'generating a script does not corrupt the top deployment\'s internal build checksum (never rendered)',
+    intent:
+      "generating a script does not corrupt the top deployment's internal build checksum (never rendered)",
     setup: ['login-submit', 'nav-compose'],
-    check: { kind: 'stateInvariantAfter', prep: composePrep, steps: ['compose-generate'], statePath: 'deployments.0.checksum' },
+    check: {
+      kind: 'stateInvariantAfter',
+      prep: composePrep,
+      steps: ['compose-generate'],
+      statePath: 'deployments.0.checksum',
+    },
     expect: 'reticle-only',
   },
   {
     id: 'generate-blast-filter',
     category: 'state',
-    intent: 'generating a script does not overwrite the top deployment\'s internal cost figure (never rendered)',
+    intent:
+      "generating a script does not overwrite the top deployment's internal cost figure (never rendered)",
     setup: ['login-submit', 'nav-compose'],
-    check: { kind: 'stateInvariantAfter', prep: composePrep, steps: ['compose-generate'], statePath: 'deployments.0.costUsd' },
+    check: {
+      kind: 'stateInvariantAfter',
+      prep: composePrep,
+      steps: ['compose-generate'],
+      statePath: 'deployments.0.costUsd',
+    },
     expect: 'reticle-only',
   },
   {
@@ -221,7 +234,12 @@ export const BUGS = [
     category: 'state',
     intent: 'generating a script does not mutate the selected-deployment id',
     setup: ['login-submit', 'nav-compose'],
-    check: { kind: 'stateInvariantAfter', prep: composePrep, steps: ['compose-generate'], statePath: 'selectedId' },
+    check: {
+      kind: 'stateInvariantAfter',
+      prep: composePrep,
+      steps: ['compose-generate'],
+      statePath: 'selectedId',
+    },
     expect: 'reticle-only',
   },
   {
@@ -229,31 +247,51 @@ export const BUGS = [
     category: 'state',
     intent: 'generating a script does not open the (off-screen) deployment drawer in state',
     setup: ['login-submit', 'nav-compose'],
-    check: { kind: 'stateInvariantAfter', prep: composePrep, steps: ['compose-generate'], statePath: 'drawerId' },
+    check: {
+      kind: 'stateInvariantAfter',
+      prep: composePrep,
+      steps: ['compose-generate'],
+      statePath: 'drawerId',
+    },
     expect: 'reticle-only',
   },
   {
     id: 'nav-blast-prompt',
     category: 'state',
-    intent: 'navigating to Diagnostics does not corrupt the top deployment\'s internal checksum (never rendered)',
+    intent:
+      "navigating to Diagnostics does not corrupt the top deployment's internal checksum (never rendered)",
     setup: ['login-submit'],
-    check: { kind: 'stateInvariantAfter', steps: ['nav-diagnostics'], statePath: 'deployments.0.checksum' },
+    check: {
+      kind: 'stateInvariantAfter',
+      steps: ['nav-diagnostics'],
+      statePath: 'deployments.0.checksum',
+    },
     expect: 'reticle-only',
   },
   {
     id: 'nav-blast-title',
     category: 'state',
-    intent: 'navigating to Diagnostics does not corrupt the top deployment\'s internal cost figure (never rendered)',
+    intent:
+      "navigating to Diagnostics does not corrupt the top deployment's internal cost figure (never rendered)",
     setup: ['login-submit'],
-    check: { kind: 'stateInvariantAfter', steps: ['nav-diagnostics'], statePath: 'deployments.0.costUsd' },
+    check: {
+      kind: 'stateInvariantAfter',
+      steps: ['nav-diagnostics'],
+      statePath: 'deployments.0.costUsd',
+    },
     expect: 'reticle-only',
   },
   {
     id: 'newdeploy-blast-kpi',
     category: 'state',
-    intent: 'opening the new-deploy modal does not corrupt the top deployment\'s internal cost figure (never rendered)',
+    intent:
+      "opening the new-deploy modal does not corrupt the top deployment's internal cost figure (never rendered)",
     setup: ['login-submit', 'nav-deployments'],
-    check: { kind: 'stateInvariantAfter', steps: ['new-deploy'], statePath: 'deployments.0.costUsd' },
+    check: {
+      kind: 'stateInvariantAfter',
+      steps: ['new-deploy'],
+      statePath: 'deployments.0.costUsd',
+    },
     expect: 'reticle-only',
   },
 
@@ -313,7 +351,14 @@ export const BUGS = [
     category: 'network',
     intent: 'generating a script fires exactly one POST /api/generate-script',
     setup: ['login-submit', 'nav-compose'],
-    check: { kind: 'netCountAfter', prep: composePrep, steps: ['compose-generate'], urlContains: '/api/generate-script', method: 'POST', expected: 1 },
+    check: {
+      kind: 'netCountAfter',
+      prep: composePrep,
+      steps: ['compose-generate'],
+      urlContains: '/api/generate-script',
+      method: 'POST',
+      expected: 1,
+    },
     expect: 'both',
   },
   {
@@ -321,7 +366,14 @@ export const BUGS = [
     category: 'network',
     intent: 'generating a script never calls the forbidden /api/legacy-telemetry endpoint',
     setup: ['login-submit', 'nav-compose'],
-    check: { kind: 'netCountAfter', prep: composePrep, steps: ['compose-generate'], urlContains: '/api/legacy-telemetry', method: 'POST', expected: 0 },
+    check: {
+      kind: 'netCountAfter',
+      prep: composePrep,
+      steps: ['compose-generate'],
+      urlContains: '/api/legacy-telemetry',
+      method: 'POST',
+      expected: 0,
+    },
     expect: 'both',
   },
   {
@@ -329,7 +381,14 @@ export const BUGS = [
     category: 'network',
     intent: 'generating a script never hits the forbidden cross-origin /api/broken/cors endpoint',
     setup: ['login-submit', 'nav-compose'],
-    check: { kind: 'netCountAfter', prep: composePrep, steps: ['compose-generate'], urlContains: '/api/broken/cors', method: 'GET', expected: 0 },
+    check: {
+      kind: 'netCountAfter',
+      prep: composePrep,
+      steps: ['compose-generate'],
+      urlContains: '/api/broken/cors',
+      method: 'GET',
+      expected: 0,
+    },
     expect: 'both',
   },
   {
@@ -337,7 +396,13 @@ export const BUGS = [
     category: 'network',
     intent: 'opening the new-deploy modal never fires a stray GET /api/broken/500',
     setup: ['login-submit', 'nav-deployments'],
-    check: { kind: 'netCountAfter', steps: ['new-deploy'], urlContains: '/api/broken/500', method: 'GET', expected: 0 },
+    check: {
+      kind: 'netCountAfter',
+      steps: ['new-deploy'],
+      urlContains: '/api/broken/500',
+      method: 'GET',
+      expected: 0,
+    },
     expect: 'both',
   },
   {
@@ -345,7 +410,13 @@ export const BUGS = [
     category: 'network',
     intent: 'signing in never fires the forbidden /api/legacy-telemetry privacy beacon',
     setup: [],
-    check: { kind: 'netCountAfter', steps: ['login-submit'], urlContains: '/api/legacy-telemetry', method: 'POST', expected: 0 },
+    check: {
+      kind: 'netCountAfter',
+      steps: ['login-submit'],
+      urlContains: '/api/legacy-telemetry',
+      method: 'POST',
+      expected: 0,
+    },
     expect: 'both',
   },
   {
@@ -353,7 +424,13 @@ export const BUGS = [
     category: 'network',
     intent: 'signing in fires exactly one POST /api/login',
     setup: [],
-    check: { kind: 'netCountAfter', steps: ['login-submit'], urlContains: '/api/login', method: 'POST', expected: 1 },
+    check: {
+      kind: 'netCountAfter',
+      steps: ['login-submit'],
+      urlContains: '/api/login',
+      method: 'POST',
+      expected: 1,
+    },
     expect: 'both',
   },
   {
@@ -361,7 +438,13 @@ export const BUGS = [
     category: 'network',
     intent: 'navigating to Overview never fires the forbidden /api/legacy-telemetry beacon',
     setup: ['login-submit'],
-    check: { kind: 'netCountAfter', steps: ['nav-overview'], urlContains: '/api/legacy-telemetry', method: 'POST', expected: 0 },
+    check: {
+      kind: 'netCountAfter',
+      steps: ['nav-overview'],
+      urlContains: '/api/legacy-telemetry',
+      method: 'POST',
+      expected: 0,
+    },
     expect: 'both',
   },
   {
@@ -369,7 +452,13 @@ export const BUGS = [
     category: 'network',
     intent: 'the 500 fault button fires exactly one GET /api/broken/500',
     setup: ['login-submit', 'nav-diagnostics'],
-    check: { kind: 'netCountAfter', steps: ['fault-500'], urlContains: '/api/broken/500', method: 'GET', expected: 1 },
+    check: {
+      kind: 'netCountAfter',
+      steps: ['fault-500'],
+      urlContains: '/api/broken/500',
+      method: 'GET',
+      expected: 1,
+    },
     expect: 'both',
   },
 
@@ -411,49 +500,91 @@ export const BUGS = [
   {
     id: 'kpi-deploys-tamper',
     category: 'business-logic',
-    intent: 'an unrelated Compose action must not corrupt the top deployment\'s internal cost (1200)',
+    intent:
+      "an unrelated Compose action must not corrupt the top deployment's internal cost (1200)",
     setup: ['login-submit', 'nav-compose'],
-    check: { kind: 'stateEqualsAfter', prep: composePrep, steps: ['compose-generate'], statePath: 'deployments.0.costUsd', expected: 1200 },
+    check: {
+      kind: 'stateEqualsAfter',
+      prep: composePrep,
+      steps: ['compose-generate'],
+      statePath: 'deployments.0.costUsd',
+      expected: 1200,
+    },
     expect: 'reticle-only',
   },
   {
     id: 'kpi-success-tamper',
     category: 'business-logic',
-    intent: 'an unrelated Compose action must not corrupt the top deployment\'s internal checksum ("9a3f00")',
+    intent:
+      'an unrelated Compose action must not corrupt the top deployment\'s internal checksum ("9a3f00")',
     setup: ['login-submit', 'nav-compose'],
-    check: { kind: 'stateEqualsAfter', prep: composePrep, steps: ['compose-generate'], statePath: 'deployments.0.checksum', expected: '9a3f00' },
+    check: {
+      kind: 'stateEqualsAfter',
+      prep: composePrep,
+      steps: ['compose-generate'],
+      statePath: 'deployments.0.checksum',
+      expected: '9a3f00',
+    },
     expect: 'reticle-only',
   },
   {
     id: 'kpi-p95-tamper',
     category: 'business-logic',
-    intent: 'an unrelated Compose action must not corrupt the second deployment\'s internal cost (1215)',
+    intent:
+      "an unrelated Compose action must not corrupt the second deployment's internal cost (1215)",
     setup: ['login-submit', 'nav-compose'],
-    check: { kind: 'stateEqualsAfter', prep: composePrep, steps: ['compose-generate'], statePath: 'deployments.1.costUsd', expected: 1215 },
+    check: {
+      kind: 'stateEqualsAfter',
+      prep: composePrep,
+      steps: ['compose-generate'],
+      statePath: 'deployments.1.costUsd',
+      expected: 1215,
+    },
     expect: 'reticle-only',
   },
   {
     id: 'kpi-services-tamper',
     category: 'business-logic',
-    intent: 'an unrelated Compose action must not corrupt the second deployment\'s internal checksum ("9a3f01")',
+    intent:
+      'an unrelated Compose action must not corrupt the second deployment\'s internal checksum ("9a3f01")',
     setup: ['login-submit', 'nav-compose'],
-    check: { kind: 'stateEqualsAfter', prep: composePrep, steps: ['compose-generate'], statePath: 'deployments.1.checksum', expected: '9a3f01' },
+    check: {
+      kind: 'stateEqualsAfter',
+      prep: composePrep,
+      steps: ['compose-generate'],
+      statePath: 'deployments.1.checksum',
+      expected: '9a3f01',
+    },
     expect: 'reticle-only',
   },
   {
     id: 'create-wrong-author',
     category: 'business-logic',
-    intent: 'a created deployment records the correct internal checksum ("2328"), not a corrupted one',
+    intent:
+      'a created deployment records the correct internal checksum ("2328"), not a corrupted one',
     setup: ['login-submit', 'nav-deployments', 'new-deploy'],
-    check: { kind: 'stateEqualsAfter', prep: namePrep, steps: ['deploy-submit'], statePath: 'deployments.0.checksum', expected: '2328' },
+    check: {
+      kind: 'stateEqualsAfter',
+      prep: namePrep,
+      steps: ['deploy-submit'],
+      statePath: 'deployments.0.checksum',
+      expected: '2328',
+    },
     expect: 'reticle-only',
   },
   {
     id: 'create-wrong-createdat',
     category: 'business-logic',
-    intent: 'a created deployment records the correct internal cost (0, not yet costed), not a bogus figure',
+    intent:
+      'a created deployment records the correct internal cost (0, not yet costed), not a bogus figure',
     setup: ['login-submit', 'nav-deployments', 'new-deploy'],
-    check: { kind: 'stateEqualsAfter', prep: namePrep, steps: ['deploy-submit'], statePath: 'deployments.0.costUsd', expected: 0 },
+    check: {
+      kind: 'stateEqualsAfter',
+      prep: namePrep,
+      steps: ['deploy-submit'],
+      statePath: 'deployments.0.costUsd',
+      expected: 0,
+    },
     expect: 'reticle-only',
   },
 
@@ -464,7 +595,14 @@ export const BUGS = [
     intent: 'clicking Generate actually fires the POST /api/generate-script (handler not dead)',
     url: `${APP_ORIGIN}/?reticle-break-click=compose-generate`,
     setup: ['login-submit', 'nav-compose'],
-    check: { kind: 'netCountAfter', prep: composePrep, steps: ['compose-generate'], urlContains: '/api/generate-script', method: 'POST', expected: 1 },
+    check: {
+      kind: 'netCountAfter',
+      prep: composePrep,
+      steps: ['compose-generate'],
+      urlContains: '/api/generate-script',
+      method: 'POST',
+      expected: 1,
+    },
     expect: 'both',
   },
   {
@@ -473,7 +611,13 @@ export const BUGS = [
     intent: 'clicking Sign in actually fires the POST /api/login (handler not dead)',
     url: `${APP_ORIGIN}/?reticle-break-click=login-submit`,
     setup: [],
-    check: { kind: 'netCountAfter', steps: ['login-submit'], urlContains: '/api/login', method: 'POST', expected: 1 },
+    check: {
+      kind: 'netCountAfter',
+      steps: ['login-submit'],
+      urlContains: '/api/login',
+      method: 'POST',
+      expected: 1,
+    },
     expect: 'both',
   },
 ];
