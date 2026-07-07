@@ -1,17 +1,29 @@
 <div align="center">
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark-logo.png" />
-  <img alt="Reticle" src="assets/readme/light-logo.png" width="80" />
+  <source media="(prefers-color-scheme: dark)" srcset="assets/readme/lockup-on-dark.png" />
+  <img alt="Reticle" src="assets/readme/lockup-on-light.png" width="260" />
 </picture>
 
-# Reticle
+</div>
+
+**Your AI agent says "Feature complete." Then you open the app:**
+
+✗ &nbsp;mock data and wrong APIs everywhere<br/>
+✗ &nbsp;a flow that used to work, now broken<br/>
+✗ &nbsp;half the feature never built
+
+<div align="center">
 
 ### Reticle is the proof layer for AI agents.
 
-It reads the _program_ — network, store state, signals, the React commit stream — not a screenshot, hands back a pass/fail **verdict with the `file:line` to fix**, and catches the silent bugs a screenshot or DOM tool **structurally cannot see.**
+</div>
 
-Measured: **10/10 bugs caught, 0 false positives, 2,574× cheaper to re-run, and two live `500`s caught on our own production app the first time we pointed it at one.**
+**Stop being your agent's QA.** Reticle makes it test its own work on every edit, and catch all three _before_ it says "done."
+
+It reads the _program_ (network, store state, signals, the React commit stream), not a screenshot, hands back a pass/fail **verdict with the `file:line` to fix**, and catches the silent bugs a screenshot or DOM tool **structurally cannot see.**
+
+<div align="center">
 
 <a href="https://reticle.sh"><img src="assets/readme/demo-montage.webp" alt="Reticle in action, an AI agent verifying a real running app from the inside: pass/fail verdicts with evidence, the file:line to fix, and a regression caught before it shipped" width="840" /></a>
 
@@ -23,30 +35,33 @@ Measured: **10/10 bugs caught, 0 false positives, 2,574× cheaper to re-run, and
 
 ## The problem, the fix, the numbers
 
-**The gap:** Your agent edits code, infers it worked, and moves on — it doesn't run your Playwright suite between every change. By the time CI catches something, the agent has already moved on and the context is gone. The broken modal, the silent `500`, the wrong store state — your agent shipped it and called it done.
+**The gap:** Your agent edits code, infers it worked, and moves on. It doesn't run your Playwright suite between every change. By the time CI catches something, the agent has already moved on and the context is gone. The broken modal, the silent `500`, the wrong store state: your agent shipped it and called it done.
 
-**Reticle closes that gap.** It instruments your running app from the inside and feeds your agent a verdict after every edit, before it moves on. This is the layer your CI suite _can't_ be — inside the agent's loop, while it codes. **Playwright gates releases. Reticle gates edits.**
+**Reticle closes that gap.** It instruments your running app from the inside and feeds your agent a verdict after every edit, before it moves on. This is the layer your CI suite _can't_ be: inside the agent's loop, while it codes. **Playwright gates releases. Reticle gates edits.**
 
-**What it reads that Playwright can't:** App store state, custom signals, request cardinality — program truth that never reaches the DOM. A page can look perfect on screen while a `500` fires underneath. Playwright sees the page. Reticle sees the program.
+**What it reads that Playwright can't:** App store state, custom signals, request cardinality: program truth that never reaches the DOM. A page can look perfect on screen while a `500` fires underneath. Playwright sees the page. Reticle sees the program.
 
 <p align="center">
-  <img src="assets/readme/silent-failures.png" alt="An e-commerce page looks perfectly shipped — but underneath: mock data, a dead click, a hidden 500. Reticle catches the failure the UI completely hid." width="560" />
+  <img src="assets/readme/silent-failures.png" alt="An e-commerce page looks perfectly shipped, but underneath: mock data, a dead click, a hidden 500. Reticle catches the failure the UI completely hid." width="560" />
 </p>
 
-**The numbers — every one measured by a committed harness, reproducible with `pnpm bench`, and we publish where we _lose_ too:**
+**The numbers, every one measured by a committed harness, reproducible with `pnpm bench`, and we publish where we _lose_ too:**
 
-| Check                                                     | Result           |
-| --------------------------------------------------------- | ---------------- |
-| Bugs caught (10 injected regressions, controlled app)     | **10 / 10**      |
-| False positives                                           | **0**            |
-| Cost to re-run a 4-flow regression suite                  | **~47 tokens**   |
-| Same suite, LLM re-driven (Playwright/DevTools)           | ~120,000 tokens  |
-| **Speed-up**                                              | **2,574×**       |
-| Flake rate on deterministic replay                        | **0%**           |
-| Real app, first pass: live `500`s the UI hid              | **2 caught**     |
-| Parallel agents on **one** browser (16 flows, 8 contexts) | **6.78× faster** |
+| Check                                                     | Result                             |
+| --------------------------------------------------------- | ---------------------------------- |
+| Bugs caught (52 injected regressions, controlled app)     | **50 / 52** (Playwright-script 38) |
+| Caught of those it _can_ catch                            | **50 / 50** (Playwright 38 / 39)   |
+| False positives (clean build)                             | **0** (Playwright 0)               |
+| Output consumed per bug                                   | **5.7 KB** vs Playwright 14.7 KB   |
+| Wall-time per bug                                         | **2.7 s** vs Playwright 31.7 s     |
+| Cost to re-run a 4-flow regression suite                  | **~47 tokens**                     |
+| Same suite, LLM re-driven (Playwright/DevTools)           | ~120,000 tokens                    |
+| **Speed-up**                                              | **2,574×**                         |
+| Flake rate on deterministic replay                        | **0%**                             |
+| Real app, first pass: live `500`s the UI hid              | **2 caught**                       |
+| Parallel agents on **one** browser (16 flows, 8 contexts) | **6.78× faster**                   |
 
-> **The proof that mattered most:** before we instrumented anything, Reticle's _first_ pass on our own production dashboard flagged two live `500`s — `GET /projects` and `/recovery/incidents` — that the UI completely hid. The page looked perfect. A screenshot would have called it done. **That is the entire point of Reticle**, and we found it on our own app, not a cherry-picked demo.
+> **The proof that mattered most:** before we instrumented anything, Reticle's _first_ pass on our own production dashboard flagged two live `500`s (`GET /projects` and `/recovery/incidents`) that the UI completely hid. The page looked perfect. A screenshot would have called it done. **That is the entire point of Reticle**, and we found it on our own app, not a cherry-picked demo.
 
 → [Full benchmark scorecard](bench/SCORECARD.md) · [Reproducible token math](docs/token-efficiency.md)
 
@@ -54,7 +69,7 @@ Measured: **10/10 bugs caught, 0 false positives, 2,574× cheaper to re-run, and
 
 ## Install in 30 seconds
 
-**Easiest — paste one line into your agent:**
+**Easiest, paste one line into your agent:**
 
 ```text
 Follow https://raw.githubusercontent.com/reticlehq/reticle/main/SKILL.md
@@ -92,16 +107,16 @@ Then **restart Claude Code** (or run `/mcp` to refresh) so it picks up the serve
 
 <img src="assets/readme/readme-done-lie.png" alt="Your agent says 'Fixed it.' It wasn't, POST /api/order returned 500. The agent never opened the app; Reticle does." width="840" />
 
-**In one sentence:** your AI coding agent says _"done"_ without ever opening the app — Reticle makes it open the app, confirm the thing actually works, and prove it, automatically, on every edit.
+**In one sentence:** your AI coding agent says _"done"_ without ever opening the app: Reticle makes it open the app, confirm the thing actually works, and prove it, automatically, on every edit.
 
-**The value lands differently depending on who you are — here's yours:**
+**The value lands differently depending on who you are, here's yours:**
 
 | You are… | What Reticle does for you |
 | --- | --- |
-| **Building with AI, don't write tests** ("vibe coding") | Your agent becomes its own QA. It checks its own work on every edit and fixes the break **before you ever see it** — so you stop being the manual tester and just keep building. |
-| **A software engineer** | An in-loop verifier: one call asserts over **network, store state, signals, console, and the React render stream**, returns a pass/fail verdict with the exact **`file:line` to fix**, and replays recorded flows deterministically — no LLM, **0% flake, ~175 tokens/run**. |
-| **In QA** | Every "I just eyeball it" acceptance step becomes a check the agent runs automatically on every edit — including the long tail nobody ever automated. Same flow, same verdict, every run. **Playwright gates releases; Reticle gates edits.** |
-| **A founder / engineering leader** | Fewer broken things shipped, agents that **prove their own work**, **2,574× cheaper** regression runs, and a **fleet of agents that verify in parallel** on one browser. Dev-only, localhost-only, **no telemetry** — nothing leaves your machine. |
+| **Building with AI, don't write tests** ("vibe coding") | Your agent becomes its own QA. It checks its own work on every edit and fixes the break **before you ever see it**, so you stop being the manual tester and just keep building. |
+| **A software engineer** | An in-loop verifier: one call asserts over **network, store state, signals, console, and the React render stream**, returns a pass/fail verdict with the exact **`file:line` to fix**, and replays recorded flows deterministically: no LLM, **0% flake, ~175 tokens/run**. |
+| **In QA** | Every "I just eyeball it" acceptance step becomes a check the agent runs automatically on every edit, including the long tail nobody ever automated. Same flow, same verdict, every run. **Playwright gates releases; Reticle gates edits.** |
+| **A founder / engineering leader** | Fewer broken things shipped, agents that **prove their own work**, **2,574× cheaper** regression runs, and a **fleet of agents that verify in parallel** on one browser. Dev-only, localhost-only, **no telemetry**, nothing leaves your machine. |
 
 ---
 
@@ -120,7 +135,7 @@ flowchart LR
 ```
 
 <p align="center">
-  <img src="assets/readme/verdict-not-view.png" alt="Reticle reads the app's runtime truth — network responses, store state, console errors — weighs the evidence, and hands back a PASS or FAIL verdict, not a screenshot." width="560" />
+  <img src="assets/readme/verdict-not-view.png" alt="Reticle reads the app's runtime truth (network responses, store state, console errors), weighs the evidence, and hands back a PASS or FAIL verdict, not a screenshot." width="560" />
 </p>
 
 One call checks many things at once and comes back with **proof**, deterministic (structured events, not a vision model), cheap (any model, no screenshot), and pointed at the code:
@@ -157,13 +172,13 @@ Three steps, then it runs itself:
 Follow https://raw.githubusercontent.com/reticlehq/reticle/main/SKILL.md
 ```
 
-**2 · Ask your agent in plain English.** No test syntax to learn — you describe the outcome, the agent drives your _real_ running app through Reticle and hands back proof:
+**2 · Ask your agent in plain English.** No test syntax to learn. You describe the outcome, the agent drives your _real_ running app through Reticle and hands back proof:
 
-> **You:** "Verify login works — it should call `/api/login`, land on the dashboard, and set the signed-in user."
+> **You:** "Verify login works: it should call `/api/login`, land on the dashboard, and set the signed-in user."
 >
-> **Agent, via Reticle:** clicks **Sign in** → `POST /api/login → 200 (14 ms)` → dashboard rendered → store now holds `auth: { email: "admin@…" }` **✅ PASS** — with that evidence attached. Had it failed, you'd get the failing check **and the `file:line` to fix** instead of a guess.
+> **Agent, via Reticle:** clicks **Sign in** → `POST /api/login → 200 (14 ms)` → dashboard rendered → store now holds `auth: { email: "admin@…" }` **✅ PASS**, with that evidence attached. Had it failed, you'd get the failing check **and the `file:line` to fix** instead of a guess.
 
-**3 · Record the flow once; it replays free, forever.** Save that journey as a flow and Reticle re-runs it deterministically on every later edit — **no model, 0% flake, ~47 tokens for a whole suite.** That's your regression net, running _inside_ the agent's loop instead of waiting for CI.
+**3 · Record the flow once; it replays free, forever.** Save that journey as a flow and Reticle re-runs it deterministically on every later edit: **no model, 0% flake, ~47 tokens for a whole suite.** That's your regression net, running _inside_ the agent's loop instead of waiting for CI.
 
 → Full walkthrough: **[Getting Started](docs/getting-started.md)** · every tool & predicate: **[Usage guide](docs/usage.md)**
 
@@ -209,7 +224,7 @@ Record a flow once; Reticle **replays it deterministically on every edit**. Your
 > We tested Reticle **two ways, a controlled toy app and a real production app, and published both**, including where we lose. Every number is produced by a committed harness ([`bench/SCORECARD.md`](bench/SCORECARD.md), reproduce with `pnpm bench`). A from-scratch explainer that teaches you to read it: [`docs/benchmarks.md`](docs/benchmarks.md).
 
 <p align="center">
-  <img src="assets/readme/regression-replay.png" alt="LLM re-drive burns a mountain of tokens replaying every step with the model. Reticle records once and replays deterministically — no model, no flake, just a verdict." width="560" />
+  <img src="assets/readme/regression-replay.png" alt="LLM re-drive burns a mountain of tokens replaying every step with the model. Reticle records once and replays deterministically: no model, no flake, just a verdict." width="560" />
 </p>
 
 <img src="assets/readme/bench-rerun.png" alt="Re-running a 4-flow test suite costs Reticle 47 tokens with no model and 0% flake, versus re-driving the whole thing with an LLM at ~120,000 tokens, up to 2,574x cheaper" width="840" />
@@ -259,11 +274,11 @@ Being inside the page costs real browser-level fidelity. These are genuine compe
 
 ## One browser, a whole fleet of agents
 
-Running a swarm of agents — or a parallel test suite — against the same app? Reticle does **not** launch a browser per agent. The daemon keeps **one** headless Chromium and leases each agent its own **isolated context** (separate cookies, storage, and DOM), so a fleet verifies in parallel with no cross-talk and no per-agent browser startup.
+Running a swarm of agents (or a parallel test suite) against the same app? Reticle does **not** launch a browser per agent. The daemon keeps **one** headless Chromium and leases each agent its own **isolated context** (separate cookies, storage, and DOM), so a fleet verifies in parallel with no cross-talk and no per-agent browser startup.
 
-<img src="assets/readme/bench-multi-agent.png" alt="One browser, eight isolated leased contexts: 16 verification flows finish in 5.2s in parallel vs 35.4s one-at-a-time — 6.78x faster, ~30s saved per batch, zero cross-talk" width="840" />
+<img src="assets/readme/bench-multi-agent.png" alt="One browser, eight isolated leased contexts: 16 verification flows finish in 5.2s in parallel vs 35.4s one-at-a-time: 6.78x faster, ~30s saved per batch, zero cross-talk" width="840" />
 
-**Measured:** 16 verification flows across **8 concurrent leased contexts** finish in **5.2s** vs **35.4s** one-at-a-time — **6.78× faster, ~30s saved per batch**, with all 8 contexts live at peak. The pool queues work above the cap (default `min(8, cores − 1)`) and automatically reclaims a lease from any hung or crashed agent, so a fleet of agents stays bounded and fair — one dead agent never starves the rest.
+**Measured:** 16 verification flows across **8 concurrent leased contexts** finish in **5.2s** vs **35.4s** one-at-a-time: **6.78× faster, ~30s saved per batch**, with all 8 contexts live at peak. The pool queues work above the cap (default `min(8, cores − 1)`) and automatically reclaims a lease from any hung or crashed agent, so a fleet of agents stays bounded and fair: one dead agent never starves the rest.
 
 Two MCP tools drive it: **`reticle_lease_acquire`** (open a fresh isolated context, get back a `sessionId`) and **`reticle_lease_release`** (close it, free the slot); **`reticle_sessions`** shows which sessions are pool-leased vs. human tabs, grouped by app. → [Multi-agent testing guide](docs/multi-agent-testing.md)
 
@@ -275,7 +290,7 @@ Two MCP tools drive it: **`reticle_lease_acquire`** (open a fresh isolated conte
 | --- | --- | --- |
 | an **agent building a React/Next app you own**, verifying each edit | **Reticle** | in-loop, ~100 tok/check, sees state + `file:line`, refuses destructive clicks |
 | running a **regression suite on every commit / in CI** | **Reticle** | deterministic replay: 0% flake, 128–2574× cheaper than re-driving with an LLM |
-| running **many agents** (or a parallel suite) against the app you own | **Reticle** | one browser, an isolated context per agent — 6.78× faster than a browser each, no cross-talk |
+| running **many agents** (or a parallel suite) against the app you own | **Reticle** | one browser, an isolated context per agent: 6.78× faster than a browser each, no cross-talk |
 | chasing a bug whose truth is **in state, not the DOM** | **Reticle** | desync, double-submit, side-effects, silent errors, no DOM tool sees these |
 | testing a **third-party site** / **many browsers** / **real input** | **Playwright** | Reticle can't instrument code you don't ship, or drive other engines |
 | verifying **true pixels** (visual regression) | **Playwright** (or Reticle _driven_) | a screenshot is the rendered frame; Reticle's always-on read is computed-style |
@@ -330,7 +345,7 @@ npm i -D @reticlehq/core        # or pnpm / yarn / bun
 **2. Register the MCP server** with your agent, `npx @reticlehq/core` _is_ the server:
 
 ```bash
-# Claude Code — add it, then restart Claude Code
+# Claude Code: add it, then restart Claude Code
 claude mcp add reticle -s user -- npx @reticlehq/core mcp
 ```
 
