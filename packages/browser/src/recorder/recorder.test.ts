@@ -119,6 +119,32 @@ describe('recorder capture — semantic anchored steps', () => {
     expect(step.anchor).toEqual({ kind: AnchorKind.TESTID, value: 'hook' });
   });
 
+  it('redacts a typed password so the secret never lands in a git-checked flow file', () => {
+    document.body.innerHTML = `<input type="password" data-testid="pw" />`;
+    const { emit } = makeEmits();
+    mount(emit);
+    clickRecord();
+    const input = document.querySelector('input') as HTMLInputElement;
+    input.value = 'hunter2';
+    fire(input, 'change');
+
+    const step = handle?.steps()[0] as FlowStep;
+    expect(step.action).toBe(ActionType.FILL);
+    expect(step.args?.['value']).toBe('[REDACTED]');
+  });
+
+  it('redacts a sensitively-named field (autocomplete one-time-code)', () => {
+    document.body.innerHTML = `<input autocomplete="one-time-code" data-testid="otp" />`;
+    const { emit } = makeEmits();
+    mount(emit);
+    clickRecord();
+    const input = document.querySelector('input') as HTMLInputElement;
+    input.value = '123456';
+    fire(input, 'change');
+
+    expect((handle?.steps()[0] as FlowStep).args?.['value']).toBe('[REDACTED]');
+  });
+
   it('keystroke inputs debounce to one fill step (latest value)', () => {
     document.body.innerHTML = `<input data-testid="hook" />`;
     const { emit } = makeEmits();

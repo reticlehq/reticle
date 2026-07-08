@@ -178,28 +178,43 @@ export function getStates(el: Element): ElementState[] {
   return states;
 }
 
+/**
+ * True when a form field holds a secret the SDK must never capture verbatim — a password input, a
+ * sensitive `autocomplete` (cc-number, one-time-code, …), or a name/id/testid/aria-label that trips
+ * `isSensitiveKey`. The single source of truth for both live-snapshot redaction (`getValue`) and the
+ * flow recorder's fill-value redaction, so recorded flows never persist typed passwords/OTPs/keys.
+ */
+export function isSensitiveField(el: Element): boolean {
+  if (
+    !(el instanceof HTMLInputElement) &&
+    !(el instanceof HTMLTextAreaElement) &&
+    !(el instanceof HTMLSelectElement)
+  ) {
+    return false;
+  }
+  const autocomplete = el.getAttribute('autocomplete') ?? '';
+  const identifiers = [
+    el.getAttribute('name') ?? '',
+    el.id,
+    el.getAttribute('data-testid') ?? '',
+    el.getAttribute('aria-label') ?? '',
+  ];
+  const sensitiveAutocomplete =
+    /current-password|new-password|cc-number|cc-csc|one-time-code/i.test(autocomplete);
+  return (
+    (el instanceof HTMLInputElement && el.type.toLowerCase() === 'password') ||
+    sensitiveAutocomplete ||
+    identifiers.some(isSensitiveKey)
+  );
+}
+
 export function getValue(el: Element): string | undefined {
   if (
     el instanceof HTMLInputElement ||
     el instanceof HTMLTextAreaElement ||
     el instanceof HTMLSelectElement
   ) {
-    const autocomplete = el.getAttribute('autocomplete') ?? '';
-    const identifiers = [
-      el.getAttribute('name') ?? '',
-      el.id,
-      el.getAttribute('data-testid') ?? '',
-      el.getAttribute('aria-label') ?? '',
-    ];
-    const sensitiveAutocomplete =
-      /current-password|new-password|cc-number|cc-csc|one-time-code/i.test(autocomplete);
-    if (
-      (el instanceof HTMLInputElement && el.type.toLowerCase() === 'password') ||
-      sensitiveAutocomplete ||
-      identifiers.some(isSensitiveKey)
-    ) {
-      return REDACTED_VALUE;
-    }
+    if (isSensitiveField(el)) return REDACTED_VALUE;
     return el.value;
   }
   const valueNow = el.getAttribute('aria-valuenow');
