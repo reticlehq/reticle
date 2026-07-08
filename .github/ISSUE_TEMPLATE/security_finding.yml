@@ -1,0 +1,61 @@
+name: Security finding (maintainers / audit tracking)
+description: Track a security finding that is ALREADY mitigated or is safe to discuss in public (e.g. from an internal audit)
+labels: ['security']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ⚠️ **Do not use this template for an undisclosed, exploitable vulnerability.**
+        Report those **privately** to **hey@reticle.ai** — see [SECURITY.md](https://github.com/reticlehq/reticle/blob/main/SECURITY.md).
+
+        This template is for tracking findings that are already public-safe: an internal audit item,
+        a hardening task, or a finding whose fix has shipped. It mirrors the structure of
+        `plan/SECURITY-AUDIT.md` so a finding maps 1:1 to an issue.
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      options:
+        - Critical
+        - High
+        - Medium
+        - Low
+    validations:
+      required: true
+  - type: input
+    id: files
+    attributes:
+      label: Affected files / area
+      description: The package(s) and file:line(s) the finding lives in.
+      placeholder: 'packages/server/src/http-server.ts:56-73, token-auth.ts:35-38'
+    validations:
+      required: true
+  - type: textarea
+    id: summary
+    attributes:
+      label: The finding
+      description: What is wrong, and which security property (localhost-only, no-telemetry, no-arbitrary-JS, redaction, path-traversal, auth) it breaks.
+    validations:
+      required: true
+  - type: textarea
+    id: impact
+    attributes:
+      label: Impact / exploit
+      description: What can an attacker do? Concrete inputs/state → outcome. Note any preconditions.
+      placeholder: 'A visited webpage rebound to 127.0.0.1 authorizes against /mcp/* and can drive the agent browser…'
+    validations:
+      required: true
+  - type: textarea
+    id: fix
+    attributes:
+      label: Proposed fix
+      description: The intended remediation, ideally the smallest correct change.
+    validations:
+      required: true
+  - type: checkboxes
+    id: disclosure
+    attributes:
+      label: Disclosure check
+      options:
+        - label: This finding is already mitigated OR is not an undisclosed exploitable vulnerability (otherwise I will email hey@reticle.ai instead of filing here).
+          required: true
