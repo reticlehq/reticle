@@ -109,13 +109,24 @@ export function decideOpen(sessions: { url: string }[], url: string | undefined)
   return match !== undefined ? { action: 'reuse', url: match.url } : { action: 'open', url };
 }
 
+/**
+ * Percent-encode the cmd.exe metacharacters that `start` re-parses so a URL can't break out into
+ * command execution on Windows (`?next=x&calc` → command chaining). `%` is left untouched so an
+ * already-encoded URL isn't double-encoded; the browser decodes the escapes back to the real URL.
+ */
+function encodeForWindowsStart(url: string): string {
+  return url.replace(/[&^|<>()"'!]/g, (ch) => `%${ch.charCodeAt(0).toString(16).toUpperCase()}`);
+}
+
 /** The OS command that opens a URL in the default browser, per platform. Pure — unit-tested. */
 export function openCommand(
   url: string,
   platform: NodeJS.Platform,
 ): { cmd: string; args: string[] } {
   if (platform === 'darwin') return { cmd: 'open', args: [url] };
-  if (platform === 'win32') return { cmd: 'cmd', args: ['/c', 'start', '', url] };
+  if (platform === 'win32') {
+    return { cmd: 'cmd', args: ['/c', 'start', '', encodeForWindowsStart(url)] };
+  }
   return { cmd: 'xdg-open', args: [url] };
 }
 

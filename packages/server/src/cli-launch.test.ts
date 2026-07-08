@@ -47,6 +47,17 @@ describe('openCommand — per-platform OS open', () => {
   it('Linux uses `xdg-open`', () => {
     expect(openCommand('http://x', 'linux')).toEqual({ cmd: 'xdg-open', args: ['http://x'] });
   });
+  it('Windows percent-encodes cmd metacharacters so a URL cannot break out of `start`', () => {
+    const { args } = openCommand('http://x/?a=1&b=2^c|calc', 'win32');
+    const encoded = args[3] ?? '';
+    expect(encoded).toBe('http://x/?a=1%26b=2%5Ec%7Ccalc');
+    for (const dangerous of ['&', '^', '|', '<', '>']) {
+      expect(encoded.includes(dangerous)).toBe(false);
+    }
+  });
+  it('Windows leaves existing percent-encoding intact (no double-encoding)', () => {
+    expect(openCommand('http://x/?q=a%20b', 'win32').args[3]).toBe('http://x/?q=a%20b');
+  });
 });
 
 describe('openInBrowser', () => {
