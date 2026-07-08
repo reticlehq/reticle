@@ -11,7 +11,8 @@ import {
   type FlowFile,
   type FlowStep,
 } from '@reticlehq/protocol';
-import { getAccessibleName, getRole } from '../dom/a11y.js';
+import { REDACTED_VALUE } from '@reticlehq/protocol';
+import { getAccessibleName, getRole, isSensitiveField } from '../dom/a11y.js';
 import { isReticleOverlay } from '../dom/dom-ignore.js';
 import { getCapabilities } from '../registry/capabilities.js';
 import { TOOLBAR_CSS, BTN_CSS, NAME_CSS, STATUS_CSS, MENU_CSS } from './recorder-styles.js';
@@ -311,7 +312,10 @@ class Recorder implements RecorderHandle {
     const pending = this.#pendingFill;
     if (pending === undefined) return;
     this.#pendingFill = undefined;
-    this.#steps.push(buildStep(pending.el, ActionType.FILL, { value: pending.value }));
+    // Never persist a typed secret into a git-checked flow file: password/OTP/cc/sensitive-keyed
+    // fields record REDACTED_VALUE, the same redaction live snapshots apply (dom/a11y.ts getValue).
+    const value = isSensitiveField(pending.el) ? REDACTED_VALUE : pending.value;
+    this.#steps.push(buildStep(pending.el, ActionType.FILL, { value }));
   }
 
   // ---- annotation ----
