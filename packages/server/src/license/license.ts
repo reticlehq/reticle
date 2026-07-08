@@ -147,6 +147,29 @@ export function assertEnterprise(feature: string, ctx: GateContext): void {
 export const LICENSE_KEY_ENV = 'RETICLE_LICENSE_KEY';
 export const LICENSE_PUBLIC_KEY_ENV = 'RETICLE_LICENSE_PUBLIC_KEY';
 
+/**
+ * Issuer public key COMPILED INTO the build. Empty in the source tree; the release pipeline replaces
+ * this literal with the real spki PEM. Baking it (rather than only reading env) is what makes the
+ * enterprise gate fail closed: a self-hosted operator can no longer disable enforcement by simply
+ * never setting RETICLE_LICENSE_PUBLIC_KEY, because the baked key takes precedence. The public key is
+ * safe to ship openly — it can only verify licenses, never mint them (that needs the private key).
+ */
+export const BAKED_ISSUER_PUBLIC_KEY_PEM = '';
+
+/**
+ * Resolve the issuer public-key PEM enforcement uses: the baked-in release key wins, so it can't be
+ * turned off from the environment. Only when nothing is baked (dev/repo) does the env var apply — that
+ * env path is the test/self-eval escape hatch, not the production switch.
+ */
+export function resolveIssuerPublicKeyPem(
+  env: NodeJS.ProcessEnv,
+  baked: string = BAKED_ISSUER_PUBLIC_KEY_PEM,
+): string | undefined {
+  if (baked.length > 0) return baked;
+  const envPem = env[LICENSE_PUBLIC_KEY_ENV];
+  return envPem !== undefined && envPem.length > 0 ? envPem : undefined;
+}
+
 /** The human-facing state of enterprise activation on this machine (what `reticle license status` shows). */
 interface LicenseReport {
   status: 'active' | 'missing' | 'invalid' | 'expired' | 'eval';
@@ -171,8 +194,12 @@ function loadPublicKey(pem: string | undefined): KeyObject | undefined {
  * issuer public key, the operator sets RETICLE_LICENSE_KEY. No public key configured ⇒ evaluation mode
  * (enterprise features run free, dev/test only). Offline, no phone-home.
  */
-export function describeLicense(now: number, env: NodeJS.ProcessEnv = process.env): LicenseReport {
-  const pem = env[LICENSE_PUBLIC_KEY_ENV];
+export function describeLicense(
+  now: number,
+  env: NodeJS.ProcessEnv = process.env,
+  baked: string = BAKED_ISSUER_PUBLIC_KEY_PEM,
+): LicenseReport {
+  const pem = resolveIssuerPublicKeyPem(env, baked);
   if (pem === undefined || pem.length === 0) {
     return {
       status: 'eval',
@@ -218,8 +245,9 @@ export function assertEnterpriseFromEnv(
   feature: string,
   now: number,
   env: NodeJS.ProcessEnv = process.env,
+  baked: string = BAKED_ISSUER_PUBLIC_KEY_PEM,
 ): void {
-  const publicKey = loadPublicKey(env[LICENSE_PUBLIC_KEY_ENV]);
+  const publicKey = loadPublicKey(resolveIssuerPublicKeyPem(env, baked));
   const key = env[LICENSE_KEY_ENV];
   assertEnterprise(feature, {
     requireLicense: publicKey !== undefined,
