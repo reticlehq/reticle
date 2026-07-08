@@ -2,7 +2,13 @@ import * as http from 'node:http';
 import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { log } from './log.js';
-import { isLoopbackPeer, requestToken, tokensMatch } from './token-auth.js';
+import {
+  isLoopbackHost,
+  isLocalWebOrigin,
+  isLoopbackPeer,
+  requestToken,
+  tokensMatch,
+} from './token-auth.js';
 
 // These paths form the agent↔server wire contract. Keep in sync with skill/SKILL.md.
 export const MCP_SSE_PATH = '/mcp/sse';
@@ -53,8 +59,19 @@ export function createSharedServer(options: { token?: string } = {}): SharedServ
   // non-loopback peer must present the pairing token. Without this, binding the daemon beyond loopback
   // (RETICLE_HOST) would expose reticle_act/reticle_navigate and session enumeration to the whole network even
   // though the WS demanded a token. When no token is configured the bind is loopback-only anyway.
+  //
+  // Loopback-peer trust alone is not enough: a DNS-rebound webpage reaches us AS a loopback peer while
+  // its browser sends the attacker's original Host/Origin. So the loopback-trust tier additionally
+  // requires a loopback Host header and a loopback-or-absent Origin/Referer — the same rebinding
+  // defense the WS bridge has (#originAllowed). A rebound page fails those and falls through to the
+  // token check (which it cannot satisfy). Legitimate remote clients on a RETICLE_HOST bind present the
+  // token instead of relying on loopback trust, so this never breaks them.
   const authorized = (req: http.IncomingMessage, url: URL): boolean => {
-    if (isLoopbackPeer(req.socket.remoteAddress)) return true;
+    const localClient =
+      isLoopbackPeer(req.socket.remoteAddress) &&
+      isLoopbackHost(req.headers.host) &&
+      isLocalWebOrigin(req.headers.origin, req.headers.referer);
+    if (localClient) return true;
     if (token === undefined) return false;
     return tokensMatch(token, requestToken(req, url));
   };
