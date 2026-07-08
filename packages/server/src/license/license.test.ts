@@ -122,4 +122,30 @@ describe('env-resolved activation (describeLicense / assertEnterpriseFromEnv)', 
       EnterpriseLicenseError,
     );
   });
+
+  it('a baked-in issuer key fails closed: enforcement cannot be disabled by unsetting env', () => {
+    // Simulates a release build (baked key present) with an operator who never sets the env var.
+    // Old behavior: eval mode, features free. New behavior: enforced, throws without a valid key.
+    expect(() => assertEnterpriseFromEnv('audit-log', NOW, {}, PUBKEY_PEM)).toThrow(
+      EnterpriseLicenseError,
+    );
+    expect(describeLicense(NOW, {}, PUBKEY_PEM).status).toBe('missing');
+    // A valid customer key still activates against the baked issuer key.
+    expect(describeLicense(NOW, { [LICENSE_KEY_ENV]: key() }, PUBKEY_PEM).status).toBe('active');
+  });
+
+  it('the baked issuer key wins over an env public key (operator cannot swap in their own)', () => {
+    const attacker = generateKeyPairSync('ed25519');
+    const attackerPem = attacker.publicKey.export({ type: 'spki', format: 'pem' }).toString();
+    // Operator bakes nothing but tries to point env at THEIR key + a self-signed license — with a real
+    // baked key, the env key is ignored, so their self-signed license fails signature verification.
+    const selfSigned = signLicenseKey(payload(), attacker.privateKey);
+    expect(
+      describeLicense(
+        NOW,
+        { [LICENSE_PUBLIC_KEY_ENV]: attackerPem, [LICENSE_KEY_ENV]: selfSigned },
+        PUBKEY_PEM,
+      ).status,
+    ).toBe('invalid');
+  });
 });
