@@ -1,5 +1,31 @@
-import { EventType } from '@reticlehq/protocol';
+import { EventType, REDACTED_VALUE } from '@reticlehq/protocol';
+import { isSensitiveKey } from '../security/serialization.js';
 import type { Emit, Teardown } from './types.js';
+
+/**
+ * Redact credential-bearing query params (`?access_token=…`, signed-URL keys, magic-link tokens) so
+ * they don't leak into the agent transcript / flow / run artifacts. Only the query string is rewritten
+ * — the path (relative or absolute) and any hash are preserved — and only when something actually
+ * matched, so non-sensitive URLs pass through byte-for-byte. Uses the shared `isSensitiveKey` regex.
+ */
+export function redactUrl(raw: string): string {
+  const queryStart = raw.indexOf('?');
+  if (queryStart === -1) return raw;
+  const base = raw.slice(0, queryStart);
+  const rest = raw.slice(queryStart + 1);
+  const hashStart = rest.indexOf('#');
+  const query = hashStart === -1 ? rest : rest.slice(0, hashStart);
+  const hash = hashStart === -1 ? '' : rest.slice(hashStart);
+  const params = new URLSearchParams(query);
+  let changed = false;
+  for (const key of [...params.keys()]) {
+    if (isSensitiveKey(key)) {
+      params.set(key, REDACTED_VALUE);
+      changed = true;
+    }
+  }
+  return changed ? `${base}?${params.toString()}${hash}` : raw;
+}
 
 interface XhrMeta {
   id: string;
@@ -38,7 +64,7 @@ export function installNetwork(emit: Emit): Teardown {
     const id = nextId();
     const start = performance.now();
     const method = methodOf(input, init);
-    const url = urlOf(input);
+    const url = redactUrl(urlOf(input));
     emit(EventType.NET_PENDING, { id, method, url, initiator: 'fetch' });
     try {
       const res = await callFetch(input, init);
@@ -81,7 +107,12 @@ export function installNetwork(emit: Emit): Teardown {
     url: string | URL,
     ...rest: unknown[]
   ): void {
-    meta.set(this, { id: nextId(), method: method.toUpperCase(), url: String(url), start: 0 });
+    meta.set(this, {
+      id: nextId(),
+      method: method.toUpperCase(),
+      url: redactUrl(String(url)),
+      start: 0,
+    });
     callOpen.call(this, method, url, ...rest);
   };
 

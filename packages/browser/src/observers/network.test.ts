@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { EventType } from '@reticlehq/protocol';
-import { installNetwork } from './network.js';
+import { installNetwork, redactUrl } from './network.js';
 import type { Emit, Teardown } from './types.js';
 
 interface Emitted {
@@ -20,6 +20,24 @@ function collect(): { emit: Emit; events: Emitted[] } {
 function fakeResponse(status: number): Response {
   return { status, ok: status >= 200 && status < 300 } as Response;
 }
+
+describe('redactUrl', () => {
+  it('redacts credential-bearing query params, keeps the rest', () => {
+    expect(redactUrl('http://api/x?access_token=secret&page=2')).toBe(
+      'http://api/x?access_token=%5BREDACTED%5D&page=2',
+    );
+    expect(redactUrl('/magic?api_key=abc')).toBe('/magic?api_key=%5BREDACTED%5D');
+  });
+
+  it('leaves URLs with no sensitive params byte-for-byte unchanged', () => {
+    expect(redactUrl('http://api/x?page=2&sort=asc')).toBe('http://api/x?page=2&sort=asc');
+    expect(redactUrl('http://api/x')).toBe('http://api/x');
+  });
+
+  it('preserves a trailing #hash', () => {
+    expect(redactUrl('/p?token=t#section')).toBe('/p?token=%5BREDACTED%5D#section');
+  });
+});
 
 describe('installNetwork (fetch)', () => {
   let teardown: Teardown | undefined;
