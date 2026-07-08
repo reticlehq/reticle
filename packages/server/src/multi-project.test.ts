@@ -414,7 +414,9 @@ describe('messy human scenarios', () => {
 
     function connectWithUrl(sessionId: string, url: string): Promise<void> {
       return new Promise((resolve) => {
-        const sock = new ws.WebSocket(`ws://${LOOPBACK_HOST}:${String(port)}${RETICLE_WS_PATH}`);
+        const sock = new ws.WebSocket(`ws://${LOOPBACK_HOST}:${String(port)}${RETICLE_WS_PATH}`, {
+          origin: 'http://localhost',
+        });
         sock.on('open', () => {
           sock.send(
             JSON.stringify({

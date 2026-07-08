@@ -270,7 +270,10 @@ export class Bridge {
   }
 
   #originAllowed(origin: string | undefined): boolean {
-    if (origin === undefined) return true;
+    // A real browser SDK connection always carries an Origin. A missing Origin means a non-browser
+    // local process (another app, a malicious npm postinstall, an extension's native host) — untrusted
+    // unless a pairing token is required, in which case the HELLO token check is the real gate.
+    if (origin === undefined) return this.#token !== undefined;
     const normalized = normalizeOrigin(origin);
     if (normalized === null) return false;
     if (this.#allowedOrigins.has(normalized)) return true;

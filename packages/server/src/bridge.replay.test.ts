@@ -25,7 +25,9 @@ class PanelClient {
     private readonly sessionId: string,
   ) {
     const host = '127.0.0.1';
-    this.#ws = new WebSocket(`ws://${host}:${String(port)}${RETICLE_WS_PATH}`);
+    this.#ws = new WebSocket(`ws://${host}:${String(port)}${RETICLE_WS_PATH}`, {
+      origin: 'http://localhost',
+    });
   }
   open(): Promise<void> {
     return new Promise((resolve) => {

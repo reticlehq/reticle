@@ -30,10 +30,12 @@ async function makeBridge(options: Omit<ConstructorParameters<typeof Bridge>[0],
   return { bridge, port: await bridge.ready };
 }
 
-function openSocket(port: number, origin?: string): Promise<WebSocket> {
+// Default to a loopback Origin — a real browser SDK always sends one. Pass `null` to simulate a
+// non-browser local process that omits Origin entirely (the M1 case).
+function openSocket(port: number, origin: string | null = 'http://localhost'): Promise<WebSocket> {
   return new Promise((resolve, reject) => {
     const socket = new WebSocket(`ws://127.0.0.1:${String(port)}${RETICLE_WS_PATH}`, {
-      ...(origin === undefined ? {} : { origin }),
+      ...(origin === null ? {} : { origin }),
     });
     sockets.push(socket);
     socket.once('open', () => resolve(socket));
@@ -94,6 +96,19 @@ describe('Bridge security boundary', () => {
     good.send(JSON.stringify(hello('good', 'shared-secret')));
     await waitUntil(() => bridge.sessions.count() === 1);
     expect(bridge.sessions.get('good')).toBeDefined();
+  });
+
+  it('rejects a handshake with no Origin when no token is configured (non-browser local process)', async () => {
+    const { port } = await makeBridge();
+    await expect(openSocket(port, null)).rejects.toThrow(/Unexpected server response: 403/);
+  });
+
+  it('allows a no-Origin handshake when a token is configured (HELLO token check is the gate)', async () => {
+    const { bridge, port } = await makeBridge({ token: 'shared-secret' });
+    const socket = await openSocket(port, null);
+    socket.send(JSON.stringify(hello('nobrowser', 'shared-secret')));
+    await waitUntil(() => bridge.sessions.count() === 1);
+    expect(bridge.sessions.get('nobrowser')).toBeDefined();
   });
 
   it('requires a token before binding beyond localhost', () => {
