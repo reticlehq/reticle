@@ -20,10 +20,14 @@ function listen(server: SharedServer): Promise<number> {
   });
 }
 
-function get(port: number, path: string): Promise<{ status: number; body: string }> {
+function get(
+  port: number,
+  path: string,
+  headers: http.OutgoingHttpHeaders = {},
+): Promise<{ status: number; body: string }> {
   return new Promise((resolve, reject) => {
     http
-      .get({ host: '127.0.0.1', port, path }, (res) => {
+      .get({ host: '127.0.0.1', port, path, headers }, (res) => {
         let body = '';
         res.setEncoding('utf8');
         res.on('data', (c: string) => (body += c));
@@ -62,6 +66,29 @@ describe('GET /status', () => {
     shared = createSharedServer({ token: 'a-secret-pairing-token' });
     const port = await listen(shared);
     const res = await get(port, STATUS_PATH);
+    expect(res.status).toBe(200);
+  });
+
+  it('rejects a DNS-rebound request whose Host header is not loopback (no token configured)', async () => {
+    // Rebinding: the page resolves evil.com -> 127.0.0.1 so the peer is loopback, but the browser
+    // still sends the attacker Host. Loopback-peer trust must not short-circuit past that.
+    shared = createSharedServer();
+    const port = await listen(shared);
+    const res = await get(port, STATUS_PATH, { host: 'evil.com' });
+    expect(res.status).toBe(401);
+  });
+
+  it('rejects a request carrying a non-loopback Origin even from a loopback peer', async () => {
+    shared = createSharedServer();
+    const port = await listen(shared);
+    const res = await get(port, STATUS_PATH, { origin: 'http://evil.com' });
+    expect(res.status).toBe(401);
+  });
+
+  it('serves a loopback peer that sends a loopback Origin (a legit same-daemon page)', async () => {
+    shared = createSharedServer();
+    const port = await listen(shared);
+    const res = await get(port, STATUS_PATH, { origin: `http://localhost:${String(port)}` });
     expect(res.status).toBe(200);
   });
 });
