@@ -419,4 +419,4 @@ The errors Reticle returns to the agent now carry a `recovery` hint for this exa
 
 **Nothing should run in production**
 
-- Keep `reticle.connect()` behind a dev guard (`import.meta.env.DEV` / `NODE_ENV`). The package is side-effect free and tree-shakes out when unused.
+- Keep `reticle.connect()` behind a dev guard (`import.meta.env.DEV` / `NODE_ENV`). The package is side-effect free and tree-shakes out when unused. As a backstop, `connect()` also self-disables when the build reports `NODE_ENV=production` (so an SSR healthcheck or a prod bundle opened on localhost won't activate it) — pass `allowInProduction: true` only for a deliberate prod diagnostic.

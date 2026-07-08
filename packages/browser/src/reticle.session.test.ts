@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { SESSION_AUTO, TRANSPORT_LIMITS } from '@reticlehq/protocol';
-import { connectionPolicy, resolveSessionLabel } from './reticle.js';
+import { connectionPolicy, resolveSessionLabel, shouldBlockProduction } from './reticle.js';
 
 describe('resolveSessionLabel', () => {
   const gen = (): string => 'unique-123';
@@ -74,5 +74,21 @@ describe('connectionPolicy', () => {
 
   it('rejects non-WebSocket bridge URLs', () => {
     expect(connectionPolicy('localhost', 'javascript:alert(1)', true, 'token').allowed).toBe(false);
+  });
+});
+
+describe('shouldBlockProduction', () => {
+  it('blocks a production build by default', () => {
+    expect(shouldBlockProduction('production', false)).toBe(true);
+  });
+
+  it('allows dev/test/undefined NODE_ENV (the normal dev-only case)', () => {
+    expect(shouldBlockProduction('development', false)).toBe(false);
+    expect(shouldBlockProduction('test', false)).toBe(false);
+    expect(shouldBlockProduction(undefined, false)).toBe(false);
+  });
+
+  it('honors the explicit allowInProduction override', () => {
+    expect(shouldBlockProduction('production', true)).toBe(false);
   });
 });

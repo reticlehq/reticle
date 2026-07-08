@@ -58,6 +58,13 @@ export interface ReticleConnectOptions {
   token?: string;
   /** Explicitly allow Reticle on a non-localhost page or bridge. Requires token. */
   allowNonLocalhost?: boolean;
+  /**
+   * Escape hatch for the production backstop. Reticle is dev-only and refuses to connect when the
+   * build reports NODE_ENV=production (an SSR healthcheck or a prod bundle opened locally would
+   * otherwise activate). The real fix is to gate the import behind `import.meta.env.DEV` so it's
+   * tree-shaken out; this flag only exists for the rare intentional prod diagnostic.
+   */
+  allowInProduction?: boolean;
   /** Show a small in-page status chip (connection + event count). */
   overlay?: boolean;
   /** Presenter mode: glow border, animated cursor, click/hover effects, narration HUD. */
@@ -88,6 +95,19 @@ export interface ReticleConnectOptions {
   endedFadeMs?: number;
   /** Session auto-end after this much agent idle (presenter). Default 5min; agent-tunable via reticle_session. */
   idleEndMs?: number;
+}
+
+/**
+ * Runtime backstop for the dev-only SDK: block connecting when the build reports production, unless
+ * explicitly overridden. Pure so it's testable; connect() reads NODE_ENV safely (process may be absent
+ * in a raw browser). This is defense-in-depth — the primary guard is the consumer gating the import
+ * behind `import.meta.env.DEV` so the SDK is dead-code-eliminated from prod bundles entirely.
+ */
+export function shouldBlockProduction(
+  nodeEnv: string | undefined,
+  allowInProduction: boolean,
+): boolean {
+  return nodeEnv === 'production' && !allowInProduction;
 }
 
 export function connectionPolicy(
@@ -204,6 +224,18 @@ export class Reticle {
   connect(options: ReticleConnectOptions = {}): void {
     if (this.#connected) return;
     if (typeof window === 'undefined' || typeof document === 'undefined') return;
+
+    // Dev-only backstop: refuse to activate in a production build (SSR healthcheck, prod bundle opened
+    // on localhost). `process` may not exist in a raw browser, so read NODE_ENV off globalThis.
+    const proc = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process;
+    const nodeEnv = proc?.env?.NODE_ENV;
+    if (shouldBlockProduction(nodeEnv, options.allowInProduction === true)) {
+      globalThis.console.warn(
+        '[Reticle] disabled in production (NODE_ENV=production). Gate the import behind ' +
+          'import.meta.env.DEV, or pass allowInProduction:true to override.',
+      );
+      return;
+    }
 
     const url = options.url ?? `ws://localhost:${String(RETICLE_DEFAULT_PORT)}${RETICLE_WS_PATH}`;
     const policy = connectionPolicy(
