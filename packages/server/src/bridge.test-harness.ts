@@ -43,7 +43,10 @@ export class FakeBrowser {
     private readonly sessionId: string,
     private readonly hasCapabilities = false,
   ) {
-    this.#ws = new WebSocket(`ws://${LOOPBACK_HOST}:${String(port)}${RETICLE_WS_PATH}`);
+    // Real browsers always send an Origin on the WS handshake; simulate a loopback app page.
+    this.#ws = new WebSocket(`ws://${LOOPBACK_HOST}:${String(port)}${RETICLE_WS_PATH}`, {
+      origin: 'http://localhost',
+    });
   }
 
   open(): Promise<void> {

@@ -29,7 +29,9 @@ afterEach(async () => {
 /** Connect a raw session announcing a sessionId, url, and (optionally) a stable projectId. */
 function connect(opts: { sessionId: string; url: string; projectId?: string }): Promise<void> {
   return new Promise((resolve) => {
-    const sock = new WebSocket(`ws://${LOOPBACK_HOST}:${String(port)}${RETICLE_WS_PATH}`);
+    const sock = new WebSocket(`ws://${LOOPBACK_HOST}:${String(port)}${RETICLE_WS_PATH}`, {
+      origin: 'http://localhost',
+    });
     open.push(sock);
     sock.on('open', () => {
       sock.send(
