@@ -13,7 +13,7 @@ import {
 import type { FlowReplayResult } from '@reticlehq/protocol';
 import { replayNamedFlow } from './flows/flow-tools.js';
 import { createSharedServer } from './http-server.js';
-import { resolveBridgeSecurity } from './bridge-security.js';
+import { resolveBridgeSecurityWithAutoToken } from './bridge-security.js';
 import { Bridge } from './bridge.js';
 import { BaselineStore } from './project/baselines.js';
 import { RecordingStore } from './flows/recordings.js';
@@ -178,6 +178,8 @@ export interface StartOptions {
   storageState?: string;
   /** absolute .reticle root. Defaults to process.cwd()/.reticle. Injectable for tests. */
   reticleRoot?: string;
+  /** Directory holding the auto-provisioned pairing token. Defaults to ~/.reticle. Injectable for tests. */
+  pairingTokenDir?: string;
   /** injectable clock for contract.json's generatedAt stamp. Defaults to Date.now. */
   now?: () => number;
   /** 'core' exposes the lean tool surface. Defaults to env RETICLE_TOOL_PROFILE, else 'full'. */
@@ -202,6 +204,8 @@ export interface RunningServer {
   /** True when nothing is using the daemon: no agent connected, no browser session, no pool lease.
    * The daemon entry (cli.ts) polls this to self-shut-down when idle so Reticle never lingers. */
   isIdle?: () => boolean;
+  /** The pairing token the bridge is enforcing (explicit, env, or auto-provisioned); undefined if none. */
+  token?: string;
   close: () => Promise<void>;
 }
 
@@ -225,7 +229,8 @@ function createBrowserPool(headless: boolean): BrowserPool {
 /** Start the Reticle bridge (browser WS endpoint) and, by default, the MCP stdio server. */
 export async function start(options: StartOptions = {}): Promise<RunningServer> {
   const port = options.port ?? RETICLE_DEFAULT_PORT;
-  const bridge = new Bridge({ port, ...resolveBridgeSecurity(options) });
+  const security = await resolveBridgeSecurityWithAutoToken(options);
+  const bridge = new Bridge({ port, ...security });
   // Server-authoritative liveness: a Node-side reaper (immune to browser throttling) ends sessions
   // whose agent has gone idle, so a forgotten/crashed agent never leaves the HUD "running" forever.
   const reaper = new SessionReaper(bridge.sessions);
@@ -316,6 +321,7 @@ export async function start(options: StartOptions = {}): Promise<RunningServer> 
   return {
     bridge,
     ...(realInput !== undefined ? { realInput } : {}),
+    ...(security.token !== undefined ? { token: security.token } : {}),
     close: async () => {
       reaper.stop();
       leaseReaper?.stop();
@@ -335,7 +341,7 @@ export async function start(options: StartOptions = {}): Promise<RunningServer> 
 export async function startDaemon(options: StartOptions = {}): Promise<RunningServer> {
   const port = options.port ?? RETICLE_DEFAULT_PORT;
 
-  const security = resolveBridgeSecurity(options);
+  const security = await resolveBridgeSecurityWithAutoToken(options);
   const shared = createSharedServer(security.token === undefined ? {} : { token: security.token });
   const bridge = new Bridge({ port, server: shared.httpServer, ...security });
   // The daemon owns listen() (below), so the real bind error is reported there; absorb bridge.ready's
@@ -489,6 +495,7 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
     bridge,
     ...(realInput !== undefined ? { realInput } : {}),
     ...(verifyHttp !== undefined ? { verifyPort: verifyHttp.port } : {}),
+    ...(security.token !== undefined ? { token: security.token } : {}),
     // Idle = nobody is using the daemon: no agent attached, no browser tab connected, no pool lease.
     // The daemon entry self-shuts-down after this holds for the grace window (see cli.ts / IdleShutdown).
     isIdle: () => !agentConnected && bridge.sessions.count() === 0 && pool.activeCount() === 0,

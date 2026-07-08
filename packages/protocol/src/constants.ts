@@ -44,6 +44,8 @@ export const ReticleEnv = {
   /** Ms of continuous idleness (no agent, no browser session, no lease) before the daemon self-exits;
    * `0` disables. Keeps Reticle from lingering on a user's machine after the editor closes. */
   IDLE_SHUTDOWN: 'RETICLE_IDLE_SHUTDOWN_MS',
+  /** Directory holding the auto-provisioned pairing token. Defaults to ~/.reticle; relocatable for CI. */
+  PAIRING_TOKEN_DIR: 'RETICLE_PAIRING_TOKEN_DIR',
 } as const;
 
 /** Hard transport bounds shared by the browser and bridge. */
@@ -95,6 +97,12 @@ export const ReticleDir = {
   VISUAL_SUBDIR: 'visual',
   /** verification-run artifacts — .reticle/runs/<runId>.json (the OEM/CI-consumable verdict). */
   RUNS_SUBDIR: 'runs',
+  /**
+   * Auto-provisioned bridge pairing token, stored at ~/.reticle/pairing-token (mode 0600). Written by
+   * the daemon, read Node-side by the build plugins to inject into connect(). A browser sandbox cannot
+   * read it, so a rogue localhost app can't present it — that's what stops cross-app session hijack.
+   */
+  PAIRING_TOKEN_FILE: 'pairing-token',
 } as const;
 
 /**

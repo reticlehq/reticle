@@ -149,6 +149,13 @@ On React 19 you then also need the source-mapping Babel plugin from Step 3. The 
 
 </details>
 
+### The pairing token (why some setups need one line more)
+
+The daemon auto-generates a **pairing token** on first run and stores it at `~/.reticle/pairing-token` (owner-only, `0600`). The bridge requires it, so another app running on `http://localhost:<some-other-port>` can't quietly register or drive your session — only code that can read that file (your dev server, not a web page) can present it.
+
+- **Vite plugin users:** nothing to do. The plugin reads the token server-side and injects it into `connect()` for you.
+- **Next.js / hand-wired `connect()`:** your `connect()` runs in the browser and can't read the file, so pass the token in yourself. The simplest path is a shared secret: set `RETICLE_TOKEN` for the daemon (it uses that instead of auto-generating) and expose the same value to the client as `NEXT_PUBLIC_RETICLE_TOKEN`, then pass it to `connect({ token })` (see below). On a single-user machine you can also just read `~/.reticle/pairing-token` in your dev tooling and forward it the same way.
+
 ### Next.js
 
 Create a tiny client component and mount it in your root layout, dev-only:
@@ -162,8 +169,10 @@ export function ReticleDev() {
   useEffect(() => {
     if (process.env.NODE_ENV === 'development') {
       // SESSION_AUTO = a unique id per tab, so several Next apps/tabs never collide on one session.
+      // NEXT_PUBLIC_RETICLE_TOKEN carries the pairing token to the browser (see "The pairing token").
+      const token = process.env.NEXT_PUBLIC_RETICLE_TOKEN;
       void import('@reticlehq/core').then(({ reticle, SESSION_AUTO }) =>
-        reticle.connect({ session: SESSION_AUTO }),
+        reticle.connect({ session: SESSION_AUTO, ...(token ? { token } : {}) }),
       );
     }
   }, []);
@@ -193,7 +202,9 @@ Anywhere your app boots in dev:
 
 ```ts
 import { reticle, SESSION_AUTO } from '@reticlehq/core';
-if (location.hostname === 'localhost') reticle.connect({ session: SESSION_AUTO });
+// Pass the pairing token (see "The pairing token" above); on a hand-wired setup you supply it yourself.
+if (location.hostname === 'localhost')
+  reticle.connect({ session: SESSION_AUTO, token: import.meta.env.VITE_RETICLE_TOKEN });
 ```
 
 Or, with no build step, a script tag pointed at the bridge:

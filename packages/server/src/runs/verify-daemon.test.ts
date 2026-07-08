@@ -30,6 +30,7 @@ describe('reticle serve --http (daemon wiring)', () => {
       httpVerifyPort: 0,
       httpVerifyToken: 'sek',
       reticleRoot: root,
+      pairingTokenDir: root, // keep the auto-provisioned token out of the real ~/.reticle
       now: () => 1_700_000_000_000,
     });
 
