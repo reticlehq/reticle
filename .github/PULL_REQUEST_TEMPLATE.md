@@ -18,3 +18,4 @@ Closes #
 - [ ] No `console.log` or internal tracking codes left in the diff
 - [ ] Each changed file is under the 500-line cap
 - [ ] Docs and `CHANGELOG.md` updated if this is user-facing (entry under `[Unreleased]`)
+- [ ] Security-affecting? Auth/redaction/trust-boundary changes keep the localhost-only, no-telemetry, no-arbitrary-JS posture and are covered by a test
