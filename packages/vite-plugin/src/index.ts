@@ -1,6 +1,9 @@
+import { readFileSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 import { transformSync } from '@babel/core';
 import reticleSource from '@reticlehq/babel-plugin';
-import { RETICLE_DEFAULT_PORT, RETICLE_WS_PATH } from '@reticlehq/protocol';
+import { RETICLE_DEFAULT_PORT, RETICLE_WS_PATH, ReticleDir, ReticleEnv } from '@reticlehq/protocol';
 import { resolveProjectId } from './project-id.js';
 
 export const RETICLE_VITE_PLUGIN_NAME = 'reticle';
@@ -80,6 +83,24 @@ function stamp(code: string, id: string): { code: string; map: string | null } |
   };
 }
 
+/**
+ * Read the daemon's auto-provisioned pairing token (~/.reticle/pairing-token, or the
+ * RETICLE_PAIRING_TOKEN_DIR override) so the served app can present it. Node-side only — a browser
+ * sandbox can't read the file, which is exactly why a rogue localhost app can't forge it. Best-effort:
+ * undefined if the daemon hasn't started yet (the page reloads once it has). Exported for testing.
+ */
+export function readPairingToken(): string | undefined {
+  const override = process.env[ReticleEnv.PAIRING_TOKEN_DIR];
+  const dir =
+    override !== undefined && override.length > 0 ? override : join(homedir(), ReticleDir.ROOT);
+  try {
+    const token = readFileSync(join(dir, ReticleDir.PAIRING_TOKEN_FILE), 'utf8').trim();
+    return token.length > 0 ? token : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /** Build the `reticle.connect()` argument literal — only includes keys the user set. */
 function connectArgs(options: ReticleVitePluginOptions): string {
   const args: Record<string, string | number> = {};
@@ -130,7 +151,11 @@ export function reticle(options: ReticleVitePluginOptions = {}): ReticleVitePlug
       return inject && id === RETICLE_CONNECT_MODULE ? RETICLE_CONNECT_MODULE : null;
     },
     load(id) {
-      return inject && id === RETICLE_CONNECT_MODULE ? connectModuleSource(resolved) : null;
+      if (!inject || id !== RETICLE_CONNECT_MODULE) return null;
+      // Read the token lazily per request: by the time the browser loads the app the daemon is up and
+      // has written it. An explicit token option still wins. Undefined ⇒ omitted (page reloads once up).
+      const token = resolved.token ?? readPairingToken();
+      return connectModuleSource(token !== undefined ? { ...resolved, token } : resolved);
     },
     transformIndexHtml() {
       if (!inject) return [];

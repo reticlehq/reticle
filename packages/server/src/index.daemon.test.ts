@@ -71,7 +71,8 @@ describe('startDaemon port collision', () => {
     const dir = await mkdtemp(join(tmpdir(), 'reticle-daemon-collide-'));
     root = join(dir, '.reticle');
     await expect(
-      startDaemon({ port, reticleRoot: root, now: () => 1_700_000_000_000 }),
+      // pairingTokenDir → temp so auto-provisioning never writes to the real ~/.reticle in tests.
+      startDaemon({ port, reticleRoot: root, pairingTokenDir: root, now: () => 1_700_000_000_000 }),
     ).rejects.toThrow();
   });
 });

@@ -269,7 +269,10 @@ export function ReticleDev() {
     if (process.env.NODE_ENV !== 'development') return;
     void import('@reticlehq/core').then(({ reticle, install, registerCapabilities }) => {
       install();
-      reticle.connect();
+      // The bridge requires a pairing token. Vite users get it auto-injected; hand-wired Next passes it
+      // in: set RETICLE_TOKEN for the daemon and expose the same value as NEXT_PUBLIC_RETICLE_TOKEN.
+      const token = process.env.NEXT_PUBLIC_RETICLE_TOKEN;
+      reticle.connect(token ? { token } : {});
       registerCapabilities({
         testids: [], // your data-testid values
         signals: [], // your reticle.signal() names

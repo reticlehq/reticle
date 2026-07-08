@@ -1,7 +1,19 @@
-import { describe, it, expect } from 'vitest';
+import { afterAll, describe, it, expect } from 'vitest';
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { SOURCE_ATTR } from '@reticlehq/babel-plugin';
-import { RETICLE_DEFAULT_PORT } from '@reticlehq/protocol';
+import { RETICLE_DEFAULT_PORT, ReticleDir, ReticleEnv } from '@reticlehq/protocol';
 import { reticle, RETICLE_VITE_PLUGIN_NAME, RETICLE_CONNECT_MODULE } from './index.js';
+
+// Point the token lookup at an empty temp dir so tests never pick up a real ~/.reticle/pairing-token.
+const emptyTokenDir = mkdtempSync(join(tmpdir(), 'reticle-vite-token-'));
+const savedTokenDir = process.env[ReticleEnv.PAIRING_TOKEN_DIR];
+process.env[ReticleEnv.PAIRING_TOKEN_DIR] = emptyTokenDir;
+afterAll(() => {
+  if (savedTokenDir === undefined) delete process.env[ReticleEnv.PAIRING_TOKEN_DIR];
+  else process.env[ReticleEnv.PAIRING_TOKEN_DIR] = savedTokenDir;
+});
 
 describe('reticle vite plugin', () => {
   it('only applies during serve (never ships to production builds)', () => {
@@ -75,6 +87,26 @@ describe('reticle vite plugin', () => {
     const code = reticle({ session: 'my-app', token: 'secret' }).load?.(RETICLE_CONNECT_MODULE);
     expect(code).toContain('my-app');
     expect(code).toContain('secret');
+  });
+
+  it('auto-injects the daemon pairing token from the token dir when no explicit token is set', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'reticle-vite-hastoken-'));
+    writeFileSync(join(dir, ReticleDir.PAIRING_TOKEN_FILE), 'daemon-secret-123\n');
+    const prev = process.env[ReticleEnv.PAIRING_TOKEN_DIR];
+    process.env[ReticleEnv.PAIRING_TOKEN_DIR] = dir;
+    try {
+      const code = reticle().load?.(RETICLE_CONNECT_MODULE);
+      expect(code).toContain('daemon-secret-123');
+      expect(code).toContain('token');
+    } finally {
+      process.env[ReticleEnv.PAIRING_TOKEN_DIR] = prev;
+    }
+  });
+
+  it('omits the token when the daemon has not provisioned one yet (no file)', () => {
+    // Env points at the empty dir from the top of the file — no token file present.
+    const code = reticle().load?.(RETICLE_CONNECT_MODULE);
+    expect(code).not.toContain('"token"');
   });
 
   it('auto-stamps a derived projectId with zero config', () => {
