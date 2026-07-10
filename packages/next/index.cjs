@@ -44,11 +44,12 @@ function withReticle(nextConfig = {}) {
   const token = readPairingToken();
   return {
     ...nextConfig,
-    // `env` values are inlined into the client bundle as process.env.<KEY>; forward the pairing token
-    // so a dev-only client connect can present it. Omitted when the daemon hasn't provisioned one yet.
+    // Expose the token to the client bundle as process.env.NEXT_PUBLIC_RETICLE_TOKEN (Next's convention
+    // for client-readable env), so a dev-only client connect can present it. Omitted when the daemon
+    // hasn't provisioned one yet — the client then connects without it and the page reloads once it has.
     env: {
       ...nextConfig.env,
-      ...(token !== undefined ? { RETICLE_PAIRING_TOKEN: token } : {}),
+      ...(token !== undefined ? { NEXT_PUBLIC_RETICLE_TOKEN: token } : {}),
     },
     webpack(config, ctx) {
       config.module = config.module || { rules: [] };
