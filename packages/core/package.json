@@ -8,9 +8,6 @@
   "publishConfig": {
     "access": "public"
   },
-  "bin": {
-    "reticle": "./dist/cli.js"
-  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
