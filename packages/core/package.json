@@ -9,17 +9,21 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
-    }
+    },
+    "./schema/*.json": "./dist/schema/*.json"
   },
   "scripts": {
-    "build": "tsc -b",
+    "build": "tsc -b && node scripts/gen-schema.mjs",
     "typecheck": "tsc -b",
     "lint": "eslint src",
     "test:unit": "vitest run src --passWithNoTests",
-    "prepack": "tsc -b && find dist -name \"*.test.*\" -delete"
+    "prepack": "tsc -b && node scripts/gen-schema.mjs && find dist -name \"*.test.*\" -delete"
   },
   "dependencies": {
     "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "zod-to-json-schema": "^3.24.0"
   },
   "license": "Apache-2.0",
   "author": "Reticle contributors",
