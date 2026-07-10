@@ -8,8 +8,10 @@ import { resolveProjectId } from './project-id.js';
 
 export const RETICLE_VITE_PLUGIN_NAME = 'reticle';
 
-/** The one-install package the host app imports the SDK from. */
-const RETICLE_PACKAGE = '@reticlehq/core';
+// The React kit the host app imports the SDK from. It re-exports the browser sensor, so a single
+// specifier yields both `reticle` (connect) and `install` (the React adapter). NOT `@reticlehq/core`
+// — that is the isomorphic foundation and exports neither.
+const RETICLE_PACKAGE = '@reticlehq/react';
 /** Files we stamp with source info — JSX/TSX only. */
 const JSX_FILE = /\.[jt]sx$/;
 /** Rollup virtual-module ids start with a NUL byte; never transform those. */
@@ -18,7 +20,7 @@ const NODE_MODULES = 'node_modules';
 
 /**
  * The connect code is served as a real module (not an inline <script>) so that Vite's import
- * pipeline resolves the bare `@reticlehq/core` specifier. An inline injected script is NOT run through
+ * pipeline resolves the bare `@reticlehq/react` specifier. An inline injected script is NOT run through
  * import resolution, so its bare import would fail in the browser. This path-like id is requested
  * by the injected <script src> and served by the load() hook below.
  */
@@ -122,7 +124,7 @@ export function connectModuleSource(options: ReticleVitePluginOptions): string {
 /**
  * Reticle Vite plugin. Add to your `plugins` array and the entire integration is done:
  *
- *   import { reticle } from '@reticlehq/core/vite';
+ *   import { reticle } from '@reticlehq/vite-plugin';
  *   export default defineConfig({ plugins: [react(), reticle()] });
  *
  * `apply: 'serve'` means Vite drops the plugin entirely from `vite build` — production bundles

@@ -54,12 +54,15 @@ describe('reticle vite plugin', () => {
     expect(tag?.attrs?.['src']).toBe(RETICLE_CONNECT_MODULE);
   });
 
-  it('serves the connect module via resolveId + load with a real @reticlehq/core import', () => {
+  it('serves the connect module importing the SDK from the @reticlehq/react kit', () => {
     const plugin = reticle();
     expect(plugin.resolveId?.(RETICLE_CONNECT_MODULE)).toBe(RETICLE_CONNECT_MODULE);
     expect(plugin.resolveId?.('some/other/id')).toBeNull();
     const code = plugin.load?.(RETICLE_CONNECT_MODULE);
-    expect(code).toContain("from '@reticlehq/core'");
+    // Must import from the kit, which actually exports `reticle` + `install`. Importing from
+    // @reticlehq/core (the foundation, which exports neither) is the bug this asserts against.
+    expect(code).toContain("from '@reticlehq/react'");
+    expect(code).not.toContain("from '@reticlehq/core'");
     expect(code).toContain('install()');
     expect(code).toContain('reticle.connect(');
   });
