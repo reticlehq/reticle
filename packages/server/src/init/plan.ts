@@ -20,7 +20,29 @@ import {
   SVELTEKIT_HOOKS_PATH,
 } from './snippets.js';
 
-const RETICLE_PACKAGE = '@reticlehq/core';
+// An app dev installs exactly the audience-scoped browser-side dependencies — never the retired
+// `@reticlehq/core` umbrella (which dragged the Node MCP server + ws into every app). The kit is the
+// framework adapter (it re-exports the browser sensor), paired with that framework's dev-only build
+// plugin for source mapping + connect() injection.
+const RETICLE_REACT_KIT = '@reticlehq/react';
+const RETICLE_VITE_PLUGIN = '@reticlehq/vite-plugin';
+const RETICLE_NEXT_PLUGIN = '@reticlehq/next';
+
+/** The dev-dependencies `reticle init` installs for a given framework — kit first, build plugin next. */
+export function frameworkPackages(framework: Framework): readonly string[] {
+  switch (framework) {
+    case Framework.NEXT:
+      return [RETICLE_REACT_KIT, RETICLE_NEXT_PLUGIN];
+    case Framework.VITE:
+    case Framework.SVELTEKIT:
+      // SvelteKit builds on Vite; until a dedicated Svelte kit exists it uses the Vite build plugin.
+      return [RETICLE_REACT_KIT, RETICLE_VITE_PLUGIN];
+    case Framework.HTML:
+      // No bundler plugin to install — just the kit; connect() is wired by hand (see htmlManual).
+      return [RETICLE_REACT_KIT];
+  }
+}
+
 const MCP_TARGET = 'global (claude user scope)';
 const RETICLE_CONFIG_FILE = '.reticle.json';
 
@@ -157,18 +179,19 @@ function mcpSteps(input: PlanInput): Step[] {
 
 function installStep(input: PlanInput): Step {
   const pm = input.detection.packageManager;
-  const command = installCommand(pm, RETICLE_PACKAGE);
+  const packages = frameworkPackages(input.detection.framework);
+  const command = installCommand(pm, packages);
   if (!input.options.install) {
     return {
-      title: 'Install dependency',
+      title: 'Install dependencies',
       target: 'package.json',
       status: StepStatus.MANUAL,
       detail: command,
     };
   }
-  const parts = installCommandParts(pm, RETICLE_PACKAGE);
+  const parts = installCommandParts(pm, packages);
   return {
-    title: 'Install dependency',
+    title: 'Install dependencies',
     target: 'package.json',
     status: StepStatus.APPLY,
     detail: command,

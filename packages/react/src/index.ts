@@ -227,3 +227,10 @@ export {
   getRenderStats,
   type RenderStats,
 } from './render-meter.js';
+
+// This package IS the React kit: one install gives an app dev the full browser-side surface
+// (the `reticle` instance + all sensing) plus this React adapter. Re-exporting the sensor here is
+// what lets `reticle init` wire a single dependency (`@reticlehq/react`) instead of making the app
+// name `@reticlehq/browser` too. `install` above is defined locally and takes precedence over any
+// same-named star re-export (the browser package has none), so there is no collision.
+export * from '@reticlehq/browser';

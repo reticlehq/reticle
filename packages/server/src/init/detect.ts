@@ -107,11 +107,16 @@ interface InstallCommand {
   args: string[];
 }
 
-export function installCommandParts(pm: PackageManager, pkg: string): InstallCommand {
-  return { command: pm, args: [...INSTALL_ARGS[pm], pkg] };
+/** Build a dev-dependency install command for one or more packages (e.g. the kit + its build plugin). */
+export function installCommandParts(
+  pm: PackageManager,
+  pkgs: string | readonly string[],
+): InstallCommand {
+  const list = typeof pkgs === 'string' ? [pkgs] : pkgs;
+  return { command: pm, args: [...INSTALL_ARGS[pm], ...list] };
 }
 
-export function installCommand(pm: PackageManager, pkg: string): string {
-  const { command, args } = installCommandParts(pm, pkg);
+export function installCommand(pm: PackageManager, pkgs: string | readonly string[]): string {
+  const { command, args } = installCommandParts(pm, pkgs);
   return `${command} ${args.join(' ')}`;
 }

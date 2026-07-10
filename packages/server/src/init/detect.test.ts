@@ -101,9 +101,17 @@ describe('detect package manager', () => {
 
 describe('installCommand', () => {
   it('renders the dev-install command per manager', () => {
-    expect(installCommand(PackageManager.PNPM, '@reticlehq/core')).toBe(
-      'pnpm add -D @reticlehq/core',
+    expect(installCommand(PackageManager.PNPM, '@reticlehq/react')).toBe(
+      'pnpm add -D @reticlehq/react',
     );
-    expect(installCommand(PackageManager.NPM, '@reticlehq/core')).toBe('npm i -D @reticlehq/core');
+    expect(installCommand(PackageManager.NPM, '@reticlehq/react')).toBe(
+      'npm i -D @reticlehq/react',
+    );
+  });
+
+  it('installs multiple packages in one command (the kit + its build plugin)', () => {
+    expect(
+      installCommand(PackageManager.PNPM, ['@reticlehq/react', '@reticlehq/vite-plugin']),
+    ).toBe('pnpm add -D @reticlehq/react @reticlehq/vite-plugin');
   });
 });

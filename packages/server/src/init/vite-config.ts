@@ -1,12 +1,12 @@
 /**
- * Pure, conservative patcher for a Vite config: add the `@reticlehq/core/vite` import and drop
+ * Pure, conservative patcher for a Vite config: add the `@reticlehq/vite-plugin` import and drop
  * `reticle()` into the `plugins` array. Only handles the obvious, common shape — anything ambiguous
  * bails to a `manual` result so we never half-edit a build config (a broken config is worse than a
  * documented manual step).
  */
 
-export const VITE_IMPORT = "import { reticle } from '@reticlehq/core/vite';";
-const RETICLE_MARKER = '@reticlehq/core/vite';
+export const VITE_IMPORT = "import { reticle } from '@reticlehq/vite-plugin';";
+const RETICLE_MARKER = '@reticlehq/vite-plugin';
 
 /** The `reticle(...)` call — carries the bridge port so the injected connect() targets it. */
 function reticlePluginCall(port: number | undefined): string {
