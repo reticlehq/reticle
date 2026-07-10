@@ -1,6 +1,11 @@
 # Research never ships — plan/ is always ignored
 plan/
 
+# Cloud control plane — the paid app carries the closed-intelligence moat and tenant/billing
+# code; it must never ship in the Apache OSS repo. Developed here for velocity, extracted to a
+# private repo (reticlehq/cloud) before any real secrets/tenant data. Its own git lives inside.
+app/
+
 # Marketing: keep the source (HTML/CSS/mjs) reproducible, but never commit the heavy
 # render outputs or raw footage — host those on a CDN / GitHub Releases. The curated
 # README media lives in assets/readme/ (a separate dir) and IS committed.
