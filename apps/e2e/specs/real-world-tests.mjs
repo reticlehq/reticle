@@ -1,4 +1,4 @@
-// Real-world Reticle coverage against the showcase dashboard (apps/demo on :4310 + apps/api on :8787).
+// Real-world Reticle coverage against the showcase dashboard (apps/bench-app on :4310 + apps/api on :8787).
 // Exercises the full loop on a believable product UI: capability discovery → auth → live store
 // state → routing → virtualized scroll-to-find → autonomous crawl. Plain synthetic input (no CDP),
 // so it runs in the same lightweight battery as the other specs.
@@ -49,8 +49,8 @@ chk('nav:changed → deployments table', (await refOf('testid', 'deploy-list')) 
 
 // Virtualized scroll-to-find.
 const list = await refOf('testid', 'deploy-list');
-const before = (await T('reticle_query', { by: 'testid', value: 'row-3700' })).elements?.length ?? 0;
-const found = await T('reticle_scroll_to', { by: 'testid', value: 'row-3700', container: list, maxScrolls: 60 });
+const before = (await T('reticle_query', { by: 'testid', value: 'row-3965' })).elements?.length ?? 0;
+const found = await T('reticle_scroll_to', { by: 'testid', value: 'row-3965', container: list, maxScrolls: 60 });
 chk('reticle_scroll_to reveals a virtualized row', before === 0 && found.found === true, `scrolls=${found.scrolls}`);
 
 // Autonomous crawl over the diagnostics controls.
