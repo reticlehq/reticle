@@ -203,7 +203,10 @@ export class ReticleAdapter {
     this.c = new McpStdioClient(
       'node',
       ['packages/server/dist/cli.js', 'mcp', '--port', this.port, '--drive', this.url],
-      { RETICLE_PORT: this.port },
+      // The default `hybrid` profile advertises only the core verify tools directly and reaches the
+      // rest through 2 meta-tools. This deterministic client calls tools BY NAME (record_start,
+      // flow_save, flow_replay…), so it needs them advertised directly — opt into the full profile.
+      { RETICLE_PORT: this.port, RETICLE_TOOL_PROFILE: 'full' },
     );
     await this.c.start();
     await sleep(RETICLE_READY_MS); // driven browser load + SDK connect (BENCH_RETICLE_READY_MS to tune)
