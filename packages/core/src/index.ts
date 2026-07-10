@@ -9,3 +9,4 @@ export * from './toon.js';
 export * from './flow-types.js';
 export * from './types.js';
 export * from './verification-run.js';
+export * from './upgrade.js';
