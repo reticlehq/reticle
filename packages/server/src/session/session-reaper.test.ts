@@ -6,8 +6,8 @@ import {
   SESSION_LIFECYCLE,
   SessionState,
   type HelloMessage,
-} from '@reticlehq/protocol';
-import { UNDELIVERED_NOTES_LABEL } from '@reticlehq/protocol';
+} from '@reticlehq/core';
+import { UNDELIVERED_NOTES_LABEL } from '@reticlehq/core';
 import { Session, SessionManager } from './session.js';
 import {
   reapIdleSessions,

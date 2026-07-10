@@ -1,5 +1,5 @@
 // Committed regression guard for the multi-agent / browser-pool path: many agents lease isolated
-// headless contexts from ONE shared browser against the live demo (:4310), capped and queued, each
+// headless contexts from ONE shared browser against the bench-app dashboard (:4310), capped and queued, each
 // usable on return. Locks in what was validated by hand: resource is bounded, leases correlate to
 // real sessions, and conflicting concurrent flows don't cross-talk. Boots its own bridge on :4400.
 import {
@@ -18,7 +18,7 @@ import {
 import os from 'node:os';
 import path from 'node:path';
 
-const DEMO = 'http://localhost:4310/';
+const APP = 'http://localhost:4310/';
 let pass = 0,
   fail = 0;
 const chk = (label, ok, detail = '') => {
@@ -61,7 +61,7 @@ const pool = new BrowserPool(
   { maxContexts: 3, genSessionId: () => `g${process.pid}-${launches}` },
 );
 
-console.log('\n=== multi-agent leases against the live demo (cap 3) ===');
+console.log('\n=== multi-agent leases against the live bench-app (cap 3) ===');
 
 // 6 "agents" lease + drive + release concurrently. Cap 3 ⇒ peak ≤ 3, the rest queue and cascade.
 let peak = 0;
@@ -73,7 +73,7 @@ const results = await Promise.allSettled(
   Array.from({ length: 6 }, (_, i) =>
     (async () => {
       const sid = `agent-${process.pid}-${i}`;
-      const navUrl = appendReticleParams(DEMO, sid); // demo's SDK adopts __reticle_session
+      const navUrl = appendReticleParams(APP, sid); // the app's SDK adopts __reticle_session
       const lease = await pool.acquire(navUrl, { sessionId: sid });
       const connected = await waitUntil(() => server.bridge.sessions.get(sid) !== undefined, 12000);
       if (!connected) {

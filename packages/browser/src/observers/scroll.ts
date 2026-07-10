@@ -1,4 +1,4 @@
-import { EventType } from '@reticlehq/protocol';
+import { EventType } from '@reticlehq/core';
 import { refs } from '../dom/refs.js';
 import type { Emit, Teardown } from './types.js';
 

@@ -4,7 +4,7 @@ import {
   ReticleCommand,
   type CommandResult,
   type ReticleEvent,
-} from '@reticlehq/protocol';
+} from '@reticlehq/core';
 import { TOOLS, type ToolDeps } from '../tools/tools.js';
 import { ReticleTool } from '../tools/tool-names.js';
 import type { CrawlReport } from './crawl.js';

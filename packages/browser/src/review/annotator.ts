@@ -1,4 +1,4 @@
-import { EventType } from '@reticlehq/protocol';
+import { EventType } from '@reticlehq/core';
 import { resolveMarkAnchor } from './mark-anchor.js';
 import { nativeSetTimeout, nativeClearTimeout } from '../timers/native-timers.js';
 

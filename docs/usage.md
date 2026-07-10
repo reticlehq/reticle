@@ -220,7 +220,7 @@ A page can be **thrashing** — committing many React renders a second — while
 // app entry — MUST run before react-dom loads, so import it FIRST (React reads the devtools hook
 // at renderer-inject time). It augments a real React DevTools hook if present; host-safe (no-ops on
 // any failure, never breaks the app).
-import { installRenderMeter } from '@reticlehq/core';
+import { installRenderMeter } from '@reticlehq/react';
 installRenderMeter();
 ```
 
@@ -814,7 +814,7 @@ Performs the action (with settle so React commits land in the window), waits for
 No need to broadcast a signal for every fact. Register stores in your app:
 
 ```ts
-import { registerStore } from '@reticlehq/core';
+import { registerStore } from '@reticlehq/react';
 registerStore('workspace', () => useWorkspace.getState());
 ```
 
@@ -835,7 +835,7 @@ Store reads are the reliable path; ref reads degrade to a structured failure rat
 Declare it once so the agent learns the surface without reading source:
 
 ```ts
-import { registerCapabilities } from '@reticlehq/core';
+import { registerCapabilities } from '@reticlehq/react';
 registerCapabilities({ testids: [...], signals: [...], stores: [...], flows: [...] });
 ```
 
@@ -893,7 +893,7 @@ Point Reticle's server at a Chrome DevTools (CDP) endpoint; it then drives **rea
      "mcpServers": {
        "reticle": {
          "command": "npx",
-         "args": ["@reticlehq/core"],
+         "args": ["@reticlehq/server", "mcp"],
          "env": { "RETICLE_CDP_URL": "http://localhost:9222" },
        },
      },

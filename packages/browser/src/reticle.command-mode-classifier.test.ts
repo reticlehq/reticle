@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { ReticleCommand, PresenterMode } from '@reticlehq/protocol';
+import { ReticleCommand, PresenterMode } from '@reticlehq/core';
 import { modeForCommand } from './reticle-presenter-helpers.js';
 
 describe('command-kind classifier', () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { VisualReason } from '@reticlehq/protocol';
+import { VisualReason } from '@reticlehq/core';
 import { VIEWPORT_TOOLS } from './viewport-tools.js';
 import { ReticleTool } from '../tools/tool-names.js';
 import type { RealInputProvider } from './real-input.js';

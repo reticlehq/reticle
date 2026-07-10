@@ -2,7 +2,7 @@ import * as fs from 'node:fs';
 import * as https from 'node:https';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
-import { UpdateCheckIntervalMs } from '@reticlehq/protocol';
+import { UpdateCheckIntervalMs } from '@reticlehq/core';
 import { log } from '../log.js';
 
 const RETICLE_HOME = join(homedir(), '.reticle');

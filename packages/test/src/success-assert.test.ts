@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { FlowExpect } from '@reticlehq/protocol';
+import type { FlowExpect } from '@reticlehq/core';
 import type { EvalResult, FlowReplaySession, Predicate, WaitForSignal } from '@reticlehq/server';
 import { assertSuccess, successToPredicate } from './success-assert.js';
 

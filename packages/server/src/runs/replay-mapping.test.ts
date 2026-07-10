@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ReplayStatus, RunFlowStatus, type FlowReplayResult } from '@reticlehq/protocol';
+import { ReplayStatus, RunFlowStatus, type FlowReplayResult } from '@reticlehq/core';
 import { mapReplayToFlowResult, runFlowStatusOf } from './replay-mapping.js';
 
 const replay = (status: ReplayStatus, extra?: Partial<FlowReplayResult>): FlowReplayResult => ({

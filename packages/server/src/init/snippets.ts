@@ -3,7 +3,7 @@
  * so the runner never inlines free strings.
  */
 
-import { RETICLE_DEFAULT_PORT, RETICLE_WS_PATH } from '@reticlehq/protocol';
+import { RETICLE_DEFAULT_PORT, RETICLE_WS_PATH } from '@reticlehq/core';
 
 /**
  * The connect() argument literal: a non-default port adds a `url`, and a projectId is always passed
@@ -23,7 +23,7 @@ export function viteManual(port: number | undefined): string {
   const call = port === undefined ? 'reticle()' : `reticle({ port: ${String(port)} })`;
   return `Add the Reticle plugin to your Vite config:
 
-  import { reticle } from '@reticlehq/core/vite';
+  import { reticle } from '@reticlehq/vite-plugin';
 
   export default defineConfig({
     plugins: [react(), ${call}],
@@ -36,7 +36,7 @@ The plugin only applies during \`vite\` (dev) — it is dropped from \`vite buil
 export function nextConfigManual(configFile: string): string {
   return `Wrap your ${configFile} export with withReticle (keeps SWC, dev-only):
 
-  import { withReticle } from '@reticlehq/core/next';
+  import { withReticle } from '@reticlehq/next';
 
   export default withReticle(nextConfig);`;
 }
@@ -50,7 +50,7 @@ import { useEffect } from 'react';
 export function ReticleDev() {
   useEffect(() => {
     if (process.env.NODE_ENV !== 'development') return;
-    void import('@reticlehq/core').then(({ reticle, install }) => {
+    void import('@reticlehq/react').then(({ reticle, install }) => {
       install();
       reticle.connect(${connectArg(port, projectId)});
     });
@@ -70,7 +70,7 @@ export const NEXT_LAYOUT_MANUAL = `Mount <ReticleDev /> in your root layout (app
 /**
  * Manual connect guidance for projects without a Vite/Next plugin. Most such projects still use a
  * BUNDLER (CRA, webpack, Parcel, Vue/Svelte CLIs) — for those, the connect goes in the entry MODULE,
- * where a bare `@reticlehq/core` import resolves. A bare import in a plain index.html does NOT resolve in
+ * where a bare `@reticlehq/react` import resolves. A bare import in a plain index.html does NOT resolve in
  * the browser, so we never tell a bundled app to do that (the old advice silently failed for CRA).
  */
 export function htmlManual(port: number | undefined, projectId?: string): string {
@@ -78,15 +78,15 @@ export function htmlManual(port: number | undefined, projectId?: string): string
   return `No Vite/Next plugin detected — wire the dev-only connect by hand. Pick the form for your setup:
 
   • Bundled app (Create React App, webpack, Parcel, Vue/Svelte CLI, etc.) — add to your ENTRY module
-    (e.g. src/index.js or src/main.js), where '@reticlehq/core' resolves through your bundler:
+    (e.g. src/index.js or src/main.js), where '@reticlehq/react' resolves through your bundler:
 
       if (location.hostname === 'localhost') {
-        const { reticle, install } = await import('@reticlehq/core');
+        const { reticle, install } = await import('@reticlehq/react');
         install();
         reticle.connect(${arg});
       }
 
-  • Plain static HTML with no build step — the browser can't resolve the bare '@reticlehq/core' import, so
+  • Plain static HTML with no build step — the browser can't resolve the bare '@reticlehq/react' import, so
     bundle the SDK once (e.g. \`npx esbuild\`) and point a dev-only <script type="module"> at the output,
     or serve the page through a dev server (Vite) that resolves bare imports.`;
 }
@@ -103,7 +103,7 @@ export function svelteKitHooksFile(port: number | undefined, projectId?: string)
   return `// Dev-only: connect Reticle on the client. SvelteKit renders via app.html, so the Vite-plugin
 // index.html injection doesn't fire — connect from this client hook instead.
 if (import.meta.env.DEV) {
-  void import('@reticlehq/core').then(({ reticle, install }) => {
+  void import('@reticlehq/react').then(({ reticle, install }) => {
     install();
     reticle.connect(${connectArg(port, projectId)});
   });

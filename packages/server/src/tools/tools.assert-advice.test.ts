@@ -5,7 +5,7 @@ import {
   SessionState,
   type CommandResult,
   type ReticleEvent,
-} from '@reticlehq/protocol';
+} from '@reticlehq/core';
 import { TOOLS, type ToolDeps } from './tools.js';
 import { ReticleTool } from './tool-names.js';
 import type { Session, SessionManager } from '../session/session.js';

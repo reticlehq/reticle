@@ -4,11 +4,13 @@
   "version": "1.1.0",
   "type": "module",
   "description": "Minimal React Router 7 (Remix) app — verifies Reticle via a dev-only client connect (SSR, no plugin injection).",
-  "scripts": { "dev": "react-router dev" },
+  "scripts": {
+    "dev": "react-router dev"
+  },
   "dependencies": {
     "@react-router/node": "8.0.0",
     "@react-router/serve": "8.0.0",
-    "@reticlehq/core": "workspace:*",
+    "@reticlehq/react": "workspace:*",
     "isbot": "^5.1.36",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",

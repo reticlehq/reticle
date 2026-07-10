@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ReticleCommand, type CommandResult } from '@reticlehq/protocol';
+import { ReticleCommand, type CommandResult } from '@reticlehq/core';
 import { scrollToFind, type ScrollFindSession } from './scroll-find.js';
 
 interface Script {

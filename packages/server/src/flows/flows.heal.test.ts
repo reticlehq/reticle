@@ -20,7 +20,7 @@ import {
   type FlowHealResult,
   type ReticleEvent,
   type QueryEmptyHint,
-} from '@reticlehq/protocol';
+} from '@reticlehq/core';
 import { FLOW_TOOLS } from './flow-tools.js';
 import { ReticleTool } from '../tools/tool-names.js';
 import { FlowStore } from './flows.js';

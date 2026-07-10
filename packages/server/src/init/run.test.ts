@@ -99,7 +99,7 @@ describe('runInit', () => {
     expect(r.ok).toBe(true);
     expect(io.written['.mcp.json']).toBeUndefined();
     expect(io.execCalls.some((c) => c.command === 'claude' && c.args.includes('add'))).toBe(true);
-    expect(io.written['vite.config.ts']).toContain('@reticlehq/core/vite');
+    expect(io.written['vite.config.ts']).toContain('@reticlehq/vite-plugin');
   });
 
   it('does not re-register when an reticle server already exists (idempotent, install-once)', () => {
@@ -118,14 +118,14 @@ describe('runInit', () => {
   it('registers in Cursor global config when Cursor is present', () => {
     const io = memoryIo(VITE_FILES, { claudeAvailable: false, cursor: true });
     runInit(OPTS, io);
-    expect(io.written['/home/u/.cursor/mcp.json']).toContain('@reticlehq/core');
+    expect(io.written['/home/u/.cursor/mcp.json']).toContain('@reticlehq/server');
   });
 
   it('registers with BOTH Claude and Cursor when both are present', () => {
     const io = memoryIo(VITE_FILES, { claudeAvailable: true, cursor: true });
     runInit(OPTS, io);
     expect(io.execCalls.some((c) => c.command === 'claude' && c.args.includes('add'))).toBe(true);
-    expect(io.written['/home/u/.cursor/mcp.json']).toContain('@reticlehq/core');
+    expect(io.written['/home/u/.cursor/mcp.json']).toContain('@reticlehq/server');
   });
 
   it('dry run writes nothing and runs no subprocess', () => {
@@ -140,7 +140,9 @@ describe('runInit', () => {
   it('runs the install when enabled', () => {
     const io = memoryIo({ ...VITE_FILES, 'pnpm-lock.yaml': '' }, { mcpExists: true });
     runInit({ ...OPTS, install: true }, io);
-    expect(io.execCalls).toEqual([{ command: 'pnpm', args: ['add', '-D', '@reticlehq/core'] }]);
+    expect(io.execCalls).toEqual([
+      { command: 'pnpm', args: ['add', '-D', '@reticlehq/react', '@reticlehq/vite-plugin'] },
+    ]);
   });
 
   it('downgrades a failed step to manual with its fallback command', () => {

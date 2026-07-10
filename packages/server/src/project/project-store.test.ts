@@ -8,7 +8,7 @@ import {
   RunKind,
   RunStatus,
   type RunRecord,
-} from '@reticlehq/protocol';
+} from '@reticlehq/core';
 import { ProjectStore } from './project-store.js';
 import { reticleDirPaths } from './reticle-dir.js';
 import { createNodeFileSystem, type FileSystemPort } from './fs-port.js';

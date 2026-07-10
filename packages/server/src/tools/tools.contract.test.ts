@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { CommandResult } from '@reticlehq/protocol';
-import { FROM_DISK_ARG } from '@reticlehq/protocol';
+import type { CommandResult } from '@reticlehq/core';
+import { FROM_DISK_ARG } from '@reticlehq/core';
 import { TOOLS, type ToolDeps } from './tools.js';
 import { ReticleTool } from './tool-names.js';
 import { BaselineStore } from '../project/baselines.js';

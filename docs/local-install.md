@@ -14,16 +14,18 @@ This starts a **fresh** Verdaccio on `http://localhost:4873`, creates a user/tok
 
 | Package | What you install it for |
 | --- | --- |
-| **`@reticlehq/core`** | **the one install** — re-exports everything below |
-| `@reticlehq/browser` | the dev-only SDK you embed in your app |
-| `@reticlehq/server` | the bridge + MCP server (your agent runs it) |
-| `@reticlehq/react` | DOM → component → source-file mapping |
-| `@reticlehq/babel-plugin` / `@reticlehq/next` | React 19 source mapping (Vite / Next.js) |
+| **`@reticlehq/react`** | **install this** — the browser SDK kit you embed (re-exports the browser sensor, so one install gives both `reticle` and `install`) |
+| `@reticlehq/vite-plugin` | dev-only source mapping + `connect()` injection (Vite) |
+| `@reticlehq/next` | Next.js build wrapper (`withReticle`) |
+| `@reticlehq/server` | the bridge + MCP server (your agent runs it, `npx @reticlehq/server mcp`) |
+| `@reticlehq/babel-plugin` | React 19 source stamping (Babel) |
 | `@reticlehq/test` | write declarative, signal-bound specs (`reticleTest`) |
 | `@reticlehq/eslint-plugin` | the `require-signal-on-mutation` lint rule |
 | `@reticlehq/protocol` | shared wire contract (pulled in automatically) |
 
-Most users only need **`@reticlehq/core`** (it re-exports the SDK + React adapter at `.`, and the plugins/runner/server at `@reticlehq/core/{next,babel,test,server}`); the rest stay available for granular installs. (Verified: an external `npm i @reticlehq/core` resolves the whole graph, including `@reticlehq/protocol`, and imports correctly.) Leave it running.
+For a browser app, install `@reticlehq/react` plus the build plugin for your framework (`@reticlehq/vite-plugin` or `@reticlehq/next`); `@reticlehq/server` is what your agent runs. (Verified: an external `npm i @reticlehq/react` resolves its graph, including `@reticlehq/protocol`, and imports correctly.) Leave the registry running.
+
+> Note: pre-2.0 docs used a single `@reticlehq/core` umbrella package that re-exported everything; it's been split into the audience-scoped packages above.
 
 ## 2. Point your app at the local registry
 
@@ -35,30 +37,31 @@ In your app's project root, add an `.npmrc` (scopes only `@reticle` to the local
 
 ## 3. Install + wire it up
 
-**One install** brings the SDK, React adapter, source-mapping plugins, the spec runner, and the MCP server:
+Install the SDK kit plus the Vite build plugin (source mapping + `connect()` injection):
 
 ```bash
-npm i -D @reticlehq/core
+npm i -D @reticlehq/react @reticlehq/vite-plugin
+# Next.js instead of Vite? npm i -D @reticlehq/react @reticlehq/next
 # optional: npm i -D @reticlehq/eslint-plugin   # require-signal-on-mutation lint rule
 ```
 
-Then follow [Getting Started](getting-started.md): embed `reticle.connect()` (dev only) from `@reticlehq/core`, add the MCP server to your agent, and (React) `install()` the adapter from `@reticlehq/core`. For the fastest agent loop, also do [Step 6 — make your app agent-legible](getting-started.md) (testids, `reticle.signal`, `registerStore`, `registerCapabilities`) and the [integration patterns](integration-patterns.md) (`createReticleEmitter` for zero prod-bundle cost).
+Then follow [Getting Started](getting-started.md): embed `reticle.connect()` (dev only) from `@reticlehq/react`, add the MCP server to your agent, and (React) `install()` the adapter from `@reticlehq/react`. For the fastest agent loop, also do [Step 6 — make your app agent-legible](getting-started.md) (testids, `reticle.signal`, `registerStore`, `registerCapabilities`) and the [integration patterns](integration-patterns.md) (`createReticleEmitter` for zero prod-bundle cost).
 
-> **Upgrading.** The package is currently **1.2.0**; new tools land as minor bumps. `scripts/local-registry.sh` resets Verdaccio and republishes the current version, so pull the latest in your app explicitly — `npm install @reticlehq/core@latest`:
+> **Upgrading.** The packages are currently **1.2.0**; new tools land as minor bumps. `scripts/local-registry.sh` resets Verdaccio and republishes the current version, so pull the latest in your app explicitly — `npm install @reticlehq/react@latest`:
 >
 > ```bash
-> npm i -D @reticlehq/core@latest @reticlehq/eslint-plugin@latest
+> npm i -D @reticlehq/react@latest @reticlehq/vite-plugin@latest @reticlehq/eslint-plugin@latest
 > ```
 
-**Run the MCP server** from the local registry too — `npx @reticlehq/core` _is_ the server:
+**Run the MCP server** from the local registry too — `npx @reticlehq/server` _is_ the server:
 
 ```jsonc
-// .mcp.json — point npx at the local registry so it fetches @reticlehq/core from Verdaccio
+// .mcp.json — point npx at the local registry so it fetches @reticlehq/server from Verdaccio
 {
   "mcpServers": {
     "reticle": {
       "command": "npx",
-      "args": ["--registry", "http://localhost:4873/", "@reticlehq/core"],
+      "args": ["--registry", "http://localhost:4873/", "@reticlehq/server", "mcp"],
     },
   },
 }
@@ -69,7 +72,7 @@ Then follow [Getting Started](getting-started.md): embed `reticle.connect()` (de
 `next.config.mjs`:
 
 ```js
-import reticleNext from '@reticlehq/core/next';
+import reticleNext from '@reticlehq/next';
 /** @type {import('next').NextConfig} */
 const nextConfig = {};
 export default reticleNext.withReticle(nextConfig); // dev-only; keeps SWC; adds file:line mapping
@@ -84,7 +87,7 @@ Synthetic events can't trigger native `onMouseEnter`/pointer state (hover menus,
 - **Easiest — `reticle drive`:** Reticle launches its own scriptable, headless-capable browser at your app URL (no flags to juggle):
 
   ```bash
-  npx --registry http://localhost:4873/ @reticlehq/core drive http://localhost:4310   # add --headed to watch
+  npx --registry http://localhost:4873/ @reticlehq/server drive http://localhost:4310   # add --headed to watch
   ```
 
 - **Or attach to your own browser:** launch it with `--remote-debugging-port=9222`, then point the MCP server at it via `env`:
@@ -95,7 +98,7 @@ Synthetic events can't trigger native `onMouseEnter`/pointer state (hover menus,
     "mcpServers": {
       "reticle": {
         "command": "npx",
-        "args": ["--registry", "http://localhost:4873/", "@reticlehq/core"],
+        "args": ["--registry", "http://localhost:4873/", "@reticlehq/server", "mcp"],
         "env": { "RETICLE_CDP_URL": "http://localhost:9222" },
       },
     },
@@ -106,7 +109,7 @@ With neither set, Reticle stays synthetic (zero extra deps) and says so via `inp
 
 ## Write replayable specs + git-checked flows
 
-- **Specs:** with `@reticlehq/core/test`, turn checks into `reticleTest("…", async t => { await t.act(...); await t.expectSignal(...) })` — signal/testid-bound, `reticle_clock` for determinism, `t.expectInputModeReal()` to skip-with-reason when real input isn't active. Run them headless via `reticle drive` (the same path CI uses).
+- **Specs:** with `@reticlehq/test`, turn checks into `reticleTest("…", async t => { await t.act(...); await t.expectSignal(...) })` — signal/testid-bound, `reticle_clock` for determinism, `t.expectInputModeReal()` to skip-with-reason when real input isn't active. Run them headless via `reticle drive` (the same path CI uses).
 - **Flows:** record a flow once and Reticle writes it to a git-checked `.reticle/flows/<name>.json` (anchored on testid/signal); `reticle_flow_replay` re-resolves anchors at run time and reports **legible drift** with a nearest-match; `reticle_flow_heal` proposes/applies the rebind. A fresh agent reads `.reticle/contract.json` to learn your testable surface without grepping source.
 
 ## When you're ready for real npm

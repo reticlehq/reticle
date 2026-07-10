@@ -1,7 +1,7 @@
 {
   "name": "@reticlehq/protocol",
-  "version": "1.3.1",
-  "description": "Shared wire contract, constants, and zod schemas for the Reticle browser SDK <-> bridge channel.",
+  "version": "2.0.0",
+  "description": "Deprecated alias for @reticlehq/core. The Reticle wire contract moved into the core foundation; this package re-exports it for one major version and will be removed in v3.",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -19,7 +19,7 @@
     "prepack": "tsc -b && find dist -name \"*.test.*\" -delete"
   },
   "dependencies": {
-    "zod": "^3.24.1"
+    "@reticlehq/core": "workspace:*"
   },
   "license": "Apache-2.0",
   "author": "Reticle contributors",
@@ -41,5 +41,7 @@
     "testing",
     "protocol"
   ],
-  "private": true
+  "publishConfig": {
+    "access": "public"
+  }
 }

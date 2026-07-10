@@ -1,4 +1,4 @@
-import { THROTTLED_WARNING } from '@reticlehq/protocol';
+import { THROTTLED_WARNING } from '@reticlehq/core';
 import type { Session, SessionHealth } from './session.js';
 
 /** The `session` (and optional throttled `warning`) block spliced onto act/assert results. */

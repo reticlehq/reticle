@@ -12,10 +12,16 @@ import Counter from '../components/Counter.tsx';
     <Counter client:load />
     <script>
       // Dev-only: connect Reticle on the client. Astro bundles this <script>, so the bare import resolves.
+      // The bridge requires the pairing token even on localhost; astro.config inlines it as
+      // __RETICLE_TOKEN__ (empty until the daemon is up — the page reloads once it is).
       if (import.meta.env.DEV) {
-        const { reticle, install } = await import('@reticlehq/core');
+        const token = typeof __RETICLE_TOKEN__ !== 'undefined' ? __RETICLE_TOKEN__ : '';
+        const { reticle, install } = await import('@reticlehq/react');
         install();
-        reticle.connect({ projectId: 'example-astro' });
+        reticle.connect({
+          projectId: 'example-astro',
+          ...(token.length > 0 ? { token } : {}),
+        });
       }
     </script>
   </body>

@@ -16,6 +16,9 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # Prove the boundary guard itself works (catches a synthetic bad graph) before trusting it.
+      - name: Dependency-boundary guard self-test
+        run: node scripts/check-boundaries.mjs --self-test
       - run: pnpm build
       - run: pnpm lint
       - run: pnpm typecheck

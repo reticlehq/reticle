@@ -4,7 +4,7 @@ import {
   type FlowReplayResult,
   type FlowStepResult,
   type ReplayDecision,
-} from '@reticlehq/protocol';
+} from '@reticlehq/core';
 import { buildRepairPacket, buildRepairPackets } from './repair-prompt.js';
 
 const step = (n: number, ok: boolean): FlowStepResult => ({

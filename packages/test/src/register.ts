@@ -1,4 +1,4 @@
-import type { FlowErrorCode } from '@reticlehq/protocol';
+import type { FlowErrorCode } from '@reticlehq/core';
 import type { FlowReplaySession } from '@reticlehq/server';
 import { FLOW_LOAD_ERROR_PREFIX, SpecKind, SpecOutcome } from './constants.js';
 import { flowsAsSpecs } from './flow-spec.js';

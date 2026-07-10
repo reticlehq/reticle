@@ -12,7 +12,7 @@ export { Reticle } from './reticle.js';
 export type { ReticleConnectOptions } from './reticle.js';
 
 // Session label sentinel: pass as `session` (or omit it) to get a unique per-tab id (no collisions).
-export { SESSION_AUTO } from '@reticlehq/protocol';
+export { SESSION_AUTO } from '@reticlehq/core';
 
 // Exclude your own dev widgets from snapshots/observers.
 export { setIgnoreSelectors } from './dom/dom-ignore.js';

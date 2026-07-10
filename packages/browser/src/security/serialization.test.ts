@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { REDACTED_VALUE, TRANSPORT_LIMITS } from '@reticlehq/protocol';
+import { REDACTED_VALUE, TRANSPORT_LIMITS } from '@reticlehq/core';
 import { safeStringify, sanitizeForTransport } from './serialization.js';
 
 describe('transport serialization', () => {

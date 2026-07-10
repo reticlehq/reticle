@@ -7,5 +7,5 @@
     "jsx": "react-jsx"
   },
   "include": ["src/**/*"],
-  "references": [{ "path": "../protocol" }, { "path": "../browser" }]
+  "references": [{ "path": "../core" }, { "path": "../browser" }]
 }

@@ -10,7 +10,7 @@ import {
   MessageKind,
   TRANSPORT_LIMITS,
   isLoopbackHostname,
-} from '@reticlehq/protocol';
+} from '@reticlehq/core';
 import { Session, SessionManager } from './session/session.js';
 import { tokensMatch } from './token-auth.js';
 import { log } from './log.js';

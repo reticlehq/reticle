@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { EventType } from '@reticlehq/protocol';
+import { EventType } from '@reticlehq/core';
 import { installNetwork, redactUrl } from './network.js';
 import type { Emit, Teardown } from './types.js';
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ReticleTool } from '@reticlehq/server';
-import { ActionType, InputMode } from '@reticlehq/protocol';
+import { ActionType, InputMode } from '@reticlehq/core';
 import { createTestContext } from './test-context.js';
 import { ReticleAssertionError, ReticleQueryEmptyError } from './skip.js';
 import type { ToolInvoker } from '@reticlehq/server';

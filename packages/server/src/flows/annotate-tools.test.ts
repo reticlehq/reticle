@@ -9,7 +9,7 @@ import {
   AnnotationTarget,
   QueryBy,
   type AnnotateResult,
-} from '@reticlehq/protocol';
+} from '@reticlehq/core';
 import { TOOLS, type ToolDeps } from '../tools/tools.js';
 import { ReticleTool } from '../tools/tool-names.js';
 import { BaselineStore } from '../project/baselines.js';

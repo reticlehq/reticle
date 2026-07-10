@@ -1,98 +1,52 @@
 {
   "name": "@reticlehq/core",
-  "version": "1.3.1",
-  "description": "One-install Reticle: the dev-only SDK (browser + React adapter) and the spec runner under one package, with subpaths for the source-mapping plugins and the MCP server.",
+  "version": "2.0.0",
+  "description": "The Reticle foundation: the shared wire contract — types, zod schemas, constants, messages, and the isomorphic kernel that every Reticle package (browser SDK, server, kits, test harness) imports. Depends only on zod.",
   "type": "module",
-  "license": "SEE LICENSE IN LICENSE",
-  "repository": "github:reticlehq/reticle",
-  "publishConfig": {
-    "access": "public"
-  },
-  "bin": {
-    "reticle": "./dist/cli.js"
-  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
-    "./server": {
-      "types": "./dist/server.d.ts",
-      "default": "./dist/server.js"
-    },
-    "./test": {
-      "types": "./dist/test.d.ts",
-      "default": "./dist/test.js"
-    },
-    "./next": {
-      "types": "./dist/next.d.ts",
-      "default": "./dist/next.js"
-    },
-    "./babel": {
-      "types": "./dist/babel.d.ts",
-      "default": "./dist/babel.js"
-    },
-    "./vite": {
-      "types": "./dist/vite.d.ts",
-      "default": "./dist/vite.js"
-    },
-    "./eslint": {
-      "types": "./dist/eslint.d.ts",
-      "default": "./dist/eslint.js"
-    }
+    "./schema/*.json": "./dist/schema/*.json"
   },
-  "files": [
-    "dist"
-  ],
   "scripts": {
-    "build": "tsup",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "build": "tsc -b && node scripts/gen-schema.mjs",
+    "typecheck": "tsc -b",
+    "lint": "eslint src",
+    "test:unit": "vitest run src --passWithNoTests",
+    "prepack": "tsc -b && node scripts/gen-schema.mjs && find dist -name \"*.test.*\" -delete"
   },
   "dependencies": {
-    "@babel/core": "^7.26.0",
-    "@modelcontextprotocol/sdk": "^1.13.0",
-    "@testing-library/dom": "^10.4.1",
-    "@typescript-eslint/utils": "^8.20.0",
-    "ws": "^8.18.0",
     "zod": "^3.24.1"
   },
   "devDependencies": {
-    "@reticlehq/babel-plugin": "workspace:*",
-    "@reticlehq/browser": "workspace:*",
-    "@reticlehq/eslint-plugin": "workspace:*",
-    "@reticlehq/next": "workspace:*",
-    "@reticlehq/protocol": "workspace:*",
-    "@reticlehq/react": "workspace:*",
-    "@reticlehq/server": "workspace:*",
-    "@reticlehq/test": "workspace:*",
-    "@reticlehq/vite-plugin": "workspace:*",
-    "@types/ws": "^8.5.13",
-    "tsup": "^8.3.5",
-    "typescript": "^5.6.0"
+    "zod-to-json-schema": "^3.24.0"
   },
-  "optionalDependencies": {
-    "pixelmatch": "^7.2.0",
-    "playwright": "^1.48.0",
-    "pngjs": "^7.0.0"
+  "license": "Apache-2.0",
+  "author": "Reticle contributors",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/reticlehq/reticle.git",
+    "directory": "packages/core"
   },
-  "peerDependencies": {
-    "eslint": ">=9",
-    "next": ">=13",
-    "react": ">=18",
-    "vitest": "^3.2.6"
+  "homepage": "https://github.com/reticlehq/reticle#readme",
+  "bugs": "https://github.com/reticlehq/reticle/issues",
+  "publishConfig": {
+    "access": "public"
   },
-  "peerDependenciesMeta": {
-    "eslint": {
-      "optional": true
-    },
-    "next": {
-      "optional": true
-    },
-    "react": {
-      "optional": true
-    },
-    "vitest": {
-      "optional": true
-    }
-  }
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "sideEffects": false,
+  "keywords": [
+    "mcp",
+    "ai-agents",
+    "testing",
+    "protocol",
+    "reticle"
+  ]
 }

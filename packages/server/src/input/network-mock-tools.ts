@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { VISUAL_NO_PROVIDER_RECOMMENDATION, VisualReason } from '@reticlehq/protocol';
+import { VISUAL_NO_PROVIDER_RECOMMENDATION, VisualReason } from '@reticlehq/core';
 import { ReticleTool } from '../tools/tool-names.js';
 import { asString } from '../tools/tools-helpers.js';
 import type { RealInputProvider } from './real-input.js';

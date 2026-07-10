@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { HumanControlKind, PresenterTone, SessionState } from '@reticlehq/protocol';
+import { HumanControlKind, PresenterTone, SessionState } from '@reticlehq/core';
 import { Presenter, type ControlIntent } from './presenter.js';
 import { buildSnapshot } from '../dom/snapshot.js';
 import { isIgnored } from '../dom/dom-ignore.js';

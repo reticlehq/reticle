@@ -2,7 +2,7 @@ import { chmod, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { randomBytes } from 'node:crypto';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { ReticleDir, ReticleEnv } from '@reticlehq/protocol';
+import { ReticleDir, ReticleEnv } from '@reticlehq/core';
 
 /**
  * Auto-provisioned bridge pairing token. The daemon reads-or-creates a per-user secret at

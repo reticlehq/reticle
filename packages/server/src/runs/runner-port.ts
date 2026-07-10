@@ -6,7 +6,7 @@
  */
 
 import { randomUUID } from 'node:crypto';
-import { asRunId, type RunId } from '@reticlehq/protocol';
+import { asRunId, type RunId } from '@reticlehq/core';
 import { replayNamedFlow } from '../flows/flow-tools.js';
 import type { ToolDeps } from '../tools/tools.js';
 import type { RunnerPort } from './reticle-runner.js';

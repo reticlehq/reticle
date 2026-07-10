@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { ReticleCommand, SnapshotMode } from '@reticlehq/protocol';
+import { ReticleCommand, SnapshotMode } from '@reticlehq/core';
 import { ReticleTool } from './tool-names.js';
 import { withSizeCost } from '../session/output-budget.js';
 import { applySnapshotDelta, SnapshotCache } from './snapshot-delta.js';

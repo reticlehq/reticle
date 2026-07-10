@@ -21,7 +21,7 @@ import { Bridge } from './bridge.js';
 import { FakeBrowser, callTool, makeDeps, waitUntil } from './bridge.test-harness.js';
 import { ReticleTool } from './tools/tool-names.js';
 import type { ToolDeps } from './tools/tools.js';
-import { EventType, RETICLE_DEFAULT_PORT } from '@reticlehq/protocol';
+import { EventType, RETICLE_DEFAULT_PORT } from '@reticlehq/core';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -410,7 +410,7 @@ describe('messy human scenarios', () => {
 
     // Override URLs via HELLO message (use custom FakeBrowser subclass pattern)
     const ws = await import('ws');
-    const { RETICLE_WS_PATH, MessageKind, LOOPBACK_HOST } = await import('@reticlehq/protocol');
+    const { RETICLE_WS_PATH, MessageKind, LOOPBACK_HOST } = await import('@reticlehq/core');
 
     function connectWithUrl(sessionId: string, url: string): Promise<void> {
       return new Promise((resolve) => {

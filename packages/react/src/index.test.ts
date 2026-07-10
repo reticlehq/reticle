@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { ComponentStateReason, type ComponentStateResult } from '@reticlehq/protocol';
+import { ComponentStateReason, type ComponentStateResult } from '@reticlehq/core';
 import { identify, readState, hasHoverHandlers } from './index.js';
 
 function PayButton(): null {

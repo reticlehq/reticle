@@ -5,7 +5,7 @@ import {
   ReticleCommand,
   type CommandResult,
   type ReticleEvent,
-} from '@reticlehq/protocol';
+} from '@reticlehq/core';
 import { crawl, type CrawlSession } from './crawl.js';
 
 const noSleep = (): Promise<void> => Promise.resolve();

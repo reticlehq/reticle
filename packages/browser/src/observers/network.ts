@@ -1,4 +1,4 @@
-import { EventType, REDACTED_VALUE } from '@reticlehq/protocol';
+import { EventType, REDACTED_VALUE } from '@reticlehq/core';
 import { isSensitiveKey } from '../security/serialization.js';
 import type { Emit, Teardown } from './types.js';
 

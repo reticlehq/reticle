@@ -3,7 +3,7 @@ import {
   type FlowFile,
   type FlowReplayResult,
   type FlowStepResult,
-} from '@reticlehq/protocol';
+} from '@reticlehq/core';
 import { classifyFlowAssertions } from './flow-classify.js';
 
 /**

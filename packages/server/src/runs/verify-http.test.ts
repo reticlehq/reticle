@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { asRunId, ReplayStatus, VerdictStatus, type FlowReplayResult } from '@reticlehq/protocol';
+import { asRunId, ReplayStatus, VerdictStatus, type FlowReplayResult } from '@reticlehq/core';
 import { ReticleRunner, type RunnerPort } from './reticle-runner.js';
 import { handleVerifyRequest, tokenOk, VERIFY_PATH } from './verify-http.js';
 

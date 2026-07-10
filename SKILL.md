@@ -67,7 +67,7 @@ which zed       2>/dev/null && echo "zed"
 
 ## Step 1 — Configure the MCP server
 
-> **Fast path (Claude Code + Vite or Next.js):** Run `npx @reticlehq/core init --port <Q3 answer>`. This handles Steps 1–4 automatically for Claude Code and Cursor. Jump to Step 4 to validate.
+> **Fast path (Claude Code + Vite or Next.js):** Run `npx @reticlehq/server init --port <Q3 answer>`. This handles Steps 1–4 automatically for Claude Code and Cursor. Jump to Step 4 to validate.
 
 > For all other harnesses or manual control, follow the steps below. There is no single MCP config file all tools share. Each harness has its own file and schema. Write only the ones in `RETICLE_HARNESSES`.
 
@@ -86,7 +86,7 @@ which zed       2>/dev/null && echo "zed"
 Register once globally so Reticle is available in every project:
 
 ```bash
-claude mcp add reticle -s user -- npx @reticlehq/core mcp
+claude mcp add reticle -s user -- npx @reticlehq/server mcp
 ```
 
 Confirm with `claude mcp list` — `reticle` should appear. **After adding, restart Claude Code** (or run `/mcp` to refresh) so it picks up the server.
@@ -98,7 +98,7 @@ Confirm with `claude mcp list` — `reticle` should appear. **After adding, rest
   "mcpServers": {
     "reticle": {
       "command": "npx",
-      "args": ["@reticlehq/core", "mcp"],
+      "args": ["@reticlehq/server", "mcp"],
     },
   },
 }
@@ -113,7 +113,7 @@ Only write to `.mcp.json` (project root) if the user explicitly asks for project
   "mcp": {
     "reticle": {
       "type": "local",
-      "command": ["npx", "@reticlehq/core", "mcp"],
+      "command": ["npx", "@reticlehq/server", "mcp"],
     },
   },
 }
@@ -126,7 +126,7 @@ Verify with `opencode mcp list`.
 ```toml
 [mcp_servers.reticle]
 command = "npx"
-args    = ["@reticlehq/core", "mcp"]
+args    = ["@reticlehq/server", "mcp"]
 ```
 
 **Cursor — `.cursor/mcp.json`** (same schema as Claude Code, different path)
@@ -136,7 +136,7 @@ args    = ["@reticlehq/core", "mcp"]
   "mcpServers": {
     "reticle": {
       "command": "npx",
-      "args": ["@reticlehq/core", "mcp"],
+      "args": ["@reticlehq/server", "mcp"],
     },
   },
 }
@@ -149,7 +149,7 @@ args    = ["@reticlehq/core", "mcp"]
   "mcpServers": {
     "reticle": {
       "command": "npx",
-      "args": ["@reticlehq/core", "mcp"],
+      "args": ["@reticlehq/server", "mcp"],
     },
   },
 }
@@ -162,7 +162,7 @@ args    = ["@reticlehq/core", "mcp"]
   "servers": {
     "reticle": {
       "command": "npx",
-      "args": ["@reticlehq/core", "mcp"],
+      "args": ["@reticlehq/server", "mcp"],
     },
   },
 }
@@ -177,7 +177,7 @@ MCP tools only appear in Copilot **Agent mode**.
   "context_servers": {
     "reticle": {
       "command": "npx",
-      "args": ["@reticlehq/core", "mcp"],
+      "args": ["@reticlehq/server", "mcp"],
     },
   },
 }
@@ -199,7 +199,7 @@ Only add this if the user explicitly asks for the daemon to stop between turns:
     "Stop": [
       {
         "matcher": "",
-        "hooks": [{ "type": "command", "command": "npx @reticlehq/core stop --quiet" }],
+        "hooks": [{ "type": "command", "command": "npx @reticlehq/server stop --quiet" }],
       },
     ],
   },
@@ -213,7 +213,8 @@ Only add this if the user explicitly asks for the daemon to stop between turns:
 > **Mental model:** The user keeps running their dev server (`npm run dev`) themselves. Reticle embeds a tiny SDK in the app that connects to a local bridge daemon. The agent talks to the daemon over MCP — no Chromium is downloaded or needed for standard agent workflows. Playwright is only required if you explicitly use `--drive` mode.
 
 ```bash
-npm install --save-dev @reticlehq/core    # swap npm for pnpm/yarn/bun per Q2
+npm install --save-dev @reticlehq/react @reticlehq/vite-plugin    # swap npm for pnpm/yarn/bun per Q2
+# Next.js instead of Vite? npm install --save-dev @reticlehq/react @reticlehq/next
 ```
 
 ---
@@ -226,7 +227,7 @@ Add the Reticle plugin to `vite.config.ts` — it auto-injects `reticle.connect(
 
 ```ts
 // vite.config.ts
-import { reticle } from '@reticlehq/core/vite';
+import { reticle } from '@reticlehq/vite-plugin';
 
 export default defineConfig({
   plugins: [react(), reticle()], // reticle() is dev-only, dropped from vite build
@@ -237,7 +238,7 @@ Then describe your app's testable surface so the agent knows what to drive (fill
 
 ```ts
 // src/reticle-dev.ts  (import in main.tsx inside import.meta.env.DEV check)
-import { registerCapabilities } from '@reticlehq/core';
+import { registerCapabilities } from '@reticlehq/react';
 if (import.meta.env.DEV) {
   registerCapabilities({
     testids: [], // your data-testid values, e.g. ['login-btn', 'submit-form']
@@ -247,13 +248,13 @@ if (import.meta.env.DEV) {
 }
 ```
 
-To emit `reticle.signal()` from app code (components, stores), **never import `reticle` statically** — a top-level `import { reticle } from '@reticlehq/core'` drags the whole dev-only SDK into your production bundle. Funnel signals through a dev-guarded helper so `import.meta.env.DEV` dead-code-eliminates it in prod:
+To emit `reticle.signal()` from app code (components, stores), **never import `reticle` statically** — a top-level `import { reticle } from '@reticlehq/react'` drags the whole dev-only SDK into your production bundle. Funnel signals through a dev-guarded helper so `import.meta.env.DEV` dead-code-eliminates it in prod:
 
 ```ts
 // src/reticle.ts — import { signal } from './reticle' in your components
 export function signal(name: string, data?: Record<string, unknown>): void {
   if (!import.meta.env.DEV) return;
-  void import('@reticlehq/core').then(({ reticle }) => reticle.signal(name, data));
+  void import('@reticlehq/react').then(({ reticle }) => reticle.signal(name, data));
 }
 ```
 
@@ -267,7 +268,7 @@ import { useEffect } from 'react';
 export function ReticleDev() {
   useEffect(() => {
     if (process.env.NODE_ENV !== 'development') return;
-    void import('@reticlehq/core').then(({ reticle, install, registerCapabilities }) => {
+    void import('@reticlehq/react').then(({ reticle, install, registerCapabilities }) => {
       install();
       // The bridge requires a pairing token. Vite users get it auto-injected; hand-wired Next passes it
       // in: set RETICLE_TOKEN for the daemon and expose the same value as NEXT_PUBLIC_RETICLE_TOKEN.
@@ -294,14 +295,14 @@ import { ReticleDev } from './reticle-dev';
 }
 ```
 
-Add `@reticlehq/core/next` → `withReticle` to `next.config.mjs` for source mapping:
+Add `@reticlehq/next` → `withReticle` to `next.config.mjs` for source mapping:
 
 ```ts
-import { withReticle } from '@reticlehq/core/next';
+import { withReticle } from '@reticlehq/next';
 export default withReticle(nextConfig);
 ```
 
-**Other frameworks** — call `reticle.connect()` and `install()` inside a dev guard. Vanilla / HTML: use a dynamic `import('@reticlehq/core')` inside `if (location.hostname === 'localhost')`.
+**Other frameworks** — call `reticle.connect()` and `install()` inside a dev guard. Vanilla / HTML: use a dynamic `import('@reticlehq/react')` inside `if (location.hostname === 'localhost')`.
 
 ---
 
@@ -522,11 +523,11 @@ Each project should have its own port in `.reticle.json`. When `reticle mcp` sta
 If two projects share the same port, start the second on a different port:
 
 ```bash
-npx @reticlehq/core stop --port 4400   # stop the other project's daemon if needed
+npx @reticlehq/server stop --port 4400   # stop the other project's daemon if needed
 # Then ensure .reticle.json in this project has a unique "port" field
 ```
 
-Use `npx @reticlehq/core status` to see which daemons are running and which sessions are connected.
+Use `npx @reticlehq/server status` to see which daemons are running and which sessions are connected.
 
 ### No Chromium / Playwright needed for standard use
 
@@ -538,7 +539,7 @@ To attach to a browser the user already has open (zero download, zero extra proc
 # Start Chrome with remote debugging enabled (user does this once):
 # Mac: /Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --remote-debugging-port=9222
 # Then set RETICLE_CDP_URL when starting the daemon:
-RETICLE_CDP_URL=http://localhost:9222 npx @reticlehq/core mcp
+RETICLE_CDP_URL=http://localhost:9222 npx @reticlehq/server mcp
 ```
 
 This connects Reticle to the existing Chrome — native clicks and screenshots work without Playwright.
@@ -547,11 +548,11 @@ This connects Reticle to the existing Chrome — native clicks and screenshots w
 
 This means the `reticle mcp` proxy process exited and Claude Code couldn't restart it cleanly. -32000 is the JSON-RPC code for a server-side error; here it means the proxy exited with code 1 before the MCP handshake completed.
 
-**Check version first — stale npx cache is the most common silent culprit.** `npx` caches packages locally and may keep running an old version of `@reticlehq/core` even after a new one is published. An older daemon speaking a different protocol than the new proxy (or vice-versa) causes the proxy to exit immediately and Claude Code to report -32000. Always clear the cache and force-resolve the latest version before investigating anything else:
+**Check version first — stale npx cache is the most common silent culprit.** `npx` caches packages locally and may keep running an old version of `@reticlehq/server` even after a new one is published. An older daemon speaking a different protocol than the new proxy (or vice-versa) causes the proxy to exit immediately and Claude Code to report -32000. Always clear the cache and force-resolve the latest version before investigating anything else:
 
 ```bash
-npx --yes @reticlehq/core@latest version   # force-resolves latest and prints version
-npx @reticlehq/core stop                   # stop any daemon running the old version
+npx --yes @reticlehq/server@latest version   # force-resolves latest and prints version
+npx @reticlehq/server stop                    # stop any daemon running the old version
 ```
 
 Then reload Claude Code (`/mcp`) so the new version is picked up on next connection.
@@ -563,8 +564,8 @@ Then reload Claude Code (`/mcp`) so the new version is picked up on next connect
 1. **Force the latest version and clear the stale daemon:**
 
    ```bash
-   npx --yes @reticlehq/core@latest version
-   npx @reticlehq/core stop
+   npx --yes @reticlehq/server@latest version
+   npx @reticlehq/server stop
    ```
 
    Reload Claude Code. If -32000 is gone, done.
@@ -577,13 +578,13 @@ Then reload Claude Code (`/mcp`) so the new version is picked up on next connect
 
    ```bash
    cat ~/.claude/claude_mcp_config.json
-   # Should contain: {"mcpServers": {"reticle": {"command": "npx", "args": ["@reticlehq/core", "mcp"]}}}
+   # Should contain: {"mcpServers": {"reticle": {"command": "npx", "args": ["@reticlehq/server", "mcp"]}}}
    ```
 
-   If the project has a `.mcp.json` or `.claude/mcp.json` that overrides the user-level config with pinned args (e.g., `["@reticlehq/core@0.x.y", "mcp"]`), rename it out of the way and re-register:
+   If the project has a `.mcp.json` or `.claude/mcp.json` that overrides the user-level config with pinned args (e.g., `["@reticlehq/server@0.x.y", "mcp"]`), rename it out of the way and re-register:
 
    ```bash
-   claude mcp add reticle -s user -- npx @reticlehq/core mcp
+   claude mcp add reticle -s user -- npx @reticlehq/server mcp
    ```
 
 **Tell the user what you found** so they can confirm which fix applies.

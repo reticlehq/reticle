@@ -1,4 +1,4 @@
-import { RING_BUFFER_DEFAULTS, type ReticleEvent } from '@reticlehq/protocol';
+import { RING_BUFFER_DEFAULTS, type ReticleEvent } from '@reticlehq/core';
 
 interface RingBufferOptions {
   maxEvents?: number;

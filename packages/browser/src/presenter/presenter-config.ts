@@ -3,7 +3,7 @@ import { type ControlHandler } from './presenter-controls.js';
 /**
  * Presenter tunables + option surface. Split out of presenter.ts so that file is just the controller
  * under the size cap; these are pure declarations (interfaces + named constants), no behavior. None
- * cross the browser↔bridge↔agent wire, so they live here, not in @reticlehq/protocol.
+ * cross the browser↔bridge↔agent wire, so they live here, not in @reticlehq/core.
  */
 
 /**

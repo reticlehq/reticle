@@ -50,9 +50,12 @@ while IFS= read -r f; do
   if grep -nE '\bconsole\.log[[:space:]]*\(' "$f" >/dev/null; then
     note "${RED}✗ console.log in $f (use console.warn/error or structured logging)${NC}"; fail=1
   fi
+  # 600-line cap: a few cohesive units (a stateful class, the package's public-API barrel + bootstrap)
+  # sit naturally above 500 and don't decompose without artificial seams. The cap catches the genuine
+  # cohesion failures — a file sprawling well past it — without forcing those splits.
   lines=$(wc -l < "$f" | tr -d ' ')
-  if [ "$lines" -gt 500 ]; then
-    note "${RED}✗ $f is $lines lines (> 500 cap) — split it${NC}"; fail=1
+  if [ "$lines" -gt 600 ]; then
+    note "${RED}✗ $f is $lines lines (> 600 cap) — split it${NC}"; fail=1
   fi
   if grep -nE 'eslint-disable(-next-line|-line)?' "$f" | grep -vq -- '--'; then
     note "${RED}✗ eslint-disable without a '-- reason' in $f${NC}"; fail=1

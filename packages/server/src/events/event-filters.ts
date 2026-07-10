@@ -1,4 +1,4 @@
-import { EventType, type ReticleEvent } from '@reticlehq/protocol';
+import { EventType, type ReticleEvent } from '@reticlehq/core';
 
 function asString(value: unknown): string | undefined {
   return typeof value === 'string' ? value : undefined;

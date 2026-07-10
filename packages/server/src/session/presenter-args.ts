@@ -1,4 +1,4 @@
-import { PresenterTone, SessionState } from '@reticlehq/protocol';
+import { PresenterTone, SessionState } from '@reticlehq/core';
 
 /**
  * Build the args for a PRESENTER push. An ended session can carry a `tone` so the panel tells apart

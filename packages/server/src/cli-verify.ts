@@ -23,7 +23,7 @@ import {
   RunTrigger,
   VerdictStatus,
   type ReticleVerificationRun,
-} from '@reticlehq/protocol';
+} from '@reticlehq/core';
 import { start, type RunningServer } from './index.js';
 import { ReticleRunner } from './runs/reticle-runner.js';
 import { createRunnerPort } from './runs/runner-port.js';

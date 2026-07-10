@@ -1,4 +1,4 @@
-import { ElementState, REDACTED_VALUE, type ElementDescriptor } from '@reticlehq/protocol';
+import { ElementState, REDACTED_VALUE, type ElementDescriptor } from '@reticlehq/core';
 import { refs } from './refs.js';
 import { isSensitiveKey } from '../security/serialization.js';
 

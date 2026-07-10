@@ -13,7 +13,10 @@
 // them, runs the EXISTING harness scripts, and tears the fixtures down on exit. Each script writes its
 // own bench/raw/*.json; gate.mjs reads those. (Raw JSON keys keep the A/B/C codes for data continuity.)
 import { execFileSync, spawn } from 'node:child_process';
-import { writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { randomBytes } from 'node:crypto';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 
 const FULL = process.argv.includes('--full');
 const NO_BOOT = process.argv.includes('--no-boot');
@@ -38,6 +41,26 @@ const REPLAY_PASS = [
 ];
 // Scripted observation cost + detection accuracy. Slow (~12 min) and boots Playwright/DevTools MCPs.
 const OBSERVATION_PASS = ['bench/harness/run-observation.mjs', 'bench/harness/analyze.mjs'];
+
+// The bridge requires the auto-provisioned pairing token (a rogue localhost app can't read the file, so
+// it can't drive sessions). bench-app has no build plugin to inject it, so we present it manually: read
+// the same per-user secret the daemon reads-or-creates (~/.reticle/pairing-token, RETICLE_PAIRING_TOKEN_DIR
+// override), creating it here if absent so bench-app's vite has it at startup. The daemon reads the file
+// we wrote rather than overwriting it, so both agree on the token.
+function readOrCreatePairingToken() {
+  const dir = process.env.RETICLE_PAIRING_TOKEN_DIR || join(homedir(), '.reticle');
+  const path = join(dir, 'pairing-token');
+  try {
+    const existing = readFileSync(path, 'utf8').trim();
+    if (existing.length > 0) return existing;
+  } catch {
+    /* missing — create below */
+  }
+  const token = randomBytes(24).toString('hex');
+  mkdirSync(dir, { recursive: true, mode: 0o700 });
+  writeFileSync(path, token, { encoding: 'utf8', mode: 0o600 });
+  return token;
+}
 
 /** Fixtures booted by this process, torn down on exit. */
 const fixtures = [];
@@ -83,12 +106,15 @@ async function bootFixtures() {
     `bench-all: booting fixtures — api:${API_PORT}, demo:${DEMO_PORT} (pass --no-boot to skip)`,
   );
   spawnFixture('api', 'node', ['apps/api/server.mjs'], { API_PORT });
-  // The demo's embedded Reticle SDK dials RETICLE_PORT; that must match the daemon each script spawns.
+  // The benchmark fixture is @reticlehq/bench-app (login + dashboard: compose/deployments/diagnostics)
+  // — the app these flows drive. (@reticlehq/demo was rebuilt into a minimal task app and no longer
+  // has those views.) Its embedded SDK dials RETICLE_PORT, which must match the daemon each script spawns.
+  const pairingToken = readOrCreatePairingToken();
   spawnFixture(
-    'demo',
+    'bench-app',
     'pnpm',
-    ['--filter', '@reticlehq/demo', 'exec', 'vite', '--port', DEMO_PORT, '--strictPort'],
-    { RETICLE_PORT },
+    ['--filter', '@reticlehq/bench-app', 'exec', 'vite', '--port', DEMO_PORT, '--strictPort'],
+    { RETICLE_PORT, VITE_RETICLE_TOKEN: pairingToken },
   );
   const [apiUp, demoUp] = await Promise.all([
     waitForHttp(`http://localhost:${API_PORT}/api/health`, FIXTURE_READY_MS),

@@ -8,7 +8,7 @@ import {
   type HelloMessage,
   type HumanMarkData,
   type ReticleEvent,
-} from '@reticlehq/protocol';
+} from '@reticlehq/core';
 import { Session, type SessionManager } from './session.js';
 import { LIVE_CONTROL_TOOLS } from './live-control-tools.js';
 import { ReticleTool } from '../tools/tool-names.js';

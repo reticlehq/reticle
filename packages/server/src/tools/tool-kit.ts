@@ -5,7 +5,7 @@
  * without a circular import — `tools.ts` assembles the groups and re-exports `ToolDef`/`ToolDeps`.
  */
 import { z } from 'zod';
-import { ReticleCommand, SnapshotMode } from '@reticlehq/protocol';
+import { ReticleCommand, SnapshotMode } from '@reticlehq/core';
 import type { SessionManager } from '../session/session.js';
 import type { RealInputProvider } from '../input/real-input.js';
 import type { BaselineStore } from '../project/baselines.js';

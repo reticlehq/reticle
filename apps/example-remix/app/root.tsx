@@ -44,12 +44,18 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   // Dev-only: connect Reticle on the client. React Router SSRs its own HTML, so the Vite-plugin
-  // index.html injection doesn't fire — connect from a client effect instead.
+  // index.html injection doesn't fire — connect from a client effect instead. The bridge requires the
+  // pairing token even on localhost; vite.config inlines it as __RETICLE_TOKEN__ (empty until the
+  // daemon is up — the page reloads once it is), so present it when it's there.
   useEffect(() => {
     if (import.meta.env.DEV) {
-      void import("@reticlehq/core").then(({ reticle, install }) => {
+      const token = typeof __RETICLE_TOKEN__ !== "undefined" ? __RETICLE_TOKEN__ : "";
+      void import("@reticlehq/react").then(({ reticle, install }) => {
         install();
-        reticle.connect({ projectId: "example-remix" });
+        reticle.connect({
+          projectId: "example-remix",
+          ...(token.length > 0 ? { token } : {}),
+        });
       });
     }
   }, []);

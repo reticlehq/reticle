@@ -5,7 +5,7 @@ import {
   LOOPBACK_HOST,
   MessageKind,
   type ElementQuery,
-} from '@reticlehq/protocol';
+} from '@reticlehq/core';
 import type { Bridge } from './bridge.js';
 import { BaselineStore } from './project/baselines.js';
 import { createNodeFileSystem } from './project/fs-port.js';

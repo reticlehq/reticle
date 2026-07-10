@@ -4,7 +4,7 @@ import {
   ReticleCommand,
   type ComponentStateResult,
   type MatchResult,
-} from '@reticlehq/protocol';
+} from '@reticlehq/core';
 import { createCommandRegistry, resolveNavigationUrl } from './commands.js';
 import { refs } from '../dom/refs.js';
 import { registerStore, unregisterStore } from '../registry/stores.js';

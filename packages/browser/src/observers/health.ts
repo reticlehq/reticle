@@ -1,4 +1,4 @@
-import { EventType, HealthReason, SESSION_HEALTH } from '@reticlehq/protocol';
+import { EventType, HealthReason, SESSION_HEALTH } from '@reticlehq/core';
 import { nativeSetInterval } from '../timers/native-timers.js';
 import type { Emit, Teardown } from './types.js';
 

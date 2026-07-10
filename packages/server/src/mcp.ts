@@ -1,6 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { isToonable, resultToToon } from '@reticlehq/protocol';
+import { isToonable, resultToToon } from '@reticlehq/core';
 import { TOOLS, type ToolDeps } from './tools/tools.js';
 import { filterTools, TOOL_PROFILE, type ToolProfile } from './tools/profiles.js';
 import { buildDynamicTools } from './tools/dynamic-tools.js';

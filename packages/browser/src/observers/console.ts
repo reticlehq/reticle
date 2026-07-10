@@ -1,5 +1,5 @@
 /* eslint-disable no-console -- this module's whole purpose is to wrap console.{log,warn,error} */
-import { EventType } from '@reticlehq/protocol';
+import { EventType } from '@reticlehq/core';
 import type { Emit, Teardown } from './types.js';
 import { safeStringify } from '../security/serialization.js';
 

@@ -8,7 +8,7 @@ import {
   type CapabilitiesContract,
   type ManifestGovernance,
   type RunId,
-} from '@reticlehq/protocol';
+} from '@reticlehq/core';
 import type { FileSystemPort } from './fs-port.js';
 
 /** Resolved absolute paths inside a `.reticle/` root. Pure: join() only, no IO, no cwd. */

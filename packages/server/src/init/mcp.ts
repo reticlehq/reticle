@@ -5,7 +5,7 @@
  * hand-editing `~/.claude.json` (a large stateful file). When the `claude` CLI is absent we print a
  * manual instruction instead.
  *
- * The registration is intentionally PORTLESS — `npx @reticlehq/core mcp`, never `--port N`. A single
+ * The registration is intentionally PORTLESS — `npx @reticlehq/server mcp`, never `--port N`. A single
  * global entry serves every project, so baking a port into it would pin every project to one port
  * and defeat per-project isolation. Instead `reticle mcp` resolves the port at runtime from the
  * project's `.reticle.json` in its CWD (see cli-port.ts). The port belongs to the project, not the
@@ -14,11 +14,13 @@
 
 export const MCP_SERVER_NAME = 'reticle';
 export const NPX = 'npx';
-const RETICLE_PACKAGE = '@reticlehq/core';
+// The `reticle` bin lives in @reticlehq/server, so `npx @reticlehq/server mcp` runs the bridge
+// without the retired `core` umbrella. `npx @reticlehq/server` resolves its sole bin (`reticle`).
+const RETICLE_PACKAGE = '@reticlehq/server';
 const MCP_SUBCOMMAND = 'mcp';
 const CLAUDE_CLI = 'claude';
 
-/** Args after `npx` that launch the bridge: `@reticlehq/core mcp`. Portless — the port comes from
+/** Args after `npx` that launch the bridge: `@reticlehq/server mcp`. Portless — the port comes from
  * the project's `.reticle.json` at runtime, so one global entry works for every project. */
 export function npxServerArgs(): string[] {
   return [RETICLE_PACKAGE, MCP_SUBCOMMAND];
@@ -36,7 +38,7 @@ interface ClaudeAddCommand {
   display: string;
 }
 
-/** `claude mcp add reticle -s user -- npx @reticlehq/core mcp` — registers globally for all projects (portless). */
+/** `claude mcp add reticle -s user -- npx @reticlehq/server mcp` — registers globally for all projects (portless). */
 export function claudeAddCommand(): ClaudeAddCommand {
   const tail = serverInvocation();
   const args = [MCP_SUBCOMMAND, 'add', MCP_SERVER_NAME, '-s', 'user', '--', ...tail];

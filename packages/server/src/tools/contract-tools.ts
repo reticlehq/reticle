@@ -4,7 +4,7 @@ import {
   ContractReadError,
   FROM_DISK_ARG,
   ReticleCommand,
-} from '@reticlehq/protocol';
+} from '@reticlehq/core';
 import { ReticleTool } from './tool-names.js';
 import { asString } from './tools-helpers.js';
 import { sessionIdShape, commandOrThrow } from './tool-kit.js';

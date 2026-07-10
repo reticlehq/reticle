@@ -29,9 +29,10 @@ Reticle is a pnpm + Turborepo monorepo. The split is not cosmetic — each bound
 | `@reticlehq/protocol` | both | The **wire contract**: every constant + zod schema crossing any boundary | Depends on nothing |
 | `@reticlehq/browser` | the browser | Instrument the page; execute commands; emit events | Never imports Node APIs |
 | `@reticlehq/server` | Node | The bridge, the MCP server, the `reticle` CLI, flow/run storage | Never imports DOM APIs |
-| `@reticlehq/react` | the browser | Optional: map a DOM node → React component → source `file:line` | Core works without it |
-| `@reticlehq/babel-plugin`, `@reticlehq/next` | build time | Stamp `data-reticle-source` for source mapping | Plain tooling |
-| `@reticlehq/core` | — | The single published package; re-exports the above under subpaths | — |
+| `@reticlehq/react` | the browser | The SDK **kit** you install in a browser app: re-exports the browser sensor (so one install gives both `reticle` and `install`) and maps a DOM node → React component → source `file:line` | Core works without the source-mapping half |
+| `@reticlehq/babel-plugin`, `@reticlehq/next`, `@reticlehq/vite-plugin` | build time | Stamp `data-reticle-source` for source mapping (and, for Vite, inject `connect()`) | Plain tooling |
+
+> Note: pre-2.0 there was a single `@reticlehq/core` umbrella package that re-exported all of the above under subpaths; it's been retired in favor of the audience-scoped packages here.
 
 **Why protocol-as-contract matters:** because the browser and the server are two different runtimes (a DOM and a Node process) that must agree exactly on every message, the temptation is to inline a string like `"net.request"` in both. That's how drift and silent breakage start. Instead, every such string and shape lives once in `@reticlehq/protocol` as a named constant + a zod schema. The browser and server both import it; neither can invent a message the other doesn't understand. The server zod-parses **every** inbound WebSocket message — malformed input closes the socket rather than flowing into logic.
 

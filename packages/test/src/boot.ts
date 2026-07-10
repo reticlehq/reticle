@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { ReticleDir } from '@reticlehq/protocol';
+import { ReticleDir } from '@reticlehq/core';
 import {
   AnnotationStore,
   BaselineStore,

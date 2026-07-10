@@ -59,7 +59,7 @@ describe('buildPlan — MCP (global, per detected agent)', () => {
       'user',
       '--',
       'npx',
-      '@reticlehq/core',
+      '@reticlehq/server',
       'mcp',
     ]);
   });
@@ -74,7 +74,7 @@ describe('buildPlan — MCP (global, per detected agent)', () => {
     const s = step(plan, CURSOR_STEP);
     expect(s.status).toBe(StepStatus.APPLY);
     expect(s.write?.path).toBe('/home/u/.cursor/mcp.json');
-    expect(s.write?.content).toContain('@reticlehq/core');
+    expect(s.write?.content).toContain('@reticlehq/server');
   });
 
   it('registers with BOTH agents when both are present', () => {
@@ -129,7 +129,7 @@ describe('buildPlan — Vite', () => {
   it('patches the vite config; no separate entry-file step (plugin injects connect)', () => {
     const plan = buildPlan(input({ viteConfig: { path: 'vite.config.ts', source: VITE_SRC } }));
     expect(step(plan, 'Vite plugin').status).toBe(StepStatus.APPLY);
-    expect(step(plan, 'Vite plugin').write?.content).toContain('@reticlehq/core/vite');
+    expect(step(plan, 'Vite plugin').write?.content).toContain('@reticlehq/vite-plugin');
     expect(plan.steps.some((s) => s.title.includes('entry'))).toBe(false);
   });
 
@@ -152,14 +152,49 @@ describe('buildPlan — Vite', () => {
 describe('buildPlan — install', () => {
   it('makes install an exec step when enabled, manual otherwise', () => {
     const off = buildPlan(input({ options: { port: undefined, mcp: true, install: false } }));
-    expect(step(off, 'Install dependency').status).toBe(StepStatus.MANUAL);
-    expect(step(off, 'Install dependency').exec).toBeUndefined();
+    expect(step(off, 'Install dependencies').status).toBe(StepStatus.MANUAL);
+    expect(step(off, 'Install dependencies').exec).toBeUndefined();
 
     const on = buildPlan(input({ options: { port: undefined, mcp: true, install: true } }));
-    const s = step(on, 'Install dependency');
+    const s = step(on, 'Install dependencies');
     expect(s.status).toBe(StepStatus.APPLY);
     expect(s.exec?.command).toBe('pnpm');
-    expect(s.exec?.args).toEqual(['add', '-D', '@reticlehq/core']);
+    // Vite (the default): the React kit + the Vite build plugin — never the retired core umbrella.
+    expect(s.exec?.args).toEqual(['add', '-D', '@reticlehq/react', '@reticlehq/vite-plugin']);
+  });
+
+  it('installs the kit + the framework build plugin, never the core umbrella', () => {
+    const vite = buildPlan(
+      input({
+        detection: detection(Framework.VITE),
+        options: { port: undefined, mcp: true, install: true },
+      }),
+    );
+    const next = buildPlan(
+      input({
+        detection: detection(Framework.NEXT),
+        options: { port: undefined, mcp: true, install: true },
+      }),
+    );
+    expect(step(vite, 'Install dependencies').exec?.args).toEqual([
+      'add',
+      '-D',
+      '@reticlehq/react',
+      '@reticlehq/vite-plugin',
+    ]);
+    expect(step(next, 'Install dependencies').exec?.args).toEqual([
+      'add',
+      '-D',
+      '@reticlehq/react',
+      '@reticlehq/next',
+    ]);
+    // The retired umbrella must appear nowhere in either install plan.
+    for (const plan of [vite, next]) {
+      for (const s of plan.steps) {
+        expect(s.exec?.args ?? []).not.toContain('@reticlehq/core');
+        expect(s.write?.content ?? '').not.toContain('@reticlehq/core');
+      }
+    }
   });
 });
 

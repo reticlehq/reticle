@@ -5,7 +5,7 @@ import {
   SessionState,
   isPresenterTone,
   isSessionState,
-} from '@reticlehq/protocol';
+} from '@reticlehq/core';
 import { refs } from '../dom/refs.js';
 import { actionVerb } from './presenter-verbs.js';
 import { nativeSetTimeout, nativeClearTimeout, nativeNow } from '../timers/native-timers.js';

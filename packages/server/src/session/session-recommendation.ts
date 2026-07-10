@@ -1,4 +1,4 @@
-import { UNSCRIPTABLE_TAB_RECOMMENDATION } from '@reticlehq/protocol';
+import { UNSCRIPTABLE_TAB_RECOMMENDATION } from '@reticlehq/core';
 
 /**
  * The session flags the recommendation is derived from. All already exist on every

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ReticleTool } from '@reticlehq/server';
-import { QueryBy } from '@reticlehq/protocol';
+import { QueryBy } from '@reticlehq/core';
 import { createTestContext } from './test-context.js';
 import { ReticleAssertionError } from './skip.js';
 import { CONSOLE_LEVEL_ERROR, PredicateKind } from './constants.js';

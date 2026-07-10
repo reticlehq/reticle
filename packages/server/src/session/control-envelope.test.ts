@@ -6,7 +6,7 @@ import {
   MessageKind,
   SessionState,
   type HelloMessage,
-} from '@reticlehq/protocol';
+} from '@reticlehq/core';
 import { Session } from './session.js';
 import { buildControlEnvelope } from './control-envelope.js';
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { FLOW_FILE_VERSION, AnchorKind } from '@reticlehq/protocol';
-import type { FlowFile, FlowStep, FlowExpect } from '@reticlehq/protocol';
+import { FLOW_FILE_VERSION, AnchorKind } from '@reticlehq/core';
+import type { FlowFile, FlowStep, FlowExpect } from '@reticlehq/core';
 import { ReticleTool } from '../tools/tool-names.js';
 import { classifyFlowAssertions, FlowAssertionGrade } from './flow-classify.js';
 

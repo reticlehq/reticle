@@ -8,7 +8,7 @@ import {
   type CommandResult,
   type FlowFile,
   type ReticleEvent,
-} from '@reticlehq/protocol';
+} from '@reticlehq/core';
 import type { Clock, EvalResult, FileSystemPort } from '@reticlehq/server';
 import { FlowStore } from '@reticlehq/server';
 import { SpecKind, SpecMessage, SpecOutcome } from './constants.js';

@@ -13,14 +13,34 @@
  * Requires the workspace to be built and installed.
  */
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { spawn } from 'node:child_process';
+import { readFileSync, mkdirSync, writeFileSync } from 'node:fs';
+import { randomBytes } from 'node:crypto';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 import { chromium } from 'playwright';
 import { start } from '@reticlehq/server';
 
 const ROOT = process.cwd();
 const BRIDGE_PORT = 4400;
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+
+// Ensure the pairing token exists BEFORE any dev server boots. The SSR examples (Next/Remix/Astro)
+// read it at config load (Node-side) to inline into their client connect; only the vite plugin reads it
+// lazily per request. Provisioning up front means every example — whatever the test order — sees the same
+// token the per-test bridge enforces. Mirrors the real workflow (daemon started before the dev server).
+beforeAll(() => {
+  const dir = process.env['RETICLE_PAIRING_TOKEN_DIR'] || join(homedir(), '.reticle');
+  const path = join(dir, 'pairing-token');
+  try {
+    if (readFileSync(path, 'utf8').trim().length > 0) return;
+  } catch {
+    /* missing — create below */
+  }
+  mkdirSync(dir, { recursive: true, mode: 0o700 });
+  writeFileSync(path, randomBytes(24).toString('hex'), { encoding: 'utf8', mode: 0o600 });
+});
 
 async function reachable(port: number): Promise<boolean> {
   try {

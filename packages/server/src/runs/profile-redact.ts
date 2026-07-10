@@ -6,7 +6,7 @@
  * The trustworthy summary — verdict, flows, risks, counts — is preserved. Pure; keyed on run.profile.
  */
 
-import { RunProfile, type ReticleVerificationRun } from '@reticlehq/protocol';
+import { RunProfile, type ReticleVerificationRun } from '@reticlehq/core';
 
 /** Marker left in place of a redacted value so a consumer can tell it was withheld, not absent. */
 export const REDACTED = '[redacted:prod-preview]';

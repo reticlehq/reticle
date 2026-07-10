@@ -13,7 +13,7 @@
  * Pure: no IO, no clock.
  */
 
-import { AnchorKind, type FlowExpect, type FlowFile } from '@reticlehq/protocol';
+import { AnchorKind, type FlowExpect, type FlowFile } from '@reticlehq/core';
 import type { EvalResult, Predicate } from '../events/predicate.js';
 import type { FlowReplaySession, WaitForSignal } from './flow-replay.js';
 

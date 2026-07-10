@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { pathToFileURL } from 'node:url';
 import { realpathSync } from 'node:fs';
-import { RETICLE_DEFAULT_PORT, ReticleEnv } from '@reticlehq/protocol';
+import { RETICLE_DEFAULT_PORT, ReticleEnv } from '@reticlehq/core';
 import { start, startDaemon } from './index.js';
 import { log } from './log.js';
 import {

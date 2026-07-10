@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { ProjectReadError, RunKind, RunStatus, type RunRecord } from '@reticlehq/protocol';
+import { ProjectReadError, RunKind, RunStatus, type RunRecord } from '@reticlehq/core';
 import { ReticleTool } from '../tools/tool-names.js';
 import { asString } from '../tools/tools-helpers.js';
 import type { ToolDef, ToolDeps } from '../tools/tools.js';

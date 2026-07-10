@@ -1,4 +1,4 @@
-import { SessionState } from '@reticlehq/protocol';
+import { SessionState } from '@reticlehq/core';
 import { LOG_KIND, LOG_RESULT, type LogKind, type LogResult } from './presenter-log.js';
 import { getCapabilities, type Capabilities } from '../registry/capabilities.js';
 

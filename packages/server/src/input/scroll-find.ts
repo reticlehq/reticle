@@ -1,4 +1,4 @@
-import { ReticleCommand, SCROLL_FIND_DEFAULTS, type CommandResult } from '@reticlehq/protocol';
+import { ReticleCommand, SCROLL_FIND_DEFAULTS, type CommandResult } from '@reticlehq/core';
 import { asRecord } from '../tools/tools-helpers.js';
 
 /** The slice of Session scroll-to-find needs — so tests inject a fake without a live browser. */

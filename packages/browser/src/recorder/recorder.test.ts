@@ -8,7 +8,7 @@ import {
   RecordedFlowSchema,
   RecorderPhase,
   type FlowStep,
-} from '@reticlehq/protocol';
+} from '@reticlehq/core';
 import {
   anchorFor,
   compileRecording,

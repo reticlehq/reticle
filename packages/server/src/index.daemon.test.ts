@@ -3,7 +3,7 @@ import * as http from 'node:http';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { ReticleEnv, LOOPBACK_HOST } from '@reticlehq/protocol';
+import { ReticleEnv, LOOPBACK_HOST } from '@reticlehq/core';
 import { resolveBridgeSecurity, startDaemon, type RunningServer } from './index.js';
 
 describe('resolveBridgeSecurity', () => {

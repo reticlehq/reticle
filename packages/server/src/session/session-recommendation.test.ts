@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { UNSCRIPTABLE_TAB_RECOMMENDATION } from '@reticlehq/protocol';
+import { UNSCRIPTABLE_TAB_RECOMMENDATION } from '@reticlehq/core';
 import { buildSessionRecommendation } from './session-recommendation.js';
 
 describe('buildSessionRecommendation', () => {

@@ -9,13 +9,17 @@ Reticle is the **proof layer for AI agents** — it verifies a running web app f
 ## Monorepo layout
 
 ```
-packages/protocol      @reticlehq/protocol     — shared wire contract, constants, zod schemas
+packages/core          @reticlehq/core         — bottom-of-graph foundation: wire contract, constants, zod schemas (deps: zod)
+packages/protocol      @reticlehq/protocol     — thin deprecated alias re-exporting @reticlehq/core (remove in v3)
 packages/browser       @reticlehq/browser      — instrumentation SDK embedded in the app (DOM-side)
 packages/server        @reticlehq/server       — bridge + MCP server, the `reticle` CLI (Node-side)
 packages/react         @reticlehq/react        — React adapter: DOM ref -> component -> source file
+packages/vite-plugin   @reticlehq/vite-plugin  — Vite integration: stamps source + auto-injects connect()
 packages/babel-plugin  @reticlehq/babel-plugin — stamps data-reticle-source (source mapping, React 19)
 packages/next          @reticlehq/next         — Next.js source mapping (keeps SWC) via withReticle (CJS)
-apps/demo              @reticlehq/demo         — Vite/React dashboard used to dogfood Reticle
+packages/test          @reticlehq/test         — spec runner + matchers for CI (peer vitest)
+packages/eslint-plugin @reticlehq/eslint-plugin — dev-only lint rule: state changed ⇒ signal fired
+apps/demo              @reticlehq/demo         — Vite/React fixture used to dogfood Reticle
 apps/api               @reticlehq/api          — Express backend exercising real-world behaviors (CJS-ish .mjs)
 apps/next-smoke        @reticlehq/next-smoke   — Next.js 15 app verifying Reticle on Next
 docs/                  — user-facing docs (getting-started, usage, token-efficiency, local-install)
@@ -27,7 +31,7 @@ This is **one git repo** at the root (pnpm + turbo monorepo). The TS library pac
 
 ## Service boundaries (who owns what)
 
-- **`@reticlehq/protocol` is the contract.** Any message that crosses browser ↔ bridge ↔ agent is defined there as a constant + zod schema. Browser and server depend on it; it depends on nothing. Never inline a wire string in `browser` or `server` — add it to `protocol`.
+- **`@reticlehq/core` is the contract.** Any message that crosses browser ↔ bridge ↔ agent is defined there as a constant + zod schema. It sits at the bottom of the graph (deps: `zod` only); everything depends on it, it depends on nothing. Never inline a wire string in `browser` or `server` — add it to `core`. (`@reticlehq/protocol` is a thin deprecated alias re-exporting `core`; import from `core` in new code.)
 - **`@reticlehq/browser` only touches the DOM/page.** It never imports Node APIs.
 - **`@reticlehq/server` only runs in Node.** It never imports DOM APIs.
 - **`@reticlehq/react` is optional enrichment.** Core must work without it.
@@ -39,7 +43,7 @@ This is **one git repo** at the root (pnpm + turbo monorepo). The TS library pac
 3. **No free strings.** Every domain/wire/UI string is a named constant.
 4. **No non-null `!`.** Use optional chaining + explicit null checks.
 5. **Tests first.** RED → GREEN → REFACTOR.
-6. **500-line file cap.** Over it = a cohesion failure; split before adding.
+6. **600-line file cap.** Over it = a cohesion failure; split before adding. (A few cohesive units — a stateful class, a package's public-API barrel + bootstrap — sit naturally in the 500–600 band and don't decompose without artificial seams.)
 7. **Inject the clock.** Never call `Date.now()`/`Math.random()` inside pure logic — pass them in.
 8. **Scope every data access to the authenticated principal.**
 9. **Design tokens are the only place design values live.**

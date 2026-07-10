@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ReticleTool } from '@reticlehq/server';
-import { ActionType, InputMode } from '@reticlehq/protocol';
+import { ActionType, InputMode } from '@reticlehq/core';
 import { createTestContext } from './test-context.js';
 import { ReticleSkip, isSkip } from './skip.js';
 import { SKIP_REASON_REAL_INPUT } from './constants.js';
