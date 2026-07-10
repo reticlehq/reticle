@@ -20,6 +20,9 @@ importers:
       '@reticlehq/core':
         specifier: workspace:*
         version: link:packages/core
+      '@reticlehq/next':
+        specifier: workspace:*
+        version: link:packages/next
       '@reticlehq/server':
         specifier: workspace:*
         version: link:packages/server
