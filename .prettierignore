@@ -18,4 +18,8 @@ assets/
 bench/raw/
 bench/logs/
 bench/artifacts/
+# Head-to-head harness outputs: measured result JSON + generated scorecards. Keep byte-identical to
+# what bench-all.mjs emits so re-running the benchmark doesn't dirty the tree via the formatter.
+bench/pw-vs-reticle/*.json
+bench/pw-vs-reticle/*SCORECARD*.md
 apps/example-*/

@@ -9,9 +9,7 @@
 
 **Your AI agent says "Feature complete." Then you open the app:**
 
-✗ &nbsp;mock data and wrong APIs everywhere<br/>
-✗ &nbsp;a flow that used to work, now broken<br/>
-✗ &nbsp;half the feature never built
+✗ &nbsp;mock data and wrong APIs everywhere<br/> ✗ &nbsp;a flow that used to work, now broken<br/> ✗ &nbsp;half the feature never built
 
 <div align="center">
 
