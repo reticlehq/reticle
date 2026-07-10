@@ -10,8 +10,8 @@ import {
   type FlowExpect,
   type FlowFile,
   type FlowStep,
-} from '@reticlehq/protocol';
-import { REDACTED_VALUE } from '@reticlehq/protocol';
+} from '@reticlehq/core';
+import { REDACTED_VALUE } from '@reticlehq/core';
 import { getAccessibleName, getRole, isSensitiveField } from '../dom/a11y.js';
 import { isReticleOverlay } from '../dom/dom-ignore.js';
 import { getCapabilities } from '../registry/capabilities.js';

@@ -1,4 +1,4 @@
-import { EventType, type ReticleEvent } from '@reticlehq/protocol';
+import { EventType, type ReticleEvent } from '@reticlehq/core';
 
 interface ReactionSummary {
   total: number;

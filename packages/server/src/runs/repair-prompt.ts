@@ -11,7 +11,7 @@ import {
   type FlowStepResult,
   type RepairPacket,
   type SourceLocation,
-} from '@reticlehq/protocol';
+} from '@reticlehq/core';
 
 /** The step a replay broke at — drift takes precedence (the legible cause), else first non-ok step. */
 function failingStepNumber(steps: ReadonlyArray<FlowStepResult>): number | undefined {

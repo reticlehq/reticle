@@ -15,7 +15,7 @@ import {
   type HelloMessage,
   type HumanControlData,
   type ReticleEvent,
-} from '@reticlehq/protocol';
+} from '@reticlehq/core';
 import { RingBuffer } from '../events/ring-buffer.js';
 import { ReviewStore, type ReviewMark } from './review-store.js';
 import { buildSessionRecommendation } from './session-recommendation.js';

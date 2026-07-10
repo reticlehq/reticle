@@ -4,7 +4,17 @@
   "version": "1.1.0",
   "type": "module",
   "description": "Minimal Vite + React app — verifies Reticle integration via the reticle() Vite plugin.",
-  "scripts": { "dev": "vite --port 5301" },
-  "dependencies": { "@reticlehq/core": "workspace:*", "react": "^19.0.0", "react-dom": "^19.0.0" },
-  "devDependencies": { "vite": "^8.0.0", "@vitejs/plugin-react": "^6.0.0" }
+  "scripts": {
+    "dev": "vite --port 5301"
+  },
+  "dependencies": {
+    "@reticlehq/react": "workspace:*",
+    "@reticlehq/vite-plugin": "workspace:*",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "vite": "^8.0.0",
+    "@vitejs/plugin-react": "^6.0.0"
+  }
 }

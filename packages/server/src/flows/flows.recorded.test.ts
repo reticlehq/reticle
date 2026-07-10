@@ -12,7 +12,7 @@ import {
   type CommandResult,
   type FlowFile,
   type ReticleEvent,
-} from '@reticlehq/protocol';
+} from '@reticlehq/core';
 import { createNodeFileSystem, type FileSystemPort } from '../project/fs-port.js';
 import { FlowStore } from './flows.js';
 import { ProjectStore } from '../project/project-store.js';

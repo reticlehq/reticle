@@ -13,7 +13,7 @@ import {
   type FlowStep,
   type ReticleEvent,
   type QueryEmptyHint,
-} from '@reticlehq/protocol';
+} from '@reticlehq/core';
 import {
   nearestTestid,
   nearestIsAmbiguous,

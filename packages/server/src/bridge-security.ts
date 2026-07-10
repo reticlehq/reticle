@@ -1,4 +1,4 @@
-import { ReticleEnv } from '@reticlehq/protocol';
+import { ReticleEnv } from '@reticlehq/core';
 import type { StartOptions } from './index.js';
 import {
   defaultPairingTokenDir,

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { EventType, SessionState, type ReticleEvent } from '@reticlehq/protocol';
+import { EventType, SessionState, type ReticleEvent } from '@reticlehq/core';
 import {
   applyEventBudget,
   costHint,

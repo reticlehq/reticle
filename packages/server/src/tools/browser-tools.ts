@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { ReticleCommand } from '@reticlehq/protocol';
+import { ReticleCommand } from '@reticlehq/core';
 import { ReticleTool } from './tool-names.js';
 import { asString } from './tools-helpers.js';
 import { sessionIdShape, commandOrThrow } from './tool-kit.js';

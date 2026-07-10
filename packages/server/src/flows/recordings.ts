@@ -1,4 +1,4 @@
-import type { FlowExpect } from '@reticlehq/protocol';
+import type { FlowExpect } from '@reticlehq/core';
 
 /** One captured agent action, normalized for replay. */
 export interface RecordedStep {

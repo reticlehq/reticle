@@ -19,7 +19,7 @@ import {
   type FlowFile,
   type FlowStep,
   type RunRecord,
-} from '@reticlehq/protocol';
+} from '@reticlehq/core';
 import { classifyFlowAssertions, FlowAssertionGrade } from '../flows/flow-classify.js';
 import { successLabel } from '../flows/flow-success.js';
 import { flowRisk, latestRun, rankByRisk, RiskLevel, type FlowRisk } from './flow-risk.js';

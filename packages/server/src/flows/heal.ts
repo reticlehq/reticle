@@ -8,7 +8,7 @@ import {
   type FlowStepResult,
   type HealChange,
   type HealProposal,
-} from '@reticlehq/protocol';
+} from '@reticlehq/core';
 import { editDistance } from './flow-replay.js';
 
 /**

@@ -3,7 +3,7 @@
  * so the runner never inlines free strings.
  */
 
-import { RETICLE_DEFAULT_PORT, RETICLE_WS_PATH } from '@reticlehq/protocol';
+import { RETICLE_DEFAULT_PORT, RETICLE_WS_PATH } from '@reticlehq/core';
 
 /**
  * The connect() argument literal: a non-default port adds a `url`, and a projectId is always passed

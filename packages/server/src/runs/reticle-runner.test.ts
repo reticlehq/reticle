@@ -11,7 +11,7 @@ import {
   RunTrigger,
   VerdictStatus,
   type FlowReplayResult,
-} from '@reticlehq/protocol';
+} from '@reticlehq/core';
 import { ReticleRunner, type RunnerPort, type VerifyOptions } from './reticle-runner.js';
 
 const replay = (

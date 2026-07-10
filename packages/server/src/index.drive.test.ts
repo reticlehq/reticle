@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { DriveErrorCode, InputMode, SessionState } from '@reticlehq/protocol';
-import type { CommandResult } from '@reticlehq/protocol';
+import { DriveErrorCode, InputMode, SessionState } from '@reticlehq/core';
+import type { CommandResult } from '@reticlehq/core';
 import { start, type RunningServer } from './index.js';
 import { PAIRING_TOKEN_DIR_ENV } from './pairing-token.js';
 

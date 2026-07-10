@@ -1,5 +1,5 @@
 import { ReticleTool, type ToolInvoker } from '@reticlehq/server';
-import type { ElementQuery, ElementState } from '@reticlehq/protocol';
+import type { ElementQuery, ElementState } from '@reticlehq/core';
 import { ReticleAssertionError } from './skip.js';
 import { CONSOLE_LEVEL_ERROR, DEFAULT_ASSERT_TIMEOUT_MS, PredicateKind } from './constants.js';
 

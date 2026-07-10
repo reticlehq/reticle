@@ -4,7 +4,7 @@ import {
   ReplayStatus,
   type FlowFile,
   type FlowReplayResult,
-} from '@reticlehq/protocol';
+} from '@reticlehq/core';
 import { ReticleTool } from '../tools/tool-names.js';
 import { buildFlowReport } from './flow-report.js';
 

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { EventType, HealthReason } from '@reticlehq/protocol';
+import { EventType, HealthReason } from '@reticlehq/core';
 
 afterEach(() => {
   vi.restoreAllMocks();

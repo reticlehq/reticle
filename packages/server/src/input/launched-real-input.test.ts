@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DriveErrorCode } from '@reticlehq/protocol';
+import { DriveErrorCode } from '@reticlehq/core';
 import { DriveError, LaunchedRealInputProvider, boxCenter, type ElementBox } from './real-input.js';
 
 const DRIVE_URL = 'http://localhost:3000/app';

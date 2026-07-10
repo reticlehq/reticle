@@ -9,7 +9,7 @@
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { WebSocket } from 'ws';
-import { RETICLE_WS_PATH, LOOPBACK_HOST, MessageKind } from '@reticlehq/protocol';
+import { RETICLE_WS_PATH, LOOPBACK_HOST, MessageKind } from '@reticlehq/core';
 import { Bridge } from '../bridge.js';
 
 let bridge: Bridge;

@@ -10,7 +10,7 @@
  * pay for it; the type-only import is elided by `tsc`, so the build stays green without it.
  */
 import type { Browser, Page } from 'playwright';
-import { ActionType, DriveErrorCode, DRIVE_PLAYWRIGHT_MISSING_MSG } from '@reticlehq/protocol';
+import { ActionType, DriveErrorCode, DRIVE_PLAYWRIGHT_MISSING_MSG } from '@reticlehq/core';
 import { installNetworkMocks, type MockRule } from './network-mock.js';
 
 /** Viewport CSS-px box as returned by the INSPECT command (getBoundingClientRect). */

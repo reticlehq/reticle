@@ -1,9 +1,5 @@
 import { z } from 'zod';
-import {
-  ReticleCommand,
-  VISUAL_NO_PROVIDER_RECOMMENDATION,
-  VisualReason,
-} from '@reticlehq/protocol';
+import { ReticleCommand, VISUAL_NO_PROVIDER_RECOMMENDATION, VisualReason } from '@reticlehq/core';
 import { ReticleTool } from '../tools/tool-names.js';
 import { asNumber, asRecord, asString } from '../tools/tools-helpers.js';
 import { diffPng, type VisualRect } from './visual-diff.js';

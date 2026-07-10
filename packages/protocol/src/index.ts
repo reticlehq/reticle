@@ -1,11 +1,14 @@
-export * from './constants.js';
-export * from './session-constants.js';
-export * from './notices.js';
-export * from './messages.js';
-export * from './security.js';
-export * from './state-select.js';
-export * from './brand.js';
-export * from './toon.js';
-export * from './flow-types.js';
-export * from './types.js';
-export * from './verification-run.js';
+/**
+ * @deprecated `@reticlehq/protocol` has moved. The wire contract — types, zod schemas, constants,
+ * messages, security helpers, and the isomorphic kernel — now lives in `@reticlehq/core`, the
+ * bottom-of-graph foundation every Reticle package imports.
+ *
+ * This package is a thin alias kept for one major version so existing installs keep working. It will
+ * be removed in v3. Migrate imports:
+ *
+ *   - import { EventType } from '@reticlehq/protocol';  // old
+ *   + import { EventType } from '@reticlehq/core';      // new
+ *
+ * See MIGRATION.md.
+ */
+export * from '@reticlehq/core';

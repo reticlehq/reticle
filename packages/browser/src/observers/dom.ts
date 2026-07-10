@@ -1,4 +1,4 @@
-import { EventType } from '@reticlehq/protocol';
+import { EventType } from '@reticlehq/core';
 import { getAccessibleName, getRole, isVisible } from '../dom/a11y.js';
 import { refs } from '../dom/refs.js';
 import { isReticleOverlay } from '../dom/dom-ignore.js';

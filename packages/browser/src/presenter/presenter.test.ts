@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { PresenterMode } from '@reticlehq/protocol';
+import { PresenterMode } from '@reticlehq/core';
 import { Presenter } from './presenter.js';
 import { buildSnapshot } from '../dom/snapshot.js';
 import { isIgnored } from '../dom/dom-ignore.js';

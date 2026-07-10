@@ -9,7 +9,7 @@ import {
   SessionState,
   type CommandResult,
   type HelloMessage,
-} from '@reticlehq/protocol';
+} from '@reticlehq/core';
 import { Session } from './session.js';
 
 const HELLO: HelloMessage = {

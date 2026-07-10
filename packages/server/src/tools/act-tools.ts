@@ -13,7 +13,7 @@ import {
   InputModeReason,
   ReticleCommand,
   isDangerousActionText,
-} from '@reticlehq/protocol';
+} from '@reticlehq/core';
 import type { Session } from '../session/session.js';
 import type { ElementBox, RealInputArgs } from '../input/real-input.js';
 import { isPointerAction } from '../input/real-input.js';

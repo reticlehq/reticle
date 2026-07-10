@@ -9,7 +9,7 @@ import {
   type FlowReplayResult,
   type FlowStepResult,
   type ReticleEvent,
-} from '@reticlehq/protocol';
+} from '@reticlehq/core';
 import { asString } from '../tools/tools-helpers.js';
 import { replayFlow } from './flow-replay.js';
 import { assertSuccess, dynamicTestids, successLabel, SUCCESS_STEP_TOOL } from './flow-success.js';
@@ -19,7 +19,7 @@ import type { ToolDeps } from '../tools/tools.js';
 
 export function latestRecordedFlow(
   events: ReticleEvent[],
-): { name: string; flow: import('@reticlehq/protocol').FlowFile } | undefined {
+): { name: string; flow: import('@reticlehq/core').FlowFile } | undefined {
   for (let i = events.length - 1; i >= 0; i--) {
     const event = events[i];
     if (event?.type !== EventType.FLOW_RECORDED) continue;

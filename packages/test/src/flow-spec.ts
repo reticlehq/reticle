@@ -4,7 +4,7 @@ import {
   type FlowErrorCode,
   type FlowFile,
   type FlowStepResult,
-} from '@reticlehq/protocol';
+} from '@reticlehq/core';
 import { FlowStore, createNodeFileSystem, replayFlow, waitForPredicate } from '@reticlehq/server';
 import type {
   Clock,

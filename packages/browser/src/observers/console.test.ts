@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { EventType } from '@reticlehq/protocol';
+import { EventType } from '@reticlehq/core';
 import { installConsole } from './console.js';
 import type { Emit, Teardown } from './types.js';
 

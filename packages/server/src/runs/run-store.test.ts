@@ -2,11 +2,11 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdtemp, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { asRunId, RunReadError, type ReticleVerificationRun } from '@reticlehq/protocol';
+import { asRunId, RunReadError, type ReticleVerificationRun } from '@reticlehq/core';
 import { buildVerificationRun, type VerificationRunInput } from './build-verification-run.js';
 import { RunStore } from './run-store.js';
 import { createNodeFileSystem, type FileSystemPort } from '../project/fs-port.js';
-import { RunAgentKind, RunFramework, RunProfile, RunTrigger } from '@reticlehq/protocol';
+import { RunAgentKind, RunFramework, RunProfile, RunTrigger } from '@reticlehq/core';
 
 const baseInput = (runId: string): VerificationRunInput => ({
   runId,

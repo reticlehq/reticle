@@ -1,4 +1,4 @@
-import type { FlowExpect } from '@reticlehq/protocol';
+import type { FlowExpect } from '@reticlehq/core';
 
 /**
  * Holds the flow-level + per-step annotations accumulating during a live

@@ -1,4 +1,4 @@
-import { PresenterMode } from '@reticlehq/protocol';
+import { PresenterMode } from '@reticlehq/core';
 
 // Activity-log UI for the presenter HUD: a persistent, timestamped, scrollable transcript of
 // every read/act/narration. All strings here are presenter-only UI (chips, glyphs, attrs) — they

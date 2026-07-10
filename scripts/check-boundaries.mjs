@@ -51,12 +51,9 @@ export const NODE_ONLY_EXTERNALS = Object.freeze([
 /** DOM-only npm packages a Node-side package must never depend on. */
 export const DOM_ONLY_EXTERNALS = Object.freeze(['@testing-library/dom']);
 
-// Temporary exemption: `@reticlehq/core` is still the top-of-graph umbrella (it re-exports every
-// audience package). Inverting it into the isomorphic, zod-only foundation is a separate ticket in
-// this same v2 series; until that lands, `core` legitimately violates the boundary. Guarding every
-// OTHER package now is what stops a *new* regression sneaking in before the inversion. Delete this
-// set the moment `core` is inverted — from then on it is fully guarded as an iso package.
-export const EXEMPT = Object.freeze(new Set(['@reticlehq/core']));
+// No exemptions: `@reticlehq/core` is now the isomorphic, zod-only foundation, so it is guarded like
+// any other package. (It was briefly exempt while it was still the umbrella being inverted.)
+export const EXEMPT = Object.freeze(new Set());
 
 /** The side a package may not depend on. Iso may depend on neither side (only other iso + zod). */
 const FORBIDDEN_SIDE = Object.freeze({

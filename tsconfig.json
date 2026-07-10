@@ -1,6 +1,7 @@
 {
   "files": [],
   "references": [
+    { "path": "packages/core" },
     { "path": "packages/protocol" },
     { "path": "packages/browser" },
     { "path": "packages/server" },

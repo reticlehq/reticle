@@ -1,6 +1,6 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
-import { reticle } from '@reticlehq/core/vite';
+import { reticle } from '@reticlehq/vite-plugin';
 
 // reticle() is dev-only (dropped from the production build). It stamps data-reticle-source for
 // DOM -> file:line mapping and auto-injects reticle.connect() so the app attaches to the bridge.

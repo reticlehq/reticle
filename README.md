@@ -385,11 +385,13 @@ A pnpm + turbo monorepo. Each audience installs the package it needs (browser ap
 
 | Package | Role |
 | --- | --- |
-| `@reticlehq/protocol` | the wire contract (zod schemas, constants) |
+| `@reticlehq/core` | the foundation: the wire contract (types, zod schemas, constants) everything imports; depends only on `zod` |
 | `@reticlehq/browser` | the dev-only instrumentation SDK (DOM/network/console/state observers) |
+| `@reticlehq/react` | the React kit: the SDK + adapter, DOM ref → component → source `file:line` |
+| `@reticlehq/vite-plugin` / `@reticlehq/next` / `@reticlehq/babel-plugin` | dev-only source mapping + connect injection (Vite / Next.js / React 19) |
 | `@reticlehq/server` | the bridge + MCP server + the `reticle` CLI |
-| `@reticlehq/react` | React adapter, DOM ref → component → source `file:line` |
-| `@reticlehq/babel-plugin` / `@reticlehq/next` | stamp source coordinates (React 19 / Next.js) |
+| `@reticlehq/test` | declarative, signal-bound specs for CI |
+| `@reticlehq/protocol` | deprecated alias for `@reticlehq/core` (removed in v3) |
 
 ## Status & safety
 

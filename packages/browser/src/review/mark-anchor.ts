@@ -1,4 +1,4 @@
-import { MarkAnchorStrategy } from '@reticlehq/protocol';
+import { MarkAnchorStrategy } from '@reticlehq/core';
 import { AnchorStrategy, synthesizeAnchor, type AnchorInput } from '../dom/auto-anchor.js';
 import { getAccessibleName, getRole } from '../dom/a11y.js';
 import { identifyComponent } from '../registry/adapters.js';

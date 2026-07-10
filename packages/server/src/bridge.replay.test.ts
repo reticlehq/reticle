@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { WebSocket } from 'ws';
-import { EventType, HumanControlKind, RETICLE_WS_PATH, MessageKind } from '@reticlehq/protocol';
+import { EventType, HumanControlKind, RETICLE_WS_PATH, MessageKind } from '@reticlehq/core';
 import { Bridge } from './bridge.js';
 
 /**

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { RiskSurface, type CapabilitiesContract } from '@reticlehq/protocol';
+import { RiskSurface, type CapabilitiesContract } from '@reticlehq/core';
 import { reticleDirPaths, readContract, writeContract } from './reticle-dir.js';
 import { createNodeFileSystem, type FileSystemPort } from './fs-port.js';
 

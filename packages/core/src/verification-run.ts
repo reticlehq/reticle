@@ -5,7 +5,7 @@
  * the WIRE/DISK shape so it can be frozen under semver. Persisted at `.reticle/runs/<runId>.json` and
  * returned by the programmatic Replay/Verify API.
  *
- * Conventions match the rest of `@reticlehq/protocol`: enums are `as const` objects narrowed with
+ * Conventions match the rest of `@reticlehq/core`: enums are `as const` objects narrowed with
  * `z.nativeEnum`, timestamps are epoch-ms NUMBERS (the clock is injected — never read inside pure
  * logic), no `any` (opaque evidence is `z.unknown()`), and every domain string is a named constant.
  */

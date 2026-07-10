@@ -4,7 +4,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { RETICLE_URL_PARAM } from '@reticlehq/protocol';
+import { RETICLE_URL_PARAM } from '@reticlehq/core';
 import {
   LEASE_TOOLS,
   appendReticleParams,

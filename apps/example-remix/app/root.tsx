@@ -47,7 +47,7 @@ export default function App() {
   // index.html injection doesn't fire — connect from a client effect instead.
   useEffect(() => {
     if (import.meta.env.DEV) {
-      void import("@reticlehq/core").then(({ reticle, install }) => {
+      void import("@reticlehq/react").then(({ reticle, install }) => {
         install();
         reticle.connect({ projectId: "example-remix" });
       });

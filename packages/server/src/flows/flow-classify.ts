@@ -19,7 +19,7 @@
  * Pure: no IO, no clock.
  */
 
-import type { FlowExpect, FlowFile, FlowStep } from '@reticlehq/protocol';
+import type { FlowExpect, FlowFile, FlowStep } from '@reticlehq/core';
 
 export const FlowAssertionGrade = {
   /** At least one step (or the success end-condition) asserts a signal/network consequence. */

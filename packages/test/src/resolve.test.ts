@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ReticleTool } from '@reticlehq/server';
-import { QueryBy } from '@reticlehq/protocol';
+import { QueryBy } from '@reticlehq/core';
 import { resolveTestid } from './resolve.js';
 import { ReticleQueryEmptyError } from './skip.js';
 import { NO_ELEMENT_FOR_TESTID } from './constants.js';

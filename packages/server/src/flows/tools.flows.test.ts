@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { CommandResult } from '@reticlehq/protocol';
-import { ActionType, FlowErrorCode, QueryBy } from '@reticlehq/protocol';
+import type { CommandResult } from '@reticlehq/core';
+import { ActionType, FlowErrorCode, QueryBy } from '@reticlehq/core';
 import { TOOLS, type ToolDeps } from '../tools/tools.js';
 import { ReticleTool } from '../tools/tool-names.js';
 import { BaselineStore } from '../project/baselines.js';

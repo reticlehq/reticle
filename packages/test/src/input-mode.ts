@@ -1,5 +1,5 @@
 import { ReticleTool, type ToolInvoker } from '@reticlehq/server';
-import { InputMode } from '@reticlehq/protocol';
+import { InputMode } from '@reticlehq/core';
 import { ReticleSkip } from './skip.js';
 import { SKIP_REASON_REAL_INPUT } from './constants.js';
 

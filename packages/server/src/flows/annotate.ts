@@ -6,7 +6,7 @@ import {
   type Annotation,
   type AnnotateOutcome,
   type FlowExpect,
-} from '@reticlehq/protocol';
+} from '@reticlehq/core';
 
 /**
  * The PURE compiler at the heart of the annotation facet. A structured annotation +

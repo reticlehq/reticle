@@ -1,4 +1,4 @@
-import { EventType } from '@reticlehq/protocol';
+import { EventType } from '@reticlehq/core';
 import type { Emit, Teardown } from './types.js';
 
 function snapshotLocation(): { pathname: string; search: string; hash: string; href: string } {

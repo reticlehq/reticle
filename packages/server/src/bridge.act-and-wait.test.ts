@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { EventType } from '@reticlehq/protocol';
+import { EventType } from '@reticlehq/core';
 import { Bridge } from './bridge.js';
 import { TOOLS, type ToolDeps } from './tools/tools.js';
 import { FakeBrowser, callTool, makeDeps, waitUntil } from './bridge.test-harness.js';

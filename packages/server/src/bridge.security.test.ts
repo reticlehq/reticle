@@ -6,7 +6,7 @@ import {
   RETICLE_WS_PATH,
   MessageKind,
   TRANSPORT_LIMITS,
-} from '@reticlehq/protocol';
+} from '@reticlehq/core';
 import { Bridge } from './bridge.js';
 
 const bridges: Bridge[] = [];

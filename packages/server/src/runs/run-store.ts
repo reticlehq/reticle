@@ -14,7 +14,7 @@ import {
   RunReadError,
   type ReticleVerificationRun,
   type RunId,
-} from '@reticlehq/protocol';
+} from '@reticlehq/core';
 import type { FileSystemPort } from '../project/fs-port.js';
 import { reticleDirPaths, isValidRunId, runPath } from '../project/reticle-dir.js';
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { AnnotationErrorCode, AnnotationKind, AnnotationTarget } from '@reticlehq/protocol';
-import type { Annotation } from '@reticlehq/protocol';
+import { AnnotationErrorCode, AnnotationKind, AnnotationTarget } from '@reticlehq/core';
+import type { Annotation } from '@reticlehq/core';
 import { compileAnnotation, describeCompiled } from './annotate.js';
 
 /**

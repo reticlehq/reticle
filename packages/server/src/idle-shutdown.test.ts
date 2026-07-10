@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { SESSION_LIFECYCLE } from '@reticlehq/protocol';
+import { SESSION_LIFECYCLE } from '@reticlehq/core';
 import { IdleShutdown, resolveIdleShutdownMs } from './idle-shutdown.js';
 
 /** A controllable clock + idle flag, so the watcher is driven deterministically. */

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { EventType, type ReticleEvent } from '@reticlehq/protocol';
+import { EventType, type ReticleEvent } from '@reticlehq/core';
 import { RingBuffer } from './ring-buffer.js';
 
 function ev(t: number): ReticleEvent {

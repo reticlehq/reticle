@@ -1,4 +1,4 @@
-import { MarkStatus, type HumanMarkData, type MarkAnchorStrategy } from '@reticlehq/protocol';
+import { MarkStatus, type HumanMarkData, type MarkAnchorStrategy } from '@reticlehq/core';
 
 /**
  * One human review mark: a mistake a human flagged on the running page, pinned to an element, ready

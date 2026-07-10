@@ -3,7 +3,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { transformSync } from '@babel/core';
 import reticleSource from '@reticlehq/babel-plugin';
-import { RETICLE_DEFAULT_PORT, RETICLE_WS_PATH, ReticleDir, ReticleEnv } from '@reticlehq/protocol';
+import { RETICLE_DEFAULT_PORT, RETICLE_WS_PATH, ReticleDir, ReticleEnv } from '@reticlehq/core';
 import { resolveProjectId } from './project-id.js';
 
 export const RETICLE_VITE_PLUGIN_NAME = 'reticle';

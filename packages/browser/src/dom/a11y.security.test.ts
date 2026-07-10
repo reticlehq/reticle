@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { REDACTED_VALUE } from '@reticlehq/protocol';
+import { REDACTED_VALUE } from '@reticlehq/core';
 import { buildSnapshot } from './snapshot.js';
 import { describe as describeElement, getValue } from './a11y.js';
 

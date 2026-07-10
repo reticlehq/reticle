@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { ActionWarning } from '@reticlehq/protocol';
+import { ActionWarning } from '@reticlehq/core';
 import { executeAction } from './actions.js';
 import { refs } from '../dom/refs.js';
 

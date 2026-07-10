@@ -1,5 +1,5 @@
 import { registerAdapter, type ComponentInfo, type ComponentSource } from '@reticlehq/browser';
-import { ComponentStateReason, type ComponentStateResult } from '@reticlehq/protocol';
+import { ComponentStateReason, type ComponentStateResult } from '@reticlehq/core';
 
 interface Hook {
   memoizedState: unknown;
