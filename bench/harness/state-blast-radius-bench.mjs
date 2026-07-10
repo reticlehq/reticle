@@ -2,12 +2,12 @@
 //
 // This is the deepest in-source moat. The Compose action should only set compose.result. The
 // mutation-leak regression (`?reticle-bug=mutation-leak`) makes it ALSO corrupt an UNRELATED store path —
-// the top deployment's status. Nothing visible changes (the Deployments view isn't even on screen), so
-// a DOM/visual/a11y tool sees a perfect Compose. The only way to catch it is to assert that the
-// unrelated store path STAYED PUT — a state invariant. No out-of-page tool can make that assertion at
-// all; it requires the program's own state.
+// the top deployment's internal checksum (a never-rendered field, so it never shows anywhere), so a
+// DOM/visual/a11y tool sees a perfect Compose. The only way to catch it is to assert that the unrelated
+// store path STAYED PUT — a state invariant. No out-of-page tool can make that assertion at all; it
+// requires the program's own state.
 //
-// Reticle expresses it as a flow success consequence `state { path:'deployments.0.status', equals:<baseline> }`
+// Reticle expresses it as a flow success consequence `state { path:'deployments.0.checksum', equals:<baseline> }`
 // (the value read live before recording, so the invariant is "this did not move"). On replay: clean =
 // holds (Compose never touches deployments), bugged = the leak flipped it → the invariant fails, with NO
 // testid drift (the Compose button is present and clicks fine). Caught deterministically in cheap replay.
@@ -22,7 +22,7 @@ import { measure } from './tokenizer.mjs';
 const URL = process.env.BENCH_URL ?? 'http://localhost:4312/';
 const LLM_REDRIVE = 30249; // Playwright MCP per-run re-drive (Layer B)
 const FLOW = 'blast-radius-compose';
-const INVARIANT_PATH = 'deployments.0.status';
+const INVARIANT_PATH = 'deployments.0.checksum';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const parse = (t) => {
   try {
@@ -93,7 +93,7 @@ try {
   await sleep(1500);
   const baseline = await replayOnce(a);
 
-  // Regression: mutation-leak injected — Compose corrupts deployments.0.status → the invariant fails.
+  // Regression: mutation-leak injected — Compose corrupts deployments.0.checksum → the invariant fails.
   const buggedUrl = `${URL}${URL.includes('?') ? '&' : '?'}reticle-bug=mutation-leak`;
   await a.c.callTool('reticle_navigate', { url: buggedUrl });
   await sleep(1800);
@@ -119,7 +119,7 @@ try {
 const summary = {
   dimension: 'State blast-radius regression (Layer C) — an action mutates unrelated store state',
   scenario:
-    'Compose corrupts the top deployment status as a side-effect (?reticle-bug=mutation-leak)',
+    'Compose corrupts the top deployment checksum as a side-effect (?reticle-bug=mutation-leak)',
   oracle: `state ${INVARIANT_PATH} == "${result.baseline_status}" (invariant: Compose must not move it)`,
   ...result,
   per_run_tokens: result.regressed?.tokens ?? null,

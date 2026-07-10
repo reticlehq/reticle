@@ -227,9 +227,10 @@ const CONSOLE_LEAKS: Record<string, string> = {
 };
 
 /**
- * Extra-fetch bugs. On the trigger's click, fire one more request. A FORBIDDEN url (a reverted API
- * migration, a privacy beacon, an N+1 fan-out) must never fire — a net count of 0 catches the extra.
- * A DOUBLE url is the action's own endpoint fired a second time — a net count of 1 catches the extra.
+ * Extra-fetch bugs. On the trigger's click, fire one more request to a FORBIDDEN url (a reverted API
+ * migration, a privacy beacon, an N+1 fan-out) that must never fire — a net count of 0 catches the
+ * extra. (The action's own endpoint fired twice is a DOUBLE bug — see DOUBLE_FETCH, which duplicates
+ * the real request rather than firing a bare beacon.)
  */
 interface ExtraFetch {
   trigger: string;
@@ -251,18 +252,24 @@ const EXTRA_FETCH: Record<string, ExtraFetch> = {
     url: `${API_BASE}/api/broken/cors`,
     method: 'GET',
   },
-  // Double (the action's own request fired twice; expected count 1).
-  'double-submit': {
-    trigger: 'compose-generate',
-    url: `${API_BASE}/api/generate-script`,
-    method: 'POST',
-  },
-  'double-login': { trigger: 'login-submit', url: `${API_BASE}/api/login`, method: 'POST' },
-  'double-fault-500': {
-    trigger: 'fault-500',
-    url: `${API_BASE}/api/broken/500`,
-    method: 'GET',
-  },
+};
+
+/**
+ * Double-request bugs (the action's OWN request fired twice; expected count 1). A faithful
+ * double-submit is the app's REAL request replayed — same URL, headers (auth), body, and latency — so
+ * BOTH calls are identical, concurrent, and equally slow. A bare extra fetch on click would instead send
+ * a fast, unauthenticated call that resolves (401) before the real (slow, authed) one, leaving a quiet
+ * gap where a settle-gated `count:1` oracle reads 1 and misses the duplicate. So these wrap fetch and
+ * clone the app's actual outgoing request rather than piggy-backing on the click.
+ */
+interface DoubleFetch {
+  method: 'GET' | 'POST';
+  urlContains: string;
+}
+const DOUBLE_FETCH: Record<string, DoubleFetch> = {
+  'double-submit': { method: 'POST', urlContains: '/api/generate-script' },
+  'double-login': { method: 'POST', urlContains: '/api/login' },
+  'double-fault-500': { method: 'GET', urlContains: '/api/broken/500' },
 };
 
 /** DOM-text bugs → a testid whose displayed label/number is silently overwritten with a wrong value. */
@@ -430,6 +437,43 @@ function installCss(bugs: ReadonlySet<string>): void {
 }
 
 /**
+ * Duplicate the app's OWN outgoing request to simulate a double-submit / useEffect-double-fire. Wraps
+ * window.fetch and, when a matching request goes out, re-issues the SAME (input, init) — same auth,
+ * body, and latency — so both land as concurrent, equally-slow NET_REQUEST events a `count:1` oracle
+ * catches at settle. A re-entrancy guard stops the clone from cloning itself.
+ */
+function installDoubleFetch(bugs: ReadonlySet<string>): void {
+  const doubles = [...bugs]
+    .map((id) => DOUBLE_FETCH[id])
+    .filter((d): d is DoubleFetch => d !== undefined);
+  if (doubles.length === 0) return;
+  const base = window.fetch.bind(window);
+  let cloning = false;
+  window.fetch = (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+    const passthrough = base(input, init);
+    if (!cloning) {
+      const url = input instanceof Request ? input.url : String(input);
+      const method = (
+        init?.method ?? (input instanceof Request ? input.method : 'GET')
+      ).toUpperCase();
+      const hit = doubles.find((d) => method === d.method && url.includes(d.urlContains));
+      if (hit !== undefined) {
+        cloning = true;
+        try {
+          // Duplicate via the LIVE window.fetch (outermost wrapper) so Reticle records it regardless of
+          // fetch-wrap order; the guard makes the re-entry a passthrough.
+          const clone = input instanceof Request ? input.clone() : input;
+          void window.fetch(clone, init).catch(() => undefined);
+        } finally {
+          cloning = false;
+        }
+      }
+    }
+    return passthrough;
+  };
+}
+
+/**
  * Install the hard-bug injector. No-op unless `?reticle-bug=` is present. Each id degrades a present,
  * correctly-labelled element (or the store behind it) so only observation of style/geometry, the
  * network, the console, or the app's state can catch it.
@@ -451,5 +495,6 @@ export function installBugInjector(): void {
   if (bugs.has('status-stale')) installStatusDesync();
   if (bugs.has('render-storm')) installRenderStorm();
   installClickBugs(bugs);
+  installDoubleFetch(bugs);
   installDomTextBugs(bugs);
 }
