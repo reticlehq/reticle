@@ -23,24 +23,31 @@ import { dirname, join } from 'node:path';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const PACKAGES_DIR = join(HERE, '..', 'packages');
 
-/** Which side of the browser/Node line each package lives on. Untagged → 'iso' (isomorphic). */
+/**
+ * Which runtime each package lives in. Untagged → 'iso' (isomorphic). Four sides, because a build
+ * plugin is neither the browser runtime nor the server runtime — it is a Node process that runs at
+ * *build* time. Collapsing it into 'browser' would be a lie (it uses `node:fs`); collapsing it into
+ * 'node' would let it pull the server runtime. It gets its own side.
+ */
 export const SIDE = Object.freeze({
-  // Browser side — runs in the page, touches the DOM, never Node.
+  // Browser runtime — runs in the page, touches the DOM, never Node.
   '@reticlehq/browser': 'browser',
   '@reticlehq/react': 'browser',
-  '@reticlehq/next': 'browser',
-  '@reticlehq/vite-plugin': 'browser',
-  '@reticlehq/babel-plugin': 'browser',
-  '@reticlehq/eslint-plugin': 'browser',
-  // Node side — runs in the `reticle` process, touches sockets/fs, never the DOM.
+  // Build-time Node tooling — source-mapping plugins + lint rule. Uses Node at build time, but must
+  // not pull the browser/server *runtime* packages or a WS/MCP/DOM dependency.
+  '@reticlehq/next': 'build',
+  '@reticlehq/vite-plugin': 'build',
+  '@reticlehq/babel-plugin': 'build',
+  '@reticlehq/eslint-plugin': 'build',
+  // Server runtime — runs in the `reticle` process, touches sockets/fs, never the DOM.
   '@reticlehq/server': 'node',
   '@reticlehq/test': 'node',
-  // Isomorphic foundation — imported by both sides, imports neither.
+  // Isomorphic foundation — imported by every side, imports none of them.
   '@reticlehq/core': 'iso',
   '@reticlehq/protocol': 'iso',
 });
 
-/** Node-only npm packages a browser-side package must never depend on (a proxy for "needs Node"). */
+/** Node-runtime npm packages a browser/build/iso package must never depend on (a "needs a server" proxy). */
 export const NODE_ONLY_EXTERNALS = Object.freeze([
   'ws',
   '@modelcontextprotocol/sdk',
@@ -48,24 +55,28 @@ export const NODE_ONLY_EXTERNALS = Object.freeze([
   'express',
 ]);
 
-/** DOM-only npm packages a Node-side package must never depend on. */
+/** DOM-only npm packages a Node/build/iso package must never depend on. */
 export const DOM_ONLY_EXTERNALS = Object.freeze(['@testing-library/dom']);
 
 // No exemptions: `@reticlehq/core` is now the isomorphic, zod-only foundation, so it is guarded like
 // any other package. (It was briefly exempt while it was still the umbrella being inverted.)
 export const EXEMPT = Object.freeze(new Set());
 
-/** The side a package may not depend on. Iso may depend on neither side (only other iso + zod). */
-const FORBIDDEN_SIDE = Object.freeze({
-  browser: 'node',
-  node: 'browser',
-  iso: 'either',
+/**
+ * The policy for each side: which sides its workspace deps may point at, and which external packages
+ * it may never depend on. A side may always depend on itself and on the isomorphic foundation.
+ */
+const POLICY = Object.freeze({
+  iso: { allow: ['iso'], forbid: [...NODE_ONLY_EXTERNALS, ...DOM_ONLY_EXTERNALS] },
+  browser: { allow: ['browser', 'iso'], forbid: NODE_ONLY_EXTERNALS },
+  node: { allow: ['node', 'iso'], forbid: DOM_ONLY_EXTERNALS },
+  build: { allow: ['build', 'iso'], forbid: [...NODE_ONLY_EXTERNALS, ...DOM_ONLY_EXTERNALS] },
 });
 
 /**
  * Compute boundary violations for a set of package manifests.
  * @param {Array<{name: string, dependencies?: Record<string,string>, peerDependencies?: Record<string,string>}>} manifests
- * @param {Record<string,string>} side  Map of package name -> 'browser' | 'node' | 'iso'.
+ * @param {Record<string,string>} side  Map of package name -> 'browser' | 'build' | 'node' | 'iso'.
  * @returns {Array<{from: string, to: string, reason: string}>}
  */
 export function findViolations(manifests, side = SIDE) {
@@ -76,45 +87,26 @@ export function findViolations(manifests, side = SIDE) {
     const from = pkg.name;
     if (EXEMPT.has(from)) continue;
     const fromSide = sideOf(from);
+    const policy = POLICY[fromSide];
     const deps = { ...pkg.dependencies, ...pkg.peerDependencies };
 
     for (const dep of Object.keys(deps)) {
-      const depSide = sideOf(dep);
-      const isWorkspacePkg = dep.startsWith('@reticlehq/');
-
-      // 1. Cross-side workspace edges: browser<->node, and iso->either-side.
-      if (isWorkspacePkg) {
-        if (fromSide === 'iso' && depSide !== 'iso') {
-          violations.push({
-            from,
-            to: dep,
-            reason: `isomorphic package must not depend on the ${depSide} side`,
-          });
-        } else if (FORBIDDEN_SIDE[fromSide] === depSide) {
+      if (dep.startsWith('@reticlehq/')) {
+        // Workspace edge: the dependency's side must be one this side is allowed to import.
+        const depSide = sideOf(dep);
+        if (!policy.allow.includes(depSide)) {
           violations.push({
             from,
             to: dep,
             reason: `${fromSide}-side package must not depend on the ${depSide} side`,
           });
         }
-        continue;
-      }
-
-      // 2. Node-only externals on a browser-side (or iso) package.
-      if ((fromSide === 'browser' || fromSide === 'iso') && NODE_ONLY_EXTERNALS.includes(dep)) {
+      } else if (policy.forbid.includes(dep)) {
+        // External edge: a package on the wrong side of the runtime line.
         violations.push({
           from,
           to: dep,
-          reason: `${fromSide}-side package must not depend on the Node-only external "${dep}"`,
-        });
-      }
-
-      // 3. DOM-only externals on a Node-side (or iso) package.
-      if ((fromSide === 'node' || fromSide === 'iso') && DOM_ONLY_EXTERNALS.includes(dep)) {
-        violations.push({
-          from,
-          to: dep,
-          reason: `${fromSide}-side package must not depend on the DOM-only external "${dep}"`,
+          reason: `${fromSide}-side package must not depend on "${dep}"`,
         });
       }
     }
