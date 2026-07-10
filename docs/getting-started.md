@@ -25,15 +25,15 @@ Three pieces, each tiny:
 ```text
 ┌─────────────┐   MCP    ┌──────────────────────┐   WebSocket   ┌─────────────────────┐
 │ coding agent │◀───────▶│  reticle bridge + server │◀─────────────▶│ your app + the Reticle │
-│ (Claude Code)│  stdio  │   (npx @reticlehq/core)   │  localhost    │   SDK (dev only)    │
+│ (Claude Code)│  stdio  │  (npx @reticlehq/server)  │  localhost    │   SDK (dev only)    │
 └─────────────┘          └──────────────────────┘  :4400        └─────────────────────┘
 ```
 
-It all ships in **one package, `@reticlehq/core`**:
+Three pieces, each from the package for its audience:
 
-1. **The MCP server** — your agent launches it with `npx @reticlehq/core`; it hosts the tools _and_ the WebSocket bridge your app connects to. You don't run it by hand; the agent does.
-2. **The SDK** — `import { reticle } from '@reticlehq/core'`, a few lines in your app's dev entry point.
-3. **(Optional) React adapter + source-mapping** — so `reticle_inspect` can tell the agent which component/file to edit (also in `@reticlehq/core`).
+1. **The MCP server** — your agent launches it with `npx @reticlehq/server mcp`; it hosts the tools _and_ the WebSocket bridge your app connects to. You don't run it by hand; the agent does.
+2. **The SDK** — `import { reticle } from '@reticlehq/react'`, a few lines in your app's dev entry point.
+3. **(Optional) React adapter + source-mapping** — so `reticle_inspect` can tell the agent which component/file to edit (also from `@reticlehq/react`).
 
 Everything is **dev-only** and **localhost-only**. It's tree-shaken out of production builds.
 
@@ -50,19 +50,19 @@ Everything is **dev-only** and **localhost-only**. It's tree-shaken out of produ
 From your project root:
 
 ```bash
-npx @reticlehq/core init
+npx @reticlehq/server init
 ```
 
 It detects your framework, package manager, and React version, then:
 
 - **registers the Reticle MCP server once, globally, for each agent you have installed** — Claude Code (`claude mcp add reticle -s user`) and/or Cursor (`~/.cursor/mcp.json`) — so every project on this machine gets it; you never re-add it per project,
-- installs `@reticlehq/core` as a dev dependency,
+- installs the SDK kit (`@reticlehq/react`) and the right build plugin (`@reticlehq/vite-plugin` or `@reticlehq/next`) as dev dependencies,
 - **Vite:** adds the `reticle()` plugin to your config — which wires source mapping _and_ `reticle.connect()` for you, so there is nothing else to edit,
 - **Next / other:** creates the dev component and prints the exact `withReticle` / mount / connect snippets to paste (it never half-edits a build config).
 
 The bridge + MCP server is a single process that serves all your projects, so it's registered at **user scope**, not in a per-project `.mcp.json`. Only the SDK (the `reticle()` plugin / connect call) is added per project.
 
-Re-running is safe (already-registered/already-patched steps are skipped). Preview without writing via `npx @reticlehq/core init --dry-run`. Flags: `--port N`, `--no-mcp`, `--no-install`, `--yes`.
+Re-running is safe (already-registered/already-patched steps are skipped). Preview without writing via `npx @reticlehq/server init --dry-run`. Flags: `--port N`, `--no-mcp`, `--no-install`, `--yes`.
 
 Then restart your dev server and skip to [Step 4](#step-4--run-it--verify-the-connection). The manual steps below explain what `init` sets up, if you prefer to wire it yourself.
 
@@ -75,7 +75,7 @@ You don't start the server manually — your agent starts it via MCP. Register R
 **Claude Code** — one command:
 
 ```bash
-claude mcp add reticle -s user -- npx @reticlehq/core mcp
+claude mcp add reticle -s user -- npx @reticlehq/server mcp
 ```
 
 (`reticle init` runs exactly this for you. `-s user` is what makes it global; drop it for a project-local registration instead.)
@@ -85,7 +85,7 @@ claude mcp add reticle -s user -- npx @reticlehq/core mcp
 ```jsonc
 {
   "mcpServers": {
-    "reticle": { "command": "npx", "args": ["@reticlehq/core", "mcp"] },
+    "reticle": { "command": "npx", "args": ["@reticlehq/server", "mcp"] },
   },
 }
 ```
@@ -98,10 +98,11 @@ Other MCP clients (Windsurf, Claude Desktop, …) use the same `command`/`args` 
 
 ## Step 2 — Embed the SDK in your app
 
-Install the one package as a dev dependency (it includes the SDK, React adapter, source-mapping plugins, the spec runner, and the MCP server):
+Install the SDK kit plus your framework's build plugin as dev dependencies (the kit re-exports the browser sensor, so one install gives both `reticle` and `install`):
 
 ```bash
-npm i -D @reticlehq/core     # or: pnpm add -D @reticlehq/core
+npm i -D @reticlehq/react @reticlehq/vite-plugin     # Vite; or: pnpm add -D …
+# Next.js instead? npm i -D @reticlehq/react @reticlehq/next
 ```
 
 Then call `reticle.connect()` once, in dev only. Where you put it depends on your framework.
@@ -113,7 +114,7 @@ Then call `reticle.connect()` once, in dev only. Where you put it depends on you
 ```ts
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
-import { reticle } from '@reticlehq/core/vite';
+import { reticle } from '@reticlehq/vite-plugin';
 
 export default defineConfig({
   plugins: [react(), reticle()],
@@ -130,7 +131,7 @@ In your entry file (`src/main.tsx`), call `connect()` in dev only:
 ```ts
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { reticle, SESSION_AUTO } from '@reticlehq/core';
+import { reticle, SESSION_AUTO } from '@reticlehq/react';
 import { App } from './App';
 
 if (import.meta.env.DEV) {
@@ -171,7 +172,7 @@ export function ReticleDev() {
       // SESSION_AUTO = a unique id per tab, so several Next apps/tabs never collide on one session.
       // NEXT_PUBLIC_RETICLE_TOKEN carries the pairing token to the browser (see "The pairing token").
       const token = process.env.NEXT_PUBLIC_RETICLE_TOKEN;
-      void import('@reticlehq/core').then(({ reticle, SESSION_AUTO }) =>
+      void import('@reticlehq/react').then(({ reticle, SESSION_AUTO }) =>
         reticle.connect({ session: SESSION_AUTO, ...(token ? { token } : {}) }),
       );
     }
@@ -201,7 +202,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 Anywhere your app boots in dev:
 
 ```ts
-import { reticle, SESSION_AUTO } from '@reticlehq/core';
+import { reticle, SESSION_AUTO } from '@reticlehq/react';
 // Pass the pairing token (see "The pairing token" above); on a hand-wired setup you supply it yourself.
 if (location.hostname === 'localhost')
   reticle.connect({ session: SESSION_AUTO, token: import.meta.env.VITE_RETICLE_TOKEN });
@@ -211,7 +212,7 @@ Or, with no build step, a script tag pointed at the bridge:
 
 ```html
 <script type="module">
-  import { reticle, SESSION_AUTO } from 'https://esm.sh/@reticlehq/core';
+  import { reticle, SESSION_AUTO } from 'https://esm.sh/@reticlehq/react';
   reticle.connect({ session: SESSION_AUTO });
 </script>
 ```
@@ -230,7 +231,7 @@ It's common to have several apps open in dev — a few Next.js and React project
   "mcpServers": {
     "reticle": {
       "command": "npx",
-      "args": ["-y", "@reticlehq/core", "mcp"],
+      "args": ["-y", "@reticlehq/server", "mcp"],
       "env": { "RETICLE_PORT": "4401" },
     },
   },
@@ -248,32 +249,32 @@ Project A stays on the default `4400`, project B on `4401` — they never touch 
 
 ## Step 3 — (React) component & source-file mapping
 
-This is optional but high-value: it lets `reticle_inspect` map a DOM element back to the **React component and the source file:line** — so when the agent finds a problem, it knows which file to edit. (The React adapter ships with `@reticlehq/core` — nothing extra to install.)
+This is optional but high-value: it lets `reticle_inspect` map a DOM element back to the **React component and the source file:line** — so when the agent finds a problem, it knows which file to edit. (The React adapter ships in `@reticlehq/react` — nothing extra to install.)
 
 ```ts
-import { install as installReticleReact } from '@reticlehq/core';
+import { install as installReticleReact } from '@reticlehq/react';
 if (import.meta.env.DEV) installReticleReact(); // call before reticle.connect()
 ```
 
 **React ≤ 18:** that's all — it uses React's dev `_debugSource`.
 
-**React 19:** React removed `_debugSource`, so the source has to be stamped at build time. **If you added the `reticle()` Vite plugin in Step 2, this is already handled — skip ahead.** Otherwise add the Babel plugin (also bundled in `@reticlehq/core`, at `@reticlehq/core/babel`) to stamp the source onto elements in dev:
+**React 19:** React removed `_debugSource`, so the source has to be stamped at build time. **If you added the `reticle()` Vite plugin in Step 2, this is already handled — skip ahead.** Otherwise add the Babel plugin (`@reticlehq/babel-plugin`) to stamp the source onto elements in dev:
 
 ```ts
 // vite.config.ts
 import react from '@vitejs/plugin-react';
-import reticleSource from '@reticlehq/core/babel';
+import reticleSource from '@reticlehq/babel-plugin';
 
 export default defineConfig({
   plugins: [react({ babel: { plugins: [reticleSource] } })],
 });
 ```
 
-> **Next.js:** verified on **Next.js 15 / React 19 (app router, SWC)**. For source-file mapping, use `@reticlehq/core/next` instead of the Babel plugin — it adds a **dev-only webpack pre-loader that keeps SWC** and stamps `data-reticle-source` so `reticle_inspect` returns `file:line` (e.g. `app/page.tsx:30`):
+> **Next.js:** verified on **Next.js 15 / React 19 (app router, SWC)**. For source-file mapping, use `@reticlehq/next` instead of the Babel plugin — it adds a **dev-only webpack pre-loader that keeps SWC** and stamps `data-reticle-source` so `reticle_inspect` returns `file:line` (e.g. `app/page.tsx:30`):
 >
 > ```js
 > // next.config.mjs
-> import reticleNext from '@reticlehq/core/next';
+> import reticleNext from '@reticlehq/next';
 > /** @type {import('next').NextConfig} */
 > const nextConfig = {};
 > export default reticleNext.withReticle(nextConfig); // no-op in production
@@ -343,7 +344,7 @@ The basics above work with zero app changes. These four additions make the agent
 **2. `reticle.signal` for off-DOM facts.** When something matters but isn't visible — a save committed, a webhook arrived, an edit applied, an LLM caption finished — emit a signal the agent can assert on. This is the single highest-value instrumentation.
 
 ```ts
-import { reticle } from '@reticlehq/core';
+import { reticle } from '@reticlehq/react';
 onSaved(() => reticle.signal('order:saved', { id, total }));
 // agent: reticle_assert({ predicate: { kind: 'signal', name: 'order:saved', dataMatches: { id: '*' } } })
 ```
@@ -353,7 +354,7 @@ onSaved(() => reticle.signal('order:saved', { id, total }));
 **3. `registerStore` so the agent reads state directly.** No need to broadcast a signal for every fact — expose the store and the agent reads it via `reticle_state`.
 
 ```ts
-import { registerStore } from '@reticlehq/core';
+import { registerStore } from '@reticlehq/react';
 registerStore('cart', () => useCart.getState());
 // agent: reticle_state({ store: 'cart' })  → { stores: { cart: {...} } }
 ```
@@ -361,7 +362,7 @@ registerStore('cart', () => useCart.getState());
 **4. `registerCapabilities` so a fresh agent learns the surface without reading source.**
 
 ```ts
-import { registerCapabilities } from '@reticlehq/core';
+import { registerCapabilities } from '@reticlehq/react';
 registerCapabilities({
   testids: ['refresh', 'cart-open', 'checkout'],
   signals: ['order:saved', 'cart:updated'],
@@ -391,12 +392,12 @@ Once the loop works, these turn ad-hoc runs into a maintained suite:
 
 ## Common setups at a glance
 
-Everything below comes from the single `@reticlehq/core` install.
+Everything below comes from the `@reticlehq/react` kit plus your framework's build plugin.
 
 | Stack | SDK connect | Source mapping |
 | --- | --- | --- |
 | Vite + React (any) | `reticle()` plugin (auto) — or `connect()` | `reticle()` plugin handles it (incl. React 19) |
-| Next.js (app router) | `ReticleDev` client component in layout (dev) | `@reticlehq/core/next` (`withReticle`) → component + file:line |
+| Next.js (app router) | `ReticleDev` client component in layout (dev) | `@reticlehq/next` (`withReticle`) → component + file:line |
 | Vue / Svelte / vanilla | `reticle.connect()` at boot (dev) | core works; framework adapters on the roadmap |
 
 ---

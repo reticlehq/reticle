@@ -20,10 +20,10 @@ One call replays the app's key journeys and asserts **program truth** — networ
 ### A. A team, agent on your own app (~10 min)
 
 ```bash
-npm i -D @reticlehq/core
+npx @reticlehq/server init   # auto-detects your framework, installs the kit + build plugin
 ```
 
-Paste to your agent (Claude Code / Cursor / any MCP agent): `Follow https://raw.githubusercontent.com/reticlehq/reticle/main/SKILL.md` It runs the wizard once (Vite/Next plugin + SDK init + MCP config), then verifies on every change. (Or `npx reticle init`.) Run your dev server, then ask the agent to _"verify it with Reticle."_
+Paste to your agent (Claude Code / Cursor / any MCP agent): `Follow https://raw.githubusercontent.com/reticlehq/reticle/main/SKILL.md` It runs the wizard once (Vite/Next plugin + SDK init + MCP config), then verifies on every change. Run your dev server, then ask the agent to _"verify it with Reticle."_
 
 ### B. A platform / CI, driven from your pipeline (no MCP, no human)
 
@@ -59,7 +59,7 @@ Reticle embeds a **dev/preview-only** SDK (`@reticlehq/browser`, Apache-2.0, tre
 
 | Layer | What you add | Unlocks | Effort |
 | --- | --- | --- | --- |
-| **1 — drive + DOM/network/console** | 1 build-plugin line + ~10-line dev-only `reticle.connect({…})` file (`npx reticle init` does it) | broken routes, network status/cardinality (double-submit), console errors, persistence-after-reload | **Easy** (~15 min) |
+| **1 — drive + DOM/network/console** | 1 build-plugin line + ~10-line dev-only `reticle.connect({…})` file (`npx @reticlehq/server init` does it) | broken routes, network status/cardinality (double-submit), console errors, persistence-after-reload | **Easy** (~15 min) |
 | **2 — program-state truth** | `registerStore('app', () => store.getState())` (1/store) + `reticle.signal('order:saved', …)` (1/consequence) + `data-testid`s | UI-vs-store desync, dead handlers, blast-radius, source mapping | **Easy–Medium** (an afternoon, once) |
 | **3 — governance (optional)** | `registerCapabilities(...)` (signals/stores/risk zones) + recorded flows with success oracles | risk policy + sharper verdicts | **Medium**, optional |
 

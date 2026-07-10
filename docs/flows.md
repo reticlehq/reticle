@@ -23,7 +23,7 @@ The server resolves `.reticle/` from the working directory it runs in (your proj
 In your app, declare what's testable (see [Step 6 in Getting Started](getting-started.md)):
 
 ```ts
-import { registerCapabilities } from '@reticlehq/core';
+import { registerCapabilities } from '@reticlehq/react';
 registerCapabilities({
   testids: ['add-task', 'checkout'],
   signals: ['order:saved'],

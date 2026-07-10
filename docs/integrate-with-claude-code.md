@@ -21,20 +21,20 @@ Read these docs first and follow them exactly:
 Then do all of this:
 
 1. MCP: register the "reticle" server ONCE, globally (user scope) — not per project:
-   claude mcp add reticle -s user -- npx @reticlehq/core mcp
-   (`npx @reticlehq/core init` runs this for you. Use a project-scoped `.mcp.json` only if a repo
+   claude mcp add reticle -s user -- npx @reticlehq/server mcp
+   (`npx @reticlehq/server init` runs this for you. Use a project-scoped `.mcp.json` only if a repo
    needs its own pinned config.)
 
 2. Install the dev deps from the local registry (skip the registry lines if using public npm):
    echo '@reticle:registry=http://localhost:4873/' >> .npmrc
-   npm i -D @reticlehq/core        # one package: SDK + React adapter + plugins + test runner + server
+   npm i -D @reticlehq/react @reticlehq/vite-plugin   # SDK kit + Vite plugin; Next: @reticlehq/react @reticlehq/next
 
 3. Embed the SDK in DEV ONLY (see getting-started Step 2 for your framework):
    - call reticle.connect({ session: '<app-name>', present: true }) once on startup in dev
    - (present:true shows a glow border + cursor + HUD so a human can watch — optional)
 
 4. React source mapping (so failures point at file:line) — getting-started Step 3:
-   - install the React adapter: import { install } from '@reticlehq/core'; install()
+   - install the React adapter: import { install } from '@reticlehq/react'; install()
    - Vite: add @reticlehq/babel-plugin to vite.config; Next: wrap next.config with withReticle from @reticlehq/next
 
 5. Make the app AGENT-LEGIBLE (this is what makes Reticle fast — see getting-started Step 6 and
@@ -108,7 +108,7 @@ asserting on volatile output. Report evidence, not prose.
 Reticle is pre-1.0, so new tools land as minor bumps. Pull the latest explicitly:
 
 ```bash
-npm i -D @reticlehq/core@latest
+npm i -D @reticlehq/react@latest @reticlehq/vite-plugin@latest   # + @reticlehq/next if you're on Next.js
 ```
 
 (`npm update` alone won't cross a `0.x` minor — use `@latest`.) The full tool list lives in [usage.md](usage.md); the loop and predicate DSL are documented there too.
