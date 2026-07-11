@@ -1,8 +1,57 @@
 # Changelog
 
-All notable changes to **`@reticlehq/core`** are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+All notable changes to the **`@reticlehq/*`** packages are documented here (each entry notes the package it affects). The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+## [2.0.0] — 2026-07-11
+
+The single-install `@reticlehq/core` umbrella is retired in favour of **audience-scoped packages**. Each package now depends only on what it needs — `@reticlehq/core` sits at the bottom of the graph as the wire contract (constants + zod schemas, `zod` its only dependency), so the dev-only browser SDK never reaches your server and the Node bridge never reaches your bundle. The split is the one breaking change; the migration is a rename with no behaviour change. This release also folds in the security-hardening work from 1.3.x and adds collision-safe multi-app flow storage.
+
+### Breaking Changes
+
+- **The `@reticlehq/core` umbrella is split into scoped packages.** In v1 you installed one package and imported everything from it via `/server`, `/vite`, `/next`, … subpaths. In v2 you install the package for your role:
+
+  | v1 (umbrella subpath) | v2 (install this) |
+  | --- | --- |
+  | `@reticlehq/core` (the dev SDK + React adapter) | `@reticlehq/react` |
+  | `@reticlehq/core/vite` | `@reticlehq/vite-plugin` |
+  | `@reticlehq/core/next` | `@reticlehq/next` |
+  | `@reticlehq/core/babel` | `@reticlehq/babel-plugin` |
+  | `@reticlehq/core/test` | `@reticlehq/test` |
+  | `@reticlehq/core/eslint` | `@reticlehq/eslint-plugin` |
+  | `@reticlehq/core/server` (and the `reticle` CLI) | `@reticlehq/server` |
+
+  `@reticlehq/core` still exists but is now **only the wire contract** shared across browser ↔ bridge ↔ agent. `@reticlehq/protocol` is a thin deprecated alias re-exporting `@reticlehq/core` (pulled in automatically; import from `@reticlehq/core` in new code — the alias is removed in v3).
+
+  **Migrate:**
+
+  1. Replace the single install with the packages for your app: `npm i -D @reticlehq/react @reticlehq/vite-plugin` (or `@reticlehq/next` for Next.js). Your agent runs `@reticlehq/server`.
+  2. Update imports: `@reticlehq/core` → `@reticlehq/react` for the SDK; `@reticlehq/core/vite` → `@reticlehq/vite-plugin`; `@reticlehq/core/next` → `@reticlehq/next`; `@reticlehq/core/test` → `@reticlehq/test`.
+  3. Update your MCP client config: the `reticle` CLI now ships in `@reticlehq/server`, so the command becomes `npx @reticlehq/server mcp`. Recorded flows, baselines, `.reticle.json`, tool names, and env vars are unchanged.
+
+### Added
+
+- **Per-project flow storage — collision-safe on a shared daemon.** Saved flows live under `.reticle/flows/<projectId>/`, so one daemon can serve many apps at once without their flows colliding or bleeding across projects: a flow recorded against app A can no longer be listed, loaded, or replayed against app B. The HUD's replay list, `reticle_flow_list/load/replay/heal`, and cloud sync are all project-scoped. Legacy flat (untagged) flows keep loading as global until re-recorded. (#22) (`@reticlehq/server`, `@reticlehq/core`)
+- **Cloud flow sync.** When logged in to Reticle Cloud (`RETICLE_CLOUD_URL` + `RETICLE_CLOUD_KEY`), a saved flow is mirrored to your team's regression suite — best-effort, so a sync failure never fails the local save. Off by default: nothing leaves the machine unless you opt in. (`@reticlehq/server`)
+- **Upgrade-hint contract** for value-triggered cloud prompts — surfaced only when a capability is actually blocked, never as a nag, and silenceable with `RETICLE_NO_UPSELL`. (`@reticlehq/core`)
+- **`reticle version`** (also `-v` / `--version`) prints the running build, so you can confirm which `npx`-resolved version is executing. (`@reticlehq/server`)
+
+### Fixed
+
+- **The SDK reconnects the bridge the instant a tab returns to the foreground.** Browsers throttle timers in a backgrounded tab, so after a bridge outage — a `reticle` restart, laptop sleep/wake, a network blip — the panel could sit on "ENDED" until a manual reload. It now self-heals on focus. (`@reticlehq/browser`)
+- **The HUD replay-flow list is bounded and page-scoped.** A long list can no longer hide the log and message input, and it shows only flows that can start on the current page instead of every flow the daemon has seen. (#22) (`@reticlehq/browser`)
+
+### Security
+
+- Block DNS-rebinding attacks against the MCP/HTTP control plane. (#12) (`@reticlehq/server`)
+- Redact typed secrets from recorded flow files. (#13) (`@reticlehq/browser`)
+- Redact credential-bearing query parameters in the network observer. (#14) (`@reticlehq/browser`)
+- Neutralize `cmd.exe` argument injection in the Windows browser launcher. (#15) (`@reticlehq/server`)
+- Treat a missing WebSocket `Origin` as untrusted unless a pairing token is set. (#16) (`@reticlehq/server`)
+- Bake the issuer public key and fail closed on the enterprise gate. (#17) (`@reticlehq/server`)
+- Add a production runtime backstop so the dev-only SDK refuses to activate in a production build. (#18) (`@reticlehq/browser`)
+- Auto-provision a pairing token so loopback origins must present a secret to connect. (#19) (`@reticlehq/server`)
 
 ## [1.3.1] — 2026-07-06
 
