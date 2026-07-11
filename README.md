@@ -29,6 +29,14 @@ It reads the _program_ (network, store state, signals, the React commit stream),
 
 </div>
 
+<div align="center">
+
+### **[⚡ Install](#install-in-30-seconds)**  ·  [All install options](#install-the-full-options)  ·  [Manual setup (docs)](docs/getting-started.md)
+
+[How it works](#how-it-works)  ·  [How to use it](#how-to-use-it)  ·  [Benchmarks](#honest-benchmarks)  ·  [vs Playwright & DevTools](#when-to-use-reticle-vs-playwright-and-devtools)  ·  [What's inside](#whats-inside)
+
+</div>
+
 ---
 
 ## The problem, the fix, the numbers
@@ -95,7 +103,7 @@ Then **restart Claude Code** (or run `/mcp` to refresh) so it picks up the serve
 
 `TypeScript` · `Model Context Protocol` · `React-first` · **dev-only · localhost-only · no telemetry · Apache-2.0 SDK**
 
-[How it works](#how-it-works) · [How to use it](#how-to-use-it) · [Watch the demo](https://reticle.sh) · [Full benchmarks](#honest-benchmarks) · [Reticle vs Playwright](#when-to-use-reticle-vs-playwright-and-devtools) · [Docs](docs/getting-started.md)
+[**Install**](#install-in-30-seconds) · [How it works](#how-it-works) · [How to use it](#how-to-use-it) · [Watch the demo](https://reticle.sh) · [Full benchmarks](#honest-benchmarks) · [Reticle vs Playwright](#when-to-use-reticle-vs-playwright-and-devtools) · [Docs](docs/getting-started.md)
 
 ---
 
