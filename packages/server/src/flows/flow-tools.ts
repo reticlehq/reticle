@@ -281,7 +281,10 @@ export const FLOW_TOOLS: ToolDef[] = [
         };
       }
       const override = asString(args['flowName']);
-      const flow = override !== undefined ? { ...recorded.flow, name: override } : recorded.flow;
+      const named = override !== undefined ? { ...recorded.flow, name: override } : recorded.flow;
+      // Stamp the recording's project so the HUD scopes it to this app (a shared daemon serves many).
+      const flow =
+        session.projectId === undefined ? named : { ...named, projectId: session.projectId };
       const res = await deps.flows.saveFlow(flow);
       if (!res.ok) return { error: flowErrorMessage(res.code), code: res.code };
       // If logged into Reticle Cloud, mirror the saved flow to the team's regression suite. Best-effort

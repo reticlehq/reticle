@@ -70,6 +70,20 @@ describe('FlowFileSchema', () => {
     // back-compat: the same flow without intent still parses
     expect(FlowFileSchema.safeParse(base).success).toBe(true);
   });
+
+  it('accepts an optional projectId (the recording project) and stays parseable without it', () => {
+    const base = {
+      version: FLOW_FILE_VERSION,
+      name: 'add-task',
+      createdAt: 1234,
+      steps: [{ tool: 'reticle_act', anchor: { kind: AnchorKind.TESTID, value: 'task-input' } }],
+    };
+    const scoped = FlowFileSchema.safeParse({ ...base, projectId: 'demo-app-abc123' });
+    expect(scoped.success).toBe(true);
+    if (scoped.success) expect(scoped.data.projectId).toBe('demo-app-abc123');
+    // back-compat: a flow with no projectId (legacy/global) still parses
+    expect(FlowFileSchema.safeParse(base).success).toBe(true);
+  });
 });
 
 describe('RecordedFlowSchema (in-page recording payload)', () => {

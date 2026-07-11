@@ -260,6 +260,13 @@ export const FlowFileSchema = z.object({
    * cannot actually check — flow-classify flags that gap.
    */
   intent: z.string().optional(),
+  /**
+   * The project the flow was recorded against (the connecting session's HELLO `projectId`), stamped at
+   * save time. Scopes a flow to its app so a shared daemon's HUD lists only the current project's flows
+   * instead of every project that ever saved to that daemon. Optional + back-compat: a flow with no
+   * projectId is treated as global (visible everywhere), so pre-existing files parse and still show.
+   */
+  projectId: z.string().optional(),
   // FUTURE: fixtures/preconditions — schema slot reserved, unpopulated this cut. The recorder
   // never writes it and no fixture runner exists.
   fixture: z.string().optional(),
