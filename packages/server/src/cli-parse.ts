@@ -25,6 +25,7 @@ const DRIVE_COMMAND = 'drive';
 const VERIFY_COMMAND = 'verify';
 const MCP_COMMAND = 'mcp';
 const LICENSE_COMMAND = 'license';
+const VERSION_COMMAND = 'version';
 export const DAEMON_INNER_COMMAND = '_daemon';
 
 export const HEADED_FLAG = '--headed';
@@ -55,6 +56,7 @@ export type CliResult =
   | { kind: 'stop'; port: number; quiet: boolean }
   | { kind: 'status'; port: number }
   | { kind: 'license' }
+  | { kind: 'version' }
   | { kind: 'open'; port: number; url?: string }
   | {
       kind: '_daemon';
@@ -255,6 +257,10 @@ export function parseCliArgs(argv: string[], defaultPort: number): CliResult {
   if (argv.length === 0) return { kind: 'serve', port: defaultPort, headless: true, http: false };
 
   const [cmd, ...rest] = argv;
+
+  // `version` (or the conventional -v/--version flags) prints the running version — the diagnostic the
+  // troubleshooting docs lean on to confirm which npx-resolved build is actually executing.
+  if (cmd === VERSION_COMMAND || cmd === '--version' || cmd === '-v') return { kind: 'version' };
 
   switch (cmd) {
     case INIT_COMMAND: {
