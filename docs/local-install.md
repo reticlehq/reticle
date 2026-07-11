@@ -1,6 +1,8 @@
-# Use Reticle in your own app — without publishing to npm
+# Test unpublished Reticle changes in a real app (local registry)
 
-Reticle isn't on public npm yet, and its packages depend on each other (`@reticlehq/browser` → `@reticlehq/protocol`, etc.), so plain `npm pack` tarballs don't resolve cleanly. The reliable way to test it in your **real external app today** is a tiny **local registry** (Verdaccio). This is also exactly the path we use to validate publishing.
+> **For normal use, Reticle is on public npm** — just `npm i -D @reticlehq/react @reticlehq/vite-plugin` (see [Getting Started](getting-started.md)). You only need this guide to test **local, unpublished changes** to the Reticle packages in a real external app before they ship.
+
+Because the `@reticlehq/*` packages depend on each other via the workspace protocol, plain `npm pack` tarballs don't resolve cleanly. The reliable way to exercise your in-progress changes in a real app is a tiny **local registry** (Verdaccio) — the same path CI uses to validate a publish.
 
 ## 1. Publish @reticlehq/\* to a local registry
 
@@ -10,7 +12,7 @@ From the Reticle repo:
 bash scripts/local-registry.sh
 ```
 
-This starts a **fresh** Verdaccio on `http://localhost:4873`, creates a user/token, and publishes all `@reticlehq/*` packages there at the current version (**1.2.0**):
+This starts a **fresh** Verdaccio on `http://localhost:4873`, creates a user/token, and publishes all `@reticlehq/*` packages there at the current workspace version:
 
 | Package | What you install it for |
 | --- | --- |
@@ -21,9 +23,9 @@ This starts a **fresh** Verdaccio on `http://localhost:4873`, creates a user/tok
 | `@reticlehq/babel-plugin` | React 19 source stamping (Babel) |
 | `@reticlehq/test` | write declarative, signal-bound specs (`reticleTest`) |
 | `@reticlehq/eslint-plugin` | the `require-signal-on-mutation` lint rule |
-| `@reticlehq/protocol` | shared wire contract (pulled in automatically) |
+| `@reticlehq/core` | shared wire contract (pulled in automatically) |
 
-For a browser app, install `@reticlehq/react` plus the build plugin for your framework (`@reticlehq/vite-plugin` or `@reticlehq/next`); `@reticlehq/server` is what your agent runs. (Verified: an external `npm i @reticlehq/react` resolves its graph, including `@reticlehq/protocol`, and imports correctly.) Leave the registry running.
+For a browser app, install `@reticlehq/react` plus the build plugin for your framework (`@reticlehq/vite-plugin` or `@reticlehq/next`); `@reticlehq/server` is what your agent runs. (Verified: an external `npm i @reticlehq/react` resolves its graph, including `@reticlehq/core`, and imports correctly.) Leave the registry running.
 
 > Note: pre-2.0 docs used a single `@reticlehq/core` umbrella package that re-exported everything; it's been split into the audience-scoped packages above.
 

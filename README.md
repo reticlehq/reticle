@@ -399,7 +399,7 @@ A pnpm + turbo monorepo. Each audience installs the package it needs (browser ap
 | `@reticlehq/vite-plugin` / `@reticlehq/next` / `@reticlehq/babel-plugin` | dev-only source mapping + connect injection (Vite / Next.js / React 19) |
 | `@reticlehq/server` | the bridge + MCP server + the `reticle` CLI |
 | `@reticlehq/test` | declarative, signal-bound specs for CI |
-| `@reticlehq/protocol` | deprecated alias for `@reticlehq/core` (removed in v3) |
+| `@reticlehq/eslint-plugin` | dev-only lint rule: a state change must fire a signal |
 
 ## Status & safety
 

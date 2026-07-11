@@ -26,15 +26,15 @@ Reticle is a pnpm + Turborepo monorepo. The split is not cosmetic — each bound
 
 | Package | Runs in | Responsibility | Hard rule |
 | --- | --- | --- | --- |
-| `@reticlehq/protocol` | both | The **wire contract**: every constant + zod schema crossing any boundary | Depends on nothing |
+| `@reticlehq/core` | both | The **wire contract**: every constant + zod schema crossing any boundary | Depends only on `zod` |
 | `@reticlehq/browser` | the browser | Instrument the page; execute commands; emit events | Never imports Node APIs |
 | `@reticlehq/server` | Node | The bridge, the MCP server, the `reticle` CLI, flow/run storage | Never imports DOM APIs |
 | `@reticlehq/react` | the browser | The SDK **kit** you install in a browser app: re-exports the browser sensor (so one install gives both `reticle` and `install`) and maps a DOM node → React component → source `file:line` | Core works without the source-mapping half |
 | `@reticlehq/babel-plugin`, `@reticlehq/next`, `@reticlehq/vite-plugin` | build time | Stamp `data-reticle-source` for source mapping (and, for Vite, inject `connect()`) | Plain tooling |
 
-> Note: pre-2.0 there was a single `@reticlehq/core` umbrella package that re-exported all of the above under subpaths; it's been retired in favor of the audience-scoped packages here.
+> Note: pre-2.0, `@reticlehq/core` was a single umbrella package that re-exported all of the above under subpaths (and the wire contract lived in `@reticlehq/protocol`). In 2.0 the umbrella was retired: `@reticlehq/core` became the bottom-of-graph wire contract, and the old `@reticlehq/protocol` alias has been removed.
 
-**Why protocol-as-contract matters:** because the browser and the server are two different runtimes (a DOM and a Node process) that must agree exactly on every message, the temptation is to inline a string like `"net.request"` in both. That's how drift and silent breakage start. Instead, every such string and shape lives once in `@reticlehq/protocol` as a named constant + a zod schema. The browser and server both import it; neither can invent a message the other doesn't understand. The server zod-parses **every** inbound WebSocket message — malformed input closes the socket rather than flowing into logic.
+**Why core-as-contract matters:** because the browser and the server are two different runtimes (a DOM and a Node process) that must agree exactly on every message, the temptation is to inline a string like `"net.request"` in both. That's how drift and silent breakage start. Instead, every such string and shape lives once in `@reticlehq/core` as a named constant + a zod schema. The browser and server both import it; neither can invent a message the other doesn't understand. The server zod-parses **every** inbound WebSocket message — malformed input closes the socket rather than flowing into logic.
 
 ---
 

@@ -29,7 +29,7 @@ The `@reticlehq/react` kit re-exports the browser sensor, so a single install gi
 
 ## `@reticlehq/protocol` → `@reticlehq/core`
 
-The wire contract that used to live in `@reticlehq/protocol` now lives in `@reticlehq/core`. `@reticlehq/protocol` remains as a **thin deprecated alias** that re-exports `@reticlehq/core` for one major version, and will be **removed in v3**.
+The wire contract that used to live in `@reticlehq/protocol` now lives in `@reticlehq/core`. **`@reticlehq/protocol` is no longer published** — there is no alias fallback, so update the import directly:
 
 ```diff
 - import { EventType, wireMessageSchema } from '@reticlehq/protocol';
