@@ -64,8 +64,23 @@ export function visualDiffPath(root: string, name: string): string {
   return join(root, ReticleDir.VISUAL_SUBDIR, `${name}.diff.png`);
 }
 
-export function flowPath(root: string, name: string): string {
-  return join(root, ReticleDir.FLOWS_SUBDIR, `${name}.json`);
+/**
+ * Path to a flow file. With a `projectId`, the flow lives in a per-project subdir
+ * (`.reticle/flows/<projectId>/<name>.json`) so a shared daemon serving many apps can't collide two
+ * apps' flows of the same name; without one it's the flat legacy path (`.reticle/flows/<name>.json`),
+ * which is also where pre-existing (untagged) flows stay. Callers pass ONLY a validated projectId.
+ */
+export function flowPath(root: string, name: string, projectId?: string): string {
+  const flowsDir = join(root, ReticleDir.FLOWS_SUBDIR);
+  return projectId === undefined
+    ? join(flowsDir, `${name}.json`)
+    : join(flowsDir, projectId, `${name}.json`);
+}
+
+/** The directory a flow write targets: the per-project subdir, or the flat flows root for global. */
+export function flowDir(root: string, projectId?: string): string {
+  const flowsDir = join(root, ReticleDir.FLOWS_SUBDIR);
+  return projectId === undefined ? flowsDir : join(flowsDir, projectId);
 }
 
 /**

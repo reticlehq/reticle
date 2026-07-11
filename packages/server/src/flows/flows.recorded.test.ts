@@ -146,7 +146,7 @@ describe('reticle_flow_save_recorded handler', () => {
     const ev = recordedEvent('scoped', flowFile('scoped', [clickStep('a')]));
     const deps = fakeDeps(store, [ev], 'demo-app-abc123');
     await recordedTool().handler(deps, {});
-    const loaded = await store.load('scoped');
+    const loaded = await store.load('scoped', 'demo-app-abc123');
     expect(loaded.ok && loaded.value.projectId).toBe('demo-app-abc123');
   });
 

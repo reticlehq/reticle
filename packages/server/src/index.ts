@@ -469,9 +469,9 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
   // so the HUD shows a flow only on the page it can begin from — the panel re-scopes per route.
   bridge.attachSessionReady((session) => {
     flows
-      .list()
+      .list(session.projectId)
       .then(async (names) => {
-        const loaded = await Promise.all(names.map((name) => flows.load(name)));
+        const loaded = await Promise.all(names.map((name) => flows.load(name, session.projectId)));
         const files = loaded.flatMap((r) => (r.ok ? [r.value] : []));
         await session.command(ReticleCommand.FLOWS, {
           flows: buildFlowChips(files, session.projectId),
