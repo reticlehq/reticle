@@ -342,7 +342,22 @@ Fill in `framework` from Q1. **Leave `port` out** — it defaults to `4400` and 
 
 Tell the user: **"Run `npm run dev` (your normal dev server) and open the app in your browser."**
 
-Once they confirm the app is open, call `reticle_run({ tool: "reticle_wait_ready" })` (or poll `reticle_sessions()`), then `reticle_sessions()`. You should see a session whose URL matches the app's localhost address. If no session appears after a few seconds, the SDK is not yet wired — confirm Step 3 was applied and the page has been refreshed.
+Once they confirm the app is open, call `reticle_run({ tool: "reticle_wait_ready" })` (or poll `reticle_sessions()`), then `reticle_sessions()`. You should see a session whose URL matches the app's localhost address.
+
+### No session appeared? Work this checklist in order
+
+Most no-connect cases are one of these. Fastest signal first:
+
+1. **Read the browser console.** The SDK announces its own failures. If you see
+   `[Reticle] could not reach the bridge at ws://localhost:<port> … Is the Reticle daemon running on that port?`
+   — that's a **port mismatch or a dead daemon** (items 2–3), and the message tells you which port the app is dialing. No `[Reticle]` line at all → the SDK never loaded (item 4).
+2. **Port match (the #1 manual-setup bug).** The app's bridge port MUST equal the daemon's. Check both:
+   - App side: `reticle({ port: N })` in `vite.config.ts` (or `connect({ url: 'ws://localhost:N/reticle' })`) — omitted ⇒ `4400`.
+   - Daemon side: `.reticle.json` `"port"` / `RETICLE_PORT` — omitted ⇒ `4400`.
+   They must be the **same number**, and it must **not** be your dev-server port. Simplest fix: remove the port from both and let them default to `4400`.
+3. **Is the daemon up on that port?** `npx @reticlehq/server status` lists running daemons + connected sessions. Nothing there ⇒ the agent hasn't launched it yet (restart the agent / `/mcp`), or it's on a different port than the app (item 2).
+4. **Is the SDK actually wired + loaded in dev?** `reticle()` present in `vite.config.ts`; for the manual entry, `if (import.meta.env.DEV) import('./reticle-dev')` in `src/main.tsx`. After editing `vite.config.ts` you **must restart `vite`** (config changes need a fresh dev server), then **hard-reload the browser tab**. A production build won't connect — the SDK is dev-only by design.
+5. **Still nothing?** See the full [Troubleshooting](#troubleshooting) section (stale `npx` cache, Stop-hook killing the daemon, `-32000`).
 
 When a session is confirmed, tell the user:
 
