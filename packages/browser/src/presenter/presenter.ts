@@ -168,6 +168,11 @@ export class Presenter {
   /** Apply a bridge→browser presenter push: PRESENTER (state echo) or FLOWS (replay list, the human's
    *  no-agent replay surface). Owns the wire parsing so the SDK dispatcher stays a thin router;
    *  setState-only so an echo can't re-emit. */
+  /** Re-scope the replay-flow chips to the current page (called by the SDK on route change). */
+  refilterFlows(): void {
+    this.#panel.refilterFlows();
+  }
+
   handlePush(command: { name: string; args: Record<string, unknown> }): void {
     const a = command.args;
     if (command.name === ReticleCommand.FLOWS) return void this.#panel.setFlows(a['flows']);

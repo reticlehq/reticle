@@ -3,6 +3,7 @@ import type { Server } from 'node:http';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import {
   AGENT_STOPPED_NOTICE,
+  AnchorKind,
   RETICLE_DEFAULT_PORT,
   ReticleCommand,
   ReticleDir,
@@ -462,13 +463,26 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
         session.pushNarration(`✗ Replay "${flowName}" failed — ${message}`);
       });
   });
-  // On connect, hand the panel the replayable-flow names so it can render the ▶ list.
+  // On connect, hand the panel the replayable flows so it can render the ▶ list. Each carries a `start`
+  // hint (the first step's testid anchor) so the HUD shows a flow only on the page it can begin from —
+  // the panel re-scopes per route. Derived from the first step, so existing flows benefit unchanged.
   bridge.attachSessionReady((session) => {
     flows
       .list()
-      .then((names) =>
-        session.command(ReticleCommand.FLOWS, { flows: names.map((name) => ({ name })) }),
-      )
+      .then(async (names) => {
+        const payload = await Promise.all(
+          names.map(async (name) => {
+            const loaded = await flows.load(name);
+            const first = loaded.ok ? loaded.value.steps[0] : undefined;
+            const start =
+              first !== undefined && first.anchor.kind === AnchorKind.TESTID
+                ? first.anchor.value
+                : undefined;
+            return start === undefined ? { name } : { name, start };
+          }),
+        );
+        await session.command(ReticleCommand.FLOWS, { flows: payload });
+      })
       .catch(() => undefined);
   });
 

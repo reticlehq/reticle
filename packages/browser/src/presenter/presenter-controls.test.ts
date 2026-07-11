@@ -259,6 +259,34 @@ describe('presenter-controls / live-control panel', () => {
     expect(rule).toContain('overflow-y:auto');
   });
 
+  it('14h shows only flows whose start testid is present on the page; re-scopes on route change', () => {
+    const { presenter } = mount();
+    const host = document.createElement('div');
+    host.innerHTML = '<button data-testid="task-input"></button>'; // this page has only task-input
+    document.body.appendChild(host);
+
+    presenter.handlePush({
+      name: 'flows',
+      args: {
+        flows: [
+          { name: 'add-task', start: 'task-input' }, // starts here → shown
+          { name: 'checkout', start: 'pay-button' }, // starts elsewhere → hidden
+          { name: 'global-search' }, // no start hint → always shown
+        ],
+      },
+    });
+    const shown = (): string[] =>
+      Array.from(document.querySelectorAll('[data-reticle-replay]'))
+        .map((b) => b.getAttribute('data-reticle-replay') ?? '')
+        .sort();
+    expect(shown()).toEqual(['add-task', 'global-search']);
+
+    // navigate to checkout: pay-button appears, task-input goes away → list re-scopes
+    host.innerHTML = '<button data-testid="pay-button"></button>';
+    presenter.refilterFlows();
+    expect(shown()).toEqual(['checkout', 'global-search']);
+  });
+
   it('15 setState is idempotent', () => {
     const { presenter } = mount();
     presenter.setState(SessionState.PAUSED);
