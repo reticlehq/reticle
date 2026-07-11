@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { HumanControlKind, PresenterTone, SessionState } from '@reticlehq/core';
 import { Presenter, type ControlIntent } from './presenter.js';
+import { CONTROLS_CSS } from './presenter-controls.js';
 import { buildSnapshot } from '../dom/snapshot.js';
 import { isIgnored } from '../dom/dom-ignore.js';
 
@@ -246,6 +247,44 @@ describe('presenter-controls / live-control panel', () => {
     pushFlows(presenter, []); // a re-push replaces, never appends
     expect(document.querySelectorAll('[data-reticle-replay]').length).toBe(0);
     expect(q('[data-reticle-flows]')?.getAttribute('data-has')).toBe('0');
+  });
+
+  it('14g the flows row is height-capped + self-scrolling so a long list never hides the log/input', () => {
+    // Regression: without flex:none + max-height + overflow-y, a long replay list grows and pushes the
+    // composer (message input) past the panel's overflow:hidden clip, and squeezes the log to nothing.
+    const start = CONTROLS_CSS.indexOf('.reticle-flows{');
+    const rule = CONTROLS_CSS.slice(start, CONTROLS_CSS.indexOf('}', start));
+    expect(rule).toContain('flex:none');
+    expect(rule).toContain('max-height:');
+    expect(rule).toContain('overflow-y:auto');
+  });
+
+  it('14h shows only flows whose start testid is present on the page; re-scopes on route change', () => {
+    const { presenter } = mount();
+    const host = document.createElement('div');
+    host.innerHTML = '<button data-testid="task-input"></button>'; // this page has only task-input
+    document.body.appendChild(host);
+
+    presenter.handlePush({
+      name: 'flows',
+      args: {
+        flows: [
+          { name: 'add-task', start: 'task-input' }, // starts here → shown
+          { name: 'checkout', start: 'pay-button' }, // starts elsewhere → hidden
+          { name: 'global-search' }, // no start hint → always shown
+        ],
+      },
+    });
+    const shown = (): string[] =>
+      Array.from(document.querySelectorAll('[data-reticle-replay]'))
+        .map((b) => b.getAttribute('data-reticle-replay') ?? '')
+        .sort();
+    expect(shown()).toEqual(['add-task', 'global-search']);
+
+    // navigate to checkout: pay-button appears, task-input goes away → list re-scopes
+    host.innerHTML = '<button data-testid="pay-button"></button>';
+    presenter.refilterFlows();
+    expect(shown()).toEqual(['checkout', 'global-search']);
   });
 
   it('15 setState is idempotent', () => {

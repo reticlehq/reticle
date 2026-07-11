@@ -33,6 +33,15 @@ const RUN_FILENAME = 'reticle-run.json';
 /** Border fade-out delay after a session ends (native timer; presenter-only tunable). */
 export const ENDED_FADE_MS = 4000;
 
+/**
+ * One replayable flow as pushed to the panel. `start` is the first step's testid anchor — a page hint
+ * used to show a flow only where it can actually begin. Absent when the first step isn't testid-anchored.
+ */
+export interface FlowChip {
+  name: string;
+  start?: string;
+}
+
 /** Payload the panel hands to its host when the human drives a control. */
 export interface ControlIntent {
   kind: HumanControlKind;
@@ -100,9 +109,16 @@ export const CONTROLS_CSS = `
   box-shadow:inset 0 0 0 2px rgba(251,146,60,.7);}
 @keyframes reticle-warn-pulse{0%,100%{box-shadow:inset 0 0 0 2px rgba(251,146,60,.32);}
   50%{box-shadow:inset 0 0 0 3px rgba(251,146,60,.85),inset 0 0 26px 5px rgba(251,146,60,.34);}}
-/* Replay-a-flow row: the human re-runs a saved flow with no agent. Hidden until flows are pushed. */
-[data-reticle-hud] .reticle-flows{display:none;flex-wrap:wrap;gap:6px;padding:9px 12px;border-top:1px solid var(--reticle-line2);}
+/* Replay-a-flow row: the human re-runs a saved flow with no agent. Hidden until flows are pushed.
+   Bounded + self-scrolling: it sits between the flex:1 log and the flex:none composer, so without a
+   height cap a long flow list would squeeze the log to nothing and push the message input past the
+   panel's overflow:hidden clip. flex:none + max-height + overflow-y keep the log and input always
+   visible; extra flow chips scroll inside this section instead of growing the panel. */
+[data-reticle-hud] .reticle-flows{display:none;flex:none;flex-wrap:wrap;align-content:flex-start;gap:6px;
+  padding:9px 12px;border-top:1px solid var(--reticle-line2);max-height:88px;overflow-y:auto;overscroll-behavior:contain;}
 [data-reticle-hud] .reticle-flows[data-has="1"]{display:flex;}
+[data-reticle-hud] .reticle-flows::-webkit-scrollbar{width:9px;}
+[data-reticle-hud] .reticle-flows::-webkit-scrollbar-thumb{background:rgba(255,255,255,.14);border-radius:9px;border:2px solid transparent;background-clip:content-box;}
 [data-reticle-hud] .reticle-flows-cap{flex:0 0 100%;margin-bottom:1px;color:var(--reticle-faint);font-size:9.5px;letter-spacing:.09em;text-transform:uppercase;}
 [data-reticle-hud] .reticle-flow{pointer-events:auto;cursor:pointer;display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 10px;
   border-radius:7px;border:1px solid var(--reticle-line);background:rgba(255,255,255,.04);color:var(--reticle-muted);
@@ -187,6 +203,8 @@ export class ControlPanel {
   #fadeTimer: number | undefined;
   #root: HTMLElement | undefined;
   #glow: HTMLElement | undefined;
+  /** The full replayable-flow list from the last push; re-filtered per page on route change. */
+  #flowItems: FlowChip[] = [];
   readonly #host: ControlPanelHost;
 
   constructor(host: ControlPanelHost) {
@@ -298,24 +316,52 @@ export class ControlPanel {
   /** Render the replayable-flow chips from the server push. Each ▶ click re-runs that flow, no agent.
    *  Takes the raw wire value and narrows it here (the panel is the consumer of this push). */
   setFlows(flows: unknown): void {
+    const list: unknown[] = Array.isArray(flows) ? (flows as unknown[]) : [];
+    this.#flowItems = list
+      .map((f): FlowChip | null => {
+        if (typeof f === 'string') return f.length > 0 ? { name: f } : null;
+        if (typeof f === 'object' && f !== null) {
+          const rec = f as Record<string, unknown>;
+          const name = rec['name'];
+          if (typeof name !== 'string' || name.length === 0) return null;
+          const start = rec['start'];
+          return typeof start === 'string' && start.length > 0 ? { name, start } : { name };
+        }
+        return null;
+      })
+      .filter((c): c is FlowChip => c !== null);
+    this.#renderFlows();
+  }
+
+  /**
+   * Re-render the replay chips for the CURRENT page. A flow "starts here" iff its first step's anchor
+   * (a testid `start` hint) is present in the live DOM; flows with no start hint (signal/role-first,
+   * un-checkable) always show. Called on connect and on every route change so the list tracks the page —
+   * so you never see (or click) a flow that can't replay from where you are. Existing flows benefit
+   * without re-recording, since the hint is derived from the first step, not stored on the flow.
+   */
+  refilterFlows(): void {
+    this.#renderFlows();
+  }
+
+  #renderFlows(): void {
     const el = this.#refs.flows;
     if (el === undefined) return;
-    const list: unknown[] = Array.isArray(flows) ? (flows as unknown[]) : [];
-    const names = list
-      .map((f) =>
-        typeof f === 'object' && f !== null ? (f as Record<string, unknown>)['name'] : f,
-      )
-      .filter((n): n is string => typeof n === 'string' && n.length > 0);
+    const doc = el.ownerDocument;
+    const testids = new Set(
+      Array.from(doc.querySelectorAll('[data-testid]')).map((n) => n.getAttribute('data-testid')),
+    );
+    const visible = this.#flowItems.filter((f) => f.start === undefined || testids.has(f.start));
     el.querySelectorAll('[data-reticle-replay]').forEach((b) => b.remove()); // rebuild, keep the caption
-    for (const name of names) {
-      const btn = el.ownerDocument.createElement('button');
+    for (const flow of visible) {
+      const btn = doc.createElement('button');
       btn.type = 'button';
       btn.className = 'reticle-flow';
-      btn.setAttribute('data-reticle-replay', name); // setAttribute → no markup injection from a flow name
-      btn.textContent = `▶ ${name}`;
+      btn.setAttribute('data-reticle-replay', flow.name); // setAttribute → no markup injection from a name
+      btn.textContent = `▶ ${flow.name}`;
       el.appendChild(btn);
     }
-    el.setAttribute('data-has', names.length > 0 ? '1' : '0');
+    el.setAttribute('data-has', visible.length > 0 ? '1' : '0');
   }
 
   /**

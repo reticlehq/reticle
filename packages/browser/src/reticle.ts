@@ -408,6 +408,8 @@ export class Reticle {
     this.#transport?.sendEvent(event);
     this.#eventCount += 1;
     this.#overlay?.update({ connected: true, events: this.#eventCount });
+    // On a route change, re-scope the HUD's replay-flow chips to the page we're now on.
+    if (type === EventType.ROUTE_CHANGE) this.#presenter?.refilterFlows();
   };
 
   #hello(): HelloMessage {
