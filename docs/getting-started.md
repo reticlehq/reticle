@@ -243,7 +243,14 @@ It's common to have several apps open in dev — a few Next.js and React project
 reticle.connect({ session: SESSION_AUTO, url: 'ws://localhost:4401/reticle' });
 ```
 
-Project A stays on the default `4400`, project B on `4401` — they never touch each other. (A port that is already in use now fails fast with a clear error instead of hanging, so a misconfiguration is obvious.)
+**On the Vite plugin?** You don't have a hand-written `connect()` to edit — the plugin injects it. Set the port on the plugin instead, and it bakes the matching URL in for you:
+
+```ts
+// project-b/vite.config.ts
+plugins: [react(), reticle({ port: 4401 })],
+```
+
+Either way, the rule is the same: **the app's bridge port must equal the daemon's `RETICLE_PORT`** — and it's the Reticle bridge port, never your dev-server port. Project A stays on the default `4400`, project B on `4401` — they never touch each other. (A port that is already in use now fails fast with a clear error instead of hanging, so a misconfiguration is obvious.)
 
 ---
 

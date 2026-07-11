@@ -237,7 +237,7 @@ export default defineConfig({
 Then describe your app's testable surface so the agent knows what to drive (fill in your real values):
 
 ```ts
-// src/reticle-dev.ts  (import in main.tsx inside import.meta.env.DEV check)
+// src/reticle-dev.ts — self-guards on import.meta.env.DEV, so it's a no-op in prod
 import { registerCapabilities } from '@reticlehq/react';
 if (import.meta.env.DEV) {
   registerCapabilities({
@@ -246,6 +246,13 @@ if (import.meta.env.DEV) {
     stores: [], // your registerStore() names
   });
 }
+```
+
+Then load it once from your entry file — add this line near the top of `src/main.tsx` (the dynamic `import()` keeps it out of the production bundle):
+
+```ts
+// src/main.tsx
+if (import.meta.env.DEV) import('./reticle-dev');
 ```
 
 To emit `reticle.signal()` from app code (components, stores), **never import `reticle` statically** — a top-level `import { reticle } from '@reticlehq/react'` drags the whole dev-only SDK into your production bundle. Funnel signals through a dev-guarded helper so `import.meta.env.DEV` dead-code-eliminates it in prod:
@@ -319,11 +326,19 @@ If setting up manually, write `.reticle.json` to the project root (commit this �
 ```jsonc
 {
   "framework": "vite-react",
-  "port": 5173,
 }
 ```
 
-Fill in framework from Q1, port from Q3. Omit `port` if using the default (4400). Each project should have its own port so multiple apps can run Reticle simultaneously without conflicts.
+Fill in `framework` from Q1. **Leave `port` out** — it defaults to `4400` and everything just works for a single app.
+
+> **`port` here is the Reticle _bridge_ port — NOT your dev server port.** The bridge is the daemon ↔ SDK channel (default `4400`); your dev server (Q3, e.g. 5173) is a separate thing Reticle never touches. Do **not** set `.reticle.json` `port` to your dev-server port — that collides the daemon with your app.
+>
+> Only set `port` when running **multiple apps at once**, so each gets its own bridge. When you do, set the **same** value in two places or the SDK and daemon never meet:
+> ```jsonc
+> // .reticle.json          →  reticle({ port: 4460 })  in vite.config.ts
+> { "framework": "vite-react", "port": 4460 }
+> ```
+> Pick any free port that is **not** your dev-server port (4460, 4461, …).
 
 Tell the user: **"Run `npm run dev` (your normal dev server) and open the app in your browser."**
 
