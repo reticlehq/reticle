@@ -11,8 +11,11 @@ import {
   type HealChange,
   type HealProposal,
 } from '@reticlehq/core';
+import type { FlowFile } from '@reticlehq/core';
 import { ReticleTool } from '../tools/tool-names.js';
 import { asString } from '../tools/tools-helpers.js';
+import { log } from '../log.js';
+import { resolveCloudConfig, syncFlowToCloud, SyncOutcome } from '../cloud/cloud-sync.js';
 import { replayFlow } from './flow-replay.js';
 import { buildSuiteVerdict } from './decision.js';
 import { classifyFlowAssertions } from './flow-classify.js';
@@ -26,6 +29,20 @@ import type { ToolDef, ToolDeps } from '../tools/tools.js';
 import { replayNamedFlow, flowErrorMessage, latestRecordedFlow } from './flow-replay-run.js';
 
 export { replayNamedFlow } from './flow-replay-run.js';
+
+/**
+ * Best-effort mirror of a just-saved flow to Reticle Cloud (only when logged in — both cloud env vars
+ * set). Fire-and-forget: resolves the config, POSTs via the platform fetch, and logs the outcome. Any
+ * failure is swallowed so a network hiccup never affects the local save.
+ */
+async function syncSavedFlowToCloud(flow: FlowFile, projectId: string | undefined): Promise<void> {
+  const config = resolveCloudConfig(process.env);
+  if (config === null) return; // not logged in → stays local
+  const result = await syncFlowToCloud(flow, config, projectId, (url, init) => fetch(url, init));
+  if (result.outcome !== SyncOutcome.SYNCED) {
+    log('cloud-flow-sync-failed', { flow: flow.name, status: result.status, error: result.error });
+  }
+}
 
 export const FLOW_TOOLS: ToolDef[] = [
   {
@@ -267,6 +284,9 @@ export const FLOW_TOOLS: ToolDef[] = [
       const flow = override !== undefined ? { ...recorded.flow, name: override } : recorded.flow;
       const res = await deps.flows.saveFlow(flow);
       if (!res.ok) return { error: flowErrorMessage(res.code), code: res.code };
+      // If logged into Reticle Cloud, mirror the saved flow to the team's regression suite. Best-effort
+      // and non-blocking: the flow is already on disk, so a sync failure never fails the save.
+      void syncSavedFlowToCloud(flow, session.projectId);
       const { name, ...rest } = res.value;
       return { flowName: name, ...rest };
     },
