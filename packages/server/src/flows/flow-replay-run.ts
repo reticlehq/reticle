@@ -83,7 +83,16 @@ export async function replayNamedFlow(
 ): Promise<FlowReplayResult> {
   const startedAt = deps.now();
   const name = asString(args['flowName']) ?? '';
-  const loaded = await deps.flows.load(name);
+  // Resolve within the connecting app's scope so a shared daemon replays THIS project's flow, not a
+  // same-named flow from another app. Safe-resolve: a missing session degrades to the global store,
+  // and the load-then-session order (unchanged) still surfaces a not-found before a no-session error.
+  let projectId: string | undefined;
+  try {
+    projectId = deps.sessions.resolve(asString(args['sessionId'])).projectId;
+  } catch {
+    projectId = undefined;
+  }
+  const loaded = await deps.flows.load(name, projectId);
   if (!loaded.ok) {
     await recordReplayRun(deps, name, ReplayStatus.ERROR, 0, deps.now() - startedAt);
     return {

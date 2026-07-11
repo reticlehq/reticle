@@ -3,7 +3,6 @@ import type { Server } from 'node:http';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import {
   AGENT_STOPPED_NOTICE,
-  AnchorKind,
   RETICLE_DEFAULT_PORT,
   ReticleCommand,
   ReticleDir,
@@ -19,6 +18,7 @@ import { Bridge } from './bridge.js';
 import { BaselineStore } from './project/baselines.js';
 import { RecordingStore } from './flows/recordings.js';
 import { FlowStore } from './flows/flows.js';
+import { buildFlowChips } from './flows/flow-scope.js';
 import { ProjectStore } from './project/project-store.js';
 import { AnnotationStore } from './flows/annotation-store.js';
 import { createNodeFileSystem } from './project/fs-port.js';
@@ -463,25 +463,19 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
         session.pushNarration(`✗ Replay "${flowName}" failed — ${message}`);
       });
   });
-  // On connect, hand the panel the replayable flows so it can render the ▶ list. Each carries a `start`
-  // hint (the first step's testid anchor) so the HUD shows a flow only on the page it can begin from —
-  // the panel re-scopes per route. Derived from the first step, so existing flows benefit unchanged.
+  // On connect, hand the panel the replayable flows so it can render the ▶ list. Scoped to the
+  // connecting session's project (a shared daemon serves many apps; each panel shows only its own
+  // flows + legacy untagged ones). Each chip carries a `start` hint (the first step's testid anchor)
+  // so the HUD shows a flow only on the page it can begin from — the panel re-scopes per route.
   bridge.attachSessionReady((session) => {
     flows
-      .list()
+      .list(session.projectId)
       .then(async (names) => {
-        const payload = await Promise.all(
-          names.map(async (name) => {
-            const loaded = await flows.load(name);
-            const first = loaded.ok ? loaded.value.steps[0] : undefined;
-            const start =
-              first !== undefined && first.anchor.kind === AnchorKind.TESTID
-                ? first.anchor.value
-                : undefined;
-            return start === undefined ? { name } : { name, start };
-          }),
-        );
-        await session.command(ReticleCommand.FLOWS, { flows: payload });
+        const loaded = await Promise.all(names.map((name) => flows.load(name, session.projectId)));
+        const files = loaded.flatMap((r) => (r.ok ? [r.value] : []));
+        await session.command(ReticleCommand.FLOWS, {
+          flows: buildFlowChips(files, session.projectId),
+        });
       })
       .catch(() => undefined);
   });

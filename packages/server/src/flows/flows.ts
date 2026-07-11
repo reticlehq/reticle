@@ -18,7 +18,15 @@ import { ReticleTool } from '../tools/tool-names.js';
 import { applyHealChanges } from './heal.js';
 import type { CompiledProgram, RecordedStep } from './recordings.js';
 import type { FileSystemPort } from '../project/fs-port.js';
-import { flowPath, reticleDirPaths, isValidFlowName } from '../project/reticle-dir.js';
+import { flowDir, flowPath, reticleDirPaths, isValidFlowName } from '../project/reticle-dir.js';
+
+/**
+ * A projectId only scopes storage when it's a safe single path segment (it's stamped from the
+ * session's HELLO, but the store defends the disk boundary itself). An unsafe/absent value collapses
+ * to `undefined` — the flat, global store — so a malformed id can never escape `.reticle/flows/`.
+ */
+const safeProjectId = (projectId?: string): string | undefined =>
+  projectId !== undefined && isValidFlowName(projectId) ? projectId : undefined;
 
 /** A monotonic clock injected for createdAt — never call Date.now() inside the store (rule 7). */
 export interface Clock {
@@ -200,20 +208,23 @@ export class FlowStore {
   async save(
     program: CompiledProgram,
     annotations?: FlowAnnotations,
+    projectId?: string,
   ): Promise<FlowResult<SaveSummary>> {
     if (!isValidFlowName(program.name)) {
       return { ok: false, code: FlowErrorCode.INVALID_NAME };
     }
+    const pid = safeProjectId(projectId);
     const steps = program.steps.map(recordedStepToFlowStep);
     const base: FlowFile = {
       version: FLOW_FILE_VERSION,
       name: program.name,
+      ...(pid === undefined ? {} : { projectId: pid }),
       createdAt: this.#clock.now(),
       steps,
     };
     const flow = withAnnotations(base, annotations);
-    await this.#fs.mkdir(reticleDirPaths(this.#root).flows);
-    await this.#fs.writeFile(flowPath(this.#root, program.name), this.#serialize(flow));
+    await this.#fs.mkdir(flowDir(this.#root, pid));
+    await this.#fs.writeFile(flowPath(this.#root, program.name, pid), this.#serialize(flow));
     const degraded = flow.steps.filter((s) => s.degraded === true).length;
     return {
       ok: true,
@@ -231,13 +242,17 @@ export class FlowStore {
    * browser resolved every semantic anchor at capture time; here we only validate the name +
    * re-run FlowFileSchema before writing. save() is left untouched.
    */
-  async saveFlow(flow: FlowFile): Promise<FlowResult<SaveSummary>> {
+  async saveFlow(flow: FlowFile, projectId?: string): Promise<FlowResult<SaveSummary>> {
     if (!isValidFlowName(flow.name)) return { ok: false, code: FlowErrorCode.INVALID_NAME };
-    const parsed = FlowFileSchema.safeParse(flow);
+    const pid = safeProjectId(projectId);
+    // Stamp the project INTO the file (so a flow carries its own scope) and route it to the matching
+    // per-project subdir. Both come from the same `pid`, so on-disk location and content always agree.
+    const stamped = pid === undefined ? flow : { ...flow, projectId: pid };
+    const parsed = FlowFileSchema.safeParse(stamped);
     if (!parsed.success) return { ok: false, code: FlowErrorCode.PARSE_FAILED };
     const valid = parsed.data;
-    await this.#fs.mkdir(reticleDirPaths(this.#root).flows);
-    await this.#fs.writeFile(flowPath(this.#root, valid.name), this.#serialize(valid));
+    await this.#fs.mkdir(flowDir(this.#root, pid));
+    await this.#fs.writeFile(flowPath(this.#root, valid.name, pid), this.#serialize(valid));
     const degraded = valid.steps.filter((s) => s.degraded === true).length;
     return {
       ok: true,
@@ -264,33 +279,82 @@ export class FlowStore {
   async heal(
     name: string,
     changes: HealChange[],
+    projectId?: string,
   ): Promise<FlowResult<{ name: string; changed: HealChange[] }>> {
     if (!isValidFlowName(name)) return { ok: false, code: FlowErrorCode.INVALID_NAME };
-    const loaded = await this.load(name);
+    const pid = safeProjectId(projectId);
+    const loaded = await this.load(name, pid);
     if (!loaded.ok) return { ok: false, code: loaded.code };
     const flow = loaded.value;
 
+    // Write back to the SAME file load resolved (nested if it lives there, else legacy flat), so a
+    // heal never forks a second copy and byte-stability holds regardless of where the flow lives.
+    const path = await this.#resolveReadPath(name, pid);
+    if (path === null) return { ok: false, code: FlowErrorCode.NOT_FOUND };
     const { flow: next, applied } = applyHealChanges(flow, changes);
-    await this.#fs.writeFile(flowPath(this.#root, name), this.#serialize(next));
+    await this.#fs.writeFile(path, this.#serialize(next));
     return { ok: true, value: { name, changed: applied } };
   }
 
-  /** List flow names present under .reticle/flows (no extension), sorted. [] if absent (no throw). */
-  async list(): Promise<string[]> {
-    const dir = reticleDirPaths(this.#root).flows;
+  /** The `.json` basenames (no extension) directly inside `dir`. [] if the dir is absent/unreadable. */
+  async #namesIn(dir: string): Promise<string[]> {
     if (!(await this.#fs.exists(dir))) return [];
-    const entries = await this.#fs.readdir(dir);
+    let entries: string[];
+    try {
+      entries = await this.#fs.readdir(dir);
+    } catch {
+      return [];
+    }
     return entries
       .filter((e) => e.endsWith(FLOW_SUFFIX))
-      .map((e) => e.slice(0, -FLOW_SUFFIX.length))
-      .sort();
+      .map((e) => e.slice(0, -FLOW_SUFFIX.length));
   }
 
-  /** Read + zod-validate a flow by name. Structured codes; never throws on a missing/bad file. */
-  async load(name: string): Promise<FlowResult<FlowFile>> {
+  /**
+   * List flow names visible to a caller, sorted + deduped. With a `projectId`: that project's own
+   * flows PLUS legacy flat (untagged/global) ones. Without one (CLI/CI/contract callers): EVERY flow
+   * in the store — flat plus every per-project subdir — so a repo-wide replay/audit misses nothing.
+   */
+  async list(projectId?: string): Promise<string[]> {
+    const flowsDir = reticleDirPaths(this.#root).flows;
+    const pid = safeProjectId(projectId);
+    const legacy = await this.#namesIn(flowsDir);
+    if (pid !== undefined) {
+      const own = await this.#namesIn(flowDir(this.#root, pid));
+      return [...new Set([...own, ...legacy])].sort();
+    }
+    if (!(await this.#fs.exists(flowsDir))) return [];
+    let entries: string[];
+    try {
+      entries = await this.#fs.readdir(flowsDir);
+    } catch {
+      return legacy.sort();
+    }
+    const subdirs = entries.filter((e) => !e.endsWith(FLOW_SUFFIX));
+    const nested = (
+      await Promise.all(subdirs.map((d) => this.#namesIn(flowDir(this.#root, d))))
+    ).flat();
+    return [...new Set([...legacy, ...nested])].sort();
+  }
+
+  /** The path a flow actually lives at: nested (per-project) if present, else legacy flat, else null. */
+  async #resolveReadPath(name: string, pid: string | undefined): Promise<string | null> {
+    if (pid !== undefined) {
+      const nested = flowPath(this.#root, name, pid);
+      if (await this.#fs.exists(nested)) return nested;
+    }
+    const flat = flowPath(this.#root, name);
+    return (await this.#fs.exists(flat)) ? flat : null;
+  }
+
+  /**
+   * Read + zod-validate a flow by name. With a `projectId`, prefers the per-project copy and falls
+   * back to a legacy flat (untagged) flow of the same name — so pre-existing flows keep loading.
+   */
+  async load(name: string, projectId?: string): Promise<FlowResult<FlowFile>> {
     if (!isValidFlowName(name)) return { ok: false, code: FlowErrorCode.INVALID_NAME };
-    const path = flowPath(this.#root, name);
-    if (!(await this.#fs.exists(path))) return { ok: false, code: FlowErrorCode.NOT_FOUND };
+    const path = await this.#resolveReadPath(name, safeProjectId(projectId));
+    if (path === null) return { ok: false, code: FlowErrorCode.NOT_FOUND };
 
     let text: string;
     try {

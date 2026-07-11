@@ -202,6 +202,12 @@ describe('parseCliArgs', () => {
     expect(parseCliArgs(['license'], PORT)).toEqual({ kind: 'license' });
   });
 
+  it('version (and the -v/--version flags) returns a version result', () => {
+    expect(parseCliArgs(['version'], PORT)).toEqual({ kind: 'version' });
+    expect(parseCliArgs(['--version'], PORT)).toEqual({ kind: 'version' });
+    expect(parseCliArgs(['-v'], PORT)).toEqual({ kind: 'version' });
+  });
+
   it('status --port overrides the port', () => {
     expect(parseCliArgs(['status', '--port', '5000'], PORT)).toEqual({
       kind: 'status',

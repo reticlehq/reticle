@@ -94,10 +94,10 @@ describe('FlowStore.saveFlow — temp-dir fs', () => {
 
 // ---- reticle_flow_save_recorded handler ----
 
-function fakeDeps(store: FlowStore, events: ReticleEvent[]): ToolDeps {
+function fakeDeps(store: FlowStore, events: ReticleEvent[], projectId?: string): ToolDeps {
   const command = (): Promise<CommandResult> =>
     Promise.resolve({ kind: 'command_result', id: 'c', ok: true, result: {} });
-  const session: Partial<Session> = { id: 'demo', command, eventsSince: () => events };
+  const session: Partial<Session> = { id: 'demo', projectId, command, eventsSince: () => events };
   const sessions: Partial<SessionManager> = { resolve: () => session as Session };
   return {
     sessions: sessions as SessionManager,
@@ -140,6 +140,21 @@ describe('reticle_flow_save_recorded handler', () => {
     expect(res.flowName).toBe('second');
     expect(res.stepCount).toBe(2);
     expect(await store.list()).toEqual(['second']);
+  });
+
+  it("stamps the saved flow with the session's projectId (scopes it to this app)", async () => {
+    const ev = recordedEvent('scoped', flowFile('scoped', [clickStep('a')]));
+    const deps = fakeDeps(store, [ev], 'demo-app-abc123');
+    await recordedTool().handler(deps, {});
+    const loaded = await store.load('scoped', 'demo-app-abc123');
+    expect(loaded.ok && loaded.value.projectId).toBe('demo-app-abc123');
+  });
+
+  it('leaves projectId unset when the session has none (legacy/global back-compat)', async () => {
+    const ev = recordedEvent('global', flowFile('global', [clickStep('a')]));
+    await recordedTool().handler(fakeDeps(store, [ev]), {});
+    const loaded = await store.load('global');
+    expect(loaded.ok && loaded.value.projectId).toBeUndefined();
   });
 
   it('no FLOW_RECORDED in the buffer → { code: NO_RECORDED_FLOW }, nothing written', async () => {

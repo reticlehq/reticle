@@ -31,6 +31,19 @@ import { replayNamedFlow, flowErrorMessage, latestRecordedFlow } from './flow-re
 export { replayNamedFlow } from './flow-replay-run.js';
 
 /**
+ * The connecting session's project, or undefined when no browser is attached. Flow tools use it to
+ * scope storage to the current app on a shared daemon; resolving must NOT throw here (list/load are
+ * documented to work headless), so a missing/unknown session degrades to the global/legacy store.
+ */
+function sessionProjectId(deps: ToolDeps, sessionId: string | undefined): string | undefined {
+  try {
+    return deps.sessions.resolve(sessionId).projectId;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * Best-effort mirror of a just-saved flow to Reticle Cloud (only when logged in — both cloud env vars
  * set). Fire-and-forget: resolves the config, POSTs via the platform fetch, and logs the outcome. Any
  * failure is swallowed so a network hiccup never affects the local save.
@@ -55,6 +68,10 @@ export const FLOW_TOOLS: ToolDef[] = [
         .describe(
           'Name for the flow file (saved to .reticle/flows/<flowName>.json). Use again in reticle_flow_load/reticle_flow_replay.',
         ),
+      sessionId: z
+        .string()
+        .optional()
+        .describe('Active session ID — scopes the saved flow to that app.'),
     },
     // Schema MUST match what the handler actually returns on BOTH paths: success
     // { name, stepCount, degraded, empty, assertions? } and error { error, code }. The prior schema
@@ -98,12 +115,13 @@ export const FLOW_TOOLS: ToolDef[] = [
         ...(success !== undefined ? { success } : {}),
         ...(intent !== undefined ? { intent } : {}),
       };
-      return deps.flows.save(program, annotations).then(async (res) => {
+      const projectId = sessionProjectId(deps, asString(args['sessionId']));
+      return deps.flows.save(program, annotations, projectId).then(async (res) => {
         if (!res.ok) return { error: flowErrorMessage(res.code), code: res.code };
         deps.annotations.clear(name);
         // Grade the saved flow's assertions so the agent learns immediately if it just saved a flow
         // that asserts nothing observable (passes even when the feature is broken).
-        const loaded = await deps.flows.load(res.value.name);
+        const loaded = await deps.flows.load(res.value.name, projectId);
         return loaded.ok
           ? { ...res.value, assertions: classifyFlowAssertions(loaded.value) }
           : res.value;
@@ -113,8 +131,15 @@ export const FLOW_TOOLS: ToolDef[] = [
   {
     name: ReticleTool.FLOW_LIST,
     description:
-      'List saved flow names under .reticle/flows (a fresh agent learns the demonstrated journeys without a browser).',
-    inputSchema: {},
+      'List saved flow names under .reticle/flows (a fresh agent learns the demonstrated journeys ' +
+      'without a browser). Scoped to the connected app: with a session it lists that project’s ' +
+      'flows plus legacy untagged ones; with no browser it lists every flow in the repo.',
+    inputSchema: {
+      sessionId: z
+        .string()
+        .optional()
+        .describe('Active session ID — scopes the list to that app. Omit to list every saved flow.'),
+    },
     outputSchema: {
       flows: z.array(
         z.object({ name: z.string(), path: z.string(), createdAt: z.number().optional() }),
@@ -123,10 +148,12 @@ export const FLOW_TOOLS: ToolDef[] = [
     // Return {name, path} objects to MATCH the declared outputSchema. Returning bare name strings
     // (the prior bug) made schema-validating MCP clients reject the result ("expected object,
     // received string") — caught driving the live demo.
-    handler: (deps: ToolDeps) =>
-      deps.flows.list().then((names) => ({
-        flows: names.map((name) => ({ name, path: flowPath(deps.reticleRoot, name) })),
-      })),
+    handler: (deps: ToolDeps, args) => {
+      const projectId = sessionProjectId(deps, asString(args['sessionId']));
+      return deps.flows.list(projectId).then((names) => ({
+        flows: names.map((name) => ({ name, path: flowPath(deps.reticleRoot, name, projectId) })),
+      }));
+    },
   },
   {
     name: ReticleTool.FLOW_LOAD,
@@ -136,18 +163,24 @@ export const FLOW_TOOLS: ToolDef[] = [
       flowName: z
         .string()
         .describe('Flow file name (without .json extension) from reticle_flow_list.'),
+      sessionId: z
+        .string()
+        .optional()
+        .describe('Active session ID — resolves the flow within that app’s scope.'),
     },
     outputSchema: {
       flowName: z.string(),
       steps: z.array(z.unknown()),
       createdAt: z.number().optional(),
     },
-    handler: (deps: ToolDeps, args) =>
-      deps.flows.load(asString(args['flowName']) ?? '').then((res) => {
+    handler: (deps: ToolDeps, args) => {
+      const projectId = sessionProjectId(deps, asString(args['sessionId']));
+      return deps.flows.load(asString(args['flowName']) ?? '', projectId).then((res) => {
         if (!res.ok) return { error: flowErrorMessage(res.code), code: res.code };
         const { name, ...rest } = res.value;
         return { flowName: name, ...rest };
-      }),
+      });
+    },
   },
   {
     name: ReticleTool.FLOW_REPLAY,
@@ -223,10 +256,11 @@ export const FLOW_TOOLS: ToolDef[] = [
       failures: z.array(z.unknown()),
     },
     handler: async (deps: ToolDeps, args): Promise<SuiteVerdict> => {
+      const sessionId = asString(args['sessionId']);
+      // "Replay all" means all of THIS app's flows (+ legacy), not every project's on a shared daemon.
       const requested = Array.isArray(args['names'])
         ? args['names'].filter((n): n is string => typeof n === 'string')
-        : await deps.flows.list();
-      const sessionId = asString(args['sessionId']);
+        : await deps.flows.list(sessionProjectId(deps, sessionId));
       const runs: { replay: FlowReplayResult }[] = [];
       // Sequential: each flow replays against the same live session; parallel would race the DOM.
       for (const flowName of requested) {
@@ -282,7 +316,9 @@ export const FLOW_TOOLS: ToolDef[] = [
       }
       const override = asString(args['flowName']);
       const flow = override !== undefined ? { ...recorded.flow, name: override } : recorded.flow;
-      const res = await deps.flows.saveFlow(flow);
+      // The store stamps the project into the file AND routes it to the per-project subdir (a shared
+      // daemon serves many apps), so location and content agree from one source of truth.
+      const res = await deps.flows.saveFlow(flow, session.projectId);
       if (!res.ok) return { error: flowErrorMessage(res.code), code: res.code };
       // If logged into Reticle Cloud, mirror the saved flow to the team's regression suite. Best-effort
       // and non-blocking: the flow is already on disk, so a sync failure never fails the save.
@@ -355,7 +391,8 @@ function toChange(proposal: HealProposal): HealChange {
 async function healFlow(deps: ToolDeps, args: Record<string, unknown>): Promise<FlowHealResult> {
   const name = asString(args['flowName']) ?? '';
   const apply = args['apply'] === true;
-  const loaded = await deps.flows.load(name);
+  const projectId = sessionProjectId(deps, asString(args['sessionId']));
+  const loaded = await deps.flows.load(name, projectId);
   if (!loaded.ok) {
     return {
       name,
@@ -466,7 +503,7 @@ async function healFlow(deps: ToolDeps, args: Record<string, unknown>): Promise<
     }
   }
 
-  const written = await deps.flows.heal(name, proposals.map(toChange));
+  const written = await deps.flows.heal(name, proposals.map(toChange), projectId);
   if (!written.ok) {
     return {
       name,
