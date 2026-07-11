@@ -41,6 +41,24 @@ interface TransportDeps {
    * an actionable hint instead of retrying silently forever.
    */
   onUnreachable?: (detail: { url: string; attempts: number }) => void;
+  /**
+   * Subscribe to "the tab became visible again" (default: document `visibilitychange`). Browsers
+   * throttle or suspend timers in a backgrounded tab, so the 1s reconnect loop stalls while hidden —
+   * a bridge blip during sleep/background otherwise leaves the panel stuck on "ENDED" until a manual
+   * reload. On foreground we retry IMMEDIATELY instead of waiting for the throttled timer. Returns an
+   * unsubscribe; injected so a test can drive visibility without a real document.
+   */
+  onVisible?: (handler: () => void) => () => void;
+}
+
+/** Default visibility source: fire `handler` whenever the document returns to the foreground. */
+function subscribeDocumentVisible(handler: () => void): () => void {
+  if (typeof document === 'undefined') return () => undefined;
+  const listener = (): void => {
+    if (document.visibilityState === 'visible') handler();
+  };
+  document.addEventListener('visibilitychange', listener);
+  return () => document.removeEventListener('visibilitychange', listener);
 }
 
 const RECONNECT_DELAY_MS = 1000;
@@ -64,6 +82,8 @@ export class Transport {
   /** Whether the unreachable warning has fired (fire-once). */
   #warnedUnreachable = false;
   #overflowCount = 0;
+  /** Teardown for the visibility subscription (foreground-triggered reconnect), while connected. */
+  #unsubscribeVisible: (() => void) | undefined;
   readonly #deps: TransportDeps;
   readonly #now: () => number;
 
@@ -75,6 +95,19 @@ export class Transport {
   connect(): void {
     if (typeof WebSocket === 'undefined') return;
     this.#closed = false;
+    this.#unsubscribeVisible ??= (this.#deps.onVisible ?? subscribeDocumentVisible)(() =>
+      this.#onVisible(),
+    );
+    this.#open();
+  }
+
+  /**
+   * The tab returned to the foreground. If we're disconnected (and not deliberately closed), reconnect
+   * NOW — a hidden tab's throttled timer may be minutes from firing. A no-op when a socket already
+   * exists (connected or mid-connect), so we never open a duplicate racing the scheduled retry.
+   */
+  #onVisible(): void {
+    if (this.#closed || this.#ws !== undefined) return;
     this.#open();
   }
 
@@ -107,9 +140,12 @@ export class Transport {
     };
   }
 
-  /** A scheduled reconnect — skipped if the SDK has since been torn down. */
+  /**
+   * A scheduled reconnect — skipped if the SDK was torn down, or if a foreground-triggered reconnect
+   * already opened a socket (guard against the throttled timer racing #onVisible into a duplicate).
+   */
   #reopen(): void {
-    if (this.#closed) return;
+    if (this.#closed || this.#ws !== undefined) return;
     this.#open();
   }
 
@@ -190,6 +226,8 @@ export class Transport {
 
   close(): void {
     this.#closed = true;
+    this.#unsubscribeVisible?.();
+    this.#unsubscribeVisible = undefined;
     this.#ws?.close();
     this.#ws = undefined;
   }
