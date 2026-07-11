@@ -100,9 +100,16 @@ export const CONTROLS_CSS = `
   box-shadow:inset 0 0 0 2px rgba(251,146,60,.7);}
 @keyframes reticle-warn-pulse{0%,100%{box-shadow:inset 0 0 0 2px rgba(251,146,60,.32);}
   50%{box-shadow:inset 0 0 0 3px rgba(251,146,60,.85),inset 0 0 26px 5px rgba(251,146,60,.34);}}
-/* Replay-a-flow row: the human re-runs a saved flow with no agent. Hidden until flows are pushed. */
-[data-reticle-hud] .reticle-flows{display:none;flex-wrap:wrap;gap:6px;padding:9px 12px;border-top:1px solid var(--reticle-line2);}
+/* Replay-a-flow row: the human re-runs a saved flow with no agent. Hidden until flows are pushed.
+   Bounded + self-scrolling: it sits between the flex:1 log and the flex:none composer, so without a
+   height cap a long flow list would squeeze the log to nothing and push the message input past the
+   panel's overflow:hidden clip. flex:none + max-height + overflow-y keep the log and input always
+   visible; extra flow chips scroll inside this section instead of growing the panel. */
+[data-reticle-hud] .reticle-flows{display:none;flex:none;flex-wrap:wrap;align-content:flex-start;gap:6px;
+  padding:9px 12px;border-top:1px solid var(--reticle-line2);max-height:88px;overflow-y:auto;overscroll-behavior:contain;}
 [data-reticle-hud] .reticle-flows[data-has="1"]{display:flex;}
+[data-reticle-hud] .reticle-flows::-webkit-scrollbar{width:9px;}
+[data-reticle-hud] .reticle-flows::-webkit-scrollbar-thumb{background:rgba(255,255,255,.14);border-radius:9px;border:2px solid transparent;background-clip:content-box;}
 [data-reticle-hud] .reticle-flows-cap{flex:0 0 100%;margin-bottom:1px;color:var(--reticle-faint);font-size:9.5px;letter-spacing:.09em;text-transform:uppercase;}
 [data-reticle-hud] .reticle-flow{pointer-events:auto;cursor:pointer;display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 10px;
   border-radius:7px;border:1px solid var(--reticle-line);background:rgba(255,255,255,.04);color:var(--reticle-muted);
