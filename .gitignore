@@ -61,8 +61,12 @@ graph.html
 graphify-out/
 GRAPH_REPORT.md
 
-# Reticle local runtime artifacts
-.reticle/
+# Reticle: commit the shareable project config (cloud binding, flows, baselines); ignore local runtime
+# artifacts at ANY depth (root app + apps/*/). The SECRET api key is never here — it lives in
+# ~/.reticle/credentials.json (outside the repo). `**/` so nested demo apps are covered too.
+**/.reticle/runs/
+**/.reticle/project.json
+**/.reticle/*.log
 
 # Logs / OS
 *.log

@@ -1,0 +1,11 @@
+{
+  "projectId": "reticle-demo-app",
+  "projectName": "Reticle Demo App",
+  "url": "http://localhost:8890",
+  "sync": {
+    "runs": true,
+    "memory": true,
+    "flows": true
+  },
+  "verify": "local"
+}

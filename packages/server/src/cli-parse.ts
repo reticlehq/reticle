@@ -6,15 +6,25 @@
  */
 
 export const CLI_USAGE = `usage:
-  reticle init  [--yes] [--dry-run] [--port N] [--no-mcp] [--no-install]  (wire Reticle into the project in this directory)
+  reticle init  [--dry-run] [--port N] [--no-mcp] [--no-install]  (wire Reticle into the project in this directory)
   reticle serve [--port N] [--drive <url>] [--headed] [--http] [--http-port N] [--http-token T]
   reticle stop  [--port N] [--quiet]
   reticle status [--port N]
+  reticle doctor [--port N]                            (diagnose setup: Chromium, daemon, port — one command)
   reticle open  [url] [--port N]                        (show the app: reuse the connected tab, else open one)
   reticle verify <url> [--headed] [--timeout N] [--storage-state <file>]  (one-shot: drive the URL, verify saved flows, exit 0=pass)
   reticle drive <url> [--headed]                       (foreground mode — for debugging)
   reticle mcp   [--port N] [--drive <url>] [--headed]  (MCP stdio proxy — auto-starts daemon if needed)
-  reticle license                                      (show enterprise license status: active | eval | missing)`;
+  reticle license                                      (show enterprise license status: active | eval | missing)
+
+Cloud (link this project to Reticle Cloud — runs/flows recorded on the dashboard):
+  reticle login --email <e> [--code <c>] [--org <n>]   (sign in: mails a code, then exchanges it)
+  reticle link  [--project <name|id>]                  (bind this repo: mints a scoped key, writes .reticle/cloud.json)
+  reticle whoami                                        (who am I signed in as, and is this repo attached?)
+  reticle project <ls|create <name>>                   (list or create cloud projects)
+  reticle config [--runs on|off] [--memory on|off] [--flows on|off] [--verify local|server]
+  reticle push                                          (send local run artifacts to the dashboard)
+  reticle runs | regression | share <runId>            (read cloud state; regression exits 3 if any flow broke)`;
 
 const INIT_COMMAND = 'init';
 const SERVE_COMMAND = 'serve';
@@ -57,6 +67,8 @@ export type CliResult =
   | { kind: 'status'; port: number }
   | { kind: 'license' }
   | { kind: 'version' }
+  | { kind: 'help' }
+  | { kind: 'doctor'; port: number }
   | { kind: 'open'; port: number; url?: string }
   | {
       kind: '_daemon';
@@ -69,7 +81,15 @@ export type CliResult =
     }
   | { kind: 'drive'; port: number; driveUrl: string; headless: boolean }
   | { kind: 'verify'; url: string; headless: boolean; timeoutMs?: number; storageState?: string }
-  | { kind: 'mcp'; port: number; driveUrl?: string; headless: boolean }
+  | {
+      kind: 'mcp';
+      port: number;
+      driveUrl?: string;
+      headless: boolean;
+      http: boolean;
+      httpPort?: number;
+      httpToken?: string;
+    }
   | { kind: 'error'; message: string };
 
 type ServeFlags =
@@ -262,6 +282,10 @@ export function parseCliArgs(argv: string[], defaultPort: number): CliResult {
   // troubleshooting docs lean on to confirm which npx-resolved build is actually executing.
   if (cmd === VERSION_COMMAND || cmd === '--version' || cmd === '-v') return { kind: 'version' };
 
+  // `help` (and the conventional -h/--help) print usage to stdout and exit 0 — the universal first move
+  // for a new user, which otherwise fell through to a JSON error with exit 1.
+  if (cmd === 'help' || cmd === '--help' || cmd === '-h') return { kind: 'help' };
+
   switch (cmd) {
     case INIT_COMMAND: {
       const r = parseInitFlags(rest);
@@ -289,6 +313,10 @@ export function parseCliArgs(argv: string[], defaultPort: number): CliResult {
     case STATUS_COMMAND: {
       const port = parsePortFlag(rest, defaultPort);
       return { kind: 'status', port };
+    }
+    case 'doctor': {
+      const port = parsePortFlag(rest, defaultPort);
+      return { kind: 'doctor', port };
     }
     case LICENSE_COMMAND:
       return { kind: 'license' };
@@ -334,7 +362,10 @@ export function parseCliArgs(argv: string[], defaultPort: number): CliResult {
         kind: 'mcp',
         port: r.port,
         headless: r.headless,
+        http: r.http,
         ...(r.driveUrl !== undefined ? { driveUrl: r.driveUrl } : {}),
+        ...(r.httpPort !== undefined ? { httpPort: r.httpPort } : {}),
+        ...(r.httpToken !== undefined ? { httpToken: r.httpToken } : {}),
       };
     }
     default:

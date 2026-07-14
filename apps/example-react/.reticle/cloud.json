@@ -1,0 +1,11 @@
+{
+  "projectId": "reticle-example-react",
+  "projectName": "Reticle Example React",
+  "url": "http://localhost:8890",
+  "sync": {
+    "runs": true,
+    "memory": true,
+    "flows": true
+  },
+  "verify": "local"
+}

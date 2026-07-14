@@ -15,6 +15,10 @@ import { replayFlow } from './flow-replay.js';
 import { assertSuccess, dynamicTestids, successLabel, SUCCESS_STEP_TOOL } from './flow-success.js';
 import { buildDecision } from './decision.js';
 import { waitForPredicate } from '../events/predicate.js';
+import { homedir } from 'node:os';
+import { syncRunRecordToCloud, SyncOutcome } from '../cloud/cloud-sync.js';
+import { resolveProjectCloud } from '../cloud/cloud-config.js';
+import { log } from '../log.js';
 import type { ToolDeps } from '../tools/tools.js';
 
 export function latestRecordedFlow(
@@ -55,21 +59,39 @@ function replayToRunStatus(status: ReplayStatus): RunStatus {
   }
 }
 
-/** Append a flow-replay outcome to .reticle/project.json (never throws into replay). */
+/**
+ * Append a flow-replay outcome to .reticle/project.json (never throws into replay) and, when logged in,
+ * best-effort mirror it to Reticle Cloud so the team's server-side regression history stays current. The
+ * cloud push is fire-and-forget: not logged in → skipped, a network failure is logged and swallowed.
+ */
 async function recordReplayRun(
   deps: ToolDeps,
   name: string,
   status: ReplayStatus,
   driftSteps: number,
   durationMs: number,
+  projectId: string | undefined,
 ): Promise<void> {
+  const runStatus = replayToRunStatus(status);
   await deps.project.recordRun({
     kind: RunKind.FLOW_REPLAY,
     name,
-    status: replayToRunStatus(status),
+    status: runStatus,
     evidence: { driftSteps },
     durationMs,
   });
+  // Per-project cloud: push memory outcomes only when cloud is attached AND memory sync is enabled.
+  const cloud = await resolveProjectCloud(deps.fs, deps.reticleRoot, homedir(), process.env);
+  if (cloud.config === null || !cloud.policy.memory) return; // not attached / memory disabled → local only
+  const result = await syncRunRecordToCloud(
+    { kind: RunKind.FLOW_REPLAY, name, status: runStatus, at: deps.now(), durationMs },
+    projectId,
+    cloud.config,
+    (url, init) => fetch(url, init),
+  );
+  if (result.outcome !== SyncOutcome.SYNCED) {
+    log('cloud-run-record-sync-failed', { flow: name, status: result.status, error: result.error });
+  }
 }
 
 /**
@@ -94,7 +116,7 @@ export async function replayNamedFlow(
   }
   const loaded = await deps.flows.load(name, projectId);
   if (!loaded.ok) {
-    await recordReplayRun(deps, name, ReplayStatus.ERROR, 0, deps.now() - startedAt);
+    await recordReplayRun(deps, name, ReplayStatus.ERROR, 0, deps.now() - startedAt, projectId);
     return {
       name,
       status: ReplayStatus.ERROR,
@@ -138,7 +160,7 @@ export async function replayNamedFlow(
   const driftSteps = steps.filter((s) => s.drift !== undefined).length;
   const allOk = steps.every((s) => s.ok);
   const status = driftSteps > 0 ? ReplayStatus.DRIFT : allOk ? ReplayStatus.OK : ReplayStatus.ERROR;
-  await recordReplayRun(deps, name, status, driftSteps, deps.now() - startedAt);
+  await recordReplayRun(deps, name, status, driftSteps, deps.now() - startedAt, projectId);
   const failed = steps.find((step) => !step.ok && step.drift === undefined);
   if (failed !== undefined) {
     const errored: FlowReplayResult = {
