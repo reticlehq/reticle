@@ -374,4 +374,15 @@ describe('compileRecording determinism', () => {
     expect(spy).not.toHaveBeenCalled();
     spy.mockRestore();
   });
+
+  it('records the start pathname so replay can navigate there first', () => {
+    const flow = compileRecording('f', [], [], 1, '/dashboard');
+    expect(flow.startPath).toBe('/dashboard');
+  });
+
+  it('omits startPath when none was captured (back-compat: file stays version 1)', () => {
+    const flow = compileRecording('f', [], [], 1);
+    expect(flow.startPath).toBeUndefined();
+    expect(flow.version).toBe(1);
+  });
 });
