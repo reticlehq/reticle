@@ -62,6 +62,7 @@ const STANDARD_TOOL_NAMES: ReadonlySet<string> = new Set([
   ReticleTool.FLOW_SAVE,
   ReticleTool.FLOW_LIST,
   ReticleTool.FLOW_LOAD,
+  ReticleTool.FLOW_DELETE,
   ReticleTool.FLOW_REPLAY,
   ReticleTool.FLOW_VERIFY,
   ReticleTool.FLOW_HEAL,

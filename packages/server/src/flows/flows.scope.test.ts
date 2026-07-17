@@ -91,6 +91,21 @@ describe('FlowStore — per-project storage (shared-daemon isolation)', () => {
     expect(loaded.ok && loaded.value.projectId).toBe('app-a');
   });
 
+  it('remove deletes a per-project flow (and a second remove is NOT_FOUND, not a silent pass)', async () => {
+    await store.saveFlow(flow('stale'), 'app-a');
+    expect(await fs.exists(flowPath(root, 'stale', 'app-a'))).toBe(true);
+    expect((await store.remove('stale', 'app-a')).ok).toBe(true);
+    expect(await fs.exists(flowPath(root, 'stale', 'app-a'))).toBe(false);
+    expect(await store.list('app-a')).not.toContain('stale');
+    expect((await store.remove('stale', 'app-a')).ok).toBe(false); // gone → NOT_FOUND
+  });
+
+  it('remove resolves a nested flow with no projectId (mirrors load)', async () => {
+    await store.saveFlow(flow('nested'), 'app-a');
+    expect((await store.remove('nested')).ok).toBe(true);
+    expect(await fs.exists(flowPath(root, 'nested', 'app-a'))).toBe(false);
+  });
+
   it('heal rewrites the nested file in place, never forking a flat copy', async () => {
     await store.saveFlow(flow('h', 'old-testid'), 'app-a');
     const healed = await store.heal(

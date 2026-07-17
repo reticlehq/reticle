@@ -183,6 +183,34 @@ export const FLOW_TOOLS: ToolDef[] = [
     },
   },
   {
+    name: ReticleTool.FLOW_DELETE,
+    description:
+      'Delete a saved flow file so a renamed/obsolete flow stops lingering in the replay list. Scoped ' +
+      'to the connected app. Returns { deleted: true } or a structured { error, code } (code not_found ' +
+      'when no such flow — deleting an absent flow is an error, not a silent no-op).',
+    inputSchema: {
+      flowName: z
+        .string()
+        .describe('Flow file name (without .json extension) from reticle_flow_list.'),
+      sessionId: z
+        .string()
+        .optional()
+        .describe('Active session ID — resolves the flow within that app’s scope.'),
+    },
+    outputSchema: {
+      deleted: z.boolean().optional(),
+      error: z.string().optional(),
+      code: z.string().optional(),
+    },
+    handler: (deps: ToolDeps, args) => {
+      const projectId = sessionProjectId(deps, asString(args['sessionId']));
+      return deps.flows.remove(asString(args['flowName']) ?? '', projectId).then((res) => {
+        if (!res.ok) return { error: flowErrorMessage(res.code), code: res.code };
+        return { deleted: true };
+      });
+    },
+  },
+  {
     name: ReticleTool.FLOW_REPLAY,
     description:
       "Replay a git-checked flow from .reticle/flows/<name>.json. RE-RESOLVES each step's semantic " +

@@ -398,4 +398,18 @@ export class FlowStore {
     if (!result.success) return { ok: false, code: FlowErrorCode.PARSE_FAILED };
     return { ok: true, value: result.data };
   }
+
+  /**
+   * Delete a flow's file so a renamed/obsolete flow stops lingering in the replay list. Resolves the
+   * same path `load()` would (per-project copy, else legacy flat, else a subdir scan for the no-pid
+   * caller), then removes it. NOT_FOUND when nothing resolves — deleting an absent flow is an error,
+   * not a silent no-op, so a typo doesn't read as success.
+   */
+  async remove(name: string, projectId?: string): Promise<FlowResult<void>> {
+    if (!isValidFlowName(name)) return { ok: false, code: FlowErrorCode.INVALID_NAME };
+    const path = await this.#resolveReadPath(name, safeProjectId(projectId));
+    if (path === null) return { ok: false, code: FlowErrorCode.NOT_FOUND };
+    await this.#fs.rm(path);
+    return { ok: true, value: undefined };
+  }
 }

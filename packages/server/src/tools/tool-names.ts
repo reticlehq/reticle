@@ -29,6 +29,7 @@ export const ReticleTool = {
   FLOW_SAVE: 'reticle_flow_save',
   FLOW_LIST: 'reticle_flow_list',
   FLOW_LOAD: 'reticle_flow_load',
+  FLOW_DELETE: 'reticle_flow_delete',
   FLOW_REPLAY: 'reticle_flow_replay',
   /** replay EVERY saved flow → one consolidated suite verdict + prioritized fixes (the loop closer). */
   FLOW_VERIFY: 'reticle_flow_verify',
