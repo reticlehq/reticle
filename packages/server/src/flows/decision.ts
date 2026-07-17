@@ -9,6 +9,7 @@ import {
   type SuiteVerdict,
 } from '@reticlehq/core';
 import { classifyFlowAssertions } from './flow-classify.js';
+import { SUCCESS_STEP_TOOL } from './flow-success.js';
 
 /**
  * Turn a replay result into the autonomy DECISION envelope — the judgement a human reviewer used to
@@ -80,7 +81,7 @@ export function buildDecision(result: FlowReplayResult, flow?: FlowFile): Replay
 
   // status error: an action failed, or the success oracle was not satisfied (green-but-wrong).
   const message = result.error?.message ?? step?.error ?? 'the flow failed';
-  const isSuccessOracle = step?.tool === 'success';
+  const isSuccessOracle = step?.tool === SUCCESS_STEP_TOOL;
   return {
     verdict: 'fail',
     summary: `"${name}" failed${step !== undefined ? ` at step ${step.step} (${step.anchor})` : ''}.`,

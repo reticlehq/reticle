@@ -5,6 +5,7 @@ import {
   type FlowStepResult,
 } from '@reticlehq/core';
 import { classifyFlowAssertions } from './flow-classify.js';
+import { SUCCESS_STEP_TOOL } from './flow-success.js';
 
 /**
  * Render a HUMAN-facing confidence report for a replayed flow — the artifact a developer reads to
@@ -45,7 +46,7 @@ function mermaidLabel(text: string): string {
 
 /** A short action verb for a step row ("act" is the tool; the anchor carries the target). */
 function stepAction(step: FlowStepResult): string {
-  return step.tool === 'success' ? 'assert outcome' : step.anchor;
+  return step.tool === SUCCESS_STEP_TOOL ? 'assert outcome' : step.anchor;
 }
 
 /** The mermaid flowchart of the journey: one node per step, page-labelled, consequence on the edge. */
