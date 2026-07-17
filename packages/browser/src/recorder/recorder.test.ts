@@ -180,6 +180,35 @@ describe('recorder capture — semantic anchored steps', () => {
     expect(steps[1]?.action).toBe(ActionType.UNCHECK);
   });
 
+  it('checkbox click+change records a single CHECK, not CLICK+CHECK (no double side effect)', () => {
+    document.body.innerHTML = `<input type="checkbox" data-testid="agree" />`;
+    const { emit } = makeEmits();
+    mount(emit);
+    clickRecord();
+    const box = document.querySelector('input') as HTMLInputElement;
+    box.checked = true;
+    fire(box, 'click'); // the click that toggles it...
+    fire(box, 'change'); // ...and the change it triggers
+
+    const steps = handle?.steps() ?? [];
+    expect(steps).toHaveLength(1);
+    expect(steps[0]?.action).toBe(ActionType.CHECK);
+  });
+
+  it('select change records a SELECT step carrying the chosen value', () => {
+    document.body.innerHTML = `<select data-testid="plan"><option value="free">Free</option><option value="pro">Pro</option></select>`;
+    const { emit } = makeEmits();
+    mount(emit);
+    clickRecord();
+    const sel = document.querySelector('select') as HTMLSelectElement;
+    sel.value = 'pro';
+    fire(sel, 'change');
+
+    const step = handle?.steps()[0] as FlowStep;
+    expect(step.action).toBe(ActionType.SELECT);
+    expect(step.args?.['value']).toBe('pro');
+  });
+
   it('Stop with zero interactions emits an empty-but-valid flow + empty status', () => {
     document.body.innerHTML = ``;
     const { emits, emit } = makeEmits();

@@ -272,6 +272,16 @@ class Recorder implements RecorderHandle {
       return;
     }
     if (this.#phase !== RecorderPhase.RECORDING) return;
+    // Controls that emit `change` (checkbox, radio, select) are recorded by #onChange as their
+    // semantic step (CHECK/UNCHECK/SELECT). Recording a CLICK here too would replay any onChange
+    // side effect twice (analytics, dependent-field resets), so skip the duplicate.
+    if (
+      (target instanceof HTMLInputElement &&
+        (inputRole(target) === 'checkbox' || inputRole(target) === 'radio')) ||
+      target instanceof HTMLSelectElement
+    ) {
+      return;
+    }
     this.#flushPendingFill();
     this.#steps.push(buildStep(target, ActionType.CLICK));
   }
@@ -296,6 +306,11 @@ class Recorder implements RecorderHandle {
     if (target instanceof HTMLInputElement && inputRole(target) === 'radio') {
       this.#flushPendingFill();
       this.#steps.push(buildStep(target, ActionType.CHECK));
+      return;
+    }
+    if (target instanceof HTMLSelectElement) {
+      this.#flushPendingFill();
+      this.#steps.push(buildStep(target, ActionType.SELECT, { value: target.value }));
       return;
     }
     if (isTextbox(target)) {
