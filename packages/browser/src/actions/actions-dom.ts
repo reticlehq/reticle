@@ -1,4 +1,5 @@
 import { refs } from '../dom/refs.js';
+import { isReticleUi } from '../dom/dom-ignore.js';
 import { nativeFrame } from '../timers/native-timers.js';
 
 interface ClickGeometry {
@@ -44,16 +45,6 @@ function isOffViewport(el: HTMLElement, rect: DOMRect): boolean {
   const cx = rect.left + rect.width / 2;
   const cy = rect.top + rect.height / 2;
   return cx < 0 || cy < 0 || cx > win.innerWidth || cy > win.innerHeight;
-}
-
-/** True if the node (or an ancestor) is Reticle's own injected UI — it must never count as an occluder. */
-function isReticleUi(node: Element | null): boolean {
-  for (let n: Element | null = node; n !== null; n = n.parentElement) {
-    for (const attr of Array.from(n.attributes)) {
-      if (attr.name.startsWith('data-reticle')) return true;
-    }
-  }
-  return false;
 }
 
 /** Hit-test the center: occluded iff the top NON-Reticle element is a foreign subtree (not target/ancestor/descendant). */

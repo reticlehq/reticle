@@ -1,7 +1,7 @@
 /**
  * Stable, human-meaningful element handles. Each element gets a ref like `e7`; the same
  * element keeps its ref across snapshots, and a ref re-resolves to its element as long as
- * the element is still in the document. See plan/03 (Refs).
+ * the element is still in the document.
  */
 export class RefRegistry {
   readonly #toRef = new WeakMap<Element, string>();

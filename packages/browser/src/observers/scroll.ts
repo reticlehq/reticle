@@ -5,7 +5,7 @@ import type { Emit, Teardown } from './types.js';
 const THROTTLE_MS = 100;
 const REVEAL_SELECTOR = '[data-reticle-reveal], [data-reveal], section';
 
-/** Observe scroll position + reveal-on-scroll for modern scroll-reactive UIs (plan/03 §8). */
+/** Observe scroll position + reveal-on-scroll for modern scroll-reactive UIs. */
 export function installScroll(emit: Emit): Teardown {
   let lastEmit = 0;
   let lastY = 0;

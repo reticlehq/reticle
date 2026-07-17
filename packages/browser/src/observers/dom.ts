@@ -26,7 +26,7 @@ function isMeaningful(role: string, name: string): boolean {
   return role !== 'generic' || name.length > 0;
 }
 
-/** Observe DOM mutations and emit semantic (not raw) events. See plan/03 §1. */
+/** Observe DOM mutations and emit semantic (not raw) events. */
 export function installDom(emit: Emit): Teardown {
   const observer = new MutationObserver((records) => {
     let added = 0;

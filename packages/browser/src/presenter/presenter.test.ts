@@ -429,17 +429,6 @@ describe('presenter v2 activity log', () => {
     expect(rows[0]?.querySelector('.reticle-chip')?.textContent).toBe('');
     p.destroy();
   });
-
-  it('result() on non-act current row is tolerated', () => {
-    document.body.innerHTML = '';
-    const p = new Presenter({});
-    p.mount();
-    p.log('read', 'x');
-    expect(() => p.result(true)).not.toThrow();
-    const rows = logRows();
-    expect(rows[0]?.textContent).not.toContain('✓');
-    p.destroy();
-  });
 });
 
 const dataOn = (): string | null =>

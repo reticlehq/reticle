@@ -23,6 +23,7 @@ import {
 import { describe } from '../dom/a11y.js';
 import { themeReport } from '../dom/theme.js';
 import { refs } from '../dom/refs.js';
+import { isReticleUi } from '../dom/dom-ignore.js';
 import { identifyComponent, readComponentState } from '../registry/adapters.js';
 import { readStores, storeNames } from '../registry/stores.js';
 import { getCapabilities } from '../registry/capabilities.js';
@@ -103,18 +104,6 @@ function inspect(ref: string): unknown {
     theme: cs !== null ? themeReport(cs) : null,
     component,
   };
-}
-
-/** True if the node (or an ancestor) is part of Reticle's own injected UI (HUD, glow, cursor, flag
- * button, …). Reticle's overlay must never count as occluding the app — a control sitting under the
- * HUD is a false "occluded" reading, since the HUD is not part of the app the user actually sees. */
-function isReticleUi(node: Element | null): boolean {
-  for (let n: Element | null = node; n !== null; n = n.parentElement) {
-    for (const attr of Array.from(n.attributes)) {
-      if (attr.name.startsWith('data-reticle')) return true;
-    }
-  }
-  return false;
 }
 
 /** Whether a NON-Reticle element covers this one's center point (a transparent overlay / z-index bug). */

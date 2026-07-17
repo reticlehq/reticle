@@ -184,7 +184,7 @@ function buildStatus(root: ParentNode): SnapshotStatus {
   };
 }
 
-/** Build the semantic accessibility snapshot of the page or a subtree (plan/04). */
+/** Build the semantic accessibility snapshot of the page or a subtree. */
 export function buildSnapshot(options: SnapshotOptions = {}): SnapshotResult {
   const mode = options.mode ?? SnapshotMode.FULL;
   const scopeEl =

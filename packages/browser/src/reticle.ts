@@ -358,7 +358,7 @@ export class Reticle {
     return this.#connected;
   }
 
-  /** Surface an arbitrary app-domain observation the DOM can't express (plan/03 §7). */
+  /** Surface an arbitrary app-domain observation the DOM can't express. */
   signal(name: string, data: Record<string, unknown> = {}): void {
     this.#emit(EventType.SIGNAL, { name, data });
   }
