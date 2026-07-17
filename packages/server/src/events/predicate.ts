@@ -220,13 +220,32 @@ export function waitForPredicate(
       clearTimeout(timer);
       resolve(result);
     };
+    // Coalesce re-checks: at most ONE evaluatePredicate is ever in flight (each can be a browser
+    // MATCH/STATE_READ round-trip). Events that arrive while one is running set a single trailing
+    // re-check instead of each firing their own command — otherwise a page emitting an event per
+    // animation frame fans out hundreds of concurrent round-trips and collapses under backpressure.
+    let inFlight = false;
+    let pendingRecheck = false;
     const check = (): void => {
+      if (done) return;
+      if (inFlight) {
+        pendingRecheck = true;
+        return;
+      }
+      inFlight = true;
       void evaluatePredicate(session, predicate, since)
         .then((r) => {
           if (r.pass) finish(r);
         })
         .catch((error: unknown) => {
           finish(failed(error));
+        })
+        .finally(() => {
+          inFlight = false;
+          if (pendingRecheck && !done) {
+            pendingRecheck = false;
+            check();
+          }
         });
     };
     const unsub = session.onEvent(() => {

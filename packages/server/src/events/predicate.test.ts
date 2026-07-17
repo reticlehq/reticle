@@ -480,3 +480,60 @@ describe('state predicate — assert store truth', () => {
     expect(ambiguous.failureReason).toContain('multiple stores');
   });
 });
+
+/** Session that lets the test drive events and control when each command resolves, to prove the
+ *  waiter never fans out one round-trip per event. `command` counts calls (one STATE_READ per eval). */
+class CoalesceSession implements PredicateSession {
+  commandCount = 0;
+  #listener: ((event: ReticleEvent) => void) | null = null;
+  #pending: Array<(r: CommandResult) => void> = [];
+  elapsed(): number {
+    return 0;
+  }
+  eventsSince(): ReticleEvent[] {
+    return [];
+  }
+  onEvent(listener: (event: ReticleEvent) => void): () => void {
+    this.#listener = listener;
+    return () => {
+      this.#listener = null;
+    };
+  }
+  emit(): void {
+    this.#listener?.(ev(EventType.DOM_ADDED, {}));
+  }
+  command(): Promise<CommandResult> {
+    this.commandCount += 1;
+    return new Promise((res) => this.#pending.push(res));
+  }
+  resolveNext(result: unknown): void {
+    const res = this.#pending.shift();
+    if (res !== undefined) res({ kind: 'command_result', id: 'x', ok: true, result });
+  }
+}
+
+const flush = (): Promise<void> => new Promise((r) => setTimeout(r, 0));
+
+describe('waitForPredicate coalescing', () => {
+  it('a burst of events triggers at most one trailing re-check, not one per event', async () => {
+    const session = new CoalesceSession();
+    const p = waitForPredicate(
+      session,
+      { kind: 'state', store: 's', path: 'x', equals: 1 },
+      10_000,
+    );
+    await flush();
+    expect(session.commandCount).toBe(1); // initial evaluation, in flight
+
+    for (let i = 0; i < 50; i += 1) session.emit();
+    expect(session.commandCount).toBe(1); // 50 events blocked by the single-in-flight guard
+
+    session.resolveNext({ stores: { s: { x: 0 } } }); // not-yet-true → exactly one trailing re-check
+    await flush();
+    expect(session.commandCount).toBe(2);
+
+    session.resolveNext({ stores: { s: { x: 1 } } }); // now true → the wait resolves
+    const r = await p;
+    expect(r.pass).toBe(true);
+  });
+});
