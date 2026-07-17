@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 import { pathToFileURL } from 'node:url';
-import { realpathSync, readFileSync } from 'node:fs';
+import { realpathSync } from 'node:fs';
 import { RETICLE_DEFAULT_PORT, ReticleEnv } from '@reticlehq/core';
 import { start, startDaemon } from './index.js';
+import { SERVER_VERSION } from './server-version.js';
 import { log } from './log.js';
 import {
   readPid,
@@ -127,20 +128,9 @@ function handleStatus(port: number): void {
 }
 
 /** `reticle license` — show enterprise activation resolved from the environment (offline; nothing leaves). */
-/** Print the running package version — read from this package's own package.json, next to dist/. */
+/** Print the running package version (resolved once in server-version.ts). */
 function handleVersion(): void {
-  let version = 'unknown';
-  try {
-    const parsed: unknown = JSON.parse(
-      readFileSync(new URL('../package.json', import.meta.url), 'utf8'),
-    );
-    if (parsed !== null && typeof parsed === 'object' && 'version' in parsed) {
-      version = String((parsed as Record<string, unknown>).version);
-    }
-  } catch {
-    // A missing/unreadable package.json leaves version 'unknown' — never throw from `version`.
-  }
-  log('reticle_version', { version });
+  log('reticle_version', { version: SERVER_VERSION });
 }
 
 function handleLicense(): void {

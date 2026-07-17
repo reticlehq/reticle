@@ -80,10 +80,4 @@ export class RingBuffer {
     return { total: this.#events.length, dropped: this.#droppedCount };
   }
 
-  /** Reset the drop counter and return the count that was cleared (for per-observe accounting). */
-  resetDropped(): number {
-    const n = this.#droppedCount;
-    this.#droppedCount = 0;
-    return n;
-  }
 }

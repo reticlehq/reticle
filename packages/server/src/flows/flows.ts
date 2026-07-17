@@ -15,6 +15,7 @@ import type {
   HealChange,
 } from '@reticlehq/core';
 import { ReticleTool } from '../tools/tool-names.js';
+import { asString, asRecord } from '../tools/tools-helpers.js';
 import { applyHealChanges } from './heal.js';
 import type { CompiledProgram, RecordedStep } from './recordings.js';
 import type { FileSystemPort } from '../project/fs-port.js';
@@ -35,14 +36,6 @@ export interface Clock {
 
 /** Discriminated result so callers never branch on free strings. */
 export type FlowResult<T> = { ok: true; value: T } | { ok: false; code: FlowErrorCode };
-
-function asString(value: unknown): string | undefined {
-  return typeof value === 'string' ? value : undefined;
-}
-
-function asRecord(value: unknown): Record<string, unknown> {
-  return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {};
-}
 
 /**
  * The anchor for a DEGRADED step (no resolvable testid). A volatile eXX ref is NEVER persisted —

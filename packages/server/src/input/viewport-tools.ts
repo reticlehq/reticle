@@ -1,18 +1,10 @@
 import { z } from 'zod';
 import { VISUAL_NO_PROVIDER_RECOMMENDATION, VisualReason } from '@reticlehq/core';
 import { ReticleTool } from '../tools/tool-names.js';
+import { sessionIdShape } from '../tools/tool-kit.js';
 import { asString } from '../tools/tools-helpers.js';
 import type { RealInputProvider } from './real-input.js';
 import type { ToolDef, ToolDeps } from '../tools/tools.js';
-
-const sessionIdShape = {
-  sessionId: z
-    .string()
-    .optional()
-    .describe(
-      'Active session ID from reticle_sessions. Omit when only one browser session is open.',
-    ),
-};
 
 /** Bounds so a viewport request stays sane (and a typo can't ask for a 1px or 100k-px window). */
 const MIN_DIM = 64;

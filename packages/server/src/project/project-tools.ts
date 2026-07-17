@@ -1,17 +1,9 @@
 import { z } from 'zod';
 import { ProjectReadError, RunKind, RunStatus, type RunRecord } from '@reticlehq/core';
 import { ReticleTool } from '../tools/tool-names.js';
+import { sessionIdShape } from '../tools/tool-kit.js';
 import { asString } from '../tools/tools-helpers.js';
 import type { ToolDef, ToolDeps } from '../tools/tools.js';
-
-const sessionIdShape = {
-  sessionId: z
-    .string()
-    .optional()
-    .describe(
-      'Active session ID from reticle_sessions. Omit when only one browser session is open.',
-    ),
-};
 
 /** The diff between the two most-recent runs for a name — the "did it behave like last time?" answer. */
 interface RunDiff {

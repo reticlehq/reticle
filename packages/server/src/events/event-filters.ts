@@ -1,12 +1,5 @@
 import { EventType, type ReticleEvent } from '@reticlehq/core';
-
-function asString(value: unknown): string | undefined {
-  return typeof value === 'string' ? value : undefined;
-}
-
-function asNumber(value: unknown): number | undefined {
-  return typeof value === 'number' ? value : undefined;
-}
+import { asString, asNumber } from '../tools/tools-helpers.js';
 
 /** Match a net.request event against optional method/url/status filters (reticle_network). */
 export function matchNet(

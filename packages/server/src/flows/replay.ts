@@ -2,14 +2,7 @@ import { DANGEROUS_ACTION_CONFIRM_ARG, ReticleCommand, QueryBy } from '@reticleh
 import { ReticleTool } from '../tools/tool-names.js';
 import type { RecordedStep, CompiledProgram } from './recordings.js';
 import type { Session } from '../session/session.js';
-
-function asString(value: unknown): string | undefined {
-  return typeof value === 'string' ? value : undefined;
-}
-
-function asRecord(value: unknown): Record<string, unknown> {
-  return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {};
-}
+import { asString, asRecord } from '../tools/tools-helpers.js';
 
 /** A destructive-action confirmation is one-shot and must never persist into a recording. */
 export function replayActionArgs(
