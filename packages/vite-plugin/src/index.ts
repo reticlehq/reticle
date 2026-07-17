@@ -5,6 +5,7 @@ import { transformSync } from '@babel/core';
 import reticleSource from '@reticlehq/babel-plugin';
 import { RETICLE_DEFAULT_PORT, bridgeWsUrl, ReticleDir, ReticleEnv } from '@reticlehq/core';
 import { resolveProjectId } from './project-id.js';
+import { discoverDaemonPort } from './discover-port.js';
 
 export const RETICLE_VITE_PLUGIN_NAME = 'reticle';
 
@@ -153,10 +154,15 @@ export function reticle(options: ReticleVitePluginOptions = {}): ReticleVitePlug
     },
     load(id) {
       if (!inject || id !== RETICLE_CONNECT_MODULE) return null;
+      // Resolve the daemon port lazily per request (like the token): an explicit port wins; else find
+      // the daemon serving THIS projectId in the discovery registry, so no hand-reconciled port. Falls
+      // back to the default when nothing matches (connectArgs omits url ⇒ SDK uses the default).
+      const port = resolved.port ?? discoverDaemonPort(resolved.projectId);
+      const withPort = port !== undefined ? { ...resolved, port } : resolved;
       // Read the token lazily per request: by the time the browser loads the app the daemon is up and
       // has written it. An explicit token option still wins. Undefined ⇒ omitted (page reloads once up).
-      const token = resolved.token ?? readPairingToken();
-      return connectModuleSource(token !== undefined ? { ...resolved, token } : resolved);
+      const token = withPort.token ?? readPairingToken();
+      return connectModuleSource(token !== undefined ? { ...withPort, token } : withPort);
     },
     transformIndexHtml() {
       if (!inject) return [];

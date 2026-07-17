@@ -1,4 +1,5 @@
 export * from './constants.js';
+export * from './daemon-registry.js';
 export * from './session-constants.js';
 export * from './notices.js';
 export * from './messages.js';

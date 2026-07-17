@@ -10,11 +10,22 @@ import {
   readdirSync,
 } from 'node:fs';
 import { spawn } from 'node:child_process';
+import {
+  daemonRegistryFileName,
+  daemonRegistryPort,
+  DaemonRegistryEntrySchema,
+  pickDaemonPort,
+  type DaemonRegistryEntry,
+} from '@reticlehq/core';
 
 const RETICLE_HOME = join(homedir(), '.reticle');
 
 function pidPath(port: number): string {
   return join(RETICLE_HOME, `daemon-${port}.pid`);
+}
+
+function registryPath(port: number): string {
+  return join(RETICLE_HOME, daemonRegistryFileName(port));
 }
 
 export function logPath(port: number): string {
@@ -45,6 +56,69 @@ export function writePid(port: number): void {
 export function removePid(port: number): void {
   const path = pidPath(port);
   if (existsSync(path)) unlinkSync(path);
+  // The discovery registry entry shares this daemon's lifetime — clean both so a dead daemon never
+  // lingers in discovery. Keyed by port, so this is safe from the parent (stop) or the child (shutdown).
+  removeDaemonRegistry(port);
+}
+
+/**
+ * Publish this daemon to the discovery registry so a build-time plugin can find it by projectId. Called
+ * from the daemon CHILD on ready (only it knows its cwd/projectId). Best-effort: a write failure must
+ * never fail daemon startup — discovery just falls back to the default port.
+ */
+export function writeDaemonRegistry(
+  port: number,
+  meta: { pid: number; cwd: string; projectId?: string; startedAt: number },
+): void {
+  const entry: DaemonRegistryEntry = {
+    port,
+    pid: meta.pid,
+    cwd: meta.cwd,
+    startedAt: meta.startedAt,
+    ...(meta.projectId !== undefined ? { projectId: meta.projectId } : {}),
+  };
+  try {
+    mkdirSync(RETICLE_HOME, { recursive: true });
+    writeFileSync(registryPath(port), JSON.stringify(entry), 'utf8');
+  } catch {
+    // discovery is a convenience — never block startup on it
+  }
+}
+
+export function removeDaemonRegistry(port: number): void {
+  const path = registryPath(port);
+  try {
+    if (existsSync(path)) unlinkSync(path);
+  } catch {
+    // racing another cleaner — already gone
+  }
+}
+
+/**
+ * Discover the port of a live daemon serving `projectId` by reading the registry entries in ~/.reticle.
+ * Returns null when none matches (caller falls back to the default port — never guesses a mismatched
+ * daemon). Stale entries (crashed daemons) are ignored via the pid liveness probe.
+ */
+export function discoverDaemonPortForProject(projectId: string | undefined): number | null {
+  const entries: DaemonRegistryEntry[] = [];
+  let files: string[];
+  try {
+    files = readdirSync(RETICLE_HOME);
+  } catch {
+    return null; // no ~/.reticle yet
+  }
+  for (const file of files) {
+    if (daemonRegistryPort(file) === null) continue;
+    try {
+      const parsed = DaemonRegistryEntrySchema.safeParse(
+        JSON.parse(readFileSync(join(RETICLE_HOME, file), 'utf8')),
+      );
+      if (parsed.success) entries.push(parsed.data);
+    } catch {
+      // unreadable/corrupt entry — skip it
+    }
+  }
+  return pickDaemonPort(entries, projectId, isAlive);
 }
 
 export function isRunning(port: number): boolean {
@@ -104,6 +178,7 @@ export function reclaimStaleDaemons(
     if (pid === null || !pidAlive(pid)) {
       try {
         unlinkSync(path);
+        removeDaemonRegistry(Number(match[1])); // drop the sidecar discovery entry too
         reclaimed.push(Number(match[1]));
       } catch {
         // racing another reclaimer — fine, it's already gone
