@@ -2,7 +2,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 import * as http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { createSharedServer, MCP_SSE_PATH, STATUS_PATH, type SharedServer } from './http-server.js';
+import { MCP_SSE_PATH, STATUS_PATH } from '@reticlehq/core';
+import { createSharedServer, type SharedServer } from './http-server.js';
 
 let shared: SharedServer | undefined;
 

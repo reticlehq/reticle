@@ -1,6 +1,7 @@
 import * as http from 'node:http';
 import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { MCP_SSE_PATH, MCP_MESSAGE_PATH, STATUS_PATH } from '@reticlehq/core';
 import { log } from './log.js';
 import {
   isLoopbackHost,
@@ -9,12 +10,6 @@ import {
   requestToken,
   tokensMatch,
 } from './token-auth.js';
-
-// These paths form the agent↔server wire contract. Keep in sync with skill/SKILL.md.
-export const MCP_SSE_PATH = '/mcp/sse';
-export const MCP_MESSAGE_PATH = '/mcp/message';
-/** Local-only daemon introspection — `reticle status` GETs this to show sessions + health at a glance. */
-export const STATUS_PATH = '/status';
 
 export interface SharedServer {
   readonly httpServer: http.Server;

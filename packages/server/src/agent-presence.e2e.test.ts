@@ -10,7 +10,8 @@ import {
   MessageKind,
   SessionState,
 } from '@reticlehq/core';
-import { createSharedServer, MCP_SSE_PATH, type SharedServer } from './http-server.js';
+import { MCP_SSE_PATH } from '@reticlehq/core';
+import { createSharedServer, type SharedServer } from './http-server.js';
 import { Bridge } from './bridge.js';
 import { endAllSessions } from './session/session-reaper.js';
 

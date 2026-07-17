@@ -1,7 +1,6 @@
 import * as http from 'node:http';
 import * as net from 'node:net';
-import { LOOPBACK_HOST } from '@reticlehq/core';
-import { MCP_SSE_PATH } from './http-server.js';
+import { LOOPBACK_HOST, MCP_SSE_PATH } from '@reticlehq/core';
 import { log } from './log.js';
 
 const DEFAULT_DAEMON_READY_TIMEOUT_MS = 10_000;

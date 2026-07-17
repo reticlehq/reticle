@@ -5,6 +5,11 @@
 
 export const RETICLE_DEFAULT_PORT = 4400;
 export const RETICLE_WS_PATH = '/reticle';
+/** Agent↔server MCP wire paths — served by the daemon HTTP plane, forwarded by the stdio proxy. */
+export const MCP_SSE_PATH = '/mcp/sse';
+export const MCP_MESSAGE_PATH = '/mcp/message';
+/** Local-only daemon introspection — `reticle status` GETs this for sessions + health at a glance. */
+export const STATUS_PATH = '/status';
 export const RETICLE_PROTOCOL_VERSION = 1;
 
 /**

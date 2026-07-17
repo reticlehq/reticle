@@ -83,7 +83,7 @@ export { VisualStore } from './visual/visual-store.js';
 export { diffPng } from './visual/visual-diff.js';
 export type { VisualDiffResult, VisualRect, DiffOptions } from './visual/visual-diff.js';
 export { crawl } from './crawl/crawl.js';
-export { MCP_SSE_PATH, MCP_MESSAGE_PATH } from './http-server.js';
+export { MCP_SSE_PATH, MCP_MESSAGE_PATH } from '@reticlehq/core';
 export { BrowserPool, DEFAULT_LEASE_TTL_MS } from './pool/browser-pool.js';
 export type { Lease, Launcher, PooledBrowser } from './pool/browser-pool.js';
 export { playwrightLauncher, resolveMaxContexts } from './pool/playwright-launcher.js';

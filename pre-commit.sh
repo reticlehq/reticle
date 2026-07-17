@@ -78,7 +78,11 @@ while IFS= read -r f; do
   if grep -nE '(//|#)[^"'"'"'`]*\b[A-Z][0-9]+(\.[0-9]+)?\b' "$f" >/dev/null 2>&1; then
     note "${RED}✗ internal tracking tag (e.g. N5, G4, M8) in comment in $f — use prose instead${NC}"; fail=1
   fi
-  if grep -nE '(//|#)[^"'"'"'`]*\b[0-9]+\.[0-9]+\.[0-9]+\b' "$f" >/dev/null 2>&1; then
+  # Blank out IPv4 addresses (four dotted octets) before the semver check — 127.0.0.1 in a
+  # DNS-rebinding comment is not an internal milestone label. A real X.Y.Z surviving is flagged.
+  if grep -nE '(//|#)[^"'"'"'`]*\b[0-9]+\.[0-9]+\.[0-9]+\b' "$f" 2>/dev/null \
+       | sed -E 's/[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}//g' \
+       | grep -qE '\b[0-9]+\.[0-9]+\.[0-9]+\b'; then
     note "${RED}✗ version string in comment in $f — remove internal milestone labels${NC}"; fail=1
   fi
 done < <(ts_staged)

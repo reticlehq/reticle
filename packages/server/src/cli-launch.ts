@@ -1,7 +1,6 @@
 import * as http from 'node:http';
 import { spawn } from 'node:child_process';
-import { LOOPBACK_HOST } from '@reticlehq/core';
-import { STATUS_PATH } from './http-server.js';
+import { LOOPBACK_HOST, STATUS_PATH } from '@reticlehq/core';
 
 /**
  * CLI launch + status helpers — the daemon-introspection (`reticle status`) and the one-command
