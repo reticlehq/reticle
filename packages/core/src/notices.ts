@@ -29,6 +29,15 @@ export function isPresenterTone(value: unknown): value is PresenterTone {
   );
 }
 
+/**
+ * Surfaced on observe/network/console results once the event ring buffer has evicted anything (age
+ * or size cap). Converts a silent false negative into an honest one: a "no such event" answer after
+ * eviction may be "I dropped the evidence", not "it never happened" — widen the buffer / grade
+ * sooner. Rides in a `buffer` block only when `dropped > 0` (silence ⇒ nothing lost).
+ */
+export const BUFFER_EVICTION_WARNING =
+  'event buffer evicted older events (age/size cap) — a negative result here may be a false negative; the evidence may have expired. Grade sooner or widen the buffer.';
+
 /** Surfaced on act/assert results when the target tab is throttled. */
 export const THROTTLED_WARNING =
   'tab throttled; timer/rAF/pointer gestures may silently no-op — refocus before driving';

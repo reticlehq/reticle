@@ -14,6 +14,7 @@ function sessionWith(events: ReticleEvent[]): Session {
     id: 'demo',
     eventsSince: () => events,
     health: () => ({ lastSeenMs: 0, throttled: false, focused: true }),
+    bufferHealth: () => ({ total: events.length, dropped: 0 }),
     getState: () => undefined as never,
     drainInbox: () => [],
   };
@@ -123,5 +124,44 @@ describe('token budget on reticle_network / reticle_console', () => {
     expect(r.logs.map((l) => l.text)).toEqual(['c']);
     expect(r.total).toBe(3);
     expect(r.droppedOldest).toBe(2);
+  });
+});
+
+describe('buffer honesty — a negative result after eviction is not silent', () => {
+  /** A session whose ring buffer has evicted `dropped` events since connect. */
+  function depsWithDrops(events: ReticleEvent[], dropped: number): ToolDeps {
+    const stub: Partial<Session> = {
+      id: 'demo',
+      eventsSince: () => events,
+      eventsInWindow: () => events,
+      health: () => ({ lastSeenMs: 0, throttled: false, focused: true }),
+      bufferHealth: () => ({ total: events.length, dropped }),
+      elapsed: () => 0,
+      lastActCursor: () => undefined,
+      getState: () => undefined as never,
+      drainInbox: () => [],
+    };
+    const sessions: Partial<SessionManager> = { resolve: () => stub as Session };
+    return { sessions: sessions as SessionManager } as ToolDeps;
+  }
+
+  it('reticle_network: an empty result WITH evictions carries a buffer block (not a false clean no)', async () => {
+    const r = (await tool(ReticleTool.NETWORK).handler(depsWithDrops([], 12), {
+      method: 'POST',
+    })) as { calls: unknown[]; buffer?: { held: number; dropped: number; note: string } };
+    expect(r.calls).toHaveLength(0);
+    expect(r.buffer?.dropped).toBe(12);
+    expect(r.buffer?.note.length).toBeGreaterThan(0);
+  });
+
+  it('reticle_observe / console: an intact buffer (0 drops) omits the block entirely', async () => {
+    const net = (await tool(ReticleTool.NETWORK).handler(depsWithDrops([], 0), {})) as {
+      buffer?: unknown;
+    };
+    const obs = (await tool(ReticleTool.OBSERVE).handler(depsWithDrops([], 0), {})) as {
+      buffer?: unknown;
+    };
+    expect(net.buffer).toBeUndefined();
+    expect(obs.buffer).toBeUndefined();
   });
 });
