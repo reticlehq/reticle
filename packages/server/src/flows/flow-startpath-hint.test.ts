@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { AnchorKind, EventType, FLOW_FILE_VERSION, type FlowFile, type ReticleEvent } from '@reticlehq/core';
+import {
+  AnchorKind,
+  EventType,
+  FLOW_FILE_VERSION,
+  type FlowFile,
+  type ReticleEvent,
+} from '@reticlehq/core';
 import { startPathMismatchHint } from './flow-replay-run.js';
 
 const flow = (startPath?: string): FlowFile => ({

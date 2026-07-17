@@ -38,7 +38,9 @@ export function buildFlowChips(
     if (!flowInProjectScope(flow.projectId, sessionProjectId)) continue;
     const first = flow.steps[0];
     const start =
-      first !== undefined && first.anchor.kind === AnchorKind.TESTID ? first.anchor.value : undefined;
+      first !== undefined && first.anchor.kind === AnchorKind.TESTID
+        ? first.anchor.value
+        : undefined;
     chips.push(start === undefined ? { name: flow.name } : { name: flow.name, start });
   }
   return chips;

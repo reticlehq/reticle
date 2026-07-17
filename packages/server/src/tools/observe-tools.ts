@@ -260,7 +260,9 @@ export const OBSERVE_TOOLS: ToolDef[] = [
       const matched = allNet.filter((e) => matchNet(e, method, urlContains, status));
       // zero-match filter returns what DID fire, not a bare [].
       if (matched.length === 0 && allNet.length > 0) {
-        return Promise.resolve(withSizeCost({ calls: matched, hint: netEmptyHint(allNet), ...buffer }));
+        return Promise.resolve(
+          withSizeCost({ calls: matched, hint: netEmptyHint(allNet), ...buffer }),
+        );
       }
       const { events: budgeted, droppedOldest } = applyEventBudget(matched, limit);
       const calls = budgeted.map(projectNetCall);
@@ -325,7 +327,9 @@ export const OBSERVE_TOOLS: ToolDef[] = [
       const logs = budgeted.map(projectConsoleLog);
       return Promise.resolve(
         withSizeCost(
-          droppedOldest > 0 ? { logs, total: matched.length, droppedOldest, ...buffer } : { logs, ...buffer },
+          droppedOldest > 0
+            ? { logs, total: matched.length, droppedOldest, ...buffer }
+            : { logs, ...buffer },
         ),
       );
     },

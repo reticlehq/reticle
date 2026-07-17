@@ -4,6 +4,28 @@ All notable changes to the **`@reticlehq/*`** packages are documented here (each
 
 ## [Unreleased]
 
+## [2.0.1] — 2026-07-17
+
+A bug-fix release focused on the verifier's honesty (no more silent false negatives), flow ergonomics, and zero-config setup. No breaking changes — every schema addition stays back-compatible and on-disk flow files remain version 1.
+
+### Fixed
+
+- **The event buffer no longer answers a confident "no" after it dropped the evidence.** The ring buffer evicts events on an age/size cap; when it has, `reticle_observe` / `reticle_network` / `reticle_console` now carry a `buffer: { held, dropped, note }` block so a negative result is distinguishable from "the evidence expired" — the difference between an honest verifier and a silent false negative on a long rollout. Omitted entirely when nothing was dropped (an intact buffer stays token-flat). (#27) (`@reticlehq/server`, `@reticlehq/core`)
+- **`reticle_domain` no longer reports a fully-tested app as untested.** `FlowStore.load()` with no `projectId` (the CLI/CI/`reticle_domain` caller) now scans the per-project subdirs like `list()` already did, instead of resolving only the flat path — so a project-scoped flow is loaded, not listed-then-silently-dropped (which reported `flowCount: 0` and every declared signal/testid as a gap). (#26) (`@reticlehq/server`)
+- **A flow that starts on another page no longer drifts on step 1 with a mystifying "a step no longer matches."** The recorder now captures the journey's `startPath`; on replay, when the tab is on a different route, the decision's next action says "navigate there (`reticle_navigate`), then replay." (#23) (`@reticlehq/browser`, `@reticlehq/core`, `@reticlehq/server`)
+- **The "no browser session connected" error names the real cause.** In a multi-repo / multi-agent setup the usual culprit is a port mismatch between the app's SDK and the daemon's `RETICLE_PORT`; the error now says so instead of only pointing at the SDK flag. (`@reticlehq/server`, `@reticlehq/core`)
+- **Security hardening (dev-only, same-machine trust):** `VisualStore.baselinePath`/`diffPath` now reject a traversal name like their siblings, and a failed pairing-token auto-provision warns loudly that the bridge is running without auth instead of degrading silently. (`@reticlehq/server`)
+
+### Added
+
+- **Zero-config daemon discovery.** Each live daemon publishes a `~/.reticle/daemon-<port>.json` registry entry; the Vite plugin, absent an explicit port, connects to the daemon serving THIS project's id — no more hand-reconciling a port in the app config and the daemon's `RETICLE_PORT`. Falls back to the default when nothing matches; an explicit port still overrides. (#24) (`@reticlehq/core`, `@reticlehq/server`, `@reticlehq/vite-plugin`)
+- **Prune saved flows.** `reticle_flow_delete` removes a renamed/obsolete flow so it stops lingering in the replay list (project-scoped like `reticle_flow_load`; `not_found` on an absent flow, never a silent no-op). (#25) (`@reticlehq/server`)
+
+### Changed
+
+- **The HUD composer is polished.** The multi-line input's default OS scrollbar is replaced with the thin styled one used elsewhere in the panel, content-box sizing no longer causes a height jump on the first keystroke, and the textarea gains an accessible name. (`@reticlehq/browser`)
+- **One `bridgeWsUrl()` builder** in `@reticlehq/core` replaces the four hand-built `ws://…/reticle` strings across the SDK, the Vite/Next snippet generators, and the CLI — the wire string can no longer drift. (`@reticlehq/core`, `@reticlehq/browser`, `@reticlehq/server`, `@reticlehq/vite-plugin`)
+
 ## [2.0.0] — 2026-07-11
 
 The single-install `@reticlehq/core` umbrella is retired in favour of **audience-scoped packages**. Each package now depends only on what it needs — `@reticlehq/core` sits at the bottom of the graph as the wire contract (constants + zod schemas, `zod` its only dependency), so the dev-only browser SDK never reaches your server and the Node bridge never reaches your bundle. The split is the one breaking change; the migration is a rename with no behaviour change. This release also folds in the security-hardening work from 1.3.x and adds collision-safe multi-app flow storage.
@@ -12,20 +34,19 @@ The single-install `@reticlehq/core` umbrella is retired in favour of **audience
 
 - **The `@reticlehq/core` umbrella is split into scoped packages.** In v1 you installed one package and imported everything from it via `/server`, `/vite`, `/next`, … subpaths. In v2 you install the package for your role:
 
-  | v1 (umbrella subpath) | v2 (install this) |
-  | --- | --- |
-  | `@reticlehq/core` (the dev SDK + React adapter) | `@reticlehq/react` |
-  | `@reticlehq/core/vite` | `@reticlehq/vite-plugin` |
-  | `@reticlehq/core/next` | `@reticlehq/next` |
-  | `@reticlehq/core/babel` | `@reticlehq/babel-plugin` |
-  | `@reticlehq/core/test` | `@reticlehq/test` |
-  | `@reticlehq/core/eslint` | `@reticlehq/eslint-plugin` |
-  | `@reticlehq/core/server` (and the `reticle` CLI) | `@reticlehq/server` |
+  | v1 (umbrella subpath)                            | v2 (install this)          |
+  | ------------------------------------------------ | -------------------------- |
+  | `@reticlehq/core` (the dev SDK + React adapter)  | `@reticlehq/react`         |
+  | `@reticlehq/core/vite`                           | `@reticlehq/vite-plugin`   |
+  | `@reticlehq/core/next`                           | `@reticlehq/next`          |
+  | `@reticlehq/core/babel`                          | `@reticlehq/babel-plugin`  |
+  | `@reticlehq/core/test`                           | `@reticlehq/test`          |
+  | `@reticlehq/core/eslint`                         | `@reticlehq/eslint-plugin` |
+  | `@reticlehq/core/server` (and the `reticle` CLI) | `@reticlehq/server`        |
 
   `@reticlehq/core` still exists but is now **only the wire contract** shared across browser ↔ bridge ↔ agent. `@reticlehq/protocol` is a thin deprecated alias re-exporting `@reticlehq/core` (pulled in automatically; import from `@reticlehq/core` in new code — the alias is removed in v3).
 
   **Migrate:**
-
   1. Replace the single install with the packages for your app: `npm i -D @reticlehq/react @reticlehq/vite-plugin` (or `@reticlehq/next` for Next.js). Your agent runs `@reticlehq/server`.
   2. Update imports: `@reticlehq/core` → `@reticlehq/react` for the SDK; `@reticlehq/core/vite` → `@reticlehq/vite-plugin`; `@reticlehq/core/next` → `@reticlehq/next`; `@reticlehq/core/test` → `@reticlehq/test`.
   3. Update your MCP client config: the `reticle` CLI now ships in `@reticlehq/server`, so the command becomes `npx @reticlehq/server mcp`. Recorded flows, baselines, `.reticle.json`, tool names, and env vars are unchanged.

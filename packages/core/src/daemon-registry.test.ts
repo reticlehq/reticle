@@ -32,7 +32,10 @@ describe('pickDaemonPort — match by projectId, drop the dead, never guess', ()
 
   it('returns the live daemon whose projectId matches', () => {
     const port = pickDaemonPort(
-      [entry({ port: 4400, projectId: 'other' }), entry({ port: 4460, pid: 200, projectId: 'mine' })],
+      [
+        entry({ port: 4400, projectId: 'other' }),
+        entry({ port: 4460, pid: 200, projectId: 'mine' }),
+      ],
       'mine',
       allAlive,
     );
@@ -41,7 +44,10 @@ describe('pickDaemonPort — match by projectId, drop the dead, never guess', ()
 
   it('lowest port wins when two live daemons match', () => {
     const port = pickDaemonPort(
-      [entry({ port: 5000, pid: 2, projectId: 'mine' }), entry({ port: 4460, pid: 1, projectId: 'mine' })],
+      [
+        entry({ port: 5000, pid: 2, projectId: 'mine' }),
+        entry({ port: 4460, pid: 1, projectId: 'mine' }),
+      ],
       'mine',
       allAlive,
     );

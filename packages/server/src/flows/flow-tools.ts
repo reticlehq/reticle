@@ -138,7 +138,9 @@ export const FLOW_TOOLS: ToolDef[] = [
       sessionId: z
         .string()
         .optional()
-        .describe('Active session ID — scopes the list to that app. Omit to list every saved flow.'),
+        .describe(
+          'Active session ID — scopes the list to that app. Omit to list every saved flow.',
+        ),
     },
     outputSchema: {
       flows: z.array(
