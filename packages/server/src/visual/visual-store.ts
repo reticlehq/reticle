@@ -19,13 +19,16 @@ export class VisualStore {
     this.#root = root;
   }
 
-  /** The absolute baseline path for `name` (for echoing back to the agent). */
+  /** The absolute baseline path for `name` (for echoing back to the agent). Guards the name so a
+   *  crafted value can never echo a path outside .reticle/visual/ to a future caller that does IO. */
   baselinePath(name: string): string {
+    if (!isValidFlowName(name)) throw new Error(`invalid visual baseline name: ${name}`);
     return visualPath(this.#root, name);
   }
 
-  /** The absolute overlay-diff path for `name`. */
+  /** The absolute overlay-diff path for `name`. Same name guard as baselinePath. */
   diffPath(name: string): string {
+    if (!isValidFlowName(name)) throw new Error(`invalid visual diff name: ${name}`);
     return visualDiffPath(this.#root, name);
   }
 
