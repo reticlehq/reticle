@@ -219,11 +219,7 @@ export function evalConsole(
   // Reticle only instruments console.log/warn/error. A level outside that set is never captured,
   // so its events can't exist — and an `absent` assertion on it would verify NOTHING while
   // reporting green. Fail loudly instead of false-passing.
-  if (
-    p.level !== undefined &&
-    p.level !== 'error' &&
-    CONSOLE_LEVEL_TYPE[p.level] === undefined
-  ) {
+  if (p.level !== undefined && p.level !== 'error' && CONSOLE_LEVEL_TYPE[p.level] === undefined) {
     return {
       pass: false,
       failureReason: `console level '${p.level}' is not captured — Reticle instruments console.log, console.warn, console.error only`,

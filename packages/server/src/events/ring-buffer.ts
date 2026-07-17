@@ -79,5 +79,4 @@ export class RingBuffer {
   bufferHealth(): { total: number; dropped: number } {
     return { total: this.#events.length, dropped: this.#droppedCount };
   }
-
 }

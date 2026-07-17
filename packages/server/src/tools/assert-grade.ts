@@ -11,6 +11,7 @@
  * Pure: no IO, no clock.
  */
 
+import { isConsequenceKind, isPresenceKind } from '@reticlehq/core';
 import type { Predicate } from '../events/predicate.js';
 
 export const PRESENCE_ONLY_ADVICE =
@@ -24,33 +25,20 @@ interface PredicateKinds {
 }
 
 function walk(predicate: Predicate): PredicateKinds {
-  switch (predicate.kind) {
-    case 'signal':
-    case 'net':
-    case 'state':
-      // A state assertion verifies the app's own source of truth changed — a consequence a wrong
-      // element or stale render cannot fake (the strongest form of the success-oracle).
-      return { consequence: true, presence: false };
-    case 'element':
-    case 'text':
-      return { consequence: false, presence: true };
-    case 'route':
-    case 'console':
-    case 'animation':
-    case 'settled':
-      // Observable but not the weak presence pattern we nudge — neither flags the advice.
-      return { consequence: false, presence: false };
-    case 'allOf':
-    case 'anyOf': {
-      const subs = predicate.predicates.map(walk);
-      return {
-        consequence: subs.some((s) => s.consequence),
-        presence: subs.some((s) => s.presence),
-      };
-    }
-    case 'not':
-      return walk(predicate.predicate);
+  if (predicate.kind === 'allOf' || predicate.kind === 'anyOf') {
+    const subs = predicate.predicates.map(walk);
+    return {
+      consequence: subs.some((s) => s.consequence),
+      presence: subs.some((s) => s.presence),
+    };
   }
+  if (predicate.kind === 'not') return walk(predicate.predicate);
+  // Leaf: classify against the single source of truth in core. Kinds that are neither consequence
+  // nor presence (route/console/settled/animation) correctly return false for both.
+  return {
+    consequence: isConsequenceKind(predicate.kind),
+    presence: isPresenceKind(predicate.kind),
+  };
 }
 
 /**

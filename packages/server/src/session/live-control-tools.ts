@@ -16,7 +16,6 @@ import type { ToolDef } from '../tools/tools.js';
 const WAIT_READY_DEFAULT_MS = 5000;
 const WAIT_READY_MAX_MS = 30000;
 
-
 /**
  * Live-control agent tools: the agent's side of the human-in-the-loop control surface.
  *
