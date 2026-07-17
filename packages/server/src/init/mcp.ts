@@ -12,11 +12,13 @@
  * global agent config.
  */
 
+import { RETICLE_NPM_PACKAGE } from '../server-version.js';
+
 export const MCP_SERVER_NAME = 'reticle';
 export const NPX = 'npx';
-// The `reticle` bin lives in @reticlehq/server, so `npx @reticlehq/server mcp` runs the bridge
-// without the retired `core` umbrella. `npx @reticlehq/server` resolves its sole bin (`reticle`).
-const RETICLE_PACKAGE = '@reticlehq/server';
+// The `reticle` bin lives in the server package, so `npx <pkg> mcp` runs the bridge without the
+// retired `core` umbrella. Sourced from the single derived identity so it can never drift.
+const RETICLE_PACKAGE = RETICLE_NPM_PACKAGE;
 const MCP_SUBCOMMAND = 'mcp';
 const CLAUDE_CLI = 'claude';
 

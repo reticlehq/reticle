@@ -76,6 +76,15 @@ function fetchNpmInfo(): Promise<NpmPackageInfo> {
   });
 }
 
+/** Injectable IO for checkForUpdate so the network + manifest cache are testable (default = real). */
+export interface UpdateCheckPorts {
+  fetchInfo: () => Promise<NpmPackageInfo>;
+  loadManifest: () => UpdateManifest | null;
+  saveManifest: (manifest: UpdateManifest) => void;
+}
+
+const defaultPorts: UpdateCheckPorts = { fetchInfo: fetchNpmInfo, loadManifest, saveManifest };
+
 /**
  * Returns the current update manifest, refreshing from the npm registry when the cache
  * is older than UpdateCheckIntervalMs. Never throws — falls back to the cached manifest
@@ -84,14 +93,15 @@ function fetchNpmInfo(): Promise<NpmPackageInfo> {
 export async function checkForUpdate(
   currentVersion: string,
   now: () => number,
+  ports: UpdateCheckPorts = defaultPorts,
 ): Promise<UpdateManifest> {
-  const cached = loadManifest();
+  const cached = ports.loadManifest();
   if (cached !== null && cached.currentVersion === currentVersion && isCacheFresh(cached, now)) {
     return cached;
   }
 
   try {
-    const info = await fetchNpmInfo();
+    const info = await ports.fetchInfo();
     const updateAvailable = info.version !== currentVersion;
     const manifest: UpdateManifest = {
       currentVersion,
@@ -104,7 +114,7 @@ export async function checkForUpdate(
         : {}),
       ...(cached?.previousVersion !== undefined ? { previousVersion: cached.previousVersion } : {}),
     };
-    saveManifest(manifest);
+    ports.saveManifest(manifest);
     return manifest;
   } catch (err) {
     log('reticle_update_check_failed', {
