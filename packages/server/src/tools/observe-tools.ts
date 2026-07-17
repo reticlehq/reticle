@@ -18,11 +18,24 @@ import {
   projectConsoleLog,
 } from '../events/event-filters.js';
 import { applyEventBudget, costHint, withSizeCost } from '../session/output-budget.js';
-import { healthEnvelope } from '../session/session-health.js';
+import { healthEnvelope, bufferEnvelope } from '../session/session-health.js';
 import { isPresenceOnlyAssertion, PRESENCE_ONLY_ADVICE } from './assert-grade.js';
 import { withControl } from '../session/control-envelope.js';
 import { asString, asNumber } from './tools-helpers.js';
 import { type ToolDef, sessionIdShape, commandOrThrow } from './tool-kit.js';
+
+/**
+ * Evidence-completeness block: present on observe/network/console only when the ring buffer has
+ * evicted events, so a "no such event" answer is distinguishable from "I dropped it" (issue #27).
+ */
+const bufferOutputShape = {
+  buffer: z
+    .object({ held: z.number(), dropped: z.number(), note: z.string() })
+    .optional()
+    .describe(
+      'Present only when the event buffer evicted events — a negative result may then be a false negative.',
+    ),
+};
 
 export const OBSERVE_TOOLS: ToolDef[] = [
   {
@@ -81,6 +94,7 @@ export const OBSERVE_TOOLS: ToolDef[] = [
       session: z
         .object({ lastSeenMs: z.number(), throttled: z.boolean(), focused: z.boolean() })
         .optional(),
+      ...bufferOutputShape,
     },
     handler: (deps, args) => {
       const session = deps.sessions.resolve(asString(args['sessionId']));
@@ -103,6 +117,7 @@ export const OBSERVE_TOOLS: ToolDef[] = [
           ...report,
           cost: costHint(report, budgeted.length, droppedOldest),
           ...healthEnvelope(session),
+          ...bufferEnvelope(session),
         }),
       );
     },
@@ -230,6 +245,7 @@ export const OBSERVE_TOOLS: ToolDef[] = [
       droppedOldest: z.number().optional().describe('How many older matches `limit` dropped.'),
       hint: z.object({ totalInWindow: z.number(), present: z.array(z.string()) }).optional(),
       cost: z.object({ bytes: z.number(), tokens: z.number() }).optional(),
+      ...bufferOutputShape,
     },
     handler: (deps, args) => {
       const session = deps.sessions.resolve(asString(args['sessionId']));
@@ -238,18 +254,23 @@ export const OBSERVE_TOOLS: ToolDef[] = [
       const urlContains = asString(args['urlContains']);
       const status = asNumber(args['status']);
       const limit = asNumber(args['limit']);
+      const buffer = bufferEnvelope(session);
       // Completed calls + unresolved in-flight requests (a hung request shows as pending).
       const allNet = reconcileNet(session.eventsSince(since));
       const matched = allNet.filter((e) => matchNet(e, method, urlContains, status));
       // zero-match filter returns what DID fire, not a bare [].
       if (matched.length === 0 && allNet.length > 0) {
-        return Promise.resolve(withSizeCost({ calls: matched, hint: netEmptyHint(allNet) }));
+        return Promise.resolve(
+          withSizeCost({ calls: matched, hint: netEmptyHint(allNet), ...buffer }),
+        );
       }
       const { events: budgeted, droppedOldest } = applyEventBudget(matched, limit);
       const calls = budgeted.map(projectNetCall);
       return Promise.resolve(
         withSizeCost(
-          droppedOldest > 0 ? { calls, total: matched.length, droppedOldest } : { calls },
+          droppedOldest > 0
+            ? { calls, total: matched.length, droppedOldest, ...buffer }
+            : { calls, ...buffer },
         ),
       );
     },
@@ -286,22 +307,30 @@ export const OBSERVE_TOOLS: ToolDef[] = [
       droppedOldest: z.number().optional().describe('How many older matches `limit` dropped.'),
       hint: z.object({ totalInWindow: z.number(), byLevel: z.record(z.number()) }).optional(),
       cost: z.object({ bytes: z.number(), tokens: z.number() }).optional(),
+      ...bufferOutputShape,
     },
     handler: (deps, args) => {
       const session = deps.sessions.resolve(asString(args['sessionId']));
       const since = asNumber(args['since']) ?? 0;
       const level = asString(args['level']);
       const limit = asNumber(args['limit']);
+      const buffer = bufferEnvelope(session);
       const allConsole = session.eventsSince(since).filter(isConsoleEvent);
       const matched = allConsole.filter((e) => matchConsole(e, level));
       // zero matches at this level → report what levels ARE present (not a bare []).
       if (matched.length === 0 && allConsole.length > 0) {
-        return Promise.resolve(withSizeCost({ logs: matched, hint: consoleEmptyHint(allConsole) }));
+        return Promise.resolve(
+          withSizeCost({ logs: matched, hint: consoleEmptyHint(allConsole), ...buffer }),
+        );
       }
       const { events: budgeted, droppedOldest } = applyEventBudget(matched, limit);
       const logs = budgeted.map(projectConsoleLog);
       return Promise.resolve(
-        withSizeCost(droppedOldest > 0 ? { logs, total: matched.length, droppedOldest } : { logs }),
+        withSizeCost(
+          droppedOldest > 0
+            ? { logs, total: matched.length, droppedOldest, ...buffer }
+            : { logs, ...buffer },
+        ),
       );
     },
   },

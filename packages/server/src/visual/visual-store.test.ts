@@ -53,4 +53,10 @@ describe('VisualStore — temp dir, never touches the repo', () => {
     expect(await store.readBaseline('../escape')).toBeUndefined();
     expect(await store.hasBaseline('../escape')).toBe(false);
   });
+
+  it('6: the path-echo methods also reject a traversal name (never echo an out-of-dir path)', () => {
+    expect(() => store.baselinePath('../escape')).toThrow();
+    expect(() => store.diffPath('../escape')).toThrow();
+    expect(store.baselinePath('home').endsWith(join('.reticle', 'visual', 'home.png'))).toBe(true);
+  });
 });

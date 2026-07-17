@@ -6,6 +6,7 @@ import {
   ReplayStatus,
   RunKind,
   RunStatus,
+  type FlowFile,
   type FlowReplayResult,
   type FlowStepResult,
   type ReticleEvent,
@@ -73,6 +74,29 @@ async function recordReplayRun(
 }
 
 /**
+ * When a flow records the page its journey started on (`startPath`) and the tab is currently on a
+ * different route, step 1 drifts for a reason that has nothing to do with the app regressing — the
+ * anchor simply isn't on this page yet. Detect that so the decision says "navigate there first"
+ * instead of a mystifying "a step no longer matches". Returns undefined when the routes agree or the
+ * current route is unobservable (no route event) — never a false alarm. Replay itself does NOT
+ * navigate: a full-page load mid-replay tears down the session socket; the agent navigates between
+ * tool calls (reticle_navigate) where the session is re-resolved fresh.
+ */
+export function startPathMismatchHint(
+  flow: FlowFile,
+  session: { eventsSince(cursor: number): ReticleEvent[] },
+): string | undefined {
+  const startPath = flow.startPath;
+  if (startPath === undefined || startPath.length === 0) return undefined;
+  const routes = session.eventsSince(0).filter((e) => e.type === EventType.ROUTE_CHANGE);
+  const last = routes.at(-1);
+  const data = last?.data ?? {};
+  const current = asString(data['pathname']) ?? asString(data['to']);
+  if (current === undefined || current === startPath) return undefined;
+  return `this flow's journey starts on ${startPath} but the tab is on ${current} — navigate there (reticle_navigate { url: "${startPath}" }), then replay`;
+}
+
+/**
  * Replay one named flow end to end: load → re-resolve+run each step → assert the success oracle →
  * status + decision. Shared by reticle_flow_replay (single flow) and reticle_flow_verify (whole suite) so
  * both produce identical FlowReplayResults. Every exit path records a run to project.json.
@@ -103,6 +127,9 @@ export async function replayNamedFlow(
     };
   }
   const session = deps.sessions.resolve(asString(args['sessionId']));
+  // Captured before replay: if the tab isn't on the flow's start page, a step-1 drift is a wrong-page
+  // symptom, not a regression — surface that on the decision instead of a bare "a step no longer matches".
+  const startPathHint = startPathMismatchHint(loaded.value, session);
   // Floor the success oracle at the start of THIS replay so a stale signal from a prior run
   // in the same session can't fake a pass.
   const replayFloor = session.elapsed();
@@ -148,9 +175,18 @@ export async function replayNamedFlow(
       error: { code: ReplayStatus.ERROR, message: failed.error ?? 'flow action failed' },
     };
     errored.decision = buildDecision(errored, loaded.value);
+    applyStartPathHint(errored, startPathHint);
     return errored;
   }
   const result: FlowReplayResult = { name, status, steps };
   if (status !== ReplayStatus.OK) result.decision = buildDecision(result, loaded.value);
+  applyStartPathHint(result, startPathHint);
   return result;
+}
+
+/** Fold a start-page-mismatch hint onto a non-passing replay's decision (the actionable next move). */
+function applyStartPathHint(result: FlowReplayResult, hint: string | undefined): void {
+  if (hint === undefined || result.decision === undefined) return;
+  result.decision.suggestedFix = hint;
+  result.decision.nextAction = hint;
 }

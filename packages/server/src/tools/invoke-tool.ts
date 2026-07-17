@@ -49,6 +49,7 @@ export const SESSION_EXEMPT_TOOLS: ReadonlySet<string> = new Set([
   ReticleTool.FLOW_SAVE, // sessionId only scopes the write to the app's flow subdir; disk-side
   ReticleTool.FLOW_LIST, // sessionId only scopes which project's flows are listed; disk read
   ReticleTool.FLOW_LOAD, // sessionId only scopes which project's flow is read; disk read
+  ReticleTool.FLOW_DELETE, // sessionId only scopes which project's flow is removed; disk delete
   ReticleTool.FLOW_REPLAY, // returns its own FlowReplayResult contract (+ auto-records a run)
   ReticleTool.FLOW_VERIFY, // returns its own SuiteVerdict contract (replays the whole suite)
   ReticleTool.FLOW_SAVE_RECORDED, // reads the recording buffer, writes disk

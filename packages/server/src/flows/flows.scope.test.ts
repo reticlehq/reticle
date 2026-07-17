@@ -81,6 +81,31 @@ describe('FlowStore — per-project storage (shared-daemon isolation)', () => {
     expect(await store.list()).toEqual(['a-only', 'b-only', 'flat-one']);
   });
 
+  it('unscoped load (CLI/CI, e.g. reticle_domain) resolves a per-project flow — not just lists it', async () => {
+    // The bug: list() unioned the subdirs but load()'s resolveReadPath did not, so an unscoped
+    // caller listed a nested flow then silently dropped it on `if (loaded.ok)` (flowCount:0).
+    await store.saveFlow(flow('nested-only'), 'app-a');
+    expect(await store.list()).toContain('nested-only'); // listed
+    const loaded = await store.load('nested-only'); // and now loadable with no projectId
+    expect(loaded.ok).toBe(true);
+    expect(loaded.ok && loaded.value.projectId).toBe('app-a');
+  });
+
+  it('remove deletes a per-project flow (and a second remove is NOT_FOUND, not a silent pass)', async () => {
+    await store.saveFlow(flow('stale'), 'app-a');
+    expect(await fs.exists(flowPath(root, 'stale', 'app-a'))).toBe(true);
+    expect((await store.remove('stale', 'app-a')).ok).toBe(true);
+    expect(await fs.exists(flowPath(root, 'stale', 'app-a'))).toBe(false);
+    expect(await store.list('app-a')).not.toContain('stale');
+    expect((await store.remove('stale', 'app-a')).ok).toBe(false); // gone → NOT_FOUND
+  });
+
+  it('remove resolves a nested flow with no projectId (mirrors load)', async () => {
+    await store.saveFlow(flow('nested'), 'app-a');
+    expect((await store.remove('nested')).ok).toBe(true);
+    expect(await fs.exists(flowPath(root, 'nested', 'app-a'))).toBe(false);
+  });
+
   it('heal rewrites the nested file in place, never forking a flat copy', async () => {
     await store.saveFlow(flow('h', 'old-testid'), 'app-a');
     const healed = await store.heal(

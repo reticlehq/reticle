@@ -293,6 +293,11 @@ export class Session {
     return this.#buffer.window(windowMs, this.elapsed());
   }
 
+  /** Buffer honesty: events currently held + cumulative evictions since connect (for false-negative detection). */
+  bufferHealth(): { total: number; dropped: number } {
+    return this.#buffer.bufferHealth();
+  }
+
   onEvent(listener: (event: ReticleEvent) => void): () => void {
     this.#listeners.add(listener);
     return () => this.#listeners.delete(listener);

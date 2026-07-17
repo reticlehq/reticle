@@ -11,6 +11,7 @@ import {
   removePid,
   spawnDaemon,
   discoverDaemonPort,
+  writeDaemonRegistry,
 } from './daemon.js';
 import { waitForDaemon, startMcpProxy, probeDaemon } from './mcp-proxy.js';
 import { installDaemonResilience } from './daemon-resilience.js';
@@ -20,7 +21,7 @@ import { handleVerify } from './cli-verify.js';
 import { runInit } from './init/run.js';
 import { buildNodeIo } from './init/node-io.js';
 import { describeLicense } from './license/license.js';
-import { readProjectPort } from './cli-port.js';
+import { readProjectPort, readProjectId } from './cli-port.js';
 import type { StartOptions } from './index.js';
 
 import {
@@ -217,6 +218,15 @@ function handleDaemonInner(parsed: {
   startDaemon(options)
     .then((server) => {
       log('reticle_daemon_ready', { port: parsed.port, pid: process.pid });
+      // Publish to the discovery registry so a build plugin can find this daemon by projectId — no
+      // hand-reconciled port. Written from the child (only it knows its cwd); removePid drops it.
+      const registryProjectId = readProjectId(process.cwd());
+      writeDaemonRegistry(parsed.port, {
+        pid: process.pid,
+        cwd: process.cwd(),
+        startedAt: Date.now(),
+        ...(registryProjectId !== undefined ? { projectId: registryProjectId } : {}),
+      });
       // The daemon serves many agents — keep it alive through one agent's stray async error; only a
       // genuine uncaught throw takes it down (cleanly, so the next `reticle mcp` respawns it fresh).
       installDaemonResilience(process, log, () => {

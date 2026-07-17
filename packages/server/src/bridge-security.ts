@@ -53,7 +53,13 @@ export async function resolveBridgeSecurityWithAutoToken(
   const dir = options.pairingTokenDir ?? defaultPairingTokenDir();
   const token = await readOrCreatePairingToken(dir, nodePairingTokenDeps());
   if (token === undefined) {
-    log('pairing_token_provision_failed', { dir });
+    // Fail-open is deliberate (never block a dev daemon on an unwritable $HOME), but it must be LOUD:
+    // the bridge is now trusting every loopback origin. Say so plainly, not just as a silent event.
+    log('pairing_token_provision_failed', {
+      dir,
+      warning:
+        'SECURITY: could not provision a pairing token — the bridge is running WITHOUT auth and will trust any localhost origin. Any local process/page can drive your browser sessions. Fix write access to this dir, or set RETICLE_TOKEN.',
+    });
     return security;
   }
   return { ...security, token };

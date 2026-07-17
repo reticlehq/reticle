@@ -1,5 +1,22 @@
-import { THROTTLED_WARNING } from '@reticlehq/core';
+import { BUFFER_EVICTION_WARNING, THROTTLED_WARNING } from '@reticlehq/core';
 import type { Session, SessionHealth } from './session.js';
+
+/** The evidence-completeness block spliced onto observe/network/console results. */
+interface BufferEnvelope {
+  buffer?: { held: number; dropped: number; note: string };
+}
+
+/**
+ * Buffer-honesty envelope for observe/network/console. When the ring buffer has evicted anything
+ * (age/size cap), a "no such event" answer may be a false negative — so we attach the drop count and
+ * an actionable note. OMITTED entirely when nothing was dropped: silence means the buffer is intact,
+ * so a clean/empty result there is trustworthy and costs zero tokens.
+ */
+export function bufferEnvelope(session: Session): BufferEnvelope {
+  const { total, dropped } = session.bufferHealth();
+  if (dropped === 0) return {};
+  return { buffer: { held: total, dropped, note: BUFFER_EVICTION_WARNING } };
+}
 
 /** The `session` (and optional throttled `warning`) block spliced onto act/assert results. */
 interface HealthEnvelope {

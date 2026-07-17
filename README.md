@@ -31,9 +31,9 @@ It reads the _program_ (network, store state, signals, the React commit stream),
 
 <div align="center">
 
-### **[⚡ Install](#install-in-30-seconds)**  ·  [All install options](#install-the-full-options)  ·  [Manual setup (docs)](docs/getting-started.md)
+### **[⚡ Install](#install-in-30-seconds)** · [All install options](#install-the-full-options) · [Manual setup (docs)](docs/getting-started.md)
 
-[How it works](#how-it-works)  ·  [How to use it](#how-to-use-it)  ·  [Benchmarks](#honest-benchmarks)  ·  [vs Playwright & DevTools](#when-to-use-reticle-vs-playwright-and-devtools)  ·  [What's inside](#whats-inside)
+[How it works](#how-it-works) · [How to use it](#how-to-use-it) · [Benchmarks](#honest-benchmarks) · [vs Playwright & DevTools](#when-to-use-reticle-vs-playwright-and-devtools) · [What's inside](#whats-inside)
 
 </div>
 

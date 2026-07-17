@@ -3,7 +3,7 @@ import {
   RETICLE_DEFAULT_PORT,
   RETICLE_PROTOCOL_VERSION,
   RETICLE_URL_PARAM,
-  RETICLE_WS_PATH,
+  bridgeWsUrl,
   ReticleCommand,
   MessageKind,
   SESSION_AUTO,
@@ -237,7 +237,7 @@ export class Reticle {
       return;
     }
 
-    const url = options.url ?? `ws://localhost:${String(RETICLE_DEFAULT_PORT)}${RETICLE_WS_PATH}`;
+    const url = options.url ?? bridgeWsUrl(RETICLE_DEFAULT_PORT);
     const policy = connectionPolicy(
       window.location.hostname,
       url,
