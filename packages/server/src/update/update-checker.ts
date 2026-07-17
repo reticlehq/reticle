@@ -3,11 +3,14 @@ import * as https from 'node:https';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { UpdateCheckIntervalMs } from '@reticlehq/core';
+import { RETICLE_NPM_PACKAGE } from '../server-version.js';
 import { log } from '../log.js';
 
 const RETICLE_HOME = join(homedir(), '.reticle');
 const MANIFEST_PATH = join(RETICLE_HOME, 'update-manifest.json');
-const NPM_REGISTRY = 'https://registry.npmjs.org/@reticlehq/core/latest';
+// Poll the package that carries the bin (@reticlehq/server), so the version we compare against and
+// the version we install are the same package — not @reticlehq/core, which only tracks it by luck.
+const NPM_REGISTRY = `https://registry.npmjs.org/${RETICLE_NPM_PACKAGE}/latest`;
 
 interface UpdateManifest {
   currentVersion: string;
