@@ -81,6 +81,16 @@ describe('FlowStore — per-project storage (shared-daemon isolation)', () => {
     expect(await store.list()).toEqual(['a-only', 'b-only', 'flat-one']);
   });
 
+  it('unscoped load (CLI/CI, e.g. reticle_domain) resolves a per-project flow — not just lists it', async () => {
+    // The bug: list() unioned the subdirs but load()'s resolveReadPath did not, so an unscoped
+    // caller listed a nested flow then silently dropped it on `if (loaded.ok)` (flowCount:0).
+    await store.saveFlow(flow('nested-only'), 'app-a');
+    expect(await store.list()).toContain('nested-only'); // listed
+    const loaded = await store.load('nested-only'); // and now loadable with no projectId
+    expect(loaded.ok).toBe(true);
+    expect(loaded.ok && loaded.value.projectId).toBe('app-a');
+  });
+
   it('heal rewrites the nested file in place, never forking a flat copy', async () => {
     await store.saveFlow(flow('h', 'old-testid'), 'app-a');
     const healed = await store.heal(

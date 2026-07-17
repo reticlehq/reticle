@@ -344,7 +344,29 @@ export class FlowStore {
       if (await this.#fs.exists(nested)) return nested;
     }
     const flat = flowPath(this.#root, name);
-    return (await this.#fs.exists(flat)) ? flat : null;
+    if (await this.#fs.exists(flat)) return flat;
+    // No projectId (CLI/CI/contract callers, e.g. reticle_domain): mirror list()'s subdir union on
+    // the read side too — a flow saved under .reticle/flows/<projectId>/ must still load, else it is
+    // listed and then silently dropped by `if (loaded.ok)` (reticle_domain reports flowCount:0).
+    if (pid === undefined) return this.#resolveNestedPath(name);
+    return null;
+  }
+
+  /** Scan the per-project subdirs for a flow by name — the read-side of list()'s no-pid union. */
+  async #resolveNestedPath(name: string): Promise<string | null> {
+    const flowsDir = reticleDirPaths(this.#root).flows;
+    if (!(await this.#fs.exists(flowsDir))) return null;
+    let entries: string[];
+    try {
+      entries = await this.#fs.readdir(flowsDir);
+    } catch {
+      return null;
+    }
+    for (const dir of entries.filter((e) => !e.endsWith(FLOW_SUFFIX))) {
+      const nested = flowPath(this.#root, name, dir);
+      if (await this.#fs.exists(nested)) return nested;
+    }
+    return null;
   }
 
   /**
