@@ -71,6 +71,12 @@ function postToSession(url: string, body: string): Promise<void> {
       },
     };
     const req = http.request(options, (res) => {
+      const status = res.statusCode ?? 0;
+      if (status < 200 || status >= 300) {
+        // A non-2xx from the daemon MCP endpoint used to be swallowed, hanging the JSON-RPC call
+        // client-side with no diagnostic. Surface it (the forward is still fire-and-forget).
+        log('reticle_mcp_proxy_post_non2xx', { status, path: options.path });
+      }
       res.resume(); // drain so the socket is reused
       resolve();
     });
