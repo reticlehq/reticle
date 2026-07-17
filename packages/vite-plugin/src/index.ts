@@ -3,7 +3,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { transformSync } from '@babel/core';
 import reticleSource from '@reticlehq/babel-plugin';
-import { RETICLE_DEFAULT_PORT, RETICLE_WS_PATH, ReticleDir, ReticleEnv } from '@reticlehq/core';
+import { RETICLE_DEFAULT_PORT, bridgeWsUrl, ReticleDir, ReticleEnv } from '@reticlehq/core';
 import { resolveProjectId } from './project-id.js';
 
 export const RETICLE_VITE_PLUGIN_NAME = 'reticle';
@@ -107,8 +107,7 @@ export function readPairingToken(): string | undefined {
 function connectArgs(options: ReticleVitePluginOptions): string {
   const args: Record<string, string | number> = {};
   const port = options.port ?? RETICLE_DEFAULT_PORT;
-  if (port !== RETICLE_DEFAULT_PORT)
-    args['url'] = `ws://localhost:${String(port)}${RETICLE_WS_PATH}`;
+  if (port !== RETICLE_DEFAULT_PORT) args['url'] = bridgeWsUrl(port);
   if (options.session !== undefined) args['session'] = options.session;
   if (options.projectId !== undefined) args['projectId'] = options.projectId;
   if (options.token !== undefined) args['token'] = options.token;

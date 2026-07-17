@@ -3,7 +3,7 @@
  * so the runner never inlines free strings.
  */
 
-import { RETICLE_DEFAULT_PORT, RETICLE_WS_PATH } from '@reticlehq/core';
+import { RETICLE_DEFAULT_PORT, bridgeWsUrl } from '@reticlehq/core';
 
 /**
  * The connect() argument literal: a non-default port adds a `url`, and a projectId is always passed
@@ -12,7 +12,7 @@ import { RETICLE_DEFAULT_PORT, RETICLE_WS_PATH } from '@reticlehq/core';
 function connectArg(port: number | undefined, projectId?: string): string {
   const parts: string[] = [];
   if (port !== undefined && port !== RETICLE_DEFAULT_PORT) {
-    parts.push(`url: 'ws://localhost:${String(port)}${RETICLE_WS_PATH}'`);
+    parts.push(`url: '${bridgeWsUrl(port)}'`);
   }
   if (projectId !== undefined && projectId.length > 0) parts.push(`projectId: '${projectId}'`);
   return parts.length > 0 ? `{ ${parts.join(', ')} }` : '';

@@ -8,6 +8,16 @@ export const RETICLE_WS_PATH = '/reticle';
 export const RETICLE_PROTOCOL_VERSION = 1;
 
 /**
+ * The one place the bridge WebSocket URL is built. The SDK connect default, the vite/next snippet
+ * generators, and the CLI's inject-connect all call this instead of hand-writing `ws://…${path}` —
+ * so the wire string can never drift across the four call sites. Host defaults to `localhost` (the
+ * dev app connects from the browser); pass it only for a non-default bind.
+ */
+export function bridgeWsUrl(port: number = RETICLE_DEFAULT_PORT, host = 'localhost'): string {
+  return `ws://${host}:${String(port)}${RETICLE_WS_PATH}`;
+}
+
+/**
  * Namespaced URL params a pooled/headless launcher appends to the app URL so the app's own SDK adopts
  * the lease's identity (session + project) on connect — no app code changes. Wire contract shared by
  * the server (BrowserPool/lease tools) and the browser SDK; namespaced to avoid clashing with the

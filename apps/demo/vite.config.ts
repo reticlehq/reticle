@@ -9,6 +9,7 @@ export default defineConfig({
   // strictPort fails loudly instead of silently drifting to vite's default when the port is taken.
   server: { port: 4310, strictPort: true },
   // port must match the reticle daemon this repo's MCP drives (RETICLE_PORT in root .mcp.json).
-  // The default 4400 is taken by a separate Reticle-protocol daemon on this machine.
-  plugins: [react(), reticle({ port: 58432 })],
+  // Env-overridable so it isn't pinned to one machine's daemon; defaults to 58432 because 4400 is
+  // taken by a separate Reticle-protocol daemon on the maintainer's machine.
+  plugins: [react(), reticle({ port: Number(process.env['RETICLE_PORT'] ?? 58432) })],
 });
