@@ -136,8 +136,8 @@ describe('reticle_flow_save_recorded handler', () => {
     const first = recordedEvent('first', flowFile('first', [clickStep('a')]));
     const last = recordedEvent('second', flowFile('second', [clickStep('b'), clickStep('c')]));
     const deps = fakeDeps(store, [first, last]);
-    const res = (await recordedTool().handler(deps, {})) as { flowName: string; stepCount: number };
-    expect(res.flowName).toBe('second');
+    const res = (await recordedTool().handler(deps, {})) as { name: string; stepCount: number };
+    expect(res.name).toBe('second');
     expect(res.stepCount).toBe(2);
     expect(await store.list()).toEqual(['second']);
   });
@@ -181,9 +181,9 @@ describe('reticle_flow_save_recorded handler', () => {
     const ev = recordedEvent('original', flowFile('original', [clickStep('a')]));
     const deps = fakeDeps(store, [ev]);
     const res = (await recordedTool().handler(deps, { flowName: 'renamed' })) as {
-      flowName: string;
+      name: string;
     };
-    expect(res.flowName).toBe('renamed');
+    expect(res.name).toBe('renamed');
     expect(await store.list()).toEqual(['renamed']);
   });
 });

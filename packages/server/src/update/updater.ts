@@ -154,5 +154,8 @@ export async function rollback(): Promise<void> {
   log('reticle_rollback_applying', { version: prev, executionKind: kind });
   await installVersionRollback(prev, kind);
   log('reticle_rollback_applied', { version: prev, executionKind: kind });
-  process.exit(0);
+  // For npx, exiting would let the next restart re-resolve @latest — rolling FORWARD, the opposite
+  // of rollback. installVersionRollback already told the user to pin the version in .mcp.json, so
+  // stay running rather than trigger that. Other kinds installed the old version and must restart.
+  if (kind !== ExecutionKind.NPX) process.exit(0);
 }

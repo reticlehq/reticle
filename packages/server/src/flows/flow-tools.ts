@@ -353,8 +353,9 @@ export const FLOW_TOOLS: ToolDef[] = [
       // If logged into Reticle Cloud, mirror the saved flow to the team's regression suite. Best-effort
       // and non-blocking: the flow is already on disk, so a sync failure never fails the save.
       void syncSavedFlowToCloud(flow, session.projectId);
-      const { name, ...rest } = res.value;
-      return { flowName: name, ...rest };
+      // Return the SaveSummary as-is ({ name, stepCount, degraded, empty }) — the outputSchema
+      // declares `name`, so the old `flowName` key was silently stripped by schema-strict clients.
+      return res.value;
     },
   },
   {
