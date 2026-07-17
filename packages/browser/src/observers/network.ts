@@ -2,29 +2,58 @@ import { EventType, REDACTED_VALUE } from '@reticlehq/core';
 import { isSensitiveKey } from '../security/serialization.js';
 import type { Emit, Teardown } from './types.js';
 
+/** A path segment name that is typically followed by a single-use secret token in the NEXT segment. */
+const SENSITIVE_PATH_SEGMENT =
+  /^(reset|verify|verification|confirm|activate|invite|magic|magiclink|token|key|oauth|unsubscribe|password)$/i;
+/** Only mask a following segment that looks token-like — short ids/words (`reset/form`) are left alone. */
+const PATH_TOKEN_MIN_LENGTH = 12;
+
 /**
- * Redact credential-bearing query params (`?access_token=…`, signed-URL keys, magic-link tokens) so
- * they don't leak into the agent transcript / flow / run artifacts. Only the query string is rewritten
- * — the path (relative or absolute) and any hash are preserved — and only when something actually
- * matched, so non-sensitive URLs pass through byte-for-byte. Uses the shared `isSensitiveKey` regex.
+ * Redact credential-bearing values so they don't leak into the agent transcript / flow / run
+ * artifacts: query params (`?access_token=…`, signed-URL keys) via the shared `isSensitiveKey` regex,
+ * AND path-embedded tokens (`/reset/<token>`, `/invite/<token>`) that live in the path, not the query.
+ * The hash is preserved and the URL is returned byte-for-byte when nothing matched.
  */
 export function redactUrl(raw: string): string {
-  const queryStart = raw.indexOf('?');
-  if (queryStart === -1) return raw;
-  const base = raw.slice(0, queryStart);
-  const rest = raw.slice(queryStart + 1);
-  const hashStart = rest.indexOf('#');
-  const query = hashStart === -1 ? rest : rest.slice(0, hashStart);
-  const hash = hashStart === -1 ? '' : rest.slice(hashStart);
-  const params = new URLSearchParams(query);
+  const hashStart = raw.indexOf('#');
+  const hash = hashStart === -1 ? '' : raw.slice(hashStart);
+  const beforeHash = hashStart === -1 ? raw : raw.slice(0, hashStart);
+  const queryStart = beforeHash.indexOf('?');
+  const pathPart = queryStart === -1 ? beforeHash : beforeHash.slice(0, queryStart);
+  const query = queryStart === -1 ? '' : beforeHash.slice(queryStart + 1);
+
   let changed = false;
-  for (const key of [...params.keys()]) {
-    if (isSensitiveKey(key)) {
-      params.set(key, REDACTED_VALUE);
+
+  let newQuery = query;
+  if (query !== '') {
+    const params = new URLSearchParams(query);
+    for (const key of [...params.keys()]) {
+      if (isSensitiveKey(key)) {
+        params.set(key, REDACTED_VALUE);
+        changed = true;
+      }
+    }
+    newQuery = params.toString();
+  }
+
+  const segments = pathPart.split('/');
+  for (let i = 0; i + 1 < segments.length; i++) {
+    const name = segments[i];
+    const next = segments[i + 1];
+    if (
+      name !== undefined &&
+      next !== undefined &&
+      next.length >= PATH_TOKEN_MIN_LENGTH &&
+      SENSITIVE_PATH_SEGMENT.test(name)
+    ) {
+      segments[i + 1] = REDACTED_VALUE;
       changed = true;
     }
   }
-  return changed ? `${base}?${params.toString()}${hash}` : raw;
+
+  if (!changed) return raw;
+  const queryOut = queryStart === -1 ? '' : `?${newQuery}`;
+  return `${segments.join('/')}${queryOut}${hash}`;
 }
 
 interface XhrMeta {

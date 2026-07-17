@@ -37,6 +37,18 @@ describe('redactUrl', () => {
   it('preserves a trailing #hash', () => {
     expect(redactUrl('/p?token=t#section')).toBe('/p?token=%5BREDACTED%5D#section');
   });
+
+  it('redacts a path-embedded token after a sensitive segment name', () => {
+    expect(redactUrl('https://app.com/reset/AbC123deadbeef99')).toBe(
+      'https://app.com/reset/[REDACTED]',
+    );
+    expect(redactUrl('/invite/aBcD1234EfGh5678?ref=x')).toBe('/invite/[REDACTED]?ref=x');
+  });
+
+  it('leaves short non-token segments after a sensitive name alone', () => {
+    expect(redactUrl('/reset/form')).toBe('/reset/form');
+    expect(redactUrl('/password/reset')).toBe('/password/reset');
+  });
 });
 
 describe('installNetwork (fetch)', () => {
