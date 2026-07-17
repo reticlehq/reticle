@@ -8,6 +8,7 @@ import {
   ReticleMessageSchema,
   LOOPBACK_HOST,
   MessageKind,
+  ReticleEnv,
   TRANSPORT_LIMITS,
   isLoopbackHostname,
 } from '@reticlehq/core';
@@ -112,6 +113,16 @@ export class Bridge {
         .map(normalizeOrigin)
         .filter((origin): origin is string => origin !== null),
     );
+    // Binding beyond localhost means the browser dials in from a non-loopback Origin. With no
+    // allow-list, #originAllowed rejects every such Origin at the WS handshake, so the bridge comes
+    // up but accepts nothing — a silent, fail-closed footgun. Refuse to start with a clear message.
+    if (!isLoopbackHostname(host) && this.#allowedOrigins.size === 0) {
+      throw new Error(
+        `${ReticleEnv.ALLOWED_ORIGINS} must list the app origin(s) when the Reticle bridge binds ` +
+          'beyond localhost — otherwise every non-loopback browser is rejected at the WebSocket ' +
+          'origin check and no connection can be established.',
+      );
+    }
     this.#maxMessagesPerSecond =
       options.maxMessagesPerSecond ?? TRANSPORT_LIMITS.MAX_MESSAGES_PER_SECOND;
     this.#maxSessions = options.maxSessions ?? TRANSPORT_LIMITS.MAX_SESSIONS;

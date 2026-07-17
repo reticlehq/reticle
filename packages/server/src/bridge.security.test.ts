@@ -115,6 +115,12 @@ describe('Bridge security boundary', () => {
     expect(() => new Bridge({ port: 0, host: '0.0.0.0' })).toThrow(/pairing token/);
   });
 
+  it('requires allowedOrigins when binding beyond localhost (else it rejects every browser)', () => {
+    expect(() => new Bridge({ port: 0, host: '0.0.0.0', token: 'shared-secret' })).toThrow(
+      /ALLOWED_ORIGINS/,
+    );
+  });
+
   it('rejects protocol mismatches', async () => {
     const { bridge, port } = await makeBridge();
     const socket = await openSocket(port);
