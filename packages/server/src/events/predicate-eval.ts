@@ -204,11 +204,31 @@ export function evalRoute(
   return { pass: true, evidence: last.data };
 }
 
+/** The only console levels Reticle instruments (console.info/debug/trace are NOT patched). */
+const CONSOLE_LEVEL_TYPE: Readonly<Record<string, EventType>> = {
+  log: EventType.CONSOLE_LOG,
+  warn: EventType.CONSOLE_WARN,
+  error: EventType.CONSOLE_ERROR,
+};
+
 export function evalConsole(
   events: ReticleEvent[],
   p: Extract<Predicate, { kind: 'console' }>,
 ): EvalResult {
   const since = p.since ?? 0;
+  // Reticle only instruments console.log/warn/error. A level outside that set is never captured,
+  // so its events can't exist — and an `absent` assertion on it would verify NOTHING while
+  // reporting green. Fail loudly instead of false-passing.
+  if (
+    p.level !== undefined &&
+    p.level !== 'error' &&
+    CONSOLE_LEVEL_TYPE[p.level] === undefined
+  ) {
+    return {
+      pass: false,
+      failureReason: `console level '${p.level}' is not captured — Reticle instruments console.log, console.warn, console.error only`,
+    };
+  }
   const matches = events.filter((e) => {
     if (e.t < since) return false;
     const isErr = e.type === EventType.CONSOLE_ERROR || e.type === EventType.ERROR_UNCAUGHT;
@@ -221,7 +241,7 @@ export function evalConsole(
       );
     }
     if (p.level === 'error') return isErr;
-    return e.type === `console.${p.level}`;
+    return e.type === CONSOLE_LEVEL_TYPE[p.level];
   });
   if (p.absent === true) {
     return matches.length === 0
@@ -325,6 +345,33 @@ export function evalSettled(
   now: number,
 ): EvalResult {
   const quietMs = p.quietMs ?? DEFAULT_QUIET_MS;
+
+  // A request that STARTED (NET_PENDING) but never completed (NET_REQUEST with the same id) is
+  // still in flight — the page is NOT settled no matter how quiet the DOM has gone. Without this,
+  // a slow save reads as "settled" the instant its spinner stops mutating the DOM: the exact
+  // false-green `settled` exists to prevent.
+  const doneIds = new Set<string>();
+  for (const e of events) {
+    if (e.type === EventType.NET_REQUEST) {
+      const id = str(e.data['id']);
+      if (id !== undefined) doneIds.add(id);
+    }
+  }
+  let inFlight = 0;
+  for (const e of events) {
+    if (e.type === EventType.NET_PENDING) {
+      const id = str(e.data['id']);
+      if (id === undefined || !doneIds.has(id)) inFlight += 1;
+    }
+  }
+  if (inFlight > 0) {
+    return {
+      pass: false,
+      failureReason: `not settled: ${String(inFlight)} request(s) still in flight`,
+      evidence: { settled: false, inFlight },
+    };
+  }
+
   let lastT = -1;
   let lastType: EventType | undefined;
   for (const e of events) {
