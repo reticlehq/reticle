@@ -102,6 +102,21 @@ describe('command registry (driven by the bridge)', () => {
     unregisterStore('state_app');
   });
 
+  it('STATE_READ resolves a row PAST the transport array cap (select before sanitize)', () => {
+    // 300 rows > MAX_COLLECTION_ITEMS (200): the old sanitize-then-select path truncated the array
+    // to 200 and lost row 250. Selecting the raw store first must still find it.
+    registerStore('state_app', () => ({
+      deployments: Array.from({ length: 300 }, (_, i) => ({ id: i, status: `s${String(i)}` })),
+    }));
+    const r = run(ReticleCommand.STATE_READ, {
+      store: 'state_app',
+      path: 'deployments.250.status',
+    }) as Record<string, unknown>;
+    expect(r['found']).toBe(true);
+    expect(r['value']).toBe('s250');
+    unregisterStore('state_app');
+  });
+
   it('STATE_READ depth caps a large sub-tree to a size marker in-page', () => {
     registerStore('state_app', () => ({ deployments: [1, 2, 3, 4, 5] }));
     const r = run(ReticleCommand.STATE_READ, {

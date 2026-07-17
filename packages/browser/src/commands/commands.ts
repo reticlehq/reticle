@@ -25,7 +25,8 @@ import { themeReport } from '../dom/theme.js';
 import { refs } from '../dom/refs.js';
 import { isReticleUi } from '../dom/dom-ignore.js';
 import { identifyComponent, readComponentState } from '../registry/adapters.js';
-import { readStores, storeNames } from '../registry/stores.js';
+import { readStores, readStoresRaw, storeNames } from '../registry/stores.js';
+import { sanitizeForTransport } from '../security/serialization.js';
 import { getCapabilities } from '../registry/capabilities.js';
 import { freezeClock, advanceClock, resetClock, isClockFrozen } from '../timers/clock.js';
 import { scrollContainer } from '../actions/scroll.js';
@@ -145,26 +146,28 @@ function readState(
   path: string | undefined,
   depth: number | undefined,
 ): unknown {
-  const stores = readStores(store);
   const names = storeNames();
 
-  // Scoped read: walk `path` into the named store (or the whole {stores} when no store is given) and
-  // cap depth — entirely in-page, so only the result crosses the wire.
+  // Scoped read: walk `path` into the RAW (uncapped) store, then sanitize only the selected sub-tree.
+  // Selecting before the transport cap is what lets a deep/large path (row 250 of a 500-row array)
+  // resolve — capping first would truncate the store before selection ever reached the row.
   if (path !== undefined || depth !== undefined) {
-    const base = store !== undefined ? stores[store] : { stores, storeNames: names };
+    const rawStores = readStoresRaw(store);
+    const base = store !== undefined ? rawStores[store] : { stores: rawStores, storeNames: names };
     const selection = path !== undefined ? selectPath(base, path) : { found: true, value: base };
-    const value =
+    const selected =
       selection.found && depth !== undefined ? capDepth(selection.value, depth) : selection.value;
     return {
       store,
       path,
       found: selection.found,
-      value,
+      value: sanitizeForTransport(selected),
       ...('availableKeys' in selection ? { availableKeys: selection.availableKeys } : {}),
       storeNames: names,
     };
   }
 
+  const stores = readStores(store);
   const result: {
     stores: Record<string, unknown>;
     storeNames: string[];
