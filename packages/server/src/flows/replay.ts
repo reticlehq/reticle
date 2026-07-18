@@ -1,4 +1,9 @@
-import { DANGEROUS_ACTION_CONFIRM_ARG, ReticleCommand, QueryBy } from '@reticlehq/core';
+import {
+  DANGEROUS_ACTION_CONFIRM_ARG,
+  ReticleCommand,
+  QueryBy,
+  type CommandResult,
+} from '@reticlehq/core';
 import { ReticleTool } from '../tools/tool-names.js';
 import type { RecordedStep, CompiledProgram } from './recordings.js';
 import type { Session } from '../session/session.js';
@@ -11,6 +16,18 @@ import { asString, asRecord } from '../tools/tools-helpers.js';
  */
 export function ambiguousTestidNote(value: string): string {
   return `ambiguous testid '${value}', used first match`;
+}
+
+/**
+ * The live element refs a QUERY resolved to (empty when it failed or matched nothing). Shared by BOTH
+ * replay engines (replayProgram + flow-replay's step runner) so element extraction — the core of anchor
+ * resolution — can't drift between them.
+ */
+export function queryRefs(result: CommandResult): string[] {
+  if (!result.ok) return [];
+  const payload = asRecord(result.result);
+  const elements = Array.isArray(payload['elements']) ? payload['elements'] : [];
+  return elements.map((e) => asString(asRecord(e)['ref']) ?? '').filter((r) => r.length > 0);
 }
 
 /** A destructive-action confirmation is one-shot and must never persist into a recording. */
@@ -105,12 +122,10 @@ async function resolveRef(
   if (by === QueryBy.TESTID && value !== undefined) {
     const result = await session.command(ReticleCommand.QUERY, { by, value });
     if (!result.ok) throw new Error(result.error ?? 'query failed');
-    const elements = Array.isArray(asRecord(result.result)['elements'])
-      ? (asRecord(result.result)['elements'] as unknown[])
-      : [];
-    const ref = asString(asRecord(elements[0])['ref']);
+    const refs = queryRefs(result);
+    const ref = refs[0];
     if (ref === undefined) throw new Error(`testid '${value}' did not resolve in current page`);
-    return elements.length > 1 ? { ref, note: ambiguousTestidNote(value) } : { ref };
+    return refs.length > 1 ? { ref, note: ambiguousTestidNote(value) } : { ref };
   }
   const ref = asString(step.ref);
   if (ref === undefined || ref.length === 0)
