@@ -333,3 +333,5 @@ export interface FlowHealResult {
   message: string;
   error?: { code: string; message: string };
 }
+
+export type RecordedFlow = z.infer<typeof RecordedFlowSchema>;

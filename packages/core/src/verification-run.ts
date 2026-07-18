@@ -317,3 +317,6 @@ export const ReticleVerificationRunSchema = z.object({
   signature: RunSignatureSchema.optional(),
 });
 export type ReticleVerificationRun = z.infer<typeof ReticleVerificationRunSchema>;
+
+export type VerificationEvidence = z.infer<typeof VerificationEvidenceSchema>;
+export type RunSignature = z.infer<typeof RunSignatureSchema>;

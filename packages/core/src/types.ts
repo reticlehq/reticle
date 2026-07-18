@@ -273,3 +273,8 @@ export interface AnnotateOutcome {
   result: AnnotateResult;
   patch?: AnnotatePatch;
 }
+
+export type ContractFile = z.infer<typeof ContractFileSchema>;
+export type RunEvidence = z.infer<typeof RunEvidenceSchema>;
+export type CapabilityFlow = z.infer<typeof CapabilityFlowSchema>;
+export type RiskZone = z.infer<typeof RiskZoneSchema>;
