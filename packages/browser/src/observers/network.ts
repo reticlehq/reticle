@@ -1,5 +1,10 @@
 import { EventType, REDACTED_VALUE } from '@reticlehq/core';
-import { isSensitiveKey, sanitizeForTransport, safeStringify } from '../security/serialization.js';
+import {
+  isSensitiveKey,
+  sanitizeForTransport,
+  safeStringify,
+  scrubKnownSecrets,
+} from '../security/serialization.js';
 import type { Emit, Teardown } from './types.js';
 
 /** Config for the network observer. Body capture is OFF by default and dev-only opt-in. */
@@ -22,14 +27,19 @@ function isCapturableType(contentType: string | null): boolean {
   return contentType !== null && CAPTURABLE_CONTENT.test(contentType);
 }
 
-/** An `Authorization: Bearer …` / `Basic …` credential carried in a text body or header dump. */
-const AUTH_SCHEME_TOKEN = /\b(Bearer|Basic)\s+[A-Za-z0-9._~+/=-]{8,}/gi;
+/**
+ * An `Authorization: Bearer …` / `Basic …` credential. The token side requires credential shape — 16+
+ * chars AND at least one digit or symbol — so ordinary prose ("Basic subscription includes…", "Bearer
+ * capacity exceeded") is NOT mangled, only actual opaque tokens are.
+ */
+const AUTH_SCHEME_TOKEN =
+  /\b(Bearer|Basic)\s+(?=[A-Za-z0-9._~+/=-]{16,})(?=[A-Za-z0-9._~+/=-]*[\d._~+/=-])[A-Za-z0-9._~+/=-]+/gi;
 
 /**
  * Redact credentials in ANY text body (form-urlencoded, text/plain, xml, or JSON that failed to parse).
  * sanitizeForTransport only redacts KEYS inside a parsed object, so a `password=secret` form post or a
  * `Bearer <token>` string would otherwise ship verbatim. Redacts the value of any `key=value` / `key: value`
- * pair whose key is sensitive, plus bare auth-scheme tokens.
+ * pair whose key is sensitive, plus credential-shaped auth-scheme tokens.
  */
 function redactText(text: string): string {
   return text
@@ -61,14 +71,30 @@ function projectBody(
   } else {
     out = redactText(text);
   }
+  // Key-based redaction can't see a secret sitting in a VALUE under a benign key — scan the projected
+  // text for high-confidence secret shapes (JWTs, provider keys) as a backstop, JSON or not.
+  out = scrubKnownSecrets(out);
   const truncated = out.length > MAX_BODY_CHARS;
   return { body: truncated ? out.slice(0, MAX_BODY_CHARS) : out, truncated };
 }
 
-/** Project one SSE/WebSocket frame: always its byte size; the (capped, redacted) payload only when
- *  body capture is on and it is a string frame. */
+/** The byte size of a binary frame (ArrayBuffer / Blob / typed-array view), or undefined if unknown. */
+function binaryFrameBytes(data: unknown): number | undefined {
+  if (data instanceof ArrayBuffer) return data.byteLength;
+  if (typeof Blob !== 'undefined' && data instanceof Blob) return data.size;
+  if (ArrayBuffer.isView(data)) return data.byteLength;
+  return undefined;
+}
+
+/** Project one SSE/WebSocket frame: byte size + shape; the (capped, redacted) payload only when body
+ *  capture is on and it is a string frame. Binary frames report their byte size, not just a bare type. */
 function frameFields(data: unknown, captureBodies: boolean): Record<string, unknown> {
-  if (typeof data !== 'string') return { frameType: typeof data };
+  if (typeof data !== 'string') {
+    const bytes = binaryFrameBytes(data);
+    return bytes === undefined
+      ? { frameType: typeof data }
+      : { frameType: 'binary', frameBytes: bytes };
+  }
   const out: Record<string, unknown> = { frameBytes: data.length };
   if (captureBodies) {
     const { body, truncated } = projectBody(data, 'application/json');
@@ -78,14 +104,27 @@ function frameFields(data: unknown, captureBodies: boolean): Record<string, unkn
   return out;
 }
 
-/** The request body when it is a plain string (JSON/form/GraphQL POSTs); other shapes are skipped. */
-function requestBodyFields(
-  init: RequestInit | undefined,
-  captureBodies: boolean,
-): Record<string, unknown> {
-  if (!captureBodies || typeof init?.body !== 'string' || init.body.length === 0) return {};
-  const { body, truncated } = projectBody(init.body, 'application/json');
-  return truncated ? { requestBody: body, requestBodyTruncated: true } : { requestBody: body };
+/**
+ * The request body for the transcript. Plain strings and URLSearchParams are captured (redacted, capped);
+ * FormData/Blob/ArrayBuffer/stream aren't text so they get a `requestBodyType` marker (the agent still
+ * learns a body existed) rather than being silently dropped. Shared by the fetch and XHR paths.
+ */
+function projectRequestBody(body: unknown, captureBodies: boolean): Record<string, unknown> {
+  if (!captureBodies) return {};
+  let text: string | undefined;
+  let contentType = 'application/json';
+  if (typeof body === 'string') {
+    text = body;
+  } else if (typeof URLSearchParams !== 'undefined' && body instanceof URLSearchParams) {
+    text = body.toString();
+    contentType = 'application/x-www-form-urlencoded';
+  } else if (body !== undefined && body !== null) {
+    const shape = (body as { constructor?: { name?: string } }).constructor?.name ?? typeof body;
+    return { requestBodyType: shape };
+  }
+  if (text === undefined || text.length === 0) return {};
+  const { body: out, truncated } = projectBody(text, contentType);
+  return truncated ? { requestBody: out, requestBodyTruncated: true } : { requestBody: out };
 }
 
 /** A path segment name that is typically followed by a single-use secret token in the NEXT segment. */
@@ -145,9 +184,19 @@ export function redactUrl(raw: string): string {
     }
   }
 
+  // OAuth implicit flow puts the access_token in the FRAGMENT (`#access_token=…`), and hash-routers carry
+  // `?token=…` in the hash — redact sensitive params there too, leaving plain anchors (`#section`) alone.
+  let newHash = hash;
+  if (hash.length > 1) {
+    newHash = hash.replace(/([A-Za-z0-9_.-]+)=([^&\s]+)/g, (m: string, key: string) =>
+      isSensitiveKey(key) ? `${key}=${REDACTED_VALUE}` : m,
+    );
+    if (newHash !== hash) changed = true;
+  }
+
   if (!changed) return raw;
   const queryOut = queryStart === -1 ? '' : `?${newQuery}`;
-  return `${segments.join('/')}${queryOut}${hash}`;
+  return `${segments.join('/')}${queryOut}${newHash}`;
 }
 
 interface XhrMeta {
@@ -155,6 +204,7 @@ interface XhrMeta {
   method: string;
   url: string;
   start: number;
+  reqBody?: Document | XMLHttpRequestBodyInit | null;
 }
 
 /**
@@ -234,7 +284,7 @@ export function installNetwork(emit: Emit, opts: NetworkOptions = {}): Teardown 
         durationMs: Math.round(performance.now() - start),
         initiator: 'fetch',
         ...netResponseMeta(res.statusText, contentType, res.headers.get('content-length')),
-        ...requestBodyFields(init, captureBodies),
+        ...projectRequestBody(init?.body, captureBodies),
         ...responseBodyFields,
       });
       return res;
@@ -276,6 +326,10 @@ export function installNetwork(emit: Emit, opts: NetworkOptions = {}): Teardown 
     callOpen.call(this, method, url, ...rest);
   };
 
+  // A reused XHR calls send() repeatedly; attach the completion listener ONCE per instance and read the
+  // request identity from `meta` at fire time. Adding a fresh closure each send() would leave stale
+  // listeners that re-fire on later completions, emitting duplicate, mislabeled events.
+  const listenerAttached = new WeakSet<XMLHttpRequest>();
   proto.send = function (
     this: XMLHttpRequest,
     body?: Document | XMLHttpRequestBodyInit | null,
@@ -283,46 +337,45 @@ export function installNetwork(emit: Emit, opts: NetworkOptions = {}): Teardown 
     const m = meta.get(this);
     if (m !== undefined) {
       m.start = performance.now();
+      m.reqBody = body ?? null;
       emit(EventType.NET_PENDING, { id: m.id, method: m.method, url: m.url, initiator: 'xhr' });
-      this.addEventListener('loadend', () => {
-        const xhrContentType = this.getResponseHeader('content-type');
-        let responseBodyFields: Record<string, unknown> = {};
-        // responseText throws unless responseType is '' or 'text' — guard before reading.
-        const textReadable = this.responseType === '' || this.responseType === 'text';
-        if (captureBodies && textReadable && isCapturableType(xhrContentType)) {
-          try {
-            const { body: rb, truncated } = projectBody(this.responseText, xhrContentType);
-            responseBodyFields = truncated
-              ? { responseBody: rb, responseBodyTruncated: true }
-              : { responseBody: rb };
-          } catch {
-            /* unreadable body — skip */
+      if (!listenerAttached.has(this)) {
+        listenerAttached.add(this);
+        this.addEventListener('loadend', () => {
+          const cur = meta.get(this);
+          if (cur === undefined) return;
+          const xhrContentType = this.getResponseHeader('content-type');
+          let responseBodyFields: Record<string, unknown> = {};
+          // responseText throws unless responseType is '' or 'text' — guard before reading.
+          const textReadable = this.responseType === '' || this.responseType === 'text';
+          if (captureBodies && textReadable && isCapturableType(xhrContentType)) {
+            try {
+              const { body: rb, truncated } = projectBody(this.responseText, xhrContentType);
+              responseBodyFields = truncated
+                ? { responseBody: rb, responseBodyTruncated: true }
+                : { responseBody: rb };
+            } catch {
+              /* unreadable body — skip */
+            }
           }
-        }
-        let requestBodyField: Record<string, unknown> = {};
-        if (captureBodies && typeof body === 'string' && body.length > 0) {
-          const { body: qb, truncated } = projectBody(body, 'application/json');
-          requestBodyField = truncated
-            ? { requestBody: qb, requestBodyTruncated: true }
-            : { requestBody: qb };
-        }
-        emit(EventType.NET_REQUEST, {
-          id: m.id,
-          method: m.method,
-          url: m.url,
-          status: this.status,
-          ok: this.status >= 200 && this.status < 400,
-          durationMs: Math.round(performance.now() - m.start),
-          initiator: 'xhr',
-          ...netResponseMeta(
-            this.statusText,
-            xhrContentType,
-            this.getResponseHeader('content-length'),
-          ),
-          ...requestBodyField,
-          ...responseBodyFields,
+          emit(EventType.NET_REQUEST, {
+            id: cur.id,
+            method: cur.method,
+            url: cur.url,
+            status: this.status,
+            ok: this.status >= 200 && this.status < 400,
+            durationMs: Math.round(performance.now() - cur.start),
+            initiator: 'xhr',
+            ...netResponseMeta(
+              this.statusText,
+              xhrContentType,
+              this.getResponseHeader('content-length'),
+            ),
+            ...projectRequestBody(cur.reqBody, captureBodies),
+            ...responseBodyFields,
+          });
         });
-      });
+      }
     }
     origSend.call(this, body ?? null);
   };

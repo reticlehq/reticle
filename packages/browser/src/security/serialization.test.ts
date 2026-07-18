@@ -1,6 +1,47 @@
 import { describe, expect, it } from 'vitest';
 import { REDACTED_VALUE, TRANSPORT_LIMITS } from '@reticlehq/core';
-import { safeStringify, sanitizeForTransport } from './serialization.js';
+import {
+  isSensitiveKey,
+  safeStringify,
+  sanitizeForTransport,
+  scrubKnownSecrets,
+} from './serialization.js';
+
+describe('isSensitiveKey — session/jwt/pwd/sid coverage without substring false positives', () => {
+  it('matches common session identifiers and short credential keys', () => {
+    for (const k of [
+      'sessionid',
+      'session_id',
+      'session-id',
+      'jwt',
+      'pwd',
+      'sid',
+      'JWT',
+      'accessToken',
+    ]) {
+      expect(isSensitiveKey(k)).toBe(true);
+    }
+  });
+  it('does NOT redact benign keys that merely CONTAIN those letters', () => {
+    for (const k of ['president', 'consider', 'outside', 'rapid', 'valid', 'jwtxCount', 'upward']) {
+      expect(isSensitiveKey(k)).toBe(false);
+    }
+  });
+});
+
+describe('scrubKnownSecrets — high-confidence shapes, no prose corruption', () => {
+  it('redacts JWTs and provider key prefixes regardless of surrounding key', () => {
+    expect(scrubKnownSecrets('token is eyJhbGciOi.eyJzdWIiOi.abc123XYZ done')).toContain(
+      REDACTED_VALUE,
+    );
+    expect(scrubKnownSecrets('key sk_live_abcd1234efgh5678')).toBe(`key ${REDACTED_VALUE}`);
+    expect(scrubKnownSecrets('aws AKIAIOSFODNN7EXAMPLE here')).toContain(REDACTED_VALUE);
+  });
+  it('leaves ordinary prose untouched', () => {
+    const prose = 'The quick brown fox jumps over the lazy dog, again and again.';
+    expect(scrubKnownSecrets(prose)).toBe(prose);
+  });
+});
 
 describe('transport serialization', () => {
   it('redacts sensitive keys at every depth', () => {
