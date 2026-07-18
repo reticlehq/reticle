@@ -62,6 +62,17 @@ describe('snapshot', () => {
     expect(snap.status.route).toBeDefined();
   });
 
+  it('pierces open shadow DOM so web-component content is visible', () => {
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const shadow = host.attachShadow({ mode: 'open' });
+    const btn = document.createElement('button');
+    btn.textContent = 'Shadow Save';
+    shadow.appendChild(btn);
+    const snap = buildSnapshot({ mode: SnapshotMode.FULL });
+    expect(snap.tree).toContain('Shadow Save');
+  });
+
   it('interactive mode lists only actionable elements', () => {
     render('<div><h1>Title</h1><button>Click</button></div>');
     const snap = buildSnapshot({ mode: SnapshotMode.INTERACTIVE });

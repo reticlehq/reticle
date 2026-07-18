@@ -127,9 +127,30 @@ interface WalkCtx {
   maxDepth: number;
 }
 
+/**
+ * The children to walk under `parent`, piercing boundaries a plain `.children` misses: an OPEN shadow
+ * root renders as part of the element (web components / design systems), and a SAME-ORIGIN iframe's
+ * body is real content. Cross-origin frames throw on access and are skipped by design. Without this,
+ * an entire category of modern apps is invisible to reticle_snapshot (systematic false negative).
+ */
+function pierceChildren(parent: Element): Element[] {
+  const out: Element[] = [...parent.children];
+  const shadow = parent.shadowRoot;
+  if (shadow !== null) out.push(...shadow.children);
+  if (parent instanceof HTMLIFrameElement) {
+    try {
+      const body = parent.contentDocument?.body;
+      if (body !== null && body !== undefined) out.push(...body.children);
+    } catch {
+      /* cross-origin frame — inaccessible by design */
+    }
+  }
+  return out;
+}
+
 function walk(parent: Element, depth: number, ctx: WalkCtx): void {
   if (depth > ctx.maxDepth) return;
-  for (const child of parent.children) {
+  for (const child of pierceChildren(parent)) {
     if (ctx.nodes >= ctx.maxNodes) {
       ctx.truncated = true;
       return;
