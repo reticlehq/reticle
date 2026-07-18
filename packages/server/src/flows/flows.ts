@@ -15,6 +15,7 @@ import type {
   HealChange,
 } from '@reticlehq/core';
 import { ReticleTool } from '../tools/tool-names.js';
+import { asString, asRecord } from '../tools/tools-helpers.js';
 import { applyHealChanges } from './heal.js';
 import type { CompiledProgram, RecordedStep } from './recordings.js';
 import type { FileSystemPort } from '../project/fs-port.js';
@@ -35,14 +36,6 @@ export interface Clock {
 
 /** Discriminated result so callers never branch on free strings. */
 export type FlowResult<T> = { ok: true; value: T } | { ok: false; code: FlowErrorCode };
-
-function asString(value: unknown): string | undefined {
-  return typeof value === 'string' ? value : undefined;
-}
-
-function asRecord(value: unknown): Record<string, unknown> {
-  return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {};
-}
 
 /**
  * The anchor for a DEGRADED step (no resolvable testid). A volatile eXX ref is NEVER persisted —
@@ -344,7 +337,29 @@ export class FlowStore {
       if (await this.#fs.exists(nested)) return nested;
     }
     const flat = flowPath(this.#root, name);
-    return (await this.#fs.exists(flat)) ? flat : null;
+    if (await this.#fs.exists(flat)) return flat;
+    // No projectId (CLI/CI/contract callers, e.g. reticle_domain): mirror list()'s subdir union on
+    // the read side too — a flow saved under .reticle/flows/<projectId>/ must still load, else it is
+    // listed and then silently dropped by `if (loaded.ok)` (reticle_domain reports flowCount:0).
+    if (pid === undefined) return this.#resolveNestedPath(name);
+    return null;
+  }
+
+  /** Scan the per-project subdirs for a flow by name — the read-side of list()'s no-pid union. */
+  async #resolveNestedPath(name: string): Promise<string | null> {
+    const flowsDir = reticleDirPaths(this.#root).flows;
+    if (!(await this.#fs.exists(flowsDir))) return null;
+    let entries: string[];
+    try {
+      entries = await this.#fs.readdir(flowsDir);
+    } catch {
+      return null;
+    }
+    for (const dir of entries.filter((e) => !e.endsWith(FLOW_SUFFIX))) {
+      const nested = flowPath(this.#root, name, dir);
+      if (await this.#fs.exists(nested)) return nested;
+    }
+    return null;
   }
 
   /**
@@ -375,5 +390,19 @@ export class FlowStore {
     const result = FlowFileSchema.safeParse(parsed);
     if (!result.success) return { ok: false, code: FlowErrorCode.PARSE_FAILED };
     return { ok: true, value: result.data };
+  }
+
+  /**
+   * Delete a flow's file so a renamed/obsolete flow stops lingering in the replay list. Resolves the
+   * same path `load()` would (per-project copy, else legacy flat, else a subdir scan for the no-pid
+   * caller), then removes it. NOT_FOUND when nothing resolves — deleting an absent flow is an error,
+   * not a silent no-op, so a typo doesn't read as success.
+   */
+  async remove(name: string, projectId?: string): Promise<FlowResult<void>> {
+    if (!isValidFlowName(name)) return { ok: false, code: FlowErrorCode.INVALID_NAME };
+    const path = await this.#resolveReadPath(name, safeProjectId(projectId));
+    if (path === null) return { ok: false, code: FlowErrorCode.NOT_FOUND };
+    await this.#fs.rm(path);
+    return { ok: true, value: undefined };
   }
 }

@@ -154,7 +154,7 @@ function ariaBool(el: Element, attr: string): boolean | undefined {
   return value === 'true';
 }
 
-/** The set of states relevant to assertions (plan/06). */
+/** The set of states relevant to assertions. */
 export function getStates(el: Element): ElementState[] {
   const states: ElementState[] = [ElementState.PRESENT];
   if (isVisible(el)) states.push(ElementState.VISIBLE);

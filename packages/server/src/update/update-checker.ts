@@ -3,11 +3,14 @@ import * as https from 'node:https';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { UpdateCheckIntervalMs } from '@reticlehq/core';
+import { RETICLE_NPM_PACKAGE } from '../server-version.js';
 import { log } from '../log.js';
 
 const RETICLE_HOME = join(homedir(), '.reticle');
 const MANIFEST_PATH = join(RETICLE_HOME, 'update-manifest.json');
-const NPM_REGISTRY = 'https://registry.npmjs.org/@reticlehq/core/latest';
+// Poll the package that carries the bin (@reticlehq/server), so the version we compare against and
+// the version we install are the same package — not @reticlehq/core, which only tracks it by luck.
+const NPM_REGISTRY = `https://registry.npmjs.org/${RETICLE_NPM_PACKAGE}/latest`;
 
 interface UpdateManifest {
   currentVersion: string;
@@ -73,6 +76,15 @@ function fetchNpmInfo(): Promise<NpmPackageInfo> {
   });
 }
 
+/** Injectable IO for checkForUpdate so the network + manifest cache are testable (default = real). */
+export interface UpdateCheckPorts {
+  fetchInfo: () => Promise<NpmPackageInfo>;
+  loadManifest: () => UpdateManifest | null;
+  saveManifest: (manifest: UpdateManifest) => void;
+}
+
+const defaultPorts: UpdateCheckPorts = { fetchInfo: fetchNpmInfo, loadManifest, saveManifest };
+
 /**
  * Returns the current update manifest, refreshing from the npm registry when the cache
  * is older than UpdateCheckIntervalMs. Never throws — falls back to the cached manifest
@@ -81,14 +93,15 @@ function fetchNpmInfo(): Promise<NpmPackageInfo> {
 export async function checkForUpdate(
   currentVersion: string,
   now: () => number,
+  ports: UpdateCheckPorts = defaultPorts,
 ): Promise<UpdateManifest> {
-  const cached = loadManifest();
+  const cached = ports.loadManifest();
   if (cached !== null && cached.currentVersion === currentVersion && isCacheFresh(cached, now)) {
     return cached;
   }
 
   try {
-    const info = await fetchNpmInfo();
+    const info = await ports.fetchInfo();
     const updateAvailable = info.version !== currentVersion;
     const manifest: UpdateManifest = {
       currentVersion,
@@ -101,7 +114,7 @@ export async function checkForUpdate(
         : {}),
       ...(cached?.previousVersion !== undefined ? { previousVersion: cached.previousVersion } : {}),
     };
-    saveManifest(manifest);
+    ports.saveManifest(manifest);
     return manifest;
   } catch (err) {
     log('reticle_update_check_failed', {

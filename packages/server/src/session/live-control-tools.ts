@@ -6,6 +6,7 @@ import {
   SessionState,
 } from '@reticlehq/core';
 import { ReticleTool } from '../tools/tool-names.js';
+import { sessionIdShape } from '../tools/tool-kit.js';
 import { asNumber, asString } from '../tools/tools-helpers.js';
 import { waitForReady, RETICLE_LOOP_GUIDE } from './session-readiness.js';
 import { recoveryFor } from '../tools/error-recovery.js';
@@ -14,15 +15,6 @@ import type { ToolDef } from '../tools/tools.js';
 /** Default + ceiling for the readiness wait — keep it short so a truly-missing app fails fast. */
 const WAIT_READY_DEFAULT_MS = 5000;
 const WAIT_READY_MAX_MS = 30000;
-
-const sessionIdShape = {
-  sessionId: z
-    .string()
-    .optional()
-    .describe(
-      'Active session ID from reticle_sessions. Omit when only one browser session is open.',
-    ),
-};
 
 /**
  * Live-control agent tools: the agent's side of the human-in-the-loop control surface.

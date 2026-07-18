@@ -30,6 +30,7 @@ export const SESSION_BOUND_TOOLS: ReadonlySet<string> = new Set([
   ReticleTool.NARRATE,
   ReticleTool.CLOCK,
   ReticleTool.STATE,
+  ReticleTool.STORAGE,
   ReticleTool.EXPLORE,
   ReticleTool.CRAWL,
   ReticleTool.SCROLL_TO,
@@ -49,6 +50,7 @@ export const SESSION_EXEMPT_TOOLS: ReadonlySet<string> = new Set([
   ReticleTool.FLOW_SAVE, // sessionId only scopes the write to the app's flow subdir; disk-side
   ReticleTool.FLOW_LIST, // sessionId only scopes which project's flows are listed; disk read
   ReticleTool.FLOW_LOAD, // sessionId only scopes which project's flow is read; disk read
+  ReticleTool.FLOW_DELETE, // sessionId only scopes which project's flow is removed; disk delete
   ReticleTool.FLOW_REPLAY, // returns its own FlowReplayResult contract (+ auto-records a run)
   ReticleTool.FLOW_VERIFY, // returns its own SuiteVerdict contract (replays the whole suite)
   ReticleTool.FLOW_SAVE_RECORDED, // reads the recording buffer, writes disk
@@ -85,18 +87,24 @@ export async function runTool(
   deps: ToolDeps,
   args: Record<string, unknown>,
 ): Promise<unknown> {
-  // Heartbeat: any tool call targeting a leased session keeps its pool lease alive, so the
+  // Heartbeat: every tool call targeting a leased session keeps its pool lease alive, so the
   // LeaseReaper only reclaims genuinely orphaned (crashed/hung-agent) leases.
   const targetSession = asString(args['sessionId']);
   if (targetSession !== undefined) deps.pool?.touch(targetSession);
   const result = await tool.handler(deps, args);
   if (!SESSION_BOUND_TOOLS.has(tool.name)) return result;
-  if (!isPlainObject(result) || 'session' in result) return result;
+  if (!isPlainObject(result)) return result;
   const session = deps.sessions.resolve(asString(args['sessionId']));
-  const envelope: Record<string, unknown> = { ...healthEnvelope(session) };
+  const envelope: Record<string, unknown> = {};
+  // The health block is idempotent: add it only when the handler didn't already include a `session`.
+  if (!('session' in result)) Object.assign(envelope, healthEnvelope(session));
+  // Lease + age-warning are INDEPENDENT of the health block. Previously the `'session' in result`
+  // early-return skipped them whenever a handler returned its own health (which a throttled tab always
+  // does) — so a long-running backgrounded session, the case most likely to leak, never got the
+  // one-time pool-lease reminder or the age cleanup nudge. Splice them regardless.
   const lease = session.takeSessionLease();
   if (lease !== undefined) envelope['session_lease'] = lease;
   const warning = session.ageWarning();
   if (warning !== undefined) envelope['session_age_warning'] = warning;
-  return { ...result, ...envelope };
+  return Object.keys(envelope).length > 0 ? { ...result, ...envelope } : result;
 }

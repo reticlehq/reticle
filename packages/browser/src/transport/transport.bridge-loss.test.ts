@@ -1,5 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { RETICLE_PROTOCOL_VERSION, MessageKind, type HelloMessage } from '@reticlehq/core';
+import {
+  RETICLE_PROTOCOL_VERSION,
+  EventType,
+  MessageKind,
+  type HelloMessage,
+} from '@reticlehq/core';
 import { Transport } from './transport.js';
 
 /**
@@ -77,6 +82,26 @@ describe('transport bridge-loss self-end', () => {
     }
 
     expect(lost).toBeGreaterThanOrEqual(1);
+  });
+
+  it('offline queue drops the OLDEST on overflow, keeping the newest (ring)', () => {
+    const t = new Transport({
+      url: 'ws://x',
+      hello,
+      handleCommand: () => Promise.resolve({ ok: true }),
+      now: () => now,
+    });
+    t.connect();
+    const ws = FakeWebSocket.instances.at(-1);
+    // Socket not open yet → events queue. Send MAX_QUEUE (500) + 3 so 3 must be dropped.
+    for (let i = 0; i < 503; i += 1) {
+      t.sendEvent({ t: i, type: EventType.DOM_ADDED, sessionId: 's', data: { seq: i } });
+    }
+    ws?.open(); // flush the queued messages
+    const events = (ws?.sent ?? []).filter((m) => m.includes('"seq":'));
+    expect(events).toHaveLength(500);
+    expect(events[0]).toContain('"seq":3}'); // 0,1,2 dropped (oldest)
+    expect(events.at(-1)).toContain('"seq":502}'); // newest kept
   });
 
   it('does NOT fire onConnectionLost when reconnection succeeds quickly', () => {

@@ -3,11 +3,13 @@ import {
   AnnotationKind,
   type AnnotationErrorCode,
   type AnnotationTarget,
+  CONTRACT_FILE_VERSION,
   ElementState,
   QueryBy,
   RunKind,
   RunStatus,
 } from './constants.js';
+import { PROJECT_FILE_VERSION } from './flow-constants.js';
 import { RiskSurface } from './verification-run.js';
 import type { FlowExpect } from './flow-types.js';
 
@@ -128,7 +130,7 @@ export type CapabilitiesContract = z.infer<typeof CapabilitiesSchema>;
 
 /** The on-disk contract.json envelope: versioned + timestamped capabilities. */
 export const ContractFileSchema = z.object({
-  version: z.number(),
+  version: z.literal(CONTRACT_FILE_VERSION),
   generatedAt: z.number(),
   capabilities: CapabilitiesSchema,
 });
@@ -164,7 +166,7 @@ export type ProjectLearned = z.infer<typeof ProjectLearnedSchema>;
 
 /** The on-disk project.json envelope: versioned learned-map + chronological runs. */
 export const ProjectFileSchema = z.object({
-  version: z.number(),
+  version: z.literal(PROJECT_FILE_VERSION),
   learned: ProjectLearnedSchema.optional(),
   runs: z.array(RunRecordSchema),
 });
@@ -271,3 +273,8 @@ export interface AnnotateOutcome {
   result: AnnotateResult;
   patch?: AnnotatePatch;
 }
+
+export type ContractFile = z.infer<typeof ContractFileSchema>;
+export type RunEvidence = z.infer<typeof RunEvidenceSchema>;
+export type CapabilityFlow = z.infer<typeof CapabilityFlowSchema>;
+export type RiskZone = z.infer<typeof RiskZoneSchema>;

@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs';
 import { platform } from 'node:os';
 import { dirname, join } from 'node:path';
 import { loadManifest, saveManifest } from './update-checker.js';
+import { RETICLE_NPM_PACKAGE } from '../server-version.js';
 import { log } from '../log.js';
 
 const NPM_BIN = platform() === 'win32' ? 'npm.cmd' : 'npm';
@@ -10,7 +11,7 @@ const NPM_TIMEOUT_MS = 120_000;
 
 /** How this reticle process was launched — determines which npm strategy to use for updates. */
 const ExecutionKind = {
-  /** Launched via `npx @reticlehq/core` — npm re-resolves the package on restart. */
+  /** Launched via `npx @reticlehq/server` — npm re-resolves the package on restart. */
   NPX: 'npx',
   /** Installed globally via `npm install -g`. */
   GLOBAL: 'global',
@@ -27,8 +28,26 @@ type ExecutionKind = (typeof ExecutionKind)[keyof typeof ExecutionKind];
  * `node_modules` directory. Everything else is treated as a global install.
  */
 export function detectExecutionKind(): ExecutionKind {
-  const script = process.argv[1] ?? '';
+  return classifyExecutionKind(process.argv[1] ?? '');
+}
+
+/**
+ * Classify a launch from the entry script path. Pure so it's testable. Global installs ALSO live under
+ * a `node_modules`, but under the npm global prefix — a `lib/node_modules` (unix: /usr/local, Homebrew,
+ * nvm) or AppData\npm (Windows). Match those FIRST, otherwise a global install is misread as local and
+ * `apply_update` npm-installs into the user's own project (polluting their package.json).
+ */
+export function classifyExecutionKind(script: string): ExecutionKind {
   if (script.includes('/_npx/') || script.includes('\\_npx\\')) return ExecutionKind.NPX;
+  const globalSignals = [
+    '/lib/node_modules/',
+    '\\npm\\node_modules\\',
+    '/.nvm/',
+    '/homebrew/',
+    '/usr/local/',
+    '/usr/lib/',
+  ];
+  if (globalSignals.some((s) => script.includes(s))) return ExecutionKind.GLOBAL;
   if (script.includes('/node_modules/') || script.includes('\\node_modules\\')) {
     return ExecutionKind.LOCAL;
   }
@@ -69,9 +88,34 @@ function runNpm(args: string[], opts: RunNpmOptions = {}): Promise<void> {
   });
 }
 
+interface NpmInstall {
+  args: string[];
+  cwd?: string;
+}
+
+/**
+ * The npm argv (and optional cwd) that installs `version` for the given launch kind, or null for
+ * npx (which re-resolves the package on the next restart — no install needed). Installs
+ * `@reticlehq/server` — the package that actually carries the `reticle` bin — never
+ * `@reticlehq/core`, which is schema-only and has no executable.
+ */
+export function installArgs(
+  version: string,
+  kind: ExecutionKind,
+  localRoot: string | null,
+): NpmInstall | null {
+  if (kind === ExecutionKind.NPX) return null;
+  const pkg = `${RETICLE_NPM_PACKAGE}@${version}`;
+  if (kind === ExecutionKind.LOCAL && localRoot !== null) {
+    return { args: ['install', pkg], cwd: localRoot };
+  }
+  return { args: ['install', '-g', pkg] };
+}
+
 async function installVersion(version: string, kind: ExecutionKind): Promise<void> {
-  const pkg = `@reticlehq/core@${version}`;
-  if (kind === ExecutionKind.NPX) {
+  const localRoot = kind === ExecutionKind.LOCAL ? findLocalProjectRoot() : null;
+  const plan = installArgs(version, kind, localRoot);
+  if (plan === null) {
     // npx re-resolves the package from npm on the next Claude Code restart — no npm
     // install needed. The restart itself is what triggers the update.
     log('reticle_update_npx_strategy', {
@@ -79,16 +123,11 @@ async function installVersion(version: string, kind: ExecutionKind): Promise<voi
     });
     return;
   }
-  if (kind === ExecutionKind.LOCAL) {
-    const root = findLocalProjectRoot();
-    if (root !== null) {
-      await runNpm(['install', pkg], { cwd: root });
-      return;
-    }
-    // Could not find a project root — fall through to global install as a safe default
+  if (kind === ExecutionKind.LOCAL && localRoot === null) {
+    // Could not find a project root — fell back to a global install as a safe default.
     log('reticle_update_local_no_root', { fallback: 'global' });
   }
-  await runNpm(['install', '-g', pkg]);
+  await runNpm(plan.args, plan.cwd !== undefined ? { cwd: plan.cwd } : {});
 }
 
 async function installVersionRollback(version: string, kind: ExecutionKind): Promise<void> {
@@ -133,5 +172,8 @@ export async function rollback(): Promise<void> {
   log('reticle_rollback_applying', { version: prev, executionKind: kind });
   await installVersionRollback(prev, kind);
   log('reticle_rollback_applied', { version: prev, executionKind: kind });
-  process.exit(0);
+  // For npx, exiting would let the next restart re-resolve @latest — rolling FORWARD, the opposite
+  // of rollback. installVersionRollback already told the user to pin the version in .mcp.json, so
+  // stay running rather than trigger that. Other kinds installed the old version and must restart.
+  if (kind !== ExecutionKind.NPX) process.exit(0);
 }

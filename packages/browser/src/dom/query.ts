@@ -157,7 +157,7 @@ function inState(el: Element, state: ElementState): boolean {
   return getStates(el).includes(state);
 }
 
-/** Match an element predicate against the live DOM (plan/06). */
+/** Match an element predicate against the live DOM. */
 export function matchQuery(query: ElementQuery, state?: ElementState): MatchResult {
   let elements: HTMLElement[];
   try {

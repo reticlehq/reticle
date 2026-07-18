@@ -14,7 +14,7 @@ import { join, basename } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import {
   RETICLE_DEFAULT_PORT,
-  RETICLE_WS_PATH,
+  bridgeWsUrl,
   isLoopbackHostname,
   ReticleDir,
   RunAgentKind,
@@ -204,7 +204,7 @@ async function openLiveConnection(opts: LiveOpts): Promise<VerifyConnection> {
     ? {}
     : (() => {
         const token = randomUUID();
-        const bridgeUrl = `ws://localhost:${String(opts.port)}${RETICLE_WS_PATH}`;
+        const bridgeUrl = bridgeWsUrl(opts.port);
         return {
           token,
           injectConnect: { token, url: bridgeUrl },

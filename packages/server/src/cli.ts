@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 import { pathToFileURL } from 'node:url';
-import { realpathSync, readFileSync, existsSync } from 'node:fs';
+import { realpathSync, existsSync } from 'node:fs';
 import { RETICLE_DEFAULT_PORT, ReticleEnv } from '@reticlehq/core';
 import { start, startDaemon } from './index.js';
 import { isCloudCommand, runCloudCommand } from './cloud-cli.js';
+import { SERVER_VERSION } from './server-version.js';
 import { log } from './log.js';
 import {
   readPid,
@@ -12,6 +13,7 @@ import {
   removePid,
   spawnDaemon,
   discoverDaemonPort,
+  writeDaemonRegistry,
 } from './daemon.js';
 import { waitForDaemon, startMcpProxy, probeDaemon } from './mcp-proxy.js';
 import { installDaemonResilience } from './daemon-resilience.js';
@@ -21,7 +23,7 @@ import { handleVerify } from './cli-verify.js';
 import { runInit } from './init/run.js';
 import { buildNodeIo } from './init/node-io.js';
 import { describeLicense } from './license/license.js';
-import { readProjectPort } from './cli-port.js';
+import { readProjectPort, readProjectId } from './cli-port.js';
 import type { StartOptions } from './index.js';
 
 import {
@@ -157,23 +159,12 @@ async function handleDoctor(port: number): Promise<void> {
   line(`  bridge port  ${port}  (your app must dial THIS port — not your dev-server port)`);
 }
 
-/** `reticle license` — show enterprise activation resolved from the environment (offline; nothing leaves). */
-/** Print the running package version — read from this package's own package.json, next to dist/. */
+/** Print the running package version (resolved once in server-version.ts). */
 function handleVersion(): void {
-  let version = 'unknown';
-  try {
-    const parsed: unknown = JSON.parse(
-      readFileSync(new URL('../package.json', import.meta.url), 'utf8'),
-    );
-    if (parsed !== null && typeof parsed === 'object' && 'version' in parsed) {
-      version = String((parsed as Record<string, unknown>).version);
-    }
-  } catch {
-    // A missing/unreadable package.json leaves version 'unknown' — never throw from `version`.
-  }
-  log('reticle_version', { version });
+  log('reticle_version', { version: SERVER_VERSION });
 }
 
+/** `reticle license` — show enterprise activation resolved from the environment (offline; nothing leaves). */
 function handleLicense(): void {
   log('reticle_license', { ...describeLicense(Date.now()) });
 }
@@ -249,6 +240,15 @@ function handleDaemonInner(parsed: {
   startDaemon(options)
     .then((server) => {
       log('reticle_daemon_ready', { port: parsed.port, pid: process.pid });
+      // Publish to the discovery registry so a build plugin can find this daemon by projectId — no
+      // hand-reconciled port. Written from the child (only it knows its cwd); removePid drops it.
+      const registryProjectId = readProjectId(process.cwd());
+      writeDaemonRegistry(parsed.port, {
+        pid: process.pid,
+        cwd: process.cwd(),
+        startedAt: Date.now(),
+        ...(registryProjectId !== undefined ? { projectId: registryProjectId } : {}),
+      });
       // The daemon serves many agents — keep it alive through one agent's stray async error; only a
       // genuine uncaught throw takes it down (cleanly, so the next `reticle mcp` respawns it fresh).
       installDaemonResilience(process, log, () => {

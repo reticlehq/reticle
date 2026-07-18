@@ -4,7 +4,9 @@ const TRUNCATED_VALUE = '[TRUNCATED]';
 const UNSERIALIZABLE_VALUE = '[UNSERIALIZABLE]';
 const OMIT_VALUE = Symbol('omit');
 const MAX_KEY_LENGTH = 256;
-const MAX_TOTAL_CHARACTERS = Math.floor(TRANSPORT_LIMITS.MAX_MESSAGE_BYTES / 8);
+// UTF-8 encodes at most ~3 bytes per JS (UTF-16) code unit, so /4 is a provably-safe bound that never
+// exceeds the byte budget — /8 was ~1/8 of the real 1MiB wire budget and truncated legitimate state.
+const MAX_TOTAL_CHARACTERS = Math.floor(TRANSPORT_LIMITS.MAX_MESSAGE_BYTES / 4);
 const MAX_TOTAL_NODES = TRANSPORT_LIMITS.MAX_COLLECTION_ITEMS * 5;
 
 // `token` must match auth CREDENTIALS, not compound design fields. Bare/separated `token(s)` and
@@ -12,10 +14,22 @@ const MAX_TOTAL_NODES = TRANSPORT_LIMITS.MAX_COLLECTION_ITEMS * 5;
 // `backgroundToken`, `tokenCount`, `designToken` are NOT — they were false-positives that redacted
 // legitimate reticle_inspect/reticle_state output.
 const SENSITIVE_KEY =
-  /password|passwd|passcode|secret|(?:(?:access|refresh|auth|bearer|api|id|session|csrf|client)[-_]?tokens?|(?:^|[-_])tokens?(?=$|[-_]))|authorization|api[-_]?key|access[-_]?key|private[-_]?key|client[-_]?secret|credit[-_]?card|card[-_]?number|cvv|cvc|ssn/i;
+  /password|passwd|passcode|secret|(?:(?:access|refresh|auth|bearer|api|id|session|csrf|client)[-_]?tokens?|(?:^|[-_])tokens?(?=$|[-_]))|session[-_]?id|(?:^|[-_])(?:sid|pwd|jwt)(?=$|[-_])|authorization|api[-_]?key|access[-_]?key|private[-_]?key|client[-_]?secret|credit[-_]?card|card[-_]?number|cvv|cvc|ssn/i;
 
 export function isSensitiveKey(key: string): boolean {
   return SENSITIVE_KEY.test(key);
+}
+
+// High-confidence credential SHAPES, redacted regardless of key name — for scanning body/value text where
+// a secret can sit under a benign key (`{"note":"<jwt>"}`, `<meta content="sk_live_…">`). Deliberately
+// narrow (JWT, known provider prefixes) so it never corrupts legitimate prose the way a broad
+// entropy/length heuristic would.
+const KNOWN_SECRET =
+  /eyJ[A-Za-z0-9_-]{4,}\.[A-Za-z0-9_-]{4,}\.[A-Za-z0-9_-]{4,}|(?:sk|rk)_(?:live|test)_[A-Za-z0-9]{10,}|AKIA[0-9A-Z]{16}|gh[pousr]_[A-Za-z0-9]{20,}|xox[baprs]-[A-Za-z0-9-]{10,}|ya29\.[A-Za-z0-9._-]{20,}/g;
+
+/** Redact high-confidence secret shapes anywhere in a text/value, independent of any surrounding key. */
+export function scrubKnownSecrets(text: string): string {
+  return text.replace(KNOWN_SECRET, REDACTED_VALUE);
 }
 
 interface SanitizeState {

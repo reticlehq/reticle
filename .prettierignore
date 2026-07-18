@@ -22,4 +22,4 @@ bench/artifacts/
 # what bench-all.mjs emits so re-running the benchmark doesn't dirty the tree via the formatter.
 bench/pw-vs-reticle/*.json
 bench/pw-vs-reticle/*SCORECARD*.md
-apps/example-*/
+apps/examples/*/

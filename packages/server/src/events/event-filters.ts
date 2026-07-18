@@ -1,12 +1,5 @@
 import { EventType, type ReticleEvent } from '@reticlehq/core';
-
-function asString(value: unknown): string | undefined {
-  return typeof value === 'string' ? value : undefined;
-}
-
-function asNumber(value: unknown): number | undefined {
-  return typeof value === 'number' ? value : undefined;
-}
+import { asString, asNumber } from '../tools/tools-helpers.js';
 
 /** Match a net.request event against optional method/url/status filters (reticle_network). */
 export function matchNet(
@@ -54,16 +47,35 @@ interface NetCallView {
   method: string;
   url: string;
   status?: number | string;
+  statusText?: string;
+  contentType?: string;
+  responseSize?: number;
+  requestBody?: string;
+  responseBody?: string;
+  bodyTruncated?: boolean;
   ms?: number;
 }
 export function projectNetCall(e: ReticleEvent): NetCallView {
   const status = e.data['status'];
   const ms = asNumber(e.data['durationMs']);
+  const statusText = asString(e.data['statusText']);
+  const contentType = asString(e.data['contentType']);
+  const responseSize = asNumber(e.data['responseSize']);
+  const requestBody = asString(e.data['requestBody']);
+  const responseBody = asString(e.data['responseBody']);
   const view: NetCallView = {
     method: asString(e.data['method']) ?? '',
     url: asString(e.data['url']) ?? '',
   };
   if (typeof status === 'number' || typeof status === 'string') view.status = status;
+  if (statusText !== undefined) view.statusText = statusText;
+  if (contentType !== undefined) view.contentType = contentType;
+  if (responseSize !== undefined) view.responseSize = responseSize;
+  if (requestBody !== undefined) view.requestBody = requestBody;
+  if (responseBody !== undefined) view.responseBody = responseBody;
+  if (e.data['requestBodyTruncated'] === true || e.data['responseBodyTruncated'] === true) {
+    view.bodyTruncated = true;
+  }
   if (ms !== undefined) view.ms = ms;
   return view;
 }

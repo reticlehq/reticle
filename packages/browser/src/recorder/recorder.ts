@@ -142,6 +142,7 @@ export function compileRecording(
   steps: FlowStep[],
   annotations: Annotation[],
   createdAt: number,
+  startPath?: string,
 ): FlowFile {
   const out: FlowStep[] = steps.map((s) => ({ ...s }));
   const dynamic: FlowAnchor[] = [];
@@ -166,6 +167,7 @@ export function compileRecording(
   }
 
   const flow: FlowFile = { version: FLOW_FILE_VERSION, name, createdAt, steps: out };
+  if (startPath !== undefined && startPath.length > 0) flow.startPath = startPath;
   if (dynamic.length > 0) flow.dynamic = dynamic;
   if (success !== undefined) flow.success = success;
   return flow;
@@ -191,6 +193,8 @@ class Recorder implements RecorderHandle {
   readonly #deps: RecorderDeps;
   #phase: RecorderPhase = RecorderPhase.IDLE;
   #steps: FlowStep[] = [];
+  /** The pathname the recording began on, so replay can navigate here before step 1. */
+  #startPath: string | undefined;
   #annotations: Annotation[] = [];
   #pendingFill: PendingFill | undefined;
   #teardowns: (() => void)[] = [];
@@ -268,6 +272,16 @@ class Recorder implements RecorderHandle {
       return;
     }
     if (this.#phase !== RecorderPhase.RECORDING) return;
+    // Controls that emit `change` (checkbox, radio, select) are recorded by #onChange as their
+    // semantic step (CHECK/UNCHECK/SELECT). Recording a CLICK here too would replay any onChange
+    // side effect twice (analytics, dependent-field resets), so skip the duplicate.
+    if (
+      (target instanceof HTMLInputElement &&
+        (inputRole(target) === 'checkbox' || inputRole(target) === 'radio')) ||
+      target instanceof HTMLSelectElement
+    ) {
+      return;
+    }
     this.#flushPendingFill();
     this.#steps.push(buildStep(target, ActionType.CLICK));
   }
@@ -292,6 +306,11 @@ class Recorder implements RecorderHandle {
     if (target instanceof HTMLInputElement && inputRole(target) === 'radio') {
       this.#flushPendingFill();
       this.#steps.push(buildStep(target, ActionType.CHECK));
+      return;
+    }
+    if (target instanceof HTMLSelectElement) {
+      this.#flushPendingFill();
+      this.#steps.push(buildStep(target, ActionType.SELECT, { value: target.value }));
       return;
     }
     if (isTextbox(target)) {
@@ -364,6 +383,7 @@ class Recorder implements RecorderHandle {
   #start(): void {
     // A fresh span — no leakage from a previous Record→Stop cycle.
     this.#steps = [];
+    this.#startPath = typeof location === 'undefined' ? undefined : location.pathname;
     this.#annotations = [];
     this.#pendingFill = undefined;
     this.#draft = undefined;
@@ -374,7 +394,13 @@ class Recorder implements RecorderHandle {
   #stop(): void {
     this.#flushPendingFill();
     const name = this.#nameField() ?? this.#deps.defaultName ?? DEFAULT_NAME;
-    const flow = compileRecording(name, this.#steps, this.#annotations, this.#deps.now());
+    const flow = compileRecording(
+      name,
+      this.#steps,
+      this.#annotations,
+      this.#deps.now(),
+      this.#startPath,
+    );
     this.#deps.emit(EventType.FLOW_RECORDED, { name, flow });
     this.#setStatus(this.#steps.length === 0 ? RECORDER_EMPTY_MSG : STATUS_IDLE);
     this.#setPhase(RecorderPhase.IDLE);

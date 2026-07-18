@@ -7,7 +7,19 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync, existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { reclaimStaleDaemons } from './daemon.js';
+import { reclaimStaleDaemons, shouldRemovePid } from './daemon.js';
+
+describe('shouldRemovePid — orphan-race guard', () => {
+  it('removes a pidfile we own, an empty one, or a dead-owner one', () => {
+    expect(shouldRemovePid(process.pid, process.pid, true)).toBe(true); // we own it
+    expect(shouldRemovePid(null, process.pid, false)).toBe(true); // empty pidfile
+    expect(shouldRemovePid(999, process.pid, false)).toBe(true); // dead owner (stale)
+  });
+  it('KEEPS a pidfile owned by a LIVE foreign daemon (the winning childA)', () => {
+    // A losing childB (pid 222) must never delete childA's (pid 111) live pidfile → orphaned daemon.
+    expect(shouldRemovePid(111, 222, true)).toBe(false);
+  });
+});
 
 let home: string;
 

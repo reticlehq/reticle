@@ -2,8 +2,9 @@
  * TOON — Token-Optimized Object Notation.
  *
  * A compact, deterministic, line-oriented text format for Reticle snapshots and query results.
- * Losslessly round-trips to/from the internal JSON representation. Not a binary format — Claude
- * must be able to generate and parse it reliably from its training data alone.
+ * This is a ONE-WAY, encode-only projection of the internal JSON representation (there is no decoder
+ * back to JSON — the agent reads TOON, it is never parsed back). Not a binary format — Claude must be
+ * able to generate and read it reliably from its training data alone.
  *
  * Grammar (one element per line):
  *   type ref "name" [states] key=value ...

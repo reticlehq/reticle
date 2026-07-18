@@ -1,7 +1,6 @@
 import * as http from 'node:http';
 import * as net from 'node:net';
-import { LOOPBACK_HOST } from '@reticlehq/core';
-import { MCP_SSE_PATH } from './http-server.js';
+import { LOOPBACK_HOST, MCP_SSE_PATH } from '@reticlehq/core';
 import { log } from './log.js';
 
 const DEFAULT_DAEMON_READY_TIMEOUT_MS = 10_000;
@@ -71,6 +70,12 @@ function postToSession(url: string, body: string): Promise<void> {
       },
     };
     const req = http.request(options, (res) => {
+      const status = res.statusCode ?? 0;
+      if (status < 200 || status >= 300) {
+        // A non-2xx from the daemon MCP endpoint used to be swallowed, hanging the JSON-RPC call
+        // client-side with no diagnostic. Surface it (the forward is still fire-and-forget).
+        log('reticle_mcp_proxy_post_non2xx', { status, path: options.path });
+      }
       res.resume(); // drain so the socket is reused
       resolve();
     });

@@ -112,6 +112,7 @@ function fakeDeps(events: ReticleEvent[]): ToolDeps {
     eventsInWindow: () => events,
     eventsSince: () => events,
     health: () => ({ lastSeenMs: 0, throttled: false, focused: true }),
+    bufferHealth: () => ({ total: events.length, dropped: 0 }),
     getState: () => SessionState.ACTIVE,
     drainInbox: () => [],
   };

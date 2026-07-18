@@ -267,6 +267,14 @@ export const FlowFileSchema = z.object({
    * projectId is treated as global (visible everywhere), so pre-existing files parse and still show.
    */
   projectId: z.string().optional(),
+  /**
+   * The route (pathname) the journey started on, captured at record time. Replay navigates here
+   * before step 1 so a flow whose first anchor lives on another page doesn't drift on step 1 ("a
+   * step no longer matches") just because replay began on the wrong page. Optional + back-compat: a
+   * flow without it (or recorded before this shipped) replays from the current page as before, and
+   * the on-disk version stays FLOW_FILE_VERSION 1.
+   */
+  startPath: z.string().optional(),
   // FUTURE: fixtures/preconditions — schema slot reserved, unpopulated this cut. The recorder
   // never writes it and no fixture runner exists.
   fixture: z.string().optional(),
@@ -325,3 +333,5 @@ export interface FlowHealResult {
   message: string;
   error?: { code: string; message: string };
 }
+
+export type RecordedFlow = z.infer<typeof RecordedFlowSchema>;

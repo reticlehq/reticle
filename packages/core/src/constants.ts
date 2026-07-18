@@ -5,7 +5,22 @@
 
 export const RETICLE_DEFAULT_PORT = 4400;
 export const RETICLE_WS_PATH = '/reticle';
+/** Agent↔server MCP wire paths — served by the daemon HTTP plane, forwarded by the stdio proxy. */
+export const MCP_SSE_PATH = '/mcp/sse';
+export const MCP_MESSAGE_PATH = '/mcp/message';
+/** Local-only daemon introspection — `reticle status` GETs this for sessions + health at a glance. */
+export const STATUS_PATH = '/status';
 export const RETICLE_PROTOCOL_VERSION = 1;
+
+/**
+ * The one place the bridge WebSocket URL is built. The SDK connect default, the vite/next snippet
+ * generators, and the CLI's inject-connect all call this instead of hand-writing `ws://…${path}` —
+ * so the wire string can never drift across the four call sites. Host defaults to `localhost` (the
+ * dev app connects from the browser); pass it only for a non-default bind.
+ */
+export function bridgeWsUrl(port: number = RETICLE_DEFAULT_PORT, host = 'localhost'): string {
+  return `ws://${host}:${String(port)}${RETICLE_WS_PATH}`;
+}
 
 /**
  * Namespaced URL params a pooled/headless launcher appends to the app URL so the app's own SDK adopts
@@ -189,6 +204,10 @@ export const EventType = {
   DOM_TEXT: 'dom.text',
   NET_REQUEST: 'net.request',
   NET_PENDING: 'net.pending',
+  /** An SSE (EventSource) or WebSocket frame — a message on a long-lived streaming connection. */
+  NET_STREAM: 'net.stream',
+  /** A web-perf metric a screenshot can't verify: LCP, cumulative layout shift, or a long task. */
+  PERF: 'perf',
   ROUTE_CHANGE: 'route.change',
   CONSOLE_LOG: 'console.log',
   CONSOLE_WARN: 'console.warn',
@@ -222,6 +241,17 @@ export const EventType = {
   HUMAN_MARK: 'human.mark',
 } as const;
 export type EventType = (typeof EventType)[keyof typeof EventType];
+
+/** The web-perf metrics carried in an EventType.PERF event's `metric` field. */
+export const PerfMetric = {
+  /** Largest Contentful Paint (ms). */
+  LCP: 'lcp',
+  /** Cumulative Layout Shift (unitless, running sum). */
+  CLS: 'cls',
+  /** A long task blocking the main thread (ms). */
+  LONGTASK: 'longtask',
+} as const;
+export type PerfMetric = (typeof PerfMetric)[keyof typeof PerfMetric];
 
 /** Which input path executed an action — native (CDP/Playwright) vs synthetic dispatchEvent. */
 export const InputMode = {
@@ -366,6 +396,8 @@ export const ReticleCommand = {
   CLOCK: 'clock',
   CAPABILITIES: 'capabilities',
   STATE_READ: 'state_read',
+  /** Read localStorage / sessionStorage / readable cookies (sensitive keys redacted). */
+  STORAGE_READ: 'storage_read',
   /** scroll a ref's nearest scrollable container by ~a viewport (virtualized lists). */
   SCROLL: 'scroll',
   /** Session lifecycle: agent tunes the presenter session (e.g. idle-end timeout) for the app's needs. */

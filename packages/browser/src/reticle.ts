@@ -3,7 +3,7 @@ import {
   RETICLE_DEFAULT_PORT,
   RETICLE_PROTOCOL_VERSION,
   RETICLE_URL_PARAM,
-  RETICLE_WS_PATH,
+  bridgeWsUrl,
   ReticleCommand,
   MessageKind,
   SESSION_AUTO,
@@ -24,6 +24,7 @@ import {
 } from './registry/capabilities.js';
 import { installDom } from './observers/dom.js';
 import { installNetwork } from './observers/network.js';
+import { installPerf } from './observers/perf.js';
 import { installRoute } from './observers/route.js';
 import { installConsole } from './observers/console.js';
 import { installAnimation } from './observers/animation.js';
@@ -67,6 +68,11 @@ export interface ReticleConnectOptions {
   allowInProduction?: boolean;
   /** Show a small in-page status chip (connection + event count). */
   overlay?: boolean;
+  /**
+   * Capture request/response bodies on net.request events (dev-only; text-like content only,
+   * sensitive keys redacted, per-body capped). Off by default — bodies cost tokens and can carry PII.
+   */
+  captureNetworkBodies?: boolean;
   /** Presenter mode: glow border, animated cursor, click/hover effects, narration HUD. */
   present?: boolean;
   /** Per-action pacing (ms) in presenter mode so a human can follow. Default 450. */
@@ -237,7 +243,7 @@ export class Reticle {
       return;
     }
 
-    const url = options.url ?? `ws://localhost:${String(RETICLE_DEFAULT_PORT)}${RETICLE_WS_PATH}`;
+    const url = options.url ?? bridgeWsUrl(RETICLE_DEFAULT_PORT);
     const policy = connectionPolicy(
       window.location.hostname,
       url,
@@ -292,7 +298,8 @@ export class Reticle {
 
     const emit = this.#emit;
     this.#teardowns = [
-      installNetwork(emit),
+      installNetwork(emit, { captureBodies: options.captureNetworkBodies === true }),
+      installPerf(emit),
       installRoute(emit),
       installConsole(emit),
       installAnimation(emit),
@@ -358,7 +365,7 @@ export class Reticle {
     return this.#connected;
   }
 
-  /** Surface an arbitrary app-domain observation the DOM can't express (plan/03 §7). */
+  /** Surface an arbitrary app-domain observation the DOM can't express. */
   signal(name: string, data: Record<string, unknown> = {}): void {
     this.#emit(EventType.SIGNAL, { name, data });
   }

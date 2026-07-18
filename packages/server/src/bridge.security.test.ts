@@ -31,7 +31,7 @@ async function makeBridge(options: Omit<ConstructorParameters<typeof Bridge>[0],
 }
 
 // Default to a loopback Origin — a real browser SDK always sends one. Pass `null` to simulate a
-// non-browser local process that omits Origin entirely (the M1 case).
+// non-browser local process that omits Origin entirely.
 function openSocket(port: number, origin: string | null = 'http://localhost'): Promise<WebSocket> {
   return new Promise((resolve, reject) => {
     const socket = new WebSocket(`ws://127.0.0.1:${String(port)}${RETICLE_WS_PATH}`, {
@@ -115,17 +115,28 @@ describe('Bridge security boundary', () => {
     expect(() => new Bridge({ port: 0, host: '0.0.0.0' })).toThrow(/pairing token/);
   });
 
-  it('rejects protocol mismatches', async () => {
+  it('requires allowedOrigins when binding beyond localhost (else it rejects every browser)', () => {
+    expect(() => new Bridge({ port: 0, host: '0.0.0.0', token: 'shared-secret' })).toThrow(
+      /ALLOWED_ORIGINS/,
+    );
+  });
+
+  it('rejects protocol mismatches with a distinct "upgrade" reason (not a generic drop)', async () => {
     const { bridge, port } = await makeBridge();
     const socket = await openSocket(port);
-    const closed = waitForClose(socket);
+    const closed = new Promise<{ code: number; reason: string }>((resolve) => {
+      socket.once('close', (code, reason) => resolve({ code, reason: reason.toString() }));
+    });
     socket.send(
       JSON.stringify({
         ...hello('old-client'),
         protocolVersion: RETICLE_PROTOCOL_VERSION + 1,
       }),
     );
-    expect(await closed).toBe(1008);
+    const { code, reason } = await closed;
+    expect(code).toBe(1008);
+    // The distinct reason is what stops the agent misdiagnosing a version skew as a port mismatch.
+    expect(reason).toContain('protocol version mismatch');
     expect(bridge.sessions.count()).toBe(0);
   });
 

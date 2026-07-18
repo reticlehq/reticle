@@ -59,16 +59,12 @@ interface SnapshotOptions {
   maxDepth?: number | undefined;
 }
 
-function skip(el: Element): boolean {
+/** Cheap skips that need no computed style (tags, overlays, aria-hidden, [hidden]). */
+function skipEarly(el: Element): boolean {
   if (SKIP_TAGS.has(el.tagName.toLowerCase())) return true;
   if (isIgnored(el)) return true; // Reticle overlay + known dev overlays
   if (el.getAttribute('aria-hidden') === 'true') return true;
   if (el instanceof HTMLElement && el.hidden) return true;
-  const view = el.ownerDocument.defaultView;
-  if (view !== null) {
-    const style = view.getComputedStyle(el);
-    if (style.display === 'none') return true;
-  }
   return false;
 }
 
@@ -109,10 +105,8 @@ function formatTextLine(depth: number, text: string): string {
  * regression (e.g. grid columns 2 -> 3) leaves the role+text tree identical, so a role-only
  * snapshot is blind to it; this line makes it visible. Empty for non-container elements.
  */
-function layoutSignature(el: Element): string {
-  const view = el.ownerDocument.defaultView;
-  if (view === null) return '';
-  const style = view.getComputedStyle(el);
+function layoutSignature(style: CSSStyleDeclaration | null): string {
+  if (style === null) return '';
   const display = style.display;
   // Grid track templates are the high-signal CLS case (column/row count + sizing) and there are
   // few grid containers per page. Flex is intentionally excluded: nearly every row is a flex
@@ -133,14 +127,40 @@ interface WalkCtx {
   maxDepth: number;
 }
 
+/**
+ * The children to walk under `parent`, piercing boundaries a plain `.children` misses: an OPEN shadow
+ * root renders as part of the element (web components / design systems), and a SAME-ORIGIN iframe's
+ * body is real content. Cross-origin frames throw on access and are skipped by design. Without this,
+ * an entire category of modern apps is invisible to reticle_snapshot (systematic false negative).
+ */
+function pierceChildren(parent: Element): Element[] {
+  const out: Element[] = [...parent.children];
+  const shadow = parent.shadowRoot;
+  if (shadow !== null) out.push(...shadow.children);
+  if (parent instanceof HTMLIFrameElement) {
+    try {
+      const body = parent.contentDocument?.body;
+      if (body !== null && body !== undefined) out.push(...body.children);
+    } catch {
+      /* cross-origin frame — inaccessible by design */
+    }
+  }
+  return out;
+}
+
 function walk(parent: Element, depth: number, ctx: WalkCtx): void {
   if (depth > ctx.maxDepth) return;
-  for (const child of parent.children) {
+  for (const child of pierceChildren(parent)) {
     if (ctx.nodes >= ctx.maxNodes) {
       ctx.truncated = true;
       return;
     }
-    if (skip(child)) continue;
+    if (skipEarly(child)) continue;
+    // Resolve computed style ONCE per node (the dominant snapshot cost) and thread it into both the
+    // display-none skip and the layout signature — was two forced style resolutions per node.
+    const view = child.ownerDocument.defaultView;
+    const style = view !== null ? view.getComputedStyle(child) : null;
+    if (style !== null && style.display === 'none') continue;
     const role = getRole(child);
     const name = getAccessibleName(child);
     const interactive = INTERACTIVE.has(role);
@@ -149,7 +169,7 @@ function walk(parent: Element, depth: number, ctx: WalkCtx): void {
     const lean = ctx.mode === SnapshotMode.INTERACTIVE;
     const text = !lean && role === 'generic' && name.length === 0 ? directText(child) : '';
     // Layout signature for grid/flex containers — makes CLS/layout regressions visible.
-    const layout = lean ? '' : layoutSignature(child);
+    const layout = lean ? '' : layoutSignature(style);
     const meaningful =
       interactive || role !== 'generic' || name.length > 0 || text.length > 0 || layout.length > 0;
     const include = lean ? interactive : meaningful;
@@ -184,7 +204,7 @@ function buildStatus(root: ParentNode): SnapshotStatus {
   };
 }
 
-/** Build the semantic accessibility snapshot of the page or a subtree (plan/04). */
+/** Build the semantic accessibility snapshot of the page or a subtree. */
 export function buildSnapshot(options: SnapshotOptions = {}): SnapshotResult {
   const mode = options.mode ?? SnapshotMode.FULL;
   const scopeEl =

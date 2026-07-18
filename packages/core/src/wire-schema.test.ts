@@ -40,3 +40,13 @@ describe('wire-contract JSON Schema', () => {
     expect(json).toContain('anyOf');
   });
 });
+
+describe('bridgeWsUrl — the one bridge-URL builder', () => {
+  it('composes host, port, and the ws path; defaults to localhost + the default port', () => {
+    expect(core.bridgeWsUrl(58432)).toBe(`ws://localhost:58432${core.RETICLE_WS_PATH}`);
+    expect(core.bridgeWsUrl()).toBe(
+      `ws://localhost:${String(core.RETICLE_DEFAULT_PORT)}${core.RETICLE_WS_PATH}`,
+    );
+    expect(core.bridgeWsUrl(4400, '127.0.0.1')).toBe(`ws://127.0.0.1:4400${core.RETICLE_WS_PATH}`);
+  });
+});

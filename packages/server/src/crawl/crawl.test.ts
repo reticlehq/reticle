@@ -119,13 +119,15 @@ describe('crawl — autonomous smart-monkey', () => {
     expect(r.interactiveFound).toBe(5);
   });
 
-  it('8: identical controls are clicked once (dedup by description)', async () => {
+  it('8: same-label but distinct controls (different refs) are each clicked (dedup by ref, not label)', async () => {
+    // Two rows' "Delete"/"Dup" buttons share a label but are different controls — the smart-monkey
+    // must click both, not collapse them by description (which under-covered list/table UIs).
     const session = fakeSession(tree(['button "Dup" (ref=e1)', 'button "Dup" (ref=e2)']), {
       e1: domActivity,
       e2: domActivity,
     });
     const r = await crawl(session, {}, noSleep);
-    expect(r.stepsRun).toBe(1);
-    expect(r.visited).toEqual(['button "Dup"']);
+    expect(r.stepsRun).toBe(2);
+    expect(r.visited).toEqual(['button "Dup"', 'button "Dup"']);
   });
 });

@@ -23,8 +23,11 @@ import {
 import { describe } from '../dom/a11y.js';
 import { themeReport } from '../dom/theme.js';
 import { refs } from '../dom/refs.js';
+import { hitTestOccluder } from '../dom/occlusion.js';
+import { readStorage } from '../observers/storage.js';
 import { identifyComponent, readComponentState } from '../registry/adapters.js';
-import { readStores, storeNames } from '../registry/stores.js';
+import { readStores, readStoresRaw, storeNames } from '../registry/stores.js';
+import { sanitizeForTransport } from '../security/serialization.js';
 import { getCapabilities } from '../registry/capabilities.js';
 import { freezeClock, advanceClock, resetClock, isClockFrozen } from '../timers/clock.js';
 import { scrollContainer } from '../actions/scroll.js';
@@ -105,27 +108,9 @@ function inspect(ref: string): unknown {
   };
 }
 
-/** True if the node (or an ancestor) is part of Reticle's own injected UI (HUD, glow, cursor, flag
- * button, …). Reticle's overlay must never count as occluding the app — a control sitting under the
- * HUD is a false "occluded" reading, since the HUD is not part of the app the user actually sees. */
-function isReticleUi(node: Element | null): boolean {
-  for (let n: Element | null = node; n !== null; n = n.parentElement) {
-    for (const attr of Array.from(n.attributes)) {
-      if (attr.name.startsWith('data-reticle')) return true;
-    }
-  }
-  return false;
-}
-
 /** Whether a NON-Reticle element covers this one's center point (a transparent overlay / z-index bug). */
 function isOccluded(el: Element, rect: DOMRect): boolean {
-  if (rect.width === 0 || rect.height === 0) return false; // a 0×0 box is a different bug (size)
-  const doc = el.ownerDocument;
-  if (typeof doc.elementFromPoint !== 'function') return false;
-  const top = doc.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2);
-  // Reticle's own HUD sits at a high z-index and must never read as occluding the app.
-  if (top === null || isReticleUi(top)) return false;
-  return top !== el && !el.contains(top);
+  return hitTestOccluder(el, rect) !== null;
 }
 
 /** Narrowing guard: an adapter returned a ComponentStateResult (has a boolean `ok`). */
@@ -156,26 +141,28 @@ function readState(
   path: string | undefined,
   depth: number | undefined,
 ): unknown {
-  const stores = readStores(store);
   const names = storeNames();
 
-  // Scoped read: walk `path` into the named store (or the whole {stores} when no store is given) and
-  // cap depth — entirely in-page, so only the result crosses the wire.
+  // Scoped read: walk `path` into the RAW (uncapped) store, then sanitize only the selected sub-tree.
+  // Selecting before the transport cap is what lets a deep/large path (row 250 of a 500-row array)
+  // resolve — capping first would truncate the store before selection ever reached the row.
   if (path !== undefined || depth !== undefined) {
-    const base = store !== undefined ? stores[store] : { stores, storeNames: names };
+    const rawStores = readStoresRaw(store);
+    const base = store !== undefined ? rawStores[store] : { stores: rawStores, storeNames: names };
     const selection = path !== undefined ? selectPath(base, path) : { found: true, value: base };
-    const value =
+    const selected =
       selection.found && depth !== undefined ? capDepth(selection.value, depth) : selection.value;
     return {
       store,
       path,
       found: selection.found,
-      value,
+      value: sanitizeForTransport(selected),
       ...('availableKeys' in selection ? { availableKeys: selection.availableKeys } : {}),
       storeNames: names,
     };
   }
 
+  const stores = readStores(store);
   const result: {
     stores: Record<string, unknown>;
     storeNames: string[];
@@ -267,6 +254,7 @@ export function createCommandRegistry(): Map<string, CommandHandler> {
   reg.set(ReticleCommand.STATE_READ, (args) =>
     readState(str(args['ref']), str(args['store']), str(args['path']), num(args['depth'])),
   );
+  reg.set(ReticleCommand.STORAGE_READ, (args) => readStorage(str(args['area'])));
   reg.set(ReticleCommand.CAPABILITIES, () => getCapabilities());
   reg.set(ReticleCommand.SCROLL, (args) => {
     const dy = args['dy'];

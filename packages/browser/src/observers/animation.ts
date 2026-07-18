@@ -3,7 +3,7 @@ import { refs } from '../dom/refs.js';
 import { isReticleOverlay } from '../dom/dom-ignore.js';
 import type { Emit, Teardown } from './types.js';
 
-/** Observe CSS animations + transitions and emit anim.start / anim.end (plan/03 §6). */
+/** Observe CSS animations + transitions and emit anim.start / anim.end. */
 export function installAnimation(emit: Emit): Teardown {
   const onStart = (event: AnimationEvent): void => {
     const target = event.target;

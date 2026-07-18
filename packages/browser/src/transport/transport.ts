@@ -216,12 +216,17 @@ export class Transport {
   #sendRaw(text: string): void {
     if (this.#ws !== undefined && this.#ws.readyState === WebSocket.OPEN) {
       this.#ws.send(text);
-    } else if (this.#queue.length < MAX_QUEUE) {
-      this.#queue.push(text);
-    } else {
+      return;
+    }
+    if (this.#queue.length >= MAX_QUEUE) {
+      // Full offline queue: drop the OLDEST and keep the newest (ring), so after reconnect the agent
+      // replays RECENT activity instead of 500 stale events with the latest lost. The overflow
+      // counter still signals that a gap occurred.
+      this.#queue.shift();
       this.#overflowCount += 1;
       this.#deps.onOverflow?.(this.#overflowCount);
     }
+    this.#queue.push(text);
   }
 
   close(): void {

@@ -1,20 +1,13 @@
 import { z } from 'zod';
 import { ReticleCommand, VISUAL_NO_PROVIDER_RECOMMENDATION, VisualReason } from '@reticlehq/core';
 import { ReticleTool } from '../tools/tool-names.js';
+import { sessionIdShape } from '../tools/tool-kit.js';
 import { asNumber, asRecord, asString } from '../tools/tools-helpers.js';
 import { diffPng, type VisualRect } from './visual-diff.js';
 import { VisualStore } from './visual-store.js';
 import type { ElementBox, RealInputProvider, ScreenshotOpts } from '../input/real-input.js';
 import type { ToolDef, ToolDeps } from '../tools/tools.js';
 
-const sessionIdShape = {
-  sessionId: z
-    .string()
-    .optional()
-    .describe(
-      'Active session ID from reticle_sessions. Omit when only one browser session is open.',
-    ),
-};
 const rectShape = z.object({
   x: z.number(),
   y: z.number(),

@@ -8,6 +8,8 @@ import {
   ReticleMessageSchema,
   LOOPBACK_HOST,
   MessageKind,
+  ReticleEnv,
+  RETICLE_PROTOCOL_VERSION,
   TRANSPORT_LIMITS,
   isLoopbackHostname,
 } from '@reticlehq/core';
@@ -29,6 +31,7 @@ const WS_CLOSE = {
   HELLO_DUPLICATE: [1008, 'hello already received'],
   AUTH_FAILED: [1008, 'authentication failed'],
   SESSION_LIMIT: [1013, 'session limit reached'],
+  PROTOCOL_MISMATCH: [1008, 'protocol version mismatch — upgrade @reticlehq/browser'],
 } as const;
 
 /** The flow name if this event is a panel ▶ replay request, else undefined. Pure boundary narrowing. */
@@ -63,6 +66,28 @@ function normalizeOrigin(origin: string): string | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * When a message fails the strict schema, detect the specific case of a HELLO whose protocolVersion
+ * differs from ours — so we can tell the operator "upgrade @reticlehq/browser" instead of dropping the
+ * connection into the generic NO_SESSION_CONNECTED path, which misdiagnoses it as a port mismatch.
+ * Returns the mismatched version, or null when it isn't a version-mismatched HELLO.
+ */
+function helloProtocolMismatch(text: string): number | null {
+  try {
+    const json = JSON.parse(text) as { kind?: unknown; protocolVersion?: unknown };
+    if (
+      json.kind === MessageKind.HELLO &&
+      typeof json.protocolVersion === 'number' &&
+      json.protocolVersion !== RETICLE_PROTOCOL_VERSION
+    ) {
+      return json.protocolVersion;
+    }
+  } catch {
+    /* not JSON — fall through to the generic invalid-message path */
+  }
+  return null;
 }
 
 /** Normalize ws RawData (string | Buffer | Buffer[] | ArrayBuffer) into a UTF-8 string. */
@@ -112,6 +137,16 @@ export class Bridge {
         .map(normalizeOrigin)
         .filter((origin): origin is string => origin !== null),
     );
+    // Binding beyond localhost means the browser dials in from a non-loopback Origin. With no
+    // allow-list, #originAllowed rejects every such Origin at the WS handshake, so the bridge comes
+    // up but accepts nothing — a silent, fail-closed footgun. Refuse to start with a clear message.
+    if (!isLoopbackHostname(host) && this.#allowedOrigins.size === 0) {
+      throw new Error(
+        `${ReticleEnv.ALLOWED_ORIGINS} must list the app origin(s) when the Reticle bridge binds ` +
+          'beyond localhost — otherwise every non-loopback browser is rejected at the WebSocket ' +
+          'origin check and no connection can be established.',
+      );
+    }
     this.#maxMessagesPerSecond =
       options.maxMessagesPerSecond ?? TRANSPORT_LIMITS.MAX_MESSAGES_PER_SECOND;
     this.#maxSessions = options.maxSessions ?? TRANSPORT_LIMITS.MAX_SESSIONS;
@@ -210,8 +245,15 @@ export class Bridge {
         return;
       }
 
-      const parsed = this.#parse(rawToString(raw));
+      const text = rawToString(raw);
+      const parsed = this.#parse(text);
       if (parsed === null) {
+        const got = helloProtocolMismatch(text);
+        if (got !== null) {
+          log('protocol_version_mismatch', { got, expected: RETICLE_PROTOCOL_VERSION });
+          socket.close(...WS_CLOSE.PROTOCOL_MISMATCH);
+          return;
+        }
         socket.close(...WS_CLOSE.INVALID_MESSAGE);
         return;
       }
@@ -248,7 +290,8 @@ export class Bridge {
         // the daemon-wired handler instead of the in-session control path. Everything else is normal.
         const replay = replayRequest(parsed.event);
         if (replay !== undefined) this.#onReplay?.(session.id, replay);
-        else session.pushEvent(parsed.event);
+        // Pass the raw frame's byte length so the buffer doesn't re-serialize every event for accounting.
+        else session.pushEvent(parsed.event, Buffer.byteLength(text, 'utf8'));
       } else if (parsed.kind === MessageKind.COMMAND_RESULT) {
         session.handleResult(parsed);
       }

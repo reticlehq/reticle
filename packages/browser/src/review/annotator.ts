@@ -324,7 +324,9 @@ export class Annotator {
     // The pin fades after a moment so it confirms the mark landed without cluttering the page.
     const ref = pin;
     this.#now(); // touch the injected clock (kept for parity with the SDK's timing seams)
-    window.setTimeout(() => ref.remove(), 2600);
+    // Native (pre-bound) timer so a frozen app clock / fake-timer library can't stall the SDK's own
+    // UI — every other SDK timer uses the native primitives for exactly this reason.
+    nativeSetTimeout(() => ref.remove(), 2600);
   }
 
   #closePopover(): void {

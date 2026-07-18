@@ -35,6 +35,23 @@ describe('installRoute', () => {
     expect(String(events[0]?.data.pathname)).toBe('/next');
   });
 
+  it('emits ROUTE_CHANGE on a Back navigation after a pushState (stale-lastHref regression)', async () => {
+    const { emit, events } = collect();
+    history.replaceState({}, '', '/a');
+    teardown = installRoute(emit);
+
+    history.pushState({}, '', '/b'); // /a -> /b
+    await new Promise<void>((resolve) => {
+      window.addEventListener('popstate', () => resolve(), { once: true });
+      history.back(); // back to /a
+    });
+
+    const backNav = events.find(
+      (e) => String(e.data.from).endsWith('/b') && String(e.data.to).endsWith('/a'),
+    );
+    expect(backNav).toBeDefined();
+  });
+
   it('restores the original history methods (identity) on teardown', () => {
     /* eslint-disable @typescript-eslint/unbound-method -- comparing method identity, not calling */
     const beforePush = history.pushState;

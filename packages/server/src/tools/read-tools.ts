@@ -13,6 +13,7 @@ import { costHint } from '../session/output-budget.js';
 import { buildReactionReport } from '../events/reaction.js';
 import { asString, asNumber, parseInteractive } from './tools-helpers.js';
 import { type ToolDef, sessionIdShape, commandOrThrow, snapshotTree } from './tool-kit.js';
+import { bufferEnvelope } from '../session/session-health.js';
 
 export const READ_TOOLS: ToolDef[] = [
   {
@@ -65,6 +66,7 @@ export const READ_TOOLS: ToolDef[] = [
       added: z.array(z.string()),
       consoleErrors: z.number(),
       routeChanged: z.boolean(),
+      buffer: z.unknown().optional(),
     },
     handler: async (deps, args) => {
       const name = asString(args['baseline']) ?? 'default';
@@ -78,7 +80,16 @@ export const READ_TOOLS: ToolDef[] = [
         .filter(
           (e) => e.type === EventType.CONSOLE_ERROR || e.type === EventType.ERROR_UNCAUGHT,
         ).length;
-      return { baseline: name, removed, added, consoleErrors, routeChanged: base.route !== route };
+      // Buffer-honesty: the console-error count reads the whole buffer, which evicts — surface the
+      // eviction so a chatty-page regression check can't silently under-report with no signal.
+      return {
+        baseline: name,
+        removed,
+        added,
+        consoleErrors,
+        routeChanged: base.route !== route,
+        ...bufferEnvelope(session),
+      };
     },
   },
   {
@@ -275,6 +286,11 @@ export const READ_TOOLS: ToolDef[] = [
       storeNames: z.array(z.string()).optional(),
       found: z.boolean().optional(),
       value: z.unknown().optional(),
+      // Scoped-read diagnostics (echoed store/path + the keys that WERE available on a miss) — declared
+      // so a schema-strict client keeps the self-correction hint instead of dropping it.
+      store: z.string().optional(),
+      path: z.string().optional(),
+      availableKeys: z.array(z.string()).optional(),
       component: z
         .object({ ok: z.boolean(), reason: z.string().optional(), state: z.unknown().optional() })
         .optional(),
@@ -353,6 +369,7 @@ export const READ_TOOLS: ToolDef[] = [
       interactive: z.array(z.unknown()),
       consoleErrors: z.number(),
       hint: z.string(),
+      buffer: z.unknown().optional(),
     },
     handler: async (deps, args) => {
       const session = deps.sessions.resolve(asString(args['sessionId']));
@@ -371,7 +388,62 @@ export const READ_TOOLS: ToolDef[] = [
         interactive: parseInteractive(snap.tree ?? ''),
         consoleErrors,
         hint: 'act on each ref, observe the reaction, and report failed requests / console errors / dead controls',
+        // Buffer-honesty: the console-error count spans the whole buffer, which evicts — signal it.
+        ...bufferEnvelope(session),
       };
+    },
+  },
+  {
+    name: ReticleTool.STORAGE,
+    description:
+      "Read the app's client-side storage: localStorage, sessionStorage, and readable cookies. " +
+      'Verifies auth/session persistence a screenshot cannot see — "token persisted after login", ' +
+      '"cart survived reload", "logout cleared the session". Sensitive keys (token/session/password/…) ' +
+      'are REDACTED; httpOnly cookies are invisible to JS by design. `area` scopes to local|session|' +
+      'cookies (omit for all three); `key` returns just that value with found:true/false so a miss is ' +
+      'diagnosable.',
+    inputSchema: {
+      area: z
+        .enum(['local', 'session', 'cookies'])
+        .optional()
+        .describe('Scope to one storage area. Omit to read all three.'),
+      key: z
+        .string()
+        .optional()
+        .describe("Return only this key's value (found:false when absent)."),
+      ...sessionIdShape,
+    },
+    outputSchema: {
+      local: z.record(z.string()).optional(),
+      session: z.record(z.string()).optional(),
+      cookies: z.record(z.string()).optional(),
+      area: z.string().optional(),
+      key: z.string().optional(),
+      value: z.string().optional(),
+      found: z.boolean().optional(),
+    },
+    handler: async (deps, args) => {
+      const area = asString(args['area']);
+      const key = asString(args['key']);
+      const result = await commandOrThrow(
+        deps,
+        asString(args['sessionId']),
+        ReticleCommand.STORAGE_READ,
+        area !== undefined ? { area } : {},
+      );
+      const data = (typeof result === 'object' && result !== null ? result : {}) as Record<
+        string,
+        unknown
+      >;
+      if (key === undefined) return data;
+      // Look up the key in the scoped area, or across all three areas when none was named.
+      const areas = area !== undefined ? [data] : [data['local'], data['session'], data['cookies']];
+      for (const a of areas) {
+        if (typeof a === 'object' && a !== null && key in a) {
+          return { area, key, value: String((a as Record<string, unknown>)[key]), found: true };
+        }
+      }
+      return { area, key, found: false };
     },
   },
 ];

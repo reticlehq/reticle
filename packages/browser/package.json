@@ -1,6 +1,6 @@
 {
   "name": "@reticlehq/browser",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "Reticle browser SDK — installs observers, builds semantic snapshots, executes actions, talks to the bridge.",
   "type": "module",
   "main": "./dist/index.js",

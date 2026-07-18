@@ -1,6 +1,6 @@
 {
   "name": "@reticlehq/protocol",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "private": true,
   "description": "Deprecated alias for @reticlehq/core. The Reticle wire contract moved into the core foundation; this alias is no longer published (unpublished after v2.0.0) — import from @reticlehq/core.",
   "type": "module",

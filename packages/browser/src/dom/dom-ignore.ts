@@ -18,6 +18,16 @@ export function isReticleOverlay(el: Element): boolean {
   return el.closest(RETICLE_OVERLAY) !== null;
 }
 
+/** Walk ancestors: true iff any element in the chain carries a data-reticle* attribute (Reticle's own UI). */
+export function isReticleUi(node: Element | null): boolean {
+  for (let n: Element | null = node; n !== null; n = n.parentElement) {
+    for (const attr of Array.from(n.attributes)) {
+      if (attr.name.startsWith('data-reticle')) return true;
+    }
+  }
+  return false;
+}
+
 /** True if the element should be excluded from snapshots/queries (Reticle overlay or dev overlay). */
 export function isIgnored(el: Element): boolean {
   const sel =

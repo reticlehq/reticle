@@ -16,12 +16,13 @@ const now = (): number => 0;
 
 /** A throttled fake session (complete enough to drive real read-only handlers) whose health()
  *  carries the un-scriptable recommendation. */
-function throttledSession(): Session {
+function throttledSession(overrides: Partial<Session> = {}): Session {
   const stub: Partial<Session> = {
     id: 'demo',
     url: 'http://localhost:5173/app',
     command: () => Promise.resolve({ kind: 'command_result', id: 'c', ok: true, result: {} }),
     eventsSince: () => [],
+    bufferHealth: () => ({ total: 0, dropped: 0 }),
     health: () => ({
       lastSeenMs: 99_999,
       throttled: true,
@@ -32,12 +33,12 @@ function throttledSession(): Session {
     drainInbox: () => [],
     takeSessionLease: () => undefined,
     ageWarning: () => undefined,
+    ...overrides,
   };
   return stub as Session;
 }
 
-function fakeDeps(): ToolDeps {
-  const session = throttledSession();
+function fakeDeps(session: Session = throttledSession()): ToolDeps {
   const sessions: Partial<SessionManager> = { resolve: () => session };
   const fs = createNodeFileSystem();
   return {
@@ -99,6 +100,25 @@ describe('runTool — universal session-health invariant', () => {
         true,
       );
     }
+  });
+
+  it('5b: lease + age-warning are spliced even when the handler already returned a session block', async () => {
+    // A throttled/backgrounded tab's handler returns its own `session` health — this must NOT skip
+    // the one-time lease reminder + age cleanup nudge (the long-running leak case).
+    const lease = { sessionId: 'demo', opened_at: 0, IMPORTANT: 'release when done' };
+    const session = throttledSession({
+      takeSessionLease: () => lease,
+      ageWarning: () => 'age-note',
+    });
+    const handlerResult = { ok: true, session: { throttled: false, lastSeenMs: 1 } };
+    const r = (await runTool(
+      stubTool(ReticleTool.ACT, handlerResult),
+      fakeDeps(session),
+      {},
+    )) as Record<string, unknown>;
+    expect(r['session_lease']).toEqual(lease);
+    expect(r['session_age_warning']).toBe('age-note');
+    expect((r['session'] as { throttled: boolean }).throttled).toBe(false); // handler's health kept
   });
 
   it('6: every name in the bound/exempt sets is a real tool (no dangling names)', () => {

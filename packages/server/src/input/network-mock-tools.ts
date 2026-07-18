@@ -1,19 +1,11 @@
 import { z } from 'zod';
 import { VISUAL_NO_PROVIDER_RECOMMENDATION, VisualReason } from '@reticlehq/core';
 import { ReticleTool } from '../tools/tool-names.js';
+import { sessionIdShape } from '../tools/tool-kit.js';
 import { asString } from '../tools/tools-helpers.js';
 import type { RealInputProvider } from './real-input.js';
 import type { MockRule } from './network-mock.js';
 import type { ToolDef, ToolDeps } from '../tools/tools.js';
-
-const sessionIdShape = {
-  sessionId: z
-    .string()
-    .optional()
-    .describe(
-      'Active session ID from reticle_sessions. Omit when only one browser session is open.',
-    ),
-};
 
 /** A provider that can install network mocks — narrows the optional capability so callers branch once. */
 type MockCapable = RealInputProvider & {

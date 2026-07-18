@@ -1,30 +1,207 @@
 import { EventType, REDACTED_VALUE } from '@reticlehq/core';
-import { isSensitiveKey } from '../security/serialization.js';
+import {
+  isSensitiveKey,
+  sanitizeForTransport,
+  safeStringify,
+  scrubKnownSecrets,
+} from '../security/serialization.js';
 import type { Emit, Teardown } from './types.js';
 
+/** Config for the network observer. Body capture is OFF by default and dev-only opt-in. */
+export interface NetworkOptions {
+  /** Capture request/response bodies (text-like content only, redacted, per-body capped). */
+  captureBodies?: boolean;
+}
+
 /**
- * Redact credential-bearing query params (`?access_token=…`, signed-URL keys, magic-link tokens) so
- * they don't leak into the agent transcript / flow / run artifacts. Only the query string is rewritten
- * — the path (relative or absolute) and any hash are preserved — and only when something actually
- * matched, so non-sensitive URLs pass through byte-for-byte. Uses the shared `isSensitiveKey` regex.
+ * Per-body character cap. Bodies ride the same ring buffer as the DOM/route/console timeline, so an
+ * uncapped body could evict the whole behavioral history; the small cap keeps a few large responses
+ * from starving the timeline (the separate-budget concern in the scalability audit).
+ */
+const MAX_BODY_CHARS = 8192;
+/** Only text-like bodies are worth capturing; binary (images/fonts/octet-stream) is skipped. */
+const CAPTURABLE_CONTENT =
+  /application\/json|text\/|application\/xml|x-www-form-urlencoded|graphql/i;
+
+function isCapturableType(contentType: string | null): boolean {
+  return contentType !== null && CAPTURABLE_CONTENT.test(contentType);
+}
+
+/**
+ * An `Authorization: Bearer …` / `Basic …` credential. The token side requires credential shape — 16+
+ * chars AND at least one digit or symbol — so ordinary prose ("Basic subscription includes…", "Bearer
+ * capacity exceeded") is NOT mangled, only actual opaque tokens are.
+ */
+const AUTH_SCHEME_TOKEN =
+  /\b(Bearer|Basic)\s+(?=[A-Za-z0-9._~+/=-]{16,})(?=[A-Za-z0-9._~+/=-]*[\d._~+/=-])[A-Za-z0-9._~+/=-]+/gi;
+
+/**
+ * Redact credentials in ANY text body (form-urlencoded, text/plain, xml, or JSON that failed to parse).
+ * sanitizeForTransport only redacts KEYS inside a parsed object, so a `password=secret` form post or a
+ * `Bearer <token>` string would otherwise ship verbatim. Redacts the value of any `key=value` / `key: value`
+ * pair whose key is sensitive, plus credential-shaped auth-scheme tokens.
+ */
+function redactText(text: string): string {
+  return (
+    text
+      // Auth-scheme tokens FIRST: `Authorization: Bearer <token>` — the key/value rule below would
+      // otherwise consume just "Bearer" as Authorization's value (it stops at whitespace) and leave the
+      // token behind, so the scheme rule must run before it.
+      .replace(AUTH_SCHEME_TOKEN, (_m: string, scheme: string) => `${scheme} ${REDACTED_VALUE}`)
+      .replace(
+        /([A-Za-z0-9_.-]+)(\s*[=:]\s*"?)([^&\s,;"}]+)/g,
+        (match: string, key: string, sep: string) =>
+          isSensitiveKey(key) ? `${key}${sep}${REDACTED_VALUE}` : match,
+      )
+  );
+}
+
+/**
+ * Redact + cap a body for the agent transcript. JSON is parsed and run through the same
+ * sanitizeForTransport redaction used for state (sensitive keys -> [REDACTED]); every other text body
+ * (and JSON that didn't parse) goes through redactText so form/plain-text credentials can't leak.
+ * Returns the (possibly truncated) body plus whether it was cut.
+ */
+function projectBody(
+  text: string,
+  contentType: string | null,
+): { body: string; truncated: boolean } {
+  let out: string;
+  if (contentType !== null && /json|graphql/i.test(contentType)) {
+    try {
+      out = safeStringify(sanitizeForTransport(JSON.parse(text)));
+    } catch {
+      out = redactText(text); // looked like JSON but wasn't — still redact key/value + auth tokens
+    }
+  } else {
+    out = redactText(text);
+  }
+  // Key-based redaction can't see a secret sitting in a VALUE under a benign key — scan the projected
+  // text for high-confidence secret shapes (JWTs, provider keys) as a backstop, JSON or not.
+  out = scrubKnownSecrets(out);
+  const truncated = out.length > MAX_BODY_CHARS;
+  return { body: truncated ? out.slice(0, MAX_BODY_CHARS) : out, truncated };
+}
+
+/** The byte size of a binary frame (ArrayBuffer / Blob / typed-array view), or undefined if unknown. */
+function binaryFrameBytes(data: unknown): number | undefined {
+  if (data instanceof ArrayBuffer) return data.byteLength;
+  if (typeof Blob !== 'undefined' && data instanceof Blob) return data.size;
+  if (ArrayBuffer.isView(data)) return data.byteLength;
+  return undefined;
+}
+
+/** Project one SSE/WebSocket frame: byte size + shape; the (capped, redacted) payload only when body
+ *  capture is on and it is a string frame. Binary frames report their byte size, not just a bare type. */
+function frameFields(data: unknown, captureBodies: boolean): Record<string, unknown> {
+  if (typeof data !== 'string') {
+    const bytes = binaryFrameBytes(data);
+    return bytes === undefined
+      ? { frameType: typeof data }
+      : { frameType: 'binary', frameBytes: bytes };
+  }
+  const out: Record<string, unknown> = { frameBytes: data.length };
+  if (captureBodies) {
+    const { body, truncated } = projectBody(data, 'application/json');
+    out['frame'] = body;
+    if (truncated) out['frameTruncated'] = true;
+  }
+  return out;
+}
+
+/**
+ * The request body for the transcript. Plain strings and URLSearchParams are captured (redacted, capped);
+ * FormData/Blob/ArrayBuffer/stream aren't text so they get a `requestBodyType` marker (the agent still
+ * learns a body existed) rather than being silently dropped. Shared by the fetch and XHR paths.
+ */
+function projectRequestBody(body: unknown, captureBodies: boolean): Record<string, unknown> {
+  if (!captureBodies) return {};
+  let text: string | undefined;
+  let contentType = 'application/json';
+  if (typeof body === 'string') {
+    text = body;
+  } else if (typeof URLSearchParams !== 'undefined' && body instanceof URLSearchParams) {
+    text = body.toString();
+    contentType = 'application/x-www-form-urlencoded';
+  } else if (body !== undefined && body !== null) {
+    const shape = (body as { constructor?: { name?: string } }).constructor?.name ?? typeof body;
+    return { requestBodyType: shape };
+  }
+  if (text === undefined || text.length === 0) return {};
+  const { body: out, truncated } = projectBody(text, contentType);
+  return truncated ? { requestBody: out, requestBodyTruncated: true } : { requestBody: out };
+}
+
+/** A path segment name that is typically followed by a single-use secret token in the NEXT segment. */
+const SENSITIVE_PATH_SEGMENT =
+  /^(reset|verify|verification|confirm|activate|invite|magic|magiclink|token|key|oauth|unsubscribe|password)$/i;
+/** Only mask a following segment that looks token-like — short ids/words (`reset/form`) are left alone. */
+const PATH_TOKEN_MIN_LENGTH = 12;
+
+/**
+ * Redact credential-bearing values so they don't leak into the agent transcript / flow / run
+ * artifacts: query params (`?access_token=…`, signed-URL keys) via the shared `isSensitiveKey` regex,
+ * AND path-embedded tokens (`/reset/<token>`, `/invite/<token>`) that live in the path, not the query.
+ * The hash is preserved and the URL is returned byte-for-byte when nothing matched.
  */
 export function redactUrl(raw: string): string {
-  const queryStart = raw.indexOf('?');
-  if (queryStart === -1) return raw;
-  const base = raw.slice(0, queryStart);
-  const rest = raw.slice(queryStart + 1);
-  const hashStart = rest.indexOf('#');
-  const query = hashStart === -1 ? rest : rest.slice(0, hashStart);
-  const hash = hashStart === -1 ? '' : rest.slice(hashStart);
-  const params = new URLSearchParams(query);
+  const hashStart = raw.indexOf('#');
+  const hash = hashStart === -1 ? '' : raw.slice(hashStart);
+  const beforeHash = hashStart === -1 ? raw : raw.slice(0, hashStart);
+  const queryStart = beforeHash.indexOf('?');
+  const pathPart = queryStart === -1 ? beforeHash : beforeHash.slice(0, queryStart);
+  const query = queryStart === -1 ? '' : beforeHash.slice(queryStart + 1);
+
   let changed = false;
-  for (const key of [...params.keys()]) {
-    if (isSensitiveKey(key)) {
-      params.set(key, REDACTED_VALUE);
+
+  // Credentials in the authority (`scheme://user:pass@host`) never belong in a transcript.
+  let authority = pathPart;
+  const userinfo = /^([a-z][a-z0-9+.-]*:\/\/)[^/@]+@/i.exec(pathPart);
+  if (userinfo !== null) {
+    authority = `${userinfo[1] ?? ''}${REDACTED_VALUE}@${pathPart.slice(userinfo[0].length)}`;
+    changed = true;
+  }
+
+  let newQuery = query;
+  if (query !== '') {
+    const params = new URLSearchParams(query);
+    for (const key of [...params.keys()]) {
+      if (isSensitiveKey(key)) {
+        params.set(key, REDACTED_VALUE);
+        changed = true;
+      }
+    }
+    newQuery = params.toString();
+  }
+
+  const segments = authority.split('/');
+  for (let i = 0; i + 1 < segments.length; i++) {
+    const name = segments[i];
+    const next = segments[i + 1];
+    if (
+      name !== undefined &&
+      next !== undefined &&
+      next.length >= PATH_TOKEN_MIN_LENGTH &&
+      SENSITIVE_PATH_SEGMENT.test(name)
+    ) {
+      segments[i + 1] = REDACTED_VALUE;
       changed = true;
     }
   }
-  return changed ? `${base}?${params.toString()}${hash}` : raw;
+
+  // OAuth implicit flow puts the access_token in the FRAGMENT (`#access_token=…`), and hash-routers carry
+  // `?token=…` in the hash — redact sensitive params there too, leaving plain anchors (`#section`) alone.
+  let newHash = hash;
+  if (hash.length > 1) {
+    newHash = hash.replace(/([A-Za-z0-9_.-]+)=([^&\s]+)/g, (m: string, key: string) =>
+      isSensitiveKey(key) ? `${key}=${REDACTED_VALUE}` : m,
+    );
+    if (newHash !== hash) changed = true;
+  }
+
+  if (!changed) return raw;
+  const queryOut = queryStart === -1 ? '' : `?${newQuery}`;
+  return `${segments.join('/')}${queryOut}${newHash}`;
 }
 
 interface XhrMeta {
@@ -32,6 +209,26 @@ interface XhrMeta {
   method: string;
   url: string;
   start: number;
+  reqBody?: Document | XMLHttpRequestBodyInit | null;
+}
+
+/**
+ * Response metadata that needs no body capture: HTTP status text, content-type, and byte size (from
+ * content-length when the server sent it). Lets an agent tell an HTML error page served as 200 from
+ * real JSON, and spot empty/oversized responses. Fields are omitted when absent so a clean call stays
+ * token-flat.
+ */
+function netResponseMeta(
+  statusText: string,
+  contentType: string | null,
+  contentLength: string | null,
+): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  if (statusText !== '') out['statusText'] = statusText;
+  if (contentType !== null && contentType !== '') out['contentType'] = contentType;
+  const size = contentLength !== null ? Number.parseInt(contentLength, 10) : Number.NaN;
+  if (Number.isFinite(size)) out['responseSize'] = size;
+  return out;
 }
 
 function urlOf(input: RequestInfo | URL): string {
@@ -47,7 +244,8 @@ function methodOf(input: RequestInfo | URL, init: RequestInit | undefined): stri
 }
 
 /** Patch fetch + XMLHttpRequest to emit net.request events. Fully reversible. */
-export function installNetwork(emit: Emit): Teardown {
+export function installNetwork(emit: Emit, opts: NetworkOptions = {}): Teardown {
+  const captureBodies = opts.captureBodies === true;
   // Keep the true original for teardown identity, plus a window-bound copy to invoke
   // (fetch throws "Illegal invocation" if called with the wrong `this`).
   const origFetch = window.fetch;
@@ -68,6 +266,20 @@ export function installNetwork(emit: Emit): Teardown {
     emit(EventType.NET_PENDING, { id, method, url, initiator: 'fetch' });
     try {
       const res = await callFetch(input, init);
+      const contentType = res.headers.get('content-type');
+      // Read a CLONE so the app's response stream stays untouched. Dev-only opt-in; only text-like
+      // bodies; a read failure never breaks the observation.
+      let responseBodyFields: Record<string, unknown> = {};
+      if (captureBodies && isCapturableType(contentType)) {
+        try {
+          const { body, truncated } = projectBody(await res.clone().text(), contentType);
+          responseBodyFields = truncated
+            ? { responseBody: body, responseBodyTruncated: true }
+            : { responseBody: body };
+        } catch {
+          /* body not readable (already locked/consumed) — skip, keep the envelope */
+        }
+      }
       emit(EventType.NET_REQUEST, {
         id,
         method,
@@ -76,6 +288,9 @@ export function installNetwork(emit: Emit): Teardown {
         ok: res.ok,
         durationMs: Math.round(performance.now() - start),
         initiator: 'fetch',
+        ...netResponseMeta(res.statusText, contentType, res.headers.get('content-length')),
+        ...projectRequestBody(init?.body, captureBodies),
+        ...responseBodyFields,
       });
       return res;
     } catch (error) {
@@ -116,6 +331,10 @@ export function installNetwork(emit: Emit): Teardown {
     callOpen.call(this, method, url, ...rest);
   };
 
+  // A reused XHR calls send() repeatedly; attach the completion listener ONCE per instance and read the
+  // request identity from `meta` at fire time. Adding a fresh closure each send() would leave stale
+  // listeners that re-fire on later completions, emitting duplicate, mislabeled events.
+  const listenerAttached = new WeakSet<XMLHttpRequest>();
   proto.send = function (
     this: XMLHttpRequest,
     body?: Document | XMLHttpRequestBodyInit | null,
@@ -123,25 +342,102 @@ export function installNetwork(emit: Emit): Teardown {
     const m = meta.get(this);
     if (m !== undefined) {
       m.start = performance.now();
+      m.reqBody = body ?? null;
       emit(EventType.NET_PENDING, { id: m.id, method: m.method, url: m.url, initiator: 'xhr' });
-      this.addEventListener('loadend', () => {
-        emit(EventType.NET_REQUEST, {
-          id: m.id,
-          method: m.method,
-          url: m.url,
-          status: this.status,
-          ok: this.status >= 200 && this.status < 400,
-          durationMs: Math.round(performance.now() - m.start),
-          initiator: 'xhr',
+      if (!listenerAttached.has(this)) {
+        listenerAttached.add(this);
+        this.addEventListener('loadend', () => {
+          const cur = meta.get(this);
+          if (cur === undefined) return;
+          const xhrContentType = this.getResponseHeader('content-type');
+          let responseBodyFields: Record<string, unknown> = {};
+          // responseText throws unless responseType is '' or 'text' — guard before reading.
+          const textReadable = this.responseType === '' || this.responseType === 'text';
+          if (captureBodies && textReadable && isCapturableType(xhrContentType)) {
+            try {
+              const { body: rb, truncated } = projectBody(this.responseText, xhrContentType);
+              responseBodyFields = truncated
+                ? { responseBody: rb, responseBodyTruncated: true }
+                : { responseBody: rb };
+            } catch {
+              /* unreadable body — skip */
+            }
+          }
+          emit(EventType.NET_REQUEST, {
+            id: cur.id,
+            method: cur.method,
+            url: cur.url,
+            status: this.status,
+            ok: this.status >= 200 && this.status < 400,
+            durationMs: Math.round(performance.now() - cur.start),
+            initiator: 'xhr',
+            ...netResponseMeta(
+              this.statusText,
+              xhrContentType,
+              this.getResponseHeader('content-length'),
+            ),
+            ...projectRequestBody(cur.reqBody, captureBodies),
+            ...responseBodyFields,
+          });
         });
-      });
+      }
     }
     origSend.call(this, body ?? null);
   };
+
+  // SSE + WebSocket frame capture — gated behind body capture, since a chatty stream is the
+  // high-volume case. Subclass the native constructors so the app's own usage is unchanged.
+  const origEventSource = window.EventSource;
+  const origWebSocket = window.WebSocket;
+  if (captureBodies && typeof origEventSource === 'function') {
+    window.EventSource = class extends origEventSource {
+      constructor(u: string | URL, init?: EventSourceInit) {
+        super(u, init);
+        const url = redactUrl(String(u));
+        emit(EventType.NET_STREAM, { transport: 'sse', direction: 'open', url });
+        this.addEventListener('message', (ev: MessageEvent) => {
+          emit(EventType.NET_STREAM, {
+            transport: 'sse',
+            direction: 'in',
+            url,
+            ...frameFields(ev.data, captureBodies),
+          });
+        });
+      }
+    };
+  }
+  if (captureBodies && typeof origWebSocket === 'function') {
+    window.WebSocket = class extends origWebSocket {
+      constructor(u: string | URL, protocols?: string | string[]) {
+        super(u, protocols);
+        const url = redactUrl(String(u));
+        emit(EventType.NET_STREAM, { transport: 'ws', direction: 'open', url });
+        this.addEventListener('message', (ev: MessageEvent) => {
+          emit(EventType.NET_STREAM, {
+            transport: 'ws',
+            direction: 'in',
+            url,
+            ...frameFields(ev.data, captureBodies),
+          });
+        });
+      }
+      send(data: string | ArrayBufferLike | Blob | ArrayBufferView): void {
+        emit(EventType.NET_STREAM, {
+          transport: 'ws',
+          direction: 'out',
+          url: redactUrl(this.url),
+          ...frameFields(data, captureBodies),
+        });
+        super.send(data);
+      }
+    };
+  }
 
   return () => {
     window.fetch = origFetch;
     proto.open = origOpen;
     proto.send = origSend;
+    window.EventSource = origEventSource;
+    window.WebSocket = origWebSocket;
   };
 }

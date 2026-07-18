@@ -1,3 +1,4 @@
+import { NO_SESSION_CONNECTED_ERROR } from '@reticlehq/core';
 import { Session, type SessionInfo } from './session.js';
 
 /**
@@ -119,9 +120,7 @@ export class SessionManager {
       return found;
     }
     if (this.#sessions.size === 0) {
-      throw new Error(
-        'no browser session connected — is your app running with @reticlehq/browser enabled?',
-      );
+      throw new Error(NO_SESSION_CONNECTED_ERROR);
     }
     // Scope to the agent's active project FIRST, so a stray tab from another app/origin (e.g. a
     // leftover dashboard on a different port) is structurally unselectable — it never enters the

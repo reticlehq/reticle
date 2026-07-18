@@ -17,8 +17,16 @@ function collect(): { emit: Emit; events: Emitted[] } {
 }
 
 /** A minimal Response stand-in — jsdom does not always expose a usable global Response. */
-function fakeResponse(status: number): Response {
-  return { status, ok: status >= 200 && status < 300 } as Response;
+function fakeResponse(
+  status: number,
+  opts: { statusText?: string; headers?: Record<string, string> } = {},
+): Response {
+  return {
+    status,
+    ok: status >= 200 && status < 300,
+    statusText: opts.statusText ?? '',
+    headers: new Headers(opts.headers ?? {}),
+  } as Response;
 }
 
 describe('redactUrl', () => {
@@ -37,6 +45,33 @@ describe('redactUrl', () => {
   it('preserves a trailing #hash', () => {
     expect(redactUrl('/p?token=t#section')).toBe('/p?token=%5BREDACTED%5D#section');
   });
+
+  it('redacts a path-embedded token after a sensitive segment name', () => {
+    expect(redactUrl('https://app.com/reset/AbC123deadbeef99')).toBe(
+      'https://app.com/reset/[REDACTED]',
+    );
+    expect(redactUrl('/invite/aBcD1234EfGh5678?ref=x')).toBe('/invite/[REDACTED]?ref=x');
+  });
+
+  it('leaves short non-token segments after a sensitive name alone', () => {
+    expect(redactUrl('/reset/form')).toBe('/reset/form');
+    expect(redactUrl('/password/reset')).toBe('/password/reset');
+  });
+  it('redacts credentials embedded in the URL authority (user:pass@host)', () => {
+    expect(redactUrl('https://alice:s3cr3t@api.example.com/data')).toBe(
+      'https://[REDACTED]@api.example.com/data',
+    );
+    expect(redactUrl('http://plainhost.com/x')).toBe('http://plainhost.com/x');
+  });
+  it('redacts a token in the URL FRAGMENT (OAuth implicit flow) but leaves plain anchors alone', () => {
+    expect(redactUrl('https://app.com/cb#access_token=ya29SECRETVAL&token_type=bearer')).toContain(
+      'access_token=[REDACTED]',
+    );
+    expect(redactUrl('https://app.com/cb#access_token=ya29SECRETVAL')).not.toContain(
+      'ya29SECRETVAL',
+    );
+    expect(redactUrl('https://app.com/page#section-two')).toBe('https://app.com/page#section-two');
+  });
 });
 
 describe('installNetwork (fetch)', () => {
@@ -52,6 +87,174 @@ describe('installNetwork (fetch)', () => {
     teardown?.();
     teardown = undefined;
     window.fetch = origFetch;
+  });
+
+  function fakeResponseWithBody(status: number, contentType: string, bodyText: string): Response {
+    return {
+      status,
+      ok: status >= 200 && status < 300,
+      statusText: 'OK',
+      headers: new Headers({ 'content-type': contentType }),
+      clone: () => ({ text: () => Promise.resolve(bodyText) }),
+    } as unknown as Response;
+  }
+
+  it('captures + redacts request and response bodies only when opted in (Network 1b)', async () => {
+    // Fake credential values held in variables so the object literals do not read as hardcoded
+    // secrets to the repo's secret scanner — the point is that the observer redacts them.
+    const respTokenValue = 'resp-token-abcdef123';
+    const reqPasswordValue = 'req-pass-abcdef123';
+    const respBody = JSON.stringify({ items: [{ id: 1 }], token: respTokenValue });
+    window.fetch = vi.fn(() =>
+      Promise.resolve(fakeResponseWithBody(200, 'application/json', respBody)),
+    );
+    const { emit, events } = collect();
+    teardown = installNetwork(emit, { captureBodies: true });
+    await window.fetch('http://localhost:8787/api/data', {
+      method: 'POST',
+      body: JSON.stringify({ email: 'a@b.com', password: reqPasswordValue }),
+    });
+    const data = events[1]?.data as Record<string, unknown>;
+    expect(String(data['responseBody'])).toContain('"id":1');
+    expect(String(data['responseBody'])).toContain('[REDACTED]'); // token value redacted
+    expect(String(data['responseBody'])).not.toContain(respTokenValue);
+    expect(String(data['requestBody'])).toContain('[REDACTED]'); // password value redacted
+    expect(String(data['requestBody'])).not.toContain(reqPasswordValue);
+  });
+
+  it('redacts sensitive key=value pairs in a NON-JSON (form-urlencoded) body', async () => {
+    const formPasswordValue = 'form-pass-abcdef123';
+    window.fetch = vi.fn(() =>
+      Promise.resolve(fakeResponseWithBody(200, 'application/json', '{"ok":true}')),
+    );
+    const { emit, events } = collect();
+    teardown = installNetwork(emit, { captureBodies: true });
+    await window.fetch('http://localhost:8787/login', {
+      method: 'POST',
+      body: `username=alice&password=${formPasswordValue}`,
+    });
+    const data = events[1]?.data as Record<string, unknown>;
+    expect(String(data['requestBody'])).toContain('username=alice'); // non-sensitive kept
+    expect(String(data['requestBody'])).toContain('password=[REDACTED]');
+    expect(String(data['requestBody'])).not.toContain(formPasswordValue);
+  });
+
+  it('does NOT over-redact prose containing the words Bearer/Basic (no false positive)', async () => {
+    const prose =
+      'Basic subscription includes support. Bearer capacity exceeded the threshold today.';
+    window.fetch = vi.fn(() => Promise.resolve(fakeResponseWithBody(200, 'text/plain', prose)));
+    const { emit, events } = collect();
+    teardown = installNetwork(emit, { captureBodies: true });
+    await window.fetch('http://localhost:8787/docs');
+    expect(String((events[1]?.data as Record<string, unknown>)['responseBody'])).toBe(prose);
+  });
+
+  it('scrubs a high-confidence secret sitting in a JSON VALUE under a benign key', async () => {
+    const jwt = 'eyJhbGciOi.eyJzdWIiOi.sig123ABCdef';
+    const body = JSON.stringify({ note: `token is ${jwt}` });
+    window.fetch = vi.fn(() =>
+      Promise.resolve(fakeResponseWithBody(200, 'application/json', body)),
+    );
+    const { emit, events } = collect();
+    teardown = installNetwork(emit, { captureBodies: true });
+    await window.fetch('http://localhost:8787/api/x');
+    const rb = String((events[1]?.data as Record<string, unknown>)['responseBody']);
+    expect(rb).toContain('[REDACTED]');
+    expect(rb).not.toContain(jwt);
+  });
+
+  it('captures + redacts a URLSearchParams request body (not just strings)', async () => {
+    const pw = 'usp-pass-abcdef123';
+    window.fetch = vi.fn(() =>
+      Promise.resolve(fakeResponseWithBody(200, 'application/json', '{"ok":1}')),
+    );
+    const { emit, events } = collect();
+    teardown = installNetwork(emit, { captureBodies: true });
+    await window.fetch('http://localhost:8787/login', {
+      method: 'POST',
+      body: new URLSearchParams({ user: 'bob', password: pw }),
+    });
+    const rb = String((events[1]?.data as Record<string, unknown>)['requestBody']);
+    expect(rb).toContain('password=[REDACTED]');
+    expect(rb).not.toContain(pw);
+  });
+
+  it('marks a non-text request body (FormData) with a type instead of dropping it', async () => {
+    window.fetch = vi.fn(() =>
+      Promise.resolve(fakeResponseWithBody(200, 'application/json', '{"ok":1}')),
+    );
+    const { emit, events } = collect();
+    teardown = installNetwork(emit, { captureBodies: true });
+    const fd = new FormData();
+    fd.append('field', 'value');
+    await window.fetch('http://localhost:8787/upload', { method: 'POST', body: fd });
+    expect((events[1]?.data as Record<string, unknown>)['requestBodyType']).toBe('FormData');
+  });
+
+  it('redacts a credential-shaped Bearer token in a text body', async () => {
+    const token = 'AbCd1234EfGh5678IjKl';
+    window.fetch = vi.fn(() =>
+      Promise.resolve(fakeResponseWithBody(200, 'text/plain', `sent Bearer ${token} today`)),
+    );
+    const { emit, events } = collect();
+    teardown = installNetwork(emit, { captureBodies: true });
+    await window.fetch('http://localhost:8787/echo');
+    const rb = String((events[1]?.data as Record<string, unknown>)['responseBody']);
+    expect(rb).toContain('Bearer [REDACTED]');
+    expect(rb).not.toContain(token);
+  });
+
+  it('does not leak the token when the body is a full "Authorization: Bearer <token>" header dump', async () => {
+    const token = 'ZzYy9876XxWw5432VvUu';
+    window.fetch = vi.fn(() =>
+      Promise.resolve(fakeResponseWithBody(200, 'text/plain', `Authorization: Bearer ${token}`)),
+    );
+    const { emit, events } = collect();
+    teardown = installNetwork(emit, { captureBodies: true });
+    await window.fetch('http://localhost:8787/echo');
+    const rb = String((events[1]?.data as Record<string, unknown>)['responseBody']);
+    expect(rb).not.toContain(token); // the token must not survive, whatever the surrounding shape
+    expect(rb).toContain('[REDACTED]');
+  });
+
+  it('caps an oversized body and sets the truncated flag', async () => {
+    const huge = 'x'.repeat(20000);
+    window.fetch = vi.fn(() => Promise.resolve(fakeResponseWithBody(200, 'text/plain', huge)));
+    const { emit, events } = collect();
+    teardown = installNetwork(emit, { captureBodies: true });
+    await window.fetch('http://localhost:8787/big');
+    const data = events[1]?.data as Record<string, unknown>;
+    expect(data['responseBodyTruncated']).toBe(true);
+    expect(String(data['responseBody']).length).toBe(8192); // MAX_BODY_CHARS
+  });
+
+  it('does NOT capture bodies by default (opt-in only)', async () => {
+    window.fetch = vi.fn(() =>
+      Promise.resolve(fakeResponseWithBody(200, 'application/json', '{"x":1}')),
+    );
+    const { emit, events } = collect();
+    teardown = installNetwork(emit);
+    await window.fetch('http://localhost:8787/api/x');
+    expect((events[1]?.data as Record<string, unknown>)['responseBody']).toBeUndefined();
+  });
+
+  it('captures content-type, response size, and status text without reading the body (Network 1a)', async () => {
+    window.fetch = vi.fn(() =>
+      Promise.resolve(
+        fakeResponse(200, {
+          statusText: 'OK',
+          headers: { 'content-type': 'application/json; charset=utf-8', 'content-length': '1234' },
+        }),
+      ),
+    );
+    const { emit, events } = collect();
+    teardown = installNetwork(emit);
+    await window.fetch('http://localhost:8787/api/data');
+    expect(events[1]?.data).toMatchObject({
+      contentType: 'application/json; charset=utf-8',
+      responseSize: 1234,
+      statusText: 'OK',
+    });
   });
 
   it('emits NET_PENDING at start then NET_REQUEST for a GET that resolves with a 500', async () => {
@@ -126,5 +329,174 @@ describe('installNetwork (fetch)', () => {
     expect(window.fetch).not.toBe(before);
     t();
     expect(window.fetch).toBe(before);
+  });
+});
+
+/** Controllable WebSocket double (jsdom has none) that the observer subclass can extend + drive. */
+class FakeWebSocket {
+  static readonly OPEN = 1;
+  #listeners: Record<string, ((ev: unknown) => void)[]> = {};
+  readonly url: string;
+  constructor(url: string | URL) {
+    this.url = String(url);
+  }
+  addEventListener(type: string, cb: (ev: unknown) => void): void {
+    (this.#listeners[type] ??= []).push(cb);
+  }
+  send(_data: unknown): void {
+    /* no-op transport */
+  }
+  dispatch(type: string, ev: unknown): void {
+    (this.#listeners[type] ?? []).forEach((cb) => cb(ev));
+  }
+}
+
+/** Controllable EventSource double (jsdom has none) that the observer subclass can extend + drive. */
+class FakeEventSource {
+  #listeners: Record<string, ((ev: unknown) => void)[]> = {};
+  readonly url: string;
+  constructor(url: string | URL) {
+    this.url = String(url);
+  }
+  addEventListener(type: string, cb: (ev: unknown) => void): void {
+    (this.#listeners[type] ??= []).push(cb);
+  }
+  dispatch(type: string, ev: unknown): void {
+    (this.#listeners[type] ?? []).forEach((cb) => cb(ev));
+  }
+}
+
+describe('installNetwork (WebSocket / SSE frames, Network 1f)', () => {
+  const origWS = window.WebSocket;
+  const origES = window.EventSource;
+  afterEach(() => {
+    window.WebSocket = origWS;
+    window.EventSource = origES;
+  });
+
+  it('reports a binary WS frame by byte size, not a bare object type', () => {
+    window.WebSocket = FakeWebSocket as unknown as typeof WebSocket;
+    const { emit, events } = collect();
+    const teardown = installNetwork(emit, { captureBodies: true });
+    const ws = new window.WebSocket('ws://localhost:8787/live') as unknown as FakeWebSocket;
+    ws.dispatch('message', { data: new ArrayBuffer(24) });
+    teardown();
+    const inbound = events.filter((e) => e.type === EventType.NET_STREAM).at(-1);
+    expect(inbound?.data['frameType']).toBe('binary');
+    expect(inbound?.data['frameBytes']).toBe(24);
+  });
+
+  it('captures SSE (EventSource) open + inbound message frames when opted in', () => {
+    window.EventSource = FakeEventSource as unknown as typeof EventSource;
+    const { emit, events } = collect();
+    const teardown = installNetwork(emit, { captureBodies: true });
+    const es = new window.EventSource('http://localhost:8787/stream') as unknown as FakeEventSource;
+    es.dispatch('message', { data: '{"tick":1}' });
+    teardown();
+    const streams = events.filter((e) => e.type === EventType.NET_STREAM);
+    expect(streams.map((s) => s.data['transport'])).toEqual(['sse', 'sse']);
+    expect(streams.map((s) => s.data['direction'])).toEqual(['open', 'in']);
+    expect(String(streams[1]?.data['frame'])).toContain('"tick":1');
+    expect(window.EventSource).toBe(FakeEventSource); // teardown restored
+  });
+
+  it('captures open, outbound send, and inbound message frames when opted in', () => {
+    window.WebSocket = FakeWebSocket as unknown as typeof WebSocket;
+    const { emit, events } = collect();
+    const teardown = installNetwork(emit, { captureBodies: true });
+
+    const ws = new window.WebSocket('ws://localhost:8787/live') as unknown as FakeWebSocket;
+    ws.send('{"hello":1}');
+    ws.dispatch('message', { data: '{"price":42}' });
+    teardown();
+
+    const streams = events.filter((e) => e.type === EventType.NET_STREAM);
+    expect(streams.map((s) => s.data['direction'])).toEqual(['open', 'out', 'in']);
+    expect(String(streams[2]?.data['frame'])).toContain('"price":42');
+    expect(window.WebSocket).toBe(FakeWebSocket); // teardown restored the (test's) original
+  });
+
+  it('does NOT patch streaming transports when body capture is off', () => {
+    window.WebSocket = FakeWebSocket as unknown as typeof WebSocket;
+    const { emit } = collect();
+    const teardown = installNetwork(emit); // no captureBodies
+    expect(window.WebSocket).toBe(FakeWebSocket); // untouched
+    teardown();
+  });
+});
+
+/** A minimal XMLHttpRequest stand-in — jsdom's real XHR would attempt a live network request. */
+class FakeXHR {
+  #listeners: Record<string, ((ev: unknown) => void)[]> = {};
+  status = 0;
+  statusText = '';
+  responseText = '';
+  responseType = '';
+  #headers: Record<string, string> = {};
+  method = '';
+  url = '';
+  open(method: string, url: string): void {
+    this.method = method;
+    this.url = url;
+  }
+  send(_body?: unknown): void {
+    /* no-op transport */
+  }
+  addEventListener(type: string, cb: (ev: unknown) => void): void {
+    (this.#listeners[type] ??= []).push(cb);
+  }
+  getResponseHeader(k: string): string | null {
+    return this.#headers[k.toLowerCase()] ?? null;
+  }
+  complete(opts: { status?: number; contentType?: string; responseText?: string } = {}): void {
+    this.status = opts.status ?? 200;
+    this.statusText = 'OK';
+    if (opts.contentType !== undefined) this.#headers['content-type'] = opts.contentType;
+    this.responseText = opts.responseText ?? '';
+    (this.#listeners['loadend'] ?? []).forEach((cb) => cb({}));
+  }
+}
+
+describe('installNetwork (XMLHttpRequest)', () => {
+  const origXHR = window.XMLHttpRequest;
+  afterEach(() => {
+    window.XMLHttpRequest = origXHR;
+  });
+
+  it('captures an XHR completion with status, redacted url, and initiator', () => {
+    window.XMLHttpRequest = FakeXHR as unknown as typeof XMLHttpRequest;
+    const { emit, events } = collect();
+    const teardown = installNetwork(emit);
+    const xhr = new window.XMLHttpRequest() as unknown as FakeXHR;
+    xhr.open('GET', '/api/data?access_token=SECRETXHR&page=1');
+    xhr.send();
+    xhr.complete({ status: 200 });
+    teardown();
+
+    const done = events.find((e) => e.type === EventType.NET_REQUEST);
+    expect(done?.data['status']).toBe(200);
+    expect(done?.data['initiator']).toBe('xhr');
+    expect(String(done?.data['url'])).toContain('access_token=%5BREDACTED%5D');
+    expect(String(done?.data['url'])).not.toContain('SECRETXHR');
+  });
+
+  it('a REUSED XHR emits exactly one completion per send (no accumulated listeners)', () => {
+    window.XMLHttpRequest = FakeXHR as unknown as typeof XMLHttpRequest;
+    const { emit, events } = collect();
+    const teardown = installNetwork(emit);
+    const xhr = new window.XMLHttpRequest() as unknown as FakeXHR;
+
+    xhr.open('GET', '/first');
+    xhr.send();
+    xhr.complete({ status: 200 });
+    xhr.open('GET', '/second');
+    xhr.send();
+    xhr.complete({ status: 201 });
+    teardown();
+
+    const done = events.filter((e) => e.type === EventType.NET_REQUEST);
+    expect(done.length).toBe(2); // NOT 3 — the first send's listener must not re-fire on the second
+    expect(done.map((e) => e.data['url'])).toEqual(['/first', '/second']);
+    expect(done.map((e) => e.data['status'])).toEqual([200, 201]);
   });
 });

@@ -22,6 +22,8 @@ const CONTROL_LABEL = {
   SEND: 'Send',
 } as const;
 const INPUT_PLACEHOLDER = 'Tell the agent something…';
+/** Accessible name for the composer (a placeholder is not an accessible name). */
+const INPUT_ARIA_LABEL = 'Message to the agent';
 const PAUSED_BADGE_TEXT = 'PAUSED';
 const ENDED_BANNER_TEXT = 'Session ended';
 const COPY_LABEL = 'Copy run';
@@ -32,6 +34,9 @@ const COPIED_TEXT = 'Copied ✓';
 const RUN_FILENAME = 'reticle-run.json';
 /** Border fade-out delay after a session ends (native timer; presenter-only tunable). */
 export const ENDED_FADE_MS = 4000;
+/** Max composer height (px) before it scrolls. One source for both the CSS cap and the JS auto-grow
+ *  clamp — they measure the same border-box, so the scrollbar appears exactly when growth stops. */
+const MSG_MAX_H = 96;
 
 /**
  * One replayable flow as pushed to the panel. `start` is the first step's testid anchor — a page hint
@@ -68,8 +73,11 @@ export const CONTROLS_CSS = `
   border:1px solid var(--reticle-line);border-radius:14px;padding:5px 6px 5px 14px;transition:border-color .15s,box-shadow .15s;}
 [data-reticle-hud] .reticle-composer:focus-within{border-color:var(--reticle-accent);box-shadow:0 0 0 3px var(--reticle-accent-soft);}
 [data-reticle-hud] .reticle-msg{flex:1;min-width:0;pointer-events:auto;background:transparent;border:none;outline:none;resize:none;
-  color:var(--reticle-fg);font-family:var(--reticle-font);font-size:13px;line-height:18px;height:18px;min-height:18px;max-height:96px;
-  padding:5px 0;overflow-y:auto;}
+  box-sizing:border-box;color:var(--reticle-fg);font-family:var(--reticle-font);font-size:13px;line-height:18px;
+  height:28px;min-height:28px;max-height:${MSG_MAX_H}px;padding:5px 0;overflow-y:auto;
+  scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.14) transparent;}
+[data-reticle-hud] .reticle-msg::-webkit-scrollbar{width:9px;}
+[data-reticle-hud] .reticle-msg::-webkit-scrollbar-thumb{background:rgba(255,255,255,.14);border-radius:9px;border:2px solid transparent;background-clip:content-box;}
 [data-reticle-hud] .reticle-msg::placeholder{color:var(--reticle-faint);}
 [data-reticle-hud] .reticle-msg:disabled{opacity:.5;}
 [data-reticle-hud] .reticle-send{flex:none;width:30px;height:30px;padding:0;border-radius:10px;border:none;cursor:pointer;pointer-events:auto;
@@ -140,7 +148,7 @@ export const CONTROLS_FLOWS_HTML = `<div data-reticle-flows class="reticle-flows
 const SEND_ICON = `<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>`;
 
 /** Footer markup: a rounded composer pill (input + icon Send), appended after the log div. */
-export const CONTROLS_FOOT_HTML = `<div data-reticle-foot><div class="reticle-composer"><textarea data-reticle-input class="reticle-msg" rows="1" placeholder="${INPUT_PLACEHOLDER}"></textarea><button type="button" data-reticle-send class="reticle-send" aria-label="${CONTROL_LABEL.SEND}">${SEND_ICON}</button></div><div class="reticle-export"><button type="button" data-reticle-copy class="reticle-ctl">${COPY_LABEL}</button><button type="button" data-reticle-export class="reticle-ctl">${EXPORT_LABEL}</button><span data-reticle-export-msg class="reticle-export-msg"></span></div></div>`;
+export const CONTROLS_FOOT_HTML = `<div data-reticle-foot><div class="reticle-composer"><textarea data-reticle-input class="reticle-msg" rows="1" aria-label="${INPUT_ARIA_LABEL}" placeholder="${INPUT_PLACEHOLDER}"></textarea><button type="button" data-reticle-send class="reticle-send" aria-label="${CONTROL_LABEL.SEND}">${SEND_ICON}</button></div><div class="reticle-export"><button type="button" data-reticle-copy class="reticle-ctl">${COPY_LABEL}</button><button type="button" data-reticle-export class="reticle-ctl">${EXPORT_LABEL}</button><span data-reticle-export-msg class="reticle-export-msg"></span></div></div>`;
 
 /** Element refs of the control surface, queried once after the markup is in the DOM. */
 interface ControlRefs {
@@ -310,7 +318,7 @@ export class ControlPanel {
     const el = this.#refs.input;
     if (el === undefined) return;
     el.style.height = 'auto';
-    el.style.height = `${String(Math.min(el.scrollHeight, 96))}px`;
+    el.style.height = `${String(Math.min(el.scrollHeight, MSG_MAX_H))}px`;
   }
 
   /** Render the replayable-flow chips from the server push. Each ▶ click re-runs that flow, no agent.

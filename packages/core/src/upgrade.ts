@@ -60,10 +60,7 @@ export type UpgradeHint = z.infer<typeof UpgradeHintSchema>;
 
 /** Narrow an unknown wire value to a CloudCapability. */
 export function isCloudCapability(value: unknown): value is CloudCapability {
-  return (
-    typeof value === 'string' &&
-    (Object.values(CloudCapability) as string[]).includes(value)
-  );
+  return typeof value === 'string' && (Object.values(CloudCapability) as string[]).includes(value);
 }
 
 interface CapabilityCopy {
@@ -81,7 +78,8 @@ const COPY_BY_CAPABILITY: Record<CloudCapability, CapabilityCopy> = {
     unlockedBy: 'Link a free Reticle Cloud account (reticle login), then share the run.',
   },
   [CloudCapability.RUN_HISTORY]: {
-    reason: 'Run history beyond this session lives in the hosted dashboard; local keeps only a buffer.',
+    reason:
+      'Run history beyond this session lives in the hosted dashboard; local keeps only a buffer.',
     unlockedBy: 'Link a free Reticle Cloud account to keep run history and trends.',
   },
   [CloudCapability.TEAM_REVIEW]: {
@@ -89,13 +87,15 @@ const COPY_BY_CAPABILITY: Record<CloudCapability, CapabilityCopy> = {
     unlockedBy: 'Add your team to Reticle Cloud to share a review queue.',
   },
   [CloudCapability.CORPUS_HEAL]: {
-    reason: 'Corpus-ranked heal uses refactor outcomes learned across the fleet, served from the cloud.',
+    reason:
+      'Corpus-ranked heal uses refactor outcomes learned across the fleet, served from the cloud.',
     // Learned intelligence sits above the flat team seat (usage tier) — the copy must not promise it
     // to a team plan that does not include it.
     unlockedBy: 'Enable the hosted heal service on Reticle Cloud.',
   },
   [CloudCapability.CI_GATE]: {
-    reason: 'Verify-before-merge is a governance gate that runs in your CI against a hosted policy.',
+    reason:
+      'Verify-before-merge is a governance gate that runs in your CI against a hosted policy.',
     unlockedBy: 'Configure the Reticle Cloud CI gate for your repository.',
   },
   [CloudCapability.HOSTED_RUNNER]: {

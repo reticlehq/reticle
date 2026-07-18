@@ -40,7 +40,9 @@ export function applyEventBudget(
 /** Build a cost hint from a payload + the event count it carries. */
 export function costHint(payload: unknown, events: number, droppedOldest = 0): CostHint {
   const json = JSON.stringify(payload) ?? '';
-  const bytes = json.length;
+  // Actual UTF-8 wire bytes, not json.length (UTF-16 code units) — the field is labeled `bytes` and
+  // drives the large-timeline recommendation, so a multibyte-heavy payload was under-counted.
+  const bytes = Buffer.byteLength(json, 'utf8');
   const base: CostHint = droppedOldest > 0 ? { events, bytes, droppedOldest } : { events, bytes };
   if (events >= LARGE_TIMELINE_EVENTS || bytes >= LARGE_TIMELINE_BYTES) {
     base.recommendation = `large timeline (${String(events)} events, ~${String(estimateTokens(json))} tokens) — pass filters:[...] (e.g. ["signal","net"]) or max_events to scope your next call and cut tokens`;

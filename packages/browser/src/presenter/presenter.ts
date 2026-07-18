@@ -466,11 +466,6 @@ export class Presenter {
     }
   }
 
-  /** Legacy no-op kept for source compat; outcomes now flow through LogHandle.result(). */
-  result(_ok: boolean): void {
-    /* no-op */
-  }
-
   /**
    * Mirror the server's session.throttled() state onto the HUD border. When throttled (tab
    * backgrounded or stale), the border turns amber so the developer knows actions are no-oping —

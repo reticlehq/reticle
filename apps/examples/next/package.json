@@ -4,7 +4,8 @@
   "version": "1.1.0",
   "description": "Minimal Next.js (App Router) app — verifies Reticle via withReticle + a dev-only client connect.",
   "scripts": {
-    "dev": "next dev --webpack -p 5302"
+    "dev": "next dev --webpack -p 5302",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@reticlehq/next": "workspace:*",
@@ -12,5 +13,10 @@
     "next": "^16.0.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "typescript": "^5.9.0"
   }
 }
