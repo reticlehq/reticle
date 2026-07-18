@@ -379,4 +379,57 @@ export const READ_TOOLS: ToolDef[] = [
       };
     },
   },
+  {
+    name: ReticleTool.STORAGE,
+    description:
+      "Read the app's client-side storage: localStorage, sessionStorage, and readable cookies. " +
+      'Verifies auth/session persistence a screenshot cannot see — "token persisted after login", ' +
+      '"cart survived reload", "logout cleared the session". Sensitive keys (token/session/password/…) ' +
+      'are REDACTED; httpOnly cookies are invisible to JS by design. `area` scopes to local|session|' +
+      'cookies (omit for all three); `key` returns just that value with found:true/false so a miss is ' +
+      'diagnosable.',
+    inputSchema: {
+      area: z
+        .enum(['local', 'session', 'cookies'])
+        .optional()
+        .describe('Scope to one storage area. Omit to read all three.'),
+      key: z
+        .string()
+        .optional()
+        .describe("Return only this key's value (found:false when absent)."),
+      ...sessionIdShape,
+    },
+    outputSchema: {
+      local: z.record(z.string()).optional(),
+      session: z.record(z.string()).optional(),
+      cookies: z.record(z.string()).optional(),
+      area: z.string().optional(),
+      key: z.string().optional(),
+      value: z.string().optional(),
+      found: z.boolean().optional(),
+    },
+    handler: async (deps, args) => {
+      const area = asString(args['area']);
+      const key = asString(args['key']);
+      const result = await commandOrThrow(
+        deps,
+        asString(args['sessionId']),
+        ReticleCommand.STORAGE_READ,
+        area !== undefined ? { area } : {},
+      );
+      const data = (typeof result === 'object' && result !== null ? result : {}) as Record<
+        string,
+        unknown
+      >;
+      if (key === undefined) return data;
+      // Look up the key in the scoped area, or across all three areas when none was named.
+      const areas = area !== undefined ? [data] : [data['local'], data['session'], data['cookies']];
+      for (const a of areas) {
+        if (typeof a === 'object' && a !== null && key in a) {
+          return { area, key, value: String((a as Record<string, unknown>)[key]), found: true };
+        }
+      }
+      return { area, key, found: false };
+    },
+  },
 ];

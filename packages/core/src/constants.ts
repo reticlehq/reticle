@@ -383,6 +383,8 @@ export const ReticleCommand = {
   CLOCK: 'clock',
   CAPABILITIES: 'capabilities',
   STATE_READ: 'state_read',
+  /** Read localStorage / sessionStorage / readable cookies (sensitive keys redacted). */
+  STORAGE_READ: 'storage_read',
   /** scroll a ref's nearest scrollable container by ~a viewport (virtualized lists). */
   SCROLL: 'scroll',
   /** Session lifecycle: agent tunes the presenter session (e.g. idle-end timeout) for the app's needs. */

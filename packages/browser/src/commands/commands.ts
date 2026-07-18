@@ -24,6 +24,7 @@ import { describe } from '../dom/a11y.js';
 import { themeReport } from '../dom/theme.js';
 import { refs } from '../dom/refs.js';
 import { hitTestOccluder } from '../dom/occlusion.js';
+import { readStorage } from '../observers/storage.js';
 import { identifyComponent, readComponentState } from '../registry/adapters.js';
 import { readStores, readStoresRaw, storeNames } from '../registry/stores.js';
 import { sanitizeForTransport } from '../security/serialization.js';
@@ -253,6 +254,7 @@ export function createCommandRegistry(): Map<string, CommandHandler> {
   reg.set(ReticleCommand.STATE_READ, (args) =>
     readState(str(args['ref']), str(args['store']), str(args['path']), num(args['depth'])),
   );
+  reg.set(ReticleCommand.STORAGE_READ, (args) => readStorage(str(args['area'])));
   reg.set(ReticleCommand.CAPABILITIES, () => getCapabilities());
   reg.set(ReticleCommand.SCROLL, (args) => {
     const dy = args['dy'];

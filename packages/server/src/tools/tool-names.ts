@@ -23,6 +23,7 @@ export const ReticleTool = {
   NARRATE: 'reticle_narrate',
   CLOCK: 'reticle_clock',
   STATE: 'reticle_state',
+  STORAGE: 'reticle_storage',
   CAPABILITIES: 'reticle_capabilities',
   CONTRACT_SAVE: 'reticle_contract_save',
   DOMAIN: 'reticle_domain',

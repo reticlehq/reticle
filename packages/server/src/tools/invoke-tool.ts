@@ -30,6 +30,7 @@ export const SESSION_BOUND_TOOLS: ReadonlySet<string> = new Set([
   ReticleTool.NARRATE,
   ReticleTool.CLOCK,
   ReticleTool.STATE,
+  ReticleTool.STORAGE,
   ReticleTool.EXPLORE,
   ReticleTool.CRAWL,
   ReticleTool.SCROLL_TO,
