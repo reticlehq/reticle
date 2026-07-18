@@ -31,7 +31,14 @@ function readArea(storage: Storage | null): Record<string, string> {
 
 function readCookies(): Record<string, string> {
   const out: Record<string, string> = {};
-  const raw = typeof document !== 'undefined' ? document.cookie : '';
+  // Reading document.cookie can throw (SecurityError) in a sandboxed / cookie-disabled context — guard
+  // it the same way safeArea guards localStorage, so one bad area never crashes the whole STORAGE read.
+  let raw = '';
+  try {
+    raw = typeof document !== 'undefined' ? document.cookie : '';
+  } catch {
+    return out;
+  }
   for (const part of raw.split(';')) {
     const eq = part.indexOf('=');
     if (eq === -1) continue;

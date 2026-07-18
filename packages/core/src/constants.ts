@@ -242,6 +242,17 @@ export const EventType = {
 } as const;
 export type EventType = (typeof EventType)[keyof typeof EventType];
 
+/** The web-perf metrics carried in an EventType.PERF event's `metric` field. */
+export const PerfMetric = {
+  /** Largest Contentful Paint (ms). */
+  LCP: 'lcp',
+  /** Cumulative Layout Shift (unitless, running sum). */
+  CLS: 'cls',
+  /** A long task blocking the main thread (ms). */
+  LONGTASK: 'longtask',
+} as const;
+export type PerfMetric = (typeof PerfMetric)[keyof typeof PerfMetric];
+
 /** Which input path executed an action — native (CDP/Playwright) vs synthetic dispatchEvent. */
 export const InputMode = {
   REAL: 'real',
