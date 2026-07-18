@@ -9,6 +9,7 @@ import {
   LOOPBACK_HOST,
   MessageKind,
   ReticleEnv,
+  RETICLE_PROTOCOL_VERSION,
   TRANSPORT_LIMITS,
   isLoopbackHostname,
 } from '@reticlehq/core';
@@ -30,6 +31,7 @@ const WS_CLOSE = {
   HELLO_DUPLICATE: [1008, 'hello already received'],
   AUTH_FAILED: [1008, 'authentication failed'],
   SESSION_LIMIT: [1013, 'session limit reached'],
+  PROTOCOL_MISMATCH: [1008, 'protocol version mismatch — upgrade @reticlehq/browser'],
 } as const;
 
 /** The flow name if this event is a panel ▶ replay request, else undefined. Pure boundary narrowing. */
@@ -64,6 +66,28 @@ function normalizeOrigin(origin: string): string | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * When a message fails the strict schema, detect the specific case of a HELLO whose protocolVersion
+ * differs from ours — so we can tell the operator "upgrade @reticlehq/browser" instead of dropping the
+ * connection into the generic NO_SESSION_CONNECTED path, which misdiagnoses it as a port mismatch.
+ * Returns the mismatched version, or null when it isn't a version-mismatched HELLO.
+ */
+function helloProtocolMismatch(text: string): number | null {
+  try {
+    const json = JSON.parse(text) as { kind?: unknown; protocolVersion?: unknown };
+    if (
+      json.kind === MessageKind.HELLO &&
+      typeof json.protocolVersion === 'number' &&
+      json.protocolVersion !== RETICLE_PROTOCOL_VERSION
+    ) {
+      return json.protocolVersion;
+    }
+  } catch {
+    /* not JSON — fall through to the generic invalid-message path */
+  }
+  return null;
 }
 
 /** Normalize ws RawData (string | Buffer | Buffer[] | ArrayBuffer) into a UTF-8 string. */
@@ -221,8 +245,15 @@ export class Bridge {
         return;
       }
 
-      const parsed = this.#parse(rawToString(raw));
+      const text = rawToString(raw);
+      const parsed = this.#parse(text);
       if (parsed === null) {
+        const got = helloProtocolMismatch(text);
+        if (got !== null) {
+          log('protocol_version_mismatch', { got, expected: RETICLE_PROTOCOL_VERSION });
+          socket.close(...WS_CLOSE.PROTOCOL_MISMATCH);
+          return;
+        }
         socket.close(...WS_CLOSE.INVALID_MESSAGE);
         return;
       }
