@@ -1,17 +1,21 @@
 // Deterministic regression injector. Each regression is a set of exact string
 // replacements in tracked source files; revert() restores via `git checkout --`.
-// Only touches apps/demo/src + apps/api (clean files); never the marketing changes.
+// Only touches the bench fixture app's src (clean files); never the marketing changes.
 import { readFileSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
+// One source of truth for the fixture app the benches boot (bench-all.mjs boots @reticlehq/bench-app).
+// The views moved here from apps/demo; keep this in sync with bench-all's fixture so the injector and
+// the runner never target different apps again.
+const FIXTURE_APP = `${ROOT}/apps/bench-app`;
 const F = {
-  store: `${ROOT}/apps/demo/src/store/store.ts`,
-  modal: `${ROOT}/apps/demo/src/components/NewDeployModal.tsx`,
-  overview: `${ROOT}/apps/demo/src/views/Overview.tsx`,
-  diagnostics: `${ROOT}/apps/demo/src/views/Diagnostics.tsx`,
+  store: `${FIXTURE_APP}/src/store/store.ts`,
+  modal: `${FIXTURE_APP}/src/components/NewDeployModal.tsx`,
+  overview: `${FIXTURE_APP}/src/views/Overview.tsx`,
+  diagnostics: `${FIXTURE_APP}/src/views/Diagnostics.tsx`,
 };
 
 function replaceOnce(file, from, to) {
