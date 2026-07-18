@@ -27,7 +27,23 @@ const ORDER = [
   'real-world-tests',
   'multi-agent-lease-test',
 ];
-const present = new Set(readdirSync(specsDir).map((f) => f.replace(/\.mjs$/, '')));
+// Specs intentionally excluded from the battery (add here WITH a reason, never by omission).
+const SKIP = new Set([]);
+const present = new Set(
+  readdirSync(specsDir)
+    .filter((f) => f.endsWith('.mjs'))
+    .map((f) => f.replace(/\.mjs$/, '')),
+);
+// ORDER only SEQUENCES; a spec present on disk but in neither ORDER nor SKIP is silently un-run rot
+// (this is how new-features-test.mjs rotted). Fail loud so every new spec must be classified.
+const unclassified = [...present].filter((n) => !ORDER.includes(n) && !SKIP.has(n));
+if (unclassified.length > 0) {
+  console.error(
+    `\ne2e: spec(s) present but not in ORDER or SKIP: ${unclassified.join(', ')}\n` +
+      'Add each to ORDER (to run, in sequence) or SKIP (to exclude, with a reason).',
+  );
+  process.exit(1);
+}
 const specs = ORDER.filter((n) => present.has(n));
 
 const sh = (cmd) =>
