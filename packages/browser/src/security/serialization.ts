@@ -4,7 +4,9 @@ const TRUNCATED_VALUE = '[TRUNCATED]';
 const UNSERIALIZABLE_VALUE = '[UNSERIALIZABLE]';
 const OMIT_VALUE = Symbol('omit');
 const MAX_KEY_LENGTH = 256;
-const MAX_TOTAL_CHARACTERS = Math.floor(TRANSPORT_LIMITS.MAX_MESSAGE_BYTES / 8);
+// UTF-8 encodes at most ~3 bytes per JS (UTF-16) code unit, so /4 is a provably-safe bound that never
+// exceeds the byte budget — /8 was ~1/8 of the real 1MiB wire budget and truncated legitimate state.
+const MAX_TOTAL_CHARACTERS = Math.floor(TRANSPORT_LIMITS.MAX_MESSAGE_BYTES / 4);
 const MAX_TOTAL_NODES = TRANSPORT_LIMITS.MAX_COLLECTION_ITEMS * 5;
 
 // `token` must match auth CREDENTIALS, not compound design fields. Bare/separated `token(s)` and

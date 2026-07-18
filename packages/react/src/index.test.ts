@@ -49,6 +49,17 @@ describe('react adapter fiber walk', () => {
 
     expect(identify(el)?.componentStack).toEqual(['Page']);
   });
+
+  it('keeps a USER component that merely ends in Provider/Context/Handler', () => {
+    function CheckoutProvider(): null {
+      return null;
+    }
+    const el = document.createElement('button');
+    const root = { return: null, type: CheckoutProvider, elementType: CheckoutProvider };
+    const host = { return: root, type: 'button', elementType: 'button' };
+    (el as unknown as Record<string, unknown>)['__reactFiber$x'] = host;
+    expect(identify(el)?.componentStack).toEqual(['CheckoutProvider']);
+  });
 });
 
 function fiberEl(memoizedState: unknown): Element {

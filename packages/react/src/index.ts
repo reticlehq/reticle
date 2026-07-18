@@ -34,8 +34,12 @@ const DOM_NODE_MARKER = '[Node]';
  * Framework plumbing to hide from the component stack (React Router/Next internals, context
  * providers, error/suspense boundaries) so the agent sees *your* components, not the runtime.
  */
+// KNOWN framework-internal component names (React runtime, Next App/Pages Router, react-router) plus
+// dotted context render (`ThemeContext.Provider`). A curated list, NOT a generic `…Context$`/`…Provider$`
+// suffix, so a user's `PricingContext`/`CheckoutProvider`/`UploadHandler` survives and source
+// attribution can point at it instead of its parent.
 const FRAMEWORK_NOISE =
-  /(Context|Boundary|Provider|Router|Handler)$|^(Root|ServerRoot|HotReload|Fragment|__next)/;
+  /(\.Provider|\.Consumer)$|^(Fragment|Suspense|StrictMode|Profiler|Root|ServerRoot|HotReload|AppContainer|ReactDevOverlay|__next|AppRouter|OuterLayoutRouter|InnerLayoutRouter|LayoutRouterContext|RenderFromTemplateContext|RouterContext|PathnameContext|SearchParamsContext|RedirectBoundary|NotFoundBoundary|RedirectErrorBoundary|HTTPAccessFallbackBoundary|BrowserRouter|MemoryRouter|HashRouter|Router|Routes|Route|Outlet)$/;
 
 function isFrameworkNoise(name: string): boolean {
   return FRAMEWORK_NOISE.test(name);
@@ -202,7 +206,7 @@ const HOVER_HANDLER_KEYS = [
 /**
  * True if the element's host fiber declares React enter/leave handlers. Synthetic dispatchEvent
  * does not reliably trigger React's native enter/leave synthesis (no hit-testing), so callers warn.
- * Fail soft: any unexpected fiber shape returns false.
+ * Fail soft: an unexpected fiber shape returns false.
  */
 export function hasHoverHandlers(el: Element): boolean {
   const fiber = getFiber(el);
