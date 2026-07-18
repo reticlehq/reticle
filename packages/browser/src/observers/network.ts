@@ -1,6 +1,57 @@
 import { EventType, REDACTED_VALUE } from '@reticlehq/core';
-import { isSensitiveKey } from '../security/serialization.js';
+import { isSensitiveKey, sanitizeForTransport, safeStringify } from '../security/serialization.js';
 import type { Emit, Teardown } from './types.js';
+
+/** Config for the network observer. Body capture is OFF by default and dev-only opt-in. */
+export interface NetworkOptions {
+  /** Capture request/response bodies (text-like content only, redacted, per-body capped). */
+  captureBodies?: boolean;
+}
+
+/**
+ * Per-body character cap. Bodies ride the same ring buffer as the DOM/route/console timeline, so an
+ * uncapped body could evict the whole behavioral history; the small cap keeps a few large responses
+ * from starving the timeline (the separate-budget concern in the scalability audit).
+ */
+const MAX_BODY_CHARS = 8192;
+/** Only text-like bodies are worth capturing; binary (images/fonts/octet-stream) is skipped. */
+const CAPTURABLE_CONTENT =
+  /application\/json|text\/|application\/xml|x-www-form-urlencoded|graphql/i;
+
+function isCapturableType(contentType: string | null): boolean {
+  return contentType !== null && CAPTURABLE_CONTENT.test(contentType);
+}
+
+/**
+ * Redact + cap a body for the agent transcript. JSON is parsed and run through the same
+ * sanitizeForTransport redaction used for state (sensitive keys -> [REDACTED]); other text is capped
+ * as-is. Returns the (possibly truncated) body plus whether it was cut.
+ */
+function projectBody(
+  text: string,
+  contentType: string | null,
+): { body: string; truncated: boolean } {
+  let out = text;
+  if (contentType !== null && /json|graphql/i.test(contentType)) {
+    try {
+      out = safeStringify(sanitizeForTransport(JSON.parse(text)));
+    } catch {
+      out = text; // not actually JSON — keep the raw text, still capped below
+    }
+  }
+  const truncated = out.length > MAX_BODY_CHARS;
+  return { body: truncated ? out.slice(0, MAX_BODY_CHARS) : out, truncated };
+}
+
+/** The request body when it is a plain string (JSON/form/GraphQL POSTs); other shapes are skipped. */
+function requestBodyFields(
+  init: RequestInit | undefined,
+  captureBodies: boolean,
+): Record<string, unknown> {
+  if (!captureBodies || typeof init?.body !== 'string' || init.body.length === 0) return {};
+  const { body, truncated } = projectBody(init.body, 'application/json');
+  return truncated ? { requestBody: body, requestBodyTruncated: true } : { requestBody: body };
+}
 
 /** A path segment name that is typically followed by a single-use secret token in the NEXT segment. */
 const SENSITIVE_PATH_SEGMENT =
@@ -95,7 +146,8 @@ function methodOf(input: RequestInfo | URL, init: RequestInit | undefined): stri
 }
 
 /** Patch fetch + XMLHttpRequest to emit net.request events. Fully reversible. */
-export function installNetwork(emit: Emit): Teardown {
+export function installNetwork(emit: Emit, opts: NetworkOptions = {}): Teardown {
+  const captureBodies = opts.captureBodies === true;
   // Keep the true original for teardown identity, plus a window-bound copy to invoke
   // (fetch throws "Illegal invocation" if called with the wrong `this`).
   const origFetch = window.fetch;
@@ -116,6 +168,20 @@ export function installNetwork(emit: Emit): Teardown {
     emit(EventType.NET_PENDING, { id, method, url, initiator: 'fetch' });
     try {
       const res = await callFetch(input, init);
+      const contentType = res.headers.get('content-type');
+      // Read a CLONE so the app's response stream stays untouched. Dev-only opt-in; only text-like
+      // bodies; a read failure never breaks the observation.
+      let responseBodyFields: Record<string, unknown> = {};
+      if (captureBodies && isCapturableType(contentType)) {
+        try {
+          const { body, truncated } = projectBody(await res.clone().text(), contentType);
+          responseBodyFields = truncated
+            ? { responseBody: body, responseBodyTruncated: true }
+            : { responseBody: body };
+        } catch {
+          /* body not readable (already locked/consumed) — skip, keep the envelope */
+        }
+      }
       emit(EventType.NET_REQUEST, {
         id,
         method,
@@ -124,11 +190,9 @@ export function installNetwork(emit: Emit): Teardown {
         ok: res.ok,
         durationMs: Math.round(performance.now() - start),
         initiator: 'fetch',
-        ...netResponseMeta(
-          res.statusText,
-          res.headers.get('content-type'),
-          res.headers.get('content-length'),
-        ),
+        ...netResponseMeta(res.statusText, contentType, res.headers.get('content-length')),
+        ...requestBodyFields(init, captureBodies),
+        ...responseBodyFields,
       });
       return res;
     } catch (error) {
@@ -178,6 +242,27 @@ export function installNetwork(emit: Emit): Teardown {
       m.start = performance.now();
       emit(EventType.NET_PENDING, { id: m.id, method: m.method, url: m.url, initiator: 'xhr' });
       this.addEventListener('loadend', () => {
+        const xhrContentType = this.getResponseHeader('content-type');
+        let responseBodyFields: Record<string, unknown> = {};
+        // responseText throws unless responseType is '' or 'text' — guard before reading.
+        const textReadable = this.responseType === '' || this.responseType === 'text';
+        if (captureBodies && textReadable && isCapturableType(xhrContentType)) {
+          try {
+            const { body: rb, truncated } = projectBody(this.responseText, xhrContentType);
+            responseBodyFields = truncated
+              ? { responseBody: rb, responseBodyTruncated: true }
+              : { responseBody: rb };
+          } catch {
+            /* unreadable body — skip */
+          }
+        }
+        let requestBodyField: Record<string, unknown> = {};
+        if (captureBodies && typeof body === 'string' && body.length > 0) {
+          const { body: qb, truncated } = projectBody(body, 'application/json');
+          requestBodyField = truncated
+            ? { requestBody: qb, requestBodyTruncated: true }
+            : { requestBody: qb };
+        }
         emit(EventType.NET_REQUEST, {
           id: m.id,
           method: m.method,
@@ -188,9 +273,11 @@ export function installNetwork(emit: Emit): Teardown {
           initiator: 'xhr',
           ...netResponseMeta(
             this.statusText,
-            this.getResponseHeader('content-type'),
+            xhrContentType,
             this.getResponseHeader('content-length'),
           ),
+          ...requestBodyField,
+          ...responseBodyFields,
         });
       });
     }

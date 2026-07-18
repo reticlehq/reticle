@@ -67,6 +67,11 @@ export interface ReticleConnectOptions {
   allowInProduction?: boolean;
   /** Show a small in-page status chip (connection + event count). */
   overlay?: boolean;
+  /**
+   * Capture request/response bodies on net.request events (dev-only; text-like content only,
+   * sensitive keys redacted, per-body capped). Off by default — bodies cost tokens and can carry PII.
+   */
+  captureNetworkBodies?: boolean;
   /** Presenter mode: glow border, animated cursor, click/hover effects, narration HUD. */
   present?: boolean;
   /** Per-action pacing (ms) in presenter mode so a human can follow. Default 450. */
@@ -292,7 +297,7 @@ export class Reticle {
 
     const emit = this.#emit;
     this.#teardowns = [
-      installNetwork(emit),
+      installNetwork(emit, { captureBodies: options.captureNetworkBodies === true }),
       installRoute(emit),
       installConsole(emit),
       installAnimation(emit),
