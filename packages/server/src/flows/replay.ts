@@ -4,6 +4,15 @@ import type { RecordedStep, CompiledProgram } from './recordings.js';
 import type { Session } from '../session/session.js';
 import { asString, asRecord } from '../tools/tools-helpers.js';
 
+/**
+ * The note attached when a testid resolves to multiple live elements (the first match is used).
+ * Shared by BOTH replay engines (replayProgram + flow-replay's step runner) so the phrasing — which
+ * an agent reads to judge a brittle locator — can never drift between them.
+ */
+export function ambiguousTestidNote(value: string): string {
+  return `ambiguous testid '${value}', used first match`;
+}
+
 /** A destructive-action confirmation is one-shot and must never persist into a recording. */
 export function replayActionArgs(
   value: unknown,
@@ -101,9 +110,7 @@ async function resolveRef(
       : [];
     const ref = asString(asRecord(elements[0])['ref']);
     if (ref === undefined) throw new Error(`testid '${value}' did not resolve in current page`);
-    return elements.length > 1
-      ? { ref, note: `ambiguous testid '${value}', used first match` }
-      : { ref };
+    return elements.length > 1 ? { ref, note: ambiguousTestidNote(value) } : { ref };
   }
   const ref = asString(step.ref);
   if (ref === undefined || ref.length === 0)

@@ -16,7 +16,7 @@ import {
 } from '@reticlehq/core';
 import type { EvalResult, Predicate } from '../events/predicate.js';
 import { asRecord, asString } from '../tools/tools-helpers.js';
-import { replayActionArgs } from './replay.js';
+import { replayActionArgs, ambiguousTestidNote } from './replay.js';
 
 /**
  * The session surface flow-replay needs: QUERY to re-resolve a testid anchor against the live
@@ -337,7 +337,7 @@ async function runTestidStep(
     };
   }
   const ref = refs[0] ?? '';
-  const note = refs.length > 1 ? `ambiguous testid '${value}', used first match` : undefined;
+  const note = refs.length > 1 ? ambiguousTestidNote(value) : undefined;
   const act = await session.command(ReticleCommand.ACT, {
     ref,
     action: step.action ?? '',
