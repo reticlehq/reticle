@@ -17,8 +17,16 @@ function collect(): { emit: Emit; events: Emitted[] } {
 }
 
 /** A minimal Response stand-in — jsdom does not always expose a usable global Response. */
-function fakeResponse(status: number): Response {
-  return { status, ok: status >= 200 && status < 300 } as Response;
+function fakeResponse(
+  status: number,
+  opts: { statusText?: string; headers?: Record<string, string> } = {},
+): Response {
+  return {
+    status,
+    ok: status >= 200 && status < 300,
+    statusText: opts.statusText ?? '',
+    headers: new Headers(opts.headers ?? {}),
+  } as Response;
 }
 
 describe('redactUrl', () => {
@@ -64,6 +72,25 @@ describe('installNetwork (fetch)', () => {
     teardown?.();
     teardown = undefined;
     window.fetch = origFetch;
+  });
+
+  it('captures content-type, response size, and status text without reading the body (Network 1a)', async () => {
+    window.fetch = vi.fn(() =>
+      Promise.resolve(
+        fakeResponse(200, {
+          statusText: 'OK',
+          headers: { 'content-type': 'application/json; charset=utf-8', 'content-length': '1234' },
+        }),
+      ),
+    );
+    const { emit, events } = collect();
+    teardown = installNetwork(emit);
+    await window.fetch('http://localhost:8787/api/data');
+    expect(events[1]?.data).toMatchObject({
+      contentType: 'application/json; charset=utf-8',
+      responseSize: 1234,
+      statusText: 'OK',
+    });
   });
 
   it('emits NET_PENDING at start then NET_REQUEST for a GET that resolves with a 500', async () => {

@@ -47,16 +47,25 @@ interface NetCallView {
   method: string;
   url: string;
   status?: number | string;
+  statusText?: string;
+  contentType?: string;
+  responseSize?: number;
   ms?: number;
 }
 export function projectNetCall(e: ReticleEvent): NetCallView {
   const status = e.data['status'];
   const ms = asNumber(e.data['durationMs']);
+  const statusText = asString(e.data['statusText']);
+  const contentType = asString(e.data['contentType']);
+  const responseSize = asNumber(e.data['responseSize']);
   const view: NetCallView = {
     method: asString(e.data['method']) ?? '',
     url: asString(e.data['url']) ?? '',
   };
   if (typeof status === 'number' || typeof status === 'string') view.status = status;
+  if (statusText !== undefined) view.statusText = statusText;
+  if (contentType !== undefined) view.contentType = contentType;
+  if (responseSize !== undefined) view.responseSize = responseSize;
   if (ms !== undefined) view.ms = ms;
   return view;
 }

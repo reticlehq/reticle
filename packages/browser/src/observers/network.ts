@@ -63,6 +63,25 @@ interface XhrMeta {
   start: number;
 }
 
+/**
+ * Response metadata that needs no body capture: HTTP status text, content-type, and byte size (from
+ * content-length when the server sent it). Lets an agent tell an HTML error page served as 200 from
+ * real JSON, and spot empty/oversized responses. Fields are omitted when absent so a clean call stays
+ * token-flat.
+ */
+function netResponseMeta(
+  statusText: string,
+  contentType: string | null,
+  contentLength: string | null,
+): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  if (statusText !== '') out['statusText'] = statusText;
+  if (contentType !== null && contentType !== '') out['contentType'] = contentType;
+  const size = contentLength !== null ? Number.parseInt(contentLength, 10) : Number.NaN;
+  if (Number.isFinite(size)) out['responseSize'] = size;
+  return out;
+}
+
 function urlOf(input: RequestInfo | URL): string {
   if (typeof input === 'string') return input;
   if (input instanceof URL) return input.href;
@@ -105,6 +124,11 @@ export function installNetwork(emit: Emit): Teardown {
         ok: res.ok,
         durationMs: Math.round(performance.now() - start),
         initiator: 'fetch',
+        ...netResponseMeta(
+          res.statusText,
+          res.headers.get('content-type'),
+          res.headers.get('content-length'),
+        ),
       });
       return res;
     } catch (error) {
@@ -162,6 +186,11 @@ export function installNetwork(emit: Emit): Teardown {
           ok: this.status >= 200 && this.status < 400,
           durationMs: Math.round(performance.now() - m.start),
           initiator: 'xhr',
+          ...netResponseMeta(
+            this.statusText,
+            this.getResponseHeader('content-type'),
+            this.getResponseHeader('content-length'),
+          ),
         });
       });
     }
