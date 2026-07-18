@@ -28,8 +28,26 @@ type ExecutionKind = (typeof ExecutionKind)[keyof typeof ExecutionKind];
  * `node_modules` directory. Everything else is treated as a global install.
  */
 export function detectExecutionKind(): ExecutionKind {
-  const script = process.argv[1] ?? '';
+  return classifyExecutionKind(process.argv[1] ?? '');
+}
+
+/**
+ * Classify a launch from the entry script path. Pure so it's testable. Global installs ALSO live under
+ * a `node_modules`, but under the npm global prefix — a `lib/node_modules` (unix: /usr/local, Homebrew,
+ * nvm) or AppData\npm (Windows). Match those FIRST, otherwise a global install is misread as local and
+ * `apply_update` npm-installs into the user's own project (polluting their package.json).
+ */
+export function classifyExecutionKind(script: string): ExecutionKind {
   if (script.includes('/_npx/') || script.includes('\\_npx\\')) return ExecutionKind.NPX;
+  const globalSignals = [
+    '/lib/node_modules/',
+    '\\npm\\node_modules\\',
+    '/.nvm/',
+    '/homebrew/',
+    '/usr/local/',
+    '/usr/lib/',
+  ];
+  if (globalSignals.some((s) => script.includes(s))) return ExecutionKind.GLOBAL;
   if (script.includes('/node_modules/') || script.includes('\\node_modules\\')) {
     return ExecutionKind.LOCAL;
   }

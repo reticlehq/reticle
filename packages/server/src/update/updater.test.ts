@@ -1,5 +1,33 @@
 import { describe, it, expect } from 'vitest';
-import { installArgs } from './updater.js';
+import { installArgs, classifyExecutionKind } from './updater.js';
+
+describe('classifyExecutionKind — global installs are not misread as local', () => {
+  it('detects npx from the _npx cache path', () => {
+    expect(
+      classifyExecutionKind('/Users/x/.npm/_npx/abc/node_modules/@reticlehq/server/dist/cli.js'),
+    ).toBe('npx');
+  });
+
+  it('detects global installs under the npm global prefix (lib/node_modules, Homebrew, nvm)', () => {
+    expect(classifyExecutionKind('/usr/local/lib/node_modules/@reticlehq/server/dist/cli.js')).toBe(
+      'global',
+    );
+    expect(
+      classifyExecutionKind('/opt/homebrew/lib/node_modules/@reticlehq/server/dist/cli.js'),
+    ).toBe('global');
+    expect(
+      classifyExecutionKind(
+        '/Users/x/.nvm/versions/node/v20.0.0/lib/node_modules/@reticlehq/server/dist/cli.js',
+      ),
+    ).toBe('global');
+  });
+
+  it('detects a genuine local project install', () => {
+    expect(
+      classifyExecutionKind('/Users/x/my-app/node_modules/@reticlehq/server/dist/cli.js'),
+    ).toBe('local');
+  });
+});
 
 // The `reticle` bin ships in @reticlehq/server; @reticlehq/core is schema-only with no executable.
 // Self-update must install the server package for every non-npx launch kind.
