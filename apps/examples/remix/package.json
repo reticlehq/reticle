@@ -6,7 +6,7 @@
   "description": "Minimal React Router 7 (Remix) app — verifies Reticle via a dev-only client connect (SSR, no plugin injection).",
   "scripts": {
     "dev": "react-router dev",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "react-router typegen && tsc --noEmit"
   },
   "dependencies": {
     "@react-router/node": "8.0.0",
