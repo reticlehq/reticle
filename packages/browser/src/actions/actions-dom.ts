@@ -1,5 +1,5 @@
 import { refs } from '../dom/refs.js';
-import { isReticleUi } from '../dom/dom-ignore.js';
+import { hitTestOccluder } from '../dom/occlusion.js';
 import { nativeFrame } from '../timers/native-timers.js';
 
 interface ClickGeometry {
@@ -49,14 +49,8 @@ function isOffViewport(el: HTMLElement, rect: DOMRect): boolean {
 
 /** Hit-test the center: occluded iff the top NON-Reticle element is a foreign subtree (not target/ancestor/descendant). */
 function hitTest(el: HTMLElement, rect: DOMRect): { occluded: boolean; occludedBy: string | null } {
-  const doc = el.ownerDocument;
-  if (typeof doc.elementFromPoint !== 'function') return { occluded: false, occludedBy: null };
-  const top = doc.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
-  // null ⇒ no layout / detached (jsdom): we cannot tell, so never false-positive occlusion.
-  // Reticle's own HUD must never read as an occluder.
-  if (top === null || isReticleUi(top)) return { occluded: false, occludedBy: null };
-  const lands = top === el || el.contains(top) || top.contains(el);
-  return lands
+  const top = hitTestOccluder(el, rect);
+  return top === null
     ? { occluded: false, occludedBy: null }
     : { occluded: true, occludedBy: refs.refFor(top) };
 }

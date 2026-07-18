@@ -23,7 +23,7 @@ import {
 import { describe } from '../dom/a11y.js';
 import { themeReport } from '../dom/theme.js';
 import { refs } from '../dom/refs.js';
-import { isReticleUi } from '../dom/dom-ignore.js';
+import { hitTestOccluder } from '../dom/occlusion.js';
 import { identifyComponent, readComponentState } from '../registry/adapters.js';
 import { readStores, readStoresRaw, storeNames } from '../registry/stores.js';
 import { sanitizeForTransport } from '../security/serialization.js';
@@ -109,13 +109,7 @@ function inspect(ref: string): unknown {
 
 /** Whether a NON-Reticle element covers this one's center point (a transparent overlay / z-index bug). */
 function isOccluded(el: Element, rect: DOMRect): boolean {
-  if (rect.width === 0 || rect.height === 0) return false; // a 0×0 box is a different bug (size)
-  const doc = el.ownerDocument;
-  if (typeof doc.elementFromPoint !== 'function') return false;
-  const top = doc.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2);
-  // Reticle's own HUD sits at a high z-index and must never read as occluding the app.
-  if (top === null || isReticleUi(top)) return false;
-  return top !== el && !el.contains(top);
+  return hitTestOccluder(el, rect) !== null;
 }
 
 /** Narrowing guard: an adapter returned a ComponentStateResult (has a boolean `ok`). */
