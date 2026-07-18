@@ -1,47 +1,25 @@
 import { z } from 'zod';
-import {
-  FLOW_SIGNAL_TIMEOUT_MS,
-  FlowErrorCode,
-  HEAL_CONFIDENCE_MIN,
-  HealStatus,
-  RecordedSaveError,
-  ReplayStatus,
-  type FlowHealResult,
-  type FlowReplayResult,
-  type HealChange,
-  type HealProposal,
-} from '@reticlehq/core';
+import { FlowErrorCode, RecordedSaveError, type FlowReplayResult } from '@reticlehq/core';
 import type { FlowFile } from '@reticlehq/core';
 import { ReticleTool } from '../tools/tool-names.js';
 import { asString } from '../tools/tools-helpers.js';
 import { log } from '../log.js';
 import { resolveCloudConfig, syncFlowToCloud, SyncOutcome } from '../cloud/cloud-sync.js';
-import { replayFlow } from './flow-replay.js';
 import { buildSuiteVerdict } from './decision.js';
 import { classifyFlowAssertions } from './flow-classify.js';
-import { assertSuccess, dynamicTestids, successLabel } from './flow-success.js';
 import { flowPath } from '../project/reticle-dir.js';
-import { applyHealChanges, collectProposals } from './heal.js';
 import type { SuiteVerdict } from '@reticlehq/core';
-import { waitForPredicate } from '../events/predicate.js';
 import type { FlowAnnotations } from './flows.js';
 import type { ToolDef, ToolDeps } from '../tools/tools.js';
-import { replayNamedFlow, flowErrorMessage, latestRecordedFlow } from './flow-replay-run.js';
+import {
+  replayNamedFlow,
+  flowErrorMessage,
+  latestRecordedFlow,
+  sessionProjectId,
+} from './flow-replay-run.js';
+import { healFlow } from './heal-run.js';
 
 export { replayNamedFlow } from './flow-replay-run.js';
-
-/**
- * The connecting session's project, or undefined when no browser is attached. Flow tools use it to
- * scope storage to the current app on a shared daemon; resolving must NOT throw here (list/load are
- * documented to work headless), so a missing/unknown session degrades to the global/legacy store.
- */
-function sessionProjectId(deps: ToolDeps, sessionId: string | undefined): string | undefined {
-  try {
-    return deps.sessions.resolve(sessionId).projectId;
-  } catch {
-    return undefined;
-  }
-}
 
 /**
  * Best-effort mirror of a just-saved flow to Reticle Cloud (only when logged in — both cloud env vars
@@ -397,169 +375,3 @@ export const FLOW_TOOLS: ToolDef[] = [
       healFlow(deps, args).then(({ name, ...rest }) => ({ flowName: name, ...rest })),
   },
 ];
-
-const HEAL_MESSAGES = {
-  NOTHING: 'nothing to heal — every anchor resolved on replay',
-  HEALED:
-    "rewrote drifted testid anchors to their nearest surviving match and re-verified the flow's success consequence still fires",
-  DRIFT_DRY: 'confident rebind(s) proposed — re-run with apply:true to write them to disk',
-  UNHEALABLE: `drift found, but no nearest match cleared the confidence floor (HEAL_CONFIDENCE_MIN=${HEAL_CONFIDENCE_MIN}); file left untouched — add a data-testid or fix the flow by hand`,
-  HEALED_UNVERIFIED:
-    'rewrote drifted testid anchors — but this flow declares no success consequence, so the rebind resolves a locator without proving the intent still holds. Add a success-state assertion (reticle_annotate) so future heals can be verified.',
-  CONSEQUENCE_BROKEN:
-    'rebind resolves the drifted locator to a surviving element, but the healed flow no longer satisfies its success consequence — refusing to write (a heal that loses the intent would ship a green-but-dead test). Fix by hand and verify',
-} as const;
-
-function toChange(proposal: HealProposal): HealChange {
-  return { step: proposal.step, from: proposal.from, to: proposal.to };
-}
-
-/**
- * Self-heal handler: load → replay → collect confident proposals → (apply ? write : dry).
- * Never silently rewrites: only proposals that cleared HEAL_CONFIDENCE_MIN are eligible, and only
- * when apply:true. A heal disk failure maps back to status:error.
- */
-async function healFlow(deps: ToolDeps, args: Record<string, unknown>): Promise<FlowHealResult> {
-  const name = asString(args['flowName']) ?? '';
-  const apply = args['apply'] === true;
-  const projectId = sessionProjectId(deps, asString(args['sessionId']));
-  const loaded = await deps.flows.load(name, projectId);
-  if (!loaded.ok) {
-    return {
-      name,
-      status: HealStatus.ERROR,
-      applied: false,
-      proposals: [],
-      changed: [],
-      message: flowErrorMessage(loaded.code),
-      error: { code: loaded.code, message: flowErrorMessage(loaded.code) },
-    };
-  }
-
-  const session = deps.sessions.resolve(asString(args['sessionId']));
-  const steps = await replayFlow(
-    session,
-    loaded.value,
-    waitForPredicate,
-    FLOW_SIGNAL_TIMEOUT_MS,
-    args['confirmDangerous'] === true,
-  );
-  const drifted = steps.some((s) => s.drift !== undefined);
-  const failed = steps.find((s) => !s.ok && s.drift === undefined);
-  if (failed !== undefined) {
-    const message = failed.error ?? 'flow replay failed before an anchor could be healed';
-    return {
-      name,
-      status: HealStatus.ERROR,
-      applied: false,
-      proposals: [],
-      changed: [],
-      message,
-      error: { code: ReplayStatus.ERROR, message },
-    };
-  }
-  if (!drifted) {
-    return {
-      name,
-      status: HealStatus.NOTHING_TO_HEAL,
-      applied: false,
-      proposals: [],
-      changed: [],
-      message: HEAL_MESSAGES.NOTHING,
-    };
-  }
-
-  const proposals = collectProposals(steps);
-  if (proposals.length === 0) {
-    return {
-      name,
-      status: HealStatus.UNHEALABLE,
-      applied: false,
-      proposals: [],
-      changed: [],
-      message: HEAL_MESSAGES.UNHEALABLE,
-    };
-  }
-
-  if (!apply) {
-    return {
-      name,
-      status: HealStatus.DRIFT,
-      applied: false,
-      proposals,
-      changed: [],
-      message: HEAL_MESSAGES.DRIFT_DRY,
-    };
-  }
-
-  // Heal-the-locator-never-the-intent invariant: "heal the locator, never the intent." Before persisting, verify the rebind on a
-  // healed in-memory copy: a rebound testid can resolve to a real but WRONG element that no longer
-  // triggers the flow's success consequence (e.g. a look-alike control). Persisting that would ship
-  // a green flow that tests nothing. Re-replay the healed flow and assert its success; refuse the
-  // write if the consequence no longer fires. Flows with no declared success can't be verified — we
-  // still heal them but say so loudly so the gap is visible.
-  const { flow: healed } = applyHealChanges(loaded.value, proposals.map(toChange));
-  if (healed.success !== undefined) {
-    // Verify from the FIRST DRIFTED step forward, not the whole flow. The drift replay above already
-    // executed the prefix (with the old anchors, up to the drift), so re-running every step would
-    // double-execute a non-idempotent prefix (create/submit) — failing a unique constraint or leaving
-    // the app already in its end-state, which reads as a false CONSEQUENCE_BROKEN that refuses a
-    // correct heal. Re-running only the healed tail completes the flow once and fires the consequence.
-    const firstDrift = steps.findIndex((s) => s.drift !== undefined);
-    const toVerify = firstDrift > 0 ? { ...healed, steps: healed.steps.slice(firstDrift) } : healed;
-    // Floor the success oracle at the start of the VERIFY replay so the success signal emitted by the
-    // earlier drift replay's prefix (this same heal call) cannot fake the verification.
-    const verifyFloor = session.elapsed();
-    const verifySteps = await replayFlow(
-      session,
-      toVerify,
-      waitForPredicate,
-      FLOW_SIGNAL_TIMEOUT_MS,
-      args['confirmDangerous'] === true,
-    );
-    const verifyClean =
-      verifySteps.length > 0 && verifySteps.every((s) => s.ok && s.drift === undefined);
-    const verdict = verifyClean
-      ? await assertSuccess(
-          session,
-          healed.success,
-          dynamicTestids(healed),
-          waitForPredicate,
-          FLOW_SIGNAL_TIMEOUT_MS,
-          verifyFloor,
-        )
-      : { pass: false, failureReason: 'healed flow did not replay cleanly' };
-    if (!verdict.pass) {
-      return {
-        name,
-        status: HealStatus.CONSEQUENCE_BROKEN,
-        applied: false,
-        proposals,
-        changed: [],
-        message: `${HEAL_MESSAGES.CONSEQUENCE_BROKEN} (${successLabel(healed.success)}: ${verdict.failureReason ?? 'not satisfied'})`,
-      };
-    }
-  }
-
-  const written = await deps.flows.heal(name, proposals.map(toChange), projectId);
-  if (!written.ok) {
-    return {
-      name,
-      status: HealStatus.ERROR,
-      applied: false,
-      proposals,
-      changed: [],
-      message: flowErrorMessage(written.code),
-      error: { code: written.code, message: flowErrorMessage(written.code) },
-    };
-  }
-  return {
-    name,
-    status: HealStatus.HEALED,
-    applied: written.value.changed.length > 0,
-    proposals,
-    changed: written.value.changed,
-    message:
-      loaded.value.success !== undefined ? HEAL_MESSAGES.HEALED : HEAL_MESSAGES.HEALED_UNVERIFIED,
-  };
-}

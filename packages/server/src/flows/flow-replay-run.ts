@@ -190,3 +190,19 @@ function applyStartPathHint(result: FlowReplayResult, hint: string | undefined):
   result.decision.suggestedFix = hint;
   result.decision.nextAction = hint;
 }
+
+/**
+ * The connecting session's project, or undefined when no browser is attached. Flow tools use it to
+ * scope storage to the current app on a shared daemon; resolving must NOT throw here (list/load are
+ * documented to work headless), so a missing/unknown session degrades to the global/legacy store.
+ */
+export function sessionProjectId(
+  deps: ToolDeps,
+  sessionId: string | undefined,
+): string | undefined {
+  try {
+    return deps.sessions.resolve(sessionId).projectId;
+  } catch {
+    return undefined;
+  }
+}
