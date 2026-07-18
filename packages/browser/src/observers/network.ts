@@ -22,22 +22,44 @@ function isCapturableType(contentType: string | null): boolean {
   return contentType !== null && CAPTURABLE_CONTENT.test(contentType);
 }
 
+/** An `Authorization: Bearer …` / `Basic …` credential carried in a text body or header dump. */
+const AUTH_SCHEME_TOKEN = /\b(Bearer|Basic)\s+[A-Za-z0-9._~+/=-]{8,}/gi;
+
+/**
+ * Redact credentials in ANY text body (form-urlencoded, text/plain, xml, or JSON that failed to parse).
+ * sanitizeForTransport only redacts KEYS inside a parsed object, so a `password=secret` form post or a
+ * `Bearer <token>` string would otherwise ship verbatim. Redacts the value of any `key=value` / `key: value`
+ * pair whose key is sensitive, plus bare auth-scheme tokens.
+ */
+function redactText(text: string): string {
+  return text
+    .replace(
+      /([A-Za-z0-9_.-]+)(\s*[=:]\s*"?)([^&\s,;"}]+)/g,
+      (match: string, key: string, sep: string) =>
+        isSensitiveKey(key) ? `${key}${sep}${REDACTED_VALUE}` : match,
+    )
+    .replace(AUTH_SCHEME_TOKEN, (_m: string, scheme: string) => `${scheme} ${REDACTED_VALUE}`);
+}
+
 /**
  * Redact + cap a body for the agent transcript. JSON is parsed and run through the same
- * sanitizeForTransport redaction used for state (sensitive keys -> [REDACTED]); other text is capped
- * as-is. Returns the (possibly truncated) body plus whether it was cut.
+ * sanitizeForTransport redaction used for state (sensitive keys -> [REDACTED]); every other text body
+ * (and JSON that didn't parse) goes through redactText so form/plain-text credentials can't leak.
+ * Returns the (possibly truncated) body plus whether it was cut.
  */
 function projectBody(
   text: string,
   contentType: string | null,
 ): { body: string; truncated: boolean } {
-  let out = text;
+  let out: string;
   if (contentType !== null && /json|graphql/i.test(contentType)) {
     try {
       out = safeStringify(sanitizeForTransport(JSON.parse(text)));
     } catch {
-      out = text; // not actually JSON — keep the raw text, still capped below
+      out = redactText(text); // looked like JSON but wasn't — still redact key/value + auth tokens
     }
+  } else {
+    out = redactText(text);
   }
   const truncated = out.length > MAX_BODY_CHARS;
   return { body: truncated ? out.slice(0, MAX_BODY_CHARS) : out, truncated };
@@ -88,6 +110,14 @@ export function redactUrl(raw: string): string {
 
   let changed = false;
 
+  // Credentials in the authority (`scheme://user:pass@host`) never belong in a transcript.
+  let authority = pathPart;
+  const userinfo = /^([a-z][a-z0-9+.-]*:\/\/)[^/@]+@/i.exec(pathPart);
+  if (userinfo !== null) {
+    authority = `${userinfo[1] ?? ''}${REDACTED_VALUE}@${pathPart.slice(userinfo[0].length)}`;
+    changed = true;
+  }
+
   let newQuery = query;
   if (query !== '') {
     const params = new URLSearchParams(query);
@@ -100,7 +130,7 @@ export function redactUrl(raw: string): string {
     newQuery = params.toString();
   }
 
-  const segments = pathPart.split('/');
+  const segments = authority.split('/');
   for (let i = 0; i + 1 < segments.length; i++) {
     const name = segments[i];
     const next = segments[i + 1];

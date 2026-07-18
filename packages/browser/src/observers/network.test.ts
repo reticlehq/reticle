@@ -57,6 +57,12 @@ describe('redactUrl', () => {
     expect(redactUrl('/reset/form')).toBe('/reset/form');
     expect(redactUrl('/password/reset')).toBe('/password/reset');
   });
+  it('redacts credentials embedded in the URL authority (user:pass@host)', () => {
+    expect(redactUrl('https://alice:s3cr3t@api.example.com/data')).toBe(
+      'https://[REDACTED]@api.example.com/data',
+    );
+    expect(redactUrl('http://plainhost.com/x')).toBe('http://plainhost.com/x');
+  });
 });
 
 describe('installNetwork (fetch)', () => {
@@ -105,6 +111,23 @@ describe('installNetwork (fetch)', () => {
     expect(String(data['responseBody'])).not.toContain(respTokenValue);
     expect(String(data['requestBody'])).toContain('[REDACTED]'); // password value redacted
     expect(String(data['requestBody'])).not.toContain(reqPasswordValue);
+  });
+
+  it('redacts sensitive key=value pairs in a NON-JSON (form-urlencoded) body', async () => {
+    const formPasswordValue = 'form-pass-abcdef123';
+    window.fetch = vi.fn(() =>
+      Promise.resolve(fakeResponseWithBody(200, 'application/json', '{"ok":true}')),
+    );
+    const { emit, events } = collect();
+    teardown = installNetwork(emit, { captureBodies: true });
+    await window.fetch('http://localhost:8787/login', {
+      method: 'POST',
+      body: `username=alice&password=${formPasswordValue}`,
+    });
+    const data = events[1]?.data as Record<string, unknown>;
+    expect(String(data['requestBody'])).toContain('username=alice'); // non-sensitive kept
+    expect(String(data['requestBody'])).toContain('password=[REDACTED]');
+    expect(String(data['requestBody'])).not.toContain(formPasswordValue);
   });
 
   it('does NOT capture bodies by default (opt-in only)', async () => {
