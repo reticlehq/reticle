@@ -204,6 +204,8 @@ export const EventType = {
   DOM_TEXT: 'dom.text',
   NET_REQUEST: 'net.request',
   NET_PENDING: 'net.pending',
+  /** An SSE (EventSource) or WebSocket frame — a message on a long-lived streaming connection. */
+  NET_STREAM: 'net.stream',
   ROUTE_CHANGE: 'route.change',
   CONSOLE_LOG: 'console.log',
   CONSOLE_WARN: 'console.warn',

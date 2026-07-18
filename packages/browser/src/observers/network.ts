@@ -43,6 +43,19 @@ function projectBody(
   return { body: truncated ? out.slice(0, MAX_BODY_CHARS) : out, truncated };
 }
 
+/** Project one SSE/WebSocket frame: always its byte size; the (capped, redacted) payload only when
+ *  body capture is on and it is a string frame. */
+function frameFields(data: unknown, captureBodies: boolean): Record<string, unknown> {
+  if (typeof data !== 'string') return { frameType: typeof data };
+  const out: Record<string, unknown> = { frameBytes: data.length };
+  if (captureBodies) {
+    const { body, truncated } = projectBody(data, 'application/json');
+    out['frame'] = body;
+    if (truncated) out['frameTruncated'] = true;
+  }
+  return out;
+}
+
 /** The request body when it is a plain string (JSON/form/GraphQL POSTs); other shapes are skipped. */
 function requestBodyFields(
   init: RequestInit | undefined,
@@ -284,9 +297,59 @@ export function installNetwork(emit: Emit, opts: NetworkOptions = {}): Teardown 
     origSend.call(this, body ?? null);
   };
 
+  // SSE + WebSocket frame capture — gated behind body capture, since a chatty stream is the
+  // high-volume case. Subclass the native constructors so the app's own usage is unchanged.
+  const origEventSource = window.EventSource;
+  const origWebSocket = window.WebSocket;
+  if (captureBodies && typeof origEventSource === 'function') {
+    window.EventSource = class extends origEventSource {
+      constructor(u: string | URL, init?: EventSourceInit) {
+        super(u, init);
+        const url = redactUrl(String(u));
+        emit(EventType.NET_STREAM, { transport: 'sse', direction: 'open', url });
+        this.addEventListener('message', (ev: MessageEvent) => {
+          emit(EventType.NET_STREAM, {
+            transport: 'sse',
+            direction: 'in',
+            url,
+            ...frameFields(ev.data, captureBodies),
+          });
+        });
+      }
+    };
+  }
+  if (captureBodies && typeof origWebSocket === 'function') {
+    window.WebSocket = class extends origWebSocket {
+      constructor(u: string | URL, protocols?: string | string[]) {
+        super(u, protocols);
+        const url = redactUrl(String(u));
+        emit(EventType.NET_STREAM, { transport: 'ws', direction: 'open', url });
+        this.addEventListener('message', (ev: MessageEvent) => {
+          emit(EventType.NET_STREAM, {
+            transport: 'ws',
+            direction: 'in',
+            url,
+            ...frameFields(ev.data, captureBodies),
+          });
+        });
+      }
+      send(data: string | ArrayBufferLike | Blob | ArrayBufferView): void {
+        emit(EventType.NET_STREAM, {
+          transport: 'ws',
+          direction: 'out',
+          url: redactUrl(this.url),
+          ...frameFields(data, captureBodies),
+        });
+        super.send(data);
+      }
+    };
+  }
+
   return () => {
     window.fetch = origFetch;
     proto.open = origOpen;
     proto.send = origSend;
+    window.EventSource = origEventSource;
+    window.WebSocket = origWebSocket;
   };
 }

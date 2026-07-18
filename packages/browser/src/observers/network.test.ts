@@ -210,3 +210,53 @@ describe('installNetwork (fetch)', () => {
     expect(window.fetch).toBe(before);
   });
 });
+
+/** Controllable WebSocket double (jsdom has none) that the observer subclass can extend + drive. */
+class FakeWebSocket {
+  static readonly OPEN = 1;
+  #listeners: Record<string, ((ev: unknown) => void)[]> = {};
+  readonly url: string;
+  constructor(url: string | URL) {
+    this.url = String(url);
+  }
+  addEventListener(type: string, cb: (ev: unknown) => void): void {
+    (this.#listeners[type] ??= []).push(cb);
+  }
+  send(_data: unknown): void {
+    /* no-op transport */
+  }
+  dispatch(type: string, ev: unknown): void {
+    (this.#listeners[type] ?? []).forEach((cb) => cb(ev));
+  }
+}
+
+describe('installNetwork (WebSocket / SSE frames, Network 1f)', () => {
+  const origWS = window.WebSocket;
+  afterEach(() => {
+    window.WebSocket = origWS;
+  });
+
+  it('captures open, outbound send, and inbound message frames when opted in', () => {
+    window.WebSocket = FakeWebSocket as unknown as typeof WebSocket;
+    const { emit, events } = collect();
+    const teardown = installNetwork(emit, { captureBodies: true });
+
+    const ws = new window.WebSocket('ws://localhost:8787/live') as unknown as FakeWebSocket;
+    ws.send('{"hello":1}');
+    ws.dispatch('message', { data: '{"price":42}' });
+    teardown();
+
+    const streams = events.filter((e) => e.type === EventType.NET_STREAM);
+    expect(streams.map((s) => s.data['direction'])).toEqual(['open', 'out', 'in']);
+    expect(String(streams[2]?.data['frame'])).toContain('"price":42');
+    expect(window.WebSocket).toBe(FakeWebSocket); // teardown restored the (test's) original
+  });
+
+  it('does NOT patch streaming transports when body capture is off', () => {
+    window.WebSocket = FakeWebSocket as unknown as typeof WebSocket;
+    const { emit } = collect();
+    const teardown = installNetwork(emit); // no captureBodies
+    expect(window.WebSocket).toBe(FakeWebSocket); // untouched
+    teardown();
+  });
+});
