@@ -61,16 +61,24 @@ export class RingBuffer {
   #evict(now: number): void {
     const before = this.#events.length;
     const cutoff = now - this.#maxAgeMs;
-    while (
-      this.#events.length > this.#maxEvents ||
-      (this.#totalBytes > this.#maxBytes && this.#events.length > 0)
-    ) {
-      this.#events.shift();
-      this.#totalBytes -= this.#eventBytes.shift() ?? 0;
+    // Compute how many HEAD events to drop (cap, then bytes, then age), then splice ONCE. Shifting
+    // per event re-indexed the whole array each time — O(k·n) for a k-event bulk age-eviction; one
+    // splice is O(n). `remaining`/`bytes` track the post-drop state without mutating yet.
+    let drop = 0;
+    let bytes = this.#totalBytes;
+    const total = this.#events.length;
+    while (total - drop > this.#maxEvents || (bytes > this.#maxBytes && total - drop > 0)) {
+      bytes -= this.#eventBytes[drop] ?? 0;
+      drop += 1;
     }
-    while ((this.#events[0]?.t ?? cutoff) < cutoff) {
-      this.#events.shift();
-      this.#totalBytes -= this.#eventBytes.shift() ?? 0;
+    while (drop < total && (this.#events[drop]?.t ?? cutoff) < cutoff) {
+      bytes -= this.#eventBytes[drop] ?? 0;
+      drop += 1;
+    }
+    if (drop > 0) {
+      this.#events.splice(0, drop);
+      this.#eventBytes.splice(0, drop);
+      this.#totalBytes = bytes;
     }
     this.#droppedCount += before - this.#events.length;
   }

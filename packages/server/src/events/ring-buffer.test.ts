@@ -31,6 +31,14 @@ describe('RingBuffer', () => {
     expect(buf.bufferHealth().dropped).toBe(1);
   });
 
+  it('bulk age-eviction drops all expired events in one pass with correct counts', () => {
+    const buf = new RingBuffer({ maxAgeMs: 100, maxEvents: 1000 });
+    for (let t = 0; t < 50; t += 1) buf.push(ev(t), t); // 50 events at t=0..49
+    buf.push(ev(1000), 1000); // now=1000 -> cutoff 900 -> all 50 old events expire at once
+    expect(buf.since(0).map((e) => e.t)).toEqual([1000]);
+    expect(buf.bufferHealth()).toEqual({ total: 1, dropped: 50 });
+  });
+
   it('since() and window() select the right slices', () => {
     const buf = new RingBuffer({ maxAgeMs: 1_000_000, maxEvents: 100 });
     [10, 20, 30, 40].forEach((t) => buf.push(ev(t), t));
