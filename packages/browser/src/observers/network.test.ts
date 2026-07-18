@@ -191,6 +191,43 @@ describe('installNetwork (fetch)', () => {
     expect((events[1]?.data as Record<string, unknown>)['requestBodyType']).toBe('FormData');
   });
 
+  it('redacts a credential-shaped Bearer token in a text body', async () => {
+    const token = 'AbCd1234EfGh5678IjKl';
+    window.fetch = vi.fn(() =>
+      Promise.resolve(fakeResponseWithBody(200, 'text/plain', `sent Bearer ${token} today`)),
+    );
+    const { emit, events } = collect();
+    teardown = installNetwork(emit, { captureBodies: true });
+    await window.fetch('http://localhost:8787/echo');
+    const rb = String((events[1]?.data as Record<string, unknown>)['responseBody']);
+    expect(rb).toContain('Bearer [REDACTED]');
+    expect(rb).not.toContain(token);
+  });
+
+  it('does not leak the token when the body is a full "Authorization: Bearer <token>" header dump', async () => {
+    const token = 'ZzYy9876XxWw5432VvUu';
+    window.fetch = vi.fn(() =>
+      Promise.resolve(fakeResponseWithBody(200, 'text/plain', `Authorization: Bearer ${token}`)),
+    );
+    const { emit, events } = collect();
+    teardown = installNetwork(emit, { captureBodies: true });
+    await window.fetch('http://localhost:8787/echo');
+    const rb = String((events[1]?.data as Record<string, unknown>)['responseBody']);
+    expect(rb).not.toContain(token); // the token must not survive, whatever the surrounding shape
+    expect(rb).toContain('[REDACTED]');
+  });
+
+  it('caps an oversized body and sets the truncated flag', async () => {
+    const huge = 'x'.repeat(20000);
+    window.fetch = vi.fn(() => Promise.resolve(fakeResponseWithBody(200, 'text/plain', huge)));
+    const { emit, events } = collect();
+    teardown = installNetwork(emit, { captureBodies: true });
+    await window.fetch('http://localhost:8787/big');
+    const data = events[1]?.data as Record<string, unknown>;
+    expect(data['responseBodyTruncated']).toBe(true);
+    expect(String(data['responseBody']).length).toBe(8192); // MAX_BODY_CHARS
+  });
+
   it('does NOT capture bodies by default (opt-in only)', async () => {
     window.fetch = vi.fn(() =>
       Promise.resolve(fakeResponseWithBody(200, 'application/json', '{"x":1}')),
@@ -314,10 +351,53 @@ class FakeWebSocket {
   }
 }
 
+/** Controllable EventSource double (jsdom has none) that the observer subclass can extend + drive. */
+class FakeEventSource {
+  #listeners: Record<string, ((ev: unknown) => void)[]> = {};
+  readonly url: string;
+  constructor(url: string | URL) {
+    this.url = String(url);
+  }
+  addEventListener(type: string, cb: (ev: unknown) => void): void {
+    (this.#listeners[type] ??= []).push(cb);
+  }
+  dispatch(type: string, ev: unknown): void {
+    (this.#listeners[type] ?? []).forEach((cb) => cb(ev));
+  }
+}
+
 describe('installNetwork (WebSocket / SSE frames, Network 1f)', () => {
   const origWS = window.WebSocket;
+  const origES = window.EventSource;
   afterEach(() => {
     window.WebSocket = origWS;
+    window.EventSource = origES;
+  });
+
+  it('reports a binary WS frame by byte size, not a bare object type', () => {
+    window.WebSocket = FakeWebSocket as unknown as typeof WebSocket;
+    const { emit, events } = collect();
+    const teardown = installNetwork(emit, { captureBodies: true });
+    const ws = new window.WebSocket('ws://localhost:8787/live') as unknown as FakeWebSocket;
+    ws.dispatch('message', { data: new ArrayBuffer(24) });
+    teardown();
+    const inbound = events.filter((e) => e.type === EventType.NET_STREAM).at(-1);
+    expect(inbound?.data['frameType']).toBe('binary');
+    expect(inbound?.data['frameBytes']).toBe(24);
+  });
+
+  it('captures SSE (EventSource) open + inbound message frames when opted in', () => {
+    window.EventSource = FakeEventSource as unknown as typeof EventSource;
+    const { emit, events } = collect();
+    const teardown = installNetwork(emit, { captureBodies: true });
+    const es = new window.EventSource('http://localhost:8787/stream') as unknown as FakeEventSource;
+    es.dispatch('message', { data: '{"tick":1}' });
+    teardown();
+    const streams = events.filter((e) => e.type === EventType.NET_STREAM);
+    expect(streams.map((s) => s.data['transport'])).toEqual(['sse', 'sse']);
+    expect(streams.map((s) => s.data['direction'])).toEqual(['open', 'in']);
+    expect(String(streams[1]?.data['frame'])).toContain('"tick":1');
+    expect(window.EventSource).toBe(FakeEventSource); // teardown restored
   });
 
   it('captures open, outbound send, and inbound message frames when opted in', () => {

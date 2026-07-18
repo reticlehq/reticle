@@ -42,13 +42,18 @@ const AUTH_SCHEME_TOKEN =
  * pair whose key is sensitive, plus credential-shaped auth-scheme tokens.
  */
 function redactText(text: string): string {
-  return text
-    .replace(
-      /([A-Za-z0-9_.-]+)(\s*[=:]\s*"?)([^&\s,;"}]+)/g,
-      (match: string, key: string, sep: string) =>
-        isSensitiveKey(key) ? `${key}${sep}${REDACTED_VALUE}` : match,
-    )
-    .replace(AUTH_SCHEME_TOKEN, (_m: string, scheme: string) => `${scheme} ${REDACTED_VALUE}`);
+  return (
+    text
+      // Auth-scheme tokens FIRST: `Authorization: Bearer <token>` — the key/value rule below would
+      // otherwise consume just "Bearer" as Authorization's value (it stops at whitespace) and leave the
+      // token behind, so the scheme rule must run before it.
+      .replace(AUTH_SCHEME_TOKEN, (_m: string, scheme: string) => `${scheme} ${REDACTED_VALUE}`)
+      .replace(
+        /([A-Za-z0-9_.-]+)(\s*[=:]\s*"?)([^&\s,;"}]+)/g,
+        (match: string, key: string, sep: string) =>
+          isSensitiveKey(key) ? `${key}${sep}${REDACTED_VALUE}` : match,
+      )
+  );
 }
 
 /**
