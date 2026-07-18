@@ -228,27 +228,17 @@ function createBrowserPool(headless: boolean): BrowserPool {
 }
 
 /** Start the Reticle bridge (browser WS endpoint) and, by default, the MCP stdio server. */
-export async function start(options: StartOptions = {}): Promise<RunningServer> {
-  const port = options.port ?? RETICLE_DEFAULT_PORT;
-  const security = await resolveBridgeSecurityWithAutoToken(options);
-  const bridge = new Bridge({ port, ...security });
-  // Server-authoritative liveness: a Node-side reaper (immune to browser throttling) ends sessions
-  // whose agent has gone idle, so a forgotten/crashed agent never leaves the HUD "running" forever.
-  const reaper = new SessionReaper(bridge.sessions);
-  reaper.start();
-  // Scope auto-selection to the active project (from .reticle.json) so a stray tab from another app is
-  // never picked when the agent omits a sessionId. Explicit per-call scope/sessionId still overrides.
-  const activeProjectId = readProjectId(process.cwd());
-  if (activeProjectId !== undefined) {
-    bridge.sessions.setDefaultScope({ projectId: activeProjectId });
-  }
-  const baselines = new BaselineStore();
-  const recordings = new RecordingStore();
-  // drive precedence: driveUrl (launch+own a browser) → CDP (attach) → none.
-  let owned: { dispose: () => Promise<void> } | undefined;
-  let realInput: RealInputProvider | undefined;
-  let pool: BrowserPool | undefined;
-  let leaseReaper: LeaseReaper | undefined;
+/**
+ * Resolve the drive/real-input provider from options — shared by start() and startDaemon() so the
+ * precedence (driveUrl launch+own → CDP attach → none) and the storageState/injectConnect plumbing
+ * live in ONE place. `onNavigateError` is the entrypoint's own cleanup (close the bridge/shared server)
+ * so a failed launch never leaks a WS port. A past divergence between the two paths let daemon mode
+ * run with a different setup — this removes that risk.
+ */
+async function resolveRealInput(
+  options: StartOptions,
+  onNavigateError: () => Promise<void>,
+): Promise<{ realInput?: RealInputProvider; owned?: { dispose: () => Promise<void> } }> {
   const driveUrl = options.driveUrl;
   if (driveUrl !== undefined && driveUrl.length > 0) {
     const headless = options.headless ?? true;
@@ -267,19 +257,39 @@ export async function start(options: StartOptions = {}): Promise<RunningServer> 
     try {
       await launched.navigate();
     } catch (error) {
-      await bridge.close(); // no leaked WS port on a failed start
+      await onNavigateError(); // no leaked WS port on a failed start
       throw error;
     }
-    owned = launched;
-    realInput = launched;
-  } else {
-    const cdpUrl = options.cdpUrl ?? process.env[ReticleEnv.CDP_URL];
-    if (cdpUrl !== undefined && cdpUrl.length > 0) {
-      const cdp = new CdpRealInputProvider({ cdpUrl });
-      owned = cdp;
-      realInput = cdp;
-    }
+    return { realInput: launched, owned: launched };
   }
+  const cdpUrl = options.cdpUrl ?? process.env[ReticleEnv.CDP_URL];
+  if (cdpUrl !== undefined && cdpUrl.length > 0) {
+    const cdp = new CdpRealInputProvider({ cdpUrl });
+    return { realInput: cdp, owned: cdp };
+  }
+  return {};
+}
+
+export async function start(options: StartOptions = {}): Promise<RunningServer> {
+  const port = options.port ?? RETICLE_DEFAULT_PORT;
+  const security = await resolveBridgeSecurityWithAutoToken(options);
+  const bridge = new Bridge({ port, ...security });
+  // Server-authoritative liveness: a Node-side reaper (immune to browser throttling) ends sessions
+  // whose agent has gone idle, so a forgotten/crashed agent never leaves the HUD "running" forever.
+  const reaper = new SessionReaper(bridge.sessions);
+  reaper.start();
+  // Scope auto-selection to the active project (from .reticle.json) so a stray tab from another app is
+  // never picked when the agent omits a sessionId. Explicit per-call scope/sessionId still overrides.
+  const activeProjectId = readProjectId(process.cwd());
+  if (activeProjectId !== undefined) {
+    bridge.sessions.setDefaultScope({ projectId: activeProjectId });
+  }
+  const baselines = new BaselineStore();
+  const recordings = new RecordingStore();
+  // drive precedence: driveUrl (launch+own a browser) → CDP (attach) → none.
+  let pool: BrowserPool | undefined;
+  let leaseReaper: LeaseReaper | undefined;
+  const { realInput, owned } = await resolveRealInput(options, () => bridge.close());
 
   if (options.mcp !== false) {
     // cwd()/Date.now() are confined to start() — never inside reticle-dir.ts's pure logic (rule 7).
@@ -375,39 +385,7 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
     bridge.sessions.setDefaultScope({ projectId: activeProjectId });
   }
 
-  let owned: { dispose: () => Promise<void> } | undefined;
-  let realInput: RealInputProvider | undefined;
-  const driveUrl = options.driveUrl;
-  if (driveUrl !== undefined && driveUrl.length > 0) {
-    const headless = options.headless ?? true;
-    const injectConnect = options.injectConnect;
-    const storageState = options.storageState;
-    const factory =
-      options.realInputFactory ??
-      ((opts) =>
-        new LaunchedRealInputProvider({
-          driveUrl: opts.driveUrl,
-          headless: opts.headless,
-          ...(injectConnect !== undefined ? { injectConnect } : {}),
-          ...(storageState !== undefined ? { storageState } : {}),
-        }));
-    const launched = factory({ driveUrl, headless });
-    try {
-      await launched.navigate();
-    } catch (error) {
-      await shared.close();
-      throw error;
-    }
-    owned = launched;
-    realInput = launched;
-  } else {
-    const cdpUrl = options.cdpUrl ?? process.env[ReticleEnv.CDP_URL];
-    if (cdpUrl !== undefined && cdpUrl.length > 0) {
-      const cdp = new CdpRealInputProvider({ cdpUrl });
-      owned = cdp;
-      realInput = cdp;
-    }
-  }
+  const { realInput, owned } = await resolveRealInput(options, () => shared.close());
 
   const fs = createNodeFileSystem();
   const reticleRoot = options.reticleRoot ?? join(process.cwd(), ReticleDir.ROOT);
