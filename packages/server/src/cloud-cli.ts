@@ -7,6 +7,8 @@
  * is `<repo>/.reticle/cloud.json`. Auth for a command = `RETICLE_CLOUD_KEY` env (agent) OR the login token.
  */
 import { mkdir, writeFile, readFile } from 'node:fs/promises';
+import { spawn } from 'node:child_process';
+import { setTimeout as sleep } from 'node:timers/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { z } from 'zod';
@@ -145,14 +147,89 @@ const resolveProjectId = async (url: string, token: string, wanted: string): Pro
  */
 const RequestCodeSchema = z.object({ devCode: z.string().optional() });
 
+const DeviceStartSchema = z.object({
+  deviceCode: z.string(),
+  userCode: z.string(),
+  verificationUri: z.string(),
+  verificationUriComplete: z.string(),
+  interval: z.number(),
+  expiresAt: z.number(),
+});
+const DevicePollSchema = z.object({
+  status: z.string(),
+  token: z.string().optional(),
+  org: z.object({ name: z.string() }).optional(),
+});
+
+/** Best-effort open the approval page in the default browser; the printed URL is the headless fallback. */
+const openBrowser = (target: string): void => {
+  const cmd =
+    process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'cmd' : 'xdg-open';
+  const args = process.platform === 'win32' ? ['/c', 'start', '', target] : [target];
+  try {
+    const child = spawn(cmd, args, { stdio: 'ignore', detached: true });
+    child.on('error', () => undefined);
+    child.unref();
+  } catch {
+    /* no opener available — the user opens the printed URL manually */
+  }
+};
+
+/** Persist a session token under ~/.reticle and print the next step. Shared by both login paths. */
+const writeSession = async (url: string, token: string, orgName: string): Promise<void> => {
+  await mkdir(home(), { recursive: true });
+  await writeFile(join(home(), SESSION_FILE), `${JSON.stringify({ url, token, orgName }, null, 2)}\n`);
+  emit({ loggedIn: orgName, session: join(home(), SESSION_FILE) });
+  hint(
+    'next: `reticle link` to bind this repo to your Default project (or `reticle project create <name>` first)',
+  );
+};
+
+/**
+ * Browser device flow — the DEFAULT `reticle login` (like `gh auth login`): fetch a device + user code,
+ * open the browser to approve, then poll until the user confirms. No email to type, no code to copy back.
+ */
+const cmdLoginDevice = async (): Promise<number> => {
+  const url = baseUrl(null);
+  const started = DeviceStartSchema.parse(await api('POST', `${url}/v1/auth/device/start`, null, {}));
+  hint(`Opening ${started.verificationUri} — confirm this code in the browser: ${started.userCode}`);
+  openBrowser(started.verificationUriComplete);
+  const intervalMs = Math.max(1, started.interval) * 1000;
+  for (;;) {
+    await sleep(intervalMs);
+    const poll = DevicePollSchema.parse(
+      await api('POST', `${url}/v1/auth/device/token`, null, { deviceCode: started.deviceCode }),
+    );
+    if (poll.status === 'approved' && poll.token !== undefined && poll.org !== undefined) {
+      await writeSession(url, poll.token, poll.org.name);
+      return 0;
+    }
+    if (poll.status === 'pending') {
+      if (Date.now() > started.expiresAt) {
+        err('device login expired — run `reticle login` again');
+        return 1;
+      }
+      continue;
+    }
+    err(
+      poll.status === 'denied'
+        ? 'device login was denied in the browser'
+        : 'device login expired — run `reticle login` again',
+    );
+    return 1;
+  }
+};
+
+/**
+ * `reticle login` — browser device flow by default; `--email <e>` (or a positional email) keeps the
+ * headless two-step code path for CI/servers where opening a browser makes no sense.
+ */
 const cmdLogin = async (argv: readonly string[]): Promise<number> => {
   const f = flags(argv);
-  const email = f['email'] ?? argv[0];
+  const positional = argv[0] !== undefined && !argv[0].startsWith('--') ? argv[0] : undefined;
+  const email = f['email'] ?? positional;
+  if (email === undefined) return cmdLoginDevice();
   const org = f['org'];
-  if (email === undefined) {
-    err('usage: reticle login --email <email> [--org <orgName>] [--code <code>]');
-    return 2;
-  }
   const url = baseUrl(null);
 
   let code = f['code'];
@@ -173,13 +250,7 @@ const cmdLogin = async (argv: readonly string[]): Promise<number> => {
   }
 
   const parsed = LoginSchema.parse(await api('POST', `${url}/v1/auth/login`, null, { email, code }));
-  await mkdir(home(), { recursive: true });
-  await writeFile(
-    join(home(), SESSION_FILE),
-    `${JSON.stringify({ url, token: parsed.token, orgName: parsed.org.name }, null, 2)}\n`,
-  );
-  emit({ loggedIn: parsed.org.name, as: email, session: join(home(), SESSION_FILE) });
-  hint('next: `reticle link` to bind this repo to your Default project (or `reticle project create <name>` first)');
+  await writeSession(url, parsed.token, parsed.org.name);
   return 0;
 };
 
