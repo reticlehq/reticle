@@ -13,6 +13,7 @@ import { costHint } from '../session/output-budget.js';
 import { buildReactionReport } from '../events/reaction.js';
 import { asString, asNumber, parseInteractive } from './tools-helpers.js';
 import { type ToolDef, sessionIdShape, commandOrThrow, snapshotTree } from './tool-kit.js';
+import { bufferEnvelope } from '../session/session-health.js';
 
 export const READ_TOOLS: ToolDef[] = [
   {
@@ -65,6 +66,7 @@ export const READ_TOOLS: ToolDef[] = [
       added: z.array(z.string()),
       consoleErrors: z.number(),
       routeChanged: z.boolean(),
+      buffer: z.unknown().optional(),
     },
     handler: async (deps, args) => {
       const name = asString(args['baseline']) ?? 'default';
@@ -78,7 +80,16 @@ export const READ_TOOLS: ToolDef[] = [
         .filter(
           (e) => e.type === EventType.CONSOLE_ERROR || e.type === EventType.ERROR_UNCAUGHT,
         ).length;
-      return { baseline: name, removed, added, consoleErrors, routeChanged: base.route !== route };
+      // Buffer-honesty: the console-error count reads the whole buffer, which evicts — surface the
+      // eviction so a chatty-page regression check can't silently under-report with no signal.
+      return {
+        baseline: name,
+        removed,
+        added,
+        consoleErrors,
+        routeChanged: base.route !== route,
+        ...bufferEnvelope(session),
+      };
     },
   },
   {
@@ -358,6 +369,7 @@ export const READ_TOOLS: ToolDef[] = [
       interactive: z.array(z.unknown()),
       consoleErrors: z.number(),
       hint: z.string(),
+      buffer: z.unknown().optional(),
     },
     handler: async (deps, args) => {
       const session = deps.sessions.resolve(asString(args['sessionId']));
@@ -376,6 +388,8 @@ export const READ_TOOLS: ToolDef[] = [
         interactive: parseInteractive(snap.tree ?? ''),
         consoleErrors,
         hint: 'act on each ref, observe the reaction, and report failed requests / console errors / dead controls',
+        // Buffer-honesty: the console-error count spans the whole buffer, which evicts — signal it.
+        ...bufferEnvelope(session),
       };
     },
   },
