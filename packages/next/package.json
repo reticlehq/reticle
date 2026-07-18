@@ -1,6 +1,6 @@
 {
   "name": "@reticlehq/next",
-  "version": "2.0.1",
+  "version": "2.1.0",
   "description": "Next.js helper for Reticle: keeps SWC, adds source-file mapping via a dev-only webpack pre-loader (data-reticle-source).",
   "license": "Apache-2.0",
   "author": "Reticle contributors",

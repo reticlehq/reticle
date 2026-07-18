@@ -4,6 +4,36 @@ All notable changes to the **`@reticlehq/*`** packages are documented here (each
 
 ## [Unreleased]
 
+## [2.1.0] — 2026-07-18
+
+This release turns Reticle's eyes on the parts of a running app a screenshot fundamentally can't see — the **network tab, client-side storage, and web-perf** — and hardens credential redaction across all of it so none of that new visibility leaks a secret into the agent transcript. It also lands a round of verifier-honesty fixes and a performance pass on the event buffer. No breaking changes — every addition is back-compatible and on-disk flow files remain version 1.
+
+### Added
+
+- **Network observation.** The SDK now instruments `fetch` + `XMLHttpRequest` and emits per-request events: HTTP status, content-type, response size, and status text on every call; opt-in request/response **body capture** (dev-only, redacted, per-body capped so a large payload can't evict the behavioral timeline); and **SSE / WebSocket frame capture** for long-lived streams. Surfaced through `reticle_network`, so an agent can assert "the POST returned 201 with the new id" instead of inferring it from the DOM. (`@reticlehq/browser`, `@reticlehq/server`, `@reticlehq/core`)
+- **Client storage & cookie observation.** `reticle_storage` reads `localStorage`, `sessionStorage`, and readable cookies (sensitive keys redacted, `httpOnly` cookies noted as unreadable) — the app's real persistence, for verifying "the token survived reload" or "logout cleared the session." (`@reticlehq/browser`, `@reticlehq/server`)
+- **Web-perf metrics.** A `PerformanceObserver` reports Largest Contentful Paint, cumulative layout shift, and long tasks into the ring buffer, so an agent can assert "no layout shift on load" or "LCP under 2.5s" — signals a screenshot can't verify. (`@reticlehq/browser`, `@reticlehq/core`)
+- **Snapshots pierce open shadow DOM and same-origin iframes,** so web-component and embedded-frame UIs are no longer invisible to `reticle_snapshot`. (`@reticlehq/browser`)
+- **The browser ↔ server boundary is enforced at the import level** — a dev-only ESLint rule bans `node:*` imports in the DOM packages and `document`/`window` in the Node packages, so the DDD contract can't silently erode.
+
+### Fixed
+
+- **Credential redaction is hardened across every surface the new observers expose.** URLs redact sensitive query params, path-embedded single-use tokens (`/reset/<token>`), `#access_token=…` fragments (OAuth implicit flow), and `user:pass@host` userinfo; captured bodies redact sensitive keys in JSON, form-encoded, and plain-text shapes, plus high-confidence secret _values_ (JWTs, provider key prefixes) sitting under a benign key, and `Authorization: Bearer …` tokens. The shared sensitive-key set gained `sessionid`/`jwt`/`pwd`/`sid` (anchored, no substring false positives). (`@reticlehq/browser`, `@reticlehq/core`)
+- **A reused `XMLHttpRequest` no longer emits duplicate, mislabeled network events** — the completion listener is attached once per instance and reads the request identity at fire time, instead of accumulating a stale closure per `send()`. (`@reticlehq/browser`)
+- **Two false-green oracles fixed.** `settled` no longer reports quiet while requests are still in flight, and a `console.info` assertion no longer "verifies" a level the buffer never captured. (`@reticlehq/server`)
+- **`reticle` self-update installs `@reticlehq/server`** (the CLI package), not the schema-only `@reticlehq/core`, and an `npx` rollback no longer rolls _forward_. (`@reticlehq/server`, `@reticlehq/core`)
+- **The bridge refuses to start on a remote bind with no `allowedOrigins`** instead of exposing itself, and a protocol-version-mismatched `HELLO` gets a clear "upgrade `@reticlehq/browser`" message. (`@reticlehq/server`, `@reticlehq/core`, `@reticlehq/browser`)
+- **`heal-verify` replays from the drifted step,** not the whole flow, so a heal proposal is checked against the step that actually moved. (`@reticlehq/server`)
+- **`SnapshotCache` is a true LRU** (was FIFO, evicting the hottest entry), scoped state reads select before applying the transport cap, `costHint` counts real UTF-8 bytes (not UTF-16 code units), and the offline transport queue drops the _oldest_ event on overflow so the freshest state survives a reconnect. (`@reticlehq/server`, `@reticlehq/browser`)
+- **Web-perf metric semantics corrected:** CLS is a running cumulative sum (not per-shift under a cumulative name), LCP surfaces only a new larger candidate, and every metric carries its own entry timestamp. (`@reticlehq/browser`, `@reticlehq/core`)
+
+### Changed
+
+- **The event buffer is materially faster under DOM/animation floods.** `RingBuffer` eviction advances a head index (amortized O(1)) instead of `shift()`-per-event (O(n)), and byte accounting is threaded from the bridge's parse boundary instead of re-serializing every event. (`@reticlehq/server`)
+- **The snapshot walk resolves computed style once per node** instead of repeatedly, cutting the cost of a full-page snapshot on large DOMs. (`@reticlehq/browser`)
+- **Predicate re-checks coalesce** — a single in-flight evaluation with a trailing recheck replaces redundant overlapping passes (the worst `wait_for` bottleneck), and the consequence-vs-presence classification is hoisted into `@reticlehq/core` as the single source both graders share. (`@reticlehq/server`, `@reticlehq/core`)
+- **Internal hardening & tidy-up:** one shared element resolver across both replay engines, `heal-run` extracted from `flow-tools`, the example apps grouped under `apps/examples/`, a daemon `O_EXCL` spawn-lock that closes the pidfile orphan race (the "CLI can't stop the daemon by port" symptom), and the browser observers brought to full test coverage.
+
 ## [2.0.1] — 2026-07-17
 
 A bug-fix release focused on the verifier's honesty (no more silent false negatives), flow ergonomics, and zero-config setup. No breaking changes — every schema addition stays back-compatible and on-disk flow files remain version 1.

@@ -1,6 +1,6 @@
 {
   "name": "@reticlehq/server",
-  "version": "2.0.1",
+  "version": "2.1.0",
   "description": "Reticle bridge + MCP server. Hosts the browser WS endpoint and exposes MCP tools to the coding agent.",
   "type": "module",
   "main": "./dist/index.js",
