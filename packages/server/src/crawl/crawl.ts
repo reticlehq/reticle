@@ -102,8 +102,11 @@ export async function crawl(
   let stepsRun = 0;
   for (const item of items) {
     if (stepsRun >= maxSteps) break;
-    if (seen.has(item.desc)) continue; // don't re-click an identical control
-    seen.add(item.desc);
+    // Dedupe by ref (the unique element), not by label — two "Delete"/"Edit" controls share a desc
+    // but are different controls; collapsing them by label under-covers list/table UIs.
+    const dedupeKey = item.ref !== '' ? item.ref : item.desc;
+    if (seen.has(dedupeKey)) continue; // don't re-click the same control
+    seen.add(dedupeKey);
     stepsRun += 1;
     visited.push(item.desc);
 

@@ -31,7 +31,11 @@ describe('resolveMaxContexts', () => {
     expect(resolveMaxContexts(undefined, 1)).toBe(1);
   });
 
-  it('an explicit value above the ceiling is honored (operator override)', () => {
+  it('an explicit value above the CPU ceiling is honored (operator override)', () => {
     expect(resolveMaxContexts('20', 4)).toBe(20);
+  });
+
+  it('an explicit value is clamped to the hard ceiling (fork-bomb backstop)', () => {
+    expect(resolveMaxContexts('5000', 4)).toBe(128);
   });
 });
