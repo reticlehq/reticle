@@ -215,6 +215,21 @@ describe('FlowStore.heal + reticle_flow_heal', () => {
     expect(loaded.value.steps[0]?.anchor).toEqual({ kind: AnchorKind.TESTID, value: 'new-id' });
   });
 
+  it('verify does not re-execute the prefix — the stable step acts once (non-idempotent-safe)', async () => {
+    await store.saveFlow({
+      ...flowFile('multi', [clickStep('stable'), clickStep('old-id')]),
+      success: { signal: 'done' },
+    });
+    const session = renamedSessionWithSignal('old-id', ['new-id'], 'done');
+
+    const res = await heal(store, session, { flowName: 'multi', apply: true });
+    expect(res.status).toBe(HealStatus.HEALED);
+    // Drift replay acts `stable` once (old-id drifts, no act); verify runs only from the drifted step
+    // forward and acts the healed step once = 2 acts. Re-running the WHOLE flow in verify would act
+    // `stable` a second time (3 total) — the double-execution that breaks non-idempotent flows.
+    expect(session.actArgs.length).toBe(2);
+  });
+
   it('REFUSES to persist a heal when the rebind breaks the success consequence', async () => {
     await store.saveFlow({
       ...flowFile('chat', [clickStep('old-id')]),

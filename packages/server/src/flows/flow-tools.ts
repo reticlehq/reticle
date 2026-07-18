@@ -500,12 +500,19 @@ async function healFlow(deps: ToolDeps, args: Record<string, unknown>): Promise<
   // still heal them but say so loudly so the gap is visible.
   const { flow: healed } = applyHealChanges(loaded.value, proposals.map(toChange));
   if (healed.success !== undefined) {
+    // Verify from the FIRST DRIFTED step forward, not the whole flow. The drift replay above already
+    // executed the prefix (with the old anchors, up to the drift), so re-running every step would
+    // double-execute a non-idempotent prefix (create/submit) — failing a unique constraint or leaving
+    // the app already in its end-state, which reads as a false CONSEQUENCE_BROKEN that refuses a
+    // correct heal. Re-running only the healed tail completes the flow once and fires the consequence.
+    const firstDrift = steps.findIndex((s) => s.drift !== undefined);
+    const toVerify = firstDrift > 0 ? { ...healed, steps: healed.steps.slice(firstDrift) } : healed;
     // Floor the success oracle at the start of the VERIFY replay so the success signal emitted by the
     // earlier drift replay's prefix (this same heal call) cannot fake the verification.
     const verifyFloor = session.elapsed();
     const verifySteps = await replayFlow(
       session,
-      healed,
+      toVerify,
       waitForPredicate,
       FLOW_SIGNAL_TIMEOUT_MS,
       args['confirmDangerous'] === true,
