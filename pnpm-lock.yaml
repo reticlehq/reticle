@@ -158,14 +158,14 @@ importers:
         specifier: ^1.48.0
         version: 1.60.0
 
-  apps/example-astro:
+  apps/examples/astro:
     dependencies:
       '@astrojs/react':
         specifier: ^6.0.0
         version: 6.0.0(@types/node@22.19.20)(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(esbuild@0.28.1)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       '@reticlehq/react':
         specifier: workspace:*
-        version: link:../../packages/react
+        version: link:../../../packages/react
       astro:
         specifier: ^7.0.3
         version: 7.0.3(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1)(@types/node@22.19.20)(rollup@4.61.1)
@@ -176,14 +176,14 @@ importers:
         specifier: ^19.0.0
         version: 19.2.7(react@19.2.7)
 
-  apps/example-next:
+  apps/examples/next:
     dependencies:
       '@reticlehq/next':
         specifier: workspace:*
-        version: link:../../packages/next
+        version: link:../../../packages/next
       '@reticlehq/react':
         specifier: workspace:*
-        version: link:../../packages/react
+        version: link:../../../packages/react
       next:
         specifier: ^16.0.0
         version: 16.2.9(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
@@ -194,14 +194,14 @@ importers:
         specifier: ^19.0.0
         version: 19.2.7(react@19.2.7)
 
-  apps/example-react:
+  apps/examples/react:
     dependencies:
       '@reticlehq/react':
         specifier: workspace:*
-        version: link:../../packages/react
+        version: link:../../../packages/react
       '@reticlehq/vite-plugin':
         specifier: workspace:*
-        version: link:../../packages/vite-plugin
+        version: link:../../../packages/vite-plugin
       react:
         specifier: ^19.0.0
         version: 19.2.7
@@ -216,7 +216,7 @@ importers:
         specifier: ^8.0.0
         version: 8.0.16(@types/node@22.19.20)(esbuild@0.28.1)
 
-  apps/example-remix:
+  apps/examples/remix:
     dependencies:
       '@react-router/node':
         specifier: 8.0.0
@@ -226,7 +226,7 @@ importers:
         version: 8.0.0(react-router@8.0.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(typescript@5.9.3)
       '@reticlehq/react':
         specifier: workspace:*
-        version: link:../../packages/react
+        version: link:../../../packages/react
       isbot:
         specifier: ^5.1.36
         version: 5.1.44
@@ -4946,7 +4946,7 @@ snapshots:
 
   '@img/sharp-wasm32@0.34.5':
     dependencies:
-      '@emnapi/runtime': 1.10.0
+      '@emnapi/runtime': 1.11.1
     optional: true
 
   '@img/sharp-win32-arm64@0.34.5':
