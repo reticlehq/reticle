@@ -200,7 +200,7 @@ export class Session {
   }
 
   /** Re-stamp an incoming event with server-relative time, buffer it, and fan out. */
-  pushEvent(event: ReticleEvent): void {
+  pushEvent(event: ReticleEvent, byteSize?: number): void {
     if (event.type === EventType.PAGE_HEALTH) {
       const data = event.data;
       const hidden = typeof data['hidden'] === 'boolean' ? data['hidden'] : this.#hidden;
@@ -226,7 +226,7 @@ export class Session {
     }
     const t = this.elapsed();
     const stamped: ReticleEvent = { ...event, t, sessionId: this.id };
-    this.#buffer.push(stamped, t);
+    this.#buffer.push(stamped, t, byteSize);
     for (const listener of this.#listeners) listener(stamped);
   }
 

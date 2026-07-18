@@ -39,6 +39,24 @@ describe('RingBuffer', () => {
     expect(buf.bufferHealth()).toEqual({ total: 1, dropped: 50 });
   });
 
+  it('stays correct across thousands of pushes with continuous eviction (head-index + compaction)', () => {
+    const buf = new RingBuffer({ maxEvents: 100, maxAgeMs: 1_000_000 });
+    for (let t = 0; t < 5000; t += 1) buf.push(ev(t), t);
+    const live = buf.since(0);
+    expect(live).toHaveLength(100); // capped
+    expect(live[0]?.t).toBe(4900); // oldest kept
+    expect(live.at(-1)?.t).toBe(4999); // newest
+    expect(buf.bufferHealth()).toEqual({ total: 100, dropped: 4900 });
+  });
+
+  it('respects a caller-provided byte size instead of re-serializing', () => {
+    const buf = new RingBuffer({ maxAgeMs: 1_000_000, maxEvents: 100, maxBytes: 250 });
+    buf.push(ev(1), 1, 200); // provided size
+    buf.push(ev(2), 2, 200); // total 400 > 250 -> evict the first
+    expect(buf.since(0).map((e) => e.t)).toEqual([2]);
+    expect(buf.bufferHealth().dropped).toBe(1);
+  });
+
   it('since() and window() select the right slices', () => {
     const buf = new RingBuffer({ maxAgeMs: 1_000_000, maxEvents: 100 });
     [10, 20, 30, 40].forEach((t) => buf.push(ev(t), t));

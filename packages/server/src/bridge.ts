@@ -290,7 +290,8 @@ export class Bridge {
         // the daemon-wired handler instead of the in-session control path. Everything else is normal.
         const replay = replayRequest(parsed.event);
         if (replay !== undefined) this.#onReplay?.(session.id, replay);
-        else session.pushEvent(parsed.event);
+        // Pass the raw frame's byte length so the buffer doesn't re-serialize every event for accounting.
+        else session.pushEvent(parsed.event, Buffer.byteLength(text, 'utf8'));
       } else if (parsed.kind === MessageKind.COMMAND_RESULT) {
         session.handleResult(parsed);
       }
