@@ -4,10 +4,25 @@ import { isToonable, resultToToon } from '@reticlehq/core';
 import { TOOLS, type ToolDeps } from './tools/tools.js';
 import { filterTools, TOOL_PROFILE, type ToolProfile } from './tools/profiles.js';
 import { buildDynamicTools } from './tools/dynamic-tools.js';
-import { runTool } from './tools/invoke-tool.js';
+import { runTool, SESSION_BOUND_TOOLS } from './tools/invoke-tool.js';
+import { sessionEnvelopeShape } from './tools/tool-kit.js';
 import { buildErrorPayload } from './tools/error-recovery.js';
 import { log } from './log.js';
 import { SERVER_VERSION } from './server-version.js';
+
+/**
+ * Merge the runtime-spliced envelope (health/lease/age/control) into a session-bound tool's declared
+ * outputSchema so structuredContent validation keeps those fields instead of dropping them. The tool's
+ * own keys win over the permissive envelope defaults (e.g. ACT keeps its typed `session` shape).
+ * Non-session-bound tools (and tools with no outputSchema) are returned unchanged.
+ */
+export function withSessionEnvelope(
+  name: string,
+  outputSchema: z.ZodRawShape | undefined,
+): z.ZodRawShape | undefined {
+  if (outputSchema === undefined || !SESSION_BOUND_TOOLS.has(name)) return outputSchema;
+  return { ...sessionEnvelopeShape, ...outputSchema };
+}
 
 const SERVER_INFO = { name: 'reticle', version: SERVER_VERSION };
 
@@ -101,10 +116,11 @@ export function createMcpServer(
     profile === TOOL_PROFILE.STANDARD ||
     profile === TOOL_PROFILE.HYBRID;
   for (const tool of advertised) {
+    const outputSchema = withSessionEnvelope(tool.name, tool.outputSchema);
     const config = {
       description: terse ? firstSentence(tool.description) : tool.description,
       inputSchema: terse ? leanZodShape(tool.inputSchema) : tool.inputSchema,
-      ...(tool.outputSchema !== undefined ? { outputSchema: tool.outputSchema } : {}),
+      ...(outputSchema !== undefined ? { outputSchema } : {}),
     };
     registerTool(tool.name, config, async (args: Record<string, unknown>) => {
       try {

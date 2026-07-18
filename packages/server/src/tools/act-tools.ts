@@ -187,6 +187,11 @@ export const ACT_TOOLS: ToolDef[] = [
       dispatched: z.boolean(),
       settled: z.boolean().nullable(),
       inputMode: z.string(),
+      // Diagnostic fields the handler splices — declared so schema-strict clients keep them.
+      effect: z.unknown().optional(),
+      settleReason: z.unknown().nullable().optional(),
+      inputModeReason: z.string().optional(),
+      warning: z.string().optional(),
       result: z.unknown().optional(),
       session: z
         .object({ lastSeenMs: z.number(), throttled: z.boolean(), focused: z.boolean() })

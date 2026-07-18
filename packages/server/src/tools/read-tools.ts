@@ -275,6 +275,11 @@ export const READ_TOOLS: ToolDef[] = [
       storeNames: z.array(z.string()).optional(),
       found: z.boolean().optional(),
       value: z.unknown().optional(),
+      // Scoped-read diagnostics (echoed store/path + the keys that WERE available on a miss) — declared
+      // so a schema-strict client keeps the self-correction hint instead of dropping it.
+      store: z.string().optional(),
+      path: z.string().optional(),
+      availableKeys: z.array(z.string()).optional(),
       component: z
         .object({ ok: z.boolean(), reason: z.string().optional(), state: z.unknown().optional() })
         .optional(),

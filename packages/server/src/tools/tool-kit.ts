@@ -61,6 +61,20 @@ export const sessionIdShape = {
     ),
 };
 
+/**
+ * Fields that `runTool` / `withControl` splice onto EVERY session-bound tool result at runtime
+ * (health, pool lease reminder, age cleanup nudge, and the delivered-once human-control envelope).
+ * They are declared here and merged into each session-bound tool's outputSchema so a schema-strict
+ * client (structuredContent validation) keeps them instead of silently dropping them — the `control`
+ * envelope is the human-in-the-loop guidance channel, so losing it is a safety failure, not cosmetic.
+ */
+export const sessionEnvelopeShape: z.ZodRawShape = {
+  session: z.unknown().optional(),
+  session_lease: z.unknown().optional(),
+  session_age_warning: z.unknown().optional(),
+  control: z.unknown().optional(),
+};
+
 /** Unwrap a browser command result or throw its error so the agent sees a clean failure. */
 export async function commandOrThrow(
   deps: ToolDeps,
