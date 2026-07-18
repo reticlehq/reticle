@@ -206,6 +206,8 @@ export const EventType = {
   NET_PENDING: 'net.pending',
   /** An SSE (EventSource) or WebSocket frame — a message on a long-lived streaming connection. */
   NET_STREAM: 'net.stream',
+  /** A web-perf metric a screenshot can't verify: LCP, cumulative layout shift, or a long task. */
+  PERF: 'perf',
   ROUTE_CHANGE: 'route.change',
   CONSOLE_LOG: 'console.log',
   CONSOLE_WARN: 'console.warn',

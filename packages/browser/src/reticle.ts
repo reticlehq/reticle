@@ -24,6 +24,7 @@ import {
 } from './registry/capabilities.js';
 import { installDom } from './observers/dom.js';
 import { installNetwork } from './observers/network.js';
+import { installPerf } from './observers/perf.js';
 import { installRoute } from './observers/route.js';
 import { installConsole } from './observers/console.js';
 import { installAnimation } from './observers/animation.js';
@@ -298,6 +299,7 @@ export class Reticle {
     const emit = this.#emit;
     this.#teardowns = [
       installNetwork(emit, { captureBodies: options.captureNetworkBodies === true }),
+      installPerf(emit),
       installRoute(emit),
       installConsole(emit),
       installAnimation(emit),
