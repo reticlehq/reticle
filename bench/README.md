@@ -33,14 +33,14 @@ artifacts/                charts + diagrams (SVG + PNG) + screens/ (real PNGs + 
 
 ## Run it
 
-The fast path: `pnpm bench` (the replay pass) and `pnpm bench --full` (+ observation-cost pass) now **boot the fixtures themselves** — the demo on `:4312` and the api on `:8787` — health-check them, and tear them down on exit. Pass `--no-boot` to use fixtures you already have running, and override ports with `BENCH_DEMO_PORT` / `BENCH_API_PORT` / `BENCH_RETICLE_PORT` (default 4455). On a slow machine raise `BENCH_FIXTURE_READY_MS` (fixture boot) or `BENCH_RETICLE_READY_MS` (driven-browser connect).
+The fast path: `pnpm bench` (the replay pass) and `pnpm bench --full` (+ observation-cost pass) now **boot the fixtures themselves** — the bench-app on `:4312` and the api on `:8787` — health-check them, and tear them down on exit. Pass `--no-boot` to use fixtures you already have running, and override ports with `BENCH_DEMO_PORT` / `BENCH_API_PORT` / `BENCH_RETICLE_PORT` (default 4455). On a slow machine raise `BENCH_FIXTURE_READY_MS` (fixture boot) or `BENCH_RETICLE_READY_MS` (driven-browser connect).
 
 To run the fixtures + harness scripts by hand instead (e.g. for the manual observation/agent-loop steps):
 
 ```bash
 # 1. backend + a dedicated demo whose embedded Reticle SDK dials port 4455
 node apps/api/server.mjs &
-RETICLE_PORT=4455 pnpm --filter @reticlehq/demo exec vite --port 4312 --strictPort &
+RETICLE_PORT=4455 pnpm --filter @reticlehq/bench-app exec vite --port 4312 --strictPort &
 
 # 2. (scenario 9 only) add the hanging endpoint to apps/api/server.mjs before /api/health,
 #    then restart the api. This is the ONLY source change the benchmark needs in the app:

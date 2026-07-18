@@ -1,6 +1,10 @@
 raw/
 logs/
-artifacts/
+# Ignore run artifacts, but keep the two SVGs embedded in docs/benchmarks.md so the flagship doc
+# renders on a fresh clone (they were previously broken image links).
+artifacts/*
+!artifacts/chart-detection.svg
+!artifacts/chart-avg-tokens.svg
 
 # benchmark run artifacts (regenerated per run)
 results-*.json
