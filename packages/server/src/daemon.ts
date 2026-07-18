@@ -7,6 +7,7 @@ import {
   existsSync,
   unlinkSync,
   openSync,
+  closeSync,
   readdirSync,
 } from 'node:fs';
 import { spawn } from 'node:child_process';
@@ -53,9 +54,25 @@ export function writePid(port: number): void {
   writeFileSync(pidPath(port), String(process.pid), 'utf8');
 }
 
-export function removePid(port: number): void {
+/**
+ * Pure decision: may `expectedPid` remove a pidfile owned by `owner` (alive = is that owner running)?
+ * Yes when we own it, it's empty, or its daemon is dead — never when a LIVE sibling owns it. This is
+ * the orphan-race guard: a losing childB (EADDRINUSE) must not delete the winning childA's live pidfile.
+ */
+export function shouldRemovePid(
+  owner: number | null,
+  expectedPid: number,
+  alive: boolean,
+): boolean {
+  return owner === null || owner === expectedPid || !alive;
+}
+
+export function removePid(port: number, expectedPid = process.pid): void {
   const path = pidPath(port);
-  if (existsSync(path)) unlinkSync(path);
+  if (existsSync(path)) {
+    const owner = readPid(port);
+    if (shouldRemovePid(owner, expectedPid, owner !== null && isAlive(owner))) unlinkSync(path);
+  }
   // The discovery registry entry shares this daemon's lifetime — clean both so a dead daemon never
   // lingers in discovery. Keyed by port, so this is safe from the parent (stop) or the child (shutdown).
   removeDaemonRegistry(port);
@@ -198,15 +215,34 @@ export function spawnDaemon(
   scriptPath: string,
   args: string[],
   port: number,
-): void {
+): boolean {
   mkdirSync(RETICLE_HOME, { recursive: true });
-  const fd = openSync(logPath(port), 'a');
+  const path = pidPath(port);
+  // O_EXCL spawn-lock: only the FIRST racer to create the pidfile spawns. A concurrent second gets
+  // EEXIST — if a LIVE daemon owns the port it skips (no duplicate detached daemon, no clobbered pid);
+  // a stale pidfile from a crashed daemon is reclaimed. Returns false when it did not spawn.
+  let lockFd: number;
+  try {
+    lockFd = openSync(path, 'wx');
+  } catch {
+    const existing = readPid(port);
+    if (existing !== null && isAlive(existing)) return false;
+    try {
+      unlinkSync(path);
+      lockFd = openSync(path, 'wx');
+    } catch {
+      return false; // lost a concurrent reclaim race
+    }
+  }
+  const logFd = openSync(logPath(port), 'a');
   const child = spawn(nodeExec, [scriptPath, ...args], {
     detached: true,
-    stdio: ['ignore', fd, fd],
+    stdio: ['ignore', logFd, logFd],
   });
   if (child.pid !== undefined) {
-    writeFileSync(pidPath(port), String(child.pid), 'utf8');
+    writeFileSync(lockFd, String(child.pid), 'utf8');
   }
+  closeSync(lockFd);
   child.unref();
+  return true;
 }
