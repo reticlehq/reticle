@@ -44,6 +44,17 @@ describe('SnapshotCache (route-invalidated)', () => {
     expect(c.recall('k1', '/a')).toBeUndefined();
     expect(c.recall('k2', '/a')).toBe('y');
   });
+
+  it('is LRU: a recalled (hot) key survives eviction of a colder one', () => {
+    const c = new SnapshotCache(2);
+    c.remember('a', '/', 'A');
+    c.remember('b', '/', 'B');
+    expect(c.recall('a', '/')).toBe('A'); // touch a -> most-recently-used
+    c.remember('c', '/', 'C'); // must evict b (least-recently-used), not a
+    expect(c.recall('a', '/')).toBe('A'); // survived
+    expect(c.recall('b', '/')).toBeUndefined(); // evicted
+    expect(c.recall('c', '/')).toBe('C');
+  });
 });
 
 describe('applySnapshotDelta', () => {
