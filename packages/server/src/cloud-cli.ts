@@ -308,7 +308,26 @@ const cmdProject = async (argv: readonly string[]): Promise<number> => {
     hint(`next: \`reticle link --project ${created.projectId}\` to bind this repo`);
     return 0;
   }
-  err('usage: reticle project <ls|create <name>>');
+  if (sub === 'rename') {
+    const id = argv[1];
+    const name = argv.slice(2).join(' ').trim();
+    if (id === undefined || name.length === 0) {
+      err('usage: reticle project rename <projectId> <new name>');
+      return 2;
+    }
+    emit(await api('PATCH', `${url}/v1/projects/${encodeURIComponent(id)}`, token, { name }));
+    return 0;
+  }
+  if (sub === 'rm' || sub === 'delete') {
+    const id = argv[1];
+    if (id === undefined) {
+      err('usage: reticle project rm <projectId>');
+      return 2;
+    }
+    emit(await api('DELETE', `${url}/v1/projects/${encodeURIComponent(id)}`, token));
+    return 0;
+  }
+  err('usage: reticle project <ls|create <name>|rename <id> <name>|rm <id>>');
   return 2;
 };
 
