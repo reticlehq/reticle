@@ -101,15 +101,30 @@ describe('ProjectStore — temp-dir filesystem, never touches the repo', () => {
     expect(r.file.runs.some((x) => x.summary === 'r0')).toBe(false);
   });
 
-  it('7: caps the whole list to TOTAL most-recent overall across names', async () => {
-    // Use unique names so PER_NAME never trims first; only the TOTAL cap applies.
+  it('7: keeps every distinct flow last-known-good even past TOTAL (durable local regression memory)', async () => {
+    // One run each of many DISTINCT flows: each flow's latest (its only) run is its last-known-good and
+    // must never be evicted by the TOTAL cap — that's what lets a fresh session answer "did my last run
+    // of flow X pass?" locally, free.
     for (let i = 0; i < PROJECT_RUN_CAP.TOTAL + 25; i += 1) {
       await store.recordRun({ ...RUN, name: `flow-${i}` });
     }
     const r = await store.read();
     if (!r.ok) throw new Error('expected ok');
-    expect(r.file.runs).toHaveLength(PROJECT_RUN_CAP.TOTAL);
+    expect(r.file.runs).toHaveLength(PROJECT_RUN_CAP.TOTAL + 25);
+    expect(r.file.runs.some((x) => x.name === 'flow-0')).toBe(true); // the oldest flow's LKG survives
     expect(r.file.runs.at(-1)?.name).toBe(`flow-${PROJECT_RUN_CAP.TOTAL + 24}`);
+  }, 30_000);
+
+  it('7b: a rarely-run flow keeps its last-known-good when busy flows fill the cap', async () => {
+    await store.recordRun({ ...RUN, name: 'early' });
+    // Four busy flows each hitting PER_NAME fills TOTAL with newer runs — under the old cap this evicted
+    // `early` entirely; now its last-known-good is reserved first.
+    for (const name of ['a', 'b', 'c', 'd']) {
+      for (let i = 0; i < PROJECT_RUN_CAP.PER_NAME; i += 1) {
+        await store.recordRun({ ...RUN, name });
+      }
+    }
+    expect(await store.lastRun('early')).toBeDefined();
   }, 30_000);
 
   // ---- EDGE / INVALID ----

@@ -4,7 +4,9 @@ import type { FlowFile } from '@reticlehq/core';
 import { ReticleTool } from '../tools/tool-names.js';
 import { asString } from '../tools/tools-helpers.js';
 import { log } from '../log.js';
-import { resolveCloudConfig, syncFlowToCloud, SyncOutcome } from '../cloud/cloud-sync.js';
+import { homedir } from 'node:os';
+import { syncFlowToCloud, SyncOutcome } from '../cloud/cloud-sync.js';
+import { resolveProjectCloud } from '../cloud/cloud-config.js';
 import { buildSuiteVerdict } from './decision.js';
 import { classifyFlowAssertions } from './flow-classify.js';
 import { flowPath } from '../project/reticle-dir.js';
@@ -17,6 +19,8 @@ import {
   latestRecordedFlow,
   sessionProjectId,
 } from './flow-replay-run.js';
+import { persistAndSyncVerificationRun, type TimedReplay } from '../runs/verification-sync.js';
+import { runServerVerify } from './server-verify.js';
 import { healFlow } from './heal-run.js';
 
 export { replayNamedFlow } from './flow-replay-run.js';
@@ -26,10 +30,17 @@ export { replayNamedFlow } from './flow-replay-run.js';
  * set). Fire-and-forget: resolves the config, POSTs via the platform fetch, and logs the outcome. Any
  * failure is swallowed so a network hiccup never affects the local save.
  */
-async function syncSavedFlowToCloud(flow: FlowFile, projectId: string | undefined): Promise<void> {
-  const config = resolveCloudConfig(process.env);
-  if (config === null) return; // not logged in → stays local
-  const result = await syncFlowToCloud(flow, config, projectId, (url, init) => fetch(url, init));
+async function syncSavedFlowToCloud(
+  deps: ToolDeps,
+  flow: FlowFile,
+  projectId: string | undefined,
+): Promise<void> {
+  // Per-project cloud: sync a saved flow only when cloud is attached AND flow sync is enabled.
+  const cloud = await resolveProjectCloud(deps.fs, deps.reticleRoot, homedir(), process.env);
+  if (cloud.config === null || !cloud.policy.flows) return; // not attached / flows disabled → local only
+  const result = await syncFlowToCloud(flow, cloud.config, projectId, (url, init) =>
+    fetch(url, init),
+  );
   if (result.outcome !== SyncOutcome.SYNCED) {
     log('cloud-flow-sync-failed', { flow: flow.name, status: result.status, error: result.error });
   }
@@ -266,15 +277,25 @@ export const FLOW_TOOLS: ToolDef[] = [
     handler: async (deps: ToolDeps, args): Promise<SuiteVerdict> => {
       const sessionId = asString(args['sessionId']);
       // "Replay all" means all of THIS app's flows (+ legacy), not every project's on a shared daemon.
+      const projectId = sessionProjectId(deps, sessionId);
       const requested = Array.isArray(args['names'])
         ? args['names'].filter((n): n is string => typeof n === 'string')
-        : await deps.flows.list(sessionProjectId(deps, sessionId));
+        : await deps.flows.list(projectId);
+      // verify:server — hand the whole suite to the hosted runner; it records the verification itself.
+      const cloud = await resolveProjectCloud(deps.fs, deps.reticleRoot, homedir(), process.env);
+      const server = await runServerVerify(deps, cloud, sessionId, requested);
+      if (server !== null) return server;
       const runs: { replay: FlowReplayResult }[] = [];
+      const timed: TimedReplay[] = [];
       // Sequential: each flow replays against the same live session; parallel would race the DOM.
       for (const flowName of requested) {
+        const start = deps.now();
         const replay = await replayNamedFlow(deps, { flowName, sessionId });
         runs.push({ replay });
+        timed.push({ replay, durationMs: deps.now() - start });
       }
+      // Emit the consolidated run artifact (Runs tab) + best-effort cloud push. Never blocks the verdict.
+      await persistAndSyncVerificationRun(deps, timed, projectId);
       return buildSuiteVerdict(runs);
     },
   },
@@ -330,7 +351,7 @@ export const FLOW_TOOLS: ToolDef[] = [
       if (!res.ok) return { error: flowErrorMessage(res.code), code: res.code };
       // If logged into Reticle Cloud, mirror the saved flow to the team's regression suite. Best-effort
       // and non-blocking: the flow is already on disk, so a sync failure never fails the save.
-      void syncSavedFlowToCloud(flow, session.projectId);
+      void syncSavedFlowToCloud(deps, flow, session.projectId);
       // Return the SaveSummary as-is ({ name, stepCount, degraded, empty }) — the outputSchema
       // declares `name`, so the old `flowName` key was silently stripped by schema-strict clients.
       return res.value;

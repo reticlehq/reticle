@@ -127,20 +127,32 @@ function serializeLearned(learned: ProjectLearned): ProjectLearned {
 }
 
 /**
- * Keep at most PER_NAME most-recent runs of any single name, then cap the whole list to TOTAL
- * most-recent overall. Chronological order (oldest→newest) is preserved throughout.
+ * Cap project memory while GUARANTEEING each flow keeps its last-known-good. Pass 1 reserves the
+ * most-recent run of every distinct name (never evicted by the TOTAL cap), so a fresh session can always
+ * answer "did my last run of this flow pass?" locally — the durable, free regression memory the solo
+ * loop needs. Pass 2 fills the remaining budget with additional recent runs (PER_NAME per name, TOTAL
+ * overall). Chronological order (oldest→newest) is preserved.
  */
 function truncate(runs: RunRecord[]): RunRecord[] {
   const perName = new Map<string, number>();
-  const keptReversed: RunRecord[] = [];
+  const kept = new Set<number>();
+  // Pass 1 (newest→oldest): reserve each name's latest run. Kept regardless of the TOTAL cap.
+  const seen = new Set<string>();
   for (let i = runs.length - 1; i >= 0; i -= 1) {
     const run = runs[i];
-    if (run === undefined) continue;
+    if (run === undefined || seen.has(run.name)) continue;
+    seen.add(run.name);
+    kept.add(i);
+    perName.set(run.name, 1);
+  }
+  // Pass 2 (newest→oldest): fill the rest with extra recent runs, respecting PER_NAME and TOTAL.
+  for (let i = runs.length - 1; i >= 0 && kept.size < PROJECT_RUN_CAP.TOTAL; i -= 1) {
+    const run = runs[i];
+    if (run === undefined || kept.has(i)) continue;
     const count = perName.get(run.name) ?? 0;
     if (count >= PROJECT_RUN_CAP.PER_NAME) continue;
     perName.set(run.name, count + 1);
-    keptReversed.push(run);
-    if (keptReversed.length >= PROJECT_RUN_CAP.TOTAL) break;
+    kept.add(i);
   }
-  return keptReversed.reverse();
+  return runs.filter((_, i) => kept.has(i));
 }

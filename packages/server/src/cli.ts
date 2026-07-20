@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 import { pathToFileURL } from 'node:url';
-import { realpathSync } from 'node:fs';
+import { realpathSync, existsSync } from 'node:fs';
 import { RETICLE_DEFAULT_PORT, ReticleEnv } from '@reticlehq/core';
 import { start, startDaemon } from './index.js';
+import { isCloudCommand, runCloudCommand } from './cloud-cli.js';
 import { SERVER_VERSION } from './server-version.js';
 import { log } from './log.js';
 import {
@@ -34,11 +35,11 @@ import {
   HTTP_PORT_FLAG,
   HTTP_TOKEN_FLAG,
   parseCliArgs,
+  CLI_USAGE,
 } from './cli-parse.js';
 
 // Re-exported so existing imports (and the CLI tests) keep resolving from './cli.js'.
-export { parseCliArgs };
-export { CLI_USAGE } from './cli-parse.js';
+export { parseCliArgs, CLI_USAGE };
 export type { CliResult } from './cli-parse.js';
 
 function handleInit(parsed: {
@@ -127,12 +128,45 @@ function handleStatus(port: number): void {
   });
 }
 
-/** `reticle license` — show enterprise activation resolved from the environment (offline; nothing leaves). */
+/**
+ * `reticle doctor` — collapse the ~6 independent first-run failure modes into one command. Checks the
+ * Chromium install (the #1 silent failure), whether a daemon is up on the resolved bridge port, and
+ * reminds the user which port the app must dial. Human-readable to stdout (not the JSON log).
+ */
+async function handleDoctor(port: number): Promise<void> {
+  const line = (s: string): void => {
+    process.stdout.write(`${s}\n`);
+  };
+  line('reticle doctor');
+  line(`  node         ${process.version}`);
+  try {
+    const { chromium } = await import('playwright');
+    const path = chromium.executablePath();
+    line(
+      existsSync(path)
+        ? '  chromium     ✓ installed'
+        : '  chromium     ✗ missing — run: npx playwright install chromium',
+    );
+  } catch {
+    line('  chromium     ✗ missing — run: npx playwright install chromium');
+  }
+  const pid = readPid(port);
+  if (pid !== null && isAlive(pid)) {
+    line(`  daemon       ✓ running on :${port} (pid ${pid})`);
+  } else {
+    line(
+      `  daemon       ✗ not running on :${port} — your agent runs \`reticle mcp\` (or \`reticle serve\`)`,
+    );
+  }
+  line(`  bridge port  ${port}  (your app must dial THIS port — not your dev-server port)`);
+}
+
 /** Print the running package version (resolved once in server-version.ts). */
 function handleVersion(): void {
   log('reticle_version', { version: SERVER_VERSION });
 }
 
+/** `reticle license` — show enterprise activation resolved from the environment (offline; nothing leaves). */
 function handleLicense(): void {
   log('reticle_license', { ...describeLicense(Date.now()) });
 }
@@ -267,8 +301,15 @@ function handleDaemonInner(parsed: {
  * Pass --drive <url> to have the daemon launch its own Playwright browser at that
  * URL. The agent then has full autonomous control without relying on the user's browser.
  */
-function handleMcp(opts: { port: number; driveUrl?: string; headless: boolean }): void {
-  const { port, driveUrl, headless } = opts;
+function handleMcp(opts: {
+  port: number;
+  driveUrl?: string;
+  headless: boolean;
+  http: boolean;
+  httpPort?: number;
+  httpToken?: string;
+}): void {
+  const { port, driveUrl, headless, http, httpPort, httpToken } = opts;
   // Probe the port first — a daemon with a stale PID file is still usable.
   // Only spawn when nothing is actually listening on the port.
   probeDaemon(port)
@@ -284,6 +325,12 @@ function handleMcp(opts: { port: number; driveUrl?: string; headless: boolean })
         if (driveUrl !== undefined) {
           daemonArgs.push(DRIVE_FLAG, driveUrl);
           if (!headless) daemonArgs.push(HEADED_FLAG);
+        }
+        // Forward the HTTP-verify flags too (previously silently dropped for `reticle mcp`).
+        if (http) {
+          daemonArgs.push(HTTP_FLAG);
+          if (httpPort !== undefined) daemonArgs.push(HTTP_PORT_FLAG, String(httpPort));
+          if (httpToken !== undefined) daemonArgs.push(HTTP_TOKEN_FLAG, httpToken);
         }
         spawnDaemon(process.execPath, scriptPath, daemonArgs, port);
         log('reticle_mcp_daemon_started', {
@@ -318,11 +365,18 @@ function handleLegacyDrive(parsed: { port: number; driveUrl: string; headless: b
 }
 
 function main(): void {
+  const argv = process.argv.slice(2);
+  // Cloud subcommands (login/link/project/config/push) are a distinct family with their own async client;
+  // handle them before the local typed parser so `reticle login` etc. work as one tool.
+  if (isCloudCommand(argv[0])) {
+    void runCloudCommand(argv).then((code) => process.exit(code));
+    return;
+  }
   const portEnv = process.env[ReticleEnv.PORT];
   const envPort = portEnv !== undefined ? parseInt(portEnv, 10) : undefined;
   const projectPort = readProjectPort(process.cwd());
   const defaultPort = envPort ?? projectPort ?? RETICLE_DEFAULT_PORT;
-  const parsed = parseCliArgs(process.argv.slice(2), defaultPort);
+  const parsed = parseCliArgs(argv, defaultPort);
 
   switch (parsed.kind) {
     case 'error':
@@ -346,6 +400,12 @@ function main(): void {
       break;
     case 'version':
       handleVersion();
+      break;
+    case 'help':
+      process.stdout.write(`${CLI_USAGE}\n`);
+      break;
+    case 'doctor':
+      void handleDoctor(parsed.port);
       break;
     case 'open':
       handleOpen(parsed.port, parsed.url);

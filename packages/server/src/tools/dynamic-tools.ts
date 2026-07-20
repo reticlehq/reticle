@@ -55,7 +55,7 @@ export function buildDynamicTools(allTools: ToolDef[]): ToolDef[] {
   const reticleTools: ToolDef = {
     name: 'reticle_tools',
     description:
-      'Discover Reticle tools on demand. Call with no arguments to list every tool (name + one-line summary); call with names:["reticle_network", …] to load full descriptions and parameters for specific tools. Then invoke them with reticle_run. This avoids paying for every tool definition on every turn.',
+      'Discover Reticle tools on demand. Call with no arguments to list every tool (name + one-line summary); call with names:["reticle_network", …] to load full descriptions and parameters for specific tools. Then invoke them with reticle_run. This avoids paying for every tool definition on every turn. To make a verification REUSABLE (record once, replay free forever), the flow workflow lives here: reticle_record_start → act → reticle_flow_save → reticle_flow_verify (and reticle_flow_heal on drift). Load those names when you want to save or re-run a flow.',
     inputSchema: {
       names: z
         .array(z.string())

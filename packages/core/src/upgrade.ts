@@ -35,6 +35,13 @@ export const CloudCapability = {
   CORPUS_HEAL: 'corpus_heal',
   /** Verify-before-merge policy gate in CI (the governance tier). */
   CI_GATE: 'ci_gate',
+  /**
+   * Hosted execution — verify a URL on OUR browsers instead of the caller's. This is the axis a local
+   * tool structurally cannot serve: CI with no Chromium, background/autonomous agents with no foreground
+   * browser, and "verify my deployed staging URL". Without this capability the runner pillar had no name,
+   * so a blocked agent could not emit a hint for it at all.
+   */
+  HOSTED_RUNNER: 'hosted_runner',
 } as const;
 export type CloudCapability = (typeof CloudCapability)[keyof typeof CloudCapability];
 
@@ -82,12 +89,19 @@ const COPY_BY_CAPABILITY: Record<CloudCapability, CapabilityCopy> = {
   [CloudCapability.CORPUS_HEAL]: {
     reason:
       'Corpus-ranked heal uses refactor outcomes learned across the fleet, served from the cloud.',
-    unlockedBy: 'Enable the hosted heal service on a Reticle Cloud team plan.',
+    // Learned intelligence sits above the flat team seat (usage tier) — the copy must not promise it
+    // to a team plan that does not include it.
+    unlockedBy: 'Enable the hosted heal service on Reticle Cloud.',
   },
   [CloudCapability.CI_GATE]: {
     reason:
       'Verify-before-merge is a governance gate that runs in your CI against a hosted policy.',
     unlockedBy: 'Configure the Reticle Cloud CI gate for your repository.',
+  },
+  [CloudCapability.HOSTED_RUNNER]: {
+    reason:
+      'Verifying without a local browser (CI, a background agent, or a deployed URL) needs a browser we run for you.',
+    unlockedBy: 'Link a Reticle Cloud account to run verifications on hosted browsers.',
   },
 };
 
