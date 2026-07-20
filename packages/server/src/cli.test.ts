@@ -340,9 +340,16 @@ describe('parseCliArgs', () => {
   });
 
   it('mcp --http forwards the HTTP-verify flags (previously dropped)', () => {
-    expect(parseCliArgs(['mcp', '--http', '--http-port', '9100', '--http-token', 't'], PORT)).toEqual(
-      { kind: 'mcp', port: PORT, headless: true, http: true, httpPort: 9100, httpToken: 't' },
-    );
+    expect(
+      parseCliArgs(['mcp', '--http', '--http-port', '9100', '--http-token', 't'], PORT),
+    ).toEqual({
+      kind: 'mcp',
+      port: PORT,
+      headless: true,
+      http: true,
+      httpPort: 9100,
+      httpToken: 't',
+    });
   });
 
   it('unknown command is a usage error', () => {

@@ -82,7 +82,9 @@ const readSession = async (): Promise<z.infer<typeof SessionSchema> | null> => {
 
 const baseUrl = (session: { url: string } | null): string => {
   const env = process.env['RETICLE_CLOUD_URL'];
-  return env !== undefined && env.length > 0 ? env.replace(/\/+$/, '') : (session?.url ?? DEFAULT_URL);
+  return env !== undefined && env.length > 0
+    ? env.replace(/\/+$/, '')
+    : (session?.url ?? DEFAULT_URL);
 };
 
 /** Bearer for a command: an explicit api key (agent) wins, else the human login token. */
@@ -102,7 +104,10 @@ const api = async (
   const headers: Record<string, string> = {};
   if (token !== null) headers['authorization'] = `Bearer ${token}`;
   if (body !== undefined) headers['content-type'] = 'application/json';
-  const init: { method: string; headers: Record<string, string>; body?: string } = { method, headers };
+  const init: { method: string; headers: Record<string, string>; body?: string } = {
+    method,
+    headers,
+  };
   if (body !== undefined) init.body = JSON.stringify(body);
   const res = await fetch(url, init);
   const text = await res.text();
@@ -128,7 +133,9 @@ const resolveProjectId = async (url: string, token: string, wanted: string): Pro
   const lc = wanted.toLowerCase();
   const match = projects.find((p) => p.projectId === wanted || p.name.toLowerCase() === lc);
   if (match === undefined)
-    throw new Error(`no project "${wanted}" — create it with \`reticle project create "${wanted}"\``);
+    throw new Error(
+      `no project "${wanted}" — create it with \`reticle project create "${wanted}"\``,
+    );
   return match.projectId;
 };
 
@@ -178,7 +185,10 @@ const openBrowser = (target: string): void => {
 /** Persist a session token under ~/.reticle and print the next step. Shared by both login paths. */
 const writeSession = async (url: string, token: string, orgName: string): Promise<void> => {
   await mkdir(home(), { recursive: true });
-  await writeFile(join(home(), SESSION_FILE), `${JSON.stringify({ url, token, orgName }, null, 2)}\n`);
+  await writeFile(
+    join(home(), SESSION_FILE),
+    `${JSON.stringify({ url, token, orgName }, null, 2)}\n`,
+  );
   emit({ loggedIn: orgName, session: join(home(), SESSION_FILE) });
   hint(
     'next: `reticle link` to bind this repo to your Default project (or `reticle project create <name>` first)',
@@ -191,8 +201,12 @@ const writeSession = async (url: string, token: string, orgName: string): Promis
  */
 const cmdLoginDevice = async (): Promise<number> => {
   const url = baseUrl(null);
-  const started = DeviceStartSchema.parse(await api('POST', `${url}/v1/auth/device/start`, null, {}));
-  hint(`Opening ${started.verificationUri} — confirm this code in the browser: ${started.userCode}`);
+  const started = DeviceStartSchema.parse(
+    await api('POST', `${url}/v1/auth/device/start`, null, {}),
+  );
+  hint(
+    `Opening ${started.verificationUri} — confirm this code in the browser: ${started.userCode}`,
+  );
   openBrowser(started.verificationUriComplete);
   const intervalMs = Math.max(1, started.interval) * 1000;
   for (;;) {
@@ -249,7 +263,9 @@ const cmdLogin = async (argv: readonly string[]): Promise<number> => {
     code = requested.devCode;
   }
 
-  const parsed = LoginSchema.parse(await api('POST', `${url}/v1/auth/login`, null, { email, code }));
+  const parsed = LoginSchema.parse(
+    await api('POST', `${url}/v1/auth/login`, null, { email, code }),
+  );
   await writeSession(url, parsed.token, parsed.org.name);
   return 0;
 };
@@ -268,7 +284,12 @@ const cmdLogout = async (): Promise<number> => {
 const cmdWhoami = async (): Promise<number> => {
   const session = await readSession();
   const fs = createNodeFileSystem();
-  const cloud = await resolveProjectCloud(fs, join(process.cwd(), RETICLE_DIR), homedir(), process.env);
+  const cloud = await resolveProjectCloud(
+    fs,
+    join(process.cwd(), RETICLE_DIR),
+    homedir(),
+    process.env,
+  );
   emit({
     loggedInAs: session?.orgName ?? null,
     repo: {
@@ -303,7 +324,9 @@ const cmdProject = async (argv: readonly string[]): Promise<number> => {
       err('usage: reticle project create <name>');
       return 2;
     }
-    const created = CreatedProjectSchema.parse(await api('POST', `${url}/v1/projects`, token, { name }));
+    const created = CreatedProjectSchema.parse(
+      await api('POST', `${url}/v1/projects`, token, { name }),
+    );
     emit(created);
     hint(`next: \`reticle link --project ${created.projectId}\` to bind this repo`);
     return 0;
@@ -355,9 +378,14 @@ const cmdLink = async (argv: readonly string[]): Promise<number> => {
     // --project accepts a slug id OR a display name; default when omitted. Resolve to the canonical id.
     const wanted = f['project'];
     const targetId =
-      wanted === undefined ? DEFAULT_PROJECT_ID : await resolveProjectId(url, session.token, wanted);
+      wanted === undefined
+        ? DEFAULT_PROJECT_ID
+        : await resolveProjectId(url, session.token, wanted);
     const minted = KeySchema.parse(
-      await api('POST', `${url}/v1/keys`, session.token, { name: 'reticle-cli', projectId: targetId }),
+      await api('POST', `${url}/v1/keys`, session.token, {
+        name: 'reticle-cli',
+        projectId: targetId,
+      }),
     );
     projectId = minted.projectId;
     projectName = minted.projectName;
@@ -371,7 +399,8 @@ const cmdLink = async (argv: readonly string[]): Promise<number> => {
   await mkdir(reticleDir, { recursive: true });
   const linkPath = join(reticleDir, CLOUD_LINK_FILE);
   const prev = await readJson(linkPath);
-  const prevObj = typeof prev === 'object' && prev !== null ? (prev as Record<string, unknown>) : {};
+  const prevObj =
+    typeof prev === 'object' && prev !== null ? (prev as Record<string, unknown>) : {};
   const cloudJson = {
     projectId,
     projectName,
@@ -384,12 +413,15 @@ const cmdLink = async (argv: readonly string[]): Promise<number> => {
   await mkdir(home(), { recursive: true });
   const credPath = join(home(), CREDENTIALS_FILE);
   const creds = (await readJson(credPath)) ?? {};
-  const credObj = typeof creds === 'object' && creds !== null ? (creds as Record<string, unknown>) : {};
+  const credObj =
+    typeof creds === 'object' && creds !== null ? (creds as Record<string, unknown>) : {};
   credObj[projectId] = key;
   await writeFile(credPath, `${JSON.stringify(credObj, null, 2)}\n`);
 
   emit({ linked: projectName, projectId, cloudJson: linkPath, credentials: credPath });
-  hint('linked ✓ runs auto-push on `reticle verify`; `reticle push` sends existing local runs; `reticle whoami` shows state');
+  hint(
+    'linked ✓ runs auto-push on `reticle verify`; `reticle push` sends existing local runs; `reticle whoami` shows state',
+  );
   return 0;
 };
 
@@ -463,7 +495,12 @@ const cmdPush = async (): Promise<number> => {
 /** Resolve THIS repo's linked cloud (url + project-scoped key). Throws a friendly error if not attached. */
 const repoCloud = async (): Promise<{ url: string; apiKey: string }> => {
   const fs = createNodeFileSystem();
-  const cloud = await resolveProjectCloud(fs, join(process.cwd(), RETICLE_DIR), homedir(), process.env);
+  const cloud = await resolveProjectCloud(
+    fs,
+    join(process.cwd(), RETICLE_DIR),
+    homedir(),
+    process.env,
+  );
   if (cloud.config === null)
     throw new Error('cloud not attached here — run `reticle link` (or set RETICLE_CLOUD_URL/KEY)');
   return cloud.config;

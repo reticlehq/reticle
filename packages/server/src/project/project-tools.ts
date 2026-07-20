@@ -97,7 +97,8 @@ export const PROJECT_TOOLS: ToolDef[] = [
     },
     handler: async (deps: ToolDeps, args) => {
       const cloud = await cloudRegression(deps, asString(args['sessionId']));
-      const withCloud = <T extends object>(obj: T): T => (cloud === undefined ? obj : { ...obj, cloud });
+      const withCloud = <T extends object>(obj: T): T =>
+        cloud === undefined ? obj : { ...obj, cloud };
       const read = await deps.project.read();
       if (!read.ok) {
         return withCloud({

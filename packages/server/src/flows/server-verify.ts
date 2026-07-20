@@ -46,8 +46,10 @@ export async function runServerVerify(
   }
   // The server hits the URL itself; with no URL (or a localhost one it can't reach) fall back to local.
   if (previewUrl === undefined || previewUrl.length === 0) return null;
-  const report = await submitServerVerification({ previewUrl, flows, source: SOURCE }, cloud.config, (url, init) =>
-    fetch(url, init),
+  const report = await submitServerVerification(
+    { previewUrl, flows, source: SOURCE },
+    cloud.config,
+    (url, init) => fetch(url, init),
   );
   if (report === null) return null;
   // The hosted runner said it couldn't actually verify (e.g. it's not enabled yet). Never surface that as

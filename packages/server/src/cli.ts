@@ -154,7 +154,9 @@ async function handleDoctor(port: number): Promise<void> {
   if (pid !== null && isAlive(pid)) {
     line(`  daemon       ✓ running on :${port} (pid ${pid})`);
   } else {
-    line(`  daemon       ✗ not running on :${port} — your agent runs \`reticle mcp\` (or \`reticle serve\`)`);
+    line(
+      `  daemon       ✗ not running on :${port} — your agent runs \`reticle mcp\` (or \`reticle serve\`)`,
+    );
   }
   line(`  bridge port  ${port}  (your app must dial THIS port — not your dev-server port)`);
 }

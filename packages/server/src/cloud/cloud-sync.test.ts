@@ -107,7 +107,11 @@ describe('syncRunToCloud', () => {
 
   it('POSTs the RAW artifact to /v1/runs with the API key when logged in', async () => {
     const fetchImpl = vi.fn<FetchLike>().mockResolvedValue({ ok: true, status: 201 });
-    const res = await syncRunToCloud(run, { url: 'https://cloud.test', apiKey: 'rk_live_x' }, fetchImpl);
+    const res = await syncRunToCloud(
+      run,
+      { url: 'https://cloud.test', apiKey: 'rk_live_x' },
+      fetchImpl,
+    );
     expect(res.outcome).toBe(SyncOutcome.SYNCED);
     const [url, init] = fetchImpl.mock.calls[0] ?? [];
     expect(url).toBe('https://cloud.test/v1/runs');
@@ -168,11 +172,13 @@ describe('syncRunRecordToCloud', () => {
   it('reports FAILED (never throws) on a non-ok response or a network error', async () => {
     const bad = vi.fn<FetchLike>().mockResolvedValue({ ok: false, status: 402 });
     expect(
-      (await syncRunRecordToCloud(record, undefined, { url: 'https://c', apiKey: 'k' }, bad)).outcome,
+      (await syncRunRecordToCloud(record, undefined, { url: 'https://c', apiKey: 'k' }, bad))
+        .outcome,
     ).toBe(SyncOutcome.FAILED);
     const throwing = vi.fn<FetchLike>().mockRejectedValue(new Error('offline'));
     expect(
-      (await syncRunRecordToCloud(record, undefined, { url: 'https://c', apiKey: 'k' }, throwing)).error,
+      (await syncRunRecordToCloud(record, undefined, { url: 'https://c', apiKey: 'k' }, throwing))
+        .error,
     ).toBe('offline');
   });
 });
