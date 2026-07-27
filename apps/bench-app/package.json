@@ -15,8 +15,8 @@
     "@reticlehq/browser": "workspace:*",
     "@reticlehq/react": "workspace:*",
     "@tanstack/react-query": "^5.101.4",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
     "zustand": "^5.0.14"
   },
   "devDependencies": {
@@ -26,7 +26,7 @@
     "@types/babel__core": "^7.20.5",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
-    "@vitejs/plugin-react": "^6.0.2",
+    "@vitejs/plugin-react": "^6.0.4",
     "vite": "^8.0.16"
   }
 }

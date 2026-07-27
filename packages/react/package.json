@@ -37,8 +37,8 @@
   "devDependencies": {
     "@types/react": "^19.0.0",
     "jsdom": "^26.0.0",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
     "@types/react-dom": "^19.0.0"
   },
   "license": "Apache-2.0",
