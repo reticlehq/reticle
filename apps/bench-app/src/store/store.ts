@@ -49,6 +49,13 @@ interface AppState {
   selectedId: number | null;
   drawerId: number | null;
   newDeployOpen: boolean;
+  /**
+   * The in-flight New Deployment form. Registered state rather than component `useState` because
+   * `deploy-submit` is gated on it: an observer that cannot see the form cannot explain why the
+   * button did nothing, and an abstraction built on such an observer is not Markov. Same reason the
+   * compose panel keeps its prompt here.
+   */
+  newDeployDraft: { service: string; env: Env };
   paletteOpen: boolean;
   toasts: Toast[];
   requestLog: RequestLog[];
@@ -62,6 +69,7 @@ interface AppState {
   openDrawer: (id: number) => void;
   closeDrawer: () => void;
   setNewDeploy: (open: boolean) => void;
+  setNewDeployDraft: (patch: Partial<{ service: string; env: Env }>) => void;
   setPalette: (open: boolean) => void;
   createDeployment: (service: string, env: Env) => void;
   shipDeployment: (id: number) => void;
@@ -89,6 +97,7 @@ export const useApp = create<AppState>((set, get) => ({
   selectedId: null,
   drawerId: null,
   newDeployOpen: false,
+  newDeployDraft: { service: '', env: 'staging' },
   paletteOpen: false,
   toasts: [],
   requestLog: [],
@@ -128,8 +137,10 @@ export const useApp = create<AppState>((set, get) => ({
     emit(Sig.DRAWER_OPENED, { id: drawerId });
   },
   closeDrawer: () => set({ drawerId: null }),
+  setNewDeployDraft: (patch) =>
+    set((st) => ({ newDeployDraft: { ...st.newDeployDraft, ...patch } })),
   setNewDeploy: (newDeployOpen) => {
-    set({ newDeployOpen });
+    set({ newDeployOpen, ...(newDeployOpen ? { newDeployDraft: { service: '', env: 'staging' as Env } } : {}) });
     emit(newDeployOpen ? Sig.MODAL_OPENED : Sig.MODAL_CLOSED, { modal: 'new-deploy' });
   },
   setPalette: (paletteOpen) => {

@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { useApp } from '../store/store.js';
 import type { Env } from '../data/seed.js';
 import { IconRocket, IconX } from './icons.js';
@@ -10,15 +9,16 @@ export function NewDeployModal(): React.ReactElement | null {
   const open = useApp((s) => s.newDeployOpen);
   const close = (): void => useApp.getState().setNewDeploy(false);
   const create = useApp((s) => s.createDeployment);
-  const [service, setService] = useState('');
-  const [env, setEnv] = useState<Env>('staging');
+  const service = useApp((s) => s.newDeployDraft.service);
+  const env = useApp((s) => s.newDeployDraft.env);
+  const setService = (v: string): void => useApp.getState().setNewDeployDraft({ service: v });
+  const setEnv = (v: Env): void => useApp.getState().setNewDeployDraft({ env: v });
 
   if (!open) return null;
 
   const submit = (): void => {
     if (service.trim().length === 0) return;
     create(service.trim(), env);
-    setService('');
     close();
   };
 
