@@ -61,13 +61,13 @@
     "eslint": "^9.18.0",
     "eslint-plugin-react-hooks": "^5.1.0",
     "jsdom": "^29.1.1",
-    "playwright": "^1.60.0",
-    "prettier": "^3.4.2",
-    "turbo": "^2.3.3",
+    "playwright": "^1.62.0",
+    "prettier": "^3.9.6",
+    "turbo": "^2.10.7",
     "typedoc": "^0.28.20",
     "typescript": "^5.7.3",
-    "typescript-eslint": "^8.20.0",
+    "typescript-eslint": "^8.65.0",
     "vitest": "^3.2.6",
-    "ws": "^8.21.0"
+    "ws": "^8.21.1"
   }
 }
