@@ -74,6 +74,14 @@ describe('computeSegments', () => {
     expect(computeSegments([e(EventType.DOM_ADDED)])[0]?.truncated).toBeUndefined();
   });
 
+  it('marks a segment truncated when the browser transport dropped events in it', () => {
+    // A bridge outage overflows the SDK's offline queue. The surviving counts understate reality by
+    // however many events the queue swallowed, so the segment must not be read as a clean sample —
+    // the deviation judge skips it, and the learned envelope refuses to fold it into the baseline.
+    const overflow = e(EventType.TRANSPORT_OVERFLOW, { data: { dropped: 42 } });
+    expect(computeSegments([net(200, true), overflow])[0]?.truncated).toBe(true);
+  });
+
   it('returns no segments for an empty stream', () => {
     expect(computeSegments([])).toEqual([]);
   });

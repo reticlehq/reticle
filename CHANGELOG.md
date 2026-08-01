@@ -6,6 +6,7 @@ All notable changes to the **`@reticlehq/*`** packages are documented here (each
 
 ### Fixed
 
+- **A bridge outage no longer opens a silent hole in the ledger.** When the SDK's offline queue filled during an outage it discarded its oldest events and told no one: `TRANSPORT_OVERFLOW` was defined in the contract and consumed by the server's segment rollup, but nothing ever emitted it, so the hook had been dead in every release. The gap then read as "the app did nothing" — and because the segment was never marked truncated, its understated counts were folded into the learned deviation envelope in `.reticle/envelopes.json`, so one blip could quietly raise the bar a later regression is judged against. The transport now declares each gap exactly once on reconnect, ahead of the replayed backlog, carrying the seq/`t` of the last event it displaced so the marker sorts at the hole instead of at the end of the session. Thanks @DevChiniwala. (`@reticlehq/browser`)
 - **`withFileLock` reclaims a path's chain entry once it settles,** guarded by pointer identity so a queued successor is never dropped — previously every unique file path locked in a long-running daemon occupied a Map slot forever. Thanks @DevChiniwala. (#63) (`@reticlehq/server`)
 
 ## [2.2.1] — 2026-07-29
