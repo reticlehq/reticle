@@ -20,7 +20,7 @@
     "zustand": "^5.0.14"
   },
   "devDependencies": {
-    "@babel/core": "^7.29.7",
+    "@babel/core": "^8.0.1",
     "@reticlehq/babel-plugin": "workspace:*",
     "@rolldown/plugin-babel": "^0.2.3",
     "@types/babel__core": "^7.20.5",
