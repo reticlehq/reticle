@@ -40,7 +40,7 @@
     "prepack": "tsc -b && find dist -name \"*.test.*\" -delete && node ../../scripts/strip-maps.mjs dist"
   },
   "dependencies": {
-    "@babel/core": "^7.26.0",
+    "@babel/core": "^8.0.1",
     "@reticlehq/babel-plugin": "workspace:*",
     "@reticlehq/core": "workspace:*"
   },
