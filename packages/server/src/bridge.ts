@@ -33,7 +33,14 @@ const WS_CLOSE = {
   HELLO_TIMEOUT: [1008, 'hello timeout'],
   INVALID_MESSAGE: [1008, 'invalid message'],
   HELLO_DUPLICATE: [1008, 'hello already received'],
-  AUTH_FAILED: [1008, 'authentication failed'],
+  // Names the recovery, because the SDK prints this reason and then stops retrying — so it is the
+  // last thing the developer sees. The common cause is a page served before the daemon existed,
+  // which carries no token; a reload re-fetches the connect module and picks the current one up.
+  // Kept under the 123-byte WebSocket close-reason limit.
+  AUTH_FAILED: [
+    1008,
+    'authentication failed — reload the page to pick up the current pairing token',
+  ],
   SESSION_LIMIT: [1013, 'session limit reached'],
   PROTOCOL_MISMATCH: [1008, 'protocol version mismatch — upgrade @reticlehq/browser'],
 } as const;

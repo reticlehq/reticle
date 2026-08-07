@@ -138,10 +138,26 @@ export interface ReticleVitePlugin {
   transformIndexHtml: (html: string) => HtmlTag[];
   /** Vite hands over the resolved config; used to resolve the HTML entry exactly. */
   configResolved?: (config: { root?: string; command?: string }) => void;
+  /** Dev-server hook: keeps the served connect module from outliving the token it was built without. */
+  configureServer?: (server: ViteDevServerLike) => void;
   /** Build-time post-condition: desktop injection must have happened. */
   buildEnd?: () => void;
   /** Runs the dev-mode injection check immediately. Test seam for the deferred timer. */
   checkInjectedForTest?: () => void;
+}
+
+/**
+ * The slice of Vite's dev server this plugin touches, structurally — so `vite` stays a peer the
+ * plugin never imports, the same way the Svelte compiler and Playwright are handled elsewhere.
+ */
+export interface ViteDevServerLike {
+  middlewares: {
+    use: (handler: (req: { url?: string }, res: unknown, next: () => void) => void) => void;
+  };
+  moduleGraph: {
+    getModuleById: (id: string) => object | undefined;
+    invalidateModule: (mod: object) => void;
+  };
 }
 
 interface HtmlTag {
@@ -427,6 +443,31 @@ export function reticle(options: ReticleVitePluginOptions = {}): ReticleVitePlug
     configResolved(config) {
       root = config.root;
       command = config.command;
+    },
+    /**
+     * Serve the connect module fresh, every time.
+     *
+     * `load` reads the daemon's pairing token at serve time precisely because the daemon may start
+     * after the dev server — but Vite caches the module it produced, and answers every later request
+     * from that cache, INCLUDING after a full page reload. So a dev server started first served a
+     * tokenless connect module once and then kept serving it: the SDK got a 1008 `authentication
+     * failed`, stopped retrying (correctly — a wrong token does not fix itself), and `reticle status`
+     * showed no session while the page demonstrably contained `/@reticle-connect`. Only restarting
+     * the dev server cleared it, which is not a step anybody guesses.
+     *
+     * Dropping the cached module before it is served makes `load` re-read the token, so starting the
+     * daemon and reloading the page is enough. Costs one string compare per request and re-runs a
+     * three-line module — no reason to be cleverer about when to invalidate.
+     */
+    configureServer(server) {
+      if (!inject) return;
+      server.middlewares.use((req, _res, next) => {
+        if ((req.url ?? '').split('?')[0] === RETICLE_CONNECT_MODULE) {
+          const mod = server.moduleGraph.getModuleById(RETICLE_CONNECT_MODULE);
+          if (mod !== undefined) server.moduleGraph.invalidateModule(mod);
+        }
+        next();
+      });
     },
     /**
      * Desktop injection is silent when it misses — the bundle simply has no connect() in it and the
