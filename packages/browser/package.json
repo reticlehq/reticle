@@ -26,7 +26,7 @@
     "@tanstack/query-core": "^5.101.4",
     "@types/jsdom": "^28.0.3",
     "jotai": "^2.20.2",
-    "jsdom": "^29.1.1",
+    "jsdom": "^30.0.1",
     "mobx": "^7.0.0",
     "pinia": "^4.0.2",
     "react": "^19.2.8",
