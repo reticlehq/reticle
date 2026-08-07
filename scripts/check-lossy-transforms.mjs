@@ -73,6 +73,11 @@ const LOSSY = new Set([Declaration.REPORT, Declaration.MARKER, Declaration.SIGNA
 export const READ_PATH = Object.freeze({
   'packages/browser/src/security/serialization.ts': {
     TruncationReport: [Declaration.NONE, 'the report type itself'],
+    isSensitiveKey: [Declaration.NONE, 'predicate; reports whether a key should be redacted'],
+    scrubKnownSecrets: [
+      Declaration.MARKER,
+      'replaces recognized secret shapes with the unambiguous REDACTED_VALUE sentinel',
+    ],
     sanitizeWithReport: [
       Declaration.REPORT,
       'the reference implementation — returns { value, truncation? } so a caller cannot mistake a fraction for the whole',
@@ -159,18 +164,48 @@ export const READ_PATH = Object.freeze({
 export const CONFORMANCE_TESTS = Object.freeze([
   'packages/core/src/lossy-conformance.test.ts',
   'packages/browser/src/security/lossy-conformance.test.ts',
+  'packages/browser/src/security/serialization.test.ts',
   'packages/browser/src/transport/transport.overflow-marker.test.ts',
   'packages/server/src/events/ring-buffer.test.ts',
 ]);
 
 /** Every top-level export name in a TypeScript source, read as text. */
 export function exportedNames(source) {
-  const names = [];
-  const pattern =
+  const names = new Set();
+  const declarationPattern =
     /^export\s+(?:declare\s+)?(?:abstract\s+)?(?:async\s+)?(?:function|const|let|var|class|interface|type|enum)\s+([A-Za-z_$][\w$]*)/gm;
   let match;
-  while ((match = pattern.exec(source)) !== null) names.push(match[1]);
-  return names;
+  while ((match = declarationPattern.exec(source)) !== null) names.add(match[1]);
+
+  const namedPattern = /^export\s+(?:type\s+)?\{([\s\S]*?)\}\s*(?:from\s+['"][^'"]+['"]\s*)?;?/gm;
+  while ((match = namedPattern.exec(source)) !== null) {
+    const specifiers = match[1]
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/\/\/.*$/gm, '')
+      .split(',')
+      .map((specifier) => specifier.trim())
+      .filter(Boolean);
+    for (const specifier of specifiers) {
+      const normalized = specifier.replace(/^type\s+/, '');
+      const parts = normalized.split(/\s+as\s+/);
+      const exported = parts.at(-1);
+      if (exported === undefined || !/^[A-Za-z_$][\w$]*$/.test(exported)) {
+        throw new Error(`unsupported export specifier: ${specifier}`);
+      }
+      names.add(exported);
+    }
+  }
+
+  const namespacePattern = /^export\s+\*\s+as\s+([A-Za-z_$][\w$]*)\s+from\s+['"][^'"]+['"]\s*;?/gm;
+  while ((match = namespacePattern.exec(source)) !== null) names.add(match[1]);
+
+  if (/^export\s+\*\s+from\s+['"][^'"]+['"]\s*;?/m.test(source)) {
+    throw new Error('bare export * re-export cannot be classified without resolving its source');
+  }
+
+  if (/^export\s+default\b/m.test(source)) names.add('default');
+
+  return [...names];
 }
 
 /**
@@ -246,6 +281,12 @@ function selfTest() {
     'export function badStyle() {}',
     'export function untested() {}',
     'export function unclassified() {}',
+    'function named() {}',
+    'function localAlias() {}',
+    'function defaultExport() {}',
+    'export { named };',
+    'export { localAlias as aliased };',
+    'export default defaultExport;',
   ].join('\n');
   const problems = findDrift(registry, (file) => (file === 'fake/mod.ts' ? source : null), [
     'expect(declared()).toBeDefined(); noReason(); badStyle();',
@@ -257,6 +298,9 @@ function selfTest() {
     ['noReason', 'a classification with no reason must be flagged'],
     ['badStyle', 'an unknown declaration style must be flagged'],
     ['untested', 'a lossy export with no conformance test must be flagged'],
+    ['named', 'a named export must be classified'],
+    ['aliased', 'an aliased export must use its exported name'],
+    ['default', 'a default export must be classified'],
     [undefined, 'a registry file missing from disk must be flagged'],
   ];
   const missing = expected.filter(([name]) =>
@@ -264,7 +308,14 @@ function selfTest() {
       ? !problems.some((p) => p.file === 'fake/missing.ts')
       : !problems.some((p) => p.name === name),
   );
-  if (missing.length > 0) {
+  let starReexportFailed = false;
+  try {
+    exportedNames("export * from './helpers.js';");
+  } catch (error) {
+    starReexportFailed = error instanceof Error && error.message.includes('export *');
+  }
+  if (missing.length > 0 || !starReexportFailed) {
+    if (!starReexportFailed) missing.push(['*', 'a bare star re-export must fail loudly']);
     console.error('self-test FAILED — guard missed:', missing.map(([, why]) => why).join('; '));
     process.exit(1);
   }
