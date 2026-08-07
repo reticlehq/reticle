@@ -60,6 +60,35 @@ describe('parseCliArgs', () => {
     });
   });
 
+  // The agent half of the feedback channel: usable when `reticle_feedback` does not exist yet, which
+  // is exactly the window in which installation and wiring go wrong.
+  it('parses `feedback --agent --kind` without eating the kind value as message text', () => {
+    expect(
+      parseCliArgs(['feedback', '--agent', '--kind', 'gap', 'init', 'never', 'wired', 'it'], PORT),
+    ).toEqual({
+      kind: 'feedback',
+      text: 'init never wired it',
+      feedbackKind: 'gap',
+      bug: false,
+      agent: true,
+    });
+  });
+
+  it('rejects a `--kind` that is not a real feedback kind', () => {
+    const parsed = parseCliArgs(['feedback', '--kind', 'annoyance', 'x'], PORT);
+    expect(parsed.kind).toBe('error');
+  });
+
+  it('keeps the plain human form working, source and all', () => {
+    expect(parseCliArgs(['feedback', '--rating', '4', 'good', 'stuff'], PORT)).toEqual({
+      kind: 'feedback',
+      text: 'good stuff',
+      rating: 4,
+      bug: false,
+      agent: false,
+    });
+  });
+
   it('parses `affected <file...>` into the changed-file list', () => {
     expect(parseCliArgs(['affected', 'src/a.ts', 'src/b.tsx'], PORT)).toEqual({
       kind: 'affected',

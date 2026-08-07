@@ -1,5 +1,5 @@
 import { FeedbackKind, FeedbackSource } from '@reticlehq/core';
-import { BUG_FLAG, RATING_FLAG } from '../cli-parse.js';
+import { AGENT_FLAG, BUG_FLAG, FEEDBACK_KINDS, KIND_FLAG, RATING_FLAG } from '../cli-parse.js';
 import { describeFeedbackPayload, submitFeedback } from './feedback.js';
 import { describeTelemetry, setTelemetryEnabled } from './telemetry.js';
 import { TelemetryAction } from '../cli-parse.js';
@@ -13,11 +13,16 @@ import {
 } from './identify.js';
 
 /**
- * `reticle feedback [--rating 1-5] [--bug] "what happened"` — the human half of the feedback channel.
+ * `reticle feedback [--rating 1-5] [--bug] "what happened"` — the feedback channel as a command.
  *
  * Kept to a single command with no prompts, no editor, and no account: the cost of telling us
  * something has to be lower than the cost of shrugging and moving on, or we only ever hear from people
  * angry enough to open an issue. A bare rating is a valid report; the words are optional garnish.
+ *
+ * `--agent --kind <…>` is the same channel for an AGENT that cannot reach `reticle_feedback` — during
+ * `init`, while instrumentation is half-wired, or when the daemon will not start. Those are the
+ * reports we are least likely to hear and most need: every other path we have requires the tool
+ * surface to already work, so a Reticle that fails before it is running fails silently by design.
  *
  * What is sent is PRINTED before it goes, every time. A channel that carries free text and does not
  * show you the payload is asking for trust it has not earned.
@@ -26,19 +31,30 @@ export async function handleFeedback(
   text: string,
   rating: number | undefined,
   bug: boolean,
+  feedbackKind?: string,
+  agent = false,
 ): Promise<void> {
   const line = (s: string): void => {
     process.stdout.write(`${s}\n`);
   };
   if (text === '' && rating === undefined) {
     line(`usage: reticle feedback [${RATING_FLAG} 1-5] [${BUG_FLAG}] "what worked, what didn't"`);
+    line(
+      `       agents: reticle feedback ${AGENT_FLAG} ${KIND_FLAG} <${FEEDBACK_KINDS.join('|')}> "what happened"`,
+    );
     line('       your words go to the maintainers; nothing from your app is ever included.');
     process.exitCode = 1;
     return;
   }
   const receipt = await submitFeedback({
-    source: FeedbackSource.HUMAN,
-    kind: bug ? FeedbackKind.BUG : FeedbackKind.EXPERIENCE,
+    // An agent filing through the CLI must not land in the HUMAN bucket: that bucket carries the
+    // ratings and the experience reports, and a few hundred agent reports mixed into it would make
+    // the one number that says whether people like Reticle mean nothing.
+    source: agent ? FeedbackSource.AGENT : FeedbackSource.HUMAN,
+    // `--kind` wins when given; `--bug` stays the shorthand it always was.
+    kind:
+      (feedbackKind as FeedbackKind | undefined) ??
+      (bug ? FeedbackKind.BUG : FeedbackKind.EXPERIENCE),
     // A rating with no words is a real report, but the schema wants text — say what the rating means.
     text: text === '' ? `rated ${String(rating)}/5 with no comment` : text,
     ...(rating !== undefined ? { rating } : {}),

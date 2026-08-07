@@ -164,6 +164,18 @@ function gatherPlanInput(options: InitOptions, io: InitIo, pkgRaw: string): Plan
   };
 }
 
+/**
+ * The standing ask, printed at the end of every `init`.
+ *
+ * Addressed to the agent as much as the human: whichever of them just ran this command is the one
+ * holding the experience, and neither has a Reticle tool surface to file through at this point.
+ */
+export const FEEDBACK_HINT =
+  'Anything wrong, missing, or awkward — in this setup or in Reticle itself? Tell us; it is the ' +
+  'one thing that decides what gets fixed:\n' +
+  '  reticle feedback --agent --kind <bug|gap|ambiguity|feature_request|improvement> "what happened"   (agents)\n' +
+  '  reticle feedback "what worked, what didn\'t"                                                      (humans)';
+
 function restartHint(framework: Framework): string {
   if (framework === Framework.NEXT)
     return 'Restart `next dev`, then ask your agent: "List Reticle sessions".';
@@ -198,6 +210,11 @@ function report(plan: Plan, dryRun: boolean, failed: ReadonlySet<string>, io: In
   }
   io.print('');
   io.print(restartHint(plan.framework));
+  // Printed even on a dry run, and even when steps failed — ESPECIALLY then. Setup is where Reticle
+  // is most likely to break and least likely to be told about it: an agent reading this output has
+  // no MCP tools yet, and the report it could file right now is the one nobody ever sends.
+  io.print('');
+  io.print(FEEDBACK_HINT);
   return { ok: true, applied, manual };
 }
 

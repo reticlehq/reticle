@@ -4,6 +4,16 @@
  * file-size cap and keep the parser pure + unit-testable. Re-exported from cli.ts so existing
  * imports are unchanged.
  */
+import { parseFeedbackArgs, type ParsedFeedback } from './cli-parse-feedback.js';
+
+// Re-exported so every existing importer of these flags is unaffected by the file split.
+export {
+  AGENT_FLAG,
+  BUG_FLAG,
+  FEEDBACK_KINDS,
+  KIND_FLAG,
+  RATING_FLAG,
+} from './cli-parse-feedback.js';
 
 export const CLI_USAGE = `usage:
   reticle init  [--dry-run] [--port N] [--no-mcp] [--no-install]  (wire Reticle into the project in this directory)
@@ -23,6 +33,8 @@ export const CLI_USAGE = `usage:
   reticle license                                      (show enterprise license status: active | eval | missing)
   reticle telemetry [status|enable|disable]            (anonymous usage metrics — status shows what's sent + the policy)
   reticle feedback [--rating 1-5] [--bug] "message"    (tell us what worked and what didn't — prints exactly what it sends)
+  reticle feedback --agent --kind <bug|gap|ambiguity|feature_request|improvement> "message"
+                                                       (agents: file from anywhere, including a setup that never finished)
   reticle identify --context company|side_project|open_source|learning [--company N] [--email E] [--forget]
                                                        (OPT-IN: tell us who you are, e.g. for support or an enterprise trial)
 
@@ -59,9 +71,6 @@ export const COMPANY_FLAG = '--company';
 export const EMAIL_FLAG = '--email';
 export const CONTEXT_FLAG = '--context';
 export const FORGET_FLAG = '--forget';
-/** `reticle feedback --rating 4 "the words"` — the human half of the channel. */
-export const RATING_FLAG = '--rating';
-export const BUG_FLAG = '--bug';
 /** The `reticle telemetry` sub-actions. Bare `reticle telemetry` means `status`. */
 export const TelemetryAction = {
   STATUS: 'status',
@@ -153,7 +162,7 @@ export type CliResult =
   | { kind: 'status'; port: number }
   | { kind: 'license' }
   | { kind: 'telemetry'; action: TelemetryAction }
-  | { kind: 'feedback'; text: string; rating?: number; bug: boolean }
+  | Extract<ParsedFeedback, { kind: 'feedback' }>
   | { kind: 'identify'; context?: string; company?: string; email?: string; forget: boolean }
   | { kind: 'version' }
   | { kind: 'help' }
@@ -461,26 +470,8 @@ export function parseCliArgs(argv: string[], defaultPort: number): CliResult {
         forget: rest.includes(FORGET_FLAG),
       };
     }
-    case FEEDBACK_COMMAND: {
-      const ratingAt = rest.indexOf(RATING_FLAG);
-      const rating = ratingAt === -1 ? undefined : Number(rest[ratingAt + 1]);
-      if (rating !== undefined && (!Number.isInteger(rating) || rating < 1 || rating > 5)) {
-        return { kind: 'error', message: `${RATING_FLAG} takes a whole number from 1 to 5` };
-      }
-      // Everything that is not a flag or the rating's value is the message. Quoting is the user's
-      // job for shell reasons, but joining the remainder means an unquoted sentence still works.
-      const consumed = new Set(ratingAt === -1 ? [] : [ratingAt, ratingAt + 1]);
-      const text = rest
-        .filter((arg, i) => !consumed.has(i) && !arg.startsWith('--'))
-        .join(' ')
-        .trim();
-      return {
-        kind: 'feedback',
-        text,
-        ...(rating !== undefined ? { rating } : {}),
-        bug: rest.includes(BUG_FLAG),
-      };
-    }
+    case FEEDBACK_COMMAND:
+      return parseFeedbackArgs(rest);
     case OPEN_COMMAND: {
       const port = parsePortFlag(rest, defaultPort);
       // The first non-flag arg is the url (optional — omitting reuses a connected tab).

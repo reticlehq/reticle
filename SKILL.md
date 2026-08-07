@@ -1,5 +1,15 @@
 # Reticle
 
+> ## Before anything else: feedback is part of the job
+>
+> Reticle is built FOR agents, so you are its user and the only one who can report what it costs you. That applies **from this line onwards** — including everything that happens during setup, which is where Reticle is most likely to break and least likely to hear about it.
+>
+> **The moment something is wrong, missing, awkward, or slower than it should be, file it — one call, then carry on with the task.** A step in this document that did not match reality, an install that needed a manual fix, a tool that returned nonsense, something you wished existed, something that works but takes five calls where it should take one. Nothing is too minor; the minor things are exactly what never gets reported and therefore never gets fixed.
+>
+> - Tools available: `reticle_feedback { kind, text, need?, impact?, currentApproach?, model?, trace? }` where `kind` is `bug` | `gap` | `ambiguity` | `feature_request` | `improvement`.
+> - Not set up yet, or the daemon will not start (which is most of setup): `reticle feedback --agent --kind <bug|gap|ambiguity|feature_request|improvement> "what happened"` — it needs nothing running.
+> - Report defects in **Reticle**. A bug you find in the app under test is Reticle working; that one goes to the user. Never put app source, secrets, or user data in a report.
+
 Start by detecting which mode to run:
 
 ```bash
@@ -596,7 +606,8 @@ If something failed, call `reticle_inspect({ sessionId, ref })` on the failing e
 - Batch net + element + signal + console into one `allOf` — don't call `reticle_assert` four times.
 - Never assert on pixels — use predicates, not `reticle_screenshot` (screenshots are for genuinely visual checks only).
 - If the session disconnects mid-test (navigation creates a new session ID) — call `reticle_sessions()` again and continue.
-- **If Reticle itself misbehaves, file it with `reticle_feedback` before you work around it.** Three things are worth reporting: a tool that returned something wrong or impossible (`kind: "bug"`), something you needed to observe and Reticle simply could not see (`kind: "gap"`), and a verification that ran but left you unable to tell pass from fail (`kind: "ambiguity"`). Write `text` as a root-cause analysis — what you called, what you expected, what you got — and put the call trail in `trace`. Then continue the task; do not retry the failing call just to re-report it. Report defects in **Reticle**, not bugs you found in the app under test: finding those is Reticle working, and they belong in your report to the user.
+- **If Reticle itself misbehaves, file it with `reticle_feedback` before you work around it.** A tool that returned something wrong or impossible (`kind: "bug"`), something you needed to observe and Reticle simply could not see (`kind: "gap"`), a verification that ran but left you unable to tell pass from fail (`kind: "ambiguity"`). Write `text` as a root-cause analysis — what you called, what you expected, what you got — and put the call trail in `trace`. Then continue the task; do not retry the failing call just to re-report it. Report defects in **Reticle**, not bugs you found in the app under test: finding those is Reticle working, and they belong in your report to the user.
+- **File what you WISHED for too, in the same breath.** `kind: "feature_request"` for something that does not exist, `kind: "improvement"` for something that works but is awkward or costs too many calls. Put the goal in `need` (not your guess at the fix), what gets better in `impact`, and how you are working around it today in `currentApproach`. This is the half nobody files, and it is the half that decides the roadmap — you are the user Reticle is built for, and the thought is gone when your context is. Set `model` to the model you are running.
 
 ---
 

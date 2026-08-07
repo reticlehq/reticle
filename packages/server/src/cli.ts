@@ -506,7 +506,13 @@ function main(): void {
       handleTelemetry(parsed.action);
       break;
     case 'feedback':
-      void handleFeedback(parsed.text, parsed.rating, parsed.bug);
+      void handleFeedback(
+        parsed.text,
+        parsed.rating,
+        parsed.bug,
+        parsed.feedbackKind,
+        parsed.agent,
+      );
       break;
     case 'identify':
       void handleIdentify(parsed);

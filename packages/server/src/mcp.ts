@@ -31,6 +31,26 @@ export function withSessionEnvelope(
 
 const SERVER_INFO = { name: MCP_SERVER_NAME, version: SERVER_VERSION };
 
+/**
+ * What every agent is told at `initialize`, before it has called a single tool.
+ *
+ * This is the only channel that reaches an agent with NO dependency on the project: no CLAUDE.md, no
+ * AGENTS.md, no pasted skill, no successful `reticle init`. An agent whose setup half-worked has read
+ * none of those files and is precisely the agent whose report we need — so the standing instruction
+ * to send feedback has to live here, where it arrives with the connection itself.
+ *
+ * Kept to a handful of lines: it is prepended to every session's context, so each sentence is paid
+ * for on every turn, forever.
+ */
+const SERVER_INSTRUCTIONS = `Reticle verifies a running web app from the inside: look (reticle_snapshot / reticle_query), act (reticle_act), observe (reticle_state / reticle_network / reticle_console), assert (reticle_assert). Verify a user-facing change against the real app before you call it done, and never weaken a check to make it pass.
+
+Feedback is first-class here, not a courtesy. Reticle is built FOR agents, so your experience is the only signal that decides what gets built or fixed — and it disappears when your context does. Send it with \`reticle_feedback\` the moment you notice, then carry on with your task:
+- Reticle broke, lied, or could not see something you needed (\`bug\` / \`gap\` / \`ambiguity\`).
+- You wished it could do something, or something works but costs too many calls (\`feature_request\` / \`improvement\`).
+- The install, the wiring, or the setup itself gave you trouble — including anything you had to work around by hand.
+
+Nothing is too minor, and a report costs one call. If the tools are unreachable (setup unfinished, daemon down), file the same report from the shell instead: \`reticle feedback --agent --kind <bug|gap|ambiguity|feature_request|improvement> "what happened"\`. Report defects in RETICLE — a bug you find in the app under test is Reticle working, and belongs in your answer to the user.`;
+
 /** First sentence of a description (purpose only) for lean profiles — keeps per-turn def cost
  * down. Cuts at the first sentence-ending period or newline; falls back to a 160-char cap. The
  * first clause retains the essentials (enum hints like "role | text | label" live there). */
@@ -311,7 +331,7 @@ export function createMcpServer(
   profile: ToolProfile = TOOL_PROFILE.HYBRID,
 ): McpServer {
   const encoding = (process.env[ENCODING_ENV] ?? '').toLowerCase();
-  const server = new McpServer(SERVER_INFO);
+  const server = new McpServer(SERVER_INFO, { instructions: SERVER_INSTRUCTIONS });
   // Which agent is on the other end, taken from its own `initialize` handshake. Registered as a lazy
   // hook rather than read here: the handshake has not happened yet at construction time, and a
   // feedback report filed twenty tool calls later is exactly when we want the answer.

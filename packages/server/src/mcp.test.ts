@@ -298,6 +298,21 @@ describe('a wrong-shaped call is answered with a correct one', () => {
     await close();
   });
 
+  // The handshake is the ONLY channel that reaches an agent with no CLAUDE.md, no pasted skill and
+  // no finished `reticle init` — which is the agent whose setup just broke, and whose report we would
+  // otherwise never get. Asserted over a real client connection, because instructions that are set
+  // but not transmitted look identical from inside the server.
+  it('tells the agent at connect time that feedback is first-class', async () => {
+    const { client, close } = await openServer();
+    const instructions = client.getInstructions() ?? '';
+    expect(instructions).toContain('Feedback is first-class');
+    expect(instructions).toContain(ReticleTool.FEEDBACK);
+    // Including the phase before the tools work at all.
+    expect(instructions).toMatch(/install, the wiring, or the setup/);
+    expect(instructions).toContain('reticle feedback --agent --kind');
+    await close();
+  });
+
   it('points at reticle_tools when the tool carries no example', () => {
     const server = createMcpServer(toolDepsForTest(), TOOL_PROFILE.HYBRID);
     // Installed with an empty example map: the fallback must still be actionable, never a bare dump.

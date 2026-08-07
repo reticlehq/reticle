@@ -103,6 +103,7 @@ Reticle verifies apps for AI agents, and for a long time it had no way to hear w
 | --- | --- | --- |
 | Your agent | Calls the `reticle_feedback` MCP tool — after a failure, **or to ask for a feature** | What it wrote: an analysis, or a request with the goal behind it, what would improve, and how it works around the gap today. Plus the model it is running, which it tells us because MCP cannot |
 | You | Run `reticle feedback [--rating 1-5] [--bug] "your words"` | Your words and your rating |
+| Your agent, before Reticle works | Runs `reticle feedback --agent --kind <bug\|gap\|ambiguity\|feature_request\|improvement> "what happened"` | The same words, filed from the shell. This exists for the phase where there is no daemon and no MCP tools — a failed `init`, half-finished wiring — which is the failure we are otherwise never told about |
 
 Agents are instructed, in the tool description itself, never to include app source, secrets, or user data — to describe the failure in their own words instead.
 
