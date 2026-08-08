@@ -85,6 +85,14 @@ export const READ_PATH = Object.freeze({
       Declaration.SILENT,
       'wraps sanitizeForTransport and so inherits its dropped report, and additionally collapses a throwing value to "[UNSERIALIZABLE]". Log/diagnostic use only',
     ],
+    isSensitiveKey: [
+      Declaration.NONE,
+      're-exported from @reticlehq/core — a predicate over a key name, reads and drops nothing',
+    ],
+    scrubKnownSecrets: [
+      Declaration.MARKER,
+      're-exported from @reticlehq/core — replaces a high-confidence secret shape in place with REDACTED_VALUE, so the returned text carries an in-band sentinel over any redacted span',
+    ],
   },
   'packages/core/src/state-select.ts': {
     PathSelection: [Declaration.NONE, 'the selection result type'],
@@ -154,23 +162,70 @@ export const READ_PATH = Object.freeze({
  * Two of these predate the registry. `Transport` and `RingBuffer` each already had a suite whose
  * whole subject was the declared gap, written when the drop was found by hand; pointing at them
  * beats copying them, and a registry that forced a duplicate would be teaching the wrong lesson. The
- * two `lossy-conformance` files cover the transforms that had no such suite.
+ * two `lossy-conformance` files cover the transforms that had no such suite. `serialization.test.ts`
+ * is a third: its "scrubKnownSecrets" describe block already asserts REDACTED_VALUE replaces a
+ * detected secret shape, so it is the existing fixture for that MARKER declaration, not a new one.
  */
 export const CONFORMANCE_TESTS = Object.freeze([
   'packages/core/src/lossy-conformance.test.ts',
   'packages/browser/src/security/lossy-conformance.test.ts',
+  'packages/browser/src/security/serialization.test.ts',
   'packages/browser/src/transport/transport.overflow-marker.test.ts',
   'packages/server/src/events/ring-buffer.test.ts',
 ]);
 
+const IDENTIFIER = '[A-Za-z_$][\\w$]*';
+const INLINE_EXPORT_PATTERN = new RegExp(
+  `^export\\s+(?:declare\\s+)?(?:abstract\\s+)?(?:async\\s+)?(?:function|const|let|var|class|interface|type|enum)\\s+(${IDENTIFIER})`,
+  'gm',
+);
+const DEFAULT_EXPORT_PATTERN = /^export\s+default\b/gm;
+// Matches `export { a, b as c };` and, deliberately, `export { a, b as c } from '...'` the same way:
+// a named re-export creates a binding under THIS module's name (`c`), which is exactly what the guard
+// tracks. `export * from '...'` cannot be resolved this way — see hasWildcardReexport below.
+const EXPORT_LIST_PATTERN = /^export\s*\{([\s\S]*?)\}/gm;
+const EXPORT_LIST_ENTRY_PATTERN = new RegExp(`^(${IDENTIFIER})(?:\\s+as\\s+(${IDENTIFIER}))?$`);
+
 /** Every top-level export name in a TypeScript source, read as text. */
 export function exportedNames(source) {
   const names = [];
-  const pattern =
-    /^export\s+(?:declare\s+)?(?:abstract\s+)?(?:async\s+)?(?:function|const|let|var|class|interface|type|enum)\s+([A-Za-z_$][\w$]*)/gm;
+
+  // Each pattern is a shared `g`-flag RegExp reused across calls, so `lastIndex` must be reset before
+  // every scan — otherwise a call on a later (or shorter) source silently resumes mid-string or finds
+  // nothing at all.
+  INLINE_EXPORT_PATTERN.lastIndex = 0;
   let match;
-  while ((match = pattern.exec(source)) !== null) names.push(match[1]);
+  while ((match = INLINE_EXPORT_PATTERN.exec(source)) !== null) names.push(match[1]);
+
+  // The external name of a default export is literally `default`, per the ES module spec
+  // (`import { default as x }` is equivalent to `import x`) — there is no better name to report,
+  // named or anonymous.
+  DEFAULT_EXPORT_PATTERN.lastIndex = 0;
+  while ((match = DEFAULT_EXPORT_PATTERN.exec(source)) !== null) names.push('default');
+
+  EXPORT_LIST_PATTERN.lastIndex = 0;
+  while ((match = EXPORT_LIST_PATTERN.exec(source)) !== null) {
+    for (const rawEntry of match[1].split(',')) {
+      const entry = rawEntry.trim();
+      if (entry.length === 0) continue;
+      const entryMatch = entry.match(EXPORT_LIST_ENTRY_PATTERN);
+      if (entryMatch === null) continue;
+      const [, localName, alias] = entryMatch;
+      names.push(alias ?? localName);
+    }
+  }
+
   return names;
+}
+
+// `export * from '...'` re-exports every name from another module. Nothing textual can resolve those
+// names without reading and evaluating that module too, so the guard does not try — it fails loudly
+// instead, per the issue's "resolve it or fail loudly, but do not let it pass silently" choice.
+const WILDCARD_REEXPORT_PATTERN = /^export\s*\*\s*(?:as\s+[A-Za-z_$][\w$]*\s+)?from\s+['"]/m;
+
+/** Whether a source contains a wildcard re-export the guard cannot resolve textually. */
+export function hasWildcardReexport(source) {
+  return WILDCARD_REEXPORT_PATTERN.test(source);
 }
 
 /**
@@ -186,6 +241,15 @@ export function findDrift(readPath, readSource, conformanceSources) {
     if (source === null) {
       problems.push({ file, reason: 'listed in the registry but not found on disk' });
       continue;
+    }
+    if (hasWildcardReexport(source)) {
+      problems.push({
+        file,
+        reason:
+          "contains a wildcard re-export (export * from '...'); the re-exported names cannot be " +
+          'resolved by reading this file alone — replace it with explicit named exports so each one ' +
+          'can be classified, or remove it from the read path',
+      });
     }
     const actual = exportedNames(source);
     for (const name of actual) {
@@ -230,6 +294,8 @@ function readFromDisk(file) {
 
 /** In-memory proof that the guard catches real drift — an unproven guard is its own false green. */
 function selfTest() {
+  const MISSING_FILE = Symbol('missing-file');
+  const WILDCARD_REEXPORT = Symbol('wildcard-reexport');
   const registry = {
     'fake/mod.ts': {
       declared: [Declaration.REPORT, 'returns a report'],
@@ -246,6 +312,11 @@ function selfTest() {
     'export function badStyle() {}',
     'export function untested() {}',
     'export function unclassified() {}',
+    'function reexportedLocal() {}',
+    'export { reexportedLocal };',
+    'export { declared as declaredAlias };',
+    'export default function () {}',
+    "export * from './helpers.js';",
   ].join('\n');
   const problems = findDrift(registry, (file) => (file === 'fake/mod.ts' ? source : null), [
     'expect(declared()).toBeDefined(); noReason(); badStyle();',
@@ -257,13 +328,24 @@ function selfTest() {
     ['noReason', 'a classification with no reason must be flagged'],
     ['badStyle', 'an unknown declaration style must be flagged'],
     ['untested', 'a lossy export with no conformance test must be flagged'],
-    [undefined, 'a registry file missing from disk must be flagged'],
+    [MISSING_FILE, 'a registry file missing from disk must be flagged'],
+    ['reexportedLocal', 'an export list entry (export { x }) must be classified'],
+    [
+      'declaredAlias',
+      'an export list alias (export { x as y }) must be classified by its exported name',
+    ],
+    ['default', 'export default must be classified'],
+    [WILDCARD_REEXPORT, 'a wildcard re-export (export * from) must fail loudly, not pass silently'],
   ];
-  const missing = expected.filter(([name]) =>
-    name === undefined
-      ? !problems.some((p) => p.file === 'fake/missing.ts')
-      : !problems.some((p) => p.name === name),
-  );
+  const missing = expected.filter(([marker]) => {
+    if (marker === MISSING_FILE) return !problems.some((p) => p.file === 'fake/missing.ts');
+    if (marker === WILDCARD_REEXPORT) {
+      return !problems.some(
+        (p) => p.file === 'fake/mod.ts' && p.name === undefined && p.reason.includes('wildcard'),
+      );
+    }
+    return !problems.some((p) => p.name === marker);
+  });
   if (missing.length > 0) {
     console.error('self-test FAILED — guard missed:', missing.map(([, why]) => why).join('; '));
     process.exit(1);
