@@ -47,18 +47,22 @@ export async function tryRealInput(
   args: Record<string, unknown>,
 ): Promise<RealActResult> {
   const provider = deps.realInput;
-  if (provider === undefined) return synthetic(); // real input not configured — no diagnostic
+  const inner = asRecord(args['args']);
+  const askedForNative = true === inner[NATIVE_INPUT_ARG];
+  if (provider === undefined) {
+    // Silent by default: with no provider EVERY action is synthetic, and a reason on all of them is
+    // noise on the most-used tool in the product. But an agent that passed native:true asked a
+    // question and got the opposite answer — reported from the field as a silent downgrade that cost
+    // real debugging time, because the tool description promises a reason is "never silent".
+    return askedForNative ? synthetic(InputModeReason.NOT_CONFIGURED) : synthetic();
+  }
   if (!isPointerAction(action)) return synthetic(InputModeReason.NOT_POINTER); // fill/type stay synthetic
 
-  const inner = asRecord(args['args']);
   // "Don't click, run the code": a click/dblclick runs the occlusion-honest SYNTHETIC path by default
   // even with a provider configured — no coordinate gesture to be intercepted by the HUD or missed
   // off-screen. Opt into a trusted native click with args.native:true (file pickers, clipboard,
   // isTrusted-gated handlers). hover/drag genuinely need native pointer state, so they stay real.
-  if (
-    (action === ActionType.CLICK || action === ActionType.DBLCLICK) &&
-    inner[NATIVE_INPUT_ARG] !== true
-  ) {
+  if ((action === ActionType.CLICK || action === ActionType.DBLCLICK) && !askedForNative) {
     return synthetic(InputModeReason.SYNTHETIC_CLICK_PREFERRED);
   }
 

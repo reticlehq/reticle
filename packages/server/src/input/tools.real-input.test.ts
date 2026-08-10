@@ -219,12 +219,36 @@ describe('reticle_act real-input routing', () => {
     expect(state.actCalls).toBe(1);
   });
 
-  it('uses synthetic when no provider is configured', async () => {
+  it('uses synthetic, and stays SILENT, when no provider is configured and none was asked for', async () => {
+    // Deliberately no reason. Without a provider every action is synthetic, and reticle_act is the
+    // most-called tool in the product — a reason on all of them is noise, not information.
     const state: FakeSessionState = { actCalls: 0, inspectRefs: [] };
     const res = await runAct(fakeDeps(undefined, state), { ref: 'e1', action: 'click' });
 
     expect(res.inputMode).toBe(InputMode.SYNTHETIC);
     expect(res.inputModeReason).toBeUndefined();
+    expect(state.actCalls).toBe(1);
+  });
+
+  /**
+   * Reported from the field: on a session with `realInputAvailable:false`, `native:true` came back
+   * `inputMode:"synthetic"` with no reason and no warning, and the agent could not tell "your
+   * request was honoured" from "this session will never do that". It spent the rest of the task
+   * probing `realInputAvailable` by hand. The tool description promises the opposite in as many
+   * words: "inputModeReason explains any real→synthetic choice so it is never silent."
+   *
+   * Silence stays the default (the test above). Asking explicitly is what earns an answer.
+   */
+  it('explains itself when native:true is asked for and no provider exists', async () => {
+    const state: FakeSessionState = { actCalls: 0, inspectRefs: [] };
+    const res = await runAct(fakeDeps(undefined, state), {
+      ref: 'e1',
+      action: 'click',
+      args: { native: true },
+    });
+
+    expect(res.inputMode).toBe(InputMode.SYNTHETIC);
+    expect(res.inputModeReason).toBe(InputModeReason.NOT_CONFIGURED);
     expect(state.actCalls).toBe(1);
   });
 

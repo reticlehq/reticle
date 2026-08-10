@@ -455,6 +455,14 @@ export const InputModeReason = {
   DRAG_TARGET_UNRESOLVED: 'drag-target-unresolved', // drag toRef missing or not locatable
   PROVIDER_DECLINED: 'provider-declined', // provider chose not to perform
   PROVIDER_ERROR: 'provider-error', // provider threw → fell back to synthetic
+  /**
+   * No real-input provider is configured at all, and the caller explicitly asked for one with
+   * `native:true`. Only emitted on that explicit ask: without a provider EVERY action is synthetic,
+   * so annotating all of them would put a reason on the most-used tool in the product for no gain.
+   * An agent that asked for a trusted click, though, has an expectation to correct — and this is
+   * permanent for the session, not a transient downgrade, so it should stop asking.
+   */
+  NOT_CONFIGURED: 'real-input-not-configured-for-this-session',
 } as const;
 export type InputModeReason = (typeof InputModeReason)[keyof typeof InputModeReason];
 
