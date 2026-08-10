@@ -301,6 +301,24 @@ describe('a wrong-shaped call is answered with a correct one', () => {
     await close();
   });
 
+  it('formats a missing session action without exposing the raw zod issue', async () => {
+    const { client, close } = await openServer();
+    const result = await client.callTool({
+      name: ReticleTool.SESSION,
+      arguments: {},
+    });
+    const failure = errorText(result);
+
+    expect(result.isError, 'the call must still be rejected').toBe(true);
+    expect(failure).toContain('Missing required parameter for reticle_session: action');
+    expect(failure).toContain('one of: tune, yield, end, resume, messages, review, narrate');
+    expect(failure).toContain('Nothing ran.');
+    expect(failure).toContain('A valid call looks like');
+    expect(failure, 'the internal zod issue must not reach the agent').not.toContain('"code"');
+    expect(failure).not.toContain('Input validation error');
+    await close();
+  });
+
   // The handshake is the ONLY channel that reaches an agent with no CLAUDE.md, no pasted skill and
   // no finished `reticle init` — which is the agent whose setup just broke, and whose report we would
   // otherwise never get. Asserted over a real client connection, because instructions that are set

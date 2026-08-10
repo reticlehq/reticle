@@ -2,6 +2,12 @@
 
 All notable changes to the **`@reticlehq/*`** packages are documented here (each entry notes the package it affects). The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **`@reticlehq/server` — invalid MCP arguments now produce a concise, actionable sentence** instead of exposing the validator's serialized issue array.
+
 ## [2.5.0] — 2026-08-09
 
 **One tool surface, an MCP server that stays up, and a long list of answers that were wrong.** Most of it was found by driving the shipped surface against live apps: a hostile-argument fuzz of all 48 tools, a nine-app fixture fleet under a new trace, and stress specs against every transport.

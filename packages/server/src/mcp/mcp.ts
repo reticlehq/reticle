@@ -322,6 +322,55 @@ function unknownKeys(args: unknown, allowed?: ReadonlySet<string>): string[] {
   return Object.keys(args as Record<string, unknown>).filter((key) => !allowed.has(key));
 }
 
+type ValidationIssue = {
+  code?: unknown;
+  expected?: unknown;
+  message?: unknown;
+  options?: unknown;
+  path?: unknown;
+  received?: unknown;
+};
+
+/** Turn the SDK's serialized zod issue array into a short, agent-actionable sentence. */
+function friendlyValidationDetail(detail: string, toolName: string): string {
+  const jsonStart = detail.indexOf('[');
+  if (-1 === jsonStart) return detail;
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(detail.slice(jsonStart));
+  } catch {
+    return detail;
+  }
+  if (!Array.isArray(parsed) || 0 === parsed.length) return detail;
+
+  const issue = parsed[0] as ValidationIssue;
+  const path = Array.isArray(issue.path) ? issue.path.map(String).join('.') : '';
+  if ('' === path) return detail;
+
+  const quotedOptions = [...detail.matchAll(/'([^']+)'/g)].map((match) => match[1]);
+  const expected =
+    Array.isArray(issue.options) && issue.options.every((option) => 'string' === typeof option)
+      ? ` (one of: ${issue.options.join(', ')})`
+      : 'string' === typeof issue.expected && issue.expected.includes("'")
+        ? ` (one of: ${issue.expected
+            .replaceAll("'", '')
+            .split('|')
+            .map((option) => option.trim())
+            .join(', ')})`
+        : quotedOptions.length > 0
+          ? ` (one of: ${quotedOptions.join(', ')})`
+          : '';
+  const missing =
+    ('invalid_type' === issue.code && undefined === issue.received) || 'Required' === issue.message;
+  if (missing) {
+    return `Missing required parameter for ${toolName}: ${path}${expected}. Nothing ran.`;
+  }
+
+  const message = 'string' === typeof issue.message ? issue.message : 'Invalid value';
+  return `Invalid parameter for ${toolName}: ${path} (${message}). Nothing ran.`;
+}
+
 export function installFriendlyArgErrors(
   server: McpServer,
   examples: Map<string, string>,
@@ -353,7 +402,7 @@ export function installFriendlyArgErrors(
     } catch (error) {
       // McpError.message already carries "MCP error -32602: "; re-wrapping would print it twice.
       const raw = error instanceof Error ? error.message : String(error);
-      const detail = raw.replace(/^MCP error -?\d+:\s*/, '');
+      const detail = friendlyValidationDetail(raw.replace(/^MCP error -?\d+:\s*/, ''), toolName);
       const example = examples.get(toolName);
       const help =
         example === undefined
