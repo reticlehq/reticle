@@ -8,7 +8,7 @@ import { dirname, join } from 'node:path';
 import { spanSync } from '../trace.js';
 import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { detect, Framework, type DetectInput } from './detect.js';
+import { detect, Framework, namesAPackageManager, type DetectInput } from './detect.js';
 import { wasMcpRegistered } from './mcp-registered.js';
 import { pickAstroHost } from './astro-host.js';
 import { workspaceParents } from './workspace-apps.js';
@@ -75,14 +75,23 @@ const LOCKFILE_NAMES = [
  * Resolve the lockfiles set used to pick the package manager. A lockfile in the project root wins;
  * otherwise we walk UP the directory tree (monorepos keep the lockfile at the workspace root, not in
  * each package) so `reticle init` in a sub-package suggests `pnpm add` instead of defaulting to `npm i`.
+ *
+ * The walk is skipped when the project has its own installed tree, because an INHERITED lockfile is
+ * weaker evidence than a `node_modules` sitting right there — the ancestor describes the workspace,
+ * the tree describes THIS package. Reported from the field: `init` in a `frontend/` app installed
+ * with npm emitted `pnpm add -D` off a repo-root `pnpm-lock.yaml`, pnpm was not on PATH, and the
+ * failed install took every downstream wiring step with it. A LOCAL lockfile still wins over the
+ * tree — it is a deliberate statement about this package, not an inheritance.
  */
 export function resolveLockfiles(
   rootFiles: ReadonlySet<string>,
   cwd: string,
   io: Pick<InitIo, 'exists'>,
+  nodeModulesMarkers: ReadonlySet<string> = new Set(),
 ): Set<string> {
   const set = new Set(rootFiles);
   if (LOCKFILE_NAMES.some((name) => set.has(name))) return set; // local lockfile is authoritative
+  if (namesAPackageManager(nodeModulesMarkers)) return set;
   let dir = cwd;
   for (let depth = 0; depth < 50; depth++) {
     for (const name of LOCKFILE_NAMES) {
@@ -262,13 +271,15 @@ function gatherPlanInput(options: InitOptions, io: InitIo, pkgRaw: string): Plan
   // Stable identity derived from the app's package.json name + root, so it survives port changes.
   const projectId = deriveProjectId(packageName(pkg), options.cwd);
   const rootFiles = new Set(io.rootFiles());
+  const nodeModulesMarkers = new Set(io.listFiles('node_modules'));
   const detectInput: DetectInput = {
     pkg: 'object' === typeof pkg && pkg !== null ? pkg : {},
     configFiles: rootFiles,
-    // Walk up for the lockfile so a monorepo sub-package picks the workspace's package manager.
-    lockfiles: resolveLockfiles(rootFiles, options.cwd, io),
+    // Walk up for the lockfile so a monorepo sub-package picks the workspace's package manager —
+    // unless this package's own installed tree already answers it, which outranks an inherited one.
+    lockfiles: resolveLockfiles(rootFiles, options.cwd, io, nodeModulesMarkers),
     // An already-installed tree names its own manager, which matters when no lockfile is committed.
-    nodeModulesMarkers: new Set(io.listFiles('node_modules')),
+    nodeModulesMarkers,
   };
   const detection = detect(detectInput);
 

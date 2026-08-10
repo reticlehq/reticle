@@ -123,6 +123,41 @@ describe('resolveLockfiles — package-manager detection in a monorepo', () => {
     const set = resolveLockfiles(new Set(['package.json']), '/x/y', io);
     expect([...set]).toEqual(['package.json']);
   });
+
+  /**
+   * Reported from the field: `init` in a `frontend/` app whose deps were installed with npm emitted
+   * `pnpm add -D ...` — because an ancestor `pnpm-lock.yaml` outranked the npm tree sitting right
+   * there. pnpm was not even on PATH, so the install step died and every downstream wiring step was
+   * skipped with it. `detectPackageManager`'s own docblock says an installed tree is the strongest
+   * evidence there is; the walk-up was quietly overruling it.
+   */
+  it('does not inherit an ancestor lockfile when the project has its own installed tree', () => {
+    const io = { exists: (p: string) => '/repo/pnpm-lock.yaml' === p.replace(/\\/g, '/') };
+    const set = resolveLockfiles(
+      new Set(['package.json']),
+      '/repo/frontend',
+      io,
+      new Set(['.package-lock.json']),
+    );
+    expect(set.has('pnpm-lock.yaml')).toBe(false);
+  });
+
+  it('still walks up when the sub-package has no installed tree of its own', () => {
+    const io = { exists: (p: string) => '/repo/pnpm-lock.yaml' === p.replace(/\\/g, '/') };
+    const set = resolveLockfiles(new Set(['package.json']), '/repo/frontend', io, new Set());
+    expect(set.has('pnpm-lock.yaml')).toBe(true);
+  });
+
+  it('a LOCAL lockfile still beats the local installed tree', () => {
+    const io = { exists: (): boolean => false };
+    const set = resolveLockfiles(
+      new Set(['pnpm-lock.yaml']),
+      '/repo/frontend',
+      io,
+      new Set(['.package-lock.json']),
+    );
+    expect(set.has('pnpm-lock.yaml')).toBe(true);
+  });
 });
 
 const OPTS: InitOptions = {
