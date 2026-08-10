@@ -178,6 +178,8 @@ const PNPM_LOCK_STUB = "lockfileVersion: '9.0'\n";
  *   - `initFrom` — the directory `init` is invoked from (default: the app's)
  *   - `seed`     — extra files written into the WORKDIR after scaffolding, before install
  *   - `hidePnpm` — make `pnpm` unusable for the `init` call only
+ *   - `dropLocalLockfile` — delete the app's own lockfile after install, so package-manager
+ *     detection has to walk UP for one instead of short-circuiting on it
  */
 const SCAFFOLDS = [
   {
@@ -246,7 +248,9 @@ const SCAFFOLDS = [
     //      one a user hits without reading anything, so it is the one wired up).
     //   3. package-manager precedence: an ancestor `pnpm-lock.yaml` must NOT beat the npm-installed
     //      tree sitting in `frontend/`. With pnpm unusable, a regression here is not a cosmetic
-    //      mis-detection — `pnpm add -D` simply cannot run, and the install step goes ⚠.
+    //      mis-detection — `pnpm add -D` simply cannot run, and the install step goes ⚠. This one
+    //      only becomes reachable together with `dropLocalLockfile`: with the app's own lockfile
+    //      present, detection short-circuits on it and the ancestor is never read at all.
     //   4. and a failed install must not silently skip the downstream wiring, which the baseline
     //      diff catches: the steps after it would vanish from the plan.
     what: 'monorepo root, app in frontend/, inherited pnpm lockfile, no pnpm on PATH',
@@ -254,6 +258,7 @@ const SCAFFOLDS = [
     initFrom: '.',
     seed: { [PNPM_LOCK]: PNPM_LOCK_STUB },
     hidePnpm: true,
+    dropLocalLockfile: true,
     create: [
       'npx',
       [
@@ -409,6 +414,15 @@ async function driveScaffold(scaffold, index) {
     // the gate would measure the published SDK while reporting on local changes.
     writeFileSync(join(app, '.npmrc'), `@reticlehq:registry=${REGISTRY}\n`);
     run('npm', ['install', '--no-audit', '--no-fund'], app);
+    // The lockfile npm just wrote is the reason the inherited-lockfile trap was unreachable here.
+    // `resolveLockfiles` returns the moment it sees a LOCAL lockfile — "local is authoritative" — so
+    // an ancestor `pnpm-lock.yaml` is never consulted and a scaffold that seeds one passes whether
+    // precedence is right, wrong, or the ancestor file is absent entirely. Deleting it leaves exactly
+    // the state the user was in: no local lockfile, an npm-installed `node_modules` (whose
+    // `.package-lock.json` marker is what detection reads), and a pnpm lockfile one directory up.
+    // init writes its own package-lock.json back when it installs, so the registry check below still
+    // has one to read.
+    if (true === scaffold.dropLocalLockfile) rmSync(join(app, 'package-lock.json'), { force: true });
 
     // ── 3. the thing under test ────────────────────────────────────────────────────────────────
     // `--no-mcp` for the reason the fixtures gate uses it: registering the MCP server edits global
