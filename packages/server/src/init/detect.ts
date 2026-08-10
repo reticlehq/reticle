@@ -115,6 +115,15 @@ function packageManagerFromNodeModules(markers: ReadonlySet<string>): PackageMan
   return undefined;
 }
 
+/**
+ * Whether an installed tree identifies the manager that built it. Callers use this to decide whether
+ * they still need weaker evidence — see `resolveLockfiles`, which stops inheriting an ancestor
+ * lockfile once the project's own tree can answer the question.
+ */
+export function namesAPackageManager(markers: ReadonlySet<string>): boolean {
+  return packageManagerFromNodeModules(markers) !== undefined;
+}
+
 export function detectPackageManager(
   lockfiles: ReadonlySet<string>,
   nodeModulesMarkers: ReadonlySet<string>,
