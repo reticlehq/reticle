@@ -12,17 +12,21 @@
 // is slower and cannot block a PR. Conflating the two gives a gate too slow to block and too shallow
 // to trust.
 //
-// Three scaffolds, because `init` has three genuinely different paths into an app, and the third is
-// the one that matters most: a Pages Router app has no `app/` root layout to patch, so connect has
+// Four scaffolds, because `init` has four genuinely different paths into an app. The third matters
+// most for framework reasons: a Pages Router app has no `app/` root layout to patch, so connect has
 // to mount through `pages/_app` — and that is the path that once did nothing at all, silently.
+//
+// The fourth is a different axis entirely: the first three are all the same SHAPE — a single-app root
+// with `init` run inside it — and that sameness is what made this gate blind to four init defects one
+// user hit in eight minutes. `monorepo-subdir` is the shape those live in.
 //
 //   pnpm gate:install                 # all scaffolds
 //   node apps/e2e/install-gate.mjs --only next-pages-router [--keep]
 //   pnpm gate:install:self-test       # negative control: every scaffold must go RED
 import { execFileSync, spawn } from 'node:child_process';
-import { mkdtempSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+import { delimiter, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as sleep } from 'node:timers/promises';
 import {
@@ -159,9 +163,21 @@ async function startLocalRegistry() {
   } };
 }
 
+/** Where a scaffold's create command puts the app, relative to the workdir. */
+const DEFAULT_APP_DIR = 'app';
+/** A lockfile only has to EXIST to pick a package manager — nothing here parses it. */
+const PNPM_LOCK = 'pnpm-lock.yaml';
+const PNPM_LOCK_STUB = "lockfileVersion: '9.0'\n";
+
 /**
  * One per DISTINCT init path. Not one per framework anyone can name — a scaffold that exercises a
  * path another scaffold already covers costs two minutes a run and proves nothing new.
+ *
+ * Optional fields, all defaulting to the single-app shape the first three use:
+ *   - `appDir`   — where the create command puts the app (default `app/`)
+ *   - `initFrom` — the directory `init` is invoked from (default: the app's)
+ *   - `seed`     — extra files written into the WORKDIR after scaffolding, before install
+ *   - `hidePnpm` — make `pnpm` unusable for the `init` call only
  */
 const SCAFFOLDS = [
   {
@@ -215,7 +231,66 @@ const SCAFFOLDS = [
     ],
     dev: (port) => ['npm', ['run', 'dev', '--', '-p', String(port)]],
   },
+  {
+    id: 'monorepo-subdir',
+    // Not a fourth flavour of the same shape — the first genuinely different one. The other three are
+    // single-app roots with `init` run inside the app, and that shape is why this gate was blind to
+    // all FOUR init defects one user hit in eight minutes on 2026-08-10: the app was in `frontend/`,
+    // the repo root had no package.json, and the root carried a pnpm lockfile the app did not use.
+    //
+    // Four things are only reachable here:
+    //   1. discovery — `init` from a root with no manifest has to FIND `frontend/` (it used to bail
+    //      with "No package.json found" before discovery ever ran).
+    //   2. the same bail made `--app frontend` unreachable too, i.e. the documented workaround for
+    //      (1) failed the same way (one run can only take one of these two paths; discovery is the
+    //      one a user hits without reading anything, so it is the one wired up).
+    //   3. package-manager precedence: an ancestor `pnpm-lock.yaml` must NOT beat the npm-installed
+    //      tree sitting in `frontend/`. With pnpm unusable, a regression here is not a cosmetic
+    //      mis-detection — `pnpm add -D` simply cannot run, and the install step goes ⚠.
+    //   4. and a failed install must not silently skip the downstream wiring, which the baseline
+    //      diff catches: the steps after it would vanish from the plan.
+    what: 'monorepo root, app in frontend/, inherited pnpm lockfile, no pnpm on PATH',
+    appDir: 'frontend',
+    initFrom: '.',
+    seed: { [PNPM_LOCK]: PNPM_LOCK_STUB },
+    hidePnpm: true,
+    create: [
+      'npx',
+      [
+        'create-next-app@latest',
+        'frontend',
+        '--ts',
+        '--app',
+        '--no-src-dir',
+        '--no-tailwind',
+        '--no-eslint',
+        '--import-alias',
+        '@/*',
+        '--use-npm',
+        '--yes',
+      ],
+    ],
+    dev: (port) => ['npm', ['run', 'dev', '--', '-p', String(port)]],
+  },
 ];
+
+/**
+ * A PATH on which `pnpm` cannot run.
+ *
+ * SHADOWED, not stripped. Dropping the PATH entry that holds pnpm is the obvious move and it is a
+ * trap: on plenty of machines (the maintainer's included) `pnpm`, `npm` and `npx` share one bin
+ * directory, so removing it takes the package manager the scaffold actually needs with it and the
+ * scaffold fails for a reason that has nothing to do with the thing under test. A stub that exits
+ * 127 the way an absent binary does is indistinguishable to `init`, which never probes for pnpm — it
+ * just runs it — and leaves everything else on PATH alone.
+ */
+function pathWithoutPnpm(workdir) {
+  const binDir = join(workdir, '.gate-no-pnpm');
+  mkdirSync(binDir, { recursive: true });
+  const stub = join(binDir, 'pnpm');
+  writeFileSync(stub, '#!/bin/sh\necho "pnpm: command not found" >&2\nexit 127\n', { mode: 0o755 });
+  return `${binDir}${delimiter}${process.env.PATH ?? ''}`;
+}
 
 const run = (cmd, args, cwd, extraEnv = {}) =>
   execFileSync(cmd, args, {
@@ -301,7 +376,9 @@ async function driveScaffold(scaffold, index) {
   await freePortSafely(appPort);
 
   const workdir = mkdtempSync(join(tmpdir(), `reticle-install-${scaffold.id}-`));
-  const app = join(workdir, 'app');
+  const app = join(workdir, scaffold.appDir ?? DEFAULT_APP_DIR);
+  // Where `init` is invoked. Defaults to the app, which is the only shape that used to exist here.
+  const initFrom = scaffold.initFrom === undefined ? app : join(workdir, scaffold.initFrom);
   let daemon;
   let dev;
 
@@ -309,6 +386,11 @@ async function driveScaffold(scaffold, index) {
     // ── 1. a surface that has never seen Reticle ──────────────────────────────────────────────
     note('scaffolding…');
     run(scaffold.create[0], scaffold.create[1], workdir);
+    // Seeded AFTER the create command, never before: `create-next-app` reads the surrounding
+    // directory to pick a package manager, and a lockfile planted first would change what it builds.
+    for (const [rel, content] of Object.entries(scaffold.seed ?? {})) {
+      writeFileSync(join(workdir, rel), content);
+    }
     const pkgPath = join(app, 'package.json');
     const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'));
     chk(
@@ -342,8 +424,11 @@ async function driveScaffold(scaffold, index) {
       report = run(
         'node',
         [CLI, 'init', '--port', String(SELF_TEST ? bridgePort + 1 : bridgePort), '--no-mcp'],
-        app,
-        { npm_config_registry: REGISTRY },
+        initFrom,
+        {
+          npm_config_registry: REGISTRY,
+          ...(true === scaffold.hidePnpm ? { PATH: pathWithoutPnpm(workdir) } : {}),
+        },
       );
     } catch (err) {
       initExit = err.status ?? 1;

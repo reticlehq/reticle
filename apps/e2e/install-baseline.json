@@ -21,5 +21,13 @@
     "✓ ReticleDev component → components/reticle-dev.tsx",
     "✓ Next config (withReticle) → next.config.ts",
     "✓ Mount ReticleDev → pages/_app.tsx"
+  ],
+  "monorepo-subdir": [
+    "– MCP server (global) → global (claude user scope)",
+    "✓ Install dependencies → package.json",
+    "✓ Reticle config → .reticle.json",
+    "✓ ReticleDev component → app/reticle-dev.tsx",
+    "✓ Next config (withReticle) → next.config.ts",
+    "✓ Mount ReticleDev → app/layout.tsx"
   ]
 }
