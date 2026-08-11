@@ -43,8 +43,7 @@ export class AppearedText {
     if (0 === this.#seen.size) return {};
     const joined = [...this.#seen].join(JOIN);
     return {
-      appeared:
-        joined.length > APPEARED_MAX ? `${joined.slice(0, APPEARED_MAX)}…` : joined,
+      appeared: joined.length > APPEARED_MAX ? `${joined.slice(0, APPEARED_MAX)}…` : joined,
     };
   }
 
