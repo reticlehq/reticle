@@ -229,7 +229,11 @@ describe('runInit', () => {
       'frontend/app/layout.tsx': 'export default function L({ children }) { return children; }\n',
     });
     runInit(OPTS, io);
-    const printed = io.lines.join('\n');
+    // Normalised for the reason this file's own harness is: the redirect builds the path with
+    // `join()`, which yields backslashes on Windows, so a literal POSIX comparison passes
+    // everywhere and fails on the platform that is two thirds of our users. CI caught exactly that
+    // on the first version of this test.
+    const printed = io.lines.join('\n').replace(/\\/g, '/');
     expect(printed).toContain('frontend');
     expect(
       printed,
