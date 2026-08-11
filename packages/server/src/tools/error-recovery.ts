@@ -309,9 +309,14 @@ export function zodArrayAsSentence(message: string): string {
  * through to the generic branch and came back as "may be a defect in Reticle" — worse than the dump
  * it replaced, because it also asks for a bug report about the agent's own malformed call. This repo
  * has now made that mistake twice; the second time a test caught it before CI did.
+ *
+ * Widened a THIRD time for PR #182, which formats the MCP SDK's validation error at the argument
+ * boundary — "Missing required parameter for reticle_session: action (one of: …)". That is better
+ * prose than the field-level sentence below (it names the TOOL and the allowed VALUES) and it was
+ * authored before this formatter existed, so it must not be punished for arriving first.
  */
 const ARGUMENT_REJECTION =
-  /Unrecognized key|unrecognized_keys|invalid_type|did not parse|unknown field|: Required\b|Invalid arguments for tool|Unknown parameters? for|^Required |Expected \w+, received/i;
+  /Unrecognized key|unrecognized_keys|invalid_type|did not parse|unknown field|: Required\b|Missing required parameter|Invalid parameter for|Invalid arguments for tool|Unknown parameters? for|^Required |Expected \w+, received/i;
 
 /**
  * What to say instead of asking for a bug report. The schema already stated the problem precisely;

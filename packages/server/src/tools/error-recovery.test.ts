@@ -585,3 +585,44 @@ describe('a serialized zod array is rendered as a sentence', () => {
     expect(buildErrorPayload(notIssues).error).toBe(notIssues);
   });
 });
+
+/**
+ * A validation sentence produced UPSTREAM must not be read as an unrecognized Reticle failure.
+ *
+ * `ARGUMENT_REJECTION` keys on the shapes our validators produce, and it has now been widened twice
+ * for the same reason: every time a layer replaces a raw zod dump with prose, the codes this pattern
+ * matched (`invalid_type`, `unrecognized_keys`) disappear with it, and the rejection falls through
+ * to "may be a defect in Reticle" — which asks a contributor for a bug report about the agent's own
+ * malformed call.
+ *
+ * Third time. The trigger here is PR #182, which formats the MCP SDK's validation error at the arg
+ * boundary into "Missing required parameter for reticle_session: action (one of: …). Nothing ran."
+ * That is strictly better prose than the field-level sentence produced downstream — it names the
+ * TOOL and the allowed VALUES — and it was authored before the downstream formatter existed. It
+ * should not be punished for arriving first.
+ */
+describe('an upstream validation sentence is still the caller to fix', () => {
+  const MISSING =
+    'Missing required parameter for reticle_session: action ' +
+    '(one of: tune, yield, end, resume, messages, review, narrate). Nothing ran.';
+  const INVALID = 'Invalid parameter for reticle_act: action (Invalid enum value). Nothing ran.';
+
+  it('a missing-parameter sentence gets the schema recovery, not a bug-report ask', () => {
+    const payload = buildErrorPayload(MISSING);
+    expect(String(payload.recovery)).toContain("did not match the tool's schema");
+    expect(JSON.stringify(payload)).not.toMatch(/defect in Reticle|report this/i);
+  });
+
+  it('an invalid-parameter sentence is treated the same way', () => {
+    const payload = buildErrorPayload(INVALID);
+    expect(String(payload.recovery)).toContain("did not match the tool's schema");
+    expect(JSON.stringify(payload)).not.toMatch(/defect in Reticle/i);
+  });
+
+  it('still asks for a report on an error it genuinely does not recognize', () => {
+    // The control. Widening the pattern until everything looks like the caller's fault would
+    // silence the feedback channel this project depends on.
+    const payload = buildErrorPayload('the presenter pool exploded');
+    expect(JSON.stringify(payload)).toMatch(/defect in Reticle/i);
+  });
+});
