@@ -30,6 +30,13 @@ interface NoSessionFacts {
   listening: readonly number[];
   /** The port this daemon is on — half of the mismatch the old message asked about. */
   port: number;
+  /**
+   * This daemon has reaped at least one EXPIRED pooled lease.
+   *
+   * Deliberately not "the session that just vanished was that lease" — nothing knows that. It is
+   * evidence, not proof, and the message below is worded accordingly.
+   */
+  leaseExpired?: boolean;
 }
 
 /**
@@ -86,6 +93,22 @@ export function diagnoseNoSession(facts: NoSessionFacts): string {
   const ports = listening.join(', ');
 
   if (everConnected) {
+    // A reaped lease first, because it is the one cause we have POSITIVE evidence for. Reported
+    // from the field (#157): an aged-out lease produced "the tab was closed … ask the human to
+    // reopen the app", which is wrong on every clause — there is no human tab, and the recovery it
+    // names is unavailable to the caller while the one that works goes unmentioned. The reporter
+    // went looking for a port mismatch. Hedged rather than swapped: a human tab may ALSO have
+    // closed, and this does not know which session went.
+    if (true === facts.leaseExpired) {
+      return (
+        'no browser session connected — but one WAS connected to this daemon earlier, so the wiring ' +
+        'is correct. This daemon has expired at least one pooled lease, so the likeliest cause is ' +
+        'that a lease you were using aged out; a lease is a headless context, not a human tab, and ' +
+        'it takes its cookies with it (so an authenticated app needs signing in again). Re-acquire ' +
+        'with reticle_lease {action:"acquire", url} and carry on. If you were driving a human tab ' +
+        `instead, it went away — reopen it or run \`reticle open\`. ${RETRY}`
+      );
+    }
     return (
       'no browser session connected — but one WAS connected to this daemon earlier, so the wiring ' +
       'is correct. The tab was closed, navigated away, or hard-reloaded. Ask the human to reopen ' +

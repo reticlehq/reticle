@@ -85,6 +85,8 @@ export class BrowserPool {
   #browser: PooledBrowser | undefined;
   #launching: Promise<PooledBrowser> | undefined;
   #closed = false;
+  /** Leases reclaimed for going stale — see reapedLeaseCount(). */
+  #reapedLeases = 0;
   readonly #active = new Map<string, ActiveLease>();
   /**
    * Slots claimed-or-active — the real concurrency gate. Incremented SYNCHRONOUSLY the instant an
@@ -148,7 +150,20 @@ export class BrowserPool {
       .filter(([, lease]) => now - lease.touchedAt > this.#ttl)
       .map(([sessionId]) => sessionId);
     for (const sessionId of expired) await this.#release(sessionId);
+    this.#reapedLeases += expired.length;
     return expired;
+  }
+
+  /**
+   * How many leases this pool has reclaimed for going stale.
+   *
+   * Read by the no-session diagnosis: an aged-out lease used to be reported as "the tab was closed
+   * … ask the human to reopen the app", which is wrong on every clause and sent one reporter looking
+   * for a port mismatch (#157). A count is enough — the message says "likeliest", not "certainly",
+   * because nothing here knows WHICH session the caller just lost.
+   */
+  reapedLeaseCount(): number {
+    return this.#reapedLeases;
   }
 
   /**
