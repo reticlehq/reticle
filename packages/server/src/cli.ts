@@ -43,7 +43,12 @@ import {
   proxyLog,
   setProxyLogPort,
 } from './mcp/mcp-proxy.js';
-import { installDaemonResilience, installProxyResilience } from './daemon/daemon-resilience.js';
+import {
+  installDaemonResilience,
+  installProxyResilience,
+  recordExitReason,
+  DaemonExitReason,
+} from './daemon/daemon-resilience.js';
 import { IdleShutdown, resolveIdleShutdownMs, resolveIdleCheckMs } from './daemon/idle-shutdown.js';
 import { DaemonHeartbeat, resolveHeartbeatMs } from './daemon/heartbeat.js';
 import { everServedToolCall } from './daemon/daemon-usefulness.js';
@@ -498,7 +503,11 @@ function handleDaemonInner(parsed: {
         removePid(parsed.port);
         process.exit(1);
       });
-      const shutdown = (): void => {
+      const shutdown = (reason: DaemonExitReason): void => {
+        // Recorded BEFORE the async chain: `installExitTrace` reads it when Node is on its way out,
+        // which is after everything below has run. Without it the exit line says `code: 0` and a
+        // reader cannot tell a tidy stop from the bridge disappearing — see #123.
+        recordExitReason(reason);
         // Awaited before the close/exit chain: `process.exit(0)` kills an in-flight POST, and this is
         // the one event carrying the whole session. A failed send resolves anyway (emit swallows its
         // own errors), so this can delay the exit by at most the send timeout, never prevent it.
@@ -516,8 +525,10 @@ function handleDaemonInner(parsed: {
             process.exit(1);
           });
       };
-      process.on('SIGTERM', shutdown);
-      process.on('SIGINT', shutdown);
+      // Wrapped rather than passed directly: a signal handler receives the signal name as its first
+      // argument, which would otherwise arrive as the reason.
+      process.on('SIGTERM', () => shutdown(DaemonExitReason.SIGNAL));
+      process.on('SIGINT', () => shutdown(DaemonExitReason.SIGNAL));
       // Self-shut-down when idle so a detached daemon (and any headless Chromium it launched) never
       // lingers on the user's machine after the editor closes. Reuses the same clean shutdown path.
       const attachedGraceEnv = process.env[ReticleEnv.IDLE_ATTACHED];
@@ -534,7 +545,7 @@ function handleDaemonInner(parsed: {
           : { attachedGraceMs: resolveIdleShutdownMs(attachedGraceEnv) }),
         onShutdown: () => {
           log('reticle_daemon_idle_exit', { port: parsed.port });
-          shutdown();
+          shutdown(DaemonExitReason.IDLE);
         },
       });
       idleShutdown.start();

@@ -19,18 +19,35 @@ export const NO_GEOMETRY: ClickGeometry = {
  * `defaultPrevented` so the probe is unchanged. Focus only moves for focusable targets (tabIndex>=0),
  * so a plain <div> click still reports focusMoved=null.
  */
-export function fireClickSequence(el: HTMLElement): boolean {
+export async function fireClickSequence(
+  el: HTMLElement,
+  hold?: { ms: number; sleep: (ms: number) => Promise<void>; now: () => number },
+): Promise<{ prevented: boolean; heldMs: number }> {
   const doc = el.ownerDocument;
   const from: EventTarget = doc.activeElement ?? doc.body;
   firePointer(el, 'pointerdown', from);
   el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
   if (el.tabIndex >= 0 && 'function' === typeof el.focus) el.focus();
+  // The gap that makes hold-to-confirm driveable. Everything between down and up used to be
+  // synchronous, so a control whose contract is "the button is down for N ms" could not be
+  // expressed at all — the reported case cancelled its own confirm on the mouseup that arrived 7ms
+  // later. `drag` already splits the pair across a gap; this is that shape with a timer.
+  //
+  // The ACHIEVED hold is measured and returned rather than echoed back: `holdMs: 1200` against a
+  // 1200ms animation is a race by construction, and a caller needs to tell "held 1200" from
+  // "held 1204". A backgrounded tab throttles timers, so this can legitimately overshoot by a lot.
+  let heldMs = 0;
+  if (hold !== undefined && hold.ms > 0) {
+    const startedAt = hold.now();
+    await hold.sleep(hold.ms);
+    heldMs = hold.now() - startedAt;
+  }
   firePointer(el, 'pointerup', from);
   el.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
   const notPrevented = el.dispatchEvent(
     new MouseEvent('click', { bubbles: true, cancelable: true }),
   );
-  return !notPrevented;
+  return { prevented: !notPrevented, heldMs };
 }
 
 /** A box has layout we can reason about (jsdom returns an all-zero box — nothing to hit-test). */
