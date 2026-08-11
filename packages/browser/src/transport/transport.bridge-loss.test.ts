@@ -26,7 +26,9 @@ class FakeWebSocket {
   send(text: string): void {
     this.sent.push(text);
   }
+  /** Idempotent, like the real thing: a WebSocket fires `onclose` ONCE. */
   close(): void {
+    if (3 === this.readyState) return;
     this.readyState = 3;
     this.onclose?.({ code: 1006, reason: '' });
   }
@@ -47,10 +49,21 @@ const hello = (): HelloMessage => ({
 });
 
 let now = 0;
+/**
+ * Retries the transport scheduled, run deliberately.
+ *
+ * `vi.advanceTimersByTime` drives nothing here: the transport schedules on `nativeSetTimeout`, bound
+ * to the real timer at module load so a frozen `reticle_clock` cannot deadlock the SDK. Without
+ * running these, the loops below re-closed one DEAD socket and only looked like repeated
+ * reconnects — the first test's own comment says "drive several failed reconnects", which is
+ * exactly what it believed and exactly what was not happening.
+ */
+const pending: (() => void)[] = [];
 
 beforeEach(() => {
   FakeWebSocket.instances = [];
   now = 0;
+  pending.length = 0;
   vi.useFakeTimers();
   (globalThis as unknown as { WebSocket: unknown }).WebSocket = FakeWebSocket;
 });
@@ -67,6 +80,7 @@ describe('transport bridge-loss self-end', () => {
       hello,
       handleCommand: () => Promise.resolve({ ok: true }),
       now: () => now,
+      schedule: (fn) => void pending.push(fn),
       onConnectionLost: () => {
         lost += 1;
       },
@@ -78,7 +92,7 @@ describe('transport bridge-loss self-end', () => {
     for (let i = 0; i < 20; i += 1) {
       FakeWebSocket.instances.at(-1)?.close();
       now += 1000;
-      vi.advanceTimersByTime(1000);
+      pending.shift()?.(); // the retry runs and opens a NEW socket to fail next round
     }
 
     expect(lost).toBeGreaterThanOrEqual(1);
@@ -90,6 +104,7 @@ describe('transport bridge-loss self-end', () => {
       hello,
       handleCommand: () => Promise.resolve({ ok: true }),
       now: () => now,
+      schedule: (fn) => void pending.push(fn),
     });
     t.connect();
     const ws = FakeWebSocket.instances.at(-1);
@@ -111,6 +126,7 @@ describe('transport bridge-loss self-end', () => {
       hello,
       handleCommand: () => Promise.resolve({ ok: true }),
       now: () => now,
+      schedule: (fn) => void pending.push(fn),
       onConnectionLost: () => {
         lost += 1;
       },
@@ -119,7 +135,7 @@ describe('transport bridge-loss self-end', () => {
 
     FakeWebSocket.instances.at(-1)?.close(); // brief blip
     now += 1000;
-    vi.advanceTimersByTime(1000);
+    pending.shift()?.();
     FakeWebSocket.instances.at(-1)?.open(); // reconnected well within the window
 
     expect(lost).toBe(0);
@@ -132,6 +148,7 @@ describe('transport bridge-loss self-end', () => {
       hello,
       handleCommand: () => Promise.resolve({ ok: true }),
       now: () => now,
+      schedule: (fn) => void pending.push(fn),
       onConnectionLost: () => {
         lost += 1;
       },
@@ -141,7 +158,7 @@ describe('transport bridge-loss self-end', () => {
     for (let i = 0; i < 40; i += 1) {
       FakeWebSocket.instances.at(-1)?.close();
       now += 1000;
-      vi.advanceTimersByTime(1000);
+      pending.shift()?.(); // the retry runs and opens a NEW socket to fail next round
     }
 
     expect(lost).toBe(1);

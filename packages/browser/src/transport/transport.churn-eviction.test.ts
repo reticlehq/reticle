@@ -24,7 +24,9 @@ class FakeWebSocket {
   send(text: string): void {
     this.sent.push(text);
   }
+  /** Idempotent, like the real thing: a WebSocket fires `onclose` ONCE. */
   close(): void {
+    if (3 === this.readyState) return;
     this.readyState = 3;
     this.onclose?.({ code: 1006, reason: '' });
   }
