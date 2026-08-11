@@ -11,6 +11,7 @@ import {
   CRA_DEV_MODULE_IMPORT,
   CRA_DEV_MODULE_PATH,
   CRA_ENV_PATH,
+  CRA_TOKEN_PER_MACHINE_NOTICE,
   TOKEN_VAR,
   craDevModuleFile,
   craEnvPatch,
@@ -276,6 +277,14 @@ export function craSteps(input: PlanInput): Step[] {
       // has to run init once or their clone is dead with no explanation.
       detail: `set ${TOKEN_VAR} (the only channel CRA inlines) — ${CRA_ENV_PATH} is gitignored, so each teammate must run \`reticle init\` on their own machine`,
       write: { path: CRA_ENV_PATH, content: env },
+    });
+    // Beside the write, not inside it. A ✓ line is one SKILL.md tells the reader to skip, and this
+    // is the fact that decides whether the install works for anyone but the person running it.
+    steps.push({
+      title: 'Pairing token is per-machine',
+      target: CRA_ENV_PATH,
+      status: StepStatus.NOTICE,
+      detail: CRA_TOKEN_PER_MACHINE_NOTICE,
     });
   } else if ('' === token) {
     // No daemon has ever run here, so there is no token to inline. Omitting the step entirely made

@@ -35,6 +35,24 @@ export const CRA_TOKEN_MISSING_NOTE =
   `The pairing token is per-machine and ${CRA_ENV_PATH} is gitignored by CRA's template, ` +
   'so it does not survive a clone. Run `npx reticle init` in this project to write it for this machine.';
 
+/**
+ * Said as its own NOTICE line, beside the write — not inside it.
+ *
+ * The caveat has always been in the write step's `detail`, and the write step renders `[✓]`. But
+ * `SKILL.md` tells whoever reads the report: *"If every line is `✓`, `·` or `–`, skip to Step 4 and
+ * validate."* So the one fact that makes this install conditional sat in the one place the reading
+ * protocol says to ignore — which is exactly how it was reported to us as "4 OK marks and no
+ * warning". The words were on screen; the reader was following instructions.
+ *
+ * It cannot simply be promoted: `run.ts` only writes steps whose status is APPLY, so demoting the
+ * token step to NOTICE would stop it writing the token and break the install outright.
+ */
+export const CRA_TOKEN_PER_MACHINE_NOTICE =
+  `${CRA_ENV_PATH} is in CRA's own .gitignore, so the token just written does not travel. ` +
+  'It works on THIS machine and nowhere else: a teammate cloning the repo, CI, or a container ' +
+  'gets an app that boots, never pairs, and reports it only in the browser console. ' +
+  'Each developer runs `npx reticle init` once locally.';
+
 /** Add the import after the last existing one, or null when it is already present. */
 export function craImportPatch(source: string): string | null {
   if (source.includes(CRA_DEV_MODULE_IMPORT)) return null;

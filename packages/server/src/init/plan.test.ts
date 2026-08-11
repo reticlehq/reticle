@@ -340,6 +340,51 @@ describe('buildPlan — CRA pairing token', () => {
     const plan = craPlan({ pairingToken: 'tok-1', craEnv: 'REACT_APP_RETICLE_TOKEN=tok-1\n' });
     expect(undefined).toBe(maybeStep(plan, TOKEN_STEP));
   });
+
+  /**
+   * The caveat was already written — and attached to a line the reader is told to skip.
+   *
+   * `SKILL.md` instructs whoever reads the report: *"If every line is `✓`, `·` or `–`, skip to Step 4
+   * and validate. The manual sections below exist for the `⚠` lines only."* The gitignore warning
+   * lives in the `detail` of an APPLY step, which renders `[✓]`. So the install is documented as
+   * conditional in a place the documented reading protocol says to ignore.
+   *
+   * That is why the report reached us as "4 OK marks and no warning": the words were on screen and
+   * the reader was following instructions.
+   *
+   * The step itself must STAY `APPLY` — `run.ts:603` is `if (s.status !== StepStatus.APPLY) continue`,
+   * so a NOTICE step never writes, and demoting it would silently stop writing the token and break
+   * the install outright. The fix is a SEPARATE notice beside it, the same shape
+   * `unverifiedUiLibraryNote` already uses.
+   */
+  it('raises a NOTICE beside the write, because a caveat on a ✓ line is one the reader is told to skip', () => {
+    const plan = craPlan({ pairingToken: 'tok-1' });
+    const written = maybeStep(plan, TOKEN_STEP);
+    expect(StepStatus.APPLY, 'the step must still WRITE — only APPLY steps do').toBe(
+      written?.status,
+    );
+
+    const notice = plan.steps.find((s) => s.status === StepStatus.NOTICE);
+    expect(
+      notice,
+      'nothing tells a reader who skips ✓ lines that this install is per-machine',
+    ).toBeDefined();
+    expect(notice?.detail).toContain('gitignore');
+    expect(notice?.detail, 'name the consequence: a fresh clone cannot pair').toMatch(
+      /clone|teammate|CI/i,
+    );
+  });
+
+  it('the notice does not appear when there is no token to write', () => {
+    const plan = craPlan({ pairingToken: '', craEnv: null });
+    const notice = plan.steps.find(
+      (s) => s.status === StepStatus.NOTICE && s.detail.includes('gitignore'),
+    );
+    expect(
+      notice,
+      'nothing was written, so there is nothing per-machine to warn about',
+    ).toBeUndefined();
+  });
 });
 
 describe('buildPlan — Next', () => {
