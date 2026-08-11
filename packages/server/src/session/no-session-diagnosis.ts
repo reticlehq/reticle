@@ -67,6 +67,18 @@ const SELF_SERVE =
  * check, or omits ones it does, is a new version of the same defect — a confident claim about
  * evidence that was never gathered.
  */
+/**
+ * The second half of the answer for a project that never went through `init`.
+ *
+ * Held separately because it must appear ONLY when the project is uninstrumented — telling a wired
+ * project to re-run `init` sends the reader back to a step that already succeeded, which is its own
+ * kind of wrong answer.
+ */
+const UNINSTRUMENTED =
+  'Separately: this project has not been through `reticle init`, which is what installs the SDK ' +
+  'and wires it into the build — so even once the dev server is up, the app will carry no SDK and ' +
+  "no session will appear. Run `reticle init` in the app's directory too.";
+
 const SCANNED_PORTS = [...DEV_SERVER_PORTS].join(', ');
 
 export function diagnoseNoSession(facts: NoSessionFacts): string {
@@ -95,7 +107,14 @@ export function diagnoseNoSession(facts: NoSessionFacts): string {
       // Deliberately NOT offering reticle_lease here, and a test pins that: a lease opens a URL, and
       // if nothing is listening there is nothing at any URL to open. Asking for the real one is the
       // only move that can recover the :7699 case.
-      `the app IS running, ask the human for its URL rather than assuming it is down. ${RETRY}`
+      'the app IS running, ask the human for its URL rather than assuming it is down. ' +
+      // BOTH facts at once when the project was never wired. This branch fires before the
+      // `!initialized` one, so an uninstrumented project used to be told only "start your dev
+      // server" — the reader starts it, calls again, and is told ONLY THEN that no app carries the
+      // SDK. Two round trips to learn two things the daemon knew on the first call, and this is the
+      // largest cohort in the funnel (#171): 77 users attached an agent and never instrumented an
+      // app. They have a daemon (they registered the MCP server) and no SDK anywhere.
+      `${initialized ? '' : UNINSTRUMENTED} ${RETRY}`
     );
   }
 

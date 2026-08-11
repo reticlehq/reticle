@@ -197,3 +197,53 @@ describe('the no-listener branch does not overclaim what an eleven-port scan pro
     expect(scanned).toMatch(/dev server|npm run dev/i);
   });
 });
+
+/**
+ * Nothing listening AND never instrumented is a TWO-step problem, and saying only one step is a
+ * dead end that costs the reader a whole round trip.
+ *
+ * This is the largest cohort in the funnel (#171): 77 users attached an agent and never
+ * instrumented an app. They registered the MCP server — so a daemon is up and the agent can call
+ * tools — but `reticle init` never ran, so no app carries the SDK.
+ *
+ * The no-listener branch runs BEFORE the `initialized` check and only ever said "start your dev
+ * server". Someone in that cohort follows it, starts the server, calls again — and lands in the
+ * `!initialized` branch to be told, only now, that the project was never wired. Two round trips to
+ * learn two facts the daemon knew at the first call.
+ *
+ * The instrumented case must NOT gain the extra sentence: for a project that HAS been through
+ * `init`, "run reticle init" is noise at best and a wrong instruction at worst.
+ */
+describe('an uninstrumented project with no server is told BOTH things at once', () => {
+  const uninstrumented = diagnoseNoSession({
+    everConnected: false,
+    initialized: false,
+    listening: [],
+    port: 4400,
+  });
+
+  it('still leads with the dev server, which is the first thing to do', () => {
+    expect(uninstrumented).toMatch(/dev server|npm run dev/i);
+  });
+
+  it('also names `reticle init`, so the second step is not a second round trip', () => {
+    expect(uninstrumented).toContain('reticle init');
+  });
+
+  it('says the app carries no SDK — the reason starting a server alone will not help', () => {
+    expect(uninstrumented).toMatch(/SDK|instrument/i);
+  });
+
+  it('does NOT tell an already-initialised project to run init', () => {
+    // The control. This branch fires for both, and "run reticle init" on a wired project sends the
+    // reader to re-run a step that already succeeded.
+    const wired = diagnoseNoSession({
+      everConnected: false,
+      initialized: true,
+      listening: [],
+      port: 4400,
+    });
+    expect(wired).not.toContain('reticle init');
+    expect(wired).toMatch(/dev server|npm run dev/i);
+  });
+});
