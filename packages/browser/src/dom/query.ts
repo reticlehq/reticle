@@ -21,7 +21,7 @@ import {
 } from '@reticlehq/core';
 import { isFrame, isHtmlElement } from './realm.js';
 import { capturedRootOf } from './shadow-registry.js';
-import { describe, getStates, isVisible } from './a11y.js';
+import { getAccessibleName, getRole, describe, getStates, isVisible } from './a11y.js';
 import { isIgnored } from './dom-ignore.js';
 import { isSensitiveKey } from '../security/serialization.js';
 import { getCapabilities } from '../registry/capabilities.js';
@@ -108,6 +108,46 @@ function findByComponent(container: HTMLElement, query: ElementQuery): HTMLEleme
   return [];
 }
 
+/**
+ * Role + name, matched the way Reticle REPORTS them — not only the way Testing Library computes them.
+ *
+ * Two implementations were disagreeing, on both axes, for the same element:
+ *
+ *   <input type="search" placeholder="Search User">
+ *     Reticle getRole            -> "textbox"      TL/dom-accessibility-api -> "searchbox"
+ *     Reticle getAccessibleName  -> "Search User"  TL                       -> "" (no placeholder)
+ *
+ * `reticle_query`, `reticle_snapshot` and every act result report Reticle's values. The matcher used
+ * TL's. So Reticle printed `textbox "Search User"` and then could not find it by that exact
+ * role and name — the same query call reporting an identity it cannot match.
+ *
+ * It surfaced through the flow recorder, which anchors a step to the reported role+name: `flow_save`
+ * graded the flow `asserted` with `degraded: 0`, a clean bill of health, and the step drifted on the
+ * first replay in a different session. The reporter diagnosed it as the replay resolver computing
+ * names differently; it is narrower and worse, because no caller could ever have closed the round
+ * trip.
+ *
+ * The fallback runs ONLY when the spec-accurate query finds nothing, so every name that resolves
+ * today keeps resolving exactly as before and this can never take a match away. Fixed on the
+ * matching side rather than by changing what is reported: dropping `placeholder` would leave an
+ * input whose only label is its placeholder nameless in every snapshot, and renaming the role would
+ * churn every stored anchor — both worse trades than a fallback that runs on the empty path.
+ */
+function queryByRoleAndName(
+  container: HTMLElement,
+  role: string,
+  name: string | undefined,
+): HTMLElement[] {
+  if (name === undefined) return queryAllByRole(container, role, { hidden: true });
+  const spec = queryAllByRole(container, role, { hidden: true, name });
+  if (spec.length > 0) return spec;
+  const wanted = name.trim();
+  // Reticle's own role AND name: the pair actually printed to the caller.
+  return [...container.querySelectorAll<HTMLElement>('*')].filter(
+    (el) => getRole(el) === role && getAccessibleName(el).trim() === wanted,
+  );
+}
+
 /** Run the appropriate Testing-Library query against ONE root (light DOM or a shadow root). */
 function findIn(container: HTMLElement, query: ElementQuery): HTMLElement[] {
   const by = query.by;
@@ -117,11 +157,7 @@ function findIn(container: HTMLElement, query: ElementQuery): HTMLElement[] {
   if (by !== undefined && value !== undefined) {
     switch (by) {
       case QueryBy.ROLE:
-        return queryAllByRole(
-          container,
-          value,
-          query.name !== undefined ? { hidden: true, name: query.name } : { hidden: true },
-        );
+        return queryByRoleAndName(container, value, query.name);
       case QueryBy.TEXT:
         return queryAllByText(container, value, { exact: false });
       case QueryBy.LABEL:
@@ -154,13 +190,10 @@ function findIn(container: HTMLElement, query: ElementQuery): HTMLElement[] {
     return findByComponent(container, query);
   }
 
-  // Structured form (role+name, or any single field).
+  // Structured form (role+name, or any single field). Same round-trip guarantee as the by+value
+  // spelling above — the two forms must not disagree about what is findable.
   if (query.role !== undefined) {
-    const options =
-      query.name !== undefined
-        ? { hidden: true as const, name: query.name }
-        : { hidden: true as const };
-    return queryAllByRole(container, query.role, options);
+    return queryByRoleAndName(container, query.role, query.name);
   }
   if (query.text !== undefined) return queryAllByText(container, query.text, { exact: false });
   if (query.label !== undefined) {
