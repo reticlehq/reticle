@@ -11,10 +11,12 @@ import {
   readdirSync,
   statSync,
   renameSync,
+  writeSync,
 } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { daemonRegistryFileName, ReticleEnv, type DaemonRegistryEntry } from '@reticlehq/core';
 import { log } from '../log.js';
+import { uncleanPredecessor } from './unclean-predecessor.js';
 
 /** Env override for the whole state directory — see ReticleEnv.STATE_DIR. */
 export const STATE_DIR_ENV = ReticleEnv.STATE_DIR;
@@ -289,12 +291,18 @@ export function spawnDaemon(
   // O_EXCL spawn-lock: only the FIRST racer to create the pidfile spawns. A concurrent second gets
   // EEXIST — if a LIVE daemon owns the port it skips (no duplicate detached daemon, no clobbered pid);
   // a stale pidfile from a crashed daemon is reclaimed. Returns false when it did not spawn.
+  /** Set when this start reclaimed a pidfile whose owner is gone — see unclean-predecessor.ts. */
+  let orphanPid: number | null = null;
   let lockFd: number;
   try {
     lockFd = deps.openFile(pidFilePath, 'wx');
   } catch {
     const existing = readPid(port, deps.home);
     if (existing !== null && deps.pidAlive(existing)) return false;
+    // This branch IS the crash detection — its own comment has always said so ("a stale pidfile from
+    // a crashed daemon is reclaimed"), it just never said it out loud. Captured before the unlink,
+    // because after it there is no trace left that the previous daemon died at all.
+    orphanPid = uncleanPredecessor(existing, false, process.pid);
     try {
       unlinkSync(pidFilePath);
       lockFd = deps.openFile(pidFilePath, 'wx');
@@ -317,6 +325,26 @@ export function spawnDaemon(
       // racing another reclaimer — fine
     }
     return false;
+  }
+  // Into the daemon log itself, not the parent's stdout: `doctor` points the reader at this file, and
+  // a death recorded anywhere else is a death they will not find. Written through the fd the child is
+  // about to inherit, so it lands immediately before that child's first line — exactly where a reader
+  // comparing two `mcp_daemon_started` entries is already looking.
+  if (null !== orphanPid) {
+    try {
+      writeSync(
+        logFd,
+        `${JSON.stringify({
+          // Same convention as log(): the clock is read at the I/O boundary, not injected.
+          t: new Date().toISOString(),
+          event: 'reticle_daemon_previous_died_unclean',
+          port,
+          pid: orphanPid,
+        })}\n`,
+      );
+    } catch {
+      // A log we cannot write is not a reason to refuse to start the daemon.
+    }
   }
   let child: SpawnedChild;
   try {
