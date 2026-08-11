@@ -22,6 +22,8 @@
 
 import { describe, expect, it } from 'vitest';
 import { navigateResult } from './navigate-result.js';
+import { TOOLS } from './tools.js';
+import { ReticleTool } from './tool-names.js';
 
 describe('navigateResult', () => {
   it('keeps ok for existing callers', () => {
@@ -49,5 +51,62 @@ describe('navigateResult', () => {
 
   it('passes a reason through when one is given', () => {
     expect(navigateResult({ ok: false, reason: 'url required' })['reason']).toBe('url required');
+  });
+});
+
+/**
+ * Honest was the first half. Useful is the second.
+ *
+ * Measured on all three fixtures on 2026-08-10: `confirmed` was `false` on every navigation, on
+ * every app. A boolean that never varies teaches an agent nothing — and worse, an agent that learns
+ * to ignore `confirmed` will keep ignoring it on the day it starts meaning something.
+ *
+ * The note told the agent to call `reticle_sessions` and poll for a session at the new URL. The
+ * daemon can do that itself, and it is the one place that can: the SDK reconnects TO it. So every
+ * navigation cost the agent a tool call it did not need to make, on a tool whose whole problem is
+ * that it is the least reliable one we ship.
+ */
+describe('confirmed reports arrival when arrival is observable', () => {
+  it('is true, and carries the reconnected sessionId, when a session arrives', () => {
+    const out = navigateResult(
+      { ok: true, url: 'http://localhost:3000/dashboard' },
+      { sessionId: 's-new' },
+    );
+    expect(out['confirmed']).toBe(true);
+    expect(out['sessionId'], 'the SDK reconnects as a NEW session — name it').toBe('s-new');
+  });
+
+  it('stays false, with the note, when nothing arrives in the window', () => {
+    const out = navigateResult({ ok: true, url: 'http://localhost:3000/dashboard' }, null);
+    expect(out['confirmed']).toBe(false);
+    expect(String(out['note'])).toContain('reticle_sessions');
+  });
+
+  it('a refusal is still conclusive — no confirmed, no sessionId', () => {
+    const out = navigateResult({ ok: false, reason: 'url required' }, null);
+    expect(out['confirmed']).toBeUndefined();
+    expect(out['sessionId']).toBeUndefined();
+  });
+});
+
+/**
+ * The description told the agent to call `reticle_sessions` after every navigation. That was correct
+ * when `confirmed` was always false; it is now the wrong instruction on the common path, and a tool
+ * whose guidance contradicts its own result is how an agent learns to trust neither.
+ */
+describe('the navigate description matches what navigate now returns', () => {
+  const nav = TOOLS.find((t) => t.name === ReticleTool.NAVIGATE);
+
+  it('tells the agent that confirmed:true means it can act', () => {
+    expect(nav?.description).toContain('confirmed');
+  });
+
+  it('does not send the agent to reticle_sessions unconditionally', () => {
+    const text = nav?.description ?? '';
+    const tellsToPoll = /Call reticle_sessions to confirm/i.test(text);
+    expect(
+      tellsToPoll,
+      'that instruction is now wrong whenever arrival was confirmed — the result already says so',
+    ).toBe(false);
   });
 });

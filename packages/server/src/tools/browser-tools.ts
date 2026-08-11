@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { navigateResult } from './navigate-result.js';
+import { awaitArrival } from './navigate-arrival.js';
 import { reloadResult } from './reload-result.js';
 import { waitForReconnect, RELOAD_RECONNECT_TIMEOUT_MS } from '../session/session-reconnect.js';
 import { ReticleCommand } from '@reticlehq/core';
@@ -13,7 +14,7 @@ export const BROWSER_TOOLS: ToolDef[] = [
     name: ReticleTool.NAVIGATE,
     example: { url: '/settings' },
     description:
-      'Navigate the connected browser tab to a URL, or reload it in place with { reload: true } (add { hard: true } to bypass the cache). `ok` means the navigation was DISPATCHED, not that the page arrived — the SDK is torn down by the navigation, so nothing can observe the new document. Call reticle_sessions to confirm a session reconnected at the new URL before acting.',
+      'Navigate the connected browser tab to a URL, or reload it in place with { reload: true } (add { hard: true } to bypass the cache). `ok` means the navigation was DISPATCHED — the SDK is torn down by the navigation, so the page itself cannot report on it. The daemon then waits briefly for the SDK to reconnect: `confirmed:true` with a new `sessionId` means the page arrived and you can act immediately. `confirmed:false` means it did not arrive within the window — the page may be slow, uninstrumented, or not there; check reticle_sessions before acting.',
     inputSchema: {
       url: z.string().optional().describe('The URL to navigate to. Omit when using reload.'),
       reload: z
@@ -35,6 +36,8 @@ export const BROWSER_TOOLS: ToolDef[] = [
       // Present on a dispatched navigation: nothing here can see the new document, so arrival is
       // reported as unconfirmed rather than implied by `ok`. See navigate-result.ts.
       confirmed: z.boolean().optional(),
+      /** The session the SDK reconnected as, when arrival was confirmed — it is a NEW id. */
+      sessionId: z.string().optional(),
       note: z.string().optional(),
     },
     handler: async (deps, args) => {
@@ -74,7 +77,10 @@ export const BROWSER_TOOLS: ToolDef[] = [
           { url },
         )) as { ok?: unknown; url?: unknown; reason?: unknown };
         // `ok` is the browser accepting the instruction, not the page arriving — see navigate-result.
-        return navigateResult(result);
+        // The daemon is the only party that CAN see arrival (the SDK reconnects to it), so it looks,
+        // briefly, instead of telling the agent to go poll reticle_sessions itself.
+        const arrival = true === result.ok ? await awaitArrival(deps.sessions, url) : null;
+        return navigateResult(result, arrival);
       } finally {
         session.finishAction();
       }
