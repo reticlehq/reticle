@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useApp } from '../store/store.js';
+import { API_BASE } from '../lib/api.js';
 
 /**
  * Deep-DOM fixture surface: one web component with an OPEN shadow root, and one same-origin
@@ -37,7 +38,7 @@ class BenchStatus extends HTMLElement {
     button.textContent = 'Refresh status';
     // A real consequence: the click makes a request, so a dead handler is observable on the network.
     button.addEventListener('click', () => {
-      void fetch('/api/health').catch(() => undefined);
+      void fetch(`${API_BASE}/api/health`).catch(() => undefined);
     });
     root.append(label, document.createTextNode(' · '), button);
   }

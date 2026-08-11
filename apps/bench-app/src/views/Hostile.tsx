@@ -1,5 +1,6 @@
 import type React from 'react';
 import { useEffect, useRef, useState } from 'react';
+import { API_BASE } from '../lib/api.js';
 
 /**
  * The hostile fixture: a page that NEVER goes quiet on its own. Two independent churn sources —
@@ -40,7 +41,7 @@ export function Hostile(): React.ReactElement {
 
   const fireFailingRequest = (): void => {
     // The ONE scarce piece of evidence that must survive the churn.
-    void fetch('/api/broken/500')
+    void fetch(`${API_BASE}/api/broken/500`)
       .then((r) => setLastFault(`status ${String(r.status)}`))
       .catch((e: unknown) => setLastFault(e instanceof Error ? e.message : 'failed'));
   };
