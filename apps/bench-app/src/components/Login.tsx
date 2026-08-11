@@ -71,6 +71,7 @@ export function Login(): React.ReactElement {
         {error !== '' ? (
           <div
             data-testid="login-error"
+            role="alert"
             style={{ color: 'var(--danger)', fontSize: 12.5, marginTop: 12 }}
           >
             {error}
