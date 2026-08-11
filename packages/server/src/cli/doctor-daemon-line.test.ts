@@ -29,7 +29,10 @@ describe('the daemon line names which daemon, not just that there is one', () =>
 
   it('flags a daemon on a different contract as skew', () => {
     const out = daemonLine(4400, 1, { version: '2.5.0', contract: 'oldfp' }, SELF);
-    expect(out.skew, 'a contract mismatch is exactly the -32000-with-no-version case').toBeDefined();
+    expect(
+      out.skew,
+      'a contract mismatch is exactly the -32000-with-no-version case',
+    ).toBeDefined();
     expect(String(out.skew)).toContain('2.5.0');
   });
 

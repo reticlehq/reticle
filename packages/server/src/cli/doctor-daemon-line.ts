@@ -29,7 +29,8 @@ export interface DaemonLine {
   skew?: string;
 }
 
-const FIX = 'Restart it so both ends are the same build: `reticle kill` then let your agent reconnect.';
+const FIX =
+  'Restart it so both ends are the same build: `reticle kill` then let your agent reconnect.';
 
 /**
  * Build the daemon line for a port that answered `/status`.
