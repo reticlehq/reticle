@@ -240,6 +240,37 @@ describe('action effect: appeared', () => {
     expect(r.effect.appeared).toBeDefined();
     expect((r.effect.appeared ?? '').length).toBeLessThan(300);
   });
+
+  it('does NOT echo the text the agent itself just typed', async () => {
+    // Found by driving: filling a textarea reported appeared:"<the value I passed in>". The field
+    // is meant to be what the APP said; handing the caller its own input back is noise wearing the
+    // name of evidence, and `valueChanged` already reports that the write landed.
+    // A textarea carries its value in a CHILD TEXT NODE, so a controlled one re-rendering after
+    // your keystroke mutates characterData with your own string. Filling the sibling <input> in
+    // the same live view produced no `appeared` at all, which is what identified the mechanism.
+    document.body.innerHTML = '<textarea>old</textarea>';
+    const ta = document.querySelector('textarea') as HTMLTextAreaElement;
+    ta.addEventListener('input', () => {
+      const child = ta.firstChild;
+      if (null !== child) child.textContent = ta.value;
+    });
+    const r = await executeAction(refs.refFor(ta), 'fill', { value: 'what shipped today' });
+    expect(r.effect.valueChanged).toBe(true);
+    expect(r.effect.appeared).toBeUndefined();
+  });
+
+  it('still reports what the app said ABOUT the input it received', async () => {
+    // The exclusion is exact-match only, so an app that quotes your input back inside its own
+    // sentence is still reported — that IS the app talking.
+    document.body.innerHTML = '<input /><div id="out"></div>';
+    const input = document.querySelector('input') as HTMLInputElement;
+    input.addEventListener('input', () => {
+      const out = document.getElementById('out');
+      if (null !== out) out.textContent = `No results for ${input.value}`;
+    });
+    const r = await executeAction(refs.refFor(input), 'fill', { value: 'zzz' });
+    expect(r.effect.appeared).toContain('No results for zzz');
+  });
 });
 
 describe('action effect: unresolvable ref', () => {

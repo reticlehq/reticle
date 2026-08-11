@@ -38,10 +38,20 @@ export class AppearedText {
     }
   }
 
-  /** `{ appeared }` when text was added, `{}` otherwise — an absent key means none was. */
-  effect(): { appeared?: string } {
-    if (0 === this.#seen.size) return {};
-    const joined = [...this.#seen].join(JOIN);
+  /**
+   * `{ appeared }` when the APP added text, `{}` otherwise — an absent key means it added none.
+   *
+   * `wrote` is the value the action itself just set, and is excluded: a textarea carries its value
+   * in a child text node, so a controlled one re-rendering after the write mutates characterData
+   * with the caller's own string. Handing that back is noise wearing the name of evidence, and
+   * `valueChanged` already reports that the write landed. Exact-match only, so an app that quotes
+   * your input inside a sentence of its own ("No results for zzz") is still reported — that is
+   * the app talking.
+   */
+  effect(wrote?: string): { appeared?: string } {
+    const said = [...this.#seen].filter((text) => text !== wrote);
+    if (0 === said.length) return {};
+    const joined = said.join(JOIN);
     return {
       appeared: joined.length > APPEARED_MAX ? `${joined.slice(0, APPEARED_MAX)}…` : joined,
     };

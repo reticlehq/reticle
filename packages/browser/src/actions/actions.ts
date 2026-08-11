@@ -568,7 +568,7 @@ export async function executeAction(
     domMutatedWithin: mutated,
     // Omitted rather than "" when nothing was said — an empty string reads as "it said nothing
     // meaningful", where absence says "it added no text at all". Those are different findings.
-    ...said.effect(),
+    ...said.effect(valueAfter),
     occluded: geometry.occluded,
     occludedBy: geometry.occludedBy,
     scrolledIntoView: geometry.scrolledIntoView,
