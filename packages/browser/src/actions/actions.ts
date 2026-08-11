@@ -12,6 +12,7 @@ import { getAccessibleName, getRole, isVisible, getStates } from '../dom/a11y.js
 import { elementHasHoverHandlers, identifyComponent } from '../registry/adapters.js';
 import { isForm, isHtmlElement, isInput, isSelect, isTextArea } from '../dom/realm.js';
 import { nativeSetTimeout, settle } from '../timers/native-timers.js';
+import { AppearedText } from './appeared-text.js';
 
 /**
  * Best-effort evidence of whether/why an action landed, so the agent can separate
@@ -35,6 +36,18 @@ interface ActionEffect {
   valueChanged: boolean;
   /** Mutation records counted by a short-lived MutationObserver (one microtask + rAF window). */
   domMutatedWithin: number;
+  /**
+   * Text the action put on the page, truncated. OMITTED when it added none.
+   *
+   * `domMutatedWithin` says the click did SOMETHING; it cannot say the app rejected you. A login
+   * that fails returns ok/settled/mutated and reads exactly like one that succeeded, so an agent
+   * moves on and asserts against a page it misread. The observer already receives these records
+   * and was keeping only `.length` — the message was being thrown away, not gathered.
+   *
+   * Deliberately NOT a verdict: this is what appeared, not what it means. Absence means no text
+   * was added, which is why a silent class toggle omits the key rather than reporting "".
+   */
+  appeared?: string;
   /**
    * Click-like only: the center hit-tested to a foreign element (an overlay is on top). Synthetic
    * dispatch STILL delivered the event to the target, but a real user could not click it — treat
@@ -510,8 +523,10 @@ export async function executeAction(
   const geometry = CLICK_LIKE.has(action) ? clickGeometry(el) : NO_GEOMETRY;
 
   let mutated = 0;
+  const said = new AppearedText();
   const obs = new MutationObserver((records) => {
     mutated += records.length;
+    said.collect(records);
   });
   obs.observe(el.ownerDocument.documentElement, {
     subtree: true,
@@ -551,6 +566,9 @@ export async function executeAction(
     focusMoved: prevFocus !== nextFocus ? `${prevFocus ?? 'null'}->${nextFocus ?? 'null'}` : null,
     valueChanged: isFillLike(action) ? valueBefore !== valueAfter : false,
     domMutatedWithin: mutated,
+    // Omitted rather than "" when nothing was said — an empty string reads as "it said nothing
+    // meaningful", where absence says "it added no text at all". Those are different findings.
+    ...said.effect(),
     occluded: geometry.occluded,
     occludedBy: geometry.occludedBy,
     scrolledIntoView: geometry.scrolledIntoView,

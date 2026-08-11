@@ -187,6 +187,61 @@ describe('action effect: domMutatedWithin', () => {
   });
 });
 
+describe('action effect: appeared', () => {
+  it('reports the text the action put on the page, not just that something changed', async () => {
+    // The login shape. `domMutatedWithin: 7` is true and useless: it says the click did SOMETHING
+    // without saying the app rejected you. An agent reads ok/settled/mutated and moves on.
+    document.body.innerHTML = '<button>Sign in</button>';
+    const button = document.querySelector('button') as HTMLButtonElement;
+    button.addEventListener('click', () => {
+      const err = document.createElement('div');
+      err.textContent = 'Invalid email or password';
+      document.body.appendChild(err);
+    });
+    const r = await executeAction(refs.refFor(button), 'click');
+    expect(r.effect.appeared).toContain('Invalid email or password');
+  });
+
+  it('reports text swapped in by a character-data change, not only new nodes', async () => {
+    document.body.innerHTML = '<button>Save</button><div id="s">Ready</div>';
+    const button = document.querySelector('button') as HTMLButtonElement;
+    button.addEventListener('click', () => {
+      const status = document.getElementById('s');
+      if (null !== status) status.textContent = 'Could not save';
+    });
+    const r = await executeAction(refs.refFor(button), 'click');
+    expect(r.effect.appeared).toContain('Could not save');
+  });
+
+  it('is OMITTED when the action added no text — absence means "nothing was said"', async () => {
+    document.body.innerHTML = '<button>noop</button>';
+    const r = await executeAction(refOf('button'), 'click');
+    expect(r.effect.appeared).toBeUndefined();
+  });
+
+  it('is omitted when the DOM changed but silently — a class toggle says nothing to a reader', async () => {
+    document.body.innerHTML = '<button>toggle</button>';
+    const button = document.querySelector('button') as HTMLButtonElement;
+    button.addEventListener('click', () => button.classList.add('active'));
+    const r = await executeAction(refs.refFor(button), 'click');
+    expect(r.effect.domMutatedWithin).toBeGreaterThanOrEqual(1);
+    expect(r.effect.appeared).toBeUndefined();
+  });
+
+  it('truncates a large render rather than returning a whole page of text', async () => {
+    document.body.innerHTML = '<button>load</button>';
+    const button = document.querySelector('button') as HTMLButtonElement;
+    button.addEventListener('click', () => {
+      const big = document.createElement('div');
+      big.textContent = 'x'.repeat(5000);
+      document.body.appendChild(big);
+    });
+    const r = await executeAction(refs.refFor(button), 'click');
+    expect(r.effect.appeared).toBeDefined();
+    expect((r.effect.appeared ?? '').length).toBeLessThan(300);
+  });
+});
+
 describe('action effect: unresolvable ref', () => {
   it('rejects when the ref no longer resolves (tool did not dispatch)', async () => {
     document.body.innerHTML = '<button>gone</button>';
