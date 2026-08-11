@@ -298,19 +298,35 @@ describe('click holdMs — hold-to-confirm controls', () => {
   }
 
   it('holds the pointer down long enough to arm the control', async () => {
+    // One-sided on purpose: a sleep can overshoot on a loaded runner but never undershoot, so
+    // "asked for 200ms, armed a 20ms control" cannot fail for machine reasons. The reverse
+    // assertion — a short hold must NOT arm a long control — WOULD be a machine statement, and is
+    // expressed relatively below instead.
     const { el, fired } = holdToConfirm(20);
-    await executeAction(refs.refFor(el), 'click', { holdMs: 60 });
+    await executeAction(refs.refFor(el), 'click', { holdMs: 200 });
     expect(fired(), 'the press and release were still in one synchronous block').toBe(true);
   });
 
   /**
-   * The half that actually catches a regression. A hold that always succeeds is indistinguishable
-   * from a click — if this ever passes, the feature has stopped holding and started pretending.
+   * The half that actually catches a regression, expressed as a BOUND rather than a duration.
+   *
+   * The first version of this asserted that `holdMs: 5` fails to arm an 80ms control. That is a
+   * statement about the machine: Windows timer granularity is ~15.6ms and worse under load, so a
+   * 5ms sleep can genuinely exceed 80ms and arm it. **It failed on Windows CI, which is exactly the
+   * failure mode CLAUDE.md describes — "fails only under parallel load, i.e. only in CI".**
+   *
+   * What is actually being defended is that the hold is CALLER-CONTROLLED rather than fixed: a hold
+   * that always lasts the same time is indistinguishable from a click. Comparing two holds measured
+   * on the same machine in the same run says that without asking the clock to behave.
    */
-  it('a hold SHORTER than the threshold does not fire it', async () => {
-    const { el, fired } = holdToConfirm(80);
-    await executeAction(refs.refFor(el), 'click', { holdMs: 5 });
-    expect(fired(), 'a short hold armed a control it should not have').toBe(false);
+  it('a shorter hold is measurably shorter than a longer one', async () => {
+    const { el } = holdToConfirm(5_000); // never fires; this test is about the measurement
+    const brief = await executeAction(refs.refFor(el), 'click', { holdMs: 1 });
+    const long = await executeAction(refs.refFor(el), 'click', { holdMs: 300 });
+    expect(
+      long.effect.heldMs,
+      'both holds took the same time — the duration is not caller-controlled',
+    ).toBeGreaterThan(brief.effect.heldMs ?? 0);
   });
 
   it('an ordinary click still works and is not slowed by the feature', async () => {
@@ -324,7 +340,9 @@ describe('click holdMs — hold-to-confirm controls', () => {
   });
 
   it('reports the hold it actually achieved, so a caller can tell 1200 from 1204', async () => {
-    const { el } = holdToConfirm(10);
+    // A lower bound only. A sleep never returns early, so this cannot fail on a slow machine — and
+    // overshoot is the thing `heldMs` exists to disclose, not something to assert against.
+    const { el } = holdToConfirm(5_000);
     const r = await executeAction(refs.refFor(el), 'click', { holdMs: 25 });
     expect(r.effect.heldMs, 'no way to tell a real hold from a claimed one').toBeGreaterThanOrEqual(
       25,
