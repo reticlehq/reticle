@@ -27,6 +27,7 @@ import {
   testidDrift,
 } from './flow-replay.js';
 import { nearestRoleName, type RoleCandidate } from './role-anchor-nearest.js';
+import { roleDriftReason } from './role-drift-reason.js';
 
 /** Query args for a NAMED role anchor — the handle that identifies an instance, not a JSX site. */
 function roleQueryArgs(
@@ -105,10 +106,7 @@ export async function runRoleStep(
       ok: false,
       drift: {
         reasonKind: DriftReason.COMPONENT_NOT_FOUND,
-        reason:
-          null === nearest
-            ? `role anchor ${label} not found, and no surviving ${anchor.role} has a similar name — anchor this step to a data-testid`
-            : `role anchor ${label} not found; the closest surviving ${anchor.role} is "${nearest}" — confirm it is the same control before rebinding, or add a data-testid`,
+        reason: roleDriftReason(anchor.role, String(anchor.name), nearest),
         anchor: label,
         nearest,
       },
