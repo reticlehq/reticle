@@ -53,6 +53,36 @@ describe('a predicate key that is not real is refused, never dropped', () => {
     ).toMatchObject({ kind: 'signal', name: 'order:placed', dataMatches: { id: 1 } });
   });
 
+  /**
+   * Reported from the field, and the reasoning behind the mistake is sound:
+   *
+   * > reticle_assert route predicate rejected urlContains (unrecognized_keys) while net predicate
+   * > accepts urlContains. Skill examples use route without documenting fields; I assumed parallel
+   * > URL filters. Need: which field names a route change after login?
+   *
+   * The agent had just learned `net { urlContains }` and applied the same word to `route`, which
+   * spells it `contains`. Unlike the cases above this one FAILED rather than silently weakening —
+   * strictness caught it — but a rejection with no valid-field list is still a dead end, and the
+   * agent burned a `reticle_tools` round trip to recover. `reticle_tools` is re-called on 33% of its
+   * uses, which is what "I do not know the grammar" looks like from the outside.
+   *
+   * The alias is semantically honest, not just convenient: route's `contains` matches the WHOLE
+   * route — path + query + fragment — so "the URL contains this" is exactly what it does.
+   */
+  it('route { urlContains } is accepted, because net spells the same idea that way', () => {
+    expect(PredicateSchema.parse({ kind: 'route', urlContains: '/dashboard' })).toMatchObject({
+      kind: 'route',
+      contains: '/dashboard',
+    });
+  });
+
+  it('route { url } too — the shorter spelling net also accepts', () => {
+    expect(PredicateSchema.parse({ kind: 'route', url: '?redirect=' })).toMatchObject({
+      kind: 'route',
+      contains: '?redirect=',
+    });
+  });
+
   it("a key that is nobody's spelling is rejected, not stripped", () => {
     // The agent gets a schema error naming the key. Before, it got a green.
     expect(() => PredicateSchema.parse({ kind: 'route', pathnmae: '/checkout' })).toThrow();

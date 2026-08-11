@@ -333,7 +333,15 @@ export const OBSERVE_TOOLS: ToolDef[] = [
       'Evaluate a predicate (optionally waiting up to timeout_ms). Returns { pass, evidence, failureReason? }. The end of every verify loop. Prefer a { signal } or { net } consequence over { element }/{ text } presence — a passing presence-only assertion returns `advice` because a wrong/healed element can fake it. By default it only counts events since your last act, so a stale buffered signal can never fake a pass; pass `since` (an observe/act cursor) to set the window explicitly.',
     inputSchema: {
       predicate: PredicateSchema.optional().describe(
-        'Predicate to evaluate: { signal }, { net }, { element } or a combination.',
+        // Every kind, each with the field that carries its argument. Five of the nine were
+        // undocumented here, including `route` — and "did submitting the login form navigate away"
+        // is the most common thing an agent wants to assert. A field report reached us from an agent
+        // that guessed `urlContains` on route (net's spelling) and got unrecognized_keys.
+        'Predicate to evaluate. Kinds: { signal, name } { net, urlContains|method|status|count } ' +
+          '{ state, path|equals } { route, pathname (exact) | contains (path+query+hash) } ' +
+          '{ element, testid|role|text } { text } { console, level|absent } { animation, name } ' +
+          '{ settled } — combine with { allOf | anyOf | not }. Prefer a signal/net/state consequence ' +
+          'over element/text presence.',
       ),
       until: PredicateSchema.optional().describe("Alias for `predicate` (act_and_wait's name)."),
       timeout_ms: z

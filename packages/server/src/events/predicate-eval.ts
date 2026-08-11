@@ -58,7 +58,13 @@ export type Predicate =
  * the only key supplied left a predicate that asserts nothing and passes on anything.
  */
 const PREDICATE_ALIASES: Readonly<Record<string, Readonly<Record<string, string>>>> = {
-  [PredicateKind.ROUTE]: { path: 'pathname' },
+  // `urlContains`/`url` reported from the field: an agent that had just written
+  // `net { urlContains }` applied the same word to `route`, which spells it `contains`, and got
+  // `unrecognized_keys` with no list of what would have worked. The parallel it assumed is a fair
+  // one — route's `contains` matches the WHOLE route (path + query + fragment), so "the URL
+  // contains this" is precisely what it does — and asserting a redirect after login is the single
+  // most common thing an agent reaches for here.
+  [PredicateKind.ROUTE]: { path: 'pathname', urlContains: 'contains', url: 'contains' },
   [PredicateKind.NET]: { url: 'urlContains' },
   [PredicateKind.SIGNAL]: { data: 'dataMatches' },
 };
