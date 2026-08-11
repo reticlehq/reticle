@@ -1,5 +1,10 @@
 import { healthEnvelope } from '../session/session-health.js';
-import { type BrowserBrand, TelemetryActor, TelemetryEventKind } from '@reticlehq/core';
+import {
+  type BrowserBrand,
+  TelemetryActor,
+  TelemetryEventKind,
+  TRANSPORT_LIMITS,
+} from '@reticlehq/core';
 import { getSessionMetrics } from '../telemetry/session-metrics.js';
 import { getTelemetry } from '../telemetry/telemetry.js';
 import { takeUpdateNudge } from '../update/update-nudge.js';
@@ -150,6 +155,27 @@ function reportBugsFound(toolName: string, result: Record<string, unknown>): voi
  * object that did not already include `session` — splices the health envelope on. Idempotent
  * (handlers that already add health are left untouched) and never alters non-object results.
  */
+/**
+ * The name of the first argument whose string value exceeds the transport bound, if any.
+ *
+ * One level of nesting is searched because that is where callers put payloads — `reticle_act`'s
+ * `args.value`, and the fuzz's own `huge-string` shape. Deeper recursion would cost more than it
+ * buys: the failure is a single huge string, not a deeply nested structure of small ones.
+ */
+function firstOversizedArg(args: Record<string, unknown>): string | undefined {
+  const tooLong = (value: unknown): boolean =>
+    'string' === typeof value && value.length > TRANSPORT_LIMITS.MAX_STRING_LENGTH;
+  for (const [key, value] of Object.entries(args)) {
+    if (tooLong(value)) return key;
+    if ('object' === typeof value && null !== value && !Array.isArray(value)) {
+      for (const [inner, nested] of Object.entries(value as Record<string, unknown>)) {
+        if (tooLong(nested)) return `${key}.${inner}`;
+      }
+    }
+  }
+  return undefined;
+}
+
 export async function runTool(
   tool: ToolDef,
   deps: ToolDeps,
@@ -166,6 +192,29 @@ export async function runTool(
   // closure carries this call's own identity, which is also what makes peak-concurrency measurable.
   // A daemon that has served even one tool call is doing a job for somebody; see daemon-usefulness.
   noteToolCall();
+  // An oversized argument is refused BEFORE the handler deserialises it.
+  //
+  // tool-fuzz failed CI on the invariant that matters most — `every tool answers every hostile call`
+  // — for a ~100KB string. Seen twice with different tools; the earlier one came back
+  // `-32001 sse_aborted` with the tool surface dropping 48→17, which is a RESTARTED daemon. The
+  // shape is: oversized argument → the daemon dies → the proxy answers the in-flight call with
+  // transport loss, and the next assertion is talking to a different daemon.
+  //
+  // `TRANSPORT_LIMITS.MAX_STRING_LENGTH` already bounds what crosses the bridge; a tool argument
+  // arrives over MCP stdio and never met it. Here, because this is the one place every invocation
+  // routes through, so a tool added later inherits the bound instead of having to remember it.
+  //
+  // A refusal is a normal answer. An UNANSWERED call is a hung agent, and that is the failure this
+  // prevents: the agent learns its argument was too big, which is something it can fix.
+  const oversized = firstOversizedArg(args);
+  if (oversized !== undefined) {
+    return {
+      error:
+        `argument '${oversized}' is larger than ${String(TRANSPORT_LIMITS.MAX_STRING_LENGTH)} ` +
+        'characters, which is the most Reticle moves in one call. Nothing ran. Send a smaller ' +
+        'value — a selector or an id rather than a document, or a slice of the text you need.',
+    };
+  }
   // An ACTION is what gets abandoned. Counted here, against verifications, so "the agent drove the
   // page and then wandered off" becomes a number instead of an impression.
   if (ACTION_TOOLS.has(tool.name)) getSessionMetrics().recordAction();

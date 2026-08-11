@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SessionState, UNSCRIPTABLE_TAB_RECOMMENDATION } from '@reticlehq/core';
+import { SessionState, UNSCRIPTABLE_TAB_RECOMMENDATION, TRANSPORT_LIMITS } from '@reticlehq/core';
 import { TOOLS, type ToolDef, type ToolDeps } from './tools.js';
 import { ReticleTool } from './tool-names.js';
 import { buildDynamicTools } from './dynamic-tools.js';
@@ -227,5 +227,78 @@ describe('reticle_run carries the same session envelope as a direct call', () =>
       second['session_lease'],
       'a second call getting no lease is correct — it is once per session, not once per call',
     ).toBeUndefined();
+  });
+});
+
+/**
+ * An oversized argument must be REFUSED, not deserialised and acted on.
+ *
+ * `tool-fuzz-test` failed CI on the invariant that matters most — `every tool answers every hostile
+ * call` — for `reticle_replay/huge-string`, a ~100KB argument. Seen twice with different tools; the
+ * earlier one came back `-32001 … sse_aborted` with the tool surface dropping 48→17 afterwards,
+ * which is a RESTARTED daemon. So the shape is: oversized argument → the daemon dies → the proxy
+ * answers the in-flight call with transport loss, and the fuzz's next assertion is talking to a
+ * different daemon.
+ *
+ * An unanswered call is a hung agent, and it is the one failure the whole transport layer is shaped
+ * around. `TRANSPORT_LIMITS.MAX_STRING_LENGTH` already bounds what crosses the BRIDGE, but a tool
+ * argument arrives over MCP stdio and never met it — `reticle_replay` and `reticle_flow_verify` both
+ * deserialise their argument before any bound is applied.
+ *
+ * The guard goes in `runTool`, the one place every tool invocation routes through, so a tool added
+ * later inherits it rather than having to remember. A refusal is a normal answer: the agent learns
+ * the argument was too big, which is a thing it can fix, instead of waiting forever.
+ */
+describe('an argument larger than the transport allows is refused, not run', () => {
+  const OVERSIZED = 'x'.repeat(TRANSPORT_LIMITS.MAX_STRING_LENGTH + 1);
+
+  it('refuses before the handler ever sees it', async () => {
+    let handlerRan = false;
+    const tool = stubTool(ReticleTool.QUERY, { ok: true });
+    const spy: typeof tool = {
+      ...tool,
+      handler: () => {
+        handlerRan = true;
+        return Promise.resolve({ ok: true });
+      },
+    };
+    const r = (await runTool(spy, fakeDeps(), { value: OVERSIZED })) as Record<string, unknown>;
+
+    expect(handlerRan, 'the handler ran on a payload the transport would refuse').toBe(false);
+    expect(String(r['error'])).toMatch(/larger than/i);
+    expect(String(r['error']), 'the agent must know nothing happened').toContain('Nothing ran');
+  });
+
+  it('names the parameter and the limit, so the agent can act', async () => {
+    const r = (await runTool(stubTool(ReticleTool.QUERY, { ok: true }), fakeDeps(), {
+      value: OVERSIZED,
+    })) as Record<string, unknown>;
+    expect(String(r['error'])).toContain('value');
+    expect(String(r['error'])).toContain(String(TRANSPORT_LIMITS.MAX_STRING_LENGTH));
+  });
+
+  it('ANSWERS rather than throwing — an unanswered call is the failure being prevented', async () => {
+    await expect(
+      runTool(stubTool(ReticleTool.QUERY, { ok: true }), fakeDeps(), { value: OVERSIZED }),
+    ).resolves.toBeDefined();
+  });
+
+  it('finds an oversized string nested inside args, where the fuzz puts it', async () => {
+    const r = (await runTool(stubTool(ReticleTool.ACT, { ok: true }), fakeDeps(), {
+      ref: 'e1',
+      args: { value: OVERSIZED },
+    })) as Record<string, unknown>;
+    expect(
+      String(r['error']),
+      'the nested path must be named, not just the top-level key',
+    ).toContain('args.value');
+  });
+
+  it('lets a normal argument through untouched', async () => {
+    const r = (await runTool(stubTool(ReticleTool.QUERY, { ok: true }), fakeDeps(), {
+      value: 'Save',
+    })) as Record<string, unknown>;
+    expect(r['error']).toBeUndefined();
+    expect(r['ok']).toBe(true);
   });
 });
