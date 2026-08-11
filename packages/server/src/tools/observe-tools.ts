@@ -15,6 +15,7 @@ import { ReticleTool } from './tool-names.js';
 import { buildReactionReport } from '../events/reaction.js';
 import { findContradictions } from '../events/contradictions.js';
 import { evaluatePredicate, waitForPredicate, PredicateSchema } from '../events/predicate.js';
+import { parsePredicate } from '../events/predicate-parse.js';
 import {
   matchNet,
   matchConsole,
@@ -305,9 +306,7 @@ export const OBSERVE_TOOLS: ToolDef[] = [
     handler: async (deps, args) => {
       const session = deps.sessions.resolve(asString(args['sessionId']));
       // `until` is act_and_wait's name for this — see alias-args.ts.
-      const predicate = PredicateSchema.parse(
-        aliasParam(args, 'predicate', ['until'])['predicate'],
-      );
+      const predicate = parsePredicate(aliasParam(args, 'predicate', ['until'])['predicate']);
       // Honesty: explicit since wins; else default to the last act's cursor; else the whole buffer.
       const since = asNumber(args['since']) ?? session.lastAct.cursor() ?? 0;
       const verdict = await waitForPredicate(
@@ -414,9 +413,7 @@ export const OBSERVE_TOOLS: ToolDef[] = [
     handler: async (deps, args) => {
       const session = deps.sessions.resolve(asString(args['sessionId']));
       // `until` is act_and_wait's name for this — see alias-args.ts.
-      const predicate = PredicateSchema.parse(
-        aliasParam(args, 'predicate', ['until'])['predicate'],
-      );
+      const predicate = parsePredicate(aliasParam(args, 'predicate', ['until'])['predicate']);
       const timeout = asNumber(args['timeout_ms']) ?? 0;
       // Honesty: explicit since wins; else default to the last act's cursor; else the whole buffer.
       const since = asNumber(args['since']) ?? session.lastAct.cursor() ?? 0;

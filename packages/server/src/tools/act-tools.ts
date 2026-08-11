@@ -19,6 +19,7 @@ import { assertNativeInputSupported } from './act-danger.js';
 import { leanActResult, mutatedWithin } from './act-view.js';
 import { ReticleTool } from './tool-names.js';
 import { buildReactionReport, summarizeReaction } from '../events/reaction.js';
+import { parsePredicate } from '../events/predicate-parse.js';
 import { causalSummary } from '../capsule/causal-summary.js';
 import { findContradictions } from '../events/contradictions.js';
 import { decideVerified } from '../honesty/verified.js';
@@ -405,7 +406,7 @@ export const ACT_TOOLS: ToolDef[] = [
       const withUntil = aliasParam(args, 'until', ['predicate']);
       const until =
         withUntil['until'] !== undefined
-          ? PredicateSchema.parse(withUntil['until'])
+          ? parsePredicate(withUntil['until'])
           : ({ kind: PredicateKind.SETTLED } as const);
       const timeout = asNumber(args['timeout_ms']) ?? DEFAULT_ASSERT_TIMEOUT_MS;
 
