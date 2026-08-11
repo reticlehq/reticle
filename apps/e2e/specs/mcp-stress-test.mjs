@@ -51,6 +51,55 @@ function daemonPid(port = PORT) {
   }
 }
 
+/**
+ * `listen()` with the bind error surfaced as a REJECTION, not an unhandled 'error' event.
+ *
+ * `await new Promise((r) => server.listen(port, host, r))` can never report a bind failure: the
+ * callback is the `listening` handler, and EADDRINUSE arrives as an `error` EVENT on the server. With
+ * no listener for it, Node throws it as an unhandled 'error' and the whole spec dies with a raw
+ * stack — which is exactly how this battery failed on main:
+ *
+ *   Error: listen EADDRINUSE: address already in use 127.0.0.1:4731
+ *       at Server.setupListenHandle …
+ *   [e2e] ✗ mcp-stress-test FAILED (exit 1)
+ *
+ * A try/catch around that promise does not help either, which is why it looked safe.
+ */
+function listenOn(server, port, host = '127.0.0.1') {
+  return new Promise((resolve, reject) => {
+    const onError = (err) => {
+      server.removeListener('listening', onListening);
+      reject(err);
+    };
+    const onListening = () => {
+      server.removeListener('error', onError);
+      resolve();
+    };
+    server.once('error', onError);
+    server.once('listening', onListening);
+    server.listen(Number(port), host);
+  });
+}
+
+/**
+ * Bind as soon as the port frees. A SIGKILLed daemon does not release its socket instantly, and the
+ * old code waited a flat 200 ms and hoped — a timing assumption about the machine, which is the one
+ * thing this repo's own rules forbid. It also let a daemon leaked by attempt 1 fail attempt 2 on
+ * EADDRINUSE, so the retry could never succeed.
+ */
+async function listenWhenFree(server, port, host = '127.0.0.1', budgetMs = 15_000) {
+  const deadline = Date.now() + budgetMs;
+  for (;;) {
+    try {
+      await listenOn(server, port, host);
+      return;
+    } catch (err) {
+      if (err?.code !== 'EADDRINUSE' || Date.now() >= deadline) throw err;
+      await sleep(100);
+    }
+  }
+}
+
 function killDaemon(port = PORT) {
   const pid = daemonPid(port);
   if (pid === null) return false;
@@ -147,7 +196,7 @@ chk('  and answered every call in between', 10 === answered, `${answered}/10 ans
   killDaemon();
   await sleep(200);
   const squatter = net.createServer((s) => s.destroy());
-  await new Promise((r) => squatter.listen(Number(PORT), '127.0.0.1', r));
+  await listenWhenFree(squatter, PORT);
   const r = await settled(client.request('tools/call', { name: 'reticle_sessions', arguments: {} }, 30_000));
   chk('a squatter on the port does not hang the client', r.answered, r.how);
   chk('  server still alive with the port stolen', alive(client));
@@ -223,7 +272,7 @@ killDaemon();
     });
   });
   fake.on('clientError', () => undefined);
-  await new Promise((r) => fake.listen(Number(RESET_PORT), '127.0.0.1', r));
+  await listenOn(fake, RESET_PORT);
 
   const resetClient = new McpStdioClient(
     'node',
@@ -257,7 +306,7 @@ killDaemon();
     res.end(); // headers, then gone
   });
   flapper.on('clientError', () => undefined);
-  await new Promise((r) => flapper.listen(Number(FLAP_PORT), '127.0.0.1', r));
+  await listenOn(flapper, FLAP_PORT);
 
   const flapClient = new McpStdioClient(
     'node',
