@@ -284,7 +284,10 @@ export function craSteps(input: PlanInput): Step[] {
       title: 'Pairing token',
       target: CRA_ENV_PATH,
       status: StepStatus.MANUAL,
-      detail: `no pairing token yet — run \`reticle start\`, then \`reticle init\` again to write ${TOKEN_VAR}`,
+      // `reticle serve`, not `reticle start` — the latter is not a verb this CLI dispatches, and
+      // this message is read by someone whose app boots and never pairs. Handing them a command
+      // that errors is a second dead end on the first.
+      detail: `no pairing token yet — the daemon writes one on first run. Start it with \`reticle serve\` (or let your agent run \`reticle mcp\`), then \`reticle init\` again to write ${TOKEN_VAR}`,
     });
   }
   if (null === entry) {

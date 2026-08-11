@@ -333,7 +333,10 @@ describe('buildPlan — CRA pairing token', () => {
     // omit the step: init read all-green and the app could never pair.
     const missing = maybeStep(craPlan({ pairingToken: '' }), TOKEN_STEP);
     expect(StepStatus.MANUAL).toBe(missing?.status);
-    expect(missing?.detail).toContain('reticle start');
+    // Was `reticle start`, which this CLI does not dispatch — the test pinned the wrong command and
+    // so kept it alive. `reticle serve` is the verb that starts a daemon; see
+    // suggested-commands-exist.test.ts, which now catches the class rather than this instance.
+    expect(missing?.detail).toContain('reticle serve');
   });
 
   it('stays quiet when the correct token is already in the env file', () => {
