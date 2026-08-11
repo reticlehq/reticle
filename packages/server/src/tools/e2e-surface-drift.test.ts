@@ -323,4 +323,30 @@ describe('the acting tools point at the one that produces a verdict', () => {
   it('and says what act_and_wait gives you, not merely that it exists', () => {
     expect(act?.description).toMatch(/verdict|assert/i);
   });
+
+  /**
+   * Mentioning it was not enough, and we now have the number. In one day of telemetry agents called
+   * `reticle_act` 179 times and `reticle_act_and_wait` 62 — and `act_and_wait` produced ALL EIGHT
+   * action-derived defects while `act` produced none. `act` is the most-used tool in the product and
+   * has never found anything.
+   *
+   * The steer was already in the description, 252 characters in, behind the full action enum. An
+   * agent skimming to pick a tool reads the opening clause — "Execute one action against a ref:
+   * click|dblclick|…" — which is a complete and satisfying answer to "how do I click something", and
+   * stops. Position is the fix, not wording.
+   *
+   * 160 chars is roughly the opening sentence. This asserts the choice is made before the reference
+   * material starts, and it is a BOUND, not a duration — it cannot flake.
+   */
+  const STEER_MUST_APPEAR_WITHIN = 160;
+
+  it('puts the steer in the opening sentence, not behind the action enum', () => {
+    const at = act?.description.indexOf(ReticleTool.ACT_AND_WAIT) ?? -1;
+    expect(at).toBeGreaterThanOrEqual(0);
+    expect(
+      at,
+      `act_and_wait is mentioned ${String(at)} chars in. An agent picking a tool reads the first ` +
+        'clause and stops — which is how the most-used tool in the product has zero findings.',
+    ).toBeLessThan(STEER_MUST_APPEAR_WITHIN);
+  });
 });
