@@ -247,8 +247,71 @@ export function recoveryFor(message: string): string | undefined {
  * a request for a bug report. The e2e battery caught it (`no bad argument is blamed on Reticle`);
  * no unit test could, which is why one now exists below.
  */
+/** Max issues rendered — a union rejection can emit one per member, which is how the array became unreadable. */
+const MAX_RENDERED_ISSUES = 3;
+
+/** The fields a zod issue always carries. Anything without both is not an issue array. */
+interface ZodIssueShape {
+  code: string;
+  message: string;
+  path?: unknown[];
+  keys?: unknown[];
+}
+
+function isZodIssue(value: unknown): value is ZodIssueShape {
+  if (typeof value !== 'object' || null === value) return false;
+  const v = value as Record<string, unknown>;
+  return 'string' === typeof v['code'] && 'string' === typeof v['message'];
+}
+
+/** `["net","urlContains"]` → `net.urlContains`; an empty path means the object itself. */
+function issueClause(issue: ZodIssueShape): string {
+  if ('unrecognized_keys' === issue.code && Array.isArray(issue.keys)) {
+    return `unknown field ${issue.keys.map(String).join(', ')}`;
+  }
+  const path = issue.path ?? [];
+  return `${0 === path.length ? 'the arguments' : path.map(String).join('.')}: ${issue.message}`;
+}
+
+/**
+ * A serialized zod issue array, rendered as a sentence. Anything else is returned untouched.
+ *
+ * This is the one boundary every agent-visible tool failure crosses, which is why the rewrite lives
+ * here rather than in each tool. `parsePredicate` solved this for the three predicate tools by never
+ * producing the array; it cannot help anywhere else, because the MCP SDK validates a tool's schema
+ * BEFORE our handler runs. So `reticle_session` with no action — the commonest mistake there is —
+ * never reaches the friendly "unknown action … expected: [tune, yield, …]" its handler already
+ * builds, and the agent gets the raw array instead. Driven live against the shipped daemon.
+ *
+ * Conservative by construction: it only rewrites a JSON ARRAY whose every element carries both
+ * `code` and `message`. A tool that legitimately returns JSON is left alone.
+ */
+export function zodArrayAsSentence(message: string): string {
+  const text = message.trim();
+  if (!text.startsWith('[')) return message;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return message; // not JSON at all — e.g. prose that happens to open with a bracket
+  }
+  if (!Array.isArray(parsed) || 0 === parsed.length || !parsed.every(isZodIssue)) return message;
+  const shown = parsed.slice(0, MAX_RENDERED_ISSUES).map(issueClause).join('; ');
+  const rest = parsed.length - MAX_RENDERED_ISSUES;
+  return rest > 0 ? `${shown} (and ${String(rest)} more)` : shown;
+}
+
+/**
+ * `unknown field` and `<path>: Required` are the shapes `zodArrayAsSentence` produces.
+ *
+ * Added for the same reason `did not parse` was: rendering the array as a sentence REMOVES the very
+ * codes (`invalid_type`, `unrecognized_keys`) this pattern matched on, so a schema rejection fell
+ * through to the generic branch and came back as "may be a defect in Reticle" — worse than the dump
+ * it replaced, because it also asks for a bug report about the agent's own malformed call. This repo
+ * has now made that mistake twice; the second time a test caught it before CI did.
+ */
 const ARGUMENT_REJECTION =
-  /Unrecognized key|unrecognized_keys|invalid_type|did not parse|Invalid arguments for tool|Unknown parameters? for|^Required |Expected \w+, received/i;
+  /Unrecognized key|unrecognized_keys|invalid_type|did not parse|unknown field|: Required\b|Invalid arguments for tool|Unknown parameters? for|^Required |Expected \w+, received/i;
 
 /**
  * What to say instead of asking for a bug report. The schema already stated the problem precisely;
@@ -292,10 +355,9 @@ interface ErrorPayload {
  * agent always gets exactly one next move.
  */
 export function buildErrorPayload(rawMessage: string): ErrorPayload {
-  // Cap FIRST, then classify on the capped text — so what the classifier reads is exactly what the
-  // agent reads. Classifying the full message and emitting a shorter one would let a recovery hint
-  // reference a phrase that is no longer there.
-  const message = capMessage(rawMessage);
+  // Render the zod array BEFORE capping: the cap would otherwise truncate the JSON mid-issue and
+  // leave an unparseable fragment as the agent's error text — the worst of both shapes.
+  const message = capMessage(zodArrayAsSentence(rawMessage));
   // A self-diagnosing message gets NEITHER a generic recovery nor the feedback ask. It already
   // inspected the machine and named the cause; a second, contradictory hint is noise, and inviting a
   // bug report about a condition Reticle diagnosed itself is exactly backwards.

@@ -529,3 +529,59 @@ describe('a predicate that did not parse is the agent to fix, not a Reticle bug'
     );
   });
 });
+
+/**
+ * The SDK's own schema rejection arrives as a serialized zod ARRAY, and this is the one boundary
+ * every agent-visible failure crosses — so it is where the array stops being the error text.
+ *
+ * `parsePredicate` fixed this for the three predicate tools by never producing the array. It cannot
+ * help anywhere else: `action` on a merged tool is validated by the MCP SDK BEFORE our handler runs,
+ * so the friendly "unknown action … expected: [tune, yield, …]" the handler already builds is
+ * unreachable for the commonest mistake of all, calling `reticle_session` with no action. What the
+ * agent got instead was the raw array. Driven live against the shipped daemon on `reticle_assert`.
+ *
+ * Fixing it HERE rather than per-tool is the point: one boundary, every tool, including ones nobody
+ * has written yet.
+ */
+describe('a serialized zod array is rendered as a sentence', () => {
+  const ZOD_ARRAY = JSON.stringify([
+    {
+      code: 'invalid_type',
+      expected: 'string',
+      received: 'undefined',
+      path: ['action'],
+      message: 'Required',
+    },
+    {
+      code: 'unrecognized_keys',
+      keys: ['mode'],
+      path: [],
+      message: "Unrecognized key(s) in object: 'mode'",
+    },
+  ]);
+
+  it('names the parameter instead of dumping the array', () => {
+    const payload = buildErrorPayload(ZOD_ARRAY);
+    expect(payload.error).toContain('action: Required');
+    expect(payload.error).toContain('unknown field mode');
+    expect(payload.error).not.toContain('invalid_type');
+    expect(payload.error).not.toContain('[{');
+  });
+
+  it('still classifies as the agent to fix, not a Reticle defect', () => {
+    const payload = buildErrorPayload(ZOD_ARRAY);
+    expect(String(payload.recovery)).toContain("did not match the tool's schema");
+    expect(JSON.stringify(payload)).not.toMatch(/defect in Reticle|report this/i);
+  });
+
+  it('leaves an ordinary message alone — this only rewrites the array shape', () => {
+    const plain = 'ref e42 no longer resolves to an element';
+    expect(buildErrorPayload(plain).error).toBe(plain);
+  });
+
+  it('leaves JSON that is not a zod issue array alone', () => {
+    // A tool legitimately returning a JSON array must not be reworded into a schema complaint.
+    const notIssues = JSON.stringify([{ url: '/api/x', status: 500 }]);
+    expect(buildErrorPayload(notIssues).error).toBe(notIssues);
+  });
+});
