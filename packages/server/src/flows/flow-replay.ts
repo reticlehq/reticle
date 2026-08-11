@@ -120,6 +120,22 @@ export function nearestTestid(missing: string, present: string[]): string | null
  */
 const ANCHOR_SETTLE_ATTEMPTS = 8;
 const ANCHOR_SETTLE_DELAY_MS = 150;
+/**
+ * The budget that actually governs, in wall-clock milliseconds.
+ *
+ * Attempts were the bound, and on an event-chatty page that collapsed. `settleTick` ends on EITHER
+ * an event OR the tick, so a page emitting continuously (API calls, a large form render, CSS
+ * transition start/end pairs) burned all eight attempts in **224–758ms measured** — a budget
+ * documented as 1.2s, spent in a fifth of it, before a newly routed page had mounted its controls.
+ * Cross-route replays drifted `testid_not_found` at 278ms while the same flow passed on a quiet page.
+ *
+ * An event arriving is evidence the page is still working. It should EXTEND the wait, not spend it.
+ * So the deadline decides when to give up, and the attempt cap below survives only as a backstop
+ * against a pathological storm spinning this loop hot.
+ */
+const ANCHOR_SETTLE_BUDGET_MS = ANCHOR_SETTLE_ATTEMPTS * ANCHOR_SETTLE_DELAY_MS;
+/** Backstop only. Generous on purpose: the deadline is the real bound, this just prevents a spin. */
+const ANCHOR_SETTLE_MAX_ATTEMPTS = 40;
 
 /** Injected sleeper so tests drive replay with a no-op clock; production waits on a real timer. */
 export type Sleep = (ms: number) => Promise<void>;
@@ -224,9 +240,15 @@ export async function resolveQuery(
   session: FlowReplaySession,
   queryArgs: Record<string, unknown>,
   sleep: Sleep,
+  now: () => number = Date.now,
 ): Promise<{ refs: string[]; hint?: QueryEmptyHint }> {
   let last = readQuery(await session.command(ReticleCommand.QUERY, queryArgs));
-  for (let attempt = 1; 0 === last.refs.length && attempt < ANCHOR_SETTLE_ATTEMPTS; attempt += 1) {
+  const deadline = now() + ANCHOR_SETTLE_BUDGET_MS;
+  for (
+    let attempt = 1;
+    0 === last.refs.length && now() < deadline && attempt < ANCHOR_SETTLE_MAX_ATTEMPTS;
+    attempt += 1
+  ) {
     await settleTick(session, sleep);
     last = readQuery(await session.command(ReticleCommand.QUERY, queryArgs));
   }
