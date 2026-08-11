@@ -78,3 +78,53 @@ describe('the daemon pair', () => {
     expect(msg).toMatch(/reticle stop/);
   });
 });
+
+/**
+ * The acceptance criterion from #127, pinned.
+ *
+ * > a test that boots an SDK one minor behind and asserts the user sees **one actionable sentence
+ * > naming both versions** — not a `-32000`.
+ *
+ * The behaviour is already right. What was missing is anything holding it there: the delivery test
+ * beside this one asserts the SDK version reaches the agent and never checks that the DAEMON's does.
+ * "Your SDK is 2.4.0" is half an answer — it does not say which direction the skew runs or how far,
+ * which is the part that decides whether you upgrade the app or the CLI.
+ *
+ * A characterisation test, not a fix. Its worth is that it fails if a future reword drops one of the
+ * two numbers, which is the cheapest way for this to regress and the hardest to notice: the sentence
+ * would still read fluently.
+ */
+describe('a skew sentence names BOTH versions, not just the peer', () => {
+  const SELF = { version: '2.5.0', contract: 'abc123' };
+
+  it('a minor behind, with a foreign contract', () => {
+    const message = describeSkew(
+      { what: 'the page', version: '2.4.0', contract: 'deadbeef', fix: 'run reticle update' },
+      SELF,
+    );
+    expect(message).toContain('2.4.0');
+    expect(message, "the daemon's own version is the half that says which way to move").toContain(
+      '2.5.0',
+    );
+  });
+
+  it('a minor behind on an SDK too old to report a contract at all', () => {
+    // The -32000 case from the report: no contract to compare, so the versions are all there is.
+    // `contract: undefined` explicitly — the field is required and "predates it" is the case here.
+    const message = describeSkew(
+      { what: 'the page', version: '2.4.0', contract: undefined, fix: 'run reticle update' },
+      SELF,
+    );
+    expect(message).toContain('2.4.0');
+    expect(message).toContain('2.5.0');
+  });
+
+  it('and it is one sentence a human can act on, not a dump', () => {
+    const message = describeSkew(
+      { what: 'the page', version: '2.4.0', contract: 'deadbeef', fix: 'run reticle update' },
+      SELF,
+    );
+    expect(message).toContain('run reticle update');
+    expect(message, 'a version-skew warning must not itself be a wall of JSON').not.toContain('{');
+  });
+});
