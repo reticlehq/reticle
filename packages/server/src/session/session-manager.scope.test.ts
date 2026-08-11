@@ -197,3 +197,68 @@ describe('a dead sessionId names the live ones instead of sending the agent away
     ).toMatch(/no sessions are connected/i);
   });
 });
+
+/**
+ * Two apps under one repo root, one daemon, no scope — a call for one was answered by the other.
+ *
+ * Reported from the field:
+ *
+ * > A call from an MCP client whose cwd is `apps/next-app-router` was resolved against a session
+ * > whose projectId is `rowy-d30b4137` — a different app. `reticle_act_and_wait` then spent 16.9s
+ * > and returned `verified:'no'`, `pass:false`, "no route change observed" **about an app never
+ * > under test**.
+ *
+ * That is the worst shape of bug this product can ship: a confident false verdict, with a source
+ * pointer, about code the agent never touched. Every honesty rule in `decideVerified` exists to
+ * prevent exactly that, and none fire — from the daemon's point of view nothing went wrong.
+ *
+ * The cause is upstream of all of them. The default scope is `readProjectId(process.cwd())` — the
+ * DAEMON's cwd (`index.ts:388`). Start the daemon at a repo root above two apps and there is no
+ * `.reticle.json` there, so there is no scope at all, and auto-selection falls through to picking
+ * the freshest heartbeat. The existing ambiguity check compares RECENCY; it has no opinion about
+ * two tabs belonging to different projects.
+ *
+ * So: when nothing has scoped the call and the candidates span more than one project, refuse and
+ * name them. A refusal costs the agent one argument. A false verdict costs it an afternoon editing
+ * the wrong file.
+ */
+describe('an unscoped call across two projects refuses instead of guessing', () => {
+  it('refuses when two projects are connected and nothing disambiguates', async () => {
+    await connect({ sessionId: 'a', url: 'http://localhost:3000/', projectId: 'next-app-router' });
+    await connect({ sessionId: 'b', url: 'http://localhost:7699/', projectId: 'rowy-d30b4137' });
+    await waitForSessions(2);
+
+    let message = '';
+    try {
+      bridge.sessions.resolve();
+    } catch (err) {
+      message = err instanceof Error ? err.message : String(err);
+    }
+    expect(message, 'it picked one of two apps by heartbeat freshness').not.toBe('');
+    expect(message, 'the agent cannot choose without being told what the options are').toContain(
+      'next-app-router',
+    );
+    expect(message).toContain('rowy-d30b4137');
+  });
+
+  it('still auto-selects when both sessions belong to the SAME project', async () => {
+    // Two tabs of one app is not ambiguity about WHICH APP — the existing recency rule handles it.
+    await connect({ sessionId: 'one', url: 'http://localhost:3000/a', projectId: 'same' });
+    await waitForSessions(1);
+    expect(bridge.sessions.resolve().id).toBe('one');
+  });
+
+  it('an explicit scope still wins, so nothing that already worked changes', async () => {
+    await connect({ sessionId: 'a', url: 'http://localhost:3000/', projectId: 'app-a' });
+    await connect({ sessionId: 'b', url: 'http://localhost:3001/', projectId: 'app-b' });
+    await waitForSessions(2);
+    expect(bridge.sessions.resolve(undefined, { projectId: 'app-b' }).id).toBe('b');
+  });
+
+  it('an explicit sessionId still wins', async () => {
+    await connect({ sessionId: 'a', url: 'http://localhost:3000/', projectId: 'app-a' });
+    await connect({ sessionId: 'b', url: 'http://localhost:3001/', projectId: 'app-b' });
+    await waitForSessions(2);
+    expect(bridge.sessions.resolve('b').id).toBe('b');
+  });
+});

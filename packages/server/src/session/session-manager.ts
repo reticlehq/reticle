@@ -258,6 +258,35 @@ export class SessionManager {
       return only;
     }
 
+    // Two projects and nothing to choose between them: refuse, BEFORE any scoring.
+    //
+    // Reported from the field: a call from `apps/next-app-router` was answered by a `rowy-*`
+    // session, and `act_and_wait` spent 16.9s returning `verified:'no'` about an app never under
+    // test — a confident false verdict, with a source pointer, about code the agent never touched.
+    //
+    // The recency rule below cannot prevent it. It asks "is one of these clearly fresher", which is
+    // the right question for two tabs of ONE app and the wrong question for two apps: the fresher
+    // tab of the wrong project is still the wrong project. The reported case had a clear winner,
+    // so the ambiguity check passed and the wrong app was selected.
+    //
+    // This sits ahead of scoring so freshness cannot rescue it. It only fires when nothing scoped
+    // the call — an explicit `sessionId` returns far above, and an explicit or default scope has
+    // already narrowed `all` to one project by here.
+    const projects = new Set(all.map((s) => s.projectId).filter((p) => p !== undefined));
+    if (projects.size > 1) {
+      const listed = all
+        .filter((s) => s.projectId !== undefined)
+        .map((s) => `'${String(s.projectId)}' (${s.url}, sessionId '${s.id}')`)
+        .join(', ');
+      throw new Error(
+        `${String(projects.size)} different projects are connected and nothing says which one this ` +
+          `call is about: ${listed}. Pass sessionId to target one. Reticle refuses rather than ` +
+          'guessing here because picking the wrong app produces a confident verdict about code you ' +
+          'never touched — the daemon scopes to the directory it was started in, so running it above ' +
+          'several apps leaves it unable to tell them apart.',
+      );
+    }
+
     // Multiple sessions: score each (lower = better candidate for auto-selection).
     // 0 = non-throttled (visible + recently-heard), 1 = throttled (hidden or stale heartbeat).
     const scored = all.map((s) => ({ s, score: s.throttled() ? 1 : 0, ms: s.lastSeenMs() }));
