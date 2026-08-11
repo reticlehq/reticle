@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { CommandResult } from '@reticlehq/core';
 import { FROM_DISK_ARG } from '@reticlehq/core';
-import { TOOLS, type ToolDeps } from './tools.js';
+import { TOOLS, type ToolDef, type ToolDeps } from './tools.js';
 import { ReticleTool } from './tool-names.js';
 import { BaselineStore } from '../project/baselines.js';
 import { RecordingStore } from '../flows/recordings.js';
@@ -177,5 +177,75 @@ describe('reticle_contract_save / reticle_capabilities fromDisk', () => {
     const a = await fs1.readFile(reticleDirPaths(ROOT).contract);
     const b = await fs2.readFile(reticleDirPaths(ROOT).contract);
     expect(a).toBe(b);
+  });
+});
+
+/**
+ * `reticle_contract_save` writes to the DAEMON's `.reticle/`, not the session's project.
+ *
+ * Reported in #161: a daemon started above several apps scopes to its own cwd, so a call from one
+ * app can be resolved against another app's session. The cross-project REFUSAL closed the verdict
+ * half of that — a call that could touch the wrong app now refuses rather than guessing. This is
+ * the write half, which had no guard at all: the surface of app A is persisted into app B's repo,
+ * silently, and the tool reports `saved: true` with a path that looks right.
+ *
+ * A contract is git-checked and diffable. Writing the wrong app's testids into it is a change
+ * somebody commits.
+ *
+ * Refuse rather than redirect: the session advertises a projectId, not a project DIRECTORY, so
+ * there is no honest way to work out where the right `.reticle/` lives. Naming both ids and
+ * stopping is the whole of what can be said truthfully.
+ */
+describe('contract_save refuses to write one project into another', () => {
+  const save = (): ToolDef => {
+    const t = TOOLS.find((x) => x.name === ReticleTool.CONTRACT_SAVE);
+    if (t === undefined) throw new Error('contract_save is not on the surface');
+    return t;
+  };
+
+  function depsFor(
+    sessionProject: string | undefined,
+    daemonProject: string | undefined,
+  ): ToolDeps {
+    const base = fakeDeps(memoryFs());
+    const command = (): Promise<CommandResult> =>
+      Promise.resolve({ kind: 'command_result', id: 'c', ok: true, result: CAPS });
+    const session: Partial<Session> = { id: 'demo', command, projectId: sessionProject };
+    const sessions: Partial<SessionManager> = { resolve: () => session as Session };
+    return {
+      ...base,
+      sessions: sessions as SessionManager,
+      ...(daemonProject === undefined ? {} : { projectId: daemonProject }),
+    };
+  }
+
+  it('refuses when the session belongs to a different project than this daemon', async () => {
+    await expect(
+      save().handler(depsFor('rowy-d30b4137', 'next-app-router-a1'), {}),
+    ).rejects.toThrow(/rowy-d30b4137/);
+  });
+
+  it('names BOTH projects, or the reader cannot tell which way round it is', async () => {
+    await expect(
+      save().handler(depsFor('rowy-d30b4137', 'next-app-router-a1'), {}),
+    ).rejects.toThrow(/next-app-router-a1/);
+  });
+
+  it('saves normally when the session is this daemon’s own project', async () => {
+    const result = (await save().handler(depsFor('same-id', 'same-id'), {})) as { saved: boolean };
+    expect(result.saved).toBe(true);
+  });
+
+  it('saves when the daemon has no project id — the pre-existing single-app case', async () => {
+    // The guard must not break every daemon that never computed one. Absence is not a mismatch.
+    const result = (await save().handler(depsFor('anything', undefined), {})) as { saved: boolean };
+    expect(result.saved).toBe(true);
+  });
+
+  it('saves when the SESSION is untagged — an unstamped build is not another project', async () => {
+    const result = (await save().handler(depsFor(undefined, 'daemon-proj'), {})) as {
+      saved: boolean;
+    };
+    expect(result.saved).toBe(true);
   });
 });

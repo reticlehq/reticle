@@ -428,6 +428,9 @@ export async function start(options: StartOptions = {}): Promise<RunningServer> 
       reticleRoot,
       now,
       bridgePort: port,
+      // The daemon's OWN project, so a tool can tell "this session is mine" from "this session
+      // belongs to a sibling app under the same daemon". contract_save refuses on the second.
+      ...(activeProjectId === undefined ? {} : { projectId: activeProjectId }),
     };
     const profile = resolveToolSurface(options.toolProfile);
     const server = createMcpServer(

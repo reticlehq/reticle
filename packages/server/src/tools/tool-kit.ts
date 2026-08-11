@@ -35,6 +35,14 @@ export interface ToolDeps {
   fs: FileSystemPort;
   /** absolute.reticle path (index.ts computes cwd/.reticle). */
   reticleRoot: string;
+  /**
+   * This daemon's OWN project id, derived from the directory it was started in.
+   *
+   * Optional because a daemon above an uninitialised directory has none, and because every existing
+   * test construction of ToolDeps predates it. Absence means "cannot tell", which must never be
+   * treated as a mismatch.
+   */
+  projectId?: string;
   /** injected clock for the contract's generatedAt stamp. */
   now: () => number;
   /**

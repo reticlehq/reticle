@@ -9,13 +9,41 @@ import { ReticleTool } from './tool-names.js';
 import { asString } from './tools-helpers.js';
 import { sessionIdShape, commandOrThrow } from './tool-kit.js';
 import { reticleDirPaths, readContract, writeContract } from '../project/reticle-dir.js';
-import type { ToolDef } from './tools.js';
+import type { ToolDef, ToolDeps } from './tools.js';
 
 /**
  * The capability-contract tools. `reticle_capabilities` reads the live session, or the
  * git-checked `.reticle/contract.json` when `{ fromDisk:true }`; `reticle_contract_save` persists the
  * live registry to that file (pretty-printed, stable key order — diffable in PRs).
  */
+
+/**
+ * Refuse to persist one project's surface into another project's repo.
+ *
+ * `writeContract` writes to the DAEMON's `.reticle/`, which is the directory the daemon was started
+ * in — not the session's project. A daemon started above several apps therefore saves app A's
+ * testids into app B's checkout, reports `saved: true`, and hands back a path that looks right. A
+ * contract is git-checked and diffable, so that is a change somebody commits.
+ *
+ * Refuse rather than redirect: a session advertises a projectId, not a project DIRECTORY, so there
+ * is no honest way to work out where the correct `.reticle/` lives. Naming both ids and stopping is
+ * the whole of what can be said truthfully.
+ *
+ * Silence is not a mismatch. An unstamped build carries no projectId, and a daemon above an
+ * uninitialised directory has none either; neither is evidence of two projects.
+ */
+function assertSameProject(deps: ToolDeps, sessionId: string | undefined): void {
+  const mine = deps.projectId;
+  const theirs = deps.sessions.resolve(sessionId).projectId;
+  if (mine === undefined || theirs === undefined || mine === theirs) return;
+  throw new Error(
+    `refusing to save: this session belongs to project '${theirs}', but this daemon writes to ` +
+      `project '${mine}' (.reticle/ in the directory it was started in). Saving would put one ` +
+      "app's testable surface into another app's git-checked contract. Run a daemon from " +
+      `'${theirs}'s own directory and save there.`,
+  );
+}
+
 export const CONTRACT_TOOLS: ToolDef[] = [
   {
     name: ReticleTool.CAPABILITIES,
@@ -75,6 +103,7 @@ export const CONTRACT_TOOLS: ToolDef[] = [
         {},
       );
       const caps = CapabilitiesSchema.parse(res);
+      assertSameProject(deps, asString(args['sessionId']));
       await writeContract(deps.fs, deps.reticleRoot, caps, deps.now);
       return {
         saved: true,
