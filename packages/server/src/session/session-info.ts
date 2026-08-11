@@ -13,7 +13,8 @@ export interface SessionInfo {
   url: string;
   /** Stable build-stamped project identity; absent for v1.0 SDKs that don't send it. */
   projectId?: string;
-  title: string;
+  /** Absent when the page has no title — never the empty string. Fall back to `url`. */
+  title?: string;
   adapters: string[];
   hasCapabilities: boolean;
   /** Present only when the page's SDK version differs from the daemon's — see version-skew.ts. */
@@ -60,7 +61,11 @@ export function buildSessionInfo(session: SessionView): SessionInfo {
     sessionId: session.id,
     url: session.url,
     ...(session.projectId === undefined ? {} : { projectId: session.projectId }),
-    title: session.title,
+    // Omitted when blank, never `""`. An empty title cannot be told apart from "we sampled before
+    // the page set one", and two such tabs make the listing unusable. Moving the sample later does
+    // not fix it — a page may set its title after connect, or never — so the projection refuses the
+    // bad answer and the reader falls back to `url`, which is right here in the same record.
+    ...('' === session.title.trim() ? {} : { title: session.title }),
     adapters: session.adapters,
     hasCapabilities: session.hasCapabilities,
     // On every listing, not buried in a log — skew explains failures that read as app bugs.
