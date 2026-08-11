@@ -10,6 +10,7 @@ import { join, dirname, isAbsolute } from 'node:path';
 import { homedir } from 'node:os';
 import { spawnSync } from 'node:child_process';
 import type { InitIo } from './run.js';
+import { windowsShellArg } from './windows-quote.js';
 
 /**
  * `shell: true` ONLY where it earns its keep.
@@ -23,10 +24,15 @@ function shellOpt(): { shell?: true } {
   return NodePlatform.WINDOWS === process.platform ? { shell: true } : {};
 }
 
-/** Under a shell, quote what the shell would otherwise split. Windows only, where shell is required. */
+/**
+ * Under a shell, quote what the shell would otherwise split or interpret. Windows only, where
+ * `shell: true` is required (see shellOpt). The rule itself lives in windows-quote.ts as a pure
+ * function so it can be tested on every platform — keeping it inside this branch is why it was
+ * wrong for as long as it was.
+ */
 function shellSafe(args: readonly string[]): string[] {
   if (process.platform !== NodePlatform.WINDOWS) return [...args];
-  return args.map((arg) => (/[\s"]/.test(arg) ? `"${arg.replace(/"/g, '\\"')}"` : arg));
+  return args.map(windowsShellArg);
 }
 
 export function buildNodeIo(cwd: string): InitIo {
