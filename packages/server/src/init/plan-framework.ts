@@ -73,6 +73,7 @@ function capabilitiesStep(input: PlanInput): Step[] {
     testids.length > 0
       ? `${String(testids.length)} data-testid values`
       : 'no data-testid values yet';
+  const nothingToRegister = 0 === testids.length && 0 === stores.length;
   return [
     {
       title: CAPABILITIES_TITLE,
@@ -82,6 +83,29 @@ function capabilitiesStep(input: PlanInput): Step[] {
       write: { path: VITE_DEV_MODULE_PATH, content: viteDevModuleFile(testids, stores) },
       dependsOnInstall: true,
     },
+    // The write is real; what it registers is not. `registerCapabilities({ testids: [], signals: [],
+    // stores: [] })` registers nothing, so `hasCapabilities` stays false — correctly — and the ✓
+    // above reads as if the feature is on. Reported as exactly that confusion: "hasCapabilities false
+    // on every session while init said ✓ Capabilities + store".
+    //
+    // Beside the write rather than replacing it, for two reasons: only APPLY steps are written
+    // (run.ts), and SKILL.md tells the reader to skip ✓ lines — so a caveat carried on the ✓ is a
+    // caveat nobody reads.
+    ...(nothingToRegister
+      ? [
+          {
+            title: 'Capabilities are empty until you edit that file',
+            target: VITE_DEV_MODULE_PATH,
+            status: StepStatus.NOTICE,
+            detail:
+              'the module was written but registers nothing — no data-testid values were found and ' +
+              'no state library was detected, so `hasCapabilities` stays false and reticle_state ' +
+              'has nothing to read. Add data-testid to the elements your main flow touches, or ' +
+              'register a store in that file, and the agent gains what the app BELIEVES rather than ' +
+              'only what it rendered.',
+          } satisfies Step,
+        ]
+      : []),
   ];
 }
 

@@ -311,6 +311,63 @@ describe('buildPlan — install', () => {
   });
 });
 
+/**
+ * `✓ Capabilities + store` on an app where nothing will ever register.
+ *
+ * From #139: `hasCapabilities: false` on every session while `init` reported `✓ Capabilities +
+ * store`. The report offered three hypotheses and asked for them to be separated before anyone
+ * touched code. They now can be.
+ *
+ * It is NOT "the app never imports the generated module" — the Vite plugin resolves it at load
+ * (`findDevModule`, `index.ts:634`) and `VITE_DEV_MODULE_PATH` is `src/reticle-dev.ts`, which is the
+ * first candidate it looks for. And it is not a broken re-announce: a live drive of `apps/bench-app`
+ * tonight reported `hasCapabilities: true`.
+ *
+ * The answer is simpler and is the artifact-versus-effect gap the report itself names. The generated
+ * module always calls `registerCapabilities({ testids: [...], signals: [], stores: [] })`. On an app
+ * with **no data-testid values and no detected store, that call registers nothing** — so
+ * `hasCapabilities: false` is CORRECT, and the `✓` is what is wrong.
+ *
+ * bench-app is full of testids, which is why it reported true and the reporter's app did not.
+ *
+ * The step must stay APPLY — `run.ts:603` only writes APPLY steps, so demoting it would stop writing
+ * the file. Same shape as the CRA token notice: a NOTICE beside the write, because `SKILL.md` tells
+ * the reader to skip `✓` lines.
+ */
+describe('buildPlan — capabilities that will register nothing say so', () => {
+  const vitePlan = (partial: Partial<PlanInput> = {}) =>
+    buildPlan(
+      input({
+        detection: detection(Framework.VITE),
+        viteConfig: { path: 'vite.config.ts', source: 'export default {};' },
+        ...partial,
+      }),
+    );
+
+  it('raises a NOTICE when the scan found no testids and no store', () => {
+    const plan = vitePlan({ testids: [], storeHints: [] });
+    const written = maybeStep(plan, 'Capabilities + store');
+    expect(StepStatus.APPLY, 'the step must still WRITE the module').toBe(written?.status);
+
+    const notice = plan.steps.find(
+      (s) => s.status === StepStatus.NOTICE && /capabilit/i.test(s.detail),
+    );
+    expect(
+      notice,
+      'nothing tells the reader that hasCapabilities will stay false until they edit this file',
+    ).toBeDefined();
+    expect(notice?.detail).toMatch(/hasCapabilities/);
+  });
+
+  it('stays quiet when the scan actually found something to register', () => {
+    const plan = vitePlan({ testids: ['save-btn', 'row-1'], storeHints: [] });
+    const notice = plan.steps.find(
+      (s) => s.status === StepStatus.NOTICE && /hasCapabilities/.test(s.detail),
+    );
+    expect(notice, 'testids were found — there is nothing to warn about').toBeUndefined();
+  });
+});
+
 describe('buildPlan — CRA pairing token', () => {
   const TOKEN_STEP = 'Pairing token';
   const craPlan = (partial: Partial<PlanInput> = {}): ReturnType<typeof buildPlan> =>
