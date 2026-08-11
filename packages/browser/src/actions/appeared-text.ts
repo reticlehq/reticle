@@ -8,6 +8,23 @@ const JOIN = ' | ';
 
 const TEXT_NODE = 3;
 
+/** Any letter, in any script — Latin, Cyrillic, CJK, Arabic. */
+const HAS_LETTER = /\p{L}/u;
+
+/**
+ * A fragment with no letters at all is not the app saying something.
+ *
+ * The Hostile fixture mutates a counter every 16ms, and clicking a button on that page reported
+ * `appeared: "409"` — the ticker, not the action's effect. A count-up animation is exactly what
+ * emits a bare number into the settle window, and a bare number carries no message a reader can
+ * act on. Deliberately conservative: it drops only fragments with NO letters, so "status 500",
+ * "3 items deleted" and "Could not save" all survive. An app whose only feedback is a naked
+ * numeral loses it here — the snapshot still shows it, and that is the cheaper mistake.
+ */
+function saysSomething(text: string): boolean {
+  return HAS_LETTER.test(text);
+}
+
 /**
  * Gathers the text an action put on the page, from mutation records the observer already receives.
  *
@@ -67,6 +84,7 @@ export class AppearedText {
     if (null !== owner && isIgnored(owner)) return;
     const text = (raw ?? '').replace(/\s+/g, ' ').trim();
     if (0 === text.length) return;
+    if (!saysSomething(text)) return;
     if (this.#seen.has(text)) return;
     this.#seen.add(text);
     this.#length += text.length + JOIN.length;

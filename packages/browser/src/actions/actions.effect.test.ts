@@ -259,6 +259,33 @@ describe('action effect: appeared', () => {
     expect(r.effect.appeared).toBeUndefined();
   });
 
+  it('ignores a bare counter tick — an animated number is not the app saying something', async () => {
+    // Found by driving the Hostile fixture, which mutates a counter every 16ms. Clicking its
+    // "Fire failing request" button returned appeared:"409" — the ticker, not the fault. A
+    // fragment with no letters at all carries no message a reader can act on, and a bare number
+    // is exactly what a count-up animation emits into the settle window.
+    document.body.innerHTML = '<button>go</button><span id="tick">408</span>';
+    const button = document.querySelector('button') as HTMLButtonElement;
+    button.addEventListener('click', () => {
+      const tick = document.getElementById('tick');
+      if (null !== tick) tick.textContent = '409';
+    });
+    const r = await executeAction(refs.refFor(button), 'click');
+    expect(r.effect.domMutatedWithin).toBeGreaterThanOrEqual(1);
+    expect(r.effect.appeared).toBeUndefined();
+  });
+
+  it('keeps a number that comes WITH words — that one is a message', async () => {
+    document.body.innerHTML = '<button>go</button><span id="o"></span>';
+    const button = document.querySelector('button') as HTMLButtonElement;
+    button.addEventListener('click', () => {
+      const out = document.getElementById('o');
+      if (null !== out) out.textContent = 'status 500';
+    });
+    const r = await executeAction(refs.refFor(button), 'click');
+    expect(r.effect.appeared).toContain('status 500');
+  });
+
   it('still reports what the app said ABOUT the input it received', async () => {
     // The exclusion is exact-match only, so an app that quotes your input back inside its own
     // sentence is still reported — that IS the app talking.
