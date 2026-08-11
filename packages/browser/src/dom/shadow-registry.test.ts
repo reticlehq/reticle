@@ -127,6 +127,18 @@ describe('HMR: connect() runs again before the old instance is torn down', () =>
   });
 });
 
+/**
+ * Generous per-test budget for the churn tests below.
+ *
+ * They build thousands of DOM nodes, and vitest's default 5 000 ms is a statement about the runner,
+ * not about the code — observed timing out at 7 410 ms on a Windows CI box while the assertion it
+ * was making held fine. CLAUDE.md prescribes exactly this remedy: a generous explicit timeout, never
+ * a number that turns load into a red build.
+ *
+ * A bigger number cannot make a broken test pass — the bound is still asserted.
+ */
+const HEAVY_DOM_TIMEOUT_MS = 60_000;
+
 describe('a long session with churning web components', () => {
   /**
    * The registry held roots in a strong Set that only cleared on teardown. Measured: a virtualized
@@ -135,23 +147,27 @@ describe('a long session with churning web components', () => {
    * components, so the most ordinary data-heavy page was the worst case, in an SDK meant to sit in a
    * dev session all day.
    */
-  it('stays bounded while a list renders and discards thousands of rows', () => {
-    const stop = installShadowRegistry();
-    for (let i = 0; i < 5000; i++) {
-      const host = document.createElement('div');
-      document.body.appendChild(host);
-      host.attachShadow({ mode: 'open' }).innerHTML = `<span>row ${String(i)}</span>`;
-      host.remove();
-    }
-    // The entries are weak, so a real engine collects the roots outright; the cap is the backstop
-    // that bounds the bookkeeping even where nothing has been collected yet.
-    //
-    // The bound is MAX + SWEEP_EVERY, not MAX: the sweep is amortized so the cap is enforced once
-    // per SWEEP_EVERY records rather than on each one. What matters is that it does not grow with
-    // churn — 5,000 rows in, and the ceiling is the same as it would be for 50,000.
-    expect(capturedRoots().length).toBeLessThanOrEqual(MAX_TRACKED_ROOTS + SWEEP_EVERY);
-    stop();
-  });
+  it(
+    'stays bounded while a list renders and discards thousands of rows',
+    () => {
+      const stop = installShadowRegistry();
+      for (let i = 0; i < 5000; i++) {
+        const host = document.createElement('div');
+        document.body.appendChild(host);
+        host.attachShadow({ mode: 'open' }).innerHTML = `<span>row ${String(i)}</span>`;
+        host.remove();
+      }
+      // The entries are weak, so a real engine collects the roots outright; the cap is the backstop
+      // that bounds the bookkeeping even where nothing has been collected yet.
+      //
+      // The bound is MAX + SWEEP_EVERY, not MAX: the sweep is amortized so the cap is enforced once
+      // per SWEEP_EVERY records rather than on each one. What matters is that it does not grow with
+      // churn — 5,000 rows in, and the ceiling is the same as it would be for 50,000.
+      expect(capturedRoots().length).toBeLessThanOrEqual(MAX_TRACKED_ROOTS + SWEEP_EVERY);
+      stop();
+    },
+    HEAVY_DOM_TIMEOUT_MS,
+  );
 
   it('still recognises a root it has already seen, without scanning every root', () => {
     const stop = installShadowRegistry();
