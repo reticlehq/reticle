@@ -145,9 +145,49 @@ function reportCrash(kind: CrashKind, value: unknown): void {
  * is the point: after this, silence in the log is itself the finding, because every other door is
  * now instrumented.
  */
+/**
+ * Why the daemon is going away — carried ON the exit line, not left to be inferred.
+ *
+ * From the field (#123): a real gate log read `reticle_daemon_signalled SIGTERM` then
+ * `reticle_daemon_exiting code:0`, then 21 seconds with nothing listening. `code: 0` is the last
+ * line before the port goes dark and it cannot distinguish "shut down tidily" from "the bridge every
+ * app on this machine needs is now gone". A correct install was written up as a failure naming the
+ * fixture because of it.
+ *
+ * `UNKNOWN` is the load-bearing member, not a fallback: it means the process left through Node
+ * WITHOUT passing a shutdown path — an uncaught throw, a stray `process.exit`. That is a different
+ * fact from an idle exit, and the one worth noticing.
+ */
+export const DaemonExitReason = {
+  /** A shutdown signal arrived (SIGTERM/SIGINT). */
+  SIGNAL: 'signal',
+  /** The idle timer fired and the daemon retired itself. */
+  IDLE: 'idle',
+  /** Left through Node, but not via any shutdown path we own. */
+  UNKNOWN: 'unknown',
+} as const;
+export type DaemonExitReason = (typeof DaemonExitReason)[keyof typeof DaemonExitReason];
+
+/**
+ * Set by whichever shutdown path is running, read once by the exit handler.
+ *
+ * A module-level value rather than a parameter because the two are separated by the whole process
+ * lifetime: the reason is known when shutdown STARTS and the exit line is written when Node is on
+ * its way out. Exit runs once, on one thread, after everything else — so there is nothing to race.
+ */
+let exitReason: DaemonExitReason = DaemonExitReason.UNKNOWN;
+
+/** Record why the daemon is shutting down. Called by a shutdown path before it exits. */
+export function recordExitReason(reason: DaemonExitReason): void {
+  exitReason = reason;
+}
+
 export function installExitTrace(proc: ProcessLike, log: LogFn): void {
   proc.on('exit', (code: unknown) => {
-    log('reticle_daemon_exiting', { code: 'number' === typeof code ? code : null });
+    log('reticle_daemon_exiting', {
+      code: 'number' === typeof code ? code : null,
+      reason: exitReason,
+    });
   });
   for (const signal of ['SIGTERM', 'SIGINT', 'SIGHUP'] as const) {
     proc.on(signal, () => {
