@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { SessionState, UNSCRIPTABLE_TAB_RECOMMENDATION } from '@reticlehq/core';
 import { TOOLS, type ToolDef, type ToolDeps } from './tools.js';
 import { ReticleTool } from './tool-names.js';
+import { buildDynamicTools } from './dynamic-tools.js';
 import { runTool, SESSION_BOUND_TOOLS, SESSION_EXEMPT_TOOLS } from './invoke-tool.js';
 import { BaselineStore } from '../project/baselines.js';
 import { RecordingStore } from '../flows/recordings.js';
@@ -154,5 +155,77 @@ describe('runTool — universal session-health invariant', () => {
       const r = (await runTool(tool(name), deps, {})) as { session?: { throttled?: boolean } };
       expect(r.session?.throttled, `${name} should carry health`).toBe(true);
     }
+  });
+});
+
+/**
+ * The escape hatch must carry the same envelope as the front door.
+ *
+ * Reported: `reticle_console { sessionId }` returned a `session_lease` block and
+ * `reticle_run { tool: "reticle_console", sessionId }` did not — measured back to back on one
+ * session. Under the default profile `reticle_run` is the ONLY way to reach an unadvertised tool,
+ * so an agent driving through the hatch would be exactly the one never told it is holding the
+ * human's page, and the HUD would read "live" until the session timed out. `reticle_run` is 111 of
+ * 1049 tool calls in a day, so it is not a rare path.
+ *
+ * The premise turned out to be wrong — see the second test — but the guard the report asked for is
+ * worth having either way: it is a decorator applied at one layer and two call paths through it,
+ * which is a shape that WILL drift the next time something is spliced onto only one of them.
+ */
+describe('reticle_run carries the same session envelope as a direct call', () => {
+  const LEASE = { sessionId: 'demo', opened_at: 0, IMPORTANT: 'release when done' };
+
+  /**
+   * Driven through the REAL `reticle_run` handler, not through a hand-rolled `runTool(target, …)`
+   * that models what it does. The whole defect class here is "a decorator applied at one layer, two
+   * call paths through it", so a test that reimplements the second path would only ever confirm my
+   * reading of it.
+   */
+  for (const toolName of [ReticleTool.ACT, ReticleTool.QUERY, ReticleTool.SNAPSHOT]) {
+    it(`${toolName} via reticle_run still gets session_lease`, async () => {
+      const session = throttledSession({ takeSessionLease: () => LEASE });
+      const target = stubTool(toolName, { ok: true });
+      const run = buildDynamicTools([target]).find((t) => t.name === ReticleTool.RUN);
+      expect(run, 'reticle_run is not on the dynamic surface').toBeDefined();
+      const r = (await run?.handler(fakeDeps(session), { tool: toolName })) as Record<
+        string,
+        unknown
+      >;
+      expect(
+        r['session_lease'],
+        `${toolName} reached through reticle_run lost the lease reminder`,
+      ).toEqual(LEASE);
+    });
+  }
+
+  /**
+   * Why the original report saw what it saw. `takeSessionLease()` is fire-once per session
+   * (`session.ts:610` — `#firstCommandDone`), so measuring a direct call and then a `reticle_run`
+   * call back to back on ONE session will always show the block on the first and never the second,
+   * whichever order they run in. The path was never dropping it.
+   */
+  it('the lease is fire-once per session, which is what the back-to-back measurement showed', async () => {
+    let taken = false;
+    const session = throttledSession({
+      takeSessionLease: () => {
+        if (taken) return undefined;
+        taken = true;
+        return LEASE;
+      },
+    });
+    const deps = fakeDeps(session);
+    const first = (await runTool(stubTool(ReticleTool.QUERY, { ok: true }), deps, {})) as Record<
+      string,
+      unknown
+    >;
+    const second = (await runTool(stubTool(ReticleTool.QUERY, { ok: true }), deps, {})) as Record<
+      string,
+      unknown
+    >;
+    expect(first['session_lease']).toEqual(LEASE);
+    expect(
+      second['session_lease'],
+      'a second call getting no lease is correct — it is once per session, not once per call',
+    ).toBeUndefined();
   });
 });
