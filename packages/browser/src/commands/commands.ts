@@ -217,16 +217,34 @@ function readState(
   return result;
 }
 
+/**
+ * Every animation, and WHICH element it drives.
+ *
+ * Reported from the field: a page with nine concurrent animations returned nine indistinguishable
+ * `{playState, currentTime, duration}` rows. `a.effect` was read only for `getTiming()`, never for
+ * its `target` — so the tool advertised "targets/timing" and shipped timing alone. A list you cannot
+ * index is not a list, and the question this tool exists to answer is "is THAT thing still
+ * animating".
+ *
+ * `describe()` is reused rather than inventing a target shape: it is what `reticle_query` returns,
+ * so the descriptor carries a `ref` the agent can pass straight to `reticle_act` — a target you
+ * cannot act on would be half an answer.
+ */
 function listAnimations(): unknown {
   const doc = document as Document & { getAnimations?: () => Animation[] };
   if (typeof doc.getAnimations !== 'function') return { animations: [] };
   const animations = doc.getAnimations().map((a) => {
     const effect = a.effect;
     const timing = effect?.getTiming();
+    // A KeyframeEffect's target is legitimately nullable, and only KeyframeEffect has one at all.
+    // `null` is reported explicitly: omitting the key would make "this animation has no element"
+    // indistinguishable from the bug above, which is the distinction the fix exists to draw.
+    const target = (effect as KeyframeEffect | null)?.target ?? null;
     return {
       playState: a.playState,
       currentTime: a.currentTime,
       duration: timing?.duration,
+      target: null === target ? null : describe(target),
     };
   });
   return { animations };
