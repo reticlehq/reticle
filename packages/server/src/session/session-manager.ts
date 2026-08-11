@@ -234,7 +234,7 @@ export class SessionManager {
       throw new Error(
         closure === undefined
           ? NO_SESSION_CONNECTED_ERROR
-          : `${NO_SESSION_CONNECTED_ERROR} NOTE: the bridge closed a session recently — "${closure.reason}". The app is probably still running; it was disconnected, and the SDK does not retry after a policy close. Reload the page to reconnect.`,
+          : `${NO_SESSION_CONNECTED_ERROR} NOTE: the bridge REFUSED or closed a connection recently — "${closure.reason}". The app is probably still running and trying to connect: it was turned away, and the SDK does not retry after a policy close. The reason above names the fix — do not go looking for a stopped dev server.`,
       );
     }
     // Scope to the agent's active project FIRST, so a stray tab from another app/origin (e.g. a

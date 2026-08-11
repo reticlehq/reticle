@@ -9,6 +9,7 @@ import {
 } from '@reticlehq/core';
 import { BlindSpotKind } from '@reticlehq/core';
 import { Bridge } from './bridge.js';
+import { WS_CLOSE_REASON } from './bridge.js';
 import { SessionManager } from '../session/session-manager.js';
 
 const bridges: Bridge[] = [];
@@ -374,5 +375,54 @@ describe('a session closed by the bridge explains itself to the agent', () => {
 
   it('keeps the plain message when nothing was closed', () => {
     expect(() => new SessionManager().resolve()).not.toThrow(/bridge closed/);
+  });
+});
+
+/**
+ * An SDK the bridge REFUSED looks exactly like an app that was never started.
+ *
+ * `noteClosure` exists, is tested directly above, and **nothing in production calls it** — the
+ * message-rate close it was built for was later replaced by sampling ("Over the cap we SAMPLE — we
+ * never disconnect"), and the mechanism was left wired to nothing. So the branch in `resolve()` that
+ * reports a bridge-initiated close has been unreachable.
+ *
+ * That matters most for the two closes that reject a would-be session with a diagnosis the bridge
+ * already knows:
+ *
+ *   PROTOCOL_MISMATCH: 'protocol version mismatch — upgrade @reticlehq/browser'
+ *   AUTH_FAILED:       'authentication failed — reload the page to pick up the current pairing token'
+ *
+ * The SDK prints those and stops retrying. The agent, meanwhile, calls a tool and is told "no
+ * browser session connected" — indistinguishable from an app nobody started. An outdated SDK and a
+ * stale pairing token are both **invisible**, which is the same shape as #127: skew that surfaces as
+ * a bare failure with nothing naming a version.
+ */
+describe('a hello the bridge rejected is reported, not silently absent', () => {
+  it('a protocol mismatch reaches the agent instead of "no session connected"', () => {
+    const sessions = new SessionManager();
+    sessions.noteClosure(WS_CLOSE_REASON.PROTOCOL_MISMATCH, 1000);
+    expect(() => sessions.resolve()).toThrow(/protocol version mismatch/);
+    expect(() => sessions.resolve()).toThrow(/@reticlehq\/browser/);
+  });
+
+  it('an auth failure names the token, not the tab', () => {
+    const sessions = new SessionManager();
+    sessions.noteClosure(WS_CLOSE_REASON.AUTH_FAILED, 1000);
+    expect(() => sessions.resolve()).toThrow(/authentication failed/);
+  });
+
+  it('does not tell the reader to reload when reloading is not the fix', () => {
+    const sessions = new SessionManager();
+    sessions.noteClosure(WS_CLOSE_REASON.PROTOCOL_MISMATCH, 1000);
+    let message = '';
+    try {
+      sessions.resolve();
+    } catch (err) {
+      message = err instanceof Error ? err.message : String(err);
+    }
+    expect(
+      message,
+      'a reload cannot fix an SDK on the wrong protocol — the close reason already names the fix',
+    ).not.toMatch(/Reload the page to reconnect/);
   });
 });

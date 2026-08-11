@@ -52,6 +52,19 @@ type ReplayRequestHandler = (sessionId: string, flowName: string) => void;
 /** Called once a browser session connects, so the daemon can push it the replayable-flow list. */
 type SessionReadyHandler = (session: Session) => void;
 
+/**
+ * The close reasons worth telling an AGENT about, not just the SDK.
+ *
+ * The SDK prints these and stops retrying. The agent then calls a tool and is told "no browser
+ * session connected" — which is indistinguishable from an app nobody started. An outdated SDK and a
+ * stale pairing token were both invisible for that reason; these two carry their own remedy, so
+ * surfacing them is strictly better than the generic answer.
+ */
+export const WS_CLOSE_REASON = {
+  PROTOCOL_MISMATCH: 'protocol version mismatch — upgrade @reticlehq/browser',
+  AUTH_FAILED: 'authentication failed — reload the page to pick up the current pairing token',
+} as const;
+
 /** WS close codes + reasons the bridge sends to the SDK (1008 = policy violation, 1013 = try again later). */
 const WS_CLOSE = {
   TOO_MANY_HANDSHAKES: [1013, 'too many pending handshakes'],
@@ -62,12 +75,9 @@ const WS_CLOSE = {
   // last thing the developer sees. The common cause is a page served before the daemon existed,
   // which carries no token; a reload re-fetches the connect module and picks the current one up.
   // Kept under the 123-byte WebSocket close-reason limit.
-  AUTH_FAILED: [
-    1008,
-    'authentication failed — reload the page to pick up the current pairing token',
-  ],
+  AUTH_FAILED: [1008, WS_CLOSE_REASON.AUTH_FAILED],
   SESSION_LIMIT: [1013, 'session limit reached'],
-  PROTOCOL_MISMATCH: [1008, 'protocol version mismatch — upgrade @reticlehq/browser'],
+  PROTOCOL_MISMATCH: [1008, WS_CLOSE_REASON.PROTOCOL_MISMATCH],
 } as const;
 
 /** Parse a positive integer env override; anything else (unset, zero, junk) falls through to the default. */
@@ -319,6 +329,10 @@ export class Bridge {
         const got = helloProtocolMismatch(text);
         if (got !== null) {
           log('protocol_version_mismatch', { got, expected: RETICLE_PROTOCOL_VERSION });
+          // Told to the AGENT too, not only to the SDK that is about to stop retrying. Without this
+          // the next tool call answers "no browser session connected", which reads as "no app is
+          // running" — so an SDK too old to connect is invisible.
+          this.sessions.noteClosure(WS_CLOSE_REASON.PROTOCOL_MISMATCH, this.#clock());
           socket.close(...WS_CLOSE.PROTOCOL_MISMATCH);
           return;
         }
@@ -374,6 +388,7 @@ export class Bridge {
             served: [...this.#servedProjects],
             ...(parsed.projectId === undefined ? {} : { helloProject: parsed.projectId }),
           });
+          this.sessions.noteClosure(WS_CLOSE_REASON.AUTH_FAILED, this.#clock());
           socket.close(WS_CLOSE.AUTH_FAILED[0], reason);
           return;
         }
