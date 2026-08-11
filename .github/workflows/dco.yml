@@ -4,6 +4,10 @@ name: DCO
 # matching its author — the contributor's affirmation that they wrote the change and can submit it under
 # the project's license (https://developercertificate.org). Sign off with `git commit -s`.
 #
+# On failure it prints the exact remedy for both shapes (one commit vs several) rather than a link:
+# three of three external contributors have been blocked here, and CONTRIBUTING.md does not mention
+# sign-off, so the old "see CONTRIBUTING.md" pointed at a document that could not answer it.
+#
 # This runs and reports on every PR; it only BLOCKS merges once a maintainer adds "DCO" to the required
 # status checks in branch protection. Self-contained (no third-party action) to keep the supply chain small.
 
@@ -35,7 +39,23 @@ jobs:
             fi
           done
           if [ "$fail" -ne 0 ]; then
-            echo "One or more commits are not signed off. See https://developercertificate.org and CONTRIBUTING.md."
+            # The fix, in the failure itself. This check is the single most common thing standing
+            # between a first-time contributor and a merged PR here, and the message used to point at
+            # CONTRIBUTING.md, which does not mention signing off at all. The two remedies are
+            # different commands and the multi-commit one is the case people are usually in, so both
+            # are spelled out — a contributor who has just been blocked should not have to go and
+            # find this.
+            echo ""
+            echo "How to fix — sign off certifies you wrote the change and may submit it"
+            echo "under the project's license (https://developercertificate.org)."
+            echo ""
+            echo "  one commit:      git commit --amend --no-edit -s"
+            echo "  several:         git rebase --signoff origin/main"
+            echo ""
+            echo "  then:            git push --force-with-lease"
+            echo ""
+            echo "Signing rewrites the commits, so the push has to be forced. Nothing else changes."
+            echo "For future work: git commit -s, or 'git config format.signOff true' in this repo."
             exit 1
           fi
           echo "All commits are signed off."
