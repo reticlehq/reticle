@@ -2,6 +2,12 @@
 
 All notable changes to the **`@reticlehq/*`** packages are documented here (each entry notes the package it affects). The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **`@reticlehq/server` — a crash whose stack is entirely node internals no longer reports no location at all.** `connect ECONNREFUSED` is the commonest failure in a loopback-heavy tool and its stack contains no Reticle frame, so `crash_frames` was `[]` and the report carried an error type and a redacted message and nothing else — measured at 65 such crashes in one day, one fingerprint, zero location on all 65. `runtime_crashed` now also carries the failing syscall, the symbolic errno, whether the target was loopback, whether the port was one of Reticle's own (as an enum), and the innermost frame naming Node's own source. The address and port number are used to derive those answers and then discarded; the frame is included only when the crash is a system error and no Reticle frame survived. The rule that drops your application's frames is unchanged. See [`docs/telemetry.md`](docs/telemetry.md).
+
 ## [2.5.0] — 2026-08-09
 
 **One tool surface, an MCP server that stays up, and a long list of answers that were wrong.** Most of it was found by driving the shipped surface against live apps: a hostile-argument fuzz of all 48 tools, a nine-app fixture fleet under a new trace, and stress specs against every transport.

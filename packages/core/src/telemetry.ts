@@ -303,6 +303,19 @@ export type VersionChange = z.infer<typeof VersionChangeSchema>;
  * give the hash a meaning, while keeping the line that matters: our code and our failure, never the
  * user's code and never their data.
  */
+/**
+ * Whether a failed connection was aimed at a port Reticle itself uses.
+ *
+ * An enum rather than the number, because the number is the reporter's and the answer is ours: all
+ * anyone needs to know is whose problem it is. Refused on a Reticle port is a lifecycle problem —
+ * a daemon that is not up; refused anywhere else is somebody else's service.
+ */
+export const CrashPort = {
+  RETICLE: 'reticle',
+  OTHER: 'other',
+} as const;
+export type CrashPort = (typeof CrashPort)[keyof typeof CrashPort];
+
 export const CrashSchema = z.object({
   /** `uncaught_exception` | `unhandled_rejection`. */
   kind: z.string().min(1).max(32),
@@ -345,6 +358,34 @@ export const CrashSchema = z.object({
    * trace and are completely different problems; this is what tells them apart.
    */
   machine: MachineSnapshotSchema.optional(),
+  /**
+   * The failing SYSCALL — `connect`, `write`, `open`. Already inside `message`; structured here so
+   * it can be grouped on rather than parsed back out of prose.
+   */
+  syscall: z.string().max(32).optional(),
+  /**
+   * The symbolic errno — `ECONNREFUSED`, `EPIPE`. The name, never the platform-specific number.
+   */
+  errno: z.string().max(32).optional(),
+  /**
+   * Was the target the machine it was running on?
+   *
+   * One bit, and it splits two populations that currently look identical and have different owners:
+   * refused ON loopback is a Reticle-lifecycle problem (no daemon), refused off-box is a network
+   * problem that is not ours.
+   */
+  loopback: z.boolean().optional(),
+  /** Whether the port was one of ours, as an enum. The number itself is never sent. */
+  port: z.enum([CrashPort.RETICLE, CrashPort.OTHER]).optional(),
+  /**
+   * The innermost frame naming NODE's own source — `node:net:1637`.
+   *
+   * Only present when the crash is a system error AND no Reticle frame survived, which is exactly
+   * the report that otherwise arrives with no location at all. It is a line in Node's published
+   * source: it says a connect failed rather than a DNS lookup, and carries nothing about the
+   * machine, the app, or anyone's directory layout.
+   */
+  internalFrame: z.string().max(64).optional(),
 });
 export type Crash = z.infer<typeof CrashSchema>;
 

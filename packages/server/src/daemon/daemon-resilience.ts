@@ -9,7 +9,7 @@
  * daemon, which beats crashing silently or limping along corrupt.
  */
 
-import { TelemetryActor, TelemetryEventKind } from '@reticlehq/core';
+import { RETICLE_DEFAULT_PORT, TelemetryActor, TelemetryEventKind } from '@reticlehq/core';
 import {
   errorSkeleton,
   errorTypeOf,
@@ -19,6 +19,7 @@ import {
 } from '../telemetry/error-fingerprint.js';
 import { getSessionMetrics } from '../telemetry/session-metrics.js';
 import { machineSnapshot } from '../telemetry/machine-snapshot.js';
+import { crashCause } from '../telemetry/crash-cause.js';
 import { getTelemetry } from '../telemetry/telemetry.js';
 
 export interface ProcessLike {
@@ -82,6 +83,20 @@ export const CrashKind = {
 export type CrashKind = (typeof CrashKind)[keyof typeof CrashKind];
 
 /**
+ * The ports Reticle itself uses, so a refusal can be classified as ours or somebody else's.
+ *
+ * Read here rather than threaded through `installCrashHandlers`: a crash handler is installed once,
+ * at startup, and the port can be set after it. The values are only ever compared against — the
+ * port a crash names is turned into an enum and then discarded.
+ */
+function knownPorts(): readonly number[] {
+  const configured = Number(process.env['RETICLE_PORT']);
+  return Number.isInteger(configured) && configured > 0
+    ? [RETICLE_DEFAULT_PORT, configured]
+    : [RETICLE_DEFAULT_PORT];
+}
+
+/**
  * Report a crash with enough detail to actually diagnose it.
  *
  * This is the only place in the product that learns about a crash at all. An uncaught exception in a
@@ -104,6 +119,10 @@ function reportCrash(kind: CrashKind, value: unknown): void {
     const message = describe(value);
     const { breadcrumb, inFlight } = getSessionMetrics().trail;
     const machine = machineSnapshot();
+    // Where the frames cannot say. A refused socket's stack is entirely node internals, so
+    // `reticleFrames` correctly keeps nothing and the report lands with no location at all — the
+    // single commonest crash shape in a loopback-heavy tool.
+    const cause = crashCause(value, knownPorts());
     void getTelemetry().emit(TelemetryEventKind.RUNTIME_CRASHED, {
       // A crash is ALWAYS reached through something the agent asked for — the daemon does nothing on
       // its own — so attributing it to the agent is accurate rather than a guess.
@@ -125,6 +144,9 @@ function reportCrash(kind: CrashKind, value: unknown): void {
         arch: process.arch,
         // "Out of memory" and "our bug" look identical in a stack trace. This is what tells them apart.
         ...(machine !== undefined ? { machine } : {}),
+        // The syscall, the errno, whether it was loopback, whether the port was ours, and the
+        // innermost frame in NODE's own source. Present only when the error carries them.
+        ...cause,
       },
     });
   } catch {
