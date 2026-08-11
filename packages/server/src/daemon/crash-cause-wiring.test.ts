@@ -46,7 +46,11 @@ describe('a crash with no Reticle frames still reports where it was', () => {
 
   it('carries the syscall, the errno, the loopback bit and a node frame', () => {
     const proc = fakeProc();
-    installDaemonResilience(proc, () => undefined, () => undefined);
+    installDaemonResilience(
+      proc,
+      () => undefined,
+      () => undefined,
+    );
     proc.fire('unhandledRejection', refusedLoopback(4400));
 
     const call = emit.mock.calls.find(([kind]) => kind === TelemetryEventKind.RUNTIME_CRASHED);
@@ -65,7 +69,11 @@ describe('a crash with no Reticle frames still reports where it was', () => {
 
   it('never sends the address or the port number', () => {
     const proc = fakeProc();
-    installDaemonResilience(proc, () => undefined, () => undefined);
+    installDaemonResilience(
+      proc,
+      () => undefined,
+      () => undefined,
+    );
     proc.fire('unhandledRejection', refusedLoopback(4400));
 
     const call = emit.mock.calls.find(([kind]) => kind === TelemetryEventKind.RUNTIME_CRASHED);

@@ -85,15 +85,15 @@ describe('innermostInternalFrame', () => {
 
   it('takes the INNERMOST when several node frames are present', () => {
     expect(
-      innermostInternalFrame(
-        'Error: x\n    at a (node:dns:120:9)\n    at b (node:net:1637:16)',
-      ),
+      innermostInternalFrame('Error: x\n    at a (node:dns:120:9)\n    at b (node:net:1637:16)'),
     ).toBe('node:dns:120');
   });
 
   it('ignores a frame from the user application', () => {
     expect(
-      innermostInternalFrame('Error: x\n    at doCheckout (/Users/ada/secret-app/src/checkout.tsx:42:9)'),
+      innermostInternalFrame(
+        'Error: x\n    at doCheckout (/Users/ada/secret-app/src/checkout.tsx:42:9)',
+      ),
     ).toBeUndefined();
   });
 

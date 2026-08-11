@@ -65,18 +65,9 @@ at doCheckout (/Users/ada/secret-app/src/checkout.tsx:42:9)   ← dropped
 at resolveAnchor (…/@reticlehq/server/dist/tools/act-tools.js:142:19)   ← sent
 ```
 
-**One narrow exception, for the crash that otherwise says nothing.** A refused connection —
-`connect ECONNREFUSED` — has a stack that is *entirely* node internals, so the rule above correctly
-keeps nothing and the report arrives with no location at all. Those crashes now also carry the
-failing **syscall** (`connect`), the **errno** (`ECONNREFUSED`), whether the target was **loopback**
-(one boolean), whether the port was **one of Reticle's own** (the enum `reticle` / `other`), and the
-innermost frame naming **Node's own source** (`node:net:1637`).
+**One narrow exception, for the crash that otherwise says nothing.** A refused connection — `connect ECONNREFUSED` — has a stack that is _entirely_ node internals, so the rule above correctly keeps nothing and the report arrives with no location at all. Those crashes now also carry the failing **syscall** (`connect`), the **errno** (`ECONNREFUSED`), whether the target was **loopback** (one boolean), whether the port was **one of Reticle's own** (the enum `reticle` / `other`), and the innermost frame naming **Node's own source** (`node:net:1637`).
 
-The address and the port number are used to compute those two answers and are then discarded —
-neither is ever sent. The Node frame is a line in Node's published source, not yours: it says a
-connect failed rather than a DNS lookup, and carries nothing about your machine, your app, or your
-directory layout. The frame is included **only** when the crash is a system error and no Reticle
-frame survived — the report that would otherwise be blind.
+The address and the port number are used to compute those two answers and are then discarded — neither is ever sent. The Node frame is a line in Node's published source, not yours: it says a connect failed rather than a DNS lookup, and carries nothing about your machine, your app, or your directory layout. The frame is included **only** when the crash is a system error and no Reticle frame survived — the report that would otherwise be blind.
 
 `project_profiled` carries: the framework and its major version, a size **bucket** (`tiny` … `huge`, never a file count), whether it is a monorepo, its age in whole **weeks**, how many saved flows/baselines/runs exist, and which Reticle feature families have been used. It also carries whether the project has git at all, whether it has ever been pushed (`none` / `local_only` / `remote`), and which forge hosts it — `github`, `gitlab`, `bitbucket`, `azure`, `sourcehut`, `codeberg`, or just `self_hosted` for anything else. A private git host is usually `git.<company>.com`, so self-hosted repos report **only** that they are self-hosted, never the hostname.
 
