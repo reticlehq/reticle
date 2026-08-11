@@ -23,6 +23,25 @@ const INTERACTIVE = new Set([
 
 const SKIP_TAGS = new Set(['script', 'style', 'noscript', 'template', 'head', 'meta', 'link']);
 
+/** Roles whose whole purpose is announcing a change; both imply an implicit aria-live. */
+const ANNOUNCE_ROLES = new Set(['alert', 'status']);
+
+/**
+ * Is this element the app SAYING something changed?
+ *
+ * INTERACTIVE mode keeps only actionable elements, which silently drops the one node that explains
+ * why an action did nothing — the error the app just rendered. An agent told to prefer the cheaper
+ * mode was structurally blind to the failure it had caused: the click reports settled with a DOM
+ * mutation, and the lean snapshot shows the same controls as before. Live regions exist precisely
+ * to announce state changes to a consumer that cannot see the screen, which is exactly the agent,
+ * so they are the principled exception — and a bounded one, since a page has very few.
+ */
+function announces(el: Element, role: string): boolean {
+  if (ANNOUNCE_ROLES.has(role)) return true;
+  const live = el.getAttribute('aria-live');
+  return live !== null && 'off' !== live;
+}
+
 /** Cap on inlined text content so a verbose node can't blow up the snapshot. */
 const TEXT_MAX = 80;
 
@@ -163,7 +182,7 @@ function pierceChildren(parent: Element): Element[] {
   return out;
 }
 
-function walk(parent: Element, depth: number, ctx: WalkCtx): void {
+function walk(parent: Element, depth: number, ctx: WalkCtx, inLive = false): void {
   if (depth > ctx.maxDepth) return;
   for (const child of pierceChildren(parent)) {
     if (ctx.nodes >= ctx.maxNodes) {
@@ -179,9 +198,12 @@ function walk(parent: Element, depth: number, ctx: WalkCtx): void {
     const role = getRole(child);
     const name = getAccessibleName(child);
     const interactive = INTERACTIVE.has(role);
+    // Announcements are exempt from leanness, and so is everything inside one: a live region whose
+    // message sits in a child element would otherwise be included as a contentless `- generic`.
+    const announce = inLive || announces(child, role);
+    const lean = ctx.mode === SnapshotMode.INTERACTIVE && !announce;
     // A generic, unnamed container's own text content — only consulted outside INTERACTIVE mode,
     // so the actionable-only view stays lean while FULL/meaningful views see content regressions.
-    const lean = ctx.mode === SnapshotMode.INTERACTIVE;
     const text = !lean && 'generic' === role && 0 === name.length ? directText(child) : '';
     // Layout signature for grid/flex containers — makes CLS/layout regressions visible.
     const layout = lean ? '' : layoutSignature(style);
@@ -195,9 +217,9 @@ function walk(parent: Element, depth: number, ctx: WalkCtx): void {
           ? formatTextLine(depth, text)
           : formatLine(child, depth, role, name, layout),
       );
-      walk(child, depth + 1, ctx);
+      walk(child, depth + 1, ctx, announce);
     } else {
-      walk(child, depth, ctx);
+      walk(child, depth, ctx, announce);
     }
   }
 }

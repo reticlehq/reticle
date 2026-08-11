@@ -123,6 +123,30 @@ describe('snapshot', () => {
     expect(snap.tree).toContain('button "Go"');
   });
 
+  it('interactive mode keeps live regions: an alert is the app SAYING the action failed', () => {
+    // Drove a real login against bench-app: the click returned ok/settled with a DOM mutation, and
+    // interactive mode — the mode the tool description recommends for being ~3x smaller — showed
+    // the same three controls as before. The error text was only in FULL. An agent that follows
+    // the advice it is given is structurally blind to the failure it just caused.
+    render('<form><input aria-label="Email"><button>Sign in</button></form><div role="alert">Invalid email or password</div>');
+    const snap = buildSnapshot({ mode: SnapshotMode.INTERACTIVE });
+    expect(snap.tree).toContain('Invalid email or password');
+  });
+
+  it('interactive mode keeps an aria-live region even when the role is not alert', () => {
+    render('<div aria-live="polite">Saved 3 of 5</div><button>Go</button>');
+    const snap = buildSnapshot({ mode: SnapshotMode.INTERACTIVE });
+    expect(snap.tree).toContain('Saved 3 of 5');
+  });
+
+  it('interactive mode still drops ordinary text: the exemption is announcements only', () => {
+    render('<div aria-live="off">Muted</div><div>Chatter</div><button>Go</button>');
+    const snap = buildSnapshot({ mode: SnapshotMode.INTERACTIVE });
+    expect(snap.tree).not.toContain('Chatter');
+    expect(snap.tree).not.toContain('Muted'); // aria-live="off" is explicitly NOT an announcement
+    expect(snap.tree).toContain('button "Go"');
+  });
+
   it('emits a layout signature for grid containers so a CLS/layout regression is visible', () => {
     // A layout regression (column count change) leaves the role+text tree identical — only
     // the computed layout differs. The signature makes that visible (a11y-only tools cannot).
