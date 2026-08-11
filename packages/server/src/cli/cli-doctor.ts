@@ -2,10 +2,12 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { ReticleEnv } from '@reticlehq/core';
 import { readPid, reticleStateHome } from '../daemon/daemon.js';
-import { PortPresence, probePresence, describePresence } from '../daemon/port-presence.js';
+import { PortPresence, probePresence } from '../daemon/port-presence.js';
 import { probeDaemon } from '../mcp/mcp-proxy.js';
 import { fetchStatus } from './cli-launch.js';
 import { daemonLine, type DaemonIdentity } from './doctor-daemon-line.js';
+import { describeForeignHolder, findPortHolder } from './port-holder.js';
+import { spawnSync } from 'node:child_process';
 import { SERVER_VERSION } from '../version/server-version.js';
 import { CONTRACT_FINGERPRINT } from '@reticlehq/core';
 import { diagnoseDesktop, isDesktopProject } from '../init/desktop-doctor.js';
@@ -15,6 +17,27 @@ import { diagnoseDesktop, isDesktopProject } from '../init/desktop-doctor.js';
  * Chromium install (the #1 silent failure), whether a daemon is up on the resolved bridge port, and
  * reminds the user which port the app must dial. Human-readable to stdout (not the JSON log).
  */
+
+/**
+ * Run a lookup and return its stdout, or null if it could not run.
+ *
+ * Null on ANY failure — no lsof (Windows, a slim container), a non-zero exit, a throw. This is a
+ * diagnostic nicety inside the command people run when things are already broken; it must never be
+ * the reason `doctor` fails, and `describeForeignHolder(port, null)` prints the message doctor
+ * printed before this existed.
+ */
+function runCapture(command: string, args: readonly string[]): string | null {
+  try {
+    const result = spawnSync(command, [...args], { encoding: 'utf8', timeout: LOOKUP_TIMEOUT_MS });
+    return 0 === result.status && 'string' === typeof result.stdout ? result.stdout : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Bound on the holder lookup. A hung `lsof` must not hang the command that diagnoses hangs. */
+const LOOKUP_TIMEOUT_MS = 2_000;
+
 /** Narrow the `/status` payload to the two fields the daemon line reads. */
 function asIdentity(payload: unknown): DaemonIdentity {
   if (typeof payload !== 'object' || null === payload) return {};
@@ -67,7 +90,10 @@ export async function handleDoctor(port: number): Promise<void> {
     line(built.text);
     if (built.skew !== undefined) line(`  version      ✗ ${built.skew}`);
   } else if (presence === PortPresence.FOREIGN) {
-    line(`  daemon       ✗ ${describePresence(presence, port)}`);
+    // Name the holder when we can. `doctor` exists for exactly this moment, and "another process"
+    // leaves the reader to find a shell command themselves — the obvious one being the `lsof -ti`
+    // pipeline that also kills the agent's own MCP proxy.
+    line(`  daemon       ✗ ${describeForeignHolder(port, findPortHolder(port, runCapture))}`);
   } else {
     line(
       `  daemon       ✗ not running on :${port} — your agent runs \`reticle mcp\` (or \`reticle serve\`)`,
