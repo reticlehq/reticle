@@ -308,6 +308,23 @@ function callSucceeded(data: Record<string, unknown>): boolean {
   return status === undefined || status < 400;
 }
 
+/**
+ * One call, as the failure report should name it: `POST /api/generate-script → 500`.
+ *
+ * The status used to be dropped here, which made the most common net failure unreadable. Asserting
+ * `{status: 200}` against a call that returned 500 reported only `POST /api/generate-script` — the
+ * very field the predicate filtered on was missing from the account of what was seen, so the agent
+ * is told the call happened and left to guess why it did not match.
+ *
+ * The arrow is OMITTED when there is no status. An in-flight or aborted request genuinely has none,
+ * and `→ undefined` would be a fabricated fact about the wire.
+ */
+function describeCall(e: ReticleEvent): string {
+  const head = `${str(e.data['method']) ?? 'GET'} ${str(e.data['url']) ?? ''}`;
+  const status = num(e.data['status']);
+  return status === undefined ? head : `${head} → ${String(status)}`;
+}
+
 export function evalNet(
   events: ReticleEvent[],
   p: Extract<Predicate, { kind: typeof PredicateKind.NET }>,
@@ -350,9 +367,7 @@ export function evalNet(
         // made no calls at all", and those need different fixes.
         observed: describeObserved(
           'calls',
-          events
-            .filter((e) => e.type === EventType.NET_REQUEST)
-            .map((e) => `${str(e.data['method']) ?? 'GET'} ${str(e.data['url']) ?? ''}`),
+          events.filter((e) => e.type === EventType.NET_REQUEST).map(describeCall),
         ),
         expected: `at least one call matching ${JSON.stringify(p)}`,
         assertion: 'net.present',

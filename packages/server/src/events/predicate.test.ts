@@ -80,6 +80,35 @@ describe('predicate engine', () => {
     expect(after.pass, 'fired BEFORE the floor — must not satisfy the assertion').toBe(false);
   });
 
+  it('a failed status assertion NAMES the status it saw, not just the call', async () => {
+    // Driven live against the swallowed-500 fixture: asserting {status:200} on a call that
+    // returned 500 reported `observed: "POST http://…/api/generate-script"` — the very field
+    // the predicate filtered on was missing from the report of what was seen. The agent is told
+    // the call happened and left to guess why it did not match.
+    const session = new FakeSession([
+      ev(EventType.NET_REQUEST, { method: 'POST', url: '/api/generate-script', status: 500 }),
+    ]);
+    const r = await evaluatePredicate(session, {
+      kind: 'net',
+      urlContains: '/api/generate-script',
+      status: 200,
+    });
+    expect(r.pass).toBe(false);
+    expect(r.observed).toContain('500');
+  });
+
+  it('omits the arrow when the call has no status yet — never invents one', async () => {
+    // An in-flight or aborted request has no status. "→ undefined" would be a fabricated fact.
+    const session = new FakeSession([
+      ev(EventType.NET_REQUEST, { method: 'GET', url: '/api/slow' }),
+    ]);
+    const r = await evaluatePredicate(session, { kind: 'net', urlContains: '/api/nope' });
+    expect(r.pass).toBe(false);
+    expect(r.observed).toContain('/api/slow');
+    expect(r.observed).not.toContain('undefined');
+    expect(r.observed).not.toContain('→');
+  });
+
   it('matches a network predicate', async () => {
     const session = new FakeSession([
       ev(EventType.NET_REQUEST, { method: 'POST', url: '/api/order', status: 200 }),
