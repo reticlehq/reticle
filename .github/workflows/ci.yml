@@ -369,7 +369,23 @@ jobs:
             # See apps/e2e/harness-rules.md.
             for port in 8787 4310 3100; do lsof -ti "tcp:$port" | xargs -r kill -9 || true; done
             lsof -ti "tcp:4400" -sTCP:LISTEN | xargs -r kill -9 || true
-            sleep 3
+            # WAIT for the sockets, do not assume. `kill -9` signals a process; it does not free its
+            # port synchronously. This was a flat `sleep 3`, and attempt 2 still failed six seconds
+            # after cleanup began with `EADDRINUSE :::3100` — so the retry that exists to absorb a
+            # transient flake could not succeed, which turns one red into two and hides the first
+            # cause behind a second, different error. Same defect as the one fixed inside
+            # mcp-stress-test.mjs: a sleep standing in for "the port is free".
+            waited=0
+            while [ "$waited" -lt 30 ]; do
+              busy=""
+              for port in 8787 4310 3100 4400; do
+                if lsof -ti "tcp:$port" >/dev/null 2>&1; then busy="$busy $port"; fi
+              done
+              [ -z "$busy" ] && break
+              echo "waiting for ports to close:$busy"
+              sleep 1; waited=$((waited + 1))
+            done
+            [ "$waited" -ge 30 ] && echo "::warning::ports still held after 30s:$busy — retrying anyway"
           done
           echo "e2e battery failed after 2 attempts"; exit 1
       - name: Upload server logs on failure
