@@ -727,3 +727,57 @@ describe('runInit — a refused pin falls back instead of blocking the install',
     expect(io.written['vite.config.ts']).toContain('reticle()');
   });
 });
+
+/**
+ * A `[✓]` for a filesystem effect must be backed by a `stat`, not by the intention to write.
+ *
+ * Reported from the field (#160): `init` printed `[✓] Reticle config → .reticle.json` and the file
+ * was not there afterward. Two candidates had to be separated before changing anything — the step
+ * reporting its PLAN rather than its EFFECT, or the file landing in a different directory than the
+ * user was standing in. The second is a real hazard in a monorepo and was addressed separately by
+ * printing the project directory in the header. This is the first: nothing ever checked.
+ *
+ * It is the same shape as #139 (`✓ Capabilities + store` for a module nothing imported) and the same
+ * shape as the Next.js install that reported clean and connected 0% of the time. A checkmark that
+ * cannot fail is not a report, it is decoration — and this one is the first thing a new user reads.
+ *
+ * The write path itself is not suspected. The point is that no arrangement of the filesystem — a
+ * read-only mount, a full disk, an antivirus quarantining a new dotfile, a path the process cannot
+ * see — could ever have turned that tick into anything else.
+ */
+describe('init confirms a file it claims to have written', () => {
+  /**
+   * An IO whose writes are accepted and silently do not land — a read-only mount, a full disk, an
+   * antivirus quarantining a new dotfile. Only the config write is swallowed, so the test isolates
+   * one step rather than failing the whole install for an unrelated reason.
+   */
+  function swallowingIo(files: Record<string, string>): MemoryIo {
+    const io = memoryIo(files);
+    const realWrite = io.writeFile.bind(io);
+    return {
+      ...io,
+      writeFile: (p, c) => {
+        if (p.endsWith('.reticle.json')) return;
+        realWrite(p, c);
+      },
+    };
+  }
+
+  it('does not print ✓ for a config file that is not on disk afterward', () => {
+    const io = swallowingIo(VITE_FILES);
+    runInit(OPTS, io);
+    const report = io.lines.join('\n');
+    const configLine = report.split('\n').find((l) => l.includes('.reticle.json')) ?? '';
+    expect(configLine, 'the config step must be reported').not.toBe('');
+    expect(configLine, 'a ✓ here is a claim nothing checked').not.toContain('✓');
+  });
+
+  it('still prints ✓ when the file IS on disk — the ordinary case is untouched', () => {
+    // The control. A confirmation that fails open would silently downgrade every healthy install.
+    const io = memoryIo(VITE_FILES);
+    runInit(OPTS, io);
+    const line = io.lines.find((l) => l.includes('.reticle.json')) ?? '';
+    expect(line).toContain('✓');
+    expect(io.written['.reticle.json']).toBeDefined();
+  });
+});

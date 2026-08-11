@@ -607,9 +607,23 @@ function applyEffects(
     }
     const write = s.write;
     if (write !== undefined) {
-      spanSync('init.write', { target: s.target, path: write.path }, () => {
-        io.writeFile(write.path, write.content);
+      // Confirm the EFFECT, not the intention. Reported from the field (#160): init printed
+      // `[✓] Reticle config → .reticle.json` and the file was not there afterward. Nothing checked —
+      // no arrangement of the filesystem (a read-only mount, a full disk, an antivirus quarantining
+      // a new dotfile) could have turned that tick into anything else. A checkmark that cannot fail
+      // is decoration, and this one is the first thing a new user reads. Same shape as #139.
+      const wrote = spanSync('init.write', { target: s.target, path: write.path }, () => {
+        try {
+          io.writeFile(write.path, write.content);
+        } catch {
+          return false; // a throw is the loud version of the same failure
+        }
+        return io.exists(write.path);
       });
+      if (!wrote) {
+        failed.add(s.target);
+        continue; // do not run this step's exec against a file that is not there
+      }
     }
     // Bound once so the traced call cannot need a `?? ''` fallback — a default there would turn a
     // narrowing mistake into an empty command that silently "succeeds".
