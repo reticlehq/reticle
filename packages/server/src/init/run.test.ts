@@ -202,6 +202,41 @@ describe('runInit', () => {
     expect(io.written['frontend/.reticle.json']).toBeDefined();
   });
 
+  /**
+   * Reported from the field: `init` printed `[✓] Reticle config → .reticle.json` and the user then
+   * could not find the file. It did not reproduce — the write throws on failure and nothing catches
+   * it — and the likeliest explanation is that they were looking in the wrong directory.
+   *
+   * Every path in the report is printed RELATIVE (`.reticle.json`, `app/layout.tsx`) and the header
+   * says only `reticle init`. Run from a repo root against an app in `frontend/`, the redirect
+   * re-roots every write and the report still reads `.reticle.json` — which is true, and is not the
+   * `.reticle.json` the user is standing next to. The redirect does announce itself, so this is not
+   * a silent move; it is that the report never states the ground its paths are relative to.
+   *
+   * One line in the header makes every path in the report unambiguous at once.
+   */
+  it('names the directory its relative paths are relative to', () => {
+    const io = memoryIo(VITE_FILES);
+    runInit(OPTS, io);
+    expect(io.lines.join('\n'), 'the report never says which directory it wrote into').toContain(
+      OPTS.cwd,
+    );
+  });
+
+  it('and names the REDIRECTED directory when the app is one level down', () => {
+    const io = memoryIo({
+      'frontend/package.json': JSON.stringify({ dependencies: { next: '16', react: '^19' } }),
+      'frontend/app/layout.tsx': 'export default function L({ children }) { return children; }\n',
+    });
+    runInit(OPTS, io);
+    const printed = io.lines.join('\n');
+    expect(printed).toContain('frontend');
+    expect(
+      printed,
+      'after a redirect the paths are relative to the APP, not to where the user ran the command',
+    ).toContain('/app/frontend');
+  });
+
   it('honours --app when the root has no package.json', () => {
     const io = memoryIo({
       'frontend/package.json': JSON.stringify({ dependencies: { next: '16', react: '^19' } }),

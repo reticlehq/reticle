@@ -503,8 +503,14 @@ function report(
   skipped: ReadonlySet<string>,
   degraded: ReadonlyMap<string, string>,
   io: InitIo,
+  projectDir: string,
 ): InitResult {
   io.print(dryRun ? 'reticle init (dry run — no files written)' : 'reticle init');
+  // Every path below is printed RELATIVE, and until now nothing said what to. Reported from the
+  // field as "[✓] Reticle config → .reticle.json" followed by the file not being there: the app was
+  // in `frontend/`, init redirected into it, and the report's `.reticle.json` was true about a
+  // directory the reader was not standing in. One line makes every path in the report unambiguous.
+  io.print(`  in ${projectDir}`);
   io.print('');
   let applied = 0;
   let manual = 0;
@@ -758,7 +764,7 @@ function runInitSteps(options: InitOptions, io: InitIo): InitResult {
     ? { failed: new Set<string>(), skipped: new Set<string>(), degraded: new Map<string, string>() }
     : spanSync('init.apply', { steps: plan.steps.length }, () => applyEffects(plan, io));
   const { failed, skipped, degraded } = effects;
-  const result = report(plan, options.dryRun, failed, skipped, degraded, io);
+  const result = report(plan, options.dryRun, failed, skipped, degraded, io, options.cwd);
   // A dry run is a preview, not an outcome — reporting it would inflate both success and failure.
   if (!options.dryRun) {
     reportInitOutcome({
