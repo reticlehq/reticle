@@ -437,3 +437,69 @@ describe('action result: testid normalization', () => {
     expect(out.steps[0]?.name).toBe('Pay now');
   });
 });
+
+/**
+ * `occludedBy` is the actionable half of an occlusion report, and nothing was holding it.
+ *
+ * `hitTestOccluder` is well covered in occlusion.test.ts — it returns the overlay element. What was
+ * not covered is the PLUMBING from there to `effect.occludedBy`, and a mutation proved it: replacing
+ * `occludedBy: geometry.occludedBy` with `occludedBy: null` failed ZERO tests. `occluded: true`
+ * alone tells an agent it is blocked; only `occludedBy` tells it by what, which is the difference
+ * between "I cannot proceed" and "dismiss e16 and retry".
+ *
+ * Verified live against bench-app before writing this, so the behaviour being pinned is the observed
+ * one rather than the one I assumed:
+ *
+ *   effect: { occluded: true, occludedBy: "e16" }
+ *   warning: "target is visually occluded by another element; a real user could not click it
+ *             (synthetic dispatch still delivered the event) — dismiss the overlay or scroll clear"
+ */
+describe('action effect: occludedBy names the blocker', () => {
+  /** jsdom has no layout: give the target a real rect and put `overlay` on top of its centre. */
+  function overlayOver(target: Element, overlay: Element): void {
+    Object.defineProperty(target, 'getBoundingClientRect', {
+      value: () => new DOMRect(0, 0, 40, 20),
+      configurable: true,
+    });
+    Object.defineProperty(document, 'elementFromPoint', {
+      value: () => overlay,
+      configurable: true,
+      writable: true,
+    });
+  }
+
+  afterEach(() => {
+    Reflect.deleteProperty(document, 'elementFromPoint');
+  });
+
+  it('reports a ref that RESOLVES to the covering element, not merely a non-null value', async () => {
+    document.body.innerHTML = '<button>Save</button><div id="sheet"></div>';
+    const button = document.querySelector('button') as HTMLButtonElement;
+    const overlay = document.querySelector('#sheet') as HTMLElement;
+    overlayOver(button, overlay);
+
+    const r = await executeAction(refs.refFor(button), 'click');
+    expect(r.effect.occluded).toBe(true);
+    const by = r.effect.occludedBy;
+    expect(by, 'an occlusion the agent cannot name is one it cannot clear').not.toBeNull();
+    // The property that makes it actionable: the ref must address the overlay itself.
+    expect(refs.resolve(String(by))).toBe(overlay);
+  });
+
+  it('is null when nothing covers the target — absence must keep meaning "clear"', async () => {
+    document.body.innerHTML = '<button>Save</button>';
+    const button = document.querySelector('button') as HTMLButtonElement;
+    Object.defineProperty(button, 'getBoundingClientRect', {
+      value: () => new DOMRect(0, 0, 40, 20),
+      configurable: true,
+    });
+    Object.defineProperty(document, 'elementFromPoint', {
+      value: () => button,
+      configurable: true,
+      writable: true,
+    });
+    const r = await executeAction(refs.refFor(button), 'click');
+    expect(r.effect.occluded).toBe(false);
+    expect(r.effect.occludedBy).toBeNull();
+  });
+});
