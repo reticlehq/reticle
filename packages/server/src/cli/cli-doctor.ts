@@ -5,6 +5,9 @@ import { readPid, reticleStateHome } from '../daemon/daemon.js';
 import { PortPresence, probePresence, describePresence } from '../daemon/port-presence.js';
 import { probeDaemon } from '../mcp/mcp-proxy.js';
 import { fetchStatus } from './cli-launch.js';
+import { daemonLine, type DaemonIdentity } from './doctor-daemon-line.js';
+import { SERVER_VERSION } from '../version/server-version.js';
+import { CONTRACT_FINGERPRINT } from '@reticlehq/core';
 import { diagnoseDesktop, isDesktopProject } from '../init/desktop-doctor.js';
 
 /**
@@ -12,6 +15,24 @@ import { diagnoseDesktop, isDesktopProject } from '../init/desktop-doctor.js';
  * Chromium install (the #1 silent failure), whether a daemon is up on the resolved bridge port, and
  * reminds the user which port the app must dial. Human-readable to stdout (not the JSON log).
  */
+/** Narrow the `/status` payload to the two fields the daemon line reads. */
+function asIdentity(payload: unknown): DaemonIdentity {
+  if (typeof payload !== 'object' || null === payload) return {};
+  const record = payload as Record<string, unknown>;
+  const pick = (key: string): string | undefined => {
+    const value = record[key];
+    return 'string' === typeof value && value.length > 0 ? value : undefined;
+  };
+  // Keys are OMITTED rather than set to undefined: `exactOptionalPropertyTypes` is on, and the
+  // distinction is the point — "this daemon did not say" is not the same as "this daemon said none".
+  const version = pick('version');
+  const contract = pick('contract');
+  return {
+    ...(version === undefined ? {} : { version }),
+    ...(contract === undefined ? {} : { contract }),
+  };
+}
+
 export async function handleDoctor(port: number): Promise<void> {
   const line = (s: string): void => {
     process.stdout.write(`${s}\n`);
@@ -35,7 +56,16 @@ export async function handleDoctor(port: number): Promise<void> {
   const pid = readPid(port);
   const presence = await probePresence(port, { tcpOpen: probeDaemon, status: fetchStatus });
   if (presence === PortPresence.DAEMON) {
-    line(`  daemon       ✓ running on :${port}${null === pid ? '' : ` (pid ${pid})`}`);
+    // Name WHICH daemon. The /status payload already carries version + contract, and doctor was
+    // throwing both away — while skew is invisible everywhere else, reaching the agent as a bare
+    // -32000 naming no version. This is the command a human runs at exactly that moment.
+    const status = asIdentity(await fetchStatus(port));
+    const built = daemonLine(port, pid, status, {
+      version: SERVER_VERSION,
+      contract: CONTRACT_FINGERPRINT,
+    });
+    line(built.text);
+    if (built.skew !== undefined) line(`  version      ✗ ${built.skew}`);
   } else if (presence === PortPresence.FOREIGN) {
     line(`  daemon       ✗ ${describePresence(presence, port)}`);
   } else {
