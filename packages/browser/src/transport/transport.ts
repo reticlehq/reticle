@@ -47,6 +47,12 @@ interface TransportDeps {
    * unsubscribe; injected so a test can drive visibility without a real document.
    */
   onVisible?: (handler: () => void) => () => void;
+  /**
+   * Schedule an internal retry (default: `nativeSetTimeout`). Injected for the same reason `now` and
+   * `onVisible` are — the default is bound to the real timer at module load so a frozen app clock
+   * cannot deadlock the SDK, which also means no fake clock can observe what was scheduled.
+   */
+  schedule?: (fn: () => void, ms: number) => void;
 }
 
 /** Default visibility source: fire `handler` whenever the document returns to the foreground. */
@@ -59,7 +65,28 @@ function subscribeDocumentVisible(handler: () => void): () => void {
   return () => document.removeEventListener('visibilitychange', listener);
 }
 
+/** The first retry after a drop. Kept short: the common outage is a daemon restarting. */
 const RECONNECT_DELAY_MS = 1000;
+/**
+ * The ceiling on reconnect backoff.
+ *
+ * A flat 1s retry with no growth and no cap meant a tab left open against a stopped daemon made
+ * ~600 failed WebSocket opens in ten minutes — CPU, and a devtools console full of
+ * ERR_CONNECTION_REFUSED. Backing off is only safe BECAUSE this transport also reconnects on
+ * focus/visibility, so a human returning to the tab retries immediately rather than waiting out
+ * the delay; the backoff resets on that path for the same reason.
+ */
+export const RECONNECT_MAX_DELAY_MS = 30_000;
+
+/**
+ * The next reconnect delay: double, then clamp. Pure, and exported so the POLICY is testable —
+ * the scheduling itself runs on `nativeSetTimeout`, which is bound to the real timer at module load
+ * (deliberately, so a frozen `reticle_clock` cannot deadlock the SDK) and therefore cannot be driven
+ * by a fake clock.
+ */
+export function nextReconnectDelay(previous: number): number {
+  return Math.min(previous * 2, RECONNECT_MAX_DELAY_MS);
+}
 /** Offline queue cap. Exported so tests overflow the real bound instead of a mirrored copy of it. */
 export const MAX_QUEUE = 500;
 /**
@@ -93,6 +120,8 @@ export class Transport {
   #closed = false;
   /** When the current continuous outage began (nativeNow), or undefined while connected. */
   #disconnectedSince: number | undefined;
+  /** Current reconnect delay; grows on each failure, resets on a successful open or on focus. */
+  #reconnectDelay = RECONNECT_DELAY_MS;
   /** Whether onConnectionLost has already fired for the current outage (fire-once). */
   #lost = false;
   /** True once the socket has opened at least once — gates the "unreachable" first-connect warning. */
@@ -136,7 +165,13 @@ export class Transport {
    * exists (connected or mid-connect), so we never open a duplicate racing the scheduled retry.
    */
   #onVisible(): void {
-    if (this.#closed || this.#ws !== undefined) return;
+    if (this.#closed) return;
+    // A human just came back to the tab, which is the strongest signal the outage may be over — and
+    // it is what makes a 30s ceiling safe. Reset the backoff BEFORE the mid-connect early return: if
+    // a socket is already in flight and then fails, that retry should be prompt too, rather than
+    // inheriting a delay earned while nobody was watching.
+    this.#reconnectDelay = RECONNECT_DELAY_MS;
+    if (this.#ws !== undefined) return;
     this.#open();
   }
 
@@ -153,7 +188,7 @@ export class Transport {
       // note the outage and schedule the normal retry.
       this.#noteOutage();
       this.#noteInitialFailure();
-      if (!this.#closed) nativeSetTimeout(() => this.#reopen(), RECONNECT_DELAY_MS);
+      this.#scheduleReopen();
       return;
     }
     this.#ws = ws;
@@ -161,6 +196,7 @@ export class Transport {
       this.#disconnectedSince = undefined; // healthy again — reset the loss timer
       this.#lost = false;
       this.#everConnected = true; // a real connection happened ⇒ never warn "unreachable"
+      this.#reconnectDelay = RECONNECT_DELAY_MS; // recovered — the next drop starts prompt again
       // HELLO is SDK-owned schema data. Preserve its pairing token; the generic sanitizer
       // intentionally redacts fields named "token" from app-controlled payloads.
       const greeting = this.#deps.hello();
@@ -195,7 +231,7 @@ export class Transport {
       }
       this.#noteOutage();
       this.#noteInitialFailure();
-      if (!this.#closed) nativeSetTimeout(() => this.#reopen(), RECONNECT_DELAY_MS);
+      this.#scheduleReopen();
     };
     ws.onerror = (): void => {
       ws.close();
@@ -206,6 +242,20 @@ export class Transport {
    * A scheduled reconnect — skipped if the SDK was torn down, or if a foreground-triggered reconnect
    * already opened a socket (guard against the throttled timer racing #onVisible into a duplicate).
    */
+  /**
+   * Schedule the next retry and grow the delay. Nothing is scheduled once the SDK is torn down.
+   *
+   * The delay grows AFTER scheduling, so the first retry of any outage is prompt (a daemon
+   * restarting must not cost 30 seconds) and only a persistent outage backs off.
+   */
+  #scheduleReopen(): void {
+    if (this.#closed) return;
+    const delay = this.#reconnectDelay;
+    this.#reconnectDelay = nextReconnectDelay(delay);
+    const schedule = this.#deps.schedule ?? nativeSetTimeout;
+    schedule(() => this.#reopen(), delay);
+  }
+
   #reopen(): void {
     if (this.#closed || this.#ws !== undefined) return;
     this.#open();

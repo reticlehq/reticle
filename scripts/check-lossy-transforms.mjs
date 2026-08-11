@@ -135,6 +135,14 @@ export const READ_PATH = Object.freeze({
   'packages/browser/src/transport/transport.ts': {
     CommandOutcome: [Declaration.NONE, 'type'],
     MAX_QUEUE: [Declaration.NONE, 'the bound itself, exported so tests overflow the real one'],
+    RECONNECT_MAX_DELAY_MS: [
+      Declaration.NONE,
+      'a reconnect timing ceiling, not a transform — no agent-visible data passes through it',
+    ],
+    nextReconnectDelay: [
+      Declaration.NONE,
+      'pure arithmetic on a delay (double, then clamp); exported so the backoff POLICY is testable, since the scheduling itself runs on a timer bound before any fake clock',
+    ],
     Transport: [
       Declaration.SIGNAL,
       'a full offline queue evicts its oldest events and then emits TRANSPORT_OVERFLOW { dropped } to the bridge, so the gap is declared on the stream it happened to',
