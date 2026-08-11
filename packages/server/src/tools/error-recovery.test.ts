@@ -498,3 +498,34 @@ describe('a refusal that already lists the live sessions is left alone', () => {
     expect(recoveryFor("no connected session with id 'ghost'")).toBe(RECOVERY.UNKNOWN_SESSION);
   });
 });
+
+/**
+ * A malformed predicate is the AGENT'S mistake, and must never be dressed as a Reticle defect.
+ *
+ * `ARGUMENT_REJECTION` keys on the shapes our validators produce. When `parsePredicate` replaced the
+ * raw zod array with a sentence, it removed the very codes (`invalid_type`, `unrecognized_keys`)
+ * that pattern matched — so a bad predicate fell through to the generic branch and came back as
+ * "may be a defect in Reticle", with a request for a bug report.
+ *
+ * That is worse than the dump it replaced: it spends the agent's turn and pollutes the feedback
+ * channel with reports about malformed calls. The e2e battery caught it — `no bad argument is
+ * blamed on Reticle`, on `reticle_wait_for/empty` and `reticle_assert/empty` — after a full unit
+ * gate had passed. This is that check, in the gate that runs in seconds.
+ */
+describe('a predicate that did not parse is the agent to fix, not a Reticle bug', () => {
+  const REAL_MESSAGE =
+    'that predicate did not parse (kind "route"): unknown field pathnmae. Nothing ran — the ' +
+    'predicate was not evaluated, so no verdict was produced.';
+
+  it('gets the schema-rejection recovery', () => {
+    const payload = buildErrorPayload(REAL_MESSAGE);
+    expect(String(payload.recovery)).toContain("did not match the tool's schema");
+    expect(String(payload.recovery)).toContain('Nothing ran');
+  });
+
+  it("does not invite a bug report about the agent's own call", () => {
+    expect(JSON.stringify(buildErrorPayload(REAL_MESSAGE))).not.toMatch(
+      /defect in Reticle|report this/i,
+    );
+  });
+});

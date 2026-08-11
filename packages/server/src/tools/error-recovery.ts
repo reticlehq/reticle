@@ -240,9 +240,15 @@ export function recoveryFor(message: string): string | undefined {
  *
  * Matched by the SHAPES the validators actually produce (zod's codes, and the MCP layer's wrapper),
  * because these are our own machinery talking, not the app.
+ *
+ * `did not parse` is the shape `parsePredicate` produces. It was added because removing the raw zod
+ * array from that path ALSO removed the codes this pattern keys on — so a malformed predicate
+ * stopped being recognised as the agent's mistake and started being blamed on Reticle, complete with
+ * a request for a bug report. The e2e battery caught it (`no bad argument is blamed on Reticle`);
+ * no unit test could, which is why one now exists below.
  */
 const ARGUMENT_REJECTION =
-  /Unrecognized key|unrecognized_keys|invalid_type|Invalid arguments for tool|Unknown parameters? for|^Required |Expected \w+, received/i;
+  /Unrecognized key|unrecognized_keys|invalid_type|did not parse|Invalid arguments for tool|Unknown parameters? for|^Required |Expected \w+, received/i;
 
 /**
  * What to say instead of asking for a bug report. The schema already stated the problem precisely;
