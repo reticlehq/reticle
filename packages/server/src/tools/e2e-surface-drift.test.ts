@@ -15,7 +15,8 @@ import { ReticleTool } from './tool-names.js';
  * taking flow record/replay, self-heal, run history and live control with them, across bench-app AND
  * next-smoke. That is a whole framework's worth of coverage, dark for an unknown number of commits.
  *
- * It went unnoticed because the e2e battery needs three servers and ~20 minutes, so it is not in
+ * It went unnoticed because the e2e battery needs three servers and ~8 minutes (measured; it was
+ * documented as "~20 min" for months, and briefly as "~70s" — both wrong), so it is not in
  * `test:unit` — which is what actually runs. The battery cannot move into the unit gate, but the
  * failure mode that killed it is a name lookup, and a name lookup is checkable in milliseconds.
  *
