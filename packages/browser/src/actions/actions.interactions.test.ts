@@ -258,3 +258,76 @@ describe('a contenteditable target is refused legibly', () => {
     expect(el.textContent, 'the existing content must not be touched').toBe('hello');
   });
 });
+
+/**
+ * Hold-to-confirm controls were undriveable, and the agent's own workaround was to give up and ask
+ * the human to click the button.
+ *
+ * Reported via `reticle_feedback` (`kind: gap`). Every action that touches an element pressed and
+ * released in the same synchronous block, so any UI whose contract is *"the button is down for N
+ * milliseconds"* could not be expressed. The reported case: `mousedown` starts a 1.2s fill, and a
+ * `mouseup` before it completes cancels the confirm — deliberate anti-misclick design, and common
+ * (hold-to-delete in dashboards, hold-to-record in chat, long-press menus).
+ *
+ * Nothing was misreported. `domMutatedWithin:7ms` was true and the absent DELETE was the app
+ * behaving as designed. Reticle simply could not produce the input.
+ *
+ * `args.holdMs` on `click` rather than separate press/release actions, for the reason the report
+ * gives: a single call owns both halves. An agent that presses and then errors, or hits its context
+ * limit, would otherwise leave the page with a button held down and nobody to release it, and the
+ * next tool call inherits a corrupted input state.
+ */
+describe('click holdMs — hold-to-confirm controls', () => {
+  /** A control that fires only if the pointer stays down past `thresholdMs`. */
+  function holdToConfirm(thresholdMs: number): { el: HTMLElement; fired: () => boolean } {
+    // Neutral label on purpose. "Hold to delete" trips the destructive-action guard — correctly —
+    // and these tests are about the hold mechanism, not about that guard.
+    document.body.innerHTML = '<button id="armed">Press and hold</button>';
+    const el = document.getElementById('armed') as HTMLElement;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let confirmed = false;
+    el.addEventListener('mousedown', () => {
+      timer = setTimeout(() => {
+        confirmed = true;
+      }, thresholdMs);
+    });
+    el.addEventListener('mouseup', () => {
+      if (timer !== undefined) clearTimeout(timer);
+    });
+    return { el, fired: () => confirmed };
+  }
+
+  it('holds the pointer down long enough to arm the control', async () => {
+    const { el, fired } = holdToConfirm(20);
+    await executeAction(refs.refFor(el), 'click', { holdMs: 60 });
+    expect(fired(), 'the press and release were still in one synchronous block').toBe(true);
+  });
+
+  /**
+   * The half that actually catches a regression. A hold that always succeeds is indistinguishable
+   * from a click — if this ever passes, the feature has stopped holding and started pretending.
+   */
+  it('a hold SHORTER than the threshold does not fire it', async () => {
+    const { el, fired } = holdToConfirm(80);
+    await executeAction(refs.refFor(el), 'click', { holdMs: 5 });
+    expect(fired(), 'a short hold armed a control it should not have').toBe(false);
+  });
+
+  it('an ordinary click still works and is not slowed by the feature', async () => {
+    document.body.innerHTML = '<button id="plain">Save</button>';
+    const el = document.getElementById('plain') as HTMLElement;
+    const clicked = vi.fn();
+    el.addEventListener('click', clicked);
+    const r = await executeAction(refs.refFor(el), 'click', {});
+    expect(clicked).toHaveBeenCalled();
+    expect(r).toMatchObject({ ok: true, action: 'click' });
+  });
+
+  it('reports the hold it actually achieved, so a caller can tell 1200 from 1204', async () => {
+    const { el } = holdToConfirm(10);
+    const r = await executeAction(refs.refFor(el), 'click', { holdMs: 25 });
+    expect(r.effect.heldMs, 'no way to tell a real hold from a claimed one').toBeGreaterThanOrEqual(
+      25,
+    );
+  });
+});

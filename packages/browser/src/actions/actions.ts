@@ -45,6 +45,14 @@ interface ActionEffect {
   occludedBy: string | null;
   /** Click-like only: the target was off-viewport, so it was scrolled into view before dispatch. */
   scrolledIntoView: boolean;
+  /**
+   * How long the pointer was ACTUALLY held down, for a click with `args.holdMs`. Absent otherwise.
+   *
+   * Measured, not echoed. `holdMs: 1200` against a 1200ms animation is a race by construction, so a
+   * caller needs to tell "held 1200" from "held 1204" — and a backgrounded tab throttles timers, so
+   * the achieved hold can legitimately be much longer than the one requested.
+   */
+  heldMs?: number;
 }
 
 interface ActionResult {
@@ -258,16 +266,64 @@ function activeRef(el: Element): string | null {
  * (false for actions whose primary event is non-cancelable or unobservable). Drag/hover-hold
  * await internally; the probe wrapper builds the result once they resolve.
  */
+/**
+ * The longest a single action may hold the pointer down, in milliseconds.
+ *
+ * An unbounded `holdMs` is a tool call that never returns, which is the failure the transport layer
+ * is shaped around. 30s is far above any real hold-to-confirm (the reported case was 1.2s) and far
+ * below a hang.
+ */
+export const MAX_HOLD_MS = 30_000;
+
+/** A hold the caller asked for, bounded and sanitised. Non-numbers and negatives mean "no hold". */
+function clampHold(raw: unknown): number {
+  if ('number' !== typeof raw || !Number.isFinite(raw) || raw <= 0) return 0;
+  return Math.min(raw, MAX_HOLD_MS);
+}
+
+/**
+ * The outcome of dispatching one action: whether the primary event was prevented, and — for a hold —
+ * how long the pointer was actually down.
+ *
+ * `heldMs` is returned rather than stashed on a module-level variable: several actions can be in
+ * flight at once, and a shared "last hold" would attribute one action's duration to another. That is
+ * the same mistake the tool-call timing pair upstream already avoids.
+ */
+interface DispatchOutcome {
+  prevented: boolean;
+  heldMs: number;
+}
+
+/**
+ * Click is the only action that can hold the pointer down, so it is the only one that reports a
+ * duration. Everything else routes through the switch below unchanged and holds for zero.
+ */
 async function dispatchFor(
+  el: HTMLElement,
+  action: string,
+  args: Record<string, unknown>,
+): Promise<DispatchOutcome> {
+  if (ActionType.CLICK === action) {
+    // Full pointer/mouse sequence (not a bare click) so pointer- and focus-gated handlers fire the
+    // way they do for a real user.
+    //
+    // `args.holdMs` keeps the pointer down in between, which is the only way to drive a
+    // hold-to-confirm control. Capped: an unbounded hold is a tool call that never returns.
+    const hold = clampHold(args['holdMs']);
+    return await fireClickSequence(
+      el,
+      0 === hold ? undefined : { ms: hold, sleep, now: () => Date.now() },
+    );
+  }
+  return { prevented: await dispatchOther(el, action, args), heldMs: 0 };
+}
+
+async function dispatchOther(
   el: HTMLElement,
   action: string,
   args: Record<string, unknown>,
 ): Promise<boolean> {
   switch (action) {
-    case ActionType.CLICK:
-      // Full pointer/mouse sequence (not a bare click) so pointer- and focus-gated handlers fire
-      // the way they do for a real user. Returns the click event's defaultPrevented.
-      return fireClickSequence(el);
     case ActionType.DBLCLICK:
       return !el.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true }));
     case ActionType.HOVER: {
@@ -284,8 +340,9 @@ async function dispatchFor(
       const moved = el.dispatchEvent(
         new MouseEvent('mousemove', { bubbles: true, cancelable: true }),
       );
-      // hover-dwell: keep "hovering" for holdMs so timer-gated reveals can mount.
-      const holdMs = 'number' === typeof args['holdMs'] ? args['holdMs'] : 0;
+      // hover-dwell: keep "hovering" for holdMs so timer-gated reveals can mount. Same cap as
+      // click — this arg was previously unbounded here, which is the same never-returns hazard.
+      const holdMs = clampHold(args['holdMs']);
       if (holdMs > 0) await sleep(holdMs);
       return !moved;
     }
@@ -464,10 +521,14 @@ export async function executeAction(
   });
 
   let defaultPrevented = false;
+  /** How long the pointer was actually held down. Zero for every action that cannot hold. */
+  let heldMs = 0;
   let settled = false;
   let settleReason: SettleReason | null = null;
   try {
-    defaultPrevented = await dispatchFor(el, action, args);
+    const outcome = await dispatchFor(el, action, args);
+    defaultPrevented = outcome.prevented;
+    heldMs = outcome.heldMs;
   } finally {
     // bounded settle — microtask + one BOUNDED frame so React's commit (and the resulting DOM
     // mutations → dom.added/dom.text/dom.attr events) flush before we return, landing inside
@@ -493,6 +554,9 @@ export async function executeAction(
     occluded: geometry.occluded,
     occludedBy: geometry.occludedBy,
     scrolledIntoView: geometry.scrolledIntoView,
+    // Omitted when there was no hold: an absent key says "this action does not hold", where a 0
+    // would read as "it held for no time", which is a different and misleading claim.
+    ...(heldMs > 0 ? { heldMs } : {}),
   };
   // Honesty caveats: a visually-occluded click is reported even though synthetic dispatch landed;
   // else synthetic hover may not fire framework enter/leave handlers (no native hit-test).
