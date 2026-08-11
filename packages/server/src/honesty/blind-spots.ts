@@ -136,3 +136,37 @@ export function blindSpotsFromEvents(events: readonly ReticleEvent[]): BlindSpot
 export function blindSpotsFromState(state: Readonly<Record<string, number>>): BlindSpot[] {
   return Object.entries(state).map(([kind, count]) => ({ kind: kind as BlindSpotKind, count }));
 }
+
+/**
+ * Events the BROWSER's own transport queue threw away inside this window, or 0.
+ *
+ * `RATE_LIMITED` — the BRIDGE sampling because events arrived faster than its per-second cap — is
+ * already the one blind spot that `impeachesCapture`, on the reasoning that a green over a window
+ * you did not fully see "would only describe what was observed". `TRANSPORT_OVERFLOW` is the exact
+ * same loss on the other side of the wire, and it was read in journal rollups and NOWHERE on the
+ * verdict path. So the identical condition downgraded a verdict from one side of the socket and was
+ * invisible from the other: a window that dropped 34 events graded `proved`, in a sentence whose own
+ * words were "over a clean capture".
+ *
+ * `TRUNCATED` is deliberately NOT counted. It names the channel it capped (a DOM-mutation flood on
+ * any busy page) and is routine churn; treating it as lost evidence would caveat every verdict on
+ * every real app, and a caveat that is always present is one nobody reads. TRANSPORT_OVERFLOW is the
+ * honest "arbitrary events are gone" marker — it cannot say which.
+ */
+export function droppedByTransport(events: readonly ReticleEvent[]): number {
+  let dropped = 0;
+  for (const e of events) {
+    if (e.type !== EventType.TRANSPORT_OVERFLOW) continue;
+    const n = e.data['dropped'];
+    dropped += 'number' === typeof n ? n : 0;
+  }
+  return dropped;
+}
+
+/** The impeaching note for a transport gap, or undefined when the window was intact. */
+export function transportGapNote(events: readonly ReticleEvent[]): string | undefined {
+  const dropped = droppedByTransport(events);
+  return 0 === dropped
+    ? undefined
+    : `the browser dropped ${String(dropped)} event(s) in this window (transport queue overflow), so events that would have contradicted this may never have arrived`;
+}

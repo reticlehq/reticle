@@ -31,6 +31,7 @@ import { buildHonestyBlock } from '../honesty/honesty.js';
 import {
   buildCoverageStatement,
   blindSpotsFromState,
+  transportGapNote,
   Coverage,
   impeachesCapture,
 } from '../honesty/blind-spots.js';
@@ -490,12 +491,21 @@ export const ACT_TOOLS: ToolDef[] = [
         // structural boundary (virtualized rows, a cross-origin frame) is reported as coverage and
         // must not downgrade a verdict about what WAS observed.
         const impeaching = buildCoverageStatement(spots.filter((s) => impeachesCapture(s.kind)));
+        // Same rule as reticle_assert: a browser-side transport gap means part of this window was
+        // never seen, which is what `blindSpots` exists to say. `truncated` above covers the SERVER
+        // ring buffer evicting; this covers the BROWSER queue overflowing, and they are not the same
+        // loss — an act_and_wait that graded `proved` over 34 dropped events said so in a sentence
+        // whose own words were "over a clean capture".
+        const gapNote = transportGapNote(windowEvents);
+        const impeachingNotes = [impeaching.note, gapNote].filter(
+          (n): n is string => n !== undefined,
+        );
         const honesty = buildHonestyBlock({
           grade: gradeOf(gradedLinks),
           attribution: 'window',
           truncated: session.bufferHealth().dropped > droppedBefore,
           coveragePartial: Coverage.PARTIAL === coverage.coverage,
-          ...(impeaching.note === undefined ? {} : { blindSpots: [impeaching.note] }),
+          ...(0 === impeachingNotes.length ? {} : { blindSpots: impeachingNotes }),
         });
         const capsuleSaved = await saveFailedAssertCapsule({
           deps,

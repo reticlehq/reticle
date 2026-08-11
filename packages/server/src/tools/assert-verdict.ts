@@ -6,6 +6,7 @@ import {
   buildCoverageStatement,
   Coverage,
   impeachesCapture,
+  transportGapNote,
 } from '../honesty/blind-spots.js';
 import { buildHonestyBlock } from '../honesty/honesty.js';
 import { hasAcceptedWrite } from '../honesty/accepted-write.js';
@@ -71,6 +72,11 @@ export async function assertVerdict(
   // Only a spot that IMPEACHES the capture downgrades a verdict. A structural boundary (virtualized
   // rows, a cross-origin frame) is reported as coverage and must not impugn what WAS observed.
   const impeaching = buildCoverageStatement(spots.filter((sp) => impeachesCapture(sp.kind)));
+  // A gap in the WINDOW, as opposed to a standing limit of the page. Both mean the same thing to the
+  // rule — part of what happened was not seen — so both belong in `blindSpots`, which is the only
+  // input `decideVerified` reads for that.
+  const gap = transportGapNote(windowEvents);
+  const impeachingNotes = [impeaching.note, gap].filter((n): n is string => n !== undefined);
   const outcomePending = hasAcceptedWrite(windowEvents);
   const outcomeUnread = hasUnreadWriteOutcome(windowEvents);
   const decision = decideVerified({
@@ -81,7 +87,7 @@ export async function assertVerdict(
       grade: gradeOfPredicate(predicate),
       attribution: 'window',
       coveragePartial: Coverage.PARTIAL === statement.coverage,
-      ...(impeaching.note === undefined ? {} : { blindSpots: [impeaching.note] }),
+      ...(0 === impeachingNotes.length ? {} : { blindSpots: impeachingNotes }),
     }),
     contradictions,
     ...(outcomePending ? { outcomePending } : {}),
