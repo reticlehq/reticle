@@ -496,7 +496,14 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
   // never picked when the agent omits a sessionId. Explicit per-call scope/sessionId still overrides.
   // Scope + the no-session diagnosis: "no browser session connected" is the error that ends most
   // sessions, and the agent is told to check two things it cannot see. See no-session-diagnosis.ts.
-  wireSessionScope(bridge.sessions, readProjectId(process.cwd()), port);
+  // The pool reader is passed lazily: `pool` is assigned above but may be undefined when this
+  // daemon runs without one, and the diagnosis must degrade to the tab message rather than lie.
+  wireSessionScope(
+    bridge.sessions,
+    readProjectId(process.cwd()),
+    port,
+    () => pool?.reapedLeaseCount() ?? 0,
+  );
 
   const { realInput, owned } = await resolveRealInput(
     options,

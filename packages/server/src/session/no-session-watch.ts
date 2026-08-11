@@ -23,6 +23,12 @@ interface NoSessionWatchOptions {
   /** Whether this project has been through `reticle init` (a projectId is stamped in .reticle.json). */
   initialized: boolean;
   probe?: () => Promise<number[]>;
+  /**
+   * How many pooled leases have aged out, if a pool exists. Injected as a reader rather than the
+   * pool itself: the diagnosis needs one number, and taking the whole pool would tie the session
+   * layer to the browser layer for it.
+   */
+  reapedLeases?: () => number;
 }
 
 /** Start the watch. Returns a stop function; the timer is unref'd so it never holds the daemon up. */
@@ -57,6 +63,7 @@ function startNoSessionWatch(options: NoSessionWatchOptions): () => void {
       initialized: options.initialized,
       listening,
       port: options.port,
+      leaseExpired: (options.reapedLeases?.() ?? 0) > 0,
     }),
   );
 
@@ -76,7 +83,14 @@ export function wireSessionScope(
   sessions: SessionManager,
   activeProjectId: string | undefined,
   port: number,
+  /** Reader for the pool's aged-out-lease count; omitted when this daemon runs no pool. */
+  reapedLeases?: () => number,
 ): () => void {
   if (activeProjectId !== undefined) sessions.setDefaultScope({ projectId: activeProjectId });
-  return startNoSessionWatch({ sessions, port, initialized: activeProjectId !== undefined });
+  return startNoSessionWatch({
+    sessions,
+    port,
+    initialized: activeProjectId !== undefined,
+    ...(reapedLeases === undefined ? {} : { reapedLeases }),
+  });
 }

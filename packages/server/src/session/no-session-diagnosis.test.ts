@@ -197,3 +197,56 @@ describe('the no-listener branch does not overclaim what an eleven-port scan pro
     expect(scanned).toMatch(/dev server|npm run dev/i);
   });
 });
+
+/**
+ * A lease that aged out must not be reported as a human closing a tab.
+ *
+ * Reported from the field (#157): when a pooled lease expires, the agent gets the `everConnected`
+ * message — "The tab was closed, navigated away, or hard-reloaded. Ask the human to reopen the app"
+ * — and none of it is true. There is no human tab; the lease simply aged out, and the fix is a
+ * re-acquire the agent can do itself. The reporter said it "sent me looking for a port mismatch".
+ *
+ * That is the same defect as the eleven-port scan: a message asserting one specific cause and one
+ * specific fix, both wrong, to an audience that will act on it. Here it is worse than a dead end,
+ * because the recovery it names (ask a human) is unavailable to the caller and the one that would
+ * work (`reticle_lease { action: "acquire" }`) is not mentioned.
+ *
+ * `leaseExpired` is "this daemon has reaped at least one expired lease", NOT "the session that just
+ * vanished was that lease" — nothing knows that. So the message leads with the lease because a reap
+ * is a fact, and still admits the tab case rather than swapping one false certainty for another.
+ */
+describe('a reaped lease is not reported as a closed tab', () => {
+  const afterReap = diagnoseNoSession({
+    everConnected: true,
+    initialized: true,
+    listening: [5173],
+    port: 4400,
+    leaseExpired: true,
+  });
+
+  it('does not assert that a human closed the tab', () => {
+    expect(afterReap).not.toMatch(/tab was closed, navigated away, or hard-reloaded/i);
+  });
+
+  it('names the lease AGEING OUT as the likely cause', () => {
+    // Deliberately not just /lease/: the existing message already mentions `reticle_lease` in its
+    // self-serve hint, so a looser assertion here would pass without the fix and prove nothing.
+    expect(afterReap).toMatch(/expired|aged out/i);
+  });
+
+  it('tells the agent to re-acquire rather than to fetch a human', () => {
+    expect(afterReap).toMatch(/acquire/i);
+    expect(afterReap).not.toMatch(/Ask the human to reopen/i);
+  });
+
+  it('still keeps the old message when no lease was ever reaped', () => {
+    // The control. Most sessions are human tabs, and that message is right for them.
+    const plain = diagnoseNoSession({
+      everConnected: true,
+      initialized: true,
+      listening: [5173],
+      port: 4400,
+    });
+    expect(plain).toMatch(/tab was closed, navigated away, or hard-reloaded/i);
+  });
+});
