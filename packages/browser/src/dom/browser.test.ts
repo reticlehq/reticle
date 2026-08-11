@@ -128,7 +128,9 @@ describe('snapshot', () => {
     // interactive mode — the mode the tool description recommends for being ~3x smaller — showed
     // the same three controls as before. The error text was only in FULL. An agent that follows
     // the advice it is given is structurally blind to the failure it just caused.
-    render('<form><input aria-label="Email"><button>Sign in</button></form><div role="alert">Invalid email or password</div>');
+    render(
+      '<form><input aria-label="Email"><button>Sign in</button></form><div role="alert">Invalid email or password</div>',
+    );
     const snap = buildSnapshot({ mode: SnapshotMode.INTERACTIVE });
     expect(snap.tree).toContain('Invalid email or password');
   });
