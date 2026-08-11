@@ -43,7 +43,13 @@ function capMessage(message: string): string {
  * it was still collecting the defect ask, inviting a bug report about a refusal that had just told
  * the agent precisely what to do.
  */
-const SELF_RECOVERING: readonly RegExp[] = [/cannot drive native input/i];
+const SELF_RECOVERING: readonly RegExp[] = [
+  /cannot drive native input/i,
+  // The unknown-session refusal now lists the live ids inline. Appending "call reticle_sessions for
+  // the current ids" to a message that just named them contradicts the shorter path it offers, and
+  // a contradicted instruction is how one agent came to retry a dead id twelve times.
+  /Connected right now:/i,
+];
 
 /** A message that already carries its own concrete next action, so nothing should be appended. */
 function isSelfRecovering(message: string): boolean {

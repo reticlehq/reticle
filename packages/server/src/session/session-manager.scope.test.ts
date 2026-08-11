@@ -149,3 +149,51 @@ describe('project-scoped resolve()', () => {
     expect(bridge.sessions.resolve(undefined, { projectId: 'showcase' }).id).toBe('stray');
   });
 });
+
+/**
+ * A dead `sessionId` used to be a dead end, and the telemetry shows what that costs.
+ *
+ * On 2026-08-10 one agent called `reticle_navigate` twelve times against a sessionId that was no
+ * longer connected — **12 of the 58 tool errors recorded that whole day, 21%, from one loop.** The
+ * message it got each time was `no connected session with id 'x'`, and the attached recovery hint
+ * said "Call reticle_sessions for the current ids and retry with a valid one". The agent never did.
+ *
+ * The daemon already knows the live ids at the moment it refuses. Making the agent spend a round
+ * trip to learn something the refusal could have told it is the defect: an agent that has to make
+ * two extra calls to recover will often just retry the one it made.
+ */
+describe('a dead sessionId names the live ones instead of sending the agent away', () => {
+  it('names the connected sessions in the error', async () => {
+    await connect({ sessionId: 'alive-1', url: 'http://localhost:3000/', projectId: 'p' });
+    await connect({ sessionId: 'alive-2', url: 'http://localhost:3001/', projectId: 'p' });
+    await waitForSessions(2);
+
+    let message = '';
+    try {
+      bridge.sessions.resolve('ghost');
+    } catch (err) {
+      message = err instanceof Error ? err.message : String(err);
+    }
+
+    expect(message).toContain('ghost');
+    expect(message, 'the refusal must name the live sessions — the daemon knows them').toContain(
+      'alive-1',
+    );
+    expect(message).toContain('alive-2');
+  });
+
+  it('when nothing is connected at all, it says so rather than implying a retry would help', () => {
+    let message = '';
+    try {
+      bridge.sessions.resolve('ghost');
+    } catch (err) {
+      message = err instanceof Error ? err.message : String(err);
+    }
+
+    expect(message).toContain('ghost');
+    expect(
+      message,
+      'with zero sessions, "retry with a valid one" is advice the agent cannot act on',
+    ).toMatch(/no sessions are connected/i);
+  });
+});

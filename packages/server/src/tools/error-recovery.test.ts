@@ -478,3 +478,23 @@ describe("a select with no such option is the caller's to fix", () => {
     expect(RECOVERY.NO_SUCH_OPTION).toMatch(/label/i);
   });
 });
+
+/**
+ * The unknown-session refusal now names the live ids inline (see `SessionManager` — one agent
+ * looped twelve times against a dead id, 21% of a whole day's tool errors). Appending "call
+ * reticle_sessions for the current ids" to a message that just listed them is not merely redundant:
+ * it contradicts the shorter path the message offers, and a contradicted instruction is how the
+ * loop started.
+ */
+describe('a refusal that already lists the live sessions is left alone', () => {
+  it('adds no generic hint when the message names connected sessions', () => {
+    const message =
+      "no connected session with id 'ghost'. Connected right now: 'a' (http://localhost:3000/). " +
+      'Retry with one of those, or omit sessionId entirely and let Reticle scope to your project.';
+    expect(recoveryFor(message)).toBeUndefined();
+  });
+
+  it('still helps when the id is unknown and the message carries no list', () => {
+    expect(recoveryFor("no connected session with id 'ghost'")).toBe(RECOVERY.UNKNOWN_SESSION);
+  });
+});

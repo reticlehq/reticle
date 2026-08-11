@@ -188,11 +188,40 @@ export class SessionManager {
     return this.#recentClosures[this.#recentClosures.length - 1];
   }
 
+  /**
+   * A dead `sessionId`, answered with what the caller needs to recover — not with an errand.
+   *
+   * Telemetry, 2026-08-10: one agent called `reticle_navigate` twelve times against an id that was
+   * no longer connected. That single loop is **12 of the 58 tool errors recorded all day, 21%**. The
+   * refusal said only `no connected session with id 'x'`, and the recovery hint told it to call
+   * `reticle_sessions` and retry — two extra round trips to learn something this method already
+   * knows at the moment it refuses. An agent charged two calls to recover will often just repeat the
+   * one it made.
+   *
+   * So: name the live ids inline, and when there are none say that instead, because "retry with a
+   * valid one" is advice nobody can act on when no valid one exists.
+   */
+  #unknownSessionError(sessionId: string): string {
+    const live = [...this.#sessions.values()];
+    if (0 === live.length) {
+      return (
+        `no connected session with id '${sessionId}', and no sessions are connected at all — so ` +
+        'there is no other id to retry with. The app is not dialling this daemon; call ' +
+        'reticle_sessions for the diagnosis rather than retrying this call.'
+      );
+    }
+    const named = live.map((s) => `'${s.id}' (${s.url})`).join(', ');
+    return (
+      `no connected session with id '${sessionId}'. Connected right now: ${named}. ` +
+      'Retry with one of those, or omit sessionId entirely and let Reticle scope to your project.'
+    );
+  }
+
   resolve(sessionId?: string, scope?: ResolveScope): Session {
     if (sessionId !== undefined) {
       const found = this.#sessions.get(sessionId);
       if (found === undefined) {
-        throw new Error(`no connected session with id '${sessionId}'`);
+        throw new Error(this.#unknownSessionError(sessionId));
       }
       found.markAgentActivity(); // liveness — a targeted tool keeps the session alive / revives it
       return found;
