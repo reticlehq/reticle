@@ -589,14 +589,32 @@ function agentRuleSteps(input: PlanInput): Step[] {
  * with nothing naming a version. Pinning turns that into this loud failure, which is the better
  * trade — but only if the message says what to do about it.
  */
-/** Said out loud when the exact-version install was refused and the unpinned one worked. */
-function unpinnedRetryNote(version: string | undefined): string {
+/**
+ * Said out loud when the exact-version install failed and the unpinned one worked.
+ *
+ * It used to assert a cause it cannot know. Every one of nine fixture apps got the same sentence —
+ * "the registry refused 2.5.0 (pnpm's minimumReleaseAge holds new releases back)" — when the actual
+ * cause on that run was that the version did not exist yet, and the remedy offered was a `pnpm
+ * config` command handed to a yarn 1 project that will never read it.
+ *
+ * This note is built at PLAN time, before anything runs, and `io.exec` returns a bare boolean, so
+ * the apply layer has no failure text to hand back either. The honest move is therefore to report
+ * the CONSEQUENCE (which is certain and is the part that bites) and offer the remedy that belongs to
+ * the manager actually in use — rather than name a cause that is one possibility among several.
+ */
+function unpinnedRetryNote(version: string | undefined, pm: PackageManager): string {
   const wanted = version === undefined ? 'the exact version' : version;
+  // Kept verbatim for pnpm, where minimumReleaseAge is a real and common cause with a real remedy.
+  const remedy =
+    pm === PackageManager.PNPM
+      ? ' One common cause on pnpm is minimumReleaseAge holding a new release back; if pnpm ' +
+        'reported ERR_PNPM_NO_MATURE_MATCHING_VERSION, either wait out the window or allow these ' +
+        'packages: pnpm config set minimumReleaseAgeExclude "@reticlehq/*"'
+      : '';
   return (
-    `the registry refused ${wanted} (pnpm's minimumReleaseAge holds new releases back), so the ` +
-    `newest ACCEPTED version was installed instead. That may not match the daemon — if the agent ` +
-    `reports protocol errors, check \`versionSkew\` in reticle_sessions, then either wait out the ` +
-    `window or allow these packages: pnpm config set minimumReleaseAgeExclude "@reticlehq/*"`
+    `the pinned install of ${wanted} failed, so the newest version the registry WOULD accept was ` +
+    `installed instead. That may not match the daemon — if the agent reports protocol errors, check ` +
+    `\`versionSkew\` in reticle_sessions.${remedy}`
   );
 }
 
@@ -641,7 +659,7 @@ function installStep(input: PlanInput): Step {
     // release-age hold gets a working install instead of no install.
     retry: {
       ...installCommandParts(pm, frameworkPackages(input.detection.framework)),
-      note: unpinnedRetryNote(input.options.sdkVersion),
+      note: unpinnedRetryNote(input.options.sdkVersion, pm),
     },
   };
 }

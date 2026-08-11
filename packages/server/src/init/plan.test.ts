@@ -592,6 +592,62 @@ describe('buildPlan — the SDK is pinned to the CLI version', () => {
 });
 
 /**
+ * Reported from nine fixture apps: every one of them got the SAME retry note, whatever their package
+ * manager and whatever actually went wrong —
+ *
+ *   the registry refused 2.5.0 (pnpm's minimumReleaseAge holds new releases back) …
+ *   pnpm config set minimumReleaseAgeExclude "@reticlehq/*"
+ *
+ * Two separate lies in one sentence. The real cause on that run was that **the version did not exist
+ * yet** — no release-age window was involved. And the remedy is a `pnpm config` command handed to a
+ * **yarn 1** project, which will never read it.
+ *
+ * The note cannot learn the true cause here: it is built at plan time, before anything runs, and
+ * `io.exec` returns a bare boolean so the apply layer has no failure text to pass back either. What
+ * it CAN stop doing is asserting a cause it does not know, and it can get the remedy right, because
+ * `pm` is in scope at the call site and the sibling `installFailureHint(pm)` already branches on it.
+ */
+describe('the unpinned-retry note does not assert a cause it cannot know', () => {
+  const noteFor = (pm: PackageManager): string => {
+    const s = step(
+      buildPlan(
+        input({
+          detection: { ...detection(Framework.VITE), packageManager: pm },
+          options: { port: undefined, mcp: true, install: true, sdkVersion: '2.5.0' },
+        }),
+      ),
+      'Install dependencies',
+    );
+    return s.retry?.note ?? '';
+  };
+
+  it('says the pinned install failed, not WHY, since it cannot know why', () => {
+    const note = noteFor(PackageManager.NPM);
+    expect(note).toContain('2.5.0');
+    expect(
+      note,
+      'minimumReleaseAge is one possible cause among several — "the version does not exist yet" was the real one',
+    ).not.toContain('minimumReleaseAge holds new releases back');
+  });
+
+  it('does not hand an npm project a pnpm config command', () => {
+    expect(noteFor(PackageManager.NPM)).not.toContain('pnpm config set');
+    expect(noteFor(PackageManager.YARN)).not.toContain('pnpm config set');
+    expect(noteFor(PackageManager.BUN)).not.toContain('pnpm config set');
+  });
+
+  it('still gives pnpm users the remedy that IS theirs', () => {
+    expect(noteFor(PackageManager.PNPM)).toContain('minimumReleaseAgeExclude');
+  });
+
+  it('always warns about the skew, whichever manager — that is the part that bites', () => {
+    for (const pm of [PackageManager.NPM, PackageManager.PNPM, PackageManager.YARN]) {
+      expect(noteFor(pm)).toContain('reticle_sessions');
+    }
+  });
+});
+
+/**
  * The generated connect component ships into a JavaScript project as `.jsx`, where SWC parses it as
  * plain JS. A TypeScript cast in the body — `(globalThis as Record<string, unknown>)` — therefore
  * failed to compile and every route served 500: installing Reticle stopped the app booting, for the
