@@ -4,6 +4,7 @@ import {
   forgetDrivenRedactionKeys,
 } from '../input/driven-redaction.js';
 import { Session, type SessionInfo } from './session.js';
+import { AttachmentHistory } from './attachment-history.js';
 
 /**
  * The agent's active project, used to scope auto-selection. `projectId` is the stable build-stamped
@@ -81,6 +82,12 @@ const MAX_REMEMBERED_CLOSURES = 5;
 export class SessionManager {
   readonly #sessions = new Map<string, Session>();
   /**
+   * Continuity per session, so a listing can answer "was this attached the whole time".
+   *
+   * Owned here because this is the one place that sees both halves — every add and every remove.
+   */
+  readonly #attachment = new AttachmentHistory();
+  /**
    * The active project's scope, set once from the daemon's .reticle.json. When a tool resolves a session
    * without passing its own scope, this is applied — so auto-selection is project-scoped by default
    * and a stray tab from another app is never picked, even on the no-sessionId path.
@@ -100,6 +107,7 @@ export class SessionManager {
     // bridge because EVERY path that registers a session goes through this method, and a declaration
     // that silently fails to register is a leak nothing would report.
     declareDrivenRedactionKeys(session.id, session.redactKeys);
+    this.#attachment.attached(session.id);
     return previous;
   }
 
@@ -107,6 +115,9 @@ export class SessionManager {
     if (this.#sessions.get(session.id) !== session) return false;
     session.rejectAll('session disconnected');
     forgetDrivenRedactionKeys(session.id);
+    // Recorded, not forgotten: a session that comes back needs its gap measured, and a listing after
+    // the reconnect is exactly where that matters.
+    this.#attachment.detached(session.id);
     return this.#sessions.delete(session.id);
   }
 
@@ -115,7 +126,16 @@ export class SessionManager {
   }
 
   list(): SessionInfo[] {
-    return [...this.#sessions.values()].map((s) => s.info());
+    return [...this.#sessions.values()].map((s) => {
+      const info = s.info();
+      const attachment = this.#attachment.of(s.id);
+      return attachment === undefined ? info : { ...info, attachment };
+    });
+  }
+
+  /** Continuity for one session — "has this been attached the whole time I am reasoning about?" */
+  attachmentOf(sessionId: string): ReturnType<AttachmentHistory['of']> {
+    return this.#attachment.of(sessionId);
   }
 
   /** Every connected session — used by the liveness reaper to sweep for idle/disconnected ones. */

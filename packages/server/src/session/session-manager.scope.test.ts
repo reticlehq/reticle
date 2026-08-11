@@ -197,3 +197,28 @@ describe('a dead sessionId names the live ones instead of sending the agent away
     ).toMatch(/no sessions are connected/i);
   });
 });
+
+/**
+ * The listing carries continuity, so an agent can tell a session that never dropped from one that
+ * did. Driven over the real bridge rather than the pure class, because the value of this is that
+ * `add`/`remove` are wired to it — the arithmetic is already covered in attachment-history.test.ts.
+ */
+describe('reticle_sessions reports whether a session stayed attached', () => {
+  it('a freshly connected session reports zero outages', async () => {
+    await connect({ sessionId: 'fresh', url: 'http://localhost:3000/', projectId: 'p' });
+    await waitForSessions(1);
+    const [info] = bridge.sessions.list();
+    expect(
+      info?.attachment,
+      'the listing cannot answer "was it attached the whole time"',
+    ).toBeDefined();
+    expect(info?.attachment?.outages).toBe(0);
+  });
+
+  it('exposes continuity per session id', async () => {
+    await connect({ sessionId: 'a', url: 'http://localhost:3000/', projectId: 'p' });
+    await waitForSessions(1);
+    expect(bridge.sessions.attachmentOf('a')?.outages).toBe(0);
+    expect(bridge.sessions.attachmentOf('never-seen')).toBeUndefined();
+  });
+});

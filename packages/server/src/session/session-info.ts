@@ -32,6 +32,18 @@ export interface SessionInfo {
   pendingMarks?: number;
   /** present with pendingMarks — nudges the agent to drain them with reticle_review. */
   review_suggestion?: string;
+  /**
+   * Continuity of this attachment — `{ connectedSinceMs, outages, lastOutage? }`.
+   *
+   * A tab that dropped for four seconds and came back is indistinguishable from one that never left
+   * (#117), and that difference decides whether a verdict over the window can be trusted. Attached
+   * by `SessionManager.list()`, which is the layer that sees every connect and disconnect.
+   */
+  attachment?: {
+    connectedSinceMs: number;
+    outages: number;
+    lastOutage?: { startedMs: number; durationMs: number };
+  };
 }
 
 /** The read-only slice of a Session that the projection needs. Keeps this module class-free. */
