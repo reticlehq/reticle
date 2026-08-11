@@ -19,6 +19,8 @@
  * the hot resolve() path and this stays unit-testable.
  */
 
+import { DEV_SERVER_PORTS } from '../cli/cli-port.js';
+
 interface NoSessionFacts {
   /** Whether ANY session has connected to this daemon since it booted. */
   everConnected: boolean;
@@ -58,6 +60,15 @@ const SELF_SERVE =
   'Reticle drives itself, and returns a sessionId you can use immediately (reach it with ' +
   'reticle_run {tool:"reticle_lease"} if it is not advertised directly; release it when you finish).';
 
+/**
+ * The ports the scan actually covers, rendered for the message.
+ *
+ * Derived from DEV_SERVER_PORTS rather than re-typed: a message that lists ports the scan does not
+ * check, or omits ones it does, is a new version of the same defect — a confident claim about
+ * evidence that was never gathered.
+ */
+const SCANNED_PORTS = [...DEV_SERVER_PORTS].join(', ');
+
 export function diagnoseNoSession(facts: NoSessionFacts): string {
   const { everConnected, initialized, listening, port } = facts;
   const ports = listening.join(', ');
@@ -72,9 +83,19 @@ export function diagnoseNoSession(facts: NoSessionFacts): string {
 
   if (0 === listening.length) {
     return (
-      'no browser session connected, and nothing is listening on any of the usual dev-server ports ' +
-      '— so the app is almost certainly not running. This is not a Reticle wiring problem: ask the ' +
-      `human to start their dev server (\`npm run dev\`), then open the app in a browser. ${RETRY}`
+      'no browser session connected, and nothing is listening on the ports Reticle scans ' +
+      `(${SCANNED_PORTS}). The likeliest cause by far is that the dev server is not running: ask ` +
+      'the human to start it (`npm run dev`), then open the app in a browser. ' +
+      // The caveat is here rather than omitted because the scan is NARROW, and the old sentence
+      // spent its confidence as though an empty result from eleven ports were proof of absence.
+      // Reported from a scripted drive of 2.5.0: this branch asserted the app was not running while
+      // it served 200 on :7699. A dev server on any other port — 4173 from `vite preview`, 1420
+      // from Tauri, 5175 from a second Vite, anything passed to --port — is invisible to it.
+      'That scan is narrow, so it is not proof: a server on any other port is invisible to it. If ' +
+      // Deliberately NOT offering reticle_lease here, and a test pins that: a lease opens a URL, and
+      // if nothing is listening there is nothing at any URL to open. Asking for the real one is the
+      // only move that can recover the :7699 case.
+      `the app IS running, ask the human for its URL rather than assuming it is down. ${RETRY}`
     );
   }
 

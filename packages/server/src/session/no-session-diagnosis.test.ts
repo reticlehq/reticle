@@ -151,3 +151,49 @@ describe('diagnoseNoSession', () => {
     }
   });
 });
+
+/**
+ * An empty result from an eleven-port scan is not evidence of absence.
+ *
+ * Reported from a scripted drive of published 2.5.0: the diagnosis asserted the app was not running
+ * while it was serving 200 on `:7699`. `DEV_SERVER_PORTS` is a fixed set of eleven, and it does not
+ * contain 7699 — nor 4310 (our own bench-app), 3100 (next-smoke), 5175 (a second Vite on a machine
+ * already running one), 1420 (Tauri), 4173 (`vite preview`), or anything a user passed to --port.
+ *
+ * The narrow claim was true. The two sentences built on top of it — "the app is almost certainly not
+ * running" and "this is not a Reticle wiring problem" — are neither, and the message is DIRECTIVE:
+ * the agent is the audience and it is being told to stop looking. That is the expensive part. A
+ * caveat costs a sentence; sending an agent away from a working app costs the session.
+ */
+describe('the no-listener branch does not overclaim what an eleven-port scan proved', () => {
+  const scanned = diagnoseNoSession({
+    everConnected: false,
+    initialized: true,
+    listening: [],
+    port: 4400,
+  });
+
+  it('does not assert the app is not running', () => {
+    expect(scanned).not.toMatch(/almost certainly not running/i);
+  });
+
+  it('does not tell the agent this cannot be a Reticle problem', () => {
+    // The directive half. Reticle cannot know this, and saying it ends the investigation.
+    expect(scanned).not.toMatch(/not a Reticle wiring problem/i);
+  });
+
+  it('says what it actually checked, so the reader can judge the gap', () => {
+    expect(scanned).toMatch(/\b5173\b/);
+    expect(scanned).toMatch(/scan|checked|only|these ports/i);
+  });
+
+  it('gives the agent a way to proceed when the app IS running elsewhere', () => {
+    expect(scanned).toMatch(/reticle_lease|url/i);
+  });
+
+  it('still leads with the likeliest cause — a caveat must not bury the common case', () => {
+    // The scan is usually right. This must stay useful for the user whose server really is down,
+    // not become a hedge that says nothing.
+    expect(scanned).toMatch(/dev server|npm run dev/i);
+  });
+});
