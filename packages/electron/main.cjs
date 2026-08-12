@@ -17,7 +17,7 @@
  * Dev-only, like the rest of Reticle. Gate the require behind your dev check so it never ships.
  */
 const { ipcMain } = require('electron');
-const { writeFile, readdir, stat, unlink } = require('node:fs/promises');
+const { writeFile, readdir, stat, unlink, mkdtemp } = require('node:fs/promises');
 const { tmpdir } = require('node:os');
 const { join } = require('node:path');
 // Generated from @reticlehq/core's TypeScript source, so the main process, the preload and the
@@ -67,14 +67,37 @@ function usableContents(sender) {
  */
 const STALE_CAPTURE_MS = 60_000;
 
+/**
+ * This process's own capture directory, created 0700 — made once, on the first capture.
+ *
+ * A screenshot of your app window can hold customer records, a token on screen, an authenticated
+ * session. Written straight into the SHARED temp dir under a guessable name — a constant prefix, a
+ * readable pid and a counter from 0 — it is readable by any other local user for as long as it
+ * sits there, and a symlink pre-placed at that name would have `writeFile` follow it and write
+ * through with this app's privileges.
+ *
+ * `mkdtemp` closes both at once, and it is the DIRECTORY that does it rather than a less guessable
+ * filename: the OS creates it 0700 with a random suffix, so another user cannot enter it to read a
+ * capture, and cannot pre-create anything inside a directory that did not exist until this process
+ * made it. Guessing is not the property that matters; the shared parent was.
+ *
+ * Memoised as the PROMISE, not the resolved path, so two captures racing on the first screenshot
+ * await one `mkdtemp` instead of creating two directories and leaking one.
+ */
+let capturesDirPromise;
+
+function capturesDir() {
+  capturesDirPromise ??= mkdtemp(join(tmpdir(), RETICLE_CAPTURE_FILE_PREFIX));
+  return capturesDirPromise;
+}
+
 async function sweepOldCaptures(dir, keepFile) {
-  const mine = `${RETICLE_CAPTURE_FILE_PREFIX}${String(process.pid)}-`;
   const cutoff = Date.now() - STALE_CAPTURE_MS;
   try {
     const entries = await readdir(dir);
     await Promise.all(
       entries
-        .filter((name) => name.startsWith(mine) && join(dir, name) !== keepFile)
+        .filter((name) => join(dir, name) !== keepFile)
         .map(async (name) => {
           const file = join(dir, name);
           const info = await stat(file).catch(() => undefined);
@@ -83,7 +106,7 @@ async function sweepOldCaptures(dir, keepFile) {
         }),
     );
   } catch {
-    /* the temp dir is unreadable; a capture is still worth attempting */
+    /* the capture directory is unreadable; a capture is still worth attempting */
   }
 }
 
@@ -116,12 +139,19 @@ function installReticleCapture(win) {
         // always on the same machine here (the bridge is loopback), so a path is the honest channel:
         // no size cap, no chunking, and nothing large on the event wire.
         captureSeq += 1;
-        const file = join(
-          tmpdir(),
-          `${RETICLE_CAPTURE_FILE_PREFIX}${String(process.pid)}-${String(captureSeq)}.png`,
-        );
-        await writeFile(file, image.toPNG());
-        await sweepOldCaptures(tmpdir(), file);
+        // Inside this process's own 0700 directory. A failure to create it throws to the catch
+        // below and answers no-image; it deliberately does NOT fall back to the shared temp dir,
+        // because that fallback is the very exposure this directory exists to remove.
+        const dir = await capturesDir();
+        const file = join(dir, `${RETICLE_CAPTURE_FILE_PREFIX}${String(captureSeq)}.png`);
+        // `wx` is O_CREAT|O_EXCL: it REFUSES an existing path instead of writing through it, and
+        // O_EXCL does not follow a final symlink. The 0700 directory already stops an attacker
+        // getting a symlink here, so this is the second lock on the same door — and the one that
+        // still holds if a later change moves this write back out into the shared temp dir. The
+        // sequence only ever climbs within a fresh per-process directory, so it never collides
+        // with a capture of our own.
+        await writeFile(file, image.toPNG(), { flag: 'wx' });
+        await sweepOldCaptures(dir, file);
         return file;
       } catch {
         return null;
