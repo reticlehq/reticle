@@ -22,9 +22,9 @@ describe('isCapturePath — what the daemon agrees to read', () => {
   });
 
   it('refuses a private directory whose name is not ours', () => {
-    expect(isCapturePath(join(tmpdir(), 'someone-else', `${RETICLE_CAPTURE_FILE_PREFIX}1.png`))).toBe(
-      false,
-    );
+    expect(
+      isCapturePath(join(tmpdir(), 'someone-else', `${RETICLE_CAPTURE_FILE_PREFIX}1.png`)),
+    ).toBe(false);
   });
 
   it('refuses a file that does not carry the prefix, even inside our directory', () => {
@@ -32,15 +32,15 @@ describe('isCapturePath — what the daemon agrees to read', () => {
   });
 
   it('refuses a traversal that climbs out of the temp dir', () => {
-    expect(
-      isCapturePath(`${PRIVATE_DIR}/../../etc/${RETICLE_CAPTURE_FILE_PREFIX}passwd.png`),
-    ).toBe(false);
+    expect(isCapturePath(`${PRIVATE_DIR}/../../etc/${RETICLE_CAPTURE_FILE_PREFIX}passwd.png`)).toBe(
+      false,
+    );
   });
 
   it('refuses a nesting deeper than one private directory', () => {
-    expect(
-      isCapturePath(join(PRIVATE_DIR, 'deeper', `${RETICLE_CAPTURE_FILE_PREFIX}1.png`)),
-    ).toBe(false);
+    expect(isCapturePath(join(PRIVATE_DIR, 'deeper', `${RETICLE_CAPTURE_FILE_PREFIX}1.png`))).toBe(
+      false,
+    );
   });
 
   it('refuses a path outside the temp dir entirely', () => {
