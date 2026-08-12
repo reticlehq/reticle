@@ -6,7 +6,7 @@ All notable changes to the **`@reticlehq/*`** packages are documented here (each
 
 ### Security
 
-- **`@reticlehq/electron` / `reticle-tauri` — desktop captures are written into a private per-process directory (mode `0700`) instead of straight into the shared OS temp directory.** The old filename was guessable by construction — a public constant prefix, a readable pid, and a counter starting at 0 — so on a multi-user machine a screenshot of your app window (customer records, a token on screen, an authenticated session) was readable by any other local user until the sweep removed it, and a symlink pre-placed at that name would be followed by the write. Fixes the CodeQL `js/insecure-temporary-file` alert on `packages/electron/main.cjs`, and the same pattern in the Tauri crate, which CodeQL does not scan. Both writes now also use `O_CREAT|O_EXCL`, which refuses an existing path rather than writing through it. `@reticlehq/server` accepts the new layout **and** the old flat one, so an app on an older shell package keeps getting screenshots against a newer daemon.
+- **`@reticlehq/electron` / `reticle-tauri` — desktop captures are written into a private per-process directory (mode `0700`) instead of straight into the shared OS temp directory.** The old filename was guessable by construction — a public constant prefix, a readable pid, and a counter starting at 0 — so on a multi-user machine a screenshot of your app window (customer records, a token on screen, an authenticated session) was readable by any other local user until the sweep removed it, and a symlink pre-placed at that name would be followed by the write. Fixes the CodeQL `js/insecure-temporary-file` alert on `packages/electron/main.cjs`, and the same pattern in the Tauri crate, which CodeQL does not scan. Both writes now also use `O_CREAT|O_EXCL`, which refuses an existing path rather than writing through it. `@reticlehq/server` accepts the new layout **and** the old flat one, so an app on an older shell package keeps getting screenshots against a newer daemon, and removes consumed private capture directories during shutdown so they do not accumulate in the OS temp directory.
 
 ## [2.6.0] — 2026-08-12
 
@@ -78,6 +78,7 @@ The measured problem: **137 of the 140 sessions that produced no verdict never c
 ### Thanks
 
 **[Dev Chiniwala](https://github.com/DevChiniwala)** — five fixes, all in the resource-leak and shutdown paths that decide whether the daemon survives a long session. **[Vijay Misal](https://github.com/vjymisal0)** — the lossy-transform guard missed export lists, default and wildcard exports, and type-only exports; the guard's own self-test never tried them. **[BabuBahir](https://github.com/BabuBahir)** ([#236](https://github.com/reticlehq/reticle/pull/236)) — corrected a test-duration figure this repo had been quoting wrongly for months.
+
 ## [2.5.0] — 2026-08-09
 
 **One tool surface, an MCP server that stays up, and a long list of answers that were wrong.** Most of it was found by driving the shipped surface against live apps: a hostile-argument fuzz of all 48 tools, a nine-app fixture fleet under a new trace, and stress specs against every transport.

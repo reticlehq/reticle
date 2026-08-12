@@ -10,6 +10,7 @@ import { sessionIdShape } from '../tools/tool-kit.js';
 import { asNumber, asRecord, asString } from '../tools/tools-helpers.js';
 import { diffPng, type VisualRect } from './visual-diff.js';
 import { VisualStore } from './visual-store.js';
+import { trackCaptureDirectory } from './capture-cleanup.js';
 import { readFile, unlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, dirname } from 'node:path';
@@ -106,6 +107,7 @@ async function desktopCapture(
   try {
     const bytes = await readFile(path);
     await unlink(path).catch(() => undefined);
+    trackCaptureDirectory(path);
     return isCompletePng(bytes) ? { png: new Uint8Array(bytes) } : {};
   } catch {
     return {};

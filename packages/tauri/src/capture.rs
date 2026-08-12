@@ -134,7 +134,7 @@ const STALE_CAPTURE_SECS: u64 = 60;
 /// The daemon unlinks a capture once it has read it — but only if it ever reads. A session that
 /// died, a command that timed out, or a path the daemon rejected each leave a ~500KB PNG in the temp
 /// directory forever, and nothing else ever collects them. Sweeping on the next capture needs no
-/// timer and no shutdown hook.
+/// timer; the daemon removes this empty private directory in its existing shutdown path.
 ///
 /// Age-gated, not "delete every sibling": two captures in flight and an unconditional sweep would
 /// unlink the older one before the daemon had read it, turning a working screenshot into a

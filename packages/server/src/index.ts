@@ -26,6 +26,7 @@ import { buildFlowChips } from './flows/flow-scope.js';
 import { ProjectStore } from './project/project-store.js';
 import { AnnotationStore } from './flows/annotation-store.js';
 import { createNodeFileSystem, type FileSystemPort } from './project/fs-port.js';
+import { cleanupCaptureDirectories } from './visual/capture-cleanup.js';
 import { ReticleRunner } from './runs/reticle-runner.js';
 import { createRunnerPort } from './runs/runner-port.js';
 import { RunStore } from './runs/run-store.js';
@@ -453,6 +454,7 @@ export async function start(options: StartOptions = {}): Promise<RunningServer> 
     ...(security.token !== undefined ? { token: security.token } : {}),
     close: async () => {
       reaper.stop();
+      await cleanupCaptureDirectories();
       leaseReaper?.stop();
       await pool?.shutdown();
       await owned?.dispose();
@@ -617,6 +619,7 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
     agentAttached: () => agentConnected,
     close: async () => {
       reaper.stop();
+      await cleanupCaptureDirectories();
       const vh = verifyHttp;
       if (vh !== undefined) await new Promise<void>((resolve) => vh.server.close(() => resolve()));
       leaseReaper.stop();

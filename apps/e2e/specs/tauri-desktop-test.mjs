@@ -159,7 +159,6 @@ try {
     concurrent.every((s) => s.saved === true),
     JSON.stringify(concurrent.map((s) => s.reason ?? s.saved)),
   );
-  chk('no capture is left behind in the temp dir', tempCaptures().length === 0, tempCaptures().join(','));
 
   /**
    * The webview must still be there a few seconds later.
@@ -202,6 +201,11 @@ try {
 } finally {
   await session?.shutdown();
 }
+chk(
+  'shutdown removes the private capture directory from the temp dir',
+  tempCaptures().length === 0,
+  tempCaptures().join(','),
+);
 
 console.log(
   `\n${state.fail === 0 ? '✅ TAURI DESKTOP VERIFIED' : '❌ FAILED'} (${String(state.pass)} passed, ${String(state.fail)} failed)`,

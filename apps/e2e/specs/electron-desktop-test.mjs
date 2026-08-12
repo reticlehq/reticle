@@ -184,10 +184,14 @@ try {
     concurrent.every((s) => s.saved === true),
     JSON.stringify(concurrent.map((s) => s.reason ?? s.saved)),
   );
-  chk('no capture is left behind in the temp dir', tempCaptures().length === 0, tempCaptures().join(','));
 } finally {
   await session?.shutdown();
 }
+chk(
+  'shutdown removes the private capture directory from the temp dir',
+  tempCaptures().length === 0,
+  tempCaptures().join(','),
+);
 
 // ── the same app with the ONE line an integrator forgets ──────────────────────────────────────────
 // Without the preload shim every IPC call is invisible. The failure mode this pins is not the

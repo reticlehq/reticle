@@ -57,8 +57,9 @@ function usableContents(sender) {
  *
  * The daemon unlinks a capture after reading it, but only if it ever reads: a session that died, a
  * command that timed out, or a path the daemon rejected all leave a ~300KB PNG in the temp directory
- * forever. Sweeping our own prefix on each capture bounds that to one file at a time, with no timer
- * to leak and no cleanup handler to forget. Best-effort — a failed sweep must never fail a capture.
+ * forever. Sweeping our own prefix on each capture bounds that to one file at a time, and the daemon
+ * removes this empty private directory in its existing shutdown path. Best-effort — a failed sweep
+ * must never fail a capture.
  *
  * Only files older than STALE_CAPTURE_MS are swept. Deleting every sibling unconditionally raced
  * with CONCURRENT captures: with two screenshots in flight, the second one's sweep unlinked the
