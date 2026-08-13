@@ -803,15 +803,30 @@ describe('the closing hint names the MCP reload before it tells you to ask the a
     expect(out, 'the reason, or it reads as superstition').toMatch(/tool list|only appear/i);
   });
 
-  it('puts the reload BEFORE "ask your agent" — the instruction that depends on it', () => {
+  it('puts the reload BEFORE the instruction that depends on it', () => {
     const io = memoryIo(VITE_FILES);
     runInit(OPTS, io);
     const out = io.lines.join('\n');
     const reload = out.search(/\/mcp|reload the window/i);
-    const ask = out.indexOf('List Reticle sessions');
+    // The dependent instruction is now "ask your agent to drive a flow" — asking the agent for
+    // ANYTHING requires the reload, because it read its tool list before Reticle existed. The
+    // closing line used to end on "ask your agent: List Reticle sessions", a question whose failure
+    // is a dead end; it now ends on `reticle status`, which ANSWERS it and needs no reload at all.
+    const dependent = out.search(/ask your agent to drive/i);
     expect(reload).toBeGreaterThan(-1);
-    expect(ask).toBeGreaterThan(-1);
-    expect(reload, 'reload must come first').toBeLessThan(ask);
+    expect(dependent, 'the closing line must still hand off to the agent').toBeGreaterThan(-1);
+    expect(reload, 'reload must come first').toBeLessThan(dependent);
+  });
+
+  it('names a command that CONFIRMS the install, not one that merely asks', () => {
+    // `init` writes files and stops. The install is not finished until an app carrying the SDK has
+    // dialled the daemon, and this is the last instruction most people read — so it has to point at
+    // the thing that can answer, which since 2.7.0 also says WHY when the answer is no.
+    const io = memoryIo(VITE_FILES);
+    runInit(OPTS, io);
+    const out = io.lines.join('\n');
+    expect(out).toMatch(/status/);
+    expect(out, 'and say what it proves').toMatch(/confirms the app connected|why it has not/i);
   });
 
   it('says nothing about MCP when this run did not register it', () => {

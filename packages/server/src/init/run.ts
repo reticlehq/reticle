@@ -504,13 +504,27 @@ function devServerRestart(framework: Framework): string {
  */
 function restartHint(framework: Framework, mcpRegistered: boolean): string {
   const dev = `${devServerRestart(framework)}.`;
-  if (!mcpRegistered) return `${dev} Then ask your agent: "List Reticle sessions".`;
+  // NAME THE COMMAND THAT PROVES IT, not one that merely asks.
+  //
+  // `init` writes files and stops; the install is not finished until an app carrying the SDK has
+  // actually dialled the daemon, and nothing here confirmed that. The field shape is unambiguous:
+  // people complete the agent half, never complete the app half, and keep a daemon running for
+  // weeks with nothing to drive — so this is the last instruction most of them read.
+  //
+  // "Ask your agent: List Reticle sessions" asks a question whose failure is a dead end. `reticle
+  // status` ANSWERS it: as of 2.7.0 it reports the session, or says why there is none — no app
+  // running, an app running that never dialled us, a tab that closed — with the fix for each.
+  const prove =
+    'Then run `npx @reticlehq/server status` — it confirms the app connected, or says exactly why ' +
+    'it has not.';
+  if (!mcpRegistered) return `${dev} ${prove}`;
   return (
     `${dev}\n` +
     "Then reload your agent's MCP tools — `/mcp` in Claude Code, or reload the window in " +
     'Cursor/VS Code.\n' +
     'The tools only appear after that: your agent read its tool list before Reticle existed.\n' +
-    'Then ask it: "List Reticle sessions".'
+    `${prove}\n` +
+    'Once it shows a session, ask your agent to drive a flow — that is the install finished.'
   );
 }
 
