@@ -13,7 +13,107 @@
  * returns full — never a misleading cross-page delta.
  */
 
-import { normalizeLines, diffLines } from '../project/baselines.js';
+/**
+ * Identity for comparison, ref for action.
+ *
+ * The delta path used `normalizeLines` from the baseline layer, which strips the ref marker on
+ * purpose — a ref stored in a baseline would make every later diff noisy. Correct there, wrong here:
+ * every delta line came back as `- button "Row actions"` with no ref, and acting needs a ref, so the
+ * full snapshot had to be taken anyway. The diff call cost tokens and bought nothing. One helper, two
+ * callers, opposite requirements — so this path keeps the ref-stripped line as the KEY and emits the
+ * ORIGINAL line with its ref.
+ *
+ * Focus is stripped from the key too. It rides in the line as `[focused]`, alone or comma-joined with
+ * other states, so a focus move used to surface as one line removed and its twin added — structural
+ * change reported where nothing had been added at all. Focus is a property OF a line, so it gets its
+ * own field. Only focus is exempt: `disabled` moving is a real change and must still show.
+ */
+
+/** The ref marker, as `formatLine` writes it. Bounded quantifier: `\s*` backtracks polynomially. */
+const REF_MARKER = /\s?\(ref=e\d+\)/;
+
+/** The state bracket — ` [disabled,checked,expanded,focused]` — and the one state that is not structural. */
+const STATE_BRACKET = /\s\[([a-z,]+)\]$/;
+const FOCUSED_STATE = 'focused';
+
+/** True when this line carries focus. */
+function isFocused(line: string): boolean {
+  return true === STATE_BRACKET.exec(line)?.[1]?.split(',').includes(FOCUSED_STATE);
+}
+
+/** The same line with focus removed — and the bracket dropped when focus was all it held. */
+function withoutFocus(line: string): string {
+  const match = STATE_BRACKET.exec(line);
+  const states = match?.[1];
+  if (null === match || undefined === match || undefined === states) return line;
+  const rest = states.split(',').filter((s) => s !== FOCUSED_STATE);
+  const head = line.slice(0, match.index);
+  return 0 === rest.length ? head : `${head} [${rest.join(',')}]`;
+}
+
+/** What makes two lines "the same element" for diffing: no ref, no focus, no surrounding space. */
+function deltaKey(line: string): string {
+  return withoutFocus(line.replace(REF_MARKER, '')).trim();
+}
+
+interface DeltaLine {
+  key: string;
+  /** The line as the agent will read it: ref intact, focus removed so it cannot read as a change. */
+  text: string;
+}
+
+function deltaLines(tree: string): DeltaLine[] {
+  return tree
+    .split('\n')
+    .map((line) => ({ key: deltaKey(line), text: withoutFocus(line).trim() }))
+    .filter((line) => line.key.length > 0);
+}
+
+/**
+ * Multiset diff on the key, emitting the original text.
+ *
+ * Multiset rather than set because duplicate labels are the norm — twelve identical `Row actions`
+ * buttons — and the count is the only thing that says how many left. Emitting the ORIGINAL text is
+ * what finally tells them apart: with refs, "which twelve" has an answer.
+ */
+function diffKeyed(prev: DeltaLine[], next: DeltaLine[]): { added: string[]; removed: string[] } {
+  const bucket = (lines: DeltaLine[]): Map<string, string[]> => {
+    const map = new Map<string, string[]>();
+    for (const line of lines) {
+      const existing = map.get(line.key);
+      if (existing === undefined) map.set(line.key, [line.text]);
+      else existing.push(line.text);
+    }
+    return map;
+  };
+  const before = bucket(prev);
+  const after = bucket(next);
+  const removed: string[] = [];
+  const added: string[] = [];
+  for (const key of new Set([...before.keys(), ...after.keys()])) {
+    const was = before.get(key) ?? [];
+    const now = after.get(key) ?? [];
+    // Pair the SAME REF first. Twelve identical `Row actions` buttons are one key, and the ref is the
+    // only thing that says which of them left — an end-of-list surplus would name an arbitrary one.
+    const survived = new Set(now);
+    const wentOrChanged = was.filter((text) => !survived.has(text));
+    const arrivedOrChanged = now.filter((text) => !new Set(was).has(text));
+    // Whatever is left over on both sides is the SAME element with a re-minted ref (a re-render, or a
+    // navigation that restarts the sequence). Pairing those off is what stops a ref change reading as
+    // a removal plus an addition; only the count difference is a real structural change.
+    const paired = Math.min(wentOrChanged.length, arrivedOrChanged.length);
+    removed.push(...wentOrChanged.slice(paired));
+    added.push(...arrivedOrChanged.slice(paired));
+  }
+  return { removed, added };
+}
+
+/** Where focus sits now, as the agent would read the line. Read from the raw tree so a line the diff
+ *  filters out cannot silently swallow the focus report. */
+function focusedLine(tree: string): string | undefined {
+  const focused = tree.split('\n').find((line) => isFocused(line));
+  return focused === undefined ? undefined : withoutFocus(focused).trim();
+}
 
 export const SnapshotDeltaMode = {
   FULL: 'full',
@@ -29,19 +129,40 @@ interface SnapshotDelta {
   removedCount: number;
 }
 
+/** Where focus moved, when it moved. Absent fields mean nothing held focus on that side. */
+export interface FocusChange {
+  from?: string;
+  to?: string;
+}
+
 type DeltaDecision =
   | { mode: typeof SnapshotDeltaMode.FULL }
-  | { mode: typeof SnapshotDeltaMode.UNCHANGED }
-  | { mode: typeof SnapshotDeltaMode.DELTA; delta: SnapshotDelta };
+  | { mode: typeof SnapshotDeltaMode.UNCHANGED; focusChanged?: FocusChange }
+  | { mode: typeof SnapshotDeltaMode.DELTA; delta: SnapshotDelta; focusChanged?: FocusChange };
 
 /** Pure: decide full vs delta vs unchanged given the previous tree (same route) and the next tree. */
 export function snapshotDelta(prevTree: string | undefined, nextTree: string): DeltaDecision {
   if (prevTree === undefined) return { mode: SnapshotDeltaMode.FULL };
-  const { added, removed } = diffLines(normalizeLines(prevTree), normalizeLines(nextTree));
-  if (0 === added.length && 0 === removed.length) return { mode: SnapshotDeltaMode.UNCHANGED };
+  const { added, removed } = diffKeyed(deltaLines(prevTree), deltaLines(nextTree));
+  const before = focusedLine(prevTree);
+  const now = focusedLine(nextTree);
+  // Reported only on a MOVE. Repeating "focus is still here" every turn is the noise the delta exists
+  // to remove, and an absent field is how the agent knows nothing happened.
+  const focusChanged: FocusChange | undefined =
+    before === now
+      ? undefined
+      : {
+          ...(before === undefined ? {} : { from: before }),
+          ...(now === undefined ? {} : { to: now }),
+        };
+  const moved = focusChanged === undefined ? {} : { focusChanged };
+  if (0 === added.length && 0 === removed.length) {
+    return { mode: SnapshotDeltaMode.UNCHANGED, ...moved };
+  }
   return {
     mode: SnapshotDeltaMode.DELTA,
     delta: { added, removed, addedCount: added.length, removedCount: removed.length },
+    ...moved,
   };
 }
 
@@ -138,8 +259,18 @@ export function applySnapshotDelta(
   // statement about the cap, not about the page. Carried through on both branches: a delta computed
   // over a prefix is real but not exhaustive either.
   const capped = true === r['truncated'] ? { truncated: true, note: CAPPED_DIFF_NOTE } : {};
+  // Spread onto BOTH branches. A value computed correctly and declared nowhere on the way out is the
+  // defect shape that hit this release five separate times: nothing throws, no test reddens, the
+  // field is simply absent forever.
+  const moved = decision.focusChanged === undefined ? {} : { focusChanged: decision.focusChanged };
   if (decision.mode === SnapshotDeltaMode.UNCHANGED) {
-    return { mode: SnapshotDeltaMode.UNCHANGED, status: r['status'], ...capped };
+    return { mode: SnapshotDeltaMode.UNCHANGED, status: r['status'], ...moved, ...capped };
   }
-  return { mode: SnapshotDeltaMode.DELTA, delta: decision.delta, status: r['status'], ...capped };
+  return {
+    mode: SnapshotDeltaMode.DELTA,
+    delta: decision.delta,
+    status: r['status'],
+    ...moved,
+    ...capped,
+  };
 }

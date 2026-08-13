@@ -23,7 +23,10 @@ describe('snapshotDelta (pure)', () => {
   it('returns only the added/removed lines on a real change', () => {
     const d = snapshotDelta(TREE_A, TREE_B);
     if (d.mode !== SnapshotDeltaMode.DELTA) throw new Error('expected delta');
-    expect(d.delta.added).toEqual(['- alert "Saved!"']); // normalize strips refs, keeps the line
+    // The ref is CARRIED, because a delta without one cannot be acted on and the agent has to take
+    // the full snapshot anyway. Identity for the diff is still the ref-stripped line — see the test
+    // above, where only the refs change and the answer is still `unchanged`.
+    expect(d.delta.added).toEqual(['- alert "Saved!" (ref=e3)']);
     expect(d.delta.removed).toEqual([]);
     expect(d.delta.addedCount).toBe(1);
   });
@@ -83,7 +86,7 @@ describe('applySnapshotDelta', () => {
     };
     expect(second.mode).toBe(SnapshotDeltaMode.DELTA);
     expect(second.tree).toBeUndefined(); // no full tree on a delta → tokens saved
-    expect(second.delta?.added).toEqual(['- alert "Saved!"']);
+    expect(second.delta?.added).toEqual(['- alert "Saved!" (ref=e3)']);
   });
 
   it('returns unchanged (no tree, no delta) when nothing changed', () => {
