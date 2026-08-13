@@ -48,11 +48,86 @@ export function echoRef(ref: string): string {
  */
 const SWEEP_EVERY_MINTS = 1000;
 
+/**
+ * Where a document records the ref numbers it has claimed, so the next one starts past them.
+ *
+ * Refs are per-DOCUMENT: a reload or a cross-page link tears this module down and the next document
+ * used to start minting from `e1` again. So `e7` from page A was a valid, resolvable, DIFFERENT
+ * element on page B — nothing refused, the wrong element was acted on, and the result came back `ok`.
+ * The SPA case was always safe (WeakRef liveness + isConnected); this was the other half, and the
+ * more dangerous one, because it produced a false green instead of an error.
+ *
+ * Deliberately NOT a change to the ref grammar. Stamping refs `e7@3` would have worked too, but every
+ * agent passes refs back verbatim and every saved flow on disk already holds bare ones, so it buys a
+ * wire-format migration for a property the sequence itself can carry. A number that never restarts
+ * means a stale ref simply misses the map, and the refusal that already exists — already worded for
+ * exactly this case — fires unchanged.
+ *
+ * Namespaced like the session key it sits beside; `sessionStorage` is the right scope for the same
+ * reason session continuity uses it (survives reloads and same-tab navigations, not shared with
+ * another tab, which is a different session with its own registry anyway).
+ */
+const REF_BASE_KEY = '__reticle_ref_base';
+
+/**
+ * How many numbers a document claims at once.
+ *
+ * The reservation is a synchronous storage write, so it cannot happen per mint — mints are frequent
+ * (every meaningful DOM addition, every transitionend, every scroll reveal). One write per this many
+ * mints is free. Sized to keep refs SHORT: refs are echoed in every snapshot and every error, so the
+ * digits are a token cost paid on every turn, and a page would have to navigate a hundred times
+ * before they reach seven of them.
+ */
+export const REF_BLOCK = 10000;
+
+/** The reserved-block high-water mark, or 0 when storage is unavailable or its value is junk. */
+function readBase(store: Storage | undefined): number {
+  try {
+    const raw = store?.getItem(REF_BASE_KEY);
+    const value = null === raw || undefined === raw ? Number.NaN : Number(raw);
+    return Number.isSafeInteger(value) && value > 0 ? value : 0;
+  } catch {
+    return 0; // a sandboxed iframe throws on access; a session must still start
+  }
+}
+
 export class RefRegistry {
   readonly #toRef = new WeakMap<Element, Ref>();
   readonly #fromRef = new Map<string, WeakRef<Element>>();
+  readonly #storage: () => Storage | undefined;
   #seq = 0;
+  /** The end of the block currently reserved. Minting past it claims the next one. */
+  #reserved = 0;
   #mintsSinceSweep = 0;
+
+  /**
+   * Storage is injected rather than read from the global for the same reason the clock is: it is an
+   * ambient dependency that decides behaviour, and the cross-document property is untestable if the
+   * only way to get a second document is to actually navigate.
+   */
+  constructor(storage: () => Storage | undefined = () => globalThis.sessionStorage) {
+    this.#storage = storage;
+  }
+
+  /** Read the tab's high-water mark and claim the next block, BEFORE any of it is handed out. */
+  #reserve(): void {
+    let store: Storage | undefined;
+    try {
+      store = this.#storage();
+    } catch {
+      store = undefined; // hostile storage: no cross-document guarantee, but the session still starts
+    }
+    const base = Math.max(readBase(store), this.#seq);
+    this.#reserved = base + REF_BLOCK;
+    try {
+      store?.setItem(REF_BASE_KEY, String(this.#reserved));
+    } catch {
+      /* same: never block a mint on storage */
+    }
+    // Claimed on the FIRST mint, not at unload — a page that crashes, is killed, or navigates away
+    // without firing unload has still permanently spent its numbers.
+    this.#seq = base;
+  }
 
   /** How many reverse entries are currently retained. Exposed so the bound can be asserted. */
   get size(): number {
@@ -90,6 +165,7 @@ export class RefRegistry {
       this.#fromRef.set(existing, weak ?? new WeakRef(el));
       return existing;
     }
+    if (this.#seq >= this.#reserved) this.#reserve();
     this.#seq += 1;
     const ref = asRef(`e${String(this.#seq)}`);
     this.#toRef.set(el, ref);
