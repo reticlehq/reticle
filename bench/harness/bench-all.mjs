@@ -19,6 +19,7 @@ import { randomBytes } from 'node:crypto';
 import { homedir } from 'node:os';
 import { basename, join } from 'node:path';
 import * as PORTS from './ports.mjs';
+import { verifyAnchors } from './inject.mjs';
 
 const FULL = process.argv.includes('--full');
 const NO_BOOT = process.argv.includes('--no-boot');
@@ -282,6 +283,26 @@ const scripts = [...(FULL ? OBSERVATION_PASS : []), ...REPLAY_PASS];
 console.log(
   `bench-all: ${FULL ? 'observation-cost + replay passes' : 'replay pass only (pass --full for observation-cost)'}`,
 );
+
+// A benchmark that cannot inject its bugs is not measuring anything — and it fails FLATTERINGLY.
+// The injector throws, the observation harness records NOT MEASURED, the scenario leaves the
+// comparison, and the catch-rate is averaged over the survivors, so the headline stays perfect while
+// coverage shrinks. `broken-form-validation` disappeared exactly that way: the repo's own `yoda` lint
+// rule rewrote the fixture and the anchors were not updated with it. Checked BEFORE the pass, because
+// a drifted anchor found afterwards has already produced a number somebody may have quoted.
+if (FULL) {
+  const drifted = verifyAnchors();
+  if (drifted.length > 0) {
+    for (const d of drifted) console.error(`✗ DRIFTED ${d.id}: ${d.error.split('\n')[0]}`);
+    console.error(
+      `\n✗ ${String(drifted.length)} regression(s) no longer apply to the fixture. Those scenarios would ` +
+        `be silently dropped and every rate below would be computed over what survived. Fix the ` +
+        `anchors (\`node bench/harness/inject.mjs --verify-anchors\`) before trusting a number.`,
+    );
+    process.exit(1);
+  }
+  console.log('✓ all regression anchors still apply');
+}
 
 if (!NO_BOOT) await bootFixtures();
 

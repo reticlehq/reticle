@@ -75,12 +75,15 @@ const REGRESSIONS = {
       // Empty service no longer blocked: the guard checks the raw (un-trimmed) length so a whitespace
       // or empty-after-trim service slips through, and submit is enabled. Comment-free (an off-by-a-
       // method bug), so source-reading gets no self-labeled giveaway.
+      // Anchors are in YODA form because the repo's own `yoda` lint rule rewrote the fixture that way.
+      // They were not updated with it, so the injector stopped finding them and this scenario silently
+      // left the comparison — see the drift note above replaceOnce.
       replaceOnce(
         F.modal,
-        '    if (service.trim().length === 0) return;\n',
-        '    if (service.length === -1) return;\n',
+        '    if (0 === service.trim().length) return;\n',
+        '    if (-1 === service.length) return;\n',
       );
-      replaceOnce(F.modal, 'disabled={service.trim().length === 0}', 'disabled={false}');
+      replaceOnce(F.modal, 'disabled={0 === service.trim().length}', 'disabled={false}');
     },
   },
   'cross-component-regression': {
@@ -128,7 +131,7 @@ export const INJECTION_SIGNATURES = {
   'signal-contract-violation': ['emit(Sig.FILTER_CHANGED, { view })'],
   'route-transition-break': ["view === 'compose' ? get().view : view"],
   'missing-modal': ['set({ newDeployOpen: false })'],
-  'broken-form-validation': ['if (service.length === -1) return;', 'disabled={false}'],
+  'broken-form-validation': ['if (-1 === service.length) return;', 'disabled={false}'],
   'cross-component-regression': ['set({ filter: get().filter })'],
   'layout-shift': ["gridTemplateColumns: '1fr 1fr 1fr'"],
   'network-timeout': ['fault-timeout'],
@@ -175,6 +178,44 @@ export function revertAll() {
   }
 }
 
+/**
+ * Do all the anchors still resolve?
+ *
+ * Anchor drift is SILENT and it flatters us. The injector throws, the observation harness records
+ * `NOT MEASURED`, the scenario leaves the comparison, and the catch-rate is then computed over
+ * whatever survived — so the headline stays perfect while coverage shrinks. That is exactly how
+ * `broken-form-validation` vanished: the repo's own `yoda` lint rule rewrote the fixture from
+ * `service.trim().length === 0` to `0 === service.trim().length`, these anchors were not updated with
+ * it, and three tools' worth of cells silently went missing with nothing red anywhere.
+ *
+ * Injects each regression and reverts it, reporting the ones that no longer apply. Cheap enough to
+ * run before a measured pass, which is the point: a benchmark that cannot inject its bugs is not
+ * measuring anything, and it must say so LOUDLY rather than average itself over the survivors.
+ */
+export function verifyAnchors() {
+  const broken = [];
+  for (const id of Object.keys(REGRESSIONS)) {
+    try {
+      inject(id);
+    } catch (e) {
+      broken.push({ id, error: e instanceof Error ? e.message : String(e) });
+    } finally {
+      revert(id);
+    }
+  }
+  return broken;
+}
+
+if (process.argv[2] === '--verify-anchors') {
+  const broken = verifyAnchors();
+  for (const b of broken) console.error(`DRIFTED ${b.id}: ${b.error.split('\n')[0]}`);
+  console.log(
+    0 === broken.length
+      ? `anchors ok — all ${String(Object.keys(REGRESSIONS).length)} regressions still apply`
+      : `${String(broken.length)} of ${String(Object.keys(REGRESSIONS).length)} regressions no longer apply`,
+  );
+  process.exit(0 === broken.length ? 0 : 1);
+}
 if (process.argv[2] === '--revert-all') {
   revertAll();
   console.log('reverted all');
