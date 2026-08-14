@@ -892,7 +892,13 @@ Then restart Claude Code so the new version is picked up on next connection. `/m
 
 2. **Check for the Stop hook:** `cat ~/.claude/settings.json | grep reticle` If present, delete that hook entry, then repeat step 1.
 
-3. **If -32000 persists**, the daemon may be crashing on startup. Check the log: `cat ~/.reticle/daemon-4400.log | tail -30` Look for `reticle_daemon_start_failed` or `reticle_mcp_daemon_unavailable`. If the port is taken by another process: `lsof -i :4400` to identify it, then kill it and retry.
+3. **If -32000 persists**, the daemon may be crashing on startup. Check the log: `cat ~/.reticle/daemon-4400.log | tail -30` Look for `reticle_daemon_start_failed` or `reticle_mcp_daemon_unavailable`. If the port is taken by another process, stop only the listener — never kill everything `lsof` lists on the port:
+
+   ```bash
+   lsof -nP -iTCP:4400 -sTCP:LISTEN -t | xargs kill -9
+   ```
+
+   The short form `lsof -ti tcp:4400 | xargs kill -9` also SIGKILLs the `reticle mcp` proxy — it holds a *client* socket on the bridge port, so the unfiltered command lists it right beside the daemon and takes down the very transport you are trying to fix.
 
 4. **Confirm the MCP config is user-level** (not project-level) and has no pinned version:
 
