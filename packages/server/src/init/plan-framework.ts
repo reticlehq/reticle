@@ -52,6 +52,41 @@ export const VITE_PLUGIN_DETAIL = {
 const CAPABILITIES_TITLE = 'Capabilities + store';
 
 /**
+ * The one step `init` genuinely cannot finish, addressed to the AGENT reading this report.
+ *
+ * It used to read "Capabilities are empty until you edit that file" and describe the consequence to
+ * a human — homework, in a report a human mostly does not read, naming no file to open and no thing
+ * to look for. The agent that ran `init` is right there, has the codebase, and can finish this in
+ * the same minute; what it needed was the specific instruction, not the rationale.
+ *
+ * What is left is exactly what could not be PROVEN from source: which atoms/actor/queryClient an
+ * adapter-wrapped store should be built from, and which elements matter enough to name. `init`
+ * emits nothing it cannot prove, because a wrong import here throws on every dev page load — worse
+ * than an empty file.
+ */
+const CAPABILITIES_TODO_TITLE = 'AGENT: finish the capabilities file';
+
+function capabilitiesTodo(path: string, stores: readonly string[]): string {
+  const store =
+    stores.length > 0
+      ? `This app depends on a state library init cannot wire on its own (it needs an argument only ` +
+        `reading the code can supply). Uncomment the suggested line in that file and complete it: ` +
+        `${stores.join('; ')}.`
+      : `No state library was detected. If the app holds state somewhere init cannot see, register ` +
+        `it — see node_modules/@reticlehq/server/docs/usage.md.`;
+  return (
+    `${path} was written but registers nothing, so \`hasCapabilities\` stays false and reticle_state ` +
+    `has nothing to read.\n` +
+    `Do this now, before driving anything:\n` +
+    `  1. ${store}\n` +
+    `  2. Open the app's main flow and add \`testids\` for the elements it touches (or add ` +
+    `data-testid attributes where there are none).\n` +
+    `  3. Prove it: drive one flow and check reticle_state returns your keys. An empty state read ` +
+    `means this file is still not doing anything, whatever else went green.`
+  );
+}
+
+/**
  * The dev module carrying `registerCapabilities` / `registerStore`.
  *
  * Without it every app came up `hasCapabilities: false` with a `reticle_state` holding nothing but
@@ -71,18 +106,26 @@ function capabilitiesStep(input: PlanInput): Step[] {
   }
   const testids = input.testids ?? [];
   const stores = input.storeHints ?? [];
+  const wired = input.foundStores ?? [];
   const found =
     testids.length > 0
       ? `${String(testids.length)} data-testid values`
       : 'no data-testid values yet';
-  const nothingToRegister = 0 === testids.length && 0 === stores.length;
+  // A store we found and wired IS a registration, so the "registers nothing" notice must not fire.
+  const nothingToRegister = 0 === testids.length && 0 === stores.length && 0 === wired.length;
   return [
     {
       title: CAPABILITIES_TITLE,
       target: VITE_DEV_MODULE_PATH,
       status: StepStatus.APPLY,
-      detail: `${found}; ${stores.length > 0 ? `store: uncomment the ${String(stores.length)} suggested line(s)` : 'no state library detected'}`,
-      write: { path: VITE_DEV_MODULE_PATH, content: viteDevModuleFile(testids, stores) },
+      detail: `${found}; ${
+        wired.length > 0
+          ? `registered ${wired.map((s) => `'${s.key}'`).join(', ')} from your source`
+          : stores.length > 0
+            ? `store: uncomment the ${String(stores.length)} suggested line(s)`
+            : 'no state library detected'
+      }`,
+      write: { path: VITE_DEV_MODULE_PATH, content: viteDevModuleFile(testids, stores, wired) },
       dependsOnInstall: true,
     },
     // The write is real; what it registers is not. `registerCapabilities({ testids: [], signals: [],
@@ -96,15 +139,10 @@ function capabilitiesStep(input: PlanInput): Step[] {
     ...(nothingToRegister
       ? [
           {
-            title: 'Capabilities are empty until you edit that file',
+            title: CAPABILITIES_TODO_TITLE,
             target: VITE_DEV_MODULE_PATH,
             status: StepStatus.NOTICE,
-            detail:
-              'the module was written but registers nothing — no data-testid values were found and ' +
-              'no state library was detected, so `hasCapabilities` stays false and reticle_state ' +
-              'has nothing to read. Add data-testid to the elements your main flow touches, or ' +
-              'register a store in that file, and the agent gains what the app BELIEVES rather than ' +
-              'only what it rendered.',
+            detail: capabilitiesTodo(VITE_DEV_MODULE_PATH, stores),
           } satisfies Step,
         ]
       : []),
@@ -222,6 +260,9 @@ export function nextSteps(input: PlanInput): Step[] {
             input.options.projectId,
             input.testids ?? [],
             input.storeHints ?? [],
+            // Next's dev module is not a sibling of `src/` — its imports are resolved from wherever
+            // the component actually lands (`app/`, or `src/app/` in a --src-dir app).
+            input.nextFoundStores ?? [],
           ),
         },
         dependsOnInstall: true,

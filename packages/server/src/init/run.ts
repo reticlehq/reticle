@@ -54,7 +54,7 @@ import {
 } from './plan.js';
 import { claudeAvailableProbe, claudeExistsProbe } from './mcp.js';
 import { reticleDevLocation } from './next-patch.js';
-import { scanTestids, storeHints } from './capabilities.js';
+import { scanTestids, storeHints, scanStores } from './capabilities.js';
 import { CURSOR_DIR_RELPATH, CURSOR_MCP_RELPATH } from './cursor.js';
 import { fileBackedClients, clientMarkerRelPath, ConfigScope, McpClient } from './mcp-clients.js';
 import { deriveProjectId, packageName } from './project-id.js';
@@ -142,13 +142,14 @@ const SOURCE_FILE = /\.(tsx|jsx|ts|js|svelte|vue|astro)$/;
 const MAX_SCANNED_FILES = 200;
 
 /** Read a bounded set of the app's source files, for the `data-testid` scan. */
-function readSourceFiles(io: InitIo): string[] {
-  const out: string[] = [];
+function readSourceFiles(io: InitIo): { path: string; source: string }[] {
+  const out: { path: string; source: string }[] = [];
   for (const dir of SOURCE_DIRS) {
     for (const name of io.listFiles(dir)) {
       if (!SOURCE_FILE.test(name)) continue;
-      const content = io.readFile(`${dir}/${name}`);
-      if (content !== null) out.push(content);
+      const path = `${dir}/${name}`;
+      const content = io.readFile(path);
+      if (content !== null) out.push({ path, source: content });
       if (out.length >= MAX_SCANNED_FILES) return out;
     }
   }
@@ -356,6 +357,8 @@ function gatherPlanInput(options: InitOptions, io: InitIo, pkgRaw: string): Plan
   // Where the component goes depends on WHICH router mounts it: `pages/` routes on presence, so a
   // component there becomes a broken route; `app/` routes on filename, so a sibling is inert.
   const devLocation = reticleDevLocation(layoutPath ?? 'app/layout.tsx', detection.typescript);
+  // Read once: both the testid scan and the store scan want the same bounded set of files.
+  const sourceFiles = readSourceFiles(io);
 
   return {
     detection,
@@ -380,8 +383,10 @@ function gatherPlanInput(options: InitOptions, io: InitIo, pkgRaw: string): Plan
         ? { path: layoutPath, source: layoutSource }
         : null,
     // Capabilities: scanned, never asked for. Bounded — a hint for the agent, not a repo index.
-    testids: scanTestids(readSourceFiles(io)),
+    testids: scanTestids(sourceFiles.map((f) => f.source)),
     storeHints: storeHints(dependencyNames(pkg)),
+    foundStores: scanStores(sourceFiles, dependencyNames(pkg)),
+    nextFoundStores: scanStores(sourceFiles, dependencyNames(pkg), dirname(devLocation.path)),
     viteDevModuleExists: io.exists(VITE_DEV_MODULE_PATH),
     nextReticleDevPath: devLocation.path,
     nextReticleDevImport: devLocation.importSpecifier,
@@ -520,9 +525,12 @@ function restartHint(framework: Framework, mcpRegistered: boolean): string {
   if (!mcpRegistered) return `${dev} ${prove}`;
   return (
     `${dev}\n` +
-    "Then reload your agent's MCP tools — `/mcp` in Claude Code, or reload the window in " +
-    'Cursor/VS Code.\n' +
-    'The tools only appear after that: your agent read its tool list before Reticle existed.\n' +
+    'Then restart your agent so it picks up the new MCP server — restart Claude Code, reload the ' +
+    'window in Cursor, or hit Start in `.vscode/mcp.json` in VS Code.\n' +
+    'The tools only appear after that: your agent read its server list before Reticle existed, ' +
+    'and no slash command re-reads it (`/mcp` manages servers already loaded, so it cannot pick ' +
+    'up a new one). This is once per machine — Reticle is registered globally, so every later ' +
+    'project starts with the tools already there.\n' +
     `${prove}\n` +
     'Once it shows a session, ask your agent to drive a flow — that is the install finished.'
   );

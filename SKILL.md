@@ -120,7 +120,7 @@ Register once globally so Reticle is available in every project:
 claude mcp add reticle -s user -- npx @reticlehq/server mcp
 ```
 
-Confirm with `claude mcp list` — `reticle` should appear. **After adding, restart Claude Code** (or run `/mcp` to refresh) so it picks up the server.
+Confirm with `claude mcp list` — `reticle` should appear. **After adding, restart Claude Code** so it picks up the server. `/mcp` will not do it: that panel manages servers already loaded and never re-reads the config.
 
 **If the `claude` CLI is unavailable**, fall back to merging `"reticle"` into `mcpServers` in `~/.claude.json` — Claude Code's user-scope config, and the same file `claude mcp add` writes. It is a large stateful file, so merge one key; never rewrite it:
 
@@ -239,25 +239,28 @@ Only add this if the user explicitly asks for the daemon to stop between turns:
 
 ---
 
-## Step 1c — The `reticle_*` tools do not exist yet. Get them.
+## Step 1c — Do you already have the `reticle_*` tools? Usually yes.
 
-`init` registered the MCP server, but **your client read its tool list when it started and has not read it again.** So `reticle_*` is not callable in this session yet, however successful the install was. An agent that skips straight to driving here gets "unknown tool" and misdiagnoses it as a broken install.
+**Check first. It costs one call, and most of the time it ends this step.**
 
-**Check first — it costs one call:**
+- **`reticle_sessions` is callable → you have the tools. Skip straight to Step 4.**
+- Not callable → read on.
 
-- If `reticle_sessions` is callable, you already have the tools. Skip this step.
-- If it is not, the tools have not loaded, and no amount of retrying will load them.
+`reticle init` registers the MCP server **globally, once per machine** (Claude Code user scope, `~/.cursor/mcp.json` for Cursor). So this step bites on the **first Reticle install on this machine and no other**. Every project after that starts with the tools already there — do not put a reload in front of a user who does not need one.
 
-**Then tell the user, in one line, to reload the tools.** This is the only point in setup where you genuinely need them, and it takes them five seconds:
+If they are not callable: your client read its server list when it started and has not read it again, so `reticle_*` is not callable in this session however successful the install was. **No amount of retrying loads it, and no slash command re-reads the config.** An agent that keeps calling `reticle_*` here gets "unknown tool" and misdiagnoses it as a broken install.
 
-| Client            | What they do                                                               |
-| ----------------- | -------------------------------------------------------------------------- |
-| Claude Code       | run `/mcp` to refresh — or restart Claude Code if that does not pick it up |
-| Cursor / Windsurf | reopen the window (Cmd/Ctrl-Shift-P → "Reload Window")                     |
-| VS Code (Copilot) | reload the window                                                          |
-| anything else     | restart the client                                                         |
+**Tell the user, in one line, to restart the client.** It takes them five seconds:
 
-Say exactly this and nothing more: **"Reticle is installed. Reload your MCP tools (`/mcp` in Claude Code, or reload the window) and tell me when they're back — then I'll verify a flow in your app."**
+| Client | What they do |
+| --- | --- |
+| Claude Code | **restart Claude Code.** `/mcp` does _not_ re-read the config — it only manages servers already loaded, so it cannot pick up a newly registered one |
+| Cursor | reopen the window (Cmd/Ctrl-Shift-P → "Reload Window"). The MCP refresh button was removed in 1.0; the toggle in Settings → MCP sometimes works, the reload always does |
+| VS Code (Copilot) | **no window reload needed** — open `.vscode/mcp.json` and hit the `Start` code lens, or Cmd/Ctrl-Shift-P → `MCP: List Servers` → Start. (Setting `chat.mcp.autostart` makes VS Code do this itself on config change.) |
+| Windsurf / Zed | reopen the window |
+| anything else | restart the client |
+
+Say exactly this and nothing more: **"Reticle is installed — this is a one-time step for this machine. Restart your client so it picks up the new MCP server (VS Code: just hit Start in `.vscode/mcp.json`), and tell me when the tools are back — then I'll verify a flow in your app."**
 
 Then **wait for them, and continue where you left off.** Do not declare setup finished here: nothing has been verified yet, and this is the single most likely place for a user to walk away believing they are done. When the tools return, go to Step 4.
 
@@ -534,6 +537,11 @@ Most no-connect cases are one of these. Fastest signal first:
 3. Walk it with `reticle_act_and_wait`, narrating each step before you take it.
 4. `reticle_assert` after each step — that the effect happened, not just that the click dispatched.
 5. `reticle_console` + `reticle_network` at the end, for what the DOM does not show.
+6. **`reticle_state` — and read what comes back.** This is the one check that proves the generated `reticle-dev` file is actually doing something. `init` writes it and registers every store it could prove from your source; the ones it could not (Jotai atoms, an XState actor, a TanStack `queryClient` — all need an argument only reading the code supplies) are left commented, and a file that registers nothing looks exactly like a working one from the outside.
+   - **State came back with your keys → done.** The agent can now check what the app BELIEVES, not only what it rendered.
+   - **State came back empty, or `hasCapabilities` is false → say so, in one line, and offer to finish it.** You have the codebase open; completing that file is a minute's work and it is the single highest-value thing left. What you may not do is report a clean install over an empty state read — `init` reported `✓` for writing the file, which is not the same as the file working.
+
+This is a check, not a prerequisite: **an empty state read never blocks the flow you just drove.** Everything else — DOM, network, console, source pointers — works without it. Reporting it accurately is the requirement; treating it as a gate that must be cleared before you show the user anything is how a two-minute setup becomes an afternoon.
 
 Then report what you drove and what it produced, with `file:line` for anything broken.
 
@@ -867,7 +875,7 @@ npx --yes @reticlehq/server@latest version   # force-resolves latest and prints 
 npx @reticlehq/server stop                    # stop any daemon running the old version
 ```
 
-Then reload Claude Code (`/mcp`) so the new version is picked up on next connection.
+Then restart Claude Code so the new version is picked up on next connection. `/mcp` does not respawn the stdio proxy — only a restart does.
 
 **Second common cause: the Stop hook is killing the daemon between turns.** If `~/.claude/settings.json` has a Stop hook running `reticle stop --quiet`, remove it. The daemon must stay alive across turns — killing it forces a cold-boot spawn on every reconnect, and if that spawn takes longer than 10 seconds (cold npx cache, slow disk, first install), the proxy times out and exits with code 1. See Step 1b above.
 

@@ -18,6 +18,16 @@ function reticlePluginCall(port: number | undefined): string {
 const PLUGINS_ARRAY = /plugins\s*:\s*\[/;
 /** Matches an ES import statement (used to place our import after the last one). */
 const IMPORT_LINE = /^import\s.+from\s+['"][^'"]+['"];?\s*$/gm;
+/**
+ * The opening `{` of the exported config object — `defineConfig({`, or a bare `export default {`.
+ * Used only when there is no `plugins` array to extend: the object is right there, so adding the
+ * key is the same edit as extending the array, and bailing sent a user whose config merely set
+ * `server.port` to a manual paste for a change we can make correctly.
+ *
+ * A config built by a call (`defineConfig(buildOptions())`) has no literal to extend and still
+ * bails — the rule stays "only edit a shape we can see whole".
+ */
+const CONFIG_OBJECT = /(export\s+default\s+(?:defineConfig\s*\(\s*)?)\{/;
 
 /** Alias kept so existing call sites read in Vite terms; the vocabulary is shared (see patch-kind). */
 export const VitePatchKind = PatchKind;
@@ -52,12 +62,29 @@ function insertPlugin(source: string, port: number | undefined): string {
   });
 }
 
+/**
+ * Add a whole `plugins: [reticle()]` key to a config object that has none, matching the layout of
+ * the object it lands in: a multi-line object gets its own indented line, a one-liner stays inline.
+ */
+function insertPluginsKey(source: string, port: number | undefined): string {
+  return source.replace(CONFIG_OBJECT, (_match, prefix: string, offset: number) => {
+    const rest = source.slice(offset + _match.length);
+    const multiline = /^\s*\n/.test(rest);
+    const indent = /^\s*\n(\s*)\S/.exec(rest)?.[1] ?? '  ';
+    const key = `plugins: [${reticlePluginCall(port)}],`;
+    return multiline ? `${prefix}{\n${indent}${key}` : `${prefix}{ ${key}`;
+  });
+}
+
 export function patchViteConfig(source: string, port?: number): VitePatch {
   if (source.includes(RETICLE_MARKER)) {
     return { kind: VitePatchKind.ALREADY };
   }
-  if (!PLUGINS_ARRAY.test(source)) {
-    return { kind: VitePatchKind.MANUAL, reason: NO_PLUGINS_REASON };
+  if (PLUGINS_ARRAY.test(source)) {
+    return { kind: VitePatchKind.APPLY, code: insertImport(insertPlugin(source, port)) };
   }
-  return { kind: VitePatchKind.APPLY, code: insertImport(insertPlugin(source, port)) };
+  if (CONFIG_OBJECT.test(source)) {
+    return { kind: VitePatchKind.APPLY, code: insertImport(insertPluginsKey(source, port)) };
+  }
+  return { kind: VitePatchKind.MANUAL, reason: NO_PLUGINS_REASON };
 }

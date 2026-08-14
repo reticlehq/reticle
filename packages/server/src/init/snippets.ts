@@ -4,6 +4,7 @@
  */
 
 import { RETICLE_DEFAULT_PORT, bridgeWsUrl } from '@reticlehq/core';
+import type { FoundStore } from './capabilities.js';
 
 /**
  * The connect argument literal: a non-default port adds a `url`, and a projectId is always passed
@@ -54,22 +55,29 @@ export function nextReticleDevFile(
   projectId?: string,
   testids: readonly string[] = [],
   stores: readonly string[] = [],
+  found: readonly FoundStore[] = [],
 ): string {
   const base = connectArg(port, projectId);
   const fields = '' === base ? '' : `${base.slice(1, -1).trim()}, `;
   const ids = testids.map((t) => `'${t}'`).join(', ');
+  // Same rule as the Vite module: a store we found is registered outright, and the commented hint
+  // survives only for the libraries we can name but not wire.
+  const storeImports = found.map((s) => `import { ${s.ident} } from '${s.importPath}';`).join('\n');
   const storeBlock =
-    0 === stores.length
-      ? '      // No state library detected. If you add one, register it here — see node_modules/@reticlehq/server/docs/usage.md.'
-      : stores.map((h) => `      // import your store, then: ${h}`).join('\n');
+    found.length > 0
+      ? found.map((s) => `      registerStore('${s.key}', ${s.ident});`).join('\n')
+      : 0 === stores.length
+        ? '      // No state library detected. If you add one, register it here — see node_modules/@reticlehq/server/docs/usage.md.'
+        : stores.map((h) => `      // import your store, then: ${h}`).join('\n');
   return `'use client';
 import { useEffect } from 'react';
+${storeImports.length > 0 ? storeImports : ''}
 
 /** Dev-only: connect Reticle + install the React adapter, after hydration. */
 export function ReticleDev() {
   useEffect(() => {
     if (process.env.NODE_ENV !== 'development') return;
-    void import('@reticlehq/react').then(({ reticle, install, registerCapabilities }) => {
+    void import('@reticlehq/react').then(({ reticle, install, registerCapabilities${found.length > 0 ? ', registerStore' : ''} }) => {
       install();
       // Both provided by withReticle() in next.config. The bridge rejects a connect with no token;
       // the root makes source paths repo-relative instead of absolute.
@@ -85,7 +93,7 @@ ${storeBlock}
       registerCapabilities({
         testids: [${ids}],${0 === testids.length ? ' // none found — add data-testid to your key elements' : ''}
         signals: [], // names you pass to reticle.signal()
-        stores: [], // the keys you registered above
+        stores: [${found.map((s) => `'${s.key}'`).join(', ')}], // the keys you registered above
       });
     });
   }, []);
@@ -189,16 +197,27 @@ Start the daemon BEFORE \`astro dev\`, so the token file exists when the config 
  * breaks the module everything else hangs off. So the store lines are generated COMMENTED, naming
  * the libraries actually found in package.json, with the exact call to uncomment.
  */
-export function viteDevModuleFile(testids: readonly string[], stores: readonly string[]): string {
+export function viteDevModuleFile(
+  testids: readonly string[],
+  stores: readonly string[],
+  found: readonly FoundStore[] = [],
+): string {
   const ids = testids.map((t) => `'${t}'`).join(', ');
+  // A store we FOUND is imported and registered outright — the whole point of the file. The hints
+  // stay only for the libraries we can name but not wire (they need an argument we cannot infer).
+  const storeImports = found.map((s) => `import { ${s.ident} } from '${s.importPath}';`).join('\n');
   const storeBlock =
-    0 === stores.length
-      ? '  // No state library detected. If you add one, register it here — see node_modules/@reticlehq/server/docs/usage.md.'
-      : stores.map((h) => `  // import your store, then: ${h}`).join('\n');
+    found.length > 0
+      ? found.map((s) => `  registerStore('${s.key}', ${s.ident});`).join('\n')
+      : 0 === stores.length
+        ? '  // No state library detected. If you add one, register it here — see node_modules/@reticlehq/server/docs/usage.md.'
+        : stores.map((h) => `  // import your store, then: ${h}`).join('\n');
+  const registerImport =
+    found.length > 0 ? 'registerCapabilities, registerStore' : 'registerCapabilities';
   return `// Dev-only. Imported automatically by @reticlehq/vite-plugin — you do not need to import it.
 // Self-guards on import.meta.env.DEV, so it is a no-op in a production build.
-import { registerCapabilities } from '@reticlehq/react';
-
+import { ${registerImport} } from '@reticlehq/react';
+${storeImports.length > 0 ? `${storeImports}\n` : ''}
 if (import.meta.env.DEV) {
   // ── Start with ONE flow. ─────────────────────────────────────────────────────────────────────
   // You do not need to describe the whole app to get value, and trying to is the slow path. Register
@@ -214,7 +233,7 @@ ${storeBlock}
   registerCapabilities({
     testids: [${ids}],${0 === testids.length ? ' // none found — add data-testid to your key elements' : ''}
     signals: [], // names you pass to reticle.signal()
-    stores: [], // the keys you registered above
+    stores: [${found.map((s) => `'${s.key}'`).join(', ')}], // the keys you registered above
   });
 }
 `;

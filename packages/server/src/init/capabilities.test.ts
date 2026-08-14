@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { scanTestids, storeHints, MAX_TESTIDS } from './capabilities.js';
+import { scanTestids, storeHints, scanStores, MAX_TESTIDS } from './capabilities.js';
 
 /**
  * Every app came up with `hasCapabilities: false` and a `reticle_state` holding only
@@ -50,5 +50,78 @@ describe('storeHints', () => {
 
   it('says nothing when the app has no store library we can read', () => {
     expect(storeHints(new Set(['react', 'vite']))).toEqual([]);
+  });
+});
+
+/**
+ * `storeHints` names the LIBRARY; that was never enough to write a working line, so the generated
+ * module shipped its `registerStore` call commented out and `registerCapabilities({ stores: [] })`
+ * registered nothing. Every app came up `hasCapabilities: false` on a file `init` had just reported
+ * `✓` for — and the fix was left to a human who had to read the docs to make it.
+ *
+ * The store instance is findable in the same sources already scanned for testids: the declaration
+ * form is regular (`export const useX = create(...)`), and it carries both the identifier and the
+ * file to import it from. Found → a real import and a real call. Not found → the commented hint,
+ * exactly as before. A guess is never emitted.
+ */
+describe('scanStores', () => {
+  const deps = new Set(['zustand']);
+
+  it('finds a zustand store and the module to import it from', () => {
+    const found = scanStores(
+      [{ path: 'src/store.ts', source: 'export const useApp = create<S>()((set) => ({}));' }],
+      deps,
+    );
+    expect(found).toEqual([{ key: 'app', ident: 'useApp', importPath: './store' }]);
+  });
+
+  it('finds a plain zustand create() with no generics', () => {
+    const found = scanStores(
+      [{ path: 'src/store.ts', source: 'export const useStore = create((set) => ({ n: 0 }));' }],
+      deps,
+    );
+    expect(found[0]?.ident).toBe('useStore');
+  });
+
+  it('names the redux store from configureStore', () => {
+    const found = scanStores(
+      [{ path: 'src/app/store.ts', source: 'export const store = configureStore({ reducer });' }],
+      new Set(['@reduxjs/toolkit']),
+    );
+    expect(found).toEqual([{ key: 'app', ident: 'store', importPath: './app/store' }]);
+  });
+
+  it('derives a distinct key per store so two stores do not collide', () => {
+    const found = scanStores(
+      [
+        { path: 'src/cart-store.ts', source: 'export const useCart = create(() => ({}));' },
+        { path: 'src/user-store.ts', source: 'export const useUser = create(() => ({}));' },
+      ],
+      deps,
+    );
+    expect(found.map((s) => s.key)).toEqual(['cart', 'user']);
+  });
+
+  /** A dependency the app does not have cannot be the thing that created this store. */
+  it('ignores a create() call when the app does not depend on that library', () => {
+    const found = scanStores(
+      [{ path: 'src/store.ts', source: 'export const useApp = create(() => ({}));' }],
+      new Set(['react']),
+    );
+    expect(found).toEqual([]);
+  });
+
+  it('ignores a non-exported store — nothing can import it', () => {
+    const found = scanStores(
+      [{ path: 'src/store.ts', source: 'const useApp = create(() => ({}));' }],
+      deps,
+    );
+    expect(found).toEqual([]);
+  });
+
+  it('finds nothing rather than guessing when no store declaration is present', () => {
+    expect(
+      scanStores([{ path: 'src/App.tsx', source: 'export const App = () => null;' }], deps),
+    ).toEqual([]);
   });
 });

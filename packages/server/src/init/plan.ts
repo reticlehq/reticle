@@ -12,6 +12,7 @@ import {
   installCommandParts,
   type Detection,
 } from './detect.js';
+import type { FoundStore } from './capabilities.js';
 import { claudeAddCommand, mcpManual } from './mcp.js';
 import { mergeCursorConfig, CursorMergeStatus, cursorServerEntry } from './cursor.js';
 import {
@@ -230,6 +231,10 @@ export interface PlanInput {
   testids?: readonly string[] | undefined;
   /** Ready-to-uncomment `registerStore` lines for the state libraries the app actually depends on. */
   storeHints?: readonly string[] | undefined;
+  /** Store instances found in the app's own source — imported and registered outright, not hinted. */
+  foundStores?: readonly FoundStore[] | undefined;
+  /** The same stores, with specifiers resolved from Next's dev-module directory instead of `src/`. */
+  nextFoundStores?: readonly FoundStore[] | undefined;
   /** Whether src/reticle-dev.ts already exists — it is the one generated file users are meant to edit. */
   viteDevModuleExists?: boolean | undefined;
   /** Whether src/hooks.client.ts already exists (SvelteKit idempotency). */

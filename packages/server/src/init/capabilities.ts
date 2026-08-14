@@ -10,6 +10,8 @@
  * a wrong import would break the dev module that everything else now hangs off.
  */
 
+import { posix } from 'node:path';
+
 /** `data-testid="foo"` / `data-testid='foo'` / `data-testid={"foo"}` — the forms people actually write. */
 const TESTID_ATTR = /data-testid\s*=\s*[{]?\s*["'`]([^"'`]+)["'`]/g;
 
@@ -54,4 +56,96 @@ const STORE_LIBRARIES: readonly (readonly [dep: string, hint: string])[] = [
 /** The store libraries this app depends on, as ready-to-uncomment registration lines. */
 export function storeHints(deps: ReadonlySet<string>): string[] {
   return STORE_LIBRARIES.filter(([dep]) => deps.has(dep)).map(([, hint]) => hint);
+}
+
+/** A store instance we found in the app's own source, with everything needed to import and register it. */
+export interface FoundStore {
+  /** The name it registers under — what `reticle_state` keys its output by. */
+  key: string;
+  /** The exported identifier. */
+  ident: string;
+  /** Module specifier relative to `src/reticle-dev.ts`. */
+  importPath: string;
+}
+
+/**
+ * Store factories whose EXPORTED result is the store instance itself — the form `registerStore`
+ * takes directly. Each is gated on the app actually depending on that library, so a local helper
+ * called `create` in an app with no store library is never mistaken for one.
+ *
+ * Deliberately short. The adapter-wrapped libraries (Jotai, XState, Valtio, MobX, TanStack Query)
+ * need an argument we cannot infer — which atoms, which actor, which queryClient — so they keep the
+ * commented hint. Guessing there produces a module that throws on import, which is strictly worse
+ * than a comment.
+ */
+const STORE_FACTORIES: readonly (readonly [dep: string, factory: string])[] = [
+  ['zustand', 'create'],
+  ['@reduxjs/toolkit', 'configureStore'],
+  ['redux', 'createStore'],
+];
+
+/** `export const useCart = create<S>()(...)` / `export const store = configureStore({...})`. */
+function storeDeclaration(factory: string): RegExp {
+  return new RegExp(`export\\s+const\\s+([A-Za-z_$][\\w$]*)\\s*=\\s*${factory}\\s*[<(]`, 'g');
+}
+
+/**
+ * `src/cart-store.ts` → `cart`; `src/store.ts` → `app`. The key is what the agent reads state under,
+ * so it has to be stable and distinct — two stores sharing one key would silently overwrite.
+ */
+function storeKey(path: string, taken: ReadonlySet<string>): string {
+  const file = (path.split('/').pop() ?? '').replace(/\.[^.]+$/, '');
+  const base = file.replace(/[-_.]?stores?$/i, '').replace(/[^a-z0-9]+/gi, '-') || 'app';
+  const key = base.toLowerCase();
+  if (!taken.has(key)) return key;
+  for (let n = 2; ; n += 1) {
+    const candidate = `${key}-${String(n)}`;
+    if (!taken.has(candidate)) return candidate;
+  }
+}
+
+/**
+ * Module specifier for `store.ts` as seen FROM the generated dev module.
+ *
+ * The dev module is not always a sibling: Vite puts it at `src/reticle-dev.ts`, Next at
+ * `app/reticle-dev.tsx` or `src/app/reticle-dev.tsx`. A specifier computed for one is dead in the
+ * other, and a dead import in this file breaks the module every other capability hangs off — so the
+ * relative path is computed, not assumed.
+ */
+function importPathFor(storePath: string, fromDir: string): string {
+  const noExt = storePath.replace(/\.[^./]+$/, '');
+  const rel = posix.relative(fromDir, noExt);
+  return rel.startsWith('.') ? rel : `./${rel}`;
+}
+
+/** Where the generated dev module lives, for Vite. Next passes its own. */
+export const DEFAULT_DEV_MODULE_DIR = 'src';
+
+/**
+ * Store instances declared in the app's own source, ready to import and register.
+ *
+ * Only exported declarations of a factory the app actually depends on: anything less certain would
+ * generate an import that breaks the dev module everything else hangs off, and a broken module is
+ * worse than the commented hint it replaces.
+ */
+export function scanStores(
+  files: readonly { path: string; source: string }[],
+  deps: ReadonlySet<string>,
+  fromDir: string = DEFAULT_DEV_MODULE_DIR,
+): FoundStore[] {
+  const factories = STORE_FACTORIES.filter(([dep]) => deps.has(dep)).map(([, f]) => f);
+  const found: FoundStore[] = [];
+  const keys = new Set<string>();
+  for (const { path, source } of files) {
+    for (const factory of factories) {
+      for (const m of source.matchAll(storeDeclaration(factory))) {
+        const ident = m[1];
+        if (ident === undefined) continue;
+        const key = storeKey(path, keys);
+        keys.add(key);
+        found.push({ key, ident, importPath: importPathFor(path, fromDir) });
+      }
+    }
+  }
+  return found;
 }

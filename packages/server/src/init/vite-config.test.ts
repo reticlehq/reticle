@@ -48,9 +48,48 @@ describe('patchViteConfig', () => {
     expect(r.code).not.toContain('port:');
   });
 
-  it('bails to manual when there is no plugins array', () => {
+  /**
+   * A config with no `plugins` key is a config we can still finish: the object literal is right
+   * there and adding the key is the same edit as extending the array. Bailing here sent a user who
+   * had only ever set `server.port` to a manual paste for a change we could make correctly.
+   */
+  it('adds a plugins array when defineConfig has none', () => {
     const r = patchViteConfig(`import { defineConfig } from 'vite';
 export default defineConfig({ server: { port: 3000 } });
+`);
+    expect(r.kind).toBe(VitePatchKind.APPLY);
+    if (r.kind !== VitePatchKind.APPLY) return;
+    expect(r.code).toContain(VITE_IMPORT);
+    expect(r.code).toContain('plugins: [reticle()]');
+    // The existing config must survive intact.
+    expect(r.code).toContain('server: { port: 3000 }');
+  });
+
+  it('adds a plugins array to a multi-line defineConfig', () => {
+    const r = patchViteConfig(`import { defineConfig } from 'vite';
+
+export default defineConfig({
+  server: {
+    port: 3000,
+  },
+});
+`);
+    expect(r.kind).toBe(VitePatchKind.APPLY);
+    if (r.kind !== VitePatchKind.APPLY) return;
+    expect(r.code).toContain('plugins: [reticle()],');
+    expect(r.code).toContain('port: 3000');
+  });
+
+  it('adds a plugins array to a bare object export', () => {
+    const r = patchViteConfig('export default {};\n');
+    expect(r.kind).toBe(VitePatchKind.APPLY);
+    if (r.kind !== VitePatchKind.APPLY) return;
+    expect(r.code).toContain('plugins: [reticle()]');
+  });
+
+  it('still bails to manual when there is no config object to extend', () => {
+    const r = patchViteConfig(`import { defineConfig } from 'vite';
+export default defineConfig(buildOptions());
 `);
     expect(r.kind).toBe(VitePatchKind.MANUAL);
   });

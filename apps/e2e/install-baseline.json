@@ -5,7 +5,7 @@
     "✓ Reticle config → .reticle.json",
     "✓ Vite plugin → vite.config.ts",
     "✓ Capabilities + store → src/reticle-dev.ts",
-    "ℹ Capabilities are empty until you edit that file → src/reticle-dev.ts"
+    "ℹ AGENT: finish the capabilities file → src/reticle-dev.ts"
   ],
   "next-app-router": [
     "– MCP server (global) → global (claude user scope)",
