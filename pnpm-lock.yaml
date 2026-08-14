@@ -234,8 +234,8 @@ importers:
         specifier: ^8.2.0
         version: 8.2.0(@types/node@26.2.0)(esbuild@0.28.1)(yaml@2.9.0)
       wait-on:
-        specifier: ^8.0.2
-        version: 8.0.5
+        specifier: ^9.1.0
+        version: 9.1.0
 
   apps/examples/astro:
     dependencies:
@@ -4714,9 +4714,9 @@ packages:
     resolution: {integrity: sha512-o8qghlI8NZHU1lLPrpi2+Uq7abh4GGPpYANlalzWxyWteJOCsr/P+oPBA49TOLu5FTZO4d3F9MnWJfiMo4BkmA==}
     engines: {node: '>=18'}
 
-  wait-on@8.0.5:
-    resolution: {integrity: sha512-J3WlS0txVHkhLRb2FsmRg3dkMTCV1+M6Xra3Ho7HzZDHpE7DCOnoSoCJsZotrmW3uRMhvIJGSKUKrh/MeF4iag==}
-    engines: {node: '>=12.0.0'}
+  wait-on@9.1.0:
+    resolution: {integrity: sha512-PymrLXHLBM1Ju/Xspb2ADUhbPSMvbnuNvy/mN2hWtpbJ3da0h3Ky1LqwKPG5QSVR57liyO0iUpfipYl/s5qNvA==}
+    engines: {node: '>=20.0.0'}
     hasBin: true
 
   web-namespaces@2.0.1:
@@ -9004,7 +9004,7 @@ snapshots:
     dependencies:
       xml-name-validator: 5.0.0
 
-  wait-on@8.0.5:
+  wait-on@9.1.0:
     dependencies:
       axios: 1.19.0
       joi: 18.2.3
