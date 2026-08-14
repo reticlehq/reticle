@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   CrawlAnomalyKind,
+  EventType,
   ReticleCommand,
   type CommandResult,
   type ReticleEvent,
@@ -44,13 +45,62 @@ describe('reticle_crawl tool', () => {
   it('drives the resolved session and returns a structured anomaly report', async () => {
     const session = deadButtonSession();
     const sessions: Partial<SessionManager> = { resolve: () => session };
-    const deps = { sessions: sessions as SessionManager } as ToolDeps;
+    const deps = {
+      sessions: sessions as SessionManager,
+      project: { recordRoutes: () => Promise.resolve() },
+    } as unknown as ToolDeps;
 
     const r = (await tool(ReticleTool.CRAWL).handler(deps, { settleMs: 0 })) as CrawlReport;
     expect(r.interactiveFound).toBe(1);
     expect(r.stepsRun).toBe(1);
     expect(r.counts.deadControls).toBe(1);
     expect(r.anomalies[0]?.kind).toBe(CrawlAnomalyKind.DEAD_CONTROL);
+  });
+
+  it('persists actual routes discovered during the crawl, not clicked-control labels', async () => {
+    let clock = 0;
+    const buffer: ReticleEvent[] = [];
+    const ok = (result: unknown): Promise<CommandResult> =>
+      Promise.resolve({ kind: 'command_result', id: 'c', ok: true, result });
+    const session = {
+      id: 'demo',
+      url: 'https://example.test/',
+      elapsed: () => clock,
+      eventsSince: (since: number) => buffer.filter((event) => event.t > since),
+      command: (name: string) => {
+        if (name === ReticleCommand.SNAPSHOT) return ok({ tree: 'link "Deployments" (ref=e1)' });
+        if (name === ReticleCommand.ACT) {
+          clock += 1;
+          buffer.push({
+            t: clock,
+            type: EventType.ROUTE_CHANGE,
+            sessionId: 'demo',
+            data: {
+              from: 'https://example.test/',
+              to: 'https://example.test/deployments',
+              pathname: '/deployments',
+              search: '',
+              hash: '',
+            },
+          });
+          return ok({ dispatched: true });
+        }
+        return ok({});
+      },
+    } as Session;
+    const sessions: Partial<SessionManager> = { resolve: () => session };
+    const recordRoutes = vi.fn<(routes: readonly string[]) => Promise<void>>(() =>
+      Promise.resolve(),
+    );
+    const deps = {
+      sessions: sessions as SessionManager,
+      project: { recordRoutes },
+    } as unknown as ToolDeps;
+
+    const report = (await tool(ReticleTool.CRAWL).handler(deps, { settleMs: 0 })) as CrawlReport;
+
+    expect(report.visited).toEqual(['link "Deployments"']);
+    expect(recordRoutes).toHaveBeenCalledWith(['/', '/deployments']);
   });
 });
 

@@ -99,6 +99,29 @@ export class ProjectStore {
     });
   }
 
+  /**
+   * Add discovered routes to the learned app map. Empty input is a no-op so "nothing observed"
+   * does not materialize as `learned.routes: []`; non-empty updates are serialized per file so
+   * concurrent browser sessions accumulate rather than overwriting one another.
+   */
+  async recordRoutes(routes: readonly string[]): Promise<void> {
+    const additions = routes.filter((route) => route.length > 0);
+    if (0 === additions.length) return;
+
+    const path = reticleDirPaths(this.#root).project;
+    await withFileLock(path, async () => {
+      const existing = await this.read();
+      const base: ProjectFile = existing.ok ? existing.file : EMPTY_PROJECT;
+      const current = base.learned?.routes ?? [];
+      const merged = new Set([...current, ...additions]);
+      if (merged.size === new Set(current).size) return;
+      const learned: ProjectLearned = { ...base.learned, routes: [...merged] };
+      const next: ProjectFile = { ...base, learned };
+      await this.#fs.mkdir(reticleDirPaths(this.#root).root);
+      await this.#fs.writeFile(path, this.#serialize(next));
+    });
+  }
+
   /** The most-recent run for `name` (undefined on missing/malformed/none). Powers diff-vs-last. */
   async lastRun(name: string): Promise<RunRecord | undefined> {
     const read = await this.read();

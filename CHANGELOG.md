@@ -4,7 +4,9 @@ All notable changes to the **`@reticlehq/*`** packages are documented here (each
 
 ## [Unreleased]
 
-_Nothing yet._
+### Learned app knowledge survives
+
+- **`@reticlehq/server` — learned routes now accumulate during crawls and normal navigation.** Runtime route discoveries are persisted in `.reticle/project.json` as a deterministic union, so later sessions can reuse the app map without re-exploring previously visited routes.
 
 ## [2.8.0] — 2026-08-15
 

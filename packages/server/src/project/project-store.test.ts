@@ -4,6 +4,7 @@ import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
+  PROJECT_FILE_VERSION,
   PROJECT_RUN_CAP,
   ProjectReadError,
   RunKind,
@@ -184,5 +185,49 @@ describe('ProjectStore — temp-dir filesystem, never touches the repo', () => {
     if (!r.ok) throw new Error('expected ok');
     expect(r.file.runs).toHaveLength(N);
     expect(new Set(r.file.runs.map((x) => x.name)).size).toBe(N); // every distinct run survived
+  });
+
+  it('13: recordRoutes unions and sorts routes while preserving learned flows and runs', async () => {
+    await fs.mkdir(root);
+    await writeFile(
+      reticleDirPaths(root).project,
+      JSON.stringify({
+        version: PROJECT_FILE_VERSION,
+        learned: { flows: ['checkout'], routes: ['/settings'] },
+        runs: [{ ...RUN, at: FROZEN }],
+      }),
+      'utf8',
+    );
+
+    await store.recordRoutes(['/deployments', '/', '/settings']);
+
+    const r = await store.read();
+    if (!r.ok) throw new Error('expected ok');
+    expect(r.file.learned).toEqual({
+      flows: ['checkout'],
+      routes: ['/', '/deployments', '/settings'],
+    });
+    expect(r.file.runs).toEqual([{ ...RUN, at: FROZEN }]);
+  });
+
+  it('14: recording no routes keeps learned absent rather than writing routes: []', async () => {
+    await store.recordRun(RUN);
+    await store.recordRoutes([]);
+
+    const r = await store.read();
+    if (!r.ok) throw new Error('expected ok');
+    expect(r.file.learned).toBeUndefined();
+    expect(await readFile(reticleDirPaths(root).project, 'utf8')).not.toContain('"routes"');
+  });
+
+  it('15: concurrent recordRoutes calls union without losing either session', async () => {
+    await Promise.all([
+      store.recordRoutes(['/compose', '/deployments']),
+      store.recordRoutes(['/diagnostics', '/deployments']),
+    ]);
+
+    const r = await store.read();
+    if (!r.ok) throw new Error('expected ok');
+    expect(r.file.learned?.routes).toEqual(['/compose', '/deployments', '/diagnostics']);
   });
 });

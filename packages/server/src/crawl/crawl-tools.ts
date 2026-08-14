@@ -3,6 +3,7 @@ import { ReticleTool } from '../tools/tool-names.js';
 import { asNumber, asString } from '../tools/tools-helpers.js';
 import { crawl, type CrawlOptions } from './crawl.js';
 import type { ToolDef, ToolDeps } from '../tools/tools.js';
+import { routeFromUrl, routesFromEvents } from '../project/learned-routes.js';
 
 const nodeSleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -70,8 +71,10 @@ export const CRAWL_TOOLS: ToolDef[] = [
         ),
       truncated: z.boolean(),
     },
-    handler: (deps: ToolDeps, args) => {
+    handler: async (deps: ToolDeps, args) => {
       const session = deps.sessions.resolve(asString(args['sessionId']));
+      const since = session.elapsed();
+      const initialRoute = routeFromUrl(session.url);
       const maxSteps = asNumber(args['maxSteps']);
       const settleMs = asNumber(args['settleMs']);
       const scope = asString(args['scope']);
@@ -81,7 +84,13 @@ export const CRAWL_TOOLS: ToolDef[] = [
         ...(scope !== undefined ? { scope } : {}),
         ...(true === args['confirmDangerous'] ? { confirmDangerous: true } : {}),
       };
-      return crawl(session, opts, nodeSleep);
+      const report = await crawl(session, opts, nodeSleep);
+      const routes = [
+        ...(initialRoute === undefined ? [] : [initialRoute]),
+        ...routesFromEvents(session.eventsSince(since)),
+      ];
+      if (routes.length > 0) await deps.project.recordRoutes(routes);
+      return report;
     },
   },
 ];

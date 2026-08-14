@@ -26,6 +26,7 @@ import { RecordingStore } from './flows/recordings.js';
 import { FlowStore } from './flows/flows.js';
 import { buildFlowChips } from './flows/flow-scope.js';
 import { ProjectStore } from './project/project-store.js';
+import { attachRouteLearning } from './project/learned-routes.js';
 import { AnnotationStore } from './flows/annotation-store.js';
 import { createNodeFileSystem, type FileSystemPort } from './project/fs-port.js';
 import { cleanupCaptureDirectories } from './visual/capture-cleanup.js';
@@ -415,6 +416,7 @@ export async function start(options: StartOptions = {}): Promise<RunningServer> 
     attachJournal(bridge, { fs, reticleRoot, enabled: journalEnabled });
     const flows = new FlowStore(fs, reticleRoot, { now });
     const project = new ProjectStore(fs, reticleRoot, { now });
+    attachRouteLearning(bridge, project);
     const annotations = new AnnotationStore();
     pool = createBrowserPool(options.headless ?? true);
     leaseReaper = new LeaseReaper(pool);
@@ -526,6 +528,7 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
   attachJournal(bridge, { fs, reticleRoot, enabled: journalEnabled });
   const flows = new FlowStore(fs, reticleRoot, { now });
   const project = new ProjectStore(fs, reticleRoot, { now });
+  attachRouteLearning(bridge, project);
   const annotations = new AnnotationStore();
   const pool = createBrowserPool(options.headless ?? true);
   const leaseReaper = new LeaseReaper(pool);
