@@ -1,6 +1,11 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { EventType, type ReticleEvent } from '@reticlehq/core';
-import { attachRouteLearning, routeFromEvent, routeFromUrl } from './learned-routes.js';
+import {
+  attachRouteLearning,
+  ROUTE_PERSIST_DEBOUNCE_MS,
+  routeFromEvent,
+  routeFromUrl,
+} from './learned-routes.js';
 
 function routeEvent(pathname: string, search = '', hash = ''): ReticleEvent {
   return {
@@ -12,13 +17,13 @@ function routeEvent(pathname: string, search = '', hash = ''): ReticleEvent {
 }
 
 describe('learned routes', () => {
-  it('normalizes route events and session URLs without persisting origins', () => {
-    expect(routeFromEvent(routeEvent('/search', '?q=reticle', '#results'))).toBe(
-      '/search?q=reticle#results',
-    );
-    expect(routeFromUrl('https://example.test/deployments?region=us#latest')).toBe(
-      '/deployments?region=us#latest',
-    );
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('uses pathname route identities without persisting origins, searches, or hashes', () => {
+    expect(routeFromEvent(routeEvent('/search', '?q=reticle', '#results'))).toBe('/search');
+    expect(routeFromUrl('https://example.test/deployments?region=us#latest')).toBe('/deployments');
   });
 
   it('ignores non-route events and invalid URLs', () => {
@@ -33,7 +38,8 @@ describe('learned routes', () => {
     expect(routeFromUrl('not a URL')).toBeUndefined();
   });
 
-  it('records the initial route and every ordinary route change', async () => {
+  it('batches the initial route and rapid ordinary route changes into one store update', async () => {
+    vi.useFakeTimers();
     let ready: ((session: TestSession) => void) | undefined;
     let listener: ((event: ReticleEvent) => void) | undefined;
     const recordRoutes = vi.fn<(routes: readonly string[]) => Promise<void>>(() =>
@@ -56,9 +62,14 @@ describe('learned routes', () => {
     attachRouteLearning(bridge, { recordRoutes });
     ready?.(session);
     listener?.(routeEvent('/compose'));
-    await vi.waitFor(() => expect(recordRoutes).toHaveBeenCalledTimes(2));
+    listener?.(routeEvent('/deployments'));
+    listener?.(routeEvent('/compose', '?draft=2'));
 
-    expect(recordRoutes.mock.calls).toEqual([[['/']], [['/compose']]]);
+    expect(recordRoutes).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(ROUTE_PERSIST_DEBOUNCE_MS);
+
+    expect(recordRoutes).toHaveBeenCalledTimes(1);
+    expect(recordRoutes).toHaveBeenCalledWith(['/', '/compose', '/deployments']);
   });
 });
 

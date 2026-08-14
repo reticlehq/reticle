@@ -50,6 +50,9 @@ export const PROJECT_RUN_CAP = {
   TOTAL: 200,
 } as const;
 
+/** Maximum distinct route identities retained in project.json. */
+export const PROJECT_ROUTE_CAP = 200;
+
 /** Schema version stamped onto on-disk flow files (.reticle/flows/<name>.json). */
 export const FLOW_FILE_VERSION = 1;
 

@@ -14,21 +14,22 @@ interface RouteLearningStore {
   recordRoutes(routes: readonly string[]): Promise<void>;
 }
 
-/** Convert a validated route-change payload into the route users see, without persisting its origin. */
+/** Coalesce navigation bursts so one crawl does not lock and rewrite project.json per event. */
+export const ROUTE_PERSIST_DEBOUNCE_MS = 50;
+
+/** Convert a validated route-change payload into a bounded route identity. */
 export function routeFromEvent(event: ReticleEvent): string | undefined {
   if (event.type !== EventType.ROUTE_CHANGE) return undefined;
   const pathname = event.data['pathname'];
   if ('string' !== typeof pathname || 0 === pathname.length) return undefined;
-  const search = 'string' === typeof event.data['search'] ? event.data['search'] : '';
-  const hash = 'string' === typeof event.data['hash'] ? event.data['hash'] : '';
-  return `${pathname}${search}${hash}`;
+  return pathname;
 }
 
 /** Read the same route shape from a session's absolute URL. */
 export function routeFromUrl(value: string): string | undefined {
   try {
     const url = new URL(value);
-    return `${url.pathname}${url.search}${url.hash}`;
+    return url.pathname;
   } catch {
     return undefined;
   }
@@ -47,15 +48,31 @@ export function attachRouteLearning(
   project: RouteLearningStore,
 ): void {
   const attached = new WeakSet<RouteLearningSession>();
+  const pending = new Set<string>();
+  let flushTimer: ReturnType<typeof setTimeout> | undefined;
+
+  const flush = (): void => {
+    flushTimer = undefined;
+    const routes = [...pending];
+    pending.clear();
+    if (routes.length > 0) void project.recordRoutes(routes).catch(() => undefined);
+  };
+
+  const queue = (route: string): void => {
+    pending.add(route);
+    if (flushTimer !== undefined) clearTimeout(flushTimer);
+    flushTimer = setTimeout(flush, ROUTE_PERSIST_DEBOUNCE_MS);
+  };
+
   const attach = (session: RouteLearningSession): void => {
     if (attached.has(session)) return;
     attached.add(session);
 
     const initial = routeFromUrl(session.url);
-    if (initial !== undefined) void project.recordRoutes([initial]).catch(() => undefined);
+    if (initial !== undefined) queue(initial);
     session.onEvent((event) => {
       const route = routeFromEvent(event);
-      if (route !== undefined) void project.recordRoutes([route]).catch(() => undefined);
+      if (route !== undefined) queue(route);
     });
   };
 

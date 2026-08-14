@@ -1,5 +1,6 @@
 import {
   PROJECT_FILE_VERSION,
+  PROJECT_ROUTE_CAP,
   PROJECT_RUN_CAP,
   ProjectFileSchema,
   ProjectReadError,
@@ -113,9 +114,13 @@ export class ProjectStore {
       const existing = await this.read();
       const base: ProjectFile = existing.ok ? existing.file : EMPTY_PROJECT;
       const current = base.learned?.routes ?? [];
-      const merged = new Set([...current, ...additions]);
-      if (merged.size === new Set(current).size) return;
-      const learned: ProjectLearned = { ...base.learned, routes: [...merged] };
+      const merged = [...new Set([...current, ...additions])].slice(0, PROJECT_ROUTE_CAP);
+      if (
+        merged.length === current.length &&
+        merged.every((route, index) => route === current[index])
+      )
+        return;
+      const learned: ProjectLearned = { ...base.learned, routes: merged };
       const next: ProjectFile = { ...base, learned };
       await this.#fs.mkdir(reticleDirPaths(this.#root).root);
       await this.#fs.writeFile(path, this.#serialize(next));
