@@ -13,7 +13,10 @@ const chk = (l, o, d = '') => {
 };
 
 const server = await start({ port: 4400, mcp: false });
-const deps = { sessions: server.bridge.sessions };
+const deps = {
+  sessions: server.bridge.sessions,
+  project: { recordRoutes: async () => {} },
+};
 const T = (n, a = {}) => TOOLS.find((t) => t.name === n).handler(deps, { sessionId: 'next-smoke', ...a });
 const b = await chromium.launch({ headless: true });
 const p = await b.newPage();
