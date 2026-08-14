@@ -104,6 +104,38 @@ describe('refs across a full navigation', () => {
     expect(Number(next.slice(1))).toBeGreaterThan(REF_BLOCK);
   });
 
+  /**
+   * The block size exists to keep refs short, so that is the thing to assert — not the constant.
+   *
+   * The first version reasoned about how many navigations it took to reach SEVEN digits. That is the
+   * wrong axis: the cost is not paid at seven digits, it is paid at every digit, on every ref, in
+   * every snapshot and every error, on every turn. At a block of 10,000 the SECOND document already
+   * minted five-digit refs — measured as +6.5% on one unchanged three-element page, and caught by the
+   * benchmark as a rise in average observation cost.
+   */
+  it('keeps refs short across the navigations an agent actually performs', () => {
+    const store = fakeStorage();
+    let ref = '';
+    // Twenty documents is a long agent session on one tab; each mints a handful of refs.
+    for (let doc = 0; doc < 20; doc += 1) {
+      document.body.innerHTML = '';
+      const registry = new RefRegistry(() => store);
+      for (let i = 0; i < 5; i += 1) ref = registry.refFor(button());
+    }
+    expect(ref.length).toBeLessThanOrEqual(5); // e + at most four digits
+  });
+
+  it('a page that mints heavily claims more numbers, and only that page pays for it', () => {
+    const store = fakeStorage();
+    const heavy = new RefRegistry(() => store);
+    for (let i = 0; i < REF_BLOCK * 3; i += 1) heavy.refFor(button());
+    // The next document starts past everything the heavy one reserved — correctness first — but a
+    // small page after a big one is still far shorter than a fixed 10k block would have made it.
+    const next = new RefRegistry(() => store).refFor(button());
+    expect(Number(next.slice(1))).toBeGreaterThan(REF_BLOCK * 3);
+    expect(next.length).toBeLessThanOrEqual(5);
+  });
+
   it('still works when storage is unavailable, because a sandboxed iframe throws on access', () => {
     const hostile = (): Storage => {
       throw new Error('SecurityError');

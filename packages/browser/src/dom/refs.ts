@@ -74,11 +74,23 @@ const REF_BASE_KEY = '__reticle_ref_base';
  *
  * The reservation is a synchronous storage write, so it cannot happen per mint — mints are frequent
  * (every meaningful DOM addition, every transitionend, every scroll reveal). One write per this many
- * mints is free. Sized to keep refs SHORT: refs are echoed in every snapshot and every error, so the
- * digits are a token cost paid on every turn, and a page would have to navigate a hundred times
- * before they reach seven of them.
+ * mints is free.
+ *
+ * Sized to keep refs SHORT, and the first attempt at that reasoned about the wrong axis. It bounded
+ * how many navigations it took to reach seven digits and concluded "a hundred" — but the cost is not
+ * paid at seven digits, it is paid at every digit, on every ref, in every snapshot and every error
+ * message, on every turn. At 10,000 the SECOND document already mints five-digit refs.
+ *
+ * Measured on one unchanged three-element page across a session: 61 tokens on the first document,
+ * 64 after a reload, 65 later — +6.5% for the same page, entirely in ref width. The benchmark saw the
+ * same thing as a ~4% rise in average observation cost, which is what a benchmark is for.
+ *
+ * So the block is small. A document claims another one when it outmints this, which costs one more
+ * storage write and is exactly proportional: a page with thousands of elements has a long snapshot
+ * anyway, and a small page — the common case, and the one an agent drives repeatedly — keeps
+ * three-digit refs across dozens of navigations.
  */
-export const REF_BLOCK = 10000;
+export const REF_BLOCK = 100;
 
 /** The reserved-block high-water mark, or 0 when storage is unavailable or its value is junk. */
 function readBase(store: Storage | undefined): number {
