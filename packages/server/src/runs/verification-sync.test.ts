@@ -1,5 +1,6 @@
+import { removeTempDir } from '../temp-dir.js';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ReplayStatus, type FlowReplayResult } from '@reticlehq/core';
@@ -49,7 +50,7 @@ describe('persistAndSyncVerificationRun — MCP verification → Runs-tab artifa
     globalThis.fetch = origFetch;
     delete process.env[URL_ENV];
     delete process.env[KEY_ENV];
-    await rm(join(root, '..'), { recursive: true, force: true });
+    await removeTempDir(join(root, '..'));
   });
 
   it('writes the run artifact to disk even when not logged in (no phone-home)', async () => {

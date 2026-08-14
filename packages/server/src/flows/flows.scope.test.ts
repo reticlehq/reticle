@@ -1,5 +1,6 @@
+import { removeTempDir } from '../temp-dir.js';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { mkdtemp, rm, writeFile, mkdir } from 'node:fs/promises';
+import { mkdtemp, writeFile, mkdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { asFlowName, AnchorKind, FLOW_FILE_VERSION, type FlowFile } from '@reticlehq/core';
@@ -30,7 +31,7 @@ describe('FlowStore — per-project storage (shared-daemon isolation)', () => {
   });
 
   afterEach(async () => {
-    await rm(join(root, '..'), { recursive: true, force: true });
+    await removeTempDir(join(root, '..'));
   });
 
   it('nests a saved flow under its projectId and stamps the file', async () => {

@@ -1,3 +1,4 @@
+import { removeTempDir } from '../temp-dir.js';
 /**
  * The flake-ledger step of `flow_verify`, tested against the shipped function rather than a copy.
  *
@@ -9,7 +10,7 @@
  * extracted now: the part worth pinning is separable from the part that needs a browser.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ReplayStatus } from '@reticlehq/core';
@@ -26,7 +27,7 @@ beforeEach(async () => {
   root = join(await mkdtemp(join(tmpdir(), 'reticle-suite-flakes-')), '.reticle');
 });
 afterEach(async () => {
-  await rm(join(root, '..'), { recursive: true, force: true });
+  await removeTempDir(join(root, '..'));
 });
 
 /** One suite run, as the handler passes it: a list of `{ replay }` wrappers. */

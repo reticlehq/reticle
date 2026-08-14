@@ -1,5 +1,6 @@
+import { removeTempDir } from '../temp-dir.js';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { EventType, type ReticleEvent } from '@reticlehq/core';
@@ -30,7 +31,7 @@ describe('makeJournalAttach', () => {
   });
 
   afterEach(async () => {
-    await rm(join(root, '..'), { recursive: true, force: true });
+    await removeTempDir(join(root, '..'));
   });
 
   it('attaches a recorder that journals events to disk for a valid session', async () => {

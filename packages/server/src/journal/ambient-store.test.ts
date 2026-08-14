@@ -1,5 +1,6 @@
+import { removeTempDir } from '../temp-dir.js';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { mkdtemp, rm, writeFile, mkdir } from 'node:fs/promises';
+import { mkdtemp, writeFile, mkdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createNodeFileSystem, type FileSystemPort } from '../project/fs-port.js';
@@ -15,7 +16,7 @@ describe('AmbientStore', () => {
     fs = createNodeFileSystem();
   });
   afterEach(async () => {
-    await rm(join(root, '..'), { recursive: true, force: true });
+    await removeTempDir(join(root, '..'));
   });
 
   it('returns an empty map when nothing is persisted', async () => {

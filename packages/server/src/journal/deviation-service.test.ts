@@ -1,5 +1,6 @@
+import { removeTempDir } from '../temp-dir.js';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createNodeFileSystem, type FileSystemPort } from '../project/fs-port.js';
@@ -32,7 +33,7 @@ describe('reportAndAccumulate — the push-default loop', () => {
     store = new EnvelopeStore(fs, root);
   });
   afterEach(async () => {
-    await rm(join(root, '..'), { recursive: true, force: true });
+    await removeTempDir(join(root, '..'));
   });
 
   it('is silent on early runs, then catches a regression once the envelope matures', async () => {

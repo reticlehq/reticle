@@ -26,6 +26,11 @@ const DECLARED_UNWIRED: Record<string, string> = {
     'Mermaid confidence report. No caller can produce it today — needs a CLI or tool surface first.',
   'phenomena/phenomena.ts':
     'Phenomenon classification over journal actions. Staged for the deviation reporter; not yet called.',
+  'temp-dir.ts':
+    'Test-only teardown helper: removing a temp directory tolerantly of Windows’ delayed handle ' +
+    'release. Production code never deletes a temp tree, so a production importer would be the ' +
+    'surprise here — it is imported by ~30 test files and belongs to src only because that is where ' +
+    'the tsconfig can see it.',
   'ee/audit-log.ts':
     'Enterprise audit hook, a self-admitted pass-through stub. Nothing calls it; the license gate that ' +
     'would is real, but this consumer is not implemented.',

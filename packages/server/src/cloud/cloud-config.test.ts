@@ -1,5 +1,6 @@
+import { removeTempDir } from '../temp-dir.js';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { resolveProjectCloud, CLOUD_LINK_FILE, CREDENTIALS_FILE } from './cloud-config.js';
@@ -20,7 +21,7 @@ describe('resolveProjectCloud — per-project cloud binding + sync policy', () =
     fs = createNodeFileSystem();
   });
   afterEach(async () => {
-    await rm(dir, { recursive: true, force: true });
+    await removeTempDir(dir);
   });
 
   const writeLink = (obj: unknown): Promise<void> =>

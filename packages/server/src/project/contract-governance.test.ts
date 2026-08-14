@@ -1,5 +1,6 @@
+import { removeTempDir } from '../temp-dir.js';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { RiskSurface, type CapabilitiesContract } from '@reticlehq/core';
@@ -32,7 +33,7 @@ describe('contract persistence preserves declared governance', () => {
   });
 
   afterEach(async () => {
-    await rm(join(root, '..'), { recursive: true, force: true });
+    await removeTempDir(join(root, '..'));
   });
 
   it('round-trips governance through write + read', async () => {

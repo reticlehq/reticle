@@ -1,5 +1,6 @@
+import { removeTempDir } from '../temp-dir.js';
 import { afterEach, describe, expect, it } from 'vitest';
-import { mkdtemp, readdir, rm } from 'node:fs/promises';
+import { mkdtemp, readdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { startDaemon, type RunningServer } from '../index.js';
@@ -17,7 +18,7 @@ describe('reticle serve --http (daemon wiring)', () => {
   afterEach(async () => {
     await server?.close();
     server = undefined;
-    if (root !== undefined) await rm(join(root, '..'), { recursive: true, force: true });
+    if (root !== undefined) await removeTempDir(join(root, '..'));
     root = undefined;
   });
 

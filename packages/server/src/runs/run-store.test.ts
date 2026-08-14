@@ -1,5 +1,6 @@
+import { removeTempDir } from '../temp-dir.js';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { mkdtemp, readdir, rm } from 'node:fs/promises';
+import { mkdtemp, readdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { asRunId, RunReadError, type ReticleVerificationRun } from '@reticlehq/core';
@@ -38,7 +39,7 @@ describe('RunStore — temp-dir filesystem, never touches the repo', () => {
   });
 
   afterEach(async () => {
-    await rm(join(root, '..'), { recursive: true, force: true });
+    await removeTempDir(join(root, '..'));
   });
 
   it('writes then reads a run round-trip', async () => {

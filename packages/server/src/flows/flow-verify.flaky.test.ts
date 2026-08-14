@@ -1,5 +1,6 @@
+import { removeTempDir } from '../temp-dir.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ReplayStatus } from '@reticlehq/core';
@@ -27,7 +28,7 @@ describe('flow_verify feeds and reads the flake ledger', () => {
     root = join(await mkdtemp(join(tmpdir(), 'reticle-verify-flake-')), '.reticle');
   });
   afterEach(async () => {
-    await rm(join(root, '..'), { recursive: true, force: true });
+    await removeTempDir(join(root, '..'));
   });
 
   /**

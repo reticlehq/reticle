@@ -1,6 +1,7 @@
+import { removeTempDir } from './temp-dir.js';
 import { afterEach, describe, expect, it } from 'vitest';
 import * as http from 'node:http';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ReticleEnv, LOOPBACK_HOST } from '@reticlehq/core';
@@ -54,7 +55,7 @@ describe('startDaemon port collision', () => {
     server = undefined;
     if (blocker !== undefined) await new Promise<void>((r) => blocker?.close(() => r()));
     blocker = undefined;
-    if (root !== undefined) await rm(join(root, '..'), { recursive: true, force: true });
+    if (root !== undefined) await removeTempDir(join(root, '..'));
     root = undefined;
   });
 

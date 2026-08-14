@@ -1,5 +1,6 @@
+import { removeTempDir } from '../temp-dir.js';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { asFlowName, ContractReadError, type CapabilitiesContract } from '@reticlehq/core';
@@ -38,7 +39,7 @@ describe('reticle-dir — temp-dir filesystem, never touches the repo', () => {
   });
 
   afterEach(async () => {
-    await rm(join(root, '..'), { recursive: true, force: true });
+    await removeTempDir(join(root, '..'));
   });
 
   // ---- VALID ----
@@ -83,8 +84,8 @@ describe('reticle-dir — temp-dir filesystem, never touches the repo', () => {
     expect(textA).toBe(textB);
     expect(textA).toContain('"testids": [\n      "a",\n      "b"\n    ]');
     expect(textA.indexOf('"name": "a"')).toBeLessThan(textA.indexOf('"name": "z"'));
-    await rm(dirA, { recursive: true, force: true });
-    await rm(dirB, { recursive: true, force: true });
+    await removeTempDir(dirA);
+    await removeTempDir(dirB);
   });
 
   it('4: writeContract stamps version + generatedAt from injected clock', async () => {

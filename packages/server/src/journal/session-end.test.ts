@@ -1,5 +1,6 @@
+import { removeTempDir } from '../temp-dir.js';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createNodeFileSystem } from '../project/fs-port.js';
@@ -34,7 +35,7 @@ describe('makeSessionEnd (teardown: flush journal + persist ambient)', () => {
     root = join(dir, '.reticle');
   });
   afterEach(async () => {
-    await rm(join(root, '..'), { recursive: true, force: true });
+    await removeTempDir(join(root, '..'));
   });
 
   it('flushes the journal so the tail of a session is never lost from disk', async () => {
@@ -88,7 +89,7 @@ describe('journal retention is bounded on a long-running daemon', () => {
     root = join(dir, '.reticle');
   });
   afterEach(async () => {
-    await rm(join(root, '..'), { recursive: true, force: true });
+    await removeTempDir(join(root, '..'));
   });
 
   it('prunes at session END, not only at daemon start', async () => {

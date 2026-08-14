@@ -1,5 +1,6 @@
+import { removeTempDir } from '../temp-dir.js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { EventType, type JournalAction, type ReticleEvent } from '@reticlehq/core';
@@ -39,7 +40,7 @@ describe('durable journal over a live bridge session', () => {
   afterAll(async () => {
     browser.close();
     await bridge.close();
-    await rm(dir, { recursive: true, force: true });
+    await removeTempDir(dir);
   });
 
   it('journals streamed events and a minted act to disk', async () => {

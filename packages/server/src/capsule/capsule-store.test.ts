@@ -1,5 +1,6 @@
+import { removeTempDir } from '../temp-dir.js';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { mkdtemp, rm, mkdir, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ActionType, AnchorKind, type FlowStep } from '@reticlehq/core';
@@ -38,7 +39,7 @@ describe('CapsuleStore (fail-to-pass bug capsules)', () => {
     root = join(dir, '.reticle');
   });
   afterEach(async () => {
-    await rm(join(root, '..'), { recursive: true, force: true });
+    await removeTempDir(join(root, '..'));
   });
 
   it('saves a capsule and reads it back', async () => {

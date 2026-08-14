@@ -1,3 +1,4 @@
+import { removeTempDir } from '../temp-dir.js';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -18,7 +19,7 @@ describe('readJournalEnabled', () => {
     dir = await mkdtemp(join(tmpdir(), 'reticle-journal-cfg-'));
   });
   afterEach(async () => {
-    await rm(dir, { recursive: true, force: true });
+    await removeTempDir(dir);
   });
 
   it('defaults to on when no config and no env', () => {
@@ -46,7 +47,7 @@ describe('readProjectPort', () => {
     dir = await mkdtemp(join(tmpdir(), 'reticle-port-'));
   });
   afterEach(async () => {
-    await rm(dir, { recursive: true, force: true });
+    await removeTempDir(dir);
   });
 
   async function writeConfig(content: string): Promise<void> {
@@ -164,7 +165,7 @@ describe('readProjectId', () => {
     dir = await mkdtemp(join(tmpdir(), 'reticle-projid-'));
   });
   afterEach(async () => {
-    await rm(dir, { recursive: true, force: true });
+    await removeTempDir(dir);
   });
 
   async function writeConfig(content: string): Promise<void> {
