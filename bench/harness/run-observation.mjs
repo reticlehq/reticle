@@ -8,6 +8,47 @@ import { inject, revert, revertAll } from './inject.mjs';
 
 const URL = 'http://localhost:4312/';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * How long one (scenario x tool) cell may take before it is abandoned.
+ *
+ * A cell that never returns used to block the ENTIRE pass — no analysis.json, no partial results,
+ * nothing. Observed twice in one day on `broken-form-validation`, both times stuck inside the
+ * Playwright MCP cell with its browser still alive, once for 38 minutes before it was killed by hand.
+ * A whole run's measurement was lost each time.
+ *
+ * Generous on purpose: the slowest healthy cell in the suite runs well under a minute, so this only
+ * fires on a genuine hang and never on a slow machine. It is a BOUND, not a duration assertion — the
+ * distinction this repo already enforces for tests.
+ *
+ * On expiry the cell lands in the existing catch, which records `NOT MEASURED` with the reason. That
+ * is deliberate and must stay loud: a timeout that silently dropped the cell would recreate exactly
+ * the coverage hole that anchor drift used to open, where the rate is computed over the survivors and
+ * the headline stays perfect while coverage shrinks.
+ */
+const CELL_TIMEOUT_MS = Number(process.env.BENCH_CELL_TIMEOUT_MS ?? '240000');
+
+class CellTimeout extends Error {}
+
+/** Run one cell, rejecting if it outlives the budget. */
+function withCellTimeout(run) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new CellTimeout(`cell exceeded ${String(CELL_TIMEOUT_MS)}ms and was abandoned`)),
+      CELL_TIMEOUT_MS,
+    );
+    run().then(
+      (v) => {
+        clearTimeout(timer);
+        resolve(v);
+      },
+      (e) => {
+        clearTimeout(timer);
+        reject(e);
+      },
+    );
+  });
+}
 // Default: all three tools. Set BENCH_TOOLS=reticle (comma-separated) to re-measure one tool's column
 // in isolation — the external tools' numbers are fixed, so an Reticle-only pass is enough to recompute VE.
 const TOOLS = (process.env['BENCH_TOOLS'] ?? 'playwright,devtools,reticle').split(',');
@@ -265,54 +306,72 @@ for (const sc of list) {
       console.log(JSON.stringify({ s: row.scenario, t: tool, v: 'NOT MEASURED' }));
       continue;
     }
+    // Held outside the cell so an ABANDONED cell can still be torn down: on timeout the inner
+    // `stop()` never runs, and without this each hang would leak a browser for the rest of the pass.
+    let openAdapter = null;
     try {
-      let baseline = null;
-      // baseline scenarios: clean capture first
-      if (sc.mode === 'baseline') {
-        const a0 = makeAdapter(tool, URL);
-        await a0.start();
-        await a0.login();
-        baseline = await runRecipe(a0, sc.steps, sc.observe);
-        if (sc.differsAfterFilter) {
-          // type a filter and re-observe to compare effect on the table
-          if (tool !== 'devtools') {
-            try {
-              await a0.clickTestid('filter-search');
-            } catch {
-              /* */
+      await withCellTimeout(async () => {
+        let baseline = null;
+        // baseline scenarios: clean capture first
+        if (sc.mode === 'baseline') {
+          const a0 = makeAdapter(tool, URL);
+          openAdapter = a0;
+          await a0.start();
+          await a0.login();
+          baseline = await runRecipe(a0, sc.steps, sc.observe);
+          if (sc.differsAfterFilter) {
+            // type a filter and re-observe to compare effect on the table
+            if (tool !== 'devtools') {
+              try {
+                await a0.clickTestid('filter-search');
+              } catch {
+                /* */
+              }
             }
           }
+          await a0.stop();
+          openAdapter = null;
         }
-        await a0.stop();
-      }
-      if (sc.regression) inject(sc.regression);
-      await sleep(400); // let vite HMR apply
-      const a = makeAdapter(tool, URL);
-      await a.start();
-      await a.login();
-      const regr = await runRecipe(a, sc.steps, sc.observe);
-      await a.stop();
-      if (sc.regression) revert(sc.regression);
+        if (sc.regression) inject(sc.regression);
+        await sleep(400); // let vite HMR apply
+        const a = makeAdapter(tool, URL);
+        openAdapter = a;
+        await a.start();
+        await a.login();
+        const regr = await runRecipe(a, sc.steps, sc.observe);
+        await a.stop();
+        openAdapter = null;
+        if (sc.regression) revert(sc.regression);
 
-      const g = grade(sc, regr, baseline);
-      const detected = typeof g === 'object' ? g.detected : g;
-      const detail = typeof g === 'object' ? g.detail : '';
-      const cycleTokens = regr.cycle.reduce((n, c) => n + (c.tokens_o200k ?? 0), 0);
-      const cycleChars = regr.cycle.reduce((n, c) => n + (c.chars ?? 0), 0);
-      const cycleBytes = regr.cycle.reduce((n, c) => n + (c.bytes ?? 0), 0);
-      row = {
-        ...row,
-        tokens_o200k: cycleTokens,
-        chars: cycleChars,
-        bytes: cycleBytes,
-        latency_ms: Date.now() - t0,
-        verdict: detected ? 'ISSUE DETECTED' : 'NO ISSUE FOUND',
-        detected_issue: detected,
-        confidence: detected === sc.expectDetect ? 1 : 0,
-        notes: `obs=${sc.observe}; signal=${sc.signal}; ${detail}; calls=${regr.cycle.map((c) => c.call).join('>')}`,
-        _obsTokens: regr.cycle.at(-1)?.tokens_o200k ?? null,
-      };
+        const g = grade(sc, regr, baseline);
+        const detected = typeof g === 'object' ? g.detected : g;
+        const detail = typeof g === 'object' ? g.detail : '';
+        const cycleTokens = regr.cycle.reduce((n, c) => n + (c.tokens_o200k ?? 0), 0);
+        const cycleChars = regr.cycle.reduce((n, c) => n + (c.chars ?? 0), 0);
+        const cycleBytes = regr.cycle.reduce((n, c) => n + (c.bytes ?? 0), 0);
+        row = {
+          ...row,
+          tokens_o200k: cycleTokens,
+          chars: cycleChars,
+          bytes: cycleBytes,
+          latency_ms: Date.now() - t0,
+          verdict: detected ? 'ISSUE DETECTED' : 'NO ISSUE FOUND',
+          detected_issue: detected,
+          confidence: detected === sc.expectDetect ? 1 : 0,
+          notes: `obs=${sc.observe}; signal=${sc.signal}; ${detail}; calls=${regr.cycle.map((c) => c.call).join('>')}`,
+          _obsTokens: regr.cycle.at(-1)?.tokens_o200k ?? null,
+        };
+      });
     } catch (e) {
+      // Best-effort: an abandoned cell leaves its browser up, and 36 cells of leaked Chrome would
+      // starve the rest of the pass. Never let a teardown failure mask the original error.
+      if (openAdapter !== null) {
+        try {
+          await openAdapter.stop();
+        } catch {
+          /* already gone */
+        }
+      }
       if (sc.regression) {
         try {
           revert(sc.regression);
