@@ -23,7 +23,7 @@ Your agent writes code. Reticle checks it against the **real running app** — t
 
 Where the work happens in the open: what's being built this cycle, what's up for grabs, and design calls before they land.
 
-**[⚡ Install in 30 seconds](#install-in-30-seconds)** · [How it works](#how-it-works) · [**What we support**](#what-we-support--frameworks-desktop-platforms) · [vs Playwright / DevTools](#cant-playwright--devtools--a-browser-agent-already-do-this) · [The numbers](#the-numbers) · [Docs](docs/getting-started.md) · [Discord](https://discord.gg/BwAbzv9ZRz)
+**[⚡ Install in 30 seconds](#install-in-30-seconds)** · [How it works](#how-it-works) · [**What we support**](#what-we-support) · [vs Playwright / DevTools](#cant-playwright--devtools--a-browser-agent-already-do-this) · [The numbers](#the-numbers) · [Docs](docs/getting-started.md) · [Discord](https://discord.gg/BwAbzv9ZRz)
 
 `dev-only` · `localhost-only` · `your app data stays local` · `Apache-2.0 SDK` · works with Claude Code, Cursor, and any MCP agent
 
@@ -304,82 +304,21 @@ Not observed today: **IndexedDB**, **Web Workers**, and anything inside a closed
 | **Memory** | a bounded ring buffer (2,000 events / 60 s), plus a capped ref registry — both fixed ceilings, not growth with app lifetime |
 | **Network** | localhost WebSocket to a daemon on your machine. **No app data leaves the machine** |
 
-## What we support — frameworks, desktop, platforms
+## What we support
 
-**The short answer:** if it renders in a browser, Reticle observes it — **web and desktop, on macOS, Linux and Windows.** Web apps (React, Vue, Svelte, Preact, Astro, plain HTML) and desktop apps (**Electron and Tauri**) are all supported, and `reticle init` wires most of them unattended. The tables below say exactly how far that goes for each one.
+The SDK runs inside your app and observes the DOM, network, console, routing, storage and animations through standard web APIs — so it is framework-agnostic by construction.
 
-The SDK observes the **DOM, network, console, routing, storage and animations of anything that renders in a browser** — that part is framework-agnostic and needs no adapter. What varies is the layer above it: whether `reticle init` wires your project unattended, and whether a DOM node can be traced back to the component and source line that rendered it.
+**Web frameworks** — Next.js (App and Pages Router), Vite + React, Create React App, SvelteKit, Svelte, Astro, Vue 3, Preact, and plain HTML. `reticle init` wires most of them without being asked.
 
-**Verified** means a gate scaffolds that stack from scratch, installs Reticle into it, boots it, opens a real browser and waits for a session — every release. Not "it should work".
+**Desktop** — Electron and Tauri, including the main-process and Rust IPC boundary a browser-only tool cannot see.
 
-| Framework | Install (`reticle init`) | Source → component mapping | Verified every release |
-| --- | --- | --- | --- |
-| **Next.js** (App Router) | auto | ✅ via `@reticlehq/next` (keeps SWC) | ✅ install gate + e2e |
-| **Next.js** (Pages Router) | auto | ✅ | ✅ install gate |
-| **Vite + React** | auto | ✅ via `@reticlehq/vite-plugin` | ✅ install gate + e2e |
-| **Monorepo sub-package** | auto | ✅ | ✅ install gate |
-| **Create React App** | auto (no build plugin — the kit alone) | ❌ | detection only |
-| **SvelteKit** | auto | ❌ | detection only |
-| **Astro** | auto | ❌ | detection only |
-| **Preact** | auto — `init` flags the stack UNVERIFIED | ❌ | ❌ — [#129](https://github.com/reticlehq/reticle/issues/129) |
-| **Vue 3** | auto — `init` flags the stack UNVERIFIED | ❌ | ❌ — [#76](https://github.com/reticlehq/reticle/issues/76) |
-| **Svelte** (standalone) | auto | ❌ | ❌ |
-| **Angular** | not detected | ❌ | ❌ — [#128](https://github.com/reticlehq/reticle/issues/128) |
-| **Plain HTML / anything else** | manual (`connect()`) | ❌ | — |
+**Agents** — anything that speaks MCP. `init` writes the config for Claude Code, Cursor, Windsurf, Gemini CLI, VS Code (Copilot), OpenCode and Codex CLI; any other MCP client works by pointing it at `reticle mcp`.
 
-**A ❌ in "source mapping" is not a broken install.** Vue, Preact, Svelte, Astro, SvelteKit and CRA apps are wired by `init`, connect normally, and every tool works — refs, roles, test-ids, network, console, storage, state, animations, assertions and verdicts. What you don't get is `reticle_query` answering _"which component rendered this, and in which file"_, because that needs a build plugin that stamps `data-reticle-source`. On the unverified stacks `init` says so on the spot rather than reporting an unqualified green.
+**Browsers** — Chrome, Edge, Arc, Dia, Brave, Opera, Firefox and Safari, plus the Electron and Tauri webviews. Reticle launches nothing by default, so it runs in whatever browser you already have open.
 
-### Desktop apps — yes, Electron and Tauri
+**Operating systems** — macOS, Linux and Windows.
 
-Both are fully supported, not experimental: Reticle observes the renderer **and** the main-process/Rust IPC boundary that a browser-only tool cannot see at all.
-
-| Desktop runtime | What Reticle observes | Verified every release |
-| --- | --- | --- |
-| **Electron** | `@reticlehq/electron` — renderer + **main-process IPC**, window capture | ✅ a real Electron main process, driven headless |
-| **Tauri** | `packages/tauri` (Rust) — webview + **IPC**, window capture | ✅ a **packaged binary**, driven headless |
-
-Both are driven by `pnpm test:e2e:desktop`; the Rust side is compiled by CI's `rust` / `rust-macos` jobs. See [Desktop apps](docs/desktop-apps.md).
-
-### Agents — who `reticle init` wires up for you
-
-Reticle is an MCP server, so anything that speaks MCP can drive it. `init` writes the config for these seven without being asked:
-
-**Claude Code** · **Cursor** · **Windsurf** · **Gemini CLI** · **VS Code (Copilot)** · **OpenCode** · **Codex CLI**
-
-Any other MCP client works too — point it at `reticle mcp` and it gets the same tools. `init --no-mcp` skips this half entirely if you already have it configured.
-
-### Browsers
-
-The SDK runs **inside your app**, in whatever browser you already have open — Reticle launches nothing by default, so there is no browser to be compatible with. It observes the DOM, network, console, routing, storage and animations through standard web APIs, and works anywhere those do: **Chrome, Edge, Arc, Dia, Brave, Opera, Firefox and Safari**, plus the Electron and Tauri webviews.
-
-A **driven** browser (`reticle drive`, CDP) is the exception and is **Chromium-only** — that is what powers native input, network mocking, viewport control and visual capture. Everything else works identically in every browser above.
-
-### Operating systems
-
-**macOS, Linux and Windows are all supported and all first-class.** CI runs a dedicated `windows` job on every commit.
-
-Missing yours? [#128](https://github.com/reticlehq/reticle/issues/128) (Angular) and [#76](https://github.com/reticlehq/reticle/issues/76) (Vue) are open and marked `help wanted`.
-
-### Does it work with my state library?
-
-`registerStore` duck-types on `{ getState, subscribe }`, so **zustand and Redux work with no adapter at all**. Shipped adapters cover **TanStack Query, Jotai, XState, Valtio, MobX, Recoil, Svelte stores and Pinia**, and a generic `pushStore` handles Context or anything hand-rolled — you push, Reticle reads. None of the adapters import their library, so they add no dependency and no weight for an app that doesn't use them.
-
-**Missing yours? It's ~9 lines — and a genuinely good first PR.** An adapter is a pure function returning `{ getState, subscribe }`; because it takes an already-constructed store and uses structural types, it never imports the library it supports. Here is the whole Valtio one:
-
-```ts
-export function valtioStore<T extends object>(
-  proxy: T,
-  snapshot: (p: T) => unknown,
-  subscribe: (p: T, listener: () => void) => () => void,
-): StoreLike {
-  return {
-    getState: () => snapshot(proxy),
-    subscribe: (listener) => subscribe(proxy, listener),
-  };
-}
-```
-
-**Effector, Nanostores, Signals** — whatever you use, add it in [`store-adapters.ts`](packages/browser/src/registry/store-adapters.ts) with a test beside it and open a PR — see [CONTRIBUTING.md](CONTRIBUTING.md), or say hello in [`#contributors`](https://discord.gg/BwAbzv9ZRz) first. Until then the generic `pushStore` path covers you.
+**State libraries** — zustand and Redux need no adapter at all. Shipped adapters cover TanStack Query, Jotai, XState, Valtio, MobX, Recoil, Svelte stores and Pinia, and a generic push API handles Context or anything hand-rolled. Adding one is about nine lines — see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Go deeper
 
