@@ -10,6 +10,10 @@ on:
 permissions:
   contents: read
 
+# Pinned here so the cache key and the install agree on one value.
+env:
+  CARGO_AUDIT_VERSION: 0.22.2
+
 jobs:
   verify:
     runs-on: ubuntu-latest
@@ -196,6 +200,62 @@ jobs:
       - name: Lint (macOS capture path, natively)
         working-directory: packages/tauri
         run: cargo clippy --all-targets -- -D warnings
+
+  # Advisory scan for the Rust tree. Nothing watched it: the npm ecosystem in dependabot.yml cannot
+  # read a Cargo manifest, CodeQL does not scan Rust at all, and the `rust` jobs above only ask
+  # whether the code compiles and lints — never whether anything it depends on is known-vulnerable.
+  # `reticle-tauri` is PUBLISHED, so that gap reached users.
+  #
+  # Its own job rather than a step on `rust`: that one installs WebKitGTK and cross-checks Windows,
+  # none of which an advisory scan needs, and a vulnerable dependency is a different answer from a
+  # broken build — worth reading off a separate line.
+  rust-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Set up Rust
+        run: |
+          rustup update stable --no-self-update
+          rustup default stable
+          rustc --version && cargo --version
+      # Cache the built binary, not just the registry — `cargo install` COMPILES cargo-audit, which
+      # is minutes on a cold runner and seconds on a warm one. Keyed on the pinned version so a bump
+      # below actually rebuilds instead of silently reusing the old binary.
+      - uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4
+        with:
+          path: |
+            ~/.cargo/bin/cargo-audit
+            ~/.cargo/registry
+          key: cargo-audit-${{ env.CARGO_AUDIT_VERSION }}
+      # Pinned and `--locked`: a tool installed to check the supply chain must not itself resolve a
+      # floating dependency tree on every run.
+      - name: Install cargo-audit
+        run: |
+          if ! command -v cargo-audit >/dev/null 2>&1; then
+            cargo install cargo-audit --locked --version "$CARGO_AUDIT_VERSION"
+          fi
+          cargo audit --version
+      # Default severity ON PURPOSE — a real VULNERABILITY fails this job, an informational
+      # advisory does not. `--deny warnings` was measured before being rejected: it fails today with
+      # 17 findings (16 `unmaintained`, 1 `unsound`), every one of them transitive through
+      # tauri/gtk/glib and none of them fixable here. A gate that is red on the day it merges, for a
+      # reason the person reading it cannot act on, gets muted — and then it is not a gate. Real
+      # vulnerabilities today: 0.
+      #
+      # The published crate is scanned against the COMMITTED lockfile, which is the exact set of
+      # versions a consumer of the crate builds.
+      - name: Audit reticle-tauri
+        working-directory: packages/tauri
+        run: cargo audit
+      # The smoke app is not published, but the desktop battery compiles and RUNS it, so a
+      # vulnerable dependency here still executes on a runner. Its lockfile is gitignored, so one is
+      # resolved for the scan and thrown away with the runner.
+      - name: Audit the Tauri smoke app
+        working-directory: apps/tauri-smoke/src-tauri
+        run: |
+          cargo generate-lockfile
+          cargo audit
 
   # Tier 2: ask reticle-fixtures to install this commit into real third-party apps.
   #
@@ -505,7 +565,18 @@ jobs:
     # red Rust build merged clean. Adding a job to the workflow is half the work; this line is the
     # other half.
     needs:
-      [verify, e2e, install-gate, matrix-records, windows, macos, rust, rust-macos, desktop-e2e]
+      [
+        verify,
+        e2e,
+        install-gate,
+        matrix-records,
+        windows,
+        macos,
+        rust,
+        rust-audit,
+        rust-macos,
+        desktop-e2e,
+      ]
     if: always()
     timeout-minutes: 5
     steps:

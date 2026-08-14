@@ -31,3 +31,33 @@ updates:
         update-types:
           - minor
           - patch
+  # Rust. `reticle-tauri` is PUBLISHED to crates.io, so its dependency tree reaches users directly
+  # and was the only shipped surface nothing watched: the npm ecosystem above cannot see a Cargo
+  # manifest, and CodeQL does not scan Rust at all. Its Cargo.lock is committed, so Dependabot
+  # resolves against the exact versions a consumer builds.
+  - package-ecosystem: cargo
+    directory: /packages/tauri
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      minor-and-patch:
+        update-types:
+          - minor
+          - patch
+
+  # The Tauri smoke app. Not published, but it is compiled and RUN by the desktop battery, so a
+  # vulnerable dependency here still executes on a runner. Its Cargo.lock is gitignored, so
+  # Dependabot works from the manifest.
+  - package-ecosystem: cargo
+    directory: /apps/tauri-smoke/src-tauri
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      minor-and-patch:
+        update-types:
+          - minor
+          - patch
