@@ -166,10 +166,26 @@ From there, point your MCP-capable agent at Reticle and ask it to verify the app
 
 1. **Branch off `main`.** Use a short, descriptive branch name.
 2. **Write tests first** for the behavior you're adding or fixing.
-3. **Use [Conventional Commits](https://www.conventionalcommits.org/)** for commit messages, e.g. `feat(server): add reticle_viewport tool`, `fix(browser): restore patched fetch on teardown`, `docs: clarify install steps`. Common scopes mirror the packages: `protocol`, `browser`, `server`, `react`, plus `docs` / `chore`.
-4. **Keep the gates green:** `pnpm lint && pnpm typecheck && pnpm test:unit`.
-5. **Update docs and `CHANGELOG.md`** when the change is user-facing. New entries go under the `[Unreleased]` section, following [Keep a Changelog](https://keepachangelog.com/).
-6. **Open a PR against `main`** and **link the issue** it resolves (e.g. `Closes #123`). Fill out the PR template checklist.
+3. **Sign off every commit — `git commit -s`.** This is the one thing that will fail your PR before a human reads it. CI runs a [Developer Certificate of Origin](https://developercertificate.org) check, and every commit needs a `Signed-off-by:` trailer matching its author. `-s` adds it for you.
+
+   Forgot? Nothing is lost — fix it in place:
+
+   ```bash
+   git commit --amend --no-edit -s          # one commit
+   git rebase --signoff origin/main         # several
+   git push --force-with-lease
+   ```
+
+   `git config format.signOff true` does **not** cover `git commit`, so setting it is not enough. If you want this to be automatic, alias the commit itself:
+
+   ```bash
+   git config --local alias.ci 'commit -s'
+   ```
+
+4. **Use [Conventional Commits](https://www.conventionalcommits.org/)** for commit messages, e.g. `feat(server): add reticle_viewport tool`, `fix(browser): restore patched fetch on teardown`, `docs: clarify install steps`. Common scopes mirror the packages: `protocol`, `browser`, `server`, `react`, plus `docs` / `chore`.
+5. **Keep the gates green:** `pnpm lint && pnpm typecheck && pnpm test:unit`.
+6. **Update docs and `CHANGELOG.md`** when the change is user-facing. New entries go under the `[Unreleased]` section, following [Keep a Changelog](https://keepachangelog.com/).
+7. **Open a PR against `main`** and **link the issue** it resolves (e.g. `Closes #123`). Fill out the PR template checklist.
 
 For anything non-trivial, **open an issue first** so we can agree on the approach before you invest time in a PR.
 

@@ -5,8 +5,9 @@ name: DCO
 # the project's license (https://developercertificate.org). Sign off with `git commit -s`.
 #
 # On failure it prints the exact remedy for both shapes (one commit vs several) rather than a link:
-# three of three external contributors have been blocked here, and CONTRIBUTING.md does not mention
-# sign-off, so the old "see CONTRIBUTING.md" pointed at a document that could not answer it.
+# three of three external contributors were blocked here while CONTRIBUTING.md did not mention sign-off,
+# so the old "see CONTRIBUTING.md" pointed at a document that could not answer it. Both now say it:
+# CONTRIBUTING.md step 3 of the PR flow, and the first line of the PR template checklist.
 #
 # This runs and reports on every PR; it only BLOCKS merges once a maintainer adds "DCO" to the required
 # status checks in branch protection. Self-contained (no third-party action) to keep the supply chain small.

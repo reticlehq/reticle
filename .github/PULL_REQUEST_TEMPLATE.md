@@ -23,6 +23,7 @@ Closes #
 
 ## Checklist
 
+- [ ] **Every commit is signed off** (`git commit -s`) — CI's DCO check fails the PR without it. Already pushed? `git rebase --signoff origin/main && git push --force-with-lease`
 - [ ] Tests added/updated (RED → GREEN); the change is covered by a test that would fail without it
 - [ ] No `any`, no free strings (wire strings live in `@reticlehq/core`), no non-null `!`
 - [ ] No `console.log` or internal tracking codes left in the diff
