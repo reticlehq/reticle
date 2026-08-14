@@ -134,7 +134,10 @@ describe('refs across a full navigation', () => {
     const next = new RefRegistry(() => store).refFor(button());
     expect(Number(next.slice(1))).toBeGreaterThan(REF_BLOCK * 3);
     expect(next.length).toBeLessThanOrEqual(5);
-  });
+    // Explicit, because the loop bound is a CONSTANT this file does not own: at the previous block
+    // size the same expression built 30,000 nodes, and the repo's heavy-DOM guard is right to refuse
+    // to evaluate it. A generous timeout, never a duration assertion — see the guard's own note.
+  }, 10_000);
 
   it('still works when storage is unavailable, because a sandboxed iframe throws on access', () => {
     const hostile = (): Storage => {
