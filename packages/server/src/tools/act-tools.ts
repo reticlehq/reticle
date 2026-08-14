@@ -24,6 +24,7 @@ import { parsePredicate } from '../events/predicate-parse.js';
 import { causalSummary } from '../capsule/causal-summary.js';
 import { findContradictions } from '../events/contradictions.js';
 import { waitForInFlight } from './settle-in-flight.js';
+import { waitForReaction } from './react-grace.js';
 import { decideVerified } from '../honesty/verified.js';
 import { readsDomState } from '../honesty/already-true.js';
 import { saveFailedAssertCapsule } from './act-capsule.js';
@@ -477,9 +478,22 @@ export const ACT_TOOLS: ToolDef[] = [
         // reports unsettled exactly as before, an honest limit rather than an early exit. Costs
         // nothing on the common path, where no request is in flight.
         if (verdict.pass && timeout > 0) {
-          await waitForInFlight(session, since, timeout - (session.elapsed() - predicateStarted), {
-            sleep: (ms) => new Promise<void>((resolve) => setTimeout(resolve, ms)),
-          });
+          const sleep = {
+            sleep: (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)),
+          };
+          const spent = (): number => timeout - (session.elapsed() - predicateStarted);
+          await waitForInFlight(session, since, spent(), sleep);
+          // Waiting for the response moved the hazard rather than removing it: the response now lands
+          // inside the window BY DESIGN, and the app's re-render happens a task or two later. Close
+          // the window in that gap and every channel agrees the app took a successful write and did
+          // nothing — `response-ignored`, i.e. `verified:"no"` on a correct app, produced entirely by
+          // where we stopped looking. A false accusation is the more damaging direction of error for
+          // a verification tool: it sends someone to fix code that is not broken.
+          //
+          // So the response is not the end of the window; the app's REACTION to it is. Paid only in
+          // the shape that would otherwise be accused — a successful mutating write with nothing
+          // moved after it — and short enough that a genuinely dropped response is still reported.
+          await waitForReaction(session, since, spent(), sleep);
         }
 
         const r = asRecord(actResult.result);
