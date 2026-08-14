@@ -23,6 +23,7 @@ import { buildReactionReport, summarizeReaction } from '../events/reaction.js';
 import { parsePredicate } from '../events/predicate-parse.js';
 import { causalSummary } from '../capsule/causal-summary.js';
 import { findContradictions } from '../events/contradictions.js';
+import { waitForInFlight } from './settle-in-flight.js';
 import { decideVerified } from '../honesty/verified.js';
 import { readsDomState } from '../honesty/already-true.js';
 import { saveFailedAssertCapsule } from './act-capsule.js';
@@ -458,10 +459,28 @@ export const ACT_TOOLS: ToolDef[] = [
         );
 
         // Honesty: floor the predicate at this act's cursor so a stale buffered event can't satisfy it.
+        const predicateStarted = session.elapsed();
         const verdict =
           timeout > 0
             ? await waitForPredicate(session, until, timeout, since)
             : await evaluatePredicate(session, until, since);
+
+        // The predicate resolves the INSTANT it holds, which on an optimistically-navigating app is
+        // while the write is still in flight — so the verdict was taken over a window the app had not
+        // finished, and came back `unknown / unsettled` asking the CALLER to re-check. A login that
+        // genuinely succeeded returned at 492ms of an 8000ms budget with every corroborating channel
+        // agreeing. Spend the rest of the budget the caller already granted.
+        //
+        // This decides nothing: it waits for the answer instead of guessing at it. A response that
+        // arrives as a FAILURE still contradicts — and now arrives INSIDE the window, where the
+        // detector can see it at all — while a request still open when the budget genuinely runs out
+        // reports unsettled exactly as before, an honest limit rather than an early exit. Costs
+        // nothing on the common path, where no request is in flight.
+        if (verdict.pass && timeout > 0) {
+          await waitForInFlight(session, since, timeout - (session.elapsed() - predicateStarted), {
+            sleep: (ms) => new Promise<void>((resolve) => setTimeout(resolve, ms)),
+          });
+        }
 
         const r = asRecord(actResult.result);
         if ('boolean' === typeof r['settled']) settledOutcome = r['settled'];
