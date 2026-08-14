@@ -8,6 +8,45 @@ const version = process.argv[2] ?? 'unlabeled';
 const note = process.argv[3] ?? '';
 const a = JSON.parse(readFileSync('bench/raw/analysis.json', 'utf8'));
 
+/**
+ * A baseline must come from the commit it claims to describe.
+ *
+ * This script used to record from whatever analysis.json was on disk. The 2.7.0 baseline is the proof
+ * that this matters: it reports `broken-form-validation` as measured, and at that commit the
+ * injector's anchor did not match the fixture, so the scenario could not have been injected. Every
+ * later run was then compared against a baseline describing a DIFFERENT run — and the most expensive
+ * scenario in the suite (2,736 tokens against a ~806 median) being present on one side and absent on
+ * the other reads as a 3.9% efficiency regression that never happened.
+ *
+ * The gate is only as honest as its memory. Refuse rather than record a row that cannot be trusted:
+ * a wrong baseline is worse than no baseline, because it produces confident false verdicts for
+ * months.
+ */
+function assertFreshAnalysis() {
+  let head = 'nogit';
+  try {
+    head = execSync('git rev-parse --short HEAD', { encoding: 'utf8' }).trim();
+  } catch {
+    return; // no git: nothing to check against, and the sha is already recorded as 'nogit'
+  }
+  if (a.git_sha === undefined) {
+    console.error(
+      'refusing to record: bench/raw/analysis.json carries no git_sha, so it predates provenance ' +
+        'stamping and cannot be shown to come from this commit. Re-run `pnpm bench:full`.',
+    );
+    process.exit(1);
+  }
+  if (a.git_sha !== head) {
+    console.error(
+      `refusing to record: analysis.json was generated at ${a.git_sha} but HEAD is ${head}. ` +
+        'That file is from a different run — recording it would create a baseline that describes ' +
+        'code nobody is testing. Re-run `pnpm bench:full`.',
+    );
+    process.exit(1);
+  }
+}
+assertFreshAnalysis();
+
 /** Read an optional raw JSON file (Layer C may not have been run this pass). */
 function readRaw(path) {
   return existsSync(path) ? JSON.parse(readFileSync(path, 'utf8')) : null;

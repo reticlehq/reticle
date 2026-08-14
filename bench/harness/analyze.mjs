@@ -2,6 +2,28 @@
 // (avg/median tokens, p95 latency, detection accuracy, FN/FP rates) and per-scenario
 // winners. Pure arithmetic over measured rows — no synthetic data.
 import { readFileSync, writeFileSync } from 'node:fs';
+import { execSync } from 'node:child_process';
+
+/**
+ * Which commit produced these numbers.
+ *
+ * analysis.json carried no provenance, so `record.mjs` would happily write a baseline row from
+ * WHATEVER file happened to be on disk — including one left by a run weeks earlier. That is not
+ * hypothetical: the recorded 2.7.0 baseline claims `broken-form-validation` was measured, and at that
+ * commit the injector's anchor did not match the fixture, so it could not have been injected at all.
+ * Every later gate then compared an honest run against a baseline describing a different one, and
+ * reported a regression that was an artefact of the comparison.
+ *
+ * A number without provenance cannot be a baseline. Stamped here, at the moment the numbers are
+ * computed, and checked by record.mjs before it will write a row.
+ */
+function headSha() {
+  try {
+    return execSync('git rev-parse --short HEAD', { encoding: 'utf8' }).trim();
+  } catch {
+    return 'nogit';
+  }
+}
 
 const rows = JSON.parse(readFileSync('bench/raw/observation-results.json', 'utf8'));
 const TOOLS = ['playwright', 'devtools', 'reticle', 'agentbrowser', 'playwrightcli'];
@@ -86,6 +108,8 @@ for (const s of scenarios) {
 
 const out = {
   generated_from: 'bench/raw/observation-results.json',
+  git_sha: headSha(),
+  generated_at: new Date().toISOString(),
   layer: 'A (observation cost)',
   total_cells: rows.length,
   measured_cells: measured.length,
