@@ -120,6 +120,19 @@ describe('focus is a property of a line, not a line arriving or leaving', () => 
     });
   });
 
+  it('does not claim focus moved when the focused element merely changed', () => {
+    // Found by driving, not by these tests: typing into a focused textbox rewrites its `[value=...]`,
+    // and comparing the RENDERED LINES made that read as focus moving from the element to itself.
+    // Focus identity is the element, so the comparison is on the ref and the line is only display.
+    const result = deltaOf(
+      '- textbox "Email" (ref=e3) [value="before@x.dev"] [focused]',
+      '- textbox "Email" (ref=e3) [value="after@x.dev"] [focused]',
+    );
+    expect(result['focusChanged']).toBeUndefined();
+    // The value change is still a real delta and must not be swallowed with it.
+    expect(delta(result)['added']).toEqual(['- textbox "Email" (ref=e3) [value="after@x.dev"]']);
+  });
+
   it('says nothing about focus when focus did not move', () => {
     const result = deltaOf(
       '- button "One" (ref=e1) [focused]',

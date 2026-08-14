@@ -108,11 +108,22 @@ function diffKeyed(prev: DeltaLine[], next: DeltaLine[]): { added: string[]; rem
   return { removed, added };
 }
 
-/** Where focus sits now, as the agent would read the line. Read from the raw tree so a line the diff
- *  filters out cannot silently swallow the focus report. */
-function focusedLine(tree: string): string | undefined {
+/**
+ * Where focus sits now: the line to show, plus the identity to compare it BY.
+ *
+ * These have to be two different things. Comparing the rendered lines said focus had moved whenever
+ * the focused element merely changed — typing into a focused textbox rewrites its `[value=...]`, so
+ * `from` and `to` came back naming the same element with different text. Focus identity is the
+ * ELEMENT, so the comparison is on the ref, and the line is only what gets displayed. Where there is
+ * no ref to compare (a non-interactive line), the ref-stripped key stands in.
+ *
+ * Read from the raw tree so a line the diff filters out cannot silently swallow the focus report.
+ */
+function focusedLine(tree: string): { id: string; text: string } | undefined {
   const focused = tree.split('\n').find((line) => isFocused(line));
-  return focused === undefined ? undefined : withoutFocus(focused).trim();
+  if (focused === undefined) return undefined;
+  const text = withoutFocus(focused).trim();
+  return { id: REF_MARKER.exec(focused)?.[0]?.trim() ?? deltaKey(focused), text };
 }
 
 export const SnapshotDeltaMode = {
@@ -149,11 +160,11 @@ export function snapshotDelta(prevTree: string | undefined, nextTree: string): D
   // Reported only on a MOVE. Repeating "focus is still here" every turn is the noise the delta exists
   // to remove, and an absent field is how the agent knows nothing happened.
   const focusChanged: FocusChange | undefined =
-    before === now
+    before?.id === now?.id
       ? undefined
       : {
-          ...(before === undefined ? {} : { from: before }),
-          ...(now === undefined ? {} : { to: now }),
+          ...(before === undefined ? {} : { from: before.text }),
+          ...(now === undefined ? {} : { to: now.text }),
         };
   const moved = focusChanged === undefined ? {} : { focusChanged };
   if (0 === added.length && 0 === removed.length) {
