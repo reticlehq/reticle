@@ -14,12 +14,7 @@ import {
 } from '../data/seed.js';
 
 export type ViewId =
-  | 'overview'
-  | 'deployments'
-  | 'compose'
-  | 'diagnostics'
-  | 'hostile'
-  | 'enterprise';
+  'overview' | 'deployments' | 'compose' | 'diagnostics' | 'hostile' | 'enterprise';
 export type EnvFilter = Env | 'all';
 
 export interface Toast {

@@ -24,8 +24,7 @@ const TMP_EXT = '.tmp';
 
 /** Never-throws read result (mirrors ReadProjectResult). */
 export type ReadRunResult =
-  | { ok: true; run: ReticleVerificationRun }
-  | { ok: false; reason: RunReadError };
+  { ok: true; run: ReticleVerificationRun } | { ok: false; reason: RunReadError };
 
 /** Optional retention overrides (defaults to the protocol caps). Injectable so tests prune fast. */
 interface RunStoreOptions {

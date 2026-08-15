@@ -28,15 +28,12 @@ function rowCount(): number {
 }
 
 const state = {
-  rows: Array.from(
-    { length: rowCount() },
-    (_, i): Row => ({
-      id: i,
-      name: `service-${String(i).padStart(4, '0')}`,
-      env: ENVS[i % ENVS.length] ?? 'dev',
-      approved: false,
-    }),
-  ),
+  rows: Array.from({ length: rowCount() }, (_, i): Row => ({
+    id: i,
+    name: `service-${String(i).padStart(4, '0')}`,
+    env: ENVS[i % ENVS.length] ?? 'dev',
+    approved: false,
+  })),
   approvedCount: 0,
 };
 

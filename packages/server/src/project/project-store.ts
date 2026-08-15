@@ -17,8 +17,7 @@ const JSON_INDENT = 2;
 
 /** Never-throws read result (mirrors ReadContractResult). */
 export type ReadProjectResult =
-  | { ok: true; file: ProjectFile }
-  | { ok: false; reason: ProjectReadError };
+  { ok: true; file: ProjectFile } | { ok: false; reason: ProjectReadError };
 
 const EMPTY_PROJECT: ProjectFile = { version: PROJECT_FILE_VERSION, runs: [] };
 

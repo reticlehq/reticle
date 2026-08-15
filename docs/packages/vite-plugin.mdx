@@ -42,9 +42,7 @@ A virtual module at `/@reticle-connect`, added to the HTML, whose contents are:
 ```ts
 import { reticle, install } from '@reticlehq/react';
 install();
-reticle.connect({
-  /* resolved args */
-});
+reticle.connect({/* resolved args */});
 ```
 
 Plus a dynamic import of your dev module if one exists. It looks for `src/reticle-dev.ts`, `.js`, `.tsx` or `.jsx`, in that order, and leaves the file alone if you have one: that file is yours to edit.

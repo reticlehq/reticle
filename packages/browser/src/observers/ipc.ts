@@ -138,8 +138,7 @@ interface IpcOptions {
 
 export function installIpc(emit: Emit, options: IpcOptions = {}): Teardown {
   const channel = (window as unknown as Record<string, unknown>)[RETICLE_IPC_GLOBAL] as
-    | PreloadChannel
-    | undefined;
+    PreloadChannel | undefined;
   if (typeof channel?.subscribe !== 'function') {
     // No shim — but on Electron that is not "nothing to observe", it is "everything unobserved".
     // Tauri needs no shim (its invoke travels as a fetch) and a web page has no IPC at all, so only
