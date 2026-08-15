@@ -42,4 +42,4 @@ windows = { version = "0.61", features = [
 [target.'cfg(any(target_os = "linux", target_os = "dragonfly", target_os = "freebsd", target_os = "openbsd", target_os = "netbsd"))'.dependencies]
 webkit2gtk = { version = "2", features = ["v2_40"] }
 # The version webkit2gtk itself resolves, so `snapshot` hands back the same `Surface` type.
-cairo-rs = { version = "0.18", features = ["png"] }
+cairo-rs = { version = "0.22", features = ["png"] }
