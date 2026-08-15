@@ -114,8 +114,7 @@ export function installRenderMeter(): void {
     // react-dom evaluates. The pre-hook runs during parse instead and has been counting since then —
     // so the honest thing is to take its numbers rather than start from zero and report a quiet page.
     const pre = (globalThis as Record<string, unknown>)[RETICLE_RENDER_PREHOOK] as
-      | { commits: number; sinks: ((...args: unknown[]) => void)[] }
-      | undefined;
+      { commits: number; sinks: ((...args: unknown[]) => void)[] } | undefined;
     if (pre !== undefined) {
       seedCommits(pre.commits);
       pre.sinks.push(onReactCommit);

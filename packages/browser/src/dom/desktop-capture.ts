@@ -70,8 +70,7 @@ const TAURI_INTERNALS_GLOBAL = '__TAURI_INTERNALS__';
  */
 function tauriCapture(): (() => Promise<string | null>) | undefined {
   const internals = (window as unknown as Record<string, unknown>)[TAURI_INTERNALS_GLOBAL] as
-    | TauriInternals
-    | undefined;
+    TauriInternals | undefined;
   if (typeof internals?.invoke !== 'function') return undefined;
   const invoke = internals.invoke.bind(internals);
   return async (fullPage?: boolean) => {
@@ -135,8 +134,7 @@ async function withReticleUiHidden<T>(capture: () => Promise<T>): Promise<T> {
 
 export async function captureDesktopWindow(fullPage = false): Promise<CaptureResult> {
   const channel = (window as unknown as Record<string, unknown>)[RETICLE_IPC_GLOBAL] as
-    | CaptureChannel
-    | undefined;
+    CaptureChannel | undefined;
   const capture = 'function' === typeof channel?.capture ? channel.capture : tauriCapture();
   if (capture === undefined) {
     return { ok: false, reason: 'no desktop capture helper installed' };

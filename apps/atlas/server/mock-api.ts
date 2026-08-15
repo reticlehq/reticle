@@ -73,19 +73,14 @@ function buildShipments(): Shipment[] {
       // is a whole bug class, and the client is free to get it wrong.
       declaredValueMinor: Math.floor(10_000 + rand() * 5_000_000),
       currency: (['INR', 'USD', 'EUR'] as const)[Math.floor(rand() * 3)] ?? 'INR',
-      legs: Array.from(
-        { length: legCount },
-        (_l, j): Leg => ({
-          id: `leg_${String(i)}_${String(j)}`,
-          from: j === 0 ? origin : (CITIES[Math.floor(rand() * CITIES.length)] ?? 'Pune'),
-          to:
-            j === legCount - 1
-              ? destination
-              : (CITIES[Math.floor(rand() * CITIES.length)] ?? 'Pune'),
-          status: 'pending',
-          etaMinutes: Math.floor(30 + rand() * 4000),
-        }),
-      ),
+      legs: Array.from({ length: legCount }, (_l, j): Leg => ({
+        id: `leg_${String(i)}_${String(j)}`,
+        from: j === 0 ? origin : (CITIES[Math.floor(rand() * CITIES.length)] ?? 'Pune'),
+        to:
+          j === legCount - 1 ? destination : (CITIES[Math.floor(rand() * CITIES.length)] ?? 'Pune'),
+        status: 'pending',
+        etaMinutes: Math.floor(30 + rand() * 4000),
+      })),
       updatedAt: Date.now() - Math.floor(rand() * 86_400_000),
       version: 1,
     };

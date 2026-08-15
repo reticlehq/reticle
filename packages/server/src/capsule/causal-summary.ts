@@ -78,11 +78,7 @@ export const MAX_SUMMARY_ENTRIES = 20;
 
 /** The lists that are capped, named so `elided` can say which one lost entries. */
 type CappedList =
-  | 'statePathsChanged'
-  | 'storageKeysChanged'
-  | 'stateDiffs'
-  | 'storageDiffs'
-  | 'signals';
+  'statePathsChanged' | 'storageKeysChanged' | 'stateDiffs' | 'storageDiffs' | 'signals';
 
 /** Trim one list to the cap and report the loss. Order is arrival order, so the head is the earliest. */
 function cap<T>(list: T[], name: CappedList, elided: Partial<Record<CappedList, number>>): T[] {

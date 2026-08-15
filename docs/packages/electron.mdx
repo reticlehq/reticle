@@ -62,9 +62,7 @@ It then exposes `window.__reticleIpc` through the context bridge, with three mem
 ```js
 const { installReticleCapture } = require('@reticlehq/electron/main');
 
-const win = new BrowserWindow({
-  /* ... */
-});
+const win = new BrowserWindow({/* ... */});
 installReticleCapture(win);
 ```
 

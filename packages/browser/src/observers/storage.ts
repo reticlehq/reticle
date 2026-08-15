@@ -97,8 +97,7 @@ export function installStorage(emit: Emit): Teardown {
   const proto = Storage.prototype;
   const origSet = Object.getOwnPropertyDescriptor(proto, 'setItem')?.value as SetItemFn | undefined;
   const origRemove = Object.getOwnPropertyDescriptor(proto, 'removeItem')?.value as
-    | RemoveItemFn
-    | undefined;
+    RemoveItemFn | undefined;
   const origClear = Object.getOwnPropertyDescriptor(proto, 'clear')?.value as ClearFn | undefined;
   if (origSet === undefined || origRemove === undefined || origClear === undefined) {
     return () => undefined;
