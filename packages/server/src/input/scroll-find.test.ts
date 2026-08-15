@@ -86,4 +86,40 @@ describe('scrollToFind', () => {
     expect(scrollArgs.every((a) => 'e9' === (a as { ref?: string }).ref)).toBe(true);
     expect(scrollArgs.length).toBe(2);
   });
+
+  it('7: notes that the document would not scroll when no container is given', async () => {
+    const { session } = fakeSession({ scrolledFalseAt: 1 });
+    const r = await scrollToFind(session, Q, { maxScrolls: 10 });
+    expect(r.found).toBe(false);
+    expect(r.exhausted).toBe(true);
+    expect(r.note).toContain('scroll container');
+  });
+
+  it('8: keeps the note off when a container is explicitly given', async () => {
+    const { session } = fakeSession({ scrolledFalseAt: 1 });
+    const r = await scrollToFind(session, { ...Q, container: 'e9' }, { maxScrolls: 10 });
+    expect(r.found).toBe(false);
+    expect(r.exhausted).toBe(true);
+    expect(r.note).toBeUndefined();
+  });
+
+  it('9: keeps the note off on genuine end-of-scroll exhaustion', async () => {
+    const { session } = fakeSession({ atEndAtScroll: 2 });
+    const r = await scrollToFind(session, Q, { maxScrolls: 10 });
+    expect(r.found).toBe(false);
+    expect(r.exhausted).toBe(true);
+    expect(r.note).toBeUndefined();
+  });
+
+  it('10: notes when bisection jumps land on a non-scrolling document', async () => {
+    const { session } = fakeSession({ scrolledFalseAt: 1 });
+    const r = await scrollToFind(
+      session,
+      { ...Q, targetIndex: 500, totalCount: 1000 },
+      { maxScrolls: 10 },
+    );
+    expect(r.found).toBe(false);
+    expect(r.exhausted).toBe(true);
+    expect(r.note).toContain('scroll container');
+  });
 });

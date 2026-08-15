@@ -62,6 +62,12 @@ export const SCROLL_TOOLS: ToolDef[] = [
       element: z.object({ ref: z.string(), role: z.string(), name: z.string() }).optional(),
       scrolls: z.number(),
       exhausted: z.boolean(),
+      note: z
+        .string()
+        .optional()
+        .describe(
+          'Present only when informative: the document itself did not scroll, so the target may be inside a list with its own scroll container — pass its ref as `container`.',
+        ),
     },
     handler: (deps: ToolDeps, args) => {
       const session = deps.sessions.resolve(asString(args['sessionId']));

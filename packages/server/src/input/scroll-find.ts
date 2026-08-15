@@ -32,6 +32,12 @@ export interface ScrollFindResult {
    * help). false ⇒ stopped at the maxScrolls budget (more rows may exist further down).
    */
   exhausted: boolean;
+  /**
+   * Present only when informative: the document itself did not scroll (nothing scrollable), so the
+   * target is likely inside a list with its own scroll container. A genuine exhaustion — reaching
+   * the real end of a scrolled container — stays quiet.
+   */
+  note?: string;
 }
 
 /** One query for the target; returns the first matching element descriptor or undefined. */
@@ -47,6 +53,20 @@ async function queryFirst(
   const elements = asRecord(res.result)['elements'];
   if (Array.isArray(elements) && elements.length > 0) return asRecord(elements[0]);
   return undefined;
+}
+
+/**
+ * A note attached to `{ found: false, exhausted: true }` only when the failure is
+ * actually informative: the document itself had nothing to scroll (scrolled:false with
+ * no explicit container), so the target is likely inside a list with its own scroll
+ * container. Reaching the genuine end of a scrolled container stays quiet.
+ */
+function exhaustNote(q: ScrollFindQuery, data: Record<string, unknown>): { note?: string } {
+  if (q.container !== undefined) return {};
+  if (false !== data['scrolled']) return {};
+  return {
+    note: "The document did not scroll — the target may be inside a list with its own scroll container. Pass that container's ref as `container`.",
+  };
 }
 
 /**
@@ -80,7 +100,7 @@ export async function scrollToFind(
     // Fall through to linear refinement from current position (already near the target).
     const data = asRecord(sr.result);
     if (true === data['atEnd'] || false === data['scrolled']) {
-      return { found: false, scrolls, exhausted: true };
+      return { found: false, scrolls, exhausted: true, ...exhaustNote(q, data) };
     }
   }
 
@@ -97,7 +117,7 @@ export async function scrollToFind(
 
     // Reached the bottom or the container would not move — no more rows to reveal.
     if (true === data['atEnd'] || false === data['scrolled']) {
-      return { found: false, scrolls, exhausted: true };
+      return { found: false, scrolls, exhausted: true, ...exhaustNote(q, data) };
     }
   }
   return { found: false, scrolls, exhausted: false }; // spent the budget; more may lie further down
