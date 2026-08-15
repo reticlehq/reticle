@@ -34,42 +34,58 @@ afterEach(async () => {
 const round = (outcomes: Record<string, ReplayStatus>) =>
   Object.entries(outcomes).map(([name, status]) => ({ replay: { name, status } }));
 
-describe('recordSuiteFlakes', () => {
-  it('reports a flow that has both passed and failed on unchanged code', async () => {
-    let flaky: readonly string[] = [];
-    for (const status of [
-      ReplayStatus.OK,
-      ReplayStatus.ERROR,
-      ReplayStatus.OK,
-      ReplayStatus.OK,
-      ReplayStatus.ERROR,
-    ]) {
-      flaky = await recordSuiteFlakes(fs, root, round({ checkout: status }));
-    }
-    expect(flaky).toContain('checkout');
-  });
+/**
+ * A BOUND, not a measurement. Each `recordSuiteFlakes` call rewrites the ledger on the real
+ * filesystem, and a batch round does it once per flow — so a five-round loop over a three-flow suite
+ * is fifteen writes, not five iterations. That is the shape that timed out at vitest's 5 s default
+ * on a Windows runner in `project-tools.test.ts`, and nothing here claims the code is fast.
+ */
+const SUITE_LEDGER_TIMEOUT_MS = 30_000;
 
-  it('records EVERY flow in a batch, not just the first or last', async () => {
-    // The parallel path records a whole round at once. A loop that broke early, or overwrote, would
-    // still look right for a one-flow suite.
-    let flaky: readonly string[] = [];
-    for (const s of [
-      ReplayStatus.OK,
-      ReplayStatus.ERROR,
-      ReplayStatus.OK,
-      ReplayStatus.OK,
-      ReplayStatus.ERROR,
-    ]) {
-      flaky = await recordSuiteFlakes(
-        fs,
-        root,
-        round({ login: s, steady: ReplayStatus.OK, search: s }),
-      );
-    }
-    expect(flaky).toContain('login');
-    expect(flaky).toContain('search');
-    expect(flaky, 'a stable flow in the same batch must stay clean').not.toContain('steady');
-  });
+describe('recordSuiteFlakes', () => {
+  it(
+    'reports a flow that has both passed and failed on unchanged code',
+    async () => {
+      let flaky: readonly string[] = [];
+      for (const status of [
+        ReplayStatus.OK,
+        ReplayStatus.ERROR,
+        ReplayStatus.OK,
+        ReplayStatus.OK,
+        ReplayStatus.ERROR,
+      ]) {
+        flaky = await recordSuiteFlakes(fs, root, round({ checkout: status }));
+      }
+      expect(flaky).toContain('checkout');
+    },
+    SUITE_LEDGER_TIMEOUT_MS,
+  );
+
+  it(
+    'records EVERY flow in a batch, not just the first or last',
+    async () => {
+      // The parallel path records a whole round at once. A loop that broke early, or overwrote, would
+      // still look right for a one-flow suite.
+      let flaky: readonly string[] = [];
+      for (const s of [
+        ReplayStatus.OK,
+        ReplayStatus.ERROR,
+        ReplayStatus.OK,
+        ReplayStatus.OK,
+        ReplayStatus.ERROR,
+      ]) {
+        flaky = await recordSuiteFlakes(
+          fs,
+          root,
+          round({ login: s, steady: ReplayStatus.OK, search: s }),
+        );
+      }
+      expect(flaky).toContain('login');
+      expect(flaky).toContain('search');
+      expect(flaky, 'a stable flow in the same batch must stay clean').not.toContain('steady');
+    },
+    SUITE_LEDGER_TIMEOUT_MS,
+  );
 
   it('says nothing until the ledger has seen enough runs to be sure', async () => {
     await recordSuiteFlakes(fs, root, round({ checkout: ReplayStatus.OK }));
@@ -77,29 +93,37 @@ describe('recordSuiteFlakes', () => {
     expect(early, 'a verdict on two runs is a guess, not a measurement').toEqual([]);
   });
 
-  it('does not confuse a consistently BROKEN flow with a flaky one', async () => {
-    let flaky: readonly string[] = [];
-    for (let i = 0; i < 6; i += 1) {
-      flaky = await recordSuiteFlakes(fs, root, round({ broken: ReplayStatus.ERROR }));
-    }
-    expect(flaky, 'always-failing is a regression to fix, not a ghost to chase').not.toContain(
-      'broken',
-    );
-  });
+  it(
+    'does not confuse a consistently BROKEN flow with a flaky one',
+    async () => {
+      let flaky: readonly string[] = [];
+      for (let i = 0; i < 6; i += 1) {
+        flaky = await recordSuiteFlakes(fs, root, round({ broken: ReplayStatus.ERROR }));
+      }
+      expect(flaky, 'always-failing is a regression to fix, not a ghost to chase').not.toContain(
+        'broken',
+      );
+    },
+    SUITE_LEDGER_TIMEOUT_MS,
+  );
 
-  it('counts DRIFT as a failure, like ERROR', async () => {
-    let flaky: readonly string[] = [];
-    for (const s of [
-      ReplayStatus.OK,
-      ReplayStatus.DRIFT,
-      ReplayStatus.OK,
-      ReplayStatus.OK,
-      ReplayStatus.DRIFT,
-    ]) {
-      flaky = await recordSuiteFlakes(fs, root, round({ wobbly: s }));
-    }
-    expect(flaky).toContain('wobbly');
-  });
+  it(
+    'counts DRIFT as a failure, like ERROR',
+    async () => {
+      let flaky: readonly string[] = [];
+      for (const s of [
+        ReplayStatus.OK,
+        ReplayStatus.DRIFT,
+        ReplayStatus.OK,
+        ReplayStatus.OK,
+        ReplayStatus.DRIFT,
+      ]) {
+        flaky = await recordSuiteFlakes(fs, root, round({ wobbly: s }));
+      }
+      expect(flaky).toContain('wobbly');
+    },
+    SUITE_LEDGER_TIMEOUT_MS,
+  );
 
   it('never lets a ledger failure break the verdict', async () => {
     // A flake ledger is memory, not a gate. A full disk must not turn a working verify into an error.

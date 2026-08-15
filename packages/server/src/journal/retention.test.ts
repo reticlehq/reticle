@@ -22,6 +22,17 @@ describe('selectPrunable', () => {
   });
 });
 
+/**
+ * A BOUND, not a measurement: nothing below claims the code is fast.
+ *
+ * The test that follows creates directories and writes files sequentially through the real
+ * filesystem inside a loop, and sleeps 5 ms per iteration on purpose to stagger mtimes. That is
+ * milliseconds on macOS and Linux and much slower on a Windows runner, so vitest's 5 s default is a
+ * statement about the machine — the exact shape CLAUDE.md forbids asserting on. A generous ceiling
+ * cannot make a broken test pass; the `['s2', 's3']` assertion still has to hold.
+ */
+const SESSION_PRUNE_TIMEOUT_MS = 30_000;
+
 describe('pruneSessions', () => {
   let root: string;
   let fs: FileSystemPort;
@@ -35,18 +46,22 @@ describe('pruneSessions', () => {
     await removeTempDir(join(root, '..'));
   });
 
-  it('keeps only the retention-most-recent session dirs on disk', async () => {
-    const sessions = join(root, 'sessions');
-    for (const name of ['s1', 's2', 's3']) {
-      await mkdir(join(sessions, name), { recursive: true });
-      await writeFile(join(sessions, name, 'events.jsonl'), '', 'utf8');
-      // stagger mtimes so ordering is deterministic
-      await new Promise((r) => setTimeout(r, 5));
-    }
-    await pruneSessions(fs, root, 2);
-    const remaining = (await readdir(sessions)).sort();
-    expect(remaining).toEqual(['s2', 's3']);
-  });
+  it(
+    'keeps only the retention-most-recent session dirs on disk',
+    async () => {
+      const sessions = join(root, 'sessions');
+      for (const name of ['s1', 's2', 's3']) {
+        await mkdir(join(sessions, name), { recursive: true });
+        await writeFile(join(sessions, name, 'events.jsonl'), '', 'utf8');
+        // stagger mtimes so ordering is deterministic
+        await new Promise((r) => setTimeout(r, 5));
+      }
+      await pruneSessions(fs, root, 2);
+      const remaining = (await readdir(sessions)).sort();
+      expect(remaining).toEqual(['s2', 's3']);
+    },
+    SESSION_PRUNE_TIMEOUT_MS,
+  );
 
   it('never throws when there is no sessions dir', async () => {
     await expect(pruneSessions(fs, root, 2)).resolves.toBeUndefined();

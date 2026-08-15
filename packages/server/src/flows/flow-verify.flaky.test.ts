@@ -20,6 +20,14 @@ import { ReticleTool } from '../tools/tool-names.js';
  * These drive the ledger the way the tool does — record every replay outcome, then ask what is
  * intermittent — so the contract is pinned even though the handler itself needs a live session.
  */
+/**
+ * A BOUND, not a measurement. `verifyRound` records every outcome through `FlakeStore`, which reads
+ * and rewrites the ledger on the real filesystem per call, and the tests below drive it in a loop.
+ * Six rounds is not a big number; twelve syscalls on a Windows runner is, and vitest's 5 s default
+ * would then be reporting the runner rather than the ledger's verdict.
+ */
+const LEDGER_ROUND_TIMEOUT_MS = 30_000;
+
 describe('flow_verify feeds and reads the flake ledger', () => {
   let root: string;
   const fs = createNodeFileSystem();
@@ -43,52 +51,69 @@ describe('flow_verify feeds and reads the flake ledger', () => {
     return store.flakyFlows();
   }
 
-  it('says nothing until the ledger has seen enough runs to be sure', async () => {
-    const store = new FlakeStore(fs, root);
-    // Two runs, one each way — genuinely intermittent, but calling it flaky off two samples is noise.
-    await verifyRound(store, { checkout: ReplayStatus.OK });
-    const early = await verifyRound(store, { checkout: ReplayStatus.ERROR });
-    expect(early, 'a verdict on two runs is a guess, not a measurement').toEqual([]);
-  });
+  it(
+    'says nothing until the ledger has seen enough runs to be sure',
+    async () => {
+      const store = new FlakeStore(fs, root);
+      // Two runs, one each way — genuinely intermittent, but calling it flaky off two samples is noise.
+      await verifyRound(store, { checkout: ReplayStatus.OK });
+      const early = await verifyRound(store, { checkout: ReplayStatus.ERROR });
+      expect(early, 'a verdict on two runs is a guess, not a measurement').toEqual([]);
+    },
+    LEDGER_ROUND_TIMEOUT_MS,
+  );
 
-  it('reports a flow that has both passed and failed on unchanged code', async () => {
-    const store = new FlakeStore(fs, root);
-    const rounds = [
-      ReplayStatus.OK,
-      ReplayStatus.ERROR,
-      ReplayStatus.OK,
-      ReplayStatus.OK,
-      ReplayStatus.ERROR,
-    ];
-    let flaky: string[] = [];
-    for (const status of rounds) flaky = await verifyRound(store, { checkout: status });
-    expect(flaky).toContain('checkout');
-  });
+  it(
+    'reports a flow that has both passed and failed on unchanged code',
+    async () => {
+      const store = new FlakeStore(fs, root);
+      const rounds = [
+        ReplayStatus.OK,
+        ReplayStatus.ERROR,
+        ReplayStatus.OK,
+        ReplayStatus.OK,
+        ReplayStatus.ERROR,
+      ];
+      let flaky: string[] = [];
+      for (const status of rounds) flaky = await verifyRound(store, { checkout: status });
+      expect(flaky).toContain('checkout');
+    },
+    LEDGER_ROUND_TIMEOUT_MS,
+  );
 
-  it('does not confuse a consistently BROKEN flow with a flaky one', async () => {
-    // The distinction the field exists for: a flow that always fails is a regression to fix, not a
-    // ghost to chase. Reporting it as flaky would send the agent looking for nondeterminism.
-    const store = new FlakeStore(fs, root);
-    let flaky: string[] = [];
-    for (let i = 0; i < 6; i += 1) flaky = await verifyRound(store, { broken: ReplayStatus.ERROR });
-    expect(flaky).not.toContain('broken');
-  });
+  it(
+    'does not confuse a consistently BROKEN flow with a flaky one',
+    async () => {
+      // The distinction the field exists for: a flow that always fails is a regression to fix, not a
+      // ghost to chase. Reporting it as flaky would send the agent looking for nondeterminism.
+      const store = new FlakeStore(fs, root);
+      let flaky: string[] = [];
+      for (let i = 0; i < 6; i += 1)
+        flaky = await verifyRound(store, { broken: ReplayStatus.ERROR });
+      expect(flaky).not.toContain('broken');
+    },
+    LEDGER_ROUND_TIMEOUT_MS,
+  );
 
-  it('keeps per-flow ledgers separate within one suite run', async () => {
-    const store = new FlakeStore(fs, root);
-    let flaky: string[] = [];
-    for (const status of [
-      ReplayStatus.OK,
-      ReplayStatus.ERROR,
-      ReplayStatus.OK,
-      ReplayStatus.OK,
-      ReplayStatus.ERROR,
-    ]) {
-      flaky = await verifyRound(store, { wobbly: status, steady: ReplayStatus.OK });
-    }
-    expect(flaky).toContain('wobbly');
-    expect(flaky, 'a stable flow in the same suite must stay clean').not.toContain('steady');
-  });
+  it(
+    'keeps per-flow ledgers separate within one suite run',
+    async () => {
+      const store = new FlakeStore(fs, root);
+      let flaky: string[] = [];
+      for (const status of [
+        ReplayStatus.OK,
+        ReplayStatus.ERROR,
+        ReplayStatus.OK,
+        ReplayStatus.OK,
+        ReplayStatus.ERROR,
+      ]) {
+        flaky = await verifyRound(store, { wobbly: status, steady: ReplayStatus.OK });
+      }
+      expect(flaky).toContain('wobbly');
+      expect(flaky, 'a stable flow in the same suite must stay clean').not.toContain('steady');
+    },
+    LEDGER_ROUND_TIMEOUT_MS,
+  );
 
   it('never lets a ledger failure break the verdict', async () => {
     // The handler wraps both halves in .catch() on purpose: a flake ledger is memory, not a gate.

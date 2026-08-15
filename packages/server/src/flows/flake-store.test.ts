@@ -6,6 +6,14 @@ import { join } from 'node:path';
 import { createNodeFileSystem, type FileSystemPort } from '../project/fs-port.js';
 import { FlakeStore } from './flake-store.js';
 
+/**
+ * A BOUND, not a measurement. Every `store.record()` reads and rewrites `flake.json` on the real
+ * filesystem, so a five-iteration loop is ten syscalls, not five cheap calls — the cost is what is
+ * inside the loop, not the iteration count. Cheap on macOS and Linux, much slower on a Windows
+ * runner, and vitest's 5 s default would then report the runner rather than the ledger.
+ */
+const FLAKE_LEDGER_IO_TIMEOUT_MS = 30_000;
+
 describe('FlakeStore', () => {
   let root: string;
   let fs: FileSystemPort;
@@ -19,17 +27,25 @@ describe('FlakeStore', () => {
     await removeTempDir(join(root, '..'));
   });
 
-  it('accrues outcomes and quarantines a flow once it is intermittently failing', async () => {
-    const store = new FlakeStore(fs, root);
-    for (const passed of [true, false, true, true, false]) await store.record('checkout', passed);
-    expect(await store.flakyFlows()).toEqual(['checkout']);
-  });
+  it(
+    'accrues outcomes and quarantines a flow once it is intermittently failing',
+    async () => {
+      const store = new FlakeStore(fs, root);
+      for (const passed of [true, false, true, true, false]) await store.record('checkout', passed);
+      expect(await store.flakyFlows()).toEqual(['checkout']);
+    },
+    FLAKE_LEDGER_IO_TIMEOUT_MS,
+  );
 
-  it('does not quarantine a consistently passing flow', async () => {
-    const store = new FlakeStore(fs, root);
-    for (let i = 0; i < 5; i += 1) await store.record('login', true);
-    expect(await store.flakyFlows()).toEqual([]);
-  });
+  it(
+    'does not quarantine a consistently passing flow',
+    async () => {
+      const store = new FlakeStore(fs, root);
+      for (let i = 0; i < 5; i += 1) await store.record('login', true);
+      expect(await store.flakyFlows()).toEqual([]);
+    },
+    FLAKE_LEDGER_IO_TIMEOUT_MS,
+  );
 
   it('degrades to an empty ledger on a malformed or wrong-version file', async () => {
     await mkdir(root, { recursive: true });
@@ -45,32 +61,48 @@ describe('FlakeStore', () => {
      * failure was intermittent. A flake and a regression demand opposite responses: one is quarantined,
      * the other is chased. An agent that cannot tell them apart does the wrong one half the time.
      */
-    it('reports a flow that passed and then failed on unchanged code', async () => {
-      // Five runs is the deliberate floor (DEFAULT_MIN_FLAKE_RUNS): calling a flow flaky off two
-      // samples would quarantine real regressions, which is the more expensive mistake.
-      const store = new FlakeStore(fs, root);
-      for (const passed of [true, false, true, true, false]) {
-        await store.record('checkout', passed);
-      }
-      expect(await store.flakyFlows()).toContain('checkout');
-    });
+    it(
+      'reports a flow that passed and then failed on unchanged code',
+      async () => {
+        // Five runs is the deliberate floor (DEFAULT_MIN_FLAKE_RUNS): calling a flow flaky off two
+        // samples would quarantine real regressions, which is the more expensive mistake.
+        const store = new FlakeStore(fs, root);
+        for (const passed of [true, false, true, true, false]) {
+          await store.record('checkout', passed);
+        }
+        expect(await store.flakyFlows()).toContain('checkout');
+      },
+      FLAKE_LEDGER_IO_TIMEOUT_MS,
+    );
 
-    it('needs enough runs before judging — three samples is not evidence', async () => {
-      const store = new FlakeStore(fs, root);
-      for (const passed of [true, false, true]) await store.record('early', passed);
-      expect(await store.flakyFlows()).not.toContain('early');
-    });
+    it(
+      'needs enough runs before judging — three samples is not evidence',
+      async () => {
+        const store = new FlakeStore(fs, root);
+        for (const passed of [true, false, true]) await store.record('early', passed);
+        expect(await store.flakyFlows()).not.toContain('early');
+      },
+      FLAKE_LEDGER_IO_TIMEOUT_MS,
+    );
 
-    it('does NOT report a flow that always fails — that is a regression, not a flake', async () => {
-      const store = new FlakeStore(fs, root);
-      for (let i = 0; i < 5; i += 1) await store.record('broken', false);
-      expect(await store.flakyFlows()).not.toContain('broken');
-    });
+    it(
+      'does NOT report a flow that always fails — that is a regression, not a flake',
+      async () => {
+        const store = new FlakeStore(fs, root);
+        for (let i = 0; i < 5; i += 1) await store.record('broken', false);
+        expect(await store.flakyFlows()).not.toContain('broken');
+      },
+      FLAKE_LEDGER_IO_TIMEOUT_MS,
+    );
 
-    it('does NOT report a flow that always passes', async () => {
-      const store = new FlakeStore(fs, root);
-      for (let i = 0; i < 5; i += 1) await store.record('stable', true);
-      expect(await store.flakyFlows()).not.toContain('stable');
-    });
+    it(
+      'does NOT report a flow that always passes',
+      async () => {
+        const store = new FlakeStore(fs, root);
+        for (let i = 0; i < 5; i += 1) await store.record('stable', true);
+        expect(await store.flakyFlows()).not.toContain('stable');
+      },
+      FLAKE_LEDGER_IO_TIMEOUT_MS,
+    );
   });
 });

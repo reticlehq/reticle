@@ -26,6 +26,13 @@ const baseInput = (runId: string): VerificationRunInput => ({
 const make = (runId: string, at: number): ReticleVerificationRun =>
   buildVerificationRun(baseInput(runId), () => at);
 
+/**
+ * A BOUND, not a measurement. The retention test writes five runs sequentially through the real
+ * filesystem, and each write is an atomic publish — a temp file plus a rename — so the cost is two
+ * syscalls per iteration rather than the five the loop counts.
+ */
+const RUN_WRITE_TIMEOUT_MS = 30_000;
+
 describe('RunStore — temp-dir filesystem, never touches the repo', () => {
   let root: string;
   let fs: FileSystemPort;
@@ -89,12 +96,16 @@ describe('RunStore — temp-dir filesystem, never touches the repo', () => {
     await expect(store.write(evil)).rejects.toThrow(/unsafe runId/);
   });
 
-  it('prunes oldest runs beyond the retention cap, keeping the newest', async () => {
-    const capped = new RunStore(fs, root, { retention: 3, slack: 1 });
-    for (let i = 1; i <= 5; i += 1) await capped.write(make(`run-${i}`, i * 1000));
-    const ids = (await capped.list()).sort();
-    expect(ids).toEqual(['run-3', 'run-4', 'run-5']); // oldest two pruned
-  });
+  it(
+    'prunes oldest runs beyond the retention cap, keeping the newest',
+    async () => {
+      const capped = new RunStore(fs, root, { retention: 3, slack: 1 });
+      for (let i = 1; i <= 5; i += 1) await capped.write(make(`run-${i}`, i * 1000));
+      const ids = (await capped.list()).sort();
+      expect(ids).toEqual(['run-3', 'run-4', 'run-5']); // oldest two pruned
+    },
+    RUN_WRITE_TIMEOUT_MS,
+  );
 
   it('leaves no .tmp file after a write (atomic publish)', async () => {
     await store.write(make('run-x', 1));

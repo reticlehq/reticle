@@ -25,6 +25,16 @@ function program(name: string, steps: RecordedStep[]): CompiledProgram {
   return { name, version: 1, steps };
 }
 
+/**
+ * A BOUND, not a measurement — and the lightest of the six the IO-in-a-loop guard flags, which is
+ * worth saying rather than leaving for the next reader to wonder about. Test 9's loop runs twice and
+ * both saves are rejected on the name before anything is written, so the LOOP is not what costs
+ * here. What costs is the block around it: every valid test round-trips a flow through a real temp
+ * directory. The bound is cheap, generous, and cannot make a broken test pass; the alternative is a
+ * file that only satisfies the guard by accident the day someone adds a third iteration that writes.
+ */
+const FLOW_ROUND_TRIP_TIMEOUT_MS = 30_000;
+
 describe('FlowStore — temp-dir fs, never touches the repo', () => {
   let root: string;
   let fs: FileSystemPort;
@@ -213,12 +223,16 @@ describe('FlowStore — temp-dir fs, never touches the repo', () => {
     expect(await fs.exists(join(root, '..', 'evil.json'))).toBe(false);
   });
 
-  it('9: save rejects an absolute / slashed name', async () => {
-    for (const name of ['a/b', '/etc/x']) {
-      const saved = await store.save(program(name, []));
-      expect(saved).toEqual({ ok: false, code: FlowErrorCode.INVALID_NAME });
-    }
-  });
+  it(
+    '9: save rejects an absolute / slashed name',
+    async () => {
+      for (const name of ['a/b', '/etc/x']) {
+        const saved = await store.save(program(name, []));
+        expect(saved).toEqual({ ok: false, code: FlowErrorCode.INVALID_NAME });
+      }
+    },
+    FLOW_ROUND_TRIP_TIMEOUT_MS,
+  );
 
   it('10: load of a missing flow returns NOT_FOUND, not a throw', async () => {
     const loaded = await store.load('ghost');
