@@ -32,7 +32,7 @@ objc2-foundation = { version = "0.3", features = [
 objc2-web-kit = { version = "0.3", features = ["WKWebView", "WKSnapshotConfiguration"] }
 
 [target."cfg(windows)".dependencies]
-webview2-com = "0.38"
+webview2-com = "0.39"
 windows = { version = "0.61", features = [
   "Win32_Foundation",
   "Win32_System_Com",
