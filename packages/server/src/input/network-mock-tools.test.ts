@@ -76,4 +76,21 @@ describe('reticle_network_mock tool', () => {
     expect(res.applied).toBe(true);
     expect(res.count).toBe(0);
   });
+
+  it('names every mock-rule field in the mocks parameter description', () => {
+    // The agent-facing description must carry the rule shape; otherwise the shape
+    // is only discoverable by failing a call (issue #345).
+    const mocks = tool().inputSchema['mocks'] as { description?: string };
+    for (const field of [
+      'urlContains',
+      'method',
+      'status',
+      'body',
+      'contentType',
+      'delayMs',
+      'abort',
+    ]) {
+      expect(mocks.description).toContain(field);
+    }
+  });
 });

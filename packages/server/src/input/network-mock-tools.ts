@@ -89,7 +89,12 @@ export const NETWORK_MOCK_TOOLS: ToolDef[] = [
       'states without touching the backend ("verify the app handles a failed payment"). Pass `mocks` ' +
       '(first matching rule wins); pass an empty array or `clear: true` to turn mocking off.',
     inputSchema: {
-      mocks: z.array(ruleShape).optional().describe('Interception rules; omit/empty to clear.'),
+      mocks: z
+        .array(ruleShape)
+        .optional()
+        .describe(
+          'Interception rules, first match wins: { urlContains, method?, status?, body?, contentType?, delayMs?, abort? }. Omit or pass [] to clear.',
+        ),
       clear: z.boolean().optional().describe('Clear all active mocks (same as mocks: []).'),
       ...sessionIdShape,
     },
