@@ -43,7 +43,7 @@ Reticle is a pnpm + Turborepo monorepo. The split is not cosmetic: each boundary
 | `@reticlehq/react` | the browser | The SDK **kit** you install in a browser app: re-exports the browser sensor (so one install gives both `reticle` and `install`) and maps a DOM node → React component → source `file:line` | Core works without the source-mapping half |
 | `@reticlehq/babel-plugin`, `@reticlehq/next`, `@reticlehq/vite-plugin` | build time | Stamp `data-reticle-source` for source mapping (and, for Vite, inject `connect()`) | Plain tooling |
 | `@reticlehq/electron` | Electron main process | Adapter for the desktop runtime: IPC observer, main-process capture | Desktop-only, outside the web gates |
-| `packages/tauri` (`reticle-tauri`) | Tauri (Rust) | Capture backend for the Tauri desktop runtime | Rust — outside every JS gate; compiled by CI's `rust`/`rust-macos` jobs |
+| `packages/tauri` (`reticle-tauri`) | Tauri (Rust) | Capture backend for the Tauri desktop runtime | Rust, outside every JS gate; compiled by CI's `rust`/`rust-macos` jobs |
 | `@reticlehq/test` | Node (dev dependency) | Spec runner + matchers used by CI's own test suites | Peer dependency on `vitest` |
 | `@reticlehq/eslint-plugin` | dev tooling | Repo-internal lint rule: a state change must fire a signal | Dev-only, never shipped in a user's bundle |
 
