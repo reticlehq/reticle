@@ -14,6 +14,8 @@ import { probeDevServers } from './dev-server-probe.js';
 import { diagnoseNoSession } from './no-session-diagnosis.js';
 import { readProjectPort } from '../cli/cli-port.js';
 import type { SessionManager } from './session-manager.js';
+import type { FileSystemPort } from '../project/fs-port.js';
+import { readEverConnected, writeEverConnected } from './session-history.js';
 
 /** Slow enough to be free, fast enough that a dev server started 15s ago is already reflected. */
 const REFRESH_MS = 15_000;
@@ -32,6 +34,8 @@ interface NoSessionWatchOptions {
    * layer to the browser layer for it.
    */
   reapedLeases?: () => number;
+  fs?: FileSystemPort;
+  reticleRoot?: string;
 }
 
 /** Start the watch. Returns a stop function; the timer is unref'd so it never holds the daemon up. */
@@ -81,6 +85,17 @@ function startNoSessionWatch(options: NoSessionWatchOptions): () => void {
     }),
   );
 
+  if (options.fs !== undefined && options.reticleRoot !== undefined) {
+    const fs = options.fs;
+    const reticleRoot = options.reticleRoot;
+    void readEverConnected(fs, reticleRoot).then((seen) => {
+      if (seen) options.sessions.setEverConnected(true);
+    });
+    options.sessions.setEverConnectedPersistor(() => {
+      void writeEverConnected(fs, reticleRoot).catch(() => undefined);
+    });
+  }
+
   return () => {
     clearInterval(timer);
     options.sessions.setNoSessionHint(undefined);
@@ -99,6 +114,8 @@ export function wireSessionScope(
   port: number,
   /** Reader for the pool's aged-out-lease count; omitted when this daemon runs no pool. */
   reapedLeases?: () => number,
+  fs?: FileSystemPort,
+  reticleRoot?: string,
 ): () => void {
   if (activeProjectId !== undefined) sessions.setDefaultScope({ projectId: activeProjectId });
   return startNoSessionWatch({
@@ -106,5 +123,7 @@ export function wireSessionScope(
     port,
     initialized: activeProjectId !== undefined,
     ...(reapedLeases === undefined ? {} : { reapedLeases }),
+    ...(fs === undefined ? {} : { fs }),
+    ...(reticleRoot === undefined ? {} : { reticleRoot }),
   });
 }

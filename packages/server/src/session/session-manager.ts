@@ -93,14 +93,27 @@ export class SessionManager {
    * and a stray tab from another app is never picked, even on the no-sessionId path.
    */
   #defaultScope: ResolveScope | undefined;
+  #everConnectedPersist: (() => void) | undefined;
 
   /** Set the active project's default resolve scope (called once at daemon wiring). */
   setDefaultScope(scope: ResolveScope | undefined): void {
     this.#defaultScope = scope;
   }
 
+  /** Restore the cross-restart fact used by the no-session diagnosis. */
+  setEverConnected(value: boolean): void {
+    this.#everConnected = value;
+  }
+
+  /** Persist the first observed connection without coupling the manager to filesystem APIs. */
+  setEverConnectedPersistor(persist: (() => void) | undefined): void {
+    this.#everConnectedPersist = persist;
+  }
+
   add(session: Session): Session | undefined {
+    const wasEverConnected = this.#everConnected;
     this.#everConnected = true;
+    if (!wasEverConnected) this.#everConnectedPersist?.();
     const previous = this.#sessions.get(session.id);
     this.#sessions.set(session.id, session);
     // Publish what this app declared sensitive to the driven-path rule. Here rather than in the
