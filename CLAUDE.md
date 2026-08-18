@@ -16,17 +16,26 @@ packages/react         @reticlehq/react        — React adapter: DOM ref -> com
 packages/vite-plugin   @reticlehq/vite-plugin  — Vite integration: stamps source + auto-injects connect()
 packages/babel-plugin  @reticlehq/babel-plugin — stamps data-reticle-source (source mapping, React 19)
 packages/next          @reticlehq/next         — Next.js source mapping (keeps SWC) via withReticle (CJS)
+packages/electron      @reticlehq/electron     — Electron main-process adapter (IPC observer, capture)
+packages/tauri         reticle-tauri           — Tauri capture backend (RUST — outside every JS gate)
 packages/test          @reticlehq/test         — spec runner + matchers for CI (peer vitest)
 packages/eslint-plugin @reticlehq/eslint-plugin — dev-only lint rule: state changed ⇒ signal fired
-apps/bench-app         @reticlehq/bench-app    — Vite/React fixture used to dogfood Reticle
-apps/api               @reticlehq/api          — Express backend exercising real-world behaviors (CJS-ish .mjs)
-apps/next-smoke        @reticlehq/next-smoke   — Next.js 15 app verifying Reticle on Next
+apps/bench-app         @reticlehq/bench-app    — integration proof (Vite + React) AND the primary benchmark target
+apps/api               @reticlehq/api          — support infra: backend the web e2e battery drives against
+apps/next-smoke        @reticlehq/next-smoke   — integration proof: Next.js 15 App Router, RSC, SWC source mapping
+apps/electron-smoke    @reticlehq/electron-smoke — integration proof: real Electron app (Vite + React renderer)
+apps/tauri-smoke       @reticlehq/tauri-smoke  — integration proof: real Tauri v2 app (Rust commands via invoke)
+apps/e2e                @reticlehq/e2e          — support infra: the web e2e test runner itself
+apps/atlas             @reticlehq/atlas        — adversarial fixture: one realistically-sized app, emergent defects
+apps/large-dom-bench   @reticlehq/large-dom-bench — benchmark target: non-virtualized grid, vanilla (non-React) TS
+apps/vibe-builder-demo @reticlehq/vibe-builder-demo — product demo: AI app-builder with Reticle as the QA layer
+apps/examples          —                       — integration proof for frameworks with no smoke app (Remix, Astro)
 docs/                  — user-facing docs (getting-started, usage, token-efficiency, local-registry)
 SKILL.md               — PUBLIC skill for users integrating Reticle into their own project (the canonical paste-URL)
 plan/                  — research/design docs only, no code (ALWAYS gitignored)
 ```
 
-This is **one git repo** at the root (pnpm + turbo monorepo). The TS library packages are strict TypeScript; `@reticlehq/babel-plugin`/`@reticlehq/next` are plain CJS tooling and `apps/api`/ `apps/next-smoke` are local fixtures — all excluded from the build/lint/test gates.
+This is **one git repo** at the root (pnpm + turbo monorepo). The TS library packages are strict TypeScript; `@reticlehq/babel-plugin`/`@reticlehq/next` are plain CJS tooling, `packages/tauri` is Rust and invisible to every JS gate, and everything under `apps/` is a local fixture — all excluded from the build/lint/test gates. See [`apps/README.md`](apps/README.md) for what belongs under `apps/` and why.
 
 ## Service boundaries (who owns what)
 
