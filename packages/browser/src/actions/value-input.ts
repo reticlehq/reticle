@@ -1,4 +1,4 @@
-import { captureValueSetter } from '../patching/capture-method.js';
+import { captureCheckedSetter, captureValueSetter } from '../patching/capture-method.js';
 import { valuePrototypeOf } from '../dom/realm.js';
 
 /**
@@ -21,6 +21,24 @@ export function setNativeValue(el: HTMLInputElement | HTMLTextAreaElement, value
     setter.call(el, value);
   } else {
     el.value = value;
+  }
+  const notPrevented = el.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+  el.dispatchEvent(new Event('change', { bubbles: true }));
+  return !notPrevented;
+}
+
+/**
+ * Set checked on a controlled checkbox/radio the way React expects (native setter + input & change events).
+ * Returns true if defaultPrevented was triggered by any listener, false otherwise.
+ */
+export function setNativeChecked(el: HTMLInputElement, checked: boolean): boolean {
+  // Realm-aware: a controlled input inside a same-origin frame has its own prototype.
+  const proto = valuePrototypeOf(el);
+  const setter = proto === undefined ? undefined : captureCheckedSetter(proto);
+  if (setter !== undefined) {
+    setter.call(el, checked);
+  } else {
+    el.checked = checked;
   }
   const notPrevented = el.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
   el.dispatchEvent(new Event('change', { bubbles: true }));

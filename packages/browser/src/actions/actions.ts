@@ -7,7 +7,13 @@ import {
   SettleReason,
 } from '@reticlehq/core';
 import { echoRef, refs } from '../dom/refs.js';
-import { assertEditable, assertNotRichText, setNativeValue } from './value-input.js';
+import {
+  assertEditable,
+  assertNotRichText,
+  setNativeChecked,
+  setNativeValue,
+} from './value-input.js';
+
 import { getAccessibleName, getRole, isVisible, getStates } from '../dom/a11y.js';
 import { elementHasHoverHandlers, identifyComponent } from '../registry/adapters.js';
 import { isForm, isHtmlElement, isInput, isSelect, isTextArea } from '../dom/realm.js';
@@ -202,7 +208,12 @@ const FILL_LIKE = new Set<string>([
 const isFillLike = (action: string): boolean => FILL_LIKE.has(action);
 
 /** Actions that resolve to a point and so benefit from off-viewport scroll + occlusion hit-test. */
-const CLICK_LIKE = new Set<string>([ActionType.CLICK, ActionType.DBLCLICK]);
+const CLICK_LIKE = new Set<string>([
+  ActionType.CLICK,
+  ActionType.DBLCLICK,
+  ActionType.CHECK,
+  ActionType.UNCHECK,
+]);
 
 function dangerousActionContext(el: HTMLElement): string {
   const form = el.closest('form');
@@ -320,6 +331,8 @@ function assertActionAllowed(el: HTMLElement, action: string, args: Record<strin
   const canTrigger =
     action === ActionType.CLICK ||
     action === ActionType.DBLCLICK ||
+    action === ActionType.CHECK ||
+    action === ActionType.UNCHECK ||
     action === ActionType.DRAG ||
     action === ActionType.SUBMIT ||
     // Read through the SAME resolver as the dispatch below. Reading a different argument here meant
@@ -572,29 +585,29 @@ async function dispatchOther(
           `cannot ${action} a disabled control — a real user could not, so neither will Reticle`,
         );
       }
-      const wanted = action === ActionType.CHECK;
-      // Already there: report success and touch nothing. `check` means "end up checked", not
-      // "toggle", so clicking here would flip it OFF and hand the app an event no user produced.
-      if (el.checked === wanted) return false;
-      // `click()`, never `el.checked = …`. Assigning the property flips the pixel and tells no
-      // framework: React binds a checkbox's onChange to the CLICK event, and its value tracker
-      // dedups the change it would otherwise synthesise from a direct assignment — so a controlled
-      // `checked={state}` box never heard from us while the action reported success. `click()` is
-      // the one DOM call that runs the element's ACTIVATION BEHAVIOUR (the native toggle) as well
-      // as firing the event; `dispatchEvent` does not.
-      let prevented = false;
-      // On window, so it runs after every listener on the element itself whenever they were added.
-      const probe = (e: Event): void => {
-        prevented = e.defaultPrevented;
-      };
-      window.addEventListener('click', probe, { once: true, capture: false });
-      try {
-        el.click();
-      } finally {
-        window.removeEventListener('click', probe, false);
+      const wanted = ActionType.CHECK === action;
+      if ('radio' === el.type && !wanted) {
+        throw new Error(
+          'cannot uncheck a radio button — a real user could not, radio buttons can only be deselected by selecting another radio in the group',
+        );
       }
-      return prevented;
+      // When already in the target state: run setNativeChecked so value trackers and controlled
+      // listeners receive events, without clicking and flipping the state off.
+      if (wanted === el.checked) {
+        return setNativeChecked(el, wanted);
+      }
+
+      // When state differs: dispatching a real click runs activation behaviour (native toggle + events)
+      // without duplicate event emission.
+      const event = new MouseEvent('click', {
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+      });
+      const notPrevented = el.dispatchEvent(event);
+      return !notPrevented || event.defaultPrevented;
     }
+
     case ActionType.SUBMIT: {
       const form = isForm(el) ? el : el.closest('form');
       if (null === form) throw new Error('no form to submit');

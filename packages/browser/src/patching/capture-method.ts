@@ -36,3 +36,17 @@ export function captureValueSetter(
   const setter = captureMethod(descriptor, 'set');
   return setter as ((this: HTMLElement, value: string) => void) | undefined;
 }
+
+/**
+ * The `checked` setter defined on a prototype, for inputs whose checked state must be set the way
+ * the browser does it — React installs its own descriptor, and assigning `el.checked` directly skips
+ * the tracker it relies on to notice a change.
+ */
+export function captureCheckedSetter(
+  proto: object,
+): ((this: HTMLElement, value: boolean) => void) | undefined {
+  const descriptor = Object.getOwnPropertyDescriptor(proto, 'checked');
+  if (descriptor === undefined) return undefined;
+  const setter = captureMethod(descriptor, 'set');
+  return setter as ((this: HTMLElement, value: boolean) => void) | undefined;
+}

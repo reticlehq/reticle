@@ -86,4 +86,75 @@ describe('check/uncheck drive the control instead of assigning it', () => {
     // succeed silently — a state no user could reach, returned as a green.
     await expect(executeAction(refs.refFor(el), ActionType.CHECK, {})).rejects.toThrow(/disabled/);
   });
+
+  it('dispatches input and change events so React controlled inputs update state', async () => {
+    const el = box();
+    const events: string[] = [];
+    el.addEventListener('input', () => events.push('input'));
+    el.addEventListener('change', () => events.push('change'));
+
+    await executeAction(refs.refFor(el), ActionType.CHECK, {});
+
+    expect(events).toContain('input');
+    expect(events).toContain('change');
+    expect(el.checked).toBe(true);
+  });
+
+  it('dispatches events when checking an already-checked box to sync value trackers', async () => {
+    const el = box({ checked: true });
+    const events: string[] = [];
+    el.addEventListener('input', () => events.push('input'));
+    el.addEventListener('change', () => events.push('change'));
+
+    await executeAction(refs.refFor(el), ActionType.CHECK, {});
+
+    expect(el.checked).toBe(true);
+    expect(events).toContain('input');
+    expect(events).toContain('change');
+  });
+
+  it('reports prevention even when stopPropagation is called on click', async () => {
+    const el = box();
+    el.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+    });
+    const out = (await executeAction(refs.refFor(el), ActionType.CHECK, {})) as {
+      effect?: { defaultPrevented?: boolean };
+    };
+    expect(
+      out.effect?.defaultPrevented,
+      'capture-phase probe must catch cancelled activation despite stopPropagation',
+    ).toBe(true);
+    expect(el.checked, 'cancelled checkbox must not end up checked').toBe(false);
+  });
+
+  it('refuses to uncheck a radio button directly', async () => {
+    const radio = document.createElement('input');
+    radio.type = 'radio';
+    radio.checked = true;
+    document.body.appendChild(radio);
+
+    await expect(executeAction(refs.refFor(radio), ActionType.UNCHECK, {})).rejects.toThrow(
+      /cannot uncheck a radio button/,
+    );
+  });
+
+  it('dispatches exactly one input and change event per state change', async () => {
+    const el = box();
+    let inputCount = 0;
+    let changeCount = 0;
+    el.addEventListener('input', () => {
+      inputCount++;
+    });
+    el.addEventListener('change', () => {
+      changeCount++;
+    });
+
+    await executeAction(refs.refFor(el), ActionType.CHECK, {});
+
+    expect(el.checked).toBe(true);
+    expect(inputCount, 'must not double-dispatch input event').toBe(1);
+    expect(changeCount, 'must not double-dispatch change event').toBe(1);
+  });
 });
