@@ -46,12 +46,15 @@ reticle({
   sourceMapping, // default true; stamp data-reticle-source (harmless on React <=18)
   inject, // default true; auto-inject reticle.connect()
   captureNetworkBodies, // default false; record request/response bodies on reticle_network
+  allowNonLocalhost, // default false; allow custom dev hostnames such as app.localtest
   desktop, // default false; also apply to `vite build`, for an Electron/Tauri renderer
   onWarn, // where a diagnostic goes; defaults to the console
 });
 ```
 
 `captureNetworkBodies` is off by default because a body is the one part of a request that routinely carries a card number, a token, or a customer's address. It is also settable as `VITE_RETICLE_CAPTURE_BODIES=1` for a single debugging session.
+
+`allowNonLocalhost` is off by default because broadening the allowed browser origin should be deliberate. Turn it on for host-routed dev apps such as `app.localtest`, or set `VITE_RETICLE_ALLOW_NON_LOCALHOST=1` for one debugging session; the bridge still requires the pairing token.
 
 `desktop: true` makes the plugin apply to `vite build` as well and calls `connect()` with `allowInProduction`, because a packaged desktop renderer is a production build with no dev server. That means an instrumented production bundle, which a web app must never ship. Keep it behind your own dev-only build target.
 

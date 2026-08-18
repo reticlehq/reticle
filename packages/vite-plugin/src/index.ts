@@ -54,6 +54,8 @@ const NODE_MODULES = 'node_modules';
  * by the injected <script src> and served by the load hook below.
  */
 export const RETICLE_CONNECT_MODULE = '/@reticle-connect';
+/** One-session opt-in that forwards non-localhost dev-host permission into connect(). */
+export const RETICLE_VITE_ALLOW_NON_LOCALHOST_ENV = 'VITE_RETICLE_ALLOW_NON_LOCALHOST';
 
 /**
  * The pre-hook, as source for an inline <head> script.
@@ -143,6 +145,18 @@ export interface ReticleVitePluginOptions {
    * session without editing vite.config.
    */
   captureNetworkBodies?: boolean;
+  /**
+   * Allow the SDK to connect from non-localhost dev hostnames.
+   *
+   * Off by default because a non-localhost origin needs an explicit trust decision: host-routed
+   * apps such as `app.localtest` need it, but broadening the origin check should never be
+   * accidental. The bridge still requires the pairing token, so this removes the hostname wall
+   * without removing authentication.
+   *
+   * Also settable as `VITE_RETICLE_ALLOW_NON_LOCALHOST=1`, so it can be turned on for one
+   * debugging session without editing vite.config.
+   */
+  allowNonLocalhost?: boolean;
   /**
    * Where a diagnostic goes. Defaults to the console; injected so the dev-mode injection check is
    * testable without capturing global console output.
@@ -382,6 +396,12 @@ function connectArgs(options: ReticleVitePluginOptions): string {
   // model with it.
   if (true === options.captureNetworkBodies || '1' === process.env['VITE_RETICLE_CAPTURE_BODIES']) {
     args['captureNetworkBodies'] = true;
+  }
+  if (
+    true === options.allowNonLocalhost ||
+    '1' === process.env[RETICLE_VITE_ALLOW_NON_LOCALHOST_ENV]
+  ) {
+    args['allowNonLocalhost'] = true;
   }
   return Object.keys(args).length > 0 ? JSON.stringify(args) : '';
 }

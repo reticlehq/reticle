@@ -10,6 +10,7 @@ import {
   reticle,
   RETICLE_VITE_PLUGIN_NAME,
   RETICLE_CONNECT_MODULE,
+  RETICLE_VITE_ALLOW_NON_LOCALHOST_ENV,
   connectModuleSource,
   installedSdk,
 } from './index.js';
@@ -137,6 +138,24 @@ describe('reticle vite plugin', () => {
     expect(code).toContain('projectId');
     // The id this monorepo derives for the vite-plugin package starts with a slug of its name.
     expect(code).toMatch(/projectId":"[a-z0-9-]+-[0-9a-f]{8}"/);
+  });
+
+  it('passes allowNonLocalhost through to the injected connect call only when opted in', () => {
+    expect(connectModuleSource({})).not.toContain('allowNonLocalhost');
+    expect(connectModuleSource({ allowNonLocalhost: true })).toContain('"allowNonLocalhost":true');
+  });
+
+  it('accepts VITE_RETICLE_ALLOW_NON_LOCALHOST for one-session non-localhost debugging', () => {
+    const previous = process.env[RETICLE_VITE_ALLOW_NON_LOCALHOST_ENV];
+    try {
+      delete process.env[RETICLE_VITE_ALLOW_NON_LOCALHOST_ENV];
+      expect(connectModuleSource({})).not.toContain('allowNonLocalhost');
+      process.env[RETICLE_VITE_ALLOW_NON_LOCALHOST_ENV] = '1';
+      expect(connectModuleSource({})).toContain('"allowNonLocalhost":true');
+    } finally {
+      if (previous === undefined) delete process.env[RETICLE_VITE_ALLOW_NON_LOCALHOST_ENV];
+      else process.env[RETICLE_VITE_ALLOW_NON_LOCALHOST_ENV] = previous;
+    }
   });
 
   it('an explicit projectId option overrides the derived one', () => {
