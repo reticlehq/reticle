@@ -14,8 +14,21 @@ import { request } from 'node:http';
 import { DEV_SERVER_PORTS } from '../cli/cli-port.js';
 import { looksLikeDevServer } from './looks-like-dev-server.js';
 
-/** Give up fast: an HTTP answer from localhost either lands quickly or nothing is there. */
-const HTTP_PROBE_TIMEOUT_MS = 400;
+/**
+ * How long to wait for `GET /` before treating the port as empty.
+ *
+ * This used to be 400ms, on the reasoning that an answer from localhost either lands quickly or
+ * nothing is there. That is true of a served file and false of the first request to a dev server:
+ * Vite, Next and Nuxt compile the entry route on demand, and the first hit after boot routinely
+ * takes over a second. The probe gave up, `listening` came back empty, and the no-session message
+ * told an agent nothing was listening while a Nuxt server answered on :5000 — the same conclusion
+ * as an empty port, drawn from evidence that is nothing like it.
+ *
+ * The ports are probed with `Promise.all`, so this is the cost of the slowest port rather than the
+ * sum, and it is paid on a background refresh that nothing waits on. Buying a real answer for a
+ * compiling dev server is worth more than the latency.
+ */
+const HTTP_PROBE_TIMEOUT_MS = 2000;
 /**
  * `localhost`, not `127.0.0.1` — so BOTH address families are tried.
  *
@@ -23,6 +36,13 @@ const HTTP_PROBE_TIMEOUT_MS = 400;
  * the IPv4 loopback cannot see it. The old TCP probe had the same blind spot, which meant the
  * diagnostic could miss the very dev server it exists to find while still reporting an unrelated
  * service that happens to bind both stacks (macOS AirPlay does).
+ *
+ * This also covers the wildcard binds a `--host` dev server uses. Measured on Windows against a
+ * server on `0.0.0.0:5199`: `localhost` connects, `::1` is refused. Node tries both families for a
+ * name that resolves to several (`autoSelectFamily`, on by default from Node 20, and this package
+ * requires >= 20), so the loopback failure does not end the attempt. dev-server-probe.test.ts pins
+ * `0.0.0.0` and `::` so that a future switch back to a pinned address fails loudly rather than
+ * silently reintroducing the blind spot.
  */
 const PROBE_HOST = 'localhost';
 
