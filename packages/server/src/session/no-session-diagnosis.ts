@@ -56,6 +56,28 @@ interface NoSessionFacts {
    * no `.reticle.json` at all and is working perfectly.
    */
   projectPort?: number;
+  /**
+   * Every `.reticle.json` found by searching outward from this daemon's directory — up to the repo
+   * root, then through the conventional workspace locations under it. See cli/config-discovery.ts.
+   *
+   * The daemon's cwd is an artifact of how the editor launched it, so its emptiness says nothing
+   * about the user's project. Reported from a Cursor monorepo: the daemon stood in the user's home
+   * directory, the config sat in `apps/web`, and the message concluded the project was not wired.
+   *
+   * Present and non-empty turns "there is no config" into "here is where it is". Present and empty
+   * is a much stronger claim than the old one, because the search was not confined to one directory
+   * — which is why `searchedDirectories` is reported alongside it rather than left implicit.
+   */
+  discoveredConfigs?: readonly string[];
+  /** Directories the search above actually examined. Names what "we looked" means. */
+  searchedDirectories?: readonly string[];
+}
+
+/** At most `limit` paths, comma-joined, with an honest tail when there are more. */
+function listPaths(paths: readonly string[], limit: number): string {
+  const shown = paths.slice(0, limit).join(', ');
+  const rest = paths.length - limit;
+  return rest > 0 ? `${shown}, and ${String(rest)} more` : shown;
 }
 
 /**
@@ -217,17 +239,47 @@ export function diagnoseNoSession(facts: NoSessionFacts): string {
     // So: report what was actually checked, name the directory, and name the case where the absence
     // is expected rather than diagnostic.
     if (!initialized) {
+      const found = facts.discoveredConfigs ?? [];
+      const searched = facts.searchedDirectories ?? [];
+      // What the second half says depends on what the search actually turned up, because the three
+      // cases call for three different next actions and the old single sentence covered only one.
+      const configHalf =
+        found.length > 0
+          ? // The reported case: the config exists, just not where this daemon stands. Naming the
+            // paths is the whole point — an agent can pick between two, and cannot pick from
+            // "there is none". Never silently choose one here.
+            `(2) This daemon's directory has no \`.reticle.json\`, but ${
+              1 === found.length ? 'one exists' : `${String(found.length)} exist`
+            } in this repo: ${listPaths(found, 4)}. The daemon's directory is set by whatever ` +
+            'launched it and often has nothing to do with the app, so this is very likely a ' +
+            `wired project rather than an uninitialised one. ${
+              1 === found.length
+                ? 'Restart the dev server from that directory, or point the daemon at it.'
+                : 'Pick the one for the app being worked on, and restart the dev server there.'
+            }`
+          : searched.length > 0
+            ? // Nothing found, but the search was wide. This is now a real claim about the project
+              // rather than about our cwd, so it can be stated plainly — with where we looked, so
+              // the reader can see whether their app was even in scope.
+              `(2) No \`.reticle.json\` anywhere we looked (${listPaths(searched, 4)}). That is ` +
+              "the file `reticle init` writes, so the app may carry no Reticle SDK — though an app " +
+              'wired by the Vite or Babel plugin carries the SDK without that file at all. If the ' +
+              'app lives outside those directories, run `reticle init` in it.'
+            : // No search result at all: an older caller, or discovery not run. Keep the previous
+              // wording rather than overstate what one directory can prove.
+              `(2) There is no \`.reticle.json\` in ${where}. That is the ` +
+              "file `reticle init` writes, so the app may carry no Reticle SDK — but check the " +
+              "app's OWN directory before re-running `init`: in a monorepo the daemon often runs " +
+              'at the root while the app lives in a subdirectory, and an app wired by the Vite or ' +
+              'Babel plugin carries the SDK without that file at all.';
+
       return (
         'no browser session connected. Two things to weigh, and neither of them is proof. ' +
         `(1) Nothing is listening on the ports Reticle scans (${SCANNED_PORTS}), so the dev server ` +
         'may not be running — ask the human to start it (`npm run dev`). That scan is narrow ' +
         'though: a server on any other port is invisible to it, so if the app IS running, ask for ' +
         'its URL rather than assuming it is down, and open it with `reticle open <url>`. ' +
-        `(2) There is no \`.reticle.json\` in ${where}. That is the ` +
-        "file `reticle init` writes, so the app may carry no Reticle SDK — but check the app's " +
-        'OWN directory before re-running `init`: in a monorepo the daemon often runs at the root ' +
-        'while the app lives in a subdirectory, and an app wired by the Vite or Babel plugin ' +
-        `carries the SDK without that file at all. ${RETRY}`
+        `${configHalf} ${RETRY}`
       );
     }
     return (

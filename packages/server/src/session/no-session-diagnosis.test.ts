@@ -429,3 +429,57 @@ describe('a configured port that disagrees with the bound port is named, not hin
     expect(why).not.toContain('disagree');
   });
 });
+
+describe('config discovery in the not-initialized message', () => {
+  const unwired = {
+    everConnected: false,
+    initialized: false,
+    listening: [] as number[],
+    port: 4400,
+    directory: '/home/user',
+  };
+
+  it('names the config it found instead of claiming there is none', () => {
+    // The reported shape: daemon in the home directory, config under apps/web.
+    const why = diagnoseNoSession({
+      ...unwired,
+      discoveredConfigs: ['/repo/apps/web/.reticle.json'],
+      searchedDirectories: ['/home/user', '/repo', '/repo/apps/web'],
+    });
+
+    expect(why).toContain('/repo/apps/web/.reticle.json');
+    // The old message's claim must not survive alongside the path that disproves it.
+    expect(why).not.toContain('There is no `.reticle.json` in');
+  });
+
+  it('names every config when there is more than one, and picks none', () => {
+    const why = diagnoseNoSession({
+      ...unwired,
+      discoveredConfigs: ['/repo/apps/web/.reticle.json', '/repo/apps/admin/.reticle.json'],
+      searchedDirectories: ['/repo'],
+    });
+
+    expect(why).toContain('/repo/apps/web/.reticle.json');
+    expect(why).toContain('/repo/apps/admin/.reticle.json');
+    expect(why).toContain('2 exist');
+  });
+
+  it('says where it looked when the search came back empty', () => {
+    const why = diagnoseNoSession({
+      ...unwired,
+      discoveredConfigs: [],
+      searchedDirectories: ['/repo', '/repo/apps/web'],
+    });
+
+    expect(why).toContain('/repo/apps/web');
+    expect(why).toContain('anywhere we looked');
+  });
+
+  it('keeps the old wording when no search was run', () => {
+    // An older caller that supplies no discovery must not be told a search found nothing.
+    const why = diagnoseNoSession(unwired);
+
+    expect(why).toContain('There is no `.reticle.json` in');
+    expect(why).not.toContain('anywhere we looked');
+  });
+});

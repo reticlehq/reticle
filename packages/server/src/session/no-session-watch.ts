@@ -13,6 +13,7 @@
 import { probeDevServers } from './dev-server-probe.js';
 import { diagnoseNoSession } from './no-session-diagnosis.js';
 import { readProjectPort } from '../cli/cli-port.js';
+import { discoverConfigs } from '../cli/config-discovery.js';
 import type { SessionManager } from './session-manager.js';
 
 /** Slow enough to be free, fast enough that a dev server started 15s ago is already reflected. */
@@ -77,6 +78,13 @@ function startNoSessionWatch(options: NoSessionWatchOptions): () => void {
       ...(() => {
         const configured = readProjectPort(options.directory ?? process.cwd());
         return configured === undefined ? {} : { projectPort: configured };
+      })(),
+      // Searched here rather than at boot, for the same reason as the port above: `init` can write
+      // the config after this daemon started. Cheap enough to redo per hint — it stats a handful of
+      // directories, and only ever runs while building an error message.
+      ...(() => {
+        const { configs, searched } = discoverConfigs(options.directory ?? process.cwd());
+        return { discoveredConfigs: configs, searchedDirectories: searched };
       })(),
     }),
   );
