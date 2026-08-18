@@ -7,7 +7,7 @@
  */
 
 /** A flow whose assertions were WEAKENED since its last passing run. */
-interface DowngradedFlow {
+export interface DowngradedFlow {
   flow: string;
   /** Step indices whose mustHold dropped from a consequence to presence-only. */
   steps: number[];
@@ -26,7 +26,7 @@ interface GateInput {
   deleted?: readonly string[];
 }
 
-interface GateResult {
+export interface GateResult {
   /** True when every affected, non-flaky flow has a passing artifact AND nothing was weakened/deleted. */
   pass: boolean;
   /** Affected flows with no passing artifact and not flaky — these block the gate. */

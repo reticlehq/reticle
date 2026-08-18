@@ -14,13 +14,13 @@ import { FlowStore } from '../flows/flows.js';
 import { RunStore } from '../runs/run-store.js';
 import { createNodeFileSystem, type FileSystemPort } from '../project/fs-port.js';
 import { affectedSavedFlows, type NamedFlow } from '../flows/flow-sources.js';
-import { gateDecision } from '../flows/gate.js';
+import { gateDecision, type DowngradedFlow, type GateResult } from '../flows/gate.js';
 import { FlakeStore } from '../flows/flake-store.js';
 import { formatBuddyStatus } from '../flows/buddy-status.js';
 import { CapsuleStore } from '../capsule/capsule-store.js';
 import { AssertionTiersStore } from '../flows/assertion-tiers-store.js';
 import { detectDowngrades } from '../flows/assertion-integrity.js';
-import { computeCoverage } from '../flows/coverage.js';
+import { computeCoverage, type Coverage } from '../flows/coverage.js';
 import { createWatchBatcher } from '../flows/watch-batcher.js';
 import { watch } from 'node:fs';
 import { log } from '../log.js';
@@ -155,6 +155,54 @@ export async function handleCapsules(): Promise<void> {
   }
 }
 
+export interface GateOutcome extends Record<string, unknown> {
+  pass: boolean;
+  uncovered: string[];
+  quarantined: string[];
+  downgraded?: DowngradedFlow[];
+  deletedCoverage?: string[];
+  /** Present when the outcome was forced non-pass for a reason `gateDecision` doesn't itself see. */
+  reason?: string;
+  coverage: { pct: number; covered: number; total: number };
+}
+
+/**
+ * Shape the `reticle_gate` log payload from a `gateDecision` result plus the run's flow coverage.
+ * Pure — split out of `handleGate` so this policy is unit-testable without the real filesystem.
+ *
+ * `noFlowsRecorded` overrides `pass` to `false` even though `gateDecision` correctly reports `true`
+ * for it in isolation: with zero flows, `affected` is vacuously empty (nothing to be affected by) and
+ * `coverage.flows.pct` is vacuously 100 (no declared surface to fall short of) — both right on their
+ * own terms, but combined they let `reticle gate` exit 0 on a project that has never recorded a single
+ * flow. That is the same false green `buildSuiteVerdict` was fixed for on the verify side (see
+ * `decision.ts`): the purest pass that can never go red. Kept out of `gateDecision` itself so its
+ * affected-flow-coverage contract — and its existing tests — stay untouched.
+ */
+export function buildGateOutcome(
+  result: GateResult,
+  coverage: Coverage,
+  noFlowsRecorded: boolean,
+): GateOutcome {
+  return {
+    pass: result.pass && !noFlowsRecorded,
+    uncovered: result.uncovered,
+    quarantined: result.quarantined,
+    ...(result.downgraded.length > 0 ? { downgraded: result.downgraded } : {}),
+    ...(result.deleted.length > 0 ? { deletedCoverage: result.deleted } : {}),
+    ...(noFlowsRecorded
+      ? {
+          reason:
+            'no flows recorded — record one (e.g. via `reticle drive`), then `reticle_flow_save`',
+        }
+      : {}),
+    coverage: {
+      pct: coverage.flows.pct,
+      covered: coverage.flows.covered,
+      total: coverage.flows.total,
+    },
+  };
+}
+
 /**
  * `reticle gate <file...>` — exit non-zero unless passing artifacts cover the flows affected by the
  * changed files. Flaky flows are quarantined (surfaced, not blocking). The environment-side enforcement
@@ -204,19 +252,9 @@ export async function handleGate(files: string[], since: string | undefined): Pr
       { testids: [], signals: [], flows: allFlows.map((f) => f.name) },
       { testids: [], signals: [], flows: passing },
     );
-    log('reticle_gate', {
-      pass: result.pass,
-      uncovered: result.uncovered,
-      quarantined: result.quarantined,
-      ...(result.downgraded.length > 0 ? { downgraded: result.downgraded } : {}),
-      ...(result.deleted.length > 0 ? { deletedCoverage: result.deleted } : {}),
-      coverage: {
-        pct: coverage.flows.pct,
-        covered: coverage.flows.covered,
-        total: coverage.flows.total,
-      },
-    });
-    if (!result.pass) process.exitCode = 1;
+    const outcome = buildGateOutcome(result, coverage, 0 === allFlows.length);
+    log('reticle_gate', outcome);
+    if (!outcome.pass) process.exitCode = 1;
   } catch (error) {
     log('reticle_gate_failed', { error: error instanceof Error ? error.message : String(error) });
     process.exitCode = 1;
