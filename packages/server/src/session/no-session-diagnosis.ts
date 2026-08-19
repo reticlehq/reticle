@@ -262,13 +262,13 @@ export function diagnoseNoSession(facts: NoSessionFacts): string {
               // rather than about our cwd, so it can be stated plainly — with where we looked, so
               // the reader can see whether their app was even in scope.
               `(2) No \`.reticle.json\` anywhere we looked (${listPaths(searched, 4)}). That is ` +
-              "the file `reticle init` writes, so the app may carry no Reticle SDK — though an app " +
+              'the file `reticle init` writes, so the app may carry no Reticle SDK — though an app ' +
               'wired by the Vite or Babel plugin carries the SDK without that file at all. If the ' +
               'app lives outside those directories, run `reticle init` in it.'
             : // No search result at all: an older caller, or discovery not run. Keep the previous
               // wording rather than overstate what one directory can prove.
               `(2) There is no \`.reticle.json\` in ${where}. That is the ` +
-              "file `reticle init` writes, so the app may carry no Reticle SDK — but check the " +
+              'file `reticle init` writes, so the app may carry no Reticle SDK — but check the ' +
               "app's OWN directory before re-running `init`: in a monorepo the daemon often runs " +
               'at the root while the app lives in a subdirectory, and an app wired by the Vite or ' +
               'Babel plugin carries the SDK without that file at all.';
