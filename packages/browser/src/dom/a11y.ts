@@ -194,7 +194,11 @@ function ariaBool(el: Element, attr: string): boolean | undefined {
  * The set of states relevant to assertions. `visible` is an O(depth) forced-style walk; callers that
  * already computed it (describe) pass it in so it isn't resolved twice per element.
  */
-export function getStates(el: Element, visible: boolean = isVisible(el)): ElementState[] {
+export function getStates(
+  el: Element,
+  visible: boolean = isVisible(el),
+  visMemo?: Map<Element, boolean>,
+): ElementState[] {
   const states: ElementState[] = [ElementState.PRESENT];
   states.push(visible ? ElementState.VISIBLE : ElementState.HIDDEN);
 
@@ -207,6 +211,7 @@ export function getStates(el: Element, visible: boolean = isVisible(el)): Elemen
   if (checkedProp || true === ariaBool(el, 'aria-checked')) states.push(ElementState.CHECKED);
   if (true === ariaBool(el, 'aria-expanded')) states.push(ElementState.EXPANDED);
   if (el.ownerDocument.activeElement === el) states.push(ElementState.FOCUSED);
+  if (visible && isInViewport(el, visMemo)) states.push(ElementState.IN_VIEWPORT);
 
   return states;
 }
@@ -286,6 +291,98 @@ export function isVisible(el: Element, memo?: Map<Element, boolean>): boolean {
   return result;
 }
 
+interface ViewportBox {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+}
+
+function hasLayout(rect: DOMRect): boolean {
+  return rect.width > 0 || rect.height > 0;
+}
+
+/** True when the two boxes share any area (partial overlap counts as in-view). */
+function rectsIntersect(a: ViewportBox, b: ViewportBox): boolean {
+  return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+}
+
+function windowViewport(win: Window): ViewportBox {
+  return { left: 0, top: 0, right: win.innerWidth, bottom: win.innerHeight };
+}
+
+/** Padding-box clip region of `el` in viewport coordinates — the area overflow can hide against. */
+function clientViewportBox(el: Element): ViewportBox {
+  const border = el.getBoundingClientRect();
+  if (!(el instanceof HTMLElement)) {
+    return {
+      left: border.left,
+      top: border.top,
+      right: border.right,
+      bottom: border.bottom,
+    };
+  }
+  const left = border.left + el.clientLeft;
+  const top = border.top + el.clientTop;
+  return {
+    left,
+    top,
+    right: left + el.clientWidth,
+    bottom: top + el.clientHeight,
+  };
+}
+
+function overflowClips(style: CSSStyleDeclaration): boolean {
+  return style.overflowX !== 'visible' || style.overflowY !== 'visible';
+}
+
+function isScrollContainer(el: HTMLElement): boolean {
+  const style = el.ownerDocument.defaultView?.getComputedStyle(el);
+  if (style === undefined) return false;
+  const scrollableY =
+    ('auto' === style.overflowY || 'scroll' === style.overflowY) &&
+    el.scrollHeight > el.clientHeight;
+  const scrollableX =
+    ('auto' === style.overflowX || 'scroll' === style.overflowX) && el.scrollWidth > el.clientWidth;
+  return scrollableY || scrollableX;
+}
+
+function ancestorClips(el: Element): boolean {
+  if (!(el instanceof HTMLElement)) return overflowClips(getComputedStyle(el));
+  return overflowClips(getComputedStyle(el)) || isScrollContainer(el);
+}
+
+/**
+ * Whether `el` intersects the visible clip of the window and every clipping ancestor.
+ *
+ * Unlike `isVisible`, this is pure geometry: a CSS-visible row below the document fold or scrolled
+ * out of an overflow panel is still `visible` but not `inViewport`. Hidden/zero-area elements are
+ * never in-viewport.
+ */
+export function isInViewport(el: Element, memo?: Map<Element, boolean>): boolean {
+  if (!isVisible(el, memo)) return false;
+  if ('function' !== typeof el.getBoundingClientRect) return false;
+  const rect = el.getBoundingClientRect();
+  if (!hasLayout(rect)) return false;
+  const win = el.ownerDocument.defaultView;
+  if (null === win) return false;
+  const box: ViewportBox = {
+    left: rect.left,
+    top: rect.top,
+    right: rect.right,
+    bottom: rect.bottom,
+  };
+  if (!rectsIntersect(box, windowViewport(win))) return false;
+  let parent = el.parentElement;
+  while (parent !== null) {
+    if (ancestorClips(parent)) {
+      if (!rectsIntersect(box, clientViewportBox(parent))) return false;
+    }
+    parent = parent.parentElement;
+  }
+  return true;
+}
+
 const MAX_TEXT = 80;
 
 function getVisibleText(el: Element): string {
@@ -304,7 +401,7 @@ export function describe(el: Element, memo?: Map<Element, boolean>): ElementDesc
     ref: refs.refFor(el),
     role: getRole(el),
     name,
-    states: getStates(el, visible),
+    states: getStates(el, visible, memo),
     visible,
   };
   if (value !== undefined && value.length > 0) base.value = value;

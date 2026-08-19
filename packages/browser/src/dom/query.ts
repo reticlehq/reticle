@@ -344,7 +344,8 @@ function projectAttrs(el: Element, keys: readonly string[]): Record<string, stri
 }
 
 function inState(el: Element, state: ElementState, memo?: Map<Element, boolean>): boolean {
-  return getStates(el, isVisible(el, memo)).includes(state);
+  const visible = isVisible(el, memo);
+  return getStates(el, visible, memo).includes(state);
 }
 
 /**

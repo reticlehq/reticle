@@ -101,6 +101,7 @@ const STATE_FLAG: Partial<Record<ElementState, string>> = {
   [ElementState.CHECKED]: 'chk',
   [ElementState.EXPANDED]: 'exp',
   [ElementState.FOCUSED]: 'focus',
+  [ElementState.IN_VIEWPORT]: 'vp',
 };
 
 /** States the `visible` field already encodes, plus the one that is true of everything. */

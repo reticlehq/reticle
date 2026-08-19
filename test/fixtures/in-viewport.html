@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>inViewport harness</title>
+    <script type="importmap">
+      {
+        "imports": {
+          "@reticlehq/core": "/core/browser-shim.js"
+        }
+      }
+    </script>
+    <style>
+      body {
+        margin: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="spacer" style="height: 1200px"></div>
+    <button id="below-fold" type="button" data-testid="below-fold">below fold</button>
+
+    <div
+      id="panel"
+      style="overflow: auto; height: 100px; width: 200px; border: 1px solid #333; margin: 8px 0"
+    >
+      <div style="height: 400px; padding-top: 350px">
+        <button id="panel-row" type="button" data-testid="panel-row">panel row</button>
+      </div>
+    </div>
+
+    <div style="overflow: hidden; height: 40px; width: 200px; margin: 8px 0">
+      <button id="hidden-clip" type="button" style="display: block; margin-top: 50px">
+        hidden clip
+      </button>
+    </div>
+
+    <div
+      id="outer-scroll"
+      style="overflow: auto; height: 80px; width: 220px; border: 1px solid #333; margin: 8px 0"
+    >
+      <div style="height: 120px">
+        <div
+          id="inner-scroll"
+          style="overflow: auto; height: 60px; width: 200px; border: 1px dashed #666"
+        >
+          <div style="height: 150px; padding-top: 130px">
+            <button id="nested-deep" type="button" data-testid="nested-deep">nested deep</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script type="module">
+      import { ElementState } from '/core/constants.js';
+      import { isInViewport, getStates } from '/browser/dom/a11y.js';
+
+      globalThis.__reticleViewport = {
+        ElementState,
+        isInViewport,
+        getStates,
+      };
+    </script>
+  </body>
+</html>

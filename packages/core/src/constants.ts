@@ -602,6 +602,8 @@ export const ElementState = {
   EXPANDED: 'expanded',
   FOCUSED: 'focused',
   PRESENT: 'present',
+  /** Intersects the visible clip of the window and every clipping scroll ancestor — not CSS visibility. */
+  IN_VIEWPORT: 'inViewport',
 } as const;
 export type ElementState = (typeof ElementState)[keyof typeof ElementState];
 

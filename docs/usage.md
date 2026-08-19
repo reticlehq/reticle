@@ -349,7 +349,9 @@ A **predicate** declares what should be true. `reticle_assert` / `reticle_wait_f
 // An element exists / is in a state
 { "kind": "element", "query": { "role": "dialog", "name": "Confirm" }, "state": "visible" }
 // query supports: role, name, text, label, placeholder, testid, alt, scope
-// state: visible | hidden | enabled | disabled | checked | expanded | focused | present
+// state: visible | hidden | enabled | disabled | checked | expanded | focused | present | inViewport
+// `visible`/`present` follow CSS/DOM presence, not the viewport. Use `inViewport` to assert scroll
+// position (below-the-fold content is `visible` but not `inViewport` until scrolled into view).
 // add "absent": true to assert it is NOT there (regression / removal)
 
 // Visible text anywhere (optionally scoped via an element query instead)
