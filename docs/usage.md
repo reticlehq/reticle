@@ -352,8 +352,10 @@ A **predicate** declares what should be true. `reticle_assert` / `reticle_wait_f
 // state: visible | hidden | enabled | disabled | checked | expanded | focused | present
 // add "absent": true to assert it is NOT there (regression / removal)
 
-// Visible text anywhere (optionally scoped via an element query instead)
+// Visible text — page-wide, or `scope` it to a subtree (CSS selector or ref) so a match
+// in a background tab can't satisfy an assertion about the dialog that just opened
 { "kind": "text", "contains": "Saved successfully", "visible": true }
+{ "kind": "text", "contains": "Floor 3", "scope": "[role=dialog]" }
 
 // A network call happened
 { "kind": "net", "method": "POST", "urlContains": "/api/order", "status": 200, "since": 1820 }

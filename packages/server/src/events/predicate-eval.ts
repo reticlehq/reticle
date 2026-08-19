@@ -20,7 +20,7 @@ export type Predicate =
       state?: ElementState;
       absent?: boolean;
     }
-  | { kind: typeof PredicateKind.TEXT; contains: string; visible?: boolean; absent?: boolean }
+  | { kind: typeof PredicateKind.TEXT; contains: string; scope?: string; visible?: boolean; absent?: boolean }
   | {
       kind: typeof PredicateKind.NET;
       method?: string;
@@ -256,6 +256,11 @@ function predicateUnion() {
       .object({
         kind: z.literal(PredicateKind.TEXT),
         contains: z.string(),
+        // CSS selector or ref to confine the search to a subtree. Without it the match is
+        // page-wide, so a word that also appears in a background tab satisfies the predicate
+        // before the action — `act_and_wait` then returns `already_true` for a correct action.
+        // The scoping machinery already exists on `element`; this forwards it to `text`.
+        scope: z.string().optional(),
         visible: z.boolean().optional(),
         absent: z.boolean().optional(),
       })

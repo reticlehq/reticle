@@ -401,7 +401,7 @@ export async function evaluatePredicate(
     case PredicateKind.TEXT:
       return evalElement(
         session,
-        { text: predicate.contains },
+        { text: predicate.contains, scope: predicate.scope },
         true === predicate.visible ? ElementState.VISIBLE : undefined,
         predicate.absent ?? false,
         diagnose,
