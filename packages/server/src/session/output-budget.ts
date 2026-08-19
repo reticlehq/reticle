@@ -85,7 +85,10 @@ interface SizeCost {
 
 export function sizeCost(payload: unknown): SizeCost {
   const json = JSON.stringify(payload) ?? '';
-  return { bytes: json.length, tokens: estimateTokens(json) };
+  // Actual UTF-8 wire bytes, not json.length (UTF-16 code units) — the field is labeled `bytes`
+  // and drives the large-snapshot recommendation, so a multibyte-heavy payload was under-counted.
+  const bytes = Buffer.byteLength(json, 'utf8');
+  return { bytes, tokens: estimateTokens(json) };
 }
 
 /**

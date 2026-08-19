@@ -100,6 +100,13 @@ describe('sizeCost / withSizeCost', () => {
     expect(big.cost.tokens).toBeLessThan(1100);
   });
 
+  it('reports UTF-8 bytes, not UTF-16 code units, for multibyte content', () => {
+    // Japanese characters are 3 bytes each in UTF-8, 2 code units in UTF-16
+    const c = sizeCost({ text: '日本語' });
+    expect(c.bytes).toBe(Buffer.byteLength(JSON.stringify({ text: '日本語' }), 'utf8'));
+    expect(c.bytes).toBeGreaterThan(JSON.stringify({ text: '日本語' }).length);
+  });
+
   it('passes non-object results through unchanged', () => {
     expect(withSizeCost(null)).toBeNull();
     expect(withSizeCost('err')).toBe('err');
