@@ -39,9 +39,9 @@ reticle_run({ tool: "reticle_crawl", sessionId, args: { maxSteps: 25 } })
 
 **`deadControls` and `contradictions` are the two counts that mean a real problem.** Console errors and failed requests are worth reading but a busy app produces both innocently. A dead control is a button wired to nothing; a contradiction is a channel disagreeing with what the screen showed.
 
-It clicks **everything**, so point it at a dev environment. `maxSteps` bounds it and defaults to 25. Want a non-destructive pass first — what is reachable, without touching it? `reticle_run({ tool: "reticle_explore", sessionId })`.
+It clicks **everything**, so point it at a dev environment. `maxSteps` bounds it and defaults to 25. Want a non-destructive pass first: what is reachable, without touching it? `reticle_run({ tool: "reticle_explore", sessionId })`.
 
-Do not hand-roll this sweep. The obvious version — click each control, assert no console error — **passes on exactly the bug you are sweeping for**, because a dead button throws nothing.
+Do not hand-roll this sweep. The obvious version (click each control, assert no console error) **passes on exactly the bug you are sweeping for**, because a dead button throws nothing.
 
 ## 3. Compare what the API said against what rendered
 
@@ -49,7 +49,7 @@ Do not hand-roll this sweep. The obvious version — click each control, assert 
 reticle_run({ tool: "reticle_reconcile", sessionId })
 ```
 
-The API returned ten rows, the table shows nine, nothing errored. Neither the network log nor the DOM is wrong on its own — only the comparison catches it, and nothing else you can run makes that comparison.
+The API returned ten rows, the table shows nine, nothing errored. Neither the network log nor the DOM is wrong on its own. Only the comparison catches it, and nothing else you can run makes that comparison.
 
 ## 4. Find the parts nobody exercised
 
@@ -70,9 +70,9 @@ A suite of forty flows where thirty-one assert nothing is a suite that will stay
 
 Lead with the counts, then one line per real finding with its `file:line` from `reticle_inspect`. Separate:
 
-- **Broken** — dead controls, contradictions, failed requests, errors thrown during the sweep.
-- **Unverified** — `untouched` controls and `assertionFree` flows. Not known to be broken; known to be unchecked.
-- **Pre-existing** — console errors that were already there before the sweep started. Say so, so nobody attributes them to today's change.
+- **Broken**: dead controls, contradictions, failed requests, errors thrown during the sweep.
+- **Unverified**: `untouched` controls and `assertionFree` flows. Not known to be broken; known to be unchecked.
+- **Pre-existing**: console errors that were already there before the sweep started. Say so, so nobody attributes them to today's change.
 
 **Do not report a clean audit over a partial one.** If `truncated` is true or `maxSteps` cut the sweep short, say what was not reached. A silent cap reads as "everything is fine" when it means "I stopped".
 

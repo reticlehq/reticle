@@ -23,7 +23,7 @@ reticle_run({ tool: "reticle_record", sessionId, args: { action: "stop", recordi
 reticle_run({ tool: "reticle_flow_save", sessionId, args: { flowName: "create-task" } })
 ```
 
-That writes `.reticle/flows/create-task.json`. **Commit it** — any agent on the repo can then replay it.
+That writes `.reticle/flows/create-task.json`. **Commit it**: any agent on the repo can then replay it.
 
 Annotate the business outcome, not just the clicks, so a replay proves the journey _achieved_ something:
 
@@ -45,7 +45,7 @@ Three statuses, and the failures are legible rather than blind:
 | status | means | next |
 | --- | --- | --- |
 | `ok` | every anchor resolved, every expectation held | done |
-| `drift` | an anchor missed — a renamed testid, a signal that never fired | read `decision.nextAction`; it names the file:line and the closest surviving anchor |
+| `drift` | an anchor missed: a renamed testid, a signal that never fired | read `decision.nextAction`; it names the file:line and the closest surviving anchor |
 | `error` | the flow file is missing or invalid, or a step failed at runtime | fix from the error envelope's failed step |
 
 On drift, `reticle_flow_heal` proposes the nearest-match rebind so flows do not rot. Apply it when the rename was intentional; treat it as a finding when it was not.
@@ -67,7 +67,7 @@ On a large suite, replaying everything after a one-file edit is waste. Hand it t
 reticle_run({ tool: "reticle_verify_change", sessionId, args: { since: "HEAD~1" } })
 ```
 
-It works out which saved flows cover the files you edited and replays only those. Give it a git ref or the file list. Use this in the inner loop and `flow_verify` before you ship — the narrow one is fast, the whole one is the guarantee.
+It works out which saved flows cover the files you edited and replays only those. Give it a git ref or the file list. Use this in the inner loop and `flow_verify` before you ship: the narrow one is fast, the whole one is the guarantee.
 
 ### Which of your flows actually prove anything
 
@@ -76,15 +76,15 @@ reticle_run({ tool: "reticle_domain", sessionId })
 // → { flowCount, coverage: { asserted, presenceOnly, assertionFree }, gaps: { declaredUntestedSignals, … } }
 ```
 
-A recorded flow that asserts nothing replays green through any regression — it proves the clicks still resolve, not that the app still works. Check this after a recording session: anything landing in `assertionFree` needs an `annotate` pass with a `success-state`, or it is decoration.
+A recorded flow that asserts nothing replays green through any regression: it proves the clicks still resolve, not that the app still works. Check this after a recording session: anything landing in `assertionFree` needs an `annotate` pass with a `success-state`, or it is decoration.
 
 ## When NOT to record
 
-A journey you will run once is cheaper to drive with `reticle_act_and_wait` and forget. Record the flows that define the product — the ones a regression in would be a bad day — and leave exploratory drives unsaved. A suite of forty half-meant flows costs more attention than it returns.
+A journey you will run once is cheaper to drive with `reticle_act_and_wait` and forget. Record the flows that define the product (the ones a regression in would be a bad day) and leave exploratory drives unsaved. A suite of forty half-meant flows costs more attention than it returns.
 
 ## Honesty
 
-A replay reports what happened. `drift` is not a pass, and healing a flow to make it green when the app genuinely broke is the one thing that makes the whole suite worthless. If the rename was not intentional, the drift **is** the finding — report it with the `whereInSource` pointer.
+A replay reports what happened. `drift` is not a pass, and healing a flow to make it green when the app genuinely broke is the one thing that makes the whole suite worthless. If the rename was not intentional, the drift **is** the finding: report it with the `whereInSource` pointer.
 
 ---
 

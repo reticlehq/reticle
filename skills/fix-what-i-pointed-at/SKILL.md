@@ -10,7 +10,7 @@ metadata:
 
 # The human pointed at the bug. Go fix it.
 
-"The spacing on that card is wrong" is unactionable in chat and precise in the app. **Reticle**'s running app has a **Flag a bug** control: the human clicks it, points at an element, and types what is wrong. Each flag becomes a mark carrying the element, the note, and the `file:line` — so the round trip that usually costs a screenshot, a description, and two clarifying questions costs one call.
+"The spacing on that card is wrong" is unactionable in chat and precise in the app. **Reticle**'s running app has a **Flag a bug** control: the human clicks it, points at an element, and types what is wrong. Each flag becomes a mark carrying the element, the note, and the `file:line`, so the round trip that usually costs a screenshot, a description, and two clarifying questions costs one call.
 
 Not installed? `RETICLE_INSTALL_SOURCE=npx_skill npx @reticlehq/server@latest init`, then the [`install-and-verify`](https://github.com/reticlehq/reticle/blob/main/skills/install-and-verify/SKILL.md) skill.
 
@@ -39,9 +39,9 @@ reticle_session({ action: "review", sessionId })
 
 ## The loop
 
-1. **Read** the marks. Group them if several point at the same file — one edit often answers three.
+1. **Read** the marks. Group them if several point at the same file: one edit often answers three.
 2. **Open** `source.file` at `source.line`. This is the whole point: no hunting for which component rendered that button.
-3. **Fix** what the `note` asks for. If the note is ambiguous, the element label and its source usually disambiguate it — ask the human only when they genuinely do not.
+3. **Fix** what the `note` asks for. If the note is ambiguous, the element label and its source usually disambiguate it. Ask the human only when they genuinely do not.
 4. **Verify in the app**, do not eyeball it. Re-drive the affected control with `reticle_act_and_wait` and name the consequence, or `reticle_inspect` the element for a layout or theme complaint. A visual fix confirmed by looking at it is how the mark gets reopened.
 5. **Resolve** it:
 
@@ -53,7 +53,7 @@ Resolve only after the fix is verified. A resolved mark is a promise to the huma
 
 ## When you cannot fix one
 
-Say so against that mark and leave it unresolved. A mark silently dropped is worse than an open one — the human believes it was handled and finds out later. If the note describes intended behaviour rather than a bug, say that too, and let them decide.
+Say so against that mark and leave it unresolved. A mark silently dropped is worse than an open one: the human believes it was handled and finds out later. If the note describes intended behaviour rather than a bug, say that too, and let them decide.
 
 ## Report back in their vocabulary
 

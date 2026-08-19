@@ -474,13 +474,9 @@ describe('shipped docs never name a tool a reader cannot call', () => {
    * someone who had been told the rule an hour earlier. That is the pattern this file already names:
    * every rule enforced by a check has held, and every rule left to prose has been violated.
    *
-   * Scoped to `docs/`, the docs site, which is the surface the rule was given for. `SKILL.md` and
-   * `skills/` are NOT covered yet and that is a deliberate, temporary line rather than a judgement
-   * that they are exempt: they carry 146 prose dashes between them, and they are agent instructions
-   * whose wording has been tuned against real sessions, so a bulk rewrite is a job to do carefully
-   * and prove, not to sweep in behind a fix to something else. Tracked, so it is not silently
-   * dropped. `CHANGELOG.md` and the source comments are out of scope for good: a changelog is a
-   * written record in a different voice.
+   * Scoped to the docs site and the published skill files: `docs/`, `SKILL.md`, and `skills/`.
+   * `CHANGELOG.md` and the source comments are out of scope for good: a changelog is a written
+   * record in a different voice.
    *
    * PROSE only. Fenced blocks and inline code spans are skipped, because a good share of the dashes
    * in these pages sit inside CAPTURED CLI OUTPUT — `doctor`'s diagnosis lines, `kill`'s refusal JSON
@@ -489,7 +485,7 @@ describe('shipped docs never name a tool a reader cannot call', () => {
    */
   it('no docs page uses an em dash in prose', () => {
     const wrong: string[] = [];
-    for (const file of docFiles()) {
+    for (const file of [...docFiles(), join(REPO, 'SKILL.md'), ...skillFiles()]) {
       let inFence = false;
       readFileSync(file, 'utf8')
         .split('\n')

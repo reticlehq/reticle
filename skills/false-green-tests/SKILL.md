@@ -1,6 +1,6 @@
 ---
 name: false-green-tests
-description: Find out why the tests pass but the app is broken. Catches false greens — a green suite over a feature that does not work, a mocked API standing in for a real one, an assertion that holds no matter what the app does, a click handler wired to nothing. Use when the suite is green and the user says it is broken, when a test never fails, when coverage looks fine but bugs still ship, or before trusting a passing run you did not watch.
+description: Find out why the tests pass but the app is broken. Catches false greens: a green suite over a feature that does not work, a mocked API standing in for a real one, an assertion that holds no matter what the app does, a click handler wired to nothing. Use when the suite is green and the user says it is broken, when a test never fails, when coverage looks fine but bugs still ship, or before trusting a passing run you did not watch.
 license: Apache-2.0
 metadata:
   version: 2.8.0
@@ -16,7 +16,7 @@ It uses **Reticle**, which observes the running app from the inside: DOM, networ
 
 ## The five shapes, in the order they are worth checking
 
-**1. The assertion cannot fail.** Read the test the user trusts. If it only asserts absence — no console error, no thrown exception, no rejected promise — it passes on a control wired to nothing. A dead button throws nothing, fires nothing, and changes nothing. Prove it in the app instead:
+**1. The assertion cannot fail.** Read the test the user trusts. If it only asserts absence (no console error, no thrown exception, no rejected promise) it passes on a control wired to nothing. A dead button throws nothing, fires nothing, and changes nothing. Prove it in the app instead:
 
 ```
 reticle_act_and_wait({ sessionId, ref, action: "click", until: { kind: "allOf", predicates: [
@@ -33,7 +33,7 @@ A verdict of `no` here, against a green suite, is the false green.
 reticle_network({ sessionId, since })
 ```
 
-No request where the test asserted one means the suite verified a fixture. A stale client cache is the same failure with no request at all to look at — which is why registering TanStack Query matters: the cache is the only witness.
+No request where the test asserted one means the suite verified a fixture. A stale client cache is the same failure with no request at all to look at, which is why registering TanStack Query matters: the cache is the only witness.
 
 **3. The UI moved and the state did not.** The strongest false green, and invisible to any DOM or screenshot check:
 
@@ -41,7 +41,7 @@ No request where the test asserted one means the suite verified a fixture. A sta
 reticle_state({ sessionId, store, path })
 ```
 
-A view rendering one value while the store holds another is a bug the render tree cannot show you. If this returns empty or `hasCapabilities` is false, no store was registered — say so, because every state check above is vacuous until it is.
+A view rendering one value while the store holds another is a bug the render tree cannot show you. If this returns empty or `hasCapabilities` is false, no store was registered: say so, because every state check above is vacuous until it is.
 
 **4. Nobody read the response.** A 2xx that the app never consumed shows as `verified: "unknown"` with `verifiedReason: "outcome_unread"`. That is usually a real app bug, and a test asserting on the request alone would call it a pass.
 
@@ -52,18 +52,18 @@ reticle_run({ tool: "reticle_crawl", sessionId })      // click sweep, returns a
 reticle_run({ tool: "reticle_coverage", sessionId })   // { total, exercised, untouched }
 ```
 
-`crawl` exists because the obvious hand-rolled sweep — click each control, assert no console error — is itself shape 1.
+`crawl` exists because the obvious hand-rolled sweep (click each control, assert no console error) is itself shape 1.
 
 ## What counts as proof
 
-A false green is confirmed when the app **contradicts** the test, not when you feel uneasy. Reticle names that case directly: `verified: "no"` with `verifiedReason: "contradicted"` means a channel observed something incompatible with what the UI claimed — a request that failed while the screen advanced, a signal disagreeing with the DOM, a field echoing a value nobody asked for.
+A false green is confirmed when the app **contradicts** the test, not when you feel uneasy. Reticle names that case directly: `verified: "no"` with `verifiedReason: "contradicted"` means a channel observed something incompatible with what the UI claimed: a request that failed while the screen advanced, a signal disagreeing with the DOM, a field echoing a value nobody asked for.
 
 `unknown` is not a false green and not a pass. It means Reticle could not tell. Report it as unknown.
 
 ## Then fix the test, not just the app
 
-For every false green you confirm, the test that missed it is still there and will miss it again. Rewrite its assertion to name a consequence the app must produce — a request with a status, a signal, a state path — rather than an absence. **Never weaken a check to make a verdict green**; that is how the false green got in.
+For every false green you confirm, the test that missed it is still there and will miss it again. Rewrite its assertion to name a consequence the app must produce (a request with a status, a signal, a state path) rather than an absence. **Never weaken a check to make a verdict green**; that is how the false green got in.
 
 ---
 
-Index of everything, one page at a time: `curl https://docs.reticle.sh/llms.txt`. Found a case Reticle could not see? `reticle_feedback` with `kind: "gap"` — that is the signal that decides what gets built.
+Index of everything, one page at a time: `curl https://docs.reticle.sh/llms.txt`. Found a case Reticle could not see? `reticle_feedback` with `kind: "gap"`: that is the signal that decides what gets built.

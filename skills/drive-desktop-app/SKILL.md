@@ -30,7 +30,7 @@ export default defineConfig({
 require('@reticlehq/electron/preload');
 ```
 
-It **must** be in the preload and it must be first. `contextBridge.exposeInMainWorld` hands the renderer a deeply frozen object, so nothing in the page can instrument it afterwards — the preload is the last point where `ipcRenderer.invoke` is still writable, and the shim has to run before your preload captures its own reference.
+It **must** be in the preload and it must be first. `contextBridge.exposeInMainWorld` hands the renderer a deeply frozen object, so nothing in the page can instrument it afterwards. The preload is the last point where `ipcRenderer.invoke` is still writable, and the shim has to run before your preload captures its own reference.
 
 A sandboxed preload cannot resolve `node_modules`, so the bare `require` fails. Either bundle the preload (electron-vite and Forge do by default) or set `sandbox: false`.
 
@@ -48,7 +48,7 @@ The frontend is the same as any web app. The part people miss is that Tauri's de
 }
 ```
 
-Keep `ipc: http://ipc.localhost` — Tauri v2 needs it for `invoke` itself. Dev-only; drop the `ws://` entries from your release config.
+Keep `ipc: http://ipc.localhost`: Tauri v2 needs it for `invoke` itself. Dev-only; drop the `ws://` entries from your release config.
 
 IPC observation needs **nothing** on the Rust side: an `invoke('load_todos')` already reaches Reticle as `ipc://load_todos`. The [`reticle-tauri`](https://crates.io/crates/reticle-tauri) crate is only for screenshots and headless, and it is versioned independently of the npm packages.
 
@@ -66,19 +66,19 @@ reticle_act_and_wait({ sessionId, ref, action: "click", until: { kind: "allOf", 
 ]}})
 ```
 
-**IPC has no status code.** `200`/`500` are synthetic, mapped from whether the command succeeded, precisely so the same predicates keep working. On Tauri you will see `status: 500` next to `statusText: "OK"` — not a bug: the transport answered fine and the `500` is the command's own verdict. `ok` is authoritative.
+**IPC has no status code.** `200`/`500` are synthetic, mapped from whether the command succeeded, precisely so the same predicates keep working. On Tauri you will see `status: 500` next to `statusText: "OK"`. That is not a bug: the transport answered fine and the `500` is the command's own verdict. `ok` is authoritative.
 
-`reticle_state` reads the live store exactly as on the web. `reticle_screenshot` and `reticle_visual_diff` work once the platform's capture step is wired — Electron needs nothing extra; Tauri needs the crate. Headless on Tauri is `RETICLE_HEADLESS=1`, and screenshots keep working because the capture renders the webview rather than the screen.
+`reticle_state` reads the live store exactly as on the web. `reticle_screenshot` and `reticle_visual_diff` work once the platform's capture step is wired. Electron needs nothing extra; Tauri needs the crate. Headless on Tauri is `RETICLE_HEADLESS=1`, and screenshots keep working because the capture renders the webview rather than the screen.
 
 ## What a missing observer looks like
 
 A missing Electron preload is **declared, not silent**: verdicts come back with `coverage: partial` naming the line you did not add, instead of reading clean over a blind spot. If you see that, add the preload line before trusting anything.
 
-If IPC calls never appear while the app works fine — Electron: the shim's `require` is not first. Tauri: `invoke` from `@tauri-apps/api/core` is observed, but a hand-rolled `postMessage` protocol is not.
+If IPC calls never appear while the app works fine: on Electron, the shim's `require` is not first. On Tauri, `invoke` from `@tauri-apps/api/core` is observed, but a hand-rolled `postMessage` protocol is not.
 
 ## Honesty
 
-`unknown` is not a pass on the desktop either. And do not weaken an IPC assertion to make a red verdict green — a desktop false green is the exact failure this wiring exists to remove.
+`unknown` is not a pass on the desktop either. And do not weaken an IPC assertion to make a red verdict green: a desktop false green is the exact failure this wiring exists to remove.
 
 ---
 

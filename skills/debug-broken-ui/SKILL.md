@@ -21,9 +21,9 @@ reticle_snapshot({ sessionId, mode: "interactive" })   // controls only, with re
 reticle_act_and_wait({ sessionId, ref, action: "click", until: { kind: "element", query: { testid: "..." } } })
 ```
 
-The verdict already narrows it: `no` / `contradicted` means a channel saw something incompatible with the UI — you have the bug. `unknown` means Reticle drove it and could not tell, which is a different investigation from "it failed".
+The verdict already narrows it: `no` / `contradicted` means a channel saw something incompatible with the UI: you have the bug. `unknown` means Reticle drove it and could not tell, which is a different investigation from "it failed".
 
-Then read the channels **scoped to what you just did** — pass `since` from the act result, or you are reading a buffer that predates the click:
+Then read the channels **scoped to what you just did**. Pass `since` from the act result, or you are reading a buffer that predates the click:
 
 ```
 reticle_console({ sessionId, since })
@@ -37,10 +37,10 @@ reticle_state({ sessionId, store })
 | --- | --- | --- |
 | No request fired at all | the handler is not bound, or a client cache served a stale value | `reticle_inspect` the element for its `file:line`; check the cache if it is TanStack Query |
 | Request fired, `4xx`/`5xx` | a real backend failure the UI swallowed | the response body is in the network entry |
-| `2xx` but nothing changed | the app never read the response — verdict says `outcome_unread` | usually a real bug in the success path |
+| `2xx` but nothing changed | the app never read the response: verdict says `outcome_unread` | usually a real bug in the success path |
 | Request fine, DOM fine, **store stale** | UI-vs-state desync, invisible to any screenshot | `reticle_state` is the only witness; this is the highest-value read here |
 | Click did nothing, no error | the control is dead, occluded, or disabled | `reticle_inspect` returns `occluded`, `box` (0×0), `styles.cursor`, `opacity` |
-| Element "not found" that you can see | virtualised list has not mounted it | `reticle_scroll_to` — a `query` that misses is not evidence of absence |
+| Element "not found" that you can see | virtualised list has not mounted it | `reticle_scroll_to`. A `query` that misses is not evidence of absence |
 | Looks logged in, behaves logged out | the token never persisted | `reticle_storage` |
 | Console error that predates your click | a pre-existing fault, not your bug | call it out before continuing |
 
@@ -50,7 +50,7 @@ reticle_state({ sessionId, store })
 reticle_inspect({ sessionId, ref })
 ```
 
-Returns the component and `source: { file, line }` for the element you are looking at, plus whether it is occluded, sized, disabled or off-theme. That is the pointer to open — end the investigation with a location, not a hypothesis.
+Returns the component and `source: { file, line }` for the element you are looking at, plus whether it is occluded, sized, disabled or off-theme. That is the pointer to open. End the investigation with a location, not a hypothesis.
 
 ## When the flow is long
 
@@ -58,7 +58,7 @@ Do not ping-pong act → snapshot → act → snapshot to find the failing step.
 
 ## Before you say it is fixed
 
-Re-run the reproduction as a verdict — `reticle_act_and_wait` with the consequence named up front — rather than eyeballing the page. A fix confirmed by looking at it is the failure mode that created this ticket.
+Re-run the reproduction as a verdict (`reticle_act_and_wait` with the consequence named up front) rather than eyeballing the page. A fix confirmed by looking at it is the failure mode that created this ticket.
 
 **And never weaken the check to make it pass.**
 
