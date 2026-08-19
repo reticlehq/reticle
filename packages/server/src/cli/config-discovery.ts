@@ -24,7 +24,7 @@ const MAX_WALK_DEPTH = 40;
 
 export interface ConfigDiscovery {
   /** Repo root, identified by a `.git` entry. Undefined when the walk found none. */
-  repoRoot?: string;
+  repoRoot?: string | undefined;
   /** Every `.reticle.json` found, absolute, in discovery order. Empty when there are none. */
   configs: readonly string[];
   /** Directories actually examined, absolute — what the message means by "where we looked". */
