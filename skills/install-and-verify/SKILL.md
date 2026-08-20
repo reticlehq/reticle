@@ -137,10 +137,10 @@ A connected session is not a result. The user has installed something and seen n
 
 Tell the user to keep the tab visible. The HUD is on by default (glow border, animated cursor, narration per step) and watching you drive their own app is the demo.
 
-Drive it in as few calls as you can. Every call is a full model turn, and in a client that asks the user to approve each one it is also a click — a flow driven one call at a time is how a person gives up before they ever see a verdict.
+Drive it in as few calls as you can. Every call is a full model turn, and in a client that asks the user to approve each one it is also a click. A flow driven one call at a time is how a person gives up before they ever see a verdict.
 
 1. `reticle_snapshot({ mode: "interactive" })` **once**, for the whole flow. Not once per step.
-2. `reticle_act_sequence` for the setup — every fill and every intermediate click in ONE call.
+2. `reticle_act_sequence` for the setup: every fill and every intermediate click in ONE call.
 3. `reticle_act_and_wait({ ref, action, until })` for the final step only. This is the call that produces the verdict, and `until` names the expected consequence before the action fires.
 4. `reticle_state()` once at the end.
 
@@ -155,7 +155,7 @@ reticle_run({ tool: "reticle_record", args: { action: "stop",  recordingName: "<
 reticle_run({ tool: "reticle_flow_save", args: { flowName: "<flow>" } })
 ```
 
-`reticle_flow_save` returns `assertions.grade`. If it is not `asserted`, the flow only clicks — it will pass even when the feature is broken. Say that in one line rather than presenting it as a regression check.
+`reticle_flow_save` returns `assertions.grade`. If it is not `asserted`, the flow only clicks: it will pass even when the feature is broken. Say that in one line rather than presenting it as a regression check.
 
 Tell the user plainly: that flow is now saved to `.reticle/flows/`, and re-verifying it after any future change is one call with no model in the loop.
 
@@ -190,7 +190,7 @@ Stop at the first row that fits. Do not hand-drive a flow you could replay.
 | "Does this new behaviour work?" | `reticle_act_sequence` for the setup, then ONE `reticle_act_and_wait` | 2 |
 | No MCP available at all | `npx @reticlehq/server verify <url>` in the shell | 1, no MCP |
 
-The first two are **not on the advertised tool list** — they are reached through `reticle_run` exactly as written. That is the supported call shape, and it is why you have to be told they exist.
+The first two are **not on the advertised tool list**: they are reached through `reticle_run` exactly as written. That is the supported call shape, and it is why you have to be told they exist.
 
 `reticle_verify_change` answers `unknown` when no saved flow covers the files you changed. Nothing ran, so nothing was proved: that is the honest answer, never a pass, and it is the signal to record one (step 5 above).
 

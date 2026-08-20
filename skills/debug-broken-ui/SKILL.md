@@ -23,11 +23,11 @@ reticle_act_and_wait({ sessionId, ref, action: "click", until: { kind: "element"
 
 The verdict already narrows it: `no` / `contradicted` means a channel saw something incompatible with the UI: you have the bug. `unknown` means Reticle drove it and could not tell, which is a different investigation from "it failed".
 
-**Read the act result before you call anything else.** Its `summary` block already carries the whole causal window of that one click: `net {total, errors, headline}`, `consoleErrors`, `stateDiffs [{path, from, to}]`, `storageDiffs [{key, from, to}]`, `route`, `signals`, `layoutShift`, `longTasks` — real before→after diffs, not counts. The console, network, storage and state calls below are for going DEEPER into something the summary already pointed at. Calling all three straight after an act pays three model round trips (and, in an approval-gated client, three human clicks) for evidence you were already holding.
+**Read the act result before you call anything else.** Its `summary` block already carries the whole causal window of that one click: `net {total, errors, headline}`, `consoleErrors`, `stateDiffs [{path, from, to}]`, `storageDiffs [{key, from, to}]`, `route`, `signals`, `layoutShift`, `longTasks`: real before→after diffs, not counts. The console, network, storage and state calls below are for going DEEPER into something the summary already pointed at. Calling all three straight after an act pays three model round trips (and, in an approval-gated client, three human clicks) for evidence you were already holding.
 
-`summary.stateUnwatched: true` means the state channel is dark — no subscribable store is registered, so an empty `stateDiffs` means _unwatched_, not _unchanged_, and no state-based conclusion is available until someone registers the store. It is the one field here that is about your instrumentation rather than about the app.
+`summary.stateUnwatched: true` means the state channel is dark: no subscribable store is registered, so an empty `stateDiffs` means _unwatched_, not _unchanged_, and no state-based conclusion is available until someone registers the store. It is the one field here that is about your instrumentation rather than about the app.
 
-When the summary does point somewhere, read that channel **scoped to what you just did** — pass `since` from the act result, or you are reading a buffer that predates the click:
+When the summary does point somewhere, read that channel **scoped to what you just did**: pass `since` from the act result, or you are reading a buffer that predates the click:
 
 ```
 reticle_console({ sessionId, since })
