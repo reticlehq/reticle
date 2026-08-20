@@ -10,12 +10,14 @@ export default defineConfig({
 `;
 
 describe('patchViteConfig', () => {
-  it('adds the import and reticle() into the plugins array', () => {
+  it('adds the import and the reticle plugin FIRST in the plugins array', () => {
     const r = patchViteConfig(BASIC);
     expect(r.kind).toBe(VitePatchKind.APPLY);
     if (r.kind !== VitePatchKind.APPLY) return;
     expect(r.code).toContain(VITE_IMPORT);
-    expect(r.code).toMatch(/plugins:\s*\[reticle\(\),\s*react\(\)\]/);
+    // Order is the invariant, not the argument list: the framework plugin must not transform an entry
+    // before this one has stamped it. `[^)]*` so options in the call cannot silently relax that.
+    expect(r.code).toMatch(/plugins:\s*\[reticle\([^)]*\),\s*react\(\)\]/);
   });
 
   it('places the import after the last existing import', () => {
@@ -36,15 +38,15 @@ describe('patchViteConfig', () => {
   it('bakes a non-default port into the reticle() call', () => {
     const r = patchViteConfig(BASIC, 5000);
     if (r.kind !== VitePatchKind.APPLY) throw new Error('expected apply');
-    expect(r.code).toContain('reticle({ port: 5000 })');
+    expect(r.code).toContain('port: 5000');
   });
 
-  it('emits bare reticle() when no port is given', () => {
+  it('omits the port argument when the default port is in use', () => {
     const r = patchViteConfig(BASIC);
     if (r.kind !== VitePatchKind.APPLY) throw new Error('expected apply');
     // Spaced to match the line it lands on: single-line arrays keep the space, multi-line ones
     // would otherwise be left with trailing whitespace for a formatter to rewrite.
-    expect(r.code).toContain('reticle(),');
+    expect(r.code).toContain('reticle({');
     expect(r.code).not.toContain('port:');
   });
 
@@ -60,7 +62,7 @@ export default defineConfig({ server: { port: 3000 } });
     expect(r.kind).toBe(VitePatchKind.APPLY);
     if (r.kind !== VitePatchKind.APPLY) return;
     expect(r.code).toContain(VITE_IMPORT);
-    expect(r.code).toContain('plugins: [reticle()]');
+    expect(r.code).toContain('plugins: [reticle({');
     // The existing config must survive intact.
     expect(r.code).toContain('server: { port: 3000 }');
   });
@@ -76,7 +78,7 @@ export default defineConfig({
 `);
     expect(r.kind).toBe(VitePatchKind.APPLY);
     if (r.kind !== VitePatchKind.APPLY) return;
-    expect(r.code).toContain('plugins: [reticle()],');
+    expect(r.code).toContain('plugins: [reticle({');
     expect(r.code).toContain('port: 3000');
   });
 
@@ -84,7 +86,7 @@ export default defineConfig({
     const r = patchViteConfig('export default {};\n');
     expect(r.kind).toBe(VitePatchKind.APPLY);
     if (r.kind !== VitePatchKind.APPLY) return;
-    expect(r.code).toContain('plugins: [reticle()]');
+    expect(r.code).toContain('plugins: [reticle({');
   });
 
   it('still bails to manual when there is no config object to extend', () => {
@@ -114,5 +116,45 @@ describe('patchViteConfig — the edit reads like the file it lands in', () => {
     for (const line of r.code.split('\n')) {
       expect(line, JSON.stringify(line)).toBe(line.replace(/\s+$/, ''));
     }
+  });
+});
+
+/**
+ * The plugin call `init` writes carries body capture, because without it the one bug class Reticle
+ * exists to catch is unreachable on a default install.
+ *
+ * A 200 describes the transport, not the result. A write whose response body was never recorded
+ * grades `unknown / outcome_unread` — so a refund that posts rupees into a paise field, answers 200,
+ * and renders the amount the user typed rather than the amount the server returned, cannot be caught
+ * by the tool built to catch exactly that. Measured on a real app: an agent asked to verify a refund
+ * had to edit the app's own vite.config mid-task to see the payload, then tell its human to revert
+ * the edit.
+ *
+ * Written into the USER'S config rather than flipped as an SDK default, and that is the whole point.
+ * A body is the one part of a request that routinely carries personal data, and while the credential
+ * classes are redacted (tokens, cookies, card numbers, cvv, ssn) an address or an email is not. So
+ * the choice belongs where the user can see it, keep it, or delete it — not in a default that
+ * changes what an already-installed SDK records the next time it updates.
+ */
+describe('the plugin call init writes', () => {
+  it('enables body capture, so a write outcome is readable out of the box', () => {
+    const r = patchViteConfig('export default defineConfig({ plugins: [react()] });', 5000);
+    expect(r.kind).toBe(VitePatchKind.APPLY);
+    if (r.kind !== VitePatchKind.APPLY) return;
+    expect(r.code).toContain('captureNetworkBodies: true');
+  });
+
+  it('still carries the port alongside it', () => {
+    const r = patchViteConfig('export default defineConfig({ plugins: [react()] });', 5000);
+    if (r.kind !== VitePatchKind.APPLY) return;
+    expect(r.code).toContain('port: 5000');
+  });
+
+  it('enables it even when there is no port to pass', () => {
+    // The default port needs no argument, which used to make the call `reticle()` — so the option
+    // had nowhere to live and the default-port case would have silently kept the old behaviour.
+    const r = patchViteConfig('export default defineConfig({ plugins: [react()] });');
+    if (r.kind !== VitePatchKind.APPLY) return;
+    expect(r.code).toContain('captureNetworkBodies: true');
   });
 });

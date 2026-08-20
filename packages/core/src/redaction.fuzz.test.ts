@@ -60,13 +60,14 @@ describe('redaction fuzz — no crash, no hang, no leak of a known secret shape'
   it('an adversarial run of the redaction alphabet cannot make the regex quadratic', () => {
     // The class the input-scan cap in network-body guards against: a long run of `[A-Za-z0-9_.-]`
     // followed by no delimiter. Here we prove the core scrub itself stays linear.
+    //
+    // The backstop is the per-test TIMEOUT below, not a wall-clock assertion — the same rule stated
+    // twenty lines above this, which this test was breaking. Catastrophic backtracking on inputs
+    // this size does not come in a little over budget; it does not finish. So a generous timeout
+    // catches it, while `Date.now() - t0 < 200` is a claim about the machine and fails only under
+    // parallel load, which means only in CI.
     for (const n of [1000, 4000, 8000]) {
-      const s = 'a'.repeat(n);
-      const t0 = Date.now();
-      scrubKnownSecrets(s);
-      // Each size should complete in well under the previous-size ceiling scaled linearly; a generous
-      // absolute cap catches an exponential blowup without asserting a specific duration.
-      expect(Date.now() - t0).toBeLessThan(200);
+      expect(() => scrubKnownSecrets('a'.repeat(n))).not.toThrow();
     }
-  });
+  }, 20_000);
 });

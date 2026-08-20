@@ -5,8 +5,7 @@
  * (jsonc/comment) files bail to manual rather than being rewritten.
  */
 
-import { NPX, MCP_SERVER_NAME, npxServerArgs } from './mcp.js';
-import { RETICLE_NPM_PACKAGE } from '../version/server-version.js';
+import { NPX, MCP_SERVER_NAME, npxServerArgs, isReticleRegistration } from './mcp.js';
 
 /** Path of Cursor's global MCP config, relative to the user's home directory. */
 export const CURSOR_MCP_RELPATH = '.cursor/mcp.json';
@@ -64,18 +63,15 @@ function parseConfig(existing: string | null): ParseResult {
  *
  * What IS repaired is a stale entry of our own shape — an old pin, a command that has moved — which
  * presence-only idempotency reported as "already registered" and never fixed, so an upgrade could
- * not repair the thing an upgrade exists to repair.
+ * not repair the thing an upgrade exists to repair. A WRONG entry counts as ours to repair too:
+ * `["@reticlehq/core","mcp"]` was reported from the field, and `core` has no MCP server in it.
  */
 function leaveEntryAlone(existing: unknown): boolean {
   if (JSON.stringify(existing) === JSON.stringify(cursorServerEntry())) return true;
   if (typeof existing !== 'object' || null === existing) return true;
-  const command = (existing as { command?: unknown }).command;
-  const args = (existing as { args?: unknown }).args;
-  const ours =
-    command === NPX &&
-    Array.isArray(args) &&
-    args.some((arg) => 'string' === typeof arg && arg.includes(RETICLE_NPM_PACKAGE));
-  return !ours;
+  const record = existing as { command?: unknown; args?: unknown };
+  const tokens = [record.command, record.args].flat().filter((v) => 'string' === typeof v);
+  return !isReticleRegistration(tokens);
 }
 
 export function mergeCursorConfig(existing: string | null): CursorMergeResult {

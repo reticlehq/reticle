@@ -11,14 +11,22 @@ const BODY_BEARING_METHODS = new Set(['POST', 'PUT', 'PATCH']);
  * every other field in the record agrees is a clean 200.
  *
  * So an omission is declared rather than left to inference, with the one line that fixes it. Present
- * only when a body-bearing call was returned AND none of them carried a body, so an app that already
- * captures bodies pays nothing and the field's PRESENCE is the warning.
+ * only when a body-bearing call was returned AND no body — request or response — was recorded
+ * anywhere in the result, so an app that already captures bodies pays nothing and the field's
+ * PRESENCE is the warning.
  */
-export function bodiesNotCaptured(calls: { method?: string; requestBody?: string }[]): {
+export function bodiesNotCaptured(
+  calls: { method?: string; requestBody?: string; responseBody?: string }[],
+): {
   bodiesNotCaptured?: string;
 } {
   const bodyBearing = calls.filter((c) => BODY_BEARING_METHODS.has((c.method ?? '').toUpperCase()));
   if (0 === bodyBearing.length) return {};
+  // A recorded response body anywhere in the result proves capture is ON. An absent request body
+  // then means this payload was not stringified (a multipart upload, a body the SDK skipped), not
+  // that recording is off — and firing the note would contradict the body sitting in the same
+  // result, exactly on the question the note exists to answer. (#394)
+  if (calls.some((c) => c.responseBody !== undefined)) return {};
   if (bodyBearing.some((c) => c.requestBody !== undefined)) return {};
   return {
     // Framework-neutral on purpose. The first version named vite.config, and driving a Next.js app

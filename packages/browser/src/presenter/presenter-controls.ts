@@ -1,30 +1,39 @@
 import { HumanControlKind, PresenterTone, SessionState, type FlowChip } from '@reticlehq/core';
 import { nativeSetTimeout, nativeClearTimeout } from '../timers/native-timers.js';
-
-// Live-control panel: the two-way control surface inside the floating HUD — Pause/Resume + End
+import { CHAT_TOGGLE_ATTR, CLEAR_MARKS_ATTR, MARKERS_BTN_ATTR } from './presenter-config.js';
+import {
+  PresenterIcon,
+  PRESENTER_ICON_SIZE,
+  hiIcon,
+  hiIconHtml,
+  hiToggleIconHtml,
+} from './presenter-icons.js';
+import { getPresenterSettings } from './presenter-settings.js';
+import { mountWorkspaceSelector, workspaceRowHtml } from './presenter-workspace.js';
+import type { HeroIconBodyKey } from './presenter-heroicons-data.js';
+// Live-control panel: the two-way control surface inside the floating HUD - Pause/Resume + End
 // (header), a message input + Send (footer), and the data-reticle-state visual machine. Split out of
 // presenter.ts to keep both files under the 500-line cap (mirrors the presenter-log.ts split).
 // All nodes carry data-reticle-* attrs so they're excluded from snapshots (see dom-ignore.ts). The
 // strings here are presenter-only UI; the control kinds + state values reuse protocol constants.
-
 /** data-reticle-state attribute on the overlay root; its value is always a SessionState. */
 const DATA_RETICLE_STATE = 'data-reticle-state';
-/** data-reticle-tone on the overlay root — waiting/ask/warn distinguishes how the agent handed back. */
+/** data-reticle-tone on the overlay root - waiting/ask/warn distinguishes how the agent handed back. */
 const DATA_RETICLE_TONE = 'data-reticle-tone';
 const DATA_ON = 'data-on';
 const GLOW_OFF = '0';
-
 /** Button copy (presenter-only UI; never a wire string). */
 const CONTROL_LABEL = {
   PAUSE: 'Pause',
   RESUME: 'Resume',
   END: 'End',
   SEND: 'Send',
-} as const;
+};
 const INPUT_PLACEHOLDER = 'Tell the agent something…';
 /** Accessible name for the composer (a placeholder is not an accessible name). */
 const INPUT_ARIA_LABEL = 'Message to the agent';
 const PAUSED_BADGE_TEXT = 'PAUSED';
+export const PAUSED_BADGE_LABEL = PAUSED_BADGE_TEXT;
 const ENDED_BANNER_TEXT = 'Session ended';
 const COPY_LABEL = 'Copy run';
 const EXPORT_LABEL = 'Export';
@@ -35,7 +44,7 @@ const RUN_FILENAME = 'reticle-run.json';
 /** Border fade-out delay after a session ends (native timer; presenter-only tunable). */
 export const ENDED_FADE_MS = 4000;
 /** Max composer height (px) before it scrolls. One source for both the CSS cap and the JS auto-grow
- * clamp — they measure the same border-box, so the scrollbar appears exactly when growth stops. */
+ * clamp - they measure the same border-box, so the scrollbar appears exactly when growth stops. */
 const MSG_MAX_H = 96;
 
 /** Payload the panel hands to its host when the human drives a control. */
@@ -47,101 +56,165 @@ export type ControlHandler = (intent: ControlIntent) => void;
 
 /** CSS for the control surface (injected with the rest of the presenter stylesheet). */
 export const CONTROLS_CSS = `
-[data-reticle-hud] .reticle-ctl{pointer-events:auto;cursor:pointer;flex:none;display:inline-flex;align-items:center;justify-content:center;
-  height:26px;padding:0 11px;border-radius:8px;border:1px solid var(--reticle-line);background:rgba(255,255,255,.04);
-  color:var(--reticle-muted);font-family:var(--reticle-font);font-size:11px;font-weight:500;letter-spacing:.01em;line-height:1;
-  transition:background .15s,color .15s,border-color .15s,transform .1s;}
-[data-reticle-hud] .reticle-ctl:hover{color:var(--reticle-fg);background:rgba(255,255,255,.09);}
-[data-reticle-hud] .reticle-ctl:active{transform:scale(.95);}
-[data-reticle-hud] .reticle-ctl:disabled{opacity:.35;cursor:default;}
-[data-reticle-hud] [data-reticle-end]{color:#ff9aa2;border-color:rgba(255,107,107,.22);}
-[data-reticle-hud] [data-reticle-end]:hover{color:#ff7a7a;border-color:rgba(255,107,107,.5);background:rgba(255,107,107,.1);}
-[data-reticle-hud] .reticle-badge{display:none;align-items:center;flex:none;font-weight:600;letter-spacing:.1em;font-size:9px;
-  color:var(--reticle-accent);border:1px solid var(--reticle-accent);background:var(--reticle-accent-soft);padding:2px 8px;border-radius:999px;}
-[data-reticle-overlay][data-reticle-state="paused"] [data-reticle-badge]{display:inline-flex;}
-[data-reticle-hud] [data-reticle-foot]{flex:none;padding:10px 12px 12px;border-top:1px solid var(--reticle-line2);background:rgba(0,0,0,.16);}
-[data-reticle-hud] .reticle-composer{display:flex;align-items:flex-end;gap:6px;background:rgba(255,255,255,.05);
-  border:1px solid var(--reticle-line);border-radius:14px;padding:5px 6px 5px 14px;transition:border-color .15s,box-shadow .15s;}
-[data-reticle-hud] .reticle-composer:focus-within{border-color:var(--reticle-accent);box-shadow:0 0 0 3px var(--reticle-accent-soft);}
-[data-reticle-hud] .reticle-msg{flex:1;min-width:0;pointer-events:auto;background:transparent;border:none;outline:none;resize:none;
-  box-sizing:border-box;color:var(--reticle-fg);font-family:var(--reticle-font);font-size:13px;line-height:18px;
+[data-reticle-chat-panel] [data-reticle-foot]{flex:none;padding:8px 10px 10px;border-top:1px solid rgba(255,255,255,.07);
+  background:linear-gradient(180deg,rgba(0,0,0,.35) 0%,rgba(0,0,0,.55) 100%);pointer-events:auto;}
+[data-reticle-chat-panel] .reticle-hud-log-well{margin:0 0 4px;}
+[data-reticle-chat-panel] .reticle-composer-stack{display:flex;flex-direction:column;gap:6px;}
+[data-reticle-chat-panel] .reticle-workspace-wrap{position:relative;align-self:flex-start;max-width:100%;}
+[data-reticle-chat-panel] .reticle-workspace{
+  display:inline-flex;align-items:center;gap:5px;max-width:100%;padding:3px 8px 3px 6px;border-radius:999px;cursor:pointer;
+  border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.04);color:rgba(255,255,255,.78);
+  font:inherit;font-size:11px;font-weight:500;line-height:1.2;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.05);transition:background .15s,border-color .15s,color .15s;}
+[data-reticle-chat-panel] .reticle-workspace:hover{background:rgba(255,255,255,.07);border-color:rgba(255,255,255,.14);color:#fff;}
+[data-reticle-chat-panel] .reticle-workspace[aria-expanded="true"]{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.16);color:#fff;}
+[data-reticle-chat-panel] .reticle-workspace-icon,
+[data-reticle-chat-panel] .reticle-workspace-caret{display:inline-flex;align-items:center;opacity:.72;flex:none;}
+[data-reticle-chat-panel] .reticle-workspace-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:min(200px,calc(100vw - 120px));}
+[data-reticle-chat-panel] .reticle-workspace[aria-expanded="true"] .reticle-workspace-caret{transform:rotate(180deg);}
+[data-reticle-chat-panel] .reticle-workspace-caret{transition:transform .18s ease;}
+[data-reticle-chat-panel] .reticle-workspace-menu{
+  position:absolute;left:0;bottom:calc(100% + 6px);z-index:8;min-width:min(268px,calc(100vw - 48px));max-width:min(300px,calc(100vw - 48px));
+  padding:10px 12px;border-radius:12px;background:#000;color:rgba(255,255,255,.86);font-size:11px;line-height:1.35;
+  box-shadow:0 12px 32px rgba(0,0,0,.58),inset 0 1px 0 rgba(255,255,255,.07),0 0 0 1px rgba(255,255,255,.1);
+  transform:translateY(4px) scale(.98);opacity:0;pointer-events:none;visibility:hidden;
+  transition:opacity .16s ease,transform .2s cubic-bezier(.19,1,.22,1),visibility .16s;}
+[data-reticle-chat-panel] .reticle-workspace[aria-expanded="true"] + .reticle-workspace-menu,
+[data-reticle-chat-panel] .reticle-workspace-menu[aria-hidden="false"]{
+  transform:translateY(0) scale(1);opacity:1;pointer-events:auto;visibility:visible;}
+[data-reticle-chat-panel] .reticle-workspace-menu-head{
+  display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;}
+[data-reticle-chat-panel] .reticle-workspace-menu-title{
+  color:rgba(255,255,255,.42);font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;}
+[data-reticle-chat-panel] .reticle-workspace-copy{
+  display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;padding:0;border:none;border-radius:6px;
+  background:rgba(255,255,255,.06);color:rgba(255,255,255,.7);cursor:pointer;line-height:0;transition:background .12s,color .12s;}
+[data-reticle-chat-panel] .reticle-workspace-copy:hover:not(:disabled){background:rgba(255,255,255,.12);color:#fff;}
+[data-reticle-chat-panel] .reticle-workspace-copy:disabled{opacity:.35;cursor:not-allowed;}
+[data-reticle-chat-panel] .reticle-workspace-menu-row{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;padding:4px 0;}
+[data-reticle-chat-panel] .reticle-workspace-menu-k{flex:none;color:rgba(255,255,255,.42);}
+[data-reticle-chat-panel] .reticle-workspace-menu-v{min-width:0;text-align:right;color:rgba(255,255,255,.9);font-weight:500;word-break:break-all;}
+[data-reticle-chat-panel] .reticle-composer{display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.03);
+  border:1px solid rgba(255,255,255,.1);border-radius:999px;padding:4px 4px 4px 14px;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.05);transition:border-color .2s,box-shadow .2s,background .2s;}
+[data-reticle-chat-panel] .reticle-composer:focus-within{
+  border-color:color-mix(in srgb,var(--reticle-accent) 50%,transparent);background:rgba(255,255,255,.06);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.06),
+    0 0 0 1px color-mix(in srgb,var(--reticle-accent) 50%,transparent);}
+[data-reticle-chat-panel] .reticle-msg{flex:1;min-width:0;pointer-events:auto;background:transparent;border:none;outline:none;resize:none;
+  box-sizing:border-box;color:var(--reticle-fg);font-family:var(--reticle-font);font-size:12.5px;line-height:18px;
   height:28px;min-height:28px;max-height:${MSG_MAX_H}px;padding:5px 0;overflow-y:auto;
   scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.14) transparent;}
-[data-reticle-hud] .reticle-msg::-webkit-scrollbar{width:9px;}
-[data-reticle-hud] .reticle-msg::-webkit-scrollbar-thumb{background:rgba(255,255,255,.14);border-radius:9px;border:2px solid transparent;background-clip:content-box;}
-[data-reticle-hud] .reticle-msg::placeholder{color:var(--reticle-faint);}
-[data-reticle-hud] .reticle-msg:disabled{opacity:.5;}
-[data-reticle-hud] .reticle-send{flex:none;width:30px;height:30px;padding:0;border-radius:10px;border:none;cursor:pointer;pointer-events:auto;
-  background:var(--reticle-accent);color:#0b0d14;display:inline-flex;align-items:center;justify-content:center;transition:filter .15s,transform .1s;}
-[data-reticle-hud] .reticle-send svg{display:block;}
-[data-reticle-hud] .reticle-send:hover{filter:brightness(1.12);}
-[data-reticle-hud] .reticle-send:active{transform:scale(.9);}
-[data-reticle-hud] .reticle-send:disabled{opacity:.4;cursor:default;}
-[data-reticle-hud] .reticle-banner{display:none;flex:none;padding:8px 15px;color:var(--reticle-accent);
-  font-size:11.5px;font-weight:500;border-bottom:1px solid var(--reticle-line2);background:var(--reticle-accent-soft);}
-[data-reticle-overlay][data-reticle-state="ended"] [data-reticle-banner]{display:block;}
-/* Export row: hidden during a live session; revealed when ended so the run can be copied/saved. */
-[data-reticle-hud] .reticle-export{display:none;align-items:center;gap:8px;margin-top:9px;}
-[data-reticle-overlay][data-reticle-state="ended"] [data-reticle-hud] .reticle-export{display:flex;}
-[data-reticle-hud] .reticle-export-msg{color:var(--reticle-ok);font-size:11px;opacity:0;transition:opacity .15s;}
-[data-reticle-hud] .reticle-export-msg[data-show="1"]{opacity:1;}
-[data-reticle-overlay][data-reticle-state="paused"] [data-reticle-glow][data-on="1"]{animation:none;
-  box-shadow:inset 0 0 0 3px rgba(246,180,76,.9),inset 0 0 30px 6px rgba(246,180,76,.4);}
-[data-reticle-overlay][data-reticle-state="ended"] [data-reticle-glow][data-on="1"]{animation:none;
-  box-shadow:inset 0 0 0 2px rgba(61,215,166,.55);}
-/* Handoff tones tell the human the agent's mode at a glance. waiting = calm teal "your turn" (no
-   alarm); ask = amber "answer me" with a pulse; warn = amber "agent crashed" with a pulse. Each leads
-   the banner with an icon and overrides the calm ended-green accent. */
-[data-reticle-overlay][data-reticle-tone="waiting"] [data-reticle-hud]{--reticle-accent:#38bdf8;--reticle-accent-soft:rgba(56,189,248,.16);}
-[data-reticle-overlay][data-reticle-tone="waiting"] [data-reticle-banner]{font-weight:600;color:#7dd3fc;}
-[data-reticle-overlay][data-reticle-tone="waiting"] [data-reticle-banner]::before{content:"\\270B  ";}
-[data-reticle-overlay][data-reticle-tone="waiting"] [data-reticle-glow][data-on="1"]{animation:none;
-  box-shadow:inset 0 0 0 2px rgba(56,189,248,.5);}
-[data-reticle-overlay][data-reticle-tone="ask"] [data-reticle-hud],
-[data-reticle-overlay][data-reticle-tone="warn"] [data-reticle-hud]{--reticle-accent:#fb923c;--reticle-accent-soft:rgba(251,146,60,.18);}
+[data-reticle-chat-panel] .reticle-msg::-webkit-scrollbar{width:9px;}
+[data-reticle-chat-panel] .reticle-msg::-webkit-scrollbar-thumb{background:rgba(255,255,255,.14);border-radius:9px;border:2px solid transparent;background-clip:content-box;}
+[data-reticle-chat-panel] .reticle-msg::placeholder{color:var(--reticle-faint);}
+[data-reticle-chat-panel] .reticle-msg:disabled{opacity:.5;}
+[data-reticle-chat-panel] .reticle-send{flex:none;width:28px;height:28px;padding:0;border-radius:50%;border:none;cursor:pointer;pointer-events:auto;
+  background:var(--reticle-accent);color:#ffffff;display:inline-flex;align-items:center;justify-content:center;
+  transition:background .15s,transform .1s,box-shadow .15s;
+  box-shadow:0 1px 3px color-mix(in srgb,var(--reticle-accent) 30%,transparent);}
+[data-reticle-chat-panel] .reticle-send:hover{
+  background:color-mix(in srgb,var(--reticle-accent) 85%,#000);
+  box-shadow:0 2px 6px color-mix(in srgb,var(--reticle-accent) 40%,transparent);}
+[data-reticle-chat-panel] .reticle-send:active{transform:scale(.92);}
+[data-reticle-chat-panel] .reticle-send:disabled{background:#374151;color:#9ca3af;box-shadow:none;opacity:.5;cursor:default;}
+[data-reticle-chat-panel] .reticle-banner{display:none;flex:none;align-items:center;gap:8px;padding:10px 14px;color:var(--reticle-fg);
+  font-size:12px;font-weight:500;border-bottom:1px solid var(--reticle-line2);background:var(--reticle-surface);}
+[data-reticle-overlay][data-reticle-state="ended"] [data-reticle-chat-panel] .reticle-banner{display:block;}
+[data-reticle-overlay][data-reticle-state="paused"] [data-reticle-glow][data-on="1"]{
+  box-shadow:inset 0 0 0 2px rgba(255,255,255,.2);}
+[data-reticle-overlay][data-reticle-state="ended"] [data-reticle-glow][data-on="1"]{
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.12);}
+[data-reticle-overlay][data-reticle-tone="waiting"] [data-reticle-chat-panel]{
+  --reticle-accent:var(--reticle-state);
+  --reticle-accent-soft:color-mix(in srgb,var(--reticle-state) 18%,transparent);}
+[data-reticle-overlay][data-reticle-tone="waiting"] [data-reticle-banner]{font-weight:500;color:var(--reticle-fg);}
+[data-reticle-overlay][data-reticle-tone="waiting"] [data-reticle-glow][data-on="1"]{
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.16);}
+[data-reticle-overlay][data-reticle-tone="ask"] [data-reticle-chat-panel],
+[data-reticle-overlay][data-reticle-tone="warn"] [data-reticle-chat-panel]{
+  --reticle-accent:var(--reticle-state);
+  --reticle-accent-soft:color-mix(in srgb,var(--reticle-state) 18%,transparent);}
 [data-reticle-overlay][data-reticle-tone="ask"] [data-reticle-banner],
-[data-reticle-overlay][data-reticle-tone="warn"] [data-reticle-banner]{font-weight:600;color:#fdba74;}
-[data-reticle-overlay][data-reticle-tone="ask"] [data-reticle-banner]::before{content:"\\2753  ";}
-[data-reticle-overlay][data-reticle-tone="warn"] [data-reticle-banner]::before{content:"\\26A0\\FE0F  ";}
+[data-reticle-overlay][data-reticle-tone="warn"] [data-reticle-banner]{font-weight:500;color:var(--reticle-fg);}
 [data-reticle-overlay][data-reticle-tone="ask"] [data-reticle-glow][data-on="1"],
-[data-reticle-overlay][data-reticle-tone="warn"] [data-reticle-glow][data-on="1"]{animation:reticle-warn-pulse 1.5s ease-in-out infinite;
-  box-shadow:inset 0 0 0 2px rgba(251,146,60,.7);}
-@keyframes reticle-warn-pulse{0%,100%{box-shadow:inset 0 0 0 2px rgba(251,146,60,.32);}
-  50%{box-shadow:inset 0 0 0 3px rgba(251,146,60,.85),inset 0 0 26px 5px rgba(251,146,60,.34);}}
-/* Replay-a-flow row: the human re-runs a saved flow with no agent. Hidden until flows are pushed.
-   Bounded + self-scrolling: it sits between the flex:1 log and the flex:none composer, so without a
-   height cap a long flow list would squeeze the log to nothing and push the message input past the
-   panel's overflow:hidden clip. flex:none + max-height + overflow-y keep the log and input always
-   visible; extra flow chips scroll inside this section instead of growing the panel. */
-[data-reticle-hud] .reticle-flows{display:none;flex:none;flex-wrap:wrap;align-content:flex-start;gap:6px;
-  padding:9px 12px;border-top:1px solid var(--reticle-line2);max-height:88px;overflow-y:auto;overscroll-behavior:contain;}
-[data-reticle-hud] .reticle-flows[data-has="1"]{display:flex;}
-[data-reticle-hud] .reticle-flows::-webkit-scrollbar{width:9px;}
-[data-reticle-hud] .reticle-flows::-webkit-scrollbar-thumb{background:rgba(255,255,255,.14);border-radius:9px;border:2px solid transparent;background-clip:content-box;}
-[data-reticle-hud] .reticle-flows-cap{flex:0 0 100%;margin-bottom:1px;color:var(--reticle-faint);font-size:9.5px;letter-spacing:.09em;text-transform:uppercase;}
-[data-reticle-hud] .reticle-flow{pointer-events:auto;cursor:pointer;display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 10px;
+[data-reticle-overlay][data-reticle-tone="warn"] [data-reticle-glow][data-on="1"]{
+  box-shadow:inset 0 0 0 2px rgba(255,255,255,.22);}
+[data-reticle-chat-panel] .reticle-flows{display:none;flex:none;flex-wrap:wrap;align-content:flex-start;gap:6px;
+  padding:9px 12px;border-top:1px solid var(--reticle-line2);max-height:88px;overflow-y:auto;overscroll-behavior:contain;
+  pointer-events:auto;touch-action:pan-y;}
+[data-reticle-chat-panel] .reticle-flows[data-has="1"]{display:flex;}
+[data-reticle-chat-panel] .reticle-flows::-webkit-scrollbar{width:9px;}
+[data-reticle-chat-panel] .reticle-flows::-webkit-scrollbar-thumb{background:rgba(255,255,255,.14);border-radius:9px;border:2px solid transparent;background-clip:content-box;}
+[data-reticle-chat-panel] .reticle-flows-cap{flex:0 0 100%;margin-bottom:1px;color:var(--reticle-faint);font-size:9.5px;letter-spacing:.09em;text-transform:uppercase;}
+[data-reticle-chat-panel] .reticle-flow{pointer-events:auto;cursor:pointer;display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 10px;
   border-radius:7px;border:1px solid var(--reticle-line);background:rgba(255,255,255,.04);color:var(--reticle-muted);
   font-family:var(--reticle-font);font-size:11px;font-weight:500;transition:background .15s,color .15s,border-color .15s,transform .1s;}
-[data-reticle-hud] .reticle-flow:hover{color:var(--reticle-fg);background:var(--reticle-accent-soft);border-color:var(--reticle-accent);}
-[data-reticle-hud] .reticle-flow:active{transform:scale(.95);}
-`;
-
-/** Header markup (controls + badge) injected into .reticle-hud-head, after the expand button. */
-export const CONTROLS_HEAD_HTML = `<button type="button" data-reticle-pause class="reticle-ctl">${CONTROL_LABEL.PAUSE}</button><button type="button" data-reticle-end class="reticle-ctl">${CONTROL_LABEL.END}</button><span data-reticle-badge class="reticle-badge">${PAUSED_BADGE_TEXT}</span>`;
-
+[data-reticle-chat-panel] .reticle-flow:hover{color:var(--reticle-fg);background:var(--reticle-accent-soft);border-color:var(--reticle-accent);}
+[data-reticle-chat-panel] .reticle-flow:active{transform:scale(.95);}
+[data-reticle-overlay][data-reticle-state="paused"] [data-reticle-hud] .reticle-tb-btn--primary{
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.16),0 0 12px rgba(255,255,255,.04);}
+[data-reticle-hud] .reticle-export-msg{position:absolute;width:1px;height:1px;margin:-1px;padding:0;
+  overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0;}
+` as string;
+/** Swap pause/resume icon + accessible label without visible text clutter in the toolbar. */
+function paintPauseBtn(btn: HTMLButtonElement, paused: boolean): void {
+  const iconName: HeroIconBodyKey = paused ? PresenterIcon.PLAY : PresenterIcon.PAUSE;
+  const labelText = paused ? CONTROL_LABEL.RESUME : CONTROL_LABEL.PAUSE;
+  btn.setAttribute('aria-label', labelText);
+  btn.setAttribute('title', labelText);
+  btn.replaceChildren(hiIcon(iconName, PRESENTER_ICON_SIZE.TOOLBAR));
+  btn.classList.toggle('reticle-tb-btn--primary', paused);
+  btn.setAttribute('data-active', paused ? '1' : '0');
+}
+const CHAT_LABEL = 'Agent chat';
+const MARKERS_LABEL = 'Hide markers';
+const CLEAR_MARKS_LABEL = 'Clear all';
+const TB = PRESENTER_ICON_SIZE.TOOLBAR;
+function tbWrap(btn: string, tip: string, kbd?: string): string {
+  const shortcut = kbd === undefined ? '' : `<span class="reticle-tb-kbd">${kbd}</span>`;
+  return `<div class="reticle-tb-wrap">${btn}<span class="reticle-tb-tip">${tip}${shortcut}</span></div>`;
+}
+function pauseToolbarHtml(): string {
+  const btn = `<button type="button" data-reticle-pause class="reticle-tb-btn" title="${CONTROL_LABEL.PAUSE}" aria-label="${CONTROL_LABEL.PAUSE}">${hiIconHtml(PresenterIcon.PAUSE, TB)}</button>`;
+  const badge = `<span data-reticle-badge class="reticle-pause-badge">${PAUSED_BADGE_TEXT}</span>`;
+  const tip = `<span class="reticle-tb-tip">${CONTROL_LABEL.PAUSE}</span>`;
+  return `<div class="reticle-tb-wrap reticle-tb-wrap--pause">${btn}${badge}${tip}</div>`;
+}
+/** Icon toolbar: pause, chat, markers, end, clear - copy/export appear after a run ends. */
+export const CONTROLS_TOOLBAR_HTML = [
+  pauseToolbarHtml(),
+  tbWrap(
+    `<button type="button" ${CHAT_TOGGLE_ATTR} class="reticle-tb-btn reticle-tb-btn--toggle" title="${CHAT_LABEL}" aria-label="${CHAT_LABEL}" aria-pressed="false" data-active="0">${hiToggleIconHtml(PresenterIcon.MESSAGE, TB)}</button>`,
+    CHAT_LABEL,
+  ),
+  tbWrap(
+    `<button type="button" ${MARKERS_BTN_ATTR} class="reticle-tb-btn reticle-tb-btn--toggle" title="${MARKERS_LABEL}" aria-label="${MARKERS_LABEL}" aria-pressed="false" data-active="0" disabled>${hiToggleIconHtml(PresenterIcon.VIEW, TB)}</button>`,
+    MARKERS_LABEL,
+    'H',
+  ),
+  tbWrap(
+    `<button type="button" data-reticle-end class="reticle-tb-btn" title="${CONTROL_LABEL.END}" aria-label="${CONTROL_LABEL.END}">${hiIconHtml(PresenterIcon.STOP, TB)}</button>`,
+    CONTROL_LABEL.END,
+  ),
+  tbWrap(
+    `<button type="button" ${CLEAR_MARKS_ATTR} class="reticle-tb-btn" title="${CLEAR_MARKS_LABEL}" aria-label="${CLEAR_MARKS_LABEL}" data-danger disabled>${hiIconHtml(PresenterIcon.TRASH, TB)}</button>`,
+    CLEAR_MARKS_LABEL,
+    'X',
+  ),
+  `<button type="button" data-reticle-copy class="reticle-tb-btn reticle-tb-btn--export" title="${COPY_LABEL}" aria-label="${COPY_LABEL}" hidden>${hiIconHtml(PresenterIcon.COPY, TB)}</button>`,
+  `<button type="button" data-reticle-export class="reticle-tb-btn reticle-tb-btn--export" title="${EXPORT_LABEL}" aria-label="${EXPORT_LABEL}" hidden>${hiIconHtml(PresenterIcon.DOWNLOAD, TB)}</button>`,
+  '<span data-reticle-export-msg class="reticle-export-msg" aria-live="polite"></span>',
+].join('');
+/** @deprecated Legacy head markup - replaced by CONTROLS_TOOLBAR_HTML in the morphing shell. */
+export const CONTROLS_HEAD_HTML = CONTROLS_TOOLBAR_HTML;
 /** Banner markup (between head and log, hidden unless ended). */
 export const CONTROLS_BANNER_HTML = `<div data-reticle-banner class="reticle-banner">${ENDED_BANNER_TEXT}</div>`;
-
 /** Replay-a-flow row (between log and footer); buttons are filled in by setFlows once flows arrive. */
 export const CONTROLS_FLOWS_HTML = `<div data-reticle-flows class="reticle-flows"><span class="reticle-flows-cap">${FLOWS_LABEL}</span></div>`;
+/** Footer markup: composer only (export icons live in the toolbar). */
+export const CONTROLS_FOOT_HTML = `<div data-reticle-foot><div class="reticle-composer-stack">${workspaceRowHtml()}<div class="reticle-composer"><textarea data-reticle-input class="reticle-msg" rows="1" aria-label="${INPUT_ARIA_LABEL}" placeholder="${INPUT_PLACEHOLDER}"></textarea><button type="button" data-reticle-send class="reticle-send" aria-label="${CONTROL_LABEL.SEND}">${hiIconHtml(PresenterIcon.SEND, PRESENTER_ICON_SIZE.SEND)}</button></div></div></div>`;
 
-/** Aesthetic send glyph (Feather "send" paper-plane). Inline SVG so it's crisp at any DPI. */
-const SEND_ICON = `<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>`;
-
-/** Footer markup: a rounded composer pill (input + icon Send), appended after the log div. */
-export const CONTROLS_FOOT_HTML = `<div data-reticle-foot><div class="reticle-composer"><textarea data-reticle-input class="reticle-msg" rows="1" aria-label="${INPUT_ARIA_LABEL}" placeholder="${INPUT_PLACEHOLDER}"></textarea><button type="button" data-reticle-send class="reticle-send" aria-label="${CONTROL_LABEL.SEND}">${SEND_ICON}</button></div><div class="reticle-export"><button type="button" data-reticle-copy class="reticle-ctl">${COPY_LABEL}</button><button type="button" data-reticle-export class="reticle-ctl">${EXPORT_LABEL}</button><span data-reticle-export-msg class="reticle-export-msg"></span></div></div>`;
-
-/** Element refs of the control surface, queried once after the markup is in the DOM. */
 interface ControlRefs {
   pauseBtn: HTMLButtonElement | undefined;
   endBtn: HTMLButtonElement | undefined;
@@ -168,16 +241,13 @@ function queryControlRefs(root: HTMLElement): ControlRefs {
   };
 }
 
-/** Host hooks the panel needs from the Presenter (the control callback + activity-log appender). */
 interface ControlPanelHost {
-  /** Emit a control to the host (onControl). The ONLY emit path — server pushes never call this. */
   emit: (kind: HumanControlKind, text?: string) => void;
-  /** Append a local 🧑 row when the human sends a message. */
   logHuman: (text: string) => void;
-  /** Injected ended-border fade delay (native timer). */
   endedFadeMs: number;
-  /** The exported run state for the Copy/Export buttons (serialized to JSON). */
   runState: () => unknown;
+  clearRunLog?: () => void;
+  onStateChange?: (state: SessionState) => void;
 }
 
 /**
@@ -199,26 +269,29 @@ export class ControlPanel {
     flows: undefined,
   };
   #state: SessionState = SessionState.ACTIVE;
-  #fadeTimer: number | undefined;
+  #fadeTimer: ReturnType<typeof nativeSetTimeout> | undefined;
   #root: HTMLElement | undefined;
   #glow: HTMLElement | undefined;
   /** The full replayable-flow list from the last push; re-filtered per page on route change. */
   #flowItems: FlowChip[] = [];
+  #workspaceTeardown: (() => void) | undefined;
   readonly #host: ControlPanelHost;
 
   constructor(host: ControlPanelHost) {
     this.#host = host;
   }
-
   get state(): SessionState {
     return this.#state;
   }
-
   /** Query control refs out of the mounted root and bind the DOM listeners, then paint active. */
   mount(root: HTMLElement, glow: HTMLElement | undefined): void {
     this.#root = root;
     this.#glow = glow;
     this.#refs = queryControlRefs(root);
+    const pauseBtn = this.#refs.pauseBtn;
+    if (pauseBtn !== undefined) {
+      paintPauseBtn(pauseBtn, this.#state === SessionState.PAUSED);
+    }
     this.#refs.pauseBtn?.addEventListener('click', () => this.#onPauseToggle());
     this.#refs.endBtn?.addEventListener('click', () => this.#onEnd());
     this.#refs.sendBtn?.addEventListener('click', () => this.#onSend());
@@ -241,17 +314,19 @@ export class ControlPanel {
     });
     this.#refs.copyBtn?.addEventListener('click', () => this.#onCopy());
     this.#refs.exportBtn?.addEventListener('click', () => this.#onExport());
+    this.#workspaceTeardown = mountWorkspaceSelector(root);
     this.setState(SessionState.ACTIVE);
   }
-
   /** Serialize the run state to pretty JSON for Copy/Export. */
   #runJson(): string {
     return JSON.stringify(this.#host.runState(), null, 2);
   }
-
   /** Copy the run state to the clipboard (with a brief "Copied ✓" flash). */
   #onCopy(): void {
     void navigator.clipboard?.writeText(this.#runJson());
+    if (getPresenterSettings().clearOnCopy) {
+      this.#host.clearRunLog?.();
+    }
     const msg = this.#refs.exportMsg;
     if (msg !== undefined) {
       msg.textContent = COPIED_TEXT;
@@ -259,7 +334,6 @@ export class ControlPanel {
       nativeSetTimeout(() => msg.setAttribute('data-show', '0'), 1600);
     }
   }
-
   /** Download the run state as reticle-run.json. */
   #onExport(): void {
     const blob = new Blob([this.#runJson()], { type: 'application/json' });
@@ -269,14 +343,17 @@ export class ControlPanel {
     a.download = RUN_FILENAME;
     a.click();
     URL.revokeObjectURL(url);
+    if (getPresenterSettings().clearOnCopy) {
+      this.#host.clearRunLog?.();
+    }
   }
-
   /** Clear any pending ended-fade timer (called from Presenter.destroy). */
   teardown(): void {
+    this.#workspaceTeardown?.();
+    this.#workspaceTeardown = undefined;
     if (this.#fadeTimer !== undefined) nativeClearTimeout(this.#fadeTimer);
     this.#fadeTimer = undefined;
   }
-
   #onPauseToggle(): void {
     if (this.#state === SessionState.PAUSED) {
       this.#host.emit(HumanControlKind.RESUME);
@@ -286,24 +363,24 @@ export class ControlPanel {
       this.setState(SessionState.PAUSED);
     }
   }
-
   #onEnd(): void {
     if (this.#state === SessionState.ENDED) return;
     this.#host.emit(HumanControlKind.END);
     this.setState(SessionState.ENDED);
   }
-
   #onSend(): void {
     if (this.#state === SessionState.ENDED) return;
     const text = (this.#refs.input?.value ?? '').trim();
     if (0 === text.length) return;
     this.#host.emit(HumanControlKind.MESSAGE, text);
     this.#host.logHuman(text);
+    if (getPresenterSettings().clearOnCopy) {
+      this.#host.clearRunLog?.();
+    }
     if (this.#refs.input !== undefined) this.#refs.input.value = '';
     this.#autosize();
   }
-
-  /** Grow the composer to fit its content (up to the CSS max-height), then shrink back — soothing,
+  /** Grow the composer to fit its content (up to the CSS max-height), then shrink back - soothing,
    * no scrollbar until it's genuinely long. Driven on input and after a send clears the field. */
   #autosize(): void {
     const el = this.#refs.input;
@@ -311,11 +388,10 @@ export class ControlPanel {
     el.style.height = 'auto';
     el.style.height = `${String(Math.min(el.scrollHeight, MSG_MAX_H))}px`;
   }
-
   /** Render the replayable-flow chips from the server push. Each ▶ click re-runs that flow, no agent.
    * Takes the raw wire value and narrows it here (the panel is the consumer of this push). */
   setFlows(flows: unknown): void {
-    const list: unknown[] = Array.isArray(flows) ? (flows as unknown[]) : [];
+    const list: unknown[] = Array.isArray(flows) ? flows : [];
     this.#flowItems = list
       .map((f): FlowChip | null => {
         if ('string' === typeof f) return f.length > 0 ? { name: f } : null;
@@ -331,18 +407,16 @@ export class ControlPanel {
       .filter((c): c is FlowChip => c !== null);
     this.#renderFlows();
   }
-
   /**
    * Re-render the replay chips for the CURRENT page. A flow "starts here" iff its first step's anchor
    * (a testid `start` hint) is present in the live DOM; flows with no start hint (signal/role-first,
-   * un-checkable) always show. Called on connect and on every route change so the list tracks the page —
+   * un-checkable) always show. Called on connect and on every route change so the list tracks the page -
    * so you never see (or click) a flow that can't replay from where you are. Existing flows benefit
    * without re-recording, since the hint is derived from the first step, not stored on the flow.
    */
   refilterFlows(): void {
     this.#renderFlows();
   }
-
   #renderFlows(): void {
     const el = this.#refs.flows;
     if (el === undefined) return;
@@ -362,9 +436,8 @@ export class ControlPanel {
     }
     el.setAttribute('data-has', visible.length > 0 ? '1' : '0');
   }
-
   /**
-   * Drive the panel's visual state. Idempotent; NEVER emits a control — the shared path for both the
+   * Drive the panel's visual state. Idempotent; NEVER emits a control - the shared path for both the
    * optimistic local click and the authoritative server PRESENTER echo. Only the ended-border fade
    * touches a clock, via the injected native timer.
    */
@@ -382,11 +455,18 @@ export class ControlPanel {
     const refs = this.#refs;
     const ended = state === SessionState.ENDED;
     if (refs.pauseBtn !== undefined) {
-      refs.pauseBtn.textContent =
-        state === SessionState.PAUSED ? CONTROL_LABEL.RESUME : CONTROL_LABEL.PAUSE;
+      paintPauseBtn(refs.pauseBtn, state === SessionState.PAUSED);
       refs.pauseBtn.disabled = ended;
     }
     if (refs.endBtn !== undefined) refs.endBtn.disabled = ended;
+    if (refs.copyBtn !== undefined) {
+      if (ended) refs.copyBtn.removeAttribute('hidden');
+      else refs.copyBtn.setAttribute('hidden', '');
+    }
+    if (refs.exportBtn !== undefined) {
+      if (ended) refs.exportBtn.removeAttribute('hidden');
+      else refs.exportBtn.setAttribute('hidden', '');
+    }
     if (refs.sendBtn !== undefined) refs.sendBtn.disabled = ended;
     if (refs.input !== undefined) refs.input.disabled = ended;
     // A calm end leads with "Session ended"; a handoff (waiting/ask/warn) leads with the notice itself,
@@ -406,5 +486,6 @@ export class ControlPanel {
         glow?.setAttribute(DATA_ON, GLOW_OFF);
       }, this.#host.endedFadeMs);
     }
+    this.#host.onStateChange?.(state);
   }
 }

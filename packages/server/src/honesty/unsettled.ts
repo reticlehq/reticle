@@ -27,6 +27,15 @@ export interface UnsettledWindow {
   waitedFor: string;
   /** Requests that started in this window and had not come back, as "METHOD url". */
   stillInFlight: readonly string[];
+  /**
+   * Endpoints called more than once in this window, as "METHOD url ×N" — see `repeatedRequestLabels`.
+   *
+   * The case `stillInFlight` structurally cannot see: a retry loop against a dead backend completes
+   * every attempt, so nothing is ever outstanding, and the verdict fell through to a sentence that
+   * blamed unnamed churn on an app whose whole problem was one endpoint being hammered. Optional —
+   * a caller that does not supply it gets exactly the sentence that shipped before.
+   */
+  repeated?: readonly string[];
 }
 
 /**
@@ -79,11 +88,15 @@ export function describeWaitTarget(predicate: Predicate): string {
 export function unsettledBecause(base: string, window: UnsettledWindow | undefined): string {
   if (window === undefined) return `${base} — re-check, or assert a consequence that settles`;
   if (0 === window.stillInFlight.length) {
+    const repeated = window.repeated ?? [];
     return (
       `${base}. It waited for ${window.waitedFor}, and no request started in this window was left ` +
-      'open — what kept the page busy was its own churn (a poll, a timer, an animation), so waiting ' +
-      'longer will not help. Assert the consequence you care about (a signal, a route change, or ' +
-      'store state) instead of waiting for idle, and re-check if the app is genuinely slow'
+      'open — what kept the page busy was its own churn ' +
+      (0 === repeated.length
+        ? '(a poll, a timer, an animation)'
+        : `(these fired repeatedly: ${repeated.join(', ')} — a poll or a retrying query)`) +
+      ', so waiting longer will not help. Assert the consequence you care about (a signal, a route ' +
+      'change, or store state) instead of waiting for idle, and re-check if the app is genuinely slow'
     );
   }
   const shown = window.stillInFlight.slice(0, MAX_LISTED_REQUESTS);

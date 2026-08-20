@@ -297,7 +297,7 @@ await settle();
   // whether this kind was already seen this session — and says nothing about the app it was found in.
   // `bug_attribution` is ALWAYS present and is an owner, never a description of the app: `app` |
   // `request` | `reticle` | `unclassified`, from a closed list.
-  const BUG_FIELDS = new Set(['bug_falseGreen', 'bug_kind', 'bug_repeat', 'bug_source', 'bug_tool', 'bug_attribution']);
+  const BUG_FIELDS = new Set(['bug_falseGreen', 'bug_fingerprint', 'bug_kind', 'bug_repeat', 'bug_source', 'bug_tool', 'bug_attribution']);
   check('  carries only the classified kind, source, dedup flag and attribution', bugs.every((b) =>
     Object.keys(b.properties).filter((k) => k.startsWith('bug_')).every((k) => BUG_FIELDS.has(k))));
   // Whose fault it was. It shipped twice and was wrong both times — across two real drives every
@@ -323,6 +323,10 @@ await settle();
     '  and the defects are still counted',
     bugs.some((b) => b.properties.bug_kind === 'signal-contradicted') &&
       bugs.some((b) => b.properties.bug_kind === 'console-error'),
+  );
+  check(
+    '  carries a fingerprint for cross-session dedup',
+    bugs.every((b) => /^[0-9a-f]{8}$/.test(b.properties.bug_fingerprint ?? '')),
   );
 }
 

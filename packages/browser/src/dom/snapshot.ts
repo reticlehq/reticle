@@ -65,6 +65,11 @@ interface SnapshotStatus {
   title: string;
   /** Open dialogs, OMITTED when there are none — absence means "no dialog is up". */
   visibleDialogs?: string[];
+  /**
+   * Present ONLY when a whole-page snapshot came back near-empty because an open overlay
+   * aria-hidden the rest of the page (#397). Absence means the page is not hidden behind an overlay.
+   */
+  overlayHidingPage?: string;
 }
 
 export interface SnapshotResult {
@@ -242,12 +247,47 @@ function collectDialogs(root: ParentNode): string[] {
  * case, so the field was almost pure repetition; a reader learns nothing from its presence and
  * everything from it.
  */
+/**
+ * A focus-trap modal (Radix and friends) marks every sibling of the portal root aria-hidden. The
+ * snapshot walk correctly skips aria-hidden subtrees, so a whole-page snapshot can return only the
+ * overlay's own nodes and nothing else -- indistinguishable from "this page is empty". If the
+ * overlay's cleanup is stuck (common on a throttled tab), every later action then dispatches with no
+ * effect because the overlay genuinely captures pointer events. Say so instead of returning a
+ * near-empty tree with no explanation. (#397)
+ */
+function overlayHidingPage(root: ParentNode): string | undefined {
+  // Only meaningful for a whole-page snapshot; a scoped snapshot is the subtree the caller chose.
+  if (root !== document.body) return undefined;
+  const dialogs = document.body.querySelectorAll(
+    '[role="dialog"], dialog[open], [aria-modal="true"]',
+  );
+  let modal: Element | undefined;
+  for (const d of dialogs) {
+    if (isVisible(d)) {
+      modal = d;
+      break;
+    }
+  }
+  if (modal === undefined) return undefined;
+  const modalEl = modal;
+  const outside = Array.from(document.body.children).filter((c) => !c.contains(modalEl));
+  if (0 === outside.length) return undefined;
+  if (!outside.every((c) => 'true' === c.getAttribute('aria-hidden'))) return undefined;
+  return (
+    'the rest of the page is aria-hidden behind an open overlay (a focus-trap modal), so this ' +
+    'snapshot shows only the overlay. If it will not close its cleanup may be stuck on a throttled ' +
+    'tab: dismiss the overlay, or snapshot with { scope } inside it.'
+  );
+}
+
 function buildStatus(root: ParentNode): SnapshotStatus {
   const visibleDialogs = collectDialogs(root);
+  const overlay = overlayHidingPage(root);
   return {
     route: `${location.pathname}${location.search}${location.hash}`,
     title: document.title,
     ...(visibleDialogs.length > 0 ? { visibleDialogs } : {}),
+    ...(overlay !== undefined ? { overlayHidingPage: overlay } : {}),
   };
 }
 

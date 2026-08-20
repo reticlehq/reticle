@@ -18,6 +18,8 @@
  * thing it claims to guard.
  */
 
+import { PortPresence } from '../daemon/port-presence.js';
+
 /** What to do when the SSE stream drops. */
 export const OnDrop = {
   /** A daemon is listening — reattach to it. */
@@ -30,9 +32,17 @@ export type OnDrop = (typeof OnDrop)[keyof typeof OnDrop];
 /**
  * A stream drop only ever justifies reattaching, never spawning. This is the whole fix: the proxy
  * used to spawn here, which turned a daemon's own idle shutdown into a permanent respawn loop.
+ *
+ * It takes the PRESENCE, not a boolean. It used to take `daemonListening`, filled from a bare TCP
+ * connect — a probe that cannot tell a Reticle daemon from anything else that accepts a socket. A
+ * stranger on the bridge port therefore read as "a daemon is there", and since a stranger answers
+ * and closes, every reattach dropped and reattached again: measured at nineteen reconnects in
+ * forty-eight seconds, each logged as `reticle_mcp_proxy_reconnected`, forever. `probePresence`
+ * already asks the second question and every human-facing command already uses it; this was the last
+ * decision point still guessing from the first.
  */
-export function onStreamDrop(daemonListening: boolean): OnDrop {
-  return daemonListening ? OnDrop.REATTACH : OnDrop.DORMANT;
+export function onStreamDrop(presence: PortPresence): OnDrop {
+  return PortPresence.DAEMON === presence ? OnDrop.REATTACH : OnDrop.DORMANT;
 }
 
 /**

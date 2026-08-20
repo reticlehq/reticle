@@ -1,4 +1,10 @@
-import { Verified, VerifiedReason, isAbsenceDerived } from '@reticlehq/core';
+import {
+  ContradictionKind,
+  MUTATING_METHODS,
+  Verified,
+  VerifiedReason,
+  isAbsenceDerived,
+} from '@reticlehq/core';
 import { HonestyGrade, type HonestyBlock } from './honesty.js';
 import { unsettledBecause, type UnsettledWindow } from './unsettled.js';
 
@@ -43,21 +49,47 @@ interface VerifiedInputs {
   /** Did a real frame flush before the wait gave up? */
   settled?: boolean;
   /**
+   * The caller NAMED the expected consequence before acting — an `until`/`predicate` of its own,
+   * rather than the default "wait for the page to go idle".
+   *
+   * This is the epistemic core of the tool: a declaration made before the action cannot be
+   * rationalised after it. When such a declaration HOLDS, settlement is corroboration, not a veto —
+   * so the two clauses that answer "the app had not gone quiet" step aside for it. Measured in the
+   * field on three different apps: the expected text was on screen, the write returned 204, the
+   * nested verdict passed with evidence, and the verdict was `unknown` because the SPA polls, or
+   * because the tab was hidden and a hidden tab never fires the animation frame `settled` is read
+   * from. A hidden tab is the NORMAL state for agent-driven verification, so a signal that is always
+   * false there cannot be a precondition for a verdict.
+   *
+   * Narrow on purpose. It steps aside for settlement ONLY: an absence-derived finding about what the
+   * action DID — a duplicate write, a dead control, a route that rendered nothing, a response
+   * nothing consumed — still downgrades, and every positively OBSERVED contradiction still wins
+   * outright. Fixing a false negative must not open a path to a false positive.
+   */
+  declaredConsequence?: boolean;
+  /**
    * A write in this window answered `202 Accepted` — the server took the request and has NOT
    * finished processing it.
    */
   outcomePending?: boolean;
   /**
-   * A write in this window returned 2xx with a payload that was never recorded, so its outcome was
-   * never read. See `hasUnreadWriteOutcome` — the status line describes the transport, not the result.
+   * Writes in this window that returned 2xx with a payload that was never recorded, as "METHOD url",
+   * so their outcome was never read. See `unreadWriteLabels` — the status line describes the
+   * transport, not the result.
+   *
+   * The LABELS rather than a flag: every other clause names the evidence that decided it, and this
+   * one named nothing, so an agent holding the caveat could not tell which call it was about.
+   * Empty means nothing went unread.
    */
-  outcomeUnread?: boolean;
+  outcomeUnread?: readonly string[];
   /**
    * What the wait was for and what the window held when it ended — read ONLY by the two clauses that
    * answer UNSETTLED, which is the commonest reason a verdict comes back `unknown` and was also the
    * least actionable. Optional: without it those clauses say exactly what they said before.
    */
   unsettled?: UnsettledWindow;
+  /** A passing absence assertion targeted a region that the current capture could not observe. */
+  absenceBlindSpot?: string;
 }
 
 interface VerifiedVerdict {
@@ -75,6 +107,8 @@ interface VerifiedVerdict {
 
 export function decideVerified(inputs: VerifiedInputs): VerifiedVerdict {
   const { pass, honesty, contradictions = [], settled, outcomePending, outcomeUnread } = inputs;
+  /** The caller named a consequence before acting and it held — see `declaredConsequence`. */
+  const declaredHeld = true === inputs.declaredConsequence && true === pass;
 
   // Ahead of the failure clause, because a failure is only the most actionable fact when there WAS
   // one. An assertion nobody could evaluate is not a defect in the app, and calling it one was
@@ -141,15 +175,47 @@ export function decideVerified(inputs: VerifiedInputs): VerifiedVerdict {
   // Absence-derived only: report it, do not assert failure. UNKNOWN is the honest answer — Reticle
   // drove the app and could not yet tell. The finding still rides out in `contradictions`, so an
   // agent that wants to wait and re-check has everything it needs.
-  if (contradictions.length > 0) {
+  //
+  // ...except when the only finding is that a READ had not come back AND the caller declared the
+  // consequence that did. `request-never-settled` is a statement about when we stopped looking; the
+  // declaration is a statement about what was supposed to happen, made before it could. On a page
+  // that polls, the first is permanently true and vetoed every verdict the second earned.
+  //
+  // An open WRITE is the exception to the exception, and it is where the false-green defence lives:
+  // "the toast said Saved while the POST was still open" is the archetype this product exists to
+  // catch, and its outcome genuinely does not exist yet. A poll or a prefetch left hanging says
+  // nothing about the action; an unfinished mutation says the answer is not in yet. Read off the
+  // labels the window already carries — and when there are no labels to read, nothing is softened.
+  const openWrite = (inputs.unsettled?.stillInFlight ?? []).some((label) =>
+    MUTATING_METHODS.includes((label.split(' ')[0] ?? '').toUpperCase()),
+  );
+  const settlementOnly =
+    declaredHeld &&
+    inputs.unsettled !== undefined &&
+    !openWrite &&
+    contradictions.every((c) => c.kind === ContradictionKind.REQUEST_NEVER_SETTLED);
+  if (contradictions.length > 0 && !settlementOnly) {
     const kinds = contradictions.map((c) => c.kind).join(', ');
     return {
       verified: Verified.UNKNOWN,
-      verifiedReason: VerifiedReason.UNSETTLED,
+      // NOT `unsettled`: this clause fires whether or not the page went idle, and naming it after
+      // idle produced verdicts that read `unsettled` beside `settled: true`.
+      verifiedReason: VerifiedReason.EVIDENCE_INCOMPLETE,
       because: unsettledBecause(
         `the assertion held, but this window closed before the app finished (${kinds})`,
         inputs.unsettled,
       ),
+    };
+  }
+
+  // An absence assertion over a region Reticle cannot observe is not disproved, but it is not proved
+  // either. This is narrower than general partial coverage: the target itself is scoped to the blind
+  // region, so the DOM result cannot answer the question the caller asked.
+  if (inputs.absenceBlindSpot !== undefined) {
+    return {
+      verified: Verified.UNKNOWN,
+      verifiedReason: VerifiedReason.ABSENCE_BLIND_SPOT,
+      because: inputs.absenceBlindSpot,
     };
   }
 
@@ -220,17 +286,24 @@ export function decideVerified(inputs: VerifiedInputs): VerifiedVerdict {
   //
   // UNKNOWN, not NO: nothing is known to have failed. The remedy is in the sentence, because an
   // agent that cannot act on a caveat will learn to skip it.
-  if (true === outcomeUnread) {
+  if (outcomeUnread !== undefined && outcomeUnread.length > 0) {
     return {
       verified: Verified.UNKNOWN,
       verifiedReason: VerifiedReason.OUTCOME_UNREAD,
       because:
-        'a write returned 2xx with a response body that was never recorded, so its outcome is unread — a 200 describes the transport, not the result (a batch reports per-item failures in the body, and every GraphQL error is a 200). Enable it where your app calls connect(): `reticle.connect({ captureNetworkBodies: true })`, then re-run',
+        `a write returned 2xx with a response body that was never recorded (${outcomeUnread.join('; ')}), so its outcome is unread` +
+        ' — a 200 describes the transport, not the result (a batch reports per-item failures in the body, and every GraphQL error is a 200). Enable it where your app calls connect(): `reticle.connect({ captureNetworkBodies: true })`, then re-run',
     };
   }
 
   // Never settled: the page may still be moving, so the observation window may have closed early.
-  if (false === settled) {
+  //
+  // Skipped when the caller DECLARED the consequence and it held. `settled` here is "a real
+  // animation frame fired within the budget", which a hidden or throttled tab never does — and a
+  // hidden tab is the ordinary case for agent-driven verification. It is corroboration; it is not
+  // the claim. It is still reported: `honesty.settled` carries the fact, and the sentence below says
+  // so in words.
+  if (false === settled && !declaredHeld) {
     return {
       verified: Verified.UNKNOWN,
       verifiedReason: VerifiedReason.UNSETTLED,
@@ -249,12 +322,19 @@ export function decideVerified(inputs: VerifiedInputs): VerifiedVerdict {
   // partial` — the prose contradicting the evidence block next to it. Whichever a reader believes,
   // one of them lied, and the whole point of this layer is that the sentence can be trusted on its
   // own. Seen on a one-way IPC send: coverage said the outcome was unobservable, `because` said clean.
+  // A green that rests on the declaration rather than on idle says so. The page not going quiet is a
+  // real fact about the app — a poll, a timer, a throttled tab — and a caller who cares must be able
+  // to see it without re-deriving it, so it is stated here and carried in `honesty.settled`.
+  const notIdle =
+    false === settled
+      ? ', though the page never went idle — this rests on the consequence you declared, not on the page going quiet'
+      : '';
   return {
     verified: Verified.YES,
     verifiedReason: VerifiedReason.PROVED,
     because:
       true === honesty.coverage?.partial
-        ? `assertion held at ${honesty.grade} grade with no channel disagreeing, but coverage was PARTIAL — see \`coverage\` for what went unobserved`
-        : `assertion held at ${honesty.grade} grade over a clean capture with no channel disagreeing`,
+        ? `assertion held at ${honesty.grade} grade with no channel disagreeing, but coverage was PARTIAL — see \`coverage\` for what went unobserved${notIdle}`
+        : `assertion held at ${honesty.grade} grade over a clean capture with no channel disagreeing${notIdle}`,
   };
 }

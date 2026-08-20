@@ -283,7 +283,7 @@ describe('a stale eviction from earlier in the session must not condemn later ac
 });
 
 /**
- * `verified` has three values and this rule has eleven clauses, so the verdict alone throws away the
+ * `verified` has three values and this rule has twelve clauses, so the verdict alone throws away the
  * only thing that says WHO has to act. Measured in a real capture: `unknown` + `passed: false` was
  * indistinguishable between "Reticle caught a real bug", "the agent wrote a bad predicate" and
  * "Reticle itself could not see", and `no` collapsed "channels disagree" into "the agent's predicate
@@ -333,10 +333,22 @@ describe('every verdict names the clause that decided it', () => {
       pass: true,
       honesty: clean(),
       settled: true,
-      outcomeUnread: true,
+      outcomeUnread: ['POST /api/bulk-hold'],
     },
     [VerifiedReason.UNSETTLED]: { pass: true, honesty: clean(), settled: false },
+    [VerifiedReason.EVIDENCE_INCOMPLETE]: {
+      pass: true,
+      honesty: clean(),
+      settled: true,
+      contradictions: [{ kind: 'duplicate-request' }],
+    },
     [VerifiedReason.PROVED]: { pass: true, honesty: clean(), settled: true },
+    [VerifiedReason.ABSENCE_BLIND_SPOT]: {
+      pass: true,
+      honesty: clean(),
+      settled: true,
+      absenceBlindSpot: 'the absence target was in an unobserved region',
+    },
   };
 
   it.each(Object.entries(branches))('reports %s', (expected, inputs) => {
@@ -353,5 +365,31 @@ describe('every verdict names the clause that decided it', () => {
       Object.values(branches).map((inputs) => decideVerified(inputs).verifiedReason),
     );
     expect([...Object.values(VerifiedReason)].filter((r) => !produced.has(r))).toEqual([]);
+  });
+});
+
+/**
+ * A caveat an agent cannot locate is one it learns to skip. Every other clause in the rule names the
+ * evidence that decided it; this one described a shape ("a write returned 2xx…") and named no write,
+ * so on any page making more than one call the next move was a guess.
+ */
+describe('an unread outcome names the write that decided the verdict', () => {
+  it('puts the method and url in the sentence', () => {
+    const decision = decideVerified({
+      pass: true,
+      honesty: clean(),
+      settled: true,
+      outcomeUnread: ['POST /api/bulk-hold', 'PUT /api/shipments/9'],
+    });
+    expect(decision.verifiedReason).toBe(VerifiedReason.OUTCOME_UNREAD);
+    expect(decision.because).toContain('POST /api/bulk-hold');
+    expect(decision.because).toContain('PUT /api/shipments/9');
+  });
+
+  // Negative control: an empty list is not a caveat. Nothing went unread, so nothing is withheld.
+  it('does not downgrade when no write went unread', () => {
+    expect(
+      decideVerified({ pass: true, honesty: clean(), settled: true, outcomeUnread: [] }).verified,
+    ).toBe(Verified.YES);
   });
 });

@@ -1,10 +1,15 @@
 import type { WebSocket } from 'ws';
+import type { ImpactSnapshot } from '@reticlehq/core';
+import { recordImpact } from '../impact/impact-recorder.js';
 import { LastAct } from './last-act.js';
 import { commandTimeoutMessage, type PageRuntime } from './command-timeout.js';
 import { readHealthEvent, type SessionHealth } from './session-health.js';
 
 export type { SessionHealth };
-import { PendingCommands } from './pending-commands.js';
+
+/** The HUD does not need 200 frames to watch a counter climb; the last state always lands. */
+const IMPACT_PUSH_DEBOUNCE_MS = 700;
+import { PendingCommands, CommandTimeoutError } from './pending-commands.js';
 import { span } from '../trace.js';
 import {
   AppRuntime,
@@ -52,6 +57,35 @@ const DEFAULT_COMMAND_TIMEOUT_MS = 8000;
 
 /** Prefix on correlated command ids (c1, c2, …) — distinguishes them from mark ids. */
 const COMMAND_ID_PREFIX = 'c';
+
+/**
+ * Commands that may be re-issued against the connection that replaced this session.
+ *
+ * Reads only, and the boundary is the point. Re-reading a page costs nothing and answers the same
+ * question the caller asked. An act cannot be replayed: it may already have been dispatched in the
+ * page that went away, and performing it a second time behind the caller's back is a double submit
+ * nobody asked for. A replaced act still errors, and the caller's own retry — with the same id,
+ * which is still the right one — is the safe path.
+ */
+/**
+ * How far to walk a chain of replacements before giving up.
+ *
+ * Generous for the real case (a page reloading a handful of times while a call is in flight) and
+ * small enough that a cycle costs nothing. The number is a backstop, not a policy: a chain longer
+ * than this means something is re-dialling in a loop, and that is a different problem.
+ */
+const MAX_SUCCESSOR_HOPS = 32;
+
+const REBINDABLE_COMMANDS: ReadonlySet<string> = new Set<string>([
+  ReticleCommand.SNAPSHOT,
+  ReticleCommand.QUERY,
+  ReticleCommand.MATCH,
+  ReticleCommand.INSPECT,
+  ReticleCommand.STATE_READ,
+  ReticleCommand.STORAGE_READ,
+  ReticleCommand.CAPABILITIES,
+  ReticleCommand.ANIMATIONS,
+]);
 
 /** Prefix on minted action ids (a1, a2, …) — the journal's action identity, independent of commands. */
 const ACTION_ID_PREFIX = 'a';
@@ -251,7 +285,12 @@ export class Session {
     if (event.type === EventType.HUMAN_MARK) {
       // A human pinned a mistake to an element. Narrow at the boundary; an invalid mark is ignored.
       const parsed = HumanMarkDataSchema.safeParse(event.data);
-      if (parsed.success) this.#review.add(parsed.data, this.elapsed());
+      if (parsed.success) {
+        this.#review.add(parsed.data, this.elapsed());
+        // The impact record's `marks` field existed and nothing ever wrote it: the report would
+        // have shown a permanent zero next to a page covered in pins.
+        recordImpact({ marks: 1 });
+      }
     }
     if (event.type === EventType.ROUTE_CHANGE) {
       // Keep the reported URL live across SPA navigation. The SDK already emits route.change on
@@ -273,7 +312,17 @@ export class Session {
         : seen;
     this.#observed.observe(attributed);
     this.#buffer.push(attributed, t, byteSize);
-    for (const listener of this.#listeners) listener(attributed);
+    // Each subscriber is independent, and this runs inside the websocket's `message` handler — a
+    // NON-async callback, so a sync throw here escapes every try/catch the tool call is wrapped in
+    // and becomes an uncaughtException, which the daemon answers by exiting. One observer's bug must
+    // not cost the fleet its daemon. Same rule the session-ready fan-out already follows.
+    for (const listener of this.#listeners) {
+      try {
+        listener(attributed);
+      } catch {
+        /* an event observer must never break the session it observes */
+      }
+    }
   }
 
   // Passthroughs to ObservedState, which owns the per-session facts that must SURVIVE buffer
@@ -477,6 +526,11 @@ export class Session {
       const ref = args['ref'];
       if ('string' === typeof ref) this.recordActedRef(ref);
     }
+    // The page already re-dialled under this same id. Nothing has been sent yet, so handing the
+    // command to the live connection cannot perform anything twice — it is the call the agent would
+    // have made itself after a `reticle_sessions` round trip, minus the round trip.
+    const successor = this.#liveSuccessor();
+    if (successor !== undefined) return successor.command(name, args, timeoutMs);
     const id = this.#pending.nextId(COMMAND_ID_PREFIX);
     const payload = JSON.stringify({
       kind: MessageKind.COMMAND,
@@ -506,7 +560,25 @@ export class Session {
         if (name === ReticleCommand.ACT) this.recordActedLabelFrom(result);
         return result;
       })
-      .finally(() => recordBrowserLatency(Date.now() - sentAt));
+      .finally(() => recordBrowserLatency(Date.now() - sentAt))
+      .catch((error: unknown) => {
+        // The replacement landed while this command was on the wire, which is the reported case:
+        // `reticle_navigate` reloads the page, the reload sends a fresh HELLO carrying the same id,
+        // and the `reticle_snapshot` already in flight is rejected by the displaced session.
+        // A TIMEOUT is not a replacement. The catch fired on any rejection, so a command that had
+        // simply not been answered in budget was read as "you were replaced, ask again" — and
+        // against a page re-dialling in a loop that turned one read into hundreds of commands on the
+        // wire, minutes of wall clock, and an answer still quoting the budget it had blown.
+        const next = error instanceof CommandTimeoutError ? undefined : this.#liveSuccessor();
+        if (next === undefined || !REBINDABLE_COMMANDS.has(name)) throw error;
+        // What is LEFT of the caller's budget, not a fresh copy of it. Re-issuing with the original
+        // timeout means a caller who granted 8s can wait 16, and across a chain of replacements the
+        // total is unbounded — a wait nobody asked for, on the path that exists to save a round trip.
+        // A budget already spent means there is nothing left to retry into, so the error stands.
+        const remaining = timeoutMs - (Date.now() - sentAt);
+        if (remaining <= 0) throw error;
+        return next.command(name, args, remaining);
+      });
   }
 
   handleResult(result: CommandResult): void {
@@ -520,8 +592,53 @@ export class Session {
     this.#disconnectListeners.clear();
   }
 
+  /**
+   * The connection that took this session's id over, once one has.
+   *
+   * Set by the bridge at the moment it displaces this session, so the two facts a replaced handle
+   * needs — that it was replaced, and by whom — arrive together. Without it, every tool call holding
+   * this handle could only report "session replaced by a newer connection claiming the same id", and
+   * the caller's only recovery was `reticle_sessions` plus a retry: two round trips to rediscover an
+   * id the daemon was already holding, and which had not even changed.
+   */
+  #successor: Session | undefined;
+
+  succeededBy(next: Session): void {
+    // A session is never its own replacement; guarding here keeps `command` from recursing forever
+    // if a registry ever re-adds the same object.
+    if (next !== this) this.#successor = next;
+  }
+
+  /**
+   * The replacement, but only while it can actually answer.
+   *
+   * A successor is recorded once and never cleared, so without this a session that was replaced an
+   * hour ago keeps handing commands to a socket that has since closed — and the caller pays the full
+   * timeout to learn it, turning an instant "session replaced" into a wait. The point of delegating
+   * was to save the caller a round trip; delegating to a dead socket costs them more than the error
+   * did.
+   */
+  #liveSuccessor(): Session | undefined {
+    // Walked, not just read one hop. Two replacements in quick succession — a page that reloads
+    // twice — leave a CHAIN, and the handle the caller holds points at a session that is itself
+    // already displaced. Stopping at the first dead link fails safe and also fails: the open page is
+    // one hop further on, and the caller gets back exactly the error this exists to remove.
+    //
+    // Bounded, because `succeededBy` refuses self-succession but nothing prevents a cycle, and an
+    // unbounded walk over one is a hang — which is worse than the error it was trying to avoid.
+    let next = this.#successor;
+    for (let hops = 0; next !== undefined && hops < MAX_SUCCESSOR_HOPS; hops += 1) {
+      if (next.#socket.readyState === WS_OPEN) return next;
+      next = next.#successor;
+    }
+    return undefined;
+  }
+
   /** End this transport without letting a stale socket remove its replacement session. */
   disconnect(reason: string): void {
+    // "Longest run" means the longest SESSION, and it used to be fed a single tool call's duration
+    // - so the report's superlative was a number in milliseconds that never grew past a click.
+    recordImpact({}, { runMs: this.elapsed() });
     this.rejectAll(reason);
     try {
       this.#socket.close(1008, reason);
@@ -612,10 +729,36 @@ export class Session {
    * Push a lifecycle state to the panel with optional human-facing `text`. State changes still flow
    * through `setState`; an auto-ended session rides a `warn` tone so the panel can shout "agent stopped".
    */
+  /**
+   * Push the impact record to this tab's HUD.
+   *
+   * Debounced: the record changes on every tool call, and the panel does not need 200 frames to
+   * show a counter going up. The LAST state always lands, because the timer re-reads the store
+   * when it fires rather than capturing a snapshot when it was scheduled.
+   */
+  pushImpact(read: () => ImpactSnapshot | undefined, immediate = false): void {
+    if (immediate) {
+      // A tab that just connected has nothing to show yet, so its first record goes out at once -
+      // waiting a debounce here is a report that reads "nothing recorded" over a month of history.
+      const first = read();
+      if (first !== undefined) this.#post(ReticleCommand.IMPACT, { snapshot: first });
+      return;
+    }
+    if (this.#impactTimer !== undefined) return;
+    this.#impactTimer = setTimeout(() => {
+      this.#impactTimer = undefined;
+      const snapshot = read();
+      if (snapshot !== undefined) this.#post(ReticleCommand.IMPACT, { snapshot });
+    }, IMPACT_PUSH_DEBOUNCE_MS);
+    this.#impactTimer.unref?.();
+  }
+
   pushPresenter(state: SessionState, text?: string, tone?: PresenterTone): void {
     this.#post(ReticleCommand.PRESENTER, buildPresenterArgs(state, text, tone));
   }
   /** Fire-and-forget a narration row to the live panel (so a resolved mark shows "✓ fixed"). */
+  #impactTimer: ReturnType<typeof setTimeout> | undefined;
+
   pushNarration(text: string): void {
     this.#post(ReticleCommand.NARRATE, { text, level: 'info' });
   }

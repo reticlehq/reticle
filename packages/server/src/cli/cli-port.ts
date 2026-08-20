@@ -9,6 +9,51 @@
  */
 
 import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+
+/** The project config `reticle init` writes. */
+export const RETICLE_CONFIG_BASENAME = '.reticle.json';
+
+/**
+ * How far up to look for the project config before giving up.
+ *
+ * A cap rather than "walk to the filesystem root" so a process started somewhere unrelated cannot
+ * silently adopt a config from a distant ancestor and dial a port that belongs to another project.
+ * Deep enough for the layouts that actually broke: an app in `frontend/` or `apps/web/`, a git
+ * worktree checked out beside its main repo, and an agent whose cwd is a package inside a monorepo.
+ */
+const MAX_CONFIG_SEARCH_DEPTH = 6;
+
+/**
+ * Find the nearest `.reticle.json` at or above `cwd`, and return its parsed contents.
+ *
+ * Every reader below used to join the basename onto `cwd` and stop there, so a process whose
+ * working directory was one level away from the config behaved exactly like a project that had
+ * never been through `init`: no port, no projectId, no journal setting, and a diagnostic that told
+ * the user to run an install they had already run. That is the shape of several field reports at
+ * once — an app wired in a subdirectory, an agent running from a repo root, a worktree beside its
+ * main checkout — and they are all the same missing walk.
+ *
+ * Returns undefined when nothing is found, which keeps every caller's existing default intact.
+ */
+export function findProjectConfig(cwd: string): Record<string, unknown> | undefined {
+  let dir = resolve(cwd);
+  for (let depth = 0; depth <= MAX_CONFIG_SEARCH_DEPTH; depth += 1) {
+    try {
+      const raw = readFileSync(`${dir}/${RETICLE_CONFIG_BASENAME}`, 'utf8');
+      const config: unknown = JSON.parse(raw);
+      if ('object' === typeof config && config !== null && !Array.isArray(config)) {
+        return config as Record<string, unknown>;
+      }
+    } catch {
+      // Absent, unreadable, or not JSON at this level — keep walking.
+    }
+    const parent = dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return undefined;
+}
 
 /**
  * Ports that belong to a DEV SERVER, not to Reticle's bridge. Next defaults to 3000, Vite to 5173,
@@ -58,16 +103,8 @@ export function devServerPortWarning(port: number): string {
  * Returns undefined if the file is absent, unreadable, or has no valid numeric port.
  */
 export function readProjectPort(cwd: string): number | undefined {
-  try {
-    const raw = readFileSync(`${cwd}/.reticle.json`, 'utf8');
-    const config: unknown = JSON.parse(raw);
-    if ('object' === typeof config && config !== null) {
-      const p = (config as Record<string, unknown>)['port'];
-      if ('number' === typeof p && Number.isInteger(p) && p > 0 && p < 65536) return p;
-    }
-  } catch {
-    //.reticle.json absent or unreadable — fall through to default
-  }
+  const p = findProjectConfig(cwd)?.['port'];
+  if ('number' === typeof p && Number.isInteger(p) && p > 0 && p < 65536) return p;
   return undefined;
 }
 
@@ -77,16 +114,22 @@ export function readProjectPort(cwd: string): number | undefined {
  * undefined if the file is absent/unreadable or has no non-empty string projectId.
  */
 export function readProjectId(cwd: string): string | undefined {
-  try {
-    const raw = readFileSync(`${cwd}/.reticle.json`, 'utf8');
-    const config: unknown = JSON.parse(raw);
-    if ('object' === typeof config && config !== null) {
-      const id = (config as Record<string, unknown>)['projectId'];
-      if ('string' === typeof id && id.length > 0) return id;
-    }
-  } catch {
-    //.reticle.json absent or unreadable — no default scope
-  }
+  const id = findProjectConfig(cwd)?.['projectId'];
+  if ('string' === typeof id && id.length > 0) return id;
+  return undefined;
+}
+
+/**
+ * The framework `reticle init` stamped into `.reticle.json`, when there is one.
+ *
+ * Read so the no-session diagnosis can RANK its causes instead of printing one static differential.
+ * Nuxt is the case that pays for this: it does not register a newly added plugin on HMR, so a dev
+ * server older than the wiring is its single most likely cause — `init` warns about it at install
+ * time and the hint the agent reads hours later never mentioned it.
+ */
+export function readProjectFramework(cwd: string): string | undefined {
+  const framework = findProjectConfig(cwd)?.['framework'];
+  if ('string' === typeof framework && framework.length > 0) return framework;
   return undefined;
 }
 
@@ -101,15 +144,7 @@ export function readJournalEnabled(cwd: string, env: string | undefined): boolea
     if ('0' === v || 'false' === v || 'off' === v) return false;
     if ('1' === v || 'true' === v || 'on' === v) return true;
   }
-  try {
-    const raw = readFileSync(`${cwd}/.reticle.json`, 'utf8');
-    const config: unknown = JSON.parse(raw);
-    if ('object' === typeof config && config !== null) {
-      if (false === (config as Record<string, unknown>)['journal']) return false;
-    }
-  } catch {
-    //.reticle.json absent or unreadable — journaling stays on by default
-  }
+  if (false === findProjectConfig(cwd)?.['journal']) return false;
   return true;
 }
 

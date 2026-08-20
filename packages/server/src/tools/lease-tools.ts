@@ -10,11 +10,35 @@
  */
 
 import { z } from 'zod';
-import { leaseNotConnectedHint } from './lease-hint.js';
+import { leaseNotConnectedHint, type LeaseEvidence } from './lease-hint.js';
+import { readProjectFramework, readProjectId } from '../cli/cli-port.js';
+import { hasConnectedBefore } from '../session/connection-memory.js';
+import { reticleStateHome } from '../daemon/daemon.js';
 import { RETICLE_URL_PARAM, RETICLE_DEFAULT_PORT } from '@reticlehq/core';
 import { ReticleTool } from './tool-names.js';
 import type { ToolDef, ToolDeps } from './tool-kit.js';
 import { asString } from './tools-helpers.js';
+import { chromiumHint } from '../cli/chromium-hint.js';
+
+/**
+ * Everything the daemon already knows about why a leased tab might not have dialled in.
+ *
+ * Gathered here rather than guessed in the hint, because the daemon HAD this evidence all along and
+ * printed a static differential over the top of it — telling one agent in `reticle_sessions` that
+ * the wiring was proven correct and telling it seconds later that the port was probably wrong.
+ */
+function leaseEvidence(deps: ToolDeps, port: number): LeaseEvidence {
+  const cwd = process.cwd();
+  const projectId = readProjectId(cwd);
+  const refusal = deps.sessions.lastClosure()?.reason;
+  const framework = readProjectFramework(cwd);
+  return {
+    ...(refusal === undefined ? {} : { refusal }),
+    ...(framework === undefined ? {} : { framework }),
+    previouslyConnected: hasConnectedBefore(reticleStateHome(), port, projectId),
+    initialized: projectId !== undefined,
+  };
+}
 
 const POOL_UNAVAILABLE =
   'browser pool unavailable — the lease tools need the daemon-managed pool (start Reticle via `reticle mcp`).';
@@ -156,108 +180,128 @@ export async function waitForLeasedSession(
   return isConnected();
 }
 
-export const LEASE_TOOLS: ToolDef[] = [
-  {
-    name: ReticleTool.LEASE_ACQUIRE,
-    description:
-      'Lease a fresh isolated headless browser context from the shared pool and navigate it to the app URL (the app must already be running and embed @reticlehq/core). Returns the sessionId the leased tab registers — pass it to other tools. The pool keeps all leases in ONE browser and caps concurrency; if at capacity this waits for a free slot. Release with reticle_lease{action:"release"} when the flow is done.',
-    inputSchema: {
-      url: z
-        .string()
-        .describe(
-          'URL of the already-running app to drive (e.g. http://localhost:3000/dashboard).',
-        ),
-      projectId: z
-        .string()
-        .optional()
-        .describe('Stable project id to stamp on the leased tab so the agent can scope to it.'),
-    },
-    outputSchema: {
-      sessionId: z.string(),
-      url: z.string(),
-      ready: z
-        .boolean()
-        .describe(
-          'Whether the leased tab connected — false ⇒ the app may not embed @reticlehq/core.',
-        ),
-      expiresInMs: z
-        .number()
-        .describe(
-          'Milliseconds until this lease expires if untouched. Each tool call that targets this session resets the clock. Plan your work to finish or re-acquire before this runs out.',
-        ),
-      leased: z.number().describe('How many contexts are currently leased from the pool.'),
-      queued: z.number().describe('How many acquires are waiting for a free slot.'),
-      hint: z.string().optional(),
-    },
-    handler: async (deps: ToolDeps, args) => {
-      const pool = deps.pool;
-      if (pool === undefined) throw new Error(POOL_UNAVAILABLE);
-      const url = asString(args['url']);
-      if (url === undefined || 0 === url.length)
-        throw new Error('reticle_lease{action:"acquire"} requires a url');
-      const projectId = asString(args['projectId']);
-      const sessionId = newLeaseId();
-      const navUrl = appendReticleParams(url, sessionId, projectId);
-      let lease;
-      try {
-        lease = await pool.acquire(navUrl, { sessionId });
-      } catch (err) {
-        // A raw page.goto failure is noisy and leaks the internal URL params — surface a clean,
-        // actionable message instead.
-        throw new Error(
-          `could not open ${url} — is the app running there? (${cleanNavError(err)})`,
-        );
-      }
-      // Wait for the leased tab's SDK to connect so the returned sessionId is usable right away.
-      // Resolved rather than assumed: an app that names its own session registers under that name,
-      // and the id we hand back has to be the one the agent can actually drive.
-      let registeredId: string | undefined;
-      const ready = await waitForLeasedSession(() => {
-        registeredId = resolveLeasedSessionId(deps.sessions, lease.sessionId);
-        return registeredId !== undefined;
-      });
-      // Tell the pool the other name this lease answers to. Every later touch and release arrives
-      // under the id we are about to hand back, and the pool is keyed by the id it navigated with;
-      // without this the touches miss, the lease ages out despite continuous activity, and the
-      // reaper closes the context mid-flow. See BrowserPool.alias and #157.
-      if (registeredId !== undefined) pool.alias(registeredId, lease.sessionId);
-      return {
-        sessionId: registeredId ?? lease.sessionId,
-        url,
-        ready,
-        expiresInMs: pool.leaseTtlMs(),
-        leased: pool.activeCount(),
-        queued: pool.queuedCount(),
-        ...(ready
-          ? {}
-          : {
-              hint: leaseNotConnectedHint(url, deps.bridgePort ?? RETICLE_DEFAULT_PORT),
-            }),
-      };
-    },
+/**
+ * Named on its own because `reticle drive <url>` runs it too.
+ *
+ * When a daemon already owns the bridge port, `drive` asks that daemon for a browser instead of
+ * competing for the port (see cli/drive-attach.ts), and the browser it should get is exactly the one
+ * an agent gets: same pool, same isolation, same reporting. Sharing the ToolDef rather than the
+ * handler keeps that literal — the drive route dispatches through `runTool`, so it is counted like
+ * any other call instead of being a second, invisible dispatch path.
+ */
+export const LEASE_ACQUIRE_TOOL: ToolDef = {
+  name: ReticleTool.LEASE_ACQUIRE,
+  description:
+    'Lease a fresh isolated headless browser context from the shared pool and navigate it to the app URL (the app must already be running and embed @reticlehq/core). Returns the sessionId the leased tab registers — pass it to other tools. The pool keeps all leases in ONE browser and caps concurrency; if at capacity this waits for a free slot. Release with reticle_lease{action:"release"} when the flow is done.',
+  inputSchema: {
+    url: z
+      .string()
+      .describe('URL of the already-running app to drive (e.g. http://localhost:3000/dashboard).'),
+    projectId: z
+      .string()
+      .optional()
+      .describe('Stable project id to stamp on the leased tab so the agent can scope to it.'),
   },
-  {
-    name: ReticleTool.LEASE_RELEASE,
-    description:
-      'Release a leased browser context by sessionId, closing it and freeing the pool slot for a queued acquire. Call this when a flow finishes so the pool stays within its concurrency cap.',
-    inputSchema: {
-      sessionId: z
-        .string()
-        .describe('The leased sessionId returned by reticle_lease{action:"acquire"}.'),
-    },
-    outputSchema: {
-      released: z.boolean(),
-      leased: z.number(),
-    },
-    handler: async (deps: ToolDeps, args) => {
-      const pool = deps.pool;
-      if (pool === undefined) throw new Error(POOL_UNAVAILABLE);
-      const sessionId = asString(args['sessionId']);
-      if (sessionId === undefined || 0 === sessionId.length) {
-        throw new Error('reticle_lease{action:"release"} requires a sessionId');
-      }
-      await pool.release(sessionId);
-      return { released: true, leased: pool.activeCount() };
-    },
+  outputSchema: {
+    sessionId: z.string(),
+    url: z.string(),
+    ready: z
+      .boolean()
+      .describe(
+        'Whether the leased tab connected — false ⇒ the app may not embed @reticlehq/core.',
+      ),
+    expiresInMs: z
+      .number()
+      .describe(
+        'Milliseconds until this lease expires if untouched. Each tool call that targets this session resets the clock. Plan your work to finish or re-acquire before this runs out.',
+      ),
+    leased: z.number().describe('How many contexts are currently leased from the pool.'),
+    queued: z.number().describe('How many acquires are waiting for a free slot.'),
+    hint: z.string().optional(),
   },
-];
+  handler: async (deps: ToolDeps, args) => {
+    const pool = deps.pool;
+    if (pool === undefined) throw new Error(POOL_UNAVAILABLE);
+    const url = asString(args['url']);
+    if (url === undefined || 0 === url.length)
+      throw new Error('reticle_lease{action:"acquire"} requires a url');
+    // Preflight the browser before spending the round trip. Without it a missing Playwright Chromium
+    // only surfaces inside pool.acquire, where the launch failure is caught and reported as
+    // "could not open <url> — is the app running?" — sending the caller to debug an app that is
+    // fine. Say the real thing at the first refusal instead. The phrasing carries "Chromium is not
+    // installed" so error-recovery routes it to the NO_POOL fix (install + drive a human tab).
+    if (deps.browserProbe !== undefined) {
+      const probe = await deps.browserProbe();
+      if (!probe.exists) {
+        throw new Error(`Chromium is not installed for Playwright — ${chromiumHint(probe)}`);
+      }
+    }
+    const projectId = asString(args['projectId']);
+    const sessionId = newLeaseId();
+    const navUrl = appendReticleParams(url, sessionId, projectId);
+    let lease;
+    try {
+      lease = await pool.acquire(navUrl, { sessionId });
+    } catch (err) {
+      // A raw page.goto failure is noisy and leaks the internal URL params — surface a clean,
+      // actionable message instead.
+      throw new Error(`could not open ${url} — is the app running there? (${cleanNavError(err)})`);
+    }
+    // Wait for the leased tab's SDK to connect so the returned sessionId is usable right away.
+    // Resolved rather than assumed: an app that names its own session registers under that name,
+    // and the id we hand back has to be the one the agent can actually drive.
+    let registeredId: string | undefined;
+    const ready = await waitForLeasedSession(() => {
+      registeredId = resolveLeasedSessionId(deps.sessions, lease.sessionId);
+      return registeredId !== undefined;
+    });
+    // Tell the pool the other name this lease answers to. Every later touch and release arrives
+    // under the id we are about to hand back, and the pool is keyed by the id it navigated with;
+    // without this the touches miss, the lease ages out despite continuous activity, and the
+    // reaper closes the context mid-flow. See BrowserPool.alias and #157.
+    if (registeredId !== undefined) pool.alias(registeredId, lease.sessionId);
+    return {
+      sessionId: registeredId ?? lease.sessionId,
+      url,
+      ready,
+      expiresInMs: pool.leaseTtlMs(),
+      leased: pool.activeCount(),
+      queued: pool.queuedCount(),
+      ...(ready
+        ? {}
+        : (() => {
+            const bridgePort = deps.bridgePort ?? RETICLE_DEFAULT_PORT;
+            return {
+              hint: leaseNotConnectedHint(url, bridgePort, leaseEvidence(deps, bridgePort)),
+            };
+          })()),
+    };
+  },
+};
+
+export const LEASE_RELEASE_TOOL: ToolDef = {
+  name: ReticleTool.LEASE_RELEASE,
+  description:
+    'Release a leased browser context by sessionId, closing it and freeing the pool slot for a queued acquire. Call this when a flow finishes so the pool stays within its concurrency cap.',
+  inputSchema: {
+    sessionId: z
+      .string()
+      .describe('The leased sessionId returned by reticle_lease{action:"acquire"}.'),
+  },
+  outputSchema: {
+    released: z.boolean(),
+    leased: z.number(),
+  },
+  handler: async (deps: ToolDeps, args) => {
+    const pool = deps.pool;
+    if (pool === undefined) throw new Error(POOL_UNAVAILABLE);
+    const sessionId = asString(args['sessionId']);
+    if (sessionId === undefined || 0 === sessionId.length) {
+      throw new Error('reticle_lease{action:"release"} requires a sessionId');
+    }
+    await pool.release(sessionId);
+    return { released: true, leased: pool.activeCount() };
+  },
+};
+
+export const LEASE_TOOLS: ToolDef[] = [LEASE_ACQUIRE_TOOL, LEASE_RELEASE_TOOL];

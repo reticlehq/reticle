@@ -172,6 +172,45 @@ app.get('/api/flaky', (_req, res) => res.status(500).json({ error: 'flaky upstre
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
 
+// --- Saved-items: server-backed write fixture for response-ignored testing ---------------
+//
+// This endpoint exists solely to give the response-ignored detector a real server write to
+// reason against. Two things make it distinct from every other write in this server:
+//
+//   1. It is a genuine write (POST that mutates server state) that leaves the browser.
+//   2. The response carries a `renderDelayMs` field the client MUST wait before rendering —
+//      so the fixture can produce a visible gap between "response landed" and "UI moved".
+//
+// Query parameters (all optional):
+//   ?delay=<ms>   — how long the server itself takes to respond (default: 0)
+//   ?broken=1     — respond 200 OK but return no id, causing the client to drop the result
+//
+// The client controls the render delay via a `?renderDelay=<ms>` parameter of its own; the
+// server echoes it back so the e2e harness can use one URL to test both polarities:
+//   - renderDelay=0  → correct: UI updates immediately after the response arrives
+//   - renderDelay=large → accusable: response lands but the client render trails by > 1 task
+const savedItems = [];
+let savedItemSeq = 1;
+
+app.get('/api/saved-items', (req, res) => {
+  res.json({ items: savedItems });
+});
+
+app.post('/api/saved-items', async (req, res) => {
+  const delay = Number(req.query.delay ?? 0);
+  const broken = req.query.broken === '1';
+  if (delay > 0) await new Promise((r) => setTimeout(r, delay));
+  if (broken) {
+    // 200 OK but deliberately missing `id` — the client will have nothing to render.
+    return res.json({ ok: true });
+  }
+  const label = String(req.body?.label ?? '').trim();
+  if (label.length === 0) return res.status(400).json({ error: 'label required' });
+  const id = savedItemSeq++;
+  savedItems.push({ id, label, savedAt: new Date().toISOString() });
+  return res.json({ id, label, savedAt: savedItems[savedItems.length - 1].savedAt });
+});
+
 const server = createServer(app);
 
 // WS echo. `channel` is echoed back so a client can correlate a reply with what it asked for;

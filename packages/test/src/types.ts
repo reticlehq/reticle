@@ -1,13 +1,22 @@
 import type { ToolInvoker } from '@reticlehq/server';
+import type { TestContext } from './test-context.js';
 import type { TestStatus } from './constants.js';
 
 /**
- * The per-spec `t` handed to a spec body. Defined by the MATCHERS facet (out of scope here);
- * the RUNNER treats it as opaque except for the skip protocol it raises (see skip.ts).
+ * The per-spec `t` handed to a spec body.
+ *
+ * This used to declare only `invoke`, on the reasoning that the RUNNER treats `t` as opaque and
+ * should stay decoupled from the matchers. That is true of the runner and false of the caller: the
+ * thing actually handed to a spec is a `TestContext`, and `reticleTest` is a public export. So
+ * every TypeScript spec written against the documented API failed to compile on its first matcher —
+ * `Property 'expectText' does not exist on type 'SpecContext'` — while the same spec ran correctly.
+ * Nothing caught it because this repo's own spec is `.mjs`, which type-checks none of it.
+ *
+ * The runner's decoupling is preserved by `ContextFactory` below: the runner still never builds a
+ * context, it only calls the one it is given. What it does not get to do any more is describe that
+ * context to the outside world as less than it is.
  */
-export interface SpecContext {
-  readonly invoke: ToolInvoker;
-}
+export type SpecContext = TestContext;
 
 export type SpecFn = (t: SpecContext) => void | Promise<void>;
 

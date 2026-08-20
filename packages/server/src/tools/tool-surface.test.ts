@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { advertisedTools } from '../mcp/mcp.js';
 import { TOOLS } from './tools.js';
 import {
   CORE_TOOL_NAMES,
+  EXTENDED_TOOL_NAMES,
   TOOL_SURFACE,
   TOOL_PROFILE_ENV,
   ADVERTISE_ALL_ENV,
@@ -29,10 +31,26 @@ describe('tool profiles', () => {
     expect(names).toHaveLength(CORE_TOOL_NAMES.size);
   });
 
-  it('2: FULL filter returns every tool (the full surface, ≥35)', () => {
+  // `all` was the whole registry until the advertised count became a hard budget: editors cap tools
+  // across every connected MCP server (Cursor at 40), so a server advertising everything it owns can
+  // evict a user's other servers. It is now the extended surface, and the registry is deliberately
+  // larger than it. Everything omitted is still callable via `reticle_run`.
+  it('2: the ALL filter returns core plus the extended set, and is SMALLER than the registry', () => {
     const tools = filterTools(TOOLS, TOOL_SURFACE.ALL);
-    expect(tools).toHaveLength(TOOLS.length);
-    expect(TOOLS.length).toBeGreaterThanOrEqual(35);
+    const names = new Set(tools.map((t) => t.name));
+    expect(tools.length).toBeLessThan(TOOLS.length);
+    for (const name of CORE_TOOL_NAMES) expect(names.has(name), name).toBe(true);
+    for (const name of EXTENDED_TOOL_NAMES) expect(names.has(name), name).toBe(true);
+    expect(tools).toHaveLength(CORE_TOOL_NAMES.size + EXTENDED_TOOL_NAMES.size);
+  });
+
+  it('3: every EXTENDED_TOOL_NAMES entry actually exists in TOOLS (no dangling name)', () => {
+    const all = new Set(TOOLS.map((t) => t.name));
+    for (const name of EXTENDED_TOOL_NAMES) expect(all.has(name), name).toBe(true);
+  });
+
+  it('4: core and extended never overlap, or the count is a lie', () => {
+    for (const name of EXTENDED_TOOL_NAMES) expect(CORE_TOOL_NAMES.has(name), name).toBe(false);
   });
 
   it('3: every CORE_TOOL_NAMES entry actually exists in TOOLS (no dangling name)', () => {
@@ -111,9 +129,36 @@ describe('tool profiles', () => {
  *
  * Every retired value still resolves, because they were a published env var.
  */
-describe('one surface, plus a verification switch', () => {
-  it('offers exactly two internal surfaces and no menu', () => {
-    expect(new Set(Object.values(TOOL_SURFACE))).toEqual(new Set(['default', 'all']));
+describe('one surface, plus two switches', () => {
+  /**
+   * The rule this pins is "no MENU", not "no more than two entries". Four profiles were retired
+   * because they were near-duplicates a user was invited to shop among, and nothing here may
+   * reintroduce that.
+   *
+   * `verify` is admitted on the same terms as `all`: named for what it does, never offered as a
+   * choice, and justified by a measurement rather than a taste. A verification that names its own
+   * target is one `act_and_wait` call, and 5,480 of its 5,909 tokens are the surface re-sent for
+   * that single turn — the answers cost 430. It is off by default precisely because the retired
+   * `dynamic` profile was measured to lose accuracy on a lean surface, and that finding stands
+   * until re-measured on the same 30-bug set.
+   *
+   * If that measurement fails, the entry comes out. An unmeasured third surface IS a menu.
+   */
+  it('offers exactly three internal surfaces, each a switch rather than a choice', () => {
+    expect(new Set(Object.values(TOOL_SURFACE))).toEqual(new Set(['default', 'all', 'verify']));
+  });
+
+  it('verify still reaches every other tool, or it is a trap rather than a saving', () => {
+    const names = new Set(advertisedTools(TOOL_SURFACE.VERIFY).map((t) => t.name));
+    expect(names).toContain('reticle_tools');
+    expect(names).toContain('reticle_run');
+  });
+
+  it('verify is the smallest surface, and is not reachable by accident', () => {
+    expect(advertisedTools(TOOL_SURFACE.VERIFY).length).toBeLessThan(
+      advertisedTools(TOOL_SURFACE.DEFAULT).length,
+    );
+    expect(resolveToolSurface(undefined), 'never the default').toBe(TOOL_SURFACE.DEFAULT);
   });
 
   it.each([['core'], ['standard'], ['hybrid'], ['dynamic']])(

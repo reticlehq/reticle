@@ -21,11 +21,11 @@ Every gate below was executed end to end against `main` on **2026-08-12** (macOS
 | `pnpm build` | ✅ | ~40s |
 | `pnpm lint` (+ both guard self-tests) | ✅ | ~15s |
 | `pnpm typecheck` | ✅ | ~10s |
-| `pnpm test:unit` | ✅ 4,315 tests / 461 files across 8 packages | ~45s |
+| `pnpm test:unit` | ✅ 5,725 tests / 613 files across 8 packages | ~45s |
 | `pnpm format:check` | ✅ | ~10s |
 | `pnpm test:integration` | ✅ 12/12 | 17s |
-| `pnpm test:e2e` | ✅ 32/32 specs + soak 60/60 answered | **490s** |
-| `pnpm test:e2e:desktop` | ✅ 2/2 (Electron 20, Tauri 14) | 58s |
+| `pnpm test:e2e` | ✅ 33/33 specs + soak 60/60 answered | **490s** |
+| `pnpm test:e2e:desktop` | ✅ 2/2 (Electron 20, Tauri 17) | 58s |
 | `node apps/e2e/soak.mjs --self-check` | ✅ | `<1s` |
 | `node apps/e2e/matrix.mjs --self-check` | ✅ | `<1s` |
 | `pnpm matrix:compat --only cursor` | ✅ 4/4 | ~10s |

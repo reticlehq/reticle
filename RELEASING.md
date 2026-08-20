@@ -63,6 +63,17 @@ Two limits worth knowing before trusting a green run.
 **None of it checks the deployed site.** The guards read this repository. `docs.reticle.sh` is a separate Mintlify deployment, and it has served pages several commits behind before, so a page being correct here is not evidence that it is correct in front of a user. Check the live page after a release, not only the source.
 
 4. Move `[Unreleased]` in `CHANGELOG.md` under a `## [2.3.0] — YYYY-MM-DD` heading; leave a fresh empty `[Unreleased]`.
+
+   **First, check what landed behind it:**
+
+   ```bash
+   git log --oneline "$(git log -1 --format=%H -- CHANGELOG.md)"..HEAD
+   ```
+
+   A release section is written once and then commits keep arriving, so the entry you are about to publish describes the release as it was on the day somebody opened the section. That has now happened twice in one release: the first time thirty-three commits had landed behind it including both headline fixes, the second time eighteen more. Both were found by running exactly the command above, and nothing else would have found either.
+
+   Not every commit earns an entry — a retuned test budget or a new internal guard changes nothing a user can observe. The question to ask of each is whether somebody deciding whether to upgrade would want to know.
+
 5. `git commit -m "chore(release): v2.3.0"` → PR → merge.
 6. `git tag v2.3.0 && git push --tags`
 7. **Publish a GitHub Release** on that tag, body = the changelog section. This is what triggers publishing — [`.github/workflows/publish.yml`](.github/workflows/publish.yml) runs the gates again and `pnpm -r publish`es in dependency order with npm provenance. It skips versions already on npm, so a partial run is safe to re-trigger.

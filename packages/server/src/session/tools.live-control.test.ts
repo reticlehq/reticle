@@ -101,7 +101,10 @@ function fakeSession(opts: { state?: SessionState; inbox?: string[] }): FakeSess
 }
 
 function fakeDeps(session: Session): ToolDeps {
-  const sessions: Partial<SessionManager> = { resolve: () => session };
+  // `count` completes the fake rather than decorating it: this stub hands back a live session from
+  // every `resolve`, so the honest count is 1. yield/end now ask, because they no-op when a turn
+  // ends with nothing attached — see yield-without-session.test.ts for that half.
+  const sessions: Partial<SessionManager> = { resolve: () => session, count: () => 1 };
   return {
     sessions: sessions as SessionManager,
     baselines: new BaselineStore(),

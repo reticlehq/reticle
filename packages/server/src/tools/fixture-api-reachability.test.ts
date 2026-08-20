@@ -31,8 +31,15 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = join(HERE, '..', '..', '..', '..');
 const SRC = join(REPO, 'apps', 'bench-app', 'src');
 
-/** `fetch('/api/…')` in any quote style — the shape that silently resolves to the SPA fallback. */
-const RELATIVE_API_FETCH = /fetch\(\s*['"`]\/api\//g;
+/**
+ * `fetch('/api/…')` in any quote style — the shape that silently resolves to the SPA fallback.
+ *
+ * NOT global. `.test()` on a `/g` regex advances `lastIndex` and resumes from there on the next
+ * call, so once one file matched, the following file was searched from an offset into a string it
+ * has nothing to do with — and a second offender was skipped. A guard that stops catching things
+ * after its first hit is worse than no guard, because the green is now evidence of nothing.
+ */
+const RELATIVE_API_FETCH = /fetch\(\s*['"`]\/api\//;
 
 function sourceFiles(dir: string): string[] {
   const out: string[] = [];
@@ -58,7 +65,22 @@ describe('bench-app requests reach the API', () => {
   it('the guard actually matches the shape it is meant to catch', () => {
     // Without this, a broken regex makes the check above pass forever while enforcing nothing —
     // which is the exact failure it was written to prevent, one level up.
-    expect(/fetch\(\s*['"`]\/api\//.test("void fetch('/api/broken/500')")).toBe(true);
-    expect(/fetch\(\s*['"`]\/api\//.test('await fetch(`${API_BASE}/api/broken/500`)')).toBe(false);
+    //
+    // Against the REAL constant, not a copy of it pasted here: a self-test that retypes the pattern
+    // proves the pattern in the test file, and goes on passing while the one actually used drifts.
+    expect(RELATIVE_API_FETCH.test("void fetch('/api/broken/500')")).toBe(true);
+    expect(RELATIVE_API_FETCH.test('await fetch(`${API_BASE}/api/broken/500`)')).toBe(false);
+  });
+
+  it('finds a second offender, not just the first', () => {
+    // The `/g` + `.test()` bug this pins: a stateful regex carries `lastIndex` between calls, so the
+    // scan above went blind to every file after the first match. Two identical strings in a row is
+    // the whole reproduction.
+    const offender = "void fetch('/api/broken/500')";
+    expect(RELATIVE_API_FETCH.test(offender)).toBe(true);
+    expect(
+      RELATIVE_API_FETCH.test(offender),
+      'the guard must not go blind after its first hit',
+    ).toBe(true);
   });
 });

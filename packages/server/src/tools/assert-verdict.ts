@@ -1,7 +1,8 @@
-import { CaptureLoss } from '@reticlehq/core';
+import { BlindSpotKind, CaptureLoss, PredicateKind } from '@reticlehq/core';
 import type { Predicate } from '../events/predicate.js';
 import type { Session } from '../session/session.js';
 import { findContradictions, type Contradiction } from '../events/contradictions.js';
+import { declaredExpectations } from '../events/declared.js';
 import {
   blindSpotsFromState,
   buildCoverageStatement,
@@ -11,11 +12,31 @@ import {
 } from '../honesty/blind-spots.js';
 import { buildHonestyBlock } from '../honesty/honesty.js';
 import { hasAcceptedWrite } from '../honesty/accepted-write.js';
-import { hasUnreadWriteOutcome } from '../honesty/unread-outcome.js';
+import { unreadWriteLabels } from '../honesty/unread-outcome.js';
 import { decideVerified } from '../honesty/verified.js';
 import { describeWaitTarget } from '../honesty/unsettled.js';
-import { inFlightRequestLabels } from './settle-in-flight.js';
+import { inFlightRequestLabels, repeatedRequestLabels } from './settle-in-flight.js';
 import { gradeOfPredicate } from './assert-grade.js';
+
+type StateBlindSpot = ReturnType<typeof blindSpotsFromState>[number];
+
+function absenceBlindSpotNote(
+  predicate: Predicate,
+  spots: readonly StateBlindSpot[],
+): string | undefined {
+  if (predicate.kind !== 'element' || predicate.absent !== true) return undefined;
+
+  const relevant = spots.filter(
+    (spot) =>
+      spot.count > 0 &&
+      spot.kind === BlindSpotKind.CROSS_ORIGIN_IFRAME &&
+      undefined !== predicate.query.scope,
+  );
+  if (0 === relevant.length) return undefined;
+
+  const statement = buildCoverageStatement(relevant);
+  return `the absence assertion targeted a region Reticle could not observe (${statement.note ?? 'partial coverage'}), so a passing DOM check cannot prove absence`;
+}
 
 /**
  * The honesty verdict for a plain `reticle_assert`.
@@ -55,6 +76,7 @@ export async function assertVerdict(
   // that implies coverage it never had, and a needless caveat costs the agent a sentence.
   const spots = blindSpotsFromState(session.blindSpots());
   const statement = buildCoverageStatement(spots);
+  const absenceBlindSpot = absenceBlindSpotNote(predicate, spots);
   // Omitted entirely when coverage is full, so an intact page pays nothing and the field's PRESENCE
   // is the warning.
   const coverage =
@@ -77,12 +99,18 @@ export async function assertVerdict(
   // could show it did. An assert taken over a window that predates the act attributes nothing, and the
   // rule then stays quiet.
   const actCursor = session.lastAct.cursor();
+  // The same declaration the act path reads. `reticle_assert` is the other half of the verdict
+  // surface, and an error path declared here deserves the same answer it gets there — a fix that
+  // lived only on the act path would leave the sibling caller broken.
+  const declared = declaredExpectations(predicate);
   const contradictions = findContradictions(windowEvents, {
     prior,
+    expectedFailures: declared.netFailures,
+    renderProved: pass && declared.rendersContent,
     ...(actCursor !== undefined && actCursor >= since ? { actionSince: actCursor } : {}),
   });
-  // Only a spot that IMPEACHES the capture downgrades a verdict. A structural boundary (virtualized
-  // rows, a cross-origin frame) is reported as coverage and must not impugn what WAS observed.
+  // Only a spot that IMPEACHES the capture downgrades a general verdict. Structural boundaries are
+  // reported as coverage; the narrower absence exception is computed separately above.
   const impeaching = buildCoverageStatement(spots.filter((sp) => impeachesCapture(sp.kind)));
   // A gap in the WINDOW, as opposed to a standing limit of the page. Both mean the same thing to the
   // rule — part of what happened was not seen — so both belong in `blindSpots`, which is the only
@@ -90,11 +118,16 @@ export async function assertVerdict(
   const gap = transportGapNote(windowEvents);
   const impeachingNotes = [impeaching.note, gap].filter((n): n is string => n !== undefined);
   const outcomePending = hasAcceptedWrite(windowEvents);
-  const outcomeUnread = hasUnreadWriteOutcome(windowEvents);
+  const outcomeUnread = unreadWriteLabels(windowEvents);
   const decision = decideVerified({
     pass,
+    // Same rule as the act path: the caller named a consequence, so a settlement-only finding must
+    // not override it. A fix that lived on one half of the verdict surface would leave the other
+    // half broken, and this is the tool agents call most.
+    declaredConsequence: predicate.kind !== PredicateKind.SETTLED,
     ...(inconclusive === undefined ? {} : { inconclusive }),
     ...(true === observationLost ? { observationLost: true } : {}),
+    ...(absenceBlindSpot === undefined ? {} : { absenceBlindSpot }),
     honesty: buildHonestyBlock({
       grade: gradeOfPredicate(predicate),
       attribution: 'window',
@@ -109,12 +142,13 @@ export async function assertVerdict(
     }),
     contradictions,
     ...(outcomePending ? { outcomePending } : {}),
-    ...(outcomeUnread ? { outcomeUnread } : {}),
+    ...(outcomeUnread.length > 0 ? { outcomeUnread } : {}),
     // Same detail the act path supplies: this route reaches UNSETTLED through an absence-derived
     // contradiction, and "the window closed before the app finished" is no more actionable here.
     unsettled: {
       waitedFor: describeWaitTarget(predicate),
       stillInFlight: inFlightRequestLabels(windowEvents),
+      repeated: repeatedRequestLabels(windowEvents),
     },
   });
   return { decision: decision as unknown as Record<string, unknown>, contradictions, coverage };

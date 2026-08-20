@@ -21,7 +21,7 @@ import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PassThrough } from 'node:stream';
-import { LOOPBACK_HOST, MCP_SSE_PATH } from '@reticlehq/core';
+import { LOOPBACK_HOST, MCP_SSE_PATH, STATUS_PATH } from '@reticlehq/core';
 import { proxyLogPath, startMcpProxy } from './mcp-proxy.js';
 import { resetOutageReporting } from './mcp-outage.js';
 
@@ -69,6 +69,15 @@ function startFakeDaemon(): Promise<FakeDaemon> {
   const streams: http.ServerResponse[] = [];
   const posts: string[] = [];
   const server = http.createServer((req, res) => {
+    // A Reticle daemon answers `/status`, and the proxy's drop path now asks: a port that accepts
+    // SSE and does not serve status is a stranger, not a daemon, and must not be reattached to.
+    // A fake that skips this is claiming to be a daemon while behaving like the squatter.
+    if ('GET' === req.method && (req.url ?? '').startsWith(STATUS_PATH)) {
+      res
+        .writeHead(200, { 'Content-Type': 'application/json' })
+        .end(JSON.stringify({ running: true }));
+      return;
+    }
     if ('POST' === req.method) {
       let body = '';
       req.setEncoding('utf8');

@@ -42,6 +42,36 @@ export const TOOL_SURFACE = {
   DEFAULT: 'default',
   /** Every tool advertised directly, WITH output schemas. A verification switch — see above. */
   ALL: 'all',
+  /**
+   * The smallest surface that can still produce a VERDICT. Not a profile — a cost switch.
+   *
+   * Measured on the wire: a verification that names its own target costs one `act_and_wait` call,
+   * and 5,480 of its 5,909 tokens are the advertised surface re-sent for that single turn. The
+   * answers cost 430. So on the path where the caller already knows what to assert, almost the
+   * entire bill is the menu, and the menu is the thing to cut.
+   *
+   * Deliberately NOT the default, and now MEASURED rather than inherited. Run over the same 30-bug
+   * set that the default surface scores 23/27 detection and 2/29 false alarms on:
+   *
+   *   detection      24/28   (held)
+   *   FALSE ALARMS   7/30    (was 2/29 — TRIPLED)
+   *   tokens         113,599 per run (was 179,959 — 37% cheaper)
+   *
+   * The five new false alarms are not scattered. They are `mutation-leak` and
+   * `generate-blast-filter` (state), `kpi-deploys-tamper` (business-logic), `debounce-broken`
+   * (timing) and `route-stuck-deployments` (routing) — precisely the classes whose evidence lives in
+   * `reticle_state`, `reticle_network` and `reticle_observe`, which this surface does not advertise.
+   * Strip the observation tools and the model stops observing: it reaches for the verdict without
+   * the evidence and calls a healthy build broken.
+   *
+   * So the retired `dynamic` finding is confirmed, with a sharper mechanism than "accuracy drops".
+   * 37% of the tokens is not worth trading for the one metric this product actually wins on, and
+   * this must not become the default on the strength of the token number alone.
+   *
+   * It remains correct for a caller who has ALREADY decided what to assert — there the assertion
+   * supplies the evidence the surface would otherwise have to go and find.
+   */
+  VERIFY: 'verify',
 } as const;
 export type ToolSurface = (typeof TOOL_SURFACE)[keyof typeof TOOL_SURFACE];
 
@@ -52,6 +82,9 @@ export type ToolSurface = (typeof TOOL_SURFACE)[keyof typeof TOOL_SURFACE];
  * users to shop among alternatives that did not meaningfully differ.
  */
 export const ADVERTISE_ALL_ENV = 'RETICLE_ADVERTISE_ALL_TOOLS';
+
+/** Opt into the smallest verdict-capable surface. Read by the DAEMON at startup, like the others. */
+export const VERIFY_SURFACE_ENV = 'RETICLE_VERIFY_SURFACE';
 
 /**
  * The retired setting, still read so nobody's shell profile breaks.
@@ -150,26 +183,54 @@ export const CORE_TOOL_NAMES: ReadonlySet<string> = new Set([
   // deleting the instruction from the lease and the pause hint — deletes the handback protocol,
   // because there is nowhere else those two calls are ever named.
   ReticleTool.SESSION,
-  // CAPABILITIES is the highest orientation-per-token tool on the surface: one call returns the app's
-  // whole testable surface — its testids, signals, stores and named flows — and `{fromDisk:true}`
-  // returns the same from a checked-in contract with NO browser attached, so an agent with zero
-  // context starts oriented instead of exploring.
-  //
-  // Same argument as the four above, and it is the fifth time this file has made it: a tool an agent
-  // must already know about, and reach through reticle_run, is a tool that never gets called.
-  //
-  // The cost is real and is NOT the bargain #262 claimed. That issue argued the marginal cost sits
-  // "well below the 274-token average" because the input schema is small; measured, its description
-  // plus schema is closer to 325 tokens, which is above the average rather than below it. This is
-  // also a straight +1 rather than a swap: the tools that write-up proposed demoting (`project`,
-  // `domain`) were never in the default set to begin with.
-  //
-  // So it is a deliberate bet, taken with that correction on the table: that orientation replaces
-  // exploratory snapshots, which are among the most expensive calls an agent makes. The measurement
-  // that settles it is whether sessions calling this early take fewer and cheaper snapshots than
-  // those that do not. If that does not show up, this is the entry to revert.
-  ReticleTool.CAPABILITIES,
 ]);
+
+/**
+ * The extended surface: what `all` advertises BEYOND the default set.
+ *
+ * `all` used to mean "every tool in the registry", and that is no longer allowed to be true. Cursor
+ * enforces a limit of 40 tools across every connected MCP server COMBINED, so a server advertising
+ * 48 by itself can push a user's other servers out or be dropped wholesale. The budget is a count,
+ * so no amount of trimming parameter prose buys anything back — only advertising fewer names does.
+ *
+ * Everything omitted stays in the registry, stays catalogued by `reticle_tools`, and stays callable
+ * by name through `reticle_run { tool, args }`. The cost is one discovery hop on the cold tail, which
+ * is the same trade the default surface has always made, applied one level further out.
+ *
+ * What it costs that is NOT free: `all` is the only surface that carries `outputSchema`, which is
+ * what makes the MCP layer validate tool OUTPUT — the check that once caught `reticle_verify_change`
+ * returning a payload its own schema rejected. The tools left off this list no longer get that
+ * validation from the wire. That defect class is now uncovered for them, and it is written down here
+ * rather than discovered later.
+ *
+ * Chosen as the capabilities an agent plausibly reaches for once the verify loop is not enough:
+ * orientation, the record/replay flow loop, visual evidence, and the three fault-injection controls.
+ */
+export const EXTENDED_TOOL_NAMES: ReadonlySet<string> = new Set([
+  // Demoted from the default set to make room under the cap. It was added as an explicit bet that
+  // orientation replaces exploratory snapshots, and the measurement that would have settled that
+  // bet was never run — so when the budget became a hard count, the unproven entry is the one that
+  // gives way. Still one `reticle_run` hop from any agent that wants it.
+  ReticleTool.CAPABILITIES,
+  ReticleTool.FLOW_SAVE,
+  ReticleTool.FLOW_REPLAY,
+  ReticleTool.FLOW_VERIFY,
+  ReticleTool.RECORD,
+  ReticleTool.SCREENSHOT,
+  ReticleTool.VISUAL_DIFF,
+  ReticleTool.CLOCK,
+  ReticleTool.NETWORK_MOCK,
+  ReticleTool.STORAGE,
+  ReticleTool.VERIFY_CHANGE,
+  ReticleTool.CRAWL,
+]);
+
+/**
+ * The verify surface: one acting tool that returns a verdict, plus the two meta-tools that reach
+ * everything else. `act_and_wait` can resolve its own target, so no query tool is needed to name an
+ * element — that round trip was half the token cost of a verification.
+ */
+export const VERIFY_TOOL_NAMES: ReadonlySet<string> = new Set([ReticleTool.ACT_AND_WAIT]);
 
 /** Is the truthy form of a boolean env var set? `1`, `true`, `yes` — anything else is off. */
 function envFlagOn(raw: string | undefined): boolean {
@@ -185,10 +246,12 @@ function envFlagOn(raw: string | undefined): boolean {
  * switch decides, and the retired setting is honoured last so an old shell profile still works.
  */
 export function resolveToolSurface(explicit?: string): ToolSurface {
+  if (explicit === TOOL_SURFACE.VERIFY) return TOOL_SURFACE.VERIFY;
   if (explicit === TOOL_SURFACE.ALL) return TOOL_SURFACE.ALL;
   if (explicit === TOOL_SURFACE.DEFAULT) return TOOL_SURFACE.DEFAULT;
   const retiredExplicit = explicit === undefined ? undefined : RETIRED_PROFILE_VALUES[explicit];
   if (retiredExplicit !== undefined) return retiredExplicit;
+  if (envFlagOn(process.env[VERIFY_SURFACE_ENV])) return TOOL_SURFACE.VERIFY;
   if (envFlagOn(process.env[ADVERTISE_ALL_ENV])) return TOOL_SURFACE.ALL;
   const retiredEnv = RETIRED_PROFILE_VALUES[process.env[TOOL_PROFILE_ENV] ?? ''];
   return retiredEnv ?? TOOL_SURFACE.DEFAULT;
@@ -241,6 +304,9 @@ export function describeToolSurface(active: ToolSurface, requested?: string): To
 export function filterTools(tools: ToolDef[], surface: ToolSurface): ToolDef[] {
   // CORE_TOOL_NAMES is what it always really was: the set advertised directly. It was never the
   // interesting thing about the `core` PROFILE, whose only distinction was a second name for this.
+  if (surface === TOOL_SURFACE.VERIFY) return tools.filter((t) => VERIFY_TOOL_NAMES.has(t.name));
   if (surface === TOOL_SURFACE.DEFAULT) return tools.filter((t) => CORE_TOOL_NAMES.has(t.name));
-  return tools;
+  // `all` is the extended surface, not the whole registry — the cap is a hard budget shared with
+  // every other MCP server the user has connected. surface-sizes.test.ts enforces it.
+  return tools.filter((t) => CORE_TOOL_NAMES.has(t.name) || EXTENDED_TOOL_NAMES.has(t.name));
 }

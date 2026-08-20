@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { ReticleEnv } from '@reticlehq/core';
 import { readPid, reticleStateHome } from '../daemon/daemon.js';
@@ -6,13 +6,21 @@ import { PortPresence, probePresence } from '../daemon/port-presence.js';
 import { probeDaemon } from '../mcp/mcp-proxy.js';
 import { fetchStatus } from './cli-launch.js';
 import { daemonLine, type DaemonIdentity } from './doctor-daemon-line.js';
+import { projectWiringLine } from './doctor-project-line.js';
+import { hasProjectConnectedBefore } from '../session/connection-memory.js';
 import { sessionsLine, type SessionsLine } from './doctor-sessions-line.js';
 import { captureLookup, describeForeignHolder, findPortHolder } from './port-holder.js';
 import { chromiumHint, probeChromium } from './chromium-hint.js';
 import { SERVER_VERSION } from '../version/server-version.js';
 import { CONTRACT_FINGERPRINT } from '@reticlehq/core';
 import { diagnoseDesktop, isDesktopProject } from '../init/desktop-doctor.js';
-import { diagnosePortMismatch, readProjectPort } from './cli-port.js';
+import { diagnoseWebCsp } from '../init/csp-doctor.js';
+import {
+  RETICLE_CONFIG_BASENAME,
+  diagnosePortMismatch,
+  readProjectId,
+  readProjectPort,
+} from './cli-port.js';
 import { DoctorRow, doctorRow } from './doctor-rows.js';
 
 /**
@@ -100,6 +108,19 @@ export async function handleDoctor(port: number): Promise<void> {
   const projectPort = readProjectPort(process.cwd());
   const mismatch = diagnosePortMismatch(port, projectPort);
   if (mismatch !== undefined) line(doctorRow(DoctorRow.PORT_CHECK, `✗ ${mismatch}`));
+  // The check this checklist was missing: is the APP wired, not just the tools. Everything above can
+  // be green in a project that has never been through `init`, and that combination is precisely the
+  // one `doctor` gets run to explain.
+  const projectId = readProjectId(process.cwd());
+  line(
+    projectWiringLine({
+      projectId,
+      previouslyConnected: hasProjectConnectedBefore(reticleStateHome(), port, projectId),
+      // An absent config and a corrupt one both read back as "no id"; only this tells them apart,
+      // and telling somebody a file is missing while it sits in front of them is its own dead end.
+      configPresent: existsSync(join(process.cwd(), RETICLE_CONFIG_BASENAME)),
+    }),
+  );
   // Where to LOOK when something is wrong. The daemon has always written a structured log here and
   // nothing ever said so, so the first move in every investigation was reading source instead of
   // reading the log. `RETICLE_TRACE=1` turns the same stream into a per-stage trace — see
@@ -131,6 +152,20 @@ export async function handleDoctor(port: number): Promise<void> {
       return undefined;
     }
   };
+  // The web sibling of the desktop findings below: a `connect-src` that excludes the bridge makes
+  // the browser refuse the WebSocket and report it in ITS console only, so every check above passes
+  // at an app that can never connect. Named, with the exact text to paste.
+  const csp = diagnoseWebCsp(readProjectFile, port);
+  if (csp.length > 0) {
+    line('');
+    line(`  csp          ✗ a Content-Security-Policy is blocking the Reticle bridge:`);
+    for (const finding of csp) {
+      line(`                 ${finding.file}`);
+      line(`                   ${finding.problem}`);
+      line(`                   fix: ${finding.fix}`);
+    }
+  }
+
   const desktop = diagnoseDesktop(readProjectFile, port);
   if (desktop.length > 0) {
     line('');

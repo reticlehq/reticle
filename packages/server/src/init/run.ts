@@ -14,7 +14,7 @@ import { wasMcpRegistered } from './mcp-registered.js';
 import { pickAstroHost } from './astro-host.js';
 import { workspaceParents } from './workspace-apps.js';
 import { chooseWorkspaceApp } from './app-choice.js';
-import { isConnectStep } from './plan.js';
+import { isConnectStep } from './connect-steps.js';
 import { CLI, CURSOR_RULE_PATH, RETICLE_MD_PATH } from './agent-rules.js';
 import { CRA_ENV_PATH } from './cra.js';
 
@@ -45,6 +45,7 @@ function readPairingToken(): string {
 }
 import {
   DEPS_TARGET,
+  RETICLE_CONFIG_FILE,
   frameworkPackages,
   MCP_TARGET,
   buildPlan,
@@ -473,10 +474,10 @@ function gatherPlanInput(options: InitOptions, io: InitIo, pkgRaw: string): Plan
     craEntry: craEntryOf(io),
     craEnv: io.readFile(CRA_ENV_PATH),
     pairingToken: readPairingToken(),
-    reticleConfigExists: io.exists('.reticle.json'),
+    reticleConfigExists: io.exists(RETICLE_CONFIG_FILE),
     // The CONTENT, so a config that exists can be checked rather than trusted — a `"port"` set to
     // the app's own dev-server port used to survive every re-run of `init`.
-    reticleConfigSource: io.readFile('.reticle.json'),
+    reticleConfigSource: io.readFile(RETICLE_CONFIG_FILE),
     // Read the agent instruction files so the rule merge stays idempotent across re-runs — from the
     // agent's own root, or the merge would idempotently check a file it is not going to write.
     claudeMdContent: io.readFile(agentFile('CLAUDE.md')),
@@ -485,7 +486,13 @@ function gatherPlanInput(options: InitOptions, io: InitIo, pkgRaw: string): Plan
     cursorRuleContent: io.readFile(agentFile(CURSOR_RULE_PATH)),
     claudeCommandContent: io.readFile(agentFile(CLAUDE_COMMAND_PATH)),
     cursorCommandContent: io.readFile(agentFile(CURSOR_COMMAND_PATH)),
-    ...(agentRoot === undefined ? {} : { agentFileRoot: agentRoot }),
+    ...(agentRoot === undefined
+      ? {}
+      : {
+          agentFileRoot: agentRoot,
+          // The config the AGENT's cwd already has, if any — see agentRootConfigStep.
+          agentRootConfigSource: io.readFile(agentFile(RETICLE_CONFIG_FILE)),
+        }),
     options: {
       port: options.port,
       mcp: options.mcp,

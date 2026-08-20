@@ -3,7 +3,7 @@ name: debug-broken-ui
 description: Find out why something in a running web app does not work, when the console is empty and the code looks correct. Reads the click, the request, the store and the console together and returns the file:line to open. Use when a button does nothing, a form will not submit, data will not load, a page renders blank or stale, a modal will not close, or the user says "it's broken" and the code review says it is fine.
 license: Apache-2.0
 metadata:
-  version: 2.8.0
+  version: 2.9.0
   homepage: https://www.reticle.sh
   repository: https://github.com/reticlehq/reticle
 ---
@@ -23,7 +23,11 @@ reticle_act_and_wait({ sessionId, ref, action: "click", until: { kind: "element"
 
 The verdict already narrows it: `no` / `contradicted` means a channel saw something incompatible with the UI: you have the bug. `unknown` means Reticle drove it and could not tell, which is a different investigation from "it failed".
 
-Then read the channels **scoped to what you just did**. Pass `since` from the act result, or you are reading a buffer that predates the click:
+**Read the act result before you call anything else.** Its `summary` block already carries the whole causal window of that one click: `net {total, errors, headline}`, `consoleErrors`, `stateDiffs [{path, from, to}]`, `storageDiffs [{key, from, to}]`, `route`, `signals`, `layoutShift`, `longTasks` — real before→after diffs, not counts. The console, network, storage and state calls below are for going DEEPER into something the summary already pointed at. Calling all three straight after an act pays three model round trips (and, in an approval-gated client, three human clicks) for evidence you were already holding.
+
+`summary.stateUnwatched: true` means the state channel is dark — no subscribable store is registered, so an empty `stateDiffs` means _unwatched_, not _unchanged_, and no state-based conclusion is available until someone registers the store. It is the one field here that is about your instrumentation rather than about the app.
+
+When the summary does point somewhere, read that channel **scoped to what you just did** — pass `since` from the act result, or you are reading a buffer that predates the click:
 
 ```
 reticle_console({ sessionId, since })

@@ -24,9 +24,13 @@ function scriptedClock(values: number[]): () => number {
   return () => values[Math.min(i++, values.length - 1)] ?? 0;
 }
 
-/** The per-spec `t`: an opaque context the runner passes through. Tests use a trivial one. */
+/**
+ * The per-spec `t`: the runner passes it through to the spec body and never reads a matcher off it,
+ * so these tests hand it the one field they exercise. The cast is the assertion — if the runner
+ * ever starts touching a matcher, this stub stops being honest.
+ */
 function buildContext(invoke: ToolInvoker): SpecContext {
-  return { invoke };
+  return { invoke } as SpecContext;
 }
 
 function options(overrides: Partial<RunnerOptions>): RunnerOptions {

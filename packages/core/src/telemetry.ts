@@ -135,6 +135,24 @@ export const TelemetryEventKind = {
    */
   APP_INSTRUMENTED: 'app_instrumented',
   /**
+   * A daemon has been up long enough that no app is going to arrive on its own.
+   *
+   * The exact counterpart of `app_instrumented`, and the reason it has to exist: that event only
+   * fires on SUCCESS, so the far larger population — daemons that never get an app at all — is
+   * measurable today only by the ABSENCE of an event, and an absence cannot distinguish "nothing
+   * was wired" from "the process died before it could tell us" from "we never sent it".
+   *
+   * The funnel breaks here and nowhere else, so this is the one silence worth turning into a signal.
+   * Fired ONCE per daemon run, and never after an app has connected, so a daemon that starts slowly
+   * and then works reports nothing.
+   *
+   * Read it against `agentAttached`: a stalled daemon with no agent is a person who installed and
+   * walked away, which is not a defect. A stalled daemon WITH an agent attached is the failure this
+   * product currently has — the tools are there, something is asking for them, and there is no app
+   * on the other end.
+   */
+  INSTRUMENTATION_STALLED: 'instrumentation_stalled',
+  /**
    * The agent LOST its Reticle tools — the worst thing this product does to anyone, and until now
    * completely invisible in the field.
    *
@@ -202,6 +220,7 @@ const SESSION_SCOPED: ReadonlySet<string> = new Set([
   TelemetryEventKind.SESSION_PROGRESS,
   TelemetryEventKind.MCP_CLIENT_CONNECTED,
   TelemetryEventKind.APP_INSTRUMENTED,
+  TelemetryEventKind.INSTRUMENTATION_STALLED,
   TelemetryEventKind.PROJECT_PROFILED,
   TelemetryEventKind.VERIFICATION_COMPLETED,
   TelemetryEventKind.BUG_FOUND,
@@ -555,6 +574,19 @@ export const BugFoundSchema = z.object({
    * `BugAttribution` for why `app` needs positive evidence.
    */
   attribution: z.nativeEnum(BugAttribution),
+  /**
+   * A stable hash identifying THIS defect across sessions — same kind at the same route = same
+   * fingerprint, regardless of when or where it was found.
+   *
+   * The inputs (route, selector) never travel raw — only the 8-char hex hash does, following the
+   * same privacy pattern as `projectId`. The analytics side groups on it to answer "was this bug
+   * fixed?" (the fingerprint stops appearing) and to deduplicate the same defect found by parallel
+   * agents in one run.
+   *
+   * OPTIONAL because old senders and the `reticle verify` CLI path do not yet compute it. Absent
+   * means "not fingerprinted", never "a different defect from one that has a fingerprint".
+   */
+  fingerprint: z.string().max(16).optional(),
 });
 export type BugFound = z.infer<typeof BugFoundSchema>;
 
@@ -639,6 +671,28 @@ export const AppInstrumentationSchema = z.object({
 export type AppInstrumentation = z.infer<typeof AppInstrumentationSchema>;
 
 /**
+ * The shape of a daemon that waited and got nothing.
+ *
+ * Deliberately the same three facts as `AppInstrumentation` rather than a richer payload, so the
+ * success and failure cases are directly comparable: the only difference between them should be
+ * which event carries them. `msWaited` is the counterpart of `msToFirstApp`.
+ *
+ * What it does NOT carry is any attempt to say WHY, because at this point the daemon does not know.
+ * Whether a dev server is listening is a live probe, and running one on a timer to enrich a metric
+ * would be collecting for the metric's sake. The diagnosis belongs where a human or an agent asks
+ * for it, not here.
+ */
+export const InstrumentationStallSchema = z.object({
+  /** Whether `reticle init` had been run in this directory (a projectId is stamped). */
+  initialized: z.boolean(),
+  /** Whether an MCP client is attached. The difference between an idle install and a broken one. */
+  agentAttached: z.boolean(),
+  /** How long the daemon has been up with no app on the other end. */
+  msWaited: z.number().int().nonnegative(),
+});
+export type InstrumentationStall = z.infer<typeof InstrumentationStallSchema>;
+
+/**
  * WHICH stage of an MCP outage this is. Reported at most twice per proxy process, and the two are
  * different facts: `first` says the session lost its tools at all, `budget_spent` says the proxy
  * stopped retrying and never came back on its own.
@@ -646,6 +700,18 @@ export type AppInstrumentation = z.infer<typeof AppInstrumentationSchema>;
 export const OutageStage = {
   FIRST: 'first',
   BUDGET_SPENT: 'budget_spent',
+  /**
+   * The link came back on its own, and `attempts` says what it cost.
+   *
+   * Without it `first` is unfalsifiable. It is emitted at the moment of the drop, when the attempt
+   * counter is 1 by construction and the cap keeps any later drop from ever replacing it — so every
+   * event in the field carried the same stage and the same attempt count, and neither could carry
+   * another. That reads as "reconnection never advances past the first attempt" and it is really
+   * "this event is emitted before there is anything to say". `recovered` is the counterpart that
+   * makes the pair mean something: `first` with no `recovered` and no `budget_spent` is a session
+   * whose tools never came back.
+   */
+  RECOVERED: 'recovered',
 } as const;
 export type OutageStage = (typeof OutageStage)[keyof typeof OutageStage];
 
@@ -655,8 +721,17 @@ export type OutageStage = (typeof OutageStage)[keyof typeof OutageStage];
  * without a raw string reaching the wire, per the classifier rule.
  */
 export const OutageReason = {
-  /** The SSE stream ended cleanly — usually the daemon exiting. */
+  /** The SSE stream ended cleanly and nothing said why. */
   SSE_ENDED: 'sse_ended',
+  /**
+   * The daemon ANNOUNCED that it was retiring before it closed the stream.
+   *
+   * Not an outage the agent suffered, and separating it is the whole point: a scheduled shutdown and
+   * a daemon dying under a live client are the same clean stream end on this side of the socket, so
+   * the metric meant to say "the agent lost its tools" spent most of its volume counting the daemon
+   * going to sleep exactly as designed. Split out, `sse_ended` finally means what it says.
+   */
+  DAEMON_SHUTDOWN: 'daemon_shutdown',
   /** The stream errored. */
   SSE_ERROR: 'sse_error',
   /** The socket died under us with neither `end` nor `error` — daemon killed, network reset. */
@@ -886,6 +961,8 @@ export const TelemetryEventSchema = z.object({
   outage: McpOutageSchema.optional(),
   /** Only on `app_instrumented`: the install's second half finally happening. */
   instrumentation: AppInstrumentationSchema.optional(),
+  /** Only on `instrumentation_stalled`: the install's second half not happening. */
+  stall: InstrumentationStallSchema.optional(),
   /**
    * Only on `reticle_installed` / `init_completed`: which published route brought this install in.
    *

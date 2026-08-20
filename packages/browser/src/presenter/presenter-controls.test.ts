@@ -4,6 +4,7 @@ import { Presenter, type ControlIntent } from './presenter.js';
 import { CONTROLS_CSS } from './presenter-controls.js';
 import { buildSnapshot } from '../dom/snapshot.js';
 import { isIgnored } from '../dom/dom-ignore.js';
+import { Annotator } from '../review/annotator.js';
 
 const wait = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 const flush = (): Promise<void> => new Promise((r) => setTimeout(r, 0));
@@ -78,18 +79,30 @@ describe('presenter-controls / live-control panel', () => {
     expect(onControl).toHaveBeenLastCalledWith({ kind: HumanControlKind.RESUME });
     expect(stateAttr()).toBe('active');
     expect(presenter.state).toBe(SessionState.ACTIVE);
-    expect(pauseBtn()?.textContent).toBe('Pause');
+    expect(pauseBtn()?.getAttribute('aria-label')).toBe('Pause');
+  });
+
+  it('3b pause and resume use different icons (play vs pause)', () => {
+    mount();
+    const pauseLabel = (): string | null => pauseBtn()?.getAttribute('aria-label') ?? null;
+    expect(pauseLabel()).toBe('Pause');
+    expect(pauseBtn()?.querySelectorAll('.reticle-hi-icon')).toHaveLength(1);
+    click(pauseBtn());
+    expect(pauseLabel()).toBe('Resume');
+    click(pauseBtn());
+    expect(pauseLabel()).toBe('Pause');
+    expect(pauseBtn()?.querySelectorAll('.reticle-hi-icon')).toHaveLength(1);
   });
 
   it('4 pause button label flips to Resume when paused, back when active', () => {
     mount();
     click(pauseBtn());
-    expect(pauseBtn()?.textContent).toBe('Resume');
+    expect(pauseBtn()?.getAttribute('aria-label')).toBe('Resume');
     click(pauseBtn());
-    expect(pauseBtn()?.textContent).toBe('Pause');
+    expect(pauseBtn()?.getAttribute('aria-label')).toBe('Pause');
   });
 
-  it('5 send with text emits message, appends 🧑 row, clears input', () => {
+  it('5 send with text emits message, appends human row, clears input', () => {
     const { onControl } = mount();
     const i = input();
     if (null === i) throw new Error('no input');
@@ -100,7 +113,8 @@ describe('presenter-controls / live-control panel', () => {
       kind: HumanControlKind.MESSAGE,
       text: 'try the dark theme',
     });
-    expect(logTexts().some((t) => '🧑 you: try the dark theme' === t)).toBe(true);
+    expect(logTexts().some((t) => 'try the dark theme' === t)).toBe(true);
+    expect(q('[data-kind="human"]')).not.toBeNull();
     expect(i.value).toBe('');
   });
 
@@ -125,14 +139,14 @@ describe('presenter-controls / live-control panel', () => {
     expect(logTexts().length).toBe(before);
   });
 
-  it('8 send with whitespace-only emits nothing and appends no 🧑 row', () => {
+  it('8 send with whitespace-only emits nothing and appends no human row', () => {
     const { onControl } = mount();
     const i = input();
     if (null === i) throw new Error('no input');
     i.value = '   ';
     click(sendBtn());
     expect(onControl).not.toHaveBeenCalled();
-    expect(logTexts().some((t) => t !== null && t.startsWith('🧑 you:'))).toBe(false);
+    expect(q('[data-kind="human"]')).toBeNull();
   });
 
   it('9 end click emits {kind:end}, enters ended, shows banner', () => {
@@ -198,12 +212,12 @@ describe('presenter-controls / live-control panel', () => {
     const panelRoot = q('div[data-reticle-overlay]') as HTMLElement; // the <div>, not the <style>
     presenter.setState(
       SessionState.ENDED,
-      'Agent stopped — switch to your terminal',
+      'Agent stopped - switch to your terminal',
       PresenterTone.WARN,
     );
     expect(panelRoot.getAttribute('data-reticle-tone')).toBe('warn');
-    // warn drops the calm "Session ended ·" prefix — the notice itself is the actionable headline
-    expect(q('[data-reticle-banner]')?.textContent).toBe('Agent stopped — switch to your terminal');
+    // warn drops the calm "Session ended ·" prefix - the notice itself is the actionable headline
+    expect(q('[data-reticle-banner]')?.textContent).toBe('Agent stopped - switch to your terminal');
   });
 
   it('14c a calm end clears any prior warn tone', () => {
@@ -315,7 +329,42 @@ describe('presenter-controls / live-control panel', () => {
     expect(snap.tree).not.toContain('Tell the agent something');
     expect(snap.tree).not.toContain('PAUSED');
     expect(snap.tree).not.toContain('Session ended');
-    expect(snap.tree).not.toContain('🧑 you:');
+    expect(snap.tree).not.toContain('reticle-brand-mini');
+  });
+
+  // Pause and End are instructions to the AGENT. Annotation is the person's own channel, so it
+  // outlives both - a note is most often written about what just happened, i.e. after the run
+  // stopped. Requiring an ACTIVE session here left the toggle lit with the annotator switched off.
+  it('pause and end leave page annotation alone while the HUD stays expanded', () => {
+    const { presenter } = mount();
+    const ann = new Annotator({ emit: () => {}, now: () => 0 });
+    ann.mount();
+    presenter.bindAnnotator(ann);
+    click(q('[data-reticle-fab]'));
+    // Expanding no longer enters annotate mode on its own — it is a toolbar toggle now.
+    click(q('[data-reticle-annotate-btn]'));
+    expect(ann.active).toBe(true);
+    click(pauseBtn());
+    expect(ann.active, 'pausing the agent does not take away the pen').toBe(true);
+    expect(stateAttr()).toBe('paused');
+    click(pauseBtn());
+    expect(ann.active).toBe(true);
+    click(endBtn());
+    expect(ann.active, 'a note about the run outlives the run').toBe(true);
+    click(q('[data-reticle-annotate-btn]'));
+    expect(ann.active, 'the toggle is still the way out').toBe(false);
+    ann.destroy();
+  });
+
+  it('expanding the HUD while paused does not start annotation', () => {
+    const { presenter } = mount();
+    const ann = new Annotator({ emit: () => {}, now: () => 0 });
+    ann.mount();
+    presenter.bindAnnotator(ann);
+    click(pauseBtn());
+    click(q('[data-reticle-fab]'));
+    expect(ann.active).toBe(false);
+    ann.destroy();
   });
 
   it('17 human log text never leaks to snapshot', () => {

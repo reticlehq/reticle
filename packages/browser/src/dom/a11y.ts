@@ -273,6 +273,23 @@ function selfHidden(el: Element): boolean {
  * static for the pass's duration — the cache MUST be a per-call Map, never module-level (that would go
  * stale the instant the app mutates, the same trap the shadow-root note in query.ts documents).
  */
+/**
+ * True when the element is inside the viewport right now: visible AND its bounding box intersects
+ * the window. This is what makes a scroll assertable (#398) — content below the fold of a scrolling
+ * container is `visible`/`present` before any scroll, so only a viewport-intersection check can tell
+ * "scrolled into view" from "was always in the DOM". Uses getBoundingClientRect (viewport-relative,
+ * already accounts for scroll position), not an IntersectionObserver, so it stays synchronous inside
+ * the predicate pass.
+ */
+export function isInViewport(el: Element, memo?: Map<Element, boolean>): boolean {
+  if (!isVisible(el, memo)) return false;
+  const view = el.ownerDocument.defaultView;
+  if (null === view) return false;
+  const r = el.getBoundingClientRect();
+  if (r.width <= 0 || r.height <= 0) return false;
+  return r.bottom > 0 && r.right > 0 && r.top < view.innerHeight && r.left < view.innerWidth;
+}
+
 export function isVisible(el: Element, memo?: Map<Element, boolean>): boolean {
   if (!el.isConnected) return false;
   const cached = memo?.get(el);

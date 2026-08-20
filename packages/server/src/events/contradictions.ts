@@ -10,6 +10,7 @@ import { findBodyFailures } from './body-failures.js';
 import { findEchoMismatches } from './echo-mismatch.js';
 import { findUnitMismatches } from './unit-mismatch.js';
 import { asNumber, asString } from '../tools/tools-helpers.js';
+import { matchesDeclaredFailure, type DeclaredNetFailure } from './declared.js';
 
 /**
  * The contradiction hunter.
@@ -235,6 +236,37 @@ export interface ContradictionOptions {
    * test, which is weaker but never wrong in the direction of a false accusation.
    */
   mutatedWithin?: number | undefined;
+  /**
+   * Requests the CALLER declared would fail, read off the oracle it wrote before acting.
+   *
+   * `ui-advanced-request-failed` cannot tell "the app swallowed the error and carried on" from "the
+   * app rendered the error, which is the behaviour under test" — both are a moved DOM beside a
+   * failed request. `failureAcknowledged` recovers the first from the app's own state, and an app
+   * that renders its error straight into the DOM without touching a store defeats it.
+   *
+   * The declaration is the missing evidence, and it costs no new API: an agent verifying an error
+   * path already writes `{ net, POST, /api/login, status: 500 }` into the predicate. Measured in the
+   * field: every branch of a login error path (500, 401, 503) passed every declared clause and every
+   * run still returned `verified: "no" / contradicted`, so error handling — empty states, offline
+   * banners, 4xx/5xx messaging, lockouts — was the code least able to reach a green verdict and the
+   * most worth verifying.
+   *
+   * Scoped as narrowly as it can be: it suppresses ONLY the heuristic rule that cannot see the
+   * difference. A success signal fired over the declared failure still contradicts, and a server
+   * fault blamed on the user is still misattributed — see the negative controls in
+   * `contradictions.declared.test.ts`.
+   */
+  expectedFailures?: readonly DeclaredNetFailure[] | undefined;
+  /**
+   * The caller declared an on-screen consequence and it HELD in this window.
+   *
+   * `route-rendered-nothing` infers a blank destination from the absence of DOM events, and a
+   * verdict that names it beside an element match — heading found, with its source file and line —
+   * is a clause its own evidence disproves. Positive evidence outranks the absence it is inferred
+   * from. Undefined/false leaves the rule exactly as it was, which is the case that catches a route
+   * with no view.
+   */
+  renderProved?: boolean | undefined;
 }
 
 /** Net-shaped events — the only ones that carry a URL a dev-tooling channel could occupy. */
@@ -286,7 +318,7 @@ export function findContradictions(
   // Needs body capture; silent without it, which is why the assert path also declares when bodies
   // were never recorded rather than letting an unread payload read as an empty one.
   found.push(...findBodyFailures(events));
-  found.push(...findEchoMismatches(events));
+  found.push(...findEchoMismatches(events, options.actionSince));
 
   // ── A money value written back at the wrong SCALE ───────────────────────────────────────────
   found.push(...findUnitMismatches(events, options.prior ?? []));
@@ -310,6 +342,11 @@ export function findContradictions(
     ];
   }
   const failed = settled.filter((c) => false === c.ok);
+  // The failures NOBODY declared — see ContradictionOptions.expectedFailures. Only the heuristic
+  // "the UI moved while a request failed" rule reads this; the sharp rules still read `failed`.
+  const unexpected = failed.filter(
+    (c) => !matchesDeclaredFailure(c, options.expectedFailures ?? []),
+  );
   const advanced = uiAdvanced(events);
   const signals = events
     .filter((e) => e.type === EventType.SIGNAL)
@@ -339,7 +376,7 @@ export function findContradictions(
   const fetched = events.some(
     (e) => e.type === EventType.NET_REQUEST || e.type === EventType.NET_PENDING,
   );
-  if (routed && !rendered && !fetched) {
+  if (routed && !rendered && !fetched && true !== options.renderProved) {
     found.push({
       kind: ContradictionKind.ROUTE_RENDERED_NOTHING,
       claim: 'the app navigated to a new route',
@@ -388,12 +425,12 @@ export function findContradictions(
       counter: `${String(failed.length)} request(s) in the same window failed`,
       detail: failed.map(describe).join('; '),
     });
-  } else if (failed.length > 0 && advanced && !misattributed && !failureAcknowledged(events)) {
+  } else if (unexpected.length > 0 && advanced && !misattributed && !failureAcknowledged(events)) {
     found.push({
       kind: ContradictionKind.UI_ADVANCED_REQUEST_FAILED,
       claim: 'the UI moved forward (DOM/store/route changed)',
-      counter: `${String(failed.length)} request(s) in the same window failed`,
-      detail: failed.map(describe).join('; '),
+      counter: `${String(unexpected.length)} request(s) in the same window failed`,
+      detail: unexpected.map(describe).join('; '),
     });
   }
 

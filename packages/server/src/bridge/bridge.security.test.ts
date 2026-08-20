@@ -341,6 +341,26 @@ describe('Bridge security boundary', () => {
     expect(limited.bridge.sessions.count()).toBe(0);
   });
 
+  /**
+   * Every other refusal on this path records WHY, and this one did not.
+   *
+   * A dial turned away because the handshake pool was full closed the socket and returned — no
+   * `noteClosure`, no log. So an app that was running, instrumented and actively trying to connect
+   * was indistinguishable from an app nobody started, and the no-session diagnosis went looking for
+   * a stopped dev server. That is the same shape as the origin-gate refusal that used to leave no
+   * trace, and the same remedy: put it on the channel the diagnosis already reads.
+   */
+  it('says WHY when a dial is turned away for a full handshake pool', async () => {
+    const limited = await makeBridge({ maxPendingConnections: 1, helloTimeoutMs: 5_000 });
+    const holder = await openSocket(limited.port);
+    const excess = await openSocket(limited.port);
+    expect(await waitForClose(excess)).toBe(1013);
+
+    const why = limited.bridge.sessions.lastClosure()?.reason ?? '';
+    expect(why, 'the refusal must be readable, not just logged').toMatch(/handshake/i);
+    holder.close();
+  });
+
   it('rejects messages above the transport payload limit', async () => {
     const { port } = await makeBridge();
     const socket = await openSocket(port);

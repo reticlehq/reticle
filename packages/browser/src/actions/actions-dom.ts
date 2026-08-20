@@ -1,6 +1,7 @@
 import { refs } from '../dom/refs.js';
 import { hitTestOccluder } from '../dom/occlusion.js';
 import { nativeFrame } from '../timers/native-timers.js';
+import { asSyntheticInput } from './synthetic-input.js';
 
 interface ClickGeometry {
   occluded: boolean;
@@ -26,7 +27,9 @@ export async function fireClickSequence(
   const doc = el.ownerDocument;
   const from: EventTarget = doc.activeElement ?? doc.body;
   firePointer(el, 'pointerdown', from);
-  el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+  asSyntheticInput(() =>
+    el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true })),
+  );
   if (el.tabIndex >= 0 && 'function' === typeof el.focus) el.focus();
   // The gap that makes hold-to-confirm driveable. Everything between down and up used to be
   // synchronous, so a control whose contract is "the button is down for N ms" could not be
@@ -43,9 +46,14 @@ export async function fireClickSequence(
     heldMs = hold.now() - startedAt;
   }
   firePointer(el, 'pointerup', from);
-  el.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
-  const notPrevented = el.dispatchEvent(
-    new MouseEvent('click', { bubbles: true, cancelable: true }),
+  asSyntheticInput(() =>
+    el.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true })),
+  );
+  // Marked as ours so the annotator's capture-phase listener lets it through. Only the CHECK branch
+  // used to do this, so the ordinary click action — which is this function — was swallowed whole in
+  // annotate mode while still reporting `dispatched: true`.
+  const notPrevented = asSyntheticInput(() =>
+    el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true })),
   );
   return { prevented: !notPrevented, heldMs };
 }
@@ -95,11 +103,13 @@ export function firePointer(
   type: string,
   relatedTarget: EventTarget | null = null,
 ): void {
-  if ('function' === typeof PointerEvent) {
-    el.dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true, relatedTarget }));
-  } else {
-    el.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, relatedTarget }));
-  }
+  asSyntheticInput(() => {
+    if ('function' === typeof PointerEvent) {
+      el.dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true, relatedTarget }));
+    } else {
+      el.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, relatedTarget }));
+    }
+  });
 }
 
 /** Enter/leave pointer events are non-bubbling per spec; keep them so to avoid double-firing. */
@@ -108,11 +118,13 @@ export function firePointerNonBubbling(
   type: string,
   relatedTarget: EventTarget | null = null,
 ): void {
-  if ('function' === typeof PointerEvent) {
-    el.dispatchEvent(new PointerEvent(type, { bubbles: false, cancelable: true, relatedTarget }));
-  } else {
-    el.dispatchEvent(new MouseEvent(type, { bubbles: false, cancelable: true, relatedTarget }));
-  }
+  asSyntheticInput(() => {
+    if ('function' === typeof PointerEvent) {
+      el.dispatchEvent(new PointerEvent(type, { bubbles: false, cancelable: true, relatedTarget }));
+    } else {
+      el.dispatchEvent(new MouseEvent(type, { bubbles: false, cancelable: true, relatedTarget }));
+    }
+  });
 }
 
 function makeDataTransfer(data: unknown): DataTransfer | null {

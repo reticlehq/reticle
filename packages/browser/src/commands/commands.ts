@@ -21,7 +21,7 @@ import {
   type ActionStep,
 } from '../actions/actions.js';
 import { describe } from '../dom/a11y.js';
-import { sourceFor, formatSource } from '../dom/source.js';
+import { documentHasSourceStamps, sourceFor, formatSource } from '../dom/source.js';
 import { themeReport } from '../dom/theme.js';
 import { echoRef, refs } from '../dom/refs.js';
 import { isButton, isInput } from '../dom/realm.js';
@@ -116,6 +116,16 @@ function inspect(ref: string): unknown {
   // stamped host. `act` already did this; inspect did not, so the two tools disagreed about the same
   // ref and inspect — the tool you reach for to ask where something lives — was the one saying null.
   const source = formatSource(sourceFor(el, component?.source));
+  // Say WHY the source is missing rather than omitting the field and leaving the caller to guess.
+  // No stamp anywhere in the document is decisive: the loader is not running, so no element will
+  // have one this session, and the fix is a build-config change rather than anything about this
+  // element. Only computed when `source` is already absent, so the ordinary path pays nothing.
+  const sourceUnavailable =
+    source !== undefined
+      ? undefined
+      : documentHasSourceStamps(el.ownerDocument)
+        ? 'This element has no source stamp. Others on the page do, so the stamping loader is running — the nearest stamped ancestor is out of range, or this element is rendered outside instrumented code.'
+        : 'No element in this document carries a source stamp, so the stamping loader is not running: an older adapter, a bundler whose hook never ran, or a build the plugin was dropped from. Add @reticlehq/vite-plugin (or @reticlehq/babel-plugin) to the dev build and restart the dev server to get `file:line` back.';
   const scroll = {
     scrollTop: el.scrollTop,
     scrollHeight: el.scrollHeight,
@@ -125,6 +135,7 @@ function inspect(ref: string): unknown {
   return {
     ...describe(el),
     ...(source !== undefined ? { source } : {}),
+    ...(sourceUnavailable !== undefined ? { sourceUnavailable } : {}),
     tag: el.tagName.toLowerCase(),
     href: el.getAttribute('href') ?? undefined,
     formAction:

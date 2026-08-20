@@ -45,6 +45,12 @@ const failedWrite = (t = 1): Ev => ({
   t,
   data: { id: 'n3', method: 'POST', url: '/api/save', status: 500, ok: false },
 });
+/** A desktop IPC write, exactly as the IPC observer records one: method `IPC`, url `ipc://<cmd>`. */
+const okIpcWrite = (t = 1): Ev => ({
+  type: EventType.NET_REQUEST,
+  t,
+  data: { id: 'n4', method: 'IPC', url: 'ipc://save_todo', status: 200, ok: true },
+});
 const domMoved = (t = 2): Ev => ({ type: EventType.DOM_TEXT, t, data: { path: 'div' } });
 const stateMoved = (t = 2): Ev => ({ type: EventType.STATE_CHANGE, t, data: { store: 'app' } });
 
@@ -70,6 +76,21 @@ describe('is this window one that could be wrongly accused?', () => {
   it('no: no traffic at all — the overwhelmingly common action pays nothing', () => {
     expect(awaitsReaction([])).toBe(false);
     expect(awaitsReaction([domMoved()])).toBe(false);
+  });
+
+  it('yes: an IPC write, because the detector counts one as a write and this must agree', () => {
+    // The accuser and the grace must read "write" the same way. `MUTATING_METHODS` in
+    // @reticlehq/core is ['POST','PUT','PATCH','DELETE','IPC'] and `findContradictions` raises
+    // response-ignored off it; this module re-declares its own list and leaves IPC out. So on a
+    // Tauri or Electron app EVERY successful IPC write skips the grace, the window closes in the
+    // gap before the app re-renders, and a correct desktop app is told it ignored its own response.
+    // The grace exists to stop exactly that accusation; it is currently paid for every method
+    // except the desktop one.
+    expect(awaitsReaction([okIpcWrite()])).toBe(true);
+  });
+
+  it('no: an IPC write the app already reacted to still buys nothing', () => {
+    expect(awaitsReaction([okIpcWrite(), domMoved()])).toBe(false);
   });
 });
 

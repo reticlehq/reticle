@@ -68,6 +68,32 @@ describe('check/uncheck drive the control instead of assigning it', () => {
     expect(clicks, 'and must not fire a pointless click the app has to absorb').toHaveLength(0);
   });
 
+  /**
+   * Not clicking is right. What was wrong is what the no-op CONCLUDED: it read the DOM property and
+   * reported an unqualified success, having dispatched nothing and having no evidence about what the
+   * APPLICATION holds. Those come apart exactly when it matters — a default-checked input the app
+   * never committed, a property written earlier by something else — and then every later read agrees
+   * because every later read is also reading the DOM.
+   */
+  it('says so when it dispatched nothing, instead of reporting a plain success', async () => {
+    const el = box({ checked: true });
+    const out = (await executeAction(refs.refFor(el), ActionType.CHECK, {})) as {
+      effect?: { alreadyAtValue?: boolean };
+    };
+    expect(
+      out.effect?.alreadyAtValue,
+      'the app was never told, so the caller must be able to see that',
+    ).toBe(true);
+  });
+
+  it('claims nothing of the sort when it actually drove the control', async () => {
+    const el = box();
+    const out = (await executeAction(refs.refFor(el), ActionType.CHECK, {})) as {
+      effect?: { alreadyAtValue?: boolean };
+    };
+    expect(out.effect?.alreadyAtValue, 'omitted at its uninformative default').toBeUndefined();
+  });
+
   it('reports prevention when the app cancels the click', async () => {
     const el = box();
     el.addEventListener('click', (e) => e.preventDefault());
@@ -85,5 +111,64 @@ describe('check/uncheck drive the control instead of assigning it', () => {
     // Refused OUT LOUD rather than reported as done. Assigning `.checked` on a disabled box used to
     // succeed silently — a state no user could reach, returned as a green.
     await expect(executeAction(refs.refFor(el), ActionType.CHECK, {})).rejects.toThrow(/disabled/);
+  });
+
+  it('dispatches input and change so a controlled input hears the state change', async () => {
+    const el = box();
+    const events: string[] = [];
+    el.addEventListener('input', () => events.push('input'));
+    el.addEventListener('change', () => events.push('change'));
+
+    await executeAction(refs.refFor(el), ActionType.CHECK, {});
+
+    expect(events).toContain('input');
+    expect(events).toContain('change');
+    expect(el.checked).toBe(true);
+  });
+
+  it('dispatches exactly one input and one change per state change', async () => {
+    // A second dispatch alongside the activation behaviour would read as a double submit to the very
+    // contradiction hunter that grades the action.
+    const el = box();
+    let inputs = 0;
+    let changes = 0;
+    el.addEventListener('input', () => {
+      inputs++;
+    });
+    el.addEventListener('change', () => {
+      changes++;
+    });
+
+    await executeAction(refs.refFor(el), ActionType.CHECK, {});
+
+    expect(el.checked).toBe(true);
+    expect(inputs, 'must not double-dispatch input').toBe(1);
+    expect(changes, 'must not double-dispatch change').toBe(1);
+  });
+
+  it('reports prevention even when a handler calls stopPropagation', async () => {
+    // The old probe listened on `window`, which never runs once propagation stops — so a cancelled
+    // activation was reported as a successful one.
+    const el = box();
+    el.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+    });
+    const out = (await executeAction(refs.refFor(el), ActionType.CHECK, {})) as {
+      effect?: { defaultPrevented?: boolean };
+    };
+    expect(out.effect?.defaultPrevented, 'cancelled activation must be reported').toBe(true);
+    expect(el.checked, 'a cancelled checkbox must not end up checked').toBe(false);
+  });
+
+  it('refuses to uncheck a radio button', async () => {
+    const radio = document.createElement('input');
+    radio.type = 'radio';
+    radio.checked = true;
+    document.body.appendChild(radio);
+
+    await expect(executeAction(refs.refFor(radio), ActionType.UNCHECK, {})).rejects.toThrow(
+      /cannot uncheck a radio button/,
+    );
   });
 });

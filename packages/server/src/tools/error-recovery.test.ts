@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { TRANSPORT_LIMITS } from '@reticlehq/core';
 import { FEEDBACK_ASK, RECOVERY, buildErrorPayload, recoveryFor } from './error-recovery.js';
 import { TOOLS } from './tools.js';
+import { ReticleTool } from './tool-names.js';
 import { diagnoseNoSession } from '../session/no-session-diagnosis.js';
 
 describe('recoveryFor — every known error carries an actionable next move', () => {
@@ -29,6 +30,15 @@ describe('recoveryFor — every known error carries an actionable next move', ()
         'refusing to act: tab throttled; timer/rAF/pointer gestures may silently no-op — refocus before driving',
       ),
     ).toBe(RECOVERY.THROTTLED);
+  });
+
+  it('names reticle_lease through reticle_run, since it is unadvertised by default (#400)', () => {
+    // The throttled-tab timeout recovery told the agent to "drive your own browser with
+    // reticle_lease" — a tool the default profile does not advertise, so an agent that had not
+    // already called reticle_tools could not call it and had no way to learn it goes through
+    // reticle_run. The recovery now names the call that actually reaches it.
+    expect(RECOVERY.COMMAND_TIMEOUT).toContain('reticle_run { tool: "reticle_lease"');
+    expect(RECOVERY.COMMAND_TIMEOUT).not.toMatch(/with reticle_lease\b/);
   });
 
   it('maps a missing baseline / recording to the create-it-first hint', () => {
@@ -74,7 +84,17 @@ describe('buildErrorPayload — the MCP-boundary envelope', () => {
  * the strings are prose, and prose is not type-checked.
  */
 describe('every tool a recovery hint names must still be advertised', () => {
-  const advertised = new Set(TOOLS.map((tool) => tool.name));
+  // TOOLS is the underlying tool table; the two META-tools (reticle_run to dispatch, reticle_tools
+  // to discover) are added by dynamic-tools.ts and are advertised under the default/hybrid profiles
+  // — the very profiles these recovery hints are written for. A hint may name them to route to a
+  // tool the profile does not advertise directly (e.g. reticle_run { tool: "reticle_lease" }), so
+  // they count as reachable here. Under `full` every tool is advertised directly, so the routing
+  // clause is merely redundant, not a dangling door.
+  const advertised = new Set([
+    ...TOOLS.map((tool) => tool.name),
+    ReticleTool.RUN,
+    ReticleTool.TOOLS,
+  ]);
 
   it.each(Object.entries(RECOVERY))('%s names only reachable tools', (_name, hint) => {
     for (const mentioned of hint.match(/reticle_[a-z_]+/g) ?? []) {

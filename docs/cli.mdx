@@ -119,11 +119,10 @@ policy       https://github.com/reticlehq/reticle/blob/main/docs/telemetry.md
 A bare `reticle` with no arguments is not help. It is `reticle serve`.
 
 <Warning>
-  `reticle drive` and `reticle verify` both bind the bridge port themselves, so either will die with
-  a raw `Error: listen EADDRINUSE: address already in use 127.0.0.1:4400` stack trace if a daemon is
-  already listening. Which is the normal state once your agent has started one. `reticle mcp` reuses
-  a running daemon; those two do not. Stop the daemon first, or point them elsewhere with
-  `RETICLE_PORT`.
+  `reticle verify` binds the bridge port itself, so it fails if a daemon is already listening, which
+  is the normal state once your agent has started one. Stop the daemon first, or point it elsewhere
+  with `RETICLE_PORT`. `reticle mcp` reuses a running daemon, and `reticle drive` attaches to one
+  (see [drive](/cli/drive)) rather than competing for the port.
 </Warning>
 
 ## Verification

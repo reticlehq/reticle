@@ -172,3 +172,24 @@ describe('summary size does not depend on how much the app did', () => {
     expect(summary.stateSettleMs).toBe((diffs.at(-1)?.t ?? 0) - (diffs[0]?.t ?? 0));
   });
 });
+
+/**
+ * An empty `stateDiffs` has two meanings and the wrong one is the default reading: "the app changed
+ * no state" is a claim, "nothing was watching state" is a blind spot. The summary is where the
+ * agent reads the empty list, so it is where the difference has to be visible.
+ */
+describe('an unwatched state channel is not an unchanged one', () => {
+  it('marks the state channel unwatched when the session says nothing is subscribed', () => {
+    const summary = causalSummary([e(EventType.NET_REQUEST, { url: '/api/x', status: 200 })], {
+      stateUnwatched: true,
+    });
+    expect(summary.stateUnwatched).toBe(true);
+    expect(summary.stateDiffs).toEqual([]);
+  });
+
+  it('says nothing on the common path — a watched channel pays no field', () => {
+    const changed = [e(EventType.STATE_CHANGE, { name: 'cart', path: 'total', old: 1, value: 2 })];
+    expect(causalSummary(changed).stateUnwatched).toBeUndefined();
+    expect(causalSummary(changed, { stateUnwatched: false }).stateUnwatched).toBeUndefined();
+  });
+});

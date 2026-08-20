@@ -23,6 +23,7 @@ import { resolveBridgeSecurityWithAutoToken } from './bridge/bridge-security.js'
 import { Bridge } from './bridge/bridge.js';
 import { BaselineStore } from './project/baselines.js';
 import { RecordingStore } from './flows/recordings.js';
+import { initImpact } from './impact/impact-recorder.js';
 import { FlowStore } from './flows/flows.js';
 import { buildFlowChips } from './flows/flow-scope.js';
 import { ProjectStore } from './project/project-store.js';
@@ -35,6 +36,8 @@ import { createRunnerPort } from './runs/runner-port.js';
 import { RunStore } from './runs/run-store.js';
 import { startVerifyServer } from './runs/verify-server.js';
 import { createMcpServer } from './mcp/mcp.js';
+import { LEASE_ACQUIRE_TOOL } from './tools/lease-tools.js';
+import { runTool } from './tools/invoke-tool.js';
 import { SessionReaper, endAllSessions, MCP_DISCONNECT_SUMMARY } from './session/session-reaper.js';
 import { wireSessionScope } from './session/no-session-watch.js';
 import { buildIdlePredicate } from './daemon/daemon-usefulness.js';
@@ -46,9 +49,13 @@ import { BrowserPool } from './pool/browser-pool.js';
 import { playwrightLauncher, resolveMaxContexts } from './pool/playwright-launcher.js';
 import { LeaseReaper } from './pool/lease-reaper.js';
 import { readJournalEnabled, readProjectId } from './cli/cli-port.js';
+import { hasProjectConnectedBefore } from './session/connection-memory.js';
+import { reticleStateHome } from './daemon/daemon.js';
+import { probeChromium } from './cli/chromium-hint.js';
 import { makeJournalAttach } from './journal/attach-journal.js';
 import { makeSessionEnd } from './journal/session-end.js';
 import { AmbientStore } from './journal/ambient-store.js';
+import { ensureWorkspaceGitignore } from './journal/workspace-gitignore.js';
 import { pruneSessions } from './journal/retention.js';
 import type {
   OwnedRealInputProvider,
@@ -234,6 +241,13 @@ export interface RunningServer {
   agentAttached?: () => boolean;
   /** The pairing token the bridge is enforcing (explicit, env, or auto-provisioned); undefined if none. */
   token?: string;
+  /**
+   * Tell every attached MCP proxy this daemon is retiring, before anything closes.
+   *
+   * Optional because only the daemon entry point serves MCP over SSE — `start()` speaks stdio, where
+   * the client owns the process and there is no stream to warn. See SharedServer.announceShutdown.
+   */
+  announceShutdown?: () => void;
   close: () => Promise<void>;
 }
 
@@ -323,7 +337,14 @@ function attachJournal(
   });
   // Teardown: flush the journal tail to disk + persist what this session learned.
   bridge.attachSessionEnd(makeSessionEnd(deps));
-  if (deps.enabled) void pruneSessions(deps.fs, deps.reticleRoot);
+  if (deps.enabled) {
+    void pruneSessions(deps.fs, deps.reticleRoot);
+    // Here rather than in `init`, because this is the moment we are actually about to write into
+    // somebody's repository — and the paths that reach it without ever running `init` (a plugin
+    // install, a hand-added client config) are exactly the ones that would otherwise leave an
+    // unexplained pile of untracked files behind. Best-effort and write-once; see the helper.
+    void ensureWorkspaceGitignore(deps.fs, deps.reticleRoot);
+  }
 }
 
 /**
@@ -381,6 +402,10 @@ async function resolveRealInput(
 /** Start the Reticle bridge (browser WS endpoint) and, by default, the MCP stdio server. */
 export async function start(options: StartOptions = {}): Promise<RunningServer> {
   const port = options.port ?? RETICLE_DEFAULT_PORT;
+  // Open the user's impact record before anything can connect. Not inside the MCP branch: a daemon
+  // serving a browser with no agent attached still has a HUD to answer, and a report that reads
+  // "nothing recorded yet" over a month of history on disk is the worst version of this feature.
+  initImpact({ reticleRoot: options.reticleRoot ?? join(process.cwd(), ReticleDir.ROOT) });
   const security = await resolveBridgeSecurityWithAutoToken(options);
   const bridge = new Bridge({ port, ...security });
   // Server-authoritative liveness: a Node-side reaper (immune to browser throttling) ends sessions
@@ -433,6 +458,7 @@ export async function start(options: StartOptions = {}): Promise<RunningServer> 
       reticleRoot,
       now,
       bridgePort: port,
+      browserProbe: probeChromium,
       // The daemon's OWN project, so a tool can tell "this session is mine" from "this session
       // belongs to a sibling app under the same daemon". contract_save refuses on the second.
       ...(activeProjectId === undefined ? {} : { projectId: activeProjectId }),
@@ -441,6 +467,7 @@ export async function start(options: StartOptions = {}): Promise<RunningServer> 
     const server = createMcpServer(
       realInput !== undefined ? { ...deps, realInput } : deps,
       profile,
+      hasProjectConnectedBefore(reticleStateHome(), port, activeProjectId),
     );
     // When the agent (the MCP client) disconnects cleanly, end every active session at once so the
     // HUD doesn't linger. (If the agent instead KILLS this process, the WS dies and the browser
@@ -475,6 +502,12 @@ export async function start(options: StartOptions = {}): Promise<RunningServer> 
  */
 export async function startDaemon(options: StartOptions = {}): Promise<RunningServer> {
   const port = options.port ?? RETICLE_DEFAULT_PORT;
+  // The SAME line as in `start`, because these are two entry points that each wire their own world
+  // and the daemon is the one that actually serves people. Wired only in `start`, the impact record
+  // was never opened in the process the HUD talks to: tool calls still recorded (the dispatch
+  // chokepoint opens it lazily), but a tab that connected before the first tool call was pushed
+  // nothing, so the report read "nothing recorded yet" over a file with history in it.
+  initImpact({ reticleRoot: options.reticleRoot ?? join(process.cwd(), ReticleDir.ROOT) });
 
   const security = await resolveBridgeSecurityWithAutoToken(options);
   const shared = createSharedServer(security.token === undefined ? {} : { token: security.token });
@@ -502,19 +535,6 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
 
   const reaper = new SessionReaper(bridge.sessions);
   reaper.start();
-  // Scope auto-selection to the active project (from .reticle.json) so a stray tab from another app is
-  // never picked when the agent omits a sessionId. Explicit per-call scope/sessionId still overrides.
-  // Scope + the no-session diagnosis: "no browser session connected" is the error that ends most
-  // sessions, and the agent is told to check two things it cannot see. See no-session-diagnosis.ts.
-  // The pool reader is passed lazily: `pool` is assigned above but may be undefined when this
-  // daemon runs without one, and the diagnosis must degrade to the tab message rather than lie.
-  wireSessionScope(
-    bridge.sessions,
-    readProjectId(process.cwd()),
-    port,
-    () => pool?.reapedLeaseCount() ?? 0,
-  );
-
   const { realInput, owned } = await resolveRealInput(
     options,
     () => shared.close(),
@@ -533,6 +553,20 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
   const pool = createBrowserPool(options.headless ?? true);
   const leaseReaper = new LeaseReaper(pool);
   leaseReaper.start();
+  // Scope auto-selection to the active project (from .reticle.json) so a stray tab from another app is
+  // never picked when the agent omits a sessionId. Explicit per-call scope/sessionId still overrides.
+  // Scope + the no-session diagnosis: "no browser session connected" is the error that ends most
+  // sessions, and the agent is told to check two things it cannot see. See no-session-diagnosis.ts.
+  // Ordered AFTER the pool: the watch may open a browser itself the moment it finds a listening dev
+  // server for a wired project (see no-session-watch.ts), and it opens it through the pool — the same
+  // path reticle_lease takes, in this process, binding nothing.
+  wireSessionScope(
+    bridge.sessions,
+    readProjectId(process.cwd()),
+    port,
+    () => pool.reapedLeaseCount(),
+    (url) => pool.acquire(url),
+  );
   const deps = {
     sessions: bridge.sessions,
     pool,
@@ -545,10 +579,24 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
     reticleRoot,
     now,
     bridgePort: port,
+    browserProbe: probeChromium,
   };
   const profile = resolveToolSurface(options.toolProfile);
   const effectiveDeps = realInput !== undefined ? { ...deps, realInput } : deps;
-  shared.attachMcp(() => createMcpServer(effectiveDeps, profile));
+  // Read per attach, not once: a project that gets wired while this daemon is alive should stop
+  // being told to wire itself on the next agent that connects.
+  shared.attachMcp(() =>
+    createMcpServer(
+      effectiveDeps,
+      profile,
+      hasProjectConnectedBefore(reticleStateHome(), port, readProjectId(process.cwd())),
+    ),
+  );
+  // `reticle drive <url>` when this daemon already owns the port: it asks HERE instead of trying to
+  // bind a port we are holding, and gets the same pooled context an agent's reticle_lease returns —
+  // through runTool, so it is counted and reported like any other call rather than being a second,
+  // invisible dispatch path. See cli/drive-attach.ts for why attaching beats refereeing the race.
+  shared.attachDrive((url) => runTool(LEASE_ACQUIRE_TOOL, effectiveDeps, { url }));
 
   // Optional OEM/CI verify endpoint: a host platform POSTs to /verify and gets an ReticleVerificationRun,
   // driving the same flow-replay machinery the agent uses — no MCP stdio, no human. Each verdict is
@@ -645,6 +693,7 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
     // Exposed so the shutdown watcher can give an ATTACHED daemon a longer grace. The predicate above
     // says WHETHER it is idle; this says how long that quiet should be tolerated — see idle-grace.
     agentAttached: () => agentConnected,
+    announceShutdown: () => shared.announceShutdown(),
     close: async () => {
       reaper.stop();
       await cleanupCaptureDirectories();

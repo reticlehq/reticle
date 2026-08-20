@@ -1,5 +1,22 @@
+/**
+ * Labels that can trigger an irreversible or money-moving effect.
+ *
+ * `send` used to be a bare token here, to cover moving money, and it taxed every ordinary button
+ * that sends something: reported from the field on `Send check-in` (a POST that logs a text
+ * message) and alongside it `Send message`, `Send invite`, `Send feedback`. A false block costs a
+ * round-trip and, repeated, trains an agent to pass confirmDangerous reflexively — which is the one
+ * outcome that makes this guard worthless.
+ *
+ * The money cases are still covered, through the thing being SENT rather than the act of sending:
+ * `payment` catches "Send payment" and "Confirm payment" (which the bare-verb list missed entirely,
+ * because `\bpay\b` does not match "payment"), and `send money`/`send funds` catch the rest.
+ *
+ * The guard stays deliberately asymmetric — a false block costs one round-trip, a missed block can
+ * charge somebody's card — so this narrows the trigger without lowering money coverage. Both
+ * directions are pinned in security.test.ts.
+ */
 const DANGEROUS_ACTION =
-  /\b(delete|remove|destroy|erase|drop|terminate|revoke|reset|logout|log out|sign out|close account|cancel subscription|purchase|buy|pay|place order|confirm order|deploy|publish|send|transfer|withdraw|refund)\b/i;
+  /\b(delete|remove|destroy|erase|drop|terminate|revoke|reset|logout|log out|sign out|close account|cancel subscription|purchase|buy|pay|payment|place order|confirm order|deploy|publish|send money|send funds|transfer|withdraw|refund)\b/i;
 
 /** The hostnames that ARE loopback outright, with no parsing: the name, and IPv6 ::1 both ways. */
 const LOOPBACK_HOSTNAMES: readonly string[] = ['localhost', '::1', '0:0:0:0:0:0:0:1'];

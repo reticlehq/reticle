@@ -23,10 +23,15 @@ async function up(url) {
   }
 }
 
-async function ensure(name, healthUrl, cmd, args, err) {
+async function ensure(name, healthUrl, cmd, args, err, env = {}) {
   if (await up(healthUrl)) return null;
   console.log(`booting ${name}…`);
-  const proc = spawn(cmd, args, { cwd: REPO, stdio: 'ignore', detached: true });
+  const proc = spawn(cmd, args, {
+    cwd: REPO,
+    stdio: 'ignore',
+    detached: true,
+    env: { ...process.env, ...env },
+  });
   proc.unref();
   for (let i = 0; i < 40; i++) {
     if (await up(healthUrl)) return proc;
@@ -35,8 +40,19 @@ async function ensure(name, healthUrl, cmd, args, err) {
   throw new Error(err);
 }
 
-// The bench-app does a real POST /api/login to apps/api (:8787); both must be up.
-export async function ensureApp() {
+/**
+ * The bench-app does a real POST /api/login to apps/api (:8787); both must be up.
+ *
+ * `reticlePort` is baked into the bench-app bundle at dev-server start (see its vite.config.ts), so
+ * it has to match the daemon the caller is about to spawn or the SDK dials a port nobody is on and
+ * no session ever connects. That is not a hypothetical: the MCP head-to-head defaulted its daemon to
+ * 4461 against this app's 4460, and every Reticle cell in that scorecard measured a model reasoning
+ * about an empty page. Callers that spawn a daemon MUST pass their port here.
+ *
+ * An already-running bench-app is reused and its baked port CANNOT be read back, so passing this is
+ * necessary and not sufficient. The caller still has to verify a session actually connects.
+ */
+export async function ensureApp(reticlePort) {
   const api = await ensure(
     'apps/api',
     `${API_ORIGIN}/api/health`,
@@ -50,6 +66,7 @@ export async function ensureApp() {
     'pnpm',
     ['--filter', '@reticlehq/bench-app', 'dev'],
     'bench-app did not come up on 4312',
+    reticlePort === undefined ? {} : { RETICLE_PORT: String(reticlePort) },
   );
   return [api, app].filter(Boolean);
 }

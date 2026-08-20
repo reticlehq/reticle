@@ -5,7 +5,7 @@ export const FAST_FADE_MS = 5;
 export const flush = (): Promise<void> => new Promise((r) => setTimeout(r, 0));
 export const wait = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
-/** Poll a predicate until true or timeout — robust to real-timer lateness under load (no flake). */
+/** Poll a predicate until true or timeout - robust to real-timer lateness under load (no flake). */
 export const until = async (pred: () => boolean, ms = 1000): Promise<boolean> => {
   const t0 = Date.now();
   while (!pred()) {

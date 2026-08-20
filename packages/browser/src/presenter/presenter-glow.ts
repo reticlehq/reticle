@@ -22,12 +22,12 @@ interface GlowDeps {
 }
 
 /**
- * The glow / activity state machine — drives the border shimmer + synthetic-cursor visibility from
+ * The glow / activity state machine - drives the border shimmer + synthetic-cursor visibility from
  * agent-activity timing. Extracted from presenter.ts so the controller file stays under the size cap;
  * behavior is byte-for-byte the same. It holds references to the same `#glow`/`#cursor` nodes the
- * Presenter does (both call setAttribute on those elements — the Presenter owns the SESSION border via
+ * Presenter does (both call setAttribute on those elements - the Presenter owns the SESSION border via
  * data-on; this owns the BUSY shimmer via data-busy). A burst flips the glow IN once, holds it (the
- * slow reticle-pulse keeps breathing — no per-action restart/strobe), then fades it OUT once after a quiet
+ * slow reticle-pulse keeps breathing - no per-action restart/strobe), then fades it OUT once after a quiet
  * window.
  */
 export class GlowController {
@@ -62,7 +62,7 @@ export class GlowController {
     return this.#phase;
   }
 
-  /** Last activity timestamp — read by the Presenter's liveness heartbeat. */
+  /** Last activity timestamp - read by the Presenter's liveness heartbeat. */
   lastActivityMs(): number {
     return this.#lastActivityMs;
   }
@@ -73,7 +73,7 @@ export class GlowController {
   }
 
   /**
-   * Record agent activity. Idempotent while busy — only the first activity from idle/fading flips the
+   * Record agent activity. Idempotent while busy - only the first activity from idle/fading flips the
    * glow on (no strobe). `ms` lets log read the clock exactly once per row.
    */
   markActivity(ms: number = this.#now()): void {
@@ -108,7 +108,7 @@ export class GlowController {
       // back-compat: the busy machine owns the base border.
       this.#glow?.setAttribute(DATA_ON, GLOW_ON);
     }
-    // The HUD/log is session-owned (sessionStart/End), NOT toggled here — it stays put on idle.
+    // The HUD/log is session-owned (sessionStart/End), NOT toggled here - it stays put on idle.
     this.#cursor?.setAttribute(DATA_ON, GLOW_ON);
   }
 
@@ -141,7 +141,7 @@ export class GlowController {
       // back-compat: fade the base border out.
       this.#glow?.setAttribute(DATA_ON, GLOW_OFF);
     }
-    // Do NOT hide the HUD/log on idle — it persists for the whole session (sessionStart/End).
+    // Do NOT hide the HUD/log on idle - it persists for the whole session (sessionStart/End).
     this.#cursor?.setAttribute(DATA_ON, GLOW_OFF);
     this.#setMode(PresenterMode.IDLE); // clear the READING/ACTING chip when going quiet
     this.#fadeTimer = nativeSetTimeout(() => {

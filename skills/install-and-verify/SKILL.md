@@ -3,7 +3,7 @@ name: install-and-verify
 description: Verify that a web app change actually works by driving the running app from the inside (DOM, network, routing, console, framework state) instead of screenshots or guessing. Use after any user-facing change, when a fix is claimed but unproven, when a test passes but the UI is broken, or when you need a real verdict rather than "looks right". Also use to install and wire up Reticle in a project that does not have it yet.
 license: Apache-2.0
 metadata:
-  version: 2.8.0
+  version: 2.9.0
   homepage: https://www.reticle.sh
   repository: https://github.com/reticlehq/reticle
 ---
@@ -80,7 +80,7 @@ If it does not: your client read its server list at startup and has not re-read 
 
 Say this once and then stop:
 
-> "Reticle is installed. Restart your client so it picks up the new MCP server, then tell me when the tools are back."
+> "Reticle is installed. Restart your client so it picks up the new MCP server, then say **'continue Reticle setup'**. Three steps are left, and your app is not instrumented until they are done."
 
 Claude Code: restart (`/mcp` does not re-read the config). VS Code: press Start in `.vscode/mcp.json`. Cursor, Windsurf, Zed: reload the window.
 
@@ -137,7 +137,27 @@ A connected session is not a result. The user has installed something and seen n
 
 Tell the user to keep the tab visible. The HUD is on by default (glow border, animated cursor, narration per step) and watching you drive their own app is the demo.
 
-Then: `reticle_snapshot` to find the elements, `reticle_act_and_wait` for each step, `reticle_assert` for the effect, and `reticle_state` at the end. If `reticle_state` comes back empty or `hasCapabilities` is false, the generated capabilities file registered no store. Say so in one line and offer to finish it. Never report a clean install over an empty state read.
+Drive it in as few calls as you can. Every call is a full model turn, and in a client that asks the user to approve each one it is also a click — a flow driven one call at a time is how a person gives up before they ever see a verdict.
+
+1. `reticle_snapshot({ mode: "interactive" })` **once**, for the whole flow. Not once per step.
+2. `reticle_act_sequence` for the setup — every fill and every intermediate click in ONE call.
+3. `reticle_act_and_wait({ ref, action, until })` for the final step only. This is the call that produces the verdict, and `until` names the expected consequence before the action fires.
+4. `reticle_state()` once at the end.
+
+Four calls for a login, not fourteen. If `reticle_state` comes back empty or `hasCapabilities` is false, the generated capabilities file registered no store. Say so in one line and offer to finish it. Never report a clean install over an empty state read.
+
+**Then save what you just drove.** Two calls, and they are what make every future check a single call instead of a repeat of this one. Wrap the drive above in a recording:
+
+```
+reticle_run({ tool: "reticle_record", args: { action: "start", recordingName: "<flow>" } })
+   ... the four calls above ...
+reticle_run({ tool: "reticle_record", args: { action: "stop",  recordingName: "<flow>" } })
+reticle_run({ tool: "reticle_flow_save", args: { flowName: "<flow>" } })
+```
+
+`reticle_flow_save` returns `assertions.grade`. If it is not `asserted`, the flow only clicks — it will pass even when the feature is broken. Say that in one line rather than presenting it as a regression check.
+
+Tell the user plainly: that flow is now saved to `.reticle/flows/`, and re-verifying it after any future change is one call with no model in the loop.
 
 **Only after that flow has produced a verdict**, report what you drove and what it produced, then:
 
@@ -158,6 +178,21 @@ Prefer `reticle_act_and_wait({ ref, action, until })`. It names the expected con
 A verdict of `verified: "unknown"` is not a pass. It means Reticle drove the app and could not tell what happened. Report it as unknown.
 
 Never weaken a check to make it pass.
+
+## Take the cheapest path that answers the question
+
+Stop at the first row that fits. Do not hand-drive a flow you could replay.
+
+| The question | The call | Calls |
+| --- | --- | --- |
+| "Did my edit break anything?" | `reticle_run({ tool: "reticle_verify_change", args: { files: ["src/App.tsx"] } })` | 1 |
+| "Does this known journey still work?" | `reticle_run({ tool: "reticle_flow_replay", args: { flowName: "login" } })` | 1 |
+| "Does this new behaviour work?" | `reticle_act_sequence` for the setup, then ONE `reticle_act_and_wait` | 2 |
+| No MCP available at all | `npx @reticlehq/server verify <url>` in the shell | 1, no MCP |
+
+The first two are **not on the advertised tool list** — they are reached through `reticle_run` exactly as written. That is the supported call shape, and it is why you have to be told they exist.
+
+`reticle_verify_change` answers `unknown` when no saved flow covers the files you changed. Nothing ran, so nothing was proved: that is the honest answer, never a pass, and it is the signal to record one (step 5 above).
 
 The full loop (look, act, observe, assert), how to read a verdict, batching, and regression suites: [references/verify.md](references/verify.md).
 

@@ -134,15 +134,15 @@ describe('a refused act leaves no act state behind', () => {
   });
 
   it('reticle_act_sequence: same — a refused sequence marks nothing', async () => {
-    const session = fakeSession({ actError: 'act_sequence failed' });
+    const session = fakeSession({ actError: 'step failed' });
     const deps = fakeDeps(session);
 
-    await expect(
-      tool(ReticleTool.ACT_SEQUENCE).handler(deps, {
-        steps: [{ ref: 'e999999', action: 'click' }],
-      }),
-    ).rejects.toThrow(/act_sequence failed/);
+    const result = (await tool(ReticleTool.ACT_SEQUENCE).handler(deps, {
+      steps: [{ ref: 'e999999', action: 'click' }],
+    })) as { completed: number; stalled_at?: number };
 
+    expect(result.completed).toBe(0);
+    expect(result.stalled_at).toBe(0);
     expect(session.lastAct.cursor()).toBeUndefined();
     expect((await observe(deps)).contradictions).toBeUndefined();
   });

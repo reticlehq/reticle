@@ -14,41 +14,53 @@ import { PROJECT_FILE_VERSION } from './flow-constants.js';
 import { RiskSurface } from './verification-run.js';
 import type { FlowExpect } from './flow-types.js';
 
-/** A query describing which element(s) to find, Testing-Library style. */
-export const ElementQuerySchema = z.object({
-  by: z.nativeEnum(QueryBy).optional(),
-  value: z.string().optional(),
-  role: z.string().optional(),
-  name: z.string().optional(),
-  text: z.string().optional(),
-  label: z.string().optional(),
-  placeholder: z.string().optional(),
-  testid: z.string().optional(),
-  alt: z.string().optional(),
-  /** Component display name (auto-anchor resolution). The nearest enclosing component of the target. */
-  component: z.string().optional(),
-  /**
-   * Attribute names to project onto each match (e.g. `['href']` to inventory links, `['src']` for
-   * images). Without this the descriptor carries only semantics, so URLs are unreachable.
-   */
-  attrs: z.array(z.string()).optional(),
-  /** Source location of the target element (auto-anchor resolution) — the precise, granular match. */
-  source: z
-    .object({ file: z.string(), line: z.number(), column: z.number().optional() })
-    .optional(),
-  /** CSS selector or ref to scope the search. */
-  scope: z.string().optional(),
-  /**
-   * Return the `scope` element ITSELF rather than searching inside it.
-   *
-   * Every other path excludes the scope root by construction, so a layout container with no role,
-   * name, testid or text of its own was unreachable — and that is routinely the element carrying the
-   * handler. Reported from the field: "click the empty region of this row" is an ordinary user
-   * action (dismiss, deselect, close, marquee-select) that could not be expressed at all, and the
-   * verification was handed back to the human. Requires `scope`.
-   */
-  self: z.boolean().optional(),
-});
+/**
+ * A query describing which element(s) to find, Testing-Library style.
+ *
+ * Strict, for the same reason the predicate union that wraps it is: a key nobody spells is a schema
+ * error naming the key, never a stripped field. Reported from the field —
+ * `{ kind: 'element', query: { css: "a[href='…']" } }` parsed, `css` was dropped, the empty query
+ * that survived matched nothing, and the verdict read "no element matched {}" about an element that
+ * was on the page. A stripped locator here is a false RED, and an agent that believes it goes and
+ * "fixes" correct code.
+ */
+export const ElementQuerySchema = z
+  .object({
+    by: z.nativeEnum(QueryBy).optional(),
+    value: z.string().optional(),
+    role: z.string().optional(),
+    name: z.string().optional(),
+    text: z.string().optional(),
+    label: z.string().optional(),
+    placeholder: z.string().optional(),
+    testid: z.string().optional(),
+    alt: z.string().optional(),
+    /** Component display name (auto-anchor resolution). The nearest enclosing component of the target. */
+    component: z.string().optional(),
+    /**
+     * Attribute names to project onto each match (e.g. `['href']` to inventory links, `['src']` for
+     * images). Without this the descriptor carries only semantics, so URLs are unreachable.
+     */
+    attrs: z.array(z.string()).optional(),
+    /** Source location of the target element (auto-anchor resolution) — the precise, granular match. */
+    source: z
+      .object({ file: z.string(), line: z.number(), column: z.number().optional() })
+      .strict()
+      .optional(),
+    /** CSS selector or ref to scope the search. */
+    scope: z.string().optional(),
+    /**
+     * Return the `scope` element ITSELF rather than searching inside it.
+     *
+     * Every other path excludes the scope root by construction, so a layout container with no role,
+     * name, testid or text of its own was unreachable — and that is routinely the element carrying the
+     * handler. Reported from the field: "click the empty region of this row" is an ordinary user
+     * action (dismiss, deselect, close, marquee-select) that could not be expressed at all, and the
+     * verification was handed back to the human. Requires `scope`.
+     */
+    self: z.boolean().optional(),
+  })
+  .strict();
 export type ElementQuery = z.infer<typeof ElementQuerySchema>;
 
 /** Compact semantic descriptor of one element surfaced to the agent. */

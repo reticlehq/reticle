@@ -22,6 +22,8 @@ interface ActEffect {
 
 export class LastAct {
   #cursor: number | undefined;
+  /** The cursor of the most recent navigation, kept apart from an act's so neither overwrites it. */
+  #navigated: number | undefined;
   #source: string | undefined;
   #effect: ActEffect | undefined;
 
@@ -44,8 +46,39 @@ export class LastAct {
     this.#effect = { action, mutatedWithin };
   }
 
+  /**
+   * A navigation — by URL or by reload — moves the floor without being an act.
+   *
+   * Reported from the field: an agent reloaded the page, restarted its API, then asserted four
+   * strings that were on the screen. Every clause passed and the verdict came back `contradicted`,
+   * citing hundreds of failed requests, every one against a resource that no longer existed. The
+   * failures were real once; they belonged to the document the reload destroyed.
+   *
+   * The floor was set only by act, act_sequence and act_and_wait, so navigating left it where it was
+   * — or unset, which the caller reads as "judge the whole session". `queryEvents` is journal-backed,
+   * so the whole session is durable history that outlives the page. A navigation has to move this or
+   * every rule reading the window inherits evidence from a page that is gone.
+   *
+   * Deliberately NOT `markActed`: a navigation records no act effect. The "this click did nothing"
+   * check reads an action with no measured mutation, and a reload written there would be accused of
+   * being a dead click.
+   */
+  markNavigated(cursor: number): void {
+    this.#navigated = cursor;
+  }
+
+  /**
+   * The evaluation floor: the most recent thing that changed the page, whichever kind it was.
+   *
+   * `Math.max` rather than last-writer-wins, because the two are recorded by different tools and
+   * their order is the agent's, not ours: an act then a reload must floor at the reload, and a reload
+   * then an act must floor at the act. Either one going backwards would re-admit the evidence this
+   * exists to exclude.
+   */
   cursor(): number | undefined {
-    return this.#cursor;
+    if (this.#cursor === undefined) return this.#navigated;
+    if (this.#navigated === undefined) return this.#cursor;
+    return Math.max(this.#cursor, this.#navigated);
   }
 
   markSource(source: string | undefined): void {

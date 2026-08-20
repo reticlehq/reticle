@@ -4,8 +4,10 @@ import {
   DANGEROUS_ACTION_CONFIRM_ARG,
   ElementState,
   isDangerousActionText,
+  NATIVE_INPUT_ARG,
   SettleReason,
 } from '@reticlehq/core';
+import { asSyntheticInput } from './synthetic-input.js';
 import { echoRef, refs } from '../dom/refs.js';
 import { assertEditable, assertNotRichText, setNativeValue } from './value-input.js';
 import { getAccessibleName, getRole, isVisible, getStates } from '../dom/a11y.js';
@@ -66,6 +68,23 @@ interface ActionEffect {
    * the achieved hold can legitimately be much longer than the one requested.
    */
   heldMs?: number;
+  /**
+   * check/uncheck only: the control ALREADY read as the requested state, so NOTHING was dispatched.
+   * OMITTED otherwise (the uninformative default).
+   *
+   * Not clicking is right — clicking an already-checked box would uncheck it. But the branch that
+   * skips the click reads the DOM PROPERTY, and that is not evidence about what the APPLICATION
+   * holds. They come apart exactly when it matters: a default-checked input the app has not
+   * committed, a property written earlier by something else, a control read mid-render. Then `check`
+   * no-ops, the framework never hears, and every later read agrees because every later read is also
+   * reading the DOM — reported from the field as a form whose flag was unset in the database while
+   * Reticle confirmed it checked.
+   *
+   * So this is a caveat, not a failure: the requested state is what the DOM shows, and Reticle did
+   * not put it there. Assert the app's own state (a signal, a request, a derived control) rather than
+   * the box.
+   */
+  alreadyAtValue?: true;
 }
 
 interface ActionResult {
@@ -202,8 +221,41 @@ const FILL_LIKE = new Set<string>([
 const isFillLike = (action: string): boolean => FILL_LIKE.has(action);
 
 /** Actions that resolve to a point and so benefit from off-viewport scroll + occlusion hit-test. */
-const CLICK_LIKE = new Set<string>([ActionType.CLICK, ActionType.DBLCLICK]);
+const CLICK_LIKE = new Set<string>([
+  ActionType.CLICK,
+  ActionType.DBLCLICK,
+  // check/uncheck activate through a real click, so they need everything a click needs: the point
+  // geometry, the off-viewport scroll, the occlusion hit-test, and the component/source attribution.
+  // Their absence here is why a `check` came back with no `component` while a `click` on the same
+  // element carried one — the tell the field report noticed and could not explain.
+  ActionType.CHECK,
+  ActionType.UNCHECK,
+]);
 
+/**
+ * A check/uncheck whose requested state the element already reads as, so nothing will be dispatched.
+ *
+ * ONE predicate, read twice — the dispatch branch decides not to click, the effect reports that it
+ * did not. Two copies of this rule could disagree, and a disagreement here is precisely the false
+ * green: an act that reports it drove a control it never touched.
+ */
+function alreadyAtCheckedState(el: HTMLElement, action: string): boolean {
+  if (action !== ActionType.CHECK && action !== ActionType.UNCHECK) return false;
+  return isInput(el) && el.checked === (action === ActionType.CHECK);
+}
+
+/**
+ * What the destructive-action guard classifies: the ELEMENT, and nothing rendered around it.
+ *
+ * This used to end with `form?.textContent`, so the whole enclosing form's rendered text decided the
+ * verdict for every control inside it — a settings form with per-row "Remove" buttons made its own
+ * Save button read as destructive, intermittently, depending on whether the rows had rendered yet.
+ * The field report's workaround was `confirmDangerous: true` on every click, which deletes the guard
+ * outright: a guard that fires on everything is a guard that gets switched off.
+ *
+ * The form's `action` stays — that is a URL this element submits to, i.e. a property of what this
+ * click DOES, not of what happens to be on screen beside it.
+ */
 function dangerousActionContext(el: HTMLElement): string {
   const form = el.closest('form');
   return [
@@ -214,7 +266,6 @@ function dangerousActionContext(el: HTMLElement): string {
     el.getAttribute('aria-label') ?? '',
     el.getAttribute('href') ?? '',
     form?.getAttribute('action') ?? '',
-    form?.textContent ?? '',
   ].join(' ');
 }
 
@@ -240,6 +291,29 @@ function pressKey(args: Record<string, unknown>): string {
   const text = args['text'];
   if ('string' === typeof text && text.length > 0) return text;
   return asString(args['key'], 'Enter');
+}
+
+/**
+ * Modifier flags for a `press`, from `args.modifiers`: an array of Meta / Control / Shift / Alt
+ * (case-insensitive, with the usual aliases). Without them a Cmd+K / Ctrl+Shift shortcut receives a
+ * keydown with every modifier false, so the app's own `event.metaKey` check never matches and
+ * nothing observable happens -- a false negative Reticle reports as no error. (#393)
+ */
+function pressModifiers(args: Record<string, unknown>): {
+  metaKey: boolean;
+  ctrlKey: boolean;
+  shiftKey: boolean;
+  altKey: boolean;
+} {
+  const raw = args['modifiers'];
+  const names = Array.isArray(raw) ? raw.map((m) => asString(m).toLowerCase()) : [];
+  const has = (...aliases: string[]): boolean => aliases.some((a) => names.includes(a));
+  return {
+    metaKey: has('meta', 'cmd', 'command', 'super', 'win'),
+    ctrlKey: has('control', 'ctrl'),
+    shiftKey: has('shift'),
+    altKey: has('alt', 'option', 'opt'),
+  };
 }
 
 /**
@@ -316,10 +390,55 @@ function dragTargetRef(args: Record<string, unknown>): string {
   return '' !== named ? named : asString(args['target']);
 }
 
+/** The keys `upload` actually reads, and the generic ones every action accepts. */
+const UPLOAD_ARG_KEYS: ReadonlySet<string> = new Set(['content', 'name', 'type']);
+const GENERIC_ACTION_ARG_KEYS: ReadonlySet<string> = new Set([
+  DANGEROUS_ACTION_CONFIRM_ARG,
+  NATIVE_INPUT_ARG,
+  'holdMs',
+]);
+
+/**
+ * An `upload` must have been told what to upload.
+ *
+ * The branch below defaults every field, so a call whose keys were all unrecognised — the field
+ * report sent `args.files` — manufactured a 17-byte `file.txt` reading "reticle test file", uploaded
+ * THAT, and returned ok:true. The server answered 200, the UI refreshed, and every signal the agent
+ * could read said its PDF had been processed. That is a manufactured green on the write path, the
+ * same shape `drag` refuses one branch below.
+ *
+ * Both halves matter. A call with no recognised key at all never described a file; a call that mixes
+ * one in with a dropped one (`{ path, name }`) is worse, because the right filename arrives attached
+ * to invented bytes. A name-only call keeps working: the placeholder body is documented and the
+ * caller that omitted `content` knows it did.
+ *
+ * The refusal names the keys upload reads so a caller that guessed can correct in one turn.
+ *
+ * Scoped to upload deliberately. Dropping an unrecognised key in silence is a property of EVERY
+ * action — `args` is `z.record(z.unknown())` at the wire boundary — but upload is the one where the
+ * dropped key is replaced with fabricated content. Refusing unknown keys everywhere needs a
+ * per-action arg schema in core and is a larger change than this release should carry.
+ */
+function assertUploadArgs(args: Record<string, unknown>): void {
+  const keys = Object.keys(args);
+  const dropped = keys.filter((k) => !UPLOAD_ARG_KEYS.has(k) && !GENERIC_ACTION_ARG_KEYS.has(k));
+  if (0 === dropped.length && keys.some((k) => UPLOAD_ARG_KEYS.has(k))) return;
+  const detail =
+    0 === dropped.length
+      ? 'no file was described'
+      : `upload does not read ${dropped.join(', ')}, so it would be dropped`;
+  throw new Error(
+    `upload needs the file described as args: { name, content?, type? } — ${detail}. ` +
+      'Reading a file from disk is not supported; pass its bytes as `content`.',
+  );
+}
+
 function assertActionAllowed(el: HTMLElement, action: string, args: Record<string, unknown>): void {
   const canTrigger =
     action === ActionType.CLICK ||
     action === ActionType.DBLCLICK ||
+    action === ActionType.CHECK ||
+    action === ActionType.UNCHECK ||
     action === ActionType.DRAG ||
     action === ActionType.SUBMIT ||
     // Read through the SAME resolver as the dispatch below. Reading a different argument here meant
@@ -436,7 +555,9 @@ async function dispatchOther(
 ): Promise<boolean> {
   switch (action) {
     case ActionType.DBLCLICK:
-      return !el.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true }));
+      return !asSyntheticInput(() =>
+        el.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true })),
+      );
     case ActionType.HOVER: {
       const doc = el.ownerDocument;
       // Best-effort "previous" node for relatedTarget so React's enter/leave synthesis has a "from".
@@ -572,28 +693,34 @@ async function dispatchOther(
           `cannot ${action} a disabled control — a real user could not, so neither will Reticle`,
         );
       }
-      const wanted = action === ActionType.CHECK;
-      // Already there: report success and touch nothing. `check` means "end up checked", not
-      // "toggle", so clicking here would flip it OFF and hand the app an event no user produced.
-      if (el.checked === wanted) return false;
-      // `click()`, never `el.checked = …`. Assigning the property flips the pixel and tells no
-      // framework: React binds a checkbox's onChange to the CLICK event, and its value tracker
-      // dedups the change it would otherwise synthesise from a direct assignment — so a controlled
-      // `checked={state}` box never heard from us while the action reported success. `click()` is
-      // the one DOM call that runs the element's ACTIVATION BEHAVIOUR (the native toggle) as well
-      // as firing the event; `dispatchEvent` does not.
-      let prevented = false;
-      // On window, so it runs after every listener on the element itself whenever they were added.
-      const probe = (e: Event): void => {
-        prevented = e.defaultPrevented;
-      };
-      window.addEventListener('click', probe, { once: true, capture: false });
-      try {
-        el.click();
-      } finally {
-        window.removeEventListener('click', probe, false);
+      // A radio is deselected by selecting another radio, never on its own. Refusing is the same
+      // rule as the disabled control above: a state no user could reach must not be forced.
+      if ('radio' === el.type && action === ActionType.UNCHECK) {
+        throw new Error(
+          'cannot uncheck a radio button — a real user could not; select another radio in the group',
+        );
       }
-      return prevented;
+      // Already there: touch nothing. `check` means "end up checked", not "toggle", so clicking here
+      // would flip it OFF, and SETTING it would hand the app an `input`/`change` no user produced —
+      // enough to make an app that autosaves, logs or POSTs on change act on a no-op. Reported as
+      // `effect.alreadyAtValue` — the same predicate, read again by executeAction — because "nothing
+      // was dispatched" is not the same claim as "the app holds this value". See ActionEffect.
+      if (alreadyAtCheckedState(el, action)) return false;
+      // A real click, never `el.checked = …`. Assigning the property flips the pixel and tells no
+      // framework: React binds a checkbox's onChange to the CLICK event, and its value tracker dedups
+      // the change it would otherwise synthesise from a direct assignment — so a controlled
+      // `checked={state}` box never heard from us while the action reported success.
+      //
+      // Dispatched rather than `el.click()` so cancellation is read off the event object itself. The
+      // old probe listened on `window`, which never runs when a handler calls `stopPropagation()`, so
+      // a cancelled activation was reported as a successful one. Activation behaviour runs either way
+      // — a synthetic click toggles the box, which `adversarial.check.test.ts` pins, because the
+      // comment this replaces asserted the opposite and was wrong.
+      const event = new MouseEvent('click', { bubbles: true, cancelable: true, composed: true });
+      // Marked as ours so the annotator's capture-phase listener lets it through: in annotate mode
+      // it cancels clicks to place a mark, which would otherwise swallow every action we dispatch.
+      const notPrevented = asSyntheticInput(() => el.dispatchEvent(event));
+      return !notPrevented || event.defaultPrevented;
     }
     case ActionType.SUBMIT: {
       const form = isForm(el) ? el : el.closest('form');
@@ -604,10 +731,17 @@ async function dispatchOther(
     case ActionType.PRESS: {
       const key = pressKey(args);
       const code = pressCode(args, key);
-      const down = el.dispatchEvent(
-        new KeyboardEvent('keydown', { key, code, bubbles: true, cancelable: true }),
+      const mods = pressModifiers(args);
+      // Marked as ours like the click sequence: the annotator leaves annotate mode on Escape, so an
+      // agent pressing Escape would otherwise switch off a mode the person turned on.
+      const down = asSyntheticInput(() =>
+        el.dispatchEvent(
+          new KeyboardEvent('keydown', { key, code, bubbles: true, cancelable: true, ...mods }),
+        ),
       );
-      el.dispatchEvent(new KeyboardEvent('keyup', { key, code, bubbles: true }));
+      asSyntheticInput(() =>
+        el.dispatchEvent(new KeyboardEvent('keyup', { key, code, bubbles: true, ...mods })),
+      );
       return !down;
     }
     case ActionType.SCROLL_INTO_VIEW:
@@ -617,6 +751,7 @@ async function dispatchOther(
       if (!isInput(el) || el.type !== 'file') {
         throw new Error('upload target must be a <input type="file">');
       }
+      assertUploadArgs(args);
       const file = new File(
         [asString(args['content'], 'reticle test file')],
         asString(args['name'], 'file.txt'),
@@ -674,6 +809,8 @@ export async function executeAction(
   // Click-like: scroll an off-viewport target in + hit-test the click point BEFORE installing the
   // mutation observer (scroll/hit-test never mutate the DOM, but keep the probe window clean).
   const geometry = CLICK_LIKE.has(action) ? clickGeometry(el) : NO_GEOMETRY;
+  // Read BEFORE dispatch, from the same predicate the dispatch branch uses.
+  const alreadyAtValue = alreadyAtCheckedState(el, action);
 
   let mutated = 0;
   const said = new AppearedText();
@@ -728,6 +865,9 @@ export async function executeAction(
     // Omitted when there was no hold: an absent key says "this action does not hold", where a 0
     // would read as "it held for no time", which is a different and misleading claim.
     ...(heldMs > 0 ? { heldMs } : {}),
+    // Omitted unless it applies: an absent key means the action actually drove the control (or is
+    // not a check at all), which is the only reading that must not be ambiguous.
+    ...(alreadyAtValue ? { alreadyAtValue: true as const } : {}),
   };
   // Honesty caveats: a visually-occluded click is reported even though synthetic dispatch landed;
   // else synthetic hover may not fire framework enter/leave handlers (no native hit-test).

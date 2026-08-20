@@ -10,9 +10,31 @@ import { PatchKind, type SourcePatch } from './patch-kind.js';
 export const VITE_IMPORT = "import { reticle } from '@reticlehq/vite-plugin';";
 const RETICLE_MARKER = '@reticlehq/vite-plugin';
 
-/** The `reticle...)` call — carries the bridge port so the injected connect targets it. */
+/**
+ * The `reticle(...)` call — the bridge port so the injected connect targets it, and body capture.
+ *
+ * `captureNetworkBodies` is here rather than in the SDK's defaults, deliberately. Without it a write
+ * that answers 2xx with a body nobody recorded grades `unknown / outcome_unread`, because a 200
+ * describes the transport and not the result — so the single bug class this product exists to catch is
+ * unreachable on a default install. Measured on a real payments UI: a refund posted rupees into a
+ * paise field, the server answered 200 having refunded a hundredth of it, the page rendered the amount
+ * the user had typed rather than the amount that came back, and every DOM-level check passed. An agent
+ * asked to verify that flow had to edit the app's own vite config mid-task to see the payload, and
+ * then tell its human to undo the edit.
+ *
+ * Written into the USER'S config, not switched on inside the SDK, and the difference is the point. A
+ * body is the one part of a request that routinely carries personal data: the credential classes are
+ * redacted before anything is journalled — tokens, cookies, card numbers, cvv, ssn — but an address or
+ * an email is not, and nothing here should decide that for someone silently. In the config it is one
+ * visible line they can read, keep, or delete, and an SDK that updates underneath them never starts
+ * recording more than it did yesterday.
+ */
 function reticlePluginCall(port: number | undefined): string {
-  return port === undefined ? 'reticle()' : `reticle({ port: ${String(port)} })`;
+  const options = [
+    ...(port === undefined ? [] : [`port: ${String(port)}`]),
+    'captureNetworkBodies: true',
+  ];
+  return `reticle({ ${options.join(', ')} })`;
 }
 /** Matches the start of a `plugins: [` array literal. */
 const PLUGINS_ARRAY = /plugins\s*:\s*\[/;

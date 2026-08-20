@@ -44,6 +44,12 @@ export const BROWSER_TOOLS: ToolDef[] = [
       // reload:true is the absorbed reticle_refresh — same command, one fewer advertised tool.
       if (true === args['reload']) {
         const before = deps.sessions.resolve(asString(args['sessionId']));
+        // The verdict floor moves HERE, before the page goes away. A reload destroys the document,
+        // so every request that failed under the old one belongs to a page that no longer exists —
+        // and a later assert defaulting its window to "the last thing that happened" must not reach
+        // back past this point. Reported from the field as an assertion whose clauses all passed
+        // coming back `contradicted` by hundreds of 500s against resources that were already gone.
+        before.lastAct.markNavigated(before.elapsed());
         await commandOrThrow(deps, asString(args['sessionId']), ReticleCommand.REFRESH, {
           hard: true === args['hard'],
         });
@@ -69,6 +75,10 @@ export const BROWSER_TOOLS: ToolDef[] = [
       // reconnects), but the action record itself — "navigated to X" — is the causal fact worth keeping.
       const session = deps.sessions.resolve(asString(args['sessionId']));
       session.beginAction(ReticleTool.NAVIGATE, { url });
+      // Same floor as the reload path above, for the same reason: going to a new URL replaces the
+      // document just as thoroughly. `beginAction` attributes events to this action; it does not move
+      // the window a later assert judges over, and those are two different jobs.
+      session.lastAct.markNavigated(session.elapsed());
       try {
         const result = (await commandOrThrow(
           deps,

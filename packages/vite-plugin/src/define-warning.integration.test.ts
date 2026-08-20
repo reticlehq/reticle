@@ -23,18 +23,40 @@ interface DevServerLike {
 }
 type CreateServer = (inline: Record<string, unknown>) => Promise<DevServerLike>;
 
+/**
+ * `vite` is a declared dependency of this package, so failing to import it is not a condition to
+ * tolerate — it is a broken workspace. Returning early on it instead made all four of these tests
+ * run ZERO assertions and report green, which is the worst shape a guard can take: the thing it
+ * protects (a clean dev boot, on every user's machine) would be unguarded and nothing would say so.
+ */
+function required<T>(value: T | undefined, what: string): T {
+  if (value === undefined) {
+    throw new Error(`${what} did not resolve — this suite cannot prove anything without it`);
+  }
+  return value;
+}
+
 let createServer: CreateServer | undefined;
 
+/**
+ * Booting a real Vite dev server — with the optimizer FORCED, which is what makes the warning
+ * reproducible at all — is not a 5-second operation on a loaded CI runner, and vitest's default is 5
+ * seconds. So this suite went red on Windows for the machine's reasons, on pull requests that do not
+ * touch this package at all, and the `gate` job aggregates it. A contributor whose docs change is
+ * blocked by a Vite boot timing out learns to re-run until green, which is how a real failure gets
+ * waved through.
+ *
+ * The invariant is "no warning is emitted", and no duration expresses that. A generous per-test
+ * budget cannot weaken it: a run that emits the warning fails at any budget, and one that does not is
+ * only ever slow. Same rule the repo already applies to its own timing assertions.
+ */
+const SERVER_BOOT_BUDGET_MS = 120_000;
 const HOOK_TIMEOUT_MS = 60_000;
 const CLOSE_BUDGET_MS = 5_000;
 
 beforeAll(async () => {
-  try {
-    const vite = (await import('vite')) as { createServer: CreateServer };
-    createServer = vite.createServer;
-  } catch {
-    createServer = undefined;
-  }
+  const vite = (await import('vite')) as { createServer: CreateServer };
+  createServer = vite.createServer;
 }, HOOK_TIMEOUT_MS);
 
 describe('vite 8 dev boot with the plugin produces no define warnings (#165)', () => {
@@ -106,65 +128,70 @@ describe('vite 8 dev boot with the plugin produces no define warnings (#165)', (
     return root;
   }
 
-  it('no "Invalid input options" warning for the define key', async () => {
-    if (createServer === undefined) return;
+  it(
+    'no "Invalid input options" warning for the define key',
+    async () => {
+      const create = required(createServer, 'vite.createServer');
 
-    const root = makeMinimalApp();
-    dirs.push(root);
+      const root = makeMinimalApp();
+      dirs.push(root);
 
-    const tokenDir = mkdtempSync(join(tmpdir(), 'reticle-token-define-'));
-    dirs.push(tokenDir);
-    process.env[ReticleEnv.PAIRING_TOKEN_DIR] = tokenDir;
+      const tokenDir = mkdtempSync(join(tmpdir(), 'reticle-token-define-'));
+      dirs.push(tokenDir);
+      process.env[ReticleEnv.PAIRING_TOKEN_DIR] = tokenDir;
 
-    const warnings: string[] = [];
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation((...args: unknown[]) => {
-      warnings.push(args.map(String).join(' '));
-    });
+      const warnings: string[] = [];
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation((...args: unknown[]) => {
+        warnings.push(args.map(String).join(' '));
+      });
 
-    const server = await createServer({
-      root,
-      configFile: false,
-      server: { port: 0, host: '127.0.0.1' },
-      // Force the optimizer to run — without this, a warm .vite cache skips Rolldown entirely
-      // and the warning never fires even when the options are wrong.
-      optimizeDeps: { force: true },
-      plugins: [reticle()],
-      customLogger: {
-        info() {},
-        warn(msg: string) {
-          warnings.push(msg);
+      const server = await create({
+        root,
+        configFile: false,
+        server: { port: 0, host: '127.0.0.1' },
+        // Force the optimizer to run — without this, a warm .vite cache skips Rolldown entirely
+        // and the warning never fires even when the options are wrong.
+        optimizeDeps: { force: true },
+        plugins: [reticle()],
+        customLogger: {
+          info() {},
+          warn(msg: string) {
+            warnings.push(msg);
+          },
+          warnOnce(msg: string) {
+            warnings.push(msg);
+          },
+          error() {},
+          clearScreen() {},
+          hasErrorLogged() {
+            return false;
+          },
+          hasWarned: false,
         },
-        warnOnce(msg: string) {
-          warnings.push(msg);
-        },
-        error() {},
-        clearScreen() {},
-        hasErrorLogged() {
-          return false;
-        },
-        hasWarned: false,
-      },
-    });
-    servers.push(server);
-    await server.listen();
+      });
+      servers.push(server);
+      await server.listen();
 
-    // Fetch the entry to trigger dep discovery + pre-bundling of the CJS SDK stub.
-    const base = server.resolvedUrls?.local[0] ?? '';
-    if (base.length > 0) {
-      await fetch(`${base.replace(/\/$/, '')}/src/main.js`).catch(() => undefined);
-      // Allow the optimizer to process and emit any validation warnings.
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-    }
+      // Fetch the entry to trigger dep discovery + pre-bundling of the CJS SDK stub.
+      const base = server.resolvedUrls?.local[0] ?? '';
+      if (base.length > 0) {
+        await fetch(`${base.replace(/\/$/, '')}/src/main.js`).catch(() => undefined);
+        // Allow the optimizer to process and emit any validation warnings.
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+      }
 
-    warnSpy.mockRestore();
+      warnSpy.mockRestore();
 
-    const defineWarnings = warnings.filter(
-      (w) => w.includes('Invalid input options') || (w.includes('define') && w.includes('Invalid')),
-    );
-    expect(
-      defineWarnings,
-      "Vite 8 must accept the plugin's optimizer options without a define warning. " +
-        `Got: ${JSON.stringify(defineWarnings)}`,
-    ).toEqual([]);
-  });
+      const defineWarnings = warnings.filter(
+        (w) =>
+          w.includes('Invalid input options') || (w.includes('define') && w.includes('Invalid')),
+      );
+      expect(
+        defineWarnings,
+        "Vite 8 must accept the plugin's optimizer options without a define warning. " +
+          `Got: ${JSON.stringify(defineWarnings)}`,
+      ).toEqual([]);
+    },
+    SERVER_BOOT_BUDGET_MS,
+  );
 });

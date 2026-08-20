@@ -75,6 +75,35 @@ describe('unsettledBecause says what the window held instead', () => {
     expect(said).toMatch(/will not help/i);
   });
 
+  /**
+   * The measured dead end: a retrying query against a dead backend. Every attempt COMPLETES, so
+   * nothing is ever "still in flight" when the budget runs out, and the sentence blamed unnamed
+   * churn — "a poll, a timer, an animation" — on an app whose whole problem was one endpoint being
+   * hammered. Naming the repeat is the difference between "my assertion was wrong" and "this app has
+   * a retry loop that never quiets".
+   */
+  it('names the request that kept firing when nothing was left open', () => {
+    const said = unsettledBecause('the page never settled', {
+      waitedFor: 'the page to go idle',
+      stillInFlight: [],
+      repeated: ['GET /api/v1/session ×7'],
+    });
+    expect(said).toContain('GET /api/v1/session ×7');
+    expect(said).toMatch(/will not help/i);
+  });
+
+  // Negative control: with nothing repeating either, the honest answer is still the churn sentence —
+  // inventing a culprit would be its own false claim.
+  it('keeps the churn sentence when nothing repeated', () => {
+    const said = unsettledBecause('the page never settled', {
+      waitedFor: 'the page to go idle',
+      stillInFlight: [],
+      repeated: [],
+    });
+    expect(said).toMatch(/will not help/i);
+    expect(said).toMatch(/poll, a timer, an animation/);
+  });
+
   it('is bounded — a chatty window must not spend the verdict on a request list', () => {
     const said = unsettledBecause('base', {
       waitedFor: 'the page to go idle',
@@ -107,7 +136,7 @@ describe('the verdict carries it, in the field an agent already reads', () => {
       contradictions: [{ kind: ContradictionKind.REQUEST_NEVER_SETTLED }],
       unsettled: { waitedFor: 'the page to go idle', stillInFlight: ['POST /api/pay'] },
     });
-    expect(v.verifiedReason).toBe(VerifiedReason.UNSETTLED);
+    expect(v.verifiedReason).toBe(VerifiedReason.EVIDENCE_INCOMPLETE);
     expect(v.because).toContain('POST /api/pay');
     // and still names the finding it was derived from
     expect(v.because).toContain(ContradictionKind.REQUEST_NEVER_SETTLED);

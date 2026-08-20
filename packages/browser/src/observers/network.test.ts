@@ -244,6 +244,37 @@ describe('installNetwork (fetch)', () => {
     } as unknown as Response;
   }
 
+  /**
+   * A redirect is not a failure, and the two transports have to agree that it is not.
+   *
+   * `Response.ok` is true only for 200-299, so reading it straight through stamped every 3xx as a
+   * failed request — while the XHR path, which computes the same field itself, called the identical
+   * status a success. Downstream, `ok` is authoritative when present, so a POST-redirect-GET login
+   * (the first flow anyone verifies in an app with auth) came back as a contradicted verdict on the
+   * strength of its own success path. Pin both transports to the same rule so they cannot drift.
+   */
+  it.each([301, 302, 303, 307, 308])('does not call a %i redirect a failed request', async (s) => {
+    window.fetch = vi.fn(() => Promise.resolve(fakeResponse(s)));
+    const { emit, events } = collect();
+    teardown = installNetwork(emit);
+    await window.fetch('http://localhost:8787/login', { method: 'POST' });
+    const data = eventOf(events, EventType.NET_REQUEST);
+    expect(data['status']).toBe(s);
+    expect(data['ok']).toBe(true);
+  });
+
+  it('still calls a 4xx and a 5xx failed', async () => {
+    for (const s of [400, 404, 500]) {
+      window.fetch = vi.fn(() => Promise.resolve(fakeResponse(s)));
+      const { emit, events } = collect();
+      teardown = installNetwork(emit);
+      await window.fetch('http://localhost:8787/api/x');
+      expect(eventOf(events, EventType.NET_REQUEST)['ok']).toBe(false);
+      teardown();
+      teardown = undefined;
+    }
+  });
+
   it('captures + redacts request and response bodies only when opted in (Network 1b)', async () => {
     // Fake credential values held in variables so the object literals do not read as hardcoded
     // secrets to the repo's secret scanner — the point is that the observer redacts them.

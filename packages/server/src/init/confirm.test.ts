@@ -114,9 +114,17 @@ describe('confirmInstall', () => {
       },
       (o) => reported.push(o),
     );
-    expect(polls).toBe(0);
-    expect(printed).toEqual([]);
+    expect(polls, 'a non-TTY run must never block on the window').toBe(0);
     expect(reported).toEqual([{ ok: true }]);
+    // ...but it must still SAY that the page half is unproven. The agent path is the prescribed
+    // path — every skill and README block tells an agent to run this through a shell, which is
+    // never a TTY — so staying silent here means the one message joining "init finished" to "an app
+    // connected" is withheld from the majority of the people who run init.
+    expect(printed.join('\n')).toContain('status');
+    expect(
+      printed.join('\n').toLowerCase(),
+      'it must not claim an app connected — it did not look',
+    ).not.toContain('an app is connected');
   });
 
   it('waits when a human is watching, prints the verdict and puts it on the outcome', async () => {

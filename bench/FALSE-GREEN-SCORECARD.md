@@ -4,15 +4,17 @@
 
 ## Headline
 
-| Metric | Reticle | Playwright |
-| --- | --: | --: |
-| Bugs caught | **86 / 88** | 60 / 88 |
-| Of what it _structurally can_ catch | **86 / 86 (100%)** | 58 / 60 |
-| **False greens** (broken but reported OK) | **0** on its capability class | **26** it cannot catch + 2 it missed = **28** |
-| False positives (clean build flagged) | 0 | 0 |
-| Output bytes / bug | **4,132 B** | 7,906 B |
+| Metric                                    |     Reticle |  Playwright |
+| ----------------------------------------- | ----------: | ----------: |
+| Bugs caught                               | **85 / 88** |     59 / 88 |
+| Of what it _structurally can_ catch       | **85 / 86** |     57 / 60 |
+| **False greens** (broken but reported OK) |       **1** |      **29** |
+| False positives (clean build flagged)     |           0 |           0 |
+| Output bytes / bug                        |     9,261 B | **5,849 B** |
 
-The 2 bugs Reticle "doesn't catch" are the 2 `false-positive-trap` cases — **not real bugs**; correctly flagging them would itself be a false positive, so 0/2 there is the right score.
+Reticle does not catch 3 of the 88. Two are the `false-positive-trap` cases — **not real bugs**; flagging them would itself be a false positive, so 0/2 there is the right score. The third, `iframe-stale-data` (deep-dom), is a **genuine miss** and is counted as a false green rather than explained away.
+
+> **Re-derived on the 2.9.0 branch.** The figures above are a fresh run of `bench/pw-vs-reticle/run.mjs`, not the numbers first recorded here on 2026-07-24. Between the two, 615 commits touched the harness, the fixture app, the SDK or the server, and the recorded figures were never re-derived: detection moved 86 → 85 for Reticle and 60 → 59 for Playwright, and the per-bug output figure **inverted** — Reticle was published as the leaner of the two at 4,134 B against 7,899 B, and measures 9,261 B against 5,849 B here. Re-run before quoting; a benchmark nobody re-derives is a claim, not a measurement.
 
 ## The false-green moat — where Reticle catches and Playwright cannot (by category)
 

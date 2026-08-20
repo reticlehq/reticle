@@ -66,7 +66,7 @@ const refusalsOfAPassingAssertion: Record<string, Parameters<typeof decideVerifi
     pass: true,
     honesty: honesty(),
     settled: true,
-    outcomeUnread: true,
+    outcomeUnread: ['POST /api/bulk-hold'],
   },
   [VerifiedReason.UNSETTLED]: { pass: true, honesty: honesty(), settled: false },
 };

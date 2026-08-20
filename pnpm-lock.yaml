@@ -469,6 +469,12 @@ importers:
         specifier: ^10.4.1
         version: 10.4.1
     devDependencies:
+      '@iconify-json/heroicons-outline':
+        specifier: ^1.2.1
+        version: 1.2.1
+      '@iconify-json/heroicons-solid':
+        specifier: ^1.2.1
+        version: 1.2.1
       '@tanstack/query-core':
         specifier: ^5.101.4
         version: 5.101.4
@@ -493,6 +499,9 @@ importers:
       recoil:
         specifier: ^0.7.7
         version: 0.7.7(react@19.2.8)
+      sharp:
+        specifier: ^0.35.3
+        version: 0.35.3(@types/node@26.2.0)
       svelte:
         specifier: ^5.56.8
         version: 5.56.8(@typescript-eslint/types@8.67.0)
@@ -634,6 +643,9 @@ importers:
       '@types/babel__core':
         specifier: ^7.20.5
         version: 7.20.5
+      esbuild:
+        specifier: ^0.28.1
+        version: 0.28.1
       svelte:
         specifier: ^5.56.8
         version: 5.56.8(@typescript-eslint/types@8.67.0)
@@ -1288,6 +1300,15 @@ packages:
   '@humanwhocodes/retry@0.4.3':
     resolution: {integrity: sha512-bV0Tgo9K4hfPCek+aMAn81RppFKv2ySDQeMoSZuvTASywNTnVJCArCZE2FWqpvIatKu7VMRLWlR1EazvVhDyhQ==}
     engines: {node: '>=18.18'}
+
+  '@iconify-json/heroicons-outline@1.2.1':
+    resolution: {integrity: sha512-QNYV4/KsW8Ww9a3B+hxDntS5BwLLbErKpL1V3MkvB8X+ZVTX5VLxjlj8rAEih+GCDWzaiZJOrdO/pagvsuBkXg==}
+
+  '@iconify-json/heroicons-solid@1.2.1':
+    resolution: {integrity: sha512-sRZ6U1FT1lkxtIuL+iQ9Fpm5IZxvJCDaKdLpP5elgZ6OkQn6j8HVJpxgFIcuJbHC/EeoNp3tHldMEELqN9pZDQ==}
+
+  '@iconify/types@2.0.0':
+    resolution: {integrity: sha512-+wluvCrRhXrhyOmRDJ3q8mux9JkKy5SJ/v8ol2tu4FVjyYvtEzkc/3pK15ET6RKg4b4w4BmTk1+gsCUhf21Ykg==}
 
   '@img/colour@1.1.0':
     resolution: {integrity: sha512-Td76q7j57o/tLVdgS746cYARfSyxk8iEfRxewL9h4OMzYhbW4TAcppl0mT4eyqXddh6L/jwoM75mo7ixa/pCeQ==}
@@ -5687,8 +5708,17 @@ snapshots:
 
   '@humanwhocodes/retry@0.4.3': {}
 
-  '@img/colour@1.1.0':
-    optional: true
+  '@iconify-json/heroicons-outline@1.2.1':
+    dependencies:
+      '@iconify/types': 2.0.0
+
+  '@iconify-json/heroicons-solid@1.2.1':
+    dependencies:
+      '@iconify/types': 2.0.0
+
+  '@iconify/types@2.0.0': {}
+
+  '@img/colour@1.1.0': {}
 
   '@img/sharp-darwin-arm64@0.35.0':
     optionalDependencies:
@@ -8792,7 +8822,6 @@ snapshots:
       '@img/sharp-win32-ia32': 0.35.3
       '@img/sharp-win32-x64': 0.35.3
       '@types/node': 26.2.0
-    optional: true
 
   shebang-command@2.0.0:
     dependencies:

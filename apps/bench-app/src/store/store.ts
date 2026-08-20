@@ -14,7 +14,7 @@ import {
 } from '../data/seed.js';
 
 export type ViewId =
-  'overview' | 'deployments' | 'compose' | 'diagnostics' | 'hostile' | 'enterprise';
+  'overview' | 'deployments' | 'compose' | 'diagnostics' | 'hostile' | 'enterprise' | 'saved-items';
 export type EnvFilter = Env | 'all';
 
 export interface Toast {
@@ -48,6 +48,9 @@ interface AppState {
   toasts: Toast[];
   requestLog: RequestLog[];
   compose: { title: string; prompt: string; result: string; generating: boolean };
+  savedItems: { id: number; label: string; savedAt: string }[];
+  savedItemsStatus: 'idle' | 'saving' | 'error';
+  saveItem: (label: string, renderDelayMs?: number) => Promise<void>;
 
   setView: (v: ViewId) => void;
   setAuth: (email: string) => void;
@@ -88,6 +91,42 @@ export const useApp = create<AppState>((set, get) => ({
   toasts: [],
   requestLog: [],
   compose: { title: '', prompt: '', result: '', generating: false },
+  savedItems: [],
+  savedItemsStatus: 'idle',
+  saveItem: async (label, renderDelayMs = 0) => {
+    // Do NOT set savedItemsStatus:'saving' here — that STATE_CHANGE fires before the response
+    // lands and makes uiAdvanced()=true, which suppresses response-ignored in both polarities.
+    // The fixture must stay state-quiet until the response is read.
+    try {
+      const res = await fetch('http://localhost:8787/api/saved-items', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ label }),
+      });
+      const data = (await res.json()) as { id?: number; label?: string; savedAt?: string };
+      if ('number' === typeof data.id && 'string' === typeof data.label) {
+        const item = { id: data.id, label: data.label, savedAt: data.savedAt ?? '' };
+        if (0 >= renderDelayMs) {
+          // Correct: state update is synchronous with the response — same microtask.
+          set({ savedItems: [...get().savedItems, item] });
+          emit(Sig.ITEM_SAVED, { id: item.id, label: item.label });
+        } else {
+          // Broken: response arrived but render deferred. The function returns here — BEFORE
+          // the render fires — so act_and_wait sees the POST settle with no state movement.
+          // After the 300ms grace elapses with nothing moved, response-ignored fires.
+          // The setTimeout is fire-and-forget: saveItem resolves NOW, not after the delay.
+          setTimeout(() => {
+            set({ savedItems: [...get().savedItems, item] });
+            emit(Sig.ITEM_SAVED, { id: item.id, label: item.label });
+          }, renderDelayMs);
+          return; // return immediately — the delayed render is fire-and-forget
+        }
+      }
+      // Dropped-response variant: server returned 200 OK but no id — write silently lost.
+    } catch {
+      set({ savedItemsStatus: 'error' });
+    }
+  },
 
   setView: (view) => {
     set({ view });

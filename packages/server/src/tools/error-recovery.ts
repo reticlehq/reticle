@@ -144,7 +144,9 @@ export const RECOVERY = {
     'The page did not answer within the command window. That is a fact about the page, not a Reticle ' +
     'failure: check reticle_sessions for `throttled`/`stale` on this session — a backgrounded tab is ' +
     'throttled and may never answer, so ask the human to bring it to the front or drive your own ' +
-    'browser with reticle_lease. If the tab is in front, the page is busy or blocked (a long ' +
+    'browser with reticle_run { tool: "reticle_lease", action: "acquire", url } — reticle_lease is ' +
+    'not advertised under the default profile, so it is reached through reticle_run, not called ' +
+    'directly. If the tab is in front, the page is busy or blocked (a long ' +
     'synchronous task, an alert/confirm dialog); reticle_console usually shows what it hit. Retry ' +
     'once the cause is addressed.',
   FLOW_STEP_MISSING:

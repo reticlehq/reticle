@@ -14,11 +14,11 @@ import { describeTestidMiss } from './testid-near-miss.js';
 import { predicateToExpectedLinks } from '../capsule/predicate-to-links.js';
 import type { ExpectedLink } from '../capsule/divergence.js';
 import { isAmbient, ambientKeyOf, type AmbientCounts } from '../journal/ambient.js';
+import { evalRoute } from './predicate-route.js';
 import {
   PredicateSchema,
   matchValue,
   evalNet,
-  evalRoute,
   evalConsole,
   evalAnimation,
   evalSignal,
@@ -40,6 +40,14 @@ export interface PredicateSession {
   onEvent(listener: (event: ReticleEvent) => void): () => void;
   /** Milliseconds since connect — the same clock that stamps event `t` (injected, testable). */
   elapsed(): number;
+  /**
+   * Where the app is RIGHT NOW — the session's live URL, kept current across SPA navigation.
+   *
+   * Read by the `route` predicate when the window holds no route change, which is the only way
+   * "did the session survive a reload?" can be answered at all. Optional: a fake session that never
+   * navigates simply omits it and route falls back to change-only, as before.
+   */
+  url?: string;
   /**
    * Learned per-ref ambient-churn counts (real-time regions that churn with no action driving them).
    * The settle oracle drops events on learned-ambient refs so a chat/ticker page can still go quiet.
@@ -253,14 +261,120 @@ function asSelection(result: unknown): { found: boolean; value: unknown } | unde
     : undefined;
 }
 
+/**
+ * A NAMED store needs no whole-store read. `reticle_state`'s scoped mode selects the path out of the
+ * RAW store IN-PAGE and returns only it, so the assertion resolves in one round trip against a payload
+ * the size of the value — not the store. The unnamed case below still needs the wide read, because
+ * that is how it discovers WHICH store carries the path; only the named branch changes.
+ *
+ * A scoped read answers `found: false` for both "no such store" and "no such path", so the two are
+ * kept distinct here using the `storeNames` list the reply always carries — otherwise the payload gets
+ * cheaper while the message gets worse.
+ */
+async function evalStateNamed(
+  session: PredicateSession,
+  p: Extract<Predicate, { kind: typeof PredicateKind.STATE }>,
+  storeName: string,
+): Promise<EvalResult> {
+  const scoped = await session.command(ReticleCommand.STATE_READ, {
+    store: storeName,
+    path: p.path,
+  });
+  if (!scoped.ok) {
+    return {
+      pass: false,
+      failureReason: 'state read failed',
+      observed: 'the store could not be read',
+      expected: 'a readable registered store',
+      assertion: 'state.unreadable',
+    };
+  }
+  const reply = (scoped.result ?? {}) as {
+    stores?: Record<string, unknown>;
+    storeNames?: unknown;
+    availableKeys?: unknown;
+  };
+  const names = Array.isArray(reply.storeNames) ? (reply.storeNames as string[]) : [];
+
+  // Resolve the value. A CURRENT SDK honours the scoped read and answers `{ found, value }` selected
+  // in-page — the whole point of this path. An OLDER SDK (version skew) or any transport that ignores
+  // `path` answers the whole-store shape `{ stores }`; walk the path server-side there so the verdict
+  // stays correct across SDK versions. The scoped win is simply unavailable on the old ones.
+  const scopedSel = asSelection(scoped.result);
+  const wholeStores = reply.stores;
+  const scopedKeys = Array.isArray(reply.availableKeys)
+    ? (reply.availableKeys as string[])
+    : undefined;
+  let selection: { found: boolean; value?: unknown; availableKeys?: string[] };
+  if (scopedSel !== undefined) {
+    selection =
+      scopedKeys === undefined
+        ? { found: scopedSel.found, value: scopedSel.value }
+        : { found: scopedSel.found, value: scopedSel.value, availableKeys: scopedKeys };
+  } else if (wholeStores !== undefined) {
+    selection = selectPath(wholeStores[storeName], p.path);
+  } else {
+    selection = { found: false };
+  }
+
+  // "no store named X" and "X has no such path" both surface as found:false; keep them distinct using
+  // the store list the reply carries, or the message regresses while the payload improves.
+  const storeAbsent =
+    wholeStores !== undefined
+      ? !(storeName in wholeStores)
+      : names.length > 0 && !names.includes(storeName);
+  if (!selection.found && storeAbsent) {
+    return {
+      pass: false,
+      failureReason: `no store named '${storeName}' is registered (${names.join(', ')})`,
+      observed: `store '${storeName}' is not registered`,
+      expected: `a registered store named '${storeName}'`,
+      assertion: 'state.store-missing',
+      evidence: { searchedStores: names },
+    };
+  }
+  // A scoped sub-tree can itself be too big for the caps; a comparison against a value known to be
+  // incomplete is an unanswered question, not a failure. Same rule the whole-store path applies.
+  if (truncationOf(scoped.result) !== undefined) {
+    const reason =
+      `state '${p.path}' could not be read intact — the transport caps truncated it, so the ` +
+      'value was never compared. Assert a narrower path, or a smaller field inside it';
+    return { pass: false, failureReason: reason, inconclusive: reason };
+  }
+  if (!selection.found) {
+    return {
+      pass: false,
+      failureReason: `state path '${p.path}' not found in store '${storeName}'`,
+      observed: `no path '${p.path}' in store '${storeName}'`,
+      expected: `store '${storeName}' to expose '${p.path}'`,
+      assertion: 'state.path-missing',
+      evidence: { availableKeys: selection.availableKeys },
+    };
+  }
+  const want = p.equals === undefined ? '*' : p.equals;
+  if (matchValue(selection.value, want)) {
+    return {
+      pass: true,
+      evidence: { store: storeName, path: p.path, value: capDepth(selection.value, 1) },
+    };
+  }
+  return {
+    pass: false,
+    failureReason: `state '${p.path}' is ${JSON.stringify(capDepth(selection.value, 0))}, expected ${JSON.stringify(want)}`,
+    observed: `${p.path} = ${JSON.stringify(capDepth(selection.value, 0))}`,
+    expected: `${p.path} = ${JSON.stringify(want)}`,
+    assertion: 'state.equals',
+    evidence: { store: storeName, path: p.path, value: capDepth(selection.value, 1) },
+  };
+}
+
 async function evalState(
   session: PredicateSession,
   p: Extract<Predicate, { kind: typeof PredicateKind.STATE }>,
 ): Promise<EvalResult> {
-  const res = await session.command(
-    ReticleCommand.STATE_READ,
-    p.store !== undefined ? { store: p.store } : {},
-  );
+  // Named store: one scoped read, no whole-store payload (issue #336).
+  if (p.store !== undefined) return await evalStateNamed(session, p, p.store);
+  const res = await session.command(ReticleCommand.STATE_READ, {});
   if (!res.ok) {
     return {
       pass: false,
@@ -401,7 +515,11 @@ export async function evaluatePredicate(
     case PredicateKind.TEXT:
       return evalElement(
         session,
-        { text: predicate.contains },
+        // `scope` passes straight through: the text predicate has always been an element query
+        // with only `text` filled in, so scoping it needs the field, not a second code path.
+        undefined === predicate.scope
+          ? { text: predicate.contains }
+          : { text: predicate.contains, scope: predicate.scope },
         true === predicate.visible ? ElementState.VISIBLE : undefined,
         predicate.absent ?? false,
         diagnose,
@@ -409,7 +527,7 @@ export async function evaluatePredicate(
     case PredicateKind.NET:
       return evalNet(events, predicate);
     case PredicateKind.ROUTE:
-      return evalRoute(events, predicate);
+      return evalRoute(events, predicate, session.url);
     case PredicateKind.CONSOLE:
       return evalConsole(events, predicate);
     case PredicateKind.ANIMATION:
@@ -440,6 +558,10 @@ export async function evaluatePredicate(
         return {
           pass: false,
           failureReason: failed.failureReason ?? 'a sub-predicate of allOf failed',
+          // A conjunction is decided as soon as ONE clause is: nothing the others do later can
+          // rescue it. This is what makes the early exit reach real calls, since an exact count is
+          // usually asserted alongside the UI change it is meant to accompany.
+          ...(true === failed.decided ? { decided: true } : {}),
           evidence: results,
         };
       }
@@ -466,9 +588,14 @@ export async function evaluatePredicate(
       // nobody could evaluate became a verdict of verified, manufactured out of a missing reading.
       // You cannot negate an answer nobody had.
       if (inner.inconclusive !== undefined) return unreadableComposite(inner, inner);
+      // A green negation used to return a bare `{ pass: true }`, so the payload fell back to
+      // whatever the caller had — every element matching the OUTER locator. Three clauses negating
+      // three different names then produced byte-identical responses, which reads as a checker that
+      // dropped the name rather than one that correctly found all three absent. The evidence is the
+      // whole answer here: what was looked for, and that it was not there.
       return inner.pass
         ? { pass: false, failureReason: 'negated predicate unexpectedly held', evidence: inner }
-        : { pass: true };
+        : { pass: true, evidence: { negated: predicate.predicate, held: false, saw: inner } };
     }
     default:
       return { pass: false, failureReason: 'unknown predicate' };
@@ -588,6 +715,14 @@ export function waitForPredicate(
       void evaluatePredicate(session, predicate, since, false)
         .then((r) => {
           if (!r.pass) {
+            // Final already: stop rather than spend a budget that cannot change the answer. Only
+            // where the evaluator could PROVE it (see EvalResult.decided) — an ordinary miss keeps
+            // waiting, because "it has not happened yet" and "it will not happen" are the same
+            // reading until the budget ends.
+            if (true === r.decided) {
+              finish(r);
+              return;
+            }
             // A time-based failure knows when it could stop being one — re-check THEN rather than on
             // the next blind tick. Without this, every `settled` wait paid up to a full poll interval
             // of dead time after the quiet window had already closed: measured at 566–627ms across

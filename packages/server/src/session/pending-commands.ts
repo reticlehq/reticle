@@ -17,6 +17,18 @@ interface PendingCommand {
   timer: ReturnType<typeof setTimeout>;
 }
 
+/**
+ * The page was asked and did not answer inside the caller's budget.
+ *
+ * A distinct type because the two ways a command can fail mean opposite things, and a caller that
+ * cannot tell them apart will do the wrong thing with one of them. A rejection from a replaced
+ * transport says the question never reached the page and is worth asking again; a timeout says it
+ * did reach the page, which did not answer in the time granted — and asking again spends a budget
+ * that is already gone. Retrying a timeout as though it were a disconnect turned one read into
+ * hundreds of commands on the wire against a page that was reconnecting in a loop.
+ */
+export class CommandTimeoutError extends Error {}
+
 export class PendingCommands {
   readonly #pending = new Map<string, PendingCommand>();
   #seq = 0;
@@ -32,7 +44,7 @@ export class PendingCommands {
     return new Promise<CommandResult>((resolve, reject) => {
       const timer = setTimeout(() => {
         this.#pending.delete(id);
-        reject(new Error(describeTimeout()));
+        reject(new CommandTimeoutError(describeTimeout()));
       }, timeoutMs);
       timer.unref();
       this.#pending.set(id, { resolve, reject, timer });

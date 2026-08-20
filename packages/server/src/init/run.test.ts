@@ -228,7 +228,10 @@ describe('runInit', () => {
   it('finds an app one directory down even when the root has no package.json', () => {
     const io = memoryIo({
       'frontend/package.json': JSON.stringify({ dependencies: { next: '16', react: '^19' } }),
-      'frontend/app/layout.tsx': 'export default function L({ children }) { return children; }\n',
+      'frontend/app/layout.tsx':
+        'export default function L({ children }) {\n' +
+        '  return (<html><body>{children}</body></html>);\n' +
+        '}\n',
     });
     const r = runInit(OPTS, io);
     expect(r.ok).toBe(true);
@@ -260,7 +263,10 @@ describe('runInit', () => {
   it('and names the REDIRECTED directory when the app is one level down', () => {
     const io = memoryIo({
       'frontend/package.json': JSON.stringify({ dependencies: { next: '16', react: '^19' } }),
-      'frontend/app/layout.tsx': 'export default function L({ children }) { return children; }\n',
+      'frontend/app/layout.tsx':
+        'export default function L({ children }) {\n' +
+        '  return (<html><body>{children}</body></html>);\n' +
+        '}\n',
     });
     runInit(OPTS, io);
     // Normalised for the reason this file's own harness is: the redirect builds the path with
@@ -278,7 +284,10 @@ describe('runInit', () => {
   it('honours --app when the root has no package.json', () => {
     const io = memoryIo({
       'frontend/package.json': JSON.stringify({ dependencies: { next: '16', react: '^19' } }),
-      'frontend/app/layout.tsx': 'export default function L({ children }) { return children; }\n',
+      'frontend/app/layout.tsx':
+        'export default function L({ children }) {\n' +
+        '  return (<html><body>{children}</body></html>);\n' +
+        '}\n',
       'backend/package.json': JSON.stringify({ dependencies: { express: '^4' } }),
     });
     const r = runInit({ ...OPTS, app: 'frontend' }, io);
@@ -427,7 +436,7 @@ describe('runInit', () => {
     // Without the token the bridge answers "authentication failed" and no session ever appears —
     // the same silent no-connect Next.js shipped. The plugin inlines it as a define.
     expect(io.written['src/hooks.client.ts']).toContain('__RETICLE_TOKEN__');
-    expect(io.written['vite.config.ts']).toContain('reticle()');
+    expect(io.written['vite.config.ts']).toContain('reticle({');
     expect(io.written['vite.config.ts']).toContain('sveltekit()'); // the app's own plugin survives
   });
 });
@@ -448,11 +457,13 @@ describe('runInit — workspace roots', () => {
     const io = memoryIo({ 'package.json': WORKSPACE_ROOT, ...VITE_APP });
     runInit(OPTS, io);
     expect(io.lines.join('\n')).toContain('apps/web');
-    expect(io.written['apps/web/vite.config.ts']).toContain('reticle()');
+    expect(io.written['apps/web/vite.config.ts']).toContain('reticle({');
     expect(io.written['apps/web/.reticle.json']).toBeDefined();
-    // The root is not the app — nothing of the app's wiring belongs there.
+    // The root is not the app — nothing of the app's WIRING belongs there. `.reticle.json` is not
+    // wiring: it is runtime config the CLI and `reticle mcp` read from their own CWD, which is the
+    // root, so it is written in both places (see the agent-root test below).
     expect(io.written['vite.config.ts']).toBeUndefined();
-    expect(io.written['.reticle.json']).toBeUndefined();
+    expect(io.written['/app/.reticle.json']).toBeDefined();
   });
 
   it('asks for feedback exactly once, even though the redirect re-enters init', () => {
@@ -482,7 +493,7 @@ describe('runInit — workspace roots', () => {
       ...VITE_APP, // a nested apps/ dir must not hijack a root that is itself an app
     });
     runInit(OPTS, io);
-    expect(io.written['vite.config.ts']).toContain('reticle()');
+    expect(io.written['vite.config.ts']).toContain('reticle({');
     expect(io.written['apps/web/vite.config.ts']).toBeUndefined();
   });
 
@@ -689,6 +700,23 @@ describe('runInit — an app outside the directory names anyone guessed', () => 
     expect(written).not.toContain('src/admin/.claude/commands/reticle.md');
   });
 
+  /**
+   * `.reticle.json` is read from the CWD by the CLI and by `reticle mcp` — the agent's CWD, which
+   * after a redirect is the repo root and not the app. Reported from the field: the app was wired on
+   * a non-default port, the root had no config, so `reticle mcp` fell back to 4400 and would have
+   * listed ANOTHER project's tabs while the wired app sat unseen. Written in both places: the app
+   * dir is where a human standing in the app runs `reticle status`, the root is where the agent is.
+   */
+  it('writes .reticle.json at the agent root as well — that is where `reticle mcp` reads it', () => {
+    const io = memoryIo(NESTED, { mcpExists: true });
+    runInit(OPTS, io);
+    const written = Object.keys(io.written).map((p) => p.replace(/\\/g, '/'));
+    expect(written).toContain('/app/.reticle.json');
+    expect(written).toContain('src/admin/.reticle.json');
+    // The same identity in both, or the daemon scopes sessions to a project the app never claims.
+    expect(io.written['/app/.reticle.json']).toBe(io.written['src/admin/.reticle.json']);
+  });
+
   it('and the agent rule with it — CLAUDE.md is read at the repo root, not in the app', () => {
     const io = memoryIo(NESTED, { mcpExists: true });
     runInit(OPTS, io);
@@ -815,7 +843,7 @@ describe('runInit — a refused pin falls back instead of blocking the install',
   it('still wires the app — a fallback install is a real install', () => {
     const io = pinRefusingIo(VITE_APP);
     runInit({ ...OPTS, install: true }, io);
-    expect(io.written['vite.config.ts']).toContain('reticle()');
+    expect(io.written['vite.config.ts']).toContain('reticle({');
   });
 });
 

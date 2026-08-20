@@ -1,11 +1,12 @@
 import { removeTempDir } from '../temp-dir.js';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdtemp, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { EventType, type ReticleEvent } from '@reticlehq/core';
 import { createNodeFileSystem, type FileSystemPort } from '../project/fs-port.js';
 import { makeJournalAttach, type JournalTarget } from './attach-journal.js';
+import * as logModule from '../log.js';
 import type { JournalRecorder } from './journal-recorder.js';
 
 /** Minimal Session stand-in: records whether a recorder was attached and drives its elapsed clock. */
@@ -62,5 +63,50 @@ describe('makeJournalAttach', () => {
     const s = target('../escape');
     expect(() => makeJournalAttach({ fs, reticleRoot: root, enabled: true })(s)).not.toThrow();
     expect(s.recorder).toBeUndefined();
+  });
+});
+
+/**
+ * A session whose id is not a safe path segment cannot be journalled — the id becomes a directory
+ * name. The guard holds and nothing escapes the workspace, which is precisely why the failure was
+ * invisible: the session connects, drives, and answers tools normally, and the only difference is
+ * that its durable record does not exist. Every query reading back through the journal returns
+ * nothing, and nothing says why.
+ */
+describe('a session that cannot be journalled says so', () => {
+  it('does not attach a journal for an unsafe id, and leaves a line about it', () => {
+    const lines: unknown[] = [];
+    const spy = vi.spyOn(logModule, 'log').mockImplementation((event, fields) => {
+      lines.push({ event, fields });
+    });
+    const attach = makeJournalAttach({
+      fs: createNodeFileSystem(),
+      reticleRoot: '/w/.reticle',
+      enabled: true,
+    });
+
+    let attached = false;
+    attach({
+      id: '../../../tmp/pwned',
+      elapsed: () => 0,
+      setJournal: () => {
+        attached = true;
+      },
+    });
+
+    expect(attached, 'an unsafe id must not become a directory name').toBe(false);
+    expect(JSON.stringify(lines)).toContain('journal_skipped_unsafe_session_id');
+    spy.mockRestore();
+  });
+
+  it('still attaches for an ordinary id', () => {
+    const attach = makeJournalAttach({
+      fs: createNodeFileSystem(),
+      reticleRoot: '/w/.reticle',
+      enabled: true,
+    });
+    let attached = false;
+    attach({ id: 'next-smoke', elapsed: () => 0, setJournal: () => (attached = true) });
+    expect(attached).toBe(true);
   });
 });

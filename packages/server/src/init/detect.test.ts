@@ -3,6 +3,7 @@ import {
   detect,
   parseMajor,
   installCommand,
+  installCommandParts,
   Framework,
   PackageManager,
   UiLibrary,
@@ -212,5 +213,49 @@ describe('detect package manager — from an installed tree', () => {
 
   it('still falls back to npm when there is nothing to go on', () => {
     expect(detect(withMarkers(new Set())).packageManager).toBe(PackageManager.NPM);
+  });
+});
+
+/**
+ * The install `init` runs is a CHILD process whose output lands above ours.
+ *
+ * Measured on a real install: the run opened with "added 602 packages", a funding notice and
+ * "14 vulnerabilities (7 moderate, 7 high)" plus `npm audit fix` advice, before a single line of
+ * Reticle output. A user's first impression of a verification tool was a wall of somebody else's
+ * security warnings, at the moment they are deciding whether this tool is careful — and the audit
+ * summary is about their existing dependency tree, which our two dev packages did not cause and
+ * cannot fix.
+ *
+ * Quieted, not silenced: a genuine failure still has to be loud, which is why the exit code and
+ * stderr are untouched.
+ */
+describe('the dependency install is quiet about things that are not ours', () => {
+  it('suppresses the audit and funding summaries on npm', () => {
+    const { args } = installCommandParts(PackageManager.NPM, ['@reticlehq/react']);
+    expect(args).toContain('--no-audit');
+    expect(args).toContain('--no-fund');
+  });
+
+  it('still installs as a dev dependency', () => {
+    const { args } = installCommandParts(PackageManager.NPM, ['@reticlehq/react']);
+    expect(args).toContain('-D');
+    expect(args).toContain('@reticlehq/react');
+  });
+
+  it('keeps them OUT of the printed command, which a user may copy by hand', () => {
+    // The plan shows this string and a user retypes it; teaching them our noise-suppression flags
+    // would be teaching them our problem.
+    expect(installCommand(PackageManager.NPM, '@reticlehq/react')).toBe(
+      'npm i -D @reticlehq/react',
+    );
+  });
+
+  it('leaves the other package managers alone — the flags are npm-specific', () => {
+    // pnpm/yarn/bun do not take these, and passing an unknown flag turns a working install into a
+    // hard failure of the one step everything downstream depends on.
+    for (const pm of [PackageManager.PNPM, PackageManager.YARN, PackageManager.BUN]) {
+      const { args } = installCommandParts(pm, ['@reticlehq/react']);
+      expect(args).not.toContain('--no-audit');
+    }
   });
 });

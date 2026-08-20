@@ -125,6 +125,31 @@ export function confirmationMessage(confirmation: InitConfirmation, port: number
   );
 }
 
+/**
+ * What a non-TTY run says instead of waiting.
+ *
+ * `init` deliberately does not block when nobody is at the terminal — a 12-second wait in a script
+ * is wrong, and an agent driving `init` through a shell is never a TTY. But silence was the wrong
+ * other half of that decision: the agent path IS the prescribed path (every skill and every README
+ * block tells an agent to run exactly this command), so the one message joining "init finished" to
+ * "an app connected" was withheld from most of the people who run it. They were left with files on
+ * disk, an exit code of 0, and nothing saying the page half had not happened.
+ *
+ * It claims nothing it did not check. It did not look for a session, so it does not say whether one
+ * exists — a one-shot look would be worse than none, because a daemon is shared across every project
+ * on the machine and "a session exists" is satisfied by somebody else's app, which is the false
+ * green `confirmAppConnected` refuses by design.
+ */
+export function unwatchedMessage(port: number): string {
+  return (
+    '  [ℹ] the files are written. An app CONNECTING is what finishes the install, and this run did ' +
+    'not wait to see one.\n' +
+    '      Start the dev server, load the app in a browser, then ' +
+    `${PROVE_COMMAND} — it confirms the app, or says exactly why it has not connected.\n` +
+    `      Bridge port ${String(port)}.`
+  );
+}
+
 const WATCHING = (windowMs: number): string =>
   `  watching for an app to connect (up to ${String(Math.round(windowMs / 1000))}s) — Ctrl-C is safe, ` +
   'everything above is already written.';
@@ -148,6 +173,9 @@ export async function confirmInstall(
   // preview is not an install and must not land in the funnel as either a success or a failure.
   if (outcome === undefined) return;
   if (!deps.interactive) {
+    // Still no waiting — see unwatchedMessage for why it speaks anyway.
+    io.print('');
+    io.print(unwatchedMessage(deps.port));
     report(outcome);
     return;
   }

@@ -1,4 +1,4 @@
-import { EventType, REDACTED_VALUE } from '@reticlehq/core';
+import { BlindSpotKind, EventType, REDACTED_VALUE } from '@reticlehq/core';
 import {
   subscribableStores,
   onStoreRegistered,
@@ -85,9 +85,28 @@ export function installStoreState(emit: Emit): Teardown {
   };
   // Stores already registered...
   for (const entry of subscribableStores()) watch(entry);
+  /**
+   * Declare an unwatched state channel — and clear it the moment one is watched.
+   *
+   * With nothing subscribed, every act reports `stateDiffs: []`, which reads as "the app changed no
+   * state" when the truth is "nobody was looking". Emitted as a BLIND_SPOT so it travels the path
+   * that already exists for everything the layer cannot see: bounding, never impeaching, so no
+   * verdict turns UNKNOWN over it.
+   */
+  if (0 === active.size) {
+    emit(EventType.BLIND_SPOT, { kind: BlindSpotKind.UNWATCHED_STATE, count: 1 });
+  }
   //...and any registered LATER. The SDK installs observers during connect, but apps call
   // registerStore after that, so without this the common case subscribes to nothing.
-  const offRegistered = onStoreRegistered(watch);
+  const offRegistered = onStoreRegistered((entry) => {
+    const wasDark = 0 === active.size;
+    watch(entry);
+    // The channel just lit up. A blind spot that is never withdrawn is a permanent lie, and this one
+    // is withdrawn in the ordinary case: apps register their stores AFTER connect() installs us.
+    if (wasDark && active.size > 0) {
+      emit(EventType.BLIND_SPOT, { kind: BlindSpotKind.UNWATCHED_STATE, count: 0 });
+    }
+  });
   return () => {
     offRegistered();
     for (const unsubscribe of active.values()) {

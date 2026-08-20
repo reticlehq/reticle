@@ -175,6 +175,33 @@ describe('desktop mode', () => {
   });
 });
 
+/**
+ * The plugin is the only `connect()` most apps ever have — a second, hand-written one is a no-op —
+ * so an option it cannot forward is an option the app cannot use AT ALL. `captureNetworkBodies` was
+ * the first case of this; `allowNonLocalhost` is the same shape and worse, because without it an app
+ * that cannot be served on localhost (host-based multi-tenant, cookie-scoped auth on a custom dev
+ * hostname) cannot use Reticle at all rather than merely losing a feature.
+ */
+describe('connect options the SDK supports are reachable from the plugin', () => {
+  const ALLOW_ENV = 'VITE_RETICLE_ALLOW_NON_LOCALHOST';
+
+  it('forwards allowNonLocalhost, and omits it when unset', () => {
+    expect(connectModuleSource({ allowNonLocalhost: true })).toContain('allowNonLocalhost');
+    expect(connectModuleSource({})).not.toContain('allowNonLocalhost');
+  });
+
+  it('can be turned on for one session through the env, without editing vite.config', () => {
+    const prev = process.env[ALLOW_ENV];
+    process.env[ALLOW_ENV] = '1';
+    try {
+      expect(connectModuleSource({})).toContain('allowNonLocalhost');
+    } finally {
+      if (prev === undefined) delete process.env[ALLOW_ENV];
+      else process.env[ALLOW_ENV] = prev;
+    }
+  });
+});
+
 describe('desktop injection site', () => {
   /**
    * In a build Vite routes the HTML entry through an html-proxy id rather than the plain file path.
@@ -437,6 +464,70 @@ describe('CJS deps the SDK needs are pre-bundled', () => {
     const include = (patch['optimizeDeps'] as { include?: string[] } | undefined)?.include ?? [];
     expect(include, "the app's own entries must survive").toContain('their-dep');
     expect(include.some((e) => e.endsWith('aria-query'))).toBe(true);
+  });
+});
+
+/**
+ * The daemon journals every session into `.reticle/` in the PROJECT root, writing `ambient.json`
+ * atomically as `ambient.json.tmp` + rename. That directory sits inside the tree Vite watches, and
+ * it is not in Vite's default ignore list — so each journal write looked to Vite like a project file
+ * changing, and Vite answered with a full page reload.
+ *
+ * That closes a loop with no exit: the page loads, the SDK connects and streams events, the daemon
+ * writes the journal, Vite force-reloads the page, the SDK reconnects and streams more events. It
+ * ran several times a second for as long as the dev server was up. Every ref went stale, every
+ * act_and_wait died mid-flight, and the session log filled with connect/disconnect pairs that read
+ * like a flapping SDK rather than a watcher feedback loop.
+ *
+ * The plugin is what puts Reticle in the app, so excluding Reticle's own state directory is the
+ * plugin's job — an app author should not have to know we write there.
+ */
+describe('the daemon journal does not drive the dev server', () => {
+  const ignoredFrom = (config: Record<string, unknown>): (string | RegExp)[] => {
+    const plugin = reticle() as unknown as {
+      config?: (config: Record<string, unknown>) => Record<string, unknown> | undefined;
+    };
+    const patch = plugin.config?.(config) ?? {};
+    const server = patch['server'] as { watch?: { ignored?: (string | RegExp)[] } } | undefined;
+    return server?.watch?.ignored ?? [];
+  };
+
+  /** Does this ignore list actually reject `path`, the way chokidar would? */
+  const rejects = (ignored: (string | RegExp)[], path: string): boolean =>
+    ignored.some((m) => m instanceof RegExp && m.test(path));
+
+  it('excludes the journal directory from the watcher', () => {
+    const ignored = ignoredFrom({});
+    // The paths chokidar actually reports: relative from the watched root, either separator.
+    expect(rejects(ignored, `${ReticleDir.ROOT}/ambient.json`)).toBe(true);
+    expect(rejects(ignored, `src/${ReticleDir.ROOT}/sessions/abc/events.jsonl`)).toBe(true);
+    expect(rejects(ignored, `src\\${ReticleDir.ROOT}\\ambient.json`)).toBe(true);
+  });
+
+  /**
+   * A GLOB here is silently useless. chokidar dropped glob support in v4 and Vite 7+ ships v4/v5,
+   * where a double-star pattern naming the journal directory is accepted and matches nothing — so
+   * the fix would look present in the config, pass a `toContain` assertion, and change no behaviour
+   * at all. Measured, not assumed: against the chokidar this repo resolves, the glob form still let
+   * a write to the journal through. This is the assertion that catches a regression back to one.
+   */
+  it('uses a matcher chokidar still honours, not a glob', () => {
+    const ignored = ignoredFrom({});
+    expect(ignored.some((m) => m instanceof RegExp)).toBe(true);
+  });
+
+  it("does not swallow the app's own files", () => {
+    const ignored = ignoredFrom({});
+    expect(rejects(ignored, 'src/App.tsx')).toBe(false);
+    // Not a `.reticle` DIRECTORY — a file that merely starts the same way.
+    expect(rejects(ignored, 'src/reticle.config.ts')).toBe(false);
+    expect(rejects(ignored, `${ReticleDir.ROOT}x/thing.json`)).toBe(false);
+  });
+
+  it("keeps the app's own ignore patterns", () => {
+    const ignored = ignoredFrom({ server: { watch: { ignored: ['**/fixtures/**'] } } });
+    expect(ignored, "the app's own entries must survive").toContain('**/fixtures/**');
+    expect(rejects(ignored, `${ReticleDir.ROOT}/ambient.json`)).toBe(true);
   });
 });
 

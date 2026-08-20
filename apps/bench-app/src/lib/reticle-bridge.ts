@@ -22,6 +22,7 @@ export const Sig = {
   FAULT_INJECTED: 'fault:injected',
   TOAST_SHOWN: 'toast:shown',
   PALETTE_OPENED: 'palette:opened',
+  ITEM_SAVED: 'item:saved',
 } as const;
 export type Sig = (typeof Sig)[keyof typeof Sig];
 

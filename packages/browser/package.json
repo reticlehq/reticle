@@ -1,6 +1,6 @@
 {
   "name": "@reticlehq/browser",
-  "version": "2.8.0",
+  "version": "2.9.0",
   "description": "Reticle browser SDK — installs observers, builds semantic snapshots, executes actions, talks to the bridge.",
   "type": "module",
   "main": "./dist/index.js",
@@ -13,7 +13,7 @@
     "./package.json": "./package.json"
   },
   "scripts": {
-    "build": "tsc -b",
+    "build": "node scripts/embed-heroicons.mjs && tsc -b",
     "typecheck": "tsc -b",
     "lint": "eslint src",
     "test:unit": "vitest run src --passWithNoTests",
@@ -25,6 +25,8 @@
     "@testing-library/dom": "^10.4.1"
   },
   "devDependencies": {
+    "@iconify-json/heroicons-outline": "^1.2.1",
+    "@iconify-json/heroicons-solid": "^1.2.1",
     "@tanstack/query-core": "^5.101.4",
     "@types/jsdom": "^30.0.0",
     "jotai": "^2.20.2",
@@ -33,6 +35,7 @@
     "pinia": "^4.0.3",
     "react": "^19.2.8",
     "recoil": "^0.7.7",
+    "sharp": "^0.35.3",
     "svelte": "^5.56.8",
     "valtio": "^2.3.2",
     "vue": "^3.5.41",

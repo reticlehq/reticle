@@ -50,6 +50,15 @@ interface HonestyInputs {
    * knows whether a blind-spot note came from the browser transport or from a boundary in the page.
    */
   losses?: readonly CaptureLoss[];
+  /**
+   * Did the page go quiet inside the action's window? Omitted when nothing measured it.
+   *
+   * Settlement stopped being a veto over a declared consequence that held (see `verified.ts`), and a
+   * fact that no longer decides the verdict must not therefore disappear: a page that never goes
+   * idle is worth knowing about, and a caller who cares can still gate on it. Reported here rather
+   * than beside `verified`, where the answer belongs to the rule and not to its inputs.
+   */
+  settled?: boolean;
 }
 
 export interface HonestyBlock {
@@ -60,6 +69,8 @@ export interface HonestyBlock {
   /** `pct` is present only when it was measured (or provably full); `partial` is always known. */
   coverage: { pct?: number; partial: boolean };
   integrity: { clean: boolean; issues: string[]; losses?: CaptureLoss[] };
+  /** Whether the page went quiet in this window — present only when it was measured. */
+  settled?: boolean;
 }
 
 export function buildHonestyBlock(inputs: HonestyInputs): HonestyBlock {
@@ -84,6 +95,7 @@ export function buildHonestyBlock(inputs: HonestyInputs): HonestyBlock {
       ? {}
       : { envelope: { samples, sufficient: samples >= MIN_ENVELOPE_SAMPLES } }),
     coverage: { ...(pct === undefined ? {} : { pct }), partial },
+    ...(inputs.settled === undefined ? {} : { settled: inputs.settled }),
     integrity: {
       clean: 0 === issues.length,
       issues,

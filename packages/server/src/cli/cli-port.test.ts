@@ -1,6 +1,6 @@
 import { removeTempDir } from '../temp-dir.js';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -389,5 +389,55 @@ describe('diagnosePortMismatch', () => {
     const msg = diagnosePortMismatch(4400, 4460);
     expect(msg).toContain('--port 4460');
     expect(msg).toContain('update .reticle.json');
+  });
+});
+
+describe('finding the project config from a nested working directory', () => {
+  let root: string;
+  beforeEach(async () => {
+    root = await mkdtemp(join(tmpdir(), 'reticle-cfg-walk-'));
+    await writeFile(
+      join(root, '.reticle.json'),
+      JSON.stringify({ port: 4460, projectId: 'walk-me', journal: false }),
+    );
+  });
+  afterEach(async () => {
+    await rm(root, { recursive: true, force: true });
+  });
+
+  // The failure this pins: every reader used to join `.reticle.json` onto cwd and stop, so a
+  // process one directory away from the config was indistinguishable from a project that had never
+  // been through init. An app wired in `frontend/`, an agent running from a repo root, and a
+  // worktree beside its main checkout are all the same missing walk.
+  it('reads port, projectId and journal from an ancestor directory', async () => {
+    const nested = join(root, 'apps', 'web', 'src');
+    await mkdir(nested, { recursive: true });
+    expect(readProjectPort(nested)).toBe(4460);
+    expect(readProjectId(nested)).toBe('walk-me');
+    expect(readJournalEnabled(nested, undefined)).toBe(false);
+  });
+
+  it('prefers the nearest config, so a nested app still wins over the repo root', async () => {
+    const nested = join(root, 'frontend');
+    await mkdir(nested, { recursive: true });
+    await writeFile(
+      join(nested, '.reticle.json'),
+      JSON.stringify({ port: 4401, projectId: 'nearest' }),
+    );
+    expect(readProjectPort(nested)).toBe(4401);
+    expect(readProjectId(nested)).toBe('nearest');
+  });
+
+  it('does not adopt a config from an arbitrarily distant ancestor', async () => {
+    const deep = join(root, 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h');
+    await mkdir(deep, { recursive: true });
+    expect(readProjectPort(deep)).toBeUndefined();
+  });
+
+  it('walks past a malformed config rather than treating it as the answer', async () => {
+    const nested = join(root, 'broken');
+    await mkdir(nested, { recursive: true });
+    await writeFile(join(nested, '.reticle.json'), '{ not json');
+    expect(readProjectPort(nested)).toBe(4460);
   });
 });

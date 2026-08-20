@@ -21,13 +21,22 @@
 
 import { DEV_SERVER_PORTS } from '../cli/cli-port.js';
 
-interface NoSessionFacts {
+export interface NoSessionFacts {
   /** Whether ANY session has connected to this daemon since it booted. */
   everConnected: boolean;
   /** Whether this project has been through `reticle init` (a .reticle.json / projectId is present). */
   initialized: boolean;
   /** Localhost ports with something listening that looks like a dev server. */
   listening: readonly number[];
+  /**
+   * Ports that ACCEPTED a connection and then answered nothing inside the probe budget.
+   *
+   * Not dev servers as far as the probe knows, and absolutely not absent. An SSR framework
+   * compiling its first route lands here every time, and calling that "nothing is listening" told a
+   * reporter to start a Nuxt server that was already serving — advice that would have hit their dev
+   * lock. Named in the message so the reader can tell the two apart.
+   */
+  slowListeners?: readonly number[];
   /** The port this daemon is on — half of the mismatch the old message asked about. */
   port: number;
   /**
@@ -56,7 +65,45 @@ interface NoSessionFacts {
    * no `.reticle.json` at all and is working perfectly.
    */
   projectPort?: number;
+  /**
+   * An app HAS connected on this port for this project before — read from durable state, not from
+   * this process.
+   *
+   * `everConnected` is a per-process boolean, and daemons are short-lived by design: they idle out
+   * and respawn. So a fresh daemon said it had "never seen one" seconds after its predecessor served
+   * a session, and the reader was sent hunting a `.reticle.json` that was never missing. The two
+   * claims mean opposite things — one is evidence about an install, the other is a fact about a
+   * process that booted four seconds ago — and only this one can tell them apart.
+   */
+  previouslyConnected?: boolean;
+  /**
+   * The framework `.reticle.json` declares, when there is one.
+   *
+   * Used to RANK the causes rather than to print a static differential. Nuxt is the case that made
+   * the difference: it does not register a new plugin on HMR, so a dev server older than the wiring
+   * is the single most likely cause there — and `reticle init` says so at install time while the
+   * hint the agent reads hours later never mentioned it.
+   */
+  framework?: string;
+  /**
+   * `.reticle.json` files found OUTSIDE this daemon's directory — a workspace app, a repo root.
+   *
+   * Editors launch MCP servers from wherever they like, and the config then sits under the app
+   * package while the daemon stands in the user's home. The old message read that as "this project
+   * has no SDK" and sent a working install back through `reticle init`.
+   */
+  configsElsewhere?: readonly { directory: string; projectId?: string }[];
+  /**
+   * Every directory the config search actually checked.
+   *
+   * "There is no `.reticle.json`" is unfalsifiable without it, and the claim was wrong often enough
+   * that a reader deserves to check it.
+   */
+  searchedDirectories?: readonly string[];
 }
+
+/** The one framework whose most likely cause differs from every other framework's. */
+const NUXT = 'nuxt';
 
 /**
  * Every branch ends with this, and `recoveryFor` keys on it to suppress the generic no-session
@@ -81,6 +128,23 @@ const RETRY = SELF_RECOVERING_MARKER;
  * Only offered when the app is known to carry the SDK: leasing an uninstrumented app just burns a
  * browser and comes back `ready:false`.
  */
+/**
+ * The no-shell path, for the branches where a BLIND lease would be wrong.
+ *
+ * A lease opens a URL, so offering one while nothing is listening is offering to open nothing —
+ * which is why these branches deliberately withheld it, and a test pins that. But withholding it
+ * left an agent with no CLI holding no path at all: reported from Windows, where the MCP server was
+ * registered and every tool advertised while no `reticle` binary existed on disk, so every remedy
+ * offered was a shell command that could not be run.
+ *
+ * The resolution is the ORDER, not the offer. Get the URL first — which these branches already tell
+ * the reader to do — and then the lease is the way to open it without a shell.
+ */
+const URL_THEN_LEASE =
+  'Once you have that URL, open it with reticle_lease {action:"acquire", url} rather than a shell ' +
+  'command — it needs no CLI on PATH (reach it with reticle_run {tool:"reticle_lease"} if it is ' +
+  'not advertised directly).';
+
 const SELF_SERVE =
   'You do not have to wait for the human: reticle_lease {action:"acquire", url} opens a browser ' +
   'Reticle drives itself, and returns a sessionId you can use immediately (reach it with ' +
@@ -110,10 +174,92 @@ const SELF_SERVE =
 const NON_LOCALHOST_GATE =
   'One more cause that leaves every other check healthy: if the app is served on anything other ' +
   'than localhost (a hosts-file alias, a LAN IP, a tunnel), the SDK refuses to connect unless it ' +
-  'is given `allowNonLocalhost: true` — the refusal is page-side, so nothing here can see it. ' +
-  "Check the browser console for that message and pass the flag in the app's reticle.connect().";
+  'is given `allowNonLocalhost: true` AND a pairing token — the flag alone is NOT sufficient off ' +
+  'localhost, which cost one reporter their whole setup until they read our compiled SDK by hand. ' +
+  'The token is the one in `~/.reticle/pairing-token`, passed as `token` to the same connect(). ' +
+  'The refusal is page-side, so nothing here can see it: check the browser console for that ' +
+  "message and pass both in the app's reticle.connect().";
+
+/**
+ * The causes that actually occurred in the field, for an app that is wired and still silent.
+ *
+ * Every one of these is indistinguishable from "no SDK installed" from every surface an agent can
+ * reach, and the old message modelled none of them — it modelled a missing SDK and a wrong port, and
+ * across a batch of reports on four apps the port was right every time. An agent that is told the
+ * wrong differential does not merely waste calls: several of these reports end with the agent
+ * telling its human that Reticle was not set up, on an app that was correctly wired.
+ */
+const REAL_CAUSES =
+  'Causes that produce exactly this and are NOT a port problem, in the order they actually occur: ' +
+  '(a) the SDK is in the bundle but `connect()` is never reached — a dev-mode guard or a missing ' +
+  'runtime-config value returning early, which emits nothing at all, so grep the app for the ' +
+  'connect call and confirm it runs; (b) the dev server was started BEFORE the Reticle plugin was ' +
+  'added, so it is not in the bundle at all — restart the dev server, do not rely on HMR; ' +
+  '(c) a peer dependency is missing, typically `@reticlehq/react` in a non-React app, so the ' +
+  "dynamic import fails silently; (d) this daemon's working directory is not the project, so it is " +
+  'scoped to the wrong app entirely — check the directory named above is really where your app ' +
+  'lives.';
+
+/** Nuxt's most likely cause is (b), and Nuxt is the framework where it is nearly certain. */
+const NUXT_STALE_BUNDLE =
+  'This project is Nuxt: the most likely cause by a distance is a dev server that predates the ' +
+  'Reticle plugin. Nuxt does NOT register a newly added plugin on HMR, so the running bundle ' +
+  'carries no SDK however correct the config is — STOP and restart `nuxt dev`, then reload the ' +
+  'page, before investigating anything else.';
+
+/**
+ * The lead when durable state proves this project has connected on this port before.
+ *
+ * The daemon used to contradict itself inside one response: `reticle_sessions` said a session HAD
+ * connected earlier "so the wiring is correct", and a lease seconds later said the usual cause was a
+ * port mismatch. It already held the evidence against its own hint.
+ */
+const RESTARTED_LEAD =
+  'no browser session connected. This daemon has served none since it started, but it is a NEW ' +
+  'process — an app for this project HAS connected on this port before, which is recorded ' +
+  'durably. So the wiring is correct and the port is correct: what is failing now is the SDK ' +
+  'reaching initialise on the page. Re-running the install is the wrong move here: it cannot help ' +
+  'on a project that has demonstrably connected, and it can overwrite a working config.';
 
 const SCANNED_PORTS = [...DEV_SERVER_PORTS].join(', ');
+
+/**
+ * How to say "open the app" to an agent that may have no `reticle` binary.
+ *
+ * These strings are read by an AGENT that is already blocked, and they used to name a bare
+ * `reticle open <url>`. Reticle registers its MCP server as `npx @reticlehq/server mcp`, so the
+ * ordinary install puts NOTHING on PATH — the binary those messages assume is missing on most
+ * machines that ever read them.
+ *
+ * Reported from Windows, where a half-failed plugin install left the MCP server registered and all
+ * the tools advertised while no CLI existed on disk. The agent followed the remediation, found no
+ * `reticle`, tried `npx @reticlehq/reticle` (a package that does not exist and 404s), and had no
+ * path forward at all. The remedy has to be a command that works from a bare npm environment.
+ *
+ * Init-time messages keep the short form on purpose: there, the reader is already running the CLI.
+ */
+const OPEN_CMD = '`npx @reticlehq/server open <url>`';
+const OPEN_CMD_BARE = '`npx @reticlehq/server open`';
+const INIT_CMD = '`npx @reticlehq/server init`';
+
+/**
+ * The one sentence that stops the scan lying about a server that is running.
+ *
+ * A port that accepted a connection and then said nothing is evidence FOR the app being up, not
+ * against it, and it has to be read before the "nothing is listening" sentence rather than after —
+ * the reader acts on the first claim.
+ */
+function slowListenerClause(facts: NoSessionFacts): string {
+  const slow = facts.slowListeners ?? [];
+  if (0 === slow.length) return '';
+  const ports = slow.join(', ');
+  const subject = 1 === slow.length ? `Port ${ports} ACCEPTED` : `Ports ${ports} ACCEPTED`;
+  return (
+    `${subject} a connection but did not answer in time, which is what a server-rendered dev ` +
+    'server compiling its first route looks like — so something IS running there and you should ' +
+    'open it rather than start it. Setting that aside: '
+  );
+}
 
 /**
  * The commonest first-run state there is, and until #320 the message named it nowhere.
@@ -125,7 +271,7 @@ const SCANNED_PORTS = [...DEV_SERVER_PORTS].join(', ');
  */
 const OPEN_THE_APP =
   'Reticle only ever sees a page that is LOADED, so the commonest cause by a distance is that no ' +
-  "browser has opened the app yet: run `reticle open <url>` with the app's own URL (or ask the " +
+  `browser has opened the app yet: run ${OPEN_CMD} with the app's own URL (or ask the ` +
   'human to open it).';
 
 /**
@@ -169,6 +315,54 @@ function portMismatchClause(facts: NoSessionFacts): string {
   );
 }
 
+/**
+ * The tail every "the app is wired and silent" branch ends with, ranked.
+ *
+ * One place, because the ranking is the whole fix: a hint that lists "no server", "no SDK" and
+ * "no tab" at equal weight is a hint the reader has to rank itself, with strictly less evidence
+ * than the daemon has.
+ */
+function rankedCauses(facts: NoSessionFacts): string {
+  const nuxt = facts.framework?.toLowerCase() === NUXT ? `${NUXT_STALE_BUNDLE} ` : '';
+  return (
+    `${nuxt}${REAL_CAUSES} If none of those, the app may be dialling a different daemon than this ` +
+    `one (on ${String(facts.port)}): check the app's reticle port matches ` +
+    `${String(facts.port)}.${portMismatchClause(facts)} ${NON_LOCALHOST_GATE}`
+  );
+}
+
+/**
+ * The scope answer, when the config was somewhere else all along.
+ *
+ * This OUTRANKS every "you may have no SDK" sentence in this file, because it is positive evidence:
+ * a `.reticle.json` in `apps/web` means that app has been through `init` whatever the daemon's own
+ * directory looks like. Naming the directories rather than adopting one is deliberate — several
+ * configs means several projects, and choosing silently is how an agent gets a confident verdict
+ * about an app it never touched.
+ */
+function configsElsewhereClause(facts: NoSessionFacts): string {
+  const configs = facts.configsElsewhere ?? [];
+  if (0 === configs.length) return '';
+  const named = configs
+    .map((c) => (c.projectId === undefined ? c.directory : `${c.directory} ('${c.projectId}')`))
+    .join(', ');
+  return (
+    `A \`.reticle.json\` WAS found outside this daemon's directory: ${named}. So the app is wired ` +
+    'and this is a SCOPE problem, not an install problem — this daemon was started somewhere that ' +
+    'is not the project, which is the normal outcome when an editor launches it from your home ' +
+    "directory. Restart the daemon from the app's directory (or point it there) rather than " +
+    'installing anything.'
+  );
+}
+
+/** Where we looked, when we found nothing. An absence nobody can check is not evidence. */
+function searchedClause(facts: NoSessionFacts): string {
+  const searched = facts.searchedDirectories ?? [];
+  if (0 === searched.length) return '';
+  if ((facts.configsElsewhere ?? []).length > 0) return '';
+  return ` I looked in: ${searched.join(', ')}. If your app is not in that list, that is the answer — this daemon is standing somewhere else.`;
+}
+
 export function diagnoseNoSession(facts: NoSessionFacts): string {
   const { everConnected, initialized, listening, port } = facts;
   // Named when known: a claim about a missing file is a claim about ONE directory.
@@ -191,13 +385,37 @@ export function diagnoseNoSession(facts: NoSessionFacts): string {
         'that a lease you were using aged out; a lease is a headless context, not a human tab, and ' +
         'it takes its cookies with it (so an authenticated app needs signing in again). Re-acquire ' +
         'with reticle_lease {action:"acquire", url} and carry on. If you were driving a human tab ' +
-        `instead, it went away — reopen it or run \`reticle open\`. ${RETRY}`
+        `instead, it went away — reopen it or run ${OPEN_CMD_BARE}. ${RETRY}`
       );
     }
     return (
       'no browser session connected, but one WAS connected to this daemon earlier, so the wiring ' +
       'is correct. The tab was closed, navigated away, or hard-reloaded. Ask the human to reopen ' +
-      `the app (or run \`reticle open\`), or reload the tab. ${SELF_SERVE} ${RETRY}`
+      `the app (or run ${OPEN_CMD_BARE}), or reload the tab. ${SELF_SERVE} ${RETRY}`
+    );
+  }
+
+  // Ranked ahead of every "we have never seen one" branch below, because it is the one fact that
+  // OUTRANKS them: those branches all reason from an absence, and this reasons from a recorded
+  // connection. It is also the branch that stops the daemon contradicting itself — a hint that the
+  // wiring is unproven, printed by a daemon holding proof that it is.
+  if (true === facts.previouslyConnected) {
+    const listeners =
+      0 === listening.length
+        ? `${unattributedListeners(listening)} If the dev server is not running, start it first ` +
+          '(the command is in `next_action`).'
+        : unattributedListeners(listening);
+    return `${RESTARTED_LEAD} ${OPEN_THE_APP} ${listeners} ${rankedCauses(facts)} ${SELF_SERVE} ${RETRY}`;
+  }
+
+  // A config found elsewhere outranks every "you may have no SDK" branch below: those reason from
+  // an absence in ONE directory, and this is a file we read in another. Ranked here so the reader is
+  // never sent through an install on a project that has demonstrably been installed.
+  if (!initialized && (facts.configsElsewhere ?? []).length > 0) {
+    return (
+      'no browser session connected, and this daemon has never seen one. ' +
+      `${configsElsewhereClause(facts)} ${unattributedListeners(listening)} ${OPEN_THE_APP} ` +
+      `${rankedCauses(facts)} ${SELF_SERVE} ${RETRY}`
     );
   }
 
@@ -219,22 +437,27 @@ export function diagnoseNoSession(facts: NoSessionFacts): string {
     if (!initialized) {
       return (
         'no browser session connected. Two things to weigh, and neither of them is proof. ' +
-        `(1) Nothing is listening on the ports Reticle scans (${SCANNED_PORTS}), so the dev server ` +
-        'may not be running — ask the human to start it (`npm run dev`). That scan is narrow ' +
+        `(1) ${slowListenerClause(facts)}Nothing is listening on the ports Reticle scans (${SCANNED_PORTS}), so the dev server ` +
+        'may not be running — START IT YOURSELF, in the background, using the command in ' +
+        "`next_action` (it is read from this project's own scripts; if there is none, that field " +
+        'says so and you should ask rather than guess). Tell the human in one line that it is ' +
+        'running. That scan is narrow ' +
         'though: a server on any other port is invisible to it, so if the app IS running, ask for ' +
-        'its URL rather than assuming it is down, and open it with `reticle open <url>`. ' +
+        `its URL rather than assuming it is down, and open it with ${OPEN_CMD}. ` +
         `(2) There is no \`.reticle.json\` in ${where}. That is the ` +
-        "file `reticle init` writes, so the app may carry no Reticle SDK — but check the app's " +
+        `file ${INIT_CMD} writes, so the app may carry no Reticle SDK — but check the app's ` +
         'OWN directory before re-running `init`: in a monorepo the daemon often runs at the root ' +
         'while the app lives in a subdirectory, and an app wired by the Vite or Babel plugin ' +
-        `carries the SDK without that file at all. ${RETRY}`
+        `carries the SDK without that file at all.${searchedClause(facts)} ${URL_THEN_LEASE} ${RETRY}`
       );
     }
     return (
       `no browser session connected, and this daemon has never seen one. ${OPEN_THE_APP} ` +
       'Nothing is listening on the ports Reticle scans ' +
       `(${SCANNED_PORTS}) either, and the most common reason for that is a dev server that is not ` +
-      'running: ask the human to start it (`npm run dev`), then open the app in a browser. ' +
+      'running: start it yourself in the background with the command in `next_action` — it is read ' +
+      "from this project's own scripts, and says so rather than guessing when there is none — tell " +
+      'the human in one line that it is running, then open the app in a browser. ' +
       // The caveat is here rather than omitted because the scan is NARROW, and the old sentence
       // spent its confidence as though an empty result were proof of absence. Reported twice: a
       // scripted drive of 2.5.0 asserted the app was not running while it served 200 on :7699, and
@@ -245,7 +468,7 @@ export function diagnoseNoSession(facts: NoSessionFacts): string {
       // Deliberately NOT offering reticle_lease here, and a test pins that: a lease opens a URL, and
       // if nothing is listening there is nothing at any URL to open. Asking for the real one is the
       // only move that can recover the :7699 case.
-      'the app IS running, ask the human for its URL rather than assuming it is down. ' +
+      `the app IS running, ask the human for its URL rather than assuming it is down. ${URL_THEN_LEASE} ` +
       // Reachable only for a project that HAS been through `init` — the uninstrumented case is
       // answered above, leading with that certainty instead of behind this scan's guess.
       `${RETRY}`
@@ -256,21 +479,19 @@ export function diagnoseNoSession(facts: NoSessionFacts): string {
     return (
       'no browser session connected, and this daemon has never seen one. ' +
       `What was actually checked: there is no \`.reticle.json\` in ${where}. That is the file ` +
-      '`reticle init` writes, so the app may carry no Reticle SDK — but it is not proof, and the ' +
+      `${INIT_CMD} writes, so the app may carry no Reticle SDK — but it is not proof, and the ` +
       'same absence is expected in a monorepo whose daemon runs at the root while the app lives in ' +
       "a subdirectory, or in an app wired by the Vite or Babel plugin. Check the app's OWN " +
-      'directory: if it has no config, run `reticle init` there and restart the dev server; if it ' +
-      'has one, the app is wired and simply has no page open — `reticle open <url>`. ' +
-      `${unattributedListeners(listening)} ${RETRY}`
+      `directory: if it has no config, run ${INIT_CMD} there and restart the dev server; if it ` +
+      `has one, the app is wired and simply has no page open — ${OPEN_CMD}. ` +
+      `${unattributedListeners(listening)}${searchedClause(facts)} ${RETRY}`
     );
   }
 
   return (
     'no browser session connected, and this daemon has never seen one for this project, which is ' +
     `wired for Reticle. ${OPEN_THE_APP} ${unattributedListeners(listening)} ` +
-    'If the page IS open and still does not appear, the app is either serving a build made before ' +
-    `the wiring landed or dialling a different daemon than this one (on ${String(port)}): restart ` +
-    "the dev server, hard-reload the page, and check that the app's reticle port matches " +
-    `${String(port)}.${portMismatchClause(facts)} ${NON_LOCALHOST_GATE} ${SELF_SERVE} ${RETRY}`
+    'If the page IS open and still does not appear, the app is wired and the SDK is not reaching ' +
+    `this daemon (on ${String(port)}). ${rankedCauses(facts)} ${SELF_SERVE} ${RETRY}`
   );
 }

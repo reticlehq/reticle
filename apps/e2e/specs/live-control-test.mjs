@@ -12,6 +12,8 @@ await waitForSession(()=>server.bridge.sessions.list(), 'next-smoke');
 const sess=server.bridge.sessions.resolve('next-smoke');
 const ref=(await T('reticle_query',{by:'testid',value:'add-task'})).elements[0].ref;
 console.log('\n=== live control: human pause + prompt + resume + agent end (real browser) ===');
+// HUD starts collapsed to the FAB — expand before using toolbar controls.
+await p.click('[data-reticle-fab]'); await sleep(200);
 // HUMAN clicks Pause on the panel
 await p.click('[data-reticle-pause]'); await sleep(300);
 chk('human Pause → server session state = paused', sess.getState?.()==='paused', `state=${sess.getState?.()}`);

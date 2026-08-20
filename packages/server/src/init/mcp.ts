@@ -54,6 +54,27 @@ export function npxServerArgs(): string[] {
   return [RETICLE_PACKAGE, MCP_SUBCOMMAND];
 }
 
+/** The npm scope every Reticle package shares — the marker of a registration we are entitled to fix. */
+const RETICLE_SCOPE = '@reticlehq/';
+
+/**
+ * Is this existing registration one WE are responsible for?
+ *
+ * Deliberately the SCOPE and not the server package. An entry naming any `@reticlehq/*` package is
+ * ours to repair — including one naming the WRONG package, which is the case this widened for:
+ * `args: ["@reticlehq/core","mcp"]` was reported from the field, where `core` has no `mcp` bin, so
+ * the client showed the server errored with zero tools while `init` reported it already wired and
+ * left it alone on every re-run. Every `reticle_*` tool was blocked until a human edited that file.
+ *
+ * An entry that names no Reticle package at all — a local build, a wrapper script — is still someone
+ * else's deliberate choice and is left exactly as it is.
+ *
+ * @param tokens every string in the entry's command + args, in any of the client shapes.
+ */
+export function isReticleRegistration(tokens: readonly string[]): boolean {
+  return tokens.includes(NPX) && tokens.some((t) => t.includes(RETICLE_SCOPE));
+}
+
 /** The full `npx …` invocation — the tail after `claude mcp add … --`. */
 function serverInvocation(): string[] {
   return [NPX, ...npxServerArgs()];

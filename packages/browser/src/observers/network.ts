@@ -35,6 +35,14 @@ interface NetworkOptions {
   captureBodies?: boolean;
   /** Optional hook that reinterprets a completed request — see NetResponseReinterpreter. */
   reinterpret?: NetResponseReinterpreter;
+  /**
+   * Requests Reticle itself makes, which must never reach the app's evidence.
+   *
+   * Same seam and same reason as `reinterpret`: this observer knows nothing about desktop IPC, and
+   * the SDK's own Tauri screenshot travels as an ordinary fetch through this very patch. Passed in
+   * rather than imported, so the knowledge stays in the IPC observer.
+   */
+  ignore?: (url: string) => boolean;
 }
 
 /** The byte size of a binary frame (ArrayBuffer / Blob / typed-array view), or undefined if unknown. */
@@ -94,6 +102,23 @@ interface XhrMeta {
   rawUrl: string;
   initiatorStack?: string | undefined;
   reqBody?: Document | XMLHttpRequestBodyInit | null;
+}
+
+/**
+ * Did this response succeed? A REDIRECT DID.
+ *
+ * The one rule both transports must share. `Response.ok` is true only for 200-299, so reading it
+ * straight through stamped every 3xx as a failed request, while the XHR path computed the same field
+ * itself and called the identical status a success. Downstream, `ok` is authoritative when present —
+ * so a POST-redirect-GET login, the first flow anyone verifies in an app with auth, produced a
+ * `ui-advanced-request-failed` contradiction citing its own success path, and the agent had to
+ * overrule the verdict by hand. A verdict that gets manually overruled is not deciding anything.
+ *
+ * 3xx is normal successful navigation. An opaque (no-cors) response reports status 0 and is correctly
+ * excluded here, exactly as `Response.ok` excluded it.
+ */
+function statusIsOk(status: number): boolean {
+  return status >= 200 && status < 400;
 }
 
 /**
@@ -264,10 +289,14 @@ export function installNetwork(emit: Emit, opts: NetworkOptions = {}): Teardown 
   const nextId = (): string => `n${++seq}`;
 
   window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+    const rawUrl = urlOf(input);
+    // Reticle's own call: pass it straight through, observed by nobody. Emitting even the PENDING
+    // half would be wrong twice over — it lands in the agent's network evidence, and `settle` would
+    // wait on the SDK's own screenshot as if the app had a request in flight.
+    if (true === opts.ignore?.(rawUrl)) return callFetch(input, init);
     const id = nextId();
     const start = performance.now();
     const method = methodOf(input, init);
-    const rawUrl = urlOf(input);
     const url = redactUrl(rawUrl);
     const initiatorStack = initiatorFrame();
     const initiatorFields = initiatorStack === undefined ? {} : { initiatorStack };
@@ -286,7 +315,7 @@ export function installNetwork(emit: Emit, opts: NetworkOptions = {}): Teardown 
           method,
           url,
           status: res.status,
-          ok: res.ok,
+          ok: statusIsOk(res.status),
           durationMs: Math.round(headersAt - start),
           initiator: 'fetch',
           ...initiatorFields,
@@ -434,7 +463,7 @@ export function installNetwork(emit: Emit, opts: NetworkOptions = {}): Teardown 
             method: cur.method,
             url: cur.url,
             status: this.status,
-            ok: this.status >= 200 && this.status < 400,
+            ok: statusIsOk(this.status),
             durationMs: Math.round(performance.now() - cur.start),
             initiator: 'xhr',
             ...(cur.initiatorStack === undefined ? {} : { initiatorStack: cur.initiatorStack }),

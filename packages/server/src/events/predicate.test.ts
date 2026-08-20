@@ -934,6 +934,55 @@ describe('net count is exact, not "at least" — the double-submit must not pass
     setTimeout(() => session.push(post(69)), 59);
     expect((await verdict).pass).toBe(false);
   });
+
+  /**
+   * And having decided, it must STOP — the budget cannot change a count that has already overshot.
+   *
+   * No clock is asserted here on purpose: a duration assertion is a statement about the machine and
+   * fails only under parallel load. The wait is granted a budget far longer than this test's own
+   * timeout, so honouring `decided` is the only way it can finish at all, and a regression shows up
+   * as this test timing out rather than as a flake.
+   */
+  it('stops as soon as the count has overshot, instead of spending the budget', async () => {
+    const session = new LiveSession();
+    const verdict = waitForPredicate(
+      session,
+      { kind: 'net', method: 'POST', urlContains: '/refund', count: 1 },
+      45_000,
+    );
+    session.push(post(10));
+    session.push(post(69));
+    const r = await verdict;
+    expect(r.pass).toBe(false);
+    expect(r.decided).toBe(true);
+  }, 5_000);
+
+  /**
+   * And through a conjunction, which is how it reaches real calls: an exact count is nearly always
+   * asserted alongside the UI change it is supposed to accompany, so a decided clause has to decide
+   * the whole `allOf` or the early exit never fires where anyone would notice.
+   */
+  it('decides the whole allOf when one clause has overshot', async () => {
+    const session = new LiveSession();
+    const verdict = waitForPredicate(
+      session,
+      {
+        kind: 'allOf',
+        predicates: [
+          { kind: 'net', method: 'POST', urlContains: '/refund', count: 1 },
+          // A clause that is merely NOT YET true: on its own this one would keep waiting for the
+          // whole budget, which is what makes the conjunction worth testing.
+          { kind: 'net', method: 'GET', urlContains: '/a-call-that-never-comes' },
+        ],
+      },
+      45_000,
+    );
+    session.push(post(10));
+    session.push(post(69));
+    const r = await verdict;
+    expect(r.pass).toBe(false);
+    expect(r.decided).toBe(true);
+  }, 5_000);
 });
 
 describe('waitForPredicate disconnect cleanup', () => {

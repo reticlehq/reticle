@@ -211,6 +211,29 @@ const INSTALL_ARGS: Record<PackageManager, readonly string[]> = {
   [PackageManager.NPM]: ['i', '-D'],
 };
 
+/**
+ * Flags added only to the install we RUN, never to the one we print.
+ *
+ * The install is a child process whose output lands above ours. Measured on a real install: the run
+ * opened with "added 602 packages", a funding notice, and "14 vulnerabilities (7 moderate, 7 high)"
+ * with `npm audit fix` advice, before one line of Reticle output. A user's first impression of a
+ * verification tool was a wall of somebody else's security warnings, at exactly the moment they are
+ * deciding whether this tool is careful — and that audit summary describes their existing dependency
+ * tree, which our two dev packages neither caused nor can fix.
+ *
+ * Kept off `installCommand`, which is the string shown in the plan and the one a user copies when
+ * running it by hand: nobody should be taught to type our noise-suppression flags.
+ *
+ * Quieted, never silenced — the exit code and stderr are untouched, so a real failure of the step
+ * everything downstream depends on stays as loud as it was.
+ *
+ * npm only: pnpm, yarn and bun reject these, and an unknown flag would turn a working install into a
+ * hard failure, which is the opposite of the problem being fixed.
+ */
+const QUIET_INSTALL_ARGS: Partial<Record<PackageManager, readonly string[]>> = {
+  [PackageManager.NPM]: ['--no-audit', '--no-fund'],
+};
+
 interface InstallCommand {
   command: string;
   args: string[];
@@ -222,10 +245,18 @@ export function installCommandParts(
   pkgs: string | readonly string[],
 ): InstallCommand {
   const list = 'string' === typeof pkgs ? [pkgs] : pkgs;
-  return { command: pm, args: [...INSTALL_ARGS[pm], ...list] };
+  return { command: pm, args: [...INSTALL_ARGS[pm], ...list, ...(QUIET_INSTALL_ARGS[pm] ?? [])] };
 }
 
+/**
+ * The install command as a human reads it — and deliberately NOT `installCommandParts` joined.
+ *
+ * This string is what the plan prints and what a user retypes when running the step by hand, so it
+ * must not carry the flags we add only to quieten our own child process. Built from `INSTALL_ARGS`
+ * directly for that reason; routing it through the parts would put `--no-audit --no-fund` in front of
+ * every reader and teach them our noise-suppression as if it were part of installing Reticle.
+ */
 export function installCommand(pm: PackageManager, pkgs: string | readonly string[]): string {
-  const { command, args } = installCommandParts(pm, pkgs);
-  return `${command} ${args.join(' ')}`;
+  const list = 'string' === typeof pkgs ? [pkgs] : pkgs;
+  return `${pm} ${[...INSTALL_ARGS[pm], ...list].join(' ')}`;
 }

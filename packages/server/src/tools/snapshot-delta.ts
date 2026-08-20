@@ -76,6 +76,21 @@ function deltaLines(tree: string): DeltaLine[] {
  * buttons — and the count is the only thing that says how many left. Emitting the ORIGINAL text is
  * what finally tells them apart: with refs, "which twelve" has an answer.
  */
+/** Extract the ref marker value from a text line, or undefined if absent. */
+function refOf(text: string): string | undefined {
+  return REF_MARKER.exec(text)?.[0]?.trim();
+}
+
+/** Extract the role (first word after the bullet) from a snapshot line — the structural type that must match. */
+function roleOf(text: string): string {
+  return (
+    text
+      .trimStart()
+      .replace(/^-\s*/, '')
+      .split(/[\s"(]/)[0] ?? ''
+  );
+}
+
 function diffKeyed(prev: DeltaLine[], next: DeltaLine[]): { added: string[]; removed: string[] } {
   const bucket = (lines: DeltaLine[]): Map<string, string[]> => {
     const map = new Map<string, string[]>();
@@ -109,6 +124,45 @@ function diffKeyed(prev: DeltaLine[], next: DeltaLine[]): { added: string[]; rem
 }
 
 /**
+ * Same ref AND same role in both added and removed = value change, not a structural
+ * arrival/departure. Refs alone are not stable identities — they are re-minted on re-render — so a
+ * removed button and an added textbox sharing a ref must stay in their respective lists.
+ */
+function extractChanged(
+  added: string[],
+  removed: string[],
+): {
+  added: string[];
+  removed: string[];
+  changed: string[];
+} {
+  const addedByRef = new Map<string, { idx: number; text: string; role: string }>();
+  for (const [i, text] of added.entries()) {
+    const ref = refOf(text);
+    if (ref !== undefined) addedByRef.set(ref, { idx: i, text, role: roleOf(text) });
+  }
+  const changedIndicesInAdded = new Set<number>();
+  const changedIndicesInRemoved = new Set<number>();
+  const changed: string[] = [];
+  for (const [i, text] of removed.entries()) {
+    const ref = refOf(text);
+    if (ref === undefined) continue;
+    const match = addedByRef.get(ref);
+    if (match !== undefined && match.role === roleOf(text)) {
+      changed.push(match.text);
+      changedIndicesInAdded.add(match.idx);
+      changedIndicesInRemoved.add(i);
+      addedByRef.delete(ref);
+    }
+  }
+  return {
+    added: added.filter((_, i) => !changedIndicesInAdded.has(i)),
+    removed: removed.filter((_, i) => !changedIndicesInRemoved.has(i)),
+    changed,
+  };
+}
+
+/**
  * Where focus sits now: the line to show, plus the identity to compare it BY.
  *
  * These have to be two different things. Comparing the rendered lines said focus had moved whenever
@@ -136,6 +190,7 @@ export type SnapshotDeltaMode = (typeof SnapshotDeltaMode)[keyof typeof Snapshot
 interface SnapshotDelta {
   added: string[];
   removed: string[];
+  changed: string[];
   addedCount: number;
   removedCount: number;
 }
@@ -154,7 +209,8 @@ type DeltaDecision =
 /** Pure: decide full vs delta vs unchanged given the previous tree (same route) and the next tree. */
 export function snapshotDelta(prevTree: string | undefined, nextTree: string): DeltaDecision {
   if (prevTree === undefined) return { mode: SnapshotDeltaMode.FULL };
-  const { added, removed } = diffKeyed(deltaLines(prevTree), deltaLines(nextTree));
+  const raw = diffKeyed(deltaLines(prevTree), deltaLines(nextTree));
+  const { added, removed, changed } = extractChanged(raw.added, raw.removed);
   const before = focusedLine(prevTree);
   const now = focusedLine(nextTree);
   // Reported only on a MOVE. Repeating "focus is still here" every turn is the noise the delta exists
@@ -167,12 +223,18 @@ export function snapshotDelta(prevTree: string | undefined, nextTree: string): D
           ...(now === undefined ? {} : { to: now.text }),
         };
   const moved = focusChanged === undefined ? {} : { focusChanged };
-  if (0 === added.length && 0 === removed.length) {
+  if (0 === added.length && 0 === removed.length && 0 === changed.length) {
     return { mode: SnapshotDeltaMode.UNCHANGED, ...moved };
   }
   return {
     mode: SnapshotDeltaMode.DELTA,
-    delta: { added, removed, addedCount: added.length, removedCount: removed.length },
+    delta: {
+      added,
+      removed,
+      changed,
+      addedCount: added.length,
+      removedCount: removed.length,
+    },
     ...moved,
   };
 }
@@ -186,6 +248,11 @@ export class SnapshotCache {
 
   constructor(max: number = DEFAULT_MAX_ENTRIES) {
     this.#max = max;
+  }
+
+  /** True when an entry exists for this key (regardless of route match). */
+  has(key: string): boolean {
+    return this.#map.has(key);
   }
 
   /** Last tree for this key IF the route still matches; undefined when absent or route changed. */
@@ -262,9 +329,13 @@ export function applySnapshotDelta(
   }
 
   const prev = cache.recall(key, route);
+  const hadEntry = cache.has(key);
   cache.remember(key, route, tree);
   const decision = snapshotDelta(prev, tree);
-  if (decision.mode === SnapshotDeltaMode.FULL) return raw;
+  if (decision.mode === SnapshotDeltaMode.FULL) {
+    const reason = hadEntry ? 'route changed' : 'first snapshot for this route';
+    return { ...(r as object), mode: SnapshotDeltaMode.FULL, reason };
+  }
   // The walk stops at a node cap and returns a DOCUMENT-ORDER PREFIX, so two capped snapshots of a
   // large page are identical whenever the change happened past the cap — and "unchanged" is then a
   // statement about the cap, not about the page. Carried through on both branches: a delta computed
@@ -277,9 +348,12 @@ export function applySnapshotDelta(
   if (decision.mode === SnapshotDeltaMode.UNCHANGED) {
     return { mode: SnapshotDeltaMode.UNCHANGED, status: r['status'], ...moved, ...capped };
   }
+  const { changed, ...structuralDelta } = decision.delta;
+  const changedField = changed.length > 0 ? { changed, changedCount: changed.length } : {};
   return {
     mode: SnapshotDeltaMode.DELTA,
-    delta: decision.delta,
+    delta: structuralDelta,
+    ...changedField,
     status: r['status'],
     ...moved,
     ...capped,

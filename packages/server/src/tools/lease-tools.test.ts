@@ -114,6 +114,38 @@ describe('reticle_lease_acquire failure surfaces a clean message', () => {
   });
 });
 
+describe('reticle_lease_acquire preflights the browser (#400)', () => {
+  it('refuses at the first call with the install fix when Chromium is absent, without a round trip', async () => {
+    const { pool, acquired } = fakePool();
+    await expect(
+      tool(ReticleTool.LEASE_ACQUIRE)(
+        { ...baseDeps, pool, browserProbe: () => Promise.resolve({ exists: false }) },
+        { url: 'http://localhost:3000/' },
+      ),
+      // Carries "Chromium is not installed" so error-recovery routes it to the NO_POOL fix rather
+      // than the misleading "is the app running?" a launch failure inside acquire would have produced.
+    ).rejects.toThrow(/Chromium is not installed/);
+    // The point of a PREflight: the pool was never asked to open anything.
+    expect(acquired).toHaveLength(0);
+  });
+
+  it('proceeds normally when the probe says Chromium is present', async () => {
+    const { pool, acquired } = fakePool();
+    const result = (await tool(ReticleTool.LEASE_ACQUIRE)(
+      { ...baseDeps, pool, browserProbe: () => Promise.resolve({ exists: true }) },
+      { url: 'http://localhost:3000/' },
+    )) as { sessionId: string };
+    expect(result.sessionId).toMatch(/^lease-/);
+    expect(acquired).toHaveLength(1);
+  });
+
+  it('skips the preflight entirely when no probe is wired (unchanged default)', async () => {
+    const { pool, acquired } = fakePool();
+    await tool(ReticleTool.LEASE_ACQUIRE)({ ...baseDeps, pool }, { url: 'http://localhost:3000/' });
+    expect(acquired).toHaveLength(1);
+  });
+});
+
 describe('waitForLeasedSession', () => {
   it('resolves true as soon as the tab is connected (no waiting)', async () => {
     const sleeper = (): Promise<void> => Promise.reject(new Error('should not sleep'));

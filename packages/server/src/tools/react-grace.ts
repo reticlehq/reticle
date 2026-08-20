@@ -24,7 +24,7 @@
  * within the grace, "ignored" has become an honest description and the finding should stand.
  */
 
-import { EventType } from '@reticlehq/core';
+import { EventType, MUTATING_METHODS } from '@reticlehq/core';
 import type { SettleSource } from './settle-in-flight.js';
 
 /**
@@ -36,8 +36,6 @@ const REACTION_GRACE_MS = 300;
 
 /** Poll cadence — the same as the settle wait, for the same reason. */
 const POLL_MS = 50;
-
-const MUTATING = ['POST', 'PUT', 'PATCH', 'DELETE'];
 
 /** Movement that would clear `response-ignored`; mirrors `uiAdvanced` in the detector. */
 const MOVEMENT = new Set<string>([
@@ -59,6 +57,10 @@ function moved(events: readonly { type: string }[]): boolean {
  * True only for the accusable shape: a SUCCESSFUL MUTATING request settled, and nothing has moved. A
  * read that changed nothing is a prefetch, a failed write is a different finding entirely, and an
  * action that already moved the UI has nothing to wait for — none of them buy a grace period.
+ *
+ * "Mutating" is read from the same constant the accuser uses rather than restated here. Restating it
+ * is how `IPC` came to be absent from this list and present in that one, so on a desktop app every
+ * successful write skipped the grace and a correct app was told it had ignored its own response.
  */
 export function awaitsReaction(
   events: readonly { type: string; data: Record<string, unknown> }[],
@@ -68,7 +70,7 @@ export function awaitsReaction(
     if (e.type !== EventType.NET_REQUEST) return false;
     const method = 'string' === typeof e.data['method'] ? e.data['method'].toUpperCase() : '';
     const ok = e.data['ok'];
-    return MUTATING.includes(method) && true === ok;
+    return MUTATING_METHODS.includes(method) && true === ok;
   });
 }
 

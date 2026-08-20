@@ -45,8 +45,39 @@ describe('act_and_wait and assert see the same evidence', () => {
   });
 
   it('act_and_wait still passes the action and its effect — prior is added, not swapped', () => {
-    expect(act).toMatch(/findContradictions\([\s\S]{0,260}action: acted/);
-    expect(act).toMatch(/findContradictions\([\s\S]{0,260}session\.lastAct\.effect\(\)/);
+    expect(act).toMatch(/findContradictions\([\s\S]{0,450}action: acted/);
+    expect(act).toMatch(/findContradictions\([\s\S]{0,450}session\.lastAct\.effect\(\)/);
+  });
+
+  /**
+   * The declaration the caller wrote before acting has to reach the detector on BOTH paths. A fix
+   * that lived only on `act_and_wait` would leave `reticle_assert` — the other half of the verdict
+   * surface — still reporting an expected failure as a contradiction.
+   */
+  it('both paths hand the caller-declared expectations to the contradiction engine', () => {
+    for (const file of [act, assert]) {
+      expect(file).toMatch(/declaredExpectations\(/);
+      expect(file).toMatch(/expectedFailures:/);
+      expect(file).toMatch(/renderProved:/);
+    }
+  });
+
+  /**
+   * The caller's declaration has to reach the RULE, not only the detector.
+   *
+   * A satisfied `until` decides the verdict and settlement only corroborates it — but the rule
+   * cannot tell a declared consequence from the implicit "wait for idle" unless the caller says so,
+   * and a fix that reached only one of these two tools would leave half the verdict surface still
+   * answering `unknown` to a consequence its caller named and Reticle watched hold.
+   */
+  it('both paths tell the rule whether the caller DECLARED the consequence', () => {
+    for (const file of [act, assert]) {
+      expect(file).toMatch(/declaredConsequence:[\s\S]{0,60}!== PredicateKind\.SETTLED/);
+    }
+  });
+
+  it('both paths name what kept the page busy when nothing was left in flight', () => {
+    for (const file of [act, assert]) expect(file).toMatch(/repeated: repeatedRequestLabels\(/);
   });
 
   it('prior is documented as learning material, so nobody later attributes findings to it', () => {

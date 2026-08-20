@@ -28,7 +28,8 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { PredicateSchema, evalRoute } from './predicate-eval.js';
+import { PredicateSchema } from './predicate-eval.js';
+import { evalRoute } from './predicate-route.js';
 import { EventType, type ReticleEvent } from '@reticlehq/core';
 
 describe('a predicate key that is not real is refused, never dropped', () => {
@@ -150,5 +151,39 @@ describe('a predicate key that is not real is refused, never dropped', () => {
     expect(() =>
       PredicateSchema.parse({ kind: 'element', query: { testid: 'x' }, since: 5 }),
     ).toThrow();
+  });
+});
+
+/**
+ * The union went strict; the query object nested inside it did not.
+ *
+ * Reported from the field: `{ kind: 'element', query: { css: "a[href='...']" } }` PARSED, `css` was
+ * stripped, `{}` survived, and the verdict read "no element matched {}" — a claim that the element is
+ * absent from a page where it was plainly present. That is the same silent weakening the union above
+ * fixed, except it lands as a false RED instead of a false green: an agent that trusts it goes off and
+ * "fixes" code that was already correct.
+ */
+describe('an unknown key inside `element.query` is refused too', () => {
+  it('names the key instead of degrading the query to {}', () => {
+    expect(() =>
+      PredicateSchema.parse({ kind: 'element', query: { css: "a[href='/pricing']" } }),
+    ).toThrow(/css/);
+  });
+
+  it('and inside the nested `source` anchor', () => {
+    expect(() =>
+      PredicateSchema.parse({
+        kind: 'element',
+        query: { source: { file: 'App.tsx', line: 4, col: 2 } },
+      }),
+    ).toThrow(/col/);
+  });
+
+  it('lifting flat query fields still parses once the query is strict', () => {
+    // `liftElementQuery` moves the flat spellings into `query`; every field it moves must be one the
+    // strict schema accepts, or the convenience becomes a rejection.
+    expect(
+      PredicateSchema.parse({ kind: 'element', role: 'button', name: 'Deploy' }),
+    ).toMatchObject({ kind: 'element', query: { role: 'button', name: 'Deploy' } });
   });
 });

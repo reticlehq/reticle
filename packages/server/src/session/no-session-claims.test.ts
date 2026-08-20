@@ -52,8 +52,12 @@ describe('claims are bounded by what was checked', () => {
 
   it('still tells the reader what to do about it', () => {
     expect(message).toMatch(/check the app's OWN directory/i);
-    // and the thing to start, when the scan really is right
-    expect(message).toMatch(/npm run dev/);
+    // …and, when the scan really is right, who starts the dev server and where the command comes
+    // from. Deliberately NOT `npm run dev`: a hardcoded command is a guess about the package manager
+    // and the script name both, and the literal one now rides on `next_action` instead.
+    expect(message).toMatch(/start it/i);
+    expect(message).toMatch(/next_action/);
+    expect(message).not.toMatch(/npm run dev/);
   });
 
   it('does not present an empty port scan as proof the app is down', () => {

@@ -157,6 +157,30 @@ describe('compact projections (token leanness)', () => {
     expect(projectNetCall(e)).toEqual({ method: 'POST', url: '/api/x', status: 500, ms: 42 });
   });
 
+  it('projectNetCall includes bodies by default and drops them when includeBodies is false (#401)', () => {
+    const e = ev(EventType.NET_REQUEST, {
+      method: 'POST',
+      url: '/api/todos',
+      status: 201,
+      durationMs: 12,
+      requestBody: '{"title":"buy milk"}',
+      responseBody: '{"id":7}',
+      responseBodyTruncated: true,
+    });
+    // Default: bodies are present (unchanged behaviour).
+    const full = projectNetCall(e);
+    expect(full.requestBody).toBe('{"title":"buy milk"}');
+    expect(full.responseBody).toBe('{"id":7}');
+    expect(full.bodyTruncated).toBe(true);
+    // Body-free listing: method/url/status/timing survive, the bodies are gone.
+    expect(projectNetCall(e, false)).toEqual({
+      method: 'POST',
+      url: '/api/todos',
+      status: 201,
+      ms: 12,
+    });
+  });
+
   it('projectNetCall passes through a pending (no-status) request', () => {
     const e = ev(EventType.NET_PENDING, {
       method: 'GET',

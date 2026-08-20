@@ -18,7 +18,7 @@ import { installFocus } from './focus.js';
 import { installBlindSpots } from './blind-spots.js';
 import { installDownload } from './download.js';
 import { installNetwork } from './network.js';
-import { installIpc, ipcNetOverrides } from './ipc.js';
+import { installIpc, ipcNetOverrides, isReticleOwnIpc } from './ipc.js';
 import { installPerf } from './perf.js';
 import { installRoute } from './route.js';
 import { installConsole } from './console.js';
@@ -50,6 +50,9 @@ export function installAllObservers(emit: Emit, options: InstallOptions): Teardo
       installNetwork(emit, {
         captureBodies: options.captureBodies,
         reinterpret: ipcNetOverrides,
+        // The SDK's own Tauri screenshot is a fetch like any other — skip it, or the observer
+        // reports its own captures as the app's writes.
+        ignore: isReticleOwnIpc,
       }),
     ),
     // Desktop backends are reached over IPC, not HTTP — inert on a plain web page.

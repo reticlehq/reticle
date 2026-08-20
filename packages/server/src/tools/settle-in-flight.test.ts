@@ -23,7 +23,12 @@
 import { describe, expect, it } from 'vitest';
 import { ContradictionKind, EventType, type ReticleEvent } from '@reticlehq/core';
 import { findContradictions } from '../events/contradictions.js';
-import { inFlightRequestIds, inFlightRequestLabels, waitForInFlight } from './settle-in-flight.js';
+import {
+  inFlightRequestIds,
+  inFlightRequestLabels,
+  repeatedRequestLabels,
+  waitForInFlight,
+} from './settle-in-flight.js';
 
 type Ev = { type: string; t: number; data: Record<string, unknown> };
 
@@ -60,6 +65,34 @@ describe('which requests are still in flight', () => {
     expect(inFlightRequestLabels([pending('a'), pending('b'), settled('a')])).toEqual([
       'POST https://api.test/b',
     ]);
+  });
+
+  /**
+   * The other half of an honest `unsettled`. A retrying query against a dead backend leaves NOTHING
+   * in flight — every attempt completes — so the verdict said the page was kept busy by unnamed
+   * churn while one endpoint was being hammered in plain sight. On such an app `act_and_wait` can
+   * never return a pass, and nothing in the verdict pointed at why.
+   */
+  it('names an endpoint that fired more than once, which is what a retry loop looks like', () => {
+    const events = [settled('a', 1), settled('a', 2), settled('a', 3), settled('b', 4)];
+    expect(repeatedRequestLabels(events)).toEqual(['POST https://api.test/a ×3']);
+  });
+
+  it('says nothing about a window where each endpoint was called once', () => {
+    expect(repeatedRequestLabels([settled('a'), settled('b')])).toEqual([]);
+  });
+
+  it('is bounded, and reports the busiest first', () => {
+    const events = [
+      ...[1, 2, 3, 4].map((t) => settled('a', t)),
+      ...[5, 6].map((t) => settled('b', t)),
+      ...[7, 8, 9].map((t) => settled('c', t)),
+      ...[10, 11].map((t) => settled('d', t)),
+    ];
+    const labels = repeatedRequestLabels(events);
+    expect(labels).toHaveLength(3);
+    expect(labels[0]).toContain('/a ×4');
+    expect(labels[1]).toContain('/c ×3');
   });
 
   it('ignores a settle for a request it never saw start', () => {

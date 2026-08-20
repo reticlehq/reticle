@@ -1,6 +1,6 @@
 import { useApp, type ViewId } from '../store/store.js';
 import { isEnterpriseEnabled } from '../lib/enterprise-config.js';
-import { IconBug, IconGrid, IconRocket, IconSparkles } from './icons.js';
+import { IconBug, IconGrid, IconRocket, IconSparkles, IconSave } from './icons.js';
 
 interface NavDef {
   id: ViewId;
@@ -15,6 +15,8 @@ const NAV: NavDef[] = [
   { id: 'diagnostics', label: 'Diagnostics', icon: IconBug },
   // The hostile fixture: reachable by click so the overhead A/B works with the SDK disabled too.
   { id: 'hostile', label: 'Hostile', icon: IconBug },
+  // Response-ignored fixture: server-backed write whose render trails the response.
+  { id: 'saved-items', label: 'Saved Items', icon: IconSave },
 ];
 
 // The enterprise-scale fixture is opt-in: without its URL knob the nav item is not even rendered,

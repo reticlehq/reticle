@@ -16,11 +16,19 @@ import type { FlowStore } from '../flows/flows.js';
 import type { ProjectStore } from '../project/project-store.js';
 import type { AnnotationStore } from '../flows/annotation-store.js';
 import type { BrowserPool } from '../pool/browser-pool.js';
+import type { ChromiumProbe } from '../cli/chromium-hint.js';
 
 export interface ToolDeps {
   sessions: SessionManager;
   /** shared one-browser/N-context pool for headless leases. undefined ⇒ lease tools report unavailable. */
   pool?: BrowserPool;
+  /**
+   * Probe for a launchable Chromium, so the lease path can refuse at the FIRST call with the install
+   * fix rather than failing several calls in with a message that reads as "the app is not running".
+   * Optional: absent ⇒ no preflight — every existing test construction of ToolDeps keeps working, and
+   * the fake-pool lease tests are deliberately runnable without a real Chromium.
+   */
+  browserProbe?: () => Promise<ChromiumProbe>;
   baselines: BaselineStore;
   recordings: RecordingStore;
   /** on-disk anchored-flow store (.reticle/flows/). */

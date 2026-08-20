@@ -20,7 +20,7 @@ import { formatBuddyStatus } from '../flows/buddy-status.js';
 import { CapsuleStore } from '../capsule/capsule-store.js';
 import { AssertionTiersStore } from '../flows/assertion-tiers-store.js';
 import { detectDowngrades } from '../flows/assertion-integrity.js';
-import { computeCoverage } from '../flows/coverage.js';
+import { computeCoverage, flowCoverageReport } from '../flows/coverage.js';
 import { createWatchBatcher } from '../flows/watch-batcher.js';
 import { watch } from 'node:fs';
 import { log } from '../log.js';
@@ -204,19 +204,19 @@ export async function handleGate(files: string[], since: string | undefined): Pr
       { testids: [], signals: [], flows: allFlows.map((f) => f.name) },
       { testids: [], signals: [], flows: passing },
     );
+    // A gate over an empty suite has not passed — it had nothing to check. Same rule the suite
+    // verdict already applies to `reticle verify`; see flowCoverageReport.
+    const flowCoverage = flowCoverageReport(coverage.flows);
+    const pass = result.pass && flowCoverage.outcome === undefined;
     log('reticle_gate', {
-      pass: result.pass,
+      pass,
       uncovered: result.uncovered,
       quarantined: result.quarantined,
       ...(result.downgraded.length > 0 ? { downgraded: result.downgraded } : {}),
       ...(result.deleted.length > 0 ? { deletedCoverage: result.deleted } : {}),
-      coverage: {
-        pct: coverage.flows.pct,
-        covered: coverage.flows.covered,
-        total: coverage.flows.total,
-      },
+      coverage: flowCoverage,
     });
-    if (!result.pass) process.exitCode = 1;
+    if (!pass) process.exitCode = 1;
   } catch (error) {
     log('reticle_gate_failed', { error: error instanceof Error ? error.message : String(error) });
     process.exitCode = 1;

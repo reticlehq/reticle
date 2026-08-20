@@ -2,10 +2,10 @@ import {
   ActionType,
   ReticleCommand,
   PresenterMode,
-  type PresenterTone,
   SessionState,
   isPresenterTone,
   isSessionState,
+  type PresenterTone,
 } from '@reticlehq/core';
 import { refs } from '../dom/refs.js';
 import { actionVerb } from './presenter-verbs.js';
@@ -14,7 +14,6 @@ import {
   LOG_KIND,
   CHIP_LABEL,
   DATA_RETICLE_LOG,
-  HUMAN_ROW_PREFIX,
   clampLogMax,
   formatElapsed,
   humanDuration,
@@ -24,33 +23,37 @@ import {
   type LogHandle,
 } from './presenter-log.js';
 import { PRESENTER_CSS } from './presenter-styles.js';
-import { BRAND_HTML } from './presenter-brand.js';
+import { HudShell } from './presenter-shell.js';
+import { parseImpactSnapshot } from './presenter-report-copy.js';
 import {
   BorderMode,
   DEFAULT_BORDER_MODE,
   DATA_BUSY,
   BUSY_OFF,
   effectivePaceMs,
-  GlowPhase,
   IDLE_AFTER_MS,
   HEARTBEAT_MS,
   IDLE_NOTICE_MS,
   IDLE_END_MS,
   IDLE_END_MIN_MS,
+  ACT_STRIP,
   GLOW_FADE_MS,
   GLOW_ON,
   GLOW_OFF,
   DATA_ON,
-  MIN_ATTR,
   THROTTLED_ATTR,
+  LIVENESS_ATTR,
+  MARKERS_BTN_ATTR,
+  CLEAR_MARKS_ATTR,
+  MARK_COUNT_ATTR,
   type PresenterOptions,
 } from './presenter-config.js';
 import { buildRunState, type PresenterRunState } from './presenter-run-state.js';
 import { moveCursor, ringAround, spawnRipple, pace } from './presenter-effects.js';
 import { GlowController } from './presenter-glow.js';
-import { renderTally, type TallyCounts } from './presenter-tally.js';
+import { PresenterIcon, PRESENTER_ICON_SIZE, hiIcon } from './presenter-icons.js';
+import { renderTally } from './presenter-tally.js';
 import {
-  CONTROLS_HEAD_HTML,
   CONTROLS_BANNER_HTML,
   CONTROLS_FLOWS_HTML,
   CONTROLS_FOOT_HTML,
@@ -58,68 +61,72 @@ import {
   ControlPanel,
   type ControlHandler,
 } from './presenter-controls.js';
-
-export type { ControlHandler, ControlIntent } from './presenter-controls.js';
-
+import {
+  statusTheme,
+  blockerHtml,
+  getPresenterSettings,
+  OutputDetail,
+  syncPageBlocker,
+  type PresenterSettings,
+} from './presenter-settings.js';
+import { Annotator, type AnnotatorChrome } from '../review/annotator.js';
 // Re-export the config surface so the public import path (`./presenter.js`) is unchanged.
-export { GlowPhase, type PresenterOptions } from './presenter-config.js';
+export { GlowPhase } from './presenter-config.js';
+export type { PresenterOptions } from './presenter-config.js';
+export { LOG_KIND, LOG_RESULT } from './presenter-log.js';
+export type { LogHandle } from './presenter-log.js';
+export type { ControlIntent, ControlHandler } from './presenter-controls.js';
 
-export {
-  LOG_KIND,
-  LOG_RESULT,
-  type LogKind,
-  type LogResult,
-  type LogHandle,
-} from './presenter-log.js';
-
+type RunLogEntry = { at: number; kind: LogKind; text: string; result?: LogResult };
 // Presenter / transparency layer: a human watches the agent work. Glowing border while
 // active, a synthetic cursor that flies to targets, click/hover/type effects, and a HUD that
 // shows the current action + the agent's narrated intent. All nodes carry data-reticle-* attrs
 // so they're excluded from snapshots/observers (see dom-ignore.ts).
-
 export class Presenter {
-  readonly #paceMs: number;
+  #paceMs: number;
   #root: HTMLElement | undefined;
   #glow: HTMLElement | undefined;
   #cursor: HTMLElement | undefined;
   #ring: HTMLElement | undefined;
   #hud: HTMLElement | undefined;
   #actLine: HTMLElement | undefined;
+  #actStrip: HTMLElement | undefined;
+  /** Label inside the minimised-chat capsule; mirrors the act strip. */
+  #chatPillText: HTMLElement | undefined;
+  /** Age of the last action, shown in the capsule's own slot. */
+  #chatPillTime: HTMLElement | undefined;
   #chip: HTMLElement | undefined;
-  /** Live verdict tally (✓N ✗M) in the header — the running testing score the human watches. */
+  /** Live verdict tally (✓N ✗M) in the header - the running testing score the human watches. */
   #tally: HTMLElement | undefined;
-  #tallied: TallyCounts = { passes: 0, fails: 0 };
-  #liveLine: HTMLElement | undefined;
+  #tallied = { passes: 0, fails: 0 };
   #mode: PresenterMode = PresenterMode.IDLE;
-
-  readonly #now: () => number;
-  readonly #heartbeatMs: number;
-  readonly #idleNoticeMs: number;
-  readonly #borderMode: BorderMode;
+  #now: () => number;
+  #heartbeatMs: number;
+  #idleNoticeMs: number;
+  #borderMode: BorderMode;
   /** The glow / activity state machine (border shimmer + cursor visibility from activity timing). */
-  readonly #glowCtl: GlowController;
+  #glowCtl: GlowController;
   /** Liveness: the most recent action text + a 1s ticker that ages it into an "idle · {dur}" clock. */
   #lastActionText = '';
-  #heartbeatTimer: number | undefined;
+  #heartbeatTimer: ReturnType<typeof nativeSetTimeout> | undefined;
   /** Session lifecycle: idle-end window (tweakable), session id, start/end cursors, structured run log. */
   #idleEndMs: number;
-  readonly #sessionId: string;
+  #sessionId: string;
   #startMs: number | undefined;
   #endMs: number | undefined;
-  readonly #runLog: { at: number; kind: LogKind; text: string; result?: LogResult }[] = [];
+  #runLog: RunLogEntry[] = [];
   /** Tracks sessionStart/sessionEnd so both are idempotent (no strobe / no spurious off-write). */
   #sessionActive = false;
-
   // v2: narration + action status accumulate in a persistent, timestamped, scrollable log.
   #logMax: number;
   #log: HTMLElement | undefined;
   /** now of the first row, the baseline for the +elapsed timestamps. */
   #logBaseMs: number | undefined;
-
   // Live-control panel: the two-way control surface (Pause/Resume + End + message Send).
   #onControl: ControlHandler | undefined;
-  readonly #panel: ControlPanel;
-
+  #panel: ControlPanel;
+  #shell: HudShell;
+  #annotator: Annotator | undefined;
   constructor(options: PresenterOptions = {}) {
     this.#paceMs = effectivePaceMs(options.paceMs);
     this.#now = options.now ?? nativeNow;
@@ -140,81 +147,86 @@ export class Presenter {
     this.#panel = new ControlPanel({
       emit: (kind, text) => this.#onControl?.(text !== undefined ? { kind, text } : { kind }),
       logHuman: (text) => {
-        this.log(LOG_KIND.HUMAN, HUMAN_ROW_PREFIX + text);
+        this.log(LOG_KIND.HUMAN, text);
       },
       endedFadeMs: options.endedFadeMs ?? ENDED_FADE_MS,
       runState: () => this.runState(),
+      clearRunLog: () => this.#clearRunLog(),
+      onStateChange: () => this.#syncAnnotator(),
+    });
+    this.#shell = new HudShell({
+      onChatOpen: () => this.#shell.pulseFab(false),
+      onExpand: () => this.#syncAnnotator(),
+      onAnnotateToggle: () => this.#syncAnnotator(),
+      onCollapse: () => this.#syncAnnotator(),
+      settings: {
+        onBeforeOpen: () => {
+          if (this.#shell.isCollapsed()) this.#shell.expand();
+        },
+        onHideUntilRestart: () => this.#applyHideUntilRestart(),
+        onSettingsChange: (s) => this.#onSettingsChange(s),
+      },
     });
   }
-
   /** Setter so reticle.ts can wire the control callback after construction. */
   setControlHandler(handler: ControlHandler): void {
     this.#onControl = handler;
   }
-
   /** Current live-control session state mirrored onto the panel (data-reticle-state). */
-  get state(): SessionState {
+  get state() {
     return this.#panel.state;
   }
-
   /** Whether a run is currently being presented (false before the agent's first activity / after end). */
-  get sessionActive(): boolean {
+  get sessionActive() {
     return this.#sessionActive;
   }
-
   /** Drive the panel's live-control visual state (server-push / agent path; never emits). */
   setState(state: SessionState, text?: string, tone?: PresenterTone): void {
     this.#panel.setState(state, text, tone);
   }
-
   /** Apply a bridge→browser presenter push: PRESENTER (state echo) or FLOWS (replay list, the human's
    * no-agent replay surface). Owns the wire parsing so the SDK dispatcher stays a thin router;
    * setState-only so an echo can't re-emit. */
   /** Re-scope the replay-flow chips to the current page (called by the SDK on route change). */
-  refilterFlows(): void {
+  refilterFlows() {
     this.#panel.refilterFlows();
   }
-
   handlePush(command: { name: string; args: Record<string, unknown> }): void {
     const a = command.args;
     if (command.name === ReticleCommand.FLOWS) return void this.#panel.setFlows(a['flows']);
+    if (command.name === ReticleCommand.IMPACT) {
+      const snapshot = parseImpactSnapshot(a['snapshot']);
+      if (snapshot !== undefined) this.#shell.report.setSnapshot(snapshot);
+      return;
+    }
     const state = a['state'];
     const tone = a['tone'];
     const text = 'string' === typeof a['text'] && a['text'].length > 0 ? a['text'] : undefined;
     if (isSessionState(state)) this.setState(state, text, isPresenterTone(tone) ? tone : undefined);
   }
-
   /** Current cap on accumulated log rows. */
-  get logMax(): number {
+  get logMax() {
     return this.#logMax;
   }
-
-  set logMax(n: number) {
+  set logMax(n) {
     this.#logMax = clampLogMax(n);
     this.#pruneLog();
   }
-
-  mount(): void {
+  mount() {
     if (this.#root !== undefined || 'undefined' === typeof document) return;
     const style = document.createElement('style');
     style.setAttribute('data-reticle-overlay', '');
     style.textContent = PRESENTER_CSS;
     document.head.appendChild(style);
-
     const root = document.createElement('div');
     root.setAttribute('data-reticle-overlay', '');
+    const actStrip = `<div class="reticle-act-strip" data-liveness="idle"><span class="reticle-act-dot" aria-hidden="true"></span><span class="reticle-act">${ACT_STRIP.READY}</span></div>`;
     root.innerHTML = `
+      ${blockerHtml()}
       <div data-reticle-glow></div>
       <div data-reticle-cursor></div>
       <div data-reticle-ring></div>
-      <div data-reticle-hud>
-        <div class="reticle-hud-head">${BRAND_HTML}<span class="reticle-chip" data-reticle-chip></span><span class="reticle-tally" data-reticle-tally hidden></span><span class="reticle-live"></span><span class="reticle-head-sp"></span><button type="button" data-reticle-min-btn title="Minimise" aria-label="Minimise the panel">⌄</button>${CONTROLS_HEAD_HTML}<span class="reticle-maxhint" aria-hidden="true">⌃</span></div>
-        <div class="reticle-act-strip"><span class="reticle-act">idle</span></div>
-        ${CONTROLS_BANNER_HTML}
-        <div ${DATA_RETICLE_LOG}></div>
-        ${CONTROLS_FLOWS_HTML}
-        ${CONTROLS_FOOT_HTML}
-      </div>`;
+      ${HudShell.dockHtml(actStrip, CONTROLS_BANNER_HTML, DATA_RETICLE_LOG, CONTROLS_FLOWS_HTML, CONTROLS_FOOT_HTML)}`;
     document.body.appendChild(root);
     this.#root = root;
     this.#glow = root.querySelector<HTMLElement>('[data-reticle-glow]') ?? undefined;
@@ -222,29 +234,55 @@ export class Presenter {
     this.#ring = root.querySelector<HTMLElement>('[data-reticle-ring]') ?? undefined;
     this.#hud = root.querySelector<HTMLElement>('[data-reticle-hud]') ?? undefined;
     this.#actLine = root.querySelector<HTMLElement>('.reticle-act') ?? undefined;
+    this.#actStrip = root.querySelector<HTMLElement>('.reticle-act-strip') ?? undefined;
+    this.#chatPillText =
+      root.querySelector<HTMLElement>('[data-reticle-chat-pill-text]') ?? undefined;
+    this.#chatPillTime =
+      root.querySelector<HTMLElement>('[data-reticle-chat-pill-time]') ?? undefined;
     this.#log = root.querySelector<HTMLElement>(`[${DATA_RETICLE_LOG}]`) ?? undefined;
     this.#chip = root.querySelector<HTMLElement>('[data-reticle-chip]') ?? undefined;
     this.#tally = root.querySelector<HTMLElement>('[data-reticle-tally]') ?? undefined;
-    this.#liveLine = root.querySelector<HTMLElement>('.reticle-live') ?? undefined;
-    // Minimise → collapse the panel to a bar (only the live line streams). Click the bar to restore.
-    const setMin = (on: boolean): void => root.setAttribute(MIN_ATTR, on ? '1' : '0');
-    root.querySelector<HTMLElement>('[data-reticle-min-btn]')?.addEventListener('click', (e) => {
-      e.stopPropagation(); // don't let the head's maximise handler immediately re-open it
-      setMin(true);
-    });
-    root.querySelector<HTMLElement>('.reticle-hud-head')?.addEventListener('click', () => {
-      if ('1' === root.getAttribute(MIN_ATTR)) setMin(false); // clicking the minimised bar restores
-    });
+    this.#shell.mount(root);
+    syncPageBlocker(root, getPresenterSettings(), false);
     this.#glowCtl.setElements(this.#glow, this.#cursor);
     // The panel queries its refs, binds listeners, and paints the initial active state.
     this.#panel.mount(root, this.#glow);
     this.setMode(this.#mode);
+    this.#renderTally();
   }
-
-  destroy(): void {
+  /** Wire annotation chrome; expanding the HUD enters annotate mode. */
+  bindAnnotator(annotator: Annotator): void {
+    this.#annotator = annotator;
+    const root = this.#root;
+    if (root === undefined) return;
+    const markers = root.querySelector(`[${MARKERS_BTN_ATTR}]`);
+    const clear = root.querySelector(`[${CLEAR_MARKS_ATTR}]`);
+    const count = root.querySelector(`[${MARK_COUNT_ATTR}]`);
+    const chrome: AnnotatorChrome = {};
+    if (markers instanceof HTMLElement) chrome.markersBtn = markers;
+    if (clear instanceof HTMLElement) chrome.clearBtn = clear;
+    if (count instanceof HTMLElement) chrome.countEl = count;
+    annotator.attachChrome(chrome);
+    annotator.setAccent(statusTheme(getPresenterSettings().statusThemeId).active);
+    this.#syncAnnotator();
+  }
+  /** Annotate whenever the HUD is open and the person asked for it - agent or no agent. */
+  #syncAnnotator(): void {
+    // Two things have to agree, and both are the user's: the HUD is open, and annotate is switched
+    // on. Session state used to be a third, so the mode was refused the moment the agent
+    // disconnected - which is precisely when someone opens the HUD to record what they just saw.
+    // The button still lit up, so the refusal was invisible: no outline, no composer, no reason.
+    const live = !this.#shell.isCollapsed() && this.#shell.isAnnotateOn();
+    this.#annotator?.toggle(live);
+    if (this.#root !== undefined) {
+      syncPageBlocker(this.#root, getPresenterSettings(), live);
+    }
+  }
+  destroy() {
     this.#glowCtl.teardown();
     if (this.#heartbeatTimer !== undefined) nativeClearTimeout(this.#heartbeatTimer);
     this.#heartbeatTimer = undefined;
+    this.#shell.teardown();
     this.#panel.teardown();
     this.#sessionActive = false;
     this.#logBaseMs = undefined;
@@ -253,12 +291,11 @@ export class Presenter {
     document.querySelectorAll('style[data-reticle-overlay]').forEach((s) => s.remove());
     this.#root = undefined;
   }
-
   /**
    * Session start: in 'session' border mode this fades the base border IN and keeps it on until
    * sessionEnd. Idempotent, and a no-op when unmounted or in 'busy' border mode.
    */
-  sessionStart(): void {
+  sessionStart() {
     // Returning agent activity after the session ended (idle or explicit) revives it as a fresh run.
     if (this.state === SessionState.ENDED) {
       this.#revive();
@@ -271,67 +308,66 @@ export class Presenter {
     this.#showSession();
     this.#glowCtl.resetActivity(this.#now());
     this.#startHeartbeat();
+    if (getPresenterSettings().autoOpenChat) {
+      this.#shell.openChat();
+    }
   }
-
-  /** Turn the base border (session mode) + the HUD/log on — the visible "session is live" state. */
-  #showSession(): void {
-    // The activity log/HUD persists the WHOLE session, like the border — it never fades on idle.
+  /** Turn the base border (session mode) + the HUD/log on - the visible "session is live" state. */
+  #showSession() {
+    const dock = this.#root?.querySelector('[data-reticle-dock]');
+    dock?.setAttribute(DATA_ON, GLOW_ON);
     this.#hud?.setAttribute(DATA_ON, GLOW_ON);
     // Base border persists in 'session' mode; 'busy' mode leaves it to the busy machine.
     if (this.#borderMode === BorderMode.SESSION) this.#glow?.setAttribute(DATA_ON, GLOW_ON);
   }
-
   /** Revive after an ended session (new agent activity): clear the ended state + glow back on. */
-  #revive(): void {
+  #revive() {
     this.#panel.setState(SessionState.ACTIVE);
     this.#endMs = undefined;
     this.#showSession();
     this.#glowCtl.resetActivity(this.#now());
     this.#startHeartbeat();
   }
-
   /**
    * Session end: hides the log/HUD and (in 'session' mode) clears the base border. Idempotent; a
    * no-op without a prior sessionStart or when unmounted.
    */
-  sessionEnd(): void {
+  sessionEnd() {
     if (!this.#sessionActive) return;
     this.#sessionActive = false;
     if (this.#heartbeatTimer !== undefined) {
       nativeClearTimeout(this.#heartbeatTimer);
       this.#heartbeatTimer = undefined;
     }
+    const dock = this.#root?.querySelector('[data-reticle-dock]');
+    dock?.setAttribute(DATA_ON, GLOW_OFF);
     this.#hud?.setAttribute(DATA_ON, GLOW_OFF);
+    this.#shell.collapse();
     if (this.#borderMode === BorderMode.SESSION) {
       this.#glow?.setAttribute(DATA_ON, GLOW_OFF);
       this.#glow?.setAttribute(DATA_BUSY, BUSY_OFF);
     }
   }
-
   /**
-   * Record agent activity. Idempotent while busy — only the first activity from idle/fading flips
+   * Record agent activity. Idempotent while busy - only the first activity from idle/fading flips
    * the glow on, so a burst never restarts the reticle-pulse animation (no strobe). Subsequent calls
    * just refresh the last-activity timestamp and re-arm the idle check.
    */
-  markActivity(): void {
+  markActivity() {
     this.#glowCtl.markActivity();
   }
-
   /** Re-arm the quiet-window idle check (kept for reticle.ts's finally block). */
-  scheduleIdle(): void {
+  scheduleIdle() {
     this.#glowCtl.scheduleIdle();
   }
-
   /** Test/diagnostic accessor for the current glow phase. */
-  glowPhase(): GlowPhase {
+  glowPhase() {
     return this.#glowCtl.phase();
   }
-
   /** Current intent (reading vs acting), exposed for tests + the watcher. */
-  get mode(): PresenterMode {
+  get mode() {
     return this.#mode;
   }
-
   /**
    * Set the presenter intent. READING shows a cyan scan + chip and hides the cursor; ACTING
    * keeps the warm cursor/ripple + chip; IDLE clears the chip. Drives color via data-reticle-mode.
@@ -340,47 +376,82 @@ export class Presenter {
     this.#mode = mode;
     this.#root?.setAttribute('data-reticle-mode', mode);
     if (this.#chip !== undefined) {
-      this.#chip.textContent = CHIP_LABEL[mode];
+      const label = CHIP_LABEL[mode];
       this.#chip.setAttribute('data-mode', mode);
+      this.#chip.replaceChildren();
+      if (label.length > 0) {
+        const icon =
+          mode === PresenterMode.READING
+            ? PresenterIcon.VIEW
+            : mode === PresenterMode.ACTING
+              ? PresenterIcon.POINTER
+              : undefined;
+        if (icon !== undefined) this.#chip.appendChild(hiIcon(icon, PRESENTER_ICON_SIZE.CHIP));
+        const labelEl = document.createElement('span');
+        labelEl.className = 'reticle-chip-label';
+        labelEl.textContent = label;
+        this.#chip.appendChild(labelEl);
+      }
     }
-    // READING has no real pointer to show (synthetic-hover pointer is native-only) — hide the cursor.
+    // READING has no real pointer to show (synthetic-hover pointer is native-only) - hide the cursor.
     if (mode === PresenterMode.READING) this.#cursor?.setAttribute(DATA_ON, GLOW_OFF);
   }
-
   status(text: string): void {
     this.markActivity();
+    if (this.#chatPillTime !== undefined) this.#chatPillTime.textContent = ACT_STRIP.NOW;
     this.#lastActionText = text;
-    if (this.#actLine !== undefined) this.#actLine.textContent = text;
+    this.#paintActStrip(text, false);
   }
-
   /**
-   * Liveness heartbeat (native 1s timer — never rAF, so it ticks in a foreground tab regardless of
+   * Sync act-strip text + the live/idle state.
+   *
+   * The liveness is mirrored onto the overlay root as well as the strip, because that is what the
+   * status COLOUR resolves against: the page glow, the collapsed FAB's halo and the minimised
+   * capsule all live outside the strip and still have to say whether the agent is working.
+   */
+  #paintActStrip(text: string, idle: boolean): void {
+    if (this.#actLine !== undefined) this.#actLine.textContent = text;
+    const liveness = idle ? 'idle' : 'active';
+    if (this.#actStrip !== undefined) this.#actStrip.setAttribute('data-liveness', liveness);
+    this.#root?.setAttribute(LIVENESS_ATTR, liveness);
+    if (this.#chatPillText !== undefined) {
+      // The capsule reads "logo | what the agent did | how long ago | expand", so it takes the
+      // ACTION, never the composed "idle · 12s since last action" line the strip shows: the age
+      // lives in its own slot next to it.
+      this.#chatPillText.textContent = idle
+        ? this.#lastActionText !== ''
+          ? this.#lastActionText
+          : ACT_STRIP.READY
+        : text;
+    }
+  }
+  /**
+   * Liveness heartbeat (native 1s timer - never rAF, so it ticks in a foreground tab regardless of
    * agent activity). Once the agent has been quiet for IDLE_NOTICE_MS, the act strip shows a LIVE,
-   * growing "◌ idle · {duration} since last action" — the signal that was missing when a stopped
+   * growing "◌ idle · {duration} since last action" - the signal that was missing when a stopped
    * agent left the panel frozen and indistinguishable from one still thinking.
    */
-  #startHeartbeat(): void {
+  #startHeartbeat() {
     if (this.#heartbeatTimer !== undefined) nativeClearTimeout(this.#heartbeatTimer);
-    const tick = (): void => {
+    const tick = () => {
       this.#tickLiveness();
       this.#heartbeatTimer = nativeSetTimeout(tick, this.#heartbeatMs);
     };
     this.#heartbeatTimer = nativeSetTimeout(tick, this.#heartbeatMs);
   }
-
-  #tickLiveness(): void {
+  #tickLiveness() {
     if (!this.#sessionActive || this.#actLine === undefined) return;
-    if (this.state === SessionState.ENDED) return; // already ended — leave the summary
+    if (this.state === SessionState.ENDED) return; // already ended - leave the summary
     const idleMs = this.#now() - this.#glowCtl.lastActivityMs();
     if (idleMs >= this.#idleEndMs) {
       this.#endIdle(idleMs); // crossed the idle-end window → auto-end (glow off, panel kept)
       return;
     }
-    if (idleMs < this.#idleNoticeMs) return; // still active (or a brief think) — keep the action text
-    const since = this.#lastActionText !== '' ? ` since last action` : '';
-    this.#actLine.textContent = `◌ idle · ${humanDuration(idleMs)}${since}`;
+    if (idleMs < this.#idleNoticeMs) return; // still active (or a brief think) - keep the action text
+    const since = this.#lastActionText !== '' ? ACT_STRIP.SINCE_LAST : '';
+    this.#paintActStrip(`${ACT_STRIP.IDLE_PREFIX}${humanDuration(idleMs)}${since}`, true);
+    if (this.#chatPillTime !== undefined) this.#chatPillTime.textContent = humanDuration(idleMs);
   }
-
   /** Auto-end after the idle window: stamp the end, drive the panel to ENDED, stop the heartbeat. */
   #endIdle(idleMs: number): void {
     this.#endMs = this.#now();
@@ -390,20 +461,18 @@ export class Presenter {
       this.#heartbeatTimer = undefined;
     }
   }
-
   /** Agent-tunable idle-end window (reticle_session). Floored so it can't be set uselessly small. */
   setIdleEndMs(ms: number): void {
     if (!Number.isFinite(ms)) return;
     this.#idleEndMs = Math.max(IDLE_END_MIN_MS, Math.floor(ms));
   }
-
   /**
-   * The exported "run state" for the Copy/Export buttons — everything the page holds about this
+   * The exported "run state" for the Copy/Export buttons - everything the page holds about this
    * run: session id, url, duration, capability surface, per-kind counts, and the full activity log.
    * (The full network/console ring-buffer lives server-side; this is the in-page run summary.)
    */
-  runState(): PresenterRunState {
-    return buildRunState({
+  runState(): PresenterRunState | Record<string, unknown> {
+    const base = buildRunState({
       sessionId: this.#sessionId,
       state: this.state,
       startMs: this.#startMs,
@@ -411,8 +480,44 @@ export class Presenter {
       now: this.#now(),
       runLog: this.#runLog,
     });
+    const settings = getPresenterSettings();
+    if (settings.outputDetail === OutputDetail.MINIMAL) {
+      return {
+        session: base.session,
+        url: base.url,
+        state: base.state,
+        startedMs: base.startedMs,
+        durationMs: base.durationMs,
+        counts: base.counts,
+      };
+    }
+    if (settings.outputDetail === OutputDetail.VERBOSE && settings.reactComponents) {
+      return { ...base, includeReactComponents: true };
+    }
+    return base;
   }
-
+  #clearRunLog(): void {
+    this.#runLog = [];
+    this.#tallied = { passes: 0, fails: 0 };
+    if (this.#log !== undefined) this.#log.replaceChildren();
+    this.#renderTally();
+  }
+  #applyHideUntilRestart(): void {
+    this.#root?.setAttribute('data-reticle-hidden', '1');
+    this.#shell.collapse();
+  }
+  #onSettingsChange(settings: PresenterSettings): void {
+    this.#annotator?.setAccent(statusTheme(settings.statusThemeId).active);
+    if (!settings.showTally) {
+      this.#tally?.setAttribute('hidden', '');
+    } else {
+      this.#renderTally();
+    }
+    if (this.#root !== undefined) {
+      const live = SessionState.ACTIVE === this.#panel.state && !this.#shell.isCollapsed();
+      syncPageBlocker(this.#root, settings, live);
+    }
+  }
   /**
    * Append an activity-log row. Accumulates (never overwrites): each call adds a timestamped row
    * with a mode chip + text. Returns a handle to stamp the row's outcome glyph (✓/✗) later, or
@@ -424,63 +529,59 @@ export class Presenter {
     if (this.#log === undefined) return undefined;
     const trimmed = text.trim();
     if (0 === trimmed.length) return undefined;
-
     this.#logBaseMs ??= ms;
     // Structured run-log entry (mirrors the DOM row) for the exported run state, capped like the DOM.
-    const entry: { at: number; kind: LogKind; text: string; result?: LogResult } =
+    const entry =
       result !== undefined
         ? { at: ms - this.#logBaseMs, kind, text: trimmed, result }
         : { at: ms - this.#logBaseMs, kind, text: trimmed };
     this.#runLog.push(entry);
     while (this.#runLog.length > this.#logMax) this.#runLog.shift();
-
     const ts = formatElapsed(ms - this.#logBaseMs);
     const handle = appendLogRow(this.#log, kind, trimmed, ts, this.#logMax);
     if (result !== undefined) handle.result(result);
-    // Feed the minimised-bar live line so the latest activity always shows when collapsed.
-    if (this.#liveLine !== undefined) this.#liveLine.textContent = trimmed;
-    this.#renderTally(); // a row that landed with a verdict updates the header score immediately
+    if (this.#shell.isCollapsed()) this.#shell.pulseFab(true);
+    this.#renderTally();
     // Wrap the handle so a later outcome stamp updates BOTH the DOM glyph and the run-log entry.
     return {
-      result: (r: LogResult): void => {
+      result: (r: LogResult) => {
         handle.result(r);
         entry.result = r;
         this.#renderTally(); // a deferred ✓/✗ stamp bumps the header tally
       },
     };
   }
-
   /** Repaint the header verdict tally from the run log; the side that grew gets a one-shot pop. */
   #renderTally(): void {
+    if (!getPresenterSettings().showTally) {
+      this.#tally?.setAttribute('hidden', '');
+      return;
+    }
     this.#tallied = renderTally(this.#tally, this.#runLog, this.#tallied);
   }
-
   /** Back-compat: narration appends to the live log (append-only, never overwrites). */
   narrate(text: string, level = 'info'): LogHandle | undefined {
     const line = 'info' === level ? text : `[${level}] ${text}`;
     return this.log(LOG_KIND.NARRATION, line);
   }
-
   #pruneLog(): void {
     if (this.#log === undefined) return;
     while (this.#log.childElementCount > this.#logMax) {
       this.#log.firstElementChild?.remove();
     }
   }
-
   /**
    * Mirror the server's session.throttled state onto the HUD border. When throttled (tab
-   * backgrounded or stale), the border turns amber so the developer knows actions are no-oping —
+   * backgrounded or stale), the border turns amber so the developer knows actions are no-oping -
    * the same signal the agent already reads from result.session.throttled.
    */
   setThrottled(throttled: boolean): void {
     this.#root?.setAttribute(THROTTLED_ATTR, throttled ? '1' : '0');
     if (throttled && this.#actLine !== undefined) {
       this.#actLine.textContent =
-        'Tab backgrounded — actions throttled. Bring tab to front or use `reticle drive`.';
+        'Tab backgrounded - actions throttled. Bring tab to front or use `reticle drive`.';
     }
   }
-
   /** Fly the cursor to an element, play the action's effect, then pace for the human. */
   async beforeAct(refId: string, action: string, label: string): Promise<void> {
     const el = refs.resolve(refId);

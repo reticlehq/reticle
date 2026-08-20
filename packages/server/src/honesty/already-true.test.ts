@@ -53,10 +53,29 @@ describe('which predicates need the before-check at all', () => {
   });
 
   it('event-based kinds do not — they are already floored at the act cursor', () => {
-    expect(readsDomState({ kind: 'route', pathname: '/a' })).toBe(false);
     expect(readsDomState({ kind: 'signal', name: 's' })).toBe(false);
     expect(readsDomState({ kind: 'net', urlContains: '/api' })).toBe(false);
     expect(readsDomState({ kind: 'settled' })).toBe(false);
+  });
+
+  /**
+   * `route` USED to be purely event-based, and was listed with the floored kinds above for that
+   * reason. It is not any more: when the window holds no route change it falls back to where the app
+   * currently is, so it can now be satisfied by a state that predates the action.
+   *
+   * Without the before-check that makes it a guaranteed green. The app is already on `/login`, the
+   * agent clicks a button whose handler is broken, nothing navigates, and
+   * `until: { kind: 'route', pathname: '/login' }` passes — an assertion that the action navigated,
+   * answered by the fact that it did not need to. A bare `{ kind: 'route' }` becomes unconditionally
+   * true, since the app always has a current route.
+   *
+   * Declaring it here is what turns that into `already_true`, which the verdict layer reports as
+   * UNKNOWN with the reason. Trading a false red for a false green is the one trade this codebase
+   * does not make, and the fallback is worth keeping only with this in place.
+   */
+  it('route does, now that it can be answered from the current route', () => {
+    expect(readsDomState({ kind: 'route', pathname: '/a' })).toBe(true);
+    expect(readsDomState({ kind: 'route' })).toBe(true);
   });
 
   it('state reads a store, which the action is supposed to change — and it IS floored', () => {

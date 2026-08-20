@@ -102,10 +102,10 @@ describe('focus is a property of a line, not a line arriving or leaving', () => 
   });
 
   it('keeps a REAL state change visible — only focus is exempt', () => {
-    // `disabled` moving is a genuine structural change and must still show up.
+    // `disabled` moving is a genuine structural change and must still show up — as a value change.
     const result = deltaOf('- button "Save" (ref=e1)', '- button "Save" (ref=e1) [disabled]');
     expect(result['mode']).toBe(SnapshotDeltaMode.DELTA);
-    expect(delta(result)['added']).toEqual(['- button "Save" (ref=e1) [disabled]']);
+    expect(result['changed']).toEqual(['- button "Save" (ref=e1) [disabled]']);
   });
 
   it('reports focus alongside a structural change rather than instead of it', () => {
@@ -130,7 +130,7 @@ describe('focus is a property of a line, not a line arriving or leaving', () => 
     );
     expect(result['focusChanged']).toBeUndefined();
     // The value change is still a real delta and must not be swallowed with it.
-    expect(delta(result)['added']).toEqual(['- textbox "Email" (ref=e3) [value="after@x.dev"]']);
+    expect(result['changed']).toEqual(['- textbox "Email" (ref=e3) [value="after@x.dev"]']);
   });
 
   it('says nothing about focus when focus did not move', () => {
@@ -146,14 +146,20 @@ describe('what the delta path must not break', () => {
   it('still returns a full tree on the first look', () => {
     const cache = new SnapshotCache();
     const raw = { tree: '- button "Save" (ref=e1)', status: { route: '/' } };
-    expect(applySnapshotDelta(raw, OPTS, cache)).toBe(raw);
+    const out = applySnapshotDelta(raw, OPTS, cache) as Record<string, unknown>;
+    expect(out['tree']).toBe(raw.tree);
+    expect(out['mode']).toBe(SnapshotDeltaMode.FULL);
+    expect(out['reason']).toBe('first snapshot for this route');
   });
 
   it('still returns full after a route change rather than a cross-page delta', () => {
     const cache = new SnapshotCache();
     applySnapshotDelta({ tree: '- button "A" (ref=e1)', status: { route: '/' } }, OPTS, cache);
     const next = { tree: '- button "B" (ref=e2)', status: { route: '/other' } };
-    expect(applySnapshotDelta(next, OPTS, cache)).toBe(next);
+    const out = applySnapshotDelta(next, OPTS, cache) as Record<string, unknown>;
+    expect(out['tree']).toBe(next.tree);
+    expect(out['mode']).toBe(SnapshotDeltaMode.FULL);
+    expect(out['reason']).toBe('route changed');
   });
 
   it('keeps the counts honest against the entries it returns', () => {

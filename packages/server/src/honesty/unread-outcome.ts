@@ -1,4 +1,11 @@
-import { EventType, MUTATING_METHODS, NetInitiator, type ReticleEvent } from '@reticlehq/core';
+import {
+  EventType,
+  MUTATING_METHODS,
+  NetInitiator,
+  isDevToolingUrl,
+  type ReticleEvent,
+} from '@reticlehq/core';
+import { asString } from '../tools/tools-helpers.js';
 
 const IPC_METHOD = NetInitiator.IPC.toUpperCase();
 
@@ -31,21 +38,45 @@ const IPC_METHOD = NetInitiator.IPC.toUpperCase();
  *    The residual gap is real and narrower: a handler that RESOLVES with a failure inside its payload
  *    is invisible without body capture. That case is `findBodyFailures`, which reads the payload and
  *    catches it precisely — with capture on, where it belongs.
+ *
+ *  - **the app's own traffic only.** The DEV TOOLCHAIN writes too: Next's overlay answers
+ *    `POST /__nextjs_original-stack-frames` with a JSON body the moment the app logs one React
+ *    warning, and nothing captures it. Judged as the app's write, that made every verdict in a Next
+ *    dev app `unknown` — decided by a channel the caller never asked about, on a request the app did
+ *    not make. `findContradictions` has split this traffic out for the same reason since the overlay
+ *    turned correct navigations red; this rule was reading the unsplit window.
  */
 const OK_MIN = 200;
 const OK_MAX = 300;
 
-export function hasUnreadWriteOutcome(events: readonly ReticleEvent[]): boolean {
-  return events.some((event) => {
-    if (event.type !== EventType.NET_REQUEST) return false;
+/**
+ * The writes whose outcome went unread, as "METHOD url".
+ *
+ * Named rather than counted, because a caveat an agent cannot locate is a caveat it learns to skip.
+ * The sentence used to say "a write returned 2xx with a response body that was never recorded" and
+ * name no write, which is unactionable on any page that makes more than one call.
+ */
+export function unreadWriteLabels(events: readonly ReticleEvent[]): string[] {
+  const labels: string[] = [];
+  for (const event of events) {
+    if (event.type !== EventType.NET_REQUEST) continue;
     const method = (
       'string' === typeof event.data['method'] ? event.data['method'] : ''
     ).toUpperCase();
-    if (method === IPC_METHOD || !MUTATING_METHODS.includes(method)) return false;
+    if (method === IPC_METHOD || !MUTATING_METHODS.includes(method)) continue;
+    const url = asString(event.data['url']);
+    if (isDevToolingUrl(url)) continue;
     const status = event.data['status'];
-    if (typeof status !== 'number' || status < OK_MIN || status >= OK_MAX) return false;
-    if (event.data['responseBody'] !== undefined) return false; // read — findBodyFailures judged it
+    if (typeof status !== 'number' || status < OK_MIN || status >= OK_MAX) continue;
+    if (event.data['responseBody'] !== undefined) continue; // read — findBodyFailures judged it
     const size = event.data['responseSize'];
-    return 'number' === typeof size && size > 0;
-  });
+    if ('number' !== typeof size || size <= 0) continue;
+    const label = `${method} ${url ?? ''}`.trim();
+    if (!labels.includes(label)) labels.push(label);
+  }
+  return labels;
+}
+
+export function hasUnreadWriteOutcome(events: readonly ReticleEvent[]): boolean {
+  return unreadWriteLabels(events).length > 0;
 }

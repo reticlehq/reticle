@@ -22,7 +22,7 @@ npx @reticlehq/server drive <url> [--headless] [--headed]
 
 ## What it prints
 
-`reticle_started` with the port on success, `reticle_start_failed` with the error otherwise.
+`reticle_started` with the port on success, `reticle_start_failed` with the error otherwise. When a daemon already owns the port it prints `reticle_drive_attached` with the session it opened instead. See [When a daemon already has the port](#when-a-daemon-already-has-the-port).
 
 Omitting the URL is a usage error. Real capture, with the usage block that follows it trimmed:
 
@@ -42,21 +42,33 @@ usage:  npx @reticlehq/server <command>   (or `reticle <command>` once the bin i
 
 ## Exit codes
 
-| Code | Meaning                                                |
-| ---- | ------------------------------------------------------ |
-| `0`  | Running in the foreground                              |
-| `1`  | No URL, an unknown flag, or the engine failed to start |
+| Code | Meaning                                                               |
+| ---- | --------------------------------------------------------------------- |
+| `0`  | Running in the foreground, or attached with a connected session       |
+| `1`  | No URL, an unknown flag, the engine failed to start, or attach failed |
 
-<Warning>
-  `drive` binds the bridge port itself. If a daemon is already listening, it fails with a raw
-  `Error: listen EADDRINUSE: address already in use 127.0.0.1:4400` stack trace, which is the normal
-  state once your agent has started one. [`reticle mcp`](/cli/mcp) reuses a running daemon; `drive`
-  does not. [`reticle verify`](/cli/verify) behaves the same way.
-</Warning>
+## When a daemon already has the port
+
+A daemon on `:4400` is the normal state the moment any agent connects, and `drive` does not fight it for the port: it **asks that daemon** for a browser instead. The daemon opens a fresh isolated, never-throttled context, the same one `reticle_lease` hands an agent, and `drive` prints the session id and exits.
+
+```bash
+$ npx @reticlehq/server drive http://localhost:5173
+{"event":"reticle_drive_attached","port":4400,"url":"http://localhost:5173","sessionId":"lease-9f2b…","ready":true}
+```
+
+A plain-text line follows it naming the same session, how long it survives untouched (any tool call against it resets that), and, if the page never dialled the bridge, why.
+
+That session lives in the daemon, so the tools your agent already has open can address it by id. You do **not** need `reticle stop` first, and should not use it: the MCP proxy respawns a daemon as soon as the next tool call arrives, which is a race a manual `stop` loses.
+
+Attaching means the browser is the daemon's pooled, headless one, so `--headed` cannot apply. To watch a browser instead, drive on a port no daemon owns (`RETICLE_PORT=4460`).
+
+<Note>
+  If the port is held by something that is **not** a Reticle daemon, `drive` refuses and names the
+  holder. It can neither bind nor attach. [`reticle verify`](/cli/verify) still binds its own port.
+</Note>
 
 ## Worked example
 
 ```bash
-npx @reticlehq/server stop
 npx @reticlehq/server drive http://localhost:5173
 ```

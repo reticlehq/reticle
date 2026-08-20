@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { EventType } from '@reticlehq/core';
+import { BlindSpotKind, EventType } from '@reticlehq/core';
 import { diffState, installStoreState } from './state.js';
 import { registerStore, unregisterStore } from '../registry/stores.js';
 
@@ -114,5 +114,54 @@ describe('installStoreState', () => {
     const change = events.find((e) => e.type === EventType.STATE_CHANGE);
     expect(change?.data['value']).toBe('[REDACTED]');
     expect(JSON.stringify(change?.data)).not.toContain('secret');
+  });
+});
+
+/**
+ * "The store did not change" and "nothing was watching the store" are the same empty `stateDiffs`
+ * unless the SDK says which one it is — and the second is the common case, because the generated
+ * capabilities file registers nothing until someone edits it. So the absence is DECLARED.
+ */
+describe('installStoreState declares an unwatched state channel', () => {
+  afterEach(() => {
+    unregisterStore('cart');
+  });
+
+  const spots = (events: Captured[]): Captured[] =>
+    events.filter(
+      (e) => e.type === EventType.BLIND_SPOT && e.data['kind'] === BlindSpotKind.UNWATCHED_STATE,
+    );
+
+  it('reports the blind spot when no subscribable store is registered, and clears it when one is', () => {
+    const events: Captured[] = [];
+    const teardown = installStoreState((type, data) => events.push({ type, data }));
+    expect(spots(events).map((e) => e.data['count'])).toEqual([1]);
+
+    const store = fakeStore<{ count: number }>({ count: 1 });
+    registerStore('cart', store);
+    teardown();
+
+    // Count 0 — the channel is live now, and a blind spot that never clears is a permanent lie.
+    expect(spots(events).map((e) => e.data['count'])).toEqual([1, 0]);
+  });
+
+  it('says nothing when a subscribable store was already registered at install', () => {
+    const store = fakeStore<{ count: number }>({ count: 1 });
+    registerStore('cart', store);
+    const events: Captured[] = [];
+    const teardown = installStoreState((type, data) => events.push({ type, data }));
+    teardown();
+    expect(spots(events)).toEqual([]);
+  });
+
+  it('reports it for a store registered as a bare GETTER — readable, but silent', () => {
+    // The other half of the same false negative: a getter-registered store can be read on demand and
+    // will never emit a STATE_CHANGE, so its causal summary is empty exactly like an unwatched app's.
+    const store = fakeStore<{ count: number }>({ count: 1 });
+    registerStore('cart', store.getState);
+    const events: Captured[] = [];
+    const teardown = installStoreState((type, data) => events.push({ type, data }));
+    teardown();
+    expect(spots(events).map((e) => e.data['count'])).toEqual([1]);
   });
 });

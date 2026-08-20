@@ -250,4 +250,18 @@ export function bugsInResult(toolName: string, result: Record<string, unknown>):
  * fault, quietly deflating the exact number we intend to publish. A copied enum is a drift hazard
  * wherever it appears; it is a correctness hazard when the thing that drifts is a public claim.
  */
+/**
+ * The route the app was on when this result was produced — extracted from the tool result so the
+ * fingerprint can identify the same defect across sessions without sending the route itself.
+ */
+export function routeOf(result: Record<string, unknown>): string | undefined {
+  const status = result['status'];
+  if ('object' === typeof status && status !== null) {
+    const r = (status as Record<string, unknown>)['route'];
+    if ('string' === typeof r && r.length > 0) return r;
+  }
+  const r = result['route'];
+  return 'string' === typeof r && r.length > 0 ? r : undefined;
+}
+
 const CONTRADICTION_KINDS: ReadonlySet<string> = new Set(Object.values(ContradictionKind));

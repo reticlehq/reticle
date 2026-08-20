@@ -8,8 +8,24 @@ export const RETICLE_WS_PATH = '/reticle';
 /** Agent↔server MCP wire paths — served by the daemon HTTP plane, forwarded by the stdio proxy. */
 export const MCP_SSE_PATH = '/mcp/sse';
 export const MCP_MESSAGE_PATH = '/mcp/message';
+/**
+ * SSE event name the daemon writes to every open MCP stream immediately before it shuts itself down.
+ *
+ * A stream that simply ends looks identical from the proxy whether the daemon retired on schedule or
+ * died under it, so every planned shutdown was counted as an outage the agent suffered. The proxy
+ * cannot infer the difference — the daemon is the only thing that knows, and this is it saying so.
+ * A custom event name rather than a `message`: the proxy forwards `message` frames to the client
+ * verbatim, and this is addressed to the proxy, not to the agent.
+ */
+export const MCP_SHUTDOWN_EVENT = 'reticle-shutdown';
 /** Local-only daemon introspection — `reticle status` GETs this for sessions + health at a glance. */
 export const STATUS_PATH = '/status';
+/**
+ * Local-only drive request — `reticle drive <url>` POSTs `{url}` here when a daemon already owns the
+ * bridge port, and gets back the pooled session that daemon opened. The CLI asks instead of binding,
+ * so the two never fight over the port. Same trust tier as STATUS_PATH.
+ */
+export const DRIVE_PATH = '/drive';
 export const RETICLE_PROTOCOL_VERSION = 1;
 
 /**
@@ -189,6 +205,13 @@ export const ReticleDir = {
   BASELINES_SUBDIR: 'baselines',
   /** cross-run memory — outcomes of past runs (the "did it behave like last time?" file). */
   PROJECT_FILE: 'project.json',
+  /**
+   * the user's own record of what Reticle has done for them — .reticle/impact.json.
+   *
+   * Local only, never uploaded, and deliberately NOT part of telemetry: telemetry answers our
+   * questions about the product; this answers the user's question about their own work.
+   */
+  IMPACT_FILE: 'impact.json',
   /** opt-in pixel baselines —.reticle/visual/<name>.png + <name>.diff.png. */
   VISUAL_SUBDIR: 'visual',
   /** verification-run artifacts —.reticle/runs/<runId>.json (the OEM/CI-consumable verdict). */
@@ -602,6 +625,14 @@ export const ElementState = {
   EXPANDED: 'expanded',
   FOCUSED: 'focused',
   PRESENT: 'present',
+  /**
+   * Inside the viewport right now (getBoundingClientRect intersects the window). Distinct from
+   * `visible`, which folds only aria-hidden/[hidden]/display/visibility/opacity and so is already
+   * true for content below the fold of a scrolling container. Without this, `scrollIntoView` is
+   * ungradeable: the target satisfied `visible`/`present` before the scroll, so act_and_wait
+   * returns already_true. (#398)
+   */
+  IN_VIEWPORT: 'inViewport',
 } as const;
 export type ElementState = (typeof ElementState)[keyof typeof ElementState];
 
@@ -643,6 +674,12 @@ export const ReticleCommand = {
    * AGENT-driven pause/end keeps the presenter in sync. `args: { state, text? }`.
    */
   PRESENTER: 'presenter',
+  /**
+   * Bridge -> browser: the user's own impact record, so the HUD can show what Reticle has done for
+   * them without the page asking for it. `args: { snapshot: ImpactSnapshot }`. Local data on a
+   * local socket - it is the same file the report is stored in, not a fetch to us.
+   */
+  IMPACT: 'impact',
   /**
    * Ask the DESKTOP shell to photograph its own window and return `{ png: <base64> }`.
    *

@@ -41,7 +41,7 @@ RETICLE_TRACE=1 reticle serve --port 4400
 
 Every instrumented stage then emits one line **when it ends**, carrying its own duration:
 
-```json
+```jsonl
 {"event":"trace","span":"browser.command","ms":412,"depth":1,"callId":"p8123-c7","ok":true,"command":"act"}
 {"event":"trace","span":"tool.handler","ms":430,"depth":0,"callId":"p8123-c7","ok":true,"tool":"reticle_act"}
 ```

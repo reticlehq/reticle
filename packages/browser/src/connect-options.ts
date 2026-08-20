@@ -3,7 +3,7 @@ import type { RedactionConfig } from '@reticlehq/core';
 /**
  * What `reticle.connect()` accepts.
  *
- * Split out of reticle.ts when that file crossed the 600-line cap — the same move `session-info.ts`
+ * Split out of reticle.ts when that file crossed the 600-line cap - the same move `session-info.ts`
  * made for the server's Session. A pure description of the SDK's public entry contract has no reason
  * to live inside the class that happens to consume it, and separating them keeps the surface every
  * integrating app actually reads reviewable on its own.
@@ -33,7 +33,7 @@ export interface ReticleConnectOptions {
   overlay?: boolean;
   /**
    * Capture request/response bodies on net.request events (dev-only; text-like content only,
-   * sensitive keys redacted, per-body capped). Off by default — bodies cost tokens and can carry PII.
+   * sensitive keys redacted, per-body capped). Off by default - bodies cost tokens and can carry PII.
    */
   captureNetworkBodies?: boolean;
   /**
@@ -42,7 +42,7 @@ export interface ReticleConnectOptions {
    * React's `_debugSource.fileName` is absolute; the babel stamp is repo-relative. Build plugins that
    * can `define` a global set it themselves; frameworks that cannot (Next passes it through env,
    * Astro through its own config) hand it here instead. Taking it as a connect OPTION is what keeps
-   * the generated app-side code plain JavaScript — the previous shape made the caller assign a global,
+   * the generated app-side code plain JavaScript - the previous shape made the caller assign a global,
    * and the TypeScript cast that needed shipped into a `.jsx` file and broke the build.
    */
   root?: string;
@@ -67,13 +67,13 @@ export interface ReticleConnectOptions {
   logMax?: number;
   /**
    * Mount the floating human-recorder toolbar (Record/Stop/Annotate).
-   * Default off — purely additive, dev-only.
+   * Default off - purely additive, dev-only.
    */
   recorder?: boolean;
   /**
-   * Mount the "Flag a bug" annotator: the human clicks an element that looks wrong, types what's
-   * wrong, and Reticle emits a HUMAN_MARK the agent drains via reticle_review. Defaults to ON with the
-   * presenter (it's the human's side of the look→act→assert loop); pass `annotate: false` to suppress.
+   * Mount the page annotator: expanding the HUD enters click-to-annotate mode, and Reticle emits
+   * a HUMAN_MARK the agent drains via reticle_review. Defaults to ON with the presenter; pass
+   * `annotate: false` to suppress.
    */
   annotate?: boolean;
   /** Live-control: overridable ended-border fade delay (native timer). Default 4000. */
@@ -92,13 +92,13 @@ export interface ReticleConnectOptions {
    * });
    * ```
    *
-   * Additive only — there is no way to replace the built-in rule, because a config that could would
+   * Additive only - there is no way to replace the built-in rule, because a config that could would
    * eventually ship an app that leaks. `keys` strings match a key name exactly (case-insensitively);
    * a RegExp is tested against it. `allow` exempts a key from the DEFAULT rule and loses to `keys`.
    *
    * Literal `keys` strings also cross the bridge, so the daemon redacts them on the driven path,
    * where request bodies are captured raw from the network stack and never pass through this SDK.
-   * RegExp entries and `allow` do NOT cross — see docs/usage.md ("Extending the redaction rules") for why, and what that means.
+   * RegExp entries and `allow` do NOT cross - see docs/usage.md ("Extending the redaction rules") for why, and what that means.
    */
   redact?: RedactionConfig;
 }

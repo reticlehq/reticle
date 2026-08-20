@@ -1,151 +1,176 @@
+import { isSyntheticInput } from '../actions/synthetic-input.js';
 import { EventType } from '@reticlehq/core';
-import { resolveMarkAnchor } from './mark-anchor.js';
+import { isReticleUi, isReticleOverlay } from '../dom/dom-ignore.js';
+import { resolveMarkAnchor, type MarkAnchor } from './mark-anchor.js';
 import { nativeSetTimeout, nativeClearTimeout } from '../timers/native-timers.js';
+import {
+  ANNOTATOR_CSS,
+  ANNOTATOR_ROOT_HTML,
+  MARK_CANCEL,
+  MARK_PENDING_GLYPH,
+  MARK_PLACEHOLDER,
+  MARK_SUBMIT,
+} from './annotator-styles.js';
 
-/** The cursor must rest this long before the outline boxes the element under it — calm, not jumpy. */
+/** The cursor must rest this long before the outline boxes the element under it - calm, not jumpy. */
 const HIGHLIGHT_REST_MS = 130;
+const SHAKE_MS = 250;
+const POP_W = 280;
+const POP_H = 170;
+const EDGE = 8;
+const MARK_ATTR = 'data-reticle-mark';
+const ACTIVE_ATTR = 'data-reticle-mark-active';
+const sel = (role: string): string => `[${MARK_ATTR}="${role}"]`;
 
 /**
- * The human "annotate the bug where you see it" surface. A dev toggles annotate mode, clicks the
- * element that looks wrong, types what's wrong, and Reticle pins a numbered marker + emits a HUMAN_MARK
- * event the agent drains (reticle_review). The mark carries the element's re-resolvable anchor and —
- * when available — the source file:line, so the agent fixes the exact element/code, not a guess.
+ * What the HUD is told about a mark the moment it is placed.
  *
- * Self-contained and dev-only: every node carries a `data-reticle-mark` attribute so Reticle's own
- * observers ignore it (see dom-ignore.ts), and clicks on its own UI never become marks.
+ * The row used to get the note and the anchor's label - "generic: my feedback" - which names
+ * neither the element nor which of several marks it is. The pin on the page is numbered, so the
+ * row carries the same number, plus the source the anchor already resolved.
  */
+export interface MarkReport {
+  note: string;
+  /** The anchor the agent will look the element up by, e.g. `[data-testid="deploy-submit"]`. */
+  anchor: string;
+  label: string;
+  /** 1-based, matching the number drawn in the pin. */
+  index: number;
+  /** file:line, when the app is source-stamped. */
+  source?: string;
+}
 
-/** Injected so the SDK wires the real emit/clock and tests can drive both. */
 export interface AnnotatorDeps {
   emit: (type: EventType, data: Record<string, unknown>) => void;
   now: () => number;
-  /**
-   * Optional: called after a mark is sent so the SDK can echo it into the live presenter panel — the
-   * human sees their flag land in the same activity log they watch the agent in. No-op when the
-   * presenter isn't mounted.
-   */
-  onMark?: (note: string, label: string) => void;
+  onMark?: (mark: MarkReport) => void;
+  shouldBlock?: () => boolean;
+  onCountChange?: (count: number) => void;
 }
 
-/** Single base attribute on every UI node (varied by VALUE) so `closest('[data-reticle-mark]')`
- * catches the FAB, popover, and pins in one check, and the SDK's observers ignore them all. */
-const MARK_ATTR = 'data-reticle-mark';
-const ACTIVE_ATTR = 'data-reticle-mark-active';
-const Z = 2147483640;
-const sel = (role: string): string => `[${MARK_ATTR}="${role}"]`;
+export interface AnnotatorChrome {
+  markersBtn?: HTMLElement;
+  clearBtn?: HTMLElement;
+  countEl?: HTMLElement;
+}
 
-const CSS = `
-${sel('fab')}{position:fixed;left:18px;bottom:18px;z-index:${String(Z + 2)};
-  font:500 13px/1 "Inter",system-ui,sans-serif;display:inline-flex;align-items:center;gap:7px;
-  padding:9px 13px;border-radius:11px;cursor:pointer;color:#e9ebf2;
-  background:linear-gradient(180deg,rgba(19,22,32,.92),rgba(13,15,22,.92));
-  border:1px solid rgba(255,255,255,.12);box-shadow:0 10px 30px -10px rgba(0,0,0,.6);
-  -webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);transition:transform .12s,border-color .15s;}
-${sel('fab')}:hover{transform:translateY(-1px);border-color:rgba(124,131,255,.55);}
-${sel('fab')}[data-on="1"]{color:#fff;border-color:#7c83ff;background:linear-gradient(180deg,#6366f1,#4f46e5);}
-${sel('dot')}{width:8px;height:8px;border-radius:50%;background:#ff7a7a;flex:none;}
-${sel('fab')}[data-on="1"] ${sel('dot')}{background:#fff;}
-html[${ACTIVE_ATTR}] *{cursor:crosshair !important;}
-/* The Flag button + its popover are interactive — keep the pointer cursor over them, not crosshair. */
-html[${ACTIVE_ATTR}] ${sel('fab')},html[${ACTIVE_ATTR}] ${sel('fab')} *,html[${ACTIVE_ATTR}] ${sel('pop')},html[${ACTIVE_ATTR}] ${sel('pop')} *{cursor:pointer !important;}
-/* The outline glides to the rested element with an ease (soothing), and fades rather than snapping. */
-${sel('hi')}{position:fixed;z-index:${String(Z + 1)};pointer-events:none;opacity:0;box-sizing:border-box;
-  border:2px solid #7c83ff;border-radius:6px;background:rgba(124,131,255,.12);box-shadow:0 0 0 2px rgba(124,131,255,.22);
-  transition:left .22s cubic-bezier(.22,1,.36,1),top .22s cubic-bezier(.22,1,.36,1),width .22s cubic-bezier(.22,1,.36,1),height .22s cubic-bezier(.22,1,.36,1),opacity .18s ease;}
-${sel('hi')}[data-on="1"]{opacity:1;}
-${sel('hilabel')}{position:absolute;top:-21px;left:-2px;background:#6366f1;color:#fff;
-  font:600 10.5px/1 "Inter",system-ui,sans-serif;padding:3px 6px;border-radius:5px;white-space:nowrap;
-  max-width:300px;overflow:hidden;text-overflow:ellipsis;}
-${sel('pin')}{position:fixed;z-index:${String(Z + 1)};width:22px;height:22px;margin:-11px 0 0 -11px;
-  border-radius:50% 50% 50% 2px;background:#ff5d5d;border:2px solid #fff;box-shadow:0 4px 12px -2px rgba(0,0,0,.5);
-  color:#fff;font:700 11px/18px "Inter",system-ui,sans-serif;text-align:center;pointer-events:none;}
-${sel('pop')}{position:fixed;z-index:${String(Z + 3)};width:280px;box-sizing:border-box;
-  background:linear-gradient(180deg,rgba(19,22,32,.96),rgba(13,15,22,.96));border:1px solid rgba(255,255,255,.14);
-  border-radius:14px;padding:12px;box-shadow:0 24px 60px -16px rgba(0,0,0,.7);
-  -webkit-backdrop-filter:blur(24px);backdrop-filter:blur(24px);font:13px/1.5 "Inter",system-ui,sans-serif;color:#e9ebf2;}
-${sel('pop')} .reticle-mark-where{color:#9aa0b2;font-size:11.5px;margin-bottom:7px;
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-${sel('pop')} textarea{width:100%;box-sizing:border-box;min-height:62px;resize:vertical;
-  background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.12);border-radius:9px;color:#e9ebf2;
-  font:13px/1.45 "Inter",system-ui,sans-serif;padding:8px;outline:none;}
-${sel('pop')} textarea:focus{border-color:#7c83ff;}
-${sel('pop')} .reticle-mark-row{display:flex;gap:8px;align-items:center;margin-top:9px;}
-${sel('pop')} .reticle-mark-hint{margin-right:auto;color:#6a7186;font-size:10.5px;letter-spacing:.02em;}
-${sel('pop')} button{font:600 12px/1 "Inter",system-ui,sans-serif;padding:8px 12px;border-radius:9px;cursor:pointer;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.05);color:#cdd2e2;}
-${sel('pop')} button[data-send]{background:#6366f1;border-color:#7c83ff;color:#fff;}
-${sel('pop')} button[data-send]:disabled{opacity:.5;cursor:default;}`;
+interface StoredMark {
+  id: string;
+  note: string;
+  label: string;
+  anchor: string;
+  route: string;
+  xPct: number;
+  yDoc: number;
+  clientX: number;
+  clientY: number;
+  isFixed: boolean;
+  pin: HTMLElement;
+  target: Element | undefined;
+  source: string | undefined;
+}
 
 export class Annotator {
   readonly #emit: AnnotatorDeps['emit'];
   readonly #now: AnnotatorDeps['now'];
   readonly #onMark: AnnotatorDeps['onMark'];
+  readonly #shouldBlock: () => boolean;
+  readonly #onCountChange: AnnotatorDeps['onCountChange'];
   #root: HTMLElement | undefined;
-  #fab: HTMLElement | undefined;
-  #pop: HTMLElement | undefined;
-  /** Hover outline box that shows WHICH element a click would flag (agentation-style). */
   #hi: HTMLElement | undefined;
   #hiLabel: HTMLElement | undefined;
-  /** Debounce timer — boxes the element only once the cursor rests, so a fast sweep doesn't flicker. */
+  #selBox: HTMLElement | undefined;
+  #pop: HTMLElement | undefined;
+  #pending: HTMLElement | undefined;
   #hiTimer: ReturnType<typeof nativeSetTimeout> | undefined;
+  #shakeTimer: ReturnType<typeof nativeSetTimeout> | undefined;
   #active = false;
-  #markCount = 0;
+  #marks: StoredMark[] = [];
+  #editing: StoredMark | undefined;
+  #pendingKey: string | undefined;
+  #pendingTarget: Element | undefined;
+  #markersBtn: HTMLElement | undefined;
+  #clearBtn: HTMLElement | undefined;
+  #countEl: HTMLElement | undefined;
+  #accent: string | undefined;
   #onClick: ((ev: MouseEvent) => void) | undefined;
   #onKeydown: ((ev: KeyboardEvent) => void) | undefined;
   #onMove: ((ev: MouseEvent) => void) | undefined;
+  #onScroll: (() => void) | undefined;
+  #onResize: (() => void) | undefined;
+  #mo: MutationObserver | undefined;
 
   constructor(deps: AnnotatorDeps) {
     this.#emit = deps.emit;
     this.#now = deps.now;
     this.#onMark = deps.onMark;
+    this.#shouldBlock = deps.shouldBlock ?? ((): boolean => true);
+    this.#onCountChange = deps.onCountChange;
   }
 
-  /** Whether annotate mode is currently capturing clicks. */
   get active(): boolean {
     return this.#active;
   }
 
-  /** Number of marks sent this session (drives the pin numbering). */
   get markCount(): number {
-    return this.#markCount;
+    return this.#marks.length;
   }
 
   mount(): void {
     if (this.#root !== undefined || 'undefined' === typeof document) return;
     const style = document.createElement('style');
     style.setAttribute(MARK_ATTR, 'style');
-    style.textContent = CSS;
+    style.textContent = ANNOTATOR_CSS;
     document.head.appendChild(style);
 
     const root = document.createElement('div');
     root.setAttribute(MARK_ATTR, 'root');
-    root.innerHTML = `<button type="button" ${MARK_ATTR}="fab" aria-label="Flag a bug for the agent">
-      <span ${MARK_ATTR}="dot"></span><span>Flag a bug</span></button>
-      <div ${MARK_ATTR}="hi"><span ${MARK_ATTR}="hilabel"></span></div>`;
+    root.innerHTML = ANNOTATOR_ROOT_HTML;
     document.body.appendChild(root);
     this.#root = root;
-    this.#fab = root.querySelector<HTMLElement>(sel('fab')) ?? undefined;
     this.#hi = root.querySelector<HTMLElement>(sel('hi')) ?? undefined;
     this.#hiLabel = root.querySelector<HTMLElement>(sel('hilabel')) ?? undefined;
-    this.#fab?.addEventListener('click', (e) => {
-      e.stopPropagation();
-      this.toggle();
-    });
+    this.#selBox = root.querySelector<HTMLElement>(sel('sel')) ?? undefined;
 
-    // Capture-phase click: intercept the FIRST click on a real page element while active.
     this.#onClick = (ev: MouseEvent): void => this.#handleClick(ev);
     document.addEventListener('click', this.#onClick, { capture: true });
-
-    // Hover outline: while active, box the element a click would flag — so you see what you're pointing at.
     this.#onMove = (ev: MouseEvent): void => this.#scheduleMove(ev);
     document.addEventListener('mousemove', this.#onMove, { passive: true, capture: true });
-
-    // Escape is the universal "back out": close an open popover, else leave annotate mode.
-    this.#onKeydown = (ev: KeyboardEvent): void => {
-      if (ev.key !== 'Escape' || !this.#active) return;
-      if (this.#pop !== undefined) this.#closePopover();
-      else this.toggle(false);
-    };
+    this.#onKeydown = (ev: KeyboardEvent): void => this.#handleKey(ev);
     document.addEventListener('keydown', this.#onKeydown);
+    this.#onScroll = (): void => this.#reposition();
+    this.#onResize = (): void => this.#reposition();
+    window.addEventListener('scroll', this.#onScroll, true);
+    window.addEventListener('resize', this.#onResize);
+    this.#mo = new MutationObserver(() => this.syncAnchors());
+    this.#mo.observe(document.documentElement, { childList: true, subtree: true });
+    if (undefined !== this.#accent) this.setAccent(this.#accent);
+  }
+
+  /** Drive marker/highlight chrome from the HUD accent swatch. */
+  setAccent(hex: string): void {
+    this.#accent = hex;
+    this.#root?.style.setProperty('--reticle-mark-accent', hex);
+  }
+
+  /** @deprecated HUD expand/collapse owns annotate mode; chrome buttons are hide/clear. */
+  attachFlagButton(btn: HTMLElement): void {
+    this.attachChrome({ markersBtn: btn });
+  }
+
+  attachChrome(chrome: AnnotatorChrome): void {
+    this.#markersBtn = chrome.markersBtn;
+    this.#clearBtn = chrome.clearBtn;
+    this.#countEl = chrome.countEl;
+    this.#markersBtn?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.#toggleMarkers();
+    });
+    this.#clearBtn?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.clearAll();
+    });
+    this.#syncChrome();
   }
 
   destroy(): void {
@@ -161,46 +186,138 @@ export class Annotator {
       document.removeEventListener('mousemove', this.#onMove, { capture: true });
       this.#onMove = undefined;
     }
-    if (this.#hiTimer !== undefined) {
-      nativeClearTimeout(this.#hiTimer);
-      this.#hiTimer = undefined;
+    if (this.#onScroll !== undefined) {
+      window.removeEventListener('scroll', this.#onScroll, true);
+      this.#onScroll = undefined;
     }
+    if (this.#onResize !== undefined) {
+      window.removeEventListener('resize', this.#onResize);
+      this.#onResize = undefined;
+    }
+    this.#mo?.disconnect();
+    this.#mo = undefined;
+    if (this.#hiTimer !== undefined) nativeClearTimeout(this.#hiTimer);
+    if (this.#shakeTimer !== undefined) nativeClearTimeout(this.#shakeTimer);
     this.#closePopover();
     document.documentElement.removeAttribute(ACTIVE_ATTR);
     this.#root?.remove();
     document.querySelectorAll(`style[${MARK_ATTR}="style"]`).forEach((s) => s.remove());
     this.#root = undefined;
-    this.#fab = undefined;
     this.#active = false;
+    this.#marks = [];
   }
 
-  /** Turn annotate mode on/off. With no argument, flips the current state. */
   toggle(on?: boolean): void {
     this.#active = on ?? !this.#active;
-    this.#fab?.setAttribute('data-on', this.#active ? '1' : '0');
     if (this.#active) document.documentElement.setAttribute(ACTIVE_ATTR, '1');
     else {
       document.documentElement.removeAttribute(ACTIVE_ATTR);
       this.#hideHighlight();
       this.#closePopover();
     }
+    this.#syncChrome();
+  }
+
+  clearAll(): void {
+    this.#closePopover();
+    for (const mark of this.#marks) mark.pin.remove();
+    this.#marks = [];
+    this.#syncChrome();
+  }
+
+  syncAnchors(): void {
+    const route = currentRoute();
+    for (const mark of this.#marks) {
+      const live = mark.target !== undefined && document.contains(mark.target);
+      if (!live) {
+        mark.target = undefined;
+        mark.pin.setAttribute('data-stale', '1');
+      } else {
+        mark.pin.removeAttribute('data-stale');
+      }
+      mark.pin.hidden = mark.route !== route;
+    }
+    this.#paintSelection();
+  }
+
+  #toggleMarkers(): void {
+    const root = this.#root;
+    if (root === undefined) return;
+    const hide = '1' === root.getAttribute('data-hide') ? '0' : '1';
+    if ('1' === hide) root.setAttribute('data-hide', '1');
+    else root.removeAttribute('data-hide');
+    this.#markersBtn?.setAttribute('data-active', '0' === hide ? '0' : '1');
+    this.#markersBtn?.setAttribute('aria-pressed', '1' === hide ? 'true' : 'false');
+  }
+
+  #syncChrome(): void {
+    const n = this.#marks.length;
+    this.#onCountChange?.(n);
+    if (this.#countEl !== undefined) {
+      this.#countEl.textContent = String(n);
+      this.#countEl.hidden = 0 === n;
+    }
+    this.#clearBtn?.toggleAttribute('disabled', 0 === n);
+    this.#markersBtn?.toggleAttribute('disabled', 0 === n);
+  }
+
+  #handleKey(ev: KeyboardEvent): void {
+    if (ev.key !== 'Escape' || !this.#active) return;
+    if (this.#pop !== undefined) {
+      ev.preventDefault();
+      this.#closePopover();
+      return;
+    }
+    this.toggle(false);
   }
 
   #handleClick(ev: MouseEvent): void {
     if (!this.#active) return;
-    const target = ev.target;
-    if (!(target instanceof Element)) return;
-    if (target.closest(`[${MARK_ATTR}]`) !== null) return; // never mark our own UI
-    ev.preventDefault();
-    ev.stopPropagation();
-    this.#openPopover(target, ev.clientX, ev.clientY);
+    // A click Reticle dispatched is the agent driving the app, not a person placing a mark. Without
+    // this, expanding the HUD silently disabled every `reticle_act` click while the action still
+    // reported success — a false green in our own UI. See synthetic-input.ts.
+    if (isSyntheticInput()) return;
+    const raw = ev.target;
+    if (!(raw instanceof Element)) return;
+    // The page blocker is a full-viewport shield Reticle puts up WHILE annotating, so with it on
+    // every click lands on Reticle's own UI and was discarded as such — annotate mode looked
+    // completely dead, because the one thing standing between the user and the page is the thing
+    // annotate mode turns on. Resolve what is underneath instead of giving up on the click.
+    const target = raw.hasAttribute(BLOCKER_ATTR_NAME)
+      ? pageElementAt(ev.clientX, ev.clientY)
+      : raw;
+    if (target === undefined) return;
+    if (isReticleOverlay(target)) return;
+    if (true === this.#markersBtn?.contains(target)) return;
+    if (true === this.#clearBtn?.contains(target)) return;
+    if (target.closest(sel('pin')) !== null) return;
+    if (target.closest(sel('pop')) !== null) return;
+
+    if (this.#pop !== undefined) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      this.#shakePopover();
+      return;
+    }
+
+    const el = target instanceof HTMLElement ? target : target.parentElement;
+    if (null === el) return;
+    if (this.#shouldBlock()) {
+      ev.preventDefault();
+      ev.stopPropagation();
+    } else {
+      ev.preventDefault();
+    }
+
+    const key = markKey(el);
+    const existing = this.#marks.find((m) => m.anchor === key && m.route === currentRoute());
+    if (existing !== undefined) {
+      this.#openEdit(existing);
+      return;
+    }
+    this.#openPopover(el, ev.clientX, ev.clientY);
   }
 
-  /**
-   * Debounce the outline: while the cursor is moving the human is still travelling, so we wait for a
-   * brief rest before boxing the element under it (the box then eases into place via CSS). A pending
-   * timer is replaced on every move, so only the resting position ever paints.
-   */
   #scheduleMove(ev: MouseEvent): void {
     if (this.#hiTimer !== undefined) nativeClearTimeout(this.#hiTimer);
     this.#hiTimer = nativeSetTimeout(() => {
@@ -209,15 +326,22 @@ export class Annotator {
     }, HIGHLIGHT_REST_MS);
   }
 
-  /** Box the element under the cursor (when active, no popover open) so you see what a click flags. */
   #handleMove(ev: MouseEvent): void {
     if (this.#hi === undefined) return;
-    const target = ev.target;
+    const raw = ev.target;
+    // Same shield as in #handleClick: while annotating, a full-viewport blocker sits over the page,
+    // so EVERY mousemove reports it as the target. Resolving only there left the outline suppressed
+    // on every element - a crosshair with no indication of what it was on. See #handleClick.
+    const target =
+      raw instanceof Element && raw.hasAttribute(BLOCKER_ATTR_NAME)
+        ? pageElementAt(ev.clientX, ev.clientY)
+        : raw;
     const skip =
       !this.#active ||
       this.#pop !== undefined ||
       !(target instanceof Element) ||
-      target.closest(`[${MARK_ATTR}]`) !== null;
+      isReticleOverlay(target) ||
+      target.closest(sel('pin')) !== null;
     if (skip) {
       this.#hi.setAttribute('data-on', '0');
       return;
@@ -235,7 +359,6 @@ export class Annotator {
     if (this.#hiLabel !== undefined) this.#hiLabel.textContent = describeEl(target);
   }
 
-  /** Hide the hover outline (annotate mode off, or a popover took over). Cancels any pending box. */
   #hideHighlight(): void {
     if (this.#hiTimer !== undefined) {
       nativeClearTimeout(this.#hiTimer);
@@ -244,101 +367,346 @@ export class Annotator {
     this.#hi?.setAttribute('data-on', '0');
   }
 
-  #openPopover(el: Element, x: number, y: number): void {
+  #openEdit(mark: StoredMark): void {
     this.#closePopover();
-    this.#hideHighlight(); // the popover is now the focus; drop the hover box
+    this.#editing = mark;
+    this.#pendingKey = mark.anchor;
+    this.#pendingTarget = mark.target;
+    this.#hideHighlight();
+    // Where the element is NOW, not where it was when the mark was made. The popover is
+    // position:fixed, so it is placed in viewport coordinates, and the stored clientX/clientY are
+    // viewport coordinates from an earlier scroll position. Reopening a mark after scrolling put the
+    // note somewhere unrelated to the thing it annotates — further away the further you had scrolled.
+    const at = this.#currentPoint(mark);
+    this.#mountPopover(mark.label, at.x, at.y, mark.note);
+    this.#dropPending(at.x, at.y);
+    this.#paintSelection();
+  }
+
+  /**
+   * The viewport point a mark's popover should open at.
+   *
+   * Prefers the element's live box, because that is what the note is ABOUT. Falls back to the stored
+   * coordinates only when the element is gone, where there is nothing better and the mark is already
+   * shown as stale.
+   */
+  #currentPoint(mark: StoredMark): { x: number; y: number } {
+    const el = mark.target;
+    if (el !== undefined && el.isConnected) {
+      const r = el.getBoundingClientRect();
+      if (r.width > 0 || r.height > 0) return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    }
+    return { x: mark.clientX, y: mark.isFixed ? mark.clientY : mark.yDoc - window.scrollY };
+  }
+
+  #openPopover(el: Element, x: number, y: number): void {
     const resolved = resolveMarkAnchor(el);
-    const pop = document.createElement('div');
-    pop.setAttribute(MARK_ATTR, 'pop');
+    const key = resolved.anchor;
+    if (this.#pendingKey === key && this.#pop !== undefined) {
+      this.#shakePopover();
+      return;
+    }
+    this.#closePopover();
+    this.#hideHighlight();
+    this.#editing = undefined;
+    this.#pendingKey = key;
+    this.#pendingTarget = el;
     const where =
       resolved.source !== undefined
         ? `${resolved.label} · ${resolved.source.file}:${String(resolved.source.line)}`
         : resolved.label;
+    this.#mountPopover(where, x, y, '');
+    this.#dropPending(x, y);
+    this.#paintSelection();
+    this.#bindSubmit(resolved, x, y);
+  }
+
+  #mountPopover(where: string, x: number, y: number, initial: string): void {
+    const pop = document.createElement('div');
+    pop.setAttribute(MARK_ATTR, 'pop');
+    pop.setAttribute('role', 'dialog');
+    pop.setAttribute('aria-label', MARK_PLACEHOLDER);
     pop.innerHTML = `<div class="reticle-mark-where"></div>
-      <textarea placeholder="What's wrong here? The agent will read this and fix it."></textarea>
-      <div class="reticle-mark-row"><span class="reticle-mark-hint">⌘↵ send · esc cancel</span><button type="button" data-cancel>Cancel</button>
-      <button type="button" data-send disabled>Send to agent</button></div>`;
+      <textarea rows="2" placeholder="${MARK_PLACEHOLDER}"></textarea>
+      <div class="reticle-mark-row">
+        <button type="button" data-cancel>${MARK_CANCEL}</button>
+        <button type="button" data-send disabled>${MARK_SUBMIT}</button>
+      </div>`;
     const whereEl = pop.querySelector('.reticle-mark-where');
     if (whereEl !== null) whereEl.textContent = where;
-    const left = Math.min(x, window.innerWidth - 296);
-    const top = Math.min(y + 12, window.innerHeight - 170);
-    pop.style.left = `${String(Math.max(8, left))}px`;
-    pop.style.top = `${String(Math.max(8, top))}px`;
-    document.body.appendChild(pop);
+    const pos = clampPop(x, y);
+    pop.style.left = `${String(pos.left)}px`;
+    pop.style.top = `${String(pos.top)}px`;
+    this.#root?.appendChild(pop);
     this.#pop = pop;
+    requestAnimationFrame(() => pop.setAttribute('data-in', '1'));
 
     const textarea = pop.querySelector('textarea');
     const send = pop.querySelector<HTMLButtonElement>('button[data-send]');
-    const submit = (): void => {
-      const note = textarea?.value.trim() ?? '';
-      if (0 === note.length) return; // never send an empty mark
-      this.#sendMark(note, resolved, x, y);
-      this.#closePopover();
-    };
-    textarea?.addEventListener('input', () => {
+    if (textarea !== null) {
+      textarea.value = initial;
       if (send !== null) send.disabled = 0 === textarea.value.trim().length;
-    });
-    // Keyboard ergonomics devs expect: ⌘/Ctrl+Enter sends, Esc cancels — without leaving the textarea.
-    textarea?.addEventListener('keydown', (e) => {
-      if ('Escape' === e.key) {
-        e.preventDefault();
-        this.#closePopover();
-      } else if ('Enter' === e.key && (e.metaKey || e.ctrlKey)) {
-        e.preventDefault();
-        submit();
-      }
-    });
-    textarea?.focus();
+      textarea.addEventListener('input', () => {
+        if (send !== null) send.disabled = 0 === textarea.value.trim().length;
+      });
+      textarea.addEventListener('keydown', (e) => {
+        e.stopPropagation();
+        if (e.isComposing) return;
+        if ('Escape' === e.key) {
+          e.preventDefault();
+          this.#closePopover();
+        } else if ('Enter' === e.key && !e.shiftKey) {
+          e.preventDefault();
+          this.#submitOpen();
+        }
+      });
+      nativeSetTimeout(() => textarea.focus(), 50);
+    }
     pop.querySelector('button[data-cancel]')?.addEventListener('click', () => this.#closePopover());
-    send?.addEventListener('click', submit);
+    send?.addEventListener('click', () => this.#submitOpen());
+    this.#pendingResolved = undefined;
+    this.#pendingXY = { x, y };
   }
 
-  #sendMark(
-    note: string,
-    resolved: ReturnType<typeof resolveMarkAnchor>,
-    x: number,
-    y: number,
-  ): void {
+  #pendingResolved: MarkAnchor | undefined;
+  #pendingXY = { x: 0, y: 0 };
+
+  #bindSubmit(resolved: MarkAnchor, x: number, y: number): void {
+    this.#pendingResolved = resolved;
+    this.#pendingXY = { x, y };
+  }
+
+  #submitOpen(): void {
+    const note = this.#pop?.querySelector('textarea')?.value.trim() ?? '';
+    if (0 === note.length) return;
+    const editing = this.#editing;
+    if (editing !== undefined) {
+      editing.note = note;
+      const tipn = editing.pin.querySelector(sel('tipn'));
+      if (tipn !== null) tipn.textContent = note;
+      this.#emit(EventType.HUMAN_MARK, {
+        note,
+        anchor: editing.anchor,
+        label: editing.label,
+        route: editing.route,
+      });
+      this.#report(
+        note,
+        editing.anchor,
+        editing.label,
+        this.#marks.indexOf(editing) + 1,
+        editing.source,
+      );
+      this.#closePopover();
+      return;
+    }
+    const resolved = this.#pendingResolved;
+    if (resolved === undefined) return;
+    this.#sendMark(note, resolved, this.#pendingXY.x, this.#pendingXY.y);
+    this.#closePopover();
+  }
+
+  #shakePopover(): void {
+    const pop = this.#pop;
+    if (pop === undefined) return;
+    pop.classList.remove('reticle-mark-shake');
+    void pop.offsetWidth;
+    pop.classList.add('reticle-mark-shake');
+    if (this.#shakeTimer !== undefined) nativeClearTimeout(this.#shakeTimer);
+    this.#shakeTimer = nativeSetTimeout(() => {
+      pop.classList.remove('reticle-mark-shake');
+      this.#shakeTimer = undefined;
+    }, SHAKE_MS);
+  }
+
+  #sendMark(note: string, resolved: MarkAnchor, x: number, y: number): void {
     const data: Record<string, unknown> = {
       note,
       anchor: resolved.anchor,
       strategy: resolved.strategy,
       label: resolved.label,
-      route: 'undefined' === typeof location ? '' : location.pathname + location.search,
+      route: currentRoute(),
     };
     if (resolved.source !== undefined) data['source'] = resolved.source;
     this.#emit(EventType.HUMAN_MARK, data);
-    this.#onMark?.(note, resolved.label); // echo into the live panel so the human sees the flag land
-    this.#markCount += 1;
-    this.#dropPin(x, y, this.#markCount);
+    this.#now();
+    this.#dropPin(resolved, note, x, y);
+    this.#report(note, resolved.anchor, resolved.label, this.#marks.length, sourceLabel(resolved));
   }
 
-  #dropPin(x: number, y: number, n: number): void {
+  /** Hand the HUD everything it needs to name this mark in one row. */
+  #report(
+    note: string,
+    anchor: string,
+    label: string,
+    index: number,
+    source: string | undefined,
+  ): void {
+    const mark: MarkReport = { note, anchor, label, index };
+    if (source !== undefined) mark.source = source;
+    this.#onMark?.(mark);
+  }
+
+  #dropPending(x: number, y: number): void {
+    this.#pending?.remove();
+    const pending = document.createElement('div');
+    pending.setAttribute(MARK_ATTR, 'pending');
+    pending.textContent = MARK_PENDING_GLYPH;
+    pending.style.left = `${String(x)}px`;
+    pending.style.top = `${String(y)}px`;
+    this.#root?.appendChild(pending);
+    this.#pending = pending;
+  }
+
+  #dropPin(resolved: MarkAnchor, note: string, x: number, y: number): void {
     if (this.#root === undefined) return;
-    const pin = document.createElement('div');
+    const pin = document.createElement('button');
+    pin.type = 'button';
     pin.setAttribute(MARK_ATTR, 'pin');
-    pin.style.left = `${String(x)}px`;
-    pin.style.top = `${String(y)}px`;
-    pin.textContent = String(n);
+    pin.setAttribute('aria-label', resolved.label);
+    const n = this.#marks.length + 1;
+    pin.innerHTML = `<span>${String(n)}</span><span ${MARK_ATTR}="tip"><span ${MARK_ATTR}="tipq"></span><span ${MARK_ATTR}="tipn"></span></span>`;
+    const q = pin.querySelector(sel('tipq'));
+    const tn = pin.querySelector(sel('tipn'));
+    if (q !== null) q.textContent = resolved.label;
+    if (tn !== null) tn.textContent = note;
+    const isFixed = isElementFixed(this.#pendingTarget);
+    const yDoc = isFixed ? y : y + window.scrollY;
+    pin.style.left = `${String((x / window.innerWidth) * 100)}%`;
+    pin.style.top = `${String(isFixed ? y : yDoc - window.scrollY)}px`;
     this.#root.appendChild(pin);
-    // The pin fades after a moment so it confirms the mark landed without cluttering the page.
-    const ref = pin;
-    this.#now(); // touch the injected clock (kept for parity with the SDK's timing seams)
-    // Native (pre-bound) timer so a frozen app clock / fake-timer library can't stall the SDK's own
-    // UI — every other SDK timer uses the native primitives for exactly this reason.
-    nativeSetTimeout(() => ref.remove(), 2600);
+    const mark: StoredMark = {
+      id: `${resolved.anchor}:${String(this.#now())}:${String(n)}`,
+      note,
+      label: resolved.label,
+      anchor: resolved.anchor,
+      route: currentRoute(),
+      xPct: (x / window.innerWidth) * 100,
+      yDoc,
+      clientX: x,
+      clientY: y,
+      isFixed,
+      pin,
+      target: this.#pendingTarget,
+      source: sourceLabel(resolved),
+    };
+    pin.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!this.#active) return;
+      this.#openEdit(mark);
+    });
+    this.#marks.push(mark);
+    this.#syncChrome();
+  }
+
+  #paintSelection(): void {
+    const box = this.#selBox;
+    if (box === undefined) return;
+    const el = this.#pendingTarget;
+    if (el === undefined || !document.contains(el) || this.#pop === undefined) {
+      box.hidden = true;
+      return;
+    }
+    const rect = el.getBoundingClientRect();
+    box.hidden = false;
+    box.style.left = `${String(rect.left)}px`;
+    box.style.top = `${String(rect.top)}px`;
+    box.style.width = `${String(rect.width)}px`;
+    box.style.height = `${String(rect.height)}px`;
+  }
+
+  #reposition(): void {
+    for (const mark of this.#marks) {
+      if (mark.isFixed) {
+        mark.pin.style.top = `${String(mark.clientY)}px`;
+        continue;
+      }
+      mark.pin.style.top = `${String(mark.yDoc - window.scrollY)}px`;
+    }
+    this.#repositionPopover();
+    this.#paintSelection();
+  }
+
+  /**
+   * Keep an OPEN popover attached to its element while the page scrolls.
+   *
+   * The pins were repositioned here and the popover was not, so scrolling with a note open slid the
+   * note off its target and left it floating over unrelated content.
+   */
+  #repositionPopover(): void {
+    const pop = this.#pop;
+    const mark = this.#editing;
+    if (pop === undefined || mark === undefined) return;
+    const at = this.#currentPoint(mark);
+    const pos = clampPop(at.x, at.y);
+    pop.style.left = `${String(pos.left)}px`;
+    pop.style.top = `${String(pos.top)}px`;
   }
 
   #closePopover(): void {
     this.#pop?.remove();
     this.#pop = undefined;
+    this.#pending?.remove();
+    this.#pending = undefined;
+    this.#pendingKey = undefined;
+    this.#pendingTarget = undefined;
+    this.#pendingResolved = undefined;
+    this.#editing = undefined;
+    if (this.#selBox !== undefined) this.#selBox.hidden = true;
   }
 }
 
+/** "file:line" for a resolved anchor, when the app carries source stamps. */
+function sourceLabel(resolved: MarkAnchor): string | undefined {
+  return resolved.source === undefined
+    ? undefined
+    : `${resolved.source.file}:${String(resolved.source.line)}`;
+}
+
+function currentRoute(): string {
+  return 'undefined' === typeof location ? '' : location.pathname + location.search;
+}
+
+function markKey(el: Element): string {
+  return resolveMarkAnchor(el).anchor;
+}
+
+function isElementFixed(el: Element | undefined): boolean {
+  if (el === undefined || 'undefined' === typeof getComputedStyle) return false;
+  const pos = getComputedStyle(el).position;
+  return 'fixed' === pos || 'sticky' === pos;
+}
+
+/** The blocker Reticle raises over the page while annotating; see the click handler. */
+const BLOCKER_ATTR_NAME = 'data-reticle-blocker';
+
 /**
- * A short label for the hovered element — testid > aria-label > tag + text. Cheap on purpose (runs
- * on every mousemove, so it does NOT call resolveMarkAnchor; the full anchor is resolved on click).
+ * The topmost element of the HOST PAGE at a point, seeing past Reticle's own overlays.
+ *
+ * `elementsFromPoint` returns the whole stack topmost-first, so the page element is simply the first
+ * entry that is not ours. Returns undefined where the API is unavailable (jsdom) or nothing but
+ * Reticle UI is there, and the caller drops the click rather than guessing at a target.
  */
+function pageElementAt(x: number, y: number): Element | undefined {
+  const from = document.elementsFromPoint.bind(document) as
+    ((cx: number, cy: number) => Element[]) | undefined;
+  if (from === undefined) return undefined;
+  for (const el of from(x, y)) {
+    if (!isReticleUi(el)) return el;
+  }
+  return undefined;
+}
+
+function clampPop(x: number, y: number): { left: number; top: number } {
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const left = Math.min(Math.max(x, EDGE + POP_W / 2), vw - EDGE - POP_W / 2);
+  let top = y + 12;
+  if (top + POP_H > vh - EDGE) top = Math.max(EDGE, y - POP_H - 12);
+  return { left, top };
+}
+
 function describeEl(el: Element): string {
   const testid = el.getAttribute('data-testid');
   if (testid !== null && testid.length > 0) return testid;
@@ -349,7 +717,6 @@ function describeEl(el: Element): string {
   return text.length > 0 ? `${tag} "${text}"` : tag;
 }
 
-/** Construct + mount the annotator (mirrors installRecorder's ergonomics). */
 export function installAnnotator(deps: AnnotatorDeps): Annotator {
   const annotator = new Annotator(deps);
   annotator.mount();

@@ -54,7 +54,9 @@ describe('absence-derived contradictions do not assert failure', () => {
     it(`${kind} downgrades to unknown rather than claiming the action failed`, () => {
       const out = verdict([kind]);
       expect(out.verified).toBe(Verified.UNKNOWN);
-      expect(out.verifiedReason).toBe(VerifiedReason.UNSETTLED);
+      // The clause is named for what it means — evidence that had not arrived — rather than for
+      // idle, which it never measured. `unsettled` beside `settled: true` was a real field report.
+      expect(out.verifiedReason).toBe(VerifiedReason.EVIDENCE_INCOMPLETE);
     });
   }
 

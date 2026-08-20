@@ -34,7 +34,9 @@ import {
   nuxtManual,
   NUXT_PLUGIN_PATH,
 } from './snippets.js';
-import { StepStatus, type PlanInput, type Step } from './plan.js';
+import { RETICLE_CONFIG_FILE, StepStatus, type PlanInput, type Step } from './plan.js';
+import { RETICLE_DEFAULT_PORT } from '@reticlehq/core';
+import { CSP_STEP_TITLE, cspPlanProblem } from './csp-check.js';
 
 /** What adding `reticle()` to a Vite config buys, which differs by framework. */
 export const VITE_PLUGIN_DETAIL = {
@@ -521,5 +523,30 @@ export function astroSteps(input: PlanInput): Step[] {
       'add the dev-only connect <script> before </body>',
       manualWithLayout,
     ),
+  ];
+}
+
+/**
+ * A Content-Security-Policy whose `connect-src` excludes the bridge, said out loud at install time.
+ *
+ * Both reported cases were Next apps where `init` printed success for every step and the app then
+ * never connected: the browser blocked the WebSocket and reported it in its own console, which
+ * nothing on this side reads. A NOTICE rather than a step, because editing someone's security policy
+ * is theirs to do — but it carries the exact text to paste, which is the difference between a
+ * warning and a fix.
+ */
+export function cspStep(input: PlanInput): Step[] {
+  const problem = cspPlanProblem(
+    [input.nextConfigSource, input.nextLayout?.source],
+    input.options.port ?? RETICLE_DEFAULT_PORT,
+  );
+  if (problem === undefined) return [];
+  return [
+    {
+      title: CSP_STEP_TITLE,
+      target: input.nextConfigFile ?? RETICLE_CONFIG_FILE,
+      status: StepStatus.NOTICE,
+      detail: problem,
+    },
   ];
 }

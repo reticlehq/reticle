@@ -23,7 +23,7 @@ describe('presenter v2 session border', () => {
     p.destroy();
   });
 
-  it('2 border STAYS on across 10 commands — never data-on=0 mid-session', async () => {
+  it('2 border STAYS on across 10 commands - never data-on=0 mid-session', async () => {
     document.body.innerHTML = '';
     let t = 0;
     const p = new Presenter({
@@ -72,7 +72,7 @@ describe('presenter v2 session border', () => {
     p.destroy();
   });
 
-  it('3b activity log/HUD persists the whole session — never fades on idle', async () => {
+  it('3b activity log/HUD persists the whole session - never fades on idle', async () => {
     document.body.innerHTML = '';
     let t = 0;
     const p = new Presenter({
@@ -95,67 +95,93 @@ describe('presenter v2 session border', () => {
     p.destroy();
   });
 
-  it('3c minimise button collapses to a bar; clicking the bar restores it', () => {
+  it('3c minimise button collapses to the FAB; clicking the FAB restores the toolbar', () => {
     document.body.innerHTML = '';
     const p = new Presenter({ border: 'session' });
     p.mount();
     const overlay = document.querySelector('div[data-reticle-overlay]') as HTMLElement;
-    const head = document.querySelector('.reticle-hud-head') as HTMLElement;
+    const fab = document.querySelector('[data-reticle-fab]') as HTMLElement;
     (document.querySelector('[data-reticle-min-btn]') as HTMLElement).click();
-    expect(overlay.getAttribute('data-reticle-min')).toBe('1'); // collapsed to the bar
-    head.click(); // clicking the minimised bar restores the panel
+    expect(overlay.getAttribute('data-reticle-min')).toBe('1');
+    fab.click();
     expect(overlay.getAttribute('data-reticle-min')).toBe('0');
     p.destroy();
   });
 
-  it('3c-brand collapsing swaps the wordmark for the mark alone', () => {
+  it('3c-d dragging the collapsed FAB then clicking still expands on the first tap', () => {
     document.body.innerHTML = '';
     const p = new Presenter({ border: 'session' });
     p.mount();
-    const head = document.querySelector('.reticle-hud-head') as HTMLElement;
-    const mark = document.querySelector('.reticle-mark') as SVGElement;
-    const wordmark = document.querySelector('.reticle-wordmark') as SVGElement;
-    const shown = (el: Element): boolean => 'none' !== getComputedStyle(el).display;
-
-    expect(shown(wordmark)).toBe(true); // expanded → wordmark
-    expect(shown(mark)).toBe(false);
-
+    const overlay = document.querySelector('div[data-reticle-overlay]') as HTMLElement;
+    const dock = document.querySelector('[data-reticle-dock]') as HTMLElement;
+    const fab = document.querySelector('[data-reticle-fab]') as HTMLElement;
     (document.querySelector('[data-reticle-min-btn]') as HTMLElement).click();
-    expect(shown(mark)).toBe(true); // collapsed → mark only
-    expect(shown(wordmark)).toBe(false);
-    // The decorative blinking dot was removed — the mark identifies the panel on its own, and a dot
-    // that never changed carried no state to lose. Pinned so it does not creep back in.
-    expect(document.querySelector('.reticle-dot')).toBeNull();
-    expect(shown(document.querySelector('.reticle-live') as HTMLElement)).toBe(true);
+    expect(overlay.getAttribute('data-reticle-min')).toBe('1');
 
-    head.click(); // restore
-    expect(shown(wordmark)).toBe(true);
-    expect(shown(mark)).toBe(false);
+    fab.dispatchEvent(
+      new PointerEvent('pointerdown', {
+        bubbles: true,
+        clientX: 120,
+        clientY: 120,
+        pointerId: 3,
+        button: 0,
+      }),
+    );
+    fab.dispatchEvent(
+      new PointerEvent('pointermove', { bubbles: true, clientX: 180, clientY: 150, pointerId: 3 }),
+    );
+    fab.dispatchEvent(
+      new PointerEvent('pointerup', { bubbles: true, clientX: 180, clientY: 150, pointerId: 3 }),
+    );
+    expect(dock.getAttribute('data-dragged')).toBe('1');
+
+    fab.click(); // drag-suppressed click must not expand
+    expect(overlay.getAttribute('data-reticle-min')).toBe('1');
+    fab.click(); // next click expands
+    expect(overlay.getAttribute('data-reticle-min')).toBe('0');
     p.destroy();
   });
 
-  it('3c-a11y the marks are decorative; the HUD keeps its name in both states', () => {
+  it('3c-brand collapsing shows the FAB mark; expanding shows the icon toolbar', () => {
     document.body.innerHTML = '';
     const p = new Presenter({ border: 'session' });
     p.mount();
-    const brand = document.querySelector('.reticle-brand') as HTMLElement;
-    for (const svg of brand.querySelectorAll('svg')) {
-      expect(svg.getAttribute('aria-hidden')).toBe('true');
-    }
-    expect(brand.querySelector('.reticle-brand-sr')?.textContent).toBe(BRAND_NAME);
+    p.sessionStart();
+    document
+      .querySelector('[data-reticle-fab]')
+      ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    const overlay = document.querySelector('div[data-reticle-overlay]') as HTMLElement;
+    const fabMark = document.querySelector('.reticle-fab-mark') as SVGElement;
+    const toolbar = document.querySelector('.reticle-toolbar') as HTMLElement;
+    const shown = (el: Element | null): boolean =>
+      el !== null && 'none' !== getComputedStyle(el).display;
+
+    expect(overlay.getAttribute('data-reticle-min')).toBe('0');
+    expect(shown(toolbar)).toBe(true);
+    expect(toolbar.querySelector('[data-reticle-chat-toggle]')).not.toBeNull();
+
     (document.querySelector('[data-reticle-min-btn]') as HTMLElement).click();
-    // the name survives the collapse — the brand block is no longer hidden with the rest
-    expect(getComputedStyle(brand).display).not.toBe('none');
+    expect(shown(fabMark)).toBe(true);
+    expect(overlay.getAttribute('data-reticle-min')).toBe('1');
     p.destroy();
   });
 
-  it('3d the minimised bar shows the latest activity in the live line', () => {
+  it('3c-a11y the FAB mark is decorative; the control keeps its name in both states', () => {
     document.body.innerHTML = '';
     const p = new Presenter({ border: 'session' });
     p.mount();
-    p.log('act', 'Clicking Pay');
-    p.log('narration', 'now checking the receipt');
-    expect(document.querySelector('.reticle-live')?.textContent).toBe('now checking the receipt');
+    const fab = document.querySelector('[data-reticle-fab]') as HTMLElement;
+    expect(fab.querySelector('svg')?.getAttribute('aria-hidden')).toBe('true');
+    expect(fab.getAttribute('aria-label')).toContain(BRAND_NAME);
+    p.destroy();
+  });
+
+  it('3d the act strip shows the latest status line', () => {
+    document.body.innerHTML = '';
+    const p = new Presenter({ border: 'session' });
+    p.mount();
+    p.status('now checking the receipt');
+    expect(document.querySelector('.reticle-act')?.textContent).toBe('now checking the receipt');
     p.destroy();
   });
 
@@ -224,7 +250,7 @@ describe('presenter v2 session border', () => {
     p.status('x');
     t += 1000;
     // Poll instead of a fixed wait: the busy→fading→idle chain runs on real timers, which fire late
-    // under load — a fixed sleep flaked ("fading" instead of "idle"). The clock (now) is fixed, so
+    // under load - a fixed sleep flaked ("fading" instead of "idle"). The clock (now) is fixed, so
     // the logic is deterministic; only the timer scheduling is slow.
     expect(await until(() => 'idle' === p.glowPhase())).toBe(true);
     expect(dataBusy()).toBe('0');
@@ -263,7 +289,7 @@ describe("presenter v2 border:'busy' back-compat", () => {
     expect(dataOn()).toBe('1');
     t += 1000;
     // POLL for the fade to COMPLETE, do not race a fixed sleep against it. The fade is driven by
-    // native timers, and `wait(idle + fade + 20)` assumed they always fire inside that window — under
+    // native timers, and `wait(idle + fade + 20)` assumed they always fire inside that window - under
     // parallel test load they do not, so this asserted "still fading" as a failure only in CI. Waiting
     // for the terminal state up to a generous bound tests the invariant (it eventually goes idle),
     // not the machine's timer latency.
@@ -337,18 +363,16 @@ describe('presenter v2 not-mounted safety', () => {
 });
 
 describe('presenter v2 HUD positioning', () => {
-  it('HUD is docked bottom-center with a fixed size (never resizes with content)', () => {
+  it('dock is bottom-right by default and can be dragged off-dock', () => {
     document.body.innerHTML = '';
     const p = new Presenter({ paceMs: 0 });
     p.mount();
 
     const css = document.querySelector('style[data-reticle-overlay]')?.textContent ?? '';
-    // bottom-center dock (like a chatbox), horizontally centered
-    expect(css).toContain('left:50%;right:auto;bottom:20px');
-    expect(css).toContain('translateX(-50%)');
-    // fixed width + height so the panel doesn't jump with children's text width
-    expect(css).toContain('width:384px;height:468px');
-    // the feed flexes/scrolls inside the fixed card
+    expect(css).toContain('right:20px');
+    expect(css).toContain('bottom:20px');
+    expect(css).not.toContain('[data-reticle-dock]{position:relative;}');
+    expect(css).toContain('[data-reticle-dock][data-dragged="1"]');
     expect(css).toContain('[data-reticle-log]{flex:1;min-height:0;overflow-y:auto');
 
     p.destroy();

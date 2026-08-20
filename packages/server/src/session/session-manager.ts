@@ -5,6 +5,7 @@ import {
 } from '../input/driven-redaction.js';
 import { Session, type SessionInfo } from './session.js';
 import { AttachmentHistory } from './attachment-history.js';
+import type { NoSessionNextAction } from './no-session-next-action.js';
 
 /**
  * The agent's active project, used to scope auto-selection. `projectId` is the stable build-stamped
@@ -99,8 +100,22 @@ export class SessionManager {
     this.#defaultScope = scope;
   }
 
+  /**
+   * Told about every session that registers, so the fact outlives this process.
+   *
+   * Injected rather than done here: this class owns a registry, not the filesystem. Wired here
+   * because `add` is the ONE method every path that registers a session goes through — the same
+   * reasoning that put the redaction declaration below it.
+   */
+  #recordConnection: ((projectId: string | undefined) => void) | undefined;
+
+  setConnectionRecorder(record: ((projectId: string | undefined) => void) | undefined): void {
+    this.#recordConnection = record;
+  }
+
   add(session: Session): Session | undefined {
     this.#everConnected = true;
+    this.#recordConnection?.(session.projectId);
     const previous = this.#sessions.get(session.id);
     this.#sessions.set(session.id, session);
     // Publish what this app declared sensitive to the driven-path rule. Here rather than in the
@@ -202,6 +217,23 @@ export class SessionManager {
     return this.#noSessionHint?.();
   }
 
+  /**
+   * The same diagnosis with the prose taken out — one action kind and one literal command.
+   *
+   * Separate from the hint rather than folded into it because the two have different consumers and
+   * different lifetimes: `resolve` throws an Error, which can only ever carry a string, while
+   * `reticle_sessions` returns a structured payload an agent can branch on without parsing English.
+   */
+  #noSessionNextAction: (() => NoSessionNextAction | undefined) | undefined;
+
+  setNoSessionNextAction(next: (() => NoSessionNextAction | undefined) | undefined): void {
+    this.#noSessionNextAction = next;
+  }
+
+  noSessionNextAction(): NoSessionNextAction | undefined {
+    return this.#noSessionNextAction?.();
+  }
+
   /** Whether any session has connected since this daemon booted — half the diagnosis. */
   #everConnected = false;
 
@@ -262,12 +294,16 @@ export class SessionManager {
       const closure = this.lastClosure();
       // A diagnosis beats a checklist: it names which of the three causes this actually is.
       const hint = this.#noSessionHint?.();
-      if (hint !== undefined && closure === undefined) throw new Error(hint);
-      throw new Error(
+      // BOTH, when there are both — the two answer different questions and the pair is strictly
+      // more than either. This used to be an either/or, and a recorded refusal DISCARDED the whole
+      // diagnosis: the one case where the daemon has hard evidence about why nothing is connected
+      // was also the one case where it threw away everything else it had learned, including the
+      // port scan and the next action. The refusal leads, because it is the fact.
+      const refusal =
         closure === undefined
-          ? NO_SESSION_CONNECTED_ERROR
-          : `${NO_SESSION_CONNECTED_ERROR} NOTE: the bridge REFUSED or closed a connection recently — "${closure.reason}". The app is probably still running and trying to connect: it was turned away, and the SDK does not retry after a policy close. The reason above names the fix — do not go looking for a stopped dev server.`,
-      );
+          ? ''
+          : ` NOTE: the bridge REFUSED or closed a connection recently — "${closure.reason}". The app is probably still running and trying to connect: it was turned away, and the SDK does not retry after a policy close. The reason above names the fix — do not go looking for a stopped dev server.`;
+      throw new Error(`${hint ?? NO_SESSION_CONNECTED_ERROR}${refusal}`);
     }
     // Scope to the agent's active project FIRST, so a stray tab from another app/origin (e.g. a
     // leftover dashboard on a different port) is structurally unselectable — it never enters the

@@ -120,7 +120,7 @@ interface NetCallView {
    */
   oneWay?: boolean;
 }
-export function projectNetCall(e: ReticleEvent): NetCallView {
+export function projectNetCall(e: ReticleEvent, includeBodies = true): NetCallView {
   const status = e.data['status'];
   const ms = asNumber(e.data['durationMs']);
   const statusText = asString(e.data['statusText']);
@@ -136,9 +136,14 @@ export function projectNetCall(e: ReticleEvent): NetCallView {
   if (statusText !== undefined) view.statusText = statusText;
   if (contentType !== undefined) view.contentType = contentType;
   if (responseSize !== undefined) view.responseSize = responseSize;
-  if (requestBody !== undefined) view.requestBody = requestBody;
-  if (responseBody !== undefined) view.responseBody = responseBody;
-  if (true === e.data['requestBodyTruncated'] || true === e.data['responseBodyTruncated']) {
+  // Bodies dominate the payload of the most-called read tool, and are only occasionally the part
+  // anyone wanted — `bodies: false` on reticle_network drops them for a body-free listing (#401).
+  if (includeBodies && requestBody !== undefined) view.requestBody = requestBody;
+  if (includeBodies && responseBody !== undefined) view.responseBody = responseBody;
+  if (
+    includeBodies &&
+    (true === e.data['requestBodyTruncated'] || true === e.data['responseBodyTruncated'])
+  ) {
     view.bodyTruncated = true;
   }
   if (ms !== undefined) view.ms = ms;

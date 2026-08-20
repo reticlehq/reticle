@@ -140,6 +140,9 @@ export const ANNOTATE_TOOLS: ToolDef[] = [
       recovery: z.string().optional(),
       target: z.string().optional(),
       compiled: z.string().optional(),
+      // Set when the compiled annotation would overstate what a replay can check — e.g. a
+      // success-state that flow_save will grade assertion-free (#395).
+      note: z.string().optional(),
       code: z.string().optional(),
     },
     handler: (deps: ToolDeps, args): Promise<AnnotateResult> => {

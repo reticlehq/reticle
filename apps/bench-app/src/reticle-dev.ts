@@ -70,6 +70,11 @@ const TESTIDS = [
   'fault-buggy',
   'request-log',
   'console-count',
+  'saved-items-heading',
+  'saved-item-input',
+  'saved-item-submit',
+  'saved-item-list',
+  'saved-item-error',
 ];
 
 const FLOWS = [

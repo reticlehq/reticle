@@ -45,6 +45,16 @@ const HUD_LEVELS = ['info', 'warn', 'error'] as const;
 const HUD_LEVEL_LIST = HUD_LEVELS.join(' | ');
 const hudLevelEnum = z.enum(HUD_LEVELS);
 
+/**
+ * How deep an unscoped `reticle_state` read goes before collapsing to size markers.
+ *
+ * 3 keeps every store name and every top-level key visible — enough to see what exists and to name a
+ * `path` — while collapsing the collections that make an unscoped read enormous. Measured on the
+ * bench fixture: unbounded 10,119 B, depth 4 1,323 B, depth 3 596 B, depth 2 322 B. Two loses the
+ * per-store keys, which is the orientation the next call needs.
+ */
+const DEFAULT_STATE_DEPTH = 1;
+
 export const READ_TOOLS: ToolDef[] = [
   {
     name: ReticleTool.BASELINE_SAVE,
@@ -451,7 +461,48 @@ export const READ_TOOLS: ToolDef[] = [
       }
 
       if (path === undefined && depth === undefined) {
-        return { ...(root as Record<string, unknown>), storeNames: names }; // unchanged shape, safe storeNames
+        // An unscoped read used to hand back the WHOLE store tree: 10,119 bytes on this repo's own
+        // fixture. A tool result is not paid once — it stays in the conversation and is re-sent on
+        // every later turn, so one such read cost roughly 34,000 tokens across a 16-turn run.
+        //
+        // The VALUES are bounded; the ENVELOPE is not touched. `{ stores, storeNames, component }`
+        // is the documented shape and callers depend on it — a first attempt applied the bound by
+        // routing through the path selector, which silently changed the reply to `{ found, value }`
+        // and took the component projection and the bridge round-trip with it. Capping in place
+        // keeps every store name and the component read exactly where they were; only collections
+        // deeper than the bound collapse to a marker like "[Array(40)]", which still says what is
+        // there and how much of it.
+        //
+        // A default, not a cap: any explicit `depth` is honoured at any value, and `path` reads a
+        // sub-tree at full fidelity. Nothing became unreachable, only cheaper by default.
+        const stores = root.stores;
+        const bounded =
+          'object' === typeof stores && null !== stores
+            ? Object.fromEntries(
+                Object.entries(stores).map(([k, v]) => [k, capDepth(v, DEFAULT_STATE_DEPTH)]),
+              )
+            : undefined;
+        // Say that it was bounded, and only when it actually was. A read that quietly hands back
+        // less than it was asked for is the shape of a false green: the agent sees
+        // `deployments: "[Array(40)]"`, concludes it has read the store, and asserts over a summary.
+        // The marker alone is suggestive; this makes it explicit and names the way to the real value.
+        const trimmed = bounded !== undefined && JSON.stringify(bounded) !== JSON.stringify(stores);
+        return {
+          ...(root as Record<string, unknown>),
+          ...(bounded === undefined ? {} : { stores: bounded }),
+          storeNames: names,
+          ...(trimmed
+            ? {
+                truncation: {
+                  note:
+                    `bounded to depth ${String(DEFAULT_STATE_DEPTH)} per store — this is NOT the ` +
+                    'whole store. Values shown as "[Array(n)]" or "{…n keys}" were collapsed; read ' +
+                    'one with { store, path } (e.g. { store:"app", path:"deployments.0" }) or pass ' +
+                    'an explicit `depth` for more.',
+                },
+              }
+            : {}),
+        };
       }
 
       // Back-compat: an older browser returned the whole store; scope it here (may already be

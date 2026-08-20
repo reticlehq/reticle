@@ -279,3 +279,34 @@ describe('un-scriptable tab recommendation', () => {
     expect(session.health().recommendation).toBe(UNSCRIPTABLE_TAB_RECOMMENDATION);
   });
 });
+
+/**
+ * An observer that throws must not end the daemon.
+ *
+ * `pushEvent` runs inside the bridge's websocket `message` handler, which is a plain non-async
+ * callback: a sync throw out of a subscriber escapes every try/catch the tool call is wrapped in,
+ * reaches the process as an uncaughtException, and the daemon answers that by exiting — killing
+ * every agent and every browser session on that port, from every project sharing it. The
+ * session-ready fan-out has been individually wrapped for this reason for a long time; the event
+ * fan-out, which runs thousands of times more often, was not.
+ */
+describe('an event observer that throws', () => {
+  const anyEvent = (): ReticleEvent =>
+    ({
+      type: EventType.ROUTE_CHANGE,
+      data: { from: 'x', to: 'http://localhost/next', pathname: '', search: '', hash: '' },
+    }) as unknown as ReticleEvent;
+
+  it('neither escapes pushEvent nor costs the other observers their turn', () => {
+    const { session } = makeSession();
+    const seen: string[] = [];
+    session.onEvent(() => seen.push('before'));
+    session.onEvent(() => {
+      throw new Error('an observer with a bug in it');
+    });
+    session.onEvent(() => seen.push('after'));
+
+    expect(() => session.pushEvent(anyEvent())).not.toThrow();
+    expect(seen).toEqual(['before', 'after']);
+  });
+});

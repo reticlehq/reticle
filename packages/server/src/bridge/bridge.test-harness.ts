@@ -39,6 +39,11 @@ export class FakeBrowser {
   queryResolves = true;
   /** Records every command the bridge sent (for replay assertions). */
   readonly received: { name: string; args: Record<string, unknown> }[] = [];
+  /** The snapshot tree to return. Mutable so tests can vary the page between calls. */
+  snapshotResult: { tree: string; status: Record<string, unknown> } = {
+    tree: '- button "Pay" (ref=e7)\n- dialog "Order confirmed" (ref=e12)',
+    status: { route: '/checkout' },
+  };
 
   constructor(
     port: number,
@@ -159,10 +164,7 @@ export class FakeBrowser {
         component: args['ref'] !== undefined ? { component: 'PayButton', hooks: [0] } : undefined,
       };
     } else if (name === ReticleCommand.SNAPSHOT) {
-      result = {
-        tree: '- button "Pay" (ref=e7)\n- dialog "Order confirmed" (ref=e12)',
-        status: { route: '/checkout' },
-      };
+      result = this.snapshotResult;
     } else if (name === ReticleCommand.CAPABILITIES) {
       if (!this.handlesCapabilities) {
         this.#send({

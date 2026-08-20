@@ -68,6 +68,11 @@ const LABEL: Record<BlindSpotKind, (n: number) => string> = {
   // instrumentation would produce one.
   [BlindSpotKind.VERDICTLESS_SEND]: (n) =>
     `${String(n)} one-way IPC send${1 === n ? '' : 's'} dispatched with NO verdict — the renderer never learns whether the main process handled ${1 === n ? 'it' : 'them'}, so this cannot be confirmed from the page`,
+  // Not a tally — a fact about the app's wiring, phrased as what the EMPTY state channel means. An
+  // agent reading `stateDiffs: []` otherwise reads "the app changed no state", which is a claim
+  // nothing here can support. Names the one-line fix, because the reader is the one who can apply it.
+  [BlindSpotKind.UNWATCHED_STATE]: () =>
+    'no subscribable store is registered, so NO state change is observed — an empty stateDiffs here means unwatched, not unchanged (register the store itself in your reticle-dev module: registerStore(name, store), not a getter)',
   [BlindSpotKind.WRAPPED_NETWORK]: () =>
     'fetch was already wrapped before Reticle, so recorded requests may differ from what was sent',
   // A fact about the app's wiring, not a tally. Says what the empty network view MEANS, because an

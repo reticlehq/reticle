@@ -79,11 +79,12 @@ export function buildDynamicTools(allTools: ToolDef[], profile?: ToolSurfaceOrig
       : {
           profile: {
             ...profile,
-            // NOT "every tool is reachable via reticle_run under any profile" — measured false:
-            // `full` advertises all 46 tools DIRECTLY and carries no meta-tools at all, so
-            // reticle_run does not exist there. Saying otherwise sends the agent to a tool the
-            // profile does not have.
-            note: `The profile is read once at daemon startup: change ${TOOL_PROFILE_ENV} and restart the daemon, or it has no effect. Under this profile every unadvertised tool is reachable through reticle_run; under \`full\` there are no meta-tools because every tool is advertised directly.`,
+            // This used to say `full` carries no meta-tools because it advertised everything
+            // directly. That stopped being true when the advertised surface was capped: no surface
+            // advertises the whole registry any more, so BOTH meta-tools are on every surface and
+            // reticle_run is always the way to the tail. The old wording would now send an agent
+            // away from the only tool that can reach half the registry.
+            note: `The surface is read once at daemon startup: change ${TOOL_PROFILE_ENV} and restart the daemon, or it has no effect. No surface advertises every tool — the advertised count is capped because editors budget tools across all connected MCP servers. Every tool listed here is callable through reticle_run { tool, args } whether or not it is advertised.`,
           },
         };
 
@@ -102,10 +103,18 @@ export function buildDynamicTools(allTools: ToolDef[], profile?: ToolSurfaceOrig
         ? (args['names'] as unknown[]).filter((n): n is string => 'string' === typeof n)
         : undefined;
       if (names === undefined || 0 === names.length) {
+        // The COUNT is stated, not just implied by the array length. An agent that can see 18 tools
+        // has no way to know whether that is all of them; being told the registry holds more is what
+        // turns "these are the tools" into "these are the tools I was shown".
+        const catalog = allTools.map((t) => ({
+          name: t.name,
+          summary: firstSentence(t.description),
+        }));
         return Promise.resolve({
-          tools: allTools.map((t) => ({ name: t.name, summary: firstSentence(t.description) })),
+          total: catalog.length,
+          tools: catalog,
           ...profileBlock,
-          next: 'Load params with reticle_tools { names:[…] }, then call reticle_run { tool, args }.',
+          next: `All ${catalog.length} tools above are callable, advertised or not. Load full params with reticle_tools { names:[…] }, then call reticle_run { tool, args }.`,
         });
       }
       return Promise.resolve({

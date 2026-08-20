@@ -92,6 +92,10 @@ const KNOWN_REMOVED = new Map<string, string>([
     'reticle_run_record',
     'RETIRED from the surface, not removed: tools.ts RETIRED_FROM_SURFACE records that flow_replay already auto-records run outcomes, so a manual append was redundant. The handler still exists and works; it is simply not advertised. An earlier note here claimed the capability was lost — it was not, and the claim came from reading a missing tool name without checking the retirement list.',
   ],
+  [
+    'reticle_record_stop',
+    'MERGED into reticle_record { action: "stop" }, and named in a spec on purpose rather than called. `skill-one-call-paths-test` asserts that this spelling is still refused WITH the redirect, because it is the mistake a draft of SKILL.md actually made — the instructions would have been refused at runtime while reading perfectly sensibly. A reference that exists to prove a name is gone is the one case this guard cannot tell from a call, so it is exempted here rather than obscured in the spec.',
+  ],
 ]);
 
 function specFiles(): string[] {

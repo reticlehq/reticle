@@ -22,11 +22,27 @@ const FALLBACK_PROJECT_BASE = 'app';
 
 /** `@acme/web` → `acme-web`; non-alphanumerics collapse to single dashes; edges trimmed. */
 export function slugifyPackageName(name: string): string {
-  return name
+  const collapsed = name
     .toLowerCase()
     .replace(/^@/, '')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
+    .replace(/[^a-z0-9]+/g, '-');
+  return trimChar(collapsed, '-');
+}
+
+/**
+ * Trim a repeated character from both ends without a regex.
+ *
+ * `/^-+|-+$/` is an anchored quantifier, and on a string of many dashes the engine retries the
+ * match from every position: linear input, quadratic work. Nothing hostile reaches here today (the
+ * inputs are the user's own package name and path), which is exactly why it would have gone
+ * unnoticed if something ever did. Two index walks cost nothing and cannot backtrack.
+ */
+function trimChar(value: string, char: string): string {
+  let start = 0;
+  let end = value.length;
+  while (start < end && value[start] === char) start += 1;
+  while (end > start && value[end - 1] === char) end -= 1;
+  return value.slice(start, end);
 }
 
 /**
@@ -34,7 +50,10 @@ export function slugifyPackageName(name: string): string {
  * Node. Handles both separators so a Windows root produces the same id as a POSIX one.
  */
 function pathTail(path: string): string {
-  const trimmed = path.replace(/[/\\]+$/, '');
+  // Same reason as `trimChar`: an anchored `+` over a run of separators backtracks quadratically.
+  let end = path.length;
+  while (end > 0 && ('/' === path[end - 1] || '\\' === path[end - 1])) end -= 1;
+  const trimmed = path.slice(0, end);
   const cut = Math.max(trimmed.lastIndexOf('/'), trimmed.lastIndexOf('\\'));
   return -1 === cut ? trimmed : trimmed.slice(cut + 1);
 }

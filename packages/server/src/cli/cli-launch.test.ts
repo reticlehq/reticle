@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { decideOpen, drivePortConflict, openCommand, openInBrowser } from './cli-launch.js';
-import { PortPresence, describePresence } from '../daemon/port-presence.js';
+import { decideOpen, openCommand, openInBrowser } from './cli-launch.js';
 
 describe('decideOpen', () => {
   it('with no url + a connected tab → reuse it (do not spawn a duplicate)', () => {
@@ -100,42 +99,5 @@ describe('openInBrowser', () => {
       Promise.resolve('spawn xdg-open ENOENT'),
     );
     expect(failure).toBe('spawn xdg-open ENOENT');
-  });
-});
-
-/**
- * `reticle drive` bound the daemon port unconditionally, and a daemon already listening is the
- * NORMAL state once an MCP client has started one. The bind failed with a raw `node:net` stack
- * trace — the one command in this CLI that answered a user with a Node core dump instead of a
- * structured Reticle error, and the command Reticle's own `reticle_sessions` recommendation tells
- * people to run in exactly the situation that guarantees the collision.
- */
-describe('drivePortConflict', () => {
-  it('lets drive proceed when nothing holds the port', () => {
-    expect(drivePortConflict(PortPresence.FREE, 4400)).toBeUndefined();
-  });
-
-  it('names the running daemon, its pid, and the three ways out', () => {
-    const message = drivePortConflict(PortPresence.DAEMON, 4400, { ourPid: 24735 });
-    expect(message).toContain('4400');
-    expect(message).toContain('24735');
-    expect(message).toContain('reticle stop');
-    // `drive` has no --port flag; naming one would be a next step that does not exist.
-    expect(message).toContain('RETICLE_PORT');
-    expect(message).not.toContain('--port');
-    // The daemon's own no-session diagnostic already points here, and it works with no free port.
-    expect(message).toContain('reticle_lease');
-  });
-
-  it('still names the daemon when no pid was recorded for the port', () => {
-    const message = drivePortConflict(PortPresence.DAEMON, 4400, { ourPid: null });
-    expect(message).toContain('4400');
-    expect(message).not.toContain('pid ');
-  });
-
-  it('hands a foreign holder to the sentence that already explains one', () => {
-    expect(drivePortConflict(PortPresence.FOREIGN, 4400)).toBe(
-      describePresence(PortPresence.FOREIGN, 4400),
-    );
   });
 });

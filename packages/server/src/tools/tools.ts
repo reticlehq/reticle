@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { QueryBy, ReticleCommand, SnapshotMode } from '@reticlehq/core';
+import { NoSessionAction, QueryBy, ReticleCommand, SnapshotMode } from '@reticlehq/core';
 import { ReticleTool } from './tool-names.js';
 import { withSizeCost } from '../session/output-budget.js';
 import { applySnapshotDelta, SnapshotCache } from './snapshot-delta.js';
@@ -96,6 +96,17 @@ const RAW_TOOLS: ToolDef[] = [
         .describe(
           'Present ONLY when `sessions` is empty: why nothing is connected, and the next action that fixes it. An empty list is never the end of the road — read this before concluding the app cannot be driven.',
         ),
+      next_action: z
+        .object({
+          action: z.nativeEnum(NoSessionAction),
+          command: z.string().optional(),
+          port: z.number().optional(),
+          reason: z.string(),
+        })
+        .optional()
+        .describe(
+          "Present ONLY when `sessions` is empty: the same answer as `why`, executable. `command` is the LITERAL command to run, sourced from this project's own package.json scripts and lockfile — it is absent, never guessed, when the project declares no dev script. `action` is one of start_dev_server | run_init | open_app | reopen_app.",
+        ),
     },
     handler: async (deps) => {
       const provider = deps.realInput;
@@ -113,7 +124,14 @@ const RAW_TOOLS: ToolDef[] = [
       // rather than only when a later tool fails for want of a session.
       if (0 === sessions.length) {
         const why = deps.sessions.noSessionHint();
-        return { sessions, ...(why === undefined ? {} : { why }) };
+        // The executable half. `why` is for the human reading the transcript; this is the one the
+        // agent acts on, so it never has to parse a paragraph to find a command inside it.
+        const next = deps.sessions.noSessionNextAction();
+        return {
+          sessions,
+          ...(why === undefined ? {} : { why }),
+          ...(next === undefined ? {} : { next_action: next }),
+        };
       }
       return { sessions };
     },
@@ -149,11 +167,18 @@ const RAW_TOOLS: ToolDef[] = [
         .string()
         .optional()
         .describe('Indented ARIA tree of every element on the page (or the scoped subtree).'),
-      status: z.object({ route: z.string(), title: z.string().optional() }).optional(),
+      status: z
+        .object({
+          route: z.string(),
+          title: z.string().optional(),
+          visibleDialogs: z.array(z.string()).optional(),
+          overlayHidingPage: z.string().optional(),
+        })
+        .optional(),
       mode: z
         .string()
         .optional()
-        .describe('delta | unchanged when diff:true returned a change set.'),
+        .describe('full | delta | unchanged — which kind of diff response this is.'),
       delta: z
         .object({
           added: z.array(z.string()),
@@ -163,6 +188,17 @@ const RAW_TOOLS: ToolDef[] = [
         })
         .optional()
         .describe('Only present on a diff:true call that found changes.'),
+      changed: z
+        .array(z.string())
+        .optional()
+        .describe(
+          'Elements whose value changed in place (same ref, different content) — not a structural add/remove.',
+        ),
+      changedCount: z.number().optional().describe('Number of elements in `changed`.'),
+      reason: z
+        .string()
+        .optional()
+        .describe('Why mode is "full": first snapshot for this route, or route changed.'),
       cost: z
         .object({ bytes: z.number(), tokens: z.number() })
         .optional()
@@ -454,6 +490,15 @@ const RAW_TOOLS: ToolDef[] = [
        * Reticle build plugin in dev; absent in production builds.
        */
       source: z.string().optional(),
+      /**
+       * Why `source` is missing, when it is.
+       *
+       * Distinguishes "this element has no stamp" from "nothing on this page has one, so the
+       * stamping loader is not running" — the second means `file:line` is unavailable for the
+       * whole session and the fix is a build-config change, which used to be discoverable only by
+       * reading the adapter's own source.
+       */
+      sourceUnavailable: z.string().optional(),
       /**
        * Component identity from the framework adapter (@reticlehq/react).
        *

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { PendingCommands } from './pending-commands.js';
+import { PendingCommands, CommandTimeoutError } from './pending-commands.js';
 
 const result = (
   id: string,
@@ -55,5 +55,30 @@ describe('PendingCommands', () => {
     } finally {
       spy.mockRestore();
     }
+  });
+});
+
+/**
+ * The two ways a command can fail mean opposite things, so a caller has to be able to tell them
+ * apart. A rejection from a replaced transport says the question never reached the page and is worth
+ * asking again; a timeout says the page WAS asked and did not answer in the budget, and asking again
+ * spends a budget that is gone. `Session.command` refuses to re-issue a timeout into a replacement
+ * on the strength of this type.
+ */
+describe('a timeout is distinguishable from every other failure', () => {
+  it('rejects with CommandTimeoutError, not a bare Error', async () => {
+    const pending = new PendingCommands();
+    const id = pending.nextId('c');
+    await expect(pending.track(id, 1, () => 'timed out')).rejects.toBeInstanceOf(
+      CommandTimeoutError,
+    );
+  });
+
+  it('and a rejectAll is NOT one — that is a transport failure, which may be retried', async () => {
+    const pending = new PendingCommands();
+    const id = pending.nextId('c');
+    const call = pending.track(id, 10_000, () => 'timed out');
+    pending.rejectAll('session replaced by a newer connection claiming the same id');
+    await expect(call).rejects.not.toBeInstanceOf(CommandTimeoutError);
   });
 });

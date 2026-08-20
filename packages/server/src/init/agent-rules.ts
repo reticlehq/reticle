@@ -123,6 +123,8 @@ A dev server that is already running does not pick up an edited build config or 
 - **If Reticle cannot run** (no daemon, or this is not a running web app), say so. Do not skip verification silently.
 - **Setup is not finished until one real flow has been driven and produced a verdict.** \`init\` exiting 0, the tools appearing, and a session being listed are all things that happen before anything has been verified.
 
+**The \`/reticle\` skill runs this whole loop for you** — detect, connect, drive one flow, report. If your client does not have it, install it once: \`/plugin marketplace add reticlehq/reticle\` then \`/plugin install reticle@reticlehq\` in Claude Code, or \`npx skills add reticlehq/reticle\` anywhere the skills CLI works.
+
 **Report Reticle's own defects with \`reticle_feedback\` the moment you notice**, then carry on with your task. You are the user Reticle is built for and the only one who can say what it cost you, and that knowledge is gone when your context is.
 
 📄 **The rest is in [RETICLE.md](./${RETICLE_MD_PATH}): what to do when the tools are missing, when a result carries \`version_skew\` or \`update_available\`, when \`reticle_state\` comes back empty, and how to write a feedback report that can be acted on. Read it when you hit one of those, not before.**`;

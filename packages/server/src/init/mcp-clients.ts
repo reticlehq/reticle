@@ -18,14 +18,14 @@
  * an install that reports success and registers nothing, which is the exact failure class this
  * repo's install gate exists to catch.
  */
-import { NPX, MCP_SERVER_NAME, npxServerArgs } from './mcp.js';
-import { RETICLE_NPM_PACKAGE } from '../version/server-version.js';
+import { NPX, MCP_SERVER_NAME, npxServerArgs, isReticleRegistration } from './mcp.js';
 
 export const McpClient = {
   CLAUDE_CODE: 'claude-code',
   CURSOR: 'cursor',
   WINDSURF: 'windsurf',
   OPENCODE: 'opencode',
+  ANTIGRAVITY: 'antigravity',
   CODEX: 'codex',
   GEMINI: 'gemini',
   VSCODE: 'vscode',
@@ -131,12 +131,56 @@ export const MCP_CLIENTS: readonly ClientSpec[] = [
   {
     id: McpClient.OPENCODE,
     label: 'OpenCode',
-    scope: ConfigScope.PROJECT,
-    relPath: 'opencode.json',
+    /**
+     * HOME, not PROJECT — OpenCode is installed globally and configured globally, like Cursor.
+     *
+     * It was project-scoped as `opencode.json`, and registration is gated on the marker already
+     * existing, so a project that had never written one was skipped in SILENCE: the user has OpenCode
+     * installed, `init` says nothing about it, and the tools never appear. In the field every OpenCode
+     * user connected a client and produced zero tool calls and zero app connections, which is what
+     * "you were never wired" looks like from outside.
+     *
+     * Path verified against a real install (OpenCode 1.3.17), not recalled. The extension is `.jsonc`,
+     * which the old project marker could not have matched even where a project config existed. JSONC
+     * permits comments, and a config that genuinely has them fails to parse — which `mergeClientConfig`
+     * already answers with MANUAL and a printed block, rather than rewriting somebody's file and
+     * dropping their comments.
+     */
+    scope: ConfigScope.HOME,
+    relPath: '.config/opencode/opencode.jsonc',
     format: ConfigFormat.JSON,
     serversKey: 'mcp',
     entry: openCodeEntry,
     docs: 'https://opencode.ai/docs/config — `mcp` key, type:"local", command is an array',
+  },
+  {
+    id: McpClient.ANTIGRAVITY,
+    label: 'Antigravity',
+    /**
+     * Nine users connected an MCP client through Antigravity and drove nothing at all.
+     *
+     * `init` did not know this client, so they hand-wired a registration - the connections are in the
+     * field data, so they got that far - and then never ran `init`, never instrumented an app, and
+     * never called a tool. Nothing in that state tells anyone there is a second half.
+     *
+     * Path and shape from Google's documentation rather than recall: `mcpServers`, at
+     * `~/.gemini/config/mcp_config.json`, and one file serves the 2.0 IDE, the CLI and the SDK. Same
+     * `command`/`args` object Cursor, Windsurf and Gemini CLI already use.
+     *
+     * It shares the `~/.gemini` tree with Gemini CLI, which is why the marker matters: registration is
+     * gated on the marker DIRECTORY, and these resolve to `.gemini/config` and `.gemini` respectively,
+     * so having one installed cannot make `init` write a config for the other.
+     *
+     * NOT verified against a running install. The path is documented, the merge is the shared JSON
+     * path that every other client here uses, and an unparseable config still degrades to a printed
+     * block rather than a rewrite.
+     */
+    scope: ConfigScope.HOME,
+    relPath: '.gemini/config/mcp_config.json',
+    format: ConfigFormat.JSON,
+    serversKey: 'mcpServers',
+    entry: commandArgsEntry,
+    docs: 'https://antigravity.google/docs/mcp — ~/.gemini/config/mcp_config.json, `mcpServers` key',
   },
   {
     id: McpClient.CODEX,
@@ -198,7 +242,8 @@ function parseConfig(existing: string | null): ParseResult {
  *
  * What IS repaired is a stale entry of our own shape — an old pin, a moved command — which
  * presence-only idempotency reported as "already registered" and never fixed, so an upgrade could
- * not repair the thing an upgrade exists to repair.
+ * not repair the thing an upgrade exists to repair — and a WRONG one, naming a Reticle package that
+ * has no MCP server in it (see isReticleRegistration).
  */
 function leaveEntryAlone(existing: unknown, spec: ClientSpec): boolean {
   if (JSON.stringify(existing) === JSON.stringify(spec.entry())) return true;
@@ -206,8 +251,7 @@ function leaveEntryAlone(existing: unknown, spec: ClientSpec): boolean {
   const record = existing as { command?: unknown; args?: unknown };
   // Both shapes carry the package name somewhere in a string; find it without assuming which field.
   const tokens = [record.command, record.args].flat().filter((v) => 'string' === typeof v);
-  const ours = tokens.some((t) => t === NPX) && tokens.some((t) => t.includes(RETICLE_NPM_PACKAGE));
-  return !ours;
+  return !isReticleRegistration(tokens);
 }
 
 /**

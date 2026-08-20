@@ -17,8 +17,40 @@ import { z } from 'zod';
 import { PredicateKind } from '@reticlehq/core';
 import { PredicateSchema, predicateFieldsFor } from './predicate-eval.js';
 
-/** A valid call, short enough to sit inside an error without becoming the error. */
-const EXAMPLE = '{ kind: "signal", name: "todos:loaded" }';
+/**
+ * One valid call PER KIND, because an example of another kind answers a question nobody asked.
+ *
+ * This was a single `signal` example shown for every rejection. Watched on a real drive: an agent got
+ * the `element` shape wrong, was shown a `signal` example, got `element` wrong again, and was shown
+ * the same `signal` example. A rejected predicate produces no verdict at all, so each of those was a
+ * round trip that ended with nothing — and the one field an agent most needs (`element`'s nested
+ * `query`) is exactly what a flat example cannot convey.
+ *
+ * Short by design: an example that grows past a line stops being read.
+ */
+const EXAMPLES: Readonly<Partial<Record<string, string>>> = {
+  [PredicateKind.ELEMENT]: '{ kind: "element", query: { role: "button", name: "Save" } }',
+  [PredicateKind.TEXT]: '{ kind: "text", contains: "Saved" }',
+  [PredicateKind.NET]: '{ kind: "net", method: "POST", urlContains: "/api/save", status: 200 }',
+  [PredicateKind.ROUTE]: '{ kind: "route", pathname: "/dashboard" }',
+  [PredicateKind.CONSOLE]: '{ kind: "console", level: "error", absent: true }',
+  [PredicateKind.ANIMATION]: '{ kind: "animation", name: "slide-in", completed: true }',
+  [PredicateKind.SIGNAL]: '{ kind: "signal", name: "todos:loaded" }',
+  [PredicateKind.STATE]: '{ kind: "state", path: "cart.total", equals: 0 }',
+  [PredicateKind.SETTLED]: '{ kind: "settled" }',
+  [PredicateKind.ALL_OF]:
+    '{ kind: "allOf", predicates: [{ kind: "text", contains: "Saved" }, { kind: "console", level: "error", absent: true }] }',
+  [PredicateKind.ANY_OF]:
+    '{ kind: "anyOf", predicates: [{ kind: "text", contains: "Saved" }, { kind: "text", contains: "Updated" }] }',
+  [PredicateKind.NOT]: '{ kind: "not", predicate: { kind: "text", contains: "Error" } }',
+};
+
+/** The fallback, for when the KIND itself is the mistake and there is no shape to demonstrate. */
+const GENERIC_EXAMPLE = '{ kind: "text", contains: "Saved" }';
+
+function exampleFor(kind: string): string {
+  return EXAMPLES[kind] ?? GENERIC_EXAMPLE;
+}
 
 /** `path: ["net","urlContains"]` → `net.urlContains`; an empty path means the object itself. */
 function pathOf(issue: z.ZodIssue): string {
@@ -57,7 +89,7 @@ export function parsePredicate(input: unknown): z.infer<typeof PredicateSchema> 
   throw new Error(
     `that predicate did not parse (kind "${kind}"): ${issues}. Nothing ran — the predicate was ` +
       `not evaluated, so no verdict was produced. ${accepted(kind)} ` +
-      `A valid call looks like: ${EXAMPLE}`,
+      `A valid ${kind} predicate looks like: ${exampleFor(kind)}`,
   );
 }
 

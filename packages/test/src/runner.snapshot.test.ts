@@ -8,7 +8,11 @@ import type { RunnerOptions, SpecContext } from './types.js';
 afterEach(() => clearRegistry());
 
 const noopInvoke: ToolInvoker = () => Promise.resolve(undefined);
-const buildContext = (invoke: ToolInvoker): SpecContext => ({ invoke });
+// The runner passes `t` straight through to the spec body and never reads a matcher off it, so
+// these tests hand it the one field they exercise. The cast is the assertion: if the runner ever
+// starts touching a matcher, this stub stops being honest and the test that relies on it should
+// break rather than quietly work.
+const buildContext = (invoke: ToolInvoker): SpecContext => ({ invoke }) as SpecContext;
 
 function baseOptions(): RunnerOptions {
   return { invoke: noopInvoke, buildContext, now: () => 0 };

@@ -3,7 +3,7 @@
  * so the runner never inlines free strings.
  */
 
-import { RETICLE_DEFAULT_PORT, bridgeWsUrl } from '@reticlehq/core';
+import { RETICLE_DEFAULT_PORT, ReticleDir, bridgeWsUrl } from '@reticlehq/core';
 import { UiLibrary } from './detect.js';
 import type { FoundStore } from './capabilities.js';
 import { SERVER_VERSION } from '../version/server-version.js';
@@ -404,8 +404,12 @@ export function htmlManual(
 ${staticPageSnippet(withToken)}
 
   Serving the app on something other than localhost (a hosts-file alias, a LAN IP, a container, a
-  tunnel)? Add \`allowNonLocalhost: true\` to the connect. Without it the SDK refuses to dial and says
-  so in the browser console only, so from here it looks exactly like nothing happened.`;
+  tunnel)? You need TWO things, not one: \`allowNonLocalhost: true\` AND a pairing token, passed as
+  \`token\` on the same connect. The flag alone is NOT sufficient — off localhost the SDK refuses
+  without a token as well, and that refusal is page-side, so the daemon sees only silence and every
+  \`reticle doctor\` check still passes. The token is the one in \`~/.reticle/pairing-token\` (the
+  build plugins read the same file). Without both, the SDK says so in the browser console only, so
+  from here it looks exactly like nothing happened.`;
 }
 
 export const NEXT_RETICLE_DEV_PATH = 'app/reticle-dev.tsx';
@@ -521,9 +525,23 @@ and no index.html to inject into. Wire it with a dev-only CLIENT plugin, which i
 2. Restart the dev server. A dev server that is already running does not pick up a new plugin —
    it will not appear in .nuxt/plugins/client.mjs, and the app will come up with no SDK at all.
 
-3. If your dev host is anything other than localhost (a hosts-file alias, a LAN IP, a tunnel), add
-   allowNonLocalhost: true to that connect call. Without it the SDK loads and then refuses, and the
-   only sign is one line in the browser console.
+3. If your dev host is anything other than localhost (a hosts-file alias, a LAN IP, a tunnel), that
+   connect call needs TWO additions, not one: allowNonLocalhost: true AND a pairing token passed as
+   token. The flag alone is NOT sufficient off localhost. The token is the one in
+   ~/.reticle/pairing-token. Without both, the SDK loads and then refuses, and the only sign is one
+   line in the browser console.
+
+4. Add this to nuxt.config, so the dev server does not watch Reticle's own journal:
+
+     vite: { server: { watch: { ignored: [/(^|[\\\\/])\\.${ReticleDir.ROOT.slice(1)}([\\\\/]|$)/] } } }
+
+   Reticle journals every session into ${ReticleDir.ROOT}/ in your project root, rewriting one file
+   in it continuously while a session is live. Nuxt's dev server watches that root, so without this
+   it sees each write as a project file changing and full-reloads the page — which reconnects the
+   SDK, which produces the next write. The loop runs several times a second and looks like anything
+   except what it is: refs go stale, actions die mid-flight, and the session appears to flap.
+   It is a RegExp rather than a glob on purpose — chokidar dropped glob support in v4, so a
+   double-star pattern here is accepted and matches nothing.
 
 The package is @reticlehq/browser — the framework-neutral sensor. DOM, network, console, routing and
 source file:line all work in Vue. What you do not get is React component identity, which is the only
@@ -539,9 +557,20 @@ export function reticleConfigContent(
   framework: string,
   port: number | undefined,
   projectId?: string,
+  installSource?: string,
 ): string {
   const fields: Record<string, unknown> = { framework };
   if (projectId !== undefined && projectId.length > 0) fields['projectId'] = projectId;
   if (port !== undefined && port !== RETICLE_DEFAULT_PORT) fields['port'] = port;
+  // How this install arrived, recorded HERE because it is a property of the install and the only
+  // moment anything knows it is the moment it happens. It reaches us as an environment variable set
+  // by whichever channel ran the install, and an environment variable is gone by the next command,
+  // so every event after this one reported `unknown` and the question "which channel actually
+  // converts" could not be asked at all. Written once, read for the life of the project.
+  //
+  // A closed vocabulary, narrowed before it gets here, so this can never carry a path or a URL.
+  if (installSource !== undefined && installSource.length > 0) {
+    fields['installSource'] = installSource;
+  }
   return `${JSON.stringify(fields, null, 2)}\n`;
 }

@@ -434,3 +434,105 @@ describe('click holdMs — hold-to-confirm controls', () => {
     ).toBeGreaterThanOrEqual(0);
   });
 });
+
+/**
+ * An `upload` whose file was never described is a FAILED call, not a request for a placeholder.
+ *
+ * The branch built `new File([asString(args.content, 'reticle test file')], asString(args.name,
+ * 'file.txt'))`, so a call whose keys were all unrecognised — the field report sent `args.files` —
+ * uploaded a 17-byte text file and returned ok:true. The server answered 200, the UI refreshed, and
+ * every signal the agent could read said the pipeline had processed its PDF. That is a manufactured
+ * green on the write path, and it is the same shape `drag` already refuses one branch below: an act
+ * that reports success over something it never did.
+ *
+ * The refusal names the keys upload accepts, so a caller that guessed can correct in one turn
+ * instead of guessing again.
+ */
+describe('upload refuses to invent a file nobody asked for', () => {
+  const fileInput = (): HTMLInputElement => {
+    document.body.innerHTML = '<input type="file" />';
+    return document.querySelector('input') as HTMLInputElement;
+  };
+
+  it('REFUSES when every key it was given is one it does not read', async () => {
+    const el = fileInput();
+    await expect(
+      executeAction(refs.refFor(el), 'upload', { files: ['/tmp/pitch.pdf'] }),
+    ).rejects.toThrow(/content/);
+    expect(el.files?.length ?? 0, 'nothing may be uploaded by a refused call').toBe(0);
+  });
+
+  it('REFUSES a recognised key alongside one it silently drops', async () => {
+    // The half-recognised call is the nastier one: `name` lands, `path` is dropped, and the app
+    // receives a file with the right name and placeholder bytes — a false green that survives.
+    const el = fileInput();
+    await expect(
+      executeAction(refs.refFor(el), 'upload', { path: '/tmp/pitch.pdf', name: 'pitch.pdf' }),
+    ).rejects.toThrow(/path/);
+  });
+
+  it('REFUSES an upload with no arguments at all', async () => {
+    const el = fileInput();
+    await expect(executeAction(refs.refFor(el), 'upload', {})).rejects.toThrow(/content/);
+  });
+
+  /**
+   * jsdom has no `DataTransfer` and no constructible `FileList`, so the dispatch itself cannot run
+   * here — the e2e battery drives a real upload. What these pin is the only thing this guard
+   * governs: a well-formed call must reach the dispatch instead of being refused.
+   */
+  const refusedFor = async (args: Record<string, unknown>): Promise<string> => {
+    const el = fileInput();
+    const err: unknown = await executeAction(refs.refFor(el), 'upload', args).catch(
+      (e: unknown) => e,
+    );
+    return String(err);
+  };
+
+  it('still uploads the file it WAS given', async () => {
+    expect(
+      await refusedFor({ name: 'pitch.pdf', content: 'hello', type: 'application/pdf' }),
+    ).not.toMatch(/upload needs/);
+  });
+
+  it('still allows the documented name-only call, whose placeholder body is not a surprise', async () => {
+    // Documented as `{ name, content?, type? }`: a caller that names the file and omits the body
+    // knows it did. Only a DROPPED key manufactures a file the caller believes it supplied.
+    expect(await refusedFor({ name: 'pitch.mp4', type: 'video/mp4' })).not.toMatch(/upload needs/);
+  });
+
+  it('does not mistake the generic action arguments for a dropped key', async () => {
+    expect(await refusedFor({ name: 'x.txt', confirmDangerous: true })).not.toMatch(/upload needs/);
+  });
+});
+
+/**
+ * The destructive-action guard classifies the ELEMENT, never the form around it.
+ *
+ * The context string used to include `el.closest('form')?.textContent`, so the whole form's rendered
+ * text decided the verdict for every control inside it. Any CRUD form with per-row "Remove" buttons
+ * made its own Save button read as destructive — intermittently, because it depended on whether the
+ * rows had rendered yet. The field report's answer was to pass confirmDangerous:true on every click,
+ * which is the real cost: a guard that fires on everything is a guard that gets switched off.
+ */
+describe('destructive-action guard reads the element, not the form around it', () => {
+  it('does not block a harmless submit because a sibling row says "Delete"', async () => {
+    document.body.innerHTML = `
+      <form action="/settings">
+        <ul><li>Row one <button type="button">Delete</button></li></ul>
+        <button type="submit" id="save">Save changes</button>
+      </form>`;
+    const save = document.getElementById('save') as HTMLButtonElement;
+    await expect(executeAction(refs.refFor(save), 'click')).resolves.toBeDefined();
+  });
+
+  it('still blocks the row button that IS destructive', async () => {
+    document.body.innerHTML = `
+      <form action="/settings">
+        <button type="button" id="del">Delete</button>
+        <button type="submit">Save changes</button>
+      </form>`;
+    const del = document.getElementById('del') as HTMLButtonElement;
+    await expect(executeAction(refs.refFor(del), 'click')).rejects.toThrow(/confirmDangerous/);
+  });
+});

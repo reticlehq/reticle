@@ -4,7 +4,13 @@ description: 'How we measure Reticle, what each number actually means, and the p
 icon: chart-column
 ---
 
-On ten injected regressions in the same app, Reticle caught **10 of 10** with zero false alarms, Playwright MCP 9, Chrome DevTools MCP 8. Reticle averaged 815 tokens per look against DevTools' 758 and Playwright's 1,292, which puts it first on Verification Efficiency (regressions caught per 1,000 tokens, gated on catching all of them) at 12.27 against 10.55 and 6.97. Where Reticle loses is stated in Part 5.
+Two different measurements, because there are two different questions.
+
+Against a **Playwright script** over an 88-bug registry, each tool running its own native check deterministically with no model in the loop, Reticle caught **85 of 88** and Playwright **59 of 88**, both with zero false alarms on the clean build. The gap is not spread evenly: it is 26 bugs Playwright **structurally cannot** see, and on everything observable from outside the app the two tie exactly. See Part 5a.
+
+Against **Playwright MCP and Chrome DevTools MCP**, the agent-driven tools where cost per look matters, Reticle caught 10 of 10 injected regressions to Playwright MCP's 9 and DevTools' 8, averaging 815 tokens per look against 1,292 and 758. See Part 5b.
+
+Where Reticle loses is stated plainly in Part 5, and it loses in more places than these two tables show.
 
 > This page assumes **zero** testing background. By the end you'll understand what software testing is, why AI coding agents made it urgent, how to tell a good verification tool from a bad one, and exactly how Reticle measures up against the main alternatives, including the places Reticle loses. If a term looks like jargon, it's defined the first time it appears.
 >
@@ -61,7 +67,9 @@ We compare Reticle against the two most credible agent-native browser tools, bec
 - **Chrome DevTools MCP** is Google's tool exposing Chrome's DevTools to an agent.
 - **(Baseline) screenshot agents**, the common "let the model look at a picture" approach.
 
-Why not compare to traditional test frameworks (Playwright the library, Cypress, etc.)? Because those are written and maintained by humans; they don't answer "can an _agent_ verify its own work in the loop." The three above do, so it's an apples-to-apples agent comparison.
+Why not compare to traditional test frameworks (Playwright the library, Cypress, etc.) on the token passes? Because those are written and maintained by humans; they don't answer "can an _agent_ verify its own work in the loop," and a hand-written script has no token cost to compare. The three above do, so the cost comparison stays apples-to-apples.
+
+There **is** a comparison against a Playwright script, and it answers a different question: not "what does it cost an agent to look" but "what can each tool structurally SEE, at all." That one is in Part 5a. It runs no model, so nothing about it depends on how well an agent drives, which is what makes it the more durable of the two results.
 
 Tool versions are pinned in `bench/raw/run-meta.json` so any run is reproducible.
 
@@ -103,7 +111,45 @@ We ran this two ways on purpose: a **controlled toy app** (where we can inject e
 
 ![One honest test, two apps: Reticle has the highest Verification Efficiency on the controlled app and the lowest observation cost on the real dashboard](/images/bench-two-apps.png)
 
-### 5a. The controlled toy app (the demo)
+### 5a. The 88-bug head-to-head against a Playwright script
+
+The largest and least model-dependent measurement here. An **88-bug registry** (`bench/pw-vs-reticle/bugs.mjs`), each bug injected into the same app, each tool running its NATIVE check: a Playwright script doing what a Playwright script does, Reticle doing what Reticle does. **No LLM in the loop**, so nothing depends on how well an agent happened to drive.
+
+A tool "catches" a bug when its check correctly FAILS on the broken build **and** does not fail on the clean one. Failing on the clean build is a false alarm and is counted against the tool, not ignored.
+
+|                                        |     Reticle | Playwright script |
+| -------------------------------------- | ----------: | ----------------: |
+| Bugs caught                            | **85 / 88** |           59 / 88 |
+| Of what it can structurally catch      | **85 / 86** |           57 / 60 |
+| **False greens** (broken, reported OK) |       **1** |            **29** |
+| False alarms on the clean build        |           0 |                 0 |
+| Output bytes per bug                   |       9,261 |         **5,849** |
+
+Three things about that table are more important than the headline number.
+
+**Two of Reticle's three non-catches are not misses.** They are the registry's `false-positive-trap` cases, builds that look broken and are not: flagging them would itself be a false alarm, so 0 of 2 is the correct score and a tool that "caught" them would be worse. The third, `iframe-stale-data` (deep-dom), is a **genuine miss** and is counted as a false green above rather than explained away.
+
+**These figures were re-derived on the 2.9.0 branch and they moved.** The numbers first published here were recorded on 2026-07-24; 615 commits touched the harness, the fixture app, the SDK or the server before anybody re-ran it. Detection moved 86 → 85 and 60 → 59, and the per-bug output figure **inverted**: Reticle was published as the leaner of the two at 4,134 B against 7,899 B and measures 9,261 B against 5,849 B here. Reticle's own check being the more expensive one does not contradict the token-cost sections below. Those measure an AGENT-driven look against MCP tools, which is a different question. It does mean the earlier claim should not be repeated. Re-run `bench/pw-vs-reticle/run.mjs` before quoting any of this.
+
+**Reticle does not win everything, and the ties are the honest part.** On everything observable from outside the app the two are exactly level: console 6/6 against 6/6, network 8/8 against 8/8, storage 5/5 against 5/5, visual UI 16/16 against 16/16, plus routing, timing, paint and chart bugs. Any evaluate-capable tool matches Reticle on what the DOM, the network buffer or a screenshot can show.
+
+**The gap is one specific shape:** bugs where the screen is right and the app is wrong.
+
+| Category | Reticle | Playwright | The bug |
+| --- | --: | --: | --- |
+| state | 8/8 | **0/8** | the UI renders a plausible value that contradicts the app's own store |
+| business-logic | 6/6 | **0/6** | an action corrupts a field nothing renders. The record is wrong, the screen is fine |
+| signal | 4/4 | **0/4** | an event the app emits about itself (hydration done, error boundary caught) |
+| net-status | 4/4 | 1/4 | a swallowed 4xx/5xx. The request failed, a catch block ate it, the UI rendered |
+| streams | 3/3 | 0/3 | an SSE or WebSocket frame anomaly a request-level view cannot see |
+| perf | 3/3 | 1/3 | layout shift, or a render storm where the DOM is identical |
+| deep-dom | 2/3 | 2/3 | a break deep in a subtree a snapshot elides. The one both now miss is `iframe-stale-data` |
+
+That is the whole claim, stated as narrowly as it deserves: Reticle sees inside the running app, so it catches the class of bug where the outside looks correct. Outside that class it ties, and it says so.
+
+Bug registry: `bench/pw-vs-reticle/bugs.mjs`. Runner: `bench/pw-vs-reticle/run.mjs`, which regenerates `results.json` locally (run artifacts are not committed). Scorecard: `bench/FALSE-GREEN-SCORECARD.md`.
+
+### 5b. The controlled toy app (the demo)
 
 Measured on the observation-cost pass (numbers regenerate from `bench/raw/`):
 
@@ -117,7 +163,7 @@ Measured on the observation-cost pass (numbers regenerate from `bench/raw/`):
 - DevTools is a hair cheaper per look (758 vs 815 tokens), **but it's cheaper because it catches less.** On the metric that combines both (Verification Efficiency), Reticle leads at 12.27 vs 10.55.
 - Playwright catches a lot but is ~1.6× more expensive per look, so its efficiency is lowest here.
 
-### 5b. A real production app (the Reticle dashboard)
+### 5c. A real production app (the Reticle dashboard)
 
 A toy app is a fair lab, but it's small. The harder, more honest test is a **real, complex app**. Take the [Reticle](https://reticle.sh) dashboard itself: React 19, authentication, live data, ~15 routes, a node-graph view, virtualized lists. We embedded the SDK (the Vite plugin) and drove the authenticated app with all three tools. Observing it **once** (the primary snapshot + the network log):
 
@@ -131,13 +177,13 @@ A toy app is a fair lab, but it's small. The harder, more honest test is a **rea
 
 On a small page everything is cheap and the gap is modest. On a **big** page the structured read pulls ahead: Reticle is **2.1× leaner than Playwright MCP** and the cheapest overall. And only Reticle can read the app's own program state (`authenticated`, `userId`, `activeProjectId`) and assert the login _actually worked_ from a signal the app emits. The others can only look at the DOM and the network and **guess**.
 
-### 5c. The kicker: a real bug, caught live
+### 5d. The kicker: a real bug, caught live
 
 Here's what makes the real-app test matter. On the **very first run, before we instrumented anything**, Reticle's network observation flagged two endpoints returning **`500`**: `GET /api/v1/projects` and `/recovery/incidents`, both failing with `column "deleted_at" does not exist` (a database migration that hadn't been applied). **The page rendered fine.** The sidebar loaded, nothing looked broken; a screenshot agent would have called it _"done."_ Reticle saw the broken backend underneath, in one look.
 
 That is the whole thesis, demonstrated on a real app we didn't cherry-pick: **"looks done" ≠ "is done," and the difference is usually non-visual.** (We then fixed the migration; all endpoints 200.)
 
-### 5d. What each tool can actually do
+### 5e. What each tool can actually do
 
 Cost is half the story; capability is the other half. The marks below are what's **first-class and built-in** to each tool (all three are good tools, and they compose: drive with theirs, assert with Reticle):
 

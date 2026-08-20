@@ -19,8 +19,23 @@ import type { Predicate } from '../events/predicate.js';
 
 export function readsDomState(predicate: Predicate): boolean {
   switch (predicate.kind) {
+    // ROUTE is here, and it did not used to be. It was purely event-based — satisfiable only by a
+    // navigation inside the act's window, and therefore unable to be answered by the past — so it
+    // sat with the floored kinds below.
+    //
+    // It gained a fallback to the CURRENT route for the case where the window holds no route change,
+    // which is what makes "did the session survive a reload?" answerable at all. Without a
+    // before-check that fallback is a guaranteed green: the app is already on /login, the click's
+    // handler is broken, nothing navigates, and an assertion that the action reached /login passes
+    // on the strength of it having been there all along. A bare `{ kind: 'route' }` becomes
+    // unconditionally true, because there is always a current route.
+    //
+    // One extra query on the act path buys `already_true`, reported as UNKNOWN with the reason
+    // rather than as a pass. The fallback removed a false red; this is what stops it becoming a
+    // false green, and that is the trade this codebase never makes.
     case PredicateKind.ELEMENT:
     case PredicateKind.TEXT:
+    case PredicateKind.ROUTE:
       return true;
     case PredicateKind.ALL_OF:
     case PredicateKind.ANY_OF:

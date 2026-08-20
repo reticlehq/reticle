@@ -1,9 +1,9 @@
 {
   "name": "@reticlehq/example-astro",
   "private": true,
-  "version": "2.8.0",
+  "version": "2.9.0",
   "type": "module",
-  "description": "Minimal Astro app with a React island \u2014 verifies Reticle via a dev-only client script.",
+  "description": "Minimal Astro app with a React island — verifies Reticle via a dev-only client script.",
   "scripts": {
     "dev": "astro dev --port 5304"
   },

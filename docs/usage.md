@@ -91,7 +91,7 @@ List connected tabs. → `{ sessions: [{ sessionId, url, title, lastSeenMs, hidd
 A semantic, accessibility-tree view of the page.
 
 - **args:** `mode?: 'full' | 'interactive' | 'status'` (default `full`), `scope?` (CSS selector or ref), `diff?: boolean`, `sessionId?`.
-- **returns:** `{ tree, status: { route, title, visibleDialogs }, nodes, truncated, cost: { bytes, tokens } }`.
+- **returns:** `{ tree, status: { route, title, visibleDialogs, overlayHidingPage }, nodes, truncated, cost: { bytes, tokens } }`.
 - **`diff: true`** returns only what changed since your last snapshot of the same scope/mode: `{ mode: 'delta', delta: { added, removed, addedCount, removedCount } }` or `{ mode: 'unchanged' }` (no full tree). The first call (and any call after a route change) still returns the full tree. ~99% fewer tokens to re-look after an action; see [token-efficiency.md](token-efficiency.md).
 - **`cost`** is an estimated size of the result. Re-scope (`mode`/`scope`) before reading if large.
 
@@ -215,7 +215,7 @@ Compare what the API **returned** against what the page **renders**.
 
 Fast targeted lookups without a full timeline.
 
-- `reticle_network({ since?, method?, urlContains?, status? })` → `{ calls }`
+- `reticle_network({ since?, method?, urlContains?, status?, bodies? })` → `{ calls }`. Pass `bodies: false` for a body-free listing (method/url/status/timing only); bodies dominate the payload, so the common "did POST /x return 200?" read gets much cheaper.
 - `reticle_console({ level?, since? })` → `{ logs }`
 - `reticle_animations()` → running/recent animations.
 
@@ -349,11 +349,14 @@ A **predicate** declares what should be true. `reticle_assert` / `reticle_wait_f
 // An element exists / is in a state
 { "kind": "element", "query": { "role": "dialog", "name": "Confirm" }, "state": "visible" }
 // query supports: role, name, text, label, placeholder, testid, alt, scope
-// state: visible | hidden | enabled | disabled | checked | expanded | focused | present
+// state: visible | hidden | enabled | disabled | checked | expanded | focused | present | inViewport
+// inViewport asserts the element is in the viewport NOW (not just in the DOM), so a scrollIntoView is gradeable
 // add "absent": true to assert it is NOT there (regression / removal)
 
-// Visible text anywhere (optionally scoped via an element query instead)
+// Visible text: page-wide, or `scope` it to a subtree (CSS selector or ref) so a match
+// in a background tab can't satisfy an assertion about the dialog that just opened
 { "kind": "text", "contains": "Saved successfully", "visible": true }
+{ "kind": "text", "contains": "Floor 3", "scope": "[role=dialog]" }
 
 // A network call happened
 { "kind": "net", "method": "POST", "urlContains": "/api/order", "status": 200, "since": 1820 }
@@ -411,7 +414,7 @@ A `state` assertion is graded as a **consequence** (a wrong element or stale ren
 | `select` | `{ value }` | `<select>` option |
 | `check` / `uncheck` | n/a | checkbox/radio |
 | `submit` | n/a | submits the element's `<form>` |
-| `press` | `{ key }` | keydown/up (default `Enter`) |
+| `press` | `{ key, modifiers? }` | keydown/up (default `Enter`); `modifiers`: an array of `Meta` / `Control` / `Shift` / `Alt` for Cmd+K-style shortcuts |
 | `scrollIntoView` | n/a |  |
 | `upload` | `{ name, content?, type? }` | sets a file on `<input type=file>` |
 | `drag` | `{ toRef }` | pointer-based drag (dnd-kit / rbd) + HTML5 DnD |

@@ -152,6 +152,25 @@ export default tseslint.config(
     },
   },
   {
+    // Meta-tests that scan the package's own sources (settings-are-wired) need node:fs to read them.
+    // The rule above is about SHIPPED code — a .test.ts is never bundled — so the DOM-only half is
+    // lifted here. The server-package half is not: that boundary is just as real inside a test.
+    files: ['packages/browser/src/**/*.test.ts', 'packages/react/src/**/*.test.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['@reticlehq/server', '@reticlehq/server/*'],
+              message: 'Browser/React must not import the Node server package.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     // Service boundary (CLAUDE.md): the Node server never touches the DOM. Forbid DOM globals and
     // importing the browser SDK, so a stray `document`/`window` use fails lint instead of only
     // breaking at runtime in the (never-run) browser bundle.

@@ -1,6 +1,6 @@
 {
   "name": "reticle-monorepo",
-  "version": "2.8.0",
+  "version": "2.9.0",
   "private": true,
   "description": "Reticle — the proof layer for AI agents. Observe and verify a running web app over MCP, no screenshots.",
   "packageManager": "pnpm@10.33.2",
@@ -13,7 +13,7 @@
     "lint": "node scripts/check-boundaries.mjs && node scripts/check-lossy-transforms.mjs && turbo run lint",
     "check:boundaries": "node scripts/check-boundaries.mjs",
     "check:lossy": "node scripts/check-lossy-transforms.mjs",
-    "lint:docs": "pnpm --filter @reticlehq/server exec vitest run src/tools/docs-commands-run.test.ts src/tools/docs-index-coverage.test.ts src/tools/e2e-surface-drift.test.ts src/tools/published-skill-artifacts.test.ts",
+    "lint:docs": "pnpm --filter @reticlehq/server exec vitest run src/tools/docs-commands-run.test.ts src/tools/docs-code-blocks.test.ts src/tools/docs-index-coverage.test.ts src/tools/guidance-commands-run.test.ts src/tools/e2e-surface-drift.test.ts src/tools/published-skill-artifacts.test.ts",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test:unit",
     "test:unit": "turbo run test:unit",

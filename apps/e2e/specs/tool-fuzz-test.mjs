@@ -48,6 +48,14 @@ const APP = process.env.TOOL_FUZZ_APP ?? 'http://localhost:4310/';
 // slow is the correct behaviour there, not a defect. Only one shape now comes near the cap, so the
 // spec stays fast while a genuine hang (which never answers at all) is still caught.
 const CALL_TIMEOUT_MS = 30_000;
+/**
+ * The second ask, and it is four times the first on purpose.
+ *
+ * Not a fifth retune of the cap above — the point is the RATIO, not the number. A hang never answers
+ * at any budget, so a wider second ask cannot hide one; all it does is stop a legitimately slow shape
+ * being reported as hung because a loaded machine ate both attempts at the same size.
+ */
+const RETRY_TIMEOUT_MS = 120_000;
 
 let pass = 0;
 let fail = 0;
@@ -139,7 +147,15 @@ function hostileArgs(schema) {
 async function callRaw(name, args) {
   const first = await callOnce(name, args);
   if (first.settled) return first;
-  const second = await callOnce(name, args);
+  // The retry is DELIBERATELY more generous than the first ask, and that asymmetry is what makes the
+  // retry mean anything. Two asks under the same budget is one number twice: a shape doing real
+  // project work — `reticle_flow_verify` with no arguments verifies every saved flow against a live
+  // browser — can miss both on a loaded box, and then "never answered twice" reports load as a hang.
+  // Observed exactly that, with a stress run saturating the machine beside the battery.
+  //
+  // A hang never answers at ANY budget, so widening the second ask cannot hide one; it only stops a
+  // slow answer being called a hang. The first ask stays short so the common case is still fast.
+  const second = await callOnce(name, args, RETRY_TIMEOUT_MS);
   if (second.settled) {
     slow.push(`${name} (answered on retry — the machine was loaded, not the tool)`);
     return second;
@@ -147,9 +163,9 @@ async function callRaw(name, args) {
   return second;
 }
 
-async function callOnce(name, args) {
+async function callOnce(name, args, budgetMs = CALL_TIMEOUT_MS) {
   try {
-    const result = await client.request('tools/call', { name, arguments: args }, CALL_TIMEOUT_MS);
+    const result = await client.request('tools/call', { name, arguments: args }, budgetMs);
     const text = (result?.content ?? [])
       .filter((c) => 'text' === c.type)
       .map((c) => c.text)

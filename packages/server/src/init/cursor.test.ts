@@ -95,6 +95,23 @@ describe('an existing reticle entry', () => {
     expect(result.content).not.toContain('@reticlehq/server@2.3.0');
   });
 
+  /**
+   * Reported from the field: `~/.cursor/mcp.json` carried `args: ["@reticlehq/core","mcp"]` — the
+   * contract package, which has no `mcp` bin — so Cursor showed the server as "errored" with zero
+   * tools, and `init` printed `·` "already in Cursor global config" on every re-run. A registration
+   * that does not point at the server package is not a registration; it is the reason none of the
+   * `reticle_*` tools exist, and it blocks everything until a human edits that file by hand.
+   */
+  it('is REWRITTEN when it points at the wrong @reticlehq package', () => {
+    const wrong = JSON.stringify({
+      mcpServers: { reticle: { command: 'npx', args: ['@reticlehq/core', 'mcp'] } },
+    });
+    const result = mergeCursorConfig(wrong);
+    expect(result.status).toBe(CursorMergeStatus.APPLY);
+    expect(result.content).not.toContain('@reticlehq/core');
+    expect(result.content).toContain('@reticlehq/server');
+  });
+
   it('repairs only OUR entry, leaving other servers untouched', () => {
     const stale = JSON.stringify({
       mcpServers: {

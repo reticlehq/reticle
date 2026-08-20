@@ -1,0 +1,10 @@
+# Written by `next dev` / `next build`, not by us.
+#
+# `next-env.d.ts` points at types under `.next/`, which only exist after a build, and Next rewrites
+# it whenever its own type layout changes. `AGENTS.md` and `CLAUDE.md` are Next's generated agent
+# instructions and say so in their own bodies. Tracking any of them means every run of this fixture
+# leaves a dirty tree, and because `verify` gates `e2e` in CI, the next person to commit after
+# running the battery trips a formatting failure that has nothing to do with their change.
+next-env.d.ts
+AGENTS.md
+CLAUDE.md

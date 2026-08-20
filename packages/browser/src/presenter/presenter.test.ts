@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { PresenterMode } from '@reticlehq/core';
 import { Presenter } from './presenter.js';
+import type { PresenterRunState } from './presenter-run-state.js';
+import { LOG_CSS } from './presenter-log.js';
 import { buildSnapshot } from '../dom/snapshot.js';
 import { isIgnored } from '../dom/dom-ignore.js';
 import { until, wait } from './presenter-test-helpers.js';
@@ -39,7 +41,7 @@ describe('presenter reading vs acting', () => {
     p.setMode(PresenterMode.READING);
     expect(p.mode).toBe(PresenterMode.READING);
     const chip = document.querySelector('[data-reticle-chip]');
-    expect(chip?.textContent).toBe('READING');
+    expect(chip?.querySelector('.reticle-chip-label')?.textContent).toBe('READING');
     expect(chip?.getAttribute('data-mode')).toBe('reading');
     expect(document.querySelector('[data-reticle-cursor]')?.getAttribute('data-on')).toBe('0');
 
@@ -53,7 +55,9 @@ describe('presenter reading vs acting', () => {
 
     p.setMode(PresenterMode.ACTING);
     expect(p.mode).toBe(PresenterMode.ACTING);
-    expect(document.querySelector('[data-reticle-chip]')?.textContent).toBe('ACTING');
+    expect(document.querySelector('[data-reticle-chip] .reticle-chip-label')?.textContent).toBe(
+      'ACTING',
+    );
 
     p.destroy();
   });
@@ -86,9 +90,9 @@ describe('presenter v2 activity log', () => {
     const rows = logRows();
     expect(rows.length).toBe(1);
     expect(rows[0]?.querySelector('.reticle-log-text')?.textContent).toBe('Looking at the page');
-    expect(rows[0]?.querySelector('.reticle-chip')?.textContent).toBe('READ');
+    expect(rows[0]?.querySelector('.reticle-chip-label')?.textContent).toBe('READ');
     expect(
-      (rows[0]?.querySelector('[data-reticle-log-ts]')?.textContent ?? '').length,
+      (rows[0]?.querySelector('[data-reticle-log-time]')?.textContent ?? '').length,
     ).toBeGreaterThan(0);
     p.destroy();
   });
@@ -112,7 +116,7 @@ describe('presenter v2 activity log', () => {
     p.log('read', 'snap');
     p.log('act', 'click Save');
     p.log('narration', 'adding a beat');
-    const chips = logRows().map((r) => r.querySelector('.reticle-chip')?.textContent ?? '');
+    const chips = logRows().map((r) => r.querySelector('.reticle-chip-label')?.textContent ?? '');
     expect(chips).toEqual(['READ', 'ACT', '']);
     expect(rowTexts()).toEqual(['snap', 'click Save', 'adding a beat']);
     p.destroy();
@@ -126,7 +130,7 @@ describe('presenter v2 activity log', () => {
     handle?.result('pass');
     const rows = logRows();
     expect(rows.length).toBe(1);
-    expect(rows[0]?.textContent).toContain('✓');
+    expect(rows[0]?.textContent).not.toContain('✓');
     expect(rows[0]?.querySelector('.reticle-res')?.className).toContain('reticle-pass');
     p.destroy();
   });
@@ -138,7 +142,7 @@ describe('presenter v2 activity log', () => {
     const handle = p.log('act', 'Submit');
     handle?.result('fail');
     const rows = logRows();
-    expect(rows[0]?.textContent).toContain('✗');
+    expect(rows[0]?.textContent).toContain('Fail');
     expect(rows[0]?.querySelector('.reticle-res')?.className).toContain('reticle-fail');
     p.destroy();
   });
@@ -221,7 +225,9 @@ describe('presenter v2 activity log', () => {
       p.mount();
       p.log('read', 'a');
       p.log('read', 'b');
-      const ts = logRows().map((r) => r.querySelector('[data-reticle-log-ts]')?.textContent ?? '');
+      const ts = logRows().map(
+        (r) => r.querySelector('[data-reticle-log-time]')?.textContent ?? '',
+      );
       // Patched wall clock is frozen at 42; injected clock advances >1s/row → rows must differ.
       expect(ts[0]).not.toBe(ts[1]);
       p.destroy();
@@ -239,7 +245,7 @@ describe('presenter v2 activity log', () => {
     p.mount();
     p.log('read', 'a');
     p.log('read', 'b');
-    const ts = logRows().map((r) => r.querySelector('[data-reticle-log-ts]')?.textContent ?? '');
+    const ts = logRows().map((r) => r.querySelector('[data-reticle-log-time]')?.textContent ?? '');
     expect(ts[0]).toBe('0s');
     expect(ts[1]).toBe('2s'); // 2400ms elapsed → "2s"
     p.destroy();
@@ -255,7 +261,7 @@ describe('presenter v2 activity log', () => {
     const act = (): string => document.querySelector('.reticle-act')?.textContent ?? '';
     expect(act()).toBe('Inspecting [testid=row-3700]'); // active → shows the action
 
-    clock = 5000; // 5s since the last action — well past idleNoticeMs
+    clock = 5000; // 5s since the last action - well past idleNoticeMs
     await wait(24); // let a heartbeat tick (8ms) fire
     expect(act()).toContain('idle');
     expect(act()).toContain('5s');
@@ -291,12 +297,14 @@ describe('presenter v2 activity log', () => {
     ).toBe('ended');
 
     // The run state is exportable and reflects what happened.
-    const rs = p.runState();
+    const rs = p.runState() as PresenterRunState;
     expect(rs.session).toBe('demo');
     expect(rs.state).toBe('ended');
     expect(rs.counts.reads).toBeGreaterThanOrEqual(1);
     expect(rs.counts.passes).toBeGreaterThanOrEqual(1);
-    expect(rs.log.some((e) => e.text.includes('row-3700'))).toBe(true);
+    expect('log' in rs && rs.log.some((e: { text: string }) => e.text.includes('row-3700'))).toBe(
+      true,
+    );
 
     // A fresh agent action revives the session (glow back on).
     clock = 5200;
@@ -314,7 +322,7 @@ describe('presenter v2 activity log', () => {
     p.setIdleEndMs(1); // below the floor
     p.sessionStart();
     p.status('x');
-    clock = 2000; // 2s quiet — above the tiny value we tried to set, but below the 5s floor
+    clock = 2000; // 2s quiet - above the tiny value we tried to set, but below the 5s floor
     // Give the heartbeat a few ticks; it must NOT have ended (floor kept the window ≥ 5s).
     return until(() => false, 40).then(() => {
       expect(p.state).toBe('active');
@@ -363,6 +371,11 @@ describe('presenter v2 activity log', () => {
     p.destroy();
   });
 
+  it('log accepts pointer events so wheel/touch scrolling works inside the HUD', () => {
+    expect(LOG_CSS).toContain('pointer-events:auto');
+    expect(LOG_CSS).toContain('overflow-y:auto');
+  });
+
   it('destroy clears log state; remount starts empty', () => {
     document.body.innerHTML = '';
     const p = new Presenter({});
@@ -385,7 +398,7 @@ describe('presenter v2 activity log', () => {
     const rows = logRows();
     expect(rows.length).toBe(1);
     expect(rows[0]?.querySelector('.reticle-log-text')?.textContent).toBe('hello');
-    expect(rows[0]?.querySelector('.reticle-chip')?.textContent).toBe('');
+    expect(rows[0]?.querySelector('.reticle-chip-label')?.textContent ?? '').toBe('');
     p.destroy();
   });
 });

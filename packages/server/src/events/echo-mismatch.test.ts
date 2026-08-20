@@ -107,3 +107,55 @@ describe('findEchoMismatches — a write that half-applied', () => {
     expect(kinds(noBodies)).toEqual([]);
   });
 });
+
+describe('findEchoMismatches — the request has to be a write', () => {
+  const lookup = (method: string, requestBody: unknown, responseBody: unknown): ReticleEvent =>
+    ({
+      type: EventType.NET_REQUEST,
+      t: ++seq,
+      data: {
+        id: `n${String(seq)}`,
+        method,
+        url: '/get-branding',
+        status: 200,
+        ok: true,
+        requestBody: JSON.stringify(requestBody),
+        responseBody: JSON.stringify(responseBody),
+      },
+    }) as unknown as ReticleEvent;
+
+  /**
+   * Reported from the field: a lookup that sends its key in the body and gets a record back was
+   * graded as a half-applied write. The check gated on the RESPONSE being a success and never on the
+   * REQUEST being a write, so any successful call with a body was read as a save — and the same key
+   * name legitimately means different things on the two sides of a request/response pair.
+   */
+  it('says nothing about a read, however much its response disagrees with its body', () => {
+    expect(
+      findEchoMismatches([lookup('GET', { workspace_id: '408523123' }, { workspace_id: 23 })]),
+    ).toEqual([]);
+  });
+
+  it('still grades a real write on the same shape', () => {
+    expect(
+      findEchoMismatches([lookup('PATCH', { workspace_id: '408523123' }, { workspace_id: 23 })]),
+    ).toHaveLength(1);
+  });
+
+  /**
+   * A finding about a request that had already completed before the agent acted reads as a verdict
+   * on the change it just made. Naming the attribution is what separates "your edit broke this" from
+   * "this endpoint was already doing that".
+   */
+  it('says so when the request predates the action being verified', () => {
+    const before = lookup('POST', { locale: 'fr' }, { locale: 'en' });
+    const [found] = findEchoMismatches([before], before.t + 1);
+    expect(found?.detail).toContain('before the action');
+  });
+
+  it('says nothing about attribution when no action opened the window', () => {
+    const call = lookup('POST', { locale: 'fr' }, { locale: 'en' });
+    const [found] = findEchoMismatches([call]);
+    expect(found?.detail).not.toContain('before the action');
+  });
+});

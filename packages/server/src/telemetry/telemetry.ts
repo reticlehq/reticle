@@ -41,6 +41,7 @@ import {
   type McpOutage,
   type ToolRefusal,
   type AppInstrumentation,
+  type InstrumentationStall,
   type ProjectProfile,
   type SessionSummary,
   type TelemetryActor,
@@ -103,6 +104,7 @@ const DETACHED_SEND_SCRIPT =
 
 /** Env var names — mirror cloud-sync's `RETICLE_*` convention. */
 import { isReticleSourceCheckout } from './dev-repo.js';
+import { projectInstallSource } from './install-source.js';
 import { gitFacts } from './git-facts.js';
 import { currentAutomationHint } from './automation-hint.js';
 
@@ -309,6 +311,8 @@ export interface TelemetryExtra {
   outage?: McpOutage;
   /** `app_instrumented`: an app carrying the SDK reached this daemon for the first time. */
   instrumentation?: AppInstrumentation;
+  /** `instrumentation_stalled`: the daemon waited and no app ever arrived. */
+  stall?: InstrumentationStall;
   /** `reticle_installed` / `init_completed`: which published route brought this install in. */
   installSource?: InstallSource;
 }
@@ -380,6 +384,12 @@ export const createTelemetry = (opts: {
    */
   const sessionId = randomUUID();
   const { projectId, source: projectIdSource } = projectFingerprint(opts.cwd ?? process.cwd());
+  // Resolved ONCE, beside projectId, and for the same reason: it is a property of this install, not
+  // of any one event. It used to be passed per-call and therefore rode only `reticle_installed` and
+  // `init_completed` — two of the rarest events there are — so the channel that brought a user in
+  // was unknown for every event that could show whether they got anywhere. Reading it here puts it
+  // on all of them, which is the only shape in which the question can be asked.
+  const installSource = projectInstallSource(opts.cwd ?? process.cwd());
   showNoticeOnce();
 
   const spawnDetached =
@@ -434,10 +444,13 @@ export const createTelemetry = (opts: {
       ...(extra?.refusal !== undefined ? { refusal: extra.refusal } : {}),
       ...(extra?.outage !== undefined ? { outage: extra.outage } : {}),
       ...(extra?.instrumentation !== undefined ? { instrumentation: extra.instrumentation } : {}),
+      ...(extra?.stall !== undefined ? { stall: extra.stall } : {}),
       // A SCALAR, so it needs the event build and the wire schema but no entry in `blocks` below —
       // there is nothing to flatten. It still needs both of those, which is the trap `outage` fell
       // into: a field declared on TelemetryExtra and missing from either one is dropped in silence.
-      ...(extra?.installSource !== undefined ? { installSource: extra.installSource } : {}),
+      // Always present now, rather than only when a caller remembered to pass it. A per-call
+      // override still wins so a command that genuinely knows better can say so.
+      installSource: extra?.installSource ?? installSource,
     };
     // Map the core contract onto PostHog's capture shape: id/name/time move up, the rest are properties.
     // The feedback body is FLATTENED into `feedback_*` properties rather than sent as a nested object:
@@ -462,6 +475,7 @@ export const createTelemetry = (opts: {
       refusal,
       outage,
       instrumentation,
+      stall,
       ...rest
     } = event;
     // `$session_id` is PostHog's OWN session property, so sending ours under that name lights up
@@ -494,6 +508,7 @@ export const createTelemetry = (opts: {
       refusal,
       outage,
       instrumentation,
+      stall,
     };
     for (const [prefix, block] of Object.entries(blocks)) {
       for (const [key, value] of Object.entries(block ?? {})) {

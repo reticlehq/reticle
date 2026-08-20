@@ -192,14 +192,14 @@ function loopBody(text: string, headOpen: number): string | null {
 /**
  * Pinned so the rule cannot silently widen into "every loop in the repo".
  *
- * 11 of 558 `.test.ts` files, or 2%. The count is the guard's own blast radius: if a later edit drops
+ * 12 of 558 `.test.ts` files, or 2%. The count is the guard's own blast radius: if a later edit drops
  * the `mkdtemp` half or the hook exclusion, this number jumps and the change announces itself in
  * review instead of arriving as a hundred annotated files. Adding a genuinely new IO-in-a-loop test
  * is expected to bump it — by one, deliberately.
  *
  * The issue that asked for this rule measured 6 files needing an annotation. That is an undercount
  * of the same shape, not a different shape: `journal/session-end.test.ts` and `runs/run-store.test.ts`
- * need one too, making 8. The remaining 3 of the 11 — `project/project-tools.test.ts`,
+ * need one too, making 8. The remaining 3 of those 11 — `project/project-tools.test.ts`,
  * `project/project-store.test.ts`, `multi-project.test.ts` — match the shape but already carry a
  * bound, so a search for files still lacking one could not see them.
  *
@@ -207,7 +207,7 @@ function loopBody(text: string, headOpen: number): string | null {
  * writes a file into each, which is more per-iteration IO than the 40-record loop that actually
  * broke Windows CI and prompted this issue.
  */
-const EXPECTED_IO_LOOP_FILES = 11;
+const EXPECTED_IO_LOOP_FILES = 12;
 
 function testFiles(dir: string): string[] {
   const out: string[] = [];

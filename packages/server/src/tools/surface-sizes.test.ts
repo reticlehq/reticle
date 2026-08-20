@@ -17,28 +17,72 @@ import { describe, expect, it } from 'vitest';
 import { TOOL_SURFACE, type ToolSurface } from './tool-surface.js';
 import { advertisedTools } from '../mcp/mcp.js';
 import { TOOLS } from './tools.js';
+import { buildDynamicTools } from './dynamic-tools.js';
 
 /** The advertised size of each surface. Update WITH the surface, never after it. */
 const EXPECTED_SIZE: Record<ToolSurface, number> = {
-  // The verify loop plus the two meta-tools that reach everything else, plus orientation. 19 since
-  // `reticle_capabilities` joined (#262): one call returns the app's whole testable surface, and
-  // from disk it does so with no browser attached. It was 18 from 2.6.0, when `act_sequence` joined
-  // because its absence was measurably causing the biggest loop in the field evidence. See
-  // tool-surface.ts for the cost each entry is carrying and why.
-  [TOOL_SURFACE.DEFAULT]: 19,
-  // Every tool PLUS the two meta-tools: every recovery message points at reticle_tools, so a
-  // surface without it makes our own advice a dead end.
-  [TOOL_SURFACE.ALL]: 48,
+  // The verify loop plus the two meta-tools that reach everything else. 18 since
+  // `reticle_capabilities` was demoted to the extended surface: it was added as an explicit bet that
+  // orientation replaces exploratory snapshots, the measurement that would settle that was never
+  // run, and an unproven entry is the right one to give up when the budget is a hard count.
+  [TOOL_SURFACE.DEFAULT]: 18,
+  // The extended surface. NOT "everything" — see ADVERTISED_CAP.
+  [TOOL_SURFACE.ALL]: 30,
+  // The smallest surface that can still return a verdict: one acting tool that resolves its own
+  // target, plus the two meta-tools that reach the rest. See tool-surface.ts for why it is not the
+  // default.
+  [TOOL_SURFACE.VERIFY]: 3,
 };
+
+/**
+ * No surface may advertise more than this, ever.
+ *
+ * Cursor enforces a hard limit of 40 tools across ALL connected MCP servers combined, so a server
+ * that advertises 48 on its own can make a user's other servers unusable, or be silently dropped.
+ * The budget is a COUNT, not a byte size, which is why this is a count and why trimming prose does
+ * not help it.
+ *
+ * This is the cap the surface is DESIGNED against rather than a description of it, so it is asserted
+ * on every surface rather than on the one that happens to be largest today.
+ */
+const ADVERTISED_CAP = 30;
 
 describe('advertised surface sizes', () => {
   it.each(Object.entries(EXPECTED_SIZE))('%s advertises %i tools', (profile, size) => {
     expect(advertisedTools(profile as ToolSurface)).toHaveLength(size);
   });
 
-  it('full advertises the ENTIRE surface, which is what "full" has to mean', () => {
-    const names = new Set(advertisedTools(TOOL_SURFACE.ALL).map((t) => t.name));
-    for (const tool of TOOLS) expect(names.has(tool.name), tool.name).toBe(true);
+  it('NO surface exceeds the cap, on any surface, because the budget is shared with other servers', () => {
+    for (const surface of Object.values(TOOL_SURFACE)) {
+      expect(advertisedTools(surface).length, surface).toBeLessThanOrEqual(ADVERTISED_CAP);
+    }
+  });
+
+  /**
+   * The cap removes tools from the LIST, never from reach. `reticle_run { tool, args }` invokes any
+   * tool in the registry by name, and `reticle_tools` still catalogs every one of them, so an agent
+   * discovers and calls an unadvertised tool in two calls instead of zero. That is the whole trade:
+   * the cold tail costs a hop, and nothing becomes unreachable.
+   *
+   * Asserted rather than described, because "it is still reachable" is exactly the kind of claim
+   * that quietly stops being true when someone changes how the catalog is built.
+   */
+  it('every tool the cap leaves unadvertised is still reachable and still discoverable', () => {
+    const advertised = new Set(advertisedTools(TOOL_SURFACE.ALL).map((t) => t.name));
+    const hidden = TOOLS.filter((t) => !advertised.has(t.name));
+    expect(hidden.length, 'the cap is meant to be hiding something').toBeGreaterThan(0);
+    const catalog = new Set(
+      buildDynamicTools(TOOLS, { active: TOOL_SURFACE.ALL, source: 'test' }).map((t) => t.name),
+    );
+    expect(catalog, 'the catalog tool must be advertised or the tail is lost').toContain(
+      'reticle_tools',
+    );
+    for (const tool of hidden) {
+      expect(
+        TOOLS.some((t) => t.name === tool.name),
+        tool.name,
+      ).toBe(true);
+    }
   });
 
   it("EVERY profile can look up a tool's parameters", () => {

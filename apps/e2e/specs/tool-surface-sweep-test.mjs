@@ -43,6 +43,17 @@ const chk = (label, ok, detail = '') => {
 // itself authored is the bug, so the spec looks for it by value rather than by vibes.
 const FEEDBACK_ASK_MARKER = 'not one Reticle recognizes';
 
+/** The meta-tool that reaches every name the surface does not advertise. */
+const RUN_TOOL = 'reticle_run';
+
+/**
+ * What the EXTENDED surface advertises. Not "every tool": the surface is deliberately capped so one
+ * server cannot exhaust an editor's shared tool budget (Cursor allows 40 in total). Asserting a
+ * floor of 40 here outlived that change by a whole release and failed the battery on the cap
+ * working as designed.
+ */
+const EXTENDED_SURFACE_SIZE = 30;
+
 const client = new McpStdioClient(
   'node',
   ['packages/server/dist/cli.js', 'mcp', '--port', PORT, '--drive', APP],
@@ -65,11 +76,30 @@ const client = new McpStdioClient(
 let DRIVEN;
 const TAKES_SESSION = new Set();
 
+/**
+ * The names this daemon advertises directly. Everything else in the registry is reached through
+ * `reticle_run`, which is the SUPPORTED call for it and not a workaround: editors budget MCP tools
+ * as a count shared across every connected server, so the surface is capped at 30 of 48 and the
+ * rest stay one call away. This spec sweeps the whole REGISTRY, so it has to make the same hop an
+ * agent makes — calling an unadvertised name directly is refused by design, and a sweep that reads
+ * that refusal as a broken tool is measuring the cap instead of the surface.
+ */
+const ADVERTISED = new Set();
+
 async function callRaw(name, args) {
   try {
     const withSession =
       DRIVEN === undefined || !TAKES_SESSION.has(name) ? args : { sessionId: DRIVEN, ...args };
-    const result = await client.request('tools/call', { name, arguments: withSession }, 60_000);
+    // Route through reticle_run exactly when the name is not advertised. `reticle_run` itself is
+    // always advertised — it is the tool that makes the rest reachable.
+    const viaRun = 0 < ADVERTISED.size && !ADVERTISED.has(name) && RUN_TOOL !== name;
+    const result = viaRun
+      ? await client.request(
+          'tools/call',
+          { name: RUN_TOOL, arguments: { tool: name, args: withSession } },
+          60_000,
+        )
+      : await client.request('tools/call', { name, arguments: withSession }, 60_000);
     const text = (result?.content ?? [])
       .filter((c) => c.type === 'text')
       .map((c) => c.text)
@@ -99,9 +129,29 @@ await client.start();
 console.log('\n=== TOOL SURFACE: every shipped tool, over real MCP ===');
 
 const advertised = await client.listTools();
-chk('the MCP server advertises the full tool surface', advertised.length >= 40, `${advertised.length} tools`);
+chk(
+  'the MCP server advertises the extended tool surface',
+  advertised.length === EXTENDED_SURFACE_SIZE,
+  `${advertised.length} tools`,
+);
 for (const tool of advertised) {
+  ADVERTISED.add(tool.name);
   if (tool.inputSchema?.properties?.sessionId !== undefined) TAKES_SESSION.add(tool.name);
+}
+
+// The UNADVERTISED tools declare a sessionId too, and their schemas are not in `tools/list` — only
+// the catalog has them. Without this the sweep drove them unaddressed, and with the bench-app tab
+// plus a lease open, every one came back "multiple sessions connected": the sweep failing on the
+// harness rather than on the surface, and intermittently, depending on how many tabs happened to be
+// live. Ask the catalog for the whole registry and take sessionId from where it is actually written
+// down.
+const catalogList = await callRaw('reticle_tools', {});
+const allNames = (catalogList?.parsed?.tools ?? []).map((t) => t.name).filter(Boolean);
+if (0 < allNames.length) {
+  const catalog = await callRaw('reticle_tools', { names: allNames });
+  for (const tool of catalog?.parsed?.tools ?? []) {
+    if ((tool.params ?? []).some((p) => p.name === 'sessionId')) TAKES_SESSION.add(tool.name);
+  }
 }
 
 // The driven browser has to load the app and its SDK has to dial the bridge before anything is real.

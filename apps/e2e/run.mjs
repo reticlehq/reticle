@@ -47,6 +47,10 @@ const ORDER = [
   'next-blur-clock-test',
   'status-honesty-test',
   'drive-launch-test',
+  // The other half of drive: what it does when it CANNOT have the port. A daemon on :4400 is the
+  // normal state once an agent has connected, and drive used to die there on a raw EADDRINUSE —
+  // reported twice from the field, both times against the command Reticle itself recommends.
+  'drive-attach-test',
   'spa-nav-realinput-test',
   'visual-test',
   'crawl-test',
@@ -79,6 +83,7 @@ const ORDER = [
   'tool-fuzz-test',
   'live-control-test',
   'real-world-tests',
+  'response-ignored-test',
   'multi-agent-lease-test',
   'atlas-hard-fixture-test',
   // Drives a real session and then checks that the EVENTS describe it — a different question from
@@ -91,6 +96,12 @@ const ORDER = [
   // Last: it drives every tool over real MCP, including navigate/crawl/clock, and owns a browser of
   // its own. Running it earlier would leave the shared bench-app in a state later specs assume fresh.
   'tool-surface-sweep-test',
+  // Beside the sweep, and deliberately NOT folded into it: the sweep advertises every tool and calls
+  // each one directly, which is right for sweeping a surface and wrong for learning what an ordinary
+  // agent can reach. This one runs at the DEFAULT profile and makes the calls SKILL.md prints, through
+  // the `reticle_run` envelope the skill has to teach because those tools are not advertised. The
+  // sweep can be entirely green while every instruction in the skill is unreachable.
+  'skill-one-call-paths-test',
   // Last: drive the demo app the way a user's agent does, including a false assertion that MUST be
   // refused. Everything above proves the pieces; this proves the product.
   'release-smoke-test',

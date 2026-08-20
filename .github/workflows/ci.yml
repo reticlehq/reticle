@@ -330,6 +330,7 @@ jobs:
     timeout-minutes: 5
     outputs:
       install: ${{ steps.filter.outputs.install }}
+      bench: ${{ steps.filter.outputs.bench }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -339,12 +340,14 @@ jobs:
           BASE="origin/${{ github.base_ref || 'main' }}"
           if ! git rev-parse --verify "$BASE" >/dev/null 2>&1; then
             echo "cannot resolve $BASE — running every tier"
-            echo "install=true" >> "$GITHUB_OUTPUT"; exit 0
+            echo "install=true" >> "$GITHUB_OUTPUT"
+            echo "bench=true" >> "$GITHUB_OUTPUT"; exit 0
           fi
           CHANGED="$(git diff --name-only "$BASE"...HEAD || true)"
           if [ -z "$CHANGED" ]; then
             echo "no diff against $BASE — running every tier"
-            echo "install=true" >> "$GITHUB_OUTPUT"; exit 0
+            echo "install=true" >> "$GITHUB_OUTPUT"
+            echo "bench=true" >> "$GITHUB_OUTPUT"; exit 0
           fi
           echo "changed files:"; echo "$CHANGED" | sed 's/^/  /'
           # Anything a user runs BEFORE their first session, plus the gate itself and the dependency
@@ -354,6 +357,17 @@ jobs:
             echo "install=true" >> "$GITHUB_OUTPUT"
           else
             echo "install=false" >> "$GITHUB_OUTPUT"
+          fi
+          # What can move TOKEN COST, which is a different question from what can break the install.
+          # A tool's description and input schema are charged to the agent on every turn, so an edit
+          # under server/src/tools moves the bill without touching anything the install filter names.
+          # The observation payloads (snapshot, query, the verdict reasons) sit in browser and events.
+          # bench-app is the fixture the numbers are measured against, so changing it moves the
+          # baseline whether or not any product code changed.
+          if echo "$CHANGED" | grep -qE '^(packages/(browser|core)/src/|packages/server/src/(tools|events|session|honesty)/|apps/bench-app/|bench/|\.github/workflows/ci\.yml)'; then
+            echo "bench=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "bench=false" >> "$GITHUB_OUTPUT"
           fi
 
   # The bot half of the client-matrix flow. A submitted record is EVIDENCE, and evidence that
@@ -557,6 +571,48 @@ jobs:
         env:
           ELECTRON_DISABLE_SANDBOX: '1'
 
+  # Token cost is the one property of this product nothing in CI measured, which is how a released
+  # version once shipped a measurable token regression with every other gate green.
+  #
+  # `bench:gate` ALONE is not enough, and that is the whole subtlety. It grades whatever raw results
+  # are on disk, and it deliberately refuses to grade a stale `analysis.json` — so run it by itself
+  # and the OBSERVATION-COST dimension reports "not run this pass (advisory skip)" and the gate
+  # passes having compared only the replay numbers. That is exactly the shape of a gate that measures
+  # nothing: green, plausible, and silent about the dimension you care about. `bench:full` produces
+  # the observation raws first so there is something real to grade.
+  bench:
+    runs-on: ubuntu-latest
+    needs: [verify, changes]
+    if: needs.changes.outputs.bench == 'true'
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: pnpm --filter @reticlehq/e2e --fail-if-no-match exec playwright install --with-deps chromium
+      # The token proxy is a python package, and without it `countTokensProxy` returns null for every
+      # payload — so every token dimension reads "this pass measured nothing" and the gate fails
+      # having compared nothing. That is the honest failure it is designed to produce, and it fails
+      # for a missing dependency rather than a regression, which is a slow way to learn this.
+      - name: Install the token proxy the observation layer measures with
+        run: python3 -m pip install --user --quiet tiktoken
+      - name: Measure (observation-cost + replay), so the gate has something real to grade
+        run: pnpm bench:full
+      - name: Benchmark gate (catch-rate floor, no false positives, efficiency and token bounds)
+        run: pnpm bench:gate
+      - name: Upload benchmark results
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: bench-raw
+          path: bench/raw/
+          retention-days: 14
+
   # The single required status check.
   #
   # A job skipped by an `if:` reports "skipped", and a branch-protection rule that requires
@@ -587,6 +643,7 @@ jobs:
         rust-audit,
         rust-macos,
         desktop-e2e,
+        bench,
       ]
     if: always()
     timeout-minutes: 5

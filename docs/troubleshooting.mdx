@@ -57,6 +57,8 @@ If nothing ever connected:
 
 The daemon still does not do it, on purpose. A build process started by a long-lived background daemon is invisible to whoever's machine it is running on, was never consented to, cannot easily be stopped, and orphans when the daemon exits. It would also mean a piece of standing infrastructure runs arbitrary `package.json` scripts. An agent already has shell access in your repo, already runs install and build commands, and runs inside a host that asks you before it does. A dev server the agent starts is in the transcript, attributable to a step you approved, and stoppable.
 
+The agent does not have to work out the command. When `reticle_sessions` comes back with nothing connected, it carries a `next_action` naming which of four cases this is and, where one applies, the literal command and port: start the dev server, run `reticle init`, open the app, or reopen a tab that went away. The command is read from this project's own scripts, so a project with no recognisable dev script gets no command rather than a guess.
+
 The guards, which apply wherever this instruction appears:
 
 1. **Never start a second one.** If something is already listening on the app's port, it is adopted.

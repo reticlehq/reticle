@@ -103,3 +103,37 @@ describe('predicateFieldsFor stays derived from the schema', () => {
     expect(predicateFieldsFor('nope')).toEqual([]);
   });
 });
+
+describe('scoping the text predicate', () => {
+  it('accepts `scope` alongside `contains`', () => {
+    // Without this the strict schema rejects the whole predicate, and a rejected predicate costs
+    // the verdict entirely — see the header of this file.
+    expect(
+      parsePredicate({ kind: PredicateKind.TEXT, contains: 'Floor', scope: '[role=dialog]' }),
+    ).toEqual({
+      kind: PredicateKind.TEXT,
+      contains: 'Floor',
+      scope: '[role=dialog]',
+    });
+  });
+
+  it('accepts `scope` with the `text` alias too', () => {
+    expect(parsePredicate({ kind: PredicateKind.TEXT, text: 'Floor', scope: '#modal' })).toEqual({
+      kind: PredicateKind.TEXT,
+      contains: 'Floor',
+      scope: '#modal',
+    });
+  });
+
+  it('keeps the predicate page-wide when no scope is given', () => {
+    // Adding the field must not change what an existing caller means.
+    expect(parsePredicate({ kind: PredicateKind.TEXT, contains: 'Floor' })).toEqual({
+      kind: PredicateKind.TEXT,
+      contains: 'Floor',
+    });
+  });
+
+  it('names `scope` among the fields the text predicate accepts', () => {
+    expect(predicateFieldsFor(PredicateKind.TEXT)).toContain('scope');
+  });
+});

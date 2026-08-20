@@ -127,3 +127,22 @@ export const HealthReason = {
   INITIAL: 'initial',
 } as const;
 export type HealthReason = (typeof HealthReason)[keyof typeof HealthReason];
+
+/**
+ * The one thing to DO when nothing is connected — the executable half of the no-session diagnosis.
+ *
+ * The prose diagnosis tells the cases apart well, and an agent still has to translate it into a
+ * command. This is that command's kind, so the agent branches on a value instead of on a sentence.
+ * Wire-owned because it crosses daemon → agent on `reticle_sessions`.
+ */
+export const NoSessionAction = {
+  /** Nothing is listening anywhere: the app is not running. Carries the project's own dev script. */
+  START_DEV_SERVER: 'start_dev_server',
+  /** Something is listening but this project carries no Reticle SDK — wire it first. */
+  RUN_INIT: 'run_init',
+  /** A wired app is up and no page is loaded — Reticle only ever sees a page a browser has opened. */
+  OPEN_APP: 'open_app',
+  /** A session was here and went away: reopen the tab, or take a lease. */
+  REOPEN_APP: 'reopen_app',
+} as const;
+export type NoSessionAction = (typeof NoSessionAction)[keyof typeof NoSessionAction];

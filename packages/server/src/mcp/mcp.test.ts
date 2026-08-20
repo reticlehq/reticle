@@ -56,6 +56,7 @@ describe('outputSchema declares every field its handler returns (field-drop guar
     [ReticleTool.ACT, ['paused', 'guidance', 'hint']],
     [ReticleTool.ACT_SEQUENCE, ['paused', 'guidance', 'hint']],
     [ReticleTool.CAPABILITIES, ['generatedAt', 'governance']],
+    [ReticleTool.SESSIONS, ['why', 'next_action']],
   ];
   for (const [name, fields] of REQUIRED_FIELDS) {
     it(`${name} declares ${fields.join(', ')}`, () => {

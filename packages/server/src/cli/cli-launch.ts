@@ -6,7 +6,6 @@ import { describeSkew, DAEMON_FIX } from '../version/version-skew.js';
 import { CONTRACT_FINGERPRINT } from '@reticlehq/core';
 import { SERVER_VERSION } from '../version/server-version.js';
 import { log } from '../log.js';
-import { PortPresence, describePresence } from '../daemon/port-presence.js';
 
 /**
  * CLI launch + status helpers — the daemon-introspection (`reticle status`) and the one-command
@@ -85,39 +84,6 @@ export async function warnOnDaemonSkew(port: number): Promise<void> {
     { version: SERVER_VERSION, contract: CONTRACT_FINGERPRINT },
   );
   if (skew !== undefined) log('reticle_daemon_skew', { port, warning: skew });
-}
-
-/**
- * Why `reticle drive` cannot have the port, or undefined when it can. Pure.
- *
- * `drive` bound the port unconditionally, and a daemon already listening on it is the NORMAL state
- * once any MCP client has started one. The bind died with a raw `node:net` stack trace: the one
- * failure in this CLI that answered a user with a Node core dump rather than a structured Reticle
- * line naming the port. It is also the command Reticle itself recommends — `reticle_sessions`
- * returns "run `reticle drive <url>`" whenever a tab is throttled, and a throttled tab nearly always
- * coexists with the running daemon that makes the bind impossible.
- *
- * The `reticle_lease` suggestion is deliberately first: it needs no free port, it is what the
- * daemon's own no-session diagnostic already points at, and it works while the collision stands.
- */
-export function drivePortConflict(
-  presence: PortPresence,
-  port: number,
-  holder?: { ourPid: number | null },
-): string | undefined {
-  if (presence !== PortPresence.DAEMON && presence !== PortPresence.FOREIGN) return undefined;
-  if (PortPresence.FOREIGN === presence) return describePresence(presence, port);
-  const pid = holder?.ourPid;
-  const who =
-    pid !== null && pid !== undefined
-      ? `a Reticle daemon (pid ${String(pid)}) is already serving :${String(port)}`
-      : `a Reticle daemon is already serving :${String(port)}`;
-  return (
-    `${who}, so \`drive\` cannot bind that port. Use the daemon that is already there — its ` +
-    '`reticle_lease` tool opens a browser Reticle drives itself and needs no free port — or stop ' +
-    'it with `reticle stop` and retry, or drive on another port with `RETICLE_PORT=N` (`drive` ' +
-    'takes the port from the environment or .reticle.json, not from a flag).'
-  );
 }
 
 /** How long the daemon /status probe waits before giving up — a local loopback call is near-instant. */

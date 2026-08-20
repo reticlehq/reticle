@@ -28,6 +28,9 @@ export * from './consequence.js';
 export * from './project-id.js';
 export * from './notices.js';
 export * from './journal.js';
+// Not an API — three names that exist so importing the BROWSER SDK from here fails with a sentence
+// naming @reticlehq/browser, instead of a bare SyntaxError that blanks the app. See the module.
+export * from './browser-misdirect.js';
 
 // ── INTERNAL cross-package plumbing (shared impl; not a stable outside API — may change in a minor) ─
 export * from './daemon-registry.js'; // daemon discovery, used by the vite plugin + server
@@ -39,4 +42,7 @@ export * from './upgrade.js'; // self-update policy shared by the CLI
 export * from './telemetry.js';
 export * from './telemetry-session.js'; // the session/project rollup payloads
 export * from './telemetry-feedback.js'; // the two things a PERSON writes: feedback + a self-declared identity // anonymous adoption telemetry wire contract (DAU/WAU/MAU/installs)
-export { CONTRACT_FINGERPRINT, fingerprintOf } from './contract-fingerprint.js';
+export * from './impact.js'; // the user's own record of what Reticle has done for them (local only)
+export * from './impact-savings.js'; // the savings model - one file, so every claim is derivable there
+export { CONTRACT_FINGERPRINT, fnv1a, fingerprintOf } from './contract-fingerprint.js';
+export { fingerprintFinding, type FindingIdentity } from './finding-fingerprint.js';

@@ -45,7 +45,9 @@ import {
   LOG_RESULT,
   type PresenterOptions,
   type LogHandle,
+  type ControlIntent,
 } from './presenter/presenter.js';
+import { getPresenterSettings } from './presenter/presenter-settings.js';
 import { actionVerb } from './presenter/presenter-verbs.js';
 import { str, refLabel, modeForCommand, presentStatus } from './reticle-presenter-helpers.js';
 import { resetClock } from './timers/clock.js';
@@ -61,7 +63,7 @@ export type { ReticleConnectOptions };
 /**
  * Runtime backstop for the dev-only SDK: block connecting when the build reports production, unless
  * explicitly overridden. Pure so it's testable; connect reads NODE_ENV safely (process may be absent
- * in a raw browser). This is defense-in-depth — the primary guard is the consumer gating the import
+ * in a raw browser). This is defense-in-depth - the primary guard is the consumer gating the import
  * behind `import.meta.env.DEV` so the SDK is dead-code-eliminated from prod bundles entirely.
  */
 export function shouldBlockProduction(
@@ -115,7 +117,7 @@ export function connectionPolicy(
 
 /** HUD summary when the SDK self-ends a session because the bridge (server/agent) became unreachable. */
 const BRIDGE_LOST_SUMMARY =
-  'Session ended — lost connection to Reticle (the agent is no longer running).';
+  'Session ended - lost connection to Reticle (the agent is no longer running).';
 
 /**
  * Resolve the session label. An absent label or the `auto` sentinel yields a fresh per-tab id (via
@@ -137,7 +139,7 @@ function stripReloadCacheBustParam(): void {
     current.searchParams.delete(RELOAD_CACHE_BUST_PARAM);
     window.history.replaceState(window.history.state, '', current.toString());
   } catch {
-    /* best-effort URL hygiene — never block connect() on it */
+    /* best-effort URL hygiene - never block connect() on it */
   }
 }
 
@@ -177,7 +179,7 @@ export function resolveConnectIdentity(
 
 /**
  * Assemble an event envelope. Pure: `seq` (monotonic per session) and `t` (elapsed clock) are
- * injected, never read here — so it is unit-testable and honors the clock-injection rule. The
+ * injected, never read here - so it is unit-testable and honors the clock-injection rule. The
  * causing action's id is attributed server-side by the settle window, so it is not stamped here.
  */
 export function buildEvent(args: {
@@ -239,7 +241,7 @@ export class Reticle {
     }
 
     // A `hard` REFRESH left a cache-busting `_reticle_reload=<nonce>` in the address bar. Strip it now
-    // (before the route observer installs, so it emits no spurious ROUTE_CHANGE) — otherwise every hard
+    // (before the route observer installs, so it emits no spurious ROUTE_CHANGE) - otherwise every hard
     // reload permanently pollutes the URL the app and the agent see.
     stripReloadCacheBustParam();
 
@@ -257,7 +259,7 @@ export class Reticle {
     }
 
     // Publish the project root for the adapters' source relativisation. Done HERE, in library code,
-    // so the app-side connect stays plain JavaScript — see ReticleConnectOptions.root.
+    // so the app-side connect stays plain JavaScript - see ReticleConnectOptions.root.
     if (options.root !== undefined && options.root.length > 0) {
       (globalThis as Record<string, unknown>)[RETICLE_ROOT_GLOBAL] = options.root;
     }
@@ -274,7 +276,7 @@ export class Reticle {
     // options win, but the `auto` sentinel defers to the URL param so leases correlate.
     const identity = resolveConnectIdentity(options, window.location.search);
     // Remembered per TAB, so a reload rejoins the same session instead of appearing as a new one and
-    // stranding the agent's handle — see session-continuity. An explicit id (connect option, or the
+    // stranding the agent's handle - see session-continuity. An explicit id (connect option, or the
     // lease's URL param) still wins.
     const explicitSession = resolveSessionLabel(identity.session, () => '');
     this.#session = rememberSessionLabel(
@@ -299,18 +301,18 @@ export class Reticle {
       url,
       hello: () => this.#hello(),
       handleCommand: (command) => this.#handleCommand(command),
-      // Show the presenter HUD as soon as the agent bridge connects — the user immediately sees
+      // Show the presenter HUD as soon as the agent bridge connects - the user immediately sees
       // the glow border and narration panel, even before the first tool call lands.
       onConnected: () => this.#presenter?.sessionStart(),
       // Liveness fallback: if the bridge stays unreachable (the agent killed the server process),
-      // no server-pushed end can arrive — so end the run we're presenting ourselves. A returning
+      // no server-pushed end can arrive - so end the run we're presenting ourselves. A returning
       // agent revives it via the normal sessionStart path on its next command.
       onConnectionLost: () => {
         // Restore real timers. A frozen clock is driven by the agent through the bridge; once the
         // bridge is gone nothing can ever advance it, so leaving it installed pins Date.now and
         // queues every setTimeout into a scheduler that will never run. Concretely that kills every
         // lodash debounce/throttle in the app (now - lastCall stays 0), so search boxes, autosave
-        // and resize handlers stop firing until a reload — with nothing on screen explaining why.
+        // and resize handlers stop firing until a reload - with nothing on screen explaining why.
         resetClock();
         if (true === this.#presenter?.sessionActive) {
           this.#presenter.setState(SessionState.ENDED, BRIDGE_LOST_SUMMARY);
@@ -350,7 +352,7 @@ export class Reticle {
       presenterOptions.sessionId = this.#session;
       // The panel calls this when the human pauses/resumes/ends or sends a message. We emit a
       // HUMAN_CONTROL event over the existing transport; #emit stamps `t` from the elapsed clock.
-      presenterOptions.onControl = (intent) =>
+      presenterOptions.onControl = (intent: ControlIntent) =>
         this.#emit(
           EventType.HUMAN_CONTROL,
           intent.text !== undefined
@@ -359,7 +361,7 @@ export class Reticle {
         );
       this.#presenter = new Presenter(presenterOptions);
       // Mount the overlay. The session (glow + HUD) activates on bridge connect via onConnected,
-      // so the presenter is visible as soon as the agent is reachable — not just on first command.
+      // so the presenter is visible as soon as the agent is reachable - not just on first command.
       this.#presenter.mount();
     }
 
@@ -368,16 +370,21 @@ export class Reticle {
       this.#recorder.mount();
     }
 
-    // The "Flag a bug" annotator rides with the presenter (the human surface) unless explicitly off.
+    // The page annotator rides with the presenter (the human surface) unless explicitly off.
     if (options.annotate ?? options.present !== false) {
       const presenter = this.#presenter;
       this.#annotator = new Annotator({
         emit,
         now: () => Date.now(),
-        // Echo the flag into the live panel so the human watches their bug report land in the log.
-        onMark: (note, label) => presenter?.log(LOG_KIND.HUMAN, `🚩 ${label}: ${note}`),
+        onMark: (mark) =>
+          presenter?.log(
+            LOG_KIND.HUMAN,
+            `🚩 #${String(mark.index)} ${mark.anchor}${mark.source !== undefined ? ` · ${mark.source}` : ''} — ${mark.note}`,
+          ),
+        shouldBlock: () => getPresenterSettings().blockPageInteractions,
       });
       this.#annotator.mount();
+      this.#presenter?.bindAnnotator(this.#annotator);
     }
 
     this.#transport.connect();
@@ -410,7 +417,7 @@ export class Reticle {
 
   /** Advertise the app's testable surface so the agent learns it without reading source. */
   describe(input: CapabilitiesInput): void {
-    registerCapabilities(input); // the registry notifies the transport — see setCapabilitiesListener
+    registerCapabilities(input); // the registry notifies the transport - see setCapabilitiesListener
   }
 
   /** Live-control: end the session programmatically from the host app (drives the panel to ended). */
@@ -447,7 +454,7 @@ export class Reticle {
       ref,
     });
     // Guarded because #emit runs INLINE IN THE APP'S CALL STACK: every monkey-patch calls it from
-    // inside the function it replaced. An exception here does not surface as an SDK error — it
+    // inside the function it replaced. An exception here does not surface as an SDK error - it
     // propagates out of history.pushState (crashing a router's navigate), out of localStorage.setItem
     // after the write already succeeded, or out of console.log before the message reaches the console.
     // A dev-only observability SDK must never be able to break the app it is observing.
@@ -464,7 +471,7 @@ export class Reticle {
 
   /**
    * Resolve the app's redaction config into the ambient policy, and remember the part of it that
-   * travels. A config of `undefined` is not "no policy" — it is the DEFAULT policy, installed
+   * travels. A config of `undefined` is not "no policy" - it is the DEFAULT policy, installed
    * explicitly so a second connect() in the same page (HMR, a re-mount) cannot inherit a rule the
    * previous one set.
    */
@@ -484,7 +491,7 @@ export class Reticle {
       adapters: adapterNames(),
       ...(this.#token === undefined ? {} : { token: this.#token }),
       hasCapabilities: hasCapabilities(),
-      // Absent when no build plugin supplied one — "unknown", never "matching".
+      // Absent when no build plugin supplied one - "unknown", never "matching".
       ...(this.#sdkVersion === undefined ? {} : { sdkVersion: this.#sdkVersion }),
       // Always present: derived from THIS build's core, so it needs no build plugin to supply it.
       // It is the half of the skew check that works on a hand-wired connect.
@@ -511,7 +518,11 @@ export class Reticle {
     // Bridge → browser presenter pushes (PRESENTER state echo / FLOWS replay list). The presenter owns
     // the parsing; here we only report whether a panel was mounted to apply it. setState-only, so a
     // PRESENTER echo of a HUMAN_CONTROL can't loop back into a re-emit.
-    if (command.name === ReticleCommand.PRESENTER || command.name === ReticleCommand.FLOWS) {
+    if (
+      command.name === ReticleCommand.PRESENTER ||
+      command.name === ReticleCommand.FLOWS ||
+      command.name === ReticleCommand.IMPACT
+    ) {
       this.#presenter?.handlePush(command);
       return { ok: true, result: { applied: this.#presenter !== undefined } };
     }

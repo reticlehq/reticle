@@ -23,6 +23,7 @@
  * are indistinguishable once they are in the same column.
  */
 import { InstallSource } from '@reticlehq/core';
+import { findProjectConfig } from '../cli/cli-port.js';
 
 /** The one marker. Set by a channel on the process that runs the install. */
 export const INSTALL_SOURCE_ENV = 'RETICLE_INSTALL_SOURCE';
@@ -40,4 +41,43 @@ const KNOWN: ReadonlySet<string> = new Set(Object.values(InstallSource));
 export function resolveInstallSource(env: NodeJS.ProcessEnv = process.env): InstallSource {
   const declared = (env[INSTALL_SOURCE_ENV] ?? '').trim().toLowerCase();
   return KNOWN.has(declared) ? (declared as InstallSource) : InstallSource.UNKNOWN;
+}
+
+/**
+ * The install source declared by the environment, or undefined when nothing declared one.
+ *
+ * Distinct from `resolveInstallSource`, which answers `unknown` so an event always carries a value.
+ * A config file wants the opposite: writing `unknown` into `.reticle.json` is indistinguishable
+ * from a config written before this field existed, and those two are different facts.
+ */
+export function declaredInstallSource(
+  env: NodeJS.ProcessEnv = process.env,
+): InstallSource | undefined {
+  const declared = (env[INSTALL_SOURCE_ENV] ?? '').trim().toLowerCase();
+  return KNOWN.has(declared) && InstallSource.UNKNOWN !== declared
+    ? (declared as InstallSource)
+    : undefined;
+}
+
+/**
+ * The install source for a project: what its config recorded, else what the environment declares.
+ *
+ * The config wins because it is the durable answer. The marker is an environment variable set by
+ * whichever channel ran the install, so it exists for exactly one command and is gone by the next
+ * one — which is why this field reached a handful of events and nothing else, and why the question
+ * it exists to answer could not be asked.
+ *
+ * Narrowed against the closed list on the way out, the same as the env path: a config file is user
+ * data, and a hand-edited one must not be able to put an arbitrary string on the wire.
+ */
+export function projectInstallSource(
+  cwd: string,
+  env: NodeJS.ProcessEnv = process.env,
+): InstallSource {
+  const recorded = findProjectConfig(cwd)?.['installSource'];
+  if ('string' === typeof recorded) {
+    const narrowed = recorded.trim().toLowerCase();
+    if (KNOWN.has(narrowed)) return narrowed as InstallSource;
+  }
+  return resolveInstallSource(env);
 }

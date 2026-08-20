@@ -1,9 +1,10 @@
 /**
  * What to say when an agent calls a real Reticle tool that this profile does not advertise.
  *
- * The default profile advertises 16 of 46 tools. That is deliberate — every advertised tool's schema
- * is re-sent on every turn, and the trim is most of why `hybrid` is cheap — and the other 30 stay
- * fully callable through `reticle_run`, which `profile-reachability.test.ts` guards.
+ * The default surface advertises 18 of 48 tools, and the extended one 30. That is deliberate — every
+ * advertised tool's schema is re-sent on every turn, and editors budget MCP tools as a COUNT shared
+ * across every connected server — and everything omitted stays fully callable through `reticle_run`,
+ * which `surface-reachability.test.ts` guards.
  *
  * The gap was in the ERROR. The MCP SDK answers `Tool <name> not found`, which is indistinguishable
  * from "this tool does not exist", so an agent that trusts it stops trying. Reported from a real
@@ -14,7 +15,7 @@
  * and the switch that makes it stop being necessary.
  */
 import { ReticleTool } from './tool-names.js';
-import { TOOL_SURFACE, TOOL_PROFILE_ENV } from './tool-surface.js';
+import { ADVERTISE_ALL_ENV } from './tool-surface.js';
 import { mergedNameRedirect, mergedNameMessage } from './merged-name-redirect.js';
 
 /**
@@ -37,7 +38,9 @@ export function unadvertisedToolHelp(
     `away. It is NOT missing: invoke it with ` +
     `${ReticleTool.RUN} { tool: "${name}", args: { ... } }. ` +
     `Call ${ReticleTool.TOOLS} { names: ["${name}"] } for its parameters. ` +
-    `If you need it repeatedly, set ${TOOL_PROFILE_ENV}=${TOOL_SURFACE.ALL} to advertise ` +
-    `every tool directly.`
+    `If you need it repeatedly, start the daemon with ${ADVERTISE_ALL_ENV}=1 for the extended ` +
+    `surface. That is read by the DAEMON at startup, so it takes effect on the next daemon, and it ` +
+    `advertises MORE tools rather than all of them — editors budget MCP tools as a shared count, so ` +
+    `${ReticleTool.RUN} stays the way to reach the rest.`
   );
 }

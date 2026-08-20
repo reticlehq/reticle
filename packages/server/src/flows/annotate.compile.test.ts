@@ -88,6 +88,42 @@ describe('compileAnnotation pure compiler', () => {
     expect(describeCompiled(a)).toContain('no console.error');
   });
 
+  // #395: annotate and flow_save must not tell the caller opposite things about the same
+  // success-state. A non-consequence end-condition carries the grade flow_save will give it, so the
+  // caller cannot save a "success" that then quietly grades assertion-free and can never go red.
+  it('success-state with a console condition notes it grades assertion-free (#395)', () => {
+    const a: Annotation = {
+      kind: AnnotationKind.SUCCESS_STATE,
+      console: { level: 'error', absent: true },
+    };
+    const out = compileAnnotation(a, 4);
+    expect(out.result.ok).toBe(true);
+    if (!out.result.ok) throw new Error('expected ok');
+    expect(out.result.note).toContain('assertion-free');
+  });
+
+  it('success-state with a testid notes it grades presence-only (#395)', () => {
+    const a: Annotation = { kind: AnnotationKind.SUCCESS_STATE, testid: 'done' };
+    const out = compileAnnotation(a, 4);
+    if (!out.result.ok) throw new Error('expected ok');
+    expect(out.result.note).toContain('presence-only');
+  });
+
+  it('a consequence success-state (signal / net / state) carries NO grade warning (#395)', () => {
+    for (const a of [
+      { kind: AnnotationKind.SUCCESS_STATE, signal: 'diff:shown' },
+      {
+        kind: AnnotationKind.SUCCESS_STATE,
+        net: { method: 'POST', urlContains: '/api/x', count: 1 },
+      },
+      { kind: AnnotationKind.SUCCESS_STATE, statePath: 'cart.items', store: 'app' },
+    ] as Annotation[]) {
+      const out = compileAnnotation(a, 4);
+      if (!out.result.ok) throw new Error('expected ok');
+      expect(out.result.note).toBeUndefined();
+    }
+  });
+
   it('assert-state compiles to step.expect.state on the LAST step', () => {
     const a: Annotation = {
       kind: AnnotationKind.ASSERT_STATE,

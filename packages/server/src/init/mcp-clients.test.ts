@@ -24,6 +24,9 @@ import {
   clientSpec,
   mergeClientConfig,
   ClientMergeStatus,
+  ConfigScope,
+  type ClientSpec,
+  clientMarkerRelPath,
   clientSnippet,
 } from './mcp-clients.js';
 import { MCP_SERVER_NAME } from './mcp.js';
@@ -166,6 +169,42 @@ describe('idempotency, and the difference between "already right" and "not ours"
     const result = mergeClientConfig(clientSpec(McpClient.CURSOR), existing);
     expect(result.status).toBe(ClientMergeStatus.APPLY);
   });
+
+  /**
+   * The wrong @reticlehq package is a WRONG registration, not a user's choice — every JSON client,
+   * not just the one it was reported on. `@reticlehq/core` has no `mcp` bin, so the client shows the
+   * server errored with zero tools while `init` reports it already wired.
+   */
+  for (const id of [McpClient.CURSOR, McpClient.WINDSURF, McpClient.GEMINI, McpClient.VSCODE]) {
+    it(`${id}: an entry naming the wrong @reticlehq package is rewritten, not reported wired`, () => {
+      const spec = clientSpec(id);
+      const existing = JSON.stringify({
+        [spec.serversKey]: {
+          [MCP_SERVER_NAME]: { command: 'npx', args: ['@reticlehq/core', 'mcp'] },
+        },
+      });
+      const result = mergeClientConfig(spec, existing);
+      expect(result.status).toBe(ClientMergeStatus.APPLY);
+      expect(result.content).not.toContain('@reticlehq/core');
+      expect(result.content).toContain('@reticlehq/server');
+    });
+  }
+
+  it('opencode: the same wrong package inside its command ARRAY is rewritten too', () => {
+    const spec = clientSpec(McpClient.OPENCODE);
+    const existing = JSON.stringify({
+      [spec.serversKey]: {
+        [MCP_SERVER_NAME]: {
+          type: 'local',
+          command: ['npx', '@reticlehq/core', 'mcp'],
+          enabled: true,
+        },
+      },
+    });
+    const result = mergeClientConfig(spec, existing);
+    expect(result.status).toBe(ClientMergeStatus.APPLY);
+    expect(result.content).not.toContain('@reticlehq/core');
+  });
 });
 
 describe('codex', () => {
@@ -192,5 +231,104 @@ describe('every client can produce a paste-able snippet', () => {
       expect(snippet.length, `${spec.id} has no snippet`).toBeGreaterThan(10);
       expect(snippet, `${spec.id} snippet does not mention the server`).toContain(MCP_SERVER_NAME);
     }
+  });
+});
+
+/**
+ * OpenCode installs GLOBALLY and is registered globally, like Cursor — not per project.
+ *
+ * It was listed with a project-scoped `opencode.json`, and registration is gated on that file already
+ * existing, so a project that had never written one was skipped in silence: the user has OpenCode
+ * installed, `init` says nothing about it, and the tools never appear. In the field every OpenCode
+ * user connected an MCP client and produced zero tool calls and zero app connections, which is what
+ * "you were never wired" looks like from the outside.
+ *
+ * Verified against a real install (OpenCode 1.3.17): the config lives at
+ * `~/.config/opencode/opencode.jsonc`. The extension is `.jsonc`, which the project-scoped marker
+ * would never have matched even if a project config existed.
+ */
+describe('opencode is wired where it actually lives', () => {
+  const spec = MCP_CLIENTS.find((c) => c.id === McpClient.OPENCODE);
+
+  it('is registered in the user home, not per project', () => {
+    expect(spec?.scope).toBe(ConfigScope.HOME);
+  });
+
+  it('targets the real config path, extension included', () => {
+    expect(spec?.relPath).toBe('.config/opencode/opencode.jsonc');
+  });
+
+  it('merges into an existing config without disturbing what is there', () => {
+    // The shape a real install has: a schema pointer and a plugin list, both of which must survive.
+    const existing = JSON.stringify({
+      $schema: 'https://opencode.ai/config.json',
+      plugin: ['opencode-supermemory@latest'],
+    });
+    const merged = mergeClientConfig(spec as ClientSpec, existing);
+    expect(merged.status).toBe(ClientMergeStatus.APPLY);
+    const parsed = JSON.parse(merged.content) as Record<string, unknown>;
+    expect(parsed['$schema']).toBe('https://opencode.ai/config.json');
+    expect(parsed['plugin']).toEqual(['opencode-supermemory@latest']);
+    expect((parsed['mcp'] as Record<string, unknown>)['reticle']).toBeDefined();
+  });
+
+  it('falls back to a printed block when the JSONC genuinely has comments', () => {
+    // `.jsonc` permits comments, and a parser that guessed would strip them from the user's own file.
+    // A failed parse must degrade to MANUAL, never to a rewrite.
+    const commented = '{\n  // my settings\n  "plugin": []\n}';
+    expect(mergeClientConfig(spec as ClientSpec, commented).status).toBe(ClientMergeStatus.MANUAL);
+  });
+});
+
+/**
+ * Antigravity, which connected nine users and drove nothing.
+ *
+ * `init` did not know this client at all, so those users hand-wired an MCP registration (they reached
+ * the daemon - the connections are in the field data) and then never ran `init`, never instrumented an
+ * app, and never called a tool. Nothing told them there was a second half.
+ *
+ * Path and shape taken from Google's own documentation, not recalled: the config is
+ * `~/.gemini/config/mcp_config.json` under a top-level `mcpServers` key, and one file serves the 2.0
+ * IDE, the CLI and the SDK alike. The shape is the same `command`/`args` object Cursor, Windsurf and
+ * Gemini CLI already use, so this is a registry entry rather than a new mechanism.
+ *
+ * NOT verified against a running install - Antigravity is not on the machine this was written on. The
+ * path is documented, the merge is the shared JSON path with its own tests, and a config that fails to
+ * parse still degrades to a printed block.
+ */
+describe('antigravity', () => {
+  const spec = MCP_CLIENTS.find((c) => c.id === McpClient.ANTIGRAVITY);
+
+  it('is a client init knows about', () => {
+    expect(spec, 'antigravity entry missing').toBeDefined();
+  });
+
+  it('writes the documented global config path', () => {
+    expect(spec?.scope).toBe(ConfigScope.HOME);
+    expect(spec?.relPath).toBe('.gemini/config/mcp_config.json');
+  });
+
+  it('uses the mcpServers key, like the other Gemini-family clients', () => {
+    expect(spec?.serversKey).toBe('mcpServers');
+  });
+
+  it('does not collide with the Gemini CLI entry that shares the ~/.gemini tree', () => {
+    // Both live under ~/.gemini, and registration is gated on the marker DIRECTORY existing. If the
+    // markers matched, having one client installed would make init write a config for the other.
+    const gemini = MCP_CLIENTS.find((c) => c.id === McpClient.GEMINI);
+    expect(spec?.relPath).not.toBe(gemini?.relPath);
+    expect(clientMarkerRelPath(spec as ClientSpec)).not.toBe(
+      clientMarkerRelPath(gemini as ClientSpec),
+    );
+  });
+
+  it('merges into an existing config without touching the servers already there', () => {
+    const existing = JSON.stringify({ mcpServers: { other: { command: 'node', args: ['x.js'] } } });
+    const merged = mergeClientConfig(spec as ClientSpec, existing);
+    expect(merged.status).toBe(ClientMergeStatus.APPLY);
+    const servers = (JSON.parse(merged.content) as { mcpServers: Record<string, unknown> })
+      .mcpServers;
+    expect(servers['other']).toBeDefined();
+    expect(servers[MCP_SERVER_NAME]).toBeDefined();
   });
 });

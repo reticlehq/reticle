@@ -94,6 +94,31 @@ describe('every published skill is one the registry can actually install', () =>
   });
 });
 
+/**
+ * The root `SKILL.md` must NOT have frontmatter, and that is the opposite of the rule above.
+ *
+ * The skills CLI (`vercel-labs/skills`) documents `--full-depth` as "search all subdirectories EVEN
+ * WHEN a root SKILL.md exists". So a valid root SKILL.md is not an extra skill, it is a stop sign:
+ * the CLI takes the root and never descends. Measured against this repo's shape on 1.5.22 — with a
+ * frontmatter-less root it reports "Found 11 skills"; add `name` and `description` to that same root
+ * and it reports "Found 1 skill" and every other published skill silently disappears from
+ * `npx skills add reticlehq/reticle`.
+ *
+ * The root file is the paste-URL artifact and cannot move without breaking the canonical URL, so the
+ * only thing holding the registry route open is that it stays unparseable as a skill. The comment at
+ * the top of this file teaches the opposite lesson ("a skill with no frontmatter is not a skill"),
+ * which is precisely the one-line "fix" that would take the other ten skills off the registry with a
+ * green suite. This test is the sign on the wire.
+ */
+describe('the root SKILL.md stays the paste-URL artifact, not a skill', () => {
+  it('has no frontmatter, so the skills CLI descends into skills/ instead of stopping at root', () => {
+    expect(
+      frontmatter(join(REPO, 'SKILL.md')),
+      'root SKILL.md now parses as a skill — the skills CLI will install ONLY it and drop every skill under skills/. Put the frontmatter on a copy under skills/ instead.',
+    ).toBe(null);
+  });
+});
+
 /** The release version out of the root `package.json`, narrowed rather than trusted. */
 function releaseVersion(): string | null {
   const parsed: unknown = JSON.parse(readFileSync(join(REPO, 'package.json'), 'utf8'));

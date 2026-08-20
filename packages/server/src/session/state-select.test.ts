@@ -75,9 +75,32 @@ describe('reticle_state path selector', () => {
     storeNames: ['workspace'],
   };
 
-  it('returns the full result unchanged when no path/depth is given', async () => {
-    const res = await stateTool().handler(fakeDeps(result), { store: 'workspace' });
-    expect(res).toEqual(result);
+  /**
+   * The ENVELOPE is unchanged — `{ stores, storeNames }`, same keys, same store names, nothing
+   * reshaped into `{ found, value }`. That is what callers depend on and what this pinned.
+   *
+   * The values inside are now bounded by default, because an unscoped read returned the whole tree
+   * and a tool result is re-sent on every later turn: 10,119 bytes measured on the bench fixture,
+   * about 34,000 tokens across a 16-turn run for one call. `captionCache.v3.text` sits below that
+   * bound here, so it collapses and the reply says so — a smaller read that did not admit it was
+   * smaller is the false green this whole file guards against.
+   */
+  it('keeps the envelope, bounds the values, and discloses the bound', async () => {
+    const res = (await stateTool().handler(fakeDeps(result), { store: 'workspace' })) as {
+      stores: Record<string, unknown>;
+      storeNames: string[];
+      truncation?: { note?: string };
+    };
+    expect(Object.keys(res).sort()).toEqual(['storeNames', 'stores', 'truncation']);
+    expect(res.storeNames).toEqual(['workspace']);
+    expect(res.stores['workspace'], 'the store is still there and still named').toBeDefined();
+    expect(res.truncation?.note, 'the bound is admitted').toMatch(/not the whole store/i);
+  });
+
+  it('says nothing about truncation when the store fits inside the bound', async () => {
+    const shallow = { stores: { workspace: { version: 7 } }, storeNames: ['workspace'] };
+    const res = (await stateTool().handler(fakeDeps(shallow), {})) as { truncation?: unknown };
+    expect(res.truncation).toBeUndefined();
   });
 
   it('extracts a sub-tree by path relative to the named store', async () => {

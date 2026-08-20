@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { bugsInResult } from './bug-found.js';
-import { BugAttribution, BugSource, ContradictionKind } from '@reticlehq/core';
+import { bugsInResult, routeOf } from './bug-found.js';
+import { BugAttribution, BugSource, ContradictionKind, fingerprintFinding } from '@reticlehq/core';
 
 /**
  * The outcome metric — the only number that can honestly be published or shown to an investor,
@@ -319,5 +319,69 @@ describe('every defect names an owner, and app is never a guess', () => {
     expect(
       bugsInResult('reticle_assert', { pass: false, assertion: 'element.present' }).length,
     ).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * Route extraction: `routeOf` reads the route from whichever shape the tool result carries it in,
+ * so the fingerprint can distinguish the same class of defect at different locations.
+ */
+describe('routeOf extracts route from the result for fingerprinting', () => {
+  it('reads from status.route (the snapshot shape)', () => {
+    expect(routeOf({ status: { route: '/dashboard' } })).toBe('/dashboard');
+  });
+
+  it('reads from a top-level route field', () => {
+    expect(routeOf({ route: '/settings' })).toBe('/settings');
+  });
+
+  it('prefers status.route over top-level route', () => {
+    expect(routeOf({ route: '/old', status: { route: '/current' } })).toBe('/current');
+  });
+
+  it('returns undefined when no route is present', () => {
+    expect(routeOf({ anomalies: [{ kind: 'console-error' }] })).toBeUndefined();
+  });
+
+  it('returns undefined for an empty string', () => {
+    expect(routeOf({ status: { route: '' } })).toBeUndefined();
+  });
+});
+
+/**
+ * The fingerprint integrates: given bugs + route, a caller produces a stable identity that persists
+ * across sessions. Reverting this code must make these tests RED.
+ */
+describe('fingerprintFinding integrates with bugsInResult to produce cross-session identity', () => {
+  it('same contradiction at the same route = same fingerprint across sessions', () => {
+    const result = {
+      pass: true,
+      contradictions: [{ kind: 'signal-contradicted' }],
+      status: { route: '/checkout' },
+    };
+    const bugs = bugsInResult('reticle_assert', result);
+    const route = routeOf(result);
+    if (route === undefined) throw new Error('expected route');
+    const firstBug = bugs[0];
+    if (firstBug === undefined) throw new Error('expected at least one bug');
+    const fp = fingerprintFinding({ kind: firstBug.kind, source: firstBug.source, route });
+    const fp2 = fingerprintFinding({
+      kind: 'signal-contradicted',
+      source: BugSource.CONTRADICTION,
+      route: '/checkout',
+    });
+    expect(fp).toBe(fp2);
+  });
+
+  it('same kind at a different route = different fingerprint (different bug)', () => {
+    const bugs = bugsInResult('reticle_assert', {
+      pass: true,
+      contradictions: [{ kind: 'signal-contradicted' }],
+    });
+    const firstBug = bugs[0];
+    if (firstBug === undefined) throw new Error('expected at least one bug');
+    const fpA = fingerprintFinding({ kind: firstBug.kind, source: firstBug.source, route: '/a' });
+    const fpB = fingerprintFinding({ kind: firstBug.kind, source: firstBug.source, route: '/b' });
+    expect(fpA).not.toBe(fpB);
   });
 });

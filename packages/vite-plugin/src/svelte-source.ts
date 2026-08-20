@@ -62,6 +62,13 @@ function defaultLoadCompiler(): SvelteCompilerLike | null {
   cachedCompiler = null;
   // From the APP's root first. The plugin may be linked, hoisted, or in a pnpm store far from the
   // project, and the compiler that matters is the one the app's own Svelte plugin will use.
+  //
+  // `import.meta.url` is this module's own location and is the ESM spelling of it. The package also
+  // ships a CJS build (an app without `"type": "module"` can only `require` its Vite config), where
+  // `import.meta` is empty — so that build SUBSTITUTES `__filename` here rather than leaving the
+  // expression to evaluate to nothing. Both artefacts therefore try the same two origins; see
+  // scripts/build-cjs.mjs. Reading it unguarded is deliberate: the build fails loudly if the
+  // substitution is ever dropped.
   for (const from of [`${process.cwd()}/package.json`, import.meta.url]) {
     try {
       cachedCompiler = createRequire(from)('svelte/compiler') as SvelteCompilerLike;

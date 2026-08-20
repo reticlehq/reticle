@@ -77,8 +77,12 @@ describe('applySnapshotDelta', () => {
 
   it('first diff call returns full (no prior), second returns only the delta', () => {
     const c = new SnapshotCache();
-    const first = applySnapshotDelta(raw(TREE_A), opts(true), c) as { tree?: string };
+    const first = applySnapshotDelta(raw(TREE_A), opts(true), c) as {
+      tree?: string;
+      mode?: string;
+    };
     expect(first.tree).toBe(TREE_A); // first look → full
+    expect(first.mode).toBe(SnapshotDeltaMode.FULL);
     const second = applySnapshotDelta(raw(TREE_B), opts(true), c) as {
       mode?: string;
       delta?: { added: string[] };
@@ -103,8 +107,14 @@ describe('applySnapshotDelta', () => {
   it('a route change yields full again (never a cross-page delta)', () => {
     const c = new SnapshotCache();
     applySnapshotDelta(raw(TREE_A, '/a'), opts(true), c);
-    const onB = applySnapshotDelta(raw(TREE_B, '/b'), opts(true), c) as { tree?: string };
+    const onB = applySnapshotDelta(raw(TREE_B, '/b'), opts(true), c) as {
+      tree?: string;
+      mode?: string;
+      reason?: string;
+    };
     expect(onB.tree).toBe(TREE_B); // different route → full, not a delta
+    expect(onB.mode).toBe(SnapshotDeltaMode.FULL);
+    expect(onB.reason).toBe('route changed');
   });
 
   it('passes an error envelope through untouched', () => {
@@ -165,5 +175,123 @@ describe('a diff over a capped tree does not claim the page is unchanged', () =>
     expect(out.mode).toBe('unchanged');
     expect(out.truncated).toBeUndefined();
     expect(out.note).toBeUndefined();
+  });
+});
+
+describe('value changes surface as `changed`, not as remove+add of the same element', () => {
+  it('typing into a textbox reports the element as changed (same ref, different text)', () => {
+    const before = '- textbox "Filter" (ref=e29)\n- button "Submit" (ref=e30)';
+    const after = '- textbox "Filter" (ref=e29) [value="billing"]\n- button "Submit" (ref=e30)';
+    const d = snapshotDelta(before, after);
+    if (d.mode !== SnapshotDeltaMode.DELTA) throw new Error('expected delta');
+    expect(d.delta.changed).toEqual(['- textbox "Filter" (ref=e29) [value="billing"]']);
+    expect(d.delta.changed).toHaveLength(1);
+    expect(d.delta.added).toEqual([]);
+    expect(d.delta.removed).toEqual([]);
+  });
+
+  it('a ref-only difference (re-render re-mint) is still unchanged', () => {
+    const before = '- button "Save" (ref=e1)\n- button "Cancel" (ref=e2)';
+    const after = '- button "Save" (ref=e7)\n- button "Cancel" (ref=e8)';
+    expect(snapshotDelta(before, after).mode).toBe(SnapshotDeltaMode.UNCHANGED);
+  });
+
+  it('multiple value changes on the same page all surface', () => {
+    const before = [
+      '- textbox "Name" (ref=e1)',
+      '- textbox "Email" (ref=e2)',
+      '- button "Submit" (ref=e3)',
+    ].join('\n');
+    const after = [
+      '- textbox "Name" (ref=e1) [value="Alice"]',
+      '- textbox "Email" (ref=e2) [value="a@b.c"]',
+      '- button "Submit" (ref=e3)',
+    ].join('\n');
+    const d = snapshotDelta(before, after);
+    if (d.mode !== SnapshotDeltaMode.DELTA) throw new Error('expected delta');
+    expect(d.delta.changed).toHaveLength(2);
+    expect(d.delta.changed).toContain('- textbox "Name" (ref=e1) [value="Alice"]');
+    expect(d.delta.changed).toContain('- textbox "Email" (ref=e2) [value="a@b.c"]');
+    expect(d.delta.added).toEqual([]);
+    expect(d.delta.removed).toEqual([]);
+  });
+
+  it('a structural add alongside a value change reports both correctly', () => {
+    const before = '- textbox "Search" (ref=e5)';
+    const after = '- textbox "Search" (ref=e5) [value="q"]\n- alert "Results" (ref=e6)';
+    const d = snapshotDelta(before, after);
+    if (d.mode !== SnapshotDeltaMode.DELTA) throw new Error('expected delta');
+    expect(d.delta.changed).toEqual(['- textbox "Search" (ref=e5) [value="q"]']);
+    expect(d.delta.added).toEqual(['- alert "Results" (ref=e6)']);
+    expect(d.delta.removed).toEqual([]);
+  });
+
+  it('different roles sharing a re-minted ref stay as separate add/remove, not paired', () => {
+    const before = '- button "Delete" (ref=e1)\n- textbox "Name" (ref=e2)';
+    const after = '- textbox "Email" (ref=e1)\n- textbox "Name" (ref=e2)';
+    const d = snapshotDelta(before, after);
+    if (d.mode !== SnapshotDeltaMode.DELTA) throw new Error('expected delta');
+    expect(d.delta.changed).toEqual([]);
+    expect(d.delta.removed).toEqual(['- button "Delete" (ref=e1)']);
+    expect(d.delta.added).toEqual(['- textbox "Email" (ref=e1)']);
+  });
+});
+
+describe('full-tree fallback carries mode and reason', () => {
+  const raw = (tree: string, route = '/'): unknown => ({
+    tree,
+    status: { route, title: 'T' },
+    nodes: 2,
+  });
+  const opts = (diff: boolean) => ({ sessionId: 's', scope: '', mode: 'full', diff });
+
+  it('first snapshot reports mode:full with reason', () => {
+    const c = new SnapshotCache();
+    const out = applySnapshotDelta(raw(TREE_A), opts(true), c) as {
+      tree?: string;
+      mode?: string;
+      reason?: string;
+    };
+    expect(out.tree).toBe(TREE_A);
+    expect(out.mode).toBe(SnapshotDeltaMode.FULL);
+    expect(out.reason).toBe('first snapshot for this route');
+  });
+
+  it('route change reports mode:full with reason', () => {
+    const c = new SnapshotCache();
+    applySnapshotDelta(raw(TREE_A, '/a'), opts(true), c);
+    const out = applySnapshotDelta(raw(TREE_B, '/b'), opts(true), c) as {
+      tree?: string;
+      mode?: string;
+      reason?: string;
+    };
+    expect(out.tree).toBe(TREE_B);
+    expect(out.mode).toBe(SnapshotDeltaMode.FULL);
+    expect(out.reason).toBe('route changed');
+  });
+
+  it('no mode field when diff is off (not a delta response)', () => {
+    const c = new SnapshotCache();
+    const out = applySnapshotDelta(raw(TREE_A), opts(false), c) as {
+      tree?: string;
+      mode?: string;
+    };
+    expect(out.tree).toBe(TREE_A);
+    expect(out.mode).toBeUndefined();
+  });
+
+  it('changed field surfaces through applySnapshotDelta', () => {
+    const c = new SnapshotCache();
+    const before = '- textbox "Q" (ref=e1)';
+    const after = '- textbox "Q" (ref=e1) [value="hi"]';
+    applySnapshotDelta(raw(before), opts(true), c);
+    const out = applySnapshotDelta(raw(after), opts(true), c) as {
+      mode?: string;
+      changed?: string[];
+      changedCount?: number;
+    };
+    expect(out.mode).toBe(SnapshotDeltaMode.DELTA);
+    expect(out.changed).toEqual(['- textbox "Q" (ref=e1) [value="hi"]']);
+    expect(out.changedCount).toBe(1);
   });
 });

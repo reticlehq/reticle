@@ -28,3 +28,46 @@ describe('isDangerousActionText', () => {
     expect(isDangerousActionText('Open settings')).toBe(false);
   });
 });
+
+/**
+ * "Send" is not a destructive verb, and treating it as one taxed ordinary buttons.
+ *
+ * Reported from the field: `Send check-in` (POST that logs a text message) and `I'm safe / arrived`
+ * (a positive status update) were both blocked as potentially destructive, costing an extra
+ * round-trip each on a routine verification pass. Neither deletes, removes or revokes anything.
+ *
+ * `send` was in the list to cover moving money, and it caught every ordinary "send a message",
+ * "send an invite", "send a check-in" alongside it. The money cases are still guarded — through the
+ * thing being sent rather than the act of sending — so `Send payment` is still blocked while
+ * `Send message` is not.
+ *
+ * The guard is deliberately asymmetric: a false block costs one round-trip, a missed block can
+ * charge somebody's card. So this narrows the trigger without lowering the money coverage, and the
+ * assertions below pin BOTH directions to keep it that way.
+ */
+describe('the destructive-action classifier does not tax ordinary verbs', () => {
+  it.each([
+    'Send check-in',
+    "I'm safe / arrived",
+    'Send message',
+    'Send invite',
+    'Send feedback',
+    'Resend code',
+  ])('does not block %s', (label) => {
+    expect(isDangerousActionText(label)).toBe(false);
+  });
+
+  it.each([
+    'Send payment',
+    'Send money',
+    'Confirm payment',
+    'Delete account',
+    'Remove item',
+    'Transfer funds',
+    'Withdraw',
+    'Revoke access',
+    'Place order',
+  ])('still blocks %s', (label) => {
+    expect(isDangerousActionText(label)).toBe(true);
+  });
+});

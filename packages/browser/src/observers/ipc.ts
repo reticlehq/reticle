@@ -5,6 +5,7 @@ import {
   IpcStatus,
   NetInitiator,
   RETICLE_IPC_GLOBAL,
+  RETICLE_TAURI_CAPTURE_COMMAND,
 } from '@reticlehq/core';
 import type { Emit, Teardown } from './types.js';
 import { observeSafely } from './types.js';
@@ -116,6 +117,25 @@ export function ipcNetOverrides(
     // and the story that matters is the command's verdict, not the pipe it travelled down.
     statusText: ok ? IPC_STATUS_TEXT.OK : IPC_STATUS_TEXT.ERROR,
   };
+}
+
+/**
+ * Is this fetch Reticle's OWN desktop call rather than the app's?
+ *
+ * Tauri has no preload stage, so `reticle_screenshot` reaches the shell the only way it can: an
+ * `invoke` — and an invoke IS a fetch to the `ipc://` protocol, straight through the patch the
+ * network observer installed. So the observer recorded its own screenshots as app IPC calls, and
+ * because `IPC` counts as a mutating method, three concurrent captures inside one action window came
+ * back to the agent as `duplicate-request`: "the same write fired 3 times", against an app that had
+ * never made the call. Accusing a correct app of a double submit is the most damaging thing a
+ * verification tool can do, and here the tool was the one submitting.
+ *
+ * Electron never had this problem — its preload captures through the UNPATCHED invoke for exactly
+ * this reason — and the bridge's own WebSocket is skipped on the same principle (`isBridgeSocket`).
+ * The capture command is the SDK's whole Tauri-side surface, so matching it is the whole rule.
+ */
+export function isReticleOwnIpc(url: string): boolean {
+  return TAURI_IPC_URL.exec(url)?.[1] === RETICLE_TAURI_CAPTURE_COMMAND;
 }
 
 /**

@@ -8,7 +8,11 @@ import type { SessionManager } from '../session/session.js';
 function fakeDeps(): ToolDeps {
   // `noSessionHint` is what `reticle_sessions` uses to explain an empty list. A stub without it is a
   // stub of a SessionManager that cannot exist, and the dispatch test happens to call that tool.
-  const sessions: Partial<SessionManager> = { list: () => [], noSessionHint: () => undefined };
+  const sessions: Partial<SessionManager> = {
+    list: () => [],
+    noSessionHint: () => undefined,
+    noSessionNextAction: () => undefined,
+  };
   return { sessions: sessions as SessionManager } as unknown as ToolDeps;
 }
 

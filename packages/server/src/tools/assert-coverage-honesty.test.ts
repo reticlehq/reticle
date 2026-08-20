@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { LastAct } from '../session/last-act.js';
-import { EventType, SessionState, Verified, type ReticleEvent } from '@reticlehq/core';
+import {
+  EventType,
+  SessionState,
+  Verified,
+  VerifiedReason,
+  type ReticleEvent,
+} from '@reticlehq/core';
 import { TOOLS, type ToolDef, type ToolDeps } from './tools.js';
 import { ReticleTool } from './tool-names.js';
 import type { Session, SessionManager } from '../session/session.js';
@@ -23,6 +29,13 @@ function depsWithBlindSpots(blindSpots: Record<string, number>): ToolDeps {
     id: 'demo',
     bufferHealth: () => ({ total: 5, dropped: 0 }),
     lastAct: new LastAct(),
+    command: () =>
+      Promise.resolve({
+        ok: true,
+        kind: 'command_result' as const,
+        id: 'match-1',
+        result: { matched: false, count: 0, elements: [] },
+      }),
     blindSpots: () => blindSpots,
     eventsSince: () => [],
     queryEvents: () => Promise.resolve([]),
@@ -47,6 +60,24 @@ const absentConsole = {
   timeout_ms: 0,
 };
 
+const absentElement = {
+  predicate: {
+    kind: 'element',
+    query: { by: 'testid', value: 'shipment-row' },
+    absent: true,
+  },
+  timeout_ms: 0,
+};
+
+const absentElementInScope = {
+  predicate: {
+    kind: 'element',
+    query: { by: 'testid', value: 'shipment-row', scope: '#cross-origin-frame' },
+    absent: true,
+  },
+  timeout_ms: 0,
+};
+
 describe('reticle_assert discloses partial coverage', () => {
   it('a PASSING assertion on a page with a cross-origin iframe reports partial coverage', async () => {
     const result = (await tool(ReticleTool.ASSERT).handler(
@@ -57,6 +88,39 @@ describe('reticle_assert discloses partial coverage', () => {
     expect(result['pass']).toBe(true);
     expect(result['coverage']).toBeTypeOf('string');
     expect(String(result['coverage'])).toContain('partial');
+  });
+
+  it('downgrades a passing scoped element absence when a cross-origin frame is unobserved', async () => {
+    const result = (await tool(ReticleTool.ASSERT).handler(
+      depsWithBlindSpots({ 'cross-origin-iframe': 1 }),
+      absentElementInScope,
+    )) as Record<string, unknown>;
+
+    expect(result['pass']).toBe(true);
+    expect(result['verified']).toBe(Verified.UNKNOWN);
+    expect(result['verifiedReason']).toBe(VerifiedReason.ABSENCE_BLIND_SPOT);
+    expect(String(result['because'])).toContain('cross-origin');
+  });
+
+  it('keeps an unscoped element absence green when only an unrelated cross-origin frame is unobserved', async () => {
+    const result = (await tool(ReticleTool.ASSERT).handler(
+      depsWithBlindSpots({ 'cross-origin-iframe': 1 }),
+      absentElement,
+    )) as Record<string, unknown>;
+
+    expect(result['pass']).toBe(true);
+    expect(result['verified']).toBe(Verified.YES);
+  });
+
+  it('keeps an unscoped element absence green when unrelated virtualized rows are unobserved', async () => {
+    const result = (await tool(ReticleTool.ASSERT).handler(
+      depsWithBlindSpots({ 'virtualized-unmounted': 1 }),
+      absentElement,
+    )) as Record<string, unknown>;
+
+    expect(result['pass']).toBe(true);
+    expect(result['verified']).toBe(Verified.YES);
+    expect(result['verifiedReason']).toBe(VerifiedReason.PROVED);
   });
 
   it('names which regions were unobservable, so the agent can act on it', async () => {

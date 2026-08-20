@@ -13,6 +13,7 @@
 //   - `reticle_capture` photographs the webview while the window is hidden (headless)
 //   - fullPage is refused on macOS/Windows rather than downgraded
 //   - concurrent captures all survive, and nothing is left in the temp dir
+//   - and none of those captures appears in the app's own network evidence
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
@@ -158,6 +159,33 @@ try {
     'three concurrent captures all succeed',
     concurrent.every((s) => s.saved === true),
     JSON.stringify(concurrent.map((s) => s.reason ?? s.saved)),
+  );
+
+  // ── the observer must not appear in its own evidence ──────────────────────────────────────────
+  //
+  // A Tauri screenshot IS an `invoke`, and an invoke is a fetch through the patch the network
+  // observer installed — so five captures showed up as five `ipc://reticle_capture` writes in the
+  // app's network view, three of them inside one action window. `IPC` counts as a mutating method,
+  // so that reads out as `duplicate-request`: "the same write fired 3 times", against an app that
+  // never made the call. This asserts on the whole session, because the leak is not scoped to a
+  // window; the check right after it is the one that keeps the app's OWN calls visible.
+  const afterCaptures = await tool('reticle_network', {});
+  chk(
+    "Reticle's own captures are absent from the app's network evidence",
+    !JSON.stringify(afterCaptures.calls ?? []).includes('reticle_capture'),
+    JSON.stringify((afterCaptures.calls ?? []).map((c) => c.url)),
+  );
+  chk(
+    'the commands the APP made are still there, one record each',
+    (afterCaptures.calls ?? []).filter((c) => c.url === 'ipc://load_todos').length === 1 &&
+      (afterCaptures.calls ?? []).filter((c) => c.url === 'ipc://archive_todo').length === 1,
+    JSON.stringify((afterCaptures.calls ?? []).map((c) => c.url)),
+  );
+  const afterObserve = await tool('reticle_observe', {});
+  chk(
+    'no duplicate-request is invented out of the screenshots Reticle itself took',
+    !(afterObserve.contradictions ?? []).some((c) => c.detail.includes('reticle_capture')),
+    JSON.stringify(afterObserve.contradictions ?? []),
   );
 
   /**

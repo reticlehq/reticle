@@ -72,6 +72,21 @@ export const AGENT_WAITING_NOTICE =
 export const AGENT_ASK_NOTICE = 'Agent needs your input — answer in your terminal';
 
 /**
+ * Returned by `reticle_session` yield/end when the turn ends with no browser session connected.
+ *
+ * Ending a turn is not an operation on a tab. The agent is reporting that it has stopped driving,
+ * and that is true whether or not anything was ever connected — so refusing it made the agent fail
+ * a call it was told is MANDATORY, on the most common state a session is in. Reported agents skip
+ * yield entirely and note the gap in prose, which is the outcome this notice exists to remove.
+ *
+ * Said back to the caller rather than swallowed, so "the panel showed nothing" is a fact the agent
+ * can put in its report instead of an absence it has to infer.
+ */
+export const YIELD_WITHOUT_SESSION_NOTE =
+  'No browser session was connected, so there was no panel to update. The turn end was still ' +
+  'recorded. If you expected an app to be attached, that is the thing to look into.';
+
+/**
  * Actionable companion to THROTTLED_WARNING. Surfaced on act/assert results and
  * reticle_sessions rows when a tab is hidden/throttled and may be un-focusable/un-recoverable from
  * the in-page SDK + CDP path. Points at the `reticle drive` escape hatch (a guaranteed scriptable

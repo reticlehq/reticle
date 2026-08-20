@@ -4,13 +4,14 @@ import {
   TelemetryActor,
   TelemetryEventKind,
   TRANSPORT_LIMITS,
+  fingerprintFinding,
 } from '@reticlehq/core';
 import { getSessionMetrics } from '../telemetry/session-metrics.js';
 import { getTelemetry } from '../telemetry/telemetry.js';
 import { takeUpdateNudge } from '../update/update-nudge.js';
 import { takeVersionSkew } from '../version/version-nudge.js';
 import { noteToolCall } from '../daemon/daemon-usefulness.js';
-import { bugsInResult } from '../telemetry/bug-found.js';
+import { bugsInResult, routeOf } from '../telemetry/bug-found.js';
 import { noteToolServed, reportToolRefused } from '../telemetry/tool-refused.js';
 import { buildErrorPayload, refusalReasonFor } from './error-recovery.js';
 import { resultIsError } from '../mcp/mcp-is-error.js';
@@ -23,6 +24,12 @@ import { takeFeedbackUndelivered } from '../telemetry/feedback-delivery.js';
 import type { Session } from '../session/session.js';
 import { noteRefsMinted, wrongTabRefusal } from '../session/ref-provenance.js';
 import { span } from '../trace.js';
+import {
+  deltaForToolResult,
+  impactSnapshot,
+  initImpact,
+  recordImpact,
+} from '../impact/impact-recorder.js';
 import { type FrictionKind, frictionOf, inviteFor } from './feedback-invite.js';
 import type { ToolDef, ToolDeps } from './tools.js';
 
@@ -158,14 +165,20 @@ function reportBugsFound(toolName: string, result: Record<string, unknown>): voi
   const bugs = bugsInResult(toolName, result);
   if (0 === bugs.length) return;
   const metrics = getSessionMetrics();
+  const route = routeOf(result);
   for (const bug of bugs) {
     // `recordBug` answers whether this kind is new to the session, which is the only thing that
     // separates "another defect" from "the same defect again". Counting instances as defects is how
     // a published number inflates itself.
     const first = metrics.recordBug(bug.kind);
+    const identity =
+      route !== undefined
+        ? { kind: bug.kind, source: bug.source, route }
+        : { kind: bug.kind, source: bug.source };
+    const fingerprint = fingerprintFinding(identity);
     void getTelemetry().emit(TelemetryEventKind.BUG_FOUND, {
       actor: TelemetryActor.AGENT,
-      bug: { ...bug, repeat: !first },
+      bug: { ...bug, repeat: !first, fingerprint },
     });
   }
 }
@@ -260,6 +273,9 @@ export async function runTool(
   // closure carries this call's own identity, which is also what makes peak-concurrency measurable.
   // A daemon that has served even one tool call is doing a job for somebody; see daemon-usefulness.
   noteToolCall();
+  // The impact record needs the project's own `.reticle` root, and this is the first place every
+  // call knows it. Idempotent: the first root wins for the daemon's lifetime.
+  initImpact({ reticleRoot: deps.reticleRoot });
   // An oversized argument is refused BEFORE the handler deserialises it.
   //
   // tool-fuzz failed CI on the invariant that matters most — `every tool answers every hostile call`
@@ -373,6 +389,14 @@ export async function runTool(
   // throw path would have measured half the wall and called it the whole of it, the same way `isError`
   // once did. A call that was served clears the retry chain, so the next refusal after it is a first
   // refusal rather than a retry of something unrelated.
+  // The user's own record of what Reticle did for them. Same chokepoint as everything else that
+  // counts, for the same reason: a second recording site is a second thing to forget. Separate
+  // store from telemetry - this one never leaves the machine.
+  recordImpact(deltaForToolResult(raw, Date.now() - startedAt, resultIsError(raw)));
+  // ...and the tab being driven is told, so the report is live rather than a thing you reload.
+  // Optional-call, not optional-chain-on-the-object: a test double is a partial Session, and a
+  // courtesy push must never be the reason a tool call throws.
+  session?.pushImpact?.(impactSnapshot);
   if (resultIsError(raw)) reportRefusal(tool.name, (raw as { error: string }).error);
   else {
     noteToolServed();

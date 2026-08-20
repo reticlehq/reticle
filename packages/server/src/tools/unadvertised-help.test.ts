@@ -20,6 +20,7 @@ import { describe, expect, it } from 'vitest';
 import { unadvertisedToolHelp } from './unadvertised-help.js';
 import { ReticleTool } from './tool-names.js';
 import { TOOLS } from './tools.js';
+import { ADVERTISE_ALL_ENV, TOOL_PROFILE_ENV } from './tool-surface.js';
 
 const ADVERTISED = new Set<string>([ReticleTool.SNAPSHOT, ReticleTool.RUN, ReticleTool.TOOLS]);
 const KNOWN = new Set(TOOLS.map((t) => t.name));
@@ -37,9 +38,14 @@ describe('a Reticle tool that is real but not advertised', () => {
     expect(help).toContain(ReticleTool.FLOW_HEAL);
   });
 
-  it('names the profile switch too, for an agent that needs the tool repeatedly', () => {
+  it('names the switch that actually takes effect, not the retired one', () => {
     const help = unadvertisedToolHelp(ReticleTool.COVERAGE, ADVERTISED, KNOWN) ?? '';
-    expect(help).toContain('RETICLE_TOOL_PROFILE');
+    // This asserted RETICLE_TOOL_PROFILE for months, which is RETIRED: resolveToolSurface maps its
+    // old values to a surface and everything else — including the 'all' this message told agents to
+    // set — to DEFAULT. So the guidance named a variable that could not do what the sentence
+    // promised, and the test pinned the wrong half of it.
+    expect(help).toContain(ADVERTISE_ALL_ENV);
+    expect(help).not.toContain(TOOL_PROFILE_ENV);
   });
 
   it("stays silent for an advertised tool — that call is the SDK's business, not ours", () => {

@@ -21,7 +21,7 @@ This page is the complete description of what is collected. If something is not 
 
 ## What is sent
 
-Seventeen kinds of events, each a single small JSON object. This is the whole list, and it is the same list the code enumerates:
+Eighteen kinds of events, each a single small JSON object. This is the whole list, and it is the same list the code enumerates:
 
 | Event | When | Extra data |
 | --- | --- | --- |
@@ -31,6 +31,7 @@ Seventeen kinds of events, each a single small JSON object. This is the whole li
 | `daemon_stopped` | The local daemon stops | A summary of the session; see below |
 | `session_progress` | Periodically, from a daemon that is still running | The same summary as `daemon_stopped`, marked `final: false`. It exists so a long session is not invisible until it exits |
 | `app_instrumented` | The first time your app's SDK connects in a given daemon run | Nothing beyond the common fields. It is the second half of the install funnel: registering the MCP server is one thing, getting the SDK into a running page is another |
+| `instrumentation_stalled` | Ten minutes into a daemon run in which your app has still never connected | The same three facts as `app_instrumented`, with how long it waited instead of how long it took. It fires at most once per daemon run, and a run that starts slowly and then works reports nothing at all. It carries no diagnosis: whether a dev server is listening would need a live probe, and probing your machine to enrich a metric is collecting for the metric's sake |
 | `verification_completed` | A verification produces a verdict | Whether it passed, whether Reticle refused to call a passing check verified, and **why** the verdict came out that way; see below |
 | `project_profiled` | Once per daemon start | The shape of the project; see below |
 | `version_changed` | You update or roll back | The two version numbers, and which direction |
@@ -53,7 +54,7 @@ It also carries a snapshot of the **machine's** state (our own process's memory,
 
 ### Why a verdict came out that way
 
-`verification_completed` carries the **clause** that decided the verdict, from a fixed list we define: `proved`, `contradicted`, `assertion_failed`, `already_true`, `unclean_capture`, `vacuous_grade`, `outcome_pending`, `outcome_unread`, `unsettled`, `observation_lost`, `inconclusive`.
+`verification_completed` carries the **clause** that decided the verdict, from a fixed list we define: `proved`, `contradicted`, `assertion_failed`, `already_true`, `unclean_capture`, `vacuous_grade`, `outcome_pending`, `outcome_unread`, `unsettled`, `evidence_incomplete`, `observation_lost`, `inconclusive`.
 
 It exists because `verified: "unknown"` covered seven different situations belonging to three different owners (your app, your agent, and Reticle's own blind spots), and they arrived as one value. It is a **name from our own vocabulary**, never a description of your app: `contradicted` says two channels disagreed, not which ones, about what, or on which page.
 

@@ -26,6 +26,9 @@ import {
   type ReticleVerificationRun,
 } from '@reticlehq/core';
 import { start, type RunningServer } from '../index.js';
+import { probePresence, PortPresence } from '../daemon/port-presence.js';
+import { probeDaemon } from '../mcp/mcp-proxy.js';
+import { fetchStatus } from './cli-launch.js';
 import { resolveCloudConfig, syncRunToCloud, SyncOutcome } from '../cloud/cloud-sync.js';
 import { ReticleRunner } from '../runs/reticle-runner.js';
 import { createRunnerPort } from '../runs/runner-port.js';
@@ -257,6 +260,38 @@ async function openLiveConnection(opts: LiveOpts): Promise<VerifyConnection> {
 }
 
 /** CLI entry — wires the live ports and runs the one-shot verification. Exits the process itself. */
+/**
+ * What a user reads when the bridge port is already taken by a daemon.
+ *
+ * `verify` boots its OWN daemon, and it has to do so on the port the APP dials — a loopback page
+ * connects natively to the port baked into its config, so verify cannot simply pick a free one and
+ * still be found. On any machine with Reticle set up, that port already belongs to a running daemon.
+ *
+ * It used to die there. The listen failure surfaces asynchronously on the server object, after
+ * `start` has resolved, so nothing caught it and the process printed a raw `node:net` stack — the
+ * worst answer available, and reached most often by the people with the fewest other options, since
+ * the skill offers this command as the way to a verdict with no MCP at all.
+ *
+ * Three ways out, in the order they are worth trying, and the message says all three rather than
+ * picking one: an agent that already has the tools should ask the daemon that is running instead of
+ * starting a second one; somebody who wants this command specifically can stop the daemon; and a
+ * second port works when the app is configured for it.
+ *
+ * Attaching to the running daemon the way `reticle drive` now does is the better answer and is not
+ * this change — see cli/drive-attach.ts for the shape it should take.
+ */
+export function portBusyMessage(port: number): string {
+  return (
+    `reticle verify needs port ${String(port)} — the port your app dials — and a Reticle daemon is ` +
+    'already listening on it. It did not start a second one.\n\n' +
+    '  • If you have the Reticle tools, ask the daemon that is already running instead: ' +
+    'reticle_run { tool: "reticle_verify_change", args: { files: ["..."] } }\n' +
+    `  • Or stop it and re-run: npx @reticlehq/server stop --port ${String(port)}\n` +
+    `  • Or run both on another port, if your app is configured for it: RETICLE_PORT=<port> ` +
+    'npx @reticlehq/server verify <url>'
+  );
+}
+
 export function handleVerify(parsed: {
   url: string;
   headless: boolean;
@@ -283,8 +318,22 @@ export function handleVerify(parsed: {
     fail: (line) => process.stderr.write(`${line}\n`),
     exit: (code) => process.exit(code),
   };
-  void runVerify(
-    { url: parsed.url, timeoutMs: parsed.timeoutMs ?? DEFAULT_SESSION_TIMEOUT_MS },
-    ports,
-  );
+  // Asked BEFORE anything binds. The listen failure arrives asynchronously on the server object,
+  // long after `start` has resolved, so no `.catch` on that promise can ever see it — which is why
+  // this used to reach the user as a raw node stack rather than as an answer.
+  void (async () => {
+    const port = parsed.port ?? RETICLE_DEFAULT_PORT;
+    if (
+      (await probePresence(port, { tcpOpen: probeDaemon, status: fetchStatus })) ===
+      PortPresence.DAEMON
+    ) {
+      ports.fail(portBusyMessage(port));
+      ports.exit(1);
+      return;
+    }
+    await runVerify(
+      { url: parsed.url, timeoutMs: parsed.timeoutMs ?? DEFAULT_SESSION_TIMEOUT_MS },
+      ports,
+    );
+  })();
 }

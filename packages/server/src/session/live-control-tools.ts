@@ -5,6 +5,7 @@ import {
   AGENT_WAITING_NOTICE,
   PresenterTone,
   SessionState,
+  YIELD_WITHOUT_SESSION_NOTE,
 } from '@reticlehq/core';
 import { ReticleTool } from '../tools/tool-names.js';
 import { sessionIdShape } from '../tools/tool-kit.js';
@@ -16,6 +17,21 @@ import type { ToolDef } from '../tools/tools.js';
 /** Default + ceiling for the readiness wait — keep it short so a truly-missing app fails fast. */
 const WAIT_READY_DEFAULT_MS = 5000;
 const WAIT_READY_MAX_MS = 30000;
+
+/**
+ * Is this a turn ending with nothing attached, rather than a call about a specific tab?
+ *
+ * Only true when the caller named NO session and none is connected. Ending a turn is a statement
+ * about the agent, not about a tab, so it must not fail merely because no app was ever wired — that
+ * made a call documented as MANDATORY fail in the most common state a daemon is in, and the agents
+ * that hit it stopped calling it and wrote the gap into prose instead.
+ *
+ * Naming a session that does not exist stays an error. That is a mistake about WHICH tab you are
+ * talking to, and swallowing it would hide a real one.
+ */
+function endingTurnWithNothingAttached(deps: { sessions: { count(): number } }, id?: string) {
+  return id === undefined && 0 === deps.sessions.count();
+}
 
 /**
  * Live-control agent tools: the agent's side of the human-in-the-loop control surface.
@@ -38,9 +54,19 @@ export const LIVE_CONTROL_TOOLS: ToolDef[] = [
       '(calm, terminal) and shows the optional `summary` on the panel. If you are just finishing a ' +
       'turn or waiting on the human, call reticle_session{action:"yield"} instead (revivable). Idempotent.',
     inputSchema: { summary: z.string().optional(), ...sessionIdShape },
-    outputSchema: { ended: z.boolean(), sessionId: z.string() },
+    // `sessionId` is optional because there may genuinely not be one — see the no-op below. An
+    // empty string would read as a real id in a log, which is worse than its absence.
+    outputSchema: {
+      ended: z.boolean(),
+      sessionId: z.string().optional(),
+      note: z.string().optional(),
+    },
     handler: (deps, args) => {
-      const session = deps.sessions.resolve(asString(args['sessionId']));
+      const requested = asString(args['sessionId']);
+      if (endingTurnWithNothingAttached(deps, requested)) {
+        return Promise.resolve({ ended: true, note: YIELD_WITHOUT_SESSION_NOTE });
+      }
+      const session = deps.sessions.resolve(requested);
       // One PRESENTER push for the transition; the optional summary rides the same push.
       session.setState(SessionState.ENDED, asString(args['summary']));
       return Promise.resolve({ ended: true, sessionId: session.id });
@@ -65,10 +91,23 @@ export const LIVE_CONTROL_TOOLS: ToolDef[] = [
         .describe('For mode:"ask", the question to show the human on the panel.'),
       ...sessionIdShape,
     },
-    outputSchema: { yielded: z.boolean(), mode: z.string(), sessionId: z.string() },
+    outputSchema: {
+      yielded: z.boolean(),
+      mode: z.string(),
+      sessionId: z.string().optional(),
+      note: z.string().optional(),
+    },
     handler: (deps, args) => {
-      const session = deps.sessions.resolve(asString(args['sessionId']));
+      const requested = asString(args['sessionId']);
       const ask = asString(args['mode']) === PresenterTone.ASK;
+      if (endingTurnWithNothingAttached(deps, requested)) {
+        return Promise.resolve({
+          yielded: true,
+          mode: ask ? PresenterTone.ASK : PresenterTone.WAITING,
+          note: YIELD_WITHOUT_SESSION_NOTE,
+        });
+      }
+      const session = deps.sessions.resolve(requested);
       const note = asString(args['note']);
       const tone = ask ? PresenterTone.ASK : PresenterTone.WAITING;
       const text =

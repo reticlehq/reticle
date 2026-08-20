@@ -1,8 +1,11 @@
 #!/usr/bin/env node
 import { pathToFileURL } from 'node:url';
+import { openFailureNote } from './cli/open-note.js';
 import { realpathSync } from 'node:fs';
 import { join } from 'node:path';
 import { stateDirProblem } from './daemon/state-dir.js';
+import { statusNextAction } from './cli/status-next-action.js';
+import { hasConnectedBefore } from './session/connection-memory.js';
 import { reticleStateHome } from './daemon/daemon.js';
 import {
   handleWatch,
@@ -19,7 +22,7 @@ import { affectedSavedFlows } from './flows/flow-sources.js';
 import { availableUpdate } from './update/update-nudge.js';
 import { handleUpdate, handleRollback } from './cli/cli-update-commands.js';
 
-import { start, startDaemon } from './index.js';
+import { startDaemon } from './index.js';
 import { isCloudCommand, runCloudCommand } from './cli/cloud-cli.js';
 import { SERVER_VERSION } from './version/server-version.js';
 import { log } from './log.js';
@@ -59,10 +62,10 @@ import {
   summarizeStatus,
   warnOnDaemonSkew,
   decideOpen,
-  drivePortConflict,
   openInBrowser,
   openCommand,
 } from './cli/cli-launch.js';
+import { handleDrive } from './cli/drive-command.js';
 import { handleVerify } from './cli/cli-verify.js';
 import { runKill } from './cli/cli-kill.js';
 import { summarizeHunt, type HuntAnomaly, type HuntRun } from './hunt/hunt-report.js';
@@ -307,17 +310,40 @@ async function handleRestart(port: number, force: boolean): Promise<void> {
   await serveWithHonestExit({ port, headless: true, http: false });
 }
 
+/** `{ nextAction }` when there is one, `{}` when a session is connected — so the success case is silent. */
+function withNextAction(facts: {
+  running: boolean;
+  sessionCount: number;
+  previouslyConnected: boolean;
+  initialized: boolean;
+}): { nextAction?: string } {
+  const next = statusNextAction(facts);
+  return next === undefined ? {} : { nextAction: next };
+}
+
 function handleStatus(port: number): void {
   const pid = readPid(port);
+  // Durable, so it survives the daemon idling out — which is the state `status` is most often run in.
+  const projectId = readProjectId(process.cwd());
+  const previouslyConnected = hasConnectedBefore(reticleStateHome(), port, projectId);
+  // Whether `init` has run HERE. Registering the MCP server does not wire the app, and more than one
+  // path does the first without the second — so this is the commonest reason `status` has nothing to
+  // report, and it was not among the facts this command could state.
+  const initialized = projectId !== undefined;
   if (null === pid || !isAlive(pid)) {
     // `running: false` on its own has been reported about a port that was demonstrably occupied,
     // because the pid file is not the port. Ask the port before answering.
     void probePresence(port, { tcpOpen: probeDaemon, status: fetchStatus }).then((presence) => {
+      const running = presenceIsUsable(presence);
       log('reticle_status', {
         port,
-        running: presenceIsUsable(presence),
+        running,
         presence,
         ...(presence === PortPresence.FOREIGN ? { reason: describePresence(presence, port) } : {}),
+        // `init` promises this command says why the app has not connected. Without it the answer was
+        // `running: false` and nothing else, which reads as "Reticle is broken" for what is usually
+        // just a daemon that has not been asked to do anything yet.
+        ...withNextAction({ running, sessionCount: 0, previouslyConnected, initialized }),
       });
     });
     return;
@@ -330,10 +356,24 @@ function handleStatus(port: number): void {
     const update = availableUpdate();
     const nudge = update === undefined ? {} : { updateAvailable: update };
     if (payload === undefined) {
-      log('reticle_status', { port, running: true, pid, ...nudge });
+      log('reticle_status', {
+        port,
+        running: true,
+        pid,
+        ...nudge,
+        ...withNextAction({ running: true, sessionCount: 0, previouslyConnected, initialized }),
+      });
       return;
     }
-    log('reticle_status', { port, running: true, pid, ...summarizeStatus(payload), ...nudge });
+    const summary = summarizeStatus(payload);
+    // Only when the daemon did NOT already explain itself. It has the whole diagnosis in-process and
+    // puts it on the wire as `why`; printing a second, thinner opinion beside it risks two confident
+    // answers pointing different ways, which is worse than one.
+    const next =
+      summary.why === undefined
+        ? withNextAction({ running: true, ...summary, previouslyConnected, initialized })
+        : {};
+    log('reticle_status', { port, running: true, pid, ...summary, ...next, ...nudge });
   });
 }
 
@@ -408,22 +448,30 @@ async function handleHunt(dir: string): Promise<void> {
 
 /** Ensure a daemon is reachable on `port` (probe the real port; spawn + wait only if nothing's there). */
 function ensureDaemon(port: number): Promise<void> {
-  return probeDaemon(port).then(async (listening) => {
-    // Attaching to whatever already owns the port is the whole point of a daemon — but it means an
-    // upgrade does NOT take effect until that daemon dies, and nothing used to say so. Say it here,
-    // where both versions are in hand, and keep attaching: killing another agent's daemon on a
-    // version bump is worse than a loud warning.
-    if (listening) return warnOnDaemonSkew(port);
-    const scriptPath = process.argv[1];
-    if (scriptPath === undefined) throw new Error('cannot locate the reticle daemon script');
-    spawnDaemon(
-      process.execPath,
-      scriptPath,
-      [DAEMON_INNER_COMMAND, PORT_FLAG, String(port)],
-      port,
-    );
-    return waitForDaemon(port);
-  });
+  return probePresence(port, { tcpOpen: probeDaemon, status: fetchStatus }).then(
+    async (presence) => {
+      // Attaching to whatever already owns the port is the whole point of a daemon — but it means an
+      // upgrade does NOT take effect until that daemon dies, and nothing used to say so. Say it here,
+      // where both versions are in hand, and keep attaching: killing another agent's daemon on a
+      // version bump is worse than a loud warning.
+      if (presenceIsUsable(presence)) return warnOnDaemonSkew(port);
+      // Not free, not a daemon: a stranger holds the port. Spawning here is guaranteed to fail —
+      // the child cannot bind — and `waitForDaemon` would then report READY anyway, because its
+      // probe is the same bare TCP connect and the stranger accepts. That is the "serve reports
+      // success for a daemon that never bound" shape. Refuse instead, with the sentence `doctor`
+      // says.
+      if (PortPresence.FREE !== presence) throw new Error(describePresence(presence, port));
+      const scriptPath = process.argv[1];
+      if (scriptPath === undefined) throw new Error('cannot locate the reticle daemon script');
+      spawnDaemon(
+        process.execPath,
+        scriptPath,
+        [DAEMON_INNER_COMMAND, PORT_FLAG, String(port)],
+        port,
+      );
+      return waitForDaemon(port);
+    },
+  );
 }
 
 /**
@@ -508,6 +556,7 @@ function handleOpen(requestedPort: number, url: string | undefined): void {
       const connected = await waitForNewSession(port, sessions.length);
       log('reticle_open', {
         port,
+        ...(port === requestedPort ? {} : { requestedPort }),
         opened: decision.url,
         connected,
         ...(connected
@@ -520,15 +569,7 @@ function handleOpen(requestedPort: number, url: string | undefined): void {
               // about a browser THIS command never uses, so a missing Chromium reads as the
               // explanation for a session that is missing for an unrelated reason. Both misdirects
               // were reported from the field, each costing several calls of app-side wiring hunt.
-              note:
-                `the URL was handed to the system default browser (this command does not use ` +
-                `Reticle's own Chromium, so a chromium warning from \`reticle doctor\` is unrelated ` +
-                `to this). No Reticle session appeared. By far the likeliest cause is that the app ` +
-                `carries no Reticle SDK, or dials a port other than ${String(port)} — run ` +
-                `\`reticle init\` in the app's directory and restart its dev server. If the app IS ` +
-                `wired, give the page a moment and check the browser console: the SDK announces its ` +
-                `own connect failures there, including the one it refuses to make from a ` +
-                `non-localhost host without allowNonLocalhost.`,
+              note: openFailureNote(port, requestedPort),
             }),
       });
     })
@@ -586,6 +627,12 @@ function handleDaemonInner(parsed: {
         // which is after everything below has run. Without it the exit line says `code: 0` and a
         // reader cannot tell a tidy stop from the bridge disappearing — see #123.
         recordExitReason(reason);
+        // Say so on the wire before anything closes. The proxy on the other end sees a clean stream
+        // end whether we retired on schedule or died under it, and it has no other way to tell —
+        // which is how a designed shutdown came to dominate the metric that means "the agent lost
+        // its tools". Told, the proxy classifies its own drop honestly. First, because the send has
+        // to reach a socket that is still open.
+        server.announceShutdown?.();
         // Awaited before the close/exit chain: `process.exit(0)` kills an in-flight POST, and this is
         // the one event carrying the whole session. A failed send resolves anyway (emit swallows its
         // own errors), so this can delay the exit by at most the send timeout, never prevent it.
@@ -688,7 +735,13 @@ function handleMcp(opts: {
    * disappeared mid-session with nothing said. Respawning here makes the reconnect self-healing.
    */
   const ensure = async (): Promise<void> => {
-    if (await probeDaemon(port)) return;
+    // The same question every other surface asks. It used to be a bare TCP connect, so a stranger on
+    // the bridge port answered "a daemon is here" — the proxy connected, the stream ended, and each
+    // client request woke into the identical non-answer. Rejecting here is what puts the proxy
+    // dormant with a reason, instead of pretending the wake succeeded.
+    const presence = await probePresence(port, { tcpOpen: probeDaemon, status: fetchStatus });
+    if (presenceIsUsable(presence)) return;
+    if (PortPresence.FREE !== presence) throw new Error(describePresence(presence, port));
     const scriptPath = process.argv[1];
     if (scriptPath === undefined) {
       log('reticle_mcp_no_script', {});
@@ -751,63 +804,6 @@ function handleMcp(opts: {
         });
       });
     });
-}
-
-function handleLegacyDrive(parsed: { port: number; driveUrl: string; headless: boolean }): void {
-  void driveWithHonestConflict(parsed);
-}
-
-/**
- * Refuse the port BEFORE binding it, and name what is holding it.
- *
- * `drive` went straight to `start`, which binds. The listen error surfaces asynchronously on the
- * server object long after `start` has resolved, so the `.catch` on that promise could never see it
- * and the process died with the raw `node:net` EADDRINUSE stack — in the one situation this command
- * is most often run in, since `reticle_sessions` recommends `reticle drive` for a throttled tab and
- * a throttled tab nearly always coexists with the daemon holding the port.
- */
-async function driveWithHonestConflict(parsed: {
-  port: number;
-  driveUrl: string;
-  headless: boolean;
-}): Promise<void> {
-  const presence = await probePresence(parsed.port, { tcpOpen: probeDaemon, status: fetchStatus });
-  const conflict = drivePortConflict(presence, parsed.port, { ourPid: readPid(parsed.port) });
-  if (conflict !== undefined) {
-    log('reticle_drive_port_conflict', { port: parsed.port, presence, reason: conflict });
-    process.stderr.write(`${conflict}\n`);
-    process.exit(1);
-    return;
-  }
-  // The probe cannot close the race: something can take the port between here and the bind, and the
-  // bind reports it on the server, outside every promise this function holds. Catching it at the
-  // process is the only place that sees it at all — and only EADDRINUSE, so a genuine crash still
-  // crashes rather than being dressed up as a port conflict. Who won the race is not knowable from
-  // in here, so the sentence used is the one that is true of any holder.
-  process.on('uncaughtException', (error: unknown) => {
-    const code = (error as { code?: unknown } | null)?.code;
-    if ('EADDRINUSE' !== code) throw error;
-    const reason = drivePortConflict(PortPresence.FOREIGN, parsed.port);
-    log('reticle_drive_port_conflict', {
-      port: parsed.port,
-      presence: PortPresence.FOREIGN,
-      reason,
-    });
-    process.stderr.write(`${String(reason)}\n`);
-    process.exit(1);
-  });
-  const options: StartOptions = {
-    port: parsed.port,
-    driveUrl: parsed.driveUrl,
-    headless: parsed.headless,
-  };
-  try {
-    await start(options);
-    log('reticle_started', { port: parsed.port });
-  } catch (error: unknown) {
-    log('reticle_start_failed', { error: error instanceof Error ? error.message : String(error) });
-    process.exit(1);
-  }
 }
 
 function main(): void {
@@ -907,7 +903,7 @@ function main(): void {
       handleOpen(parsed.port, parsed.url);
       break;
     case 'drive':
-      handleLegacyDrive(parsed);
+      handleDrive(parsed);
       break;
     case 'verify':
       handleVerify(parsed);

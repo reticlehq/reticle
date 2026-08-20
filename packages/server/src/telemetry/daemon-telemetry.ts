@@ -13,6 +13,8 @@ import { profileProject } from './project-profile.js';
 import { startUpdateCheck } from '../update/update-nudge.js';
 import { markDaemonStart } from './mcp-connection.js';
 import { markInstrumentationClock } from './app-instrumented.js';
+import { markStallClock, reportInstrumentationStall } from './instrumentation-stall.js';
+import { readProjectId } from '../cli/cli-port.js';
 
 /** Let the daemon finish coming up before walking the source tree for a profile. */
 const PROJECT_PROFILE_DELAY_MS = 5_000;
@@ -78,6 +80,8 @@ export function installDaemonTelemetry(
   // Same clock, different half of the install: one measures how long before an AGENT attached, this
   // one how long before an APP did. The gap between them is the funnel.
   markInstrumentationClock(now());
+  // The other half of the same question: how long before an app arrives, and a report if none does.
+  markStallClock(now());
 
   // One profile per daemon start: what kind of project this is and how deeply Reticle is used in it.
   // Deferred off the boot path — it walks the source tree, and nothing about a daemon coming up
@@ -93,6 +97,20 @@ export function installDaemonTelemetry(
   }, PROJECT_PROFILE_DELAY_MS).unref();
 
   const flushWindow = (): void => {
+    // BEFORE the idle return, and that ordering is the whole point: a stalled install produces an
+    // empty window by definition — no app, so no tool calls, so nothing to roll up. Checking it
+    // after the early return would make the one case this event exists for the one case it never
+    // sees. It is self-limiting (once per run, never after an app connects), so running it on every
+    // tick costs a comparison.
+    reportInstrumentationStall(
+      {
+        // Same test `app_instrumented` uses for the same field, so the success and failure events
+        // stay directly comparable: a stamped projectId means `init` has run here.
+        initialized: readProjectId(cwd) !== undefined,
+        agentAttached: metrics.agentEverAttached,
+      },
+      now,
+    );
     if (metrics.empty) return; // an idle window is not worth an event
     // NOT daemon_stopped: the daemon is still running. See SESSION_PROGRESS.
     void getTelemetry().emit(TelemetryEventKind.SESSION_PROGRESS, {
@@ -115,6 +133,19 @@ export function installDaemonTelemetry(
       stopped ??= (async () => {
         clearInterval(flush);
         clearTimeout(firstFlush);
+        // Last chance to say that no app ever arrived. The periodic path cannot report an
+        // UNATTENDED stall at all — that daemon idle-exits at five minutes and the periodic
+        // threshold is ten — so without this the event only ever describes daemons with an agent
+        // attached, which is not the population it was built to measure. Self-limiting: if the
+        // interval already reported, this returns false and emits nothing.
+        reportInstrumentationStall(
+          {
+            initialized: readProjectId(cwd) !== undefined,
+            agentAttached: metrics.agentEverAttached,
+          },
+          now,
+          { atShutdown: true },
+        );
         // The rich one: the whole session in a single event — duration, the tool histogram, error
         // shapes, verifications, browser launches. This is what replaced the per-tool-call event.
         await getTelemetry().emit(TelemetryEventKind.DAEMON_STOPPED, {

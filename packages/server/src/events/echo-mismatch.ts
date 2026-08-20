@@ -1,4 +1,4 @@
-import { ContradictionKind, EventType, type ReticleEvent } from '@reticlehq/core';
+import { ContradictionKind, EventType, MUTATING_METHODS, type ReticleEvent } from '@reticlehq/core';
 import type { Contradiction } from './contradictions.js';
 
 /**
@@ -20,6 +20,11 @@ import type { Contradiction } from './contradictions.js';
  * would fire on healthy APIs constantly, and a contradiction kind that cries wolf gets filtered out
  * by the agents reading it, taking the true positives with it. So:
  *
+ *  - only requests that are WRITES are considered. Reported from the field: a lookup that sends its
+ *    key in the body (`POST /get-branding` with `{workspace_id}`) and gets a record back was graded
+ *    as a half-applied write. The gate was on the RESPONSE being a success and never on the REQUEST
+ *    being a write, so every successful call carrying a body read as a save — and the same key name
+ *    legitimately means different things on the two sides of a request/response pair;
  *  - only keys the request actually SENT are considered;
  *  - only scalars, since deep structural diffing is where the false positives live;
  *  - values are compared NORMALISED (trimmed, case-folded, numbers as numbers), so `FR` vs `fr` and
@@ -94,11 +99,34 @@ function scalarsByKey(
 const OK_MIN = 200;
 const OK_MAX = 300;
 
-/** Contradictions for writes whose response echoes a different value than the request asked for. */
-export function findEchoMismatches(events: readonly ReticleEvent[]): Contradiction[] {
+/**
+ * Contradictions for writes whose response echoes a different value than the request asked for.
+ *
+ * `actionSince` is the attribution floor `findContradictions` already keeps — the event time the
+ * action that opened this window was dispatched. A finding about a request that had already settled
+ * before the agent acted otherwise reads as a verdict on the change it just made.
+ */
+export function findEchoMismatches(
+  events: readonly ReticleEvent[],
+  actionSince?: number,
+): Contradiction[] {
   const found: Contradiction[] = [];
   for (const event of events) {
     if (event.type !== EventType.NET_REQUEST) continue;
+    // `MUTATING_METHODS` is the one definition of "is this a write" in the codebase — the same list
+    // `contradictions.ts`'s `isMutating` reads. A read has no fields to half-apply.
+    //
+    // KNOWN LIMIT, stated because it is easy to read this fix as bigger than it is: POST is in that
+    // list, so a lookup that POSTs its key and gets a record back — the shape actually reported —
+    // still reaches the comparison below. Method is the only signal available here, and a read-shaped
+    // POST is genuinely indistinguishable from a write by method alone.
+    //
+    // The tempting next step is to skip a pair whose JSON types disagree (a string key sent, a number
+    // echoed). Deliberately not taken: that also silences `{"qty":"5"}` answered with `3`, which is a
+    // real dropped write. A false negative here is a missed bug in someone's app, and that is not a
+    // trade this file makes to quieten a false positive.
+    const method = 'string' === typeof event.data['method'] ? event.data['method'] : '';
+    if (!MUTATING_METHODS.includes(method.toUpperCase())) continue;
     // IPC reports `ok` rather than a status; HTTP reports a status. Either must say success — a write
     // that already failed is a different (and louder) finding than one that half-applied.
     const status = event.data['status'];
@@ -128,12 +156,15 @@ export function findEchoMismatches(events: readonly ReticleEvent[]): Contradicti
     if (0 === dropped.length) continue;
 
     const url = 'string' === typeof event.data['url'] ? event.data['url'] : '';
-    const method = 'string' === typeof event.data['method'] ? event.data['method'] : '';
+    const attribution =
+      actionSince !== undefined && event.t < actionSince
+        ? ' — this request completed before the action being verified, so the finding is not about that change'
+        : '';
     found.push({
       kind: ContradictionKind.WRITE_FIELD_IGNORED,
       claim: 'the write returned success and the page treated it as saved',
       counter: `its own echo shows ${String(dropped.length)} field(s) NOT applied — ${dropped.join('; ')}`,
-      detail: `${method} ${url} — the server answered OK and returned a different value than it was asked to set, so the write half-applied; the UI has no way to know and will show the value the user typed`,
+      detail: `${method} ${url} — the server answered OK and returned a different value than it was asked to set, so the write half-applied; the UI has no way to know and will show the value the user typed${attribution}`,
     });
   }
   return found;

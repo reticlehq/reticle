@@ -142,7 +142,7 @@ This injects `reticle.connect()` for you _and_ handles React 19 source mapping (
 
 In your entry file (`src/main.tsx`), call `connect()` in dev only:
 
-```ts
+```tsx
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { reticle, SESSION_AUTO } from '@reticlehq/react';

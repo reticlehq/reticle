@@ -71,8 +71,21 @@ export const VerifiedReason = {
   OUTCOME_UNREAD: 'outcome_unread',
   /** The page never settled, so the reaction window may have closed early. */
   UNSETTLED: 'unsettled',
+  /**
+   * The assertion held, but a channel's outcome had not been observed when the window closed — an
+   * ABSENCE-derived finding (see ABSENCE_DERIVED_CONTRADICTIONS), not evidence against the action.
+   *
+   * Split out of UNSETTLED because that word is a claim about idle, and this clause fires
+   * independently of whether the page went idle. One field report was, verbatim, "internally
+   * contradictory": `verifiedReason: "unsettled"` beside `settled: true`, a passing nested verdict,
+   * the requested POST at 200 and a clean console. Both halves came from this rule, and a verdict
+   * whose own evidence block denies its stated reason is a verdict nobody can act on.
+   */
+  EVIDENCE_INCOMPLETE: 'evidence_incomplete',
   /** Held at a real grade over a clean capture with no channel disagreeing. */
   PROVED: 'proved',
+  /** A passing absence assertion targeted a region Reticle could not observe. */
+  ABSENCE_BLIND_SPOT: 'absence_blind_spot',
 } as const;
 export type VerifiedReason = (typeof VerifiedReason)[keyof typeof VerifiedReason];
 
@@ -182,5 +195,19 @@ export const BlindSpotKind = {
    * is declared, and the verdict over it reports partial coverage.
    */
   VERDICTLESS_SEND: 'verdictless-send',
+  /**
+   * No SUBSCRIBABLE store is registered, so the app's own state is unobservable.
+   *
+   * Without it, "the store did not change" and "nothing was watching the store" are the same empty
+   * `stateDiffs` — and the first reading is a confident wrong answer. It is the common case, not an
+   * exotic one: `init` writes a capabilities file that registers nothing until someone edits it, and
+   * a store passed as a bare getter is readable but silent, so an app can hold state, change it on
+   * every click, and report an empty state channel forever with no error anywhere.
+   *
+   * BOUNDING, never impeaching (see `impeachesCapture`): what WAS observed — DOM, network, console,
+   * storage — is observed completely. Only the state channel is dark, and it lights up the moment a
+   * subscribable store registers, which is when the SDK emits this kind with count 0.
+   */
+  UNWATCHED_STATE: 'unwatched-state',
 } as const;
 export type BlindSpotKind = (typeof BlindSpotKind)[keyof typeof BlindSpotKind];

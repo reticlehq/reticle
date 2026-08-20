@@ -85,6 +85,30 @@ if(typeof prev==='function')return prev.apply(this,arguments);};}
  */
 const DEV_INJECTION_GRACE_MS = 10_000;
 
+/**
+ * How many times the connect module's source may legitimately change in one dev-server session
+ * before the plugin says so.
+ *
+ * The source is a function of the port, the projectId, the pairing token and whether the app has a
+ * `reticle-dev` module. In a healthy session that settles almost immediately: the daemon starting
+ * after Vite is one change, a dev module being created is another. Anything past a handful means
+ * an input is oscillating, and an oscillating connect module is what makes Vite re-resolve it on
+ * every page load — the reload loop this counter exists to make audible instead of mysterious.
+ */
+const CONNECT_CHURN_LIMIT = 5;
+
+/**
+ * Said ONCE, and it names the symptom the user is looking at rather than the mechanism, because the
+ * mechanism is invisible from a browser: the page reloads and nothing explains why.
+ */
+export const connectChurnWarning = (): string =>
+  `[${RETICLE_VITE_PLUGIN_NAME}] the injected connect module has changed ${String(CONNECT_CHURN_LIMIT)} ` +
+  'times in one dev-server session. Something it depends on (the bridge port, the pairing token, ' +
+  'or a reticle-dev module appearing and disappearing) is not settling, and that can make the page ' +
+  'reload repeatedly. Reticle will keep serving the newest version. Please report this at ' +
+  'https://github.com/ReticleHQ/reticle/issues with your vite.config and whether more than one ' +
+  'daemon is running (`npx @reticlehq/server status`).';
+
 export interface ReticleVitePluginOptions {
   /** Bridge WebSocket port. Defaults to the SDK default; only baked into connect when non-default. */
   port?: number;
@@ -144,6 +168,27 @@ export interface ReticleVitePluginOptions {
    */
   captureNetworkBodies?: boolean;
   /**
+   * Let Reticle run when the page or the bridge is not on localhost.
+   *
+   * Off by default: the SDK refuses outside localhost so a page on the open internet cannot be
+   * instrumented by a bridge it happened to reach. Turn it on for a dev server that CANNOT be served
+   * on localhost — a host-based multi-tenant frontend, a white-label app resolving the tenant from
+   * the `Host` header, anything with cookie-scoped auth on a custom dev hostname. Without it those
+   * apps cannot use Reticle at all, because the plugin is the only `connect()` they have and a
+   * second, hand-written one is a no-op.
+   *
+   * NOT SUFFICIENT ON ITS OWN — a pairing token is also required. `connectionPolicy` in
+   * `@reticlehq/browser` refuses a non-localhost connect with "a pairing token is required outside
+   * localhost" whenever the token is missing or empty, whatever this flag says. The plugin supplies
+   * one automatically from the daemon's `~/.reticle/pairing-token` (see readPairingToken), so a
+   * started daemon is normally all it takes; pass `token` yourself only when the daemon's file is
+   * unreachable. A non-loopback BRIDGE additionally has to be `wss://`.
+   *
+   * Also settable as `VITE_RETICLE_ALLOW_NON_LOCALHOST=1`, so it can be turned on for one session
+   * without editing vite.config.
+   */
+  allowNonLocalhost?: boolean;
+  /**
    * Where a diagnostic goes. Defaults to the console; injected so the dev-mode injection check is
    * testable without capturing global console output.
    */
@@ -166,6 +211,7 @@ export interface ReticleVitePlugin {
     };
     define?: Record<string, string>;
     root?: string;
+    server?: { watch?: { ignored?: (string | RegExp)[] } };
   }) => {
     optimizeDeps: {
       include: string[];
@@ -175,6 +221,7 @@ export interface ReticleVitePlugin {
       [optionsKey: string]: unknown;
     };
     define: Record<string, string>;
+    server: { watch: { ignored: (string | RegExp)[] } };
   };
   /** Absent in desktop mode, where the plugin must also run for `vite build`. */
   apply?: 'serve';
@@ -383,6 +430,14 @@ function connectArgs(options: ReticleVitePluginOptions): string {
   if (true === options.captureNetworkBodies || '1' === process.env['VITE_RETICLE_CAPTURE_BODIES']) {
     args['captureNetworkBodies'] = true;
   }
+  // Same shape, same reason: without it an app that cannot be served on localhost has no way to
+  // reach the SDK option at all. The pairing token still applies — see the option's docstring.
+  if (
+    true === options.allowNonLocalhost ||
+    '1' === process.env['VITE_RETICLE_ALLOW_NON_LOCALHOST']
+  ) {
+    args['allowNonLocalhost'] = true;
+  }
   return Object.keys(args).length > 0 ? JSON.stringify(args) : '';
 }
 
@@ -467,6 +522,16 @@ export function connectModuleSource(
  * caller — keep it behind your own dev-only build target so an instrumented bundle can never reach
  * a release binary.
  */
+/**
+ * The daemon's journal directory, as a matcher every chokidar major honours.
+ *
+ * Exported so the one regression test can assert on the matcher itself rather than on a string that
+ * looked right and matched nothing.
+ */
+export const JOURNAL_IGNORE = new RegExp(
+  `(^|[\\\\/])${ReticleDir.ROOT.replace('.', '\\.')}([\\\\/]|$)`,
+);
+
 export function reticle(options: ReticleVitePluginOptions = {}): ReticleVitePlugin {
   const sourceMapping = options.sourceMapping !== false;
   const inject = options.inject !== false;
@@ -508,6 +573,17 @@ export function reticle(options: ReticleVitePluginOptions = {}): ReticleVitePlug
     const sdkVersion = withToken.sdkVersion ?? sdkPackageVersion(appRoot);
     return { ...withToken, root: appRoot, sdkVersion };
   };
+  /**
+   * The connect module's source as it would be served RIGHT NOW. Recomputed rather than cached: the
+   * daemon's token and the app's dev module can both appear after the dev server started, which is
+   * the whole reason the module is re-read at all.
+   */
+  const currentConnectSource = (): string =>
+    connectModuleSource(resolveLazy(), root === undefined ? null : findDevModule(root, existsSync));
+  /** The source `load` last handed to Vite, or undefined before the first serve. */
+  let lastServedConnectSource: string | undefined;
+  /** How many times the served source has actually changed. See connectChurnWarning. */
+  let connectChanges = 0;
   /**
    * The BUILD message. A build always runs every transform, so "my transform never ran" and "the
    * bundle has no connect()" are the same statement there, and stating it as a certainty is correct.
@@ -576,12 +652,45 @@ export function reticle(options: ReticleVitePluginOptions = {}): ReticleVitePlug
       define?: Record<string, string>;
       /** Vite's UserConfig root; undefined means the cwd. `configResolved` runs too late for this. */
       root?: string;
+      /** The app's own watcher config; its `ignored` list is preserved, never replaced. */
+      server?: { watch?: { ignored?: (string | RegExp)[] } };
     }) {
       // Everything below asks what the APP has installed, so every lookup is rooted here and never
       // at the plugin's own location. Vite defaults an omitted root to the cwd; so do we.
       const appRoot = config.root ?? process.cwd();
       const optimizerKey = optimizerOptionsKey(viteMajor(appRoot));
       return {
+        // Keep the daemon's journal out of the dev server's watcher.
+        //
+        // The daemon writes `.reticle/` into the PROJECT root — session journals, and `ambient.json`
+        // rewritten atomically as `ambient.json.tmp` + rename on a live session. Vite watches the
+        // project root and does not ignore that directory, so every journal write read as a project
+        // file changing and Vite answered with a full page reload.
+        //
+        // That is a loop with no exit: page loads -> SDK connects and streams events -> daemon
+        // journals them -> Vite reloads the page -> SDK reconnects -> more events. It ran several
+        // times a second for as long as the dev server was up, and the damage was total but
+        // misattributed: every ref went stale, every act_and_wait died mid-flight, and the log
+        // filled with connect/disconnect pairs that looked like a flapping SDK rather than a
+        // watcher chasing its own tail.
+        //
+        // A RegExp, not a glob, and that is the whole difference between this working and not.
+        // chokidar dropped glob support in v4 — Vite 7+ ships v4/v5, where a pattern like
+        // `**/.reticle/**` is silently accepted and matches nothing. MEASURED against the chokidar
+        // this repo resolves: with the glob, a write to `.reticle/ambient.json` still fires; with
+        // this RegExp it does not, while a normal file still does. Vite's own defaults are globs and
+        // have the same problem, which is why it is not safe to copy their shape here.
+        //
+        // Anchored on `^` or a separator so it matches the directory and not a file that merely ends
+        // in those characters, and both separators are accepted because chokidar reports the path in
+        // the platform's own form.
+        //
+        // Appends to the app's list rather than replacing it, so nothing it already excluded is lost.
+        server: {
+          watch: {
+            ignored: [...(config.server?.watch?.ignored ?? []), JOURNAL_IGNORE],
+          },
+        },
         // Expose the daemon's pairing token to hand-written connects in the same Vite app. The
         // plugin's own injected connect gets the token directly, but a connect the USER writes —
         // SvelteKit's client hook, a custom entry — had no way to reach a file only Node can read,
@@ -673,9 +782,9 @@ export function reticle(options: ReticleVitePluginOptions = {}): ReticleVitePlug
     },
     load(id) {
       if (!inject || id !== RETICLE_CONNECT_MODULE) return null;
-      // Resolved at load, not at config: the file may be created after the dev server starts.
-      const devModule = root === undefined ? null : findDevModule(root, existsSync);
-      return connectModuleSource(resolveLazy(), devModule);
+      const source = currentConnectSource();
+      lastServedConnectSource = source;
+      return source;
     },
     configResolved(config) {
       root = config.root;
@@ -693,15 +802,28 @@ export function reticle(options: ReticleVitePluginOptions = {}): ReticleVitePlug
      * the dev server cleared it, which is not a step anybody guesses.
      *
      * Dropping the cached module before it is served makes `load` re-read the token, so starting the
-     * daemon and reloading the page is enough. Costs one string compare per request and re-runs a
-     * three-line module — no reason to be cleverer about when to invalidate.
+     * daemon and reloading the page is enough.
+     *
+     * Only when the source would ACTUALLY differ, though. This used to invalidate on every request
+     * for the module, forever — and a module that is force-invalidated on every request is
+     * re-resolved against Vite's dep optimizer on every page load, which is the shape of a
+     * self-sustaining reload loop: reload → request → invalidate → re-resolve → reload. Reported
+     * from the field on a Vite + React Router app pinned to a non-default port: every route
+     * reloaded the whole page about once a second, `/@reticle-connect` was fetched in every cycle,
+     * and removing the plugin stopped it instantly. Comparing the source first costs one string
+     * compare, keeps the late-daemon fix intact (the token appearing IS a change), and makes the
+     * module inert once it has settled.
      */
     configureServer(server) {
       if (!inject) return;
       server.middlewares.use((req, _res, next) => {
         if ((req.url ?? '').split('?')[0] === RETICLE_CONNECT_MODULE) {
-          const mod = server.moduleGraph.getModuleById(RETICLE_CONNECT_MODULE);
-          if (mod !== undefined) server.moduleGraph.invalidateModule(mod);
+          if (currentConnectSource() !== lastServedConnectSource) {
+            connectChanges++;
+            if (CONNECT_CHURN_LIMIT === connectChanges) warn(connectChurnWarning());
+            const mod = server.moduleGraph.getModuleById(RETICLE_CONNECT_MODULE);
+            if (mod !== undefined) server.moduleGraph.invalidateModule(mod);
+          }
         }
         next();
       });

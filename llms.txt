@@ -120,6 +120,13 @@ Svelte stores, Pinia. Anything else works through the generic `pushStore`.
 4. **Hosted preview.** `reticle verify <url> --storage-state auth.json` drives a deployed, auth-gated
    preview; Reticle injects its connect into the page so it pairs to the local bridge.
 
+**The HUD (what the human sees).** The SDK draws a dev-only panel in the corner of your own app: the
+agent's live activity log, the session state as one colour (driving / idle / ended), and an
+**annotate** mode where you click any element, type what is wrong, and the note reaches the agent
+with the element's anchor and its source `file:line` — delivered exactly once on its next tool call.
+It also carries an **impact report**: what Reticle has actually caught for you, read from a local
+file and never uploaded (see Trust & data handling).
+
 **In-app instrumentation, by layer:** Layer 1 (one build-plugin line + `reticle.connect()`) → routes,
 network cardinality, console, persistence-after-reload. Layer 2 (`registerStore`, `reticle.signal`,
 `data-testid`s) → program-state truth, dead handlers, source mapping. Layer 3 (`registerCapabilities`
@@ -136,9 +143,27 @@ network cardinality, console, persistence-after-reload. Layer 2 (`registerStore`
 
 ## Benchmarks (measured, reproducible)
 
-Everything is produced by a committed harness (`bench/`), comparing Reticle to **Playwright MCP**
-and **Chrome DevTools MCP**. Tested two ways — a controlled toy app AND a real production app — with
-both results published, including where Reticle loses. Full from-scratch explainer: `docs/benchmarks.md`.
+Everything is produced by a committed harness (`bench/`). Two different opponents answering two
+different questions: a **Playwright script** with no model in the loop (what can each tool
+structurally SEE?), and **Playwright MCP** / **Chrome DevTools MCP** agent-driven (what does a look
+COST?). Tested on a controlled toy app AND a real production app, with both results published,
+including where Reticle loses. Full from-scratch explainer: `docs/benchmarks.md`.
+
+**88-bug head-to-head vs a Playwright script (the largest, least model-dependent measurement;
+re-run on the 2.9.0 branch — figures below are that run, not an older recorded one):**
+- **Bugs caught: Reticle 85/88 vs Playwright script 59/88**, both with **zero false alarms** on the
+  clean build. A catch requires the check to fail on the broken build AND pass on the clean one.
+- **False greens (broken, reported OK): Reticle 1 vs 29.** Two of Reticle's three non-catches are the
+  registry's false-positive traps — builds that look broken and are not — where not flagging is the
+  correct answer; the third (`iframe-stale-data`) is a real miss and is counted as one.
+- **The ties are the honest part.** On everything observable from outside the app the two are exactly
+  level: console 6/6 vs 6/6, network 8/8 vs 8/8, storage 5/5 vs 5/5, visual UI 16/16 vs 16/16, plus
+  routing, timing, paint, charts and mock-data. The gap is one shape — the screen is right and the app
+  is wrong: state 8/8 vs 0/8, business-logic 6/6 vs 0/6, signal 4/4 vs 0/4, streams 3/3 vs 0/3,
+  net-status 4/4 vs 1/4, perf 3/3 vs 1/3.
+- **Per-bug output: Reticle 9,261 B vs 5,849 B.** Reticle's own check is the more expensive one here;
+  the token-cost claims elsewhere in this file are about an AGENT-driven look, which is a different
+  measurement against different tools.
 
 **Controlled toy app (10 injected regressions):**
 - **Verification Efficiency (bugs caught per 1k tokens, gated on catching them all): Reticle 12.27 vs
@@ -193,8 +218,14 @@ both results published, including where Reticle loses. Full from-scratch explain
   guarantee above, not a claim that nothing is reported.
 - **Dev/preview-only SDK**, tree-shaken from production builds.
 - **Localhost-only** bridge (binds `127.0.0.1`), token-guarded HTTP, request/size/timeout limits.
-- **Artifacts are yours**, on your disk (`.reticle/runs`, `.reticle/flows`), with atomic writes and bounded
-  retention. Run/flow ids are validated as single path segments (no traversal).
+- **Artifacts are yours**, on your disk (`.reticle/runs`, `.reticle/flows`, `.reticle/impact.json`),
+  with atomic writes and bounded retention. Run/flow ids are validated as single path segments (no
+  traversal).
+- **The impact record is local and is not telemetry.** `.reticle/impact.json` (this project) and
+  `~/.reticle/impact.json` (this machine) count what Reticle did for you — verdicts split
+  pass/fail/unknown, defects caught, tokens returned, time driving, sessions, streak — and they power
+  the HUD's impact report. They are never uploaded and are unrelated to the anonymous usage telemetry
+  above; disabling telemetry does not disable them, and they carry nothing about your app's data.
 - **Source-available** — read the tree-shaking, the bind, and the offline license verify yourself.
 
 ## Packages
@@ -207,12 +238,23 @@ package that re-exports the others) ·
 
 ## Links
 
-- **Landing page / product:** https://reticle.sh
-- **Company website:** https://reticle.sh
+- **Marketing site / product:** https://reticle.sh
 - **GitHub (source):** https://github.com/reticlehq/reticle
+- **Bugs & feature requests:** https://github.com/reticlehq/reticle/issues
 - **npm (CLI + MCP server):** https://www.npmjs.com/package/@reticlehq/server
 - **Skill file (paste this URL to your agent):** https://raw.githubusercontent.com/reticlehq/reticle/main/SKILL.md
-- **Docs home:** https://github.com/reticlehq/reticle/tree/main/docs
+- **Docs site (start here):** https://docs.reticle.sh — a page per tool, per CLI command, per
+  package, with every command captured from a real run.
+  - Quickstart: https://docs.reticle.sh/quickstart · Every tool: https://docs.reticle.sh/tools-overview
+    · Every command: https://docs.reticle.sh/cli · Troubleshooting: https://docs.reticle.sh/troubleshooting
+    · Desktop apps: https://docs.reticle.sh/desktop
+- **Reading as an agent — fetch:** https://docs.reticle.sh/llms.txt lists every page, and appending
+  `.md` to any page URL returns its source with no site chrome — so you pull the one page you need
+  instead of a whole document. Details: https://docs.reticle.sh/for-agents
+- **Reading as an agent — connect:** https://docs.reticle.sh/mcp is an MCP server over the same docs,
+  with `search_reticle` to search and `query_docs_filesystem_reticle` to read. Add it like any MCP
+  server if you would rather search than fetch.
+- **Docs in the repo (markdown source):** https://github.com/reticlehq/reticle/tree/main/docs
   - Getting started: https://github.com/reticlehq/reticle/blob/main/docs/getting-started.md
   - Integration (Lovable / Emergent / Bolt): https://github.com/reticlehq/reticle/blob/main/docs/platform-integration.md
   - Enterprise: https://github.com/reticlehq/reticle/blob/main/docs/enterprise.md
@@ -221,8 +263,8 @@ package that re-exports the others) ·
 - **Benchmarks:** https://github.com/reticlehq/reticle/blob/main/bench/SCORECARD.md
 - **Changelog:** https://github.com/reticlehq/reticle/blob/main/CHANGELOG.md
 - **License:** https://github.com/reticlehq/reticle/blob/main/LICENSE
-- **Community — join the Discord:** https://discord.gg/BwAbzv9ZRz
-- **X / Twitter:** https://x.com/reticlehq
+- **Community — ask a question, claim work, see the roadmap:** https://discord.gg/BwAbzv9ZRz
+- **X / Twitter:** https://x.com/reticle_hq
 - **LinkedIn:** https://www.linkedin.com/company/reticlehq
 - **Contact / partnerships / OEM:** hey@reticle.sh
 

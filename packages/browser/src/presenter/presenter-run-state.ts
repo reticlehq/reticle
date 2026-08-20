@@ -21,7 +21,7 @@ export interface PresenterRunState {
   log: { at: number; kind: LogKind; text: string; result?: LogResult }[];
 }
 
-/** Everything the controller hands the builder — the live fields a run state is computed from. */
+/** Everything the controller hands the builder - the live fields a run state is computed from. */
 interface RunStateInput {
   sessionId: string;
   state: SessionState;

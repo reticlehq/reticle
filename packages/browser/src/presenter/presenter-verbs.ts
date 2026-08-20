@@ -1,9 +1,9 @@
 // Present-tense verb for an action label in the presenter HUD (cursor status + act-log row).
-// Presenter-only UI copy — never a wire string. Shared by presenter.ts (cursor) and reticle.ts
+// Presenter-only UI copy - never a wire string. Shared by presenter.ts (cursor) and reticle.ts
 // (act-log row) so the two stay in lockstep.
 //
 // The CASES are wire values though, and they are core's ActionType. Spelled as free strings here,
-// a rename in core left this switch silently falling through to `default` — which returns the raw
+// a rename in core left this switch silently falling through to `default` - which returns the raw
 // action name, so the HUD degrades to "webmcp Save" instead of a verb and nothing fails.
 import { ActionType } from '@reticlehq/core';
 

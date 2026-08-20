@@ -61,6 +61,22 @@ export interface CausalSummary {
   signals: string[];
   layoutShift?: number;
   longTasks: number;
+  /**
+   * TRUE when no store was subscribed, so `statePathsChanged`/`stateDiffs` are empty because nothing
+   * was watching — not because the app changed nothing.
+   *
+   * The two readings are the same empty list, and the wrong one is the one an agent takes: "state
+   * did not change" is a claim about the app, and this codebase would rather say "I could not see"
+   * than say something confident and wrong. Present only when the channel is dark, so a wired app
+   * pays nothing and the field's PRESENCE is what carries the meaning — the same rule
+   * `stateSettleMs` and `elided` follow.
+   */
+  stateUnwatched?: true;
+}
+
+/** What only the SESSION knows — level facts the event window cannot contain. See `stateUnwatched`. */
+export interface SummaryContext {
+  stateUnwatched?: boolean;
 }
 
 /**
@@ -122,7 +138,10 @@ function stateSettle(diffs: readonly StateDiff[]): { stateSettleMs?: number } {
   return spread > 0 ? { stateSettleMs: spread } : {};
 }
 
-export function causalSummary(events: readonly ReticleEvent[]): CausalSummary {
+export function causalSummary(
+  events: readonly ReticleEvent[],
+  context: SummaryContext = {},
+): CausalSummary {
   let netTotal = 0;
   let netErrors = 0;
   let ignoredDevTooling = 0;
@@ -226,5 +245,6 @@ export function causalSummary(events: readonly ReticleEvent[]): CausalSummary {
     ...(0 === Object.keys(elided).length ? {} : { elided }),
     ...(layoutShift === undefined ? {} : { layoutShift }),
     longTasks,
+    ...(true === context.stateUnwatched ? { stateUnwatched: true as const } : {}),
   };
 }

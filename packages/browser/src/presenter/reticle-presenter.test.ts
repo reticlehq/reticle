@@ -82,7 +82,7 @@ describe('reticle.ts session wiring (border)', () => {
   it('17 connect({present:true}) mounts the overlay but stays dormant until the first command', async () => {
     const reticle = new Reticle();
     reticle.connect({ present: true, pace: 0 });
-    // Overlay is mounted (ready) but the session has NOT started — no glow, no panel — because
+    // Overlay is mounted (ready) but the session has NOT started - no glow, no panel - because
     // nothing has happened yet. (The page merely loaded the SDK.)
     expect(document.querySelector('[data-reticle-glow]')).not.toBeNull();
     expect(dataOn()).not.toBe('1'); // dormant: no border until the agent acts
@@ -112,7 +112,7 @@ describe('reticle.ts session wiring (border)', () => {
     reticle.disconnect();
   });
 
-  it('20 connect({present:false}) — no presenter, session calls are skipped', async () => {
+  it('20 connect({present:false}) - no presenter, session calls are skipped', async () => {
     const reticle = new Reticle();
     reticle.connect({ present: false });
     const out = await dispatch(ReticleCommand.NARRATE, { text: 'hi' });
@@ -142,7 +142,9 @@ describe('reticle.ts -> presenter log wiring', () => {
     reticle.connect({ present: true, pace: 0 });
     await dispatch(ReticleCommand.SNAPSHOT);
     const rows = logRows();
-    const readRows = rows.filter((r) => 'READ' === r.querySelector('.reticle-chip')?.textContent);
+    const readRows = rows.filter(
+      (r) => 'READ' === r.querySelector('.reticle-chip-label')?.textContent,
+    );
     expect(readRows.length).toBeGreaterThanOrEqual(1);
     expect(readRows[0]?.querySelector('.reticle-log-text')?.textContent).toBe(
       'Looking at the page',
@@ -156,17 +158,22 @@ describe('reticle.ts -> presenter log wiring', () => {
     reticle.connect({ present: true, pace: 0 });
     // act on a ref that does not resolve still succeeds via the registry (no-op path); we only
     // need the act row + a pass glyph. Use a query first to register a ref is overkill; the act
-    // handler tolerates an unknown ref by failing — so assert via a known-good snapshot+act.
+    // handler tolerates an unknown ref by failing - so assert via a known-good snapshot+act.
     await dispatch(ReticleCommand.SNAPSHOT);
     const before = logRows().length;
     await dispatch(ReticleCommand.ACT, { ref: 'r-missing', action: 'click' });
     const actRows = logRows()
       .slice(before)
-      .filter((r) => 'ACT' === r.querySelector('.reticle-chip')?.textContent);
+      .filter((r) => 'ACT' === r.querySelector('.reticle-chip-label')?.textContent);
     expect(actRows.length).toBeGreaterThanOrEqual(1);
     // result glyph present (pass or fail depending on ref resolution)
     const last = actRows[actRows.length - 1];
-    expect(last?.textContent).toMatch(/[✓✗]/);
+    const res = last?.querySelector('.reticle-res');
+    expect(res).toBeDefined();
+    expect(res).not.toBeNull();
+    if (res !== null && res !== undefined && res.classList.contains('reticle-fail')) {
+      expect(res.textContent).toContain('Fail');
+    }
     reticle.disconnect();
   });
 

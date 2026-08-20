@@ -101,7 +101,21 @@ export class McpStdioClient {
   // Returns { result, latencyMs, text } where text is the concatenated text content.
   async callTool(name, args, timeoutMs = 60000) {
     const t0 = process.hrtime.bigint();
-    const result = await this.request('tools/call', { name, arguments: args }, timeoutMs);
+    let result;
+    try {
+      result = await this.request('tools/call', { name, arguments: args }, timeoutMs);
+    } catch (e) {
+      // The advertised surface is capped, so a tool can exist, work, and still not be listed. These
+      // harnesses call by NAME from a dozen files, and the server itself says the way through is
+      // `reticle_run { tool, args }` — so take it here rather than in every caller, and only for
+      // the refusal that names this cause. Anything else still throws.
+      if (!/not advertised under this tool profile/.test(String(e?.message ?? ''))) throw e;
+      result = await this.request(
+        'tools/call',
+        { name: 'reticle_run', arguments: { tool: name, args } },
+        timeoutMs,
+      );
+    }
     const t1 = process.hrtime.bigint();
     const latencyMs = Number(t1 - t0) / 1e6;
     const text = (result?.content ?? [])

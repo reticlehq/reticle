@@ -57,6 +57,23 @@ export function sourceFor(
 }
 
 /**
+ * Does ANY element in this document carry a source stamp?
+ *
+ * The difference between "this element has no stamp" and "the stamping loader is not running at
+ * all" — two answers that look identical from a single missing `source` field, and that call for
+ * completely different next actions. The first is ordinary: not every element sits under a stamped
+ * host. The second means "fix at file:line", the single most-cited reason to reach for Reticle over
+ * a generic DOM tool, is silently unavailable for the whole session — and it has been discovered by
+ * reading the adapter's source rather than from anything Reticle said.
+ *
+ * One `querySelector`, which stops at the first hit, so this is cheap enough to answer on a
+ * single-element path like inspect. It is only consulted when a source is already missing.
+ */
+export function documentHasSourceStamps(doc: Document): boolean {
+  return doc.querySelector(`[${SOURCE_ATTR}]`) !== null;
+}
+
+/**
  * `file:line` — the form an agent can act on directly.
  *
  * Deliberately a single compact string rather than an object: it costs a couple of dozen bytes on a

@@ -41,7 +41,9 @@ Source of truth for everything below:
 | `tzOffsetMin` | int, -900 to 900 | no | Minutes offset from UTC. Turns a time-of-day chart from "which continent" into "9am or 11pm" |
 | `actor` | `TelemetryActor` | no | `human` or `agent`. Absent on events that are neither |
 
-Then exactly one payload block, keyed by event. The keys are `feedback`, `command` plus `flags`, `session`, `project`, `verification`, `versionChange`, `crash`, `identity`, `connection`, `init`, `bug`, `outage`, `instrumentation`.
+Then exactly one payload block, keyed by event. The keys are `feedback`, `command` plus `flags`, `session`, `project`, `verification`, `versionChange`, `crash`, `identity`, `connection`, `init`, `bug`, `refusal`, `outage`, `instrumentation`, `stall`.
+
+Plus `installSource`, which is not a block. It is resolved once per process and stamped on **every** event, so it is the one attribution field you can group any chart by.
 
 <Warning>
   `emit()` builds its wire event from an explicit allowlist of keys. A payload block that is not on
@@ -51,9 +53,11 @@ Then exactly one payload block, keyed by event. The keys are `feedback`, `comman
 
 ## Session scope
 
-`isSessionScoped(kind)` decides whether `sessionId` is attached. Eleven kinds are session-scoped:
+`isSessionScoped(kind)` decides whether `sessionId` is attached. Twelve kinds are session-scoped:
 
-`daemon_started`, `daemon_stopped`, `session_progress`, `mcp_client_connected`, `app_instrumented`, `project_profiled`, `verification_completed`, `bug_found`, `tool_refused`, `runtime_crashed`, `feedback_submitted`.
+`daemon_started`, `daemon_stopped`, `session_progress`, `mcp_client_connected`, `app_instrumented`, `instrumentation_stalled`, `project_profiled`, `verification_completed`, `bug_found`, `tool_refused`, `runtime_crashed`, `feedback_submitted`.
+
+`mcp_connection_lost` is deliberately **not** on that list even though it feels session-shaped. It fires from the proxy process rather than the daemon, so it carries no `sessionId` and cannot be joined to a session at all.
 
 The other six are one-shot. A per-process id on `reticle status` is not a session: it joins to nothing and inflates every session count that runs a distinct count over the field.
 
@@ -61,7 +65,7 @@ The other six are one-shot. A per-process id on `reticle status` is not a sessio
 
 ## reticle_installed
 
-**Wire name:** `reticle_installed`. **Emitted from:** `packages/server/src/telemetry/cli-telemetry.ts:50`. **Session-scoped:** no. **Payload block:** none.
+**Wire name:** `reticle_installed`. **Emitted from:** `packages/server/src/telemetry/cli-telemetry.ts:51`. **Session-scoped:** no. **Payload block:** none.
 
 Fires on the first ever run on a machine. Carries `installSource`.
 
@@ -69,7 +73,7 @@ Fires on the first ever run on a machine. Carries `installSource`.
 | --- | --- | --- |
 | `installSource` | `InstallSource`, optional | Which published route brought this install in: `skill_file`, `npx_skill`, `plugin`, `docs_site`, `readme`, `cli_direct`, `unknown` |
 
-`installSource` is **declared, never detected**. A channel sets `RETICLE_INSTALL_SOURCE` on the process that runs the install and anything unrecognised reports `unknown`, so `unknown` is expected to be the largest bucket while the marker spreads across four separately published artifacts. Read a small `unknown` as a marker that spread, never as success. Nothing infers it: `npm_config_user_agent` only says npx ran us and every route goes through npx; the presence of a plugin directory or a skill folder says a route exists rather than that it ran the install. The same field rides on `init_completed`.
+`installSource` is **declared, never detected**. A channel sets `RETICLE_INSTALL_SOURCE` on the process that runs the install and anything unrecognised reports `unknown`, so `unknown` is expected to be the largest bucket while the marker spreads across four separately published artifacts. Read a small `unknown` as a marker that spread, never as success. Nothing infers it: `npm_config_user_agent` only says npx ran us and every route goes through npx; the presence of a plugin directory or a skill folder says a route exists rather than that it ran the install. `installSource` is **not** limited to this event. It is resolved once per process (`packages/server/src/telemetry/telemetry.ts:392`) and stamped on every event that process sends (`:453`), so any chart can group by it. It is also sourced **config first, then environment**: `projectInstallSource()` prefers the value recorded in `.reticle.json`, because the environment variable exists for exactly one command and is gone by the next, which is why the field originally reached a handful of events and nothing else.
 
 **The question it answers:** how many machines have installed this, and what does the new-user curve look like? There is deliberately no uninstall event, because npm 7 and pnpm run no uninstall lifecycle script. Churn is inferred server-side from inactivity instead.
 
@@ -77,7 +81,7 @@ Fires on the first ever run on a machine. Carries `installSource`.
 
 ## cli_command_run
 
-**Wire name:** `cli_command_run`. **Emitted from:** `packages/server/src/telemetry/cli-telemetry.ts:52`. **Session-scoped:** no. **Payload:** two envelope fields.
+**Wire name:** `cli_command_run`. **Emitted from:** `packages/server/src/telemetry/cli-telemetry.ts:58`. **Session-scoped:** no. **Payload:** two envelope fields.
 
 | Field | Type | Meaning |
 | --- | --- | --- |
@@ -101,7 +105,7 @@ Fires on the first ever run on a machine. Carries `installSource`.
 
 ## daemon_started
 
-**Wire name:** `daemon_started`. **Emitted from:** `packages/server/src/telemetry/daemon-telemetry.ts:73`. **Session-scoped:** yes. **Payload block:** none.
+**Wire name:** `daemon_started`. **Emitted from:** `packages/server/src/telemetry/daemon-telemetry.ts:75`. **Session-scoped:** yes. **Payload block:** none.
 
 **The question it answers:** how many active daemon runs are there? This is the numerator of daily, weekly and monthly actives, and the first step of the install funnel.
 
@@ -109,7 +113,7 @@ Fires on the first ever run on a machine. Carries `installSource`.
 
 ## daemon_stopped
 
-**Wire name:** `daemon_stopped`. **Emitted from:** `packages/server/src/telemetry/daemon-telemetry.ts:120`. **Session-scoped:** yes. **Payload block:** `session`, a `SessionSummary` with `final: true`.
+**Wire name:** `daemon_stopped`. **Emitted from:** `packages/server/src/telemetry/daemon-telemetry.ts:138`. **Session-scoped:** yes. **Payload block:** `session`, a `SessionSummary` with `final: true`.
 
 The rich one. One event carries the entire session rolled up, replacing the hundreds a per-tool-call event would send. PostHog bills per ingested event and a single verification loop is a great many tool calls, so aggregation here is a design decision, not an optimisation.
 
@@ -158,7 +162,7 @@ The rich one. One event carries the entire session rolled up, replacing the hund
 
 ## session_progress
 
-**Wire name:** `session_progress`. **Emitted from:** `packages/server/src/telemetry/daemon-telemetry.ts:98`. **Session-scoped:** yes. **Payload block:** `session`, the same `SessionSummary` shape with `final: false` and no `exit`.
+**Wire name:** `session_progress`. **Emitted from:** `packages/server/src/telemetry/daemon-telemetry.ts:116`. **Session-scoped:** yes. **Payload block:** `session`, the same `SessionSummary` shape with `final: false` and no `exit`.
 
 A periodic roll-up from a daemon that is still running.
 
@@ -175,7 +179,7 @@ A periodic roll-up from a daemon that is still running.
 
 ## verification_completed
 
-**Wire name:** `verification_completed`. **Emitted from:** `packages/server/src/tools/invoke-tool.ts:125` and `packages/server/src/telemetry/run-telemetry.ts:38`. **Session-scoped:** yes. **Payload block:** `verification`.
+**Wire name:** `verification_completed`. **Emitted from:** `packages/server/src/tools/invoke-tool.ts:144` and `packages/server/src/telemetry/run-telemetry.ts:39`. **Session-scoped:** yes. **Payload block:** `verification`.
 
 ### `VerificationSchema`
 
@@ -197,7 +201,7 @@ A periodic roll-up from a daemon that is still running.
 
 ## project_profiled
 
-**Wire name:** `project_profiled`. **Emitted from:** `packages/server/src/telemetry/daemon-telemetry.ts:87`. **Session-scoped:** yes. **Payload block:** `project`. Once per daemon start, so it is cheap.
+**Wire name:** `project_profiled`. **Emitted from:** `packages/server/src/telemetry/daemon-telemetry.ts:91`. **Session-scoped:** yes. **Payload block:** `project`. Once per daemon start, so it is cheap.
 
 ### `ProjectProfileSchema`
 
@@ -315,7 +319,7 @@ The one kind that carries author-written free text, which is exactly why it is n
 | --- | --- | --- |
 | `reconnect` | boolean | False on the first attach to this daemon, true for every attach after |
 | `daemonAgeMs` | int | How long the daemon had been up first |
-| `client` | string, optional | From the handshake: `claude-code`, `cursor` |
+| `client` | string, optional | **Never populated today.** The schema defines it and `mcp-connection.ts:35` would spread it, but the only caller (`http-server.ts:202`) passes no argument, so it is absent on every event ever sent. The client name and version _are_ captured, at `mcp/mcp.ts:461` and `:471` on `oninitialized`, and land in `session.clients` / `session.clientVersions`. Per-connect client attribution is therefore only reachable by joining to the session summary on `sessionId`. |
 
 **The question it answers:** is somebody actually using this, as opposed to having it installed and running? A daemon can sit up for days with no agent attached. A large `daemonAgeMs` on the **first** connect is the interesting case: Reticle was started and then sat unused, which is an onboarding failure nobody would otherwise report. Reconnect churn is visible here too, and a client reattaching every few minutes looks identical to healthy usage in every other metric.
 
@@ -334,6 +338,39 @@ The one kind that carries author-written free text, which is exactly why it is n
 **The question it answers:** did the second half of the install ever happen? Reticle's install has two halves, registering the MCP server and getting the SDK into a running page, done at different times by different commands and often in different directories. Almost everyone completes the first.
 
 Fired **once per daemon run**, on the first connect only, so `daemon_started` to `app_instrumented` is a real rate and a reconnecting page cannot inflate it. It deliberately carries no stack and no framework: `project_profiled` reports both for the same daemon run, and the two join on `sessionId`.
+
+---
+
+## instrumentation_stalled
+
+**Wire name:** `instrumentation_stalled`. **Emitted from:** `packages/server/src/telemetry/instrumentation-stall.ts:73`, called from `daemon-telemetry.ts:105`. **Session-scoped:** yes. **Payload block:** `stall`.
+
+The failure side of `app_instrumented`, and the reason the funnel has a denominator at all. A daemon that runs for ten minutes without a single SDK-carrying page is an install that half worked, and until this event existed that outcome was pure silence: indistinguishable from a machine nobody touched.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `initialized` | boolean | Has `init` run in this working directory (`readProjectId(cwd)` resolves). False means the daemon is running somewhere `init` never wrote a project id, which is usually a wrong-directory problem rather than a wiring one |
+| `agentAttached` | boolean | Was an agent connected at the moment the check ran. **This is the field that decides whether the row is a defect.** False means somebody installed and walked away, which is not a bug. True means an agent was sitting there with tools it could not use, which is the failure the product actually has |
+| `msWaited` | int | Milliseconds since the daemon started, from the clock marked at `daemon-telemetry.ts:84` |
+
+Deliberately the same three facts as `app_instrumented`, with `msWaited` standing in for `msToFirstApp`, so the success and failure rows are directly comparable without reshaping either.
+
+**When it fires:** on every flush tick, but only once all four guards at `instrumentation-stall.ts:64` pass: it has not already been reported this run, no app has ever connected, the clock was marked, and at least `STALL_AFTER_MS` (10 minutes) has elapsed. It is checked **before** the empty-window early return in `flushWindow`, which is not an accident: a stalled install produces an empty window by definition, so checking after the return would blind the event to the exact condition it exists to report.
+
+**The question it answers:** of the installs that never reach a verdict, how many had an agent present and waiting? That is the difference between a distribution problem and a wiring problem, and they need opposite responses.
+
+**What it is blind to:**
+
+- **Any diagnosis.** It never says whether a dev server is listening, because that is a live probe, and probing a user's machine to enrich a metric is collecting for the metric's sake.
+- **Slow starts.** A run that connects at minute eleven reports nothing at all, and neither does the recovery. The event answers "did this run stall", not "how long do installs take".
+- **The page side.** Every real cause (a non-localhost gate, a port mismatch, a stale build, a dev server never restarted) lives where the daemon cannot see. Attributing a stall needs the SDK to report its own refusals, and that is not built.
+- **Repeats.** Once per daemon run, so a user stuck for a week contributes one row per daemon start, not one per hour.
+
+<Warning>
+  This kind has no live check in `apps/e2e/specs/telemetry-events-test.mjs`, and neither do
+  `session_progress` and `app_instrumented`. Those three are the funnel, and the funnel is the part
+  of the wire nothing fires end to end. Adding one is the highest-value thing left in this file.
+</Warning>
 
 ---
 
@@ -356,7 +393,7 @@ Fired **once per daemon run**, on the first connect only, so `daemon_started` to
 
 ## init_completed
 
-**Wire name:** `init_completed`. **Emitted from:** `packages/server/src/telemetry/init-telemetry.ts:31`. **Session-scoped:** no. **Payload block:** `init`.
+**Wire name:** `init_completed`. **Emitted from:** `packages/server/src/telemetry/init-telemetry.ts:32`. **Session-scoped:** no. **Payload block:** `init`.
 
 | Field | Type | Meaning |
 | --- | --- | --- |
@@ -371,7 +408,7 @@ Fired **once per daemon run**, on the first connect only, so `daemon_started` to
 
 ## bug_found
 
-**Wire name:** `bug_found`. **Emitted from:** `packages/server/src/tools/invoke-tool.ts:147` and `packages/server/src/telemetry/run-telemetry.ts:58`. **Session-scoped:** yes. **Payload block:** `bug`.
+**Wire name:** `bug_found`. **Emitted from:** `packages/server/src/tools/invoke-tool.ts:166` and `packages/server/src/telemetry/run-telemetry.ts:59`. **Session-scoped:** yes. **Payload block:** `bug`.
 
 | Field | Type | Meaning |
 | --- | --- | --- |
@@ -396,7 +433,7 @@ The payload never carries a selector, a URL, an element, or any description of t
 
 ## tool_refused
 
-**Wire name:** `tool_refused`. **Emitted from:** `packages/server/src/tools/invoke-tool.ts`, via `packages/server/src/telemetry/tool-refused.ts`. **Session-scoped:** yes. **Payload block:** `refusal`.
+**Wire name:** `tool_refused`. **Emitted from:** `packages/server/src/telemetry/tool-refused.ts:49`, reached from four call sites in `packages/server/src/tools/invoke-tool.ts` (`:285` a handler threw, `:325` the wrong-tab guard, `:346` a message-shaped refusal, `:376` the `{error}` return convention). **Session-scoped:** yes. **Payload block:** `refusal`.
 
 | Field | Type | Meaning |
 | --- | --- | --- |

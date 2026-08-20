@@ -31,6 +31,27 @@ if [ ! -s "$TOKEN_FILE" ]; then
   chmod 600 "$TOKEN_FILE"
 fi
 
+# Wait for the ports to be FREE before binding them.
+#
+# The cleanup below kills the listeners, but a killed process does not release its port the instant
+# the shell returns: back-to-back battery runs raced the previous run's teardown and died on
+# `EADDRINUSE :::8787` during boot — a whole 8-minute run lost to the run before it, reported as an
+# api that "died during boot". Twice in one afternoon, on a green tree. Polling here is the fix
+# because the failure is timing, not state: nothing needs killing, only waiting for.
+echo "==> waiting for the battery's ports to be free"
+for port in 8787 4310 3100; do
+  for _ in $(seq 1 30); do
+    lsof -nP -iTCP:"$port" -sTCP:LISTEN -t > /dev/null 2>&1 || break
+    sleep 1
+  done
+  if lsof -nP -iTCP:"$port" -sTCP:LISTEN -t > /dev/null 2>&1; then
+    echo "port $port is still held after 30s by:"
+    lsof -nP -iTCP:"$port" -sTCP:LISTEN
+    echo "the battery would run against another process's app — refusing to start."
+    exit 1
+  fi
+done
+
 echo "==> starting api (:8787), bench-app (:4310), next-smoke (:3100)"
 REFLECT_MS=6000 node apps/api/server.mjs > /tmp/e2e-api.log 2>&1 &
 API=$!
@@ -48,14 +69,18 @@ NEXT=$!
 # failed for a reason that had nothing to do with the first. The runner's own orphan sweep named the
 # survivor — `next-server (v15.5.22)` — after the job had already gone red.
 #
-# `lsof -ti tcp:PORT` is on both the ubuntu runner and macOS, and asks the only question that
-# matters: is anything still holding the port the next attempt needs.
+# `-sTCP:LISTEN` is not optional. Without it `lsof -ti tcp:PORT` returns CLIENTS as well as the
+# listener, so the recipe everyone reaches for kills whatever is connected to the port along with
+# whatever is serving it. On a bridge port that takes the developer's own `reticle mcp` proxy with
+# it, silently, and the process that would have logged the death is the one that died. This file
+# had the unsafe form while `gate-harness.mjs` documented it as the trap to avoid, which is how a
+# rule written down in one place gets broken in another.
 E2E_PORTS='8787 4310 3100'
 cleanup() {
   kill "$API" "$DEMO" "$NEXT" 2>/dev/null || true
   sleep 1
   for port in $E2E_PORTS; do
-    lsof -ti "tcp:$port" 2>/dev/null | xargs -r kill -9 2>/dev/null || true
+    lsof -nP -iTCP:"$port" -sTCP:LISTEN -t 2>/dev/null | xargs -r kill -9 2>/dev/null || true
   done
 }
 trap cleanup EXIT

@@ -12,7 +12,7 @@
  * Half-editing a build config is worse than a documented manual step.
  */
 
-import { RETICLE_DEFAULT_PORT, bridgeWsUrl } from '@reticlehq/core';
+import { RETICLE_DEFAULT_PORT, ReticleDir, bridgeWsUrl } from '@reticlehq/core';
 import { PatchKind, type SourcePatch } from './patch-kind.js';
 import { UiLibrary } from './detect.js';
 import { sdkImport } from './snippets.js';
@@ -34,6 +34,26 @@ const LAYOUT_MARKER = 'reticle.connect';
  * never got it.
  */
 const SDK_INCLUDE_LITERAL = `'@reticlehq/react'`;
+/**
+ * The daemon's journal directory, kept out of the dev server's watcher.
+ *
+ * The daemon writes `.reticle/` into the project root and rewrites `ambient.json` atomically
+ * (`.tmp` + rename) for as long as a session is live. Astro dev is a Vite dev server watching that
+ * root, and `.reticle/` is not in Vite's default ignore list — so every journal write read as a
+ * project file changing and Vite answered with a full page reload. That closes a loop with no exit:
+ * the page loads, the SDK connects and streams events, the daemon journals them, Vite reloads the
+ * page, the SDK reconnects. It ran several times a second for as long as the dev server was up,
+ * and the symptom looked nothing like the cause — stale refs, actions dying mid-flight, and a log
+ * full of connect/disconnect pairs that read as a flapping SDK.
+ *
+ * The Vite plugin sets the same ignore in its `config` hook. Astro is hand-patched and never loads
+ * that plugin, so it needs its own.
+ *
+ * A RegExp, not a glob. chokidar dropped glob support in v4 and Vite 7+ ships v4/v5, where a
+ * double-star pattern is accepted and matches nothing — the ignore would be visibly present in the
+ * config and do nothing at all. Measured against the chokidar this repo resolves.
+ */
+const WATCH_IGNORE_LITERAL = `/(^|[\\\\/])\\.${ReticleDir.ROOT.slice(1)}([\\\\/]|$)/`;
 /**
  * An `include:` the app already declared — ours joins that array instead of adding a second key.
  * Deliberately not anchored to a newline: `optimizeDeps: { include: ['x'] }` on one line is the
@@ -79,6 +99,10 @@ const VITE_KEYS: readonly { key: string; inner: string }[] = [
     key: 'define',
     inner: `\n      __RETICLE_TOKEN__: JSON.stringify(reticleToken()),\n      __RETICLE_ROOT__: JSON.stringify(process.cwd()),`,
   },
+  // Merged in first, so a `server: { port }` the app already set keeps its port. An app that
+  // already sets `server.watch` itself is the one shape this loses to — the inner `watch` key would
+  // be duplicated and the app's would win — which is the same nested-merge ceiling `build` has.
+  { key: 'server', inner: `\n      watch: { ignored: [${WATCH_IGNORE_LITERAL}] },` },
 ];
 
 /** Whole-key form, for a `vite:` block that does not have the key at all. */
@@ -86,6 +110,7 @@ const WHOLE: Readonly<Record<string, string>> = {
   build: `\n    build: { target: 'es2022' },`,
   optimizeDeps: `\n    optimizeDeps: { include: [${SDK_INCLUDE_LITERAL}], esbuildOptions: { target: 'es2022' } },`,
   define: `\n    define: {\n      __RETICLE_TOKEN__: JSON.stringify(reticleToken()),\n      __RETICLE_ROOT__: JSON.stringify(process.cwd()),\n    },`,
+  server: `\n    server: { watch: { ignored: [${WATCH_IGNORE_LITERAL}] } },`,
 };
 
 /**
@@ -167,6 +192,7 @@ const VITE_BLOCK = `  vite: {
       __RETICLE_TOKEN__: JSON.stringify(reticleToken()),
       __RETICLE_ROOT__: JSON.stringify(process.cwd()),
     },
+    server: { watch: { ignored: [${WATCH_IGNORE_LITERAL}] } },
   },
 `;
 

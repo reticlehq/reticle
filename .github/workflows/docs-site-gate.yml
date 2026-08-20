@@ -1,0 +1,23 @@
+name: Docs site gate
+
+# Fetches every page listed in docs.json from the live docs site and fails on any non-200.
+# Runs daily and on manual dispatch — NOT on PRs, because the site lags the merge and a PR-time
+# check would report the previous state.
+
+on:
+  schedule:
+    - cron: '0 8 * * *' # daily at 08:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+      - run: node scripts/check-docs-site.mjs

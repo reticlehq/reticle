@@ -5,6 +5,7 @@ import {
   queryAllByPlaceholderText,
   queryAllByTestId,
   queryAllByAltText,
+  getDefaultNormalizer,
 } from '@testing-library/dom';
 import {
   DATA_RETICLE_SOURCE_ATTR,
@@ -21,7 +22,14 @@ import {
 } from '@reticlehq/core';
 import { isFrame, isHtmlElement } from './realm.js';
 import { capturedRootOf } from './shadow-registry.js';
-import { getAccessibleName, getRole, describe, getStates, isVisible } from './a11y.js';
+import {
+  getAccessibleName,
+  getRole,
+  describe,
+  getStates,
+  isInViewport,
+  isVisible,
+} from './a11y.js';
 import { isIgnored } from './dom-ignore.js';
 import { isSensitiveKey } from '../security/serialization.js';
 import { getCapabilities } from '../registry/capabilities.js';
@@ -38,7 +46,7 @@ const COMPONENT_CANDIDATE_SELECTOR = `[${SOURCE_ATTR}], [${TESTID_ATTR}], button
 
 /**
  * Resolve a scope to its container. A container of `null` means a scope was GIVEN but resolved to
- * nothing (unmounted, or a selector that matches no element) — the caller must NOT fall back to the
+ * nothing (unmounted, or a selector that matches no element) - the caller must NOT fall back to the
  * whole page, or a scoped query silently widens into a phantom match. `scope === undefined` (no scope)
  * legitimately searches the body.
  */
@@ -53,13 +61,13 @@ function resolveContainer(scope: string | undefined): {
     const found = document.querySelector(scope);
     if (isHtmlElement(found)) return { container: found, scopeMissing: false };
   } catch {
-    // invalid selector — treat as a missing scope, never a whole-page search
+    // invalid selector - treat as a missing scope, never a whole-page search
   }
   return { container: null, scopeMissing: true };
 }
 
 /**
- * Resolve an element by its SOURCE location — the precise, granular auto-anchor. The babel plugin
+ * Resolve an element by its SOURCE location - the precise, granular auto-anchor. The babel plugin
  * stamps `data-reticle-source="file:line:column"` on host elements, so a line-level starts-with match
  * pins the exact JSX element with a single fast attribute selector (no fiber walk). Column is
  * ignored so a small column drift doesn't unbind the anchor.
@@ -79,7 +87,7 @@ function findBySource(
 /**
  * Resolve by component display name when no source stamp is available: scan a bounded set of
  * likely-actionable elements and keep those whose NEAREST enclosing component (via the registered
- * framework adapter) matches. Coarser than source (one component renders many hosts) — used as a
+ * framework adapter) matches. Coarser than source (one component renders many hosts) - used as a
  * fallback / for frameworks without a source plugin.
  */
 function findByComponentName(container: HTMLElement, component: string): HTMLElement[] {
@@ -109,7 +117,7 @@ function findByComponent(container: HTMLElement, query: ElementQuery): HTMLEleme
 }
 
 /**
- * Role + name, matched the way Reticle REPORTS them — not only the way Testing Library computes them.
+ * Role + name, matched the way Reticle REPORTS them - not only the way Testing Library computes them.
  *
  * Two implementations were disagreeing, on both axes, for the same element:
  *
@@ -119,7 +127,7 @@ function findByComponent(container: HTMLElement, query: ElementQuery): HTMLEleme
  *
  * `reticle_query`, `reticle_snapshot` and every act result report Reticle's values. The matcher used
  * TL's. So Reticle printed `textbox "Search User"` and then could not find it by that exact
- * role and name — the same query call reporting an identity it cannot match.
+ * role and name - the same query call reporting an identity it cannot match.
  *
  * It surfaced through the flow recorder, which anchors a step to the reported role+name: `flow_save`
  * graded the flow `asserted` with `degraded: 0`, a clean bill of health, and the step drifted on the
@@ -131,7 +139,7 @@ function findByComponent(container: HTMLElement, query: ElementQuery): HTMLEleme
  * today keeps resolving exactly as before and this can never take a match away. Fixed on the
  * matching side rather than by changing what is reported: dropping `placeholder` would leave an
  * input whose only label is its placeholder nameless in every snapshot, and renaming the role would
- * churn every stored anchor — both worse trades than a fallback that runs on the empty path.
+ * churn every stored anchor - both worse trades than a fallback that runs on the empty path.
  */
 function queryByRoleAndName(
   container: HTMLElement,
@@ -148,6 +156,37 @@ function queryByRoleAndName(
   );
 }
 
+/**
+ * The same text, written two legal ways, did not match itself.
+ *
+ * Unicode lets `café` be one code point (`é`) or two (`e` + a combining acute). They render
+ * identically, they are canonically equivalent, and JavaScript string comparison says they differ —
+ * so a query typed one way against a DOM holding the other found nothing. That is a false RED: the
+ * agent asserts text that is visibly on screen, is told it is absent, and reports a working app as
+ * broken.
+ *
+ * It cannot happen in English, which is why it survived here. It is ordinary in French, Vietnamese
+ * and Korean, and the decomposed form is what macOS filesystems, several IMEs and some databases
+ * hand back.
+ *
+ * Normalising both sides can only ADD matches: normalisation is idempotent and
+ * canonical-equivalence-preserving, so two strings equal before are equal after and nothing that
+ * matched can stop matching. That property is why this is safe to apply to the matching core.
+ *
+ * Applied only to queries over USER-VISIBLE text. A testid is an attribute the developer typed on
+ * both sides and a component name is an identifier; normalising those would change what an exact
+ * match means, for no case anyone has.
+ */
+const toNfc = (value: string): string => value.normalize('NFC');
+
+/**
+ * Testing Library's own normaliser — whitespace trimming and collapsing — with NFC on top.
+ *
+ * Composed rather than replaced: writing a normaliser from scratch here would silently drop their
+ * whitespace handling, which every existing match depends on.
+ */
+const TEXT_NORMALIZER = { normalizer: (text: string) => toNfc(getDefaultNormalizer()(text)) };
+
 /** Run the appropriate Testing-Library query against ONE root (light DOM or a shadow root). */
 function findIn(container: HTMLElement, query: ElementQuery): HTMLElement[] {
   const by = query.by;
@@ -159,64 +198,72 @@ function findIn(container: HTMLElement, query: ElementQuery): HTMLElement[] {
       case QueryBy.ROLE:
         return queryByRoleAndName(container, value, query.name);
       case QueryBy.TEXT:
-        return queryAllByText(container, value, { exact: false });
+        return queryAllByText(container, toNfc(value), { exact: false, ...TEXT_NORMALIZER });
       case QueryBy.LABEL:
-        return queryAllByLabelText(container, value, { exact: false });
+        return queryAllByLabelText(container, toNfc(value), { exact: false, ...TEXT_NORMALIZER });
       case QueryBy.PLACEHOLDER:
-        return queryAllByPlaceholderText(container, value, { exact: false });
+        return queryAllByPlaceholderText(container, toNfc(value), {
+          exact: false,
+          ...TEXT_NORMALIZER,
+        });
       case QueryBy.TESTID:
         return queryAllByTestId(container, value, { exact: true });
       case QueryBy.ALT:
-        return queryAllByAltText(container, value, { exact: false });
+        return queryAllByAltText(container, toNfc(value), { exact: false, ...TEXT_NORMALIZER });
       case QueryBy.COMPONENT:
         // value is the component name;.source (if present) still takes precedence inside.
         return findByComponent(container, { ...query, component: query.component ?? value });
       default:
         // THROW, never `return []`. An unsupported strategy answering "no matches" is
-        // indistinguishable from the element genuinely being absent, so `by:'css'` — the first thing
-        // anyone arriving from Playwright reaches for — reported a page with a <body> as empty. The
+        // indistinguishable from the element genuinely being absent, so `by:'css'` - the first thing
+        // anyone arriving from Playwright reaches for - reported a page with a <body> as empty. The
         // server now rejects unknown strategies at the schema; this is the same guarantee for every
         // other path in (replay, reticle_run, an internal caller), because a false negative invented
         // by the tool is the exact failure this product exists to prevent.
         throw new Error(
-          `unsupported query strategy '${String(by)}' — use one of: ${Object.values(QueryBy).join(', ')}`,
+          `unsupported query strategy '${String(by)}' - use one of: ${Object.values(QueryBy).join(', ')}`,
         );
     }
   }
 
-  // Auto-anchor (component / source) — checked before the role/text fields so a query carrying
+  // Auto-anchor (component / source) - checked before the role/text fields so a query carrying
   // both a component anchor and an incidental role resolves by the more durable anchor.
   if (query.component !== undefined || query.source !== undefined) {
     return findByComponent(container, query);
   }
 
   // Structured form (role+name, or any single field). Same round-trip guarantee as the by+value
-  // spelling above — the two forms must not disagree about what is findable.
+  // spelling above - the two forms must not disagree about what is findable.
   if (query.role !== undefined) {
     return queryByRoleAndName(container, query.role, query.name);
   }
-  if (query.text !== undefined) return queryAllByText(container, query.text, { exact: false });
+  if (query.text !== undefined)
+    return queryAllByText(container, toNfc(query.text), { exact: false, ...TEXT_NORMALIZER });
   if (query.label !== undefined) {
-    return queryAllByLabelText(container, query.label, { exact: false });
+    return queryAllByLabelText(container, toNfc(query.label), { exact: false, ...TEXT_NORMALIZER });
   }
   if (query.placeholder !== undefined) {
-    return queryAllByPlaceholderText(container, query.placeholder, { exact: false });
+    return queryAllByPlaceholderText(container, toNfc(query.placeholder), {
+      exact: false,
+      ...TEXT_NORMALIZER,
+    });
   }
   if (query.testid !== undefined) return queryAllByTestId(container, query.testid, { exact: true });
-  if (query.alt !== undefined) return queryAllByAltText(container, query.alt, { exact: false });
+  if (query.alt !== undefined)
+    return queryAllByAltText(container, toNfc(query.alt), { exact: false, ...TEXT_NORMALIZER });
   return [];
 }
 
 /**
  * Every open shadow root at or beneath `root`, in document order.
  *
- * A closed root is deliberately unreachable — `element.shadowRoot` is null by design, and the SDK
+ * A closed root is deliberately unreachable - `element.shadowRoot` is null by design, and the SDK
  * reports that as a blind spot rather than pretending to see through it.
  */
 /**
  * A same-origin `<iframe>`'s body, or null when the document is unreachable.
  *
- * Cross-origin access THROWS in some engines and yields null in others, so both are handled — and
+ * Cross-origin access THROWS in some engines and yields null in others, so both are handled - and
  * both mean the same thing here: not ours to read. That case is not a silent skip, it is reported
  * separately as a declared blind spot.
  */
@@ -236,7 +283,7 @@ const FRAME_DEPTH_MAX = 3;
  * open shadow roots, and the documents of SAME-ORIGIN iframes.
  *
  * The iframe half was measured missing: a same-origin frame whose text the page could read straight
- * off `contentDocument` returned zero matches from `query`, and coverage said nothing about it — the
+ * off `contentDocument` returned zero matches from `query`, and coverage said nothing about it - the
  * worst combination, an absent-element answer for content that is right there. Cross-origin frames
  * are a genuinely different case and stay unread; they are declared instead.
  */
@@ -255,7 +302,7 @@ function embeddedRootsUnder(root: HTMLElement): HTMLElement[] {
       if (depth >= FRAME_DEPTH_MAX) continue;
       if (!isFrame(el)) continue;
       const body = readableFrameBody(el);
-      if (null === body) continue; // cross-origin — declared, not searched
+      if (null === body) continue; // cross-origin - declared, not searched
       found.push(body);
       walk(body, depth + 1);
     }
@@ -266,13 +313,13 @@ function embeddedRootsUnder(root: HTMLElement): HTMLElement[] {
 
 /**
  * NOTE ON COST. The walk above is a `querySelectorAll('*')` over the container, and `reticle_query` is
- * a hot-path tool, so every query on every app pays it — including the overwhelming majority that hold
+ * a hot-path tool, so every query on every app pays it - including the overwhelming majority that hold
  * no web components.
  *
  * A cache invalidated by a MutationObserver was written and then REMOVED, because it is not sound:
  * `attachShadow` on an element that is already in the document mutates only the shadow tree, which an
  * observer watching documentElement's subtree never sees. The cached "no shadow roots here" would
- * persist and the content would be silently missed — a false negative indistinguishable from a genuinely
+ * persist and the content would be silently missed - a false negative indistinguishable from a genuinely
  * absent element, which is the exact bug the piercing was added to fix.
  *
  * Correctness wins until there is a measurement saying the walk actually matters. The allocation is
@@ -282,17 +329,17 @@ function embeddedRootsUnder(root: HTMLElement): HTMLElement[] {
  * Run the query against the light DOM AND every open shadow root beneath the scope.
  *
  * Testing Library only walks the light DOM, so a control inside a web component returned zero matches
- * on a completely healthy page — a miss indistinguishable from a genuinely absent element. The
+ * on a completely healthy page - a miss indistinguishable from a genuinely absent element. The
  * snapshot has always pierced open roots; this makes `query` agree with it.
  */
 function findCandidates(query: ElementQuery): { candidates: HTMLElement[]; scopeMissing: boolean } {
   const { container, scopeMissing } = resolveContainer(query.scope);
-  // A given-but-missing scope searches NOTHING — never the whole page. The empty result plus the
+  // A given-but-missing scope searches NOTHING - never the whole page. The empty result plus the
   // scopeMissing flag is what keeps "gone scope" distinct from "absent element".
   if (null === container) return { candidates: [], scopeMissing: true };
   // `self: true` asks for the container ITSELF, which every other path excludes by construction.
   // A layout element with no role, name, testid or own text is unreachable by any semantic locator,
-  // and it is routinely the element carrying the handler — "click the empty space in this row" is a
+  // and it is routinely the element carrying the handler - "click the empty space in this row" is a
   // real user action that was simply not expressible. Requires a scope: without one there is no root
   // to return, and answering `document.body` would be a wrong answer wearing the shape of one.
   if (true === query.self) {
@@ -303,11 +350,11 @@ function findCandidates(query: ElementQuery): { candidates: HTMLElement[]; scope
   const out: HTMLElement[] = [];
   const collect = (els: HTMLElement[]): void => {
     for (const el of els) {
-      if (seen.has(el)) continue; // reachable from both host and root — count once
+      if (seen.has(el)) continue; // reachable from both host and root - count once
       // Reticle's OWN UI is not part of the app under test. `snapshot` has always excluded it; query
-      // did not, so the presenter panel and the annotator answered `by: role` like app controls —
+      // did not, so the presenter panel and the annotator answered `by: role` like app controls -
       // measured on a real merchant dashboard, 7 of the 40 buttons an agent could see were ours
-      // ("Pause", "End", "Minimise the panel", "Export", "Flag a bug for the agent"). Two of those
+      // ("Pause", "End", "Chat", "Export"). Two of those
       // share a NAME with a real control on that page, so an agent resolving "Export" could drive the
       // observer instead of the app and then reason about the result. Filtered here, at the one
       // collection point, so every entry path (by role/text/testid, shadow roots, scoped) is covered.
@@ -323,7 +370,7 @@ function findCandidates(query: ElementQuery): { candidates: HTMLElement[]; scope
 
 /** Longest attribute value returned; one enormous href must not blow the response budget. */
 export const ATTR_VALUE_MAX = 512;
-/** Most attributes projected per element — a guard against a caller asking for everything. */
+/** Most attributes projected per element - a guard against a caller asking for everything. */
 const ATTR_KEYS_MAX = 12;
 
 /**
@@ -331,7 +378,7 @@ const ATTR_KEYS_MAX = 12;
  *
  * Absent attributes are OMITTED rather than returned empty, so "not present" and "present but blank"
  * stay distinguishable. Credential-bearing names are redacted with the same rule the network and
- * storage paths use — a projection API must not become an exfiltration path.
+ * storage paths use - a projection API must not become an exfiltration path.
  */
 function projectAttrs(el: Element, keys: readonly string[]): Record<string, string> | undefined {
   const out: Record<string, string> = {};
@@ -344,6 +391,10 @@ function projectAttrs(el: Element, keys: readonly string[]): Record<string, stri
 }
 
 function inState(el: Element, state: ElementState, memo?: Map<Element, boolean>): boolean {
+  // inViewport is computed on demand rather than listed in getStates, so it stays assertable without
+  // adding a state to every element in every snapshot (it would bloat the wire and churn every
+  // describe). The predicate path is the only consumer that needs it. (#398)
+  if (ElementState.IN_VIEWPORT === state) return isInViewport(el, memo);
   return getStates(el, isVisible(el, memo)).includes(state);
 }
 
@@ -352,7 +403,7 @@ function inState(el: Element, state: ElementState, memo?: Map<Element, boolean>)
  *
  * describe() is the expensive part of a query: it resolves the accessible name and forces a style
  * computation for every ancestor to decide visibility. Describing every match on a page with
- * thousands of them freezes the main thread for seconds — and then the wire discards all but the
+ * thousands of them freezes the main thread for seconds - and then the wire discards all but the
  * first `MAX_COLLECTION_ITEMS` anyway, so the work past that point was never observable by anyone.
  * Matching one to the other means the cost of a broad query is bounded by the transport rather than
  * by the size of the page.
@@ -372,15 +423,15 @@ export function matchQuery(
 ): MatchResult {
   // NO blanket try/catch here. It used to turn ANY exception during candidate-finding into
   // `elements = []`, which is the same lie as the `default` arm above: a query that could not run
-  // reported that the element is not on the page. The one failure it was plausibly guarding —
-  // a scope selector that matches nothing — is already handled explicitly and distinctly, as
+  // reported that the element is not on the page. The one failure it was plausibly guarding -
+  // a scope selector that matches nothing - is already handled explicitly and distinctly, as
   // `scopeMissing`, so what remained was a net that could only convert real faults into false
   // negatives.
   const found = findCandidates(query);
   const elements: HTMLElement[] = found.candidates;
   const scopeMissing = found.scopeMissing;
   // One visibility cache for the whole (synchronous) query pass. isVisible is an O(depth) forced-style
-  // walk; the state filter runs it over EVERY candidate (the count must be exact) — on a match-heavy
+  // walk; the state filter runs it over EVERY candidate (the count must be exact) - on a match-heavy
   // page (e.g. a 3k-row grid) that is tens of thousands of getComputedStyle calls on the host's main
   // thread. The memo makes each element's ancestors resolve once, then short-circuit for every sibling.
   const visMemo = new Map<Element, boolean>();
@@ -407,7 +458,7 @@ export function matchQuery(
   };
 }
 
-/** Resolve `aria-labelledby` (one or more element IDs) to the referenced elements' text — a bare ID is
+/** Resolve `aria-labelledby` (one or more element IDs) to the referenced elements' text - a bare ID is
  * not a human-readable name. Undefined when unset or nothing resolves. */
 function resolveLabelledBy(el: Element): string | undefined {
   const ids = el.getAttribute('aria-labelledby');
@@ -422,7 +473,7 @@ function resolveLabelledBy(el: Element): string | undefined {
   return text.length > 0 ? text : undefined;
 }
 
-/** Structural clusters of the page — the successor to the raw testid list in zero-match hints. */
+/** Structural clusters of the page - the successor to the raw testid list in zero-match hints. */
 function buildPresentRegions(query: ElementQuery): PresentRegion[] {
   // For the diagnostic hint we WANT the page's orientation even when the scope is gone, so fall back
   // to the body here (the match path above already reported scopeMissing, so this can't mask it).
@@ -456,7 +507,7 @@ function buildPresentRegions(query: ElementQuery): PresentRegion[] {
     for (const el of containers) {
       const name =
         el.getAttribute('aria-label') ??
-        resolveLabelledBy(el) ?? // aria-labelledby is an element ID — resolve it to the referenced TEXT
+        resolveLabelledBy(el) ?? // aria-labelledby is an element ID - resolve it to the referenced TEXT
         el.getAttribute('data-testid') ??
         undefined;
       const children = el.querySelectorAll('[role]');
@@ -510,8 +561,8 @@ function buildEmptyHint(query: ElementQuery): QueryEmptyHint {
  * Resolve a query to descriptors for the `query` MCP tool.
  *
  * `count` is carried through deliberately: the server reports match totals from it rather than from
- * the array, because the array is capped in transit. Dropping it here — which this function used to
- * do — silently put the server back to counting survivors and calling that the answer.
+ * the array, because the array is capped in transit. Dropping it here - which this function used to
+ * do - silently put the server back to counting survivors and calling that the answer.
  */
 export function runQuery(query: ElementQuery, limit?: number): QueryResult {
   const result = matchQuery(query, undefined, limit);

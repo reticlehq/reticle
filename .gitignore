@@ -117,3 +117,7 @@ leads/
 # The originals at the repo root are the only editable copies.
 /packages/server/SKILL.md
 /packages/server/docs/
+
+# Maintainer rules for GitHub conduct — issues, PRs, releases. Deliberately private: it names the
+# mistakes that produced each rule, and those belong to the people who made them, not to the repo.
+/GITHUB.md

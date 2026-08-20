@@ -20,21 +20,22 @@ import {
   OnDrop,
   OnRequest,
 } from './proxy-lifecycle.js';
+import { PortPresence } from '../daemon/port-presence.js';
 
 describe('onStreamDrop — a dropped stream is not demand', () => {
-  it('reattaches when a daemon is already listening', () => {
-    expect(onStreamDrop(true)).toBe(OnDrop.REATTACH);
+  it('reattaches when a Reticle daemon is already listening', () => {
+    expect(onStreamDrop(PortPresence.DAEMON)).toBe(OnDrop.REATTACH);
   });
 
   it('goes DORMANT when nothing is listening — never spawns', () => {
     // The whole regression in one assertion. Spawning here is what made an idle daemon's own
     // shutdown into a permanent loop.
-    expect(onStreamDrop(false)).toBe(OnDrop.DORMANT);
+    expect(onStreamDrop(PortPresence.FREE)).toBe(OnDrop.DORMANT);
   });
 
   it('has no third answer that could smuggle a spawn back in', () => {
-    for (const listening of [true, false]) {
-      expect([OnDrop.REATTACH, OnDrop.DORMANT]).toContain(onStreamDrop(listening));
+    for (const presence of [PortPresence.DAEMON, PortPresence.FOREIGN, PortPresence.FREE]) {
+      expect([OnDrop.REATTACH, OnDrop.DORMANT]).toContain(onStreamDrop(presence));
     }
   });
 });
@@ -61,10 +62,14 @@ describe('onClientRequest — demand is the only thing that starts a daemon', ()
  */
 describe('the pair cannot cycle', () => {
   it('no sequence of drops alone ever reaches WAKE', () => {
-    const reachableFromDrops = [onStreamDrop(true), onStreamDrop(false)];
+    const reachableFromDrops = [
+      onStreamDrop(PortPresence.DAEMON),
+      onStreamDrop(PortPresence.FOREIGN),
+      onStreamDrop(PortPresence.FREE),
+    ];
     expect(reachableFromDrops).not.toContain(OnRequest.WAKE);
     // And dormancy is terminal until a request arrives: dropping again while dormant is still not demand.
-    expect(onStreamDrop(false)).toBe(OnDrop.DORMANT);
+    expect(onStreamDrop(PortPresence.FREE)).toBe(OnDrop.DORMANT);
   });
 });
 

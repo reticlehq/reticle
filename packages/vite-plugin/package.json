@@ -1,6 +1,6 @@
 {
   "name": "@reticlehq/vite-plugin",
-  "version": "2.8.0",
+  "version": "2.9.0",
   "description": "Vite plugin for Reticle: dev-only source-map stamping plus auto-injected reticle.connect(). apply:'serve' guarantees it never ships to production.",
   "type": "module",
   "license": "Apache-2.0",
@@ -23,8 +23,14 @@
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "default": "./dist/index.js"
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
     },
     "./package.json": "./package.json"
   },
@@ -34,12 +40,13 @@
     "NOTICE"
   ],
   "scripts": {
-    "build": "tsc -b",
+    "build": "tsc -b && node scripts/build-cjs.mjs",
     "typecheck": "tsc -b",
     "lint": "eslint src",
     "test:unit": "vitest run src --passWithNoTests",
     "test:coverage": "vitest run src --passWithNoTests --coverage.enabled --coverage.provider=v8 --coverage.reporter=text-summary --coverage.include='src/**/*.ts' --coverage.exclude='src/**/*.test.ts'",
-    "prepack": "tsc -b && find dist -name \"*.test.*\" -delete && node ../../scripts/strip-maps.mjs dist"
+    "prepack": "tsc -b && node scripts/build-cjs.mjs && find dist -name \"*.test.*\" -delete && node ../../scripts/strip-maps.mjs dist",
+    "build:cjs": "node scripts/build-cjs.mjs"
   },
   "dependencies": {
     "@babel/core": "^7.26.0",
@@ -49,7 +56,8 @@
   "devDependencies": {
     "@types/babel__core": "^7.20.5",
     "svelte": "^5.56.8",
-    "vite": "^8"
+    "vite": "^8",
+    "esbuild": "^0.28.1"
   },
   "peerDependencies": {
     "vite": ">=4"

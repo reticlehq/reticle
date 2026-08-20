@@ -64,6 +64,12 @@ export const IconDrag = (p: Omit<IconProps, 'd'>) => (
 export const IconBolt = (p: Omit<IconProps, 'd'>) => <Icon {...p} d="M13 2L4 14h6l-1 8 9-12h-6z" />;
 export const IconCheck = (p: Omit<IconProps, 'd'>) => <Icon {...p} d="M20 6L9 17l-5-5" />;
 export const IconArrow = (p: Omit<IconProps, 'd'>) => <Icon {...p} d="M5 12h14M13 6l6 6-6 6" />;
+export const IconSave = (p: Omit<IconProps, 'd'>) => (
+  <Icon
+    {...p}
+    d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2zM17 21v-8H7v8M7 3v5h8"
+  />
+);
 export const IconGit = (p: Omit<IconProps, 'd'>) => (
   <Icon
     {...p}

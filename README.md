@@ -33,37 +33,9 @@ Where the work happens in the open: what's being built this cycle, what's up for
 
 ---
 
-## The problem
-
-Your agent writes code, **assumes** it worked, and moves on. It never opens the app.
-
-So the broken modal, the silent `500`, the "Deploy succeeded" over a deploy that failed — they all ship, and you find them by clicking around afterwards. **You've become your agent's QA.**
-
-The maddening part: the truth was right there in the running app the whole time. The failed response, the store that still says `0`, the error in the console. It just never reaches the screen — so a screenshot shows a page that looks perfect, and your agent sees nothing at all.
-
-<p align="center">
-  <img src="assets/readme/silent-failures.png" alt="An e-commerce page looks perfectly shipped, but underneath: mock data, a dead click, a hidden 500 — the failures the UI completely hid." width="560" />
-</p>
-
-## What is Reticle?
-
-**Reticle is a verification layer for AI coding agents.** It runs a dev-only SDK inside your running web app, so an agent can drive a real flow and read what actually happened — the network calls, the store, the console, the routes, the DOM — instead of guessing that its change worked.
-
-**It proofreads your agent's work, on the running app, before you ever see it.**
-
-```
-your agent writes code  →  Reticle checks the app it produced  →  verdict goes back to the agent
-        ↑                                                                      │
-        └──────────────────  it fixes and tries again, until it passes  ───────┘
-```
-
-That's the whole idea. The agent stops guessing that it worked, and gets told — with the evidence, and the `file:line` to fix.
-
-It works because Reticle runs **inside** the app rather than looking at it from outside. It can see what the page never displays: the network response behind the click, the value in your store, the signal your code fired, the error in the console. Then it answers one question — _did the thing you claimed actually happen?_ — and hands back **yes**, **no**, or an honest **"I couldn't tell."**
-
-You never write test syntax. You say what should be true in plain English; the agent does the rest.
-
 ## Install in 30 seconds
+
+**One paste, and the skill drives the rest.** The skill is the install path. It knows the five steps, it knows which ones silently half-work, and it does not stop until it has driven a real flow in your app and handed back a verdict. A config file is not an install.
 
 **Paste this into your coding agent — Claude Code, Cursor, Copilot, Codex, Windsurf, OpenCode, or any MCP agent:**
 
@@ -108,18 +80,20 @@ whenever you change any user-facing behaviour.
 
 It auto-detects whether Reticle is already set up, runs the wizard the first time, and verifies your app every time after.
 
-**New in 2.8.0: install the published skill in one line.** On Claude Code the plugin is the shortest path of all, because it registers the MCP server and the skill in one step:
+**If you would rather run it yourself than paste it.** On Claude Code the plugin is the shortest path of all, because it registers the MCP server and the skill in one step:
 
 ```text
 /plugin marketplace add reticlehq/reticle
 /plugin install reticle@reticlehq
 ```
 
-On Cursor, Codex, Copilot and Gemini:
+Everywhere the skills CLI reaches — Cursor, Codex, Copilot, Gemini, Windsurf, OpenCode:
 
 ```bash
 npx skills add reticlehq/reticle
 ```
+
+Either way, **restart the client afterwards**. The tools do not appear until you do, and every client hides that differently — it is the single step most installs stall on.
 
 **Or via CLI** — auto-detects your framework, installs the kit + build plugin, and registers the MCP server for every agent in one shot:
 
@@ -200,6 +174,36 @@ Or ask your agent: _"Is Reticle connected to my app right now?"_
 Full walkthrough → [Getting Started](docs/getting-started.md).
 
 </details>
+
+## The problem
+
+Your agent writes code, **assumes** it worked, and moves on. It never opens the app.
+
+So the broken modal, the silent `500`, the "Deploy succeeded" over a deploy that failed — they all ship, and you find them by clicking around afterwards. **You've become your agent's QA.**
+
+The maddening part: the truth was right there in the running app the whole time. The failed response, the store that still says `0`, the error in the console. It just never reaches the screen — so a screenshot shows a page that looks perfect, and your agent sees nothing at all.
+
+<p align="center">
+  <img src="assets/readme/silent-failures.png" alt="An e-commerce page looks perfectly shipped, but underneath: mock data, a dead click, a hidden 500 — the failures the UI completely hid." width="560" />
+</p>
+
+## What is Reticle?
+
+**Reticle is a verification layer for AI coding agents.** It runs a dev-only SDK inside your running web app, so an agent can drive a real flow and read what actually happened — the network calls, the store, the console, the routes, the DOM — instead of guessing that its change worked.
+
+**It proofreads your agent's work, on the running app, before you ever see it.**
+
+```
+your agent writes code  →  Reticle checks the app it produced  →  verdict goes back to the agent
+        ↑                                                                      │
+        └──────────────────  it fixes and tries again, until it passes  ───────┘
+```
+
+That's the whole idea. The agent stops guessing that it worked, and gets told — with the evidence, and the `file:line` to fix.
+
+It works because Reticle runs **inside** the app rather than looking at it from outside. It can see what the page never displays: the network response behind the click, the value in your store, the signal your code fired, the error in the console. Then it answers one question — _did the thing you claimed actually happen?_ — and hands back **yes**, **no**, or an honest **"I couldn't tell."**
+
+You never write test syntax. You say what should be true in plain English; the agent does the rest.
 
 ## What do you actually say to it?
 

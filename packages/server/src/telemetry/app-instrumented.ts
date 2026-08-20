@@ -66,6 +66,17 @@ export function reportAppInstrumented(
   }
 }
 
+/**
+ * Has an app connected to this daemon run at all?
+ *
+ * The same flag `reportAppInstrumented` uses for idempotency, read from outside. The stall check
+ * needs exactly this question and must not answer it from a window counter, which resets on every
+ * flush and would then report a long-instrumented daemon as freshly stalled.
+ */
+export function appEverConnected(): boolean {
+  return reported;
+}
+
 /** Tests only. */
 export function resetAppInstrumented(): void {
   reported = false;

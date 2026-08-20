@@ -12,22 +12,48 @@
  */
 
 import { describe, expect, it } from 'vitest';
+import { NoSessionAction } from '@reticlehq/core';
 import { ReticleTool } from './tool-names.js';
 import { TOOLS } from './tools.js';
+import type { NoSessionNextAction } from '../session/no-session-next-action.js';
 import type { ToolDeps } from './tool-kit.js';
 
 const sessionsTool = TOOLS.find((tool) => ReticleTool.SESSIONS === tool.name);
 
-/** Only the two fields this handler reads — the rest of ToolDeps is irrelevant here. */
-function depsWith(list: unknown[], hint: string | undefined): ToolDeps {
+/** Only the fields this handler reads — the rest of ToolDeps is irrelevant here. */
+function depsWith(list: unknown[], hint: string | undefined, next?: NoSessionNextAction): ToolDeps {
   return {
-    sessions: { list: () => list, noSessionHint: () => hint },
+    sessions: {
+      list: () => list,
+      noSessionHint: () => hint,
+      noSessionNextAction: () => next,
+    },
   } as unknown as ToolDeps;
 }
 
 describe('reticle_sessions explains an empty list', () => {
   it('is a declared output field, so a strict client does not strip it', () => {
     expect(sessionsTool?.outputSchema).toHaveProperty('why');
+  });
+
+  it('carries the executable next action alongside the prose', async () => {
+    const next: NoSessionNextAction = {
+      action: NoSessionAction.START_DEV_SERVER,
+      command: 'pnpm run dev',
+      reason: 'nothing is listening',
+    };
+    const result = (await sessionsTool?.handler(depsWith([], 'prose', next), {})) as {
+      next_action?: NoSessionNextAction;
+    };
+    expect(result.next_action?.command).toBe('pnpm run dev');
+    expect(sessionsTool?.outputSchema).toHaveProperty('next_action');
+  });
+
+  it('omits next_action when there is none, rather than shipping an empty shell', async () => {
+    const result = (await sessionsTool?.handler(depsWith([], 'prose'), {})) as {
+      next_action?: NoSessionNextAction;
+    };
+    expect(result.next_action).toBeUndefined();
   });
 
   it('carries the diagnosis when nothing is connected', async () => {

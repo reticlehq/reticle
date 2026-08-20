@@ -8,7 +8,13 @@ import {
   type ReticleVerificationRun,
 } from '@reticlehq/core';
 import { buildVerificationRun, type VerificationRunInput } from '../runs/build-verification-run.js';
-import { runVerify, urlParts, type VerifyConnection, type VerifyPorts } from './cli-verify.js';
+import {
+  portBusyMessage,
+  runVerify,
+  urlParts,
+  type VerifyConnection,
+  type VerifyPorts,
+} from './cli-verify.js';
 
 const NOW = 1_700_000_000_000;
 
@@ -160,5 +166,31 @@ describe('runVerify', () => {
     expect(rec.exit).toEqual([1]);
     expect(rec.fail.join('\n')).toContain('replay boom');
     expect(rec.closed).toBe(1);
+  });
+});
+
+/**
+ * `reticle verify` boots its OWN daemon on the port the app dials, so on a machine where a daemon is
+ * already running — which is every machine with Reticle set up — binding fails.
+ *
+ * It failed by dying: the listen error surfaces asynchronously on the server object, so nothing
+ * caught it and the process printed a raw `node:net` EADDRINUSE stack. The source comment beside the
+ * bind already knew ("crashed with EADDRINUSE on any machine already running a daemon — i.e. every
+ * developer machine") and the remedy taken was to honour an environment variable, which helps only
+ * somebody who already knows to set it.
+ *
+ * It matters more now than it did: the skill advertises this command as the way to get a verdict
+ * with no MCP at all, so it is reached by people with the fewest other options.
+ *
+ * A stack trace is the worst possible answer here. Refusing with the reason and a way out is the
+ * least this can do, and it is what the assertion below pins.
+ */
+describe('verify against a port a daemon already owns', () => {
+  it('refuses with a reason instead of a raw listen error', () => {
+    const message = portBusyMessage(4400);
+    expect(message, 'names the port').toContain('4400');
+    expect(message.toLowerCase(), 'says who has it').toMatch(/daemon|already/);
+    expect(message, 'gives a way out').toMatch(/reticle stop|RETICLE_PORT|verify_change/);
+    expect(message, 'never a bare node error').not.toMatch(/EADDRINUSE|node:net/);
   });
 });

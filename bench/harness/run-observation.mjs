@@ -5,8 +5,12 @@
 import { writeFileSync } from 'node:fs';
 import { makeAdapter } from './adapters.mjs';
 import { inject, revert, revertAll } from './inject.mjs';
+import { BENCH_URL } from './ports.mjs';
 
-const URL = 'http://localhost:4312/';
+// Never a port literal: ports.mjs is the one place the app, the daemon and every harness agree, and
+// a literal here silently drove ANOTHER process's app when a second dev server took 4312 mid-run —
+// the Reticle arm then measured nothing while the other tools kept scoring.
+const URL = BENCH_URL;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /**

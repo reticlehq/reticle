@@ -291,6 +291,9 @@ export async function replayProgram(
         session.beginAction(ReticleTool.REPLAY, { steps: liveSteps.length });
         let r;
         try {
+          // DIVERGENCE: replay sends one batched ACT_SEQUENCE command to the browser;
+          // live (tools/act-tools.ts) sends N individual ACT commands for per-step timeout +
+          // progress. A bug in either is invisible from the other.
           r = await session.command(ReticleCommand.ACT_SEQUENCE, { steps: liveSteps });
         } finally {
           session.finishAction();

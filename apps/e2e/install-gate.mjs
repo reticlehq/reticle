@@ -56,7 +56,7 @@ process.env.RETICLE_TELEMETRY = '0';
 // The telemetry line above already silences the events; this is belt and braces for anything that
 // re-enables them (a debug run recording to a local sink) and for the CLI's own CI-shaped defaults.
 process.env.CI = process.env.CI ?? 'true';
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { delimiter, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -517,7 +517,24 @@ async function driveScaffold(scaffold, index) {
     );
 
     // The baseline diff. See stepsOf() for why "zero ⚠" cannot carry this on its own.
-    const steps = fingerprint(stepsOf(report));
+    //
+    // The scaffold's own temp directory is folded to `<root>` first. Most targets are repo-relative,
+    // but the ones written where the AGENT stands — the `.reticle.json` a redirect leaves at the
+    // repo root, and the rule/command files — are absolute by necessity, and an absolute path under
+    // `mkdtemp` is different on every run: recording it would make this baseline diff RED forever,
+    // for a reason that has nothing to do with init.
+    // Both spellings of it: `mkdtemp` hands back `/var/folders/…` on macOS while the `init` process
+    // reports its cwd as the resolved `/private/var/folders/…`, and only one of those two ever
+    // appears in a given line.
+    //
+    // LONGEST FIRST, and that is the whole subtlety. One spelling is a suffix of the other, so
+    // folding the short one first eats the tail of the long one and leaves `/private<root>` behind
+    // — a baseline diff that fails while reporting a path that never existed.
+    const foldRoot = (text) =>
+      [workdir, realpathSync(workdir)]
+        .sort((a, b) => b.length - a.length)
+        .reduce((acc, dir) => acc.split(dir).join('<root>'), text);
+    const steps = fingerprint(stepsOf(foldRoot(report)));
     const expected = BASELINE[scaffold.id];
     if (UPDATE_BASELINE) {
       nextBaseline[scaffold.id] = steps;
