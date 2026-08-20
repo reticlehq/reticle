@@ -176,11 +176,13 @@ From there, point your MCP-capable agent at Reticle and ask it to verify the app
    git push --force-with-lease
    ```
 
-   `git config format.signOff true` does **not** cover `git commit`, so setting it is not enough. If you want this to be automatic, alias the commit itself:
+   `git config format.signOff true` does **not** cover `git commit`, so setting it is not enough — it applies to `format-patch`/`send-email`, and setting it buys you unsigned commits plus the belief that they are signed. To make sign-off automatic, install the repo's hooks:
 
    ```bash
-   git config --local alias.ci 'commit -s'
+   pnpm hooks:install
    ```
+
+   That symlinks a `prepare-commit-msg` hook which adds the trailer when it is missing (and leaves `git commit -s` alone), plus the pre-commit quality gate.
 
 4. **Use [Conventional Commits](https://www.conventionalcommits.org/)** for commit messages, e.g. `feat(server): add reticle_viewport tool`, `fix(browser): restore patched fetch on teardown`, `docs: clarify install steps`. Common scopes mirror the packages: `protocol`, `browser`, `server`, `react`, plus `docs` / `chore`.
 5. **Keep the gates green:** `pnpm lint && pnpm typecheck && pnpm test:unit`.

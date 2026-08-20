@@ -56,7 +56,13 @@ jobs:
             echo "  then:            git push --force-with-lease"
             echo ""
             echo "Signing rewrites the commits, so the push has to be forced. Nothing else changes."
-            echo "For future work: git commit -s, or 'git config format.signOff true' in this repo."
+            echo "To stop this happening again, install the repo's hooks — a prepare-commit-msg"
+            echo "hook signs every commit for you:"
+            echo ""
+            echo "  pnpm hooks:install"
+            echo ""
+            echo "Note: 'git config format.signOff true' does NOT do this. It applies to"
+            echo "format-patch/send-email, not to git commit."
             exit 1
           fi
           echo "All commits are signed off."
