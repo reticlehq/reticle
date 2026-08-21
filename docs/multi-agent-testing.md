@@ -36,6 +36,23 @@ reticle_lease {action:"release"} { sessionId }    # free the slot
 
 `reticle_lease {action:"acquire"}` opens a fresh isolated headless context against your **already-running** app, stamps the lease identity into the URL so the app's own SDK registers under a sessionId you can target, and waits until that tab has connected (`ready: true`) before returning, so the sessionId is usable immediately. Release when the flow finishes.
 
+### Keep an authenticated session across leases
+
+Storage is isolated and disposable by default. For a login-heavy suite, opt one project into a persisted Playwright storage profile:
+
+```json
+{
+  "action": "acquire",
+  "url": "http://localhost:3000/dashboard",
+  "projectId": "my-app",
+  "persistStorage": true
+}
+```
+
+The first lease starts clean and saves its cookies and local storage when released. A later acquire with the same `projectId` restores them and reports `storageRestored: true`. The profile is stored outside the checkout under Reticle's state directory, keyed by a hash of `projectId`, and restricted to the current OS user. Its contents are never returned by a tool or sent through telemetry.
+
+To discard an expired or poisoned login, acquire with both `persistStorage: true` and `resetStorage: true`. The reset applies only to that `projectId`; another project's profile remains isolated.
+
 ## 10 agents, 10 flows, one dashboard
 
 This is the design target, and it needs no special setup:

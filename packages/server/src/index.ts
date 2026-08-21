@@ -46,6 +46,7 @@ import { statusPayload } from './status-payload.js';
 import { CdpRealInputProvider, LaunchedRealInputProvider } from './input/real-input.js';
 import { cpus } from 'node:os';
 import { BrowserPool } from './pool/browser-pool.js';
+import { NodeStorageProfileStore } from './pool/storage-profile.js';
 import { playwrightLauncher, resolveMaxContexts } from './pool/playwright-launcher.js';
 import { LeaseReaper } from './pool/lease-reaper.js';
 import { readJournalEnabled, readProjectId } from './cli/cli-port.js';
@@ -108,6 +109,7 @@ export { crawl } from './crawl/crawl.js';
 export { MCP_SSE_PATH, MCP_MESSAGE_PATH } from '@reticlehq/core';
 export { BrowserPool, DEFAULT_LEASE_TTL_MS } from './pool/browser-pool.js';
 export type { Lease, Launcher, PooledBrowser } from './pool/browser-pool.js';
+export { NodeStorageProfileStore } from './pool/storage-profile.js';
 export { playwrightLauncher, resolveMaxContexts } from './pool/playwright-launcher.js';
 export { appendReticleParams } from './tools/lease-tools.js';
 export { writePid, removePid, isRunning, logPath, readPid, isAlive } from './daemon/daemon.js';
@@ -265,7 +267,14 @@ function createBrowserPool(headless: boolean): BrowserPool {
         ? globalThis.crypto.randomUUID()
         : String(Date.now())
     }`;
-  return new BrowserPool(playwrightLauncher({ headless }), { maxContexts, genSessionId });
+  const storageProfiles = new NodeStorageProfileStore(
+    join(reticleStateHome(), ReticleDir.STORAGE_PROFILES_SUBDIR),
+  );
+  return new BrowserPool(playwrightLauncher({ headless }), {
+    maxContexts,
+    genSessionId,
+    storageProfiles,
+  });
 }
 
 /**

@@ -39,8 +39,10 @@ export function gotoOptions(timeoutMs: number | undefined): {
 function wrapBrowser(browser: Browser): PooledBrowser {
   return {
     isConnected: () => browser.isConnected(),
-    newContext: async (): Promise<PooledContext> => {
-      const context = await browser.newContext();
+    newContext: async (opts): Promise<PooledContext> => {
+      const context = await browser.newContext(
+        opts?.storageStatePath === undefined ? undefined : { storageState: opts.storageStatePath },
+      );
       return {
         newPage: async (): Promise<PooledPage> => {
           const page = await context.newPage();
@@ -50,6 +52,7 @@ function wrapBrowser(browser: Browser): PooledBrowser {
             onCrash: (handler) => page.on('crash', handler),
           };
         },
+        saveStorageState: (path) => context.storageState({ path }).then(() => undefined),
         close: () => context.close(),
       };
     },

@@ -230,6 +230,8 @@ export const ReticleDir = {
   AMBIENT_FILE: 'ambient.json',
   /** per-flow flake ledger — replay outcomes that decide intermittent-failure quarantine. */
   FLAKE_FILE: 'flake.json',
+  /** Owner-only Playwright auth state, keyed by a hash of projectId (never committed). */
+  STORAGE_PROFILES_SUBDIR: 'storage-profiles',
   /** Per-flow assertion tiers recorded on each PASSING replay — the gate's anti-downgrade baseline. */
   TIERS_FILE: 'assertion-tiers.json',
   /**

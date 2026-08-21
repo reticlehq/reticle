@@ -24,25 +24,51 @@ function tool(name: string): (deps: ToolDeps, args: Record<string, unknown>) => 
 /** A pool stub that records acquire calls and tracks active count. */
 function fakePool(): {
   pool: BrowserPool;
-  acquired: { url: string; sessionId: string | undefined }[];
+  acquired: {
+    url: string;
+    sessionId: string | undefined;
+    persistStorage: { projectId: string } | undefined;
+  }[];
+  reset: string[];
   /** Every (registeredId, leaseId) pair the lease told the pool about. */
   aliased: [string, string][];
 } {
-  const acquired: { url: string; sessionId: string | undefined }[] = [];
+  const acquired: Array<{
+    url: string;
+    sessionId: string | undefined;
+    persistStorage: { projectId: string } | undefined;
+  }> = [];
   let active = 0;
   const released: string[] = [];
   const aliased: [string, string][] = [];
+  const reset: string[] = [];
   const pool = {
-    acquire(url: string, opts: { sessionId?: string } = {}): Promise<Lease> {
-      acquired.push({ url, sessionId: opts.sessionId });
+    acquire(
+      url: string,
+      opts: { sessionId?: string; persistStorage?: { projectId: string } } = {},
+    ): Promise<Lease> {
+      acquired.push({
+        url,
+        sessionId: opts.sessionId,
+        persistStorage: opts.persistStorage,
+      });
       active += 1;
       const sessionId = opts.sessionId ?? 'gen';
-      return Promise.resolve({ sessionId, url, release: () => Promise.resolve() });
+      return Promise.resolve({
+        sessionId,
+        url,
+        ...(opts.persistStorage === undefined ? {} : { storageRestored: true }),
+        release: () => Promise.resolve(),
+      });
     },
-    release(sessionId: string): Promise<void> {
+    release(sessionId: string) {
       released.push(sessionId);
       active = Math.max(0, active - 1);
-      return Promise.resolve();
+      return Promise.resolve({ released: true, storageSaved: true });
+    },
+    resetStorageProfile: (projectId: string) => {
+      reset.push(projectId);
+      return Promise.resolve(true);
     },
     activeCount: () => active,
     queuedCount: () => 0,
@@ -54,7 +80,7 @@ function fakePool(): {
       aliased.push([registeredId, leaseId]);
     },
   } as unknown as BrowserPool;
-  return { pool, acquired, aliased };
+  return { pool, acquired, aliased, reset };
 }
 
 // A sessions stub where the leased tab is already "connected", so acquire's wait-for-ready resolves
@@ -197,6 +223,34 @@ describe('reticle_lease_acquire', () => {
     expect(result.expiresInMs).toBe(300_000);
   });
 
+  it('opts into project-scoped storage and can reset it before acquiring', async () => {
+    const { pool, acquired, reset } = fakePool();
+    const result = (await tool(ReticleTool.LEASE_ACQUIRE)(
+      { ...baseDeps, pool },
+      {
+        url: 'http://localhost:3000/',
+        projectId: 'project-a',
+        persistStorage: true,
+        resetStorage: true,
+      },
+    )) as { storageRestored?: boolean; storageReset?: boolean };
+
+    expect(reset).toEqual(['project-a']);
+    expect(acquired[0]?.persistStorage).toEqual({ projectId: 'project-a' });
+    expect(result.storageRestored).toBe(true);
+    expect(result.storageReset).toBe(true);
+  });
+
+  it('refuses persistence without a projectId', async () => {
+    const { pool } = fakePool();
+    await expect(
+      tool(ReticleTool.LEASE_ACQUIRE)(
+        { ...baseDeps, pool },
+        { url: 'http://localhost:3000/', persistStorage: true },
+      ),
+    ).rejects.toThrow(/projectId/);
+  });
+
   it('throws a clear error when no pool is available', async () => {
     await expect(
       tool(ReticleTool.LEASE_ACQUIRE)(baseDeps, { url: 'http://localhost:3000/' }),
@@ -226,10 +280,11 @@ describe('reticle_lease_release', () => {
       {
         sessionId: acq.sessionId,
       },
-    )) as { released: boolean; leased: number };
+    )) as { released: boolean; leased: number; storageSaved?: boolean };
 
     expect(result.released).toBe(true);
     expect(result.leased).toBe(1);
+    expect(result.storageSaved).toBe(true);
   });
 
   it('throws when no pool is available', async () => {
