@@ -101,7 +101,7 @@ describe('a licensed event belongs to an organisation group', () => {
     // Awaited: the write happens inside emit, so reading the file first races it.
     await telemetry.emit(TelemetryEventKind.CLI_COMMAND_RUN, { command: 'license' });
     const raw = readFileSync(file, 'utf8').trim();
-    if (raw === '') throw new Error('nothing was written to the sink');
+    if ('' === raw) throw new Error('nothing was written to the sink');
     const line = raw.split('\n').pop() ?? '{}';
     rmSync(dir, { recursive: true, force: true });
     return JSON.parse(line) as Record<string, unknown>;
