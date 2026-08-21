@@ -100,6 +100,13 @@ export interface NoSessionFacts {
    * that a reader deserves to check it.
    */
   searchedDirectories?: readonly string[];
+  /**
+   * Ports where another live Reticle daemon was found in the pid registry.
+   *
+   * Reported as a neutral observation — the daemon that is NOT this one may or may not be related
+   * to why no session has appeared here. The message never asserts causation.
+   */
+  siblingDaemons?: readonly number[];
 }
 
 /** The one framework whose most likely cause differs from every other framework's. */
@@ -316,6 +323,28 @@ function portMismatchClause(facts: NoSessionFacts): string {
 }
 
 /**
+ * A neutral observation that another Reticle daemon exists on a different port.
+ *
+ * Never asserts causation — "may or may not be related" is the strongest claim this makes.
+ * Only appended on `!everConnected` branches: once a session has proved itself, the existence
+ * of another daemon is irrelevant to this daemon's working state.
+ */
+function siblingDaemonClause(facts: NoSessionFacts): string {
+  if (facts.everConnected) return '';
+  const siblings = facts.siblingDaemons ?? [];
+  if (0 === siblings.length) return '';
+  const ports = siblings.map(String).join(', ');
+  const subject =
+    1 === siblings.length
+      ? `A Reticle daemon is also answering on :${ports}`
+      : `Reticle daemons are also answering on :${ports}`;
+  return (
+    ` ${subject}, which this daemon (on :${String(facts.port)}) is not on — ` +
+    'that may or may not be related to why no session has appeared here.'
+  );
+}
+
+/**
  * The tail every "the app is wired and silent" branch ends with, ranked.
  *
  * One place, because the ranking is the whole fix: a hint that lists "no server", "no SDK" and
@@ -405,7 +434,7 @@ export function diagnoseNoSession(facts: NoSessionFacts): string {
         ? `${unattributedListeners(listening)} If the dev server is not running, start it first ` +
           '(the command is in `next_action`).'
         : unattributedListeners(listening);
-    return `${RESTARTED_LEAD} ${OPEN_THE_APP} ${listeners} ${rankedCauses(facts)} ${SELF_SERVE} ${RETRY}`;
+    return `${RESTARTED_LEAD} ${OPEN_THE_APP} ${listeners} ${rankedCauses(facts)}${siblingDaemonClause(facts)} ${SELF_SERVE} ${RETRY}`;
   }
 
   // A config found elsewhere outranks every "you may have no SDK" branch below: those reason from
@@ -415,7 +444,7 @@ export function diagnoseNoSession(facts: NoSessionFacts): string {
     return (
       'no browser session connected, and this daemon has never seen one. ' +
       `${configsElsewhereClause(facts)} ${unattributedListeners(listening)} ${OPEN_THE_APP} ` +
-      `${rankedCauses(facts)} ${SELF_SERVE} ${RETRY}`
+      `${rankedCauses(facts)}${siblingDaemonClause(facts)} ${SELF_SERVE} ${RETRY}`
     );
   }
 
@@ -448,7 +477,7 @@ export function diagnoseNoSession(facts: NoSessionFacts): string {
         `file ${INIT_CMD} writes, so the app may carry no Reticle SDK — but check the app's ` +
         'OWN directory before re-running `init`: in a monorepo the daemon often runs at the root ' +
         'while the app lives in a subdirectory, and an app wired by the Vite or Babel plugin ' +
-        `carries the SDK without that file at all.${searchedClause(facts)} ${URL_THEN_LEASE} ${RETRY}`
+        `carries the SDK without that file at all.${searchedClause(facts)}${siblingDaemonClause(facts)} ${URL_THEN_LEASE} ${RETRY}`
       );
     }
     return (
@@ -468,7 +497,8 @@ export function diagnoseNoSession(facts: NoSessionFacts): string {
       // Deliberately NOT offering reticle_lease here, and a test pins that: a lease opens a URL, and
       // if nothing is listening there is nothing at any URL to open. Asking for the real one is the
       // only move that can recover the :7699 case.
-      `the app IS running, ask the human for its URL rather than assuming it is down. ${URL_THEN_LEASE} ` +
+      `the app IS running, ask the human for its URL rather than assuming it is down. ${URL_THEN_LEASE}` +
+      `${siblingDaemonClause(facts)} ` +
       // Reachable only for a project that HAS been through `init` — the uninstrumented case is
       // answered above, leading with that certainty instead of behind this scan's guess.
       `${RETRY}`
@@ -484,7 +514,7 @@ export function diagnoseNoSession(facts: NoSessionFacts): string {
       "a subdirectory, or in an app wired by the Vite or Babel plugin. Check the app's OWN " +
       `directory: if it has no config, run ${INIT_CMD} there and restart the dev server; if it ` +
       `has one, the app is wired and simply has no page open — ${OPEN_CMD}. ` +
-      `${unattributedListeners(listening)}${searchedClause(facts)} ${RETRY}`
+      `${unattributedListeners(listening)}${searchedClause(facts)}${siblingDaemonClause(facts)} ${RETRY}`
     );
   }
 
@@ -492,6 +522,6 @@ export function diagnoseNoSession(facts: NoSessionFacts): string {
     'no browser session connected, and this daemon has never seen one for this project, which is ' +
     `wired for Reticle. ${OPEN_THE_APP} ${unattributedListeners(listening)} ` +
     'If the page IS open and still does not appear, the app is wired and the SDK is not reaching ' +
-    `this daemon (on ${String(port)}). ${rankedCauses(facts)} ${SELF_SERVE} ${RETRY}`
+    `this daemon (on ${String(port)}). ${rankedCauses(facts)}${siblingDaemonClause(facts)} ${SELF_SERVE} ${RETRY}`
   );
 }

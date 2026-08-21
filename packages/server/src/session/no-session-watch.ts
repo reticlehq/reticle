@@ -18,7 +18,7 @@ import type { NoSessionNextAction } from './no-session-next-action.js';
 import { readProjectFramework, readProjectId, readProjectPort } from '../cli/cli-port.js';
 import { discoverProjectConfigs } from '../cli/config-discovery.js';
 import { hasProjectConnectedBefore, rememberConnected } from './connection-memory.js';
-import { reticleStateHome } from '../daemon/daemon.js';
+import { discoverSiblingDaemons, reticleStateHome } from '../daemon/daemon.js';
 import type { SessionManager } from './session-manager.js';
 
 /** Slow enough to be free, fast enough that a dev server started 15s ago is already reflected. */
@@ -74,6 +74,11 @@ interface NoSessionWatchOptions {
    * a test says otherwise.
    */
   stateDir?: string;
+  /**
+   * Returns ports of live sibling Reticle daemons (all live daemons other than this one).
+   * Injectable for testing; defaults to scanning the pid file registry.
+   */
+  siblingProbe?: () => readonly number[];
 }
 
 /**
@@ -94,6 +99,7 @@ export function startNoSessionWatch(options: NoSessionWatchOptions): () => void 
    * `options.probe` returns only the serving set, so this stays empty for injected probes.
    */
   let slowListeners: readonly number[] = [];
+  let siblingDaemons: readonly number[] = [];
   let running = false;
   /** Ports auto-attach has already spent its one attempt on. Bounded: never a loop, never a retry. */
   const attempted = new Set<number>();
@@ -158,10 +164,13 @@ export function startNoSessionWatch(options: NoSessionWatchOptions): () => void 
     }
   };
 
+  const probeSiblings = options.siblingProbe ?? (() => discoverSiblingDaemons(options.port));
+
   const refresh = (): void => {
     // Nothing to diagnose while a session is live, and no reason to scan.
     if (running || options.sessions.count() > 0) return;
     running = true;
+    siblingDaemons = probeSiblings();
     void (
       options.probe === undefined
         ? probeDevServerStates().then((states) => {
@@ -251,6 +260,7 @@ export function startNoSessionWatch(options: NoSessionWatchOptions): () => void 
           const configured = readProjectPort(directory);
           return configured === undefined ? {} : { projectPort: configured };
         })(),
+        ...(0 === siblingDaemons.length ? {} : { siblingDaemons }),
       }) +
       // Prose for the human, then the literal command for the agent. Appended rather than folded
       // into the diagnosis so that file stays pure and its cases stay independently pinned.

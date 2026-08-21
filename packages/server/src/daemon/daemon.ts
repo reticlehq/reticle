@@ -222,6 +222,40 @@ export function reclaimStaleDaemons(
   return reclaimed;
 }
 
+/**
+ * Find all live Reticle daemons OTHER than `ownPort` by scanning the pid file registry.
+ *
+ * Injectable `home` and `pidAlive` follow `reclaimStaleDaemons`'s pattern for testability.
+ */
+export function discoverSiblingDaemons(
+  ownPort: number,
+  home: string = reticleStateHome(),
+  pidAlive: (pid: number) => boolean = isAlive,
+): readonly number[] {
+  const siblings: number[] = [];
+  let files: string[];
+  try {
+    files = readdirSync(home);
+  } catch {
+    return siblings;
+  }
+  for (const file of files) {
+    const m = /^daemon-(\d+)\.pid$/.exec(file);
+    if (null === m) continue;
+    const port = Number(m[1]);
+    if (port === ownPort) continue;
+    let pid: number | null = null;
+    try {
+      pid = parseInt(readFileSync(join(home, file), 'utf8').trim(), 10);
+      if (isNaN(pid)) pid = null;
+    } catch {
+      pid = null;
+    }
+    if (null !== pid && pidAlive(pid)) siblings.push(port);
+  }
+  return siblings;
+}
+
 /** The minimal shape of a spawned child that spawnDaemon uses. */
 export interface SpawnedChild {
   readonly pid?: number | undefined;

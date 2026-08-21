@@ -563,3 +563,77 @@ describe('every branch offers the no-shell escape hatch', () => {
     ).toContain('reticle_lease');
   });
 });
+
+/**
+ * Sibling Reticle daemons — another daemon is running on a port this one is not on.
+ *
+ * Issue #261: "the version worth building reports the observation without the conclusion:
+ * 'something is listening on :4460, which this daemon is not; that may or may not be related.'"
+ *
+ * The diagnosis must be NEUTRAL — report what was observed, never assert causation.
+ */
+describe('sibling daemon observation', () => {
+  it('names the sibling port when no session has connected and a sibling is live', () => {
+    const msg = diagnoseNoSession({
+      everConnected: false,
+      initialized: true,
+      listening: [5173],
+      port: 4400,
+      siblingDaemons: [4460],
+    });
+    expect(msg).toContain('4460');
+    expect(msg).toMatch(/Reticle daemon/i);
+  });
+
+  it('names multiple siblings when more than one exists', () => {
+    const msg = diagnoseNoSession({
+      everConnected: false,
+      initialized: true,
+      listening: [5173],
+      port: 4400,
+      siblingDaemons: [4460, 4480],
+    });
+    expect(msg).toContain('4460');
+    expect(msg).toContain('4480');
+  });
+
+  it('does NOT mention siblings when a session has connected — the wiring already proved itself', () => {
+    const msg = diagnoseNoSession({
+      everConnected: true,
+      initialized: true,
+      listening: [5173],
+      port: 4400,
+      siblingDaemons: [4460],
+    });
+    expect(msg).not.toContain('4460');
+  });
+
+  it('says nothing when siblingDaemons is empty', () => {
+    const withSiblings = diagnoseNoSession({
+      everConnected: false,
+      initialized: true,
+      listening: [5173],
+      port: 4400,
+      siblingDaemons: [],
+    });
+    const without = diagnoseNoSession({
+      everConnected: false,
+      initialized: true,
+      listening: [5173],
+      port: 4400,
+    });
+    expect(withSiblings).toBe(without);
+  });
+
+  it('uses neutral wording — observation, not conclusion', () => {
+    const msg = diagnoseNoSession({
+      everConnected: false,
+      initialized: true,
+      listening: [5173],
+      port: 4400,
+      siblingDaemons: [4460],
+    });
+    expect(msg).toMatch(/may or may not/i);
+    expect(msg).not.toMatch(/this is why|this is the cause|the problem is/i);
+  });
+});
