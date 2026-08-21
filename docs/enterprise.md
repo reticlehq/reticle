@@ -14,7 +14,7 @@ Enterprise (`ee/`) features ship **inside the open package**; they're source-ava
 
 **The flow, end to end:**
 
-1. **Buy.** Contact **[hey@reticle.sh](mailto:hey@reticle.sh)**; we issue you a signed license key (org, plan, expiry, feature set).
+1. **Buy.** Contact **[hey@reticle.sh](mailto:hey@reticle.sh)**; we issue you a signed license key (license id, org, plan, expiry, feature set). The **license id** is the stable handle on your subscription: it survives a rename, and it is what a renewal continues.
 2. **Install.** Set it on the machine running the Reticle server:
    ```bash
    export RETICLE_LICENSE_KEY="<your key>"

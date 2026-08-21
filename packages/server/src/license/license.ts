@@ -13,6 +13,7 @@
 
 import { createPublicKey, sign as edSign, verify as edVerify, type KeyObject } from 'node:crypto';
 import { z } from 'zod';
+import { LicenseActivation } from '@reticlehq/core';
 
 /** Outcome of verifying a license key. */
 export const LicenseStatus = {
@@ -24,8 +25,19 @@ export const LicenseStatus = {
 } as const;
 export type LicenseStatus = (typeof LicenseStatus)[keyof typeof LicenseStatus];
 
-/** The signed claims inside a key. `exp` is epoch ms; `features` (optional) scopes which ee features unlock. */
+/**
+ * The signed claims inside a key. `exp` is epoch ms; `features` (optional) scopes which ee features
+ * unlock.
+ *
+ * `lid` is the STABLE LICENSE ID and the only safe join key for per-customer usage: `org` is a display
+ * name a human typed at signing time, so two customers called "Acme" merge into one and a customer who
+ * renames splits into two. Every key carries one (minted by the issuer, `scripts/issue-license.mjs`),
+ * which is why it is required rather than optional — an optional id is one that goes missing on exactly
+ * the keys somebody later needs to attribute, and a key without it should be re-issued, not silently
+ * counted as nobody.
+ */
 const LicensePayloadSchema = z.object({
+  lid: z.string().min(1),
   org: z.string(),
   plan: z.string(),
   exp: z.number(),
@@ -171,8 +183,15 @@ function resolveIssuerPublicKeyPem(
 }
 
 /** The human-facing state of enterprise activation on this machine (what `reticle license status` shows). */
-interface LicenseReport {
-  status: 'active' | 'missing' | 'invalid' | 'expired' | 'eval';
+export interface LicenseReport {
+  /**
+   * Typed against core's closed list rather than re-listing the strings here: this status is reported
+   * on every telemetry event, so a member added in one place and not the other is a silently
+   * miscounted column (telemetry contract, rule 4).
+   */
+  status: LicenseActivation;
+  /** The stable license id — what usage is attributed to. Present only when `status` is `active`. */
+  licenseId?: string;
   org?: string;
   plan?: string;
   expiresAt?: number;
@@ -205,24 +224,28 @@ export function describeLicense(
     // is off, and assertEnterpriseFromEnv now denies rather than unlocking. Say so loudly here too.
     return isProductionEnv(env)
       ? {
-          status: 'invalid',
+          status: LicenseActivation.INVALID,
           detail:
             'MISCONFIGURED — running in production with no issuer key baked; enterprise features are DENIED (rebuild with BAKED_ISSUER_PUBLIC_KEY_PEM stamped in)',
         }
       : {
-          status: 'eval',
+          status: LicenseActivation.EVAL,
           detail: 'evaluation mode: enterprise features run free (no issuer key configured)',
         };
   }
   const publicKey = loadPublicKey(pem);
   if (publicKey === undefined)
-    return { status: 'invalid', detail: `${LICENSE_PUBLIC_KEY_ENV} is not a valid public key` };
+    return {
+      status: LicenseActivation.INVALID,
+      detail: `${LICENSE_PUBLIC_KEY_ENV} is not a valid public key`,
+    };
 
   const check = verifyLicenseKey(env[LICENSE_KEY_ENV], publicKey, now);
   if (check.status === LicenseStatus.VALID) {
-    const { org, plan, exp, features } = check.payload;
+    const { lid, org, plan, exp, features } = check.payload;
     return {
-      status: 'active',
+      status: LicenseActivation.ACTIVE,
+      licenseId: lid,
       org,
       plan,
       expiresAt: exp,
@@ -232,17 +255,17 @@ export function describeLicense(
   }
   if (check.status === LicenseStatus.MISSING) {
     return {
-      status: 'missing',
+      status: LicenseActivation.MISSING,
       detail: `set ${LICENSE_KEY_ENV} to activate enterprise features in production`,
     };
   }
   if (check.status === LicenseStatus.EXPIRED) {
     return {
-      status: 'expired',
+      status: LicenseActivation.EXPIRED,
       detail: 'license expired — renew to keep using enterprise features',
     };
   }
-  return { status: 'invalid', detail: `license key rejected (${check.status})` };
+  return { status: LicenseActivation.INVALID, detail: `license key rejected (${check.status})` };
 }
 
 /** True in a production runtime (NODE_ENV=production) — where a missing issuer key is a mis-built

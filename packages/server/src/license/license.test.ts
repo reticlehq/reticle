@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { generateKeyPairSync } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import { z } from 'zod';
 import {
   assertEnterprise,
   assertEnterpriseFromEnv,
@@ -20,6 +22,7 @@ const PAST = NOW - 1;
 
 const { publicKey, privateKey } = generateKeyPairSync('ed25519');
 const payload = (over: Partial<LicensePayload> = {}): LicensePayload => ({
+  lid: 'lic_00000000-0000-4000-8000-000000000001',
   org: 'acme',
   plan: 'enterprise',
   exp: FUTURE,
@@ -47,6 +50,13 @@ describe('verifyLicenseKey', () => {
     );
     const tampered = `${otherPayload}.${valid.split('.')[1]}`;
     expect(verifyLicenseKey(tampered, publicKey, NOW).status).toBe(LicenseStatus.BAD_SIGNATURE);
+  });
+
+  it('rejects a key with no license id — an unattributable key must be re-issued, not accepted', () => {
+    const { lid: _dropped, ...noLid } = payload();
+    const unsigned = Buffer.from(JSON.stringify(noLid), 'utf8');
+    const forged = `${unsigned.toString('base64url')}.${signLicenseKey(payload(), privateKey).split('.')[1]}`;
+    expect(verifyLicenseKey(forged, publicKey, NOW).status).toBe(LicenseStatus.MALFORMED);
   });
 
   it('rejects a key signed by a different issuer', () => {
@@ -98,6 +108,9 @@ describe('env-resolved activation (describeLicense / assertEnterpriseFromEnv)', 
     const report = describeLicense(NOW, withPubKey({ [LICENSE_KEY_ENV]: key() }));
     expect(report.status).toBe('active');
     expect(report.org).toBe('acme');
+    // The join key usage is attributed by — reported so `reticle license` can show it and support can
+    // match a customer to their data without asking them for anything.
+    expect(report.licenseId).toBe('lic_00000000-0000-4000-8000-000000000001');
   });
 
   it('issuer key but no license key → missing', () => {
@@ -171,5 +184,26 @@ describe('env-resolved activation (describeLicense / assertEnterpriseFromEnv)', 
         PUBKEY_PEM,
       ).status,
     ).toBe('invalid');
+  });
+});
+
+describe('the release bakes the issuer key', () => {
+  // The gate is only real if a PUBLISHED artifact carries the issuer key, and only `prepack` can put it
+  // there: prepack starts with `rm -rf dist && tsc -b --force`, so a stamp applied anywhere earlier in
+  // the release job is deleted and rebuilt away. That is not a hypothetical — the stamp first shipped as
+  // a separate workflow step before `pnpm publish`, and the packed tarball came out with an empty key,
+  // nothing having failed. Nothing else in the repo can see this: unit tests run against src, and the
+  // gates never pack. So the ordering is pinned here.
+  const PackageJsonSchema = z.object({ scripts: z.record(z.string()).optional() });
+  const packageJson: unknown = JSON.parse(
+    readFileSync(new URL('../../package.json', import.meta.url), 'utf8'),
+  );
+  const prepack = PackageJsonSchema.parse(packageJson).scripts?.['prepack'] ?? '';
+
+  it('stamps the issuer key during prepack, after the build that would erase it', () => {
+    expect(prepack).toContain('stamp-issuer-key.mjs');
+    expect(prepack.indexOf('stamp-issuer-key.mjs')).toBeGreaterThan(
+      prepack.indexOf('tsc -b --force'),
+    );
   });
 });
