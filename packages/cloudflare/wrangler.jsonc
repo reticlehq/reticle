@@ -1,0 +1,20 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "reticle-cloudflare",
+  "main": "dist/index.js",
+  "workers_dev": true,
+  "compatibility_date": "2026-08-21",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+  "vars": {
+    "RETICLE_PROJECT_ID": "default",
+    "RETICLE_PROJECT_NAME": "Self-hosted Reticle",
+    "RETICLE_DEFAULT_PARALLEL": "4",
+  },
+  "browser": { "binding": "BROWSER" },
+  "r2_buckets": [{ "binding": "ARTIFACTS", "bucket_name": "reticle-cloudflare-artifacts" }],
+  "durable_objects": {
+    "bindings": [{ "name": "VERIFICATION_RUNNER", "class_name": "VerificationRunner" }],
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["VerificationRunner"] }],
+}

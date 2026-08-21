@@ -206,7 +206,13 @@ export type ServerVerification = z.infer<typeof ServerVerificationSchema>;
  * submit fails, so the caller falls back to a local replay. Never throws.
  */
 export async function submitServerVerification(
-  body: { previewUrl: string; flows: string[]; source: string },
+  body: {
+    previewUrl: string;
+    flows: string[];
+    source: string;
+    parallel?: number;
+    projectId?: string;
+  },
   config: CloudConfig | null,
   fetchImpl: FetchPostJsonLike,
 ): Promise<ServerVerification | null> {

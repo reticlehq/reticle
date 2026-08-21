@@ -58,7 +58,13 @@
               },
               {
                 "group": "Verify and ship",
-                "pages": ["flows", "testing", "deploy-checks", "integration-patterns"]
+                "pages": [
+                  "flows",
+                  "testing",
+                  "deploy-checks",
+                  "cloudflare-browser-run",
+                  "integration-patterns"
+                ]
               },
               {
                 "group": "Working with agents",

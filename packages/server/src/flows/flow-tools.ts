@@ -397,9 +397,10 @@ export const FLOW_TOOLS: ToolDef[] = [
       const requested = Array.isArray(args['names'])
         ? args['names'].filter((n): n is string => 'string' === typeof n)
         : await deps.flows.list(projectId);
+      const parallelArg = asNumber(args['parallel']);
       // verify:server — hand the whole suite to the hosted runner; it records the verification itself.
       const cloud = await resolveProjectCloud(deps.fs, deps.reticleRoot, homedir(), process.env);
-      const server = await runServerVerify(deps, cloud, sessionId, requested);
+      const server = await runServerVerify(deps, cloud, sessionId, requested, parallelArg);
       if (server !== null) return server;
       // PARALLEL: flows race the DOM only when they share ONE tab. Given the lease pool, each
       // flow gets its own isolated context, so a large suite finishes in interactive time. Opt-in via
@@ -410,7 +411,6 @@ export const FLOW_TOOLS: ToolDef[] = [
       // (no speedup to win) but silently downgraded an explicit `parallel` request to a shared-tab run,
       // so the flow inherited whatever state the previous run left behind — isolation is the point here,
       // not only concurrency.
-      const parallelArg = asNumber(args['parallel']);
       const pool = deps.pool;
       const appUrl = leasableAppUrl(deps, sessionId);
       if (

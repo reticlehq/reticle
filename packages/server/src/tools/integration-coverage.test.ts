@@ -84,6 +84,8 @@ describe('every shipped integration is covered by an app AND a gate', () => {
       'server',
       'test',
       'eslint-plugin',
+      // Private deployment target; its package-local tests and live smoke script cover the Worker.
+      'cloudflare',
     ]);
     const unmapped = shippedPackages().filter((p) => !known.has(p));
     expect(
