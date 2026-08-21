@@ -21,12 +21,16 @@ Enterprise (`ee/`) features ship **inside the open package**; they're source-ava
    # the release already bakes the issuer public key (RETICLE_LICENSE_PUBLIC_KEY)
    ```
 3. **Verify.** `reticle license` shows your status:
+
    ```
    active    licensed to Acme Corp (enterprise), expires 2027-06-20 · features: sso, audit
    eval      evaluation mode: enterprise features run free (no issuer key configured)
-   missing   set RETICLE_LICENSE_KEY to activate enterprise features in production
-   expired   renew to keep using enterprise features
+   missing   set RETICLE_LICENSE_KEY to activate enterprise features in production. Request a key from hey@reticle.sh
+   expired   license expired. Renew with hey@reticle.sh to keep using enterprise features
    ```
+
+   Every status also reports `gated` (what a licence unlocks in the build you are running) and `contact`, so the command answers "what would this buy me, and how do I get one" without anybody having to find this page first. `gated` is derived from the features the gate actually enforces, so it lists what your build will really refuse rather than a roadmap.
+
 4. **Unlock.** Enterprise features now run in production; without a valid key they refuse to run there (a clear error, never a silent half-feature). In eval/dev they always run free.
 5. **Renew.** Keys carry an expiry; `reticle license` warns before it lapses.
 

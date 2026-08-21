@@ -103,13 +103,36 @@ export function verifyLicenseKey(
   return { status: LicenseStatus.VALID, payload };
 }
 
+/**
+ * Where to get a key. A named constant because it appears in the gate's error AND in what
+ * `reticle license` prints, and a contact address that drifts between the two is a support request
+ * that reaches nobody.
+ */
+export const LICENSE_CONTACT = 'hey@reticle.sh';
+
+/**
+ * The features a licence gates in THIS build. The single source: `assertEnterprise` callers name a
+ * member rather than a string literal, and `reticle license` reports the list, so what the CLI claims
+ * is gated is derived from what is actually gated rather than a second list somebody maintains.
+ *
+ * It is deliberately short. Reticle's roadmap for enterprise is longer (SSO, SCIM, RBAC, multi-org,
+ * policy gates), and none of it is here yet — printing a roadmap as though it were shipped is how a
+ * buyer discovers on day two that the thing they paid for does not exist. What is listed is what the
+ * running build will actually refuse without a key.
+ */
+export const EnterpriseFeature = {
+  /** Recording an audit event. */
+  AUDIT_LOG: 'audit-log',
+} as const;
+export type EnterpriseFeature = (typeof EnterpriseFeature)[keyof typeof EnterpriseFeature];
+
 /** Thrown when a production-mode enterprise feature is used without a valid license. */
 export class EnterpriseLicenseError extends Error {
   readonly feature: string;
   readonly reason: string;
   constructor(feature: string, reason: string) {
     super(
-      `Reticle Enterprise feature "${feature}" requires a valid license (${reason}). Contact hey@reticle.sh.`,
+      `Reticle Enterprise feature "${feature}" requires a valid license (${reason}). Contact ${LICENSE_CONTACT}.`,
     );
     this.name = 'EnterpriseLicenseError';
     this.feature = feature;
@@ -192,12 +215,30 @@ export interface LicenseReport {
   status: LicenseActivation;
   /** The stable license id — what usage is attributed to. Present only when `status` is `active`. */
   licenseId?: string;
+  /**
+   * What a licence unlocks in THIS build, and where to get one. Always reported, including on an
+   * unlicensed install: `reticle license` was the one command that talks about licensing and it named
+   * neither, so it told an interested reader to set a variable without saying what it would unlock or
+   * how to obtain it. A dead end at exactly the moment somebody is asking.
+   */
+  gated: readonly string[];
+  contact: string;
   org?: string;
   plan?: string;
   expiresAt?: number;
   features?: string[];
   detail: string;
 }
+
+/**
+ * The two fields every report carries, spread into each branch. One object rather than a field on each
+ * return, because the value that must never go missing is the one on the branch nobody was thinking
+ * about — and the branch an unlicensed reader lands on is exactly that branch.
+ */
+const LICENSE_OFFER = {
+  gated: Object.values(EnterpriseFeature),
+  contact: LICENSE_CONTACT,
+} as const;
 
 function loadPublicKey(pem: string | undefined): KeyObject | undefined {
   if (pem === undefined || 0 === pem.length) return undefined;
@@ -224,11 +265,13 @@ export function describeLicense(
     // is off, and assertEnterpriseFromEnv now denies rather than unlocking. Say so loudly here too.
     return isProductionEnv(env)
       ? {
+          ...LICENSE_OFFER,
           status: LicenseActivation.INVALID,
           detail:
             'MISCONFIGURED — running in production with no issuer key baked; enterprise features are DENIED (rebuild with BAKED_ISSUER_PUBLIC_KEY_PEM stamped in)',
         }
       : {
+          ...LICENSE_OFFER,
           status: LicenseActivation.EVAL,
           detail: 'evaluation mode: enterprise features run free (no issuer key configured)',
         };
@@ -236,6 +279,7 @@ export function describeLicense(
   const publicKey = loadPublicKey(pem);
   if (publicKey === undefined)
     return {
+      ...LICENSE_OFFER,
       status: LicenseActivation.INVALID,
       detail: `${LICENSE_PUBLIC_KEY_ENV} is not a valid public key`,
     };
@@ -244,6 +288,7 @@ export function describeLicense(
   if (check.status === LicenseStatus.VALID) {
     const { lid, org, plan, exp, features } = check.payload;
     return {
+      ...LICENSE_OFFER,
       status: LicenseActivation.ACTIVE,
       licenseId: lid,
       org,
@@ -255,17 +300,25 @@ export function describeLicense(
   }
   if (check.status === LicenseStatus.MISSING) {
     return {
+      ...LICENSE_OFFER,
       status: LicenseActivation.MISSING,
-      detail: `set ${LICENSE_KEY_ENV} to activate enterprise features in production`,
+      detail:
+        `set ${LICENSE_KEY_ENV} to activate enterprise features in production. ` +
+        `Request a key from ${LICENSE_CONTACT}`,
     };
   }
   if (check.status === LicenseStatus.EXPIRED) {
     return {
+      ...LICENSE_OFFER,
       status: LicenseActivation.EXPIRED,
-      detail: 'license expired — renew to keep using enterprise features',
+      detail: `license expired. Renew with ${LICENSE_CONTACT} to keep using enterprise features`,
     };
   }
-  return { status: LicenseActivation.INVALID, detail: `license key rejected (${check.status})` };
+  return {
+    ...LICENSE_OFFER,
+    status: LicenseActivation.INVALID,
+    detail: `license key rejected (${check.status}). ${LICENSE_CONTACT} can re-issue it`,
+  };
 }
 
 /** True in a production runtime (NODE_ENV=production) — where a missing issuer key is a mis-built

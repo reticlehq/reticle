@@ -4,6 +4,8 @@ import { readFileSync } from 'node:fs';
 import { z } from 'zod';
 import {
   assertEnterprise,
+  EnterpriseFeature,
+  LICENSE_CONTACT,
   assertEnterpriseFromEnv,
   describeLicense,
   EnterpriseLicenseError,
@@ -205,5 +207,53 @@ describe('the release bakes the issuer key', () => {
     expect(prepack.indexOf('stamp-issuer-key.mjs')).toBeGreaterThan(
       prepack.indexOf('tsc -b --force'),
     );
+  });
+});
+
+describe('reticle license is not a dead end for somebody who has no key', () => {
+  // It was the one command that talks about licensing, and it named neither what a licence unlocks nor
+  // how to get one: it told an interested reader to set an environment variable and stopped there.
+  const PUBKEY_PEM = publicKey.export({ type: 'spki', format: 'pem' }).toString();
+
+  it('every branch says what is gated and where to get a key, including the unlicensed ones', () => {
+    // The branch an unlicensed reader lands on is exactly the branch that gets forgotten, so all of
+    // them are checked rather than the happy path.
+    const branches = [
+      describeLicense(NOW, {}),
+      describeLicense(NOW, { [LICENSE_PUBLIC_KEY_ENV]: PUBKEY_PEM }),
+      describeLicense(NOW, { [LICENSE_PUBLIC_KEY_ENV]: PUBKEY_PEM, [LICENSE_KEY_ENV]: key() }),
+      describeLicense(NOW, {
+        [LICENSE_PUBLIC_KEY_ENV]: PUBKEY_PEM,
+        [LICENSE_KEY_ENV]: key({ exp: PAST }),
+      }),
+      describeLicense(NOW, { [LICENSE_PUBLIC_KEY_ENV]: PUBKEY_PEM, [LICENSE_KEY_ENV]: 'garbage' }),
+      describeLicense(NOW, { [LICENSE_PUBLIC_KEY_ENV]: 'not-a-key' }),
+      describeLicense(NOW, { NODE_ENV: 'production' }),
+    ];
+    for (const report of branches) {
+      expect(report.contact, `${report.status} names no contact`).toBe(LICENSE_CONTACT);
+      expect(report.gated.length, `${report.status} lists nothing as gated`).toBeGreaterThan(0);
+    }
+  });
+
+  it('reports what this build actually gates, not a roadmap', () => {
+    // Derived from the same registry the gate reads, so a feature that stops being gated stops being
+    // advertised. Printing a roadmap as though it shipped is how a buyer finds out on day two.
+    expect(describeLicense(NOW, {}).gated).toEqual(Object.values(EnterpriseFeature));
+  });
+
+  it('the gate and the CLI cannot name different features', () => {
+    // assertEnterprise is called with a member, so an ee feature added without one is refused by a key
+    // that lists it and never appears in what `reticle license` says is gated.
+    for (const feature of Object.values(EnterpriseFeature)) {
+      expect(() =>
+        assertEnterprise(feature, {
+          requireLicense: true,
+          now: () => NOW,
+          publicKey,
+          key: key({ features: [feature] }),
+        }),
+      ).not.toThrow();
+    }
   });
 });
