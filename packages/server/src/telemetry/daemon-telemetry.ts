@@ -13,7 +13,11 @@ import { profileProject } from './project-profile.js';
 import { startUpdateCheck } from '../update/update-nudge.js';
 import { markDaemonStart } from './mcp-connection.js';
 import { markInstrumentationClock } from './app-instrumented.js';
-import { markStallClock, reportInstrumentationStall } from './instrumentation-stall.js';
+import {
+  markStallClock,
+  reportInstrumentationStall,
+  STALL_AFTER_MS,
+} from './instrumentation-stall.js';
 import { readProjectId } from '../cli/cli-port.js';
 
 /** Let the daemon finish coming up before walking the source tree for a profile. */
@@ -102,7 +106,7 @@ export function installDaemonTelemetry(
     // after the early return would make the one case this event exists for the one case it never
     // sees. It is self-limiting (once per run, never after an app connects), so running it on every
     // tick costs a comparison.
-    reportInstrumentationStall(
+    const stalled = reportInstrumentationStall(
       {
         // Same test `app_instrumented` uses for the same field, so the success and failure events
         // stay directly comparable: a stamped projectId means `init` has run here.
@@ -111,6 +115,13 @@ export function installDaemonTelemetry(
       },
       now,
     );
+    if (stalled) {
+      const minutes = Math.round(STALL_AFTER_MS / 60_000);
+      process.stderr.write(
+        `[reticle] no app has connected after ${String(minutes)} minutes — ` +
+          'the install may be incomplete. Restart the dev server if you added the Reticle plugin.\n',
+      );
+    }
     if (metrics.empty) return; // an idle window is not worth an event
     // NOT daemon_stopped: the daemon is still running. See SESSION_PROGRESS.
     void getTelemetry().emit(TelemetryEventKind.SESSION_PROGRESS, {

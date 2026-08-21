@@ -19,6 +19,7 @@ import { readProjectFramework, readProjectId, readProjectPort } from '../cli/cli
 import { discoverProjectConfigs } from '../cli/config-discovery.js';
 import { hasProjectConnectedBefore, rememberConnected } from './connection-memory.js';
 import { reticleStateHome } from '../daemon/daemon.js';
+import { stallUptime } from '../telemetry/instrumentation-stall.js';
 import type { SessionManager } from './session-manager.js';
 
 /** Slow enough to be free, fast enough that a dev server started 15s ago is already reflected. */
@@ -244,6 +245,12 @@ export function startNoSessionWatch(options: NoSessionWatchOptions): () => void 
           return framework === undefined ? {} : { framework };
         })(),
         leaseExpired: (options.reapedLeases?.() ?? 0) > 0,
+        // How long this daemon has been waiting with no app. The diagnosis uses it to surface
+        // "install never finished" — the same condition telemetry already knows about.
+        ...(() => {
+          const upMs = stallUptime(Date.now());
+          return upMs === undefined ? {} : { daemonUpMs: upMs };
+        })(),
         // Read here rather than at boot: `.reticle.json` can be written by `init` after this daemon
         // started, which is the ordinary first-install order, and a port cached from before it existed
         // would make the daemon confidently report no mismatch on the one run where there is one.

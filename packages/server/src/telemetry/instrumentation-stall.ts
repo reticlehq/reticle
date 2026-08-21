@@ -96,6 +96,18 @@ export function reportInstrumentationStall(
   return true;
 }
 
+/**
+ * How long this daemon has waited with no app, or undefined if the question is moot.
+ *
+ * Moot means: the clock was never started, or an app already connected. Callers use this to
+ * surface the stall to user-facing channels without coupling to the telemetry event itself.
+ */
+export function stallUptime(now: number): number | undefined {
+  if (daemonStartedAt === undefined) return undefined;
+  if (appEverConnected()) return undefined;
+  return now - daemonStartedAt;
+}
+
 /** Tests only. */
 export function resetInstrumentationStall(): void {
   reported = false;

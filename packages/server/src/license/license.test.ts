@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { generateKeyPairSync } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import { z } from 'zod';
 import {
   assertEnterprise,
+  EnterpriseFeature,
+  LICENSE_CONTACT,
   assertEnterpriseFromEnv,
   describeLicense,
   EnterpriseLicenseError,
@@ -20,6 +24,7 @@ const PAST = NOW - 1;
 
 const { publicKey, privateKey } = generateKeyPairSync('ed25519');
 const payload = (over: Partial<LicensePayload> = {}): LicensePayload => ({
+  lid: 'lic_00000000-0000-4000-8000-000000000001',
   org: 'acme',
   plan: 'enterprise',
   exp: FUTURE,
@@ -47,6 +52,13 @@ describe('verifyLicenseKey', () => {
     );
     const tampered = `${otherPayload}.${valid.split('.')[1]}`;
     expect(verifyLicenseKey(tampered, publicKey, NOW).status).toBe(LicenseStatus.BAD_SIGNATURE);
+  });
+
+  it('rejects a key with no license id — an unattributable key must be re-issued, not accepted', () => {
+    const { lid: _dropped, ...noLid } = payload();
+    const unsigned = Buffer.from(JSON.stringify(noLid), 'utf8');
+    const forged = `${unsigned.toString('base64url')}.${signLicenseKey(payload(), privateKey).split('.')[1]}`;
+    expect(verifyLicenseKey(forged, publicKey, NOW).status).toBe(LicenseStatus.MALFORMED);
   });
 
   it('rejects a key signed by a different issuer', () => {
@@ -98,6 +110,9 @@ describe('env-resolved activation (describeLicense / assertEnterpriseFromEnv)', 
     const report = describeLicense(NOW, withPubKey({ [LICENSE_KEY_ENV]: key() }));
     expect(report.status).toBe('active');
     expect(report.org).toBe('acme');
+    // The join key usage is attributed by — reported so `reticle license` can show it and support can
+    // match a customer to their data without asking them for anything.
+    expect(report.licenseId).toBe('lic_00000000-0000-4000-8000-000000000001');
   });
 
   it('issuer key but no license key → missing', () => {
@@ -171,5 +186,74 @@ describe('env-resolved activation (describeLicense / assertEnterpriseFromEnv)', 
         PUBKEY_PEM,
       ).status,
     ).toBe('invalid');
+  });
+});
+
+describe('the release bakes the issuer key', () => {
+  // The gate is only real if a PUBLISHED artifact carries the issuer key, and only `prepack` can put it
+  // there: prepack starts with `rm -rf dist && tsc -b --force`, so a stamp applied anywhere earlier in
+  // the release job is deleted and rebuilt away. That is not a hypothetical — the stamp first shipped as
+  // a separate workflow step before `pnpm publish`, and the packed tarball came out with an empty key,
+  // nothing having failed. Nothing else in the repo can see this: unit tests run against src, and the
+  // gates never pack. So the ordering is pinned here.
+  const PackageJsonSchema = z.object({ scripts: z.record(z.string()).optional() });
+  const packageJson: unknown = JSON.parse(
+    readFileSync(new URL('../../package.json', import.meta.url), 'utf8'),
+  );
+  const prepack = PackageJsonSchema.parse(packageJson).scripts?.['prepack'] ?? '';
+
+  it('stamps the issuer key during prepack, after the build that would erase it', () => {
+    expect(prepack).toContain('stamp-issuer-key.mjs');
+    expect(prepack.indexOf('stamp-issuer-key.mjs')).toBeGreaterThan(
+      prepack.indexOf('tsc -b --force'),
+    );
+  });
+});
+
+describe('reticle license is not a dead end for somebody who has no key', () => {
+  // It was the one command that talks about licensing, and it named neither what a licence unlocks nor
+  // how to get one: it told an interested reader to set an environment variable and stopped there.
+  const PUBKEY_PEM = publicKey.export({ type: 'spki', format: 'pem' }).toString();
+
+  it('every branch says what is gated and where to get a key, including the unlicensed ones', () => {
+    // The branch an unlicensed reader lands on is exactly the branch that gets forgotten, so all of
+    // them are checked rather than the happy path.
+    const branches = [
+      describeLicense(NOW, {}),
+      describeLicense(NOW, { [LICENSE_PUBLIC_KEY_ENV]: PUBKEY_PEM }),
+      describeLicense(NOW, { [LICENSE_PUBLIC_KEY_ENV]: PUBKEY_PEM, [LICENSE_KEY_ENV]: key() }),
+      describeLicense(NOW, {
+        [LICENSE_PUBLIC_KEY_ENV]: PUBKEY_PEM,
+        [LICENSE_KEY_ENV]: key({ exp: PAST }),
+      }),
+      describeLicense(NOW, { [LICENSE_PUBLIC_KEY_ENV]: PUBKEY_PEM, [LICENSE_KEY_ENV]: 'garbage' }),
+      describeLicense(NOW, { [LICENSE_PUBLIC_KEY_ENV]: 'not-a-key' }),
+      describeLicense(NOW, { NODE_ENV: 'production' }),
+    ];
+    for (const report of branches) {
+      expect(report.contact, `${report.status} names no contact`).toBe(LICENSE_CONTACT);
+      expect(report.gated.length, `${report.status} lists nothing as gated`).toBeGreaterThan(0);
+    }
+  });
+
+  it('reports what this build actually gates, not a roadmap', () => {
+    // Derived from the same registry the gate reads, so a feature that stops being gated stops being
+    // advertised. Printing a roadmap as though it shipped is how a buyer finds out on day two.
+    expect(describeLicense(NOW, {}).gated).toEqual(Object.values(EnterpriseFeature));
+  });
+
+  it('the gate and the CLI cannot name different features', () => {
+    // assertEnterprise is called with a member, so an ee feature added without one is refused by a key
+    // that lists it and never appears in what `reticle license` says is gated.
+    for (const feature of Object.values(EnterpriseFeature)) {
+      expect(() =>
+        assertEnterprise(feature, {
+          requireLicense: true,
+          now: () => NOW,
+          publicKey,
+          key: key({ features: [feature] }),
+        }),
+      ).not.toThrow();
+    }
   });
 });

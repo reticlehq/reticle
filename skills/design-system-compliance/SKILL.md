@@ -25,10 +25,10 @@ reticle_inspect({ sessionId, ref })
 
 | Field | What it tells you |
 | --- | --- |
-| `offTheme` | **the headline.** True when a set, opaque color matches no token in the palette — a violation worth fixing |
+| `offTheme` | **the headline.** True when a set, opaque color matches no token in the palette: a violation worth fixing |
 | `colorTokens` / `backgroundTokens` | every token whose resolved value is this color. Empty means off-palette |
-| `colorToken` / `backgroundToken` | the _unambiguous_ match, or `null` when several tokens share the color. `null` here is an abstention, not a violation — read the plural field |
-| `tokenCount` | how many tokens resolved under the active theme. **`0` means the app declares no palette**, and `offTheme` is never asserted — report that rather than a clean bill of health |
+| `colorToken` / `backgroundToken` | the _unambiguous_ match, or `null` when several tokens share the color. `null` here is an abstention, not a violation: read the plural field |
+| `tokenCount` | how many tokens resolved under the active theme. **`0` means the app declares no palette**, and `offTheme` is never asserted: report that rather than a clean bill of health |
 | `themeScope` | the theme active at capture (e.g. `.dark`), so two inspects taken minutes apart are comparable at all |
 
 Read `tokenCount` first. Zero tokens means there is nothing to comply with, and every "pass" below it is vacuous.
@@ -37,10 +37,10 @@ Read `tokenCount` first. Zero tokens means there is nothing to comply with, and 
 
 The same call answers the questions a screenshot cannot:
 
-- `occluded` — covered by an overlay. It renders, and no user can click it.
-- `box` — `0×0` is present-but-invisible, the most common "it's there, I can see it in the DOM" bug.
-- `styles.opacity` / `styles.cursor` — the difference between disabled-looking and disabled.
-- `source: { file, line }` — where to go and fix it.
+- `occluded`: covered by an overlay. It renders, and no user can click it.
+- `box`: `0×0` is present-but-invisible, the most common "it's there, I can see it in the DOM" bug.
+- `styles.opacity` / `styles.cursor`: the difference between disabled-looking and disabled.
+- `source: { file, line }`: where to go and fix it.
 
 A design review that only compares colors passes a button nobody can press.
 
@@ -54,11 +54,11 @@ Returns running and recently completed animations with their targets and timing.
 
 ## Report violations as locations, not opinions
 
-For each element that failed, give the `file:line` from `inspect` and the specific fact — "background `#3b82f6` matches no token; the palette has `--color-primary` at `#2563eb`". A design-review comment without a location is a task someone else has to redo.
+For each element that failed, give the `file:line` from `inspect` and the specific fact: "background `#3b82f6` matches no token; the palette has `--color-primary` at `#2563eb`". A design-review comment without a location is a task someone else has to redo.
 
 ## What this is not
 
-This checks **compliance with the tokens the project declares**. It is not an opinion about whether the design is good, and it is not an accessibility audit — contrast ratios, focus order and screen-reader semantics are a different job, and claiming them here would be a false green of exactly the kind this repo exists to prevent.
+This checks **compliance with the tokens the project declares**. It is not an opinion about whether the design is good, and it is not an accessibility audit. Contrast ratios, focus order and screen-reader semantics are a different job, and claiming them here would be a false green of exactly the kind this repo exists to prevent.
 
 ---
 

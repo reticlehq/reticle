@@ -20,6 +20,7 @@
  */
 
 import { DEV_SERVER_PORTS } from '../cli/cli-port.js';
+import { STALL_AFTER_MS } from '../telemetry/instrumentation-stall.js';
 
 export interface NoSessionFacts {
   /** Whether ANY session has connected to this daemon since it booted. */
@@ -100,6 +101,13 @@ export interface NoSessionFacts {
    * that a reader deserves to check it.
    */
   searchedDirectories?: readonly string[];
+  /**
+   * How long this daemon has been running with no app connected, in milliseconds.
+   *
+   * Present only when the stall clock is active and no app has arrived. Used to surface "the
+   * install never finished" to the user-facing diagnosis rather than only to telemetry.
+   */
+  daemonUpMs?: number;
 }
 
 /** The one framework whose most likely cause differs from every other framework's. */
@@ -363,6 +371,26 @@ function searchedClause(facts: NoSessionFacts): string {
   return ` I looked in: ${searched.join(', ')}. If your app is not in that list, that is the answer — this daemon is standing somewhere else.`;
 }
 
+/**
+ * A leading sentence when the daemon has been up long enough that no app is coming.
+ *
+ * Only fires for a WIRED project (initialized) that has NEVER connected and is past the
+ * threshold. An unwired project already names the install gap as its primary cause; adding a time
+ * sentence there would double-blame.
+ */
+function stallClause(facts: NoSessionFacts): string {
+  const { daemonUpMs, initialized, everConnected } = facts;
+  if (everConnected) return '';
+  if (!initialized) return '';
+  if (daemonUpMs === undefined || daemonUpMs < STALL_AFTER_MS) return '';
+  const minutes = Math.round(daemonUpMs / 60_000);
+  return (
+    `This daemon has been running for ${String(minutes)} minutes and no app has connected. ` +
+    'The most likely cause is that the dev server was not restarted after adding the Reticle ' +
+    'plugin, so the running bundle carries no SDK. Restart the dev server first. '
+  );
+}
+
 export function diagnoseNoSession(facts: NoSessionFacts): string {
   const { everConnected, initialized, listening, port } = facts;
   // Named when known: a claim about a missing file is a claim about ONE directory.
@@ -452,7 +480,7 @@ export function diagnoseNoSession(facts: NoSessionFacts): string {
       );
     }
     return (
-      `no browser session connected, and this daemon has never seen one. ${OPEN_THE_APP} ` +
+      `${stallClause(facts)}no browser session connected, and this daemon has never seen one. ${OPEN_THE_APP} ` +
       'Nothing is listening on the ports Reticle scans ' +
       `(${SCANNED_PORTS}) either, and the most common reason for that is a dev server that is not ` +
       'running: start it yourself in the background with the command in `next_action` — it is read ' +
@@ -489,7 +517,7 @@ export function diagnoseNoSession(facts: NoSessionFacts): string {
   }
 
   return (
-    'no browser session connected, and this daemon has never seen one for this project, which is ' +
+    `${stallClause(facts)}no browser session connected, and this daemon has never seen one for this project, which is ` +
     `wired for Reticle. ${OPEN_THE_APP} ${unattributedListeners(listening)} ` +
     'If the page IS open and still does not appear, the app is wired and the SDK is not reaching ' +
     `this daemon (on ${String(port)}). ${rankedCauses(facts)} ${SELF_SERVE} ${RETRY}`

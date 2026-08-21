@@ -7,7 +7,6 @@ import {
 } from './proxy-handshake.js';
 import { ToolCatalogCache } from './tool-catalog-cache.js';
 import { toolsChangedNotification } from './proxy-handshake.js';
-import * as net from 'node:net';
 import {
   LOOPBACK_HOST,
   MCP_SSE_PATH,
@@ -15,6 +14,10 @@ import {
   ReticleEnv,
   CONTRACT_FINGERPRINT,
 } from '@reticlehq/core';
+import { SseFrameParser } from './sse-frame-parser.js';
+export { SseFrameParser, type SseFrame } from './sse-frame-parser.js';
+export { probeDaemon, waitForDaemon } from './proxy-daemon-probe.js';
+import { probeDaemon } from './proxy-daemon-probe.js';
 import { SERVER_VERSION } from '../version/server-version.js';
 import { buildServerInstructions } from './server-instructions.js';
 import { hasProjectConnectedBefore } from '../session/connection-memory.js';
@@ -51,23 +54,6 @@ export {
 import { proxyLog } from './proxy-log.js';
 import { log } from '../log.js';
 import { OutageReason, OutageStage, reportMcpOutage } from './mcp-outage.js';
-
-const DEFAULT_DAEMON_READY_TIMEOUT_MS = 10_000;
-/**
- * How long to wait for the spawned daemon's port to accept connections before giving up. The default
- * suits a normal machine; a slow CI/VM (heavy headless-browser launch) can raise it via the
- * RETICLE_DAEMON_READY_TIMEOUT_MS env var. Invalid/absent values fall back to the default.
- */
-const envDaemonReadyTimeoutMs = Number(process.env['RETICLE_DAEMON_READY_TIMEOUT_MS']);
-const DAEMON_READY_TIMEOUT_MS =
-  Number.isFinite(envDaemonReadyTimeoutMs) && envDaemonReadyTimeoutMs > 0
-    ? envDaemonReadyTimeoutMs
-    : DEFAULT_DAEMON_READY_TIMEOUT_MS;
-const DAEMON_POLL_INTERVAL_MS = 100;
-
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
 
 /** Reconnect backoff: linear, capped, so a briefly-restarting daemon is picked up fast. */
 const RECONNECT_BASE_MS = 250;
@@ -316,88 +302,6 @@ export class HandshakeReplay {
     this.#pendingReplayId = null; // one response per replay — anything later is not ours to swallow
     return true;
   }
-}
-
-/** One parsed Server-Sent-Events frame: the event name (defaulted to "message") and its data. */
-interface SseFrame {
-  event: string;
-  data: string;
-}
-
-/**
- * Incremental SSE frame parser for the MCP front door.
- *
- * A single SSE field can split across TCP reads (`da` in one chunk, `ta: {...}` in the next), and a
- * server may send CRLF or bare CR line endings — so the framing is stateful and edge-case-prone, yet it
- * carried every MCP message the agent sends and was only ever exercised end-to-end. Pulled out of the
- * socket handler as a pure, chunk-fed parser so those boundaries are unit-testable: feed raw chunks,
- * get back each complete frame (a blank line terminates a frame; `event:` names it, `data:` lines
- * accumulate newline-joined; `id:`/`retry:`/comments are ignored — not needed for the bridge).
- */
-export class SseFrameParser {
-  #buffer = '';
-  #event = '';
-  #data = '';
-
-  push(chunk: string): SseFrame[] {
-    this.#buffer += chunk;
-    // Normalise CRLF/CR so the splitter only handles \n, then hold the trailing partial line for the
-    // next chunk (it may complete later).
-    const normalised = this.#buffer.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-    const lines = normalised.split('\n');
-    this.#buffer = lines.pop() ?? '';
-    const frames: SseFrame[] = [];
-    for (const line of lines) {
-      if ('' === line) {
-        if (this.#data !== '') {
-          frames.push({ event: this.#event !== '' ? this.#event : 'message', data: this.#data });
-        }
-        this.#event = '';
-        this.#data = '';
-      } else if (line.startsWith('event:')) {
-        this.#event = line.slice(6).trim();
-      } else if (line.startsWith('data:')) {
-        const val = line.slice(5).trim();
-        this.#data = this.#data !== '' ? `${this.#data}\n${val}` : val;
-      }
-    }
-    return frames;
-  }
-}
-
-/**
- * Returns true if something is already listening on the reticle port.
- * Uses a plain TCP probe so we don't create a side-effectful SSE session
- * inside the daemon just to check reachability.
- */
-export function probeDaemon(port: number): Promise<boolean> {
-  return new Promise((resolve) => {
-    const socket = new net.Socket();
-    socket.setTimeout(500);
-    socket.on('connect', () => {
-      socket.destroy();
-      resolve(true);
-    });
-    socket.on('error', () => resolve(false));
-    socket.on('timeout', () => {
-      socket.destroy();
-      resolve(false);
-    });
-    socket.connect(port, LOOPBACK_HOST);
-  });
-}
-
-/** Poll until the daemon's HTTP port accepts connections or the deadline is reached. */
-export async function waitForDaemon(port: number): Promise<void> {
-  const deadline = Date.now() + DAEMON_READY_TIMEOUT_MS;
-  while (Date.now() < deadline) {
-    const reachable = await probeDaemon(port);
-    if (reachable) return;
-    await delay(DAEMON_POLL_INTERVAL_MS);
-  }
-  throw new Error(
-    `reticle daemon did not become ready on port ${port} within ${DAEMON_READY_TIMEOUT_MS}ms`,
-  );
 }
 
 /**

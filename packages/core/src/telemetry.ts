@@ -24,6 +24,7 @@ import {
 import { BrowserBrand, FeedbackSchema } from './telemetry-feedback.js';
 import { CaptureLoss, VerifiedReason } from './verified-constants.js';
 import { IdentitySchema } from './telemetry-feedback.js';
+import { LicenseActivation } from './telemetry-license.js';
 
 /** Bump when the event shape changes so the analytics side can segment old senders. */
 export const TELEMETRY_EVENT_VERSION = 3;
@@ -970,5 +971,23 @@ export const TelemetryEventSchema = z.object({
    * common, and because there is exactly one fact to carry. Absent on every other kind.
    */
   installSource: z.nativeEnum(InstallSource).optional(),
+  /**
+   * Enterprise activation, on EVERY event. Three scalars rather than a block, for the same reason
+   * `installSource` is one: they describe the install, not any single event, and they have to be
+   * present on the events that show whether a licensed customer got anywhere.
+   *
+   * `licenseId` is the signed license id — an opaque uuid that resolves to a company only against the
+   * issuance ledger we hold locally, so the analytics backend never learns a customer list. The
+   * organisation NAME is deliberately absent: it is free text somebody typed at signing time, and
+   * rule 3 is names-never-values.
+   *
+   * Present only when activation is `active`; `licenseStatus` rides whenever an issuer key is baked,
+   * including the failure states, which is what makes a lapse distinguishable from a churn.
+   */
+  licenseId: z.string().min(1).max(64).optional(),
+  /** The plan on the key (`enterprise`, …). Only when `licenseStatus` is `active`. */
+  licensePlan: z.string().min(1).max(64).optional(),
+  /** How activation resolved. Absent on a build with no issuer key baked, i.e. every OSS install. */
+  licenseStatus: z.nativeEnum(LicenseActivation).optional(),
 });
 export type TelemetryEvent = z.infer<typeof TelemetryEventSchema>;

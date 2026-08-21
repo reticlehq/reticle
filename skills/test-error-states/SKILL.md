@@ -1,6 +1,6 @@
 ---
 name: test-error-states
-description: Force the states a happy-path run never reaches — a failing API, an empty list, a slow request, a timeout, an expired session, a toast that auto-dismisses — and check the UI actually handles them. Use when error handling was written but never run, when a loading or empty state needs verifying, when a bug only happens on a slow connection, or when a timer, poll, debounce or retry needs testing without sleeping.
+description: Force the states a happy-path run never reaches (a failing API, an empty list, a slow request, a timeout, an expired session, a toast that auto-dismisses) and check the UI actually handles them. Use when error handling was written but never run, when a loading or empty state needs verifying, when a bug only happens on a slow connection, or when a timer, poll, debounce or retry needs testing without sleeping.
 license: Apache-2.0
 metadata:
   version: 2.9.0
@@ -16,7 +16,7 @@ Every app has a `catch` block nobody has executed and an empty state nobody has 
 
 ## Read this before you start: network mocking needs a driven browser
 
-`reticle_network_mock` applies mocks through CDP, and **the always-on SDK cannot do it.** A pooled lease is not enough either — `reticle_lease` returns `{ ok: false, reason: "no-cdp-provider" }`.
+`reticle_network_mock` applies mocks through CDP, and **the always-on SDK cannot do it.** A pooled lease is not enough either: `reticle_lease` returns `{ ok: false, reason: "no-cdp-provider" }`.
 
 Your route is `RETICLE_CDP_URL` pointed at a Chrome started with remote debugging:
 
@@ -27,7 +27,7 @@ Your route is `RETICLE_CDP_URL` pointed at a Chrome started with remote debuggin
 RETICLE_CDP_URL=http://localhost:9222 npx @reticlehq/server@latest mcp
 ```
 
-If that is not set up, **say so in one line and offer the clock half of this skill anyway** — `reticle_clock` needs none of it. What you may not do is drive the happy path, watch it pass, and report that error handling works.
+If that is not set up, **say so in one line and offer the clock half of this skill anyway**: `reticle_clock` needs none of it. What you may not do is drive the happy path, watch it pass, and report that error handling works.
 
 ## Force a failure
 
@@ -48,7 +48,7 @@ reticle_act_and_wait({ sessionId, ref, action: "click", until: { kind: "allOf", 
 
 Note the second predicate. A UI that "handles" an error by logging an uncaught exception has not handled it. Clear mocks with `{ clear: true }` when you are done, or every later check runs against a lie.
 
-Worth forcing, in rough order of how often they are broken: `500`, a `4xx` with a real error body, an empty `200` (`[]` — the empty state), a malformed payload, and a request that never resolves (the spinner that spins forever).
+Worth forcing, in rough order of how often they are broken: `500`, a `4xx` with a real error body, an empty `200` (`[]`, the empty state), a malformed payload, and a request that never resolves (the spinner that spins forever).
 
 ## Skip time instead of sleeping
 
@@ -58,7 +58,7 @@ reticle_clock({ sessionId, advanceMs: 5000 })
 reticle_clock({ sessionId, reset: true })
 ```
 
-Toasts that auto-dismiss, debounced search, polling, session timeouts, retry backoff. All of these are normally verified by sleeping, which is slow and flaky in equal measure — and a timing assertion is a statement about the machine, so it passes on your laptop and fails in CI.
+Toasts that auto-dismiss, debounced search, polling, session timeouts, retry backoff. All of these are normally verified by sleeping, which is slow and flaky in equal measure. A timing assertion is a statement about the machine, so it passes on your laptop and fails in CI.
 
 Freeze, advance by exactly the interval, assert the consequence. Same result on a fast laptop and a loaded runner. **Always `reset` when you finish**, or a frozen clock silently breaks everything that runs after you.
 
@@ -66,14 +66,14 @@ Freeze, advance by exactly the interval, assert the consequence. Same result on 
 
 The recovery, not the absence of a crash:
 
-1. The error is **shown to the user** — a specific element, not just "the page did not blank".
-2. The app **stayed usable** — retry works, the form still has its input, navigation is not stuck.
-3. **State is honest** — `reticle_state` shows the failure, not a half-applied optimistic update. A UI that rolled back visually while the store kept the optimistic value is the classic bug here, and only the store read finds it.
+1. The error is **shown to the user**: a specific element, not just "the page did not blank".
+2. The app **stayed usable**: retry works, the form still has its input, navigation is not stuck.
+3. **State is honest**: `reticle_state` shows the failure, not a half-applied optimistic update. A UI that rolled back visually while the store kept the optimistic value is the classic bug here, and only the store read finds it.
 4. **No uncaught error** in the console.
 
 ## Honesty
 
-Mocking changes the app's world, so a verdict taken under a mock is a statement about the mocked condition and nothing else. Say which mock was active when you report a pass, and clear every mock and reset the clock before handing back — an audit that leaves a `500` pinned on `/api/deploys` breaks the next person's session and looks like a real outage.
+Mocking changes the app's world, so a verdict taken under a mock is a statement about the mocked condition and nothing else. Say which mock was active when you report a pass, and clear every mock and reset the clock before handing back. An audit that leaves a `500` pinned on `/api/deploys` breaks the next person's session and looks like a real outage.
 
 ---
 

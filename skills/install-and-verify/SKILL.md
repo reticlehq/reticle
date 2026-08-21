@@ -10,7 +10,7 @@ metadata:
 
 # Reticle: prove the change, do not guess
 
-Reticle embeds a dev-only SDK in the user's running app and exposes it to you as `reticle_*` MCP tools. You look, act, observe, and assert against the real app. No screenshots, and no browser download for the verify loop — it drives the tab the user already has open. (A driven browser, which `reticle_lease` and `--drive` use, does need Chromium; Reticle says so when it needs one.)
+Reticle embeds a dev-only SDK in the user's running app and exposes it to you as `reticle_*` MCP tools. You look, act, observe, and assert against the real app. No screenshots, and no browser download for the verify loop: it drives the tab the user already has open. (A driven browser, which `reticle_lease` and `--drive` use, does need Chromium; Reticle says so when it needs one.)
 
 ## Where the rest of the documentation is
 
@@ -105,7 +105,7 @@ Two rules that cause silent failures if broken:
 
 Then make sure something is serving the app.
 
-**If a dev server is already listening, use it. If none is, start one yourself** — read the project's own dev script out of `package.json` (`dev`, `start`, whatever this project calls it), run it in the BACKGROUND, and tell the user in one line that it is running and how to stop it. Stopping here to ask is how a setup turn ends with nothing verified.
+**If a dev server is already listening, use it. If none is, start one yourself**: read the project's own dev script out of `package.json` (`dev`, `start`, whatever this project calls it), run it in the BACKGROUND, and tell the user in one line that it is running and how to stop it. Stopping here to ask is how a setup turn ends with nothing verified.
 
 The daemon deliberately will not do this for you. A build process started by a long-lived background daemon is invisible to the person whose machine it runs on and orphans when the daemon exits; a dev server YOU start is in the transcript, attributable, and stoppable.
 
@@ -113,7 +113,7 @@ Five guards, none optional:
 
 1. **Never start a second one.** If something is already listening on the app's port, use it.
 2. **Never guess the command.** It comes from `package.json` scripts. No recognisable dev script means say so and stop, not invent one.
-3. **Never kill anything.** Not a dev server, not a daemon, not a port holder — including one you started.
+3. **Never kill anything.** Not a dev server, not a daemon, not a port holder, including one you started.
 4. **Background it, and say so.** A dev server the human does not know about is the same failure one step later.
 5. **The permission prompt belongs to your host.** Never bypass, suppress or auto-approve it, and take a refusal as the answer.
 
@@ -127,7 +127,7 @@ reticle_sessions()
 
 You need a session whose URL matches the app's localhost address. Nothing below this line is meaningful until you have one.
 
-**Empty list?** Read the `why` field first; the daemon can see whether a session was ever here and whether a dev server is listening. **Nothing listening at all? That is yours to fix — start it, per step 3.** Otherwise work [references/troubleshooting.md](references/troubleshooting.md) in order, and **do not tell the user to start a dev server they are already running.** The checklist is, in order: is the SDK imported and called in the app entry, is the dev server actually serving that entry, is the connect guarded on `hostname === 'localhost'`, and is the bridge port the same number on both sides.
+**Empty list?** Read the `why` field first; the daemon can see whether a session was ever here and whether a dev server is listening. **Nothing listening at all? That is yours to fix: start it, per step 3.** Otherwise work [references/troubleshooting.md](references/troubleshooting.md) in order, and **do not tell the user to start a dev server they are already running.** The checklist is, in order: is the SDK imported and called in the app entry, is the dev server actually serving that entry, is the connect guarded on `hostname === 'localhost'`, and is the bridge port the same number on both sides.
 
 ## 5. Drive one real flow and produce a verdict.
 
@@ -137,10 +137,10 @@ A connected session is not a result. The user has installed something and seen n
 
 Tell the user to keep the tab visible. The HUD is on by default (glow border, animated cursor, narration per step) and watching you drive their own app is the demo.
 
-Drive it in as few calls as you can. Every call is a full model turn, and in a client that asks the user to approve each one it is also a click — a flow driven one call at a time is how a person gives up before they ever see a verdict.
+Drive it in as few calls as you can. Every call is a full model turn, and in a client that asks the user to approve each one it is also a click. A flow driven one call at a time is how a person gives up before they ever see a verdict.
 
 1. `reticle_snapshot({ mode: "interactive" })` **once**, for the whole flow. Not once per step.
-2. `reticle_act_sequence` for the setup — every fill and every intermediate click in ONE call.
+2. `reticle_act_sequence` for the setup: every fill and every intermediate click in ONE call.
 3. `reticle_act_and_wait({ ref, action, until })` for the final step only. This is the call that produces the verdict, and `until` names the expected consequence before the action fires.
 4. `reticle_state()` once at the end.
 
@@ -155,7 +155,7 @@ reticle_run({ tool: "reticle_record", args: { action: "stop",  recordingName: "<
 reticle_run({ tool: "reticle_flow_save", args: { flowName: "<flow>" } })
 ```
 
-`reticle_flow_save` returns `assertions.grade`. If it is not `asserted`, the flow only clicks — it will pass even when the feature is broken. Say that in one line rather than presenting it as a regression check.
+`reticle_flow_save` returns `assertions.grade`. If it is not `asserted`, the flow only clicks: it will pass even when the feature is broken. Say that in one line rather than presenting it as a regression check.
 
 Tell the user plainly: that flow is now saved to `.reticle/flows/`, and re-verifying it after any future change is one call with no model in the loop.
 
@@ -190,7 +190,7 @@ Stop at the first row that fits. Do not hand-drive a flow you could replay.
 | "Does this new behaviour work?" | `reticle_act_sequence` for the setup, then ONE `reticle_act_and_wait` | 2 |
 | No MCP available at all | `npx @reticlehq/server verify <url>` in the shell | 1, no MCP |
 
-The first two are **not on the advertised tool list** — they are reached through `reticle_run` exactly as written. That is the supported call shape, and it is why you have to be told they exist.
+The first two are **not on the advertised tool list**: they are reached through `reticle_run` exactly as written. That is the supported call shape, and it is why you have to be told they exist.
 
 `reticle_verify_change` answers `unknown` when no saved flow covers the files you changed. Nothing ran, so nothing was proved: that is the honest answer, never a pass, and it is the signal to record one (step 5 above).
 

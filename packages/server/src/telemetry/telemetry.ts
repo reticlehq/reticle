@@ -105,6 +105,7 @@ const DETACHED_SEND_SCRIPT =
 /** Env var names — mirror cloud-sync's `RETICLE_*` convention. */
 import { isReticleSourceCheckout } from './dev-repo.js';
 import { projectInstallSource } from './install-source.js';
+import { licenseFacts } from './license-activation.js';
 import { gitFacts } from './git-facts.js';
 import { currentAutomationHint } from './automation-hint.js';
 
@@ -413,13 +414,16 @@ export const createTelemetry = (opts: {
     // In a Reticle source checkout the emitter carries FEEDBACK and nothing else: somebody typed the
     // feedback, and no metric is worth phoning home from a contributor's clone.
     if (feedbackOnly && TelemetryEventKind.FEEDBACK_SUBMITTED !== kind) return false;
+    // One clock read for the whole event: `ts` and the licence check must agree, and two calls to
+    // now() can straddle an expiry.
+    const eventTs = now();
     const event: TelemetryEvent = {
       v: TELEMETRY_EVENT_VERSION,
       anonymousId,
       sessionId,
       projectId,
       event: kind,
-      ts: now(),
+      ts: eventTs,
       version: opts.version,
       ci,
       // A SCALAR, so it needs the event build and the wire schema and no `blocks` entry — the same
@@ -451,6 +455,11 @@ export const createTelemetry = (opts: {
       // Always present now, rather than only when a caller remembered to pass it. A per-call
       // override still wins so a command that genuinely knows better can say so.
       installSource: extra?.installSource ?? installSource,
+      // Enterprise activation: three SCALARS, so they need the event build and the wire schema and no
+      // `blocks` entry. Resolved per event off the event's own clock rather than once at startup — an
+      // eleven-hour session must not report the status it booted with. All three are absent unless a
+      // release has an issuer key baked, so an OSS payload is byte-identical to before.
+      ...licenseFacts(eventTs),
     };
     // Map the core contract onto PostHog's capture shape: id/name/time move up, the rest are properties.
     // The feedback body is FLATTENED into `feedback_*` properties rather than sent as a nested object:

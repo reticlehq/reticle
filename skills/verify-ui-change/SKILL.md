@@ -22,7 +22,7 @@ reticle_sessions()
 
 - **A session comes back** → go to step 2.
 - **Tools do not exist** → Reticle is not installed. Run `RETICLE_INSTALL_SOURCE=npx_skill npx @reticlehq/server@latest init`, then tell the user to restart their client so it picks up the MCP server. Full setup is in the [`install-and-verify`](https://github.com/reticlehq/reticle/blob/main/skills/install-and-verify/SKILL.md) skill.
-- **Tools exist, list is empty** → read the `why` field on the response. It distinguishes "no app running" from "an app is running that never dialled this daemon" from "a tab was here and closed", and each has a different fix. If no app is running, start the project's own dev script from `package.json` in the background yourself and tell the user in one line that it is running and how to stop it — never a second one, never a guessed command, never kill anything, and the permission prompt is your host's. If one IS running, the app is not the missing piece and the SDK is; do not send the user to start what they already started.
+- **Tools exist, list is empty** → read the `why` field on the response. It distinguishes "no app running" from "an app is running that never dialled this daemon" from "a tab was here and closed", and each has a different fix. If no app is running, start the project's own dev script from `package.json` in the background yourself and tell the user in one line that it is running and how to stop it: never a second one, never a guessed command, never kill anything, and the permission prompt is your host's. If one IS running, the app is not the missing piece and the SDK is; do not send the user to start what they already started.
 
 ## 2. Name the consequence BEFORE you act
 
@@ -47,10 +47,10 @@ Multi-step journey? Drive it in one call with `reticle_act_sequence`, then asser
 | `verified` | means | do |
 | --- | --- | --- |
 | `yes` | the consequence you named happened | report it, with the evidence |
-| `no` | it did not happen, or a channel contradicted the UI | a real finding — report it with `because` |
+| `no` | it did not happen, or a channel contradicted the UI | a real finding: report it with `because` |
 | `unknown` | Reticle drove the app and could not tell | **not a pass.** Say unknown and say why |
 
-On `unknown` / `unsettled`, re-assert rather than re-driving — `reticle_assert({ predicate, since, timeout_ms: 8000 })` using the `since` from the act result. Re-driving repeats a side effect that already happened.
+On `unknown` / `unsettled`, re-assert rather than re-driving: `reticle_assert({ predicate, since, timeout_ms: 8000 })` using the `since` from the act result. Re-driving repeats a side effect that already happened.
 
 **Never weaken a check to turn a verdict green.** An assertion edited until it passes proves nothing.
 
@@ -64,10 +64,10 @@ If `untouched` still holds controls your change affects, the drive is unfinished
 
 ## 5. Report
 
-State what you drove, what the verdict was, and the evidence: the request and status, the state that changed, the app's own signal. If something failed, `reticle_inspect({ sessionId, ref })` on the failing element gives the `file:line` — put it in the report.
+State what you drove, what the verdict was, and the evidence: the request and status, the state that changed, the app's own signal. If something failed, `reticle_inspect({ sessionId, ref })` on the failing element gives the `file:line`: put it in the report.
 
 Then `reticle_session({ action: "yield", mode: "waiting" })` so the human's panel stops reading "live".
 
 ---
 
-More detail, fetchable one page at a time: `curl https://docs.reticle.sh/llms.txt` for the index, then the single page you need (`tools-act-and-wait.md`, `predicates.md`, `troubleshooting.md`). If Reticle itself misbehaves, file it with `reticle_feedback` — one call, then carry on.
+More detail, fetchable one page at a time: `curl https://docs.reticle.sh/llms.txt` for the index, then the single page you need (`tools-act-and-wait.md`, `predicates.md`, `troubleshooting.md`). If Reticle itself misbehaves, file it with `reticle_feedback`: one call, then carry on.

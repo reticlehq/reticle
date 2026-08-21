@@ -1,6 +1,6 @@
 # Reticle
 
-Reticle embeds a dev-only SDK in the user's running app and exposes it to you as `reticle_*` MCP tools. You look, act, observe, and assert against the real app. No screenshots, and no browser download for the verify loop — it drives the tab the user already has open.
+Reticle embeds a dev-only SDK in the user's running app and exposes it to you as `reticle_*` MCP tools. You look, act, observe, and assert against the real app. No screenshots, and no browser download for the verify loop: it drives the tab the user already has open.
 
 This file is the whole critical path and nothing else. Everything it leaves out is at `https://docs.reticle.sh`, one page at a time.
 
@@ -84,7 +84,7 @@ It detects the framework, package manager and UI library, registers the MCP serv
 
 **Never ask about the port.** There are two, and conflating them is a top setup failure. The dev-server port (3000, 5173) belongs to the project's own dev script and the daemon never binds it. The bridge port (**4400**) is the daemon-to-SDK channel and defaults correctly.
 
-Read the report: `✓` applied, `·` already wired, `–` skipped, `ℹ` done but incomplete in a way that matters, `⚠` needs your edit. **`⚠` and `ℹ` both need you.** `ℹ` is the one people skim past: the step ran, and something about the result still stops a session appearing. Each line carries the exact snippet. A non-zero exit is a to-do list, not a failed install. Fix every `⚠` before moving on — per-framework wiring is at `https://docs.reticle.sh/install-manual.md`.
+Read the report: `✓` applied, `·` already wired, `–` skipped, `ℹ` done but incomplete in a way that matters, `⚠` needs your edit. **`⚠` and `ℹ` both need you.** `ℹ` is the one people skim past: the step ran, and something about the result still stops a session appearing. Each line carries the exact snippet. A non-zero exit is a to-do list, not a failed install. Fix every `⚠` before moving on. Per-framework wiring is at `https://docs.reticle.sh/install-manual.md`.
 
 ## 2. Register the MCP server, then restart the client.
 
@@ -109,7 +109,7 @@ This is the step the funnel dies on. The daemon runs, the MCP server registers, 
 - **Vite + React**: `reticle()` is in the `plugins` array of `vite.config.*`.
 - **Next.js**: `withReticle` wraps the export in `next.config.*`, `reticle-dev.tsx` exists, and it is mounted in the root layout or `_app`.
 - **Remix**, **Astro**: wired by `init`, each with an app in this repo that a gate drives.
-- **Anything else**: nothing is wired. Do it by hand — fetch `https://docs.reticle.sh/frameworks.md`.
+- **Anything else**: nothing is wired. Do it by hand: fetch `https://docs.reticle.sh/frameworks.md`.
 
 Those four are the frameworks with an app and a CI gate behind them. The SDK is framework-agnostic and usually connects elsewhere, but say so honestly rather than reporting a proven install.
 
@@ -120,7 +120,7 @@ Two rules that cause silent failures if broken:
 
 Then make sure something is serving the app.
 
-**If a dev server is already listening, use it. If none is, start one yourself** — read the project's own dev script out of `package.json` (`dev`, `start`, whatever this project calls it), run it in the BACKGROUND, and tell the user in one line that it is running and how to stop it. Stopping here to ask is how a setup turn ends with nothing verified.
+**If a dev server is already listening, use it. If none is, start one yourself**: read the project's own dev script out of `package.json` (`dev`, `start`, whatever this project calls it), run it in the BACKGROUND, and tell the user in one line that it is running and how to stop it. Stopping here to ask is how a setup turn ends with nothing verified.
 
 The daemon deliberately will not do this for you. A build process started by a long-lived background daemon is invisible to the person whose machine it runs on and orphans when the daemon exits; a dev server YOU start is in the transcript, attributable, and stoppable.
 
@@ -128,7 +128,7 @@ Five guards, none optional:
 
 1. **Never start a second one.** If something is already listening on the app's port, use it.
 2. **Never guess the command.** It comes from `package.json` scripts. No recognisable dev script means say so and stop, not invent one.
-3. **Never kill anything.** Not a dev server, not a daemon, not a port holder — including one you started.
+3. **Never kill anything.** Not a dev server, not a daemon, not a port holder, including one you started.
 4. **Background it, and say so.** A dev server the human does not know about is the same failure one step later.
 5. **The permission prompt belongs to your host.** Never bypass, suppress or auto-approve it, and take a refusal as the answer.
 
@@ -142,7 +142,7 @@ reticle_sessions()
 
 You need a session whose URL matches the app's localhost address. **Nothing below this line is meaningful until you have one, and you may not report setup complete without one.**
 
-**Empty list?** Read `next_action` first, then `why`. `next_action` is the machine-readable half: it names which of the four cases this is and, when there is one, the literal command to run and the port — sourced from this project's own scripts, never guessed. `why` is the same thing in prose for the human. The daemon can see whether a session was ever here and whether a dev server is listening. Then, in order: is the SDK imported and called in the app entry, is the dev server actually serving that entry, is the connect guarded on `hostname === 'localhost'`, and is the bridge port the same number on both sides. **Nothing listening at all? That one is yours — start it, per step 3.** If something IS listening, do not tell the user to start what they are already running; the fault is the SDK not loading in the page. Full checklist: `https://docs.reticle.sh/troubleshooting.md`.
+**Empty list?** Read `next_action` first, then `why`. `next_action` is the machine-readable half: it names which of the four cases this is and, when there is one, the literal command to run and the port, sourced from this project's own scripts, never guessed. `why` is the same thing in prose for the human. The daemon can see whether a session was ever here and whether a dev server is listening. Then, in order: is the SDK imported and called in the app entry, is the dev server actually serving that entry, is the connect guarded on `hostname === 'localhost'`, and is the bridge port the same number on both sides. **Nothing listening at all? That one is yours: start it, per step 3.** If something IS listening, do not tell the user to start what they are already running; the fault is the SDK not loading in the page. Full checklist: `https://docs.reticle.sh/troubleshooting.md`.
 
 ## 5. Drive one real flow and produce a verdict.
 
@@ -152,10 +152,10 @@ A connected session is not a result. The user has installed something and seen n
 
 Tell the user to keep the tab visible. The HUD is on by default (glow border, animated cursor, narration per step) and watching you drive their own app is the demo.
 
-Drive it in as few calls as you can. Every call is a full model turn, and in a client that asks the user to approve each one it is also a click — a flow driven one call at a time is how a person gives up before they ever see a verdict.
+Drive it in as few calls as you can. Every call is a full model turn, and in a client that asks the user to approve each one it is also a click. A flow driven one call at a time is how a person gives up before they ever see a verdict.
 
 1. `reticle_snapshot({ mode: "interactive" })` **once**, for the whole flow. Not once per step.
-2. `reticle_act_sequence` for the setup — every fill and every intermediate click in ONE call.
+2. `reticle_act_sequence` for the setup: every fill and every intermediate click in ONE call.
 3. `reticle_act_and_wait({ ref, action, until })` for the final step only. This is the call that produces the verdict, and `until` names the expected consequence before the action fires.
 4. `reticle_state()` once at the end.
 
@@ -170,7 +170,7 @@ reticle_run({ tool: "reticle_record", args: { action: "stop",  recordingName: "<
 reticle_run({ tool: "reticle_flow_save", args: { flowName: "<flow>" } })
 ```
 
-`reticle_flow_save` returns `assertions.grade`. If it is not `asserted`, the flow only clicks — it will pass even when the feature is broken. Say that in one line rather than presenting it as a regression check.
+`reticle_flow_save` returns `assertions.grade`. If it is not `asserted`, the flow only clicks: it will pass even when the feature is broken. Say that in one line rather than presenting it as a regression check.
 
 Tell the user plainly: that flow is now saved to `.reticle/flows/`, and re-verifying it after any future change is one call with no model in the loop.
 
@@ -178,7 +178,7 @@ Tell the user plainly: that flow is now saved to `.reticle/flows/`, and re-verif
 
 `init` writes a managed block into the project's `CLAUDE.md` and `AGENTS.md` (and `.cursor/rules/reticle.mdc` where it applies), plus a `RETICLE.md` reference file and the `/reticle` command. That block is what makes the next agent verify its own work instead of guessing.
 
-Confirm the block is present, between `<!-- reticle:begin ... -->` and `<!-- reticle:end -->`. **Do not hand-write your own copy** — the markers are how a re-run stays idempotent, and a second unmarked copy will never be updated again. If it is missing, re-run `init`.
+Confirm the block is present, between `<!-- reticle:begin ... -->` and `<!-- reticle:end -->`. **Do not hand-write your own copy.** The markers are how a re-run stays idempotent, and a second unmarked copy will never be updated again. If it is missing, re-run `init`.
 
 **Only after step 5 has produced a verdict**, report what you drove and what it produced, then:
 
@@ -207,9 +207,9 @@ Work down this list and stop at the first row that fits. Do not hand-drive a flo
 | "Does this new behaviour work?" | `reticle_act_sequence` for the setup, then ONE `reticle_act_and_wait` | 2 |
 | No MCP available at all | `npx @reticlehq/server verify <url>` in the shell | 1, no MCP |
 
-`reticle_verify_change` and `reticle_flow_replay` are **not on the advertised tool list** — they are reached through `reticle_run` exactly as written above. That is the supported call shape, not a workaround, and it is why you have to be told they exist at all.
+`reticle_verify_change` and `reticle_flow_replay` are **not on the advertised tool list**: they are reached through `reticle_run` exactly as written above. That is the supported call shape, not a workaround, and it is why you have to be told they exist at all.
 
-`reticle_verify_change` answers `unknown` when no saved flow covers the files you changed. That is the honest answer and not a failure — nothing ran, so nothing was proved. It is also the signal to record one. Never read it as a pass.
+`reticle_verify_change` answers `unknown` when no saved flow covers the files you changed. That is the honest answer and not a failure. Nothing ran, so nothing was proved. It is also the signal to record one. Never read it as a pass.
 
 ## Record once, replay cheaply
 
@@ -247,7 +247,7 @@ A verdict of `verified: "unknown"` is not a pass. It means Reticle drove the app
 
 Then report what you drove, what it produced, and the `file:line` for anything broken.
 
-The surface is deliberately small: `default` 18, `all` 30. Editors budget tools across every MCP server you have connected (Cursor allows 40 in total), so the count is capped rather than allowed to grow. `reticle_tools` loads the argument grammar for the rest on demand, and `reticle_run` invokes any of them by name — nothing is unreachable, the cold tail just costs one discovery hop.
+The surface is deliberately small: `default` 18, `all` 30. Editors budget tools across every MCP server you have connected (Cursor allows 40 in total), so the count is capped rather than allowed to grow. `reticle_tools` loads the argument grammar for the rest on demand, and `reticle_run` invokes any of them by name. Nothing is unreachable; the cold tail just costs one discovery hop.
 
 - Batching, regression suites, reading a verdict: `https://docs.reticle.sh/agent-cheatsheet.md`
 - Every predicate and action: `https://docs.reticle.sh/predicates.md`, `https://docs.reticle.sh/actions.md`

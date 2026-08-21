@@ -7,7 +7,10 @@ name: Publish to npm
 # already on npm — so a partial/failed run is safe to re-trigger.
 #
 # NPM_TOKEN (an npm "Automation" token) lives in the "Production" GitHub Environment, so
-# the job declares `environment: Production` below to bring that secret into scope.
+# the job declares `environment: Production` below to bring that secret into scope. The same
+# Environment holds RETICLE_ISSUER_PUBLIC_KEY, which the stamp step bakes into the built server so
+# enterprise license keys verify against a release. Without it a published release has no issuer key,
+# so every enterprise feature denies in production and every customer key activates nothing.
 #
 # Provenance (the verified "published from GitHub Actions" badge) requires a PUBLIC repo +
 # the id-token permission below. If the repo is still private, drop the NPM_CONFIG_PROVENANCE
@@ -53,8 +56,15 @@ jobs:
       - run: pnpm test:unit
         env:
           TURBO_LOG_ORDER: stream # a hung task must say so while it hangs (see ci.yml)
+      # RETICLE_ISSUER_PUBLIC_KEY is consumed by @reticlehq/server's `prepack`, which bakes it into the
+      # built artifact (scripts/stamp-issuer-key.mjs). It has to be here rather than in an earlier step:
+      # prepack rebuilds dist from scratch, so anything stamped before this point is deleted, and the
+      # tarball would reach npm with an empty key and no step having failed. Without the secret the
+      # publish still succeeds and ships an eval-mode build, so a release that must activate enterprise
+      # keys needs this set. The public key can only verify licenses, never mint them.
       - name: Publish public packages
         run: pnpm -r publish --access public --no-git-checks
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           NPM_CONFIG_PROVENANCE: true
+          RETICLE_ISSUER_PUBLIC_KEY: ${{ secrets.RETICLE_ISSUER_PUBLIC_KEY }}

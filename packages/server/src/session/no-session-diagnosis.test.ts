@@ -25,6 +25,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { diagnoseNoSession, type NoSessionFacts } from './no-session-diagnosis.js';
+import { STALL_AFTER_MS } from '../telemetry/instrumentation-stall.js';
 
 describe('diagnoseNoSession', () => {
   it('a session was here and left — say so, and say what to do', () => {
@@ -561,5 +562,71 @@ describe('every branch offers the no-shell escape hatch', () => {
       diagnoseNoSession(facts),
       'an agent with no shell and no session has no other way out of this branch',
     ).toContain('reticle_lease');
+  });
+});
+
+/**
+ * A daemon past the stall threshold with no app connected — the install never finished.
+ *
+ * This is the funnel's biggest silence: the daemon is up, the agent has the tools, and the app
+ * never arrived. The telemetry has known about it since day one; the user-facing diagnosis was
+ * silent about it, and a reader in that state was sent down an investigation that never mentioned
+ * the simplest explanation.
+ */
+describe('a stalled install is surfaced in the diagnosis', () => {
+  it('mentions the stall when daemon is past threshold and no app connected', () => {
+    const msg = diagnoseNoSession({
+      everConnected: false,
+      initialized: true,
+      listening: [5173],
+      port: 4400,
+      daemonUpMs: STALL_AFTER_MS + 1,
+    });
+    expect(msg).toMatch(/\d+ minutes/);
+    expect(msg).toMatch(/no.+app.+(connected|arrived)/i);
+  });
+
+  it('does NOT mention the stall when an app has connected', () => {
+    const msg = diagnoseNoSession({
+      everConnected: true,
+      initialized: true,
+      listening: [5173],
+      port: 4400,
+      daemonUpMs: STALL_AFTER_MS + 1,
+    });
+    expect(msg).not.toMatch(/\d+ minutes.*no.+app/i);
+  });
+
+  it('does NOT mention the stall below the threshold', () => {
+    const msg = diagnoseNoSession({
+      everConnected: false,
+      initialized: true,
+      listening: [5173],
+      port: 4400,
+      daemonUpMs: STALL_AFTER_MS - 1,
+    });
+    expect(msg).not.toMatch(/\d+ minutes.*no.+app/i);
+  });
+
+  it('still mentions it on the no-listener branch when initialized', () => {
+    const msg = diagnoseNoSession({
+      everConnected: false,
+      initialized: true,
+      listening: [],
+      port: 4400,
+      daemonUpMs: STALL_AFTER_MS + 1,
+    });
+    expect(msg).toMatch(/\d+ minutes/);
+  });
+
+  it('does NOT mention it when the project is not initialized', () => {
+    const msg = diagnoseNoSession({
+      everConnected: false,
+      initialized: false,
+      listening: [5173],
+      port: 4400,
+      daemonUpMs: STALL_AFTER_MS + 1,
+    });
+    expect(msg).not.toMatch(/\d+ minutes.*no.+app/i);
   });
 });

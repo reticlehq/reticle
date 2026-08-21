@@ -21,6 +21,7 @@ import {
   markStallClock,
   reportInstrumentationStall,
   resetInstrumentationStall,
+  stallUptime,
 } from './instrumentation-stall.js';
 import * as telemetry from './telemetry.js';
 import * as appInstrumented from './app-instrumented.js';
@@ -146,5 +147,24 @@ describe('instrumentation_stalled on the shutdown path', () => {
     noAppEverConnected();
     expect(reportInstrumentationStall(FACTS, () => 1000, { atShutdown: true })).toBe(false);
     expect(sent).toEqual([]);
+  });
+});
+
+describe('stallUptime — how long a daemon has waited with no app', () => {
+  it('returns the elapsed time when no app has connected', () => {
+    noAppEverConnected();
+    markStallClock(1000);
+    expect(stallUptime(11_000)).toBe(10_000);
+  });
+
+  it('returns undefined once an app has connected', () => {
+    vi.spyOn(appInstrumented, 'appEverConnected').mockReturnValue(true);
+    markStallClock(0);
+    expect(stallUptime(STALL_AFTER_MS * 2)).toBeUndefined();
+  });
+
+  it('returns undefined when the clock was never started', () => {
+    noAppEverConnected();
+    expect(stallUptime(99_999)).toBeUndefined();
   });
 });

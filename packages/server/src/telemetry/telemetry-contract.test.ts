@@ -14,12 +14,16 @@ import {
   CrawlAnomalyKind,
   TelemetryEventKind,
   TelemetryEventSchema,
+  LicenseActivation,
 } from '@reticlehq/core';
+import { generateKeyPairSync } from 'node:crypto';
 import { TOOLS } from '../tools/tools.js';
 import { ReticleTool } from '../tools/tool-names.js';
 import { VERIFICATION_TOOLS } from '../tools/feedback-tools.js';
 import { bugsInResult, type BugCandidate } from './bug-found.js';
 import { describeParam } from './argument-shape.js';
+import { licenseFacts } from './license-activation.js';
+import { LICENSE_KEY_ENV, LICENSE_PUBLIC_KEY_ENV, signLicenseKey } from '../license/license.js';
 
 /**
  * THE TELEMETRY CONTRACT, enforced.
@@ -347,5 +351,51 @@ describe('the bug classifier stays pure — dedup belongs to the session', () =>
     });
     expect(bugs.length).toBe(1);
     expect(bugs[0]).not.toHaveProperty('repeat');
+  });
+});
+
+describe('enterprise activation rides every event, and carries no identity', () => {
+  // The licence properties are SCALARS on the envelope, which is the three-place trap `outage` fell
+  // into: declared in one of {event build, wire schema, docs} and missing from another, it is dropped
+  // in silence. These pin the two that a test can see.
+
+  it('types the reported status against core, rather than re-listing the strings', () => {
+    // Rule 4. A copied vocabulary is a correctness hazard the moment it is a column somebody reads,
+    // and this one is read to decide whether a customer is about to churn.
+    const source = readFileSync(new URL('./license-activation.ts', import.meta.url), 'utf8');
+    expect(source).toContain("from '@reticlehq/core'");
+    for (const status of Object.values(LicenseActivation)) {
+      expect(
+        source.includes(`'${status}'`),
+        `license-activation.ts hand-lists '${status}' instead of using core.LicenseActivation.`,
+      ).toBe(false);
+    }
+  });
+
+  it('the wire schema accepts every status core defines', () => {
+    // The other half of the same drift: a status core gains that the schema rejects is an event
+    // dropped at the boundary, which is indistinguishable from an install that went quiet.
+    for (const status of Object.values(LicenseActivation)) {
+      expect(
+        TelemetryEventSchema.shape.licenseStatus.safeParse(status).success,
+        `the wire schema rejects LicenseActivation.${status}.`,
+      ).toBe(true);
+    }
+  });
+
+  it('never carries the organisation name', () => {
+    // Rule 3, names never values. `org` is free text typed at signing time; the id is opaque and
+    // resolves to a company only against the ledger we hold locally.
+    const { publicKey, privateKey } = generateKeyPairSync('ed25519');
+    const key = signLicenseKey(
+      { lid: 'lid-1', org: 'Northwind Bank', plan: 'enterprise', exp: 2_000_000_000_000 },
+      privateKey,
+    );
+    const facts = licenseFacts(1_700_000_000_000, {
+      [LICENSE_PUBLIC_KEY_ENV]: publicKey.export({ type: 'spki', format: 'pem' }).toString(),
+      [LICENSE_KEY_ENV]: key,
+    });
+    expect(facts.licenseId).toBe('lid-1');
+    expect(JSON.stringify(facts)).not.toContain('Northwind');
   });
 });

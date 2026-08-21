@@ -4,7 +4,7 @@
  * stub — the real audit sink is the hosted control plane. It exists now to prove the gate.
  */
 
-import { assertEnterprise, type GateContext } from '../license/license.js';
+import { assertEnterprise, EnterpriseFeature, type GateContext } from '../license/license.js';
 
 interface AuditEvent {
   actor: string;
@@ -14,6 +14,6 @@ interface AuditEvent {
 
 /** Record an audit event — gated. Throws EnterpriseLicenseError in production without a valid license. */
 export function recordAuditEvent(event: AuditEvent, ctx: GateContext): AuditEvent {
-  assertEnterprise('audit-log', ctx);
+  assertEnterprise(EnterpriseFeature.AUDIT_LOG, ctx);
   return event; // stub: a real implementation persists to the enterprise audit store
 }
