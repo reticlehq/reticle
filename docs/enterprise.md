@@ -31,7 +31,7 @@ Enterprise (`ee/`) features ship **inside the open package**; they're source-ava
    expired   license expired. Renew with hey@reticle.sh to keep using enterprise features
    ```
 
-   Every status also reports `gated` (what a licence unlocks in the build you are running) and `contact`, so the command answers "what would this buy me, and how do I get one" without anybody having to find this page first. `gated` is derived from the features the gate actually enforces, so it lists what your build will really refuse rather than a roadmap.
+   Every status reports `contact`, so a reader who is stuck always has somebody to write to. An unlicensed status also reports `gated`, what a licence unlocks in the build you are running, so the command answers "what would this buy me, and how do I get one" without anybody having to find this page first. It is derived from the features the gate actually enforces, so it names what your build will really refuse rather than a roadmap. An `active` licence does not report it: that reader has already bought, and listing feature names at them answers nothing they asked.
 
 4. **Unlock.** Enterprise features now run in production; without a valid key they refuse to run there (a clear error, never a silent half-feature). In eval/dev they always run free.
 5. **Renew.** Keys carry an expiry; `reticle license` warns before it lapses.

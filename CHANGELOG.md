@@ -10,9 +10,15 @@ All notable changes to the **`@reticlehq/*`** packages are documented here (each
 
   The group key is the licence id and nothing else. **A customer's machine still never transmits their name**, so an event carries no identity and the analytics side holds no customer list unless we deliberately upload one from the issuance ledger, which is the only place that mapping exists. Absent entirely on an unlicensed build: an empty group key would mint a phantom bucket that every OSS install falls into, and it would be the largest group on the dashboard.
 
+### Changed
+
+- **`@reticlehq/server` — `reticle license` stopped naming gated features to customers whose licence already works.** `gated` exists to close a dead end for somebody who has NOT bought: being told to set an environment variable with no idea what it unlocks. An `active` licence is the one reader that question is already answered for, so listing feature names at them revealed the product surface and answered nothing they asked. Every unlicensed status still reports it, and so does the one active case that cannot be explained without it, a key covering nothing the running build gates. `contact` remains on every status, because a stuck reader always needs somebody to write to.
+
 ### Fixed
 
 - **`@reticlehq/server` — the telemetry client ignored its own injected environment when resolving a licence.** `createTelemetry` takes an `env` for injection, and licence resolution read the ambient `process.env` instead. Identical in production, which is why it went unnoticed, and wrong everywhere the seam is actually used: an embedder or a test that injects an environment got attribution from the process it happened to be running in rather than the one it asked for. Found while asserting the group payload against the file sink, where the two environments differ for the first time.
+
+- **`@reticlehq/server` — the enterprise gate refused every valid licence on a real release.** Two entry points resolved the issuer key differently: `assertEnterpriseFromEnv` consulted the key baked at publish, while `assertEnterprise(ctx)` read only the environment. On a published build, where the key is baked and no env var is set, the same licence on the same build was ALLOWED by one and DENIED by the other with `no-issuer-key`. The only gated feature calls the ctx path, so it refused every customer, and whatever real feature got gated next would have been dead on arrival for the same reason. Both paths now resolve identically, baked first and the environment only as the dev and test hatch. Caught by driving the packaged, stamped artifact rather than the source tree, which is the only place the two can disagree.
 
 ### Removed
 

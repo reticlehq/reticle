@@ -157,25 +157,23 @@ export interface GateContext {
   publicKey?: KeyObject;
 }
 
-/** The issuer public key from the environment (set at release / by the operator); undefined if unset. */
-function issuerPublicKey(): KeyObject | undefined {
-  const pem = process.env[LICENSE_PUBLIC_KEY_ENV];
-  if (pem === undefined || 0 === pem.length) return undefined;
-  try {
-    return createPublicKey(pem);
-  } catch {
-    return undefined;
-  }
-}
-
 /**
  * Gate an enterprise feature. No-op in dev/eval (requireLicense:false). In production it throws
  * EnterpriseLicenseError unless a valid, unexpired key that covers `feature` is present.
  */
-export function assertEnterprise(feature: string, ctx: GateContext): void {
+export function assertEnterprise(
+  feature: string,
+  ctx: GateContext,
+  env: NodeJS.ProcessEnv = process.env,
+  baked?: string,
+): void {
   if (!ctx.requireLicense) return;
 
-  const publicKey = ctx.publicKey ?? issuerPublicKey();
+  // Resolved exactly as the env-entry point resolves it: BAKED first, env only as the dev/test
+  // hatch. This path used to read the environment alone, so on a real release, where the key is
+  // baked and no env var is set, it denied every valid licence with `no-issuer-key` while
+  // assertEnterpriseFromEnv allowed the same key on the same build. Two gates, one truth.
+  const publicKey = ctx.publicKey ?? loadPublicKey(resolveIssuerPublicKeyPem(env, baked));
   if (publicKey === undefined) throw new EnterpriseLicenseError(feature, 'no-issuer-key');
 
   const check = verifyLicenseKey(ctx.key, publicKey, ctx.now());
@@ -230,7 +228,13 @@ export interface LicenseReport {
    * neither, so it told an interested reader to set a variable without saying what it would unlock or
    * how to obtain it. A dead end at exactly the moment somebody is asking.
    */
-  gated: readonly string[];
+  /**
+   * What a licence unlocks in this build. Present on every branch a PROSPECTIVE customer lands on,
+   * because being told to set a variable with no idea what it unlocks is the dead end this exists to
+   * close. Absent once a licence is `active`: that reader has already bought, so naming features at
+   * them reveals the product surface and answers nothing they asked.
+   */
+  gated?: readonly string[];
   contact: string;
   /**
    * The key is valid, and scoped to features this build does not gate, so it unlocks nothing here.
@@ -310,7 +314,10 @@ export function describeLicense(
       ? `licensed to ${org} (${plan}), expires ${new Date(exp).toISOString()}. This key covers ${features?.join(', ')}, and nothing this build gates (${LICENSE_OFFER.gated.join(', ')}) is included. Contact ${LICENSE_CONTACT}`
       : `licensed to ${org} (${plan}), expires ${new Date(exp).toISOString()}`;
     return {
-      ...LICENSE_OFFER,
+      contact: LICENSE_CONTACT,
+      // The one active case that still needs the list: a key covering nothing this build gates is
+      // reported here, and the sentence explaining it is unreadable without both sides named.
+      ...(coversNothingHere ? { gated: LICENSE_OFFER.gated } : {}),
       status: LicenseActivation.ACTIVE,
       licenseId: lid,
       org,
