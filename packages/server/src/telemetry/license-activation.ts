@@ -12,7 +12,15 @@
  * reporting through `expired` and `invalid`, which is the difference between seeing a renewal coming
  * and hearing about it from the customer.
  *
- * WHAT IS DELIBERATELY ABSENT: the organisation NAME. It is free text somebody typed at signing time,
+ * WHAT IS DELIBERATELY ABSENT: the organisation NAME, and the PLAN. The name is free text somebody
+ * typed at signing time, which rule 3 forbids outright. The plan is merely redundant, which is a
+ * quieter reason to leave something out and an easy one to lose sight of: it is keyed by this same
+ * `lid` in the issuance ledger, so sending it on every event from every machine forever pays a
+ * per-event cost to carry what one local file already holds, and the join that turns a `lid` into a
+ * company turns it into a plan at the same moment. `reticle license` still reports it locally, where
+ * it costs nothing and answers a question the operator is actually asking.
+ *
+ * More on the name: It is free text somebody typed at signing time,
  * and rule 3 of the telemetry contract is names-never-values. `licenseId` is an opaque uuid that
  * resolves to a company only against the issuance ledger held locally, so the analytics backend never
  * holds a customer list.
@@ -23,7 +31,6 @@ import { describeLicense } from '../license/license.js';
 /** The activation facts that ride the wire. All absent on a build with no issuer key baked. */
 export interface LicenseFacts {
   licenseId?: string;
-  licensePlan?: string;
   licenseStatus?: LicenseActivation;
 }
 
@@ -48,7 +55,6 @@ export function licenseFacts(now: number, env: NodeJS.ProcessEnv = process.env):
     return {
       licenseStatus: report.status,
       ...(report.licenseId !== undefined ? { licenseId: report.licenseId } : {}),
-      ...(report.plan !== undefined ? { licensePlan: report.plan } : {}),
     };
   } catch {
     return {};

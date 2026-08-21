@@ -972,7 +972,7 @@ export const TelemetryEventSchema = z.object({
    */
   installSource: z.nativeEnum(InstallSource).optional(),
   /**
-   * Enterprise activation, on EVERY event. Three scalars rather than a block, for the same reason
+   * Enterprise activation, on EVERY event. Two scalars rather than a block, for the same reason
    * `installSource` is one: they describe the install, not any single event, and they have to be
    * present on the events that show whether a licensed customer got anywhere.
    *
@@ -981,12 +981,12 @@ export const TelemetryEventSchema = z.object({
    * organisation NAME is deliberately absent: it is free text somebody typed at signing time, and
    * rule 3 is names-never-values.
    *
-   * Present only when activation is `active`; `licenseStatus` rides whenever an issuer key is baked,
-   * including the failure states, which is what makes a lapse distinguishable from a churn.
+   * `licenseId` is present only when activation is `active`; `licenseStatus` rides whenever an issuer
+   * key is baked, including the failure states, which is what makes a lapse distinguishable from a
+   * churn. The PLAN is deliberately not here: the issuance ledger already holds it against this same
+   * id, so it would be a per-event cost for something the join that resolves the id resolves anyway.
    */
   licenseId: z.string().min(1).max(64).optional(),
-  /** The plan on the key (`enterprise`, …). Only when `licenseStatus` is `active`. */
-  licensePlan: z.string().min(1).max(64).optional(),
   /** How activation resolved. Absent on a build with no issuer key baked, i.e. every OSS install. */
   licenseStatus: z.nativeEnum(LicenseActivation).optional(),
 });

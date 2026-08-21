@@ -17,11 +17,13 @@ const licensed = (over: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv => ({
 });
 
 describe('licenseFacts', () => {
-  it('reports id, plan and status for an active license', () => {
+  it('reports id and status for an active license, and nothing the ledger already holds', () => {
+    // The plan is NOT sent. It is keyed by this same lid in the issuance ledger, so putting it on
+    // every event from every machine forever pays a per-event cost to carry something one local
+    // file already knows, and the join that resolves the lid to a company resolves the plan with it.
     const facts = licenseFacts(NOW, licensed({ [LICENSE_KEY_ENV]: key(NOW + 100_000) }));
     expect(facts).toEqual({
       licenseId: LID,
-      licensePlan: 'enterprise',
       licenseStatus: LicenseActivation.ACTIVE,
     });
   });
@@ -40,7 +42,6 @@ describe('licenseFacts', () => {
     const facts = licenseFacts(NOW, licensed({ [LICENSE_KEY_ENV]: key(NOW - 1) }));
     expect(facts.licenseStatus).toBe(LicenseActivation.EXPIRED);
     expect(facts.licenseId).toBeUndefined();
-    expect(facts.licensePlan).toBeUndefined();
   });
 
   it('reports missing and invalid distinctly', () => {
