@@ -4,6 +4,14 @@ All notable changes to the **`@reticlehq/*`** packages are documented here (each
 
 ## [Unreleased]
 
+### Removed
+
+- **`@reticlehq/server` — the `instrumentation_stalled` event.** Its founding argument was that a missing `app_instrumented` is an uninterpretable absence, unable to separate "never wired" from "the process died before it could say so". The event did not solve that: it emitted only on a flush tick or a graceful shutdown, so a killed daemon still sent `daemon_started` and nothing else and landed in the absence anyway. Everything it carried is derivable from `daemon_started` minus `app_instrumented`, joined on `sessionId`, and that set difference is strictly MORE complete because it does catch the killed daemons. A second way to compute the same number that disagrees with the first is worse than not having it.
+
+  Two defects go with it, recorded so they are not rediscovered as new. The shutdown path had no floor, so any duration qualified and a run cancelled after three seconds in the wrong directory emitted a "stall"; any historical count read as a defect count is inflated by an unknown amount. And it had no causal resolution at all: "dev server never started", "wrong port", "SDK not injected" and "stale build" were one bucket.
+
+  What was NOT removed is the CLOCK, which two live features read and neither is a metric: the no-session diagnosis tells an agent how long this daemon has waited, and the daemon still warns on stderr once a run passes ten minutes with nothing connected. It moved to `session/stall-clock.ts`, beside the files that read it, which is where its old home under `telemetry/` had disguised it as part of the event.
+
 ## [2.10.0] — 2026-08-21
 
 ### Added

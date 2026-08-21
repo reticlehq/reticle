@@ -103,7 +103,6 @@ The single exception is `daemon_stopped`, which is **awaited**, because the proc
 | `identified` | `reticle identify` | joins anonymous machine ids to a person who volunteered one |
 | `mcp_client_connected` | an MCP client attached | how many sessions are agent-driven at all |
 | `app_instrumented` | the first app carrying the SDK reached this daemon | **the funnel step everything turns on**; see below |
-| `instrumentation_stalled` | the daemon waited and no app ever arrived | the same funnel step, seen from the failure side; see below |
 | `mcp_connection_lost` | the proxy lost its daemon | **the transport-stability metric.** The disconnect that makes a user reopen `/mcp` is invisible without it |
 | `init_completed` | `reticle init` finished | does install actually work, outside the fixtures gate |
 | `bug_found` | a defect was detected in the app under test | the value delivered, as opposed to the work done |
@@ -117,17 +116,7 @@ Nothing measured the second. `daemon_started` and `mcp_client_connected` describ
 
 `app_instrumented` fires **once per daemon run**, on the first session-ready only, so `daemon_started` → `app_instrumented` is a rate rather than an inference and a reloading page cannot inflate it. It carries `initialized` (had `init` run here), `agentAttached` (was an agent already waiting), and `msToFirstApp` (how long the daemon sat with nothing wired). It deliberately carries no stack and no framework: `project_profiled` already reports both for the same run, and the two join on `sessionId`.
 
-### The counterpart: `instrumentation_stalled`
-
-`app_instrumented` fires on success and only on success, so the larger population, runs where no app ever arrives, exists in the data as an **absence**. An absence is the one thing telemetry cannot interpret: it cannot separate "nothing was ever wired" from "the process was killed before it could say so" from "we never sent the event". Since the funnel breaks at this step and nowhere else, this is the one silence worth converting into a signal.
-
-`instrumentation_stalled` fires **once per daemon run**, only after the daemon has been up past a generous threshold, and **never once an app has connected**. A run that starts slowly and then works reports nothing at all. It carries the same three facts as its success counterpart so the two are directly comparable, with `msWaited` in place of `msToFirstApp`.
-
-Read it against `agentAttached`, which is what makes it actionable rather than merely sad. A stalled daemon with no agent attached is somebody who installed and walked away, and is not a defect. A stalled daemon **with** an agent attached is the failure the product actually has: the tools are loaded, something is asking for them, and there is nothing on the other end to drive.
-
-It deliberately carries no diagnosis. Whether a dev server is listening is a live probe, and running one on a timer to enrich a metric would be collecting for the metric's sake. The diagnosis belongs where a human or an agent asks for it.
-
-What neither event can see is **why** an app never connected. Every cause for that is page-side (the non-localhost gate, a port mismatch, a stale build, a dev server never restarted), where the daemon has no visibility. That needs the SDK to report its own refusals, and it is the next thing to build.
+The failure side is a **set difference**, not an event: `daemon_started` minus `app_instrumented`, joined on `sessionId`. There used to be an `instrumentation_stalled` event for it, and it was removed because the derivation is strictly more complete. The event could only fire on a flush tick or a graceful shutdown, so a killed daemon never produced one and landed in the absence anyway, while the set difference catches it. Two ways to compute one number, disagreeing with each other, is worse than one way.
 
 ## Sessions: `daemon_stopped` vs `session_progress`
 

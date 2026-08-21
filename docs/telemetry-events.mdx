@@ -55,7 +55,7 @@ Plus `installSource`, which is not a block. It is resolved once per process and 
 
 `isSessionScoped(kind)` decides whether `sessionId` is attached. Twelve kinds are session-scoped:
 
-`daemon_started`, `daemon_stopped`, `session_progress`, `mcp_client_connected`, `app_instrumented`, `instrumentation_stalled`, `project_profiled`, `verification_completed`, `bug_found`, `tool_refused`, `runtime_crashed`, `feedback_submitted`.
+`daemon_started`, `daemon_stopped`, `session_progress`, `mcp_client_connected`, `app_instrumented`, `project_profiled`, `verification_completed`, `bug_found`, `tool_refused`, `runtime_crashed`, `feedback_submitted`.
 
 `mcp_connection_lost` is deliberately **not** on that list even though it feels session-shaped. It fires from the proxy process rather than the daemon, so it carries no `sessionId` and cannot be joined to a session at all.
 
@@ -338,39 +338,6 @@ The one kind that carries author-written free text, which is exactly why it is n
 **The question it answers:** did the second half of the install ever happen? Reticle's install has two halves, registering the MCP server and getting the SDK into a running page, done at different times by different commands and often in different directories. Almost everyone completes the first.
 
 Fired **once per daemon run**, on the first connect only, so `daemon_started` to `app_instrumented` is a real rate and a reconnecting page cannot inflate it. It deliberately carries no stack and no framework: `project_profiled` reports both for the same daemon run, and the two join on `sessionId`.
-
----
-
-## instrumentation_stalled
-
-**Wire name:** `instrumentation_stalled`. **Emitted from:** `packages/server/src/telemetry/instrumentation-stall.ts:73`, called from `daemon-telemetry.ts:105`. **Session-scoped:** yes. **Payload block:** `stall`.
-
-The failure side of `app_instrumented`, and the reason the funnel has a denominator at all. A daemon that runs for ten minutes without a single SDK-carrying page is an install that half worked, and until this event existed that outcome was pure silence: indistinguishable from a machine nobody touched.
-
-| Field | Type | Meaning |
-| --- | --- | --- |
-| `initialized` | boolean | Has `init` run in this working directory (`readProjectId(cwd)` resolves). False means the daemon is running somewhere `init` never wrote a project id, which is usually a wrong-directory problem rather than a wiring one |
-| `agentAttached` | boolean | Was an agent connected at the moment the check ran. **This is the field that decides whether the row is a defect.** False means somebody installed and walked away, which is not a bug. True means an agent was sitting there with tools it could not use, which is the failure the product actually has |
-| `msWaited` | int | Milliseconds since the daemon started, from the clock marked at `daemon-telemetry.ts:84` |
-
-Deliberately the same three facts as `app_instrumented`, with `msWaited` standing in for `msToFirstApp`, so the success and failure rows are directly comparable without reshaping either.
-
-**When it fires:** on every flush tick, but only once all four guards at `instrumentation-stall.ts:64` pass: it has not already been reported this run, no app has ever connected, the clock was marked, and at least `STALL_AFTER_MS` (10 minutes) has elapsed. It is checked **before** the empty-window early return in `flushWindow`, which is not an accident: a stalled install produces an empty window by definition, so checking after the return would blind the event to the exact condition it exists to report.
-
-**The question it answers:** of the installs that never reach a verdict, how many had an agent present and waiting? That is the difference between a distribution problem and a wiring problem, and they need opposite responses.
-
-**What it is blind to:**
-
-- **Any diagnosis.** It never says whether a dev server is listening, because that is a live probe, and probing a user's machine to enrich a metric is collecting for the metric's sake.
-- **Slow starts.** A run that connects at minute eleven reports nothing at all, and neither does the recovery. The event answers "did this run stall", not "how long do installs take".
-- **The page side.** Every real cause (a non-localhost gate, a port mismatch, a stale build, a dev server never restarted) lives where the daemon cannot see. Attributing a stall needs the SDK to report its own refusals, and that is not built.
-- **Repeats.** Once per daemon run, so a user stuck for a week contributes one row per daemon start, not one per hour.
-
-<Warning>
-  This kind has no live check in `apps/e2e/specs/telemetry-events-test.mjs`, and neither do
-  `session_progress` and `app_instrumented`. Those three are the funnel, and the funnel is the part
-  of the wire nothing fires end to end. Adding one is the highest-value thing left in this file.
-</Warning>
 
 ---
 

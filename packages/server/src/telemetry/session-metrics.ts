@@ -595,7 +595,7 @@ export class SessionMetrics {
   /**
    * Has an agent ever attached to this daemon?
    *
-   * Read by the instrumentation-stall check, which needs to tell two very different silences apart:
+   * Read by the stall clock, which needs to tell two very different silences apart:
    * a daemon nobody is using, and a daemon with an agent sitting on it that has no app to drive.
    * The second is the funnel's failure case and the first is not a problem at all.
    */

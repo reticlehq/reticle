@@ -41,7 +41,6 @@ import {
   type McpOutage,
   type ToolRefusal,
   type AppInstrumentation,
-  type InstrumentationStall,
   type ProjectProfile,
   type SessionSummary,
   type TelemetryActor,
@@ -312,8 +311,6 @@ export interface TelemetryExtra {
   outage?: McpOutage;
   /** `app_instrumented`: an app carrying the SDK reached this daemon for the first time. */
   instrumentation?: AppInstrumentation;
-  /** `instrumentation_stalled`: the daemon waited and no app ever arrived. */
-  stall?: InstrumentationStall;
   /** `reticle_installed` / `init_completed`: which published route brought this install in. */
   installSource?: InstallSource;
 }
@@ -448,7 +445,6 @@ export const createTelemetry = (opts: {
       ...(extra?.refusal !== undefined ? { refusal: extra.refusal } : {}),
       ...(extra?.outage !== undefined ? { outage: extra.outage } : {}),
       ...(extra?.instrumentation !== undefined ? { instrumentation: extra.instrumentation } : {}),
-      ...(extra?.stall !== undefined ? { stall: extra.stall } : {}),
       // A SCALAR, so it needs the event build and the wire schema but no entry in `blocks` below —
       // there is nothing to flatten. It still needs both of those, which is the trap `outage` fell
       // into: a field declared on TelemetryExtra and missing from either one is dropped in silence.
@@ -484,7 +480,6 @@ export const createTelemetry = (opts: {
       refusal,
       outage,
       instrumentation,
-      stall,
       ...rest
     } = event;
     // `$session_id` is PostHog's OWN session property, so sending ours under that name lights up
@@ -517,7 +512,6 @@ export const createTelemetry = (opts: {
       refusal,
       outage,
       instrumentation,
-      stall,
     };
     for (const [prefix, block] of Object.entries(blocks)) {
       for (const [key, value] of Object.entries(block ?? {})) {

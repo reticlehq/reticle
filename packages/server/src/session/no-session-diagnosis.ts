@@ -20,7 +20,7 @@
  */
 
 import { DEV_SERVER_PORTS } from '../cli/cli-port.js';
-import { STALL_AFTER_MS } from '../telemetry/instrumentation-stall.js';
+import { STALL_AFTER_MS } from './stall-clock.js';
 
 export interface NoSessionFacts {
   /** Whether ANY session has connected to this daemon since it booted. */

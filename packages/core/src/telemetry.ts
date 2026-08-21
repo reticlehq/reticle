@@ -136,24 +136,6 @@ export const TelemetryEventKind = {
    */
   APP_INSTRUMENTED: 'app_instrumented',
   /**
-   * A daemon has been up long enough that no app is going to arrive on its own.
-   *
-   * The exact counterpart of `app_instrumented`, and the reason it has to exist: that event only
-   * fires on SUCCESS, so the far larger population — daemons that never get an app at all — is
-   * measurable today only by the ABSENCE of an event, and an absence cannot distinguish "nothing
-   * was wired" from "the process died before it could tell us" from "we never sent it".
-   *
-   * The funnel breaks here and nowhere else, so this is the one silence worth turning into a signal.
-   * Fired ONCE per daemon run, and never after an app has connected, so a daemon that starts slowly
-   * and then works reports nothing.
-   *
-   * Read it against `agentAttached`: a stalled daemon with no agent is a person who installed and
-   * walked away, which is not a defect. A stalled daemon WITH an agent attached is the failure this
-   * product currently has — the tools are there, something is asking for them, and there is no app
-   * on the other end.
-   */
-  INSTRUMENTATION_STALLED: 'instrumentation_stalled',
-  /**
    * The agent LOST its Reticle tools — the worst thing this product does to anyone, and until now
    * completely invisible in the field.
    *
@@ -221,7 +203,6 @@ const SESSION_SCOPED: ReadonlySet<string> = new Set([
   TelemetryEventKind.SESSION_PROGRESS,
   TelemetryEventKind.MCP_CLIENT_CONNECTED,
   TelemetryEventKind.APP_INSTRUMENTED,
-  TelemetryEventKind.INSTRUMENTATION_STALLED,
   TelemetryEventKind.PROJECT_PROFILED,
   TelemetryEventKind.VERIFICATION_COMPLETED,
   TelemetryEventKind.BUG_FOUND,
@@ -672,28 +653,6 @@ export const AppInstrumentationSchema = z.object({
 export type AppInstrumentation = z.infer<typeof AppInstrumentationSchema>;
 
 /**
- * The shape of a daemon that waited and got nothing.
- *
- * Deliberately the same three facts as `AppInstrumentation` rather than a richer payload, so the
- * success and failure cases are directly comparable: the only difference between them should be
- * which event carries them. `msWaited` is the counterpart of `msToFirstApp`.
- *
- * What it does NOT carry is any attempt to say WHY, because at this point the daemon does not know.
- * Whether a dev server is listening is a live probe, and running one on a timer to enrich a metric
- * would be collecting for the metric's sake. The diagnosis belongs where a human or an agent asks
- * for it, not here.
- */
-export const InstrumentationStallSchema = z.object({
-  /** Whether `reticle init` had been run in this directory (a projectId is stamped). */
-  initialized: z.boolean(),
-  /** Whether an MCP client is attached. The difference between an idle install and a broken one. */
-  agentAttached: z.boolean(),
-  /** How long the daemon has been up with no app on the other end. */
-  msWaited: z.number().int().nonnegative(),
-});
-export type InstrumentationStall = z.infer<typeof InstrumentationStallSchema>;
-
-/**
  * WHICH stage of an MCP outage this is. Reported at most twice per proxy process, and the two are
  * different facts: `first` says the session lost its tools at all, `budget_spent` says the proxy
  * stopped retrying and never came back on its own.
@@ -962,8 +921,6 @@ export const TelemetryEventSchema = z.object({
   outage: McpOutageSchema.optional(),
   /** Only on `app_instrumented`: the install's second half finally happening. */
   instrumentation: AppInstrumentationSchema.optional(),
-  /** Only on `instrumentation_stalled`: the install's second half not happening. */
-  stall: InstrumentationStallSchema.optional(),
   /**
    * Only on `reticle_installed` / `init_completed`: which published route brought this install in.
    *

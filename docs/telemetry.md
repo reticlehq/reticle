@@ -31,7 +31,6 @@ Eighteen kinds of events, each a single small JSON object. This is the whole lis
 | `daemon_stopped` | The local daemon stops | A summary of the session; see below |
 | `session_progress` | Periodically, from a daemon that is still running | The same summary as `daemon_stopped`, marked `final: false`. It exists so a long session is not invisible until it exits |
 | `app_instrumented` | The first time your app's SDK connects in a given daemon run | Nothing beyond the common fields. It is the second half of the install funnel: registering the MCP server is one thing, getting the SDK into a running page is another |
-| `instrumentation_stalled` | Ten minutes into a daemon run in which your app has still never connected | The same three facts as `app_instrumented`, with how long it waited instead of how long it took. It fires at most once per daemon run, and a run that starts slowly and then works reports nothing at all. It carries no diagnosis: whether a dev server is listening would need a live probe, and probing your machine to enrich a metric is collecting for the metric's sake |
 | `verification_completed` | A verification produces a verdict | Whether it passed, whether Reticle refused to call a passing check verified, and **why** the verdict came out that way; see below |
 | `project_profiled` | Once per daemon start | The shape of the project; see below |
 | `version_changed` | You update or roll back | The two version numbers, and which direction |

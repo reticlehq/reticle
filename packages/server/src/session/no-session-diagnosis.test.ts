@@ -25,7 +25,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { diagnoseNoSession, type NoSessionFacts } from './no-session-diagnosis.js';
-import { STALL_AFTER_MS } from '../telemetry/instrumentation-stall.js';
+import { STALL_AFTER_MS } from './stall-clock.js';
 
 describe('diagnoseNoSession', () => {
   it('a session was here and left — say so, and say what to do', () => {
