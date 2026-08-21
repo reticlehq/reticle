@@ -4,6 +4,10 @@ All notable changes to the **`@reticlehq/*`** packages are documented here (each
 
 ## [Unreleased]
 
+### Added
+
+- **Self-hosted Cloudflare Browser Rendering backend.** The new private `@reticlehq/cloudflare` workspace package fills Reticle's existing `verify: "server"` contract with a token-gated Worker, R2-backed flow/run storage, a Durable Object per verification, and isolated Cloudflare Playwright contexts. It replays testid/role anchors with DOM, network, and console consequences; unsupported in-page signal/state evidence returns `unverified` so the local runner can fall back instead of accepting a false green. Includes SSRF controls, unit coverage, deployment documentation, and a deployed-browser smoke script. ([#428](https://github.com/reticlehq/reticle/issues/428))
+
 ## [2.9.0] — 2026-08-20
 
 ### BREAKING — read before upgrading

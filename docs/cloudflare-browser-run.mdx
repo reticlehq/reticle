@@ -1,0 +1,59 @@
+---
+title: 'Run verification on Cloudflare'
+description: "Deploy Reticle's self-hosted verify:server backend with Workers, Durable Objects, R2, and Browser Rendering."
+---
+
+Reticle can replay synced flows in Cloudflare Browser Rendering instead of consuming a browser on the agent's machine. This is opt-in: local verification remains the default, and nothing is uploaded until a project is linked and configured for server verification.
+
+The reference backend implements the cloud endpoints the Reticle CLI already uses:
+
+- `POST /v1/flows` stores a validated flow in R2.
+- `POST /v1/verifications` runs the named flows in isolated Browser Rendering contexts.
+- `POST /v1/runs` and `POST /v1/project/runs` retain run history.
+- `GET /v1/project/regression` exposes the latest flow outcomes and status changes.
+
+## Deploy the Worker
+
+Cloudflare Browser Rendering must be enabled for the account, and Wrangler must already be authenticated.
+
+```bash
+pnpm install
+pnpm --filter @reticlehq/cloudflare exec wrangler r2 bucket create reticle-cloudflare-artifacts
+pnpm --filter @reticlehq/cloudflare exec wrangler secret put RETICLE_CLOUD_KEY
+pnpm --filter @reticlehq/cloudflare deploy
+```
+
+The checked-in Wrangler configuration uses the required `nodejs_compat` flag, a Browser Rendering binding, one R2 bucket, and a Durable Object class. Change the Worker and bucket names before deployment if they collide with another installation.
+
+For a tighter outbound policy, add `RETICLE_ALLOWED_HOSTS` as a comma-separated Worker variable. Entries can be exact hosts (`preview.example.com`) or suffixes (`.pages.dev`). Literal localhost, link-local, and private-IP preview URLs are always refused.
+
+## Link a project
+
+Use the Worker URL and the same key you stored as the Worker secret:
+
+```bash
+export RETICLE_CLOUD_URL="https://reticle-cloudflare.<account>.workers.dev"
+export RETICLE_CLOUD_KEY="<the-secret>"
+npx @reticlehq/server link
+npx @reticlehq/server config --verify server
+```
+
+`reticle link` writes the non-secret URL/project binding under `.reticle/cloud.json` and keeps the key in the user-level Reticle credential store. A flow saved after linking is synced automatically. During `reticle_flow_verify`, Reticle submits the current public preview URL and flow names to the Worker; if the Worker is unavailable or returns `unverified`, Reticle falls back to the local replay.
+
+The remote browser cannot reach `localhost`; submit a deployed preview or a tunnel with an HTTPS URL.
+
+## Verify the deployment
+
+The package includes a real-browser smoke script. It uploads a semantic flow, asks the deployed Worker to click through `example.com`, and requires a passing DOM consequence:
+
+```bash
+RETICLE_CLOUDFLARE_URL="https://reticle-cloudflare.<account>.workers.dev" \
+RETICLE_CLOUD_KEY="<the-secret>" \
+pnpm --filter @reticlehq/cloudflare smoke
+```
+
+## Evidence support
+
+The first self-hosted runner supports testid and role anchors, common browser actions, and DOM, network, and console expectations. Component/source anchors and signal or registered-state expectations depend on Reticle's in-page bridge; the Worker returns `unverified` for those rather than converting missing evidence into a pass. The local runner remains the full-fidelity fallback.
+
+See Cloudflare's [Playwright](https://developers.cloudflare.com/browser-run/playwright/), [session reuse](https://developers.cloudflare.com/browser-run/features/reuse-sessions/), and [Durable Objects](https://developers.cloudflare.com/browser-run/how-to/browser-run-with-do/) guidance for the platform primitives used here.

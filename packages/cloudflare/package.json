@@ -1,0 +1,26 @@
+{
+  "name": "@reticlehq/cloudflare",
+  "version": "2.9.0",
+  "private": true,
+  "description": "Self-hosted Reticle verify:server backend for Cloudflare Workers and Browser Rendering.",
+  "type": "module",
+  "scripts": {
+    "build": "tsc -b",
+    "dev": "wrangler dev --remote",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc -b",
+    "lint": "eslint src",
+    "test:unit": "vitest run src --passWithNoTests",
+    "test:coverage": "vitest run src --passWithNoTests --coverage.enabled --coverage.provider=v8 --coverage.reporter=text-summary --coverage.include='src/**/*.ts' --coverage.exclude='src/**/*.test.ts'",
+    "smoke": "node scripts/smoke.mjs"
+  },
+  "dependencies": {
+    "@cloudflare/playwright": "^1.3.6",
+    "@reticlehq/core": "workspace:*",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260821.1",
+    "wrangler": "^4.125.0"
+  }
+}
