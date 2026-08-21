@@ -4,6 +4,10 @@ All notable changes to the **`@reticlehq/*`** packages are documented here (each
 
 ## [Unreleased]
 
+### Added
+
+- **`@reticlehq/server` - authenticated pooled leases can keep an opt-in project storage profile.** `reticle_lease {action:"acquire"}` accepts `persistStorage:true` with a `projectId`, restores that project's Playwright cookies and local storage into the new isolated context, then captures the updated state atomically on release. Profiles live outside the checkout under the Reticle state directory, use hashed project keys and owner-only permissions, never appear in tool output or telemetry, and cannot cross project boundaries. `resetStorage:true` explicitly discards an expired or poisoned profile before opening the clean context. A failed save is disclosed without echoing its path or credential material and still frees the browser-pool slot. ([#334](https://github.com/reticlehq/reticle/issues/334))
+
 ## [2.9.0] — 2026-08-20
 
 ### BREAKING — read before upgrading

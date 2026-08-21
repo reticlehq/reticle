@@ -10,6 +10,8 @@
  * the thin Playwright adapter that satisfies these interfaces lives separately.
  */
 
+import type { StorageProfileStore } from './storage-profile.js';
+
 /** The minimal page surface the pool drives. Real Playwright `Page` satisfies this. */
 export interface PooledPage {
   goto(url: string, opts?: { timeoutMs?: number }): Promise<unknown>;
@@ -21,13 +23,15 @@ export interface PooledPage {
 /** An isolated browsing context (cookies/storage). Real Playwright `BrowserContext` satisfies this. */
 export interface PooledContext {
   newPage(): Promise<PooledPage>;
+  /** Capture cookies/local storage to a Playwright storage-state file. */
+  saveStorageState(path: string): Promise<void>;
   close(): Promise<void>;
 }
 
 /** The launched browser. Real Playwright `Browser` satisfies this. */
 export interface PooledBrowser {
   isConnected(): boolean;
-  newContext(): Promise<PooledContext>;
+  newContext(opts?: { storageStatePath?: string }): Promise<PooledContext>;
   close(): Promise<void>;
   /** Fires when the browser process dies/crashes so the pool can relaunch on the next acquire. */
   onDisconnected(handler: () => void): void;
@@ -40,7 +44,15 @@ export type Launcher = () => Promise<PooledBrowser>;
 export interface Lease {
   readonly sessionId: string;
   readonly url: string;
+  readonly storageRestored?: boolean;
   release(): Promise<void>;
+}
+
+/** Result of an explicit pool release. A persistence failure never leaks the browser slot. */
+export interface ReleaseResult {
+  released: boolean;
+  storageSaved?: boolean;
+  storageError?: string;
 }
 
 /** Default lease time-to-live: a lease untouched for this long is presumed orphaned and reclaimed. */
@@ -60,6 +72,8 @@ interface BrowserPoolOptions {
   leaseTtlMs?: number;
   /** Per-lease navigation timeout — a page that won't load fails its own lease, never blocks a slot. */
   navTimeoutMs?: number;
+  /** Optional owner-only store used only when an acquire explicitly opts into persistence. */
+  storageProfiles?: StorageProfileStore;
 }
 
 interface ActiveLease {
@@ -68,6 +82,8 @@ interface ActiveLease {
   url: string;
   /** Last time an agent touched this lease (acquire or any tool call); drives orphan reclaim. */
   touchedAt: number;
+  /** Present only for an acquire that explicitly opted into project-scoped persistence. */
+  storageProjectId?: string;
 }
 
 /**
@@ -81,6 +97,7 @@ export class BrowserPool {
   readonly #now: () => number;
   readonly #ttl: number;
   readonly #navTimeout: number;
+  readonly #storageProfiles: StorageProfileStore | undefined;
 
   #browser: PooledBrowser | undefined;
   #launching: Promise<PooledBrowser> | undefined;
@@ -109,6 +126,7 @@ export class BrowserPool {
     this.#now = opts.now ?? ((): number => Date.now());
     this.#ttl = opts.leaseTtlMs ?? DEFAULT_LEASE_TTL_MS;
     this.#navTimeout = opts.navTimeoutMs ?? DEFAULT_NAV_TIMEOUT_MS;
+    this.#storageProfiles = opts.storageProfiles;
   }
 
   /** The TTL configured for leases — how long an untouched lease lives before the reaper reclaims it. */
@@ -142,8 +160,14 @@ export class BrowserPool {
    * that named its own session is not the id the pool navigated with. Releasing by that name used to
    * be a silent no-op that left the slot held until the reaper took it.
    */
-  release(sessionId: string): Promise<void> {
+  release(sessionId: string): Promise<ReleaseResult> {
     return this.#release(this.#leaseIdOf(sessionId));
+  }
+
+  /** Discard one project's persisted auth state without touching any active lease. */
+  resetStorageProfile(projectId: string): Promise<boolean> {
+    if (this.#storageProfiles === undefined) return Promise.resolve(false);
+    return this.#storageProfiles.reset(projectId);
   }
 
   /**
@@ -207,9 +231,16 @@ export class BrowserPool {
    */
   async acquire(
     url: string,
-    opts: { signal?: AbortSignal; sessionId?: string } = {},
+    opts: {
+      signal?: AbortSignal;
+      sessionId?: string;
+      persistStorage?: { projectId: string };
+    } = {},
   ): Promise<Lease> {
     if (this.#closed) throw new Error('browser pool is shut down');
+    if (opts.persistStorage !== undefined && this.#storageProfiles === undefined) {
+      throw new Error('browser storage profile store is unavailable');
+    }
     // #waitForSlot claims the slot synchronously (bumps #occupied) before returning, so the cap holds
     // even when many acquires race through the gate in the same tick.
     await this.#waitForSlot(opts.signal);
@@ -217,7 +248,13 @@ export class BrowserPool {
     let context: PooledContext | undefined;
     try {
       const browser = await this.#ensureBrowser();
-      context = await browser.newContext();
+      const storageStatePath =
+        opts.persistStorage === undefined
+          ? undefined
+          : await this.#storageProfiles?.loadPath(opts.persistStorage.projectId);
+      context = await browser.newContext(
+        storageStatePath === undefined ? undefined : { storageStatePath },
+      );
       const page = await context.newPage();
       // Per-page crash isolation: if THIS renderer dies, reclaim only this lease — the shared browser
       // and every other agent's context keep running. (A full browser death is handled by #onCrash.)
@@ -230,11 +267,24 @@ export class BrowserPool {
       // the slot count out of sync (drifting below #active.size, eventually exceeding the cap). If we're
       // no longer the live browser, bail — the catch below closes the context and returns the slot.
       if (this.#browser !== browser) throw new Error('browser crashed during navigation');
-      this.#active.set(sessionId, { context, page, url, touchedAt: this.#now() });
+      this.#active.set(sessionId, {
+        context,
+        page,
+        url,
+        touchedAt: this.#now(),
+        ...(opts.persistStorage === undefined
+          ? {}
+          : { storageProjectId: opts.persistStorage.projectId }),
+      });
       return {
         sessionId,
         url,
-        release: () => this.#release(sessionId),
+        ...(opts.persistStorage === undefined
+          ? {}
+          : { storageRestored: storageStatePath !== undefined }),
+        release: async () => {
+          await this.#release(sessionId);
+        },
       };
     } catch (err) {
       // Setup failed after we claimed the slot — give it back so a queued acquire isn't stuck, and
@@ -267,17 +317,37 @@ export class BrowserPool {
     for (const waiter of this.#waiters.splice(0)) waiter();
   }
 
-  async #release(sessionId: string): Promise<void> {
+  async #release(sessionId: string): Promise<ReleaseResult> {
     const lease = this.#active.get(sessionId);
-    if (lease === undefined) return; // already released or lost to a crash
+    if (lease === undefined) return { released: false }; // already released or lost to a crash
     this.#active.delete(sessionId);
     // Drop any alias pointing here, or the map grows for the life of the daemon and a later lease
     // reusing that registered name would resolve to a context that is already closed.
     for (const [registered, leaseId] of this.#aliases) {
       if (leaseId === sessionId) this.#aliases.delete(registered);
     }
+    let storageSaved: boolean | undefined;
+    let storageError: string | undefined;
+    if (lease.storageProjectId !== undefined && this.#storageProfiles !== undefined) {
+      try {
+        await this.#storageProfiles.save(lease.storageProjectId, sessionId, (path) =>
+          lease.context.saveStorageState(path),
+        );
+        storageSaved = true;
+      } catch {
+        storageSaved = false;
+        // A Playwright/fs error often includes the owner home path and may include browser state.
+        // The tool result needs to disclose the failure without echoing credential material.
+        storageError = 'storage profile could not be saved';
+      }
+    }
     await lease.context.close().catch(() => undefined);
     this.#releaseSlot();
+    return {
+      released: true,
+      ...(storageSaved === undefined ? {} : { storageSaved }),
+      ...(storageError === undefined ? {} : { storageError }),
+    };
   }
 
   /** Synchronously claim a slot if under the cap. Returns true on success (caller proceeds). */

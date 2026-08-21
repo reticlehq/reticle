@@ -192,7 +192,7 @@ export async function waitForLeasedSession(
 export const LEASE_ACQUIRE_TOOL: ToolDef = {
   name: ReticleTool.LEASE_ACQUIRE,
   description:
-    'Lease a fresh isolated headless browser context from the shared pool and navigate it to the app URL (the app must already be running and embed @reticlehq/core). Returns the sessionId the leased tab registers — pass it to other tools. The pool keeps all leases in ONE browser and caps concurrency; if at capacity this waits for a free slot. Release with reticle_lease{action:"release"} when the flow is done.',
+    'Lease a fresh isolated headless browser context from the shared pool and navigate it to the app URL (the app must already be running and embed @reticlehq/core). Returns the sessionId the leased tab registers — pass it to other tools. The pool keeps all leases in ONE browser and caps concurrency; if at capacity this waits for a free slot. Set persistStorage:true with projectId to restore and save that project auth state; resetStorage:true discards it first. Release with reticle_lease{action:"release"} when the flow is done.',
   inputSchema: {
     url: z
       .string()
@@ -201,6 +201,16 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
       .string()
       .optional()
       .describe('Stable project id to stamp on the leased tab so the agent can scope to it.'),
+    persistStorage: z
+      .boolean()
+      .optional()
+      .describe(
+        'Opt in to restoring this projectId storage profile and saving it on release. The profile contains live credentials and stays owner-readable on this machine.',
+      ),
+    resetStorage: z
+      .boolean()
+      .optional()
+      .describe('Discard this projectId storage profile before acquiring a clean context.'),
   },
   outputSchema: {
     sessionId: z.string(),
@@ -217,6 +227,8 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
       ),
     leased: z.number().describe('How many contexts are currently leased from the pool.'),
     queued: z.number().describe('How many acquires are waiting for a free slot.'),
+    storageRestored: z.boolean().optional(),
+    storageReset: z.boolean().optional(),
     hint: z.string().optional(),
   },
   handler: async (deps: ToolDeps, args) => {
@@ -237,11 +249,26 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
       }
     }
     const projectId = asString(args['projectId']);
+    const persistStorage = true === args['persistStorage'];
+    const resetStorage = true === args['resetStorage'];
+    if ((persistStorage || resetStorage) && projectId === undefined) {
+      throw new Error('persistStorage/resetStorage requires a projectId');
+    }
+    if (resetStorage && !persistStorage) {
+      throw new Error('resetStorage requires persistStorage:true');
+    }
+    const storageReset =
+      resetStorage && projectId !== undefined
+        ? await pool.resetStorageProfile(projectId)
+        : undefined;
     const sessionId = newLeaseId();
     const navUrl = appendReticleParams(url, sessionId, projectId);
     let lease;
     try {
-      lease = await pool.acquire(navUrl, { sessionId });
+      lease = await pool.acquire(navUrl, {
+        sessionId,
+        ...(persistStorage && projectId !== undefined ? { persistStorage: { projectId } } : {}),
+      });
     } catch (err) {
       // A raw page.goto failure is noisy and leaks the internal URL params — surface a clean,
       // actionable message instead.
@@ -267,6 +294,8 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
       expiresInMs: pool.leaseTtlMs(),
       leased: pool.activeCount(),
       queued: pool.queuedCount(),
+      ...(lease.storageRestored === undefined ? {} : { storageRestored: lease.storageRestored }),
+      ...(storageReset === undefined ? {} : { storageReset }),
       ...(ready
         ? {}
         : (() => {
@@ -291,6 +320,8 @@ export const LEASE_RELEASE_TOOL: ToolDef = {
   outputSchema: {
     released: z.boolean(),
     leased: z.number(),
+    storageSaved: z.boolean().optional(),
+    storageError: z.string().optional(),
   },
   handler: async (deps: ToolDeps, args) => {
     const pool = deps.pool;
@@ -299,8 +330,8 @@ export const LEASE_RELEASE_TOOL: ToolDef = {
     if (sessionId === undefined || 0 === sessionId.length) {
       throw new Error('reticle_lease{action:"release"} requires a sessionId');
     }
-    await pool.release(sessionId);
-    return { released: true, leased: pool.activeCount() };
+    const result = await pool.release(sessionId);
+    return { ...result, leased: pool.activeCount() };
   },
 };
 

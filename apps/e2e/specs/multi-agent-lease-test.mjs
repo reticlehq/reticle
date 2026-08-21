@@ -6,6 +6,7 @@ import {
   start,
   TOOLS,
   BrowserPool,
+  NodeStorageProfileStore,
   playwrightLauncher,
   appendReticleParams,
   BaselineStore,
@@ -17,6 +18,7 @@ import {
 } from '@reticlehq/server';
 import os from 'node:os';
 import path from 'node:path';
+import { rm } from 'node:fs/promises';
 
 const APP = 'http://localhost:4310/';
 let pass = 0,
@@ -58,7 +60,11 @@ const pool = new BrowserPool(
     launches += 1;
     return playwrightLauncher({ headless: true })();
   },
-  { maxContexts: 3, genSessionId: () => `g${process.pid}-${launches}` },
+  {
+    maxContexts: 3,
+    genSessionId: () => `g${process.pid}-${launches}`,
+    storageProfiles: new NodeStorageProfileStore(path.join(reticleRoot, 'storage-profiles')),
+  },
 );
 
 console.log('\n=== multi-agent leases against the live bench-app (cap 3) ===');
@@ -111,7 +117,68 @@ chk('each leased tab connected as its own session (distinct)', new Set(ok.map((r
 chk('each agent drove the live dashboard (found buttons)', ok.length > 0 && ok.every((r) => r.buttons > 0), `buttons=${ok.map((r) => r.buttons).join('/')}`);
 chk('no leaked contexts after all agents done', pool.activeCount() === 0);
 
+console.log('\n=== project-scoped persistent browser storage ===');
+
+const refOf = async (sessionId, testid) => {
+  const q = await T('reticle_query', { sessionId, by: 'testid', value: testid });
+  return q.elements?.[0]?.ref;
+};
+const acquireProject = async (projectId) => {
+  const sid = `storage-${projectId}-${process.pid}-${Date.now()}`;
+  const lease = await pool.acquire(appendReticleParams(APP, sid, projectId), {
+    sessionId: sid,
+    persistStorage: { projectId },
+  });
+  const connected = await waitUntil(() => server.bridge.sessions.get(sid) !== undefined, 30000);
+  if (!connected) {
+    await lease.release();
+    throw new Error(`${sid} never connected`);
+  }
+  return { sid, lease };
+};
+const hasPersistedAuth = async (sessionId) => {
+  const local = await T('reticle_storage', {
+    sessionId,
+    area: 'local',
+    key: 'reticle.bench.authToken',
+  });
+  const cookie = await T('reticle_storage', {
+    sessionId,
+    area: 'cookies',
+    key: 'bench_session',
+  });
+  return local.found === true && cookie.found === true;
+};
+
+const firstA = await acquireProject('project-a');
+const loginRef = await refOf(firstA.sid, 'login-submit');
+if (loginRef === undefined) throw new Error('project-a clean context did not show login');
+await T('reticle_act_and_wait', {
+  sessionId: firstA.sid,
+  ref: loginRef,
+  action: 'click',
+  until: { kind: 'signal', name: 'auth:granted' },
+  timeout_ms: 5000,
+});
+const firstRelease = await pool.release(firstA.sid);
+chk('release captured project A cookies and local storage', firstRelease.storageSaved === true);
+
+const restoredA = await acquireProject('project-a');
+chk('same project reports that its profile was restored', restoredA.lease.storageRestored === true);
+chk('same project restores its auth token and cookie', await hasPersistedAuth(restoredA.sid));
+await restoredA.lease.release();
+
+const cleanB = await acquireProject('project-b');
+chk('different project cannot see project A auth', !(await hasPersistedAuth(cleanB.sid)));
+await cleanB.lease.release();
+
+chk('explicit reset removes project A profile', await pool.resetStorageProfile('project-a'));
+const resetA = await acquireProject('project-a');
+chk('reset project has no auth token or cookie', !(await hasPersistedAuth(resetA.sid)));
+await resetA.lease.release();
+
 await pool.shutdown();
 await server.close();
+await rm(path.dirname(reticleRoot), { recursive: true, force: true });
 console.log(`\n${fail === 0 ? '✅' : '❌'} MULTI-AGENT LEASE: ${pass} passed, ${fail} failed`);
 process.exit(fail === 0 ? 0 : 1);

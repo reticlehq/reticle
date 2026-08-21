@@ -12,6 +12,7 @@ import {
   type PooledContext,
   type PooledPage,
 } from './browser-pool.js';
+import type { StorageProfileStore } from './storage-profile.js';
 
 class FakePage implements PooledPage {
   gotoUrls: string[] = [];
@@ -37,6 +38,7 @@ class FakePage implements PooledPage {
 
 class FakeContext implements PooledContext {
   readonly pages: FakePage[] = [];
+  readonly savedStoragePaths: string[] = [];
   closed = false;
   constructor(private readonly failNav = false) {}
   newPage(): Promise<PooledPage> {
@@ -49,17 +51,23 @@ class FakeContext implements PooledContext {
     this.closed = true;
     return Promise.resolve();
   }
+  saveStorageState(path: string): Promise<void> {
+    this.savedStoragePaths.push(path);
+    return Promise.resolve();
+  }
 }
 
 class FakeBrowser implements PooledBrowser {
   readonly contexts: FakeContext[] = [];
+  readonly contextOptions: Array<{ storageStatePath?: string } | undefined> = [];
   failNav = false;
   #connected = true;
   #onDisc: (() => void) | undefined;
   isConnected(): boolean {
     return this.#connected;
   }
-  newContext(): Promise<PooledContext> {
+  newContext(opts?: { storageStatePath?: string }): Promise<PooledContext> {
+    this.contextOptions.push(opts);
     const c = new FakeContext(this.failNav);
     this.contexts.push(c);
     return Promise.resolve(c);
@@ -94,6 +102,31 @@ function fakeLauncher(): { launch: Launcher; browsers: FakeBrowser[] } {
   return { launch, browsers };
 }
 
+function fakeStorageProfiles(paths: Record<string, string> = {}): {
+  store: StorageProfileStore;
+  saved: Array<{ projectId: string; leaseId: string; path: string }>;
+  reset: string[];
+} {
+  const saved: Array<{ projectId: string; leaseId: string; path: string }> = [];
+  const reset: string[] = [];
+  return {
+    saved,
+    reset,
+    store: {
+      loadPath: (projectId) => Promise.resolve(paths[projectId]),
+      save: async (projectId, leaseId, capture) => {
+        const path = `/profiles/${projectId}-${leaseId}.tmp`;
+        await capture(path);
+        saved.push({ projectId, leaseId, path });
+      },
+      reset: (projectId) => {
+        reset.push(projectId);
+        return Promise.resolve(true);
+      },
+    },
+  };
+}
+
 describe('BrowserPool', () => {
   it('leases an isolated context+page navigated to the url', async () => {
     const { launch, browsers } = fakeLauncher();
@@ -121,6 +154,94 @@ describe('BrowserPool', () => {
     expect(browsers[0]?.contexts).toHaveLength(2); // TWO contexts
     expect(a.sessionId).not.toBe(b.sessionId);
     expect(pool.activeCount()).toBe(2);
+  });
+
+  it('restores and saves an opted-in project storage profile across leases', async () => {
+    const { launch, browsers } = fakeLauncher();
+    const profiles = fakeStorageProfiles({ 'project-a': '/profiles/project-a.json' });
+    const pool = new BrowserPool(launch, {
+      maxContexts: 2,
+      genSessionId: counterIds(),
+      storageProfiles: profiles.store,
+    });
+
+    const lease = await pool.acquire('http://localhost:3000/', {
+      persistStorage: { projectId: 'project-a' },
+    });
+
+    expect(browsers[0]?.contextOptions[0]).toEqual({
+      storageStatePath: '/profiles/project-a.json',
+    });
+    const result = await pool.release(lease.sessionId);
+    expect(result.storageSaved).toBe(true);
+    expect(profiles.saved).toEqual([
+      { projectId: 'project-a', leaseId: 's1', path: '/profiles/project-a-s1.tmp' },
+    ]);
+    expect(browsers[0]?.contexts[0]?.savedStoragePaths).toEqual(['/profiles/project-a-s1.tmp']);
+  });
+
+  it('never restores one project storage profile into another project context', async () => {
+    const { launch, browsers } = fakeLauncher();
+    const profiles = fakeStorageProfiles({
+      'project-a': '/profiles/a.json',
+      'project-b': '/profiles/b.json',
+    });
+    const pool = new BrowserPool(launch, {
+      maxContexts: 2,
+      genSessionId: counterIds(),
+      storageProfiles: profiles.store,
+    });
+
+    await pool.acquire('http://localhost:3000/a', {
+      persistStorage: { projectId: 'project-a' },
+    });
+    await pool.acquire('http://localhost:3000/b', {
+      persistStorage: { projectId: 'project-b' },
+    });
+
+    expect(browsers[0]?.contextOptions).toEqual([
+      { storageStatePath: '/profiles/a.json' },
+      { storageStatePath: '/profiles/b.json' },
+    ]);
+  });
+
+  it('resets only the requested project storage profile', async () => {
+    const { launch } = fakeLauncher();
+    const profiles = fakeStorageProfiles();
+    const pool = new BrowserPool(launch, {
+      maxContexts: 1,
+      genSessionId: counterIds(),
+      storageProfiles: profiles.store,
+    });
+
+    await expect(pool.resetStorageProfile('project-a')).resolves.toBe(true);
+    expect(profiles.reset).toEqual(['project-a']);
+  });
+
+  it('releases the slot and redacts a storage capture failure', async () => {
+    const { launch } = fakeLauncher();
+    const store: StorageProfileStore = {
+      loadPath: () => Promise.resolve(undefined),
+      save: () => Promise.reject(new Error('cookie=top-secret at /Users/alice/profile.json')),
+      reset: () => Promise.resolve(false),
+    };
+    const pool = new BrowserPool(launch, {
+      maxContexts: 1,
+      genSessionId: counterIds(),
+      storageProfiles: store,
+    });
+    const lease = await pool.acquire('http://localhost:3000/', {
+      persistStorage: { projectId: 'project-a' },
+    });
+
+    const result = await pool.release(lease.sessionId);
+
+    expect(result).toEqual({
+      released: true,
+      storageSaved: false,
+      storageError: 'storage profile could not be saved',
+    });
+    expect(pool.activeCount()).toBe(0);
   });
 
   it('release frees the slot and closes the context', async () => {
