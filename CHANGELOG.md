@@ -7,7 +7,7 @@ All notable changes to the **`@reticlehq/*`** packages are documented here (each
 ### Added
 
 - **Self-hosted Cloudflare Browser Rendering backend.** The new `@reticlehq/cloudflare` workspace package fills Reticle's existing `verify: "server"` contract with a token-gated Worker, R2-backed flow/run storage, a Durable Object per verification, and isolated Cloudflare Playwright contexts. It replays testid/role anchors with DOM, network, and console consequences; unsupported in-page signal/state evidence returns `unverified` so the local runner can fall back instead of accepting a false green. Includes SSRF controls, unit coverage, deployment documentation, and a deployed-browser smoke script. ([#428](https://github.com/reticlehq/reticle/issues/428))
-- **One-command Cloudflare bootstrap and parallel suites.** `npx @reticlehq/cloudflare init` now provisions, deploys, links, enables server verification, bulk-uploads existing flows/runs, and requires a real browser smoke pass. Hosted verification carries a bounded parallel request and defaults to four isolated Cloudflare contexts while preserving result order. ([#430](https://github.com/reticlehq/reticle/issues/430))
+- **One-command Cloudflare bootstrap and parallel suites.** `npx @reticlehq/cloudflare init` now provisions, deploys, links, enables server verification, bulk-uploads existing flows/runs, and requires a real browser smoke pass. Hosted verification carries a bounded parallel request and defaults to four isolated Cloudflare contexts while preserving result order. Opening the Worker now shows a public readiness page while project APIs remain bearer-protected. ([#430](https://github.com/reticlehq/reticle/issues/430))
 
 ## [2.9.0] — 2026-08-20
 

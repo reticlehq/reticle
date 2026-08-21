@@ -1,5 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { authorized, previewAllowed, tokenMatches } from './http.js';
+import { authorized, previewAllowed, publicResponse, tokenMatches } from './http.js';
+
+describe('public Worker routes', () => {
+  it('shows a friendly ready page at the Worker root', async () => {
+    const response = publicResponse(new Request('https://worker.example/'));
+
+    expect(response?.status).toBe(200);
+    expect(response?.headers.get('content-type')).toContain('text/html');
+    await expect(response?.text()).resolves.toContain('Reticle Cloudflare Runner');
+    expect(publicResponse(new Request('https://worker.example/missing'))).toBeUndefined();
+  });
+});
 
 describe('worker request security', () => {
   it('requires the complete bearer token', () => {

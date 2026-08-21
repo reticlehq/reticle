@@ -5,7 +5,7 @@ import {
   VerificationRunUploadSchema,
 } from './contracts.js';
 import type { Env } from './env.js';
-import { authorized, json, previewAllowed } from './http.js';
+import { authorized, json, previewAllowed, publicResponse } from './http.js';
 import { VerificationRunner } from './runner.js';
 import {
   listVerificationRuns,
@@ -29,9 +29,8 @@ async function body(request: Request): Promise<unknown> {
 
 async function handle(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
-  if ('GET' === request.method && '/health' === url.pathname) {
-    return json({ ok: true, service: 'reticle-cloudflare', browser: 'cloudflare' });
-  }
+  const publicRoute = publicResponse(request);
+  if (publicRoute !== undefined) return publicRoute;
   if (!url.pathname.startsWith('/v1/')) return json({ error: 'not_found' }, 404);
   if (env.RETICLE_CLOUD_KEY === undefined || 0 === env.RETICLE_CLOUD_KEY.length) {
     return json({ error: 'cloud_key_not_configured' }, 503);
