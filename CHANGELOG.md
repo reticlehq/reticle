@@ -4,6 +4,12 @@ All notable changes to the **`@reticlehq/*`** packages are documented here (each
 
 ## [Unreleased]
 
+### Fixed
+
+- **`@reticlehq/server` — a lapsed customer could not be identified, which is most of what a lapse signal is for.** Found by running six dummy customers through a packaged release rather than the source tree: the expired one arrived UNATTRIBUTABLE. `licenseId` was reported only while a key verified AND was in date, so telemetry could say that somebody's licence had run out and never whose, and the renewal conversation still had to start with the customer noticing. An expired key is still SIGNED, so its claims are exactly as trustworthy as they were the day before and only the clock has moved; the id now rides it. The line that matters is the SIGNATURE, not the expiry, so a malformed or wrongly-signed key stays anonymous exactly as before, and that is pinned by its own test.
+
+- **`@reticlehq/server` — a paying customer could read `active` while every gated feature refused them.** From the same rehearsal: a key scoped to `sso` on a build that gates `audit-log` reported `active`, and then denied every gated call. Both halves were already on screen, `features` against `gated`, and nothing joined them, so the one word anybody actually reads said they were fine. `reticle license` now says outright when a valid key covers nothing the running build gates, and names both lists.
+
 ### Added
 
 - **`@reticlehq/server` — an agent can report that something WORKED, not only that it broke.** Every kind `reticle_feedback` offered an agent was a complaint: bug, gap, ambiguity, feature_request, improvement. So the only thing the corpus could ever become was a defect list, and the question a refactor actually needs answered, which parts are worth protecting when we change them, had no evidence behind it at all. The `experience` kind and its 1-5 `rating` already existed in the contract and were reachable only by a human at a terminal; the agent, which is the user this product is built for, could not file one. Both are now on the agent tool and on `reticle feedback --agent`, and the MCP instructions name it so an agent that was never told about it can still use it.

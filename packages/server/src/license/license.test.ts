@@ -257,3 +257,52 @@ describe('reticle license is not a dead end for somebody who has no key', () => 
     }
   });
 });
+
+describe('what the fleet rehearsal caught', () => {
+  const PUBKEY_PEM = publicKey.export({ type: 'spki', format: 'pem' }).toString();
+  const env = (over: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv => ({
+    [LICENSE_PUBLIC_KEY_ENV]: PUBKEY_PEM,
+    ...over,
+  });
+
+  it('still names the customer once their key expires', () => {
+    // Found by running six dummy customers through a packaged release: the lapsed one came out
+    // UNATTRIBUTABLE. The whole point of reporting status through the failure states is to see a
+    // renewal coming, and "somebody's key expired" is not a renewal signal if it cannot say WHOSE.
+    // The signature still verifies on an expired key, so the id is as trustworthy as it ever was;
+    // only the clock has moved.
+    const report = describeLicense(NOW, env({ [LICENSE_KEY_ENV]: key({ exp: PAST }) }));
+    expect(report.status).toBe('expired');
+    expect(report.licenseId).toBe('lic_00000000-0000-4000-8000-000000000001');
+  });
+
+  it('a forged key is still anonymous, because its claims were never trustworthy', () => {
+    // The line is the SIGNATURE, not the expiry. An unverified payload must never name a customer.
+    const other = generateKeyPairSync('ed25519');
+    const forged = signLicenseKey(payload(), other.privateKey);
+    const report = describeLicense(NOW, env({ [LICENSE_KEY_ENV]: forged }));
+    expect(report.status).toBe('invalid');
+    expect(report.licenseId).toBeUndefined();
+  });
+
+  it('says so when a valid key covers nothing this build gates', () => {
+    // Also from the rehearsal: a customer who bought `sso` read `active` while every gated feature
+    // refused them. Both facts were on screen (`features` vs `gated`) and nothing joined them, so
+    // the one word they actually read said they were fine.
+    const report = describeLicense(NOW, env({ [LICENSE_KEY_ENV]: key({ features: ['sso'] }) }));
+    expect(report.status).toBe('active');
+    expect(report.coversNothingHere).toBe(true);
+    expect(report.detail).toMatch(/sso/);
+  });
+
+  it('stays quiet when the key does cover something, or covers everything', () => {
+    const scoped = describeLicense(
+      NOW,
+      env({ [LICENSE_KEY_ENV]: key({ features: ['audit-log'] }) }),
+    );
+    expect(scoped.coversNothingHere).toBeUndefined();
+    // No `features` at all means every gated feature is included, which is the common case.
+    const unscoped = describeLicense(NOW, env({ [LICENSE_KEY_ENV]: key() }));
+    expect(unscoped.coversNothingHere).toBeUndefined();
+  });
+});

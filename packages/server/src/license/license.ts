@@ -47,7 +47,16 @@ export type LicensePayload = z.infer<typeof LicensePayloadSchema>;
 
 type LicenseCheck =
   | { status: typeof LicenseStatus.VALID; payload: LicensePayload }
-  | { status: Exclude<LicenseStatus, typeof LicenseStatus.VALID> };
+  /**
+   * EXPIRED carries the payload; the other failures cannot. The line is the SIGNATURE, not the
+   * clock: an expired key was genuinely issued by us and its claims are exactly as trustworthy as
+   * they were yesterday, so the licence id is safe to use. A malformed or wrongly-signed key has no
+   * verified claims at all, and naming a customer from one would mean trusting whatever was pasted.
+   */
+  | { status: typeof LicenseStatus.EXPIRED; payload: LicensePayload }
+  | {
+      status: Exclude<LicenseStatus, typeof LicenseStatus.VALID | typeof LicenseStatus.EXPIRED>;
+    };
 
 /** A key is `base64url(payloadJson).base64url(ed25519Signature)`. */
 const KEY_SEP = '.';
@@ -99,7 +108,7 @@ export function verifyLicenseKey(
     return { status: LicenseStatus.BAD_SIGNATURE };
   }
   if (!signatureOk) return { status: LicenseStatus.BAD_SIGNATURE };
-  if (payload.exp <= now) return { status: LicenseStatus.EXPIRED };
+  if (payload.exp <= now) return { status: LicenseStatus.EXPIRED, payload };
   return { status: LicenseStatus.VALID, payload };
 }
 
@@ -223,6 +232,11 @@ export interface LicenseReport {
    */
   gated: readonly string[];
   contact: string;
+  /**
+   * The key is valid, and scoped to features this build does not gate, so it unlocks nothing here.
+   * Present only when true: a `false` on every healthy licence is noise on the common case.
+   */
+  coversNothingHere?: boolean;
   org?: string;
   plan?: string;
   expiresAt?: number;
@@ -235,10 +249,10 @@ export interface LicenseReport {
  * return, because the value that must never go missing is the one on the branch nobody was thinking
  * about — and the branch an unlicensed reader lands on is exactly that branch.
  */
-const LICENSE_OFFER = {
+const LICENSE_OFFER: { readonly gated: readonly string[]; readonly contact: string } = {
   gated: Object.values(EnterpriseFeature),
   contact: LICENSE_CONTACT,
-} as const;
+};
 
 function loadPublicKey(pem: string | undefined): KeyObject | undefined {
   if (pem === undefined || 0 === pem.length) return undefined;
@@ -287,6 +301,14 @@ export function describeLicense(
   const check = verifyLicenseKey(env[LICENSE_KEY_ENV], publicKey, now);
   if (check.status === LicenseStatus.VALID) {
     const { lid, org, plan, exp, features } = check.payload;
+    // A key scoped to features this build does not gate is `active` and unlocks nothing. Both halves
+    // were already on screen (`features` against `gated`) and nothing joined them, so the one word a
+    // customer actually reads told them they were fine while every gated call refused them.
+    const coversNothingHere =
+      features !== undefined && !features.some((f) => LICENSE_OFFER.gated.includes(f));
+    const detail = coversNothingHere
+      ? `licensed to ${org} (${plan}), expires ${new Date(exp).toISOString()}. This key covers ${features?.join(', ')}, and nothing this build gates (${LICENSE_OFFER.gated.join(', ')}) is included. Contact ${LICENSE_CONTACT}`
+      : `licensed to ${org} (${plan}), expires ${new Date(exp).toISOString()}`;
     return {
       ...LICENSE_OFFER,
       status: LicenseActivation.ACTIVE,
@@ -295,7 +317,8 @@ export function describeLicense(
       plan,
       expiresAt: exp,
       ...(features !== undefined ? { features } : {}),
-      detail: `licensed to ${org} (${plan}), expires ${new Date(exp).toISOString()}`,
+      ...(coversNothingHere ? { coversNothingHere } : {}),
+      detail,
     };
   }
   if (check.status === LicenseStatus.MISSING) {
@@ -308,9 +331,14 @@ export function describeLicense(
     };
   }
   if (check.status === LicenseStatus.EXPIRED) {
+    // The id rides an expired key so a lapse can be attributed to a CUSTOMER. Without it, telemetry
+    // reports that somebody's licence ran out and cannot say whose, which is not a renewal signal.
     return {
       ...LICENSE_OFFER,
       status: LicenseActivation.EXPIRED,
+      licenseId: check.payload.lid,
+      org: check.payload.org,
+      expiresAt: check.payload.exp,
       detail: `license expired. Renew with ${LICENSE_CONTACT} to keep using enterprise features`,
     };
   }

@@ -36,12 +36,14 @@ describe('licenseFacts', () => {
     expect(JSON.stringify(facts)).not.toContain('Northwind');
   });
 
-  it('keeps reporting status once a key lapses, which is what makes a lapse visible', () => {
-    // The renewal signal. `licenseId` drops (nothing verified), but a machine that used to report
-    // `active` now reports `expired` — on identity alone this would be indistinguishable from churn.
+  it('names the customer whose key lapsed, not merely that one did', () => {
+    // The renewal signal, and it has to carry identity to be one. A fleet rehearsal through a
+    // packaged release showed the lapsed customer arriving UNATTRIBUTABLE: the status said a licence
+    // had run out and nothing said whose. An expired key is still SIGNED, so its id is exactly as
+    // trustworthy as it was the day before; only the clock moved.
     const facts = licenseFacts(NOW, licensed({ [LICENSE_KEY_ENV]: key(NOW - 1) }));
     expect(facts.licenseStatus).toBe(LicenseActivation.EXPIRED);
-    expect(facts.licenseId).toBeUndefined();
+    expect(facts.licenseId).toBe(LID);
   });
 
   it('reports missing and invalid distinctly', () => {
