@@ -11,6 +11,7 @@ import {
 import type { Env } from './env.js';
 import { json, previewAllowed } from './http.js';
 import { pageAdapter, replayFlow } from './replay.js';
+import { mapWithConcurrency } from './parallel.js';
 import { getFlow } from './store.js';
 
 function verdictOf(flows: RemoteFlowResult[]): RemoteFlowStatus {
@@ -26,6 +27,11 @@ function summaryOf(flows: RemoteFlowResult[], verdict: RemoteFlowStatus): string
   const failed = flows.filter((flow) => RemoteFlowStatus.FAIL === flow.status).length;
   const unverified = flows.filter((flow) => RemoteFlowStatus.UNVERIFIED === flow.status).length;
   return `${verdict}: ${String(passed)} passed, ${String(failed)} failed, ${String(unverified)} unverified`;
+}
+
+function defaultParallel(env: Env): number {
+  const value = Number(env.RETICLE_DEFAULT_PARALLEL ?? 4);
+  return Number.isInteger(value) ? Math.max(1, Math.min(10, value)) : 4;
 }
 
 export class VerificationRunner extends DurableObject<Env> {
@@ -45,23 +51,29 @@ export class VerificationRunner extends DurableObject<Env> {
     const browser = await launch(this.env.BROWSER, { keep_alive: 60_000 });
     const results: RemoteFlowResult[] = [];
     try {
-      for (const name of request.flows) {
+      const runFlow = async (name: string): Promise<RemoteFlowResult> => {
         const raw = await getFlow(this.env.ARTIFACTS, name);
         const parsed = FlowFileSchema.safeParse(raw);
         if (!parsed.success) {
-          results.push({ name, status: RemoteFlowStatus.UNVERIFIED, detail: 'flow is missing' });
-          continue;
+          return { name, status: RemoteFlowStatus.UNVERIFIED, detail: 'flow is missing' };
         }
         const context = await browser.newContext();
         try {
           const page = await context.newPage();
-          results.push(await replayFlow(pageAdapter(page), request.previewUrl, parsed.data));
+          return await replayFlow(pageAdapter(page), request.previewUrl, parsed.data);
         } catch {
-          results.push({ name, status: RemoteFlowStatus.FAIL, detail: 'browser execution failed' });
+          return { name, status: RemoteFlowStatus.FAIL, detail: 'browser execution failed' };
         } finally {
           await context.close().catch(() => undefined);
         }
-      }
+      };
+      results.push(
+        ...(await mapWithConcurrency(
+          request.flows,
+          request.parallel ?? defaultParallel(this.env),
+          (name) => runFlow(name),
+        )),
+      );
     } finally {
       await browser.close().catch(() => undefined);
     }

@@ -1,7 +1,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "reticle-cloudflare",
-  "main": "src/index.ts",
+  "main": "dist/index.js",
   "workers_dev": true,
   "compatibility_date": "2026-08-21",
   "compatibility_flags": ["nodejs_compat"],
@@ -9,6 +9,7 @@
   "vars": {
     "RETICLE_PROJECT_ID": "default",
     "RETICLE_PROJECT_NAME": "Self-hosted Reticle",
+    "RETICLE_DEFAULT_PARALLEL": "4",
   },
   "browser": { "binding": "BROWSER" },
   "r2_buckets": [{ "binding": "ARTIFACTS", "bucket_name": "reticle-cloudflare-artifacts" }],

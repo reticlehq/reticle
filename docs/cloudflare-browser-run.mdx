@@ -12,7 +12,17 @@ The reference backend implements the cloud endpoints the Reticle CLI already use
 - `POST /v1/runs` and `POST /v1/project/runs` retain run history.
 - `GET /v1/project/regression` exposes the latest flow outcomes and status changes.
 
-## Deploy the Worker
+## Automatic setup
+
+From the application repository you want Reticle to verify:
+
+```bash
+npx @reticlehq/cloudflare init
+```
+
+That command checks Cloudflare authentication, creates the artifact bucket when needed, deploys the Worker and secret, links the repository, enables `verify:server`, uploads every existing flow and run, and requires a passing live-browser smoke check. It prints the Worker URL and a machine-readable ready summary only after every stage succeeds. Use `--dry-run` to print the full plan without changing Cloudflare or local Reticle configuration. Remote suites use four isolated browser contexts by default; `--parallel 1..10` changes the bound.
+
+## Manual deployment
 
 Cloudflare Browser Rendering must be enabled for the account, and Wrangler must already be authenticated.
 
@@ -20,7 +30,7 @@ Cloudflare Browser Rendering must be enabled for the account, and Wrangler must 
 pnpm install
 pnpm --filter @reticlehq/cloudflare exec wrangler r2 bucket create reticle-cloudflare-artifacts
 pnpm --filter @reticlehq/cloudflare exec wrangler secret put RETICLE_CLOUD_KEY
-pnpm --filter @reticlehq/cloudflare deploy
+pnpm --filter @reticlehq/cloudflare run deploy
 ```
 
 The checked-in Wrangler configuration uses the required `nodejs_compat` flag, a Browser Rendering binding, one R2 bucket, and a Durable Object class. Change the Worker and bucket names before deployment if they collide with another installation.

@@ -15,8 +15,15 @@ import { join } from 'node:path';
 import { z } from 'zod';
 import { createNodeFileSystem } from '../project/fs-port.js';
 import { RunStore } from '../runs/run-store.js';
+import { FlowStore } from '../flows/flows.js';
 import { resolveProjectCloud } from '../cloud/cloud-config.js';
-import { syncRunToCloud, SyncOutcome } from '../cloud/cloud-sync.js';
+import {
+  syncFlowToCloud,
+  syncRunToCloud,
+  SyncOutcome,
+  type CloudConfig,
+  type FetchLike,
+} from '../cloud/cloud-sync.js';
 
 const DEFAULT_URL = 'http://localhost:8890';
 const RETICLE_DIR = '.reticle';
@@ -432,7 +439,7 @@ const cmdLink = async (argv: readonly string[]): Promise<number> => {
 
   emit({ linked: projectName, projectId, cloudJson: linkPath, credentials: credPath });
   hint(
-    'linked ✓ runs auto-push on `reticle verify`; `reticle push` sends existing local runs; `reticle whoami` shows state',
+    'linked ✓ new artifacts auto-sync; `reticle push` sends existing flows and runs; `reticle whoami` shows state',
   );
   return 0;
 };
@@ -475,7 +482,36 @@ const cmdConfig = async (argv: readonly string[]): Promise<number> => {
   return 0;
 };
 
-/** `reticle push` — best-effort push of local run artifacts to the linked project (honors sync policy). */
+interface PushCounts {
+  pushed: number;
+  failed: number;
+  total: number;
+}
+
+/** Upload every visible saved flow; exported so bootstrap coverage never needs a real cloud. */
+export async function pushSavedFlows(
+  store: Pick<FlowStore, 'list' | 'load'>,
+  config: CloudConfig,
+  projectId: string | undefined,
+  fetchImpl: FetchLike,
+): Promise<PushCounts> {
+  const names = await store.list(projectId);
+  let pushed = 0;
+  let failed = 0;
+  for (const name of names) {
+    const loaded = await store.load(name, projectId);
+    if (!loaded.ok) {
+      failed += 1;
+      continue;
+    }
+    const result = await syncFlowToCloud(loaded.value, config, projectId, fetchImpl);
+    if (SyncOutcome.SYNCED === result.outcome) pushed += 1;
+    else if (SyncOutcome.FAILED === result.outcome) failed += 1;
+  }
+  return { pushed, failed, total: names.length };
+}
+
+/** `reticle push` — best-effort push of existing flows and runs (honors sync policy). */
 const cmdPush = async (): Promise<number> => {
   const fs = createNodeFileSystem();
   const reticleRoot = join(process.cwd(), RETICLE_DIR);
@@ -484,12 +520,16 @@ const cmdPush = async (): Promise<number> => {
     err('cloud not attached here — run `reticle link` (or set RETICLE_CLOUD_URL/KEY)');
     return 1;
   }
-  if (!cloud.policy.runs) {
-    emit({ pushed: 0, skipped: 'sync.runs is off for this project (reticle config --runs on)' });
-    return 0;
-  }
+  const flowCounts = cloud.policy.flows
+    ? await pushSavedFlows(
+        new FlowStore(fs, reticleRoot, { now: () => Date.now() }),
+        cloud.config,
+        cloud.projectId ?? undefined,
+        (url, init) => fetch(url, init),
+      )
+    : { pushed: 0, failed: 0, total: 0 };
   const store = new RunStore(fs, reticleRoot);
-  const ids = await store.list();
+  const ids = cloud.policy.runs ? await store.list() : [];
   let pushed = 0;
   let failed = 0;
   for (const id of ids) {
@@ -499,8 +539,18 @@ const cmdPush = async (): Promise<number> => {
     if (res.outcome === SyncOutcome.SYNCED) pushed += 1;
     else if (res.outcome === SyncOutcome.FAILED) failed += 1;
   }
-  emit({ pushed, failed, total: ids.length, project: cloud.projectId });
-  if (pushed > 0) hint(`pushed ✓ see them in the dashboard Runs tab (${cloud.config.url})`);
+  const runs = { pushed, failed, total: ids.length };
+  emit({
+    pushed: flowCounts.pushed + runs.pushed,
+    failed: flowCounts.failed + runs.failed,
+    total: flowCounts.total + runs.total,
+    flows: flowCounts,
+    runs,
+    project: cloud.projectId,
+  });
+  if (flowCounts.pushed + runs.pushed > 0) {
+    hint(`pushed ✓ ${String(flowCounts.pushed)} flows and ${String(runs.pushed)} runs`);
+  }
   return 0;
 };
 

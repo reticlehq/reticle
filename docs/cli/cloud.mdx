@@ -101,7 +101,7 @@ reticle: no .reticle/cloud.json here ... run `reticle link` first
 
 ### `reticle push`
 
-Sends local run artifacts from `.reticle` to the linked project, honoring the sync policy. With `sync.runs` off it does nothing and says so. Prints `{ pushed, failed, total, project }`.
+Sends all existing saved flows and run artifacts from `.reticle` to the linked project, honoring the `sync.flows` and `sync.runs` policy. Prints totals plus separate `flows` and `runs` counts, so bootstrap and CI can prove the whole local suite reached the cloud.
 
 ### `reticle runs`
 

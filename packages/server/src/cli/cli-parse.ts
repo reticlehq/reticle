@@ -59,7 +59,7 @@ Cloud (link this project to Reticle Cloud; runs/flows recorded on the dashboard)
   reticle whoami                                        (who am I signed in as, and is this repo attached?)
   reticle project <ls|create <name>>                   (list or create cloud projects)
   reticle config [--runs on|off] [--memory on|off] [--flows on|off] [--verify local|server]
-  reticle push                                          (send local run artifacts to the dashboard)
+  reticle push                                          (send existing flows and runs to the cloud)
   reticle runs | regression | share <runId>            (read cloud state; regression exits 3 if any flow broke)
 
 'drive' shows the browser; everything else is hidden (serve/mcp own the pool behind leases, replay

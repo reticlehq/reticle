@@ -6,9 +6,9 @@ if (!base || !token) {
 }
 
 const headers = { 'content-type': 'application/json', authorization: `Bearer ${token}` };
-const flow = {
+const flows = ['cloudflare-example-domain-a', 'cloudflare-example-domain-b'].map((name) => ({
   version: 1,
-  name: 'cloudflare-example-domain',
+  name,
   createdAt: Date.now(),
   startPath: '/',
   steps: [
@@ -19,22 +19,25 @@ const flow = {
       expect: { element: { role: 'heading', name: 'Example Domains' } },
     },
   ],
-};
+}));
 
-const upload = await fetch(`${base}/v1/flows`, {
-  method: 'POST',
-  headers,
-  body: JSON.stringify({ flow }),
-});
-if (!upload.ok) throw new Error(`flow upload failed: ${upload.status} ${await upload.text()}`);
+for (const flow of flows) {
+  const upload = await fetch(`${base}/v1/flows`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ flow }),
+  });
+  if (!upload.ok) throw new Error(`flow upload failed: ${upload.status} ${await upload.text()}`);
+}
 
 const verification = await fetch(`${base}/v1/verifications`, {
   method: 'POST',
   headers,
   body: JSON.stringify({
     previewUrl: 'https://example.com',
-    flows: [flow.name],
+    flows: flows.map((flow) => flow.name),
     source: 'cloudflare-smoke',
+    parallel: 2,
   }),
 });
 const report = await verification.json();

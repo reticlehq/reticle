@@ -523,6 +523,9 @@ importers:
       '@reticlehq/core':
         specifier: workspace:*
         version: link:../core
+      wrangler:
+        specifier: ^4.125.0
+        version: 4.125.0(@cloudflare/workers-types@5.20260821.1)
       zod:
         specifier: ^3.24.1
         version: 3.25.76
@@ -530,9 +533,6 @@ importers:
       '@cloudflare/workers-types':
         specifier: ^5.20260821.1
         version: 5.20260821.1
-      wrangler:
-        specifier: ^4.125.0
-        version: 4.125.0(@cloudflare/workers-types@5.20260821.1)
 
   packages/core:
     dependencies:

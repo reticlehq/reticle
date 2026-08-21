@@ -8,4 +8,6 @@ export interface Env {
   RETICLE_ALLOWED_HOSTS?: string;
   RETICLE_PROJECT_ID?: string;
   RETICLE_PROJECT_NAME?: string;
+  /** Default isolated-context concurrency when the caller does not choose one. */
+  RETICLE_DEFAULT_PARALLEL?: string;
 }

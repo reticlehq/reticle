@@ -35,6 +35,30 @@ describe('submitServerVerification', () => {
     expect(out?.flows).toHaveLength(1);
   });
 
+  it('forwards bounded parallel intent to the hosted runner', async () => {
+    let posted: unknown;
+    const fetchImpl: FetchPostJsonLike = (_url, init) => {
+      posted = JSON.parse(init.body);
+      return Promise.resolve({
+        ok: true,
+        status: 201,
+        json: () =>
+          Promise.resolve({
+            verificationId: 'ver_parallel',
+            verdict: 'pass',
+            flows: [{ name: 'checkout', status: 'pass' }],
+            summary: 'ok',
+          }),
+      });
+    };
+    await submitServerVerification(
+      { previewUrl: 'https://app.test', flows: ['checkout'], source: 's', parallel: 6 },
+      CONFIG,
+      fetchImpl,
+    );
+    expect(posted).toMatchObject({ parallel: 6 });
+  });
+
   it('returns null on a non-ok response (best-effort, never throws)', async () => {
     const out = await submitServerVerification(
       { previewUrl: 'https://app.test', flows: [], source: 's' },

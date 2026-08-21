@@ -36,6 +36,7 @@ export async function runServerVerify(
   cloud: ProjectCloud,
   sessionId: string | undefined,
   flows: string[],
+  parallel?: number,
 ): Promise<SuiteVerdict | null> {
   if (cloud.verify !== VerifyMode.SERVER || null === cloud.config) return null;
   let previewUrl: string | undefined;
@@ -47,7 +48,7 @@ export async function runServerVerify(
   // The server hits the URL itself; with no URL (or a localhost one it can't reach) fall back to local.
   if (previewUrl === undefined || 0 === previewUrl.length) return null;
   const report = await submitServerVerification(
-    { previewUrl, flows, source: SOURCE },
+    { previewUrl, flows, source: SOURCE, ...(parallel === undefined ? {} : { parallel }) },
     cloud.config,
     (url, init) => fetch(url, init),
   );

@@ -13,6 +13,7 @@ export const VerificationRequestSchema = z.object({
   previewUrl: z.string().url(),
   flows: z.array(FlowNameSchema).min(1).max(50),
   source: z.string().min(1).max(120),
+  parallel: z.number().int().min(1).max(10).optional(),
 });
 export type VerificationRequest = z.infer<typeof VerificationRequestSchema>;
 
