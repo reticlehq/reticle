@@ -71,6 +71,18 @@ const POSTHOG_KEY = 'phc_q4yCxKMXHfWQ43VAz4HxJXZFLqFi4nBbg5v3avemggYo';
  * still key on distinct_id.
  */
 const POSTHOG_PERSONLESS = { $process_person_profile: false } as const;
+
+/**
+ * PostHog's group type for a licensed customer. Sent as `$groups` so PostHog can aggregate a whole
+ * organisation natively: per-company retention, "which orgs went quiet", one row per customer rather
+ * than one per machine.
+ *
+ * The KEY is the licence id and nothing else. The organisation's NAME is never sent from a customer's
+ * machine, here or anywhere; the name reaches PostHog only if we push it ourselves from the issuance
+ * ledger, which is the one place that mapping lives. So an event still carries no identity, and the
+ * analytics side learns a customer list only when we deliberately upload one.
+ */
+export const POSTHOG_GROUP_ORGANIZATION = 'organization';
 const SEND_TIMEOUT_MS = 2000;
 
 /**
@@ -455,7 +467,10 @@ export const createTelemetry = (opts: {
       // `blocks` entry. Resolved per event off the event's own clock rather than once at startup — an
       // eleven-hour session must not report the status it booted with. All three are absent unless a
       // release has an issuer key baked, so an OSS payload is byte-identical to before.
-      ...licenseFacts(eventTs),
+      // The RESOLVED env, not process.env: createTelemetry takes an env for injection, and reading
+      // the ambient one here would silently ignore it. Identical in production, wrong everywhere the
+      // seam is actually used.
+      ...licenseFacts(eventTs, env),
     };
     // Map the core contract onto PostHog's capture shape: id/name/time move up, the rest are properties.
     // The feedback body is FLATTENED into `feedback_*` properties rather than sent as a nested object:
@@ -522,7 +537,15 @@ export const createTelemetry = (opts: {
       event: name,
       distinct_id: distinctId,
       timestamp: new Date(ts).toISOString(),
-      properties: { ...properties, ...POSTHOG_PERSONLESS },
+      properties: {
+        ...properties,
+        ...POSTHOG_PERSONLESS,
+        // Only on a licensed build. An unlicensed event has no organisation to belong to, and an
+        // empty group key would mint a phantom "no org" bucket that every OSS install falls into.
+        ...(event.licenseId !== undefined
+          ? { $groups: { [POSTHOG_GROUP_ORGANIZATION]: event.licenseId } }
+          : {}),
+      },
     };
     const body = JSON.stringify({ api_key: apiKey, batch: [capture] });
     const filePath = env[Env.FILE];

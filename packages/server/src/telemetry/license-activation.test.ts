@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { generateKeyPairSync } from 'node:crypto';
 import { LicenseActivation } from '@reticlehq/core';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { TelemetryEventKind } from '@reticlehq/core';
 import { licenseFacts } from './license-activation.js';
+import { createTelemetry, POSTHOG_GROUP_ORGANIZATION } from './telemetry.js';
 import { LICENSE_KEY_ENV, LICENSE_PUBLIC_KEY_ENV, signLicenseKey } from '../license/license.js';
 
 const NOW = 1_700_000_000_000;
@@ -71,5 +76,53 @@ describe('licenseFacts', () => {
     const env = licensed({ [LICENSE_KEY_ENV]: key(NOW + 1_000) });
     expect(licenseFacts(NOW, env).licenseStatus).toBe(LicenseActivation.ACTIVE);
     expect(licenseFacts(NOW + 2_000, env).licenseStatus).toBe(LicenseActivation.EXPIRED);
+  });
+});
+
+/**
+ * The group that lets PostHog aggregate a customer instead of a machine. Written against the FILE
+ * SINK rather than a mocked sender, because the sink is built by the same code path as the wire
+ * payload: what this asserts is literally what would have been sent.
+ */
+describe('a licensed event belongs to an organisation group', () => {
+  const PUBKEY_PEM = publicKey.export({ type: 'spki', format: 'pem' }).toString();
+
+  const captureFor = async (env: NodeJS.ProcessEnv): Promise<Record<string, unknown>> => {
+    const dir = mkdtempSync(join(tmpdir(), 'reticle-groups-'));
+    const file = join(dir, 'events.jsonl');
+    const telemetry = createTelemetry({
+      version: '0.0.0-test',
+      // Outside the checkout: in a Reticle source tree the emitter carries feedback and nothing
+      // else, so a cli_command_run here would be suppressed and the file would stay empty.
+      cwd: dir,
+      // Same literals the sibling local-sink test uses; Env is module-private on purpose.
+      env: { ...env, RETICLE_TELEMETRY_FILE: file, RETICLE_TELEMETRY_KEY: 'k' },
+    });
+    // Awaited: the write happens inside emit, so reading the file first races it.
+    await telemetry.emit(TelemetryEventKind.CLI_COMMAND_RUN, { command: 'license' });
+    const raw = readFileSync(file, 'utf8').trim();
+    if (raw === '') throw new Error('nothing was written to the sink');
+    const line = raw.split('\n').pop() ?? '{}';
+    rmSync(dir, { recursive: true, force: true });
+    return JSON.parse(line) as Record<string, unknown>;
+  };
+
+  it('sends $groups keyed on the licence id, and never the org name', async () => {
+    const capture = await captureFor({
+      [LICENSE_PUBLIC_KEY_ENV]: PUBKEY_PEM,
+      [LICENSE_KEY_ENV]: key(NOW + 100_000, 'Northwind Bank'),
+    });
+    const props = capture['properties'] as Record<string, unknown>;
+    expect(props['$groups']).toEqual({ [POSTHOG_GROUP_ORGANIZATION]: LID });
+    // The name reaches PostHog only if WE push it from the ledger, never from a customer's machine.
+    expect(JSON.stringify(capture)).not.toContain('Northwind');
+  });
+
+  it('sends no group at all when there is no licence', async () => {
+    // An empty or placeholder key would mint a phantom "no org" bucket that every OSS install falls
+    // into, and it would be the largest group on the dashboard.
+    const capture = await captureFor({});
+    const props = capture['properties'] as Record<string, unknown>;
+    expect(props['$groups']).toBeUndefined();
   });
 });

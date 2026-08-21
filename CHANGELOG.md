@@ -4,6 +4,16 @@ All notable changes to the **`@reticlehq/*`** packages are documented here (each
 
 ## [Unreleased]
 
+### Added
+
+- **`@reticlehq/server` — a licensed event says which organisation it belongs to, so PostHog can aggregate a customer instead of a machine.** Attribution already carried `licenseId`, but as a flat property, which means every per-customer question is a filter typed by hand against a UUID and there is no such thing as a company in the data. Events now also carry `$groups: { organization: <licenseId> }`, which is the shape PostHog aggregates natively: per-company retention, one row per customer rather than one per machine, and a view of which organisations have gone quiet.
+
+  The group key is the licence id and nothing else. **A customer's machine still never transmits their name**, so an event carries no identity and the analytics side holds no customer list unless we deliberately upload one from the issuance ledger, which is the only place that mapping exists. Absent entirely on an unlicensed build: an empty group key would mint a phantom bucket that every OSS install falls into, and it would be the largest group on the dashboard.
+
+### Fixed
+
+- **`@reticlehq/server` — the telemetry client ignored its own injected environment when resolving a licence.** `createTelemetry` takes an `env` for injection, and licence resolution read the ambient `process.env` instead. Identical in production, which is why it went unnoticed, and wrong everywhere the seam is actually used: an embedder or a test that injects an environment got attribution from the process it happened to be running in rather than the one it asked for. Found while asserting the group payload against the file sink, where the two environments differ for the first time.
+
 ### Removed
 
 - **`@reticlehq/server` — the `instrumentation_stalled` event.** Its founding argument was that a missing `app_instrumented` is an uninterpretable absence, unable to separate "never wired" from "the process died before it could say so". The event did not solve that: it emitted only on a flush tick or a graceful shutdown, so a killed daemon still sent `daemon_started` and nothing else and landed in the absence anyway. Everything it carried is derivable from `daemon_started` minus `app_instrumented`, joined on `sessionId`, and that set difference is strictly MORE complete because it does catch the killed daemons. A second way to compute the same number that disagrees with the first is worse than not having it.
