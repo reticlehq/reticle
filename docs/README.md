@@ -69,6 +69,7 @@ Everything here is published to [docs.reticle.sh](https://docs.reticle.sh) by `d
 | [vs-screenshots.mdx](vs-screenshots.mdx) | why a better vision model does not fix a non-visual bug |
 | [telemetry.md](telemetry.md) | what is collected, and how to turn it off |
 | [local-registry.md](local-registry.md) | installing an unpublished build |
+| [license-activation.mdx](license-activation.mdx) | you have a key: where to set it, how to confirm it, what to do when it fails |
 | [enterprise.md](enterprise.md) | the licensed surface |
 
 ## For people working on Reticle

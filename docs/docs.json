@@ -183,7 +183,7 @@
               },
               {
                 "group": "Trust & licensing",
-                "pages": ["telemetry", "enterprise"]
+                "pages": ["telemetry", "license-activation", "enterprise"]
               }
             ]
           },

@@ -8,6 +8,8 @@ Enterprise features ship inside the open package and are unlocked by a signed li
 
 > Premium access (how you get + activate it), what's gated, the security/data-handling posture, and the licensing model. Integration mechanics live in [`platform-integration.md`](./platform-integration.md).
 
+> **Already have a key and just need to switch it on?** [Activating a license key](./license-activation) is the step-by-step version: where to set it on each platform, the editor and CI cases, how to read every status, and what to do when it does not work.
+
 ## How premium access works (offline, no phone-home)
 
 Enterprise (`ee/`) features ship **inside the open package**; they're source-available (free for development, testing, and evaluation). A **license key activates them in production**. Activation is verified locally with Ed25519; nothing about your usage ever leaves your machine.
