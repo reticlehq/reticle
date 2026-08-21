@@ -12,9 +12,14 @@
  * tokens on that and not on politeness.
  */
 import { z } from 'zod';
-import { FeedbackKind, FeedbackSource } from '@reticlehq/core';
+import {
+  FeedbackKind,
+  FeedbackSource,
+  FEEDBACK_RATING_MAX,
+  FEEDBACK_RATING_MIN,
+} from '@reticlehq/core';
 import { ReticleTool } from './tool-names.js';
-import { asString } from './tools-helpers.js';
+import { asNumber, asString } from './tools-helpers.js';
 import { submitFeedback, feedbackDisabled } from '../telemetry/feedback.js';
 import { getTelemetry } from '../telemetry/telemetry.js';
 import type { ToolDef, ToolDeps } from './tools.js';
@@ -23,6 +28,18 @@ import type { ToolDef, ToolDeps } from './tools.js';
 function optionalText(args: Record<string, unknown>, key: string): Record<string, string> {
   const value = asString(args[key]);
   return value !== undefined && value !== '' ? { [key]: value } : {};
+}
+
+/**
+ * The star rating, present only when the agent actually supplied one, and only when it is on the
+ * scale core defines. Bounds-checked HERE as well as in the schema because a number that survives
+ * to the wire off-scale is worse than an absent one: it still averages.
+ */
+function optionalRating(args: Record<string, unknown>): Record<string, number> {
+  const value = asNumber(args['rating']);
+  if (value === undefined || !Number.isInteger(value)) return {};
+  if (value < FEEDBACK_RATING_MIN || value > FEEDBACK_RATING_MAX) return {};
+  return { rating: value };
 }
 
 /** Read the connected session's self-reported facts, or nothing when no app is attached. */
@@ -57,7 +74,7 @@ export const FEEDBACK_TOOLS: ToolDef[] = [
   {
     name: ReticleTool.FEEDBACK,
     description:
-      "Tell the Reticle maintainers something — a failure, OR a feature you wish existed. Reticle is built FOR agents, so your experience is the one that decides what gets built, and this is the only channel that reaches us. File a `bug` when a tool returned something wrong, a `gap` when Reticle could not observe what you needed, an `ambiguity` when a verdict was not decidable, a `feature_request` when you thought 'I wish Reticle could do X', or an `improvement` when something works but is awkward (too many calls, a confusing shape, a slow path). Do not save these up or judge them as too minor — file it the moment you notice, then carry on with your task. For a failure, write `text` as a root-cause analysis (what you called, expected, got). For a request, write what you want and use `need` for the GOAL behind it, `impact` for what gets better, and `currentApproach` for how you are working around it today — that workaround is usually the most useful thing in the report. Set `model` to the model you are running. Never include app source, secrets, user data, or customer records. Do NOT use this for bugs you found in the app under test — that is a successful verification, which is Reticle working.",
+      "Tell the Reticle maintainers something — a failure, OR a feature you wish existed. Reticle is built FOR agents, so your experience is the one that decides what gets built, and this is the only channel that reaches us. File a `bug` when a tool returned something wrong, a `gap` when Reticle could not observe what you needed, an `ambiguity` when a verdict was not decidable, a `feature_request` when you thought 'I wish Reticle could do X', an `improvement` when something works but is awkward (too many calls, a confusing shape, a slow path), or an `experience` when something worked notably WELL (carry `rating` 1-5). File that one unprompted, when you actually notice it, and say which call and what it saved you — every other kind here is a complaint, so it is the only evidence for what is worth protecting when we change things. Do not save these up or judge them as too minor — file it the moment you notice, then carry on with your task. For a failure, write `text` as a root-cause analysis (what you called, expected, got). For a request, write what you want and use `need` for the GOAL behind it, `impact` for what gets better, and `currentApproach` for how you are working around it today — that workaround is usually the most useful thing in the report. Set `model` to the model you are running. Never include app source, secrets, user data, or customer records. Do NOT use this for bugs you found in the app under test — that is a successful verification, which is Reticle working.",
     inputSchema: {
       kind: z
         .enum([
@@ -66,9 +83,10 @@ export const FEEDBACK_TOOLS: ToolDef[] = [
           FeedbackKind.AMBIGUITY,
           FeedbackKind.FEATURE_REQUEST,
           FeedbackKind.IMPROVEMENT,
+          FeedbackKind.EXPERIENCE,
         ])
         .describe(
-          'bug = a Reticle tool returned a wrong or broken result; gap = Reticle could not observe something you needed at all; ambiguity = the verification ran but you could not tell pass from fail; feature_request = something that does not exist and would have helped; improvement = something that exists but is awkward or inefficient.',
+          'bug = a Reticle tool returned a wrong or broken result; gap = Reticle could not observe something you needed at all; ambiguity = the verification ran but you could not tell pass from fail; feature_request = something that does not exist and would have helped; improvement = something that exists but is awkward or inefficient; experience = something worked notably well and is worth keeping (pair it with `rating`).',
         ),
       text: z
         .string()
@@ -93,6 +111,15 @@ export const FEEDBACK_TOOLS: ToolDef[] = [
         .optional()
         .describe(
           'How you work around it TODAY. Usually the most useful field in the report: it proves the need is real, and often shows a cheaper fix than the feature being asked for.',
+        ),
+      rating: z
+        .number()
+        .int()
+        .min(FEEDBACK_RATING_MIN)
+        .max(FEEDBACK_RATING_MAX)
+        .optional()
+        .describe(
+          `How well it worked, ${FEEDBACK_RATING_MIN}-${FEEDBACK_RATING_MAX}, with an \`experience\`. Only when you formed the judgement while working, never because you were asked: an agreeable number and an earned one are indistinguishable once both sit in the same column. The \`text\` is the part we can act on.`,
         ),
       model: z
         .string()
@@ -141,6 +168,7 @@ export const FEEDBACK_TOOLS: ToolDef[] = [
           ...optionalText(args, 'impact'),
           ...optionalText(args, 'currentApproach'),
           ...optionalText(args, 'model'),
+          ...optionalRating(args),
         },
         {
           session: sessionFacts(deps, asString(args['sessionId'])),

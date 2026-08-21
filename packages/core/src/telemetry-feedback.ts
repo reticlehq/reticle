@@ -51,7 +51,19 @@ export const FeedbackKind = {
    * would hide the second inside the first, and the second is usually cheaper and higher-impact.
    */
   IMPROVEMENT: 'improvement',
-  /** A human's overall take on using Reticle (carries `rating`). */
+  /**
+   * "This worked, and here is what it did." An overall take on using Reticle, carrying `rating`.
+   *
+   * Filed by a human at a terminal OR by an agent mid-task, and the agent case is the one that was
+   * missing: every other kind an agent can file is a complaint, so the corpus could only ever grow
+   * into a defect list. Nothing in it said which parts were worth protecting when we changed them,
+   * which is the question a refactor actually needs answered.
+   *
+   * A score alone is close to worthless here and the tool says so: a model asked for a number will
+   * produce an agreeable one, and an agreeable number is indistinguishable from an earned one once
+   * both are in the same column. What makes a report usable is the `text` naming the concrete
+   * moment, which is also the only part that can be quoted or acted on.
+   */
   EXPERIENCE: 'experience',
 } as const;
 export type FeedbackKind = (typeof FeedbackKind)[keyof typeof FeedbackKind];

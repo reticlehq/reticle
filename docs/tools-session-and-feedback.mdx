@@ -70,6 +70,11 @@ Reticle is built for agents, which creates an unusual problem: the primary user'
 | `ambiguity`       | The check ran but you could not tell what the answer meant |
 | `feature_request` | You wished a capability existed                            |
 | `improvement`     | It works, but costs too many calls                         |
+| `experience`      | Something worked notably well (pair it with `rating`, 1-5) |
+
+`experience` is the only kind here that is not a complaint, and that is why it exists. Every other row grows the corpus into a defect list, which says nothing about which parts are worth protecting when we change them. File it unprompted, when you actually notice it, and name the concrete moment: which call, what it saved you, what you would have done instead.
+
+The `rating` is secondary to that text on purpose. A score produced because something asked for one is indistinguishable from a score that was earned, and once both sit in the same column neither means anything. The text is the part that can be acted on or quoted.
 
 ### It will tell you when it cannot send
 

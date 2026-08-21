@@ -44,7 +44,7 @@ const FEEDBACK_ASK = `Feedback is first-class here, not a courtesy. Reticle is b
 - You wished it could do something, or something works but costs too many calls (\`feature_request\` / \`improvement\`).
 - The install, the wiring, or the setup itself gave you trouble — including anything you had to work around by hand.
 
-Nothing is too minor, and a report costs one call. If the tools are unreachable (setup unfinished, daemon down), file the same report from the shell instead: \`reticle feedback --agent --kind <bug|gap|ambiguity|feature_request|improvement> "what happened"\`. Report defects in RETICLE — a bug you find in the app under test is Reticle working, and belongs in your answer to the user.`;
+Nothing is too minor, and a report costs one call. If the tools are unreachable (setup unfinished, daemon down), file the same report from the shell instead: \`reticle feedback --agent --kind <one of those kinds> "what happened"\`. Report defects in RETICLE — a bug you find in the app under test is Reticle working, and belongs in your answer to the user.`;
 
 export interface InstructionState {
   /**

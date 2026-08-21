@@ -48,7 +48,7 @@ export const CLI_USAGE = `usage:  npx @reticlehq/server <command>   (or \`reticl
   reticle license                                      (show enterprise license status: active | eval | missing)
   reticle telemetry [status|enable|disable]            (anonymous usage metrics; status shows what's sent + the policy)
   reticle feedback [--rating 1-5] [--bug] "message"    (tell us what worked and what didn't; prints exactly what it sends)
-  reticle feedback --agent --kind <bug|gap|ambiguity|feature_request|improvement> "message"
+  reticle feedback --agent --kind <bug|gap|ambiguity|feature_request|improvement|experience> "message"
                                                        (agents: file from anywhere, including a setup that never finished)
   reticle identify --context company|side_project|open_source|learning [--company N] [--email E] [--forget]
                                                        (OPT-IN: tell us who you are, e.g. for support or an enterprise trial)

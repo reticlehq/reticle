@@ -1,4 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { z } from 'zod';
+import { FeedbackKind, FEEDBACK_RATING_MAX, FEEDBACK_RATING_MIN } from '@reticlehq/core';
+import * as feedbackModule from '../telemetry/feedback.js';
 import * as telemetryModule from '../telemetry/telemetry.js';
 import { TOOLS } from './tools.js';
 import { ReticleTool } from './tool-names.js';
@@ -130,5 +133,71 @@ describe('the human prompt re-arms, but is capped', () => {
       if (takeFeedbackPrompt(ReticleTool.ASSERT) !== undefined) asks += 1;
     }
     expect(asks).toBe(3);
+  });
+});
+
+/**
+ * The praise channel. Every kind the agent could file was a complaint, so the only thing an agent
+ * could ever tell us was what was wrong — which makes the feedback corpus a defect list and leaves
+ * "what is already worth keeping" with no evidence behind it at all.
+ */
+describe('an agent can report that something worked, not only that it broke', () => {
+  const tool = TOOLS.find((t) => t.name === ReticleTool.FEEDBACK);
+  const kindSchema = tool?.inputSchema['kind'] as z.ZodEnum<[string, ...string[]]> | undefined;
+  const ratingSchema = tool?.inputSchema['rating'];
+
+  it('offers the experience kind, which until now only a human could file', () => {
+    expect(kindSchema?.options).toContain(FeedbackKind.EXPERIENCE);
+  });
+
+  it('takes a star rating on the same scale the human channel already uses', () => {
+    // Reusing core's bounds rather than inventing a second scale: two rating scales in one corpus
+    // cannot be averaged together, and nothing would say which one a row came from.
+    expect(ratingSchema?.safeParse(FEEDBACK_RATING_MIN).success).toBe(true);
+    expect(ratingSchema?.safeParse(FEEDBACK_RATING_MAX).success).toBe(true);
+  });
+
+  it('refuses a rating off the scale, rather than storing a number nothing can interpret', () => {
+    expect(ratingSchema?.safeParse(FEEDBACK_RATING_MIN - 1).success).toBe(false);
+    expect(ratingSchema?.safeParse(FEEDBACK_RATING_MAX + 1).success).toBe(false);
+    expect(ratingSchema?.safeParse(4.5).success).toBe(false);
+  });
+
+  it('asks what happened, not just how many stars', () => {
+    // A bare score is unusable: it cannot be acted on, cannot be quoted, and cannot be told apart
+    // from a model being agreeable. The description has to demand the concrete moment behind it,
+    // and has to say the quiet part out loud, that this is filed unprompted or not at all.
+    expect(tool?.description).toMatch(/unprompted/i);
+    expect(tool?.description).toMatch(/concretely|what happened|which call/i);
+    const ratingDescription = JSON.stringify(tool?.inputSchema['rating']?.description ?? '');
+    expect(ratingDescription).toMatch(/agreeable|never because you were asked/i);
+  });
+
+  it('carries the rating through to the report rather than dropping it silently', async () => {
+    // The trap this pins: a new tool field needs the input schema AND the handler AND the wire
+    // schema. Miss the handler and the call still succeeds, the receipt still says accepted, and
+    // the number is simply never in the data.
+    const filed: Record<string, unknown>[] = [];
+    const spy = vi.spyOn(feedbackModule, 'submitFeedback').mockImplementation((input: unknown) => {
+      filed.push(input as Record<string, unknown>);
+      return Promise.resolve({ sent: false, accepted: true, redacted: [], note: '' } as never);
+    });
+    const deps = {
+      sessions: {
+        resolve: () => {
+          throw new Error('no browser session connected');
+        },
+      },
+    } as unknown as Parameters<NonNullable<typeof tool>['handler']>[0];
+
+    await tool?.handler(deps, {
+      kind: FeedbackKind.EXPERIENCE,
+      text: 'act_and_wait proved the checkout flow in one call where I would have taken four.',
+      rating: 5,
+    });
+
+    expect(filed[0]?.['rating']).toBe(5);
+    expect(filed[0]?.['kind']).toBe(FeedbackKind.EXPERIENCE);
+    spy.mockRestore();
   });
 });
