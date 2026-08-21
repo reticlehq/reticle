@@ -8,6 +8,8 @@ The automatic path provisions Cloudflare, deploys and secures the Worker, links 
 npx @reticlehq/cloudflare init
 ```
 
+Later runs reuse the locally stored Worker credential. Pass `--rotate-key` only when you intentionally need to invalidate the previous credential.
+
 Preview every mutation before it happens with `npx @reticlehq/cloudflare init --dry-run`. The remote runner uses four isolated contexts by default; choose another bound with `--parallel 1..10`.
 
 See [the Cloudflare runner guide](../../docs/cloudflare-browser-run.mdx) for project linking, the deployed smoke test, security controls, and current evidence support.

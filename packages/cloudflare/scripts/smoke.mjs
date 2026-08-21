@@ -6,6 +6,7 @@ if (!base || !token) {
 }
 
 const headers = { 'content-type': 'application/json', authorization: `Bearer ${token}` };
+const projectId = 'cloudflare-live-smoke';
 const flows = ['cloudflare-example-domain-a', 'cloudflare-example-domain-b'].map((name) => ({
   version: 1,
   name,
@@ -25,7 +26,7 @@ for (const flow of flows) {
   const upload = await fetch(`${base}/v1/flows`, {
     method: 'POST',
     headers,
-    body: JSON.stringify({ flow }),
+    body: JSON.stringify({ flow, projectId }),
   });
   if (!upload.ok) throw new Error(`flow upload failed: ${upload.status} ${await upload.text()}`);
 }
@@ -34,6 +35,7 @@ const verification = await fetch(`${base}/v1/verifications`, {
   method: 'POST',
   headers,
   body: JSON.stringify({
+    projectId,
     previewUrl: 'https://example.com',
     flows: flows.map((flow) => flow.name),
     source: 'cloudflare-smoke',

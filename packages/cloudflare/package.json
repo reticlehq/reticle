@@ -32,7 +32,8 @@
     "scripts/bootstrap-lib.mjs",
     "scripts/smoke.mjs",
     "wrangler.jsonc",
-    "README.md"
+    "README.md",
+    "LICENSE"
   ],
   "publishConfig": {
     "access": "public"

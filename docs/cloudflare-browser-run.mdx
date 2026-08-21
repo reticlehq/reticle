@@ -22,6 +22,8 @@ npx @reticlehq/cloudflare init
 
 That command checks Cloudflare authentication, creates the artifact bucket when needed, deploys the Worker and secret, links the repository, enables `verify:server`, uploads every existing flow and run, and requires a passing live-browser smoke check. It prints the Worker URL and a machine-readable ready summary only after every stage succeeds. Use `--dry-run` to print the full plan without changing Cloudflare or local Reticle configuration. Remote suites use four isolated browser contexts by default; `--parallel 1..10` changes the bound.
 
+Later runs reuse the locally stored Worker credential, so redeploying does not invalidate CI or other linked repositories. Use `--rotate-key` only for an intentional credential rotation. Flow objects are namespaced by the linked project, and retained R2 histories are bounded and cursor-paginated.
+
 ## Manual deployment
 
 Cloudflare Browser Rendering must be enabled for the account, and Wrangler must already be authenticated.

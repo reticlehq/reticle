@@ -47,7 +47,7 @@ async function handle(request: Request, env: Env): Promise<Response> {
   if ('POST' === request.method && '/v1/flows' === url.pathname) {
     const parsed = FlowUploadSchema.safeParse(await body(request));
     if (!parsed.success) return json({ error: 'bad_request' }, 400);
-    await putFlow(env.ARTIFACTS, parsed.data.flow);
+    await putFlow(env.ARTIFACTS, parsed.data.flow, parsed.data.projectId);
     return json({ ok: true, name: parsed.data.flow.name }, 201);
   }
 

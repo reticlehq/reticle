@@ -12,7 +12,7 @@ import type { Env } from './env.js';
 import { json, previewAllowed } from './http.js';
 import { pageAdapter, replayFlow } from './replay.js';
 import { mapWithConcurrency } from './parallel.js';
-import { getFlow } from './store.js';
+import { getFlow, putVerificationReport } from './store.js';
 
 function verdictOf(flows: RemoteFlowResult[]): RemoteFlowStatus {
   if (flows.some((flow) => RemoteFlowStatus.FAIL === flow.status)) return RemoteFlowStatus.FAIL;
@@ -52,7 +52,12 @@ export class VerificationRunner extends DurableObject<Env> {
     const results: RemoteFlowResult[] = [];
     try {
       const runFlow = async (name: string): Promise<RemoteFlowResult> => {
-        const raw = await getFlow(this.env.ARTIFACTS, name);
+        const raw = await getFlow(
+          this.env.ARTIFACTS,
+          name,
+          request.projectId,
+          this.env.RETICLE_PROJECT_ID ?? 'default',
+        );
         const parsed = FlowFileSchema.safeParse(raw);
         if (!parsed.success) {
           return { name, status: RemoteFlowStatus.UNVERIFIED, detail: 'flow is missing' };
@@ -84,11 +89,7 @@ export class VerificationRunner extends DurableObject<Env> {
       flows: results,
       summary: summaryOf(results, verdict),
     };
-    await this.env.ARTIFACTS.put(
-      `verifications/${request.verificationId}.json`,
-      JSON.stringify(response),
-      { httpMetadata: { contentType: 'application/json' } },
-    );
+    await putVerificationReport(this.env.ARTIFACTS, response);
     return response;
   }
 }

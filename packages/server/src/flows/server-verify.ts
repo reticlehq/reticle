@@ -48,7 +48,13 @@ export async function runServerVerify(
   // The server hits the URL itself; with no URL (or a localhost one it can't reach) fall back to local.
   if (previewUrl === undefined || 0 === previewUrl.length) return null;
   const report = await submitServerVerification(
-    { previewUrl, flows, source: SOURCE, ...(parallel === undefined ? {} : { parallel }) },
+    {
+      previewUrl,
+      flows,
+      source: SOURCE,
+      ...(parallel === undefined ? {} : { parallel }),
+      ...(null === cloud.projectId ? {} : { projectId: cloud.projectId }),
+    },
     cloud.config,
     (url, init) => fetch(url, init),
   );

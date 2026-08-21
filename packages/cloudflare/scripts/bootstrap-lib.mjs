@@ -11,11 +11,13 @@ export function parseBootstrapArgs(argv) {
     parallel: 4,
     dryRun: false,
     skipSmoke: false,
+    rotateKey: false,
   };
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
     if ('--dry-run' === arg) options.dryRun = true;
     else if ('--skip-smoke' === arg) options.skipSmoke = true;
+    else if ('--rotate-key' === arg) options.rotateKey = true;
     else if ('--worker' === arg || '--parallel' === arg) {
       const value = args[index + 1];
       if (value === undefined || value.startsWith('-')) throw new Error(`${arg} requires a value`);
@@ -38,7 +40,9 @@ export function bootstrapPlan(options) {
     'check Cloudflare authentication and Browser Run access',
     `create R2 bucket ${options.bucket} when missing`,
     `deploy Worker ${options.worker}`,
-    'generate and configure RETICLE_CLOUD_KEY',
+    options.rotateKey
+      ? 'rotate and configure RETICLE_CLOUD_KEY'
+      : 'reuse or generate and configure RETICLE_CLOUD_KEY',
     'link this repository and enable verify:server',
     'upload all existing flows and runs',
     ...(options.skipSmoke ? [] : ['run a live Cloudflare browser smoke verification']),
@@ -62,4 +66,12 @@ export function reticleCommand(version, args, platform = process.platform) {
     command: 'win32' === platform ? 'npx.cmd' : 'npx',
     args: ['--yes', '--package', `@reticlehq/server@${version}`, '--', 'reticle', ...args],
   };
+}
+
+export function selectBootstrapKey(environmentKey, cachedKey, rotateKey, generate) {
+  if (!rotateKey && 'string' === typeof environmentKey && environmentKey.length > 0) {
+    return environmentKey;
+  }
+  if (!rotateKey && 'string' === typeof cachedKey && cachedKey.length > 0) return cachedKey;
+  return generate();
 }

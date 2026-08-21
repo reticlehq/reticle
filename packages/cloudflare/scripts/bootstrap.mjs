@@ -2,8 +2,9 @@
 import { randomBytes } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
-import { readFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import {
   bootstrapPlan,
@@ -11,6 +12,7 @@ import {
   deploymentNotReady,
   parseBootstrapArgs,
   reticleCommand,
+  selectBootstrapKey,
   workerUrlFromOutput,
 } from './bootstrap-lib.mjs';
 
@@ -19,6 +21,35 @@ const require = createRequire(import.meta.url);
 const wranglerPackage = require.resolve('wrangler/package.json');
 const wranglerBin = join(dirname(wranglerPackage), 'bin', 'wrangler.js');
 const packageVersion = JSON.parse(readFileSync(join(packageRoot, 'package.json'), 'utf8')).version;
+const credentialPath = join(homedir(), '.reticle', 'cloudflare-workers.json');
+
+function credentialCache() {
+  try {
+    if (!existsSync(credentialPath)) return {};
+    const parsed = JSON.parse(readFileSync(credentialPath, 'utf8'));
+    if ('object' !== typeof parsed || null === parsed) return {};
+    return parsed;
+  } catch {
+    return {};
+  }
+}
+
+function cachedKey(url) {
+  const value = credentialCache()[url];
+  return 'string' === typeof value && value.length > 0 ? value : undefined;
+}
+
+function rememberKey(url, key) {
+  mkdirSync(dirname(credentialPath), { recursive: true, mode: 0o700 });
+  writeFileSync(
+    credentialPath,
+    `${JSON.stringify({ ...credentialCache(), [url]: key }, null, 2)}\n`,
+    {
+      mode: 0o600,
+    },
+  );
+  chmodSync(credentialPath, 0o600);
+}
 
 function run(command, args, { cwd = process.cwd(), env = process.env, input } = {}) {
   return new Promise((resolve, reject) => {
@@ -108,13 +139,19 @@ async function main() {
   if (url === undefined)
     throw new Error('Wrangler deployed the Worker but returned no workers.dev URL');
 
-  const key = randomBytes(32).toString('hex');
+  const key = selectBootstrapKey(
+    process.env.RETICLE_CLOUD_KEY,
+    cachedKey(url),
+    options.rotateKey,
+    () => randomBytes(32).toString('hex'),
+  );
   await requireSuccess(
     'configuring the Worker secret',
     process.execPath,
     [wranglerBin, 'secret', 'put', 'RETICLE_CLOUD_KEY', '--name', options.worker],
     { cwd: packageRoot, input: key },
   );
+  rememberKey(url, key);
   const linkedEnv = { ...process.env, RETICLE_CLOUD_URL: url, RETICLE_CLOUD_KEY: key };
   const reticle = (args) => reticleCommand(packageVersion, args);
   const link = reticle(['link']);

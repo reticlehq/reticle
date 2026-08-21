@@ -5,6 +5,7 @@ import {
   deploymentNotReady,
   parseBootstrapArgs,
   reticleCommand,
+  selectBootstrapKey,
   workerUrlFromOutput,
 } from './bootstrap-lib.mjs';
 
@@ -16,7 +17,7 @@ describe('Cloudflare bootstrap CLI', () => {
       'check Cloudflare authentication and Browser Run access',
       'create R2 bucket reticle-cloudflare-artifacts when missing',
       'deploy Worker reticle-cloudflare',
-      'generate and configure RETICLE_CLOUD_KEY',
+      'reuse or generate and configure RETICLE_CLOUD_KEY',
       'link this repository and enable verify:server',
       'upload all existing flows and runs',
       'run a live Cloudflare browser smoke verification',
@@ -32,6 +33,7 @@ describe('Cloudflare bootstrap CLI', () => {
       parallel: 8,
       dryRun: true,
     });
+    expect(parseBootstrapArgs(['init', '--rotate-key']).rotateKey).toBe(true);
     expect(() => parseBootstrapArgs(['init', '--parallel', '0'])).toThrow(/1 to 10/);
     expect(() => parseBootstrapArgs(['destroy'])).toThrow(/unknown command/);
   });
@@ -50,5 +52,12 @@ describe('Cloudflare bootstrap CLI', () => {
       args: ['--yes', '--package', '@reticlehq/server@2.9.0', '--', 'reticle', 'push'],
     });
     expect(reticleCommand('2.9.0', ['link'], 'win32').command).toBe('npx.cmd');
+  });
+
+  it('keeps an existing credential unless rotation is explicit', () => {
+    const generate = () => 'generated';
+    expect(selectBootstrapKey('from-env', 'cached', false, generate)).toBe('from-env');
+    expect(selectBootstrapKey(undefined, 'cached', false, generate)).toBe('cached');
+    expect(selectBootstrapKey('from-env', 'cached', true, generate)).toBe('generated');
   });
 });
