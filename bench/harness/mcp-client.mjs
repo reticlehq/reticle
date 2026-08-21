@@ -3,7 +3,7 @@
 // so we can capture the exact tool-response payloads, wall-clock latency, and
 // whether a failure signal is present. This is the "observation-cost" layer and
 // needs no API key. The agent-loop layer (claude-agent-loop.mjs) is separate.
-import { spawn } from 'node:child_process';
+import { spawn, execFileSync } from 'node:child_process';
 import path from 'node:path';
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -26,6 +26,7 @@ export class McpStdioClient {
     this.proc = spawn(this.command, this.args, {
       env: { ...process.env, ...this.env },
       stdio: ['pipe', 'pipe', 'pipe'],
+      shell: process.platform === 'win32',
     });
     this.proc.stdout.setEncoding('utf8');
     this.proc.stdout.on('data', (chunk) => this._onData(chunk));
@@ -136,7 +137,17 @@ export class McpStdioClient {
 
   async stop() {
     try {
-      this.proc?.kill('SIGTERM');
+      if (process.platform === 'win32' && this.proc?.pid) {
+        try {
+          execFileSync('taskkill', ['/pid', String(this.proc.pid), '/T', '/F'], {
+            stdio: 'ignore',
+          });
+        } catch {
+          this.proc?.kill('SIGTERM');
+        }
+      } else {
+        this.proc?.kill('SIGTERM');
+      }
     } catch {
       /* noop */
     }

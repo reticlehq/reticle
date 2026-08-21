@@ -20,13 +20,13 @@ import { homedir } from 'node:os';
 import { basename, join } from 'node:path';
 import * as PORTS from './ports.mjs';
 import { verifyAnchors } from './inject.mjs';
-
 const FULL = process.argv.includes('--full');
 const NO_BOOT = process.argv.includes('--no-boot');
 // Ports live in one module — see the note there on why disagreeing about them silently
 // invalidated the benchmark twice.
 const { RETICLE_PORT, API_PORT, DEMO_PORT, BENCH_URL } = PORTS;
 const FIXTURE_READY_MS = Number(process.env.BENCH_FIXTURE_READY_MS ?? '30000');
+const PNPM_CMD = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // Deterministic, offline, pure-Reticle detection scripts — always run (the gate's hard floor).
@@ -77,10 +77,13 @@ function spawnFixture(label, command, args, env) {
   // exits and takes every remaining pass with it. That is the whole reason bench-all has been
   // unable to complete: the passes reported "measured NOTHING" and the numbers looked like a
   // verifier regression when the fixture had simply gone away underneath them.
+  const isWindows = process.platform === 'win32';
   const child = spawn(command, args, {
     env: { ...process.env, ...env },
     stdio: 'ignore',
-    detached: true,
+    detached: !isWindows,
+    windowsHide: isWindows,
+    shell: isWindows,
   });
   child.on('error', (error) => console.error(`fixture ${label} failed to spawn: ${error.message}`));
   child.label = label;
@@ -110,7 +113,15 @@ function teardownFixtures() {
     try {
       // Kill the GROUP (negative pid), not just the direct child — see spawnFixture. Killing the
       // wrapper alone is what orphaned a dev server that then outlived the run.
-      process.kill(-child.pid, 'SIGTERM');
+      if (process.platform === 'win32') {
+        try {
+          execFileSync('taskkill', ['/pid', String(child.pid), '/T', '/F'], { stdio: 'ignore' });
+        } catch {
+          child.kill('SIGTERM');
+        }
+      } else {
+        process.kill(-child.pid, 'SIGTERM');
+      }
     } catch {
       try {
         child.kill('SIGTERM');
@@ -133,7 +144,7 @@ async function bootFixtures() {
   const pairingToken = readOrCreatePairingToken();
   spawnFixture(
     'bench-app',
-    'pnpm',
+    PNPM_CMD,
     ['--filter', '@reticlehq/bench-app', 'exec', 'vite', '--port', DEMO_PORT, '--strictPort'],
     { RETICLE_PORT, VITE_RETICLE_TOKEN: pairingToken },
   );
