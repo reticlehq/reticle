@@ -338,7 +338,7 @@ export const OBSERVE_TOOLS: ToolDef[] = [
         // that guessed `urlContains` on route (net's spelling) and got unrecognized_keys.
         'Predicate to evaluate. Kinds: { signal, name } { net, urlContains|method|status|count|bodyContains } ' +
           '{ state, path|equals } { route, pathname (exact) | contains (path+query+hash) } ' +
-          '{ element, testid|role|text } { text } { console, level|absent } { animation, name } ' +
+          '{ element, testid|role|text } { text } { console, level|contains|absent } { animation, name } ' +
           '{ settled } — combine with { allOf | anyOf | not }. Prefer a signal/net/state consequence ' +
           'over element/text presence.',
       ),

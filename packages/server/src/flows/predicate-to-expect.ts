@@ -41,6 +41,13 @@ export function predicateToExpect(predicate: Predicate): FlowExpect | undefined 
       return 0 === Object.keys(net).length ? undefined : { net };
     }
     case PredicateKind.CONSOLE: {
+      // `contains` has no representation in FlowExpect.console (core keeps `level` and `absent`
+      // and nothing else). Copying the rest through anyway would record an assertion the agent
+      // never made: {console, level:'warn', contains:'no-op', absent:true} would save "no warn
+      // entries at all", a false red on any unrelated warning, and in the presence direction it
+      // saves a strictly weaker claim than the one chosen. This file's own rule applies: record
+      // nothing rather than something different, so the flow stays assertion-free there instead.
+      if (predicate.contains !== undefined) return undefined;
       const console_: NonNullable<FlowExpect['console']> = {};
       if (predicate.level !== undefined) console_.level = predicate.level;
       if (predicate.absent !== undefined) console_.absent = predicate.absent;

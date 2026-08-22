@@ -251,14 +251,6 @@ describe('predicate engine', () => {
     );
   });
 
-  it("console accepts the reporter's textContains spelling via alias", async () => {
-    const session = new FakeSession([ev(EventType.CONSOLE_ERROR, { message: 'boom' })]);
-    const result = await evaluatePredicate(session, {
-      kind: 'console',
-      textContains: 'boo',
-    } as never);
-    expect(result.pass).toBe(true);
-  });
 
   /**
    * A hash router keeps the whole route in the fragment, so `pathname` never moves off '/' (or, in a

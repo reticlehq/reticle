@@ -84,6 +84,21 @@ describe('a predicate key that is not real is refused, never dropped', () => {
     });
   });
 
+  /**
+   * Reported from the field by analogy with net { urlContains }: the reporter spells console
+   * substring matching `textContains`, and a rejection with no verdict costs the agent a
+   * `reticle_tools` round trip to recover. The alias is applied in
+   * `z.preprocess(applyPredicateAliases, …)` at schema parse time, so this is asserted through
+   * PredicateSchema; calling evaluatePredicate directly would take an already-typed predicate and
+   * pass for a reason unrelated to aliasing.
+   */
+  it("console { textContains } is accepted, because that is the reporter's spelling", () => {
+    expect(PredicateSchema.parse({ kind: 'console', textContains: 'no-op' })).toMatchObject({
+      kind: 'console',
+      contains: 'no-op',
+    });
+  });
+
   it("a key that is nobody's spelling is rejected, not stripped", () => {
     // The agent gets a schema error naming the key. Before, it got a green.
     expect(() => PredicateSchema.parse({ kind: 'route', pathnmae: '/checkout' })).toThrow();
