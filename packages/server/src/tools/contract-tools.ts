@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { sessionRoot } from '../project/session-root.js';
 import {
   CapabilitiesSchema,
   ContractReadError,
@@ -70,7 +71,7 @@ export const CONTRACT_TOOLS: ToolDef[] = [
     },
     handler: async (deps, args) => {
       if (true === args[FROM_DISK_ARG]) {
-        const r = await readContract(deps.fs, deps.reticleRoot);
+        const r = await readContract(deps.fs, sessionRoot(deps, asString(args['sessionId'])));
         if (!r.ok)
           throw new Error(
             r.reason === ContractReadError.MISSING
@@ -108,10 +109,11 @@ export const CONTRACT_TOOLS: ToolDef[] = [
       );
       const caps = CapabilitiesSchema.parse(res);
       assertSameProject(deps, asString(args['sessionId']));
-      await writeContract(deps.fs, deps.reticleRoot, caps, deps.now);
+      const root = sessionRoot(deps, asString(args['sessionId']));
+      await writeContract(deps.fs, root, caps, deps.now);
       return {
         saved: true,
-        path: reticleDirPaths(deps.reticleRoot).contract,
+        path: reticleDirPaths(root).contract,
         testidCount: caps.testids.length,
         signalCount: caps.signals.length,
       };

@@ -34,6 +34,8 @@ export * from './browser-misdirect.js';
 
 // ── INTERNAL cross-package plumbing (shared impl; not a stable outside API — may change in a minor) ─
 export * from './daemon-registry.js'; // daemon discovery, used by the vite plugin + server
+export * from './project-registry.js'; // projectId -> directory, so a cross-repo daemon can still resolve
+export * from './instrumentation-gap.js'; // what Reticle could not see, and the change that would let it
 export * from './security.js'; // sanitize/serialize helpers shared by browser + server
 export * from './redaction.js'; // isSensitiveKey / scrubKnownSecrets — the shared redaction rules
 export * from './state-select.js'; // selectPath / capDepth — shared by browser SDK + server fallback

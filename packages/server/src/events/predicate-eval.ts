@@ -223,11 +223,123 @@ function describeNetFilter(p: Extract<Predicate, { kind: typeof PredicateKind.NE
   return JSON.stringify(filter);
 }
 
+/**
+ * URL suffixes only the DOCUMENT fetches, which the network observer therefore never records.
+ *
+ * `network.ts` patches `fetch` and `XMLHttpRequest` and nothing else, so `<link rel=icon>`,
+ * `<link rel=manifest>`, stylesheets, fonts and `<img src>` are invisible to it. "No matching call"
+ * and "that class of call is not observed" are then indistinguishable, and the miss graded
+ * `assertion_failed` — a false RED. Reported from the field: an assert over `/favicon.ico`,
+ * `/site.webmanifest` and `/apple-touch-icon.png` returned `verified:"no"` while curl showed all
+ * three answering 200. A false negative here is worse than an unknown, because an agent that trusts
+ * it goes and "fixes" working code.
+ *
+ * Deliberately NOT here: `.js` and `.json`. Both are routinely fetched via `fetch`/XHR — a module
+ * preload and an API call can share a suffix — so downgrading them would hide real misses. This list
+ * is only the suffixes for which the document is the sole plausible initiator.
+ *
+ * This began as the smaller half of #447: it did not make these requests observable, it stopped
+ * Reticle claiming they did not happen. The other half, observing them via resource timing, has
+ * since landed in the browser SDK, so the two halves are no longer independent and this downgrade is
+ * now GATED: when the event stream carries at least one document-initiated record, the observer is
+ * demonstrably live and a miss over these suffixes is real evidence, graded a plain failure. Only a
+ * page whose stream holds no resource entry at all keeps the honest "cannot tell apart" answer,
+ * because there the observer may simply not exist.
+ */
+const DOCUMENT_ONLY_SUFFIXES: readonly string[] = [
+  '.ico',
+  '.png',
+  '.jpg',
+  '.jpeg',
+  '.gif',
+  '.svg',
+  '.webp',
+  '.avif',
+  '.bmp',
+  '.css',
+  '.woff',
+  '.woff2',
+  '.ttf',
+  '.otf',
+  '.eot',
+  '.webmanifest',
+];
+
+/**
+ * Does this filter target a class of request the observer cannot see?
+ *
+ * Read off `urlContains` only, and only when the pattern ENDS in one of the suffixes — a filter of
+ * `/api/` that happens to contain `.css` somewhere in a query string is still an ordinary XHR
+ * target. Query strings and fragments are stripped first, since `favicon.ico?v=2` is the same asset.
+ */
+function targetsUnobservedChannel(
+  p: Extract<Predicate, { kind: typeof PredicateKind.NET }>,
+): boolean {
+  if (p.urlContains === undefined) return false;
+  const path = (p.urlContains.split('#')[0] ?? '').split('?')[0]?.toLowerCase() ?? '';
+  return DOCUMENT_ONLY_SUFFIXES.some((suffix) => path.endsWith(suffix));
+}
+
+/**
+ * Initiator types the browser SDK's resource-timing observer stamps onto document-initiated records
+ * (packages/browser/src/observers/network.ts). The patched transports sign themselves `fetch`,
+ * `xhr` or `beacon`, so any NET_REQUEST carrying one of these came from a `resource` entry, and its
+ * mere presence is proof the PerformanceObserver is alive on this page. Mirrors the wire; keep in
+ * sync with the browser package.
+ */
+const DOCUMENT_INITIATORS: ReadonlySet<string> = new Set([
+  'link',
+  'css',
+  'img',
+  'script',
+  'manifest',
+  'other',
+]);
+
+/**
+ * Did the observer actually report a document-initiated load?
+ *
+ * This is the gate on the unobserved-channel downgrade above. Once subresource observation landed,
+ * a miss over `.ico`/`.css`/`.woff2` is no longer inherently unknowable: if the observer is live it
+ * would have seen the favicon load, so seeing none is evidence it never fired. But the observer is
+ * opt-in-by-engine, not guaranteed: on a renderer without `PerformanceObserver` (or before any
+ * resource entry exists) nothing distinguishes "not requested" from "not visible", and the honest
+ * answer stays inconclusive. Liveness is inferred from the same events being judged: one
+ * document-initiated record anywhere in the window proves the channel works.
+ */
+function observerSawSubresources(events: ReticleEvent[]): boolean {
+  return events.some((e) => {
+    if (e.type !== EventType.NET_REQUEST) return false;
+    const initiator = str(e.data['initiator']);
+    return initiator !== undefined && DOCUMENT_INITIATORS.has(initiator);
+  });
+}
+
+/** The sentence both zero-match branches hand to `inconclusive`. */
+function unobservedChannelReason(
+  p: Extract<Predicate, { kind: typeof PredicateKind.NET }>,
+): string {
+  return (
+    `no call matched ${describeNetFilter(p)}, and no document-initiated load was recorded either, ` +
+    `so this page exposed no resource timing to read: Reticle observes fetch and XMLHttpRequest ` +
+    `directly, while a request the document initiates (<link rel=icon|manifest|preload>, a ` +
+    `stylesheet, a font, <img src>) leaves no record, and that state cannot be told apart from the ` +
+    `request having been made. ` +
+    `Nothing here says the app is wrong. Check it outside the browser, or assert something the ` +
+    `document does not fetch on its own`
+  );
+}
+
 export function evalNet(
   events: ReticleEvent[],
   p: Extract<Predicate, { kind: typeof PredicateKind.NET }>,
 ): EvalResult {
   const since = p.since ?? 0;
+  /**
+   * Computed once: the gate every zero-match downgrade below reads. True means the resource-timing
+   * observer is demonstrably live in this window, so a miss is evidence rather than blindness.
+   */
+  const sawSubresources = observerSawSubresources(events);
   /**
    * Did any call match everything EXCEPT the body assertion, while carrying no recorded body?
    *
@@ -237,6 +349,8 @@ export function evalNet(
    * because it is the same pass over the same events.
    */
   let matchedButUnrecorded = false;
+  /** A call matched url/method but carried NO readable status (document-initiated subresource). */
+  let unobservableStatus = false;
   /**
    * The response body of a call that matched everything EXCEPT the body assertion, and HAD one.
    *
@@ -255,7 +369,18 @@ export function evalNet(
     if (p.urlContains !== undefined && !(str(d['url']) ?? '').includes(p.urlContains)) {
       return false;
     }
-    if (p.status !== undefined && num(d['status']) !== p.status) return false;
+    if (p.status !== undefined) {
+      const status = num(d['status']);
+      if (status === undefined) {
+        // Document-initiated subresources (link/css/img/manifest via resource timing) carry no
+        // readable status on engines without responseStatus. A failed assertion here would read
+        // "your change is broken" and send the caller to fix working code — the exact false
+        // negative the oracle exists to prevent. Downgrade to unknown instead.
+        unobservableStatus = true;
+        return false;
+      }
+      if (status !== p.status) return false;
+    }
     if (p.ok !== undefined && callSucceeded(d) !== p.ok) return false;
     if (p.bodyContains !== undefined) {
       // The RESPONSE body only, and this is the whole point of the field. Searching the request too
@@ -274,6 +399,18 @@ export function evalNet(
     }
     return true;
   });
+  if (unobservableStatus && 0 === matches.length) {
+    // The url/method matched a document-initiated subresource whose engine could not read a status.
+    // "No matching call" would be a lie in both directions: it may have succeeded, it may have 404'd
+    // on exactly the path mistake the caller is hunting. Say the truth — not observable here.
+    return {
+      pass: false,
+      inconclusive: `a document-initiated request matching ${describeNetFilter(p)} was observed, but this engine does not expose its status code (resource timing without responseStatus) — assert on the element or route instead, or check the network tab`,
+      observed: 'a matching request with no readable status',
+      expected: `a status of ${String(p.status)} on ${JSON.stringify(p.urlContains ?? '*')}`,
+      assertion: 'net.unobservable-status',
+    };
+  }
   if (matchedButUnrecorded && 0 === matches.length) {
     return {
       pass: false,
@@ -300,19 +437,40 @@ export function evalNet(
   if (p.count !== undefined) {
     return matches.length === p.count
       ? { pass: true, evidence: { matched: matches.length } }
-      : {
-          pass: false,
-          // Monotonic: more matches than asked for can never become exactly the number asked for.
-          // This is the double-submit — two writes 59ms apart — so the finding that matters most was
-          // also the one that took the caller's whole budget to report.
-          ...(matches.length > p.count ? { decided: true } : {}),
-          failureReason: `expected ${String(p.count)} network call(s) matching ${describeNetFilter(p)}, saw ${String(matches.length)}`,
-          observed: `${String(matches.length)} matching network call(s)`,
-          expected: `exactly ${String(p.count)} matching ${describeNetFilter(p)}`,
-          assertion: 'net.count',
-        };
+      : 0 === matches.length && targetsUnobservedChannel(p) && !sawSubresources
+        ? {
+            pass: false,
+            failureReason: unobservedChannelReason(p),
+            inconclusive: unobservedChannelReason(p),
+            assertion: 'net.count',
+          }
+        : {
+            pass: false,
+            // Monotonic: more matches than asked for can never become exactly the number asked for.
+            // This is the double-submit — two writes 59ms apart — so the finding that matters most was
+            // also the one that took the caller's whole budget to report.
+            ...(matches.length > p.count ? { decided: true } : {}),
+            failureReason: `expected ${String(p.count)} network call(s) matching ${describeNetFilter(p)}, saw ${String(matches.length)}`,
+            observed: `${String(matches.length)} matching network call(s)`,
+            expected: `exactly ${String(p.count)} matching ${describeNetFilter(p)}`,
+            assertion: 'net.count',
+          };
   }
   const hit = matches[0];
+  if (hit === undefined && targetsUnobservedChannel(p) && !sawSubresources) {
+    const reason = unobservedChannelReason(p);
+    return {
+      pass: false,
+      failureReason: reason,
+      inconclusive: reason,
+      observed: describeObserved(
+        'calls',
+        events.filter((e) => e.type === EventType.NET_REQUEST).map(describeCall),
+      ),
+      expected: `at least one call matching ${describeNetFilter(p)}`,
+      assertion: 'net.unobserved-channel',
+    };
+  }
   return hit !== undefined
     ? { pass: true, evidence: hit.data }
     : {
@@ -367,25 +525,71 @@ export function evalConsole(
     if ('error' === p.level) return isErr;
     return e.type === CONSOLE_LEVEL_TYPE[p.level];
   });
+  // A text match narrows the population to entries whose captured message contains the substring.
+  // With `absent: true` this is the whole point: "THIS message did not appear", not "no messages
+  // appeared" — the difference between a regression check and a fragile one that any unrelated
+  // warning anywhere in the app breaks.
+  const wanted = 'contains' in p ? p.contains : undefined;
+  // Captured messages are strings (stringifyArgs in the browser observer), but a malformed or
+  // foreign event must not crash the evaluator: non-strings stringify defensively, and objects
+  // go through JSON.stringify rather than a default toString that would print '[object Object]'.
+  const asText = (v: unknown): string => {
+    if ('string' === typeof v) return v;
+    try {
+      return JSON.stringify(v) ?? '';
+    } catch {
+      return '';
+    }
+  };
+  const matching =
+    wanted !== undefined
+      ? matches.filter((e) => asText(e.data['message']).includes(wanted))
+      : matches;
   if (true === p.absent) {
-    return 0 === matches.length
+    if (wanted !== undefined && 0 === matching.length && matches.length > 0) {
+      // Other entries exist but none carries the substring: exactly the pass an absence-with-match
+      // asserts. Name both counts so the caller can tell this from a silent window.
+      return {
+        pass: true,
+        evidence: { absent: true, contains: wanted },
+      };
+    }
+    return 0 === matching.length
       ? { pass: true, evidence: { absent: true } }
       : {
           pass: false,
-          failureReason: `expected no ${p.level ?? 'console'} entries but found ${String(matches.length)}`,
-          observed: `${String(matches.length)} ${p.level ?? 'console'} entr${1 === matches.length ? 'y' : 'ies'}`,
-          expected: `no ${p.level ?? 'console'} entries`,
-          assertion: 'console.absent',
-          evidence: matches.map((e) => e.data),
+          failureReason:
+            wanted !== undefined
+              ? `expected no ${p.level ?? 'console'} entry containing ${JSON.stringify(wanted)} but found ${String(matching.length)}`
+              : `expected no ${p.level ?? 'console'} entries but found ${String(matches.length)}`,
+          observed:
+            wanted !== undefined
+              ? `${String(matching.length)} ${p.level ?? 'console'} entr${1 === matching.length ? 'y' : 'ies'} containing ${JSON.stringify(wanted)}`
+              : `${String(matches.length)} ${p.level ?? 'console'} entr${1 === matches.length ? 'y' : 'ies'}`,
+          expected:
+            wanted !== undefined
+              ? `no ${p.level ?? 'console'} entry containing ${JSON.stringify(wanted)}`
+              : `no ${p.level ?? 'console'} entries`,
+          assertion: wanted !== undefined ? 'console.absent-contains' : 'console.absent',
+          evidence: matching.map((e) => e.data),
         };
   }
-  return matches.length > 0
-    ? { pass: true, evidence: matches.map((e) => e.data) }
+  return matching.length > 0
+    ? { pass: true, evidence: matching.map((e) => e.data) }
     : {
         pass: false,
-        failureReason: `no ${p.level ?? 'console'} entries found`,
-        observed: `no ${p.level ?? 'console'} entries in the window`,
-        expected: `at least one ${p.level ?? 'console'} entry`,
+        failureReason:
+          wanted !== undefined
+            ? `no ${p.level ?? 'console'} entry containing ${JSON.stringify(wanted)} found`
+            : `no ${p.level ?? 'console'} entries found`,
+        observed:
+          wanted !== undefined
+            ? `no ${p.level ?? 'console'} entry containing ${JSON.stringify(wanted)} in the window`
+            : `no ${p.level ?? 'console'} entries in the window`,
+        expected:
+          wanted !== undefined
+            ? `at least one ${p.level ?? 'console'} entry containing ${JSON.stringify(wanted)}`
+            : `at least one ${p.level ?? 'console'} entry`,
         assertion: 'console.present',
       };
 }

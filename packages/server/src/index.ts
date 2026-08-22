@@ -1,4 +1,13 @@
 import { join } from 'node:path';
+import { existsSync, readFileSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { PROJECT_REGISTRY_FILE, emptyProjectRegistry, parseProjectRegistry } from '@reticlehq/core';
+import { discoverProjectConfigs, type ConfigDiscovery } from './cli/config-discovery.js';
+import {
+  projectCandidatesFrom,
+  resolveArtifactRoot,
+  type ArtifactRoot,
+} from './project/artifact-root.js';
 import type { Server } from 'node:http';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import {
@@ -421,6 +430,41 @@ async function resolveRealInput(
 }
 
 /** Start the Reticle bridge (browser WS endpoint) and, by default, the MCP stdio server. */
+
+/**
+ * Resolve a session's artifact root, from everything this machine knows about where projects live.
+ *
+ * Built once per daemon and closed over by every tool call. The two sources are read lazily and
+ * cheaply on each call rather than snapshotted at startup: `init` can run in another terminal while
+ * this daemon is up, and a resolution that used a startup snapshot would keep answering with a map
+ * from before the project the agent is now driving existed.
+ */
+function artifactRootResolver(daemonRoot: string): (projectId: string | undefined) => ArtifactRoot {
+  return (projectId) => {
+    let registry = emptyProjectRegistry();
+    try {
+      const path = join(homedir(), ReticleDir.ROOT, PROJECT_REGISTRY_FILE);
+      registry = existsSync(path)
+        ? parseProjectRegistry(JSON.parse(readFileSync(path, 'utf8')))
+        : registry;
+    } catch {
+      // A cache that cannot be read is an empty cache, never an error: the daemon still resolves
+      // through discovery, and falls back to its own root exactly as it did before this existed.
+    }
+    let discovery: ConfigDiscovery = { found: [], searched: [] };
+    try {
+      discovery = discoverProjectConfigs(process.cwd());
+    } catch {
+      // Same reasoning: a diagnostic search that throws must not take a tool call with it.
+    }
+    return resolveArtifactRoot({
+      projectId,
+      candidates: projectCandidatesFrom(discovery, registry),
+      daemonRoot,
+    });
+  };
+}
+
 export async function start(options: StartOptions = {}): Promise<RunningServer> {
   const port = options.port ?? RETICLE_DEFAULT_PORT;
   // Open the user's impact record before anything can connect. Not inside the MCP branch: a daemon
@@ -477,6 +521,7 @@ export async function start(options: StartOptions = {}): Promise<RunningServer> 
       project,
       fs,
       reticleRoot,
+      artifactRootFor: artifactRootResolver(reticleRoot),
       now,
       bridgePort: port,
       browserProbe: probeChromium,

@@ -56,6 +56,13 @@ describe('the core surface leaves nothing to guess', () => {
     (tool) => CORE_TOOL_NAMES.has(tool.name) && Object.keys(tool.inputSchema).length > 1,
   );
 
+  // Its own it(), because an empty `it.each` registers ZERO tests and reports the file
+  // green with no warning — there is nothing to hang an assertion on. The sibling group
+  // above already has this control; this one was missed.
+  it('has a core surface to check', () => {
+    expect(needExamples.length).toBeGreaterThan(0);
+  });
+
   it.each(needExamples.map((tool) => [tool.name, tool] as const))(
     '%s carries an example call',
     (_name, tool) => {

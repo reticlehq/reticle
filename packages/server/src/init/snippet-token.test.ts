@@ -35,7 +35,11 @@ describe('the manual connect snippet carries the pairing token', () => {
     // Two connect calls, or a token in prose beside a tokenless call, is the same bug wearing a
     // different shape: what matters is that the call the user pastes carries it.
     const snippet = htmlManual(4400, 'demo', 'tok_abc123');
-    for (const call of snippet.match(/reticle\.connect\(\{[^)]*\}\)/g) ?? []) {
+    const calls = snippet.match(/reticle\.connect\(\{[^)]*\}\)/g) ?? [];
+    // Change how the snippet spells the call and this matches nothing, passing green
+    // without having looked at a single connect call.
+    expect(calls.length, 'no connect call found in the snippet').toBeGreaterThan(0);
+    for (const call of calls) {
       expect(call, 'a connect call without the token').toContain('tok_abc123');
     }
   });

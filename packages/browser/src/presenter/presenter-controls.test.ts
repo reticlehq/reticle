@@ -377,3 +377,42 @@ describe('presenter-controls / live-control panel', () => {
     expect(snap.tree).not.toContain('secret guidance text');
   });
 });
+
+/**
+ * Teardown has to remove what mount added.
+ *
+ * All eight of this panel's listeners are anonymous closures over `this`, so there was no reference
+ * to hand `removeEventListener` and teardown removed none of them.
+ *
+ * Asserting the MECHANISM rather than a side effect: a test that tears down, clicks, and checks
+ * nothing happened passes either way once the HUD has left the DOM, so it measures the removal
+ * rather than the fix. Recording each registration and checking its signal is what goes red.
+ */
+describe('control panel teardown', () => {
+  it('registers its listeners with a signal, and aborts it on teardown', () => {
+    document.body.innerHTML = '';
+    const add = vi.spyOn(EventTarget.prototype, 'addEventListener');
+
+    const p = new Presenter({});
+    p.mount();
+    p.sessionStart();
+
+    const signals = add.mock.calls
+      .map(([, , options]) =>
+        'object' === typeof options && null !== options ? options.signal : undefined,
+      )
+      .filter((s): s is AbortSignal => s !== undefined);
+    add.mockRestore();
+
+    // Guards the guard: if nothing registers with a signal, the loop below passes for free.
+    expect(signals.length, 'the HUD should register listeners with a signal').toBeGreaterThan(0);
+    expect(signals.some((s) => s.aborted)).toBe(false);
+
+    p.destroy();
+
+    expect(
+      signals.every((s) => s.aborted),
+      'a signalled listener outlived destroy()',
+    ).toBe(true);
+  });
+});

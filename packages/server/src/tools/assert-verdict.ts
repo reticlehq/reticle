@@ -1,4 +1,9 @@
 import { BlindSpotKind, CaptureLoss, PredicateKind } from '@reticlehq/core';
+import { gapsForAction } from '../honesty/instrumentation-gaps.js';
+import { noteSessionGaps } from '../honesty/gap-ledger.js';
+import { declaresState } from '../events/predicate-asks.js';
+import { isStateUnwatched } from '../honesty/blind-spots.js';
+import type { InstrumentationGap } from '@reticlehq/core';
 import type { Predicate } from '../events/predicate.js';
 import type { Session } from '../session/session.js';
 import { findContradictions, type Contradiction } from '../events/contradictions.js';
@@ -68,6 +73,7 @@ export async function assertVerdict(
   decision: Record<string, unknown>;
   contradictions: Contradiction[];
   coverage: Record<string, unknown>;
+  gaps: InstrumentationGap[];
 }> {
   // Scope caveat, stated because it is a real limitation and not a bug: blind spots are tracked per
   // SESSION, not per assertion window, so a cross-origin iframe seen once marks every later verdict
@@ -151,5 +157,24 @@ export async function assertVerdict(
       repeated: repeatedRequestLabels(windowEvents),
     },
   });
-  return { decision: decision as unknown as Record<string, unknown>, contradictions, coverage };
+  // The same rule the act path uses, fed by what THIS path knows. An assertion drives nothing, so
+  // only two of the four gates can fire here: a red with no remembered source to point at, and a
+  // state assertion against an app that registers no store.
+  const gaps = gapsForAction({
+    pass,
+    sourceKnown: session.lastAct.source() !== undefined,
+    stateAsked: declaresState(predicate),
+    stateUnwatched: isStateUnwatched(spots),
+    domMutated: false,
+    signalsFired: 0,
+    routeChanged: false,
+    routeSignalFired: false,
+  });
+  noteSessionGaps(session, gaps);
+  return {
+    decision: decision as unknown as Record<string, unknown>,
+    contradictions,
+    coverage,
+    gaps,
+  };
 }

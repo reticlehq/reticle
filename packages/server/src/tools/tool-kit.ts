@@ -12,6 +12,7 @@ import type { BaselineStore } from '../project/baselines.js';
 import { normalizeLines } from '../project/baselines.js';
 import type { RecordingStore } from '../flows/recordings.js';
 import type { FileSystemPort } from '../project/fs-port.js';
+import type { ArtifactRoot } from '../project/artifact-root.js';
 import type { FlowStore } from '../flows/flows.js';
 import type { ProjectStore } from '../project/project-store.js';
 import type { AnnotationStore } from '../flows/annotation-store.js';
@@ -41,8 +42,22 @@ export interface ToolDeps<Ext = unknown> {
   realInput?: RealInputProvider;
   /** injected filesystem seam (tests pass a fake/temp-dir adapter). */
   fs: FileSystemPort;
-  /** absolute.reticle path (index.ts computes cwd/.reticle). */
+  /** absolute.reticle path (index.ts computes cwd/.reticle). The FALLBACK, not the answer. */
   reticleRoot: string;
+  /**
+   * Which `.reticle` a SESSION's artifacts belong in, resolved per call.
+   *
+   * `reticleRoot` above is fixed at construction from the daemon's own `process.cwd()`, which is a
+   * statement about where the daemon was launched and was being read as a statement about which
+   * project is being verified. Those are usually not the same tree: an editor starts a user-scoped
+   * MCP server wherever it likes, so flows landed outside the repo they verify, or died on
+   * `mkdir '/.reticle'`.
+   *
+   * Optional because every existing construction of ToolDeps predates it and because a consumer
+   * embedding this engine may not have a filesystem to search. Absent ⇒ `reticleRoot`, which is
+   * exactly today's behaviour.
+   */
+  artifactRootFor?: (projectId: string | undefined) => ArtifactRoot;
   /**
    * This daemon's OWN project id, derived from the directory it was started in.
    *

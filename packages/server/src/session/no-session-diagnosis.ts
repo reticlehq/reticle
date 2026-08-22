@@ -19,6 +19,7 @@
  * the hot resolve() path and this stays unit-testable.
  */
 
+import { leaseCaveat, type LeaseBrowserState } from './lease-availability.js';
 import { DEV_SERVER_PORTS } from '../cli/cli-port.js';
 import { STALL_AFTER_MS } from './stall-clock.js';
 
@@ -40,6 +41,15 @@ export interface NoSessionFacts {
   slowListeners?: readonly number[];
   /** The port this daemon is on — half of the mismatch the old message asked about. */
   port: number;
+  /**
+   * What the caller knows about the Chromium a lease would drive.
+   *
+   * Every branch below offers `reticle_lease` as the way not to wait for a human. When that browser
+   * is missing or at a revision this Playwright will not use, the offer is the one thing that cannot
+   * help — and it was being made by the same output that had just diagnosed exactly that. Optional:
+   * absent means the caller did not probe, which is not evidence the browser is missing.
+   */
+  leaseBrowser?: LeaseBrowserState | undefined;
   /**
    * The directory `initialized` was decided in, named in the message when it is known.
    *
@@ -152,6 +162,18 @@ const URL_THEN_LEASE =
   'Once you have that URL, open it with reticle_lease {action:"acquire", url} rather than a shell ' +
   'command — it needs no CLI on PATH (reach it with reticle_run {tool:"reticle_lease"} if it is ' +
   'not advertised directly).';
+
+/**
+ * The lease advice, with the reason it cannot be taken when that is the case.
+ *
+ * A function rather than a constant so the caveat cannot be forgotten at one of the six sites that
+ * offer the lease — which is exactly how the offer came to be made by the command that had already
+ * diagnosed the problem.
+ */
+function leaseAdvice(base: string, facts: NoSessionFacts): string {
+  const caveat = leaseCaveat(facts.leaseBrowser);
+  return caveat === undefined ? base : `${base} ${caveat}`;
+}
 
 const SELF_SERVE =
   'You do not have to wait for the human: reticle_lease {action:"acquire", url} opens a browser ' +
@@ -419,7 +441,7 @@ export function diagnoseNoSession(facts: NoSessionFacts): string {
     return (
       'no browser session connected, but one WAS connected to this daemon earlier, so the wiring ' +
       'is correct. The tab was closed, navigated away, or hard-reloaded. Ask the human to reopen ' +
-      `the app (or run ${OPEN_CMD_BARE}), or reload the tab. ${SELF_SERVE} ${RETRY}`
+      `the app (or run ${OPEN_CMD_BARE}), or reload the tab. ${leaseAdvice(SELF_SERVE, facts)} ${RETRY}`
     );
   }
 
@@ -433,7 +455,7 @@ export function diagnoseNoSession(facts: NoSessionFacts): string {
         ? `${unattributedListeners(listening)} If the dev server is not running, start it first ` +
           '(the command is in `next_action`).'
         : unattributedListeners(listening);
-    return `${RESTARTED_LEAD} ${OPEN_THE_APP} ${listeners} ${rankedCauses(facts)} ${SELF_SERVE} ${RETRY}`;
+    return `${RESTARTED_LEAD} ${OPEN_THE_APP} ${listeners} ${rankedCauses(facts)} ${leaseAdvice(SELF_SERVE, facts)} ${RETRY}`;
   }
 
   // A config found elsewhere outranks every "you may have no SDK" branch below: those reason from
@@ -443,7 +465,7 @@ export function diagnoseNoSession(facts: NoSessionFacts): string {
     return (
       'no browser session connected, and this daemon has never seen one. ' +
       `${configsElsewhereClause(facts)} ${unattributedListeners(listening)} ${OPEN_THE_APP} ` +
-      `${rankedCauses(facts)} ${SELF_SERVE} ${RETRY}`
+      `${rankedCauses(facts)} ${leaseAdvice(SELF_SERVE, facts)} ${RETRY}`
     );
   }
 
@@ -476,7 +498,7 @@ export function diagnoseNoSession(facts: NoSessionFacts): string {
         `file ${INIT_CMD} writes, so the app may carry no Reticle SDK — but check the app's ` +
         'OWN directory before re-running `init`: in a monorepo the daemon often runs at the root ' +
         'while the app lives in a subdirectory, and an app wired by the Vite or Babel plugin ' +
-        `carries the SDK without that file at all.${searchedClause(facts)} ${URL_THEN_LEASE} ${RETRY}`
+        `carries the SDK without that file at all.${searchedClause(facts)} ${leaseAdvice(URL_THEN_LEASE, facts)} ${RETRY}`
       );
     }
     return (
@@ -496,7 +518,7 @@ export function diagnoseNoSession(facts: NoSessionFacts): string {
       // Deliberately NOT offering reticle_lease here, and a test pins that: a lease opens a URL, and
       // if nothing is listening there is nothing at any URL to open. Asking for the real one is the
       // only move that can recover the :7699 case.
-      `the app IS running, ask the human for its URL rather than assuming it is down. ${URL_THEN_LEASE} ` +
+      `the app IS running, ask the human for its URL rather than assuming it is down. ${leaseAdvice(URL_THEN_LEASE, facts)} ` +
       // Reachable only for a project that HAS been through `init` — the uninstrumented case is
       // answered above, leading with that certainty instead of behind this scan's guess.
       `${RETRY}`
@@ -520,6 +542,6 @@ export function diagnoseNoSession(facts: NoSessionFacts): string {
     `${stallClause(facts)}no browser session connected, and this daemon has never seen one for this project, which is ` +
     `wired for Reticle. ${OPEN_THE_APP} ${unattributedListeners(listening)} ` +
     'If the page IS open and still does not appear, the app is wired and the SDK is not reaching ' +
-    `this daemon (on ${String(port)}). ${rankedCauses(facts)} ${SELF_SERVE} ${RETRY}`
+    `this daemon (on ${String(port)}). ${rankedCauses(facts)} ${leaseAdvice(SELF_SERVE, facts)} ${RETRY}`
   );
 }

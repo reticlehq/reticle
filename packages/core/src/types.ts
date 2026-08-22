@@ -246,6 +246,20 @@ export type RunRecord = z.infer<typeof RunRecordSchema>;
 export const ProjectLearnedSchema = z.object({
   flows: z.array(z.string()).optional(),
   routes: z.array(z.string()).optional(),
+  /**
+   * The highest observability this project has ever reached — of the controls a session drove, the
+   * share Reticle could fully observe.
+   *
+   * Kept so a LATER run can be told it fell. A coverage figure with no floor under it is one that
+   * gets gamed, and the cheapest way to stop a gap firing is to stop asserting the thing that
+   * revealed it — so the number and its guard ship together or neither is worth having. Same
+   * reasoning as the assertion-tier ledger, which records what a flow asserted the last time it
+   * PASSED for exactly this reason.
+   *
+   * Optional and additive: absent means "no best yet", which is the honest state of every project
+   * that predates this field, and is why the file version does not move.
+   */
+  bestObservability: z.object({ percent: z.number(), at: z.number() }).optional(),
 });
 export type ProjectLearned = z.infer<typeof ProjectLearnedSchema>;
 

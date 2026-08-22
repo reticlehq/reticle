@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { asNumber } from '../tools/tools-helpers.js';
+import { sessionRoot } from '../project/session-root.js';
+import { asNumber, asString } from '../tools/tools-helpers.js';
 import type { FlowFile } from '@reticlehq/core';
 import { ReticleTool } from '../tools/tool-names.js';
 import { readContract } from '../project/reticle-dir.js';
@@ -90,7 +91,7 @@ export const DOMAIN_TOOLS: ToolDef[] = [
         const loaded = await deps.flows.load(name);
         if (loaded.ok) flows.push(loaded.value);
       }
-      const contract = await readContract(deps.fs, deps.reticleRoot);
+      const contract = await readContract(deps.fs, sessionRoot(deps, asString(args['sessionId'])));
       const project = await deps.project.read();
       const runs = project.ok ? project.file.runs : [];
       const model = buildDomainModel(flows, contract.ok ? contract.capabilities : null, runs);

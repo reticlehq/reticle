@@ -82,6 +82,15 @@ export class HudShell {
    */
   #annotateOn = false;
   #toggleSync: MutationObserver | undefined;
+  /**
+   * One signal for every listener this shell registers, so teardown cannot drift from mount.
+   *
+   * The click handlers below are anonymous closures over `this`: there is no reference to hand to
+   * `removeEventListener`, so before this they were never removed at all. Mounting twice onto the
+   * same root therefore stacked a second set, and every handler kept the shell reachable for as
+   * long as its element lived.
+   */
+  #listeners: AbortController | undefined;
   readonly #report = new PresenterReport({
     onBeforeOpen: () => {
       // One panel at a time in the slot above the toolbar. The chat, the settings and the report
@@ -196,6 +205,8 @@ export class HudShell {
     this.#annotateBtn?.setAttribute('data-active', on ? '1' : '0');
   }
   mount(root: HTMLElement): void {
+    this.#listeners = new AbortController();
+    const { signal } = this.#listeners;
     this.#root = root;
     this.#dock = root.querySelector<HTMLElement>(`[${DOCK_ATTR}]`) ?? undefined;
     const fabEl = root.querySelector(`[${FAB_ATTR}]`);
@@ -206,24 +217,36 @@ export class HudShell {
     this.#chatToggle = chatToggleEl instanceof HTMLElement ? chatToggleEl : undefined;
     const annotateEl = root.querySelector(`[${ANNOTATE_BTN_ATTR}]`);
     this.#annotateBtn = annotateEl instanceof HTMLButtonElement ? annotateEl : undefined;
-    this.#annotateBtn?.addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      this.setAnnotateOn(!this.#annotateOn);
-      this.#callbacks.onAnnotateToggle?.(this.#annotateOn);
-    });
+    this.#annotateBtn?.addEventListener(
+      'click',
+      (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        this.setAnnotateOn(!this.#annotateOn);
+        this.#callbacks.onAnnotateToggle?.(this.#annotateOn);
+      },
+      { signal },
+    );
     const pillEl = root.querySelector(`[${CHAT_PILL_ATTR}]`);
-    pillEl?.addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      this.showChat();
-    });
+    pillEl?.addEventListener(
+      'click',
+      (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        this.showChat();
+      },
+      { signal },
+    );
     const chatMinEl = root.querySelector(`[${CHAT_MIN_ATTR}]`);
-    chatMinEl?.addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      this.closeChat();
-    });
+    chatMinEl?.addEventListener(
+      'click',
+      (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        this.closeChat();
+      },
+      { signal },
+    );
     const collapseEl = root.querySelector('[data-reticle-min-btn]');
     this.#collapseBtn = collapseEl instanceof HTMLButtonElement ? collapseEl : undefined;
     root.setAttribute(MIN_ATTR, '1');
@@ -241,27 +264,43 @@ export class HudShell {
       attributeFilter: [CHAT_ATTR, SETTINGS_ATTR, REPORT_ATTR],
     });
     this.#syncToolbarToggles();
-    root.querySelector(`[${REPORT_BTN_ATTR}]`)?.addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      this.#report.toggle();
-    });
-    this.#fab?.addEventListener('click', (e) => {
-      e.stopPropagation();
-      if (this.#suppressFabClick) {
-        this.#suppressFabClick = false;
-        return;
-      }
-      this.expand();
-    });
-    this.#collapseBtn?.addEventListener('click', (e) => {
-      e.stopPropagation();
-      this.collapse();
-    });
-    this.#chatToggle?.addEventListener('click', (e) => {
-      e.stopPropagation();
-      this.toggleChat();
-    });
+    root.querySelector(`[${REPORT_BTN_ATTR}]`)?.addEventListener(
+      'click',
+      (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        this.#report.toggle();
+      },
+      { signal },
+    );
+    this.#fab?.addEventListener(
+      'click',
+      (e) => {
+        e.stopPropagation();
+        if (this.#suppressFabClick) {
+          this.#suppressFabClick = false;
+          return;
+        }
+        this.expand();
+      },
+      { signal },
+    );
+    this.#collapseBtn?.addEventListener(
+      'click',
+      (e) => {
+        e.stopPropagation();
+        this.collapse();
+      },
+      { signal },
+    );
+    this.#chatToggle?.addEventListener(
+      'click',
+      (e) => {
+        e.stopPropagation();
+        this.toggleChat();
+      },
+      { signal },
+    );
     const toolbarDrag = root.querySelector(`.${DRAG_HANDLE_CLASS}`);
     const dragHandles = [this.#fab, toolbarDrag].filter(
       (el): el is HTMLElement => el instanceof HTMLElement,
@@ -277,12 +316,19 @@ export class HudShell {
       });
       this.#layoutTeardown = installHudPositionGuards(this.#dock, root);
     }
-    document.addEventListener('pointerdown', this.#onDocPointerDown);
-    document.addEventListener('keydown', this.#onKeyDown);
+    document.addEventListener('pointerdown', this.#onDocPointerDown, { signal });
+    document.addEventListener('keydown', this.#onKeyDown, { signal });
   }
   teardown(): void {
-    document.removeEventListener('pointerdown', this.#onDocPointerDown);
-    document.removeEventListener('keydown', this.#onKeyDown);
+    // One call for all nine registrations. It cannot fall out of step with mount() the way a list
+    // of removeEventListener calls can, which is the whole point.
+    this.#listeners?.abort();
+    this.#listeners = undefined;
+    // NOT covered by the signal: a MutationObserver takes no `signal` option. This disconnect was
+    // missing entirely, so the observer kept `root` — and through it the shell — alive after
+    // teardown, and a re-mount left the previous one still firing.
+    this.#toggleSync?.disconnect();
+    this.#toggleSync = undefined;
     this.#dragTeardown?.();
     this.#dragTeardown = undefined;
     this.#layoutTeardown?.();

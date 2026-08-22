@@ -15,7 +15,7 @@
 
 import { z } from 'zod';
 import { PredicateKind } from '@reticlehq/core';
-import { PredicateSchema, predicateFieldsFor } from './predicate-eval.js';
+import { PredicateSchema, predicateFieldsFor, predicateNestedFieldsFor } from './predicate-eval.js';
 
 /**
  * One valid call PER KIND, because an example of another kind answers a question nobody asked.
@@ -102,6 +102,13 @@ export function parsePredicate(input: unknown): z.infer<typeof PredicateSchema> 
  */
 function accepted(kind: string): string {
   const fields = predicateFieldsFor(kind);
-  if (0 < fields.length) return `${kind} accepts: ${fields.join(', ')}.`;
+  if (0 < fields.length) {
+    // A field whose value is an object is the one an agent cannot guess from its name alone, so
+    // expand it in the same breath rather than making the shape a second round trip.
+    const nested = Object.entries(predicateNestedFieldsFor(kind))
+      .map(([field, keys]) => ` ${field} accepts: ${keys.join(', ')}.`)
+      .join('');
+    return `${kind} accepts: ${fields.join(', ')}.${nested}`;
+  }
   return `"${kind}" is not a predicate kind — use one of: ${Object.values(PredicateKind).join(', ')}.`;
 }

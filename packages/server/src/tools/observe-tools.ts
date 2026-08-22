@@ -338,7 +338,7 @@ export const OBSERVE_TOOLS: ToolDef[] = [
         // that guessed `urlContains` on route (net's spelling) and got unrecognized_keys.
         'Predicate to evaluate. Kinds: { signal, name } { net, urlContains|method|status|count|bodyContains } ' +
           '{ state, path|equals } { route, pathname (exact) | contains (path+query+hash) } ' +
-          '{ element, testid|role|text } { text } { console, level|absent } { animation, name } ' +
+          '{ element, testid|role|text } { text } { console, level|contains|absent } { animation, name } ' +
           '{ settled } — combine with { allOf | anyOf | not }. Prefer a signal/net/state consequence ' +
           'over element/text presence.',
       ),
@@ -409,6 +409,12 @@ export const OBSERVE_TOOLS: ToolDef[] = [
         .array(z.object({ kind: z.string(), count: z.number() }))
         .optional()
         .describe('Which regions were unobservable, when coverage is partial.'),
+      instrumentationGaps: z
+        .array(z.unknown())
+        .optional()
+        .describe(
+          'What the APP did not tell Reticle, and the one change that would fix it — each entry is { kind, missing, cost, fix, source?, ref? }. Reported ONLY where an absence made THIS verdict weaker: a failing assertion with no source to point at, or a state assertion against an app that registers no store. Never a survey of the page, so an entry is always work worth doing now. OMITTED when the app told Reticle everything it needed.',
+        ),
     },
     handler: async (deps, args) => {
       const session = deps.sessions.resolve(asString(args['sessionId']));
@@ -433,7 +439,7 @@ export const OBSERVE_TOOLS: ToolDef[] = [
           : assertsDerivedIpcStatus(predicate)
             ? { advice: DERIVED_IPC_STATUS_ADVICE }
             : {};
-      const { decision, contradictions, coverage } = await assertVerdict(
+      const { decision, contradictions, coverage, gaps } = await assertVerdict(
         session,
         predicate,
         verdict.pass,
@@ -445,6 +451,8 @@ export const OBSERVE_TOOLS: ToolDef[] = [
         ...decision,
         ...verdict,
         ...(contradictions.length > 0 ? { contradictions } : {}),
+        // What the app did not tell Reticle, on the same rule the act path uses.
+        ...(gaps.length > 0 ? { instrumentationGaps: gaps } : {}),
         ...advice,
         ...coverage,
         ...lastActSourceOnFailure(session, verdict.pass),

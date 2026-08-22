@@ -1,6 +1,6 @@
 {
   "name": "@reticlehq/eslint-plugin",
-  "version": "2.10.0",
+  "version": "2.11.0",
   "description": "Reticle ESLint plugin — keeps the signal layer self-enforcing (mutation-without-signal).",
   "type": "module",
   "main": "./dist/index.js",

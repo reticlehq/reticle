@@ -1,6 +1,6 @@
 {
   "name": "reticle-monorepo",
-  "version": "2.10.0",
+  "version": "2.11.0",
   "private": true,
   "description": "Reticle — the proof layer for AI agents. Observe and verify a running web app over MCP, no screenshots.",
   "packageManager": "pnpm@10.33.2",
@@ -39,7 +39,9 @@
     "matrix:validate": "node apps/e2e/matrix.mjs --self-check && for f in docs/matrix/*/*.json; do node apps/e2e/matrix.mjs --validate \"$f\" || exit 1; done",
     "matrix:compat": "node apps/e2e/client-compat.mjs",
     "knip": "npx --yes knip --no-progress",
-    "hooks:install": "ln -sf ../../pre-commit.sh .git/hooks/pre-commit && ln -sf ../../prepare-commit-msg.sh .git/hooks/prepare-commit-msg && echo \"pre-commit + sign-off hooks installed\""
+    "hooks:install": "ln -sf ../../pre-commit.sh .git/hooks/pre-commit && ln -sf ../../prepare-commit-msg.sh .git/hooks/prepare-commit-msg && echo \"pre-commit + sign-off hooks installed\"",
+    "check:stale-issues": "node scripts/check-stale-issues.mjs",
+    "check:stale-issues:self-test": "node scripts/check-stale-issues.mjs --self-test"
   },
   "pnpm": {
     "overrides": {

@@ -106,8 +106,13 @@ export function installHudPositionGuards(hud: HTMLElement, overlay: HTMLElement)
     scheduleSyncDockLayout(hud, overlay);
   };
 
+  // One signal for all three listeners here. The observers below are NOT covered — neither
+  // ResizeObserver nor MutationObserver accepts one — so they keep their explicit disconnects.
+  const listeners = new AbortController();
+  const { signal } = listeners;
+
   const onResize = (): void => scheduleRelayout();
-  window.addEventListener('resize', onResize);
+  window.addEventListener('resize', onResize, { signal });
 
   let resizeObserver: ResizeObserver | undefined;
   if (typeof ResizeObserver !== 'undefined') {
@@ -122,13 +127,11 @@ export function installHudPositionGuards(hud: HTMLElement, overlay: HTMLElement)
   });
 
   const onVisualViewportResize = (): void => scheduleRelayout();
-  window.visualViewport?.addEventListener('resize', onVisualViewportResize);
-  window.visualViewport?.addEventListener('scroll', onVisualViewportResize);
+  window.visualViewport?.addEventListener('resize', onVisualViewportResize, { signal });
+  window.visualViewport?.addEventListener('scroll', onVisualViewportResize, { signal });
 
   return (): void => {
-    window.removeEventListener('resize', onResize);
-    window.visualViewport?.removeEventListener('resize', onVisualViewportResize);
-    window.visualViewport?.removeEventListener('scroll', onVisualViewportResize);
+    listeners.abort();
     resizeObserver?.disconnect();
     minObserver.disconnect();
   };
@@ -222,16 +225,17 @@ export function installHudDrag(
     finishDrag();
   };
 
-  head.addEventListener('pointerdown', onPointerDown);
-  head.addEventListener('pointermove', onPointerMove);
-  head.addEventListener('pointerup', onPointerUp);
-  head.addEventListener('pointercancel', onPointerCancel);
+  // All four pointer phases share one signal: they are added together and must come off
+  // together, and a partial removal would leave a half-live drag.
+  const listeners = new AbortController();
+  const { signal } = listeners;
+  head.addEventListener('pointerdown', onPointerDown, { signal });
+  head.addEventListener('pointermove', onPointerMove, { signal });
+  head.addEventListener('pointerup', onPointerUp, { signal });
+  head.addEventListener('pointercancel', onPointerCancel, { signal });
 
   return (): void => {
-    head.removeEventListener('pointerdown', onPointerDown);
-    head.removeEventListener('pointermove', onPointerMove);
-    head.removeEventListener('pointerup', onPointerUp);
-    head.removeEventListener('pointercancel', onPointerCancel);
+    listeners.abort();
     if (dragging) releaseCapture(activePointerId ?? 0);
     finishDrag();
   };

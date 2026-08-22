@@ -76,6 +76,7 @@ function memoryIo(
     },
     exists: (p) => key(p) in present || key(p) in written,
     homeDir: () => HOME,
+    cwd: () => '/project',
     rootFiles: () => {
       const scope = '' === prefix ? '' : `${prefix}/`;
       return Object.keys(files)

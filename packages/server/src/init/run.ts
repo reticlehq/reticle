@@ -9,6 +9,7 @@ import { noPackageJsonMessage } from './non-js-project.js';
 import { spanSync } from '../trace.js';
 import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
+import { projectIdOf, rememberProjectOnDisk } from '../project/remember-project.js';
 import { detect, Framework, namesAPackageManager, type DetectInput, UiLibrary } from './detect.js';
 import { wasMcpRegistered } from './mcp-registered.js';
 import { pickAstroHost } from './astro-host.js';
@@ -269,6 +270,8 @@ export interface InitIo {
   exists(relPath: string): boolean;
   /** The user's home directory (for global agent config like ~/.cursor/mcp.json). */
   homeDir(): string;
+  /** Absolute path of the directory `init` is running in — the project's own root. */
+  cwd(): string;
   /** Basenames present in the project root. */
   rootFiles(): readonly string[];
   /** Subdirectory names inside a project-relative directory; empty when it isn't one. */
@@ -826,6 +829,17 @@ function applyEffects(
       if (s.target === DEPS_TARGET && !sdkPackagesPresent(plan.framework, plan.uiLibrary, io))
         installFailed = true;
     }
+  }
+  // Where this project lives, remembered for a daemon that will be started somewhere else.
+  //
+  // Deliberately AFTER the loop and unconditional on which steps ran: most init runs report "already
+  // wired", and a re-run in a re-cloned or moved checkout is exactly when the remembered path has
+  // gone stale — so the run that would otherwise be a no-op is the one that repairs the entry. The
+  // return value is ignored on purpose; this is a cache, and a read-only home directory must not
+  // turn a wired project into a failed init.
+  const projectId = projectIdOf(io.readFile(RETICLE_CONFIG_FILE));
+  if (projectId !== undefined) {
+    rememberProjectOnDisk(io, projectId, io.cwd(), Date.now());
   }
   return { failed, skipped, degraded };
 }

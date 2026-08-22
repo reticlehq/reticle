@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { sessionRoot } from '../project/session-root.js';
 import { verdictForSuite } from './verify-change-verdict.js';
 import { attributedFailures } from './attributed-failure.js';
 import { Verified } from '@reticlehq/core';
@@ -97,7 +98,10 @@ export const VERIFY_CHANGE_TOOLS: ToolDef[] = [
         : [];
       const since = asString(args['since']);
       const changedFiles = await resolveChangedFiles(files, since);
-      const flows = await loadNamedFlows(deps.fs, deps.reticleRoot);
+      // Same root flow_save wrote to. A read that resolved differently would report "no flows
+      // covered this change" over flows that exist, which reads as a clean result rather than
+      // an error, so the disagreement would be invisible.
+      const flows = await loadNamedFlows(deps.fs, sessionRoot(deps, asString(args['sessionId'])));
       const { affected, unknownProvenance } = affectedSavedFlows(flows, changedFiles);
 
       if (0 === changedFiles.length) {

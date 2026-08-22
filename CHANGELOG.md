@@ -4,6 +4,46 @@ All notable changes to the **`@reticlehq/*`** packages are documented here (each
 
 ## [Unreleased]
 
+## [2.11.0] — 2026-08-22
+
+### Added
+
+- **`@reticlehq/core` + `@reticlehq/server` — an action now reports what the APP did not tell Reticle, and the one change that would fix it.** Reticle has always answered "could I see it?" honestly: an unobservable channel downgrades a verdict rather than passing it. It has never answered the other half — _what would I need in order to see it?_ `reticle_act_and_wait` and `reticle_assert` now carry `instrumentationGaps`, each entry `{ kind, missing, cost, fix, source?, ref? }`: a control driven with no source mapping, a state assertion against an app that registers no store, a DOM change no signal announced, a route change nothing signalled.
+
+  **Reported only where an absence made THAT verdict weaker**, never as a survey of the page. Each kind carries its own gate, because "weaker" means something different per kind: a missing source mapping costs nothing on a pass and a great deal on a red, where the file and line are the first thing wanted; a missing store costs nothing unless the caller asked about state; a silent mutation costs nothing if the app proved the outcome another way. A gap nobody hit is a backlog, and a backlog reported as a finding is how an agent learns to stop reading findings.
+
+  The remedy is derived from the kind in one place rather than written at each emit site — a kind reported with a fix that has drifted from it is worse than no fix, because an agent that follows a wrong instruction spends the round trip _and_ ends further away.
+
+- **`@reticlehq/server` — an open gap means verification is not finished, and says so where the agent asks.** `reticle_verify { action: "coverage" }` already answered "am I done?" with the controls you did not drive. It now also answers with what the app **cannot answer**, which no amount of further driving will change, and adds `unproven: true` when that is why you are not finished. Reporting the first without the second is how an agent completes a pass believing it verified something the app was never able to confirm.
+
+  The ledger keys on the LAST verdict, not the session's history: an agent that hits a gap, instruments the app and re-verifies has closed it, and a mechanism that still reported it would punish exactly the behaviour this exists to cause.
+
+- **`@reticlehq/server` — of the controls you drove, how many Reticle could actually observe.** A new `observability` block on the coverage answer, and the first honest denominator the product has had. No percentage is reported for an empty run, because 0/0 rendered as 100% is the most flattering possible reading of no evidence at all. An app-level gap is never divided into a control, since an unregistered store is missing from the application and not from a button.
+
+  **The floor ships with the number.** The best a project has reached is recorded in `project.json` and can only ever rise; a regression is reported when a later run falls below it. A coverage figure with no floor is one that gets gamed, and the cheapest way to stop a gap firing is to stop asserting the thing that revealed it.
+
+### Fixed
+
+- **`@reticlehq/core` + `@reticlehq/server` — a saved flow lands in the project it verifies, and says where.** Everything Reticle persists — flows, the capability contract, baselines, capsules, cross-run memory — resolved against the daemon's own `process.cwd()`. That is a statement about where the daemon was launched, and it was being read as a statement about which project is being verified. Those are usually not the same tree: a user-scoped MCP registration is started wherever the editor likes. Reported three ways from the field — `ENOENT: mkdir '/.reticle'` from a daemon at `/`, a flow written into an unrelated repo, and a save that reported success without naming a path so it had to be found with `find`.
+
+  Resolution is per call, from the session's own project, with **no wire change**: HELLO already stamps `projectId` and `.reticle.json` already declares the same id beside the code it configures. `reticle init` now also records where each project lives, so a daemon started in a different repo entirely can still resolve one. The read half and the write half go through one resolution — a `flow_save` that found the project while `verify_change` still read the daemon's directory would have been worse than the original defect, because the flow would save and then be invisible to the tool that exists to replay it.
+
+  It refuses rather than guesses when two checkouts declare one project. A wrong root writes a caller's evidence into a tree they never drove.
+
+- **`@reticlehq/server` — the escape hatch is no longer offered by the output that just diagnosed why it is shut.** `reticle_lease` is what `status`, `doctor` and the no-session diagnosis all recommend when no tab is connected, and it drives a Reticle-owned Chromium — so a missing or wrong-revision browser is exactly the case where that advice cannot help. It is now qualified, with the pinned install command, and says plainly that a large download is the human's call rather than something an agent should run unprompted on their machine.
+
+- **`@reticlehq/server` — a `{net}` assertion over a request Reticle cannot observe is inconclusive, not failed.** The network observer instruments `fetch` and `XMLHttpRequest`, so a document-initiated load — a favicon, a manifest, a stylesheet, a font — was graded `assertion_failed`. That is a false red from the layer whose job is not to produce one, and worse than an unknown, because an agent that trusts it goes and "fixes" working code. Thanks to **@vaibhav8a**, who also expanded nested predicate fields in a parse error so `element.query` stops being a second round trip.
+
+- **`@reticlehq/server` — `sizeCost` counted UTF-16 code units under a field named `bytes`.**
+
+### Changed
+
+- **Repo — an issue we have already fixed can no longer keep reading as available work.** A commit that says `Closes #N` is a claim the work is done; if that issue is still open and unlabelled afterwards, the tracker is lying to the next person who reads it — and that person is looking for something to start. `pnpm check:stale-issues` refuses the branch unless the issue is closed or labelled `fixed-pending-release`, and ships with a self-test, because a guard nobody has watched go red proves nothing when it is green.
+
+  This is here because it cost real people real evenings. **@Osheun** opened a fix for a dev-server probe defect and we shipped our own the next day without merging theirs — they were first. They also rebuilt config discovery that had shipped a day and a half earlier while its issue stayed open. **@hardikguptaofficialgit** rebuilt the `inViewport` predicate for the same reason, and in doing so found a real false green in the shipped version: it intersects only against the window, so an element scrolled out of an `overflow:auto` panel still reports as in the viewport. **@shaurya703** and **@vaibhav8a** independently solved the same two issues within half an hour of each other. Every one of those was our process, not their work.
+
+- **`@reticlehq/server` — four guards that could pass over an empty collection now have a control each.** Thanks to **@shaurya703**, with the same fix independently written by **@vaibhav8a**. Thanks to **@slegarraga** for proving the MCP no-example fallback actually fires, rather than asserting around it.
+
 ### Added
 
 - **`@reticlehq/server` — a licensed event says which organisation it belongs to, so PostHog can aggregate a customer instead of a machine.** Attribution already carried `licenseId`, but as a flat property, which means every per-customer question is a filter typed by hand against a UUID and there is no such thing as a company in the data. Events now also carry `$groups: { organization: <licenseId> }`, which is the shape PostHog aggregates natively: per-company retention, one row per customer rather than one per machine, and a view of which organisations have gone quiet.

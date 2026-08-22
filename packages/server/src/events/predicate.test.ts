@@ -156,6 +156,40 @@ describe('predicate engine', () => {
     ).toBe(true);
   });
 
+  /**
+   * Document-initiated subresources (link/css/img/manifest via resource timing) carry no readable
+   * status on engines without `responseStatus`. A plain failure would read "your change is broken"
+   * and send the agent to fix working code — the false negative the oracle exists to prevent. The
+   * honest verdict is unknown: the request WAS seen, its status simply cannot be asserted here.
+   */
+  it('net status over a status-less subresource downgrades to unknown, never a plain failure', async () => {
+    const session = new FakeSession([
+      // A document-initiated load: url matches, status unreadable (absent from the record).
+      ev(EventType.NET_REQUEST, { method: 'GET', url: '/favicon.ico', initiator: 'link' }),
+    ]);
+    const result = await evaluatePredicate(session, {
+      kind: 'net',
+      urlContains: '/favicon.ico',
+      status: 200,
+    });
+    expect(result.pass).toBe(false);
+    expect(result.inconclusive).toBeDefined();
+    expect(result.inconclusive).toContain('does not expose its status');
+  });
+
+  it('net status still fails plainly when the status IS readable and differs', async () => {
+    const session = new FakeSession([
+      ev(EventType.NET_REQUEST, { method: 'GET', url: '/api/data', status: 500 }),
+    ]);
+    const result = await evaluatePredicate(session, {
+      kind: 'net',
+      urlContains: '/api/data',
+      status: 200,
+    });
+    expect(result.pass).toBe(false);
+    expect(result.inconclusive).toBeUndefined();
+  });
+
   it('net count: respects the since floor (a prior-action request is not counted)', async () => {
     const session = new FakeSession([
       ev(EventType.NET_REQUEST, { method: 'POST', url: '/api/deploy', status: 200 }, 10),
@@ -202,6 +236,53 @@ describe('predicate engine', () => {
     expect(
       (await evaluatePredicate(dirty, { kind: 'console', level: 'error', absent: true })).pass,
     ).toBe(false);
+  });
+
+  /**
+   * `absent` + `contains` must mean "THIS message did not appear", not "no messages appeared".
+   * A no-op service-worker handler removed means Chrome stops emitting one specific warning; the
+   * assertion that matters survives unrelated console chatter. The inverse — a matcher that
+   * silently inverted — would be worse than no matcher, so both polarities are pinned.
+   */
+  it('console absent+contains passes when the message is gone even with other entries', async () => {
+    // The targeted warning is gone; an unrelated warn from elsewhere in the app remains.
+    const quiet = new FakeSession([ev(EventType.CONSOLE_WARN, { message: 'unrelated chatter' })]);
+    const pass = await evaluatePredicate(quiet, {
+      kind: 'console',
+      level: 'warn',
+      contains: 'no-op',
+      absent: true,
+    });
+    expect(pass.pass).toBe(true);
+
+    const loud = new FakeSession([
+      ev(EventType.CONSOLE_WARN, { message: 'Fetch event handler is recognized as a no-op...' }),
+      ev(EventType.CONSOLE_WARN, { message: 'unrelated chatter' }),
+    ]);
+    const fail = await evaluatePredicate(loud, {
+      kind: 'console',
+      level: 'warn',
+      contains: 'no-op',
+      absent: true,
+    });
+    expect(fail.pass).toBe(false);
+    if (!fail.pass) {
+      expect(fail.failureReason).toContain('no-op');
+      expect((fail.evidence as unknown[]).length).toBe(1);
+    }
+  });
+
+  it('console contains asserts presence of a specific message', async () => {
+    const hit = new FakeSession([
+      ev(EventType.CONSOLE_ERROR, { message: 'save failed: disk full' }),
+    ]);
+    expect((await evaluatePredicate(hit, { kind: 'console', contains: 'disk full' })).pass).toBe(
+      true,
+    );
+    const miss = new FakeSession([ev(EventType.CONSOLE_ERROR, { message: 'save failed: quota' })]);
+    expect((await evaluatePredicate(miss, { kind: 'console', contains: 'disk full' })).pass).toBe(
+      false,
+    );
   });
 
   /**

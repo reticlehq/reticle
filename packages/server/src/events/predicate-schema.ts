@@ -43,7 +43,18 @@ export type Predicate =
       bodyContains?: string;
     }
   | { kind: typeof PredicateKind.ROUTE; pathname?: string; contains?: string; since?: number }
-  | { kind: typeof PredicateKind.CONSOLE; level?: string; absent?: boolean; since?: number }
+  | {
+      kind: typeof PredicateKind.CONSOLE;
+      level?: string;
+      /**
+       * A substring the captured message must contain. With `absent: true` this flips the meaning
+       * from "no console entries at all" to "THIS message did not appear" — the assertion people
+       * actually write regression checks for (deprecation warnings, no-op handler notices).
+       */
+      contains?: string;
+      absent?: boolean;
+      since?: number;
+    }
   | {
       kind: typeof PredicateKind.ANIMATION;
       name?: string;
@@ -84,6 +95,10 @@ const PREDICATE_ALIASES: Readonly<Record<string, Readonly<Record<string, string>
   // most common thing an agent reaches for here.
   [PredicateKind.ROUTE]: { path: 'pathname', urlContains: 'contains', url: 'contains' },
   [PredicateKind.NET]: { url: 'urlContains' },
+  // `textContains` on a `console` predicate: the reporter who hit the missing matcher reached for
+  // it first, by analogy with `net { urlContains }` — and that parallel is exactly right, since
+  // both mean "this entry must contain this substring". Accepted as an alias for `contains`.
+  [PredicateKind.CONSOLE]: { textContains: 'contains' },
   [PredicateKind.SIGNAL]: { data: 'dataMatches' },
   // `of` on a composite: it reads naturally, several assertion libraries spell it that way, and it has
   // no other meaning here. Observed twice in one drive on a real app, and each rejection cost a round
@@ -319,6 +334,7 @@ function predicateUnion() {
       .object({
         kind: z.literal(PredicateKind.CONSOLE),
         level: z.string().optional(),
+        contains: z.string().min(1).optional(),
         absent: z.boolean().optional(),
         since: z.number().optional(),
       })
@@ -383,4 +399,58 @@ export function predicateFieldsFor(kind: string): readonly string[] {
     }
   }
   return [];
+}
+
+/** Peel optional/nullable/default/effects wrappers off a field to reach the schema underneath. */
+function unwrapSchema(schema: z.ZodTypeAny): z.ZodTypeAny {
+  let current = schema;
+  for (;;) {
+    if (
+      current instanceof z.ZodOptional ||
+      current instanceof z.ZodNullable ||
+      current instanceof z.ZodDefault
+    ) {
+      current = current._def.innerType as z.ZodTypeAny;
+      continue;
+    }
+    if (current instanceof z.ZodEffects) {
+      current = current._def.schema as z.ZodTypeAny;
+      continue;
+    }
+    return current;
+  }
+}
+
+/**
+ * One level into the fields that are themselves objects — `{ query: ['by', 'value', ...] }`.
+ *
+ * Naming the top-level fields alone leaves `element` unguessable: `query` is an object with its own
+ * required shape, and a plain CSS string works in `reticle_snapshot.scope` and `reticle_query.scope`,
+ * so assuming it works here is the natural guess. The rejection is the only place that inconsistency
+ * can be explained.
+ *
+ * One level only. Derived from the schema for the same reason `predicateFieldsFor` is: a stale field
+ * list is worse than none, because the agent trusts it and retries into the same wall.
+ */
+export function predicateNestedFieldsFor(
+  kind: string,
+): Readonly<Record<string, readonly string[]>> {
+  for (const option of predicateUnion().options) {
+    const literal = option.shape['kind'];
+    if (!(literal instanceof z.ZodLiteral) || literal.value !== kind) continue;
+    const nested: Record<string, readonly string[]> = {};
+    for (const [field, schema] of Object.entries(option.shape)) {
+      if ('kind' === field) continue;
+      const inner = unwrapSchema(schema as z.ZodTypeAny);
+      // `instanceof z.ZodObject` narrows to ZodObject<any>, whose `.shape` is `any`. Name the shape
+      // type so the keys are read off something typed rather than laundering an `any` through
+      // Object.keys.
+      if (inner instanceof z.ZodObject) {
+        const shape = (inner as z.ZodObject<z.ZodRawShape>).shape;
+        nested[field] = Object.keys(shape);
+      }
+    }
+    return nested;
+  }
+  return {};
 }

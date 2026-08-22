@@ -55,6 +55,9 @@ export function buildNodeIo(cwd: string): InitIo {
     homeDir() {
       return homedir();
     },
+    cwd() {
+      return cwd;
+    },
     rootFiles() {
       return readdirSync(cwd).filter((name) => {
         try {

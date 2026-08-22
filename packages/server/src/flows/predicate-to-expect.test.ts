@@ -42,6 +42,20 @@ describe('predicateToExpect', () => {
     });
   });
 
+  it('records NOTHING for a console assertion narrowed by contains', () => {
+    // FlowExpect.console has `level` and `absent` and nothing else, so copying the rest through
+    // would save "no warn entries at all" for an agent who claimed "THIS warning did not appear":
+    // a false red on any unrelated warning, and in the presence direction a strictly weaker
+    // assertion than the one chosen. Recording nothing keeps the flow honest.
+    expect(
+      predicateToExpect({ kind: 'console', level: 'warn', contains: 'no-op', absent: true }),
+    ).toBeUndefined();
+    // Without the substring the expressible half still records untouched.
+    expect(predicateToExpect({ kind: 'console', level: 'warn', absent: true })).toEqual({
+      console: { level: 'warn', absent: true },
+    });
+  });
+
   it('carries an element assertion by testid', () => {
     expect(predicateToExpect({ kind: 'element', query: { testid: 'reply-modal' } })).toEqual({
       element: { testid: 'reply-modal' },

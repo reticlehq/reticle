@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { sessionRoot } from '../project/session-root.js';
 import { RunReadError, type ReticleVerificationRun } from '@reticlehq/core';
 import { ReticleTool } from '../tools/tool-names.js';
 import { asString } from '../tools/tools-helpers.js';
@@ -41,7 +42,7 @@ export const RUN_TOOLS: ToolDef[] = [
       error: z.string().optional(),
     },
     handler: async (deps: ToolDeps, args: Record<string, unknown>) => {
-      const store = new RunStore(deps.fs, deps.reticleRoot);
+      const store = new RunStore(deps.fs, sessionRoot(deps, asString(args['sessionId'])));
       // format:"diff" is a whole-history operation (two most-recent runs), not a single-run read.
       if ('diff' === asString(args['format'])) {
         const pair = await store.latestTwo();

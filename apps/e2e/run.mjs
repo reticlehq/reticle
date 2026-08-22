@@ -54,6 +54,12 @@ const ORDER = [
   'spa-nav-realinput-test',
   'visual-test',
   'crawl-test',
+  // The release motive, end to end. The unit tests pin the RULE; only a real app in a real browser
+  // proves the wiring — that the facts reach the rule, that the field survives the outputSchema, and
+  // that a gap raised on one call is still open on the next AND closes when the app stops being
+  // unobservable. Carries its own negative control, because a surface that always reports a finding
+  // is worth exactly nothing.
+  'instrumentation-gap-test',
   'scroll-find-test',
   'flow-record-replay-test',
   'flow-self-heal-test',

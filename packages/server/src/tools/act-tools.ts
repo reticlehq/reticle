@@ -17,6 +17,7 @@ import {
   InputMode,
   ReticleCommand,
   Verified,
+  VerifiedReason,
   PredicateKind,
 } from '@reticlehq/core';
 import { assertNativeInputSupported } from './act-danger.js';
@@ -26,6 +27,10 @@ import { buildReactionReport, summarizeReaction } from '../events/reaction.js';
 import { parsePredicate } from '../events/predicate-parse.js';
 import { causalSummary } from '../capsule/causal-summary.js';
 import { findContradictions } from '../events/contradictions.js';
+import { gapsForAction } from '../honesty/instrumentation-gaps.js';
+import { noteSessionGaps } from '../honesty/gap-ledger.js';
+import { declaresState } from '../events/predicate-asks.js';
+import { isStateUnwatched } from '../honesty/blind-spots.js';
 import {
   inFlightRequestLabels,
   repeatedRequestLabels,
@@ -41,7 +46,6 @@ import { buildDivergenceCapsule } from '../capsule/capsule.js';
 import { predicateToExpectedLinks } from '../capsule/predicate-to-links.js';
 import { buildHonestyBlock } from '../honesty/honesty.js';
 import {
-  BlindSpotKind,
   buildCoverageStatement,
   blindSpotsFromState,
   transportGapNote,
@@ -515,6 +519,12 @@ export const ACT_TOOLS: ToolDef[] = [
         .describe(
           'Channels that DISAGREE about this action — the UI advanced while its write failed, a success signal fired over a failed request, a response changed nothing, a duplicate fired, a request never settled. OMITTED when clean. Treat any entry as a finding even when the verdict is green: a passing assertion and a contradicted channel is exactly the false green this exists to catch.',
         ),
+      instrumentationGaps: z
+        .array(z.unknown())
+        .optional()
+        .describe(
+          'What the APP did not tell Reticle, and the one change that would fix it — each entry is { kind, missing, cost, fix, source?, ref? }. Reported ONLY where an absence made THIS verdict weaker (a red that cannot name a file:line, a state assertion with no registered store, a DOM change no signal announced, a route change nothing signalled); never a survey of the page, so an entry is always work worth doing now. OMITTED when the app told Reticle everything it needed. Applying `fix` makes every later verdict on this app stronger, not just this one.',
+        ),
       honesty: z
         .unknown()
         .describe(
@@ -662,9 +672,7 @@ export const ACT_TOOLS: ToolDef[] = [
         const coverage = buildCoverageStatement(spots);
         // Nothing subscribed ⇒ the state channel is dark, and the summary must say so rather than
         // report an empty diff list that reads like a fact about the app. See CausalSummary.
-        const stateUnwatched = spots.some(
-          (s) => s.kind === BlindSpotKind.UNWATCHED_STATE && s.count > 0,
-        );
+        const stateUnwatched = isStateUnwatched(spots);
         // Only a spot that IMPEACHES the capture belongs in integrity — see impeachesCapture. A
         // structural boundary (virtualized rows, a cross-origin frame) is reported as coverage and
         // must not downgrade a verdict about what WAS observed.
@@ -778,6 +786,25 @@ export const ACT_TOOLS: ToolDef[] = [
             repeated: repeatedRequestLabels(windowEvents),
           },
         });
+        // Computed once: the verdict block reports it, and the instrumentation gaps are a second
+        // reading of the same evidence rather than a new observation.
+        const actionSummary = causalSummary(windowEvents, { stateUnwatched });
+        const gaps = gapsForAction({
+          pass: verdict.pass,
+          proved: decision.verifiedReason === VerifiedReason.PROVED,
+          sourceKnown: actedSource !== undefined,
+          ref: asString(args['ref']),
+          stateAsked: declaresState(until),
+          stateUnwatched,
+          domMutated: (session.lastAct.effect().mutatedWithin ?? 0) > 0,
+          signalsFired: actionSummary.signals.length,
+          routeChanged: actionSummary.route !== undefined,
+          routeSignalFired: actionSummary.signals.some((name) => name.startsWith('route')),
+        });
+        // Recorded on the session, so a later "am I done?" can answer with what is STILL missing
+        // rather than with everything that was ever missing. An empty list closes a gap, which is
+        // why it is noted rather than skipped.
+        noteSessionGaps(session, gaps);
         return withControl(session, {
           ...decision,
           effect: leanActResult(actResult.result),
@@ -792,7 +819,10 @@ export const ACT_TOOLS: ToolDef[] = [
           ...(capsuleSaved === undefined ? {} : { capsuleSaved }),
           // The window cannot say whether anything was WATCHING state — that is a level fact the
           // session holds. Without it an empty `stateDiffs` reads as "the app changed nothing".
-          summary: causalSummary(windowEvents, { stateUnwatched }),
+          summary: actionSummary,
+          // What the APP did not tell Reticle, and the one change that would fix it. Reported only
+          // where an absence made this very verdict weaker — never as a survey of the page.
+          ...(gaps.length > 0 ? { instrumentationGaps: gaps } : {}),
           // Cross-channel disagreement, reported WITH the action that caused it.
           //
           // This is the one finding here a human structurally cannot make — they watch one channel,

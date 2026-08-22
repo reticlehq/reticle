@@ -126,6 +126,40 @@ export class ProjectStore {
     });
   }
 
+  /**
+   * The best observability this project has reached, and the raiser of that bar.
+   *
+   * Read returns undefined on a first run or an unreadable file, which is the honest "no best to
+   * fall from" — never a zero, which would make every first run look like a recovery.
+   */
+  async bestObservability(): Promise<{ percent: number } | undefined> {
+    const existing = await this.read();
+    return existing.ok ? existing.file.learned?.bestObservability : undefined;
+  }
+
+  /**
+   * Raise the bar, if this run cleared it. Lowering is deliberately impossible.
+   *
+   * A best that could fall would let a weakened run quietly redefine what good looks like, which is
+   * precisely the gaming the figure exists to resist. Serialized per file so two sessions racing
+   * cannot lose the higher of the two.
+   */
+  async raiseObservability(percent: number): Promise<void> {
+    const path = reticleDirPaths(this.#root).project;
+    await withFileLock(path, async () => {
+      const existing = await this.read();
+      const base: ProjectFile = existing.ok ? existing.file : EMPTY_PROJECT;
+      const current = base.learned?.bestObservability?.percent;
+      if (current !== undefined && percent <= current) return;
+      const learned: ProjectLearned = {
+        ...base.learned,
+        bestObservability: { percent, at: this.#clock.now() },
+      };
+      await this.#fs.mkdir(reticleDirPaths(this.#root).root);
+      await this.#fs.writeFile(path, this.#serialize({ ...base, learned }));
+    });
+  }
+
   /** The most-recent run for `name` (undefined on missing/malformed/none). Powers diff-vs-last. */
   async lastRun(name: string): Promise<RunRecord | undefined> {
     const read = await this.read();

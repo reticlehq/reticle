@@ -2,6 +2,7 @@ import type { WebSocket } from 'ws';
 import type { ImpactSnapshot } from '@reticlehq/core';
 import { recordImpact } from '../impact/impact-recorder.js';
 import { LastAct } from './last-act.js';
+import { GapLedger } from '../honesty/gap-ledger.js';
 import { commandTimeoutMessage, type PageRuntime } from './command-timeout.js';
 import { readHealthEvent, type SessionHealth } from './session-health.js';
 
@@ -441,6 +442,14 @@ export class Session {
    * from it, and the split between those two tool calls is the whole reason it exists.
    */
   readonly lastAct = new LastAct();
+  /**
+   * What this app still cannot tell Reticle, as of the most recent verdict.
+   *
+   * Lives on the session because that is the scope the question belongs to: "am I done with this
+   * app" is a session question, and a gap closed halfway through must not follow the agent to the
+   * end of it.
+   */
+  readonly gaps = new GapLedger();
 
   // ── Server-authoritative liveness (immune to browser-tab throttling) ──────────────
 

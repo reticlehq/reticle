@@ -21,7 +21,7 @@ import { buildSuiteVerdict } from './decision.js';
 import { classifyFlowAssertions } from './flow-classify.js';
 import { isValidFlowName, flowPath } from '../project/reticle-dir.js';
 import type { SuiteVerdict } from '@reticlehq/core';
-import type { FlowAnnotations } from './flows.js';
+import { FlowStore, type FlowAnnotations } from './flows.js';
 import type { ToolDef, ToolDeps } from '../tools/tools.js';
 import {
   replayNamedFlow,
@@ -90,6 +90,28 @@ export function leaseFailureReplay(name: string, error: string | undefined): Flo
 /** Stand-in path for a flow whose name fails the path-segment guard — never a real join. */
 const INVALID_FLOW_NAME_PATH = '(invalid flow name — not a usable path)';
 
+/**
+ * The flow store a SESSION's artifacts belong in, and the root it resolved to.
+ *
+ * `deps.flows` is bound to the daemon's own root at construction, which is right only when the
+ * daemon happens to have been started in the project it is driving. When a resolver is wired and it
+ * names a different project, the write has to go there instead — so the store is rebound for this
+ * call. Rebinding is cheap: a FlowStore is a filesystem port, a root and a clock.
+ *
+ * Returns `deps.flows` unchanged when nothing is wired or the roots already agree, so the common
+ * case allocates nothing and behaves exactly as before.
+ */
+function flowsForSession(
+  deps: ToolDeps,
+  projectId: string | undefined,
+): { flows: FlowStore; root: string } {
+  const resolved = deps.artifactRootFor?.(projectId);
+  if (resolved === undefined || resolved.root === deps.reticleRoot) {
+    return { flows: deps.flows, root: deps.reticleRoot };
+  }
+  return { flows: new FlowStore(deps.fs, resolved.root, { now: deps.now }), root: resolved.root };
+}
+
 export const FLOW_TOOLS: ToolDef[] = [
   {
     name: ReticleTool.FLOW_SAVE,
@@ -157,15 +179,25 @@ export const FLOW_TOOLS: ToolDef[] = [
       // forever while telling the agent it had saved a regression test — see empty-flow.
       const emptyRefusal = emptyFlowRefusal(program.steps.length, name);
       if (emptyRefusal !== undefined) return Promise.resolve(emptyRefusal);
-      return deps.flows.save(program, annotations, projectId).then(async (res) => {
+      const { flows, root } = flowsForSession(deps, projectId);
+      return flows.save(program, annotations, projectId).then(async (res) => {
         if (!res.ok) return { error: flowErrorMessage(res.code), code: res.code };
         deps.annotations.clear(name);
         // Grade the saved flow's assertions so the agent learns immediately if it just saved a flow
         // that asserts nothing observable (passes even when the feature is broken).
-        const loaded = await deps.flows.load(res.value.name, projectId);
+        const loaded = await flows.load(res.value.name, projectId);
+        // The absolute path, always. A save that reports success and not WHERE cost a reporter a
+        // `find` across their disk to discover it had landed in an unrelated repo. The name came
+        // back from a save that succeeded, so the guard is a type narrowing rather than a doubt.
+        const saved = res.value.name;
+        const path = isValidFlowName(saved) ? flowPath(root, saved, projectId) : undefined;
         return loaded.ok
-          ? { ...res.value, assertions: classifyFlowAssertions(loaded.value) }
-          : res.value;
+          ? {
+              ...res.value,
+              ...(path === undefined ? {} : { path }),
+              assertions: classifyFlowAssertions(loaded.value),
+            }
+          : { ...res.value, ...(path === undefined ? {} : { path }) };
       });
     },
   },
