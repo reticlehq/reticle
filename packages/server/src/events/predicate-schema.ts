@@ -43,7 +43,18 @@ export type Predicate =
       bodyContains?: string;
     }
   | { kind: typeof PredicateKind.ROUTE; pathname?: string; contains?: string; since?: number }
-  | { kind: typeof PredicateKind.CONSOLE; level?: string; absent?: boolean; since?: number }
+  | {
+      kind: typeof PredicateKind.CONSOLE;
+      level?: string;
+      /**
+       * A substring the captured message must contain. With `absent: true` this flips the meaning
+       * from "no console entries at all" to "THIS message did not appear" — the assertion people
+       * actually write regression checks for (deprecation warnings, no-op handler notices).
+       */
+      contains?: string;
+      absent?: boolean;
+      since?: number;
+    }
   | {
       kind: typeof PredicateKind.ANIMATION;
       name?: string;
@@ -84,6 +95,10 @@ const PREDICATE_ALIASES: Readonly<Record<string, Readonly<Record<string, string>
   // most common thing an agent reaches for here.
   [PredicateKind.ROUTE]: { path: 'pathname', urlContains: 'contains', url: 'contains' },
   [PredicateKind.NET]: { url: 'urlContains' },
+  // `textContains` on a `console` predicate: the reporter who hit the missing matcher reached for
+  // it first, by analogy with `net { urlContains }` — and that parallel is exactly right, since
+  // both mean "this entry must contain this substring". Accepted as an alias for `contains`.
+  [PredicateKind.CONSOLE]: { textContains: 'contains' },
   [PredicateKind.SIGNAL]: { data: 'dataMatches' },
   // `of` on a composite: it reads naturally, several assertion libraries spell it that way, and it has
   // no other meaning here. Observed twice in one drive on a real app, and each rejection cost a round
@@ -319,6 +334,7 @@ function predicateUnion() {
       .object({
         kind: z.literal(PredicateKind.CONSOLE),
         level: z.string().optional(),
+        contains: z.string().min(1).optional(),
         absent: z.boolean().optional(),
         since: z.number().optional(),
       })

@@ -454,25 +454,71 @@ export function evalConsole(
     if ('error' === p.level) return isErr;
     return e.type === CONSOLE_LEVEL_TYPE[p.level];
   });
+  // A text match narrows the population to entries whose captured message contains the substring.
+  // With `absent: true` this is the whole point: "THIS message did not appear", not "no messages
+  // appeared" — the difference between a regression check and a fragile one that any unrelated
+  // warning anywhere in the app breaks.
+  const wanted = 'contains' in p ? p.contains : undefined;
+  // Captured messages are strings (stringifyArgs in the browser observer), but a malformed or
+  // foreign event must not crash the evaluator: non-strings stringify defensively, and objects
+  // go through JSON.stringify rather than a default toString that would print '[object Object]'.
+  const asText = (v: unknown): string => {
+    if ('string' === typeof v) return v;
+    try {
+      return JSON.stringify(v) ?? '';
+    } catch {
+      return '';
+    }
+  };
+  const matching =
+    wanted !== undefined
+      ? matches.filter((e) => asText(e.data['message']).includes(wanted))
+      : matches;
   if (true === p.absent) {
-    return 0 === matches.length
+    if (wanted !== undefined && 0 === matching.length && matches.length > 0) {
+      // Other entries exist but none carries the substring: exactly the pass an absence-with-match
+      // asserts. Name both counts so the caller can tell this from a silent window.
+      return {
+        pass: true,
+        evidence: { absent: true, contains: wanted },
+      };
+    }
+    return 0 === matching.length
       ? { pass: true, evidence: { absent: true } }
       : {
           pass: false,
-          failureReason: `expected no ${p.level ?? 'console'} entries but found ${String(matches.length)}`,
-          observed: `${String(matches.length)} ${p.level ?? 'console'} entr${1 === matches.length ? 'y' : 'ies'}`,
-          expected: `no ${p.level ?? 'console'} entries`,
-          assertion: 'console.absent',
-          evidence: matches.map((e) => e.data),
+          failureReason:
+            wanted !== undefined
+              ? `expected no ${p.level ?? 'console'} entry containing ${JSON.stringify(wanted)} but found ${String(matching.length)}`
+              : `expected no ${p.level ?? 'console'} entries but found ${String(matches.length)}`,
+          observed:
+            wanted !== undefined
+              ? `${String(matching.length)} ${p.level ?? 'console'} entr${1 === matching.length ? 'y' : 'ies'} containing ${JSON.stringify(wanted)}`
+              : `${String(matches.length)} ${p.level ?? 'console'} entr${1 === matches.length ? 'y' : 'ies'}`,
+          expected:
+            wanted !== undefined
+              ? `no ${p.level ?? 'console'} entry containing ${JSON.stringify(wanted)}`
+              : `no ${p.level ?? 'console'} entries`,
+          assertion: wanted !== undefined ? 'console.absent-contains' : 'console.absent',
+          evidence: matching.map((e) => e.data),
         };
   }
-  return matches.length > 0
-    ? { pass: true, evidence: matches.map((e) => e.data) }
+  return matching.length > 0
+    ? { pass: true, evidence: matching.map((e) => e.data) }
     : {
         pass: false,
-        failureReason: `no ${p.level ?? 'console'} entries found`,
-        observed: `no ${p.level ?? 'console'} entries in the window`,
-        expected: `at least one ${p.level ?? 'console'} entry`,
+        failureReason:
+          wanted !== undefined
+            ? `no ${p.level ?? 'console'} entry containing ${JSON.stringify(wanted)} found`
+            : `no ${p.level ?? 'console'} entries found`,
+        observed:
+          wanted !== undefined
+            ? `no ${p.level ?? 'console'} entry containing ${JSON.stringify(wanted)} in the window`
+            : `no ${p.level ?? 'console'} entries in the window`,
+        expected:
+          wanted !== undefined
+            ? `at least one ${p.level ?? 'console'} entry containing ${JSON.stringify(wanted)}`
+            : `at least one ${p.level ?? 'console'} entry`,
         assertion: 'console.present',
       };
 }
