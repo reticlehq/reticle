@@ -204,3 +204,73 @@ describe('presenter HUD drag', () => {
     teardown();
   });
 });
+
+/**
+ * Teardown has to remove what install added.
+ *
+ * Both installers were already symmetric — every addEventListener had a matching remove — so this
+ * is not a leak being fixed, it is the symmetry being made impossible to break. Which is only worth
+ * anything if something notices when it IS broken, and nothing did: deleting either `abort()` left
+ * the whole presenter suite green (187 passed).
+ */
+describe('presenter HUD drag teardown', () => {
+  it('installHudDrag stops driving the HUD after teardown', () => {
+    const hud = document.createElement('div');
+    const head = document.createElement('div');
+    document.body.append(hud, head);
+
+    let dragged = false;
+    const teardown = installHudDrag(hud, head, {
+      onDragMove: () => {
+        dragged = true;
+      },
+    });
+    teardown();
+
+    head.dispatchEvent(
+      new PointerEvent('pointerdown', {
+        bubbles: true,
+        clientX: 420,
+        clientY: 320,
+        pointerId: 9,
+        button: 0,
+      }),
+    );
+    head.dispatchEvent(
+      new PointerEvent('pointermove', { bubbles: true, clientX: 500, clientY: 400, pointerId: 9 }),
+    );
+
+    expect(dragged, 'a pointer handler survived teardown').toBe(false);
+    expect(isHudDragged(hud), 'the HUD moved after teardown').toBe(false);
+  });
+
+  it('installHudPositionGuards releases its window listeners on teardown', () => {
+    const hud = document.createElement('div');
+    const overlay = document.createElement('div');
+    document.body.append(hud, overlay);
+
+    // Asserting the signal rather than a side effect: the guards react to resize by SCHEDULING a
+    // relayout, so a spy on the measurement sees nothing synchronously and the obvious behavioural
+    // test passes whether or not the listener was removed. I wrote that version first and it stayed
+    // green with the abort() deleted.
+    const add = vi.spyOn(window, 'addEventListener');
+    const teardown = installHudPositionGuards(hud, overlay);
+    const signals = add.mock.calls
+      .map(([, , options]) =>
+        'object' === typeof options && null !== options ? options.signal : undefined,
+      )
+      .filter((sig): sig is AbortSignal => sig !== undefined);
+    add.mockRestore();
+
+    // Guards the guard: no signalled registration would make the loop below pass for free.
+    expect(signals.length, 'the guards should register with a signal').toBeGreaterThan(0);
+    expect(signals.some((sig) => sig.aborted)).toBe(false);
+
+    teardown();
+
+    expect(
+      signals.every((sig) => sig.aborted),
+      'a window listener outlived teardown',
+    ).toBe(true);
+  });
+});
