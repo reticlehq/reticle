@@ -376,11 +376,54 @@ export const PredicateSchema = z.lazy(() =>
  * wall. Empty for a kind that is not in the union.
  */
 export function predicateFieldsFor(kind: string): readonly string[] {
+  const shape = shapeForKind(kind);
+  if (null === shape) return [];
+  return Object.keys(shape).filter((field) => 'kind' !== field);
+}
+
+/** The option shape for `kind`, or null when the kind is not in the union. */
+function shapeForKind(kind: string): z.ZodRawShape | null {
   for (const option of predicateUnion().options) {
     const literal = option.shape['kind'];
-    if (literal instanceof z.ZodLiteral && literal.value === kind) {
-      return Object.keys(option.shape).filter((field) => 'kind' !== field);
-    }
+    if (literal instanceof z.ZodLiteral && literal.value === kind) return option.shape;
   }
-  return [];
+  return null;
+}
+
+/**
+ * The keys of `schema` if it is an object, reaching through the wrappers a field can be declared
+ * behind. Empty for anything else.
+ *
+ * `query` is a bare object today, but a field can equally be `.optional()`, `.nullable()` or carry a
+ * `.default()`. Not reaching through those returns [] and silently prints the old message — a
+ * regression with no symptom, which is the kind that ships. Exported so that behaviour is asserted
+ * against this function rather than against a copy of it in a test.
+ */
+export function nestedKeysOf(schema: z.ZodTypeAny | undefined): readonly string[] {
+  let current = schema;
+  while (
+    current instanceof z.ZodOptional ||
+    current instanceof z.ZodNullable ||
+    current instanceof z.ZodDefault
+  ) {
+    current = current._def.innerType as z.ZodTypeAny;
+  }
+  return current instanceof z.ZodObject ? Object.keys(current.shape as z.ZodRawShape) : [];
+}
+
+/**
+ * The keys of a nested object field, one level down. Empty when the field is not an object.
+ *
+ * `predicateFieldsFor` answers what a KIND accepts, which for `element` is `query, state, absent` —
+ * and `query` is itself an object whose shape was described nowhere. An agent was told the name of
+ * the field it got wrong and nothing about what would have been right, so it guessed three times in
+ * a row and produced no verdict, each rejection correct and none of them useful (issue #445).
+ *
+ * One level only. This exists to make the next call land, not to print the schema: `query.source` is
+ * an object too, and expanding transitively would bury the answer that matters.
+ */
+export function predicateNestedFieldsFor(kind: string, field: string): readonly string[] {
+  const shape = shapeForKind(kind);
+  if (null === shape) return [];
+  return nestedKeysOf(shape[field]);
 }

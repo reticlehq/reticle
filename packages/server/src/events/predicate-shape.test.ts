@@ -16,9 +16,10 @@
  */
 
 import { describe, expect, it } from 'vitest';
+import { z } from 'zod';
 import { PredicateKind } from '@reticlehq/core';
 import { parsePredicate } from './predicate-parse.js';
-import { predicateFieldsFor } from './predicate-eval.js';
+import { nestedKeysOf, predicateFieldsFor, predicateNestedFieldsFor } from './predicate-eval.js';
 
 const messageOf = (input: unknown): string => {
   try {
@@ -135,5 +136,53 @@ describe('scoping the text predicate', () => {
 
   it('names `scope` among the fields the text predicate accepts', () => {
     expect(predicateFieldsFor(PredicateKind.TEXT)).toContain('scope');
+  });
+});
+
+describe('predicateNestedFieldsFor reaches one level into an object field', () => {
+  it('reads a bare object field off the schema', () => {
+    const fields = predicateNestedFieldsFor(PredicateKind.ELEMENT, 'query');
+    expect(fields).toContain('role');
+    expect(fields).toContain('testid');
+    expect(fields).toContain('scope');
+  });
+
+  it.each([
+    ['bare', z.object({ a: z.string() })],
+    ['optional', z.object({ a: z.string() }).optional()],
+    ['with a default', z.object({ a: z.string() }).default({ a: 'x' })],
+    ['nullable', z.object({ a: z.string() }).nullable()],
+    ['optional and nullable', z.object({ a: z.string() }).nullable().optional()],
+  ])('reaches through a %s object field', (_label, schema) => {
+    // Every top-level field on a predicate kind is bare today, so none of these wrappers is
+    // exercised by the real schema. One per shape rather than trusting one to stand for the rest:
+    // the failure mode is silent — [] comes back and the old sentence prints unchanged.
+    expect(nestedKeysOf(schema)).toEqual(['a']);
+  });
+
+  it.each([
+    ['a string', z.string()],
+    ['an array', z.array(z.string())],
+    ['undefined', undefined],
+  ])('is empty for %s', (_label, schema) => {
+    expect(nestedKeysOf(schema)).toEqual([]);
+  });
+
+  it('is empty for a field that is not an object', () => {
+    // `absent` is a boolean; expanding it would put a nonsense clause in the sentence.
+    expect(predicateNestedFieldsFor(PredicateKind.ELEMENT, 'absent')).toEqual([]);
+  });
+
+  it('is empty for a kind or field that does not exist', () => {
+    expect(predicateNestedFieldsFor('elemnt', 'query')).toEqual([]);
+    expect(predicateNestedFieldsFor(PredicateKind.ELEMENT, 'quarry')).toEqual([]);
+  });
+
+  it('does not expand transitively', () => {
+    // `query.source` is an object too. One level is the contract: the sentence exists to make the
+    // next call land, not to print the schema.
+    const fields = predicateNestedFieldsFor(PredicateKind.ELEMENT, 'query');
+    expect(fields).toContain('source');
+    expect(fields).not.toContain('file');
   });
 });

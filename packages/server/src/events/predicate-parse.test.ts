@@ -59,3 +59,38 @@ describe('parsePredicate turns a zod rejection into a sentence', () => {
     });
   });
 });
+
+describe('the error describes a nested field, not just its name', () => {
+  /*
+   * The three calls from the field report on #445, in order. Each was correctly rejected and none
+   * of them said what `query` wanted, so the agent guessed three times and produced no verdict.
+   */
+  const WRONG_FLAT = { kind: 'element', selector: '#journeyScreen.active iframe' };
+  const WRONG_STRING = { kind: 'element', query: '#journeyScreen.active iframe' };
+  const WRONG_NESTED_KEY = { kind: 'element', query: { css: '#journeyScreen.active iframe' } };
+
+  it.each([
+    ['a flat selector', WRONG_FLAT],
+    ['a string where an object goes', WRONG_STRING],
+    ['a key that is nobody spelling of a query field', WRONG_NESTED_KEY],
+  ])('names the shape of query when the mistake is %s', (_label, input) => {
+    const message = messageOf(input);
+    expect(message, `no query shape in: ${message}`).toContain('query accepts:');
+    // `role` and `testid` are the two an agent reaches for first; if the expansion ever silently
+    // returns [] the sentence still reads fine, so assert on contents rather than the phrase alone.
+    expect(message).toContain('role');
+    expect(message).toContain('testid');
+  });
+
+  it('still names the top-level fields it always did', () => {
+    expect(messageOf(WRONG_STRING)).toContain('element accepts:');
+  });
+
+  it('does not drag in a nested shape the caller did not get wrong', () => {
+    // `net` has no object-valued field, so nothing should be expanded for it. Guards against a
+    // version that expands every field of every kind and buries the answer in noise.
+    const message = messageOf({ kind: 'net', urlContainz: '/api/save' });
+    expect(message).toContain('net accepts:');
+    expect(message).not.toContain('accepts: by,');
+  });
+});

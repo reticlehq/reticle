@@ -15,7 +15,7 @@
 
 import { z } from 'zod';
 import { PredicateKind } from '@reticlehq/core';
-import { PredicateSchema, predicateFieldsFor } from './predicate-eval.js';
+import { PredicateSchema, predicateFieldsFor, predicateNestedFieldsFor } from './predicate-eval.js';
 
 /**
  * One valid call PER KIND, because an example of another kind answers a question nobody asked.
@@ -88,7 +88,7 @@ export function parsePredicate(input: unknown): z.infer<typeof PredicateSchema> 
   const issues = parsed.error.issues.slice(0, 3).map(describeIssue).join('; ');
   throw new Error(
     `that predicate did not parse (kind "${kind}"): ${issues}. Nothing ran — the predicate was ` +
-      `not evaluated, so no verdict was produced. ${accepted(kind)} ` +
+      `not evaluated, so no verdict was produced. ${accepted(kind, parsed.error.issues)} ` +
       `A valid ${kind} predicate looks like: ${exampleFor(kind)}`,
   );
 }
@@ -100,8 +100,30 @@ export function parsePredicate(input: unknown): z.infer<typeof PredicateSchema> 
  * round trip on the one call path that produces verdicts. Naming the accepted fields — or, when the
  * kind itself is the mistake, the accepted kinds — makes the retry informed instead.
  */
-function accepted(kind: string): string {
+function accepted(kind: string, issues: readonly z.ZodIssue[]): string {
   const fields = predicateFieldsFor(kind);
-  if (0 < fields.length) return `${kind} accepts: ${fields.join(', ')}.`;
-  return `"${kind}" is not a predicate kind — use one of: ${Object.values(PredicateKind).join(', ')}.`;
+  if (0 === fields.length) {
+    return `"${kind}" is not a predicate kind — use one of: ${Object.values(PredicateKind).join(', ')}.`;
+  }
+  return [`${kind} accepts: ${fields.join(', ')}.`, ...nestedShapes(kind, issues)].join(' ');
+}
+
+/**
+ * The shape of the nested field the caller actually got wrong — nothing else.
+ *
+ * Expanding EVERY object-valued field would make the sentence long and mostly irrelevant; expanding
+ * none is the state that cost three round trips. So it follows the issues: whichever field the
+ * rejection points at gets described, and a kind whose mistake was elsewhere reads exactly as before.
+ */
+function nestedShapes(kind: string, issues: readonly z.ZodIssue[]): readonly string[] {
+  const described = new Set<string>();
+  const out: string[] = [];
+  for (const issue of issues) {
+    const field = issue.path[0];
+    if ('string' !== typeof field || described.has(field)) continue;
+    described.add(field);
+    const nested = predicateNestedFieldsFor(kind, field);
+    if (0 < nested.length) out.push(`${field} accepts: ${nested.join(', ')}.`);
+  }
+  return out;
 }
