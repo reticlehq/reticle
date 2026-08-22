@@ -344,8 +344,8 @@ function siblingDaemonClause(facts: NoSessionFacts): string {
   const ports = siblings.map(String).join(', ');
   const subject =
     1 === siblings.length
-      ? `A Reticle daemon is also answering on :${ports}`
-      : `Reticle daemons are also answering on :${ports}`;
+      ? `Another Reticle daemon is registered on :${ports} and its process is alive`
+      : `Reticle daemons are registered on :${ports} and their processes are alive`;
   return (
     ` ${subject}, which this daemon (on :${String(facts.port)}) is not on — ` +
     'that may or may not be related to why no session has appeared here.'
