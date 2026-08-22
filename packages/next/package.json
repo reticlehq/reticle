@@ -40,6 +40,9 @@
     "@babel/core": "^7.26.0",
     "@reticlehq/babel-plugin": "workspace:*"
   },
+  "scripts": {
+    "test:unit": "vitest run loader.test.mjs index.test.mjs"
+  },
   "peerDependencies": {
     "next": ">=13"
   },
