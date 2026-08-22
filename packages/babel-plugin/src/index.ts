@@ -1,8 +1,23 @@
 import { relative } from 'node:path';
 import type { PluginObj, PluginPass, types as BabelTypes } from '@babel/core';
 
-/** The attribute this plugin stamps (mirrors DATA_RETICLE_SOURCE_ATTR in @reticlehq/core). */
-const SOURCE_ATTR = 'data-reticle-source';
+/**
+ * The attribute this plugin stamps, taken from @reticlehq/core rather than restated here.
+ *
+ * `require`, not `import`: this package is plain CommonJS tooling — Babel loads a plugin with
+ * `require()` — so it cannot load core's ESM build. `@reticlehq/core/source-contract` is the
+ * CommonJS view, generated from the same TypeScript constant the browser SDK and the React adapter
+ * read. This used to be a local literal kept in step by a comment on each side, and a drift between
+ * the two breaks all source mapping on the React 19 / Next SWC path without any gate seeing it.
+ */
+// `require`, and not a plain `import`, for a TypeScript reason rather than a runtime one: this
+// package compiles with `moduleResolution: Node10` (see tsconfig.json), which predates subpath
+// `exports` and cannot resolve `@reticlehq/core/source-contract` at all. Node's own resolver
+// honours the export map fine, which is how `@reticlehq/electron` consumes its sibling contract.
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { DATA_RETICLE_SOURCE_ATTR: SOURCE_ATTR } = require('@reticlehq/core/source-contract') as {
+  DATA_RETICLE_SOURCE_ATTR: string;
+};
 
 interface PluginApi {
   types: typeof BabelTypes;

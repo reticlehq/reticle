@@ -33,3 +33,21 @@ export const RETICLE_ROOT_GLOBAL = '__RETICLE_ROOT__';
  * package's version. See `sdkVersion` on the HELLO message.
  */
 export const RETICLE_SDK_VERSION_GLOBAL = '__RETICLE_SDK_VERSION__';
+
+/**
+ * The CommonJS view of the source-mapping contract.
+ *
+ * `@reticlehq/babel-plugin` is plain CJS tooling — Babel loads a plugin with `require()` — so it
+ * cannot import this module's ESM build. It used to declare its own `const SOURCE_ATTR =
+ * 'data-reticle-source'`, kept in step with the constant above by a comment on each side pointing
+ * at the other. If those two ever drift, source mapping breaks on the React 19 / Next SWC path,
+ * which is the plugin's whole job, and nothing can see it: the browser reads the attribute core
+ * names, the plugin writes the attribute it names itself, and both keep passing.
+ *
+ * `scripts/gen-source-contract.mjs` emits `dist/source-contract.cjs` from THIS record at build
+ * time, so the plugin requires the same value it would have imported. Same mechanism as
+ * `DESKTOP_CONTRACT`, for the same reason: remove the copy rather than police it.
+ */
+export const SOURCE_CONTRACT = {
+  DATA_RETICLE_SOURCE_ATTR,
+} as const;

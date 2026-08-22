@@ -452,6 +452,10 @@ importers:
         version: 8.2.1(@types/node@26.2.0)(esbuild@0.28.1)(yaml@2.9.0)
 
   packages/babel-plugin:
+    dependencies:
+      '@reticlehq/core':
+        specifier: workspace:*
+        version: link:../core
     devDependencies:
       '@babel/core':
         specifier: ^7.26.0
