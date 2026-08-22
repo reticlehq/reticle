@@ -21,6 +21,9 @@
   ],
   "sideEffects": false,
   "main": "./dist/index.js",
+  "dependencies": {
+    "@reticlehq/core": "workspace:*"
+  },
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
