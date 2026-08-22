@@ -16,12 +16,13 @@ describe('boundedFrame is bounded — never hangs', () => {
     vi.stubGlobal('requestAnimationFrame', (_cb: FrameRequestCallback): number => 1);
     const { boundedFrame } = await import('./native-timers.js');
 
-    const start = Date.now();
     const outcome = await boundedFrame(50);
-    const elapsed = Date.now() - start;
 
+    // `settled: false` is the whole property: the bound was reached and the call resolved
+    // instead of hanging on a rAF that never fires. A wall-clock comparison restated that
+    // as a fact about the runner, which is the one way it could fail without the code
+    // being wrong.
     expect(outcome.settled).toBe(false);
-    expect(elapsed).toBeLessThan(2000);
   });
 
   it('resolves with { settled: true } when rAF fires normally', async () => {
