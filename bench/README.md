@@ -79,6 +79,8 @@ artifacts/                charts + diagrams (SVG + PNG) + screens/ (real PNGs + 
 
 ## Run it
 
+> [!WARNING] The benchmark **rewrites tracked files in the fixture app** and reverts them with `git checkout --`: `apps/bench-app/src/store/store.ts`, `src/components/NewDeployModal.tsx`, `src/views/Overview.tsx` and `src/views/Diagnostics.tsx`. Commit or stash any work in those four before running — the injector refuses to start if they are dirty, but nothing else protects them. If a crashed run left a regression injected, clear it with `node bench/harness/inject.mjs --revert-all`.
+
 The fast path: `pnpm bench` (the replay pass) and `pnpm bench --full` (+ observation-cost pass) now **boot the fixtures themselves** — the bench-app on `:4312` and the api on `:8787` — health-check them, and tear them down on exit. Pass `--no-boot` to use fixtures you already have running, and override ports with `BENCH_DEMO_PORT` / `BENCH_API_PORT` / `BENCH_RETICLE_PORT` (default 4460 — the same value apps/bench-app/vite.config.ts defaults to; see bench/harness/ports.mjs for why they must agree). On a slow machine raise `BENCH_FIXTURE_READY_MS` (fixture boot) or `BENCH_RETICLE_READY_MS` (driven-browser connect).
 
 To run the fixtures + harness scripts by hand instead (e.g. for the manual observation/agent-loop steps):

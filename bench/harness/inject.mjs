@@ -147,6 +147,55 @@ export function signaturesOf(id) {
 }
 
 /** The source files a regression touches. */
+/** Every tracked file this module rewrites — the blast radius of a `git checkout --`. */
+const ANCHOR_FILES = [...new Set(Object.values(REGRESSIONS).flatMap((r) => r.files))];
+
+function isDirty(file) {
+  for (const args of [
+    ['diff', '--quiet', '--', file],
+    ['diff', '--cached', '--quiet', '--', file],
+  ]) {
+    try {
+      execFileSync('git', ['-C', ROOT, ...args], { stdio: 'ignore' });
+    } catch {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Refuse to run if an anchor file carries uncommitted work.
+ *
+ * `revert()` restores with `git checkout --`, which HARD-DISCARDS. Anything uncommitted in these
+ * four files was silently destroyed by running the benchmark — no prompt, no stash, and nothing in
+ * the reflog to recover from, because the work was never committed. Easy to hit: edit the bench app
+ * to reproduce something, run the benchmark to measure it, lose the edit. Worse with parallel agent
+ * sessions, which share one checkout.
+ *
+ * Refuse rather than destroy. Deliberately NOT `git stash` + restore: a run killed partway through
+ * would leave the user's work somewhere they do not know to look, which is a worse failure than the
+ * one being fixed.
+ *
+ * Latched, because after the first injection these files are dirty BY DESIGN and re-checking would
+ * refuse the harness's own work. `revertAll()` is intentionally left ungated — it is the recovery
+ * path when a crashed run leaves an injection behind, and gating it would strand the user.
+ */
+let anchorsChecked = false;
+export function assertAnchorsClean() {
+  if (anchorsChecked) return;
+  anchorsChecked = true;
+  const dirty = ANCHOR_FILES.filter(isDirty).map((f) => f.slice(ROOT.length + 1));
+  if (0 === dirty.length) return;
+  throw new Error(
+    `inject: refusing to run — the benchmark reverts these files with \`git checkout --\`, which ` +
+      `would discard your uncommitted work:\n` +
+      dirty.map((f) => `  ${f}`).join('\n') +
+      `\n\nCommit or stash them first. If a previous run crashed and left a regression injected, ` +
+      `run \`node bench/harness/inject.mjs --revert-all\` to clear it.`,
+  );
+}
+
 export function filesOf(id) {
   const r = REGRESSIONS[id];
   if (!r) throw new Error(`unknown regression ${id}`);
@@ -156,6 +205,7 @@ export function filesOf(id) {
 export function inject(id) {
   const r = REGRESSIONS[id];
   if (!r) throw new Error(`unknown regression ${id}`);
+  assertAnchorsClean();
   r.apply();
   return r.files;
 }
@@ -193,6 +243,8 @@ export function revertAll() {
  * measuring anything, and it must say so LOUDLY rather than average itself over the survivors.
  */
 export function verifyAnchors() {
+  // Up front, so the preflight refuses before it touches anything rather than on the first apply().
+  assertAnchorsClean();
   const broken = [];
   for (const id of Object.keys(REGRESSIONS)) {
     try {
@@ -207,7 +259,14 @@ export function verifyAnchors() {
 }
 
 if (process.argv[2] === '--verify-anchors') {
-  const broken = verifyAnchors();
+  // A refusal is a message to a human, not a crash: print the sentence, not a stack trace.
+  let broken;
+  try {
+    broken = verifyAnchors();
+  } catch (e) {
+    console.error(e instanceof Error ? e.message : String(e));
+    process.exit(1);
+  }
   for (const b of broken) console.error(`DRIFTED ${b.id}: ${b.error.split('\n')[0]}`);
   console.log(
     0 === broken.length
