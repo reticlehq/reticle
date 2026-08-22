@@ -426,7 +426,13 @@ export function predicateNestedFieldsFor(
     for (const [field, schema] of Object.entries(option.shape)) {
       if ('kind' === field) continue;
       const inner = unwrapSchema(schema as z.ZodTypeAny);
-      if (inner instanceof z.ZodObject) nested[field] = Object.keys(inner.shape);
+      // `instanceof z.ZodObject` narrows to ZodObject<any>, whose `.shape` is `any`. Name the shape
+      // type so the keys are read off something typed rather than laundering an `any` through
+      // Object.keys.
+      if (inner instanceof z.ZodObject) {
+        const shape = (inner as z.ZodObject<z.ZodRawShape>).shape;
+        nested[field] = Object.keys(shape);
+      }
     }
     return nested;
   }
