@@ -77,8 +77,12 @@ describe('tool profiles', () => {
    */
   it('4a: a tool an always-on instruction ORDERS the agent to call is advertised', () => {
     for (const block of [PAUSE_HINT, buildSessionLease('s1', 0).IMPORTANT]) {
-      for (const named of block.match(/reticle_[a-z_]+/g) ?? []) {
-        expect(CORE_TOOL_NAMES.has(named), `${named} is ordered by "${block}"`).toBe(true);
+      const named = block.match(/reticle_[a-z_]+/g) ?? [];
+      // Reword the instruction to drop the literal tool name and this loop runs zero
+      // times, forever green — which is the defect the guard was written to catch.
+      expect(named.length, `no tool name in "${block}" — nothing was checked`).toBeGreaterThan(0);
+      for (const tool of named) {
+        expect(CORE_TOOL_NAMES.has(tool), `${tool} is ordered by "${block}"`).toBe(true);
       }
     }
   });

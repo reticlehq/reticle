@@ -96,6 +96,20 @@ describe('every tool a recovery hint names must still be advertised', () => {
     ReticleTool.TOOLS,
   ]);
 
+  it('actually reads tool names out of the hints', () => {
+    // Two ways this group can check nothing: an empty RECOVERY registers zero cases
+    // below, and hints that name no tool at all leave every inner loop with nothing to
+    // assert. Counting mentions across the whole set covers both.
+    //
+    // Deliberately NOT a per-hint control: a recovery hint that mentions no tool is
+    // legitimate, so requiring one from each would fail on a correct hint.
+    expect(Object.keys(RECOVERY).length).toBeGreaterThan(0);
+    const mentions = Object.values(RECOVERY).flatMap(
+      (hint) => hint.match(/reticle_[a-z_]+/g) ?? [],
+    );
+    expect(mentions.length, 'no hint names a tool — the check below is vacuous').toBeGreaterThan(0);
+  });
+
   it.each(Object.entries(RECOVERY))('%s names only reachable tools', (_name, hint) => {
     for (const mentioned of hint.match(/reticle_[a-z_]+/g) ?? []) {
       expect(
