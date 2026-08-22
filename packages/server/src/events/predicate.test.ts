@@ -251,7 +251,6 @@ describe('predicate engine', () => {
     );
   });
 
-
   /**
    * A hash router keeps the whole route in the fragment, so `pathname` never moves off '/' (or, in a
    * packaged desktop app on file://, off the long path to index.html). Matching `contains` against
