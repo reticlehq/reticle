@@ -5,6 +5,12 @@
  * Split out of act-tools.ts along its natural seam: the act tools care only about the outcome
  * (`result` defined = it went native), never about provider availability, box resolution,
  * drag-target inspection or the reason taxonomy.
+ *
+ * Also hosts `rewriteUploadArgs` — the daemon-side path that lets an agent name a file on disk
+ * and have its REAL bytes reach the browser's `<input type="file">`. The browser SDK cannot read
+ * the filesystem; the daemon can. The rewrite happens here, before the ACT command crosses the
+ * bridge, so the browser side sees a normal `{ content, name, type }` call and `assertUploadArgs`
+ * keeps its invariant (no fabricated bytes, no silently-dropped keys).
  */
 import { ActionType, InputModeReason, ReticleCommand } from '@reticlehq/core';
 import type { Session } from '../session/session.js';
@@ -15,6 +21,130 @@ import { NATIVE_INPUT_ARG } from '@reticlehq/core';
 import { asString, asRecord } from './tools-helpers.js';
 import { type ToolDeps, commandOrThrow } from './tool-kit.js';
 import { asBox } from './act-helpers.js';
+import { isAbsolute, join, resolve, relative, extname } from 'node:path';
+
+/**
+ * Minimal extension → MIME-type table for the file types agents most commonly upload.
+ * Falls back to `application/octet-stream` for anything not listed here — the browser and
+ * the receiving server both sniff the real type from the bytes anyway.
+ */
+const MIME_BY_EXT: Record<string, string> = {
+  '.pdf': 'application/pdf',
+  '.csv': 'text/csv',
+  '.txt': 'text/plain',
+  '.json': 'application/json',
+  '.xml': 'application/xml',
+  '.html': 'text/html',
+  '.htm': 'text/html',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.webp': 'image/webp',
+  '.svg': 'image/svg+xml',
+  '.zip': 'application/zip',
+  '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  '.xls': 'application/vnd.ms-excel',
+  '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  '.doc': 'application/msword',
+  '.mp4': 'video/mp4',
+  '.mp3': 'audio/mpeg',
+};
+
+function mimeFromPath(filePath: string): string {
+  return MIME_BY_EXT[extname(filePath).toLowerCase()] ?? 'application/octet-stream';
+}
+
+/**
+ * Maximum file size the daemon will read and forward over the bridge (10 MiB).
+ *
+ * The bridge serialises the bytes as a base-64 string inside a JSON command frame. Larger files
+ * would stall the WebSocket and the browser's DataTransfer, so we refuse rather than guess.
+ * The stated cap is the whole point: `assertUploadArgs` exists to prevent substituted content;
+ * a size limit exists to prevent an unbounded read on an agent's say-so.
+ */
+const UPLOAD_MAX_BYTES = 10 * 1024 * 1024;
+
+/**
+ * Resolve a caller-supplied path to an absolute path that is still within the project root (cwd).
+ *
+ * The trust-boundary decision the issue asks for: scoped to `process.cwd()` — the directory the
+ * daemon was started in, the same implicit root that gates flows, baselines, and recordings. An
+ * absolute path outside that tree, or a relative path that escapes it via `../`, is refused here
+ * with a clear error, never silently substituted with fabricated bytes.
+ *
+ * Throws on any violation so the caller surface stays simple: resolve → read → forward.
+ */
+function resolveUploadPath(rawPath: string, cwd: string): string {
+  const abs = isAbsolute(rawPath) ? rawPath : join(cwd, rawPath);
+  const norm = resolve(abs);
+  const rel = relative(cwd, norm);
+  // relative() returns a path starting with '..' when norm escapes cwd.
+  if (rel.startsWith('..') || isAbsolute(rel)) {
+    throw new Error(
+      `upload path '${rawPath}' is outside the project root '${cwd}' — ` +
+        'only files within the directory the daemon was started in may be read. ' +
+        'Use a path relative to the project root, or an absolute path inside it.',
+    );
+  }
+  return norm;
+}
+
+/**
+ * If the action is `upload` AND the inner args carry `path`, read the file from disk and rewrite
+ * the args to `{ content, name, type }` before the ACT command reaches the browser.
+ *
+ * Returns the (possibly rewritten) args object. All other actions are returned unchanged.
+ *
+ * Design intent: the browser side is unchanged — it still sees `{ content, name, type }` and
+ * `assertUploadArgs` still enforces "no fabricated bytes". The daemon is the only party that can
+ * cross the filesystem→browser boundary; this is that crossing, done safely.
+ */
+export async function rewriteUploadArgs(
+  deps: ToolDeps,
+  action: string,
+  innerArgs: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  if (action !== ActionType.UPLOAD) return innerArgs;
+  const rawPath = asString(innerArgs['path']);
+  if (rawPath === undefined) return innerArgs; // no path → let assertUploadArgs handle it normally
+
+  // Project root: one level above reticleRoot (.reticle/ lives inside it).
+  const cwd = join(deps.reticleRoot, '..');
+  const absPath = resolveUploadPath(rawPath, cwd);
+
+  const bytes = await deps.fs.readFileBytes(absPath).catch(() => {
+    throw new Error(
+      `upload path '${rawPath}' could not be read: file not found or not accessible.`,
+    );
+  });
+
+  if (bytes.byteLength > UPLOAD_MAX_BYTES) {
+    throw new Error(
+      `upload path '${rawPath}' is ${bytes.byteLength} bytes, which exceeds the ` +
+        `${UPLOAD_MAX_BYTES / (1024 * 1024)} MiB limit. ` +
+        'Split the file or pass its bytes as args.content directly.',
+    );
+  }
+
+  // Encode as base-64 so the bytes survive JSON serialisation across the bridge.
+  const content = Buffer.from(bytes).toString('base64');
+
+  // Infer MIME type from the file extension; fall back to octet-stream if unknown.
+  const callerType = asString(innerArgs['type']);
+  const type = callerType ?? mimeFromPath(absPath);
+
+  // Caller may override the filename; default to the basename of the path.
+  const callerName = asString(innerArgs['name']);
+  const name = callerName ?? absPath.split('/').pop() ?? absPath.split('\\').pop() ?? 'file';
+
+  // Strip 'path' from the forwarded args; the browser does not know it and assertUploadArgs
+  // would refuse it as an unrecognised key. Carry any other caller-supplied keys through.
+  // __base64: true tells the browser-side dispatch to decode `content` from base64 before
+  // constructing the File — JSON can only carry strings, not binary, across the bridge.
+  const { path: _dropped, name: _n, type: _t, ...rest } = innerArgs;
+  return { ...rest, content, name, type, __base64: true };
+}
 
 interface RealActResult {
   /** Defined only on a successful native action; `undefined` means the synthetic path runs. */

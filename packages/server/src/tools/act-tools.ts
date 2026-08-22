@@ -70,7 +70,7 @@ import {
 import { asString, asNumber, asRecord, sourceOf } from './tools-helpers.js';
 import { type ToolDef, sessionIdShape } from './tool-kit.js';
 import { asActionType, gradeOf } from './act-helpers.js';
-import { tryRealInput } from './real-input-attempt.js';
+import { tryRealInput, rewriteUploadArgs } from './real-input-attempt.js';
 
 /**
  * Narrow the wire's `action` to a real ActionType, or undefined.
@@ -156,7 +156,7 @@ export const ACT_TOOLS: ToolDef[] = [
         .record(z.unknown())
         .optional()
         .describe(
-          'Action-specific arguments: { value } for fill/select, { text } for type/press (the key NAME, e.g. Escape or Tab), { modifiers: ["Meta","Shift"] } for a press shortcut (Meta/Control/Shift/Alt — a Cmd+K), { toRef } for drag (the ref to drop ON — without it the drag lands nowhere), { native: true } to force a trusted native click, { holdMs: N } to keep the pointer DOWN for N ms (hold-to-confirm controls; effect.heldMs reports what was achieved), { confirmDangerous: true } to allow a potentially destructive control — a permission gate, NOT a duration.',
+          'Action-specific arguments: { value } for fill/select, { text } for type/press (the key NAME, e.g. Escape or Tab), { modifiers: ["Meta","Shift"] } for a press shortcut (Meta/Control/Shift/Alt — a Cmd+K), { toRef } for drag (the ref to drop ON — without it the drag lands nowhere), { native: true } to force a trusted native click, { holdMs: N } to keep the pointer DOWN for N ms (hold-to-confirm controls; effect.heldMs reports what was achieved), { confirmDangerous: true } to allow a potentially destructive control — a permission gate, NOT a duration. For upload: { path } is a path on disk (absolute or relative to the project root; the daemon reads the file and delivers real bytes to the file picker — this is the way to verify document-ingestion flows); or { name, content?, type? } to supply inline bytes directly.',
         ),
       refuseWhenThrottled: z
         .boolean()
@@ -241,10 +241,20 @@ export const ACT_TOOLS: ToolDef[] = [
           });
         }
 
+        // If this is an `upload` action and the caller passed `args.path`, the daemon reads the
+        // file from disk here — before the command crosses the bridge — and rewrites the args to
+        // `{ content, name, type }`. The browser side is unchanged: it still sees a normal upload
+        // call and `assertUploadArgs` still enforces "no fabricated bytes". A path outside the
+        // project root or a file exceeding the size cap is refused here with a clear error.
+        const bridgeArgs = await rewriteUploadArgs(
+          deps,
+          String(args['action'] ?? ''),
+          asRecord(args['args']),
+        );
         const result = await session.command(ReticleCommand.ACT, {
           ref: targetRef.ref,
           action: args['action'],
-          args: args['args'] ?? {},
+          args: bridgeArgs,
         });
         if (!result.ok) throw new Error(result.error ?? 'act failed');
         captureAct(deps.recordings, args, result.result);
@@ -336,10 +346,16 @@ export const ACT_TOOLS: ToolDef[] = [
         // invisible from the other — cover both when changing sequence semantics.
         for (let i = 0; i < inputSteps.length; i++) {
           const step = asRecord(inputSteps[i]);
+          // Rewrite upload+path args at the per-step level, same as the single-act path.
+          const stepArgs = await rewriteUploadArgs(
+            deps,
+            String(step['action'] ?? ''),
+            asRecord(step['args']),
+          );
           try {
             const result = await session.command(
               ReticleCommand.ACT,
-              { ref: step['ref'], action: step['action'], args: step['args'] ?? {} },
+              { ref: step['ref'], action: step['action'], args: stepArgs },
               perStepTimeout,
             );
             if (!result.ok) {
@@ -434,7 +450,7 @@ export const ACT_TOOLS: ToolDef[] = [
         .record(z.unknown())
         .optional()
         .describe(
-          'Action-specific arguments: { value } for fill/select, { text } for type/press (the key NAME, e.g. Escape or Tab), { modifiers: ["Meta","Shift"] } for a press shortcut (Meta/Control/Shift/Alt), { toRef } for drag (the ref to drop ON — without it the drag lands nowhere), { confirmDangerous: true } for a potentially destructive control.',
+          'Action-specific arguments: { value } for fill/select, { text } for type/press (the key NAME, e.g. Escape or Tab), { modifiers: ["Meta","Shift"] } for a press shortcut (Meta/Control/Shift/Alt), { toRef } for drag (the ref to drop ON — without it the drag lands nowhere), { confirmDangerous: true } for a potentially destructive control. For upload: { path } is a path on disk (absolute or relative to project root; daemon reads real bytes) or { name, content?, type? } for inline bytes.',
         ),
       predicate: PredicateSchema.optional().describe(
         'Alias for `until` (the name reticle_assert / reticle_wait_for use).',
@@ -587,10 +603,17 @@ export const ACT_TOOLS: ToolDef[] = [
           ? (await evaluatePredicate(session, until, since, false)).pass
           : false;
       try {
+        // Same daemon-side path rewrite as reticle_act — if args.path is set, the file is read
+        // here and forwarded as { content, name, type } so the browser sees a normal upload call.
+        const bridgeActArgs = await rewriteUploadArgs(
+          deps,
+          String(args['action'] ?? ''),
+          asRecord(args['args']),
+        );
         const actResult = await session.command(ReticleCommand.ACT, {
           ref: resolved.ref,
           action: args['action'],
-          args: args['args'] ?? {},
+          args: bridgeActArgs,
         });
         if (!actResult.ok) throw new Error(actResult.error ?? 'act failed');
         captureAct(deps.recordings, args, actResult.result);
