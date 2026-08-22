@@ -741,3 +741,106 @@ describe('installNetwork (XMLHttpRequest)', () => {
     expect(done.map((e) => e.data['status'])).toEqual([200, 201]);
   });
 });
+
+describe('document-initiated subresources (PerformanceObserver)', () => {
+  let teardown: Teardown | undefined;
+  type POCallback = (list: { getEntries: () => PerformanceEntry[] }) => void;
+  let observedTypes: string[] = [];
+  const hadPO = typeof globalThis.PerformanceObserver !== 'undefined';
+  const originalPO = globalThis.PerformanceObserver;
+
+  class FakePO {
+    static instances: FakePO[] = [];
+    callback: POCallback;
+    disconnected = false;
+    constructor(cb: POCallback) {
+      this.callback = cb;
+      FakePO.instances.push(this);
+    }
+    observe(opts: { type: string }): void {
+      observedTypes.push(opts.type);
+    }
+    disconnect(): void {
+      this.disconnected = true;
+    }
+  }
+
+  beforeEach(() => {
+    FakePO.instances = [];
+    observedTypes = [];
+    (globalThis as unknown as { PerformanceObserver: unknown }).PerformanceObserver = FakePO;
+  });
+
+  afterEach(() => {
+    teardown?.();
+    teardown = undefined;
+    if (hadPO) (globalThis as unknown as { PerformanceObserver: unknown }).PerformanceObserver = originalPO;
+    else Reflect.deleteProperty(globalThis, 'PerformanceObserver');
+  });
+
+  function fakeEntry(initiatorType: string, name: string, durationMs = 12): PerformanceEntry {
+    return {
+      name,
+      entryType: 'resource',
+      startTime: 100,
+      duration: durationMs,
+      initiatorType,
+      transferSize: 2048,
+      responseStatus: 200,
+    } as unknown as PerformanceEntry;
+  }
+
+  it('emits document-initiated loads as NET_REQUEST with status when readable', () => {
+    const { emit, events } = collect();
+    teardown = installNetwork(emit);
+    expect(observedTypes).toContain('resource');
+
+    const cb = FakePO.instances.at(0)?.callback;
+    if (cb === undefined) throw new Error('observer callback missing');
+    cb({ getEntries: () => [
+      fakeEntry('link', 'https://app.test/favicon.ico'),
+      fakeEntry('link', 'https://app.test/site.webmanifest'),
+      fakeEntry('css', 'https://app.test/app.css'),
+      // fetch/XHR types belong to the patched transports and must be skipped
+      fakeEntry('fetch', 'https://app.test/api/data'),
+    ]});
+
+    const net = events.filter((e) => e.type === EventType.NET_REQUEST);
+    expect(net.length).toBe(3);
+    expect(net.map((e) => e.data['url'])).toEqual([
+      'https://app.test/favicon.ico',
+      'https://app.test/site.webmanifest',
+      'https://app.test/app.css',
+    ]);
+    for (const e of net) {
+      expect(e.data['method']).toBe('GET');
+      expect(e.data['status']).toBe(200);
+      expect(e.data['ok']).toBe(true);
+    }
+  });
+
+  it('omits the status fields entirely when responseStatus is unreadable', () => {
+    const { emit, events } = collect();
+    teardown = installNetwork(emit);
+    const entry = fakeEntry('img', 'https://app.test/hero.png');
+    delete (entry as unknown as Record<string, unknown>).responseStatus;
+    FakePO.instances.at(0)?.callback({ getEntries: () => [entry] });
+
+    const net = events.find((e) => e.type === EventType.NET_REQUEST);
+    expect(net).toBeDefined();
+    if (net === undefined) return;
+    expect(net.data).not.toHaveProperty('status');
+    expect(net.data).not.toHaveProperty('ok');
+    expect(net.data['initiator']).toBe('img');
+  });
+
+  it('disconnects the observer on teardown', () => {
+    const { emit } = collect();
+    teardown = installNetwork(emit);
+    const po = FakePO.instances.at(0);
+    expect(po).toBeDefined();
+    teardown?.();
+    teardown = undefined;
+    expect(po?.disconnected).toBe(true);
+  });
+});

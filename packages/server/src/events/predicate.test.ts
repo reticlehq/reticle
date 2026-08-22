@@ -156,6 +156,40 @@ describe('predicate engine', () => {
     ).toBe(true);
   });
 
+  /**
+   * Document-initiated subresources (link/css/img/manifest via resource timing) carry no readable
+   * status on engines without `responseStatus`. A plain failure would read "your change is broken"
+   * and send the agent to fix working code — the false negative the oracle exists to prevent. The
+   * honest verdict is unknown: the request WAS seen, its status simply cannot be asserted here.
+   */
+  it('net status over a status-less subresource downgrades to unknown, never a plain failure', async () => {
+    const session = new FakeSession([
+      // A document-initiated load: url matches, status unreadable (absent from the record).
+      ev(EventType.NET_REQUEST, { method: 'GET', url: '/favicon.ico', initiator: 'link' }),
+    ]);
+    const result = await evaluatePredicate(session, {
+      kind: 'net',
+      urlContains: '/favicon.ico',
+      status: 200,
+    });
+    expect(result.pass).toBe(false);
+    expect(result.inconclusive).toBeDefined();
+    expect(result.inconclusive).toContain('does not expose its status');
+  });
+
+  it('net status still fails plainly when the status IS readable and differs', async () => {
+    const session = new FakeSession([
+      ev(EventType.NET_REQUEST, { method: 'GET', url: '/api/data', status: 500 }),
+    ]);
+    const result = await evaluatePredicate(session, {
+      kind: 'net',
+      urlContains: '/api/data',
+      status: 200,
+    });
+    expect(result.pass).toBe(false);
+    expect(result.inconclusive).toBeUndefined();
+  });
+
   it('net count: respects the since floor (a prior-action request is not counted)', async () => {
     const session = new FakeSession([
       ev(EventType.NET_REQUEST, { method: 'POST', url: '/api/deploy', status: 200 }, 10),

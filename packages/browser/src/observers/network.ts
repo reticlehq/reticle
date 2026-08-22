@@ -309,6 +309,7 @@ export function installNetwork(emit: Emit, opts: NetworkOptions = {}): Teardown 
       const contentType = res.headers.get('content-type');
       // The request is done; the BODY may not be. Watch it so settle cannot pass mid-stream.
       watchStreamedBody(emit, res, id, url, contentType, res.headers.get('content-length'));
+      reportedNetUrls.add(rawUrl);
       const emitRequest = (responseBodyFields: Record<string, unknown>): void => {
         emit(EventType.NET_REQUEST, {
           id,
@@ -444,6 +445,7 @@ export function installNetwork(emit: Emit, opts: NetworkOptions = {}): Teardown 
         this.addEventListener('loadend', () => {
           const cur = meta.get(this);
           if (cur === undefined) return;
+          reportedNetUrls.add(cur.rawUrl);
           const xhrContentType = this.getResponseHeader('content-type');
           let responseBodyFields: Record<string, unknown> = {};
           // responseText throws unless responseType is '' or 'text' — guard before reading.
@@ -591,7 +593,58 @@ export function installNetwork(emit: Emit, opts: NetworkOptions = {}): Teardown 
     navProto.sendBeacon = patchedBeacon;
   }
 
+  // Document-initiated subresources (link/css/img/script/manifest): fetch and XHR patches never see
+  // these, so a `{net}` predicate over a favicon or manifest used to read `assertion_failed` — "your
+  // change is broken" — when the truthful answer is "not observable". A PerformanceObserver over
+  // `resource` entries reports them with no CDP. Status is the known gap: entries carry one only on
+  // newer Chromium, so the field is emitted ONLY when readable and the evaluation seam downgrades
+  // status assertions it cannot verify instead of guessing.
+  //
+  // Dedup: any URL the patched transports already reported (or later report) is skipped — resource
+  // timing also records fetch/XHR loads. The seen-set is filled eagerly here AND at every
+  // NET_REQUEST emit below, so both orders of arrival stay single-reported.
+  const reportedNetUrls = new Set<string>();
+  let subresourceEvents = 0;
+  const SUBRESOURCE_CAP = 200;
+  let subresourceObserver: PerformanceObserver | undefined;
+  if (typeof PerformanceObserver !== 'undefined') {
+    try {
+      const observer = new PerformanceObserver((list) => {
+        for (const raw of list.getEntries()) {
+          const entry = raw as PerformanceResourceTiming;
+          if (subresourceEvents >= SUBRESOURCE_CAP) return;
+          const type = entry.initiatorType || 'other';
+          // Patched transports own their records; only document-initiated types are new here.
+          if ('fetch' === type || 'xmlhttprequest' === type) continue;
+          const rawUrl = entry.name;
+          if (reportedNetUrls.has(rawUrl)) continue;
+          reportedNetUrls.add(rawUrl);
+          subresourceEvents += 1;
+          emit(EventType.NET_REQUEST, {
+            id: nextId(),
+            method: 'GET',
+            url: redactUrl(rawUrl),
+            durationMs: Math.round(entry.duration),
+            initiator: type,
+            ...(entry.transferSize > 0 ? { transferSize: entry.transferSize } : {}),
+            // responseStatus is Chromium-only; omitted entirely when unreadable so the wire never
+            // carries a guessed status. Its absence is what the server-side seam reads as unknown.
+            ...((entry.responseStatus ?? 0) > 0
+              ? { status: entry.responseStatus, ok: (entry.responseStatus ?? 0) >= 200 && (entry.responseStatus ?? 0) < 400 }
+              : {}),
+          });
+        }
+      });
+      subresourceObserver = observer;
+      observer.observe({ type: 'resource', buffered: true });
+      // Disconnected in the disposer below.
+    } catch {
+      // No observer support: document-initiated loads stay unobserved, stated rather than guessed.
+    }
+  }
+
   return () => {
+    subresourceObserver?.disconnect();
     // Restore each slot ONLY if it still holds OUR wrapper. Between connect() and disconnect() the app
     // (or Sentry/analytics/a router) may have wrapped fetch/XHR/EventSource/WebSocket/sendBeacon ON TOP
     // of ours; blindly writing the original back would silently uninstall their instrumentation — the

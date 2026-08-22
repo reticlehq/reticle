@@ -303,6 +303,8 @@ export function evalNet(
    * because it is the same pass over the same events.
    */
   let matchedButUnrecorded = false;
+  /** A call matched url/method but carried NO readable status (document-initiated subresource). */
+  let unobservableStatus = false;
   /**
    * The response body of a call that matched everything EXCEPT the body assertion, and HAD one.
    *
@@ -321,7 +323,18 @@ export function evalNet(
     if (p.urlContains !== undefined && !(str(d['url']) ?? '').includes(p.urlContains)) {
       return false;
     }
-    if (p.status !== undefined && num(d['status']) !== p.status) return false;
+    if (p.status !== undefined) {
+      const status = num(d['status']);
+      if (status === undefined) {
+        // Document-initiated subresources (link/css/img/manifest via resource timing) carry no
+        // readable status on engines without responseStatus. A failed assertion here would read
+        // "your change is broken" and send the caller to fix working code — the exact false
+        // negative the oracle exists to prevent. Downgrade to unknown instead.
+        unobservableStatus = true;
+        return false;
+      }
+      if (status !== p.status) return false;
+    }
     if (p.ok !== undefined && callSucceeded(d) !== p.ok) return false;
     if (p.bodyContains !== undefined) {
       // The RESPONSE body only, and this is the whole point of the field. Searching the request too
@@ -340,6 +353,18 @@ export function evalNet(
     }
     return true;
   });
+  if (unobservableStatus && 0 === matches.length) {
+    // The url/method matched a document-initiated subresource whose engine could not read a status.
+    // "No matching call" would be a lie in both directions: it may have succeeded, it may have 404'd
+    // on exactly the path mistake the caller is hunting. Say the truth — not observable here.
+    return {
+      pass: false,
+      inconclusive: `a document-initiated request matching ${describeNetFilter(p)} was observed, but this engine does not expose its status code (resource timing without responseStatus) — assert on the element or route instead, or check the network tab`,
+      observed: 'a matching request with no readable status',
+      expected: `a status of ${String(p.status)} on ${JSON.stringify(p.urlContains ?? '*')}`,
+      assertion: 'net.unobservable-status',
+    };
+  }
   if (matchedButUnrecorded && 0 === matches.length) {
     return {
       pass: false,
