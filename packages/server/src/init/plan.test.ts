@@ -2,9 +2,14 @@ import { describe, expect, it } from 'vitest';
 import { buildPlan, StepStatus, type PlanInput } from './plan.js';
 import { Framework, PackageManager, UiLibrary, type Detection } from './detect.js';
 import { cursorRuleFile } from './agent-rules.js';
+import { McpClient } from './mcp-clients.js';
 
 const CLAUDE_STEP = 'MCP server (Claude, global)';
-const CURSOR_STEP = 'MCP server (Cursor, global)';
+const CURSOR_STEP = 'MCP server (Cursor)';
+
+function cursorClient(existing: string | null = null) {
+  return { id: McpClient.CURSOR, configPath: '/home/u/.cursor/mcp.json', existing };
+}
 const MCP_STEP = 'MCP server (global)';
 const CONFIG_STEP = 'Reticle config';
 
@@ -28,10 +33,8 @@ function input(partial: Partial<PlanInput>): PlanInput {
     detection: partial.detection ?? detection(Framework.VITE),
     claudeCli: partial.claudeCli ?? true,
     mcpExists: partial.mcpExists ?? false,
-    cursorPresent: partial.cursorPresent ?? false,
     cursorProjectPresent: partial.cursorProjectPresent,
-    cursorConfig: partial.cursorConfig ?? null,
-    cursorConfigPath: partial.cursorConfigPath ?? '/home/u/.cursor/mcp.json',
+    detectedClients: partial.detectedClients,
     viteConfig: partial.viteConfig ?? null,
     astroConfig: partial.astroConfig,
     astroLayout: partial.astroLayout,
@@ -108,7 +111,9 @@ describe('buildPlan — agent verification rule (makes the agent USE Reticle)', 
 
   it('writes a Cursor .mdc rule when Cursor is present', () => {
     const s = step(
-      buildPlan(input({ claudeCli: false, cursorPresent: true, cursorRuleContent: null })),
+      buildPlan(
+        input({ claudeCli: false, detectedClients: [cursorClient()], cursorRuleContent: null }),
+      ),
       AGENT_RULE_STEP,
     );
     expect(s.status).toBe(StepStatus.APPLY);
@@ -119,7 +124,9 @@ describe('buildPlan — agent verification rule (makes the agent USE Reticle)', 
   it('Cursor rule step is ALREADY only when the .mdc holds the CURRENT rule', () => {
     const current = cursorRuleFile();
     const s = step(
-      buildPlan(input({ claudeCli: false, cursorPresent: true, cursorRuleContent: current })),
+      buildPlan(
+        input({ claudeCli: false, detectedClients: [cursorClient()], cursorRuleContent: current }),
+      ),
       AGENT_RULE_STEP,
     );
     expect(s.status).toBe(StepStatus.ALREADY);
@@ -136,7 +143,7 @@ describe('buildPlan — agent verification rule (makes the agent USE Reticle)', 
       buildPlan(
         input({
           claudeCli: false,
-          cursorPresent: true,
+          detectedClients: [cursorClient()],
           cursorRuleContent: '---\nalwaysApply: true\n---\n\n## Verifying with Reticle\n\nold text',
         }),
       ),
@@ -147,10 +154,7 @@ describe('buildPlan — agent verification rule (makes the agent USE Reticle)', 
   });
 
   it('falls back to AGENTS.md when neither Claude nor Cursor is detected', () => {
-    const s = step(
-      buildPlan(input({ claudeCli: false, cursorPresent: false, agentsMdContent: null })),
-      AGENT_RULE_STEP,
-    );
+    const s = step(buildPlan(input({ claudeCli: false, agentsMdContent: null })), AGENT_RULE_STEP);
     expect(s.status).toBe(StepStatus.APPLY);
     expect(s.write?.path).toBe('AGENTS.md');
   });
@@ -187,7 +191,7 @@ describe('buildPlan — MCP (global, per detected agent)', () => {
   });
 
   it('registers with Cursor by writing its global config when Cursor is present', () => {
-    const plan = buildPlan(input({ claudeCli: false, cursorPresent: true, cursorConfig: null }));
+    const plan = buildPlan(input({ claudeCli: false, detectedClients: [cursorClient()] }));
     const s = step(plan, CURSOR_STEP);
     expect(s.status).toBe(StepStatus.APPLY);
     expect(s.write?.path).toBe('/home/u/.cursor/mcp.json');
@@ -195,21 +199,19 @@ describe('buildPlan — MCP (global, per detected agent)', () => {
   });
 
   it('registers with BOTH agents when both are present', () => {
-    const plan = buildPlan(input({ claudeCli: true, cursorPresent: true, cursorConfig: null }));
+    const plan = buildPlan(input({ claudeCli: true, detectedClients: [cursorClient()] }));
     expect(maybeStep(plan, CLAUDE_STEP)).toBeDefined();
     expect(maybeStep(plan, CURSOR_STEP)).toBeDefined();
   });
 
   it('Cursor step is ALREADY when reticle is already in its config', () => {
     const existing = JSON.stringify({ mcpServers: { reticle: { command: 'x' } } });
-    const plan = buildPlan(
-      input({ claudeCli: false, cursorPresent: true, cursorConfig: existing }),
-    );
+    const plan = buildPlan(input({ claudeCli: false, detectedClients: [cursorClient(existing)] }));
     expect(step(plan, CURSOR_STEP).status).toBe(StepStatus.ALREADY);
   });
 
   it('falls back to a single manual step when no agent is detected', () => {
-    const plan = buildPlan(input({ claudeCli: false, cursorPresent: false }));
+    const plan = buildPlan(input({ claudeCli: false }));
     const s = step(plan, MCP_STEP);
     expect(s.status).toBe(StepStatus.MANUAL);
     expect(s.detail).toContain('-s user');
@@ -227,8 +229,7 @@ describe('buildPlan — MCP (global, per detected agent)', () => {
     const plan = buildPlan(
       input({
         claudeCli: true,
-        cursorPresent: true,
-        cursorConfig: null,
+        detectedClients: [cursorClient()],
         options: { port: 5000, mcp: true, install: false },
       }),
     );
@@ -641,19 +642,19 @@ describe('buildPlan — non-React apps are marked unverified', () => {
 
 describe('buildPlan — the Cursor rule is a project file, not a machine-wide one', () => {
   const rule = (partial: Partial<PlanInput>) =>
-    maybeStep(buildPlan(input({ cursorPresent: true, ...partial })), AGENT_RULE_STEP);
+    maybeStep(buildPlan(input({ detectedClients: [cursorClient()], ...partial })), AGENT_RULE_STEP);
 
   it('is not written into a Claude Code project just because ~/.cursor exists', () => {
     expect(rule({ claudeCli: true, cursorProjectPresent: false })?.write?.path).toBe('CLAUDE.md');
     const steps = buildPlan(
-      input({ cursorPresent: true, claudeCli: true, cursorProjectPresent: false }),
+      input({ detectedClients: [cursorClient()], claudeCli: true, cursorProjectPresent: false }),
     ).steps;
     expect(steps.some((s) => '.cursor/rules/reticle.mdc' === s.write?.path)).toBe(false);
   });
 
   it('is written when the repo itself has a .cursor dir', () => {
     const steps = buildPlan(
-      input({ cursorPresent: true, claudeCli: true, cursorProjectPresent: true }),
+      input({ detectedClients: [cursorClient()], claudeCli: true, cursorProjectPresent: true }),
     ).steps;
     expect(steps.some((s) => '.cursor/rules/reticle.mdc' === s.write?.path)).toBe(true);
   });

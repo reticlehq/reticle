@@ -56,8 +56,7 @@ import {
 import { claudeAvailableProbe, claudeExistsProbe } from './mcp.js';
 import { reticleDevLocation } from './next-patch.js';
 import { scanTestids, storeHints, scanStores } from './capabilities.js';
-import { CURSOR_DIR_RELPATH, CURSOR_MCP_RELPATH } from './cursor.js';
-import { fileBackedClients, clientMarkerRelPath, ConfigScope, McpClient } from './mcp-clients.js';
+import { fileBackedClients, clientMarkerRelPath, ConfigScope } from './mcp-clients.js';
 import { deriveProjectId, packageName } from './project-id.js';
 import { VITE_DEV_MODULE_PATH, connectArgWithToken, staticPageSnippet } from './snippets.js';
 import { CLAUDE_COMMAND_PATH, CURSOR_COMMAND_PATH } from './slash-command.js';
@@ -373,23 +372,11 @@ function gatherPlanInput(options: InitOptions, io: InitIo, pkgRaw: string): Plan
   const existsProbe = claudeExistsProbe();
   const mcpExists = claudeCli ? io.probe(existsProbe.command, existsProbe.args) : false;
 
-  // join(), not a literal '/': this path is checked and WRITTEN on the user's machine, and a
-  // backslash platform silently misses the config it is meant to find.
-  const cursorDir = join(io.homeDir(), CURSOR_DIR_RELPATH);
-  const cursorConfigPath = join(io.homeDir(), CURSOR_MCP_RELPATH);
-  // Cursor is "present" if its global config directory exists OR the project carries a `.cursor/`.
-  // The directory alone missed a real case: Cursor installed with a FRESH profile has not written
-  // ~/.cursor yet, so a user who had it open got no Cursor step and no message about one. A
-  // project-level .cursor/ is unambiguous evidence somebody uses it here.
-  const cursorPresent = options.mcp && (io.exists(cursorDir) || io.exists(CURSOR_DIR_RELPATH));
-  const cursorConfig = cursorPresent ? io.readFile(cursorConfigPath) : null;
-
-  // Every OTHER MCP client this machine shows evidence of. Conservative and one-directional: we
-  // write into a config a client ALREADY has, and never create ~/.gemini or ~/.codeium for somebody
-  // who does not use them. Cursor and Claude are handled above by their own steps.
+  // Every MCP client this machine shows evidence of. Conservative and one-directional: we write
+  // into a config a client ALREADY has, and never create ~/.gemini or ~/.codeium for somebody who
+  // does not use them.
   const detectedClients = options.mcp
     ? fileBackedClients()
-        .filter((spec) => spec.id !== McpClient.CURSOR)
         .map((spec) => {
           const marker = clientMarkerRelPath(spec);
           const absolute =
@@ -399,7 +386,6 @@ function gatherPlanInput(options: InitOptions, io: InitIo, pkgRaw: string): Plan
           return {
             id: spec.id,
             configPath: absolute,
-            // io.readFile passes absolute paths through unchanged, so one call covers both scopes.
             existing: io.readFile(absolute),
           };
         })
@@ -443,11 +429,8 @@ function gatherPlanInput(options: InitOptions, io: InitIo, pkgRaw: string): Plan
     detection,
     claudeCli,
     mcpExists,
-    cursorPresent,
     detectedClients,
-    cursorProjectPresent: io.exists(CURSOR_DIR_RELPATH),
-    cursorConfig,
-    cursorConfigPath,
+    cursorProjectPresent: io.exists('.cursor'),
     viteConfig,
     astroConfig:
       astroPath !== null && astroSource !== null ? { path: astroPath, source: astroSource } : null,

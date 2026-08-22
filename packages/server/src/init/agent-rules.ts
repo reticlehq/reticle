@@ -1,7 +1,7 @@
 /**
  * `reticle init` writes a behavioral rule into the coding agent's instruction file so the agent
  * VERIFIES a feature with Reticle after building it — not only when the user remembers to say "test
- * it with reticle". Registering the MCP server (mcp.ts / cursor.ts) only makes the tools AVAILABLE;
+ * it with reticle". Registering the MCP server (mcp.ts / mcp-clients.ts) only makes the tools AVAILABLE;
  * this is the piece that makes the agent reach for them, every session, unprompted.
  *
  * It carries a SECOND standing instruction, and that one is not about this project at all: send
@@ -15,7 +15,7 @@
  * written into whichever instruction file the detected agent reads: `CLAUDE.md` (Claude Code),
  * `.cursor/rules/reticle.mdc` (Cursor, `alwaysApply` so it stays in context), or `AGENTS.md` as the
  * cross-agent fallback. Idempotent via a marker block — safe to append to an existing file and a
- * re-run is a no-op. Mirrors the apply/already result shape used across init (see cursor.ts).
+ * re-run is a no-op. Mirrors the apply/already result shape used across init (see mcp-clients.ts).
  */
 
 import { NPX } from './mcp.js';

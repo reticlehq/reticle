@@ -14,13 +14,12 @@ import {
 } from './detect.js';
 import type { FoundStore } from './capabilities.js';
 import { claudeAddCommand, mcpManual } from './mcp.js';
-import { mergeCursorConfig, CursorMergeStatus, cursorServerEntry } from './cursor.js';
 import {
   mergeClientConfig,
   ClientMergeStatus,
   clientSnippet,
   clientSpec,
-  type McpClient,
+  McpClient,
 } from './mcp-clients.js';
 import {
   CLAUDE_COMMAND_PATH,
@@ -205,14 +204,8 @@ export interface PlanInput {
   claudeCli: boolean;
   /** Whether an `reticle` MCP server is already registered with Claude (any scope) — idempotency. */
   mcpExists: boolean;
-  /** Whether Cursor is installed for this user (its global config dir exists). */
-  cursorPresent: boolean;
   /** Whether THIS project has a .cursor/ directory — the signal that Cursor works on this repo. */
   cursorProjectPresent?: boolean | undefined;
-  /** Current ~/.cursor/mcp.json content, or null if absent. */
-  cursorConfig: string | null;
-  /** Absolute path of ~/.cursor/mcp.json (the write target). */
-  cursorConfigPath: string;
   /**
    * Every OTHER MCP client detected on this machine, with its config path and current content.
    *
@@ -220,7 +213,8 @@ export interface PlanInput {
    * predates this. Everything else is uniform: read the file, merge, write.
    */
   detectedClients?:
-    readonly { id: McpClient; configPath: string; existing: string | null }[] | undefined;
+    | readonly { id: McpClient; configPath: string; existing: string | null }[]
+    | undefined;
   /** Discovered Vite config: its path + source, or null if none found. */
   viteConfig: { path: string; source: string } | null;
   /** Discovered Astro config: its path + source, or null if none found. */
@@ -330,7 +324,6 @@ function agentFile(input: PlanInput, relPath: string): string {
 }
 
 const CLAUDE_MCP_TITLE = 'MCP server (Claude, global)';
-const CURSOR_MCP_TITLE = 'MCP server (Cursor, global)';
 
 function claudeMcpStep(input: PlanInput): Step | null {
   if (!input.claudeCli) return null;
@@ -349,34 +342,6 @@ function claudeMcpStep(input: PlanInput): Step | null {
     status: StepStatus.APPLY,
     detail: 'register reticle globally for all projects',
     exec: { command: cmd.command, args: cmd.args, fallback: cmd.display },
-  };
-}
-
-function cursorMcpStep(input: PlanInput): Step | null {
-  if (!input.cursorPresent) return null;
-  const r = mergeCursorConfig(input.cursorConfig);
-  if (r.status === CursorMergeStatus.ALREADY) {
-    return {
-      title: CURSOR_MCP_TITLE,
-      target: input.cursorConfigPath,
-      status: StepStatus.ALREADY,
-      detail: 'reticle already in Cursor global config',
-    };
-  }
-  if (r.status === CursorMergeStatus.MANUAL) {
-    return {
-      title: CURSOR_MCP_TITLE,
-      target: input.cursorConfigPath,
-      status: StepStatus.MANUAL,
-      detail: `couldn't parse ${input.cursorConfigPath} — add this server by hand:\n  "reticle": ${JSON.stringify(cursorServerEntry())}`,
-    };
-  }
-  return {
-    title: CURSOR_MCP_TITLE,
-    target: input.cursorConfigPath,
-    status: StepStatus.APPLY,
-    detail: 'register reticle in Cursor global config',
-    write: { path: input.cursorConfigPath, content: r.content },
   };
 }
 
@@ -511,7 +476,8 @@ function claudeCommandStep(input: PlanInput): Step | null {
 }
 
 function cursorCommandStep(input: PlanInput): Step | null {
-  const present = true === input.cursorProjectPresent || (input.cursorPresent && !input.claudeCli);
+  const cursorGlobal = (input.detectedClients ?? []).some((c) => c.id === McpClient.CURSOR);
+  const present = true === input.cursorProjectPresent || (cursorGlobal && !input.claudeCli);
   return commandStepFor(agentFile(input, CURSOR_COMMAND_PATH), present, input.cursorCommandContent);
 }
 
@@ -549,7 +515,8 @@ function claudeRuleStep(input: PlanInput): Step | null {
  * committed into their repo. (Global MCP registration is different: it is global, and stays.)
  */
 function cursorRuleStep(input: PlanInput): Step | null {
-  if (!input.cursorPresent) return null;
+  const cursorGlobal = (input.detectedClients ?? []).some((c) => c.id === McpClient.CURSOR);
+  if (!cursorGlobal && true !== input.cursorProjectPresent) return null;
   if (input.cursorProjectPresent !== true && input.claudeCli) return null;
   // The whole file is Reticle's — init created it — so a stale one is REWRITTEN rather than merged.
   // Comparing content is what makes the rule updatable; comparing existence made it permanent.
@@ -610,7 +577,7 @@ const AGENT_INTEGRATIONS: readonly AgentIntegration[] = [
   },
   {
     id: AgentId.CURSOR,
-    mcpStep: cursorMcpStep,
+    mcpStep: () => null,
     ruleStep: cursorRuleStep,
     commandStep: cursorCommandStep,
   },
