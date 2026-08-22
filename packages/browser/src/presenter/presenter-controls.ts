@@ -275,6 +275,14 @@ export class ControlPanel {
   /** The full replayable-flow list from the last push; re-filtered per page on route change. */
   #flowItems: FlowChip[] = [];
   #workspaceTeardown: (() => void) | undefined;
+  /**
+   * One signal for every listener this controller registers.
+   *
+   * All eight are anonymous closures over `this`, so there was no reference to hand
+   * `removeEventListener` and teardown removed none of them — each kept the controller reachable
+   * for as long as its element lived, and a second mount stacked another set on top.
+   */
+  #listeners: AbortController | undefined;
   readonly #host: ControlPanelHost;
 
   constructor(host: ControlPanelHost) {
@@ -285,6 +293,8 @@ export class ControlPanel {
   }
   /** Query control refs out of the mounted root and bind the DOM listeners, then paint active. */
   mount(root: HTMLElement, glow: HTMLElement | undefined): void {
+    this.#listeners = new AbortController();
+    const { signal } = this.#listeners;
     this.#root = root;
     this.#glow = glow;
     this.#refs = queryControlRefs(root);
@@ -292,28 +302,36 @@ export class ControlPanel {
     if (pauseBtn !== undefined) {
       paintPauseBtn(pauseBtn, this.#state === SessionState.PAUSED);
     }
-    this.#refs.pauseBtn?.addEventListener('click', () => this.#onPauseToggle());
-    this.#refs.endBtn?.addEventListener('click', () => this.#onEnd());
-    this.#refs.sendBtn?.addEventListener('click', () => this.#onSend());
-    this.#refs.input?.addEventListener('keydown', (e) => {
-      // Enter sends; Shift+Enter inserts a newline (falls through to the textarea's default).
-      if (e instanceof KeyboardEvent && 'Enter' === e.key && !e.shiftKey) {
-        e.preventDefault();
-        this.#onSend();
-      }
-    });
-    this.#refs.input?.addEventListener('input', () => this.#autosize());
+    this.#refs.pauseBtn?.addEventListener('click', () => this.#onPauseToggle(), { signal });
+    this.#refs.endBtn?.addEventListener('click', () => this.#onEnd(), { signal });
+    this.#refs.sendBtn?.addEventListener('click', () => this.#onSend(), { signal });
+    this.#refs.input?.addEventListener(
+      'keydown',
+      (e) => {
+        // Enter sends; Shift+Enter inserts a newline (falls through to the textarea's default).
+        if (e instanceof KeyboardEvent && 'Enter' === e.key && !e.shiftKey) {
+          e.preventDefault();
+          this.#onSend();
+        }
+      },
+      { signal },
+    );
+    this.#refs.input?.addEventListener('input', () => this.#autosize(), { signal });
     // Replay-a-flow: one ▶ click re-runs a saved flow (no agent). Delegated so it covers all chips.
-    this.#refs.flows?.addEventListener('click', (e) => {
-      const target = e.target;
-      if (!(target instanceof HTMLElement)) return;
-      const name = target.closest('[data-reticle-replay]')?.getAttribute('data-reticle-replay');
-      if (name !== null && name !== undefined && name.length > 0) {
-        this.#host.emit(HumanControlKind.REPLAY, name);
-      }
-    });
-    this.#refs.copyBtn?.addEventListener('click', () => this.#onCopy());
-    this.#refs.exportBtn?.addEventListener('click', () => this.#onExport());
+    this.#refs.flows?.addEventListener(
+      'click',
+      (e) => {
+        const target = e.target;
+        if (!(target instanceof HTMLElement)) return;
+        const name = target.closest('[data-reticle-replay]')?.getAttribute('data-reticle-replay');
+        if (name !== null && name !== undefined && name.length > 0) {
+          this.#host.emit(HumanControlKind.REPLAY, name);
+        }
+      },
+      { signal },
+    );
+    this.#refs.copyBtn?.addEventListener('click', () => this.#onCopy(), { signal });
+    this.#refs.exportBtn?.addEventListener('click', () => this.#onExport(), { signal });
     this.#workspaceTeardown = mountWorkspaceSelector(root);
     this.setState(SessionState.ACTIVE);
   }
@@ -349,6 +367,9 @@ export class ControlPanel {
   }
   /** Clear any pending ended-fade timer (called from Presenter.destroy). */
   teardown(): void {
+    // All eight registrations, in one call that cannot drift from mount().
+    this.#listeners?.abort();
+    this.#listeners = undefined;
     this.#workspaceTeardown?.();
     this.#workspaceTeardown = undefined;
     if (this.#fadeTimer !== undefined) nativeClearTimeout(this.#fadeTimer);
