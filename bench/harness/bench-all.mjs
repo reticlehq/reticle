@@ -302,7 +302,17 @@ console.log(
 // rule rewrote the fixture and the anchors were not updated with it. Checked BEFORE the pass, because
 // a drifted anchor found afterwards has already produced a number somebody may have quoted.
 if (FULL) {
-  const drifted = verifyAnchors();
+  // verifyAnchors() refuses rather than destroying uncommitted work in the fixture files it
+  // rewrites. That refusal is a message to a human, so print the sentence — an unhandled throw at
+  // module top level would wrap it in a stack trace, on the `pnpm bench --full` path that most
+  // people take. Same treatment as the CLI path in inject.mjs.
+  let drifted;
+  try {
+    drifted = verifyAnchors();
+  } catch (e) {
+    console.error(e instanceof Error ? e.message : String(e));
+    process.exit(1);
+  }
   if (drifted.length > 0) {
     for (const d of drifted) console.error(`✗ DRIFTED ${d.id}: ${d.error.split('\n')[0]}`);
     console.error(
