@@ -4,6 +4,8 @@ All notable changes to the **`@reticlehq/*`** packages are documented here (each
 
 ## [Unreleased]
 
+## [2.11.1] — 2026-08-23
+
 ### Added
 
 - **`@reticlehq/core` + `@reticlehq/server` — `reticle_context`: what this run established, handed back when your own copy is gone.** A verification thread is multi-step, and the only thing holding it together is the agent's own context window. When that compacts, or the turn ends, or a sub-agent takes over, the thread goes with it and the work restarts: long runs of the same read-only call, an agent searching by exhaustion because it no longer remembers what it already saw.

@@ -1,6 +1,6 @@
 {
   "name": "@reticlehq/next-smoke",
-  "version": "2.11.0",
+  "version": "2.11.1",
   "private": true,
   "description": "A real Next.js (app router, React 19) app to smoke-test Reticle on Next.",
   "scripts": {
