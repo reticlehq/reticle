@@ -10,6 +10,9 @@
   "dependencies": {
     "@reticlehq/core": "workspace:*"
   },
+  "scripts": {
+    "test:unit": "vitest run preload.test.mjs"
+  },
   "peerDependencies": {
     "electron": ">=22"
   },
