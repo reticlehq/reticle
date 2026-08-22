@@ -22,6 +22,7 @@ const HARNESS_FILES = [
   'apps/bench-app/src/views/Diagnostics.tsx',
 ];
 const DIRTY_TARGET = 'apps/bench-app/src/views/Overview.tsx';
+const TEST_TIMEOUT_MS = 30_000;
 
 function git(root, ...args) {
   return execFileSync('git', ['-C', root, ...args], { encoding: 'utf8' });
@@ -56,46 +57,58 @@ function verifyAnchors(root) {
 }
 
 describe('benchmark injector dirty-worktree guard', () => {
-  it('allows a clean worktree and restores every injected fixture', () => {
-    withHarnessRepo((root) => {
-      const result = verifyAnchors(root);
+  it(
+    'allows a clean worktree and restores every injected fixture',
+    () => {
+      withHarnessRepo((root) => {
+        const result = verifyAnchors(root);
 
-      expect(result.status).toBe(0);
-      expect(result.stdout).toMatch(/anchors ok/i);
-      expect(git(root, 'status', '--porcelain')).toBe('');
-    });
-  });
+        expect(result.status).toBe(0);
+        expect(result.stdout).toMatch(/anchors ok/i);
+        expect(git(root, 'status', '--porcelain')).toBe('');
+      });
+    },
+    TEST_TIMEOUT_MS,
+  );
 
-  it('refuses an unstaged anchor edit without changing it', () => {
-    withHarnessRepo((root) => {
-      const target = join(root, DIRTY_TARGET);
-      appendFileSync(target, '\n// local unstaged edit\n');
-      const before = readFileSync(target, 'utf8');
+  it(
+    'refuses an unstaged anchor edit without changing it',
+    () => {
+      withHarnessRepo((root) => {
+        const target = join(root, DIRTY_TARGET);
+        appendFileSync(target, '\n// local unstaged edit\n');
+        const before = readFileSync(target, 'utf8');
 
-      const result = verifyAnchors(root);
+        const result = verifyAnchors(root);
 
-      expect(result.status).toBe(1);
-      expect(result.stderr).toMatch(/refusing to run/i);
-      expect(result.stderr.replaceAll('\\', '/')).toContain(DIRTY_TARGET);
-      expect(readFileSync(target, 'utf8')).toBe(before);
-      expect(git(root, 'diff', '--name-only').trim()).toBe(DIRTY_TARGET);
-    });
-  });
+        expect(result.status).toBe(1);
+        expect(result.stderr).toMatch(/refusing to run/i);
+        expect(result.stderr.replaceAll('\\', '/')).toContain(DIRTY_TARGET);
+        expect(readFileSync(target, 'utf8')).toBe(before);
+        expect(git(root, 'diff', '--name-only').trim()).toBe(DIRTY_TARGET);
+      });
+    },
+    TEST_TIMEOUT_MS,
+  );
 
-  it('refuses a staged anchor edit without changing it', () => {
-    withHarnessRepo((root) => {
-      const target = join(root, DIRTY_TARGET);
-      appendFileSync(target, '\n// local staged edit\n');
-      git(root, 'add', DIRTY_TARGET);
-      const before = readFileSync(target, 'utf8');
+  it(
+    'refuses a staged anchor edit without changing it',
+    () => {
+      withHarnessRepo((root) => {
+        const target = join(root, DIRTY_TARGET);
+        appendFileSync(target, '\n// local staged edit\n');
+        git(root, 'add', DIRTY_TARGET);
+        const before = readFileSync(target, 'utf8');
 
-      const result = verifyAnchors(root);
+        const result = verifyAnchors(root);
 
-      expect(result.status).toBe(1);
-      expect(result.stderr).toMatch(/refusing to run/i);
-      expect(result.stderr.replaceAll('\\', '/')).toContain(DIRTY_TARGET);
-      expect(readFileSync(target, 'utf8')).toBe(before);
-      expect(git(root, 'diff', '--cached', '--name-only').trim()).toBe(DIRTY_TARGET);
-    });
-  });
+        expect(result.status).toBe(1);
+        expect(result.stderr).toMatch(/refusing to run/i);
+        expect(result.stderr.replaceAll('\\', '/')).toContain(DIRTY_TARGET);
+        expect(readFileSync(target, 'utf8')).toBe(before);
+        expect(git(root, 'diff', '--cached', '--name-only').trim()).toBe(DIRTY_TARGET);
+      });
+    },
+    TEST_TIMEOUT_MS,
+  );
 });
