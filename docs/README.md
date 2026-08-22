@@ -26,7 +26,7 @@ Everything here is published to [docs.reticle.sh](https://docs.reticle.sh) by `d
 | [faq.mdx](faq.mdx) | production, frameworks, comparisons, and the honest limits |
 | [tools-overview.mdx](tools-overview.mdx) | the 18 advertised tools, the 30 in the cold tail, and why |
 | [tools-snapshot.mdx](tools-snapshot.mdx) | `reticle_snapshot`: three modes, from full tree to a 25-token route check |
-| [tools-query.mdx](tools-query.mdx) | `reticle_query` finds elements by testing-library semantics |
+| [tools-query.mdx](tools-query.mdx) | `reticle_query` finds elements by their reported roles, names and labels |
 | [tools-inspect.mdx](tools-inspect.mdx) | `reticle_inspect`: one element, down to source and design tokens |
 | [tools-navigate.mdx](tools-navigate.mdx) | `reticle_navigate`, and why `ok` does not mean the page arrived |
 | [tools-act.mdx](tools-act.mdx) | `reticle_act` acts, proves nothing, and says so |

@@ -35,8 +35,21 @@ const MAX_COMPONENT_CANDIDATES = 2000;
 /** Likely-actionable elements considered when resolving a component anchor without a source stamp. */
 const COMPONENT_CANDIDATE_SELECTOR = `[${SOURCE_ATTR}], [${TESTID_ATTR}], button, a, input, select, textarea, [role]`;
 
+/**
+ * Every candidate a semantic locator may match: the container ITSELF first, then its descendants.
+ *
+ * The container's own text, role or name was matched by every engine this replaces - a scoped
+ * `{ text: "Saved" }` against `<div id="status">Saved</div>` found #status itself - so dropping
+ * the root here would turn exactly those scoped queries into silent zero-match answers: the worst
+ * failure mode, indistinguishable from the element being absent. `self: true` stays the way to
+ * reach an UNLABELLED root (it skips the predicate entirely); this keeps a root that DOES satisfy
+ * the predicate findable without a second spelling.
+ */
 function elementsUnder(container: HTMLElement): HTMLElement[] {
-  return Array.from(container.querySelectorAll<HTMLElement>('*'));
+  // Embedded roots include ShadowRoots, which are DocumentFragments: they have no attributes or
+  // tag to match on, so only a true Element root joins the candidates.
+  const self = Node.ELEMENT_NODE === container.nodeType ? [container] : [];
+  return [...self, ...Array.from(container.querySelectorAll<HTMLElement>('*'))];
 }
 
 /**
@@ -71,11 +84,23 @@ function directText(el: Element): string {
     .join('');
 }
 
+/**
+ * Elements whose accessible name comes from author-supplied naming rather than free subtree
+ * content - the set `by: label` addresses.
+ *
+ * Form controls plus anything explicitly named with aria-label/aria-labelledby covers the common
+ * case. `button`, `meter`, `output` and `progress` are included because their names arrive on
+ * attributes (`value`) or from their caption, which is precisely what a label query is looking
+ * for; leaving them out would silently drop buttons from label searches.
+ */
 function semanticNameTarget(el: Element): boolean {
+  if (isInput(el) || isTextArea(el) || isSelect(el)) return true;
+  const tag = el.tagName.toLowerCase();
   return (
-    isInput(el) ||
-    isTextArea(el) ||
-    isSelect(el) ||
+    'button' === tag ||
+    'meter' === tag ||
+    'output' === tag ||
+    'progress' === tag ||
     el.hasAttribute('aria-label') ||
     el.hasAttribute('aria-labelledby')
   );

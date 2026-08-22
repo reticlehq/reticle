@@ -55,6 +55,25 @@ function inputRole(input: HTMLInputElement): string {
   return 'textbox';
 }
 
+/**
+ * Cheap author-supplied-naming probe: an explicit `aria-label`, any `aria-labelledby`, or a
+ * `title`. Attribute reads only - no name computation - so `getRole` can consult it without
+ * recursion into `getAccessibleName`.
+ *
+ * This decides `section` -> `region`, which the implicit-role table makes CONDITIONAL: an unnamed
+ * `<section>` is a plain `generic` container, while one carrying an accessible name is exposed as
+ * `region`. Getting that backwards either floods every page with phantom regions or hides real
+ * ones, so both halves are pinned by tests.
+ */
+function hasAuthorNaming(el: Element): boolean {
+  const label = el.getAttribute('aria-label');
+  if (label !== null && label.trim().length > 0) return true;
+  const labelledby = el.getAttribute('aria-labelledby');
+  if (labelledby !== null && labelledby.trim().length > 0) return true;
+  const title = el.getAttribute('title');
+  return title !== null && title.trim().length > 0;
+}
+
 /** Compute the ARIA role (explicit wins, else implicit from the tag). */
 export function getRole(el: Element): string {
   const explicit = el.getAttribute('role');
@@ -95,6 +114,46 @@ export function getRole(el: Element): string {
       return 'img';
     case 'table':
       return 'table';
+    case 'tr':
+      return 'row';
+    case 'tbody':
+    case 'thead':
+    case 'tfoot':
+      return 'rowgroup';
+    // A cell's role follows its grid context: plain tables expose `cell`/`columnheader`,
+    // while inside an explicit `role="grid"`/`role="treegrid"` the same markup is exposed as
+    // `gridcell` - the pair data-grid queries actually reach for (`{ role: "cell" }` against a
+    // CSS grid pretending to be a table would otherwise answer zero).
+    case 'td':
+      return el.closest('[role~="grid"], [role~="treegrid"]') !== null ? 'gridcell' : 'cell';
+    case 'th': {
+      const scope = (el.getAttribute('scope') ?? '').toLowerCase();
+      return 'row' === scope || 'rowgroup' === scope ? 'rowheader' : 'columnheader';
+    }
+    case 'option':
+      return 'option';
+    case 'optgroup':
+      return 'group';
+    case 'section':
+      return hasAuthorNaming(el) ? 'region' : 'generic';
+    case 'article':
+      return 'article';
+    case 'fieldset':
+      return 'group';
+    case 'details':
+      return 'group';
+    case 'summary':
+      return 'button';
+    case 'progress':
+      return 'progressbar';
+    case 'meter':
+      return 'meter';
+    case 'output':
+      return 'status';
+    case 'hr':
+      return 'separator';
+    case 'area':
+      return el.hasAttribute('href') ? 'link' : 'generic';
     case 'form':
       return 'form';
     case 'p':
@@ -129,21 +188,32 @@ function labelledByText(el: Element): string | null {
 /**
  * Text content with `aria-hidden` subtrees removed.
  *
- * The accessible-name spec excludes them, and — decisively — so does dom-accessibility-api, which is
- * what `by: role` + name MATCHES against via testing-library. Reading raw `textContent` here made the
- * name we REPORT differ from the name that can be SELECTED: Material UI renders its required-field
- * marker as `<span aria-hidden="true"> *</span>`, so a login field was reported as `"Username *"` and
+ * The accessible-name spec excludes them, and so does the matcher, because THIS function is what
+ * `by: role` + name matches through. Reading raw `textContent` here made the name we REPORT differ
+ * from the name that can be SELECTED: Material UI renders its required-field marker as
+ * `<span aria-hidden="true"> *</span>`, so a login field was reported as `"Username *"` and
  * addressable only as `"Username"`. Reporting a name the agent cannot use defeats the purpose of
- * reporting it at all, so both must come from the same rule.
+ * reporting it at all, so both come from the same rule.
+ *
+ * An `<img alt>` contributes its alt text the way the spec's subtree step treats embedded
+ * alternatives: `<button><img alt="Close"></button>` is named "Close", not nameless. Pieces are
+ * joined with spaces so an icon followed by a word never fuses into one unmatchable token.
  */
 function textWithoutHidden(node: Node): string {
   if (node.nodeType === Node.TEXT_NODE) return node.textContent ?? '';
   if (node.nodeType !== Node.ELEMENT_NODE) return '';
   const el = node as Element;
   if ('true' === el.getAttribute('aria-hidden')) return '';
-  let out = '';
-  for (const child of el.childNodes) out += textWithoutHidden(child);
-  return out;
+  if (isImage(el)) {
+    const alt = el.getAttribute('alt');
+    return null === alt ? '' : alt;
+  }
+  const parts: string[] = [];
+  for (const child of el.childNodes) {
+    const piece = textWithoutHidden(child);
+    if (piece.length > 0) parts.push(piece);
+  }
+  return parts.join(' ');
 }
 
 export function getAccessibleName(el: Element): string {
@@ -166,6 +236,17 @@ export function getAccessibleName(el: Element): string {
         .join(' ')
         .trim();
       if (text.length > 0) return text;
+    }
+    // Submit-like inputs carry their name on `value`, exactly where the visible caption comes
+    // from: `<input type="submit" value="Send">` renders a button reading Send. Without this the
+    // descriptor printed `button ""` while `by: text` found the very same input by "Send", so the
+    // two locators disagreed about one element - the disagreement this engine exists to prevent.
+    if (isInput(el)) {
+      const type = el.type.toLowerCase();
+      if ('submit' === type || 'button' === type || 'reset' === type) {
+        const value = collapse(el.value);
+        if (value.length > 0) return value;
+      }
     }
     if (isInput(el) || isTextArea(el)) {
       const placeholder = el.getAttribute('placeholder');

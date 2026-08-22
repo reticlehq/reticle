@@ -73,6 +73,25 @@ describe('a reported name is a usable name', () => {
     expect(refound).toBe(1);
   });
 
+  it('round-trips a submit input named from its value attribute', () => {
+    // The caption IS the value: `<input type="submit" value="Send">` renders a button reading Send.
+    // The name engine reads `value`, so matching must too - `by: text` already found this element
+    // by "Send", and a matcher that could not would split one control across two vocabularies.
+    document.body.innerHTML = '<form><input type="submit" value="Send" /></form>';
+    const { reported, refound } = roundTrip('button');
+    expect(reported).toBe('Send');
+    expect(refound).toBe(1);
+  });
+
+  it('round-trips a name contributed by an img alt inside the button', () => {
+    // An icon-only button names itself through the image's alternative text; walking text nodes
+    // alone reported it nameless even though the page renders a visible tooltip from the same alt.
+    document.body.innerHTML = '<button><img alt="Close" /></button>';
+    const { reported, refound } = roundTrip('button');
+    expect(reported).toBe('Close');
+    expect(refound).toBe(1);
+  });
+
   it('does not match a DIFFERENT control that merely looks similar', () => {
     document.body.innerHTML = '<button>Save</button><button>Save all</button>';
     expect(runQuery({ by: QueryBy.ROLE, value: 'button', name: 'Save' }).count).toBe(1);

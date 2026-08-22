@@ -70,7 +70,7 @@ Those rules are why the browser SDK cannot accidentally pull in a filesystem cal
 
 **Why it exists:** this is the part that makes Reticle different from a browser-automation tool. Because it runs _inside_ the app rather than driving it from outside, it can see a state mutation and a fired signal, not just a rendered pixel.
 
-**Depends on:** `@reticlehq/core`, `@testing-library/dom`. The latter is why [`reticle_query`](/tools-query) speaks role, label and testid rather than CSS selectors.
+**Depends on:** `@reticlehq/core`. [`reticle_query`](/tools-query) speaks role, label and testid rather than CSS selectors through its own local accessibility engine, so what a snapshot reports is exactly what a query matches.
 
 **Install it directly when** you are not on React, or you want `connect()` under your own control:
 
