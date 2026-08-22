@@ -117,3 +117,66 @@ describe('evalNet — requests the document initiates', () => {
     expect(r.inconclusive).toBeUndefined();
   });
 });
+
+describe('evalNet — the unobserved-channel downgrade is gated on observer liveness', () => {
+  /**
+   * Once the browser SDK observes document-initiated loads (resource timing), a miss over these
+   * suffixes stops being unknowable: a live observer would have seen the favicon load, so seeing
+   * none is real evidence. The downgrade must therefore fire ONLY when nothing proves the observer
+   * ran at all. Liveness is read off the same events being judged: any NET_REQUEST whose initiator
+   * names a document channel (link/css/img/script/manifest/other) proves the channel works.
+   */
+  // A stylesheet load as the resource-timing observer reports it: proof of liveness.
+  const STYLESHEET = netEvent(5, {
+    method: 'GET',
+    url: '/assets/app.css',
+    initiator: 'link',
+    status: 200,
+    ok: true,
+  });
+
+  it('a missing favicon where the observer IS running grades no, not unknown', () => {
+    const r = evalNet([STYLESHEET], {
+      kind: PredicateKind.NET,
+      urlContains: '/favicon.ico',
+      status: 200,
+    });
+
+    expect(r.pass).toBe(false);
+    expect(r.inconclusive).toBeUndefined();
+    expect(r.failureReason).toBeDefined();
+  });
+
+  it('a zero-match count assertion over the same class grades no too', () => {
+    const r = evalNet([STYLESHEET], {
+      kind: PredicateKind.NET,
+      urlContains: '/site.webmanifest',
+      count: 1,
+    });
+
+    expect(r.pass).toBe(false);
+    expect(r.inconclusive).toBeUndefined();
+  });
+
+  it('a page with no document-initiated record keeps the honest unknown', () => {
+    // Only an XHR in the stream: nothing proves the PerformanceObserver exists here.
+    const r = evalNet([API_CALL], { kind: PredicateKind.NET, urlContains: '/favicon.ico' });
+
+    expect(r.inconclusive).toBeDefined();
+  });
+
+  it('an observed subresource still passes untouched under the gate', () => {
+    const icon = netEvent(20, {
+      method: 'GET',
+      url: '/apple-touch-icon.png',
+      initiator: 'link',
+      status: 200,
+      ok: true,
+    });
+
+    expect(
+      evalNet([STYLESHEET, icon], { kind: PredicateKind.NET, urlContains: '/apple-touch-icon.png' })
+        .pass,
+    ).toBe(true);
+  });
+});

@@ -238,9 +238,13 @@ function describeNetFilter(p: Extract<Predicate, { kind: typeof PredicateKind.NE
  * preload and an API call can share a suffix — so downgrading them would hide real misses. This list
  * is only the suffixes for which the document is the sole plausible initiator.
  *
- * This is the smaller half of #447: it does not make these requests observable, it stops Reticle
- * claiming they did not happen. Widening the observer (via `PerformanceResourceTiming`) is the other
- * half and is independent of this one.
+ * This began as the smaller half of #447: it did not make these requests observable, it stopped
+ * Reticle claiming they did not happen. The other half, observing them via resource timing, has
+ * since landed in the browser SDK, so the two halves are no longer independent and this downgrade is
+ * now GATED: when the event stream carries at least one document-initiated record, the observer is
+ * demonstrably live and a miss over these suffixes is real evidence, graded a plain failure. Only a
+ * page whose stream holds no resource entry at all keeps the honest "cannot tell apart" answer,
+ * because there the observer may simply not exist.
  */
 const DOCUMENT_ONLY_SUFFIXES: readonly string[] = [
   '.ico',
@@ -276,14 +280,51 @@ function targetsUnobservedChannel(
   return DOCUMENT_ONLY_SUFFIXES.some((suffix) => path.endsWith(suffix));
 }
 
+/**
+ * Initiator types the browser SDK's resource-timing observer stamps onto document-initiated records
+ * (packages/browser/src/observers/network.ts). The patched transports sign themselves `fetch`,
+ * `xhr` or `beacon`, so any NET_REQUEST carrying one of these came from a `resource` entry, and its
+ * mere presence is proof the PerformanceObserver is alive on this page. Mirrors the wire; keep in
+ * sync with the browser package.
+ */
+const DOCUMENT_INITIATORS: ReadonlySet<string> = new Set([
+  'link',
+  'css',
+  'img',
+  'script',
+  'manifest',
+  'other',
+]);
+
+/**
+ * Did the observer actually report a document-initiated load?
+ *
+ * This is the gate on the unobserved-channel downgrade above. Once subresource observation landed,
+ * a miss over `.ico`/`.css`/`.woff2` is no longer inherently unknowable: if the observer is live it
+ * would have seen the favicon load, so seeing none is evidence it never fired. But the observer is
+ * opt-in-by-engine, not guaranteed: on a renderer without `PerformanceObserver` (or before any
+ * resource entry exists) nothing distinguishes "not requested" from "not visible", and the honest
+ * answer stays inconclusive. Liveness is inferred from the same events being judged: one
+ * document-initiated record anywhere in the window proves the channel works.
+ */
+function observerSawSubresources(events: ReticleEvent[]): boolean {
+  return events.some((e) => {
+    if (e.type !== EventType.NET_REQUEST) return false;
+    const initiator = str(e.data['initiator']);
+    return initiator !== undefined && DOCUMENT_INITIATORS.has(initiator);
+  });
+}
+
 /** The sentence both zero-match branches hand to `inconclusive`. */
 function unobservedChannelReason(
   p: Extract<Predicate, { kind: typeof PredicateKind.NET }>,
 ): string {
   return (
-    `no call matched ${describeNetFilter(p)}, but Reticle only observes fetch and XMLHttpRequest — ` +
-    `a request the document initiates (<link rel=icon|manifest|preload>, a stylesheet, a font, ` +
-    `<img src>) is never recorded, so this cannot be told apart from the request having been made. ` +
+    `no call matched ${describeNetFilter(p)}, and no document-initiated load was recorded either, ` +
+    `so this page exposed no resource timing to read: Reticle observes fetch and XMLHttpRequest ` +
+    `directly, while a request the document initiates (<link rel=icon|manifest|preload>, a ` +
+    `stylesheet, a font, <img src>) leaves no record, and that state cannot be told apart from the ` +
+    `request having been made. ` +
     `Nothing here says the app is wrong. Check it outside the browser, or assert something the ` +
     `document does not fetch on its own`
   );
@@ -294,6 +335,11 @@ export function evalNet(
   p: Extract<Predicate, { kind: typeof PredicateKind.NET }>,
 ): EvalResult {
   const since = p.since ?? 0;
+  /**
+   * Computed once: the gate every zero-match downgrade below reads. True means the resource-timing
+   * observer is demonstrably live in this window, so a miss is evidence rather than blindness.
+   */
+  const sawSubresources = observerSawSubresources(events);
   /**
    * Did any call match everything EXCEPT the body assertion, while carrying no recorded body?
    *
@@ -391,7 +437,7 @@ export function evalNet(
   if (p.count !== undefined) {
     return matches.length === p.count
       ? { pass: true, evidence: { matched: matches.length } }
-      : 0 === matches.length && targetsUnobservedChannel(p)
+      : 0 === matches.length && targetsUnobservedChannel(p) && !sawSubresources
         ? {
             pass: false,
             failureReason: unobservedChannelReason(p),
@@ -411,7 +457,7 @@ export function evalNet(
           };
   }
   const hit = matches[0];
-  if (hit === undefined && targetsUnobservedChannel(p)) {
+  if (hit === undefined && targetsUnobservedChannel(p) && !sawSubresources) {
     const reason = unobservedChannelReason(p);
     return {
       pass: false,
