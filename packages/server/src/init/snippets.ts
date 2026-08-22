@@ -20,9 +20,9 @@ import { SERVER_VERSION } from '../version/server-version.js';
  *
  * jsDelivr rather than esm.sh, measured: a third of the requests and a third of the bytes for the
  * same result. `/+esm` is what makes it work, and the bare package URL does NOT: every file in
- * `dist` carries bare specifiers for `@reticlehq/core` and `@testing-library/dom`, so an unbundled
- * entry point dies on the first import. That is also why adding `unpkg`/`jsdelivr` fields to
- * package.json would not help.
+ * `dist` still carries bare workspace specifiers such as `@reticlehq/core`, so an unbundled entry
+ * point dies on the first import. That is also why adding `unpkg`/`jsdelivr` fields to package.json
+ * would not help.
  *
  * PINNED to this server's version on purpose. A floating import upgrades the page SDK underneath a
  * daemon that did not move, which is `version_skew` arriving by a route nothing checks.

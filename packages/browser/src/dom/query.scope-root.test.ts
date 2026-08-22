@@ -58,3 +58,31 @@ describe('scope root as a target', () => {
     expect(result.elements).toEqual([]);
   });
 });
+
+describe('a scope root that satisfies a predicate is still findable by it', () => {
+  /**
+   * The root was always part of what a scoped locator searched: `{ text }` matched #status itself
+   * when the status line carried its own caption. Dropping it would answer ZERO - indistinguishable
+   * from the element being absent, and wrong. `self: true` remains the spelling for UNLABELLED
+   * roots; these pin the labelled ones staying reachable without a second query form.
+   */
+  it('text directly on the root matches the root', () => {
+    document.body.innerHTML = '<div id="status">Saved</div>';
+    const result = runQuery({ scope: '#status', by: QueryBy.TEXT, value: 'Saved' });
+    expect(result.count).toBe(1);
+    expect(result.elements[0]?.ref).toBeDefined();
+  });
+
+  it('a role satisfied by the root itself matches too', () => {
+    document.body.innerHTML = '<section id="status" aria-label="Status">Saved</section>';
+    const result = runQuery({ scope: '#status', by: QueryBy.ROLE, value: 'region' });
+    expect(result.count).toBe(1);
+  });
+
+  it('descendants are still found alongside the root when both match', () => {
+    document.body.innerHTML =
+      '<ul id="todos" aria-label="Todos"><li>first</li><li>second</li></ul>';
+    expect(runQuery({ scope: '#todos', by: QueryBy.ROLE, value: 'listitem' }).count).toBe(2);
+    expect(runQuery({ scope: '#todos', by: QueryBy.ROLE, value: 'list' }).count).toBe(1);
+  });
+});

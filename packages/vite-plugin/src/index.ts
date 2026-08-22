@@ -336,47 +336,6 @@ function stamp(code: string, id: string): { code: string; map: string | null } |
  * sandbox can't read the file, which is exactly why a rogue localhost app can't forge it. Best-effort:
  * undefined if the daemon hasn't started yet (the page reloads once it has). Exported for testing.
  */
-/**
- * CJS packages the browser SDK needs at runtime. Named, because a bare string here is exactly the
- * kind of thing that silently rots when a dependency is renamed.
- */
-const SDK_CJS_DEPS = {
-  TESTING_LIBRARY: '@testing-library/dom',
-  ARIA_QUERY: 'aria-query',
-} as const;
-
-/**
- * Name each CJS dep ONLY in the bare form, and only when the app root can resolve it.
- *
- * This used to try three layouts and emit Vite's nested `a > b > c` form when a hoisted lookup
- * failed. The guard asked the wrong question: it tested NODE resolvability, walking the chain
- * segment by segment, and under pnpm that succeeds exactly where Vite fails. Measured on the
- * sveltekit fixture:
- *
- *   ['@testing-library/dom']                                           -> null
- *   ['@reticlehq/browser', '@testing-library/dom']                     -> null
- *   ['@reticlehq/react', '@reticlehq/browser', '@testing-library/dom'] -> emitted
- *
- * So we emitted the three-segment chain, Vite could not follow it, and the boot warning this
- * function exists to prevent appeared anyway — `Failed to resolve dependency: …, present in
- * optimizeDeps.include`, pointing at Reticle, naming a package the developer has never heard of,
- * and forcing a full re-optimization on every cold start. The comment stated the rule correctly and
- * the code broke it.
- *
- * Dropping the nested form loses nothing that matters: the SDK itself is still pre-bundled, and Vite
- * follows its imports when it does that, so these deps are handled as part of it. Naming them
- * separately was belt-and-braces for a locally-aliased SDK, where the bare form resolves anyway.
- */
-export function cjsDepIncludes(
-  appRoot: string,
-  // Injected so the rule can be tested hermetically. Real module resolution is not: under vitest,
-  // `createRequire` from a directory that does not exist still resolves packages out of the runner's
-  // own graph, so a filesystem-based test of "nothing is reachable here" silently asserts nothing.
-  canResolve: (dep: string) => boolean = (dep) => null !== resolvableChain([dep], appRoot),
-): string[] {
-  return [SDK_CJS_DEPS.TESTING_LIBRARY, SDK_CJS_DEPS.ARIA_QUERY].filter(canResolve);
-}
-
 export function readPairingToken(): string | undefined {
   const override = process.env[ReticleEnv.PAIRING_TOKEN_DIR];
   const dir =
@@ -627,21 +586,11 @@ export function reticle(options: ReticleVitePluginOptions = {}): ReticleVitePlug
     ...(true === options.desktop ? {} : { apply: 'serve' as const }),
     enforce: 'pre',
     /**
-     * Declare the SDK's CJS runtime deps so Vite pre-bundles them.
+     * Declare the SDK itself and the optimizer cache fingerprint.
      *
-     * `@testing-library/dom` is what `by: role` matching runs on, and it pulls CJS `aria-query`. When
-     * the SDK resolves from OUTSIDE the app's root — a linked package, a pnpm workspace, `npm link`,
-     * a monorepo alias — Vite skips pre-bundling and the named import dies with "does not provide an
-     * export named 'elementRoles'". That takes the WHOLE SDK down before connect() runs, so there is
-     * no session, no Reticle-side error, and only a console SyntaxError naming a package the
-     * developer has never heard of. Measured on the react-admin demo with the SDK aliased to a local
-     * checkout: zero sessions, and it looked like the app was failing to render.
-     *
-     * Declaring them is free when Vite would have found them anyway — but only when they are
-     * actually installed. Naming a package that is not there makes Vite log `Failed to resolve
-     * dependency: …, present in optimizeDeps.include` on every boot, which is a scary line pointing
-     * at Reticle for a problem that does not exist. SvelteKit apps hit exactly that: nothing in that
-     * tree depends on @testing-library/dom.
+     * The browser SDK used to need extra CJS query-engine deps here. It no longer imports that
+     * second accessibility engine, so keeping those names would make Vite pre-bundle packages the
+     * app may not have and blame Reticle for a false `Failed to resolve dependency` warning.
      */
     config(config: {
       optimizeDeps?: {
@@ -737,9 +686,6 @@ export function reticle(options: ReticleVitePluginOptions = {}): ReticleVitePlug
             // given the sensor produces the exact boot warning the note below is about, for a
             // package that is correctly absent.
             installedSdk(appRoot).specifier,
-            // Only in a form that resolves — see above; a name Vite cannot resolve produces a boot
-            // warning that blames Reticle, and a forced re-optimization on every cold start.
-            ...cjsDepIncludes(appRoot),
           ],
         },
       };

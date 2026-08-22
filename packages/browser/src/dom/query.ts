@@ -1,13 +1,4 @@
 import {
-  queryAllByRole,
-  queryAllByText,
-  queryAllByLabelText,
-  queryAllByPlaceholderText,
-  queryAllByTestId,
-  queryAllByAltText,
-  getDefaultNormalizer,
-} from '@testing-library/dom';
-import {
   DATA_RETICLE_SOURCE_ATTR,
   ElementState,
   QueryBy,
@@ -20,7 +11,7 @@ import {
   type QueryResult,
   TRANSPORT_LIMITS,
 } from '@reticlehq/core';
-import { isFrame, isHtmlElement } from './realm.js';
+import { isFrame, isHtmlElement, isInput, isSelect, isTextArea } from './realm.js';
 import { capturedRootOf } from './shadow-registry.js';
 import {
   getAccessibleName,
@@ -43,6 +34,77 @@ const MAX_PRESENT_TESTIDS = 12;
 const MAX_COMPONENT_CANDIDATES = 2000;
 /** Likely-actionable elements considered when resolving a component anchor without a source stamp. */
 const COMPONENT_CANDIDATE_SELECTOR = `[${SOURCE_ATTR}], [${TESTID_ATTR}], button, a, input, select, textarea, [role]`;
+
+/**
+ * Every candidate a semantic locator may match: the container ITSELF first, then its descendants.
+ *
+ * The container's own text, role or name was matched by every engine this replaces - a scoped
+ * `{ text: "Saved" }` against `<div id="status">Saved</div>` found #status itself - so dropping
+ * the root here would turn exactly those scoped queries into silent zero-match answers: the worst
+ * failure mode, indistinguishable from the element being absent. `self: true` stays the way to
+ * reach an UNLABELLED root (it skips the predicate entirely); this keeps a root that DOES satisfy
+ * the predicate findable without a second spelling.
+ */
+function elementsUnder(container: HTMLElement): HTMLElement[] {
+  // Embedded roots include ShadowRoots, which are DocumentFragments: they have no attributes or
+  // tag to match on, so only a true Element root joins the candidates.
+  const self = Node.ELEMENT_NODE === container.nodeType ? [container] : [];
+  return [...self, ...Array.from(container.querySelectorAll<HTMLElement>('*'))];
+}
+
+/**
+ * Match user-visible prose the way the public query API has always promised: trim and collapse
+ * whitespace, compare canonically equivalent Unicode in NFC, and keep fuzzy text queries
+ * case-insensitive. Attribute identifiers such as testid stay exact and do not pass through here.
+ */
+function normaliseVisibleText(value: string): string {
+  return value.replace(/\s+/g, ' ').trim().normalize('NFC');
+}
+
+function fuzzyVisibleText(actual: string, expected: string): boolean {
+  return normaliseVisibleText(actual)
+    .toLowerCase()
+    .includes(normaliseVisibleText(expected).toLowerCase());
+}
+
+function exactVisibleText(actual: string, expected: string): boolean {
+  return normaliseVisibleText(actual) === normaliseVisibleText(expected);
+}
+
+function directText(el: Element): string {
+  if (isInput(el)) {
+    const type = el.type.toLowerCase();
+    if ('submit' === type || 'button' === type || 'reset' === type) return el.value;
+  }
+  const tag = el.tagName.toLowerCase();
+  if ('script' === tag || 'style' === tag) return '';
+  return Array.from(el.childNodes)
+    .filter((node) => Node.TEXT_NODE === node.nodeType)
+    .map((node) => node.textContent ?? '')
+    .join('');
+}
+
+/**
+ * Elements whose accessible name comes from author-supplied naming rather than free subtree
+ * content - the set `by: label` addresses.
+ *
+ * Form controls plus anything explicitly named with aria-label/aria-labelledby covers the common
+ * case. `button`, `meter`, `output` and `progress` are included because their names arrive on
+ * attributes (`value`) or from their caption, which is precisely what a label query is looking
+ * for; leaving them out would silently drop buttons from label searches.
+ */
+function semanticNameTarget(el: Element): boolean {
+  if (isInput(el) || isTextArea(el) || isSelect(el)) return true;
+  const tag = el.tagName.toLowerCase();
+  return (
+    'button' === tag ||
+    'meter' === tag ||
+    'output' === tag ||
+    'progress' === tag ||
+    el.hasAttribute('aria-label') ||
+    el.hasAttribute('aria-labelledby')
+  );
+}
 
 /**
  * Resolve a scope to its container. A container of `null` means a scope was GIVEN but resolved to
@@ -117,77 +179,52 @@ function findByComponent(container: HTMLElement, query: ElementQuery): HTMLEleme
 }
 
 /**
- * Role + name, matched the way Reticle REPORTS them - not only the way Testing Library computes them.
+ * Role + name, matched with the same local accessibility engine used to describe results.
  *
- * Two implementations were disagreeing, on both axes, for the same element:
- *
- *   <input type="search" placeholder="Search User">
- *     Reticle getRole            -> "textbox"      TL/dom-accessibility-api -> "searchbox"
- *     Reticle getAccessibleName  -> "Search User"  TL                       -> "" (no placeholder)
- *
- * `reticle_query`, `reticle_snapshot` and every act result report Reticle's values. The matcher used
- * TL's. So Reticle printed `textbox "Search User"` and then could not find it by that exact
- * role and name - the same query call reporting an identity it cannot match.
- *
- * It surfaced through the flow recorder, which anchors a step to the reported role+name: `flow_save`
- * graded the flow `asserted` with `degraded: 0`, a clean bill of health, and the step drifted on the
- * first replay in a different session. The reporter diagnosed it as the replay resolver computing
- * names differently; it is narrower and worse, because no caller could ever have closed the round
- * trip.
- *
- * The fallback runs ONLY when the spec-accurate query finds nothing, so every name that resolves
- * today keeps resolving exactly as before and this can never take a match away. Fixed on the
- * matching side rather than by changing what is reported: dropping `placeholder` would leave an
- * input whose only label is its placeholder nameless in every snapshot, and renaming the role would
- * churn every stored anchor - both worse trades than a fallback that runs on the empty path.
+ * This intentionally makes Reticle's reported role and name the source of truth. If an element is
+ * described as `textbox "Search User"`, the resolver must accept that exact pair, not a different
+ * role or name from a second library.
  */
 function queryByRoleAndName(
   container: HTMLElement,
   role: string,
   name: string | undefined,
 ): HTMLElement[] {
-  if (name === undefined) return queryAllByRole(container, role, { hidden: true });
-  const spec = queryAllByRole(container, role, { hidden: true, name });
-  if (spec.length > 0) return spec;
-  const wanted = name.trim();
-  // Reticle's own role AND name: the pair actually printed to the caller.
-  return [...container.querySelectorAll<HTMLElement>('*')].filter(
-    (el) => getRole(el) === role && getAccessibleName(el).trim() === wanted,
+  return elementsUnder(container).filter(
+    (el) =>
+      getRole(el) === role && (name === undefined || exactVisibleText(getAccessibleName(el), name)),
   );
 }
 
-/**
- * The same text, written two legal ways, did not match itself.
- *
- * Unicode lets `café` be one code point (`é`) or two (`e` + a combining acute). They render
- * identically, they are canonically equivalent, and JavaScript string comparison says they differ —
- * so a query typed one way against a DOM holding the other found nothing. That is a false RED: the
- * agent asserts text that is visibly on screen, is told it is absent, and reports a working app as
- * broken.
- *
- * It cannot happen in English, which is why it survived here. It is ordinary in French, Vietnamese
- * and Korean, and the decomposed form is what macOS filesystems, several IMEs and some databases
- * hand back.
- *
- * Normalising both sides can only ADD matches: normalisation is idempotent and
- * canonical-equivalence-preserving, so two strings equal before are equal after and nothing that
- * matched can stop matching. That property is why this is safe to apply to the matching core.
- *
- * Applied only to queries over USER-VISIBLE text. A testid is an attribute the developer typed on
- * both sides and a component name is an identifier; normalising those would change what an exact
- * match means, for no case anyone has.
- */
-const toNfc = (value: string): string => value.normalize('NFC');
+function queryByText(container: HTMLElement, value: string): HTMLElement[] {
+  return elementsUnder(container).filter((el) => fuzzyVisibleText(directText(el), value));
+}
 
-/**
- * Testing Library's own normaliser — whitespace trimming and collapsing — with NFC on top.
- *
- * Composed rather than replaced: writing a normaliser from scratch here would silently drop their
- * whitespace handling, which every existing match depends on.
- */
-const TEXT_NORMALIZER = { normalizer: (text: string) => toNfc(getDefaultNormalizer()(text)) };
+function queryByLabel(container: HTMLElement, value: string): HTMLElement[] {
+  return elementsUnder(container).filter(
+    (el) => semanticNameTarget(el) && fuzzyVisibleText(getAccessibleName(el), value),
+  );
+}
 
-/** Run the appropriate Testing-Library query against ONE root (light DOM or a shadow root). */
+function queryByPlaceholder(container: HTMLElement, value: string): HTMLElement[] {
+  return elementsUnder(container).filter((el) => {
+    const placeholder = el.getAttribute('placeholder');
+    return placeholder !== null && fuzzyVisibleText(placeholder, value);
+  });
+}
+
+function queryByTestId(container: HTMLElement, value: string): HTMLElement[] {
+  return elementsUnder(container).filter((el) => el.getAttribute(TESTID_ATTR) === value);
+}
+
+function queryByAlt(container: HTMLElement, value: string): HTMLElement[] {
+  return elementsUnder(container).filter((el) => {
+    const alt = el.getAttribute('alt');
+    return alt !== null && fuzzyVisibleText(alt, value);
+  });
+}
+
+/** Run the appropriate local query against ONE root, light DOM or a shadow root. */
 function findIn(container: HTMLElement, query: ElementQuery): HTMLElement[] {
   const by = query.by;
   const value = query.value;
@@ -198,18 +235,15 @@ function findIn(container: HTMLElement, query: ElementQuery): HTMLElement[] {
       case QueryBy.ROLE:
         return queryByRoleAndName(container, value, query.name);
       case QueryBy.TEXT:
-        return queryAllByText(container, toNfc(value), { exact: false, ...TEXT_NORMALIZER });
+        return queryByText(container, value);
       case QueryBy.LABEL:
-        return queryAllByLabelText(container, toNfc(value), { exact: false, ...TEXT_NORMALIZER });
+        return queryByLabel(container, value);
       case QueryBy.PLACEHOLDER:
-        return queryAllByPlaceholderText(container, toNfc(value), {
-          exact: false,
-          ...TEXT_NORMALIZER,
-        });
+        return queryByPlaceholder(container, value);
       case QueryBy.TESTID:
-        return queryAllByTestId(container, value, { exact: true });
+        return queryByTestId(container, value);
       case QueryBy.ALT:
-        return queryAllByAltText(container, toNfc(value), { exact: false, ...TEXT_NORMALIZER });
+        return queryByAlt(container, value);
       case QueryBy.COMPONENT:
         // value is the component name;.source (if present) still takes precedence inside.
         return findByComponent(container, { ...query, component: query.component ?? value });
@@ -237,20 +271,11 @@ function findIn(container: HTMLElement, query: ElementQuery): HTMLElement[] {
   if (query.role !== undefined) {
     return queryByRoleAndName(container, query.role, query.name);
   }
-  if (query.text !== undefined)
-    return queryAllByText(container, toNfc(query.text), { exact: false, ...TEXT_NORMALIZER });
-  if (query.label !== undefined) {
-    return queryAllByLabelText(container, toNfc(query.label), { exact: false, ...TEXT_NORMALIZER });
-  }
-  if (query.placeholder !== undefined) {
-    return queryAllByPlaceholderText(container, toNfc(query.placeholder), {
-      exact: false,
-      ...TEXT_NORMALIZER,
-    });
-  }
-  if (query.testid !== undefined) return queryAllByTestId(container, query.testid, { exact: true });
-  if (query.alt !== undefined)
-    return queryAllByAltText(container, toNfc(query.alt), { exact: false, ...TEXT_NORMALIZER });
+  if (query.text !== undefined) return queryByText(container, query.text);
+  if (query.label !== undefined) return queryByLabel(container, query.label);
+  if (query.placeholder !== undefined) return queryByPlaceholder(container, query.placeholder);
+  if (query.testid !== undefined) return queryByTestId(container, query.testid);
+  if (query.alt !== undefined) return queryByAlt(container, query.alt);
   return [];
 }
 
@@ -293,8 +318,8 @@ function embeddedRootsUnder(root: HTMLElement): HTMLElement[] {
     for (const el of node.querySelectorAll<HTMLElement>('*')) {
       const shadow = el.shadowRoot ?? capturedRootOf(el);
       if (shadow !== null) {
-        // A ShadowRoot is a DocumentFragment; the Testing-Library queries accept any HTMLElement-like
-        // container, and every call site only reads from it.
+        // A ShadowRoot is a DocumentFragment. The local query helpers only call querySelectorAll on
+        // the container, and every call site only reads from it.
         found.push(shadow as unknown as HTMLElement);
         walk(shadow, depth); // nested web components
         continue;
@@ -328,9 +353,10 @@ function embeddedRootsUnder(root: HTMLElement): HTMLElement[] {
 /**
  * Run the query against the light DOM AND every open shadow root beneath the scope.
  *
- * Testing Library only walks the light DOM, so a control inside a web component returned zero matches
- * on a completely healthy page - a miss indistinguishable from a genuinely absent element. The
- * snapshot has always pierced open roots; this makes `query` agree with it.
+ * A single querySelectorAll call only walks the root it starts from, so a control inside a web
+ * component returned zero matches on a completely healthy page - a miss indistinguishable from a
+ * genuinely absent element. The snapshot has always pierced open roots; this makes `query` agree
+ * with it.
  */
 function findCandidates(query: ElementQuery): { candidates: HTMLElement[]; scopeMissing: boolean } {
   const { container, scopeMissing } = resolveContainer(query.scope);
@@ -498,12 +524,7 @@ function buildPresentRegions(query: ElementQuery): PresentRegion[] {
     'tablist',
   ] as const;
   for (const role of CONTAINER_ROLES) {
-    let containers: HTMLElement[];
-    try {
-      containers = queryAllByRole(container, role, { hidden: true });
-    } catch {
-      continue;
-    }
+    const containers = queryByRoleAndName(container, role, undefined);
     for (const el of containers) {
       const name =
         el.getAttribute('aria-label') ??

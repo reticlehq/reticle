@@ -6,13 +6,13 @@ icon: window
 
 `@reticlehq/browser` is the Reticle SDK that runs inside your page. It installs the observers, builds semantic snapshots, executes actions, and talks to the bridge. Install it directly only if you are **not** on React or want to call `connect()` yourself, because [`@reticlehq/react`](/packages/react) already re-exports all of it.
 
-**Apache 2.0. Depends on `@reticlehq/core` and `@testing-library/dom`.**
+**Apache 2.0. Depends on `@reticlehq/core`.**
 
 ## Why it exists
 
 This is what makes Reticle different from a browser-automation tool. Because it runs _inside_ the app rather than driving it from outside, it can see a state mutation and a fired signal, not just a rendered pixel. It never imports a Node API; that boundary is enforced by the dependency graph.
 
-`@testing-library/dom` is why [`reticle_query`](/tools-query) speaks role, label and testid instead of CSS selectors.
+[`reticle_query`](/tools-query) speaks role, label and testid instead of CSS selectors through its own local accessibility engine: one engine computes both what elements are called and what they match by, so a reported identity always round-trips.
 
 ## When you need it directly
 
