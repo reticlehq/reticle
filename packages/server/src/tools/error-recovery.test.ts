@@ -96,6 +96,16 @@ describe('every tool a recovery hint names must still be advertised', () => {
     ReticleTool.TOOLS,
   ]);
 
+  it('the hints still name tools, so the guard below means something', () => {
+    // The control, covering both ways this can go vacuous: an empty RECOVERY registers zero
+    // `it.each` cases (vitest reports that green with no warning), and hints that stop naming tools
+    // literally leave the inner loop iterating nothing.
+    const entries = Object.entries(RECOVERY);
+    expect(entries.length).toBeGreaterThan(0);
+    const mentioned = entries.flatMap(([, hint]) => hint.match(/reticle_[a-z_]+/g) ?? []);
+    expect(mentioned.length).toBeGreaterThan(0);
+  });
+
   it.each(Object.entries(RECOVERY))('%s names only reachable tools', (_name, hint) => {
     for (const mentioned of hint.match(/reticle_[a-z_]+/g) ?? []) {
       expect(

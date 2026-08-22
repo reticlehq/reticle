@@ -83,6 +83,16 @@ describe('tool profiles', () => {
     }
   });
 
+  it('4a-control: those instructions still name tools, so 4a means something', () => {
+    // The control. 4a derives what it checks from the instruction text, so rewording either block
+    // to drop the literal tool name leaves it iterating zero times and passing forever — which is
+    // exactly the defect it was written to catch.
+    const named = [PAUSE_HINT, buildSessionLease('s1', 0).IMPORTANT].flatMap(
+      (block) => block.match(/reticle_[a-z_]+/g) ?? [],
+    );
+    expect(named.length).toBeGreaterThan(0);
+  });
+
   it('4b: server-management ops are NOT on the MCP surface (CLI-only — they restart the daemon)', () => {
     const names = new Set(TOOLS.map((t) => t.name));
     for (const retired of ['reticle_version_info', 'reticle_apply_update', 'reticle_rollback'])

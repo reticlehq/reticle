@@ -56,6 +56,14 @@ describe('the core surface leaves nothing to guess', () => {
     (tool) => CORE_TOOL_NAMES.has(tool.name) && Object.keys(tool.inputSchema).length > 1,
   );
 
+  it('has core tools to check', () => {
+    // The control, and it has to be its own `it()`: confirmed against vitest 3.2.6, `it.each([])`
+    // registers ZERO tests and reports the file green with no warning, so there is nothing to hang
+    // an assertion on. A change to CORE_TOOL_NAMES would otherwise retire this guard silently.
+    // Mirrors the sibling group's control above.
+    expect(needExamples.length).toBeGreaterThan(0);
+  });
+
   it.each(needExamples.map((tool) => [tool.name, tool] as const))(
     '%s carries an example call',
     (_name, tool) => {
