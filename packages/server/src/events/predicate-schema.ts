@@ -384,3 +384,51 @@ export function predicateFieldsFor(kind: string): readonly string[] {
   }
   return [];
 }
+
+/** Peel optional/nullable/default/effects wrappers off a field to reach the schema underneath. */
+function unwrapSchema(schema: z.ZodTypeAny): z.ZodTypeAny {
+  let current = schema;
+  for (;;) {
+    if (
+      current instanceof z.ZodOptional ||
+      current instanceof z.ZodNullable ||
+      current instanceof z.ZodDefault
+    ) {
+      current = current._def.innerType as z.ZodTypeAny;
+      continue;
+    }
+    if (current instanceof z.ZodEffects) {
+      current = current._def.schema as z.ZodTypeAny;
+      continue;
+    }
+    return current;
+  }
+}
+
+/**
+ * One level into the fields that are themselves objects — `{ query: ['by', 'value', ...] }`.
+ *
+ * Naming the top-level fields alone leaves `element` unguessable: `query` is an object with its own
+ * required shape, and a plain CSS string works in `reticle_snapshot.scope` and `reticle_query.scope`,
+ * so assuming it works here is the natural guess. The rejection is the only place that inconsistency
+ * can be explained.
+ *
+ * One level only. Derived from the schema for the same reason `predicateFieldsFor` is: a stale field
+ * list is worse than none, because the agent trusts it and retries into the same wall.
+ */
+export function predicateNestedFieldsFor(
+  kind: string,
+): Readonly<Record<string, readonly string[]>> {
+  for (const option of predicateUnion().options) {
+    const literal = option.shape['kind'];
+    if (!(literal instanceof z.ZodLiteral) || literal.value !== kind) continue;
+    const nested: Record<string, readonly string[]> = {};
+    for (const [field, schema] of Object.entries(option.shape)) {
+      if ('kind' === field) continue;
+      const inner = unwrapSchema(schema as z.ZodTypeAny);
+      if (inner instanceof z.ZodObject) nested[field] = Object.keys(inner.shape);
+    }
+    return nested;
+  }
+  return {};
+}

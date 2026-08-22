@@ -52,6 +52,27 @@ describe('parsePredicate turns a zod rejection into a sentence', () => {
     expect(messageOf({ kind: 'nope' })).toContain('kind');
   });
 
+  it('expands a nested object field, so element.query is not a second round trip', () => {
+    // The reported trap: a plain CSS string works in reticle_snapshot.scope and
+    // reticle_query.scope, so assuming it works here is the natural guess. The
+    // rejection is the only place that inconsistency can be explained.
+    const message = messageOf({ kind: 'element', query: '#journeyScreen iframe' });
+    expect(message).toContain('element accepts:');
+    expect(message).toContain('query accepts:');
+    expect(message).toContain('role');
+    expect(message).toContain('testid');
+  });
+
+  it('expands the nested shape for a wrong top-level field too', () => {
+    expect(messageOf({ kind: 'element', selector: '#app' })).toContain('query accepts:');
+  });
+
+  it('leaves a kind with no nested object field unchanged', () => {
+    const message = messageOf({ kind: 'route', pathnmae: '/x' });
+    expect(message).toContain('route accepts:');
+    expect(message).not.toContain(' accepts: by,');
+  });
+
   it('still parses a good predicate untouched, aliases included', () => {
     expect(parsePredicate({ kind: 'route', path: '/checkout' })).toMatchObject({
       kind: 'route',
