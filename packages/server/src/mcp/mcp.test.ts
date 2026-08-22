@@ -254,13 +254,18 @@ describe('a wrong-shaped call is answered with a correct one', () => {
       .join(' ');
   };
 
-  const openServer = async (): Promise<{
+  const openServer = async (
+    examples?: Map<string, string>,
+  ): Promise<{
     client: import('@modelcontextprotocol/sdk/client/index.js').Client;
     close: () => Promise<void>;
   }> => {
     const { InMemoryTransport } = await import('@modelcontextprotocol/sdk/inMemory.js');
     const { Client } = await import('@modelcontextprotocol/sdk/client/index.js');
     const server = createMcpServer(toolDepsForTest(), TOOL_SURFACE.DEFAULT);
+    // Passing an empty example map re-wraps the validator so every failure answers with the
+    // no-example fallback, which is what tools without an advertised example serve today.
+    if (examples !== undefined) installFriendlyArgErrors(server, examples);
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
     await server.connect(serverTransport);
     const client = new Client({ name: 'c', version: '0' });
@@ -340,11 +345,22 @@ describe('a wrong-shaped call is answered with a correct one', () => {
     await close();
   });
 
-  it('points at reticle_tools when the tool carries no example', () => {
-    const server = createMcpServer(toolDepsForTest(), TOOL_SURFACE.DEFAULT);
-    // Installed with an empty example map: the fallback must still be actionable, never a bare dump.
-    installFriendlyArgErrors(server, new Map());
-    expect(typeof server).toBe('object');
+  it('points at reticle_tools when the tool carries no example', async () => {
+    // An empty example map stands in for every tool that advertises none: the failure must still
+    // navigate the agent to reticle_tools, never hand back a bare validator dump.
+    const { client, close } = await openServer(new Map());
+    const result = await client.callTool({
+      name: ReticleTool.ACT,
+      arguments: { action: 'click', testid: 'break' },
+    });
+    const failure = errorText(result);
+
+    expect(result.isError, 'the call must still be rejected').toBe(true);
+    expect(failure, 'with no example to show, the reply must navigate instead').toContain(
+      'Call reticle_tools',
+    );
+    expect(failure).toContain(ReticleTool.ACT);
+    await close();
   });
 });
 
