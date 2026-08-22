@@ -1,5 +1,6 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { Presenter } from './presenter.js';
+import { HudShell } from './presenter-shell.js';
 import { asSyntheticInput } from '../actions/synthetic-input.js';
 import { Annotator } from '../review/annotator.js';
 import { LOG_KIND } from './presenter-log.js';
@@ -352,5 +353,106 @@ describe('the activity feed opens at the newest row', () => {
     await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r(null))));
     expect(log.scrollTop, 'a feed that grew after layout still ends at the bottom').toBe(1400);
     p.destroy();
+  });
+});
+
+/**
+ * Teardown has to actually remove what mount added.
+ *
+ * Every click handler in the shell is an anonymous closure over `this`, so there was no reference
+ * to hand `removeEventListener` and none of them was ever removed.
+ *
+ * Asserting the MECHANISM rather than a side effect, deliberately. The obvious test — destroy, then
+ * dispatch, then check nothing happened — passes whether or not the listeners were removed, because
+ * `destroy()` also removes the HUD from the DOM, so the handlers are unreachable either way. I wrote
+ * that version first and it stayed green with the `abort()` deleted, which is the vacuous-guard
+ * shape #455 is about. Recording every registration and checking its signal is aborted is the thing
+ * that actually goes red.
+ */
+describe('presenter HUD shell teardown', () => {
+  interface Registration {
+    type: string;
+    signal: AbortSignal | undefined;
+  }
+
+  /** Record every document-level registration and the signal (if any) it was given. */
+  const recordDocumentListeners = (): { seen: Registration[]; restore: () => void } => {
+    const seen: Registration[] = [];
+    const real = document.addEventListener.bind(document);
+    document.addEventListener = ((
+      type: string,
+      listener: EventListenerOrEventListenerObject,
+      options?: boolean | AddEventListenerOptions,
+    ): void => {
+      const signal = 'object' === typeof options && null !== options ? options.signal : undefined;
+      seen.push({ type, signal });
+      real(type, listener, options);
+    }) as typeof document.addEventListener;
+    return { seen, restore: () => (document.addEventListener = real) };
+  };
+
+  it('registers its document listeners with a signal, and aborts it on teardown', () => {
+    // HudShell directly, not through Presenter: the settings, report and drag components register
+    // pointerdown/keydown on `document` too, and this change is scoped to one file. Driving the
+    // shell alone means the assertion is about the listeners this PR converted and nothing else.
+    document.body.innerHTML = '<div id="root"></div>';
+    const root = document.querySelector<HTMLElement>('#root');
+    if (null === root) throw new Error('no root');
+
+    const { seen, restore } = recordDocumentListeners();
+    const shell = new HudShell({});
+    shell.mount(root);
+    restore();
+
+    // Guards the guard: if the shell stops registering these, the loop below passes for free.
+    expect(seen.length, 'the shell should install its document listeners').toBe(2);
+    expect(seen.map((r) => r.type).sort()).toEqual(['keydown', 'pointerdown']);
+    for (const registration of seen) {
+      expect(
+        registration.signal,
+        `${registration.type} was registered with no signal`,
+      ).toBeDefined();
+      expect(registration.signal?.aborted, `${registration.type} aborted before teardown`).toBe(
+        false,
+      );
+    }
+
+    shell.teardown();
+
+    for (const registration of seen) {
+      expect(
+        registration.signal?.aborted,
+        `${registration.type} outlived teardown() — its signal was never aborted`,
+      ).toBe(true);
+    }
+  });
+
+  it('disconnects the toolbar MutationObserver on teardown', () => {
+    // A MutationObserver takes no signal, so it is not covered by the abort — and this disconnect
+    // was missing entirely, leaving the observer holding `root` after teardown.
+    document.body.innerHTML = '';
+    const disconnected: string[] = [];
+    const RealObserver = globalThis.MutationObserver;
+    class SpyObserver extends RealObserver {
+      override disconnect(): void {
+        disconnected.push('disconnect');
+        super.disconnect();
+      }
+    }
+    globalThis.MutationObserver = SpyObserver;
+    try {
+      document.body.innerHTML = '<div id="root"></div>';
+      const root = document.querySelector<HTMLElement>('#root');
+      if (null === root) throw new Error('no root');
+      const shell = new HudShell({});
+      shell.mount(root);
+      const before = disconnected.length;
+      shell.teardown();
+      expect(disconnected.length, 'teardown() disconnected no MutationObserver').toBeGreaterThan(
+        before,
+      );
+    } finally {
+      globalThis.MutationObserver = RealObserver;
+    }
   });
 });
