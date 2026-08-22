@@ -77,10 +77,8 @@ function packageDirOf(specifier: string, from: string): string | null {
  *
  * A single-segment chain is just the bare specifier, so this also answers "can the app see it
  * itself". Each further segment is resolved from the PREVIOUS package's directory, which is what
- * Vite does with the `>` form and the only way to name a dependency the app root cannot see: under
- * pnpm (and npm's nested layout) `@testing-library/dom` belongs to `@reticlehq/browser`, not to the
- * user's app. Naming it bare made Vite fail to resolve it and force a re-optimization on every cold
- * boot. SvelteKit ships `svelte > clsx` for the same reason.
+ * Vite does with the `>` form and the only way to name a dependency the app root cannot see under
+ * pnpm or npm's nested layout. SvelteKit ships `svelte > clsx` for the same reason.
  */
 export function resolvableChain(chain: readonly string[], from: string): string | null {
   let base = from;

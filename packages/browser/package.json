@@ -21,8 +21,7 @@
     "prepack": "tsc -b && find dist -name \"*.test.*\" -delete && node ../../scripts/strip-maps.mjs dist"
   },
   "dependencies": {
-    "@reticlehq/core": "workspace:*",
-    "@testing-library/dom": "^10.4.1"
+    "@reticlehq/core": "workspace:*"
   },
   "devDependencies": {
     "@iconify-json/heroicons-outline": "^1.2.1",

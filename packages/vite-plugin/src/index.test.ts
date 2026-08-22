@@ -328,23 +328,13 @@ describe('desktop injection is loud in dev too, not only in build', () => {
   });
 });
 
-describe('CJS deps the SDK needs are pre-bundled', () => {
+describe('SDK dep optimization', () => {
   /**
-   * The SDK imports `@testing-library/dom` at RUNTIME (it is what `by: role` matching uses), and that
-   * pulls CJS `aria-query`. When the SDK is served from OUTSIDE the app's root — a linked package,
-   * a pnpm workspace, `npm link`, a monorepo alias — Vite does not pre-bundle those, and the named
-   * import fails with:
-   *
-   *   Uncaught SyntaxError: The requested module '.../aria-query/lib/index.js'
-   *   does not provide an export named 'elementRoles'
-   *
-   * That kills the ENTIRE SDK before connect() runs, so the developer gets no session, no error from
-   * any Reticle tool, and only a console SyntaxError naming a package they have never heard of.
-   * Measured on the react-admin demo with the SDK aliased to a local checkout: zero sessions, and the
-   * app looked like it was simply failing to render. Declaring the deps costs nothing when Vite would
-   * have found them anyway, and is the difference between "works" and "silently dead" when it can't.
+   * The browser SDK no longer imports the second accessibility engine, so the Vite plugin must not
+   * keep forcing those retired transitive deps into `optimizeDeps.include`. If an app does not have
+   * them, Vite reports a scary Reticle-owned resolve warning before the page even loads.
    */
-  it('declares @testing-library/dom and aria-query in optimizeDeps', () => {
+  it('does not declare the retired query-engine deps in optimizeDeps', () => {
     const plugin = reticle() as unknown as {
       config?: (config: Record<string, unknown>) => Record<string, unknown> | undefined;
     };
@@ -353,11 +343,8 @@ describe('CJS deps the SDK needs are pre-bundled', () => {
     );
     const patch = plugin.config?.({}) ?? {};
     const include = (patch['optimizeDeps'] as { include?: string[] } | undefined)?.include ?? [];
-    // Either spelling counts: the bare specifier when the app root can resolve it, or Vite's nested
-    // `a > b > c` chain when only the SDK can. Asserting the bare form alone would forbid the fix
-    // for pnpm layouts, where naming it bare is what breaks the app — see installed.test.ts.
-    expect(include.some((e) => e.endsWith('@testing-library/dom'))).toBe(true);
-    expect(include.some((e) => e.endsWith('aria-query'))).toBe(true);
+    expect(include.some((e) => e.endsWith('@testing-library/dom'))).toBe(false);
+    expect(include.some((e) => e.endsWith('aria-query'))).toBe(false);
   });
 
   /**
@@ -463,7 +450,7 @@ describe('CJS deps the SDK needs are pre-bundled', () => {
     const patch = plugin.config?.({ optimizeDeps: { include: ['their-dep'] } }) ?? {};
     const include = (patch['optimizeDeps'] as { include?: string[] } | undefined)?.include ?? [];
     expect(include, "the app's own entries must survive").toContain('their-dep');
-    expect(include.some((e) => e.endsWith('aria-query'))).toBe(true);
+    expect(include, 'the SDK itself still needs pre-bundling').toContain('@reticlehq/react');
   });
 });
 

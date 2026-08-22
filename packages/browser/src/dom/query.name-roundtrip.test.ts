@@ -11,8 +11,8 @@
  * aria-label: query reported `name: "Search User"`, and the replay lookup matched nothing.
  *
  * The property is stated here as an invariant over shapes where the accessible name comes from
- * somewhere Testing-Library's own `name` filter may not consider — placeholder, title, value — so a
- * future change to either side of the computation breaks this rather than a user's recorded flow.
+ * Reticle's own local engine: placeholder, title, value and ordinary text. If a future change makes
+ * matching and reporting disagree again, a user's recorded flow should not be the first signal.
  */
 
 import { describe, expect, it, beforeEach } from 'vitest';
@@ -32,14 +32,16 @@ function roundTrip(role: string): { reported: string; refound: number } {
 }
 
 describe('a reported name is a usable name', () => {
-  it('round-trips a placeholder-derived name — the reported case', () => {
+  it("round-trips a placeholder-derived name with Reticle's own role", () => {
     document.body.innerHTML = '<input type="search" placeholder="Search User" />';
-    const first = runQuery({ by: QueryBy.ROLE, value: 'searchbox' });
-    const role = first.elements[0]?.role ?? 'searchbox';
+    const first = runQuery({ by: QueryBy.ROLE, value: 'textbox' });
+    const role = first.elements[0]?.role ?? '';
     const name = first.elements[0]?.name ?? '';
-    expect(name).toBe('Search User');
+    expect({ role, name }).toEqual({ role: 'textbox', name: 'Search User' });
     // The pair the recorder would write to disk, re-resolved the way replay re-resolves it.
     expect(runQuery({ by: QueryBy.ROLE, value: role, name }).count).toBe(1);
+    // Reticle reports this input as `textbox`, so the former second-library role is no longer a match.
+    expect(runQuery({ by: QueryBy.ROLE, value: 'searchbox', name }).count).toBe(0);
   });
 
   it('round-trips a label-derived name', () => {

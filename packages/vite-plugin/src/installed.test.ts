@@ -42,10 +42,10 @@ function makeAppWithSdk(): string {
  * which carries the second, which carries the third. Node resolves this identically to pnpm's
  * symlinked store, and it is what every pnpm install of Reticle looks like.
  *
- * The names are invented rather than the real ones on purpose. Node resolution walks node_modules
- * UPWARD and this suite runs inside the monorepo, so a temp dir asking for `@testing-library/dom`
- * finds the workspace's copy and the "the app cannot see it" precondition quietly becomes false —
- * the test would then pass for a reason that has nothing to do with the code under test.
+ * The names are invented rather than real package names on purpose. Node resolution walks
+ * node_modules UPWARD and this suite runs inside the monorepo, so a temp dir asking for a real
+ * workspace dependency can accidentally find this repo's copy and make the "the app cannot see it"
+ * precondition quietly become false.
  */
 const NESTED_CHAIN = [
   '@reticle-fixture/outer',
@@ -101,16 +101,9 @@ describe('installed — probes resolve from the app root, not from this plugin',
   });
 
   /**
-   * The shape that broke SvelteKit-on-pnpm: the SDK's own CJS deps are NOT resolvable from the app.
-   *
-   * `@testing-library/dom` is a dependency of `@reticlehq/browser`, never of the user's app, so
-   * under pnpm's strict layout (and npm's nested one, modelled here) nothing resolves it from the
-   * app root. Naming it bare in `optimizeDeps.include` made Vite print `Failed to resolve
-   * dependency: @testing-library/dom, present in client 'optimizeDeps.include'` and force a full
-   * re-optimization on EVERY cold boot — measured on the sveltekit fixture, where the page then
-   * missed the gate's 30s load window twice in a row. Vite's answer is the nested `a > b` form,
-   * which resolves each segment from the previous package; SvelteKit ships `svelte > clsx` for the
-   * same reason.
+   * A dependency can be reachable only through a parent package. The helper reports the Vite chain
+   * spelling for that generic case, even though this PR no longer uses it for browser query-engine
+   * deps.
    */
   it('spells a dep the app cannot resolve as the nested chain that reaches it', () => {
     const nested = makeAppWithNestedCjsDep();

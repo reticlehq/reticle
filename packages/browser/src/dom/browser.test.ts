@@ -319,8 +319,8 @@ describe('query: open shadow roots and attribute projection', () => {
   };
 
   it('finds a testid inside an OPEN shadow root', () => {
-    // Testing Library only walks the light DOM, so this returned zero on a healthy page — a miss that
-    // is indistinguishable from a genuinely absent element.
+    // A single root query does not pierce shadow DOM, so this returned zero on a healthy page, a miss
+    // indistinguishable from a genuinely absent element.
     withShadow('<span data-testid="shadow-status">All systems nominal</span>');
     expect(matchQuery({ by: 'testid', value: 'shadow-status' }).count).toBe(1);
   });

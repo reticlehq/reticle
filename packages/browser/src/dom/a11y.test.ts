@@ -29,10 +29,10 @@ describe('aria-hidden decoration inside a label', () => {
   /**
    * The name we REPORT must be a name the agent can then MATCH on.
    *
-   * `by: role` matching goes through testing-library, i.e. dom-accessibility-api, which follows the
-   * spec and excludes `aria-hidden` subtrees. This function reads the label's raw `textContent` and
-   * does not — so MUI's required-field marker (`<span aria-hidden="true"> *</span>`) made us report
-   * `"Username *"` for a field that is only addressable as `"Username"`.
+   * `by: role` matching must use this same computed name. A previous split implementation excluded
+   * `aria-hidden` subtrees while this function read the label's raw `textContent`, so MUI's
+   * required-field marker (`<span aria-hidden="true"> *</span>`) made us report `"Username *"` for
+   * a field that was only addressable as `"Username"`.
    *
    * Measured on the react-admin demo login form: `reticle_query` reported the textbox as
    * `name: "Username *"`, and querying that exact string back returned ZERO elements while

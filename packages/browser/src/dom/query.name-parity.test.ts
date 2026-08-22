@@ -5,11 +5,11 @@ import { matchQuery } from './query.js';
 /**
  * The name Reticle PRINTS must be a name Reticle can MATCH.
  *
- * Two accessible-name implementations were disagreeing. `getAccessibleName` — what `reticle_query`,
- * `reticle_snapshot` and every act result report — falls back to `placeholder` and then `title`.
- * The role matcher is Testing Library's `queryAllByRole`, whose name comes from
- * `dom-accessibility-api`, which does not. So Reticle reported `name: "Search User"` for
- * `<input type="search" placeholder="Search User">` and then failed to find it by that exact name.
+ * The matcher and reporter must use one accessibility engine. `getAccessibleName` is what
+ * `reticle_query`, `reticle_snapshot` and every act result report, and it falls back to
+ * `placeholder` and then `title`. The resolver now filters with the same local `getRole` and
+ * `getAccessibleName`, so a reported identity can round-trip without a second implementation
+ * disagreeing underneath it.
  *
  * Reported as a recorder bug: the flow recorder anchors a step to the reported name, `flow_save`
  * grades it `asserted` with `degraded: 0` — a clean bill of health — and the step drifts on the
@@ -17,9 +17,9 @@ import { matchQuery } from './query.js';
  * names differently. It is narrower and worse than that: the SAME query call reports a name it
  * cannot match, so the round trip could never close for any caller.
  *
- * Fixed by making the matcher accept Reticle's own computed name as a fallback, rather than by
- * dropping placeholder from the reported name — an input whose only label is its placeholder would
- * otherwise go nameless in every snapshot, which is a readability regression for the common case.
+ * Fixed by making Reticle's own reported role and name the source of truth, rather than by dropping
+ * placeholder from the reported name. An input whose only label is its placeholder would otherwise
+ * go nameless in every snapshot, which is a readability regression for the common case.
  */
 describe('accessible-name round trip', () => {
   it('a placeholder-named input is findable by the name Reticle reports for it', () => {
@@ -47,6 +47,12 @@ describe('accessible-name round trip', () => {
   it('still does not match the right name on the wrong role', () => {
     document.body.innerHTML = '<input type="search" placeholder="Search User" />';
     expect(matchQuery({ role: 'button', name: 'Search User' }).matched).toBe(false);
+  });
+
+  it('uses the role Reticle reports, not a second library role', () => {
+    document.body.innerHTML = '<input type="search" placeholder="Search User" />';
+    expect(matchQuery({ role: 'textbox', name: 'Search User' }).matched).toBe(true);
+    expect(matchQuery({ role: 'searchbox', name: 'Search User' }).matched).toBe(false);
   });
 
   it('the ordinary label path is unchanged', () => {
