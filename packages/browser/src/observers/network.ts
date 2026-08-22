@@ -630,7 +630,10 @@ export function installNetwork(emit: Emit, opts: NetworkOptions = {}): Teardown 
             // responseStatus is Chromium-only; omitted entirely when unreadable so the wire never
             // carries a guessed status. Its absence is what the server-side seam reads as unknown.
             ...((entry.responseStatus ?? 0) > 0
-              ? { status: entry.responseStatus, ok: (entry.responseStatus ?? 0) >= 200 && (entry.responseStatus ?? 0) < 400 }
+              ? {
+                  status: entry.responseStatus,
+                  ok: (entry.responseStatus ?? 0) >= 200 && (entry.responseStatus ?? 0) < 400,
+                }
               : {}),
           });
         }

@@ -774,7 +774,8 @@ describe('document-initiated subresources (PerformanceObserver)', () => {
   afterEach(() => {
     teardown?.();
     teardown = undefined;
-    if (hadPO) (globalThis as unknown as { PerformanceObserver: unknown }).PerformanceObserver = originalPO;
+    if (hadPO)
+      (globalThis as unknown as { PerformanceObserver: unknown }).PerformanceObserver = originalPO;
     else Reflect.deleteProperty(globalThis, 'PerformanceObserver');
   });
 
@@ -797,13 +798,15 @@ describe('document-initiated subresources (PerformanceObserver)', () => {
 
     const cb = FakePO.instances.at(0)?.callback;
     if (cb === undefined) throw new Error('observer callback missing');
-    cb({ getEntries: () => [
-      fakeEntry('link', 'https://app.test/favicon.ico'),
-      fakeEntry('link', 'https://app.test/site.webmanifest'),
-      fakeEntry('css', 'https://app.test/app.css'),
-      // fetch/XHR types belong to the patched transports and must be skipped
-      fakeEntry('fetch', 'https://app.test/api/data'),
-    ]});
+    cb({
+      getEntries: () => [
+        fakeEntry('link', 'https://app.test/favicon.ico'),
+        fakeEntry('link', 'https://app.test/site.webmanifest'),
+        fakeEntry('css', 'https://app.test/app.css'),
+        // fetch/XHR types belong to the patched transports and must be skipped
+        fakeEntry('fetch', 'https://app.test/api/data'),
+      ],
+    });
 
     const net = events.filter((e) => e.type === EventType.NET_REQUEST);
     expect(net.length).toBe(3);
