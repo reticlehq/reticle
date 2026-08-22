@@ -223,6 +223,72 @@ function describeNetFilter(p: Extract<Predicate, { kind: typeof PredicateKind.NE
   return JSON.stringify(filter);
 }
 
+/**
+ * URL suffixes only the DOCUMENT fetches, which the network observer therefore never records.
+ *
+ * `network.ts` patches `fetch` and `XMLHttpRequest` and nothing else, so `<link rel=icon>`,
+ * `<link rel=manifest>`, stylesheets, fonts and `<img src>` are invisible to it. "No matching call"
+ * and "that class of call is not observed" are then indistinguishable, and the miss graded
+ * `assertion_failed` — a false RED. Reported from the field: an assert over `/favicon.ico`,
+ * `/site.webmanifest` and `/apple-touch-icon.png` returned `verified:"no"` while curl showed all
+ * three answering 200. A false negative here is worse than an unknown, because an agent that trusts
+ * it goes and "fixes" working code.
+ *
+ * Deliberately NOT here: `.js` and `.json`. Both are routinely fetched via `fetch`/XHR — a module
+ * preload and an API call can share a suffix — so downgrading them would hide real misses. This list
+ * is only the suffixes for which the document is the sole plausible initiator.
+ *
+ * This is the smaller half of #447: it does not make these requests observable, it stops Reticle
+ * claiming they did not happen. Widening the observer (via `PerformanceResourceTiming`) is the other
+ * half and is independent of this one.
+ */
+const DOCUMENT_ONLY_SUFFIXES: readonly string[] = [
+  '.ico',
+  '.png',
+  '.jpg',
+  '.jpeg',
+  '.gif',
+  '.svg',
+  '.webp',
+  '.avif',
+  '.bmp',
+  '.css',
+  '.woff',
+  '.woff2',
+  '.ttf',
+  '.otf',
+  '.eot',
+  '.webmanifest',
+];
+
+/**
+ * Does this filter target a class of request the observer cannot see?
+ *
+ * Read off `urlContains` only, and only when the pattern ENDS in one of the suffixes — a filter of
+ * `/api/` that happens to contain `.css` somewhere in a query string is still an ordinary XHR
+ * target. Query strings and fragments are stripped first, since `favicon.ico?v=2` is the same asset.
+ */
+function targetsUnobservedChannel(
+  p: Extract<Predicate, { kind: typeof PredicateKind.NET }>,
+): boolean {
+  if (p.urlContains === undefined) return false;
+  const path = (p.urlContains.split('#')[0] ?? '').split('?')[0]?.toLowerCase() ?? '';
+  return DOCUMENT_ONLY_SUFFIXES.some((suffix) => path.endsWith(suffix));
+}
+
+/** The sentence both zero-match branches hand to `inconclusive`. */
+function unobservedChannelReason(
+  p: Extract<Predicate, { kind: typeof PredicateKind.NET }>,
+): string {
+  return (
+    `no call matched ${describeNetFilter(p)}, but Reticle only observes fetch and XMLHttpRequest — ` +
+    `a request the document initiates (<link rel=icon|manifest|preload>, a stylesheet, a font, ` +
+    `<img src>) is never recorded, so this cannot be told apart from the request having been made. ` +
+    `Nothing here says the app is wrong. Check it outside the browser, or assert something the ` +
+    `document does not fetch on its own`
+  );
+}
+
 export function evalNet(
   events: ReticleEvent[],
   p: Extract<Predicate, { kind: typeof PredicateKind.NET }>,
@@ -300,19 +366,40 @@ export function evalNet(
   if (p.count !== undefined) {
     return matches.length === p.count
       ? { pass: true, evidence: { matched: matches.length } }
-      : {
-          pass: false,
-          // Monotonic: more matches than asked for can never become exactly the number asked for.
-          // This is the double-submit — two writes 59ms apart — so the finding that matters most was
-          // also the one that took the caller's whole budget to report.
-          ...(matches.length > p.count ? { decided: true } : {}),
-          failureReason: `expected ${String(p.count)} network call(s) matching ${describeNetFilter(p)}, saw ${String(matches.length)}`,
-          observed: `${String(matches.length)} matching network call(s)`,
-          expected: `exactly ${String(p.count)} matching ${describeNetFilter(p)}`,
-          assertion: 'net.count',
-        };
+      : 0 === matches.length && targetsUnobservedChannel(p)
+        ? {
+            pass: false,
+            failureReason: unobservedChannelReason(p),
+            inconclusive: unobservedChannelReason(p),
+            assertion: 'net.count',
+          }
+        : {
+            pass: false,
+            // Monotonic: more matches than asked for can never become exactly the number asked for.
+            // This is the double-submit — two writes 59ms apart — so the finding that matters most was
+            // also the one that took the caller's whole budget to report.
+            ...(matches.length > p.count ? { decided: true } : {}),
+            failureReason: `expected ${String(p.count)} network call(s) matching ${describeNetFilter(p)}, saw ${String(matches.length)}`,
+            observed: `${String(matches.length)} matching network call(s)`,
+            expected: `exactly ${String(p.count)} matching ${describeNetFilter(p)}`,
+            assertion: 'net.count',
+          };
   }
   const hit = matches[0];
+  if (hit === undefined && targetsUnobservedChannel(p)) {
+    const reason = unobservedChannelReason(p);
+    return {
+      pass: false,
+      failureReason: reason,
+      inconclusive: reason,
+      observed: describeObserved(
+        'calls',
+        events.filter((e) => e.type === EventType.NET_REQUEST).map(describeCall),
+      ),
+      expected: `at least one call matching ${describeNetFilter(p)}`,
+      assertion: 'net.unobserved-channel',
+    };
+  }
   return hit !== undefined
     ? { pass: true, evidence: hit.data }
     : {
