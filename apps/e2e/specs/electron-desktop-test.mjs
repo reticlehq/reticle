@@ -240,7 +240,21 @@ try {
   await sleep(2500);
 
   const net = await blind.tool('reticle_network', {});
-  chk('an un-instrumented renderer really does report no IPC at all', (net.calls?.length ?? 0) === 0);
+  // Document-initiated subresource observation means the network view is no longer guaranteed
+  // empty without the preload: the page's own <script>/<link>/<img> loads are seen at the
+  // session layer. What must still be EMPTY here is the IPC half: no preload, no invoke patch,
+  // so every ipc:// record would be an invention.
+  const calls = net.calls ?? [];
+  chk(
+    'an un-instrumented renderer really does report no IPC at all',
+    calls.every((c) => !String(c.url ?? '').startsWith('ipc://')),
+    JSON.stringify(calls.filter((c) => String(c.url ?? '').startsWith('ipc://')).slice(0, 3)),
+  );
+  chk(
+    'but document-initiated loads of the page itself are now observed even here',
+    calls.some((c) => /:5174/.test(String(c.url ?? ''))),
+    JSON.stringify(calls.slice(0, 3)),
+  );
 
   const green = await blind.tool('reticle_assert', {
     predicate: { kind: 'text', contains: '2 todos' },

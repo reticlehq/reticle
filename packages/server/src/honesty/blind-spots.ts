@@ -75,11 +75,13 @@ const LABEL: Record<BlindSpotKind, (n: number) => string> = {
     'no subscribable store is registered, so NO state change is observed — an empty stateDiffs here means unwatched, not unchanged (register the store itself in your reticle-dev module: registerStore(name, store), not a getter)',
   [BlindSpotKind.WRAPPED_NETWORK]: () =>
     'fetch was already wrapped before Reticle, so recorded requests may differ from what was sent',
-  // A fact about the app's wiring, not a tally. Says what the empty network view MEANS, because an
-  // empty one here is indistinguishable from "this app made no backend calls" — and that reading is
-  // the false green: every IPC call went unseen and every `assert { net }` over them is vacuous.
+  // A fact about the app's wiring, not a tally. Says what a network view WITHOUT ipc:// records
+  // MEANS, because that state here is indistinguishable from "this app made no backend calls" —
+  // and that reading is the false green: every IPC call went unseen and every `assert { net }` over
+  // them is vacuous. Document-initiated loads ARE seen since subresource observation (#447), so
+  // the note names the missing half instead of claiming the whole view is blind.
   [BlindSpotKind.UNOBSERVED_IPC]: () =>
-    "this Electron renderer has no Reticle preload, so NO ipcRenderer.invoke is observed — an empty network view here means unseen, not none (add require('@reticlehq/electron/preload') to your preload)",
+    "this Electron renderer has no Reticle preload, so NO ipcRenderer.invoke is observed; document-initiated loads may still appear, so a view with no ipc:// records means unseen IPC, not none (add require('@reticlehq/electron/preload') to your preload)",
 };
 
 /**
