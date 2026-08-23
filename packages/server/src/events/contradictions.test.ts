@@ -162,6 +162,63 @@ describe('findContradictions — cross-channel disagreement', () => {
     ).toEqual([]);
   });
 
+  /**
+   * A command-bus API sends every mutation to ONE URL and discriminates on a JSON body field.
+   * Reported from the field: one click firing three genuinely different commands read as "the same
+   * write fired 3 times", nearly every act_and_wait in the session was flagged, and otherwise-clean
+   * verdicts degraded to unknown behind repeats that were never repeats. The bodies that
+   * disambiguate the calls ride on the events already; folding them into the identity costs
+   * nothing and saves the accusation for writes that are actually identical.
+   */
+  describe('writes distinguished only by their captured request body', () => {
+    const commandBus = (command: string): ReticleEvent =>
+      ev(EventType.NET_REQUEST, {
+        id: `n${String(seq)}`,
+        method: 'POST',
+        url: '/api/v0/studies/1/command',
+        status: 200,
+        ok: true,
+        requestBody: JSON.stringify({ command }),
+      });
+
+    it('are not a duplicate when the bodies differ', () => {
+      const events = [
+        commandBus('study.stage.set'),
+        commandBus('mesh.controls.set'),
+        commandBus('mesh.plan'),
+        domChanged(),
+      ];
+      expect(
+        findContradictions(events, { actionSince: events[0]?.t ?? 0 }).map((c) => c.kind),
+      ).not.toContain(ContradictionKind.DUPLICATE_REQUEST);
+    });
+
+    it('are still a duplicate when the bodies are identical', () => {
+      const events = [commandBus('mesh.plan'), commandBus('mesh.plan'), domChanged()];
+      expect(
+        findContradictions(events, { actionSince: events[0]?.t ?? 0 }).find(
+          (c) => c.kind === ContradictionKind.DUPLICATE_REQUEST,
+        )?.detail,
+      ).toContain('/api/v0/studies/1/command');
+    });
+
+    it('stay un-compared, and therefore un-flagged, when only one side carried a body', () => {
+      const withBody = commandBus('study.stage.set');
+      const withoutBody = ev(EventType.NET_REQUEST, {
+        id: `n${String(seq)}`,
+        method: 'POST',
+        url: '/api/v0/studies/1/command',
+        status: 200,
+        ok: true,
+      });
+      expect(
+        findContradictions([withBody, withoutBody, domChanged()], {
+          actionSince: withBody.t,
+        }).map((c) => c.kind),
+      ).not.toContain(ContradictionKind.DUPLICATE_REQUEST);
+    });
+  });
+
   it('catches the UI advancing over a request that never settled', () => {
     const pending = ev(EventType.NET_PENDING, { id: 'n99', method: 'POST', url: '/api/slow' });
     expect(kinds([pending, domChanged()])).toEqual([ContradictionKind.REQUEST_NEVER_SETTLED]);

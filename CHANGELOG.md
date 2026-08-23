@@ -132,6 +132,12 @@ All notable changes to the **`@reticlehq/*`** packages are documented here (each
 
   **The `sharp` security override in the root manifest stays.** It looks orphaned once the direct dependency goes and it is not: `next` and `astro` both pull `sharp` as an optional dependency in the fixtures under `apps/`, so the override is still the floor on a transitive install. Removing a version floor because the direct dependant left is how a patched transitive quietly slides back down.
 
+### Fixed
+
+- **`@reticlehq/server`: `duplicate-request` no longer reports every distinct write to one URL as a double submit.** A command-bus API posts every mutation to a single endpoint and discriminates on a JSON body field (`{"command":"study.stage.set"}` vs `{"command":"mesh.plan"}`). The rule keyed repeats on method + URL alone, so one click firing three genuinely different commands read as "the same write fired 3 times": nearly every `act_and_wait` in such a session was flagged, and verdicts that had genuinely passed degraded to `unknown` behind doubles that were never doubles. Reported from the field.
+
+  A captured request body now joins the identity, so writes that differ in what they sent are no longer counted as repeats, and identical bodies still are. With body capture off (or a non-text body, which reports a type marker instead) there is nothing to compare and the URL alone stands, exactly as before; a window where only some calls carried bodies compares nothing rather than guess. The finding's `detail` still names `method url ×N`, so nothing downstream had to change.
+
 ## [2.11.0] — 2026-08-22
 
 ### Added

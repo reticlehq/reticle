@@ -573,23 +573,35 @@ function findWindowContradictions(
   // Attribution is the whole rule here, not a refinement of it: counting `method + url` over whatever
   // window the caller handed in turns two legitimate separate saves into a double submit. See
   // ContradictionOptions.actionSince.
+  //
+  // A captured request body joins the identity. A command-bus API posts every mutation to one URL
+  // and discriminates on a body field (`{"command":"study.stage.set"}` vs `{"command":"mesh.plan"}`),
+  // so under URL alone each of those distinct writes read as a repeat of the first, and clean
+  // verdicts degraded to unknown behind doubles that were never doubles. When no body was captured
+  // (capture off, or a non-text body, which reports a type marker instead) there is nothing to
+  // compare and the URL alone stands, as before; a window where only some calls carried bodies
+  // compares nothing rather than guess.
   const actionSince = options.actionSince;
   if (actionSince !== undefined) {
-    const writeCounts = new Map<string, number>();
+    const writeCounts = new Map<string, { label: string; count: number }>();
     for (const event of events) {
       if (event.type !== EventType.NET_REQUEST || event.t < actionSince) continue;
       const call = netCall(event);
       if (!isMutating(call)) continue;
-      const key = `${call.method} ${call.url}`;
-      writeCounts.set(key, (writeCounts.get(key) ?? 0) + 1);
+      const label = `${call.method} ${call.url}`;
+      const body = asString(event.data['requestBody']);
+      const key = body === undefined || 0 === body.length ? label : `${label} ${body}`;
+      const entry = writeCounts.get(key) ?? { label, count: 0 };
+      entry.count += 1;
+      writeCounts.set(key, entry);
     }
-    for (const [key, count] of writeCounts) {
+    for (const [, { label, count }] of writeCounts) {
       if (count < 2) continue;
       found.push({
         kind: ContradictionKind.DUPLICATE_REQUEST,
         claim: 'one user action was performed',
         counter: `the same write fired ${String(count)} times`,
-        detail: `${key} ×${String(count)}`,
+        detail: `${label} ×${String(count)}`,
       });
     }
   }
