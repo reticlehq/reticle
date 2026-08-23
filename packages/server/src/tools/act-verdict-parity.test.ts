@@ -111,4 +111,11 @@ describe('act_and_wait and assert see the same evidence', () => {
     expect(act).toMatch(/[Ll]earning material/);
     expect(assert).toMatch(/LEARNING material/);
   });
+
+  it('both paths pass absenceBlindSpot to decideVerified', () => {
+    for (const file of [act, assert]) {
+      expect(file).toMatch(/absenceBlindSpotNote\(/);
+      expect(file).toMatch(/absenceBlindSpot === undefined \? \{\} : \{ absenceBlindSpot \}/);
+    }
+  });
 });

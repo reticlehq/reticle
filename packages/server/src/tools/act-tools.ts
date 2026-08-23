@@ -54,6 +54,7 @@ import { buildDivergenceCapsule } from '../capsule/capsule.js';
 import { predicateToExpectedLinks } from '../capsule/predicate-to-links.js';
 import { buildHonestyBlock } from '../honesty/honesty.js';
 import {
+  absenceBlindSpotNote,
   buildCoverageStatement,
   blindSpotsFromState,
   transportGapNote,
@@ -762,6 +763,7 @@ export const ACT_TOOLS: ToolDef[] = [
         // verdict didn't see everything — say so, never imply full coverage.
         const spots = blindSpotsFromState(session.blindSpots());
         const coverage = buildCoverageStatement(spots);
+        const absenceBlindSpot = absenceBlindSpotNote(until, spots);
         // Nothing subscribed ⇒ the state channel is dark, and the summary must say so rather than
         // report an empty diff list that reads like a fact about the app. See CausalSummary.
         const stateUnwatched = isStateUnwatched(spots);
@@ -869,6 +871,7 @@ export const ACT_TOOLS: ToolDef[] = [
           // the measured false red: a reload mid-wait, graded assertion_failed at the clicked
           // component's own file and line.
           ...(true === verdict.observationLost ? { observationLost: true } : {}),
+          ...(absenceBlindSpot === undefined ? {} : { absenceBlindSpot }),
           honesty,
           contradictions,
           ...(outcomePending ? { outcomePending } : {}),

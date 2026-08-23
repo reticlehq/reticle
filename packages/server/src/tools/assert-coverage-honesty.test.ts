@@ -113,15 +113,26 @@ describe('reticle_assert discloses partial coverage', () => {
     expect(result['verified']).toBe(Verified.YES);
   });
 
-  it('keeps an unscoped element absence green when unrelated virtualized rows are unobserved', async () => {
+  it('downgrades an element absence to UNKNOWN when virtualized rows are unobserved', async () => {
     const result = (await tool(ReticleTool.ASSERT).handler(
       depsWithBlindSpots({ 'virtualized-unmounted': 1 }),
       absentElement,
     )) as Record<string, unknown>;
 
     expect(result['pass']).toBe(true);
-    expect(result['verified']).toBe(Verified.YES);
-    expect(result['verifiedReason']).toBe(VerifiedReason.PROVED);
+    expect(result['verified']).toBe(Verified.UNKNOWN);
+    expect(result['verifiedReason']).toBe(VerifiedReason.ABSENCE_BLIND_SPOT);
+  });
+
+  it('downgrades an element absence to UNKNOWN when a closed shadow root is unobserved', async () => {
+    const result = (await tool(ReticleTool.ASSERT).handler(
+      depsWithBlindSpots({ 'closed-shadow-root': 1 }),
+      absentElement,
+    )) as Record<string, unknown>;
+
+    expect(result['pass']).toBe(true);
+    expect(result['verified']).toBe(Verified.UNKNOWN);
+    expect(result['verifiedReason']).toBe(VerifiedReason.ABSENCE_BLIND_SPOT);
   });
 
   it('names which regions were unobservable, so the agent can act on it', async () => {
