@@ -213,8 +213,7 @@ export interface PlanInput {
    * predates this. Everything else is uniform: read the file, merge, write.
    */
   detectedClients?:
-    | readonly { id: McpClient; configPath: string; existing: string | null }[]
-    | undefined;
+    readonly { id: McpClient; configPath: string; existing: string | null }[] | undefined;
   /** Discovered Vite config: its path + source, or null if none found. */
   viteConfig: { path: string; source: string } | null;
   /** Discovered Astro config: its path + source, or null if none found. */
