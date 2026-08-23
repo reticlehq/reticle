@@ -59,7 +59,13 @@ import {
 import { claudeAvailableProbe, claudeExistsProbe } from './mcp.js';
 import { reticleDevLocation } from './next-patch.js';
 import { scanTestids, storeHints, scanStores } from './capabilities.js';
-import { fileBackedClients, clientMarkerRelPath, ConfigScope } from './mcp-clients.js';
+import {
+  fileBackedClients,
+  clientMarkerRelPath,
+  ConfigScope,
+  McpClient,
+  CURSOR_PROJECT_MARKER,
+} from './mcp-clients.js';
 import { deriveProjectId, packageName } from './project-id.js';
 import { VITE_DEV_MODULE_PATH, connectArgWithToken, staticPageSnippet } from './snippets.js';
 import { CLAUDE_COMMAND_PATH, CURSOR_COMMAND_PATH } from './slash-command.js';
@@ -387,7 +393,13 @@ function gatherPlanInput(options: InitOptions, io: InitIo, pkgRaw: string): Plan
           const absolute =
             spec.scope === ConfigScope.HOME ? join(io.homeDir(), spec.relPath) : spec.relPath;
           const markerPath = spec.scope === ConfigScope.HOME ? join(io.homeDir(), marker) : marker;
-          if (!io.exists(markerPath)) return null;
+          // A fresh Cursor profile has not written ~/.cursor yet; the project-level .cursor/ is the
+          // fallback that kept that real case working. Same signal, project scope.
+          const projectFallback =
+            spec.id === McpClient.CURSOR && !io.exists(markerPath)
+              ? io.exists(CURSOR_PROJECT_MARKER)
+              : false;
+          if (!io.exists(markerPath) && !projectFallback) return null;
           return {
             id: spec.id,
             configPath: absolute,
@@ -435,7 +447,7 @@ function gatherPlanInput(options: InitOptions, io: InitIo, pkgRaw: string): Plan
     claudeCli,
     mcpExists,
     detectedClients,
-    cursorProjectPresent: io.exists('.cursor'),
+    cursorProjectPresent: io.exists(CURSOR_PROJECT_MARKER),
     viteConfig,
     astroConfig:
       astroPath !== null && astroSource !== null ? { path: astroPath, source: astroSource } : null,

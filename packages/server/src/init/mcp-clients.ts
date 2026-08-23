@@ -327,6 +327,14 @@ export function clientMarkerRelPath(spec: ClientSpec): string {
   return parts.length > 1 ? parts.slice(0, -1).join('/') : spec.relPath;
 }
 
+/**
+ * Project-relative directory whose presence signals Cursor is in use for this repo.
+ *
+ * A fresh Cursor profile has not written `~/.cursor` yet, so the home marker alone misses real
+ * users. A project-level `.cursor/` is unambiguous evidence somebody uses Cursor here.
+ */
+export const CURSOR_PROJECT_MARKER = '.cursor';
+
 /** Clients `init` can wire by writing a file — everything but the CLI-registered one. */
 export function fileBackedClients(): readonly ClientSpec[] {
   return MCP_CLIENTS.filter((spec) => spec.scope !== ConfigScope.CLI);
