@@ -44,6 +44,24 @@ function stubSessions(): { manager: SessionManager; hint: () => string } {
   return { manager, hint: () => installed?.() ?? '' };
 }
 
+describe('sibling daemon probe reaches the diagnosis output', () => {
+  it('a port returned by siblingProbe appears in noSessionHint', () => {
+    const dir = projectDir(undefined);
+    const { manager, hint } = stubSessions();
+    const stop = startNoSessionWatch({
+      sessions: manager,
+      port: 4400,
+      initialized: false,
+      directory: dir,
+      probe: () => Promise.resolve([]),
+      siblingProbe: () => [4460],
+    });
+    const message = hint();
+    stop();
+    expect(message).toContain('4460');
+  });
+});
+
 describe('the no-session diagnosis and a config written after boot', () => {
   it('reads `.reticle.json` when the question is asked, not when the daemon booted', async () => {
     const dir = projectDir(JSON.stringify({ framework: 'vite', projectId: 'app-1' }));
