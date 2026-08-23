@@ -13,7 +13,7 @@ import {
   type Detection,
 } from './detect.js';
 import type { FoundStore } from './capabilities.js';
-import { claudeAddCommand, mcpManual } from './mcp.js';
+import { claudeAddCommand, mcpManual, windowsMcpNote } from './mcp.js';
 import { mergeCursorConfig, CursorMergeStatus, cursorServerEntry } from './cursor.js';
 import {
   mergeClientConfig,
@@ -424,6 +424,20 @@ function otherClientSteps(input: PlanInput): Step[] {
   return steps;
 }
 
+/**
+ * The Windows spawn fallback rides along with every MCP registration step (#509).
+ *
+ * A registration that WRITES cleanly can still produce zero tools on Windows: some hosts cannot
+ * spawn an `.cmd` shim as a stdio server, so no `reticle_*` tool ever loads and the daemon never
+ * starts — while init reported clean, because `claude mcp add` itself succeeded and the fallback
+ * paragraph lived only in the manual path nobody reached. Off-Windows the note is undefined and
+ * every detail is untouched.
+ */
+function withWindowsSpawnNote(step: Step): Step {
+  const note = windowsMcpNote(process.platform);
+  return note === undefined ? step : { ...step, detail: `${step.detail}\n\n${note}` };
+}
+
 /** One global registration per detected agent (Claude + Cursor). Falls back to a manual note. */
 function mcpSteps(input: PlanInput): Step[] {
   if (!input.options.mcp) {
@@ -443,7 +457,9 @@ function mcpSteps(input: PlanInput): Step[] {
   // Claude and Cursor first (they have their own registration paths), then every other detected
   // client. A machine with Cursor AND Windsurf gets both — registering only the first one found is
   // how a user ends up with Reticle in the editor they were not using.
-  const steps = [...stepsForAgents(input, (a) => a.mcpStep), ...otherClientSteps(input)];
+  const steps = [...stepsForAgents(input, (a) => a.mcpStep), ...otherClientSteps(input)].map(
+    withWindowsSpawnNote,
+  );
   if (steps.length > 0) return steps;
   // No supported agent detected — print the one-time global instructions. Reached when the `claude`
   // CLI is absent AND ~/.cursor does not exist, which includes Cursor installed with a fresh profile

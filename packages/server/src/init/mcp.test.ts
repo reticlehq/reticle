@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { claudeAddCommand, claudeExistsProbe, mcpManual, MCP_SERVER_NAME } from './mcp.js';
+import {
+  claudeAddCommand,
+  claudeExistsProbe,
+  mcpManual,
+  windowsMcpNote,
+  MCP_SERVER_NAME,
+} from './mcp.js';
 
 describe('claudeAddCommand', () => {
   it('registers reticle at user scope via npx (global, all projects)', () => {
@@ -51,5 +57,27 @@ describe('mcpManual', () => {
     expect(m).toContain('claude mcp add reticle -s user');
     expect(m).toContain('globally');
     expect(m).not.toContain('--port');
+  });
+});
+
+describe('windowsMcpNote', () => {
+  /**
+   * #509: on Windows the registered command stayed bare `npx`, the session came up with ZERO
+   * reticle_* tools, and the daemon never started — and because `claude mcp add` itself succeeded,
+   * init reported a clean install and never printed the one paragraph (the cmd /c fallback from
+   * mcpManual) that fixes it. The fallback therefore has to ride along with every Windows
+   * registration, not only the manual path. Off-Windows it is noise and stays absent.
+   */
+  it('names the cmd /c fallback on Windows', () => {
+    const note = windowsMcpNote('win32');
+    expect(note).toContain('cmd');
+    expect(note).toContain('/c');
+    expect(note).toContain(MCP_SERVER_NAME);
+    expect(note).toContain('zero');
+  });
+
+  it('is absent off-Windows', () => {
+    expect(windowsMcpNote('darwin')).toBeUndefined();
+    expect(windowsMcpNote('linux')).toBeUndefined();
   });
 });

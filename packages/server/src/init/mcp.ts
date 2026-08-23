@@ -13,6 +13,7 @@
  */
 
 import { RETICLE_NPM_PACKAGE } from '../version/server-version.js';
+import { NodePlatform } from '../platform.js';
 
 // The name is a wire identity and lives in the contract; re-exported here so the registration writers
 // below (and their tests) keep reading it from the module that USES it.
@@ -128,4 +129,23 @@ on this system" — a PowerShell execution policy), register it through cmd inst
 does not gate:
 
   "${MCP_SERVER_NAME}": { "command": "cmd", "args": ${JSON.stringify(['/c', NPX, ...serverInvocation().slice(1)])} }`;
+}
+
+/**
+ * The Windows fallback, for EVERY successful registration rather than only the manual path.
+ *
+ * #509: on Windows the registration itself succeeds (`claude mcp add` writes bare `npx`), the
+ * session starts, the skill appears — and zero `reticle_*` tools ever arrive, because some hosts
+ * cannot spawn an `.cmd` shim as a stdio server and the daemon therefore never comes up. Until this
+ * note existed only in mcpManual(), a user whose `claude` CLI worked never saw the one paragraph
+ * that fixes it: init reported clean over a dead install. Platform is injected so tests can pin both
+ * sides; callers pass `process.platform`. Undefined off-Windows, where the paragraph is noise.
+ */
+export function windowsMcpNote(platform: string): string | undefined {
+  if (platform !== NodePlatform.WINDOWS) return undefined;
+  return (
+    'On Windows, if no reticle_* tools appear after restarting the agent (the server fails to ' +
+    'spawn npx, so zero tools load and the daemon never starts), register through cmd instead:\n\n' +
+    `  "${MCP_SERVER_NAME}": { "command": "cmd", "args": ${JSON.stringify(['/c', NPX, ...serverInvocation().slice(1)])} }`
+  );
 }
