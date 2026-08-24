@@ -73,6 +73,7 @@ describe('the no-session diagnosis and a config written after boot', () => {
       initialized: false,
       directory: dir,
       probe: () => Promise.resolve([5173]),
+      siblingProbe: () => [],
     });
     // Let the port scan settle — the dev server IS up, which is the stale-process shape.
     await Promise.resolve();
@@ -93,6 +94,7 @@ describe('the no-session diagnosis and a config written after boot', () => {
       initialized: false,
       directory: dir,
       probe: () => Promise.resolve([5173]),
+      siblingProbe: () => [],
     });
     const message = hint();
     stop();

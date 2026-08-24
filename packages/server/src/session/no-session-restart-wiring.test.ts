@@ -65,6 +65,7 @@ describe('the watch reads the durable bit and hands it to the diagnosis', () => 
       directory: dir,
       stateDir: dir,
       probe: () => Promise.resolve([3000]),
+      siblingProbe: () => [],
     });
     try {
       expect(sessions.noSessionHint() ?? '').not.toMatch(/never seen one/i);
@@ -82,6 +83,7 @@ describe('the watch reads the durable bit and hands it to the diagnosis', () => 
       directory: dir,
       stateDir: dir,
       probe: () => Promise.resolve([]),
+      siblingProbe: () => [],
     });
     try {
       expect(sessions.noSessionHint() ?? '').toMatch(/never seen one|no `\.reticle\.json`/i);
