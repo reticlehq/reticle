@@ -471,7 +471,12 @@ export function svelteKitSteps(input: PlanInput): Step[] {
 export function astroSteps(input: PlanInput): Step[] {
   const config = input.astroConfig ?? null;
   const layout = input.astroLayout ?? null;
-  const manual = astroManual(input.options.port, input.options.projectId, layout?.path);
+  const manual = astroManual(
+    input.options.port,
+    input.options.projectId,
+    layout?.path,
+    input.detection.uiLibrary,
+  );
   if (null === config || null === layout) {
     return [
       {
@@ -490,8 +495,13 @@ export function astroSteps(input: PlanInput): Step[] {
   // real fixture — config ⚠, layout ✓ — which reads as one step done and one caveat when it is
   // actually a guaranteed non-connection. If either half cannot be applied, BOTH go manual with the
   // single recipe that does the whole job.
-  const manualWithLayout = astroManual(input.options.port, input.options.projectId, layout.path);
-  const configPatch = patchAstroConfig(config.source);
+  const manualWithLayout = astroManual(
+    input.options.port,
+    input.options.projectId,
+    layout.path,
+    input.detection.uiLibrary,
+  );
+  const configPatch = patchAstroConfig(config.source, input.detection.uiLibrary);
   const layoutPatch = patchAstroLayout(
     layout.source,
     input.options.port,

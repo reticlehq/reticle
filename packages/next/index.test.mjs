@@ -28,10 +28,12 @@ describe('readPairingToken', () => {
     expect(readPairingToken()).toBe('tok-from-daemon');
   });
 
-  it('returns undefined when the file is missing, so connect proceeds without a token', () => {
+  it('mints a token when the file is missing, so Next started before the daemon still pairs', () => {
     dir = mkdtempSync(join(tmpdir(), 'reticle-next-token-'));
     process.env[TOKEN_ENV] = dir;
-    expect(readPairingToken()).toBeUndefined();
+    const token = readPairingToken();
+    expect(token).toBeTruthy();
+    expect(readPairingToken()).toBe(token);
   });
 });
 

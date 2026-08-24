@@ -6,8 +6,7 @@ import { buildEvent } from './reticle.js';
  * Every event says which round of source edits it was observed under.
  *
  * Stamped in `buildEvent` for the same reason `documentId` is: it is the one place every event
- * passes through, so an observer added later cannot emit an unstamped one. Absence reads as
- * "current" downstream, which is what makes an unstamped observer a silent regression.
+ * passes through, so an observer added later cannot emit an unstamped one.
  */
 
 const base = {
@@ -23,10 +22,10 @@ describe('buildEvent stamps the edit epoch', () => {
     expect(buildEvent({ ...base, editEpoch: 2 }).editEpoch).toBe(2);
   });
 
-  it('omits the field while no edit has been observed, rather than asserting none happened', () => {
-    // A page with no hot-update channel — Next, Electron, Tauri, a plain page — knows nothing about
-    // edits. Stamping zero on every event would spend wire on a value that means "unknown".
-    expect(buildEvent({ ...base, editEpoch: NO_EDITS_OBSERVED }).editEpoch).toBeUndefined();
+  it('stamps zero as zero so pre-edit events stay distinguishable after a hot update', () => {
+    // Omitting `NO_EDITS_OBSERVED` made `isSameEditEpoch(undefined, 1)` read as current, so
+    // EVIDENCE_PREDATES_EDIT never fired for events emitted before the first edit.
+    expect(buildEvent({ ...base, editEpoch: NO_EDITS_OBSERVED }).editEpoch).toBe(NO_EDITS_OBSERVED);
     expect(buildEvent(base).editEpoch).toBeUndefined();
   });
 

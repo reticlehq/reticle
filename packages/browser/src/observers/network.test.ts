@@ -317,6 +317,24 @@ describe('installNetwork (fetch)', () => {
     expect(String(data['requestBody'])).not.toContain(formPasswordValue);
   });
 
+  it('captures the body from fetch(Request) when init has no body', async () => {
+    window.fetch = vi.fn(() =>
+      Promise.resolve(fakeResponseWithBody(200, 'application/json', '{"ok":true}')),
+    );
+    const { emit, events } = collect();
+    teardown = installNetwork(emit, { captureBodies: true });
+    const req = new Request('http://localhost:8787/api', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email: 'a@b.com', password: 'req-pass-abcdef123' }),
+    });
+    await window.fetch(req);
+    await flushBody();
+    const data = eventOf(events, EventType.NET_REQUEST);
+    expect(String(data['requestBody'])).toContain('[REDACTED]');
+    expect(String(data['requestBody'])).not.toContain('req-pass-abcdef123');
+  });
+
   it('does NOT over-redact prose containing the words Bearer/Basic (no false positive)', async () => {
     const prose =
       'Basic subscription includes support. Bearer capacity exceeded the threshold today.';

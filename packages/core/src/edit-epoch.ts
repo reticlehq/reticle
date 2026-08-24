@@ -29,16 +29,21 @@ export const NO_EDITS_OBSERVED = 0;
 /**
  * Was this evidence recorded under the edit epoch currently in force?
  *
- * **Unstamped evidence counts as current**, following `isSameDocument` exactly rather than inventing
- * a stricter rule beside it. An SDK older than this field stamps nothing, and so does a perfectly
- * current SDK in a page with no hot-update channel. Reading either as foreign would make those
- * installations silently stop reporting real contradictions, and a verification tool that quietly
- * finds nothing is worse than one that occasionally over-reports.
+ * While no edit has been observed (`current` is undefined or `NO_EDITS_OBSERVED`), unstamped
+ * evidence counts as current — same as `isSameDocument`, and required for older SDKs and pages with
+ * no hot-update channel.
+ *
+ * Once an edit HAS been observed (`current > 0`), unstamped evidence is foreign. Omitting `0` on
+ * the wire used to leave pre-edit events looking current forever after the first hot update; that
+ * made `EVIDENCE_PREDATES_EDIT` unreachable on the common path.
  */
 export function isSameEditEpoch(
   evidenceEpoch: number | undefined,
   currentEpoch: number | undefined,
 ): boolean {
-  if (undefined === evidenceEpoch || undefined === currentEpoch) return true;
+  if (undefined === currentEpoch || currentEpoch === NO_EDITS_OBSERVED) {
+    return true;
+  }
+  if (undefined === evidenceEpoch) return false;
   return evidenceEpoch === currentEpoch;
 }

@@ -42,8 +42,10 @@ export function resolveBridgeSecurity(options: StartOptions): BridgeSecurity {
  * Same as `resolveBridgeSecurity`, but when no explicit/env token is set it auto-provisions one from
  * ~/.reticle/pairing-token so the bridge always requires a secret by default — this is what closes the
  * "any loopback origin is trusted" gap (a rogue localhost app can't read the file to present it). The
- * build plugins read the same file and inject it, so plugin-served apps stay zero-config. Best-effort:
- * if provisioning fails, the daemon degrades to the prior tokenless behavior rather than failing to start.
+ * build plugins read the same file and inject it, so plugin-served apps stay zero-config.
+ *
+ * Fail-closed when provision fails: starting tokenless restores the attack pairing exists to stop.
+ * Set `RETICLE_ALLOW_INSECURE=1` only when that risk is acceptable (unwritable $HOME in a locked-down CI).
  */
 export async function resolveBridgeSecurityWithAutoToken(
   options: StartOptions,
@@ -53,13 +55,20 @@ export async function resolveBridgeSecurityWithAutoToken(
   const dir = options.pairingTokenDir ?? defaultPairingTokenDir();
   const token = await readOrCreatePairingToken(dir, nodePairingTokenDeps());
   if (token === undefined) {
-    // Fail-open is deliberate (never block a dev daemon on an unwritable $HOME), but it must be LOUD:
-    // the bridge is now trusting every loopback origin. Say so plainly, not just as a silent event.
+    const allowInsecure = process.env[ReticleEnv.ALLOW_INSECURE];
+    const insecure = allowInsecure === '1' || allowInsecure === 'true' || allowInsecure === 'on';
     log('pairing_token_provision_failed', {
       dir,
-      warning:
-        'SECURITY: could not provision a pairing token — the bridge is running WITHOUT auth and will trust any localhost origin. Any local process/page can drive your browser sessions. Fix write access to this dir, or set RETICLE_TOKEN.',
+      allowInsecure: insecure,
+      warning: insecure
+        ? 'SECURITY: could not provision a pairing token — RETICLE_ALLOW_INSECURE is set, so the bridge is running WITHOUT auth and will trust any localhost origin.'
+        : 'SECURITY: could not provision a pairing token — refusing to start without auth. Fix write access to this dir, set RETICLE_TOKEN, or set RETICLE_ALLOW_INSECURE=1 to opt into tokenless localhost trust.',
     });
+    if (!insecure) {
+      throw new Error(
+        `could not provision a pairing token in ${dir} — refusing to start without auth (set RETICLE_TOKEN, fix write access, or RETICLE_ALLOW_INSECURE=1)`,
+      );
+    }
     return security;
   }
   return { ...security, token };

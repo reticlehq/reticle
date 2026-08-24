@@ -25,16 +25,20 @@ const LAYOUT_MARKER = 'reticle.connect';
 /**
  * The SDK, declared so Vite pre-bundles it BEFORE the first page load.
  *
- * The connect script does `await import('@reticlehq/react')`. Undeclared, Vite meets that import
- * mid-load, pre-bundles it, and the hashed `/node_modules/.vite/deps/@reticlehq_react.js?v=…` URL
+ * The connect script does `await import(<sdk>)`. Undeclared, Vite meets that import
+ * mid-load, pre-bundles it, and the hashed `/node_modules/.vite/deps/…` URL
  * the browser already requested stops existing — the import rejects with "Failed to fetch
  * dynamically imported module", connect() never runs, and the page looks entirely normal. Measured
  * on astro-nanostores, intermittent on whether the dep cache was warm. The Vite plugin has declared
  * the SDK for this exact reason since the bug was first found on React; Astro is hand-patched and
  * never got it.
+ *
+ * Must match `sdkImport(uiLibrary)` — a Vue/Svelte Astro app installs `@reticlehq/browser`, and
+ * hardcoding `@reticlehq/react` here made optimizeDeps point at a package that is not in node_modules.
  */
-const SDK_INCLUDE_LITERAL = `'@reticlehq/react'`;
-/**
+function sdkIncludeLiteral(uiLibrary: UiLibrary): string {
+  return `'${sdkImport(uiLibrary).specifier}'`;
+} /**
  * The daemon's journal directory, kept out of the dev server's watcher.
  *
  * The daemon writes `.reticle/` into the project root and rewrites `ambient.json` atomically
@@ -89,29 +93,33 @@ import { join } from 'node:path';
  * `target: 'es2022'` was silently discarded while init reported success. Losing that target is not
  * cosmetic: Astro's default down-levels the modern SDK bundle and dies on a destructuring transform.
  */
-const VITE_KEYS: readonly { key: string; inner: string }[] = [
-  { key: 'build', inner: `\n      target: 'es2022',` },
-  {
-    key: 'optimizeDeps',
-    inner: `\n      include: [${SDK_INCLUDE_LITERAL}],\n      esbuildOptions: { target: 'es2022' },`,
-  },
-  {
-    key: 'define',
-    inner: `\n      __RETICLE_TOKEN__: JSON.stringify(reticleToken()),\n      __RETICLE_ROOT__: JSON.stringify(process.cwd()),`,
-  },
-  // Merged in first, so a `server: { port }` the app already set keeps its port. An app that
-  // already sets `server.watch` itself is the one shape this loses to — the inner `watch` key would
-  // be duplicated and the app's would win — which is the same nested-merge ceiling `build` has.
-  { key: 'server', inner: `\n      watch: { ignored: [${WATCH_IGNORE_LITERAL}] },` },
-];
+function viteKeys(include: string): readonly { key: string; inner: string }[] {
+  return [
+    { key: 'build', inner: `\n      target: 'es2022',` },
+    {
+      key: 'optimizeDeps',
+      inner: `\n      include: [${include}],\n      esbuildOptions: { target: 'es2022' },`,
+    },
+    {
+      key: 'define',
+      inner: `\n      __RETICLE_TOKEN__: JSON.stringify(reticleToken()),\n      __RETICLE_ROOT__: JSON.stringify(process.cwd()),`,
+    },
+    // Merged in first, so a `server: { port }` the app already set keeps its port. An app that
+    // already sets `server.watch` itself is the one shape this loses to — the inner `watch` key would
+    // be duplicated and the app's would win — which is the same nested-merge ceiling `build` has.
+    { key: 'server', inner: `\n      watch: { ignored: [${WATCH_IGNORE_LITERAL}] },` },
+  ];
+}
 
 /** Whole-key form, for a `vite:` block that does not have the key at all. */
-const WHOLE: Readonly<Record<string, string>> = {
-  build: `\n    build: { target: 'es2022' },`,
-  optimizeDeps: `\n    optimizeDeps: { include: [${SDK_INCLUDE_LITERAL}], esbuildOptions: { target: 'es2022' } },`,
-  define: `\n    define: {\n      __RETICLE_TOKEN__: JSON.stringify(reticleToken()),\n      __RETICLE_ROOT__: JSON.stringify(process.cwd()),\n    },`,
-  server: `\n    server: { watch: { ignored: [${WATCH_IGNORE_LITERAL}] } },`,
-};
+function wholeKeys(include: string): Readonly<Record<string, string>> {
+  return {
+    build: `\n    build: { target: 'es2022' },`,
+    optimizeDeps: `\n    optimizeDeps: { include: [${include}], esbuildOptions: { target: 'es2022' } },`,
+    define: `\n    define: {\n      __RETICLE_TOKEN__: JSON.stringify(reticleToken()),\n      __RETICLE_ROOT__: JSON.stringify(process.cwd()),\n    },`,
+    server: `\n    server: { watch: { ignored: [${WATCH_IGNORE_LITERAL}] } },`,
+  };
+}
 
 /**
  * Add our keys to an existing `vite: { ... }` block, merging into any the app already set.
@@ -119,14 +127,16 @@ const WHOLE: Readonly<Record<string, string>> = {
  * Returns null when a colliding key is not an object literal (`build: sharedConfig`) — there is no
  * brace to merge into, and duplicating or replacing it would corrupt someone's build.
  */
-function mergeIntoViteBlock(source: string, braceAt: number): string | null {
+function mergeIntoViteBlock(source: string, braceAt: number, include: string): string | null {
   let out = source;
-  for (const { key, inner } of VITE_KEYS) {
+  const keys = viteKeys(include);
+  const whole = wholeKeys(include);
+  for (const { key, inner } of keys) {
     // Scoped to the vite block by searching from its opening brace: a `build:` under `markdown:` or
     // at the top level is somebody else's key and must not be touched.
     const existing = new RegExp(`(\\n\\s*${key}\\s*:\\s*)([\\{A-Za-z_])`).exec(out.slice(braceAt));
     if (existing?.index === undefined) {
-      out = `${out.slice(0, braceAt)}${WHOLE[key] ?? ''}${out.slice(braceAt)}`;
+      out = `${out.slice(0, braceAt)}${whole[key] ?? ''}${out.slice(braceAt)}`;
       continue;
     }
     // The character after the colon decides: `{` is a literal we can open; anything else is a
@@ -145,8 +155,8 @@ function mergeIntoViteBlock(source: string, braceAt: number): string | null {
     }
     // Their array first, then the rest of our keys at the block's start — inserting at the LOWER
     // offset second keeps the first offset valid.
-    out = insertAt(out, at + own.index + own[0].length, `${SDK_INCLUDE_LITERAL}, `);
-    out = insertAt(out, at, withoutInclude(inner));
+    out = insertAt(out, at + own.index + own[0].length, `${include}, `);
+    out = insertAt(out, at, withoutInclude(inner, include));
   }
   return out;
 }
@@ -176,8 +186,8 @@ function blockAfter(source: string, at: number): string {
 }
 
 /** The optimizeDeps inner minus our `include:` line, for when the app already has one to join. */
-function withoutInclude(inner: string): string {
-  return inner.replace(`\n      include: [${SDK_INCLUDE_LITERAL}],`, '');
+function withoutInclude(inner: string, include: string): string {
+  return inner.replace(`\n      include: [${include}],`, '');
 }
 
 /**
@@ -185,9 +195,10 @@ function withoutInclude(inner: string): string {
  * modern SDK bundle and dies on a destructuring transform; `__RETICLE_ROOT__` is defined because
  * without it every source pointer comes back as an absolute path from the machine that ran `init`.
  */
-const VITE_BLOCK = `  vite: {
+function viteBlock(include: string): string {
+  return `  vite: {
     build: { target: 'es2022' },
-    optimizeDeps: { include: [${SDK_INCLUDE_LITERAL}], esbuildOptions: { target: 'es2022' } },
+    optimizeDeps: { include: [${include}], esbuildOptions: { target: 'es2022' } },
     define: {
       __RETICLE_TOKEN__: JSON.stringify(reticleToken()),
       __RETICLE_ROOT__: JSON.stringify(process.cwd()),
@@ -195,8 +206,13 @@ const VITE_BLOCK = `  vite: {
     server: { watch: { ignored: [${WATCH_IGNORE_LITERAL}] } },
   },
 `;
+}
 
-export function patchAstroConfig(source: string): SourcePatch {
+export function patchAstroConfig(
+  source: string,
+  uiLibrary: UiLibrary = UiLibrary.REACT,
+): SourcePatch {
+  const include = sdkIncludeLiteral(uiLibrary);
   if (source.includes(CONFIG_MARKER)) return { kind: PatchKind.ALREADY };
   // A `vite: { ... }` block is an object literal, so our keys can go straight after the brace and
   // whatever is already in there is untouched. Refusing outright was the only genuine install defect
@@ -206,7 +222,7 @@ export function patchAstroConfig(source: string): SourcePatch {
   const viteObject = VITE_OBJECT_KEY.exec(source);
   if (viteObject?.index !== undefined) {
     const at = viteObject.index + viteObject[0].length;
-    const merged = mergeIntoViteBlock(source, at);
+    const merged = mergeIntoViteBlock(source, at, include);
     if (merged !== null) {
       return {
         kind: PatchKind.APPLY,
@@ -237,7 +253,7 @@ export function patchAstroConfig(source: string): SourcePatch {
     };
   }
   const at = opening.index + opening[0].length;
-  const withBlock = `${source.slice(0, at)}\n${VITE_BLOCK}${source.slice(at)}`;
+  const withBlock = `${source.slice(0, at)}\n${viteBlock(include)}${source.slice(at)}`;
   return {
     kind: PatchKind.APPLY,
     code: `${HELPER_IMPORTS}${withBlock.trimStart()}\n${HELPER}`.trimEnd() + '\n',

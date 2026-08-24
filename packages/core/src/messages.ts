@@ -89,9 +89,9 @@ export const ReticleEventSchema = z.object({
    * hot update. A hot update replaces modules and re-renders INSIDE the same document, so
    * `documentId` cannot see it; this is the edit-shaped half of the same question.
    *
-   * Optional, and absent while nothing has hot-updated, which is why absence is read as "current"
-   * rather than "foreign" — see `isSameEditEpoch`. Most pages have no channel that could report an
-   * update at all, so a stamp of `NO_EDITS_OBSERVED` would be wire spent on the word "unknown".
+   * Optional for older SDKs that stamped nothing. The current SDK stamps `0` while no edit has been
+   * observed. Once `currentEditEpoch > 0`, absence is foreign — see `isSameEditEpoch`. Most pages
+   * have no hot channel, so `0` means "no edits OBSERVED", never "none happened".
    */
   editEpoch: z.number().int().min(NO_EDITS_OBSERVED).optional(),
   /** Event-type-specific payload. Kept open here; refined per observer at the edges. */

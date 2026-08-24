@@ -382,6 +382,10 @@ export class Transport {
   }
 
   #sendRaw(text: string, event?: QueuedMessage['event']): void {
+    // A terminal refusal (1008) sets `#closed` and never reconnects. Queuing after that fills the
+    // offline buffer forever — the gap marker only ships on a successful reopen that will not happen —
+    // so upstream looks clean while every observation is discarded. Drop instead of enqueue.
+    if (this.#closed) return;
     if (this.#ws !== undefined && this.#ws.readyState === WebSocket.OPEN) {
       this.#ws.send(text);
       return;

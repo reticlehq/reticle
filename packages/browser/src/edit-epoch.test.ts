@@ -114,4 +114,17 @@ describe('EditEpoch with a hot-update channel', () => {
       "ref 'not-a-ref' no longer resolves to an element",
     );
   });
+
+  it('ignores a second observe so HMR cannot stack listeners', () => {
+    const registry = new RefRegistry();
+    const epoch = new EditEpoch(registry);
+    const first = fakeHot();
+    const second = fakeHot();
+    epoch.observe(first);
+    epoch.observe(second);
+    first.fire({ type: 'update', updates: [{ path: '/src/A.tsx' }] });
+    second.fire({ type: 'update', updates: [{ path: '/src/B.tsx' }] });
+    // Only the first channel advances the epoch — one update, one tick.
+    expect(epoch.current).toBe(NO_EDITS_OBSERVED + 1);
+  });
 });

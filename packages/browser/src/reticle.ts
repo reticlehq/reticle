@@ -18,7 +18,6 @@ import {
   RETICLE_SDK_VERSION_GLOBAL,
   CONTRACT_FINGERPRINT,
   newDocumentId,
-  NO_EDITS_OBSERVED,
   type CommandMessage,
   type HelloMessage,
   type RedactionConfig,
@@ -206,10 +205,10 @@ export function buildEvent(args: {
     // through: an observer added later would otherwise emit unstamped events, which read as
     // "current" by design and would reintroduce the defect silently for one event type.
     documentId: args.documentId,
-    // Which round of source edits this was observed under. Stamped HERE for exactly the reason
-    // documentId is, and omitted while nothing has hot-updated: absence already reads as "current"
-    // downstream, so `NO_EDITS_OBSERVED` on the wire would be bytes spent saying "unknown".
-    editEpoch: NO_EDITS_OBSERVED === args.editEpoch ? undefined : args.editEpoch,
+    // Which round of source edits this was observed under. Stamped HERE for the same reason as
+    // documentId. Epoch 0 is stamped as 0 — omitting it made pre-edit events look current after the
+    // first hot update (`isSameEditEpoch(undefined, 1)`), so EVIDENCE_PREDATES_EDIT never fired.
+    editEpoch: args.editEpoch,
     data: args.data,
   };
 }
@@ -460,7 +459,10 @@ export class Reticle {
   }
 
   disconnect(): void {
-    if (!this.#connected) return;
+    // Observers install before `#connected` flips true. If a later mount throws, `#connected` stays
+    // false while `#teardowns` still holds fetch/XHR/history patches — gating teardown on connected
+    // alone leaked those monkeypatches for the life of the page.
+    if (!this.#connected && 0 === this.#teardowns.length && this.#transport === undefined) return;
     for (const teardown of this.#teardowns) teardown();
     this.#teardowns = [];
     this.#transport?.close();

@@ -94,6 +94,31 @@ function projectRequestBody(body: unknown, captureBodies: boolean): Record<strin
   return truncated ? { requestBody: out, requestBodyTruncated: true } : { requestBody: out };
 }
 
+/**
+ * Request body for a fetch call. `init.body` is the common path; `fetch(new Request(url, { body }))`
+ * puts the body only on the Request, and reading only `init?.body` claimed "no body" for that form.
+ */
+async function projectFetchRequestBody(
+  input: RequestInfo | URL,
+  init: RequestInit | undefined,
+  captureBodies: boolean,
+): Promise<Record<string, unknown>> {
+  if (!captureBodies) return {};
+  if (init?.body !== undefined && init.body !== null) {
+    return projectRequestBody(init.body, true);
+  }
+  if (typeof Request === 'undefined' || !(input instanceof Request) || null === input.body) {
+    return {};
+  }
+  try {
+    const text = await withBodyDeadline(input.clone().text());
+    if (text === undefined || 0 === text.length) return { requestBodyType: 'ReadableStream' };
+    return projectRequestBody(text, true);
+  } catch {
+    return { requestBodyType: 'ReadableStream' };
+  }
+}
+
 interface XhrMeta {
   id: string;
   method: string;
@@ -301,7 +326,10 @@ export function installNetwork(emit: Emit, opts: NetworkOptions = {}): Teardown 
     const initiatorStack = initiatorFrame();
     const initiatorFields = initiatorStack === undefined ? {} : { initiatorStack };
     emit(EventType.NET_PENDING, { id, method, url, initiator: 'fetch', ...initiatorFields });
+    let requestBodyFields: Record<string, unknown> = {};
     try {
+      // Capture BEFORE the app's fetch consumes a Request body stream.
+      requestBodyFields = await projectFetchRequestBody(input, init, captureBodies);
       const res = await callFetch(input, init);
       // The app's fetch resolves HERE — at headers — like a native fetch. durationMs is measured to
       // headers-received, so it stays honest whether or not we read the body.
@@ -322,7 +350,7 @@ export function installNetwork(emit: Emit, opts: NetworkOptions = {}): Teardown 
           ...initiatorFields,
           ...resourceTiming(rawUrl),
           ...netResponseMeta(res.statusText, contentType, res.headers.get('content-length')),
-          ...projectRequestBody(init?.body, captureBodies),
+          ...requestBodyFields,
           ...responseBodyFields,
           // Applied LAST so a reinterpreted verdict wins over the transport's own fields — a Tauri
           // command that returned Err still travelled down a fetch that answered HTTP 200.
@@ -386,6 +414,7 @@ export function installNetwork(emit: Emit, opts: NetworkOptions = {}): Teardown 
         durationMs: Math.round(performance.now() - start),
         initiator: 'fetch',
         ...initiatorFields,
+        ...requestBodyFields,
       });
       throw error;
     }

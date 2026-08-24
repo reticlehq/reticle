@@ -6,7 +6,7 @@
  * `credentials.json` (per-project api keys from `reticle link`). The non-secret repo binding + sync policy
  * is `<repo>/.reticle/cloud.json`. Auth for a command = `RETICLE_CLOUD_KEY` env (agent) OR the login token.
  */
-import { mkdir, writeFile, readFile } from 'node:fs/promises';
+import { mkdir, writeFile, readFile, chmod } from 'node:fs/promises';
 import { NodePlatform } from '../platform.js';
 import { spawn } from 'node:child_process';
 import { setTimeout as sleep } from 'node:timers/promises';
@@ -196,12 +196,15 @@ const openBrowser = (target: string): void => {
 
 /** Persist a session token under ~/.reticle and print the next step. Shared by both login paths. */
 const writeSession = async (url: string, token: string, orgName: string): Promise<void> => {
-  await mkdir(home(), { recursive: true });
-  await writeFile(
-    join(home(), SESSION_FILE),
-    `${JSON.stringify({ url, token, orgName }, null, 2)}\n`,
-  );
-  emit({ loggedIn: orgName, session: join(home(), SESSION_FILE) });
+  await mkdir(home(), { recursive: true, mode: 0o700 });
+  const sessionPath = join(home(), SESSION_FILE);
+  await writeFile(sessionPath, `${JSON.stringify({ url, token, orgName }, null, 2)}\n`, {
+    encoding: 'utf8',
+    mode: 0o600,
+  });
+  // writeFile keeps a pre-existing looser mode, so set it explicitly — same as the pairing token.
+  await chmod(sessionPath, 0o600);
+  emit({ loggedIn: orgName, session: sessionPath });
   hint(
     'next: `reticle link` to bind this repo to your Default project (or `reticle project create <name>` first)',
   );
@@ -422,13 +425,17 @@ const cmdLink = async (argv: readonly string[]): Promise<number> => {
   };
   await writeFile(linkPath, `${JSON.stringify(cloudJson, null, 2)}\n`);
 
-  await mkdir(home(), { recursive: true });
+  await mkdir(home(), { recursive: true, mode: 0o700 });
   const credPath = join(home(), CREDENTIALS_FILE);
   const creds = (await readJson(credPath)) ?? {};
   const credObj =
     'object' === typeof creds && creds !== null ? (creds as Record<string, unknown>) : {};
   credObj[projectId] = key;
-  await writeFile(credPath, `${JSON.stringify(credObj, null, 2)}\n`);
+  await writeFile(credPath, `${JSON.stringify(credObj, null, 2)}\n`, {
+    encoding: 'utf8',
+    mode: 0o600,
+  });
+  await chmod(credPath, 0o600);
 
   emit({ linked: projectName, projectId, cloudJson: linkPath, credentials: credPath });
   hint(

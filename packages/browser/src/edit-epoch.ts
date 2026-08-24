@@ -70,6 +70,7 @@ function updatedPaths(payload: unknown): string[] {
 export class EditEpoch {
   #epoch: number = NO_EDITS_OBSERVED;
   #files: readonly string[] = [];
+  #observing = false;
   readonly #refs: RefRegistry;
 
   /** The registry is injected for the same reason the clock is: the interesting property is the
@@ -89,9 +90,11 @@ export class EditEpoch {
   }
 
   /** Subscribe to a hot-update channel if one was handed in. Anything else is silently ignored —
-   *  no channel is the normal case, not an error. */
+   *  no channel is the normal case, not an error. Once only: a connect module re-running under HMR
+   *  must not stack listeners on the surviving singleton (one Vite update would advance the epoch N times). */
   observe(hot: unknown): void {
-    if (!isHotLike(hot)) return;
+    if (this.#observing || !isHotLike(hot)) return;
+    this.#observing = true;
     hot.on(HOT_UPDATE_APPLIED, (payload) => this.applied(updatedPaths(payload)));
   }
 
