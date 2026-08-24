@@ -582,8 +582,8 @@ type AgentId = (typeof AgentId)[keyof typeof AgentId];
 
 interface AgentIntegration {
   readonly id: AgentId;
-  /** Global MCP registration. Global on purpose: registered once, used by every project. */
-  readonly mcpStep: (input: PlanInput) => Step | null;
+  /** Global MCP registration. Omit when the generic `otherClientSteps` loop handles it. */
+  readonly mcpStep?: (input: PlanInput) => Step | null;
   /** The project instruction file this agent re-reads every session. */
   readonly ruleStep: (input: PlanInput) => Step | null;
   /** The project slash-command file, for agents that have a command surface. */
@@ -599,7 +599,6 @@ const AGENT_INTEGRATIONS: readonly AgentIntegration[] = [
   },
   {
     id: AgentId.CURSOR,
-    mcpStep: () => null,
     ruleStep: cursorRuleStep,
     commandStep: cursorCommandStep,
   },
@@ -608,9 +607,11 @@ const AGENT_INTEGRATIONS: readonly AgentIntegration[] = [
 /** The steps one surface contributes across every known agent, in registry order. */
 function stepsForAgents(
   input: PlanInput,
-  surface: (a: AgentIntegration) => (input: PlanInput) => Step | null,
+  surface: (a: AgentIntegration) => ((input: PlanInput) => Step | null) | undefined,
 ): Step[] {
-  return AGENT_INTEGRATIONS.map((a) => surface(a)(input)).filter((s): s is Step => s !== null);
+  return AGENT_INTEGRATIONS.map((a) => surface(a)?.(input) ?? null).filter(
+    (s): s is Step => s !== null,
+  );
 }
 
 /** The `/reticle` command file for every agent that has a command surface and is present here. */
