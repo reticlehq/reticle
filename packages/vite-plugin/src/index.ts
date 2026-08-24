@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { missingTokenWarning } from './missing-token.js';
 import { ensurePairingToken } from './ensure-token.js';
 import { homedir } from 'node:os';
@@ -445,6 +445,25 @@ export function installedSdk(
   appRoot: string,
   canResolve: (dep: string) => boolean = (dep) => null !== resolvableChain([dep], appRoot),
 ): { specifier: string; usesInstall: boolean } {
+  try {
+    const pkgPath = join(appRoot, 'package.json');
+    if (existsSync(pkgPath)) {
+      const pkg = JSON.parse(readFileSync(pkgPath, 'utf8')) as Record<
+        string,
+        Record<string, string> | undefined
+      >;
+      const deps = { ...(pkg.dependencies ?? {}), ...(pkg.devDependencies ?? {}) };
+      if (deps[RETICLE_SENSOR] !== undefined && deps[RETICLE_PACKAGE] === undefined) {
+        return { specifier: RETICLE_SENSOR, usesInstall: false };
+      }
+      if (deps[RETICLE_PACKAGE] !== undefined) {
+        return { specifier: RETICLE_PACKAGE, usesInstall: true };
+      }
+    }
+  } catch {
+    // Ignore read or parse failures when checking dependencies
+  }
+
   if (canResolve(RETICLE_PACKAGE)) return { specifier: RETICLE_PACKAGE, usesInstall: true };
   if (canResolve(RETICLE_SENSOR)) return { specifier: RETICLE_SENSOR, usesInstall: false };
   // Neither resolves: keep the historical name so the failure reads as "the SDK is not installed"
