@@ -194,16 +194,13 @@ interface AbsencePredicate {
 
 /**
  * When an absence assertion targets a page with regions Reticle cannot observe, "the element is
- * absent" means only "it is absent in what I CAN see". This function returns a note when that
- * distinction matters, and undefined otherwise.
+ * absent" means only "it is absent in what I CAN see". Returns a note when that distinction
+ * matters, undefined otherwise.
  *
  * Fires on three blind-spot kinds:
- *   - CROSS_ORIGIN_IFRAME (only when the predicate is scoped — an unscoped search that found
- *     nothing still cannot prove it is absent inside a frame it never entered)
+ *   - CROSS_ORIGIN_IFRAME (only when the predicate is scoped to a frame region)
  *   - VIRTUALIZED_UNMOUNTED — a row that was never rendered could hold the element
  *   - CLOSED_SHADOW_ROOT — a subtree Reticle cannot see into
- *
- * The act path never called this, so `act_and_wait { until: { absent: true } }` got no caveat.
  */
 export function absenceBlindSpotNote(
   predicate: AbsencePredicate,
