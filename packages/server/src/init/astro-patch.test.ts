@@ -12,6 +12,7 @@ import { describe, expect, it } from 'vitest';
 import { ReticleDir } from '@reticlehq/core';
 import { patchAstroConfig, patchAstroLayout } from './astro-patch.js';
 import { PatchKind } from './patch-kind.js';
+import { UiLibrary } from './detect.js';
 
 const PLAIN_CONFIG = `import { defineConfig } from 'astro/config';
 
@@ -267,6 +268,13 @@ describe('the SDK is pre-declared so the first load is not lost to a dep-optimiz
     expect(patch.code).toContain('their-dep');
     expect(patch.code).toContain('@reticlehq/react');
     expect(patch.code.match(/include\s*:/g)?.length ?? 0).toBe(1);
+  });
+
+  it('declares @reticlehq/browser for a Vue Astro app, not the React kit', () => {
+    const patch = patchAstroConfig(PLAIN_CONFIG, UiLibrary.VUE);
+    if (patch.kind !== PatchKind.APPLY) throw new Error('expected a patch');
+    expect(patch.code).toContain("include: ['@reticlehq/browser']");
+    expect(patch.code).not.toContain('@reticlehq/react');
   });
 });
 

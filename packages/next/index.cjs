@@ -7,29 +7,49 @@
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const crypto = require('node:crypto');
 
 // Kept in sync with @reticlehq/core (ReticleDir / ReticleEnv). This package is plain CJS tooling and
 // deliberately has no ESM/TS dependency on core, so the two constants are mirrored here.
 const PAIRING_TOKEN_DIR_ENV = 'RETICLE_PAIRING_TOKEN_DIR';
 const PAIRING_TOKEN_FILE = 'pairing-token';
+/** Matches the daemon / Vite plugin token size. */
+const TOKEN_BYTES = 32;
 
 /**
- * Read the daemon's auto-provisioned pairing token (~/.reticle/pairing-token, or the
- * RETICLE_PAIRING_TOKEN_DIR override). Node-side only. Returns undefined if the daemon hasn't started
- * yet (start it before `next dev`); the client then connects without a token and the page reloads once
- * the daemon is up and the config is re-read.
+ * Read the daemon's auto-provisioned pairing token, or mint one if the file is missing.
+ *
+ * Same contract as `@reticlehq/vite-plugin`'s `ensurePairingToken`: whichever process starts first
+ * (Next config resolve vs daemon) must leave a token the other side will accept. Read-only left a
+ * Next app started before the daemon with an empty NEXT_PUBLIC_RETICLE_TOKEN baked in until a full
+ * restart after the daemon existed — classic silent non-connect.
  * @returns {string | undefined}
  */
-function readPairingToken() {
+function ensurePairingToken() {
   const override = process.env[PAIRING_TOKEN_DIR_ENV];
   const dir =
     override !== undefined && override.length > 0 ? override : path.join(os.homedir(), '.reticle');
+  const filePath = path.join(dir, PAIRING_TOKEN_FILE);
   try {
-    const token = fs.readFileSync(path.join(dir, PAIRING_TOKEN_FILE), 'utf8').trim();
-    return token.length > 0 ? token : undefined;
+    const existing = fs.readFileSync(filePath, 'utf8').trim();
+    if (existing.length > 0) return existing;
+  } catch {
+    /* missing or unreadable — fall through and create one */
+  }
+  try {
+    const token = crypto.randomBytes(TOKEN_BYTES).toString('hex');
+    fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+    fs.writeFileSync(filePath, token, { encoding: 'utf8', mode: 0o600 });
+    fs.chmodSync(filePath, 0o600);
+    return token;
   } catch {
     return undefined;
   }
+}
+
+/** @deprecated Prefer ensurePairingToken — kept as the historical export name for callers/tests. */
+function readPairingToken() {
+  return ensurePairingToken();
 }
 
 /**
@@ -151,7 +171,7 @@ function withReticle(nextConfig = {}) {
   if (process.env.NODE_ENV === 'production') return nextConfig;
 
   const userWebpack = nextConfig.webpack;
-  const token = readPairingToken();
+  const token = ensurePairingToken();
   return {
     ...nextConfig,
     ...(supportsTurbopackKey() ? { turbopack: turbopackConfig(nextConfig.turbopack) } : {}),
@@ -183,4 +203,4 @@ function withReticle(nextConfig = {}) {
   };
 }
 
-module.exports = { withReticle, readPairingToken };
+module.exports = { withReticle, readPairingToken, ensurePairingToken };

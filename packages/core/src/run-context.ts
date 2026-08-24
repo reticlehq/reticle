@@ -61,14 +61,13 @@ export const RUN_ESTABLISHED_CAP = 12;
 /**
  * Evidence scoped to the page and the source revision it was taken under.
  *
- * Both fields are optional and absence means "current", exactly as `isSameDocument` and
- * `isSameEditEpoch` already rule: an SDK predating either stamps nothing, and a page with no
- * hot-update channel never stamps an epoch at all.
+ * `doc` absence means "current" (`isSameDocument`). `epoch` absence means current only while no
+ * edit has been observed — once `currentEditEpoch > 0`, unstamped epoch is foreign (`isSameEditEpoch`).
  */
 interface ScopedEvidence {
   /** The document this was seen under. Absent only from evidence predating document identity. */
   readonly doc?: string | undefined;
-  /** The edit epoch this was seen under. Absent where no hot update could ever be observed. */
+  /** The edit epoch this was seen under. Absent from older SDKs; current SDK stamps `0` until an edit. */
   readonly epoch?: number | undefined;
 }
 

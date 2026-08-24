@@ -46,7 +46,19 @@ export const AFFECTED_TOOLS: ToolDef[] = [
         ? (args['files'] as unknown[]).filter((f): f is string => 'string' === typeof f)
         : [];
       const since = 'string' === typeof args['since'] ? args['since'] : undefined;
-      const changedFiles = await resolveChangedFiles(files, since);
+      let changedFiles: string[];
+      try {
+        changedFiles = await resolveChangedFiles(files, since);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        return {
+          changedFiles: [],
+          affected: [],
+          unknownProvenance: [],
+          observed: true,
+          note: `could not resolve the change set: ${message}`,
+        };
+      }
       const flows = await loadNamedFlows(deps.fs, deps.reticleRoot);
       const result = affectedSavedFlows(flows, changedFiles);
       // Three different situations produced the same empty answer: no files changed, no flows saved,

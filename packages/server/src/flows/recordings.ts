@@ -15,6 +15,8 @@ export interface RecordedStep {
 interface ActiveRecording {
   cursor: number;
   steps: RecordedStep[];
+  /** True once the step cap refused further captures — stop is still required to compile. */
+  capped?: boolean;
 }
 
 /** A finished, replayable program compiled from a recording. */
@@ -23,6 +25,12 @@ export interface CompiledProgram {
   version: number;
   steps: RecordedStep[];
 }
+
+/**
+ * Hard cap on steps per active recording. A forgotten `reticle_record` over a long crawl used to
+ * grow without bound (the event ring buffer is capped; recordings were not) and could OOM the daemon.
+ */
+export const MAX_RECORDING_STEPS = 500;
 
 /**
  * Tracks in-flight recordings (name -> { buffer cursor at record_start, captured steps })
@@ -49,9 +57,20 @@ export class RecordingStore {
     return this.#active.get(name)?.steps.length;
   }
 
-  /** Append a captured step to every active recording (steps belong to all in-flight spans). */
+  /**
+   * Append a captured step to every active recording that is under the step cap.
+   * Once a recording hits `MAX_RECORDING_STEPS`, further captures are refused for that span
+   * (the recording stays open so stop/save still works).
+   */
   capture(step: RecordedStep): void {
-    for (const rec of this.#active.values()) rec.steps.push(step);
+    for (const rec of this.#active.values()) {
+      if (rec.steps.length >= MAX_RECORDING_STEPS) {
+        rec.capped = true;
+        continue;
+      }
+      rec.steps.push(step);
+      if (rec.steps.length >= MAX_RECORDING_STEPS) rec.capped = true;
+    }
   }
 
   /** Returns the active recording (cursor + steps) and clears it, or undefined if not recording. */

@@ -97,7 +97,20 @@ export const VERIFY_CHANGE_TOOLS: ToolDef[] = [
         ? (args['files'] as unknown[]).filter((f): f is string => 'string' === typeof f)
         : [];
       const since = asString(args['since']);
-      const changedFiles = await resolveChangedFiles(files, since);
+      let changedFiles: string[];
+      try {
+        changedFiles = await resolveChangedFiles(files, since);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        return {
+          verified: Verified.UNKNOWN,
+          because: `could not resolve the change set: ${message}`,
+          changedFiles: [],
+          flowsRun: [],
+          unknownProvenance: [],
+          measured: [],
+        };
+      }
       // Same root flow_save wrote to. A read that resolved differently would report "no flows
       // covered this change" over flows that exist, which reads as a clean result rather than
       // an error, so the disagreement would be invisible.

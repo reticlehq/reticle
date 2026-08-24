@@ -43,6 +43,9 @@ const CONNECT_STEP_TITLES: ReadonlySet<string> = new Set([
   // not, and `gate:install` scaffolds no CRA app, so that change would ship with no coverage of the
   // path it changes. It is worth doing, and worth doing with a scaffold behind it.
   'Vite plugin',
+  // Without withReticle the pairing token never reaches the client and Next never dials the bridge.
+  // Mounting ReticleDev alone looked green while the config stayed MANUAL — classic silent non-connect.
+  'Next config (withReticle)',
 ]);
 
 /** True when this step is what makes the app dial the daemon. */

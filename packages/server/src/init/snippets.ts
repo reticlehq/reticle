@@ -226,7 +226,9 @@ export function astroManual(
    * reader, and cost them the time it takes to go and confirm it is missing.
    */
   layoutPath?: string,
+  uiLibrary: UiLibrary = UiLibrary.REACT,
 ): string {
+  const sdk = sdkImport(uiLibrary);
   const extra =
     port !== undefined && port !== RETICLE_DEFAULT_PORT
       ? `\n          url: '${bridgeWsUrl(port)}',`
@@ -250,7 +252,7 @@ export function astroManual(
     vite: {
       // Astro's default target down-levels the modern SDK bundle and fails on a destructuring transform.
       build: { target: 'es2022' },
-      optimizeDeps: { esbuildOptions: { target: 'es2022' } },
+      optimizeDeps: { include: ['${sdk.specifier}'], esbuildOptions: { target: 'es2022' } },
       define: {
         __RETICLE_TOKEN__: JSON.stringify(reticleToken()),
         // Without this, source pointers come back as absolute paths from YOUR machine — useless in a
@@ -266,8 +268,8 @@ ${layoutHost(layoutPath)}
     if (import.meta.env.DEV) {
       const token = typeof __RETICLE_TOKEN__ !== 'undefined' ? __RETICLE_TOKEN__ : '';
       const root = typeof __RETICLE_ROOT__ !== 'undefined' ? __RETICLE_ROOT__ : '';
-      const { reticle, install } = await import('@reticlehq/react');
-      install();
+      const { reticle${sdk.usesInstall ? ', install' : ''} } = await import('${sdk.specifier}');
+      ${sdk.usesInstall ? 'install();' : '// The sensor has no install(); that is the React adapter.'}
       reticle.connect({${id}${extra}
           ...(token.length > 0 ? { token } : {}),
           ...(root.length > 0 ? { root } : {}),

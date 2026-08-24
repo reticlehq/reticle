@@ -1,6 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { ActionType, DANGEROUS_ACTION_CONFIRM_ARG, QueryBy } from '@reticlehq/core';
-import { RecordingStore, type RecordedStep, type CompiledProgram } from './recordings.js';
+import {
+  RecordingStore,
+  MAX_RECORDING_STEPS,
+  type RecordedStep,
+  type CompiledProgram,
+} from './recordings.js';
 import { compileActStep, compileSequenceStep } from './replay.js';
 
 const step = (tool: string, stable = true): RecordedStep => ({ tool, stable, args: {} });
@@ -34,6 +39,15 @@ describe('RecordingStore', () => {
     store.capture(step('reticle_act'));
     expect(store.stop('a')?.steps).toHaveLength(1);
     expect(store.stop('b')?.steps).toHaveLength(1);
+  });
+
+  it('refuses further captures once a recording hits the step cap', () => {
+    const store = new RecordingStore();
+    store.start('flow', 0);
+    for (let i = 0; i < MAX_RECORDING_STEPS + 50; i++) store.capture(step('reticle_act'));
+    const rec = store.stop('flow');
+    expect(rec?.steps).toHaveLength(MAX_RECORDING_STEPS);
+    expect(rec?.capped).toBe(true);
   });
 
   it('round-trips compiled programs by name', () => {

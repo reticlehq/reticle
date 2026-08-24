@@ -1,5 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { RETICLE_PROTOCOL_VERSION, MessageKind, type HelloMessage } from '@reticlehq/core';
+import {
+  RETICLE_PROTOCOL_VERSION,
+  MessageKind,
+  EventType,
+  type HelloMessage,
+} from '@reticlehq/core';
 import * as nativeConsole from '../timers/native-console.js';
 import { Transport } from './transport.js';
 
@@ -121,5 +126,56 @@ describe('transport stops retrying on a 1008 policy-violation close', () => {
     FakeWebSocket.instances[0]?.closeWith(1006, 'abnormal'); // NOT closed — retryable
     becomeVisible(); // foreground reopen still allowed (only 1008 sets #closed)
     expect(FakeWebSocket.instances.length).toBe(2);
+  });
+
+  it('discards events after a 1008 instead of queuing them for a later reconnect', () => {
+    class TrackingSocket {
+      static readonly OPEN = 1;
+      static instances: TrackingSocket[] = [];
+      onopen: (() => void) | null = null;
+      onmessage: ((e: MessageEvent) => void) | null = null;
+      onclose: ((e: { code: number; reason: string }) => void) | null = null;
+      onerror: (() => void) | null = null;
+      readyState = 0;
+      sent: string[] = [];
+      constructor(_url: string) {
+        TrackingSocket.instances.push(this);
+      }
+      send(data: string): void {
+        this.sent.push(data);
+      }
+      open(): void {
+        this.readyState = TrackingSocket.OPEN;
+        this.onopen?.();
+      }
+      closeWith(code: number, reason: string): void {
+        this.readyState = 3;
+        this.onclose?.({ code, reason });
+      }
+    }
+    vi.stubGlobal('WebSocket', TrackingSocket);
+    const t = new Transport({
+      url: 'ws://x',
+      hello,
+      handleCommand: () => Promise.resolve({ ok: true }),
+    });
+    t.connect();
+    TrackingSocket.instances[0]?.closeWith(1008, 'refused');
+    for (let i = 0; i < 20; i += 1) {
+      t.sendEvent({
+        t: i,
+        seq: i,
+        type: EventType.CONSOLE_ERROR,
+        sessionId: 's1',
+        data: {},
+      });
+    }
+    // A later connect() clears #closed (page rewired) — discarded events must not flush.
+    t.connect();
+    TrackingSocket.instances[1]?.open();
+    const flushed = (TrackingSocket.instances[1]?.sent ?? []).filter((m) =>
+      m.includes(EventType.CONSOLE_ERROR),
+    );
+    expect(flushed).toHaveLength(0);
   });
 });
