@@ -109,6 +109,14 @@ export async function scrollToFind(
 
   let scrolls = 0;
   let last: Record<string, unknown> = {};
+  const useBisection =
+    q.targetIndex !== undefined && q.totalCount !== undefined && q.totalCount > 1;
+
+  // When not bisecting, reset to the top so the linear scan covers the entire container — without
+  // this, an element above the current scroll position is unreachable.
+  if (!useBisection) {
+    await session.command(ReticleCommand.SCROLL, { ...baseArgs(), fraction: 0 });
+  }
 
   // Bisection: if the caller knows the target index and list size, jump to the estimated offset in
   // one scroll command rather than stepping a viewport at a time. The estimate can land on either

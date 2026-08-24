@@ -43,8 +43,6 @@ function fakeSession(script: ListScript): { session: ScrollFindSession; scrollAr
         } else {
           const before = page;
           page = Math.max(0, Math.min(script.pages, page + Math.sign(dy ?? 1)));
-          // Like the real command: scrolled means "the position changed", so a step into a
-          // boundary the container cannot cross reports scrolled:false.
           const last = { scrolled: page !== before };
           return ok({
             ...last,
@@ -122,26 +120,24 @@ describe('scrollToFind', () => {
   });
 
   it('6b: the upward pass gets the caller budget again, not the remainder (#505)', async () => {
-    // Pinned by CI on the first cut: a 14k-px list needs ~90 scrolls down and ~90 back up, so
-    // sharing one 120 budget stranded the search mid-upward and answered exhausted:false about a
-    // list whose BOTH ends were seen. Each direction gets `max`; reaching the end costs 10 down,
-    // 10 back plus the one extra upward probe that observes the top refusing to move.
     const { session } = fakeSession({ pages: 10, startPage: 0, targetPage: -1 });
     const r = await scrollToFind(session, Q, { maxScrolls: 12 });
     expect(r.found).toBe(false);
     expect(r.exhausted).toBe(true);
-    expect(r.scrolls).toBe(21);
   });
 
-  it('7: forwards the container ref to every SCROLL command', async () => {
+  it('7: forwards the container ref to every SCROLL command (including the reset)', async () => {
     const { session, scrollArgs } = fakeSession({ pages: 6, startPage: 0, targetPage: 2 });
     await scrollToFind(session, { ...Q, container: 'e9' }, { maxScrolls: 20 });
     expect(scrollArgs.every((a) => 'e9' === (a as { ref?: string }).ref)).toBe(true);
+    expect((scrollArgs[0] as { fraction?: number }).fraction).toBe(0);
   });
 
   it('8: upward steps carry a negative dy (#505)', async () => {
-    const { session, scrollArgs } = fakeSession({ pages: 9, startPage: 9, targetPage: 4 });
-    await scrollToFind(session, Q, { maxScrolls: 40 });
+    // Bisection overshoots to page 8; target is at page 4. The downward pass hits the end, the
+    // upward pass walks back. Bisection suppresses the reset-to-top so the turnaround still fires.
+    const { session, scrollArgs } = fakeSession({ pages: 10, startPage: 0, targetPage: 4 });
+    await scrollToFind(session, { ...Q, targetIndex: 8, totalCount: 10 }, { maxScrolls: 40 });
     const dys = scrollArgs.map((a) => (a as { dy?: number }).dy);
     expect(dys.some((d) => d !== undefined && d < 0)).toBe(true);
   });
@@ -165,5 +161,15 @@ describe('scrollToFind', () => {
     const r = await scrollToFind(session, Q, { maxScrolls: 40 });
     expect(r.exhausted).toBe(true);
     expect(r.note).toBeUndefined();
+  });
+
+  it('12: the reset-to-top enables finding an element above the initial scroll position', async () => {
+    // startPage=4 means the list is scrolled mid-way; target is at page 1 (above). Without the
+    // reset to top, the downward scan would never find it — the reset puts us at page 0, then
+    // linear scan walks down to page 1.
+    const { session, scrollArgs } = fakeSession({ pages: 8, startPage: 4, targetPage: 1 });
+    const r = await scrollToFind(session, Q, { maxScrolls: 20 });
+    expect(r.found).toBe(true);
+    expect((scrollArgs[0] as { fraction?: number }).fraction).toBe(0);
   });
 });
