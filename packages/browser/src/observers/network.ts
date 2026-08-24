@@ -107,7 +107,7 @@ async function projectFetchRequestBody(
   if (init?.body !== undefined && init.body !== null) {
     return projectRequestBody(init.body, true);
   }
-  if (typeof Request === 'undefined' || !(input instanceof Request) || null === input.body) {
+  if (typeof Request === 'undefined' || !(input instanceof Request) || input.body === null) {
     return {};
   }
   try {

@@ -95,12 +95,19 @@ describe('foldEstablished', () => {
   });
 
   /**
-   * An unstamped fact predates document identity. It is kept for the same reason unstamped EVIDENCE
-   * is treated as current: an older SDK stamps nothing, and dropping its facts would make the answer
-   * silently empty rather than honestly smaller.
+   * Unstamped facts are kept only while no edit has been observed — same as `isSameEditEpoch`.
+   * Once an edit landed, absence means foreign (older SDKs / omit-zero left pre-edit facts looking
+   * current forever after the first hot update).
    */
-  it('keeps an unstamped fact rather than dropping it as foreign', () => {
-    expect(foldEstablished([], [fact('e1', 'no document known')], 'd3', 4)).toHaveLength(1);
+  it('keeps an unstamped fact only while no edit has been observed', () => {
+    expect(foldEstablished([], [fact('e1', 'no document known')], 'd3', undefined)).toHaveLength(1);
+    expect(
+      foldEstablished([], [fact('e1', 'no document known')], 'd3', NO_EDITS_OBSERVED),
+    ).toHaveLength(1);
+  });
+
+  it('DROPS an unstamped fact once an edit has been observed', () => {
+    expect(foldEstablished([], [fact('e1', 'no document known')], 'd3', 4)).toEqual([]);
   });
 
   it('keeps a fact from a page where no edit was ever observed', () => {
