@@ -446,6 +446,7 @@ function gatherPlanInput(options: InitOptions, io: InitIo, pkgRaw: string): Plan
     detection,
     claudeCli,
     mcpExists,
+    platform: process.platform,
     detectedClients,
     cursorProjectPresent: io.exists(CURSOR_PROJECT_MARKER),
     viteConfig,

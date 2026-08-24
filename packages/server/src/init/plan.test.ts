@@ -35,6 +35,7 @@ function input(partial: Partial<PlanInput>): PlanInput {
     detection: partial.detection ?? detection(Framework.VITE),
     claudeCli: partial.claudeCli ?? true,
     mcpExists: partial.mcpExists ?? false,
+    ...(partial.platform === undefined ? {} : { platform: partial.platform }),
     cursorProjectPresent: partial.cursorProjectPresent,
     detectedClients: partial.detectedClients,
     viteConfig: partial.viteConfig ?? null,
@@ -263,9 +264,7 @@ describe('buildPlan — MCP (global, per detected agent)', () => {
   });
 
   it('does not duplicate the Windows fallback when the manual step already carries it', () => {
-    const plan = buildPlan(
-      input({ claudeCli: false, cursorPresent: false, platform: NodePlatform.WINDOWS }),
-    );
+    const plan = buildPlan(input({ claudeCli: false, platform: NodePlatform.WINDOWS }));
     expect(maybeStep(plan, WINDOWS_MCP_STEP)).toBeUndefined();
     expect(step(plan, MCP_STEP).detail).toContain('cmd');
   });

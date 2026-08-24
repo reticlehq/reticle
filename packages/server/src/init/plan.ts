@@ -13,7 +13,8 @@ import {
   type Detection,
 } from './detect.js';
 import type { FoundStore } from './capabilities.js';
-import { claudeAddCommand, mcpManual } from './mcp.js';
+import { claudeAddCommand, mcpManual, mcpWindowsNote } from './mcp.js';
+import { NodePlatform } from '../platform.js';
 import {
   mergeClientConfig,
   ClientMergeStatus,
@@ -204,6 +205,8 @@ export interface PlanInput {
   claudeCli: boolean;
   /** Whether an `reticle` MCP server is already registered with Claude (any scope) — idempotency. */
   mcpExists: boolean;
+  /** `process.platform`. Injected so this module stays pure. Windows is the only branch. */
+  platform?: string;
   /** Whether THIS project has a .cursor/ directory — the signal that Cursor works on this repo. */
   cursorProjectPresent?: boolean | undefined;
   /**
