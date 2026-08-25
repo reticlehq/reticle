@@ -47,9 +47,6 @@ function input(partial: Partial<PlanInput>): PlanInput {
     } satisfies Detection,
     claudeCli: true,
     mcpExists: false,
-    cursorPresent: false,
-    cursorConfig: null,
-    cursorConfigPath: '/home/u/.cursor/mcp.json',
     viteConfig: {
       path: 'vite.config.ts',
       source: 'export default defineConfig({ plugins: [react()] })',
