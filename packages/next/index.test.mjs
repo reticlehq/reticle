@@ -213,21 +213,46 @@ describe('withReticle forwards the discovered daemon', () => {
  * duplicate that drifts does not throw: it produces a URL nothing is listening on, which surfaces as
  * a silent no-connect and reads to a user as "Reticle is broken". Pin them to core's.
  */
+/**
+ * A BOUND, not a measurement.
+ *
+ * The test below does two slow things at once: a dynamic `import()` of a workspace package —
+ * resolving and evaluating @reticlehq/core's ESM build from a CJS test — and two real temp
+ * directories with file writes. Both are milliseconds when this package runs alone and neither is
+ * bounded by anything the test asserts.
+ *
+ * Against vitest's 5 s default that is a statement about the machine, which CLAUDE.md bans in
+ * assertions for the same reason it is wrong here: it passes on its own and fails only under
+ * full-monorepo parallel load, i.e. only in CI. Observed on release/v2.12.0 before this bound:
+ *
+ *   × builds the same bridge URL core does  5039ms
+ *     → Test timed out in 5000ms.
+ *
+ * while `pnpm --filter @reticlehq/next test:unit` alone passed 20/20 in 355 ms. A generous ceiling
+ * cannot make a broken test pass — the URL equality is still asserted — it only stops the suite
+ * reporting the runner.
+ */
+const WIRE_CONSTANT_TIMEOUT_MS = 30_000;
+
 describe('the duplicated wire constants match core', () => {
-  it('builds the same bridge URL core does', async () => {
-    const { bridgeWsUrl } = await import('@reticlehq/core');
-    const home = mkdtempSync(join(tmpdir(), 'reticle-const-home-'));
-    const cwd = mkdtempSync(join(tmpdir(), 'reticle-const-proj-'));
-    try {
-      writeFileSync(join(cwd, '.reticle.json'), JSON.stringify({ projectId: 'p' }));
-      writeFileSync(
-        join(home, 'daemon-4400.json'),
-        JSON.stringify({ port: 4400, pid: process.pid, projectId: 'p' }),
-      );
-      expect(discoverDaemonUrl(cwd, home, () => true)).toBe(bridgeWsUrl(4400));
-    } finally {
-      rmSync(home, { recursive: true, force: true });
-      rmSync(cwd, { recursive: true, force: true });
-    }
-  });
+  it(
+    'builds the same bridge URL core does',
+    async () => {
+      const { bridgeWsUrl } = await import('@reticlehq/core');
+      const home = mkdtempSync(join(tmpdir(), 'reticle-const-home-'));
+      const cwd = mkdtempSync(join(tmpdir(), 'reticle-const-proj-'));
+      try {
+        writeFileSync(join(cwd, '.reticle.json'), JSON.stringify({ projectId: 'p' }));
+        writeFileSync(
+          join(home, 'daemon-4400.json'),
+          JSON.stringify({ port: 4400, pid: process.pid, projectId: 'p' }),
+        );
+        expect(discoverDaemonUrl(cwd, home, () => true)).toBe(bridgeWsUrl(4400));
+      } finally {
+        rmSync(home, { recursive: true, force: true });
+        rmSync(cwd, { recursive: true, force: true });
+      }
+    },
+    WIRE_CONSTANT_TIMEOUT_MS,
+  );
 });
