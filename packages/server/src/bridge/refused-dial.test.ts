@@ -63,6 +63,30 @@ describe('a dial refused at the origin gate is remembered', () => {
     expect(sessions.lastClosure()?.reason ?? '').toContain('tenant.myapp.test');
   });
 
+  it('prints the exact origin to add, so the fix is copy-pasteable', async () => {
+    const bridge = new Bridge({ port: 0 });
+    bridges.push(bridge);
+    const { sessions } = bridge;
+    const port = await bridge.ready;
+
+    await dial(port, 'https://tenant.myapp.test');
+
+    expect(sessions.lastClosure()?.reason ?? '').toContain(
+      'add this exact origin to RETICLE_ALLOWED_ORIGINS: "https://tenant.myapp.test"',
+    );
+  });
+
+  it('offers no allow-list entry for an opaque origin, where the token is the gate', async () => {
+    const bridge = new Bridge({ port: 0 });
+    bridges.push(bridge);
+    const { sessions } = bridge;
+    const port = await bridge.ready;
+
+    await dial(port, 'tauri://localhost');
+
+    expect(sessions.lastClosure()?.reason ?? '').not.toContain('add this exact origin');
+  });
+
   it('records nothing for an origin that is allowed', async () => {
     const bridge = new Bridge({ port: 0 });
     bridges.push(bridge);

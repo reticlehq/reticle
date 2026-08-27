@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { WebSocket } from 'ws';
 import {
   EventType,
@@ -164,6 +164,52 @@ describe('Bridge security boundary', () => {
     socket.send(JSON.stringify(hello('tauri', 'shared-secret')));
     await waitUntil(() => 1 === bridge.sessions.count());
     expect(bridge.sessions.get('tauri')).toBeDefined();
+  });
+
+  it('warns at startup when an allow-list entry fails to normalise', () => {
+    const writes: string[] = [];
+    const spy = vi
+      .spyOn(process.stderr, 'write')
+      .mockImplementation(((chunk: unknown) => {
+        writes.push(String(chunk));
+        return true;
+      }) as typeof process.stderr.write);
+    try {
+      const bridge = new Bridge({
+        port: 0,
+        token: 'shared-secret',
+        allowedOrigins: ['myapp.test', 'https://app.example'],
+      });
+      bridges.push(bridge);
+    } finally {
+      spy.mockRestore();
+    }
+    const ignored = writes.find((line) => line.includes('origin_entry_ignored'));
+    expect(ignored).toBeDefined();
+    expect(ignored).toContain('myapp.test');
+    expect(ignored).toContain('http://myapp.test');
+    expect(writes.filter((line) => line.includes('origin_entry_ignored'))).toHaveLength(1);
+  });
+
+  it('stays silent at startup when every allow-list entry normalises', () => {
+    const writes: string[] = [];
+    const spy = vi
+      .spyOn(process.stderr, 'write')
+      .mockImplementation(((chunk: unknown) => {
+        writes.push(String(chunk));
+        return true;
+      }) as typeof process.stderr.write);
+    try {
+      const bridge = new Bridge({
+        port: 0,
+        token: 'shared-secret',
+        allowedOrigins: ['https://app.example', 'tauri://localhost'],
+      });
+      bridges.push(bridge);
+    } finally {
+      spy.mockRestore();
+    }
+    expect(writes.filter((line) => line.includes('origin_entry_ignored'))).toHaveLength(0);
   });
 
   it('requires a token before binding beyond localhost', () => {
