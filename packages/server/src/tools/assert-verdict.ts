@@ -1,4 +1,4 @@
-import { BlindSpotKind, CaptureLoss, PredicateKind } from '@reticlehq/core';
+import { CaptureLoss, PredicateKind } from '@reticlehq/core';
 import { gapsForAction } from '../honesty/instrumentation-gaps.js';
 import { noteSessionGaps } from '../honesty/gap-ledger.js';
 import { declaresState } from '../events/predicate-asks.js';
@@ -9,6 +9,7 @@ import type { Session } from '../session/session.js';
 import { findContradictions, type Contradiction } from '../events/contradictions.js';
 import { declaredExpectations, declaresBodyIndependentChannel } from '../events/declared.js';
 import {
+  absenceBlindSpotNote,
   blindSpotsFromState,
   buildCoverageStatement,
   Coverage,
@@ -23,26 +24,6 @@ import { describeWaitTarget } from '../honesty/unsettled.js';
 import { inFlightRequestLabels, repeatedRequestLabels } from './settle-in-flight.js';
 import { gradeOfPredicate } from './assert-grade.js';
 import { assertSource } from './assert-source.js';
-
-type StateBlindSpot = ReturnType<typeof blindSpotsFromState>[number];
-
-function absenceBlindSpotNote(
-  predicate: Predicate,
-  spots: readonly StateBlindSpot[],
-): string | undefined {
-  if (predicate.kind !== 'element' || predicate.absent !== true) return undefined;
-
-  const relevant = spots.filter(
-    (spot) =>
-      spot.count > 0 &&
-      spot.kind === BlindSpotKind.CROSS_ORIGIN_IFRAME &&
-      undefined !== predicate.query.scope,
-  );
-  if (0 === relevant.length) return undefined;
-
-  const statement = buildCoverageStatement(relevant);
-  return `the absence assertion targeted a region Reticle could not observe (${statement.note ?? 'partial coverage'}), so a passing DOM check cannot prove absence`;
-}
 
 /**
  * The honesty verdict for a plain `reticle_assert`.

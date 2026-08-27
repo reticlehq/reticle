@@ -1,14 +1,23 @@
 import { describe, expect, it } from 'vitest';
 import { LastAct } from '../session/last-act.js';
 import {
+  BlindSpotKind,
   EventType,
+  ReticleCommand,
   SessionState,
   Verified,
   VerifiedReason,
+  type CommandResult,
   type ReticleEvent,
 } from '@reticlehq/core';
 import { TOOLS, type ToolDef, type ToolDeps } from './tools.js';
 import { ReticleTool } from './tool-names.js';
+import { BaselineStore } from '../project/baselines.js';
+import { createNodeFileSystem } from '../project/fs-port.js';
+import { RecordingStore } from '../flows/recordings.js';
+import { FlowStore } from '../flows/flows.js';
+import { ProjectStore } from '../project/project-store.js';
+import { AnnotationStore } from '../flows/annotation-store.js';
 import type { Session, SessionManager } from '../session/session.js';
 
 /**
@@ -113,15 +122,26 @@ describe('reticle_assert discloses partial coverage', () => {
     expect(result['verified']).toBe(Verified.YES);
   });
 
-  it('keeps an unscoped element absence green when unrelated virtualized rows are unobserved', async () => {
+  it('downgrades an element absence to UNKNOWN when virtualized rows are unobserved', async () => {
     const result = (await tool(ReticleTool.ASSERT).handler(
       depsWithBlindSpots({ 'virtualized-unmounted': 1 }),
       absentElement,
     )) as Record<string, unknown>;
 
     expect(result['pass']).toBe(true);
-    expect(result['verified']).toBe(Verified.YES);
-    expect(result['verifiedReason']).toBe(VerifiedReason.PROVED);
+    expect(result['verified']).toBe(Verified.UNKNOWN);
+    expect(result['verifiedReason']).toBe(VerifiedReason.ABSENCE_BLIND_SPOT);
+  });
+
+  it('downgrades an element absence to UNKNOWN when a closed shadow root is unobserved', async () => {
+    const result = (await tool(ReticleTool.ASSERT).handler(
+      depsWithBlindSpots({ 'closed-shadow-root': 1 }),
+      absentElement,
+    )) as Record<string, unknown>;
+
+    expect(result['pass']).toBe(true);
+    expect(result['verified']).toBe(Verified.UNKNOWN);
+    expect(result['verifiedReason']).toBe(VerifiedReason.ABSENCE_BLIND_SPOT);
   });
 
   it('names which regions were unobservable, so the agent can act on it', async () => {
@@ -203,5 +223,97 @@ describe('reticle_assert carries the verdict, not just pass', () => {
   it('reports yes on a clean window', async () => {
     const result = (await runAssert([])) as Record<string, unknown>;
     expect(result['verified']).toBe(Verified.YES);
+  });
+});
+
+describe('reticle_act_and_wait downgrades absence when blind spots hide the target', () => {
+  function actSessionWithBlindSpots(blindSpots: Record<string, number>): ToolDeps {
+    const noEvents: ReticleEvent[] = [];
+    const command = (name: string): Promise<CommandResult> => {
+      if (name === ReticleCommand.MATCH) {
+        return Promise.resolve({
+          kind: 'command_result',
+          id: 'q1',
+          ok: true,
+          result: { matched: false, count: 0, elements: [] },
+        });
+      }
+      return Promise.resolve({
+        kind: 'command_result',
+        id: 'c1',
+        ok: true,
+        result: { dispatched: true, settled: true, effect: { domMutatedWithin: 1 } },
+      });
+    };
+    const session: Partial<Session> = {
+      id: 'demo',
+      url: 'http://localhost:5173/app',
+      elapsed: () => 1000,
+      lastAct: new LastAct(),
+      beginAction: () => 'a1',
+      finishAction: () => undefined,
+      command,
+      queryEvents: () => Promise.resolve(noEvents),
+      eventsSince: () => noEvents,
+      bufferHealth: () => ({ total: 10, dropped: 0 }),
+      lostSince: () => false,
+      blindSpots: () => blindSpots,
+      health: () => ({ lastSeenMs: 0, throttled: false, focused: true }),
+      throttled: () => false,
+      getState: () => SessionState.ACTIVE,
+      drainInbox: () => [],
+      inboxSize: () => 0,
+      onEvent: () => () => undefined,
+      ambientCounts: () => ({}),
+    };
+    const sessions: Partial<SessionManager> = { resolve: () => session as Session };
+    return {
+      sessions: sessions as SessionManager,
+      baselines: new BaselineStore(),
+      recordings: new RecordingStore(),
+      flows: new FlowStore(createNodeFileSystem(), '/tmp/reticle-test/.reticle', { now: () => 0 }),
+      project: new ProjectStore(createNodeFileSystem(), '/tmp/reticle-test/.reticle', {
+        now: () => 0,
+      }),
+      annotations: new AnnotationStore(),
+      fs: createNodeFileSystem(),
+      reticleRoot: '/tmp/reticle-test/.reticle',
+      now: () => 0,
+    };
+  }
+
+  const ACT_ABSENT = {
+    ref: 'e1',
+    action: 'click',
+    until: { kind: 'element', query: { by: 'testid', value: 'shipment-row' }, absent: true },
+  };
+
+  it('downgrades to UNKNOWN when virtualized rows hide where the element could be', async () => {
+    const deps = actSessionWithBlindSpots({ [BlindSpotKind.VIRTUALIZED_UNMOUNTED]: 1 });
+    const r = (await tool(ReticleTool.ACT_AND_WAIT).handler(deps, ACT_ABSENT)) as Record<
+      string,
+      unknown
+    >;
+    expect(r['verified']).toBe(Verified.UNKNOWN);
+    expect(r['verifiedReason']).toBe(VerifiedReason.ABSENCE_BLIND_SPOT);
+  });
+
+  it('downgrades to UNKNOWN when a closed shadow root hides subtrees', async () => {
+    const deps = actSessionWithBlindSpots({ [BlindSpotKind.CLOSED_SHADOW_ROOT]: 1 });
+    const r = (await tool(ReticleTool.ACT_AND_WAIT).handler(deps, ACT_ABSENT)) as Record<
+      string,
+      unknown
+    >;
+    expect(r['verified']).toBe(Verified.UNKNOWN);
+    expect(r['verifiedReason']).toBe(VerifiedReason.ABSENCE_BLIND_SPOT);
+  });
+
+  it('does NOT cite ABSENCE_BLIND_SPOT when no blind spot is present', async () => {
+    const deps = actSessionWithBlindSpots({});
+    const r = (await tool(ReticleTool.ACT_AND_WAIT).handler(deps, ACT_ABSENT)) as Record<
+      string,
+      unknown
+    >;
+    expect(r['verifiedReason']).not.toBe(VerifiedReason.ABSENCE_BLIND_SPOT);
   });
 });
