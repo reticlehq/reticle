@@ -47,6 +47,26 @@ describe('buildDynamicTools — the dynamic profile meta-tools', () => {
     expect(out.tools[0]?.summary).not.toContain('second sentence');
   });
 
+  it('reticle_tools catalog carries tombstones for merged and retired tools', async () => {
+    const tools = buildDynamicTools(fakeTools);
+    const discover = tools.find((t) => t.name === ReticleTool.TOOLS);
+    const out = (await discover?.handler(NO_DEPS, {})) as {
+      total: number;
+      tools: { name: string; summary: string }[];
+      retired: { name: string; retired: string }[];
+    };
+    // The total counts LIVE tools only — a tombstone is not callable.
+    expect(out.total).toBe(out.tools.length);
+    // A merged tool's old name carries the migration in the catalog itself.
+    const crawl = out.retired.find((t) => t.name === ReticleTool.CRAWL);
+    expect(crawl).toBeDefined();
+    expect(crawl?.retired).toContain('retired; use');
+    expect(crawl?.retired).toContain(ReticleTool.VERIFY);
+    expect(crawl?.retired).toContain('"crawl"');
+    // ...and does not appear among the live tools.
+    expect(out.tools.map((t) => t.name)).not.toContain(ReticleTool.CRAWL);
+  });
+
   it('reticle_tools with names loads full params for known tools and flags unknown ones', async () => {
     const tools = buildDynamicTools(fakeTools);
     const discover = tools.find((t) => t.name === ReticleTool.TOOLS);

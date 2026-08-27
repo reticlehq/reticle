@@ -2,7 +2,7 @@ import { z } from 'zod';
 import type { ToolDef, ToolDeps } from './tools.js';
 import { runTool } from './invoke-tool.js';
 import { buildErrorPayload } from './error-recovery.js';
-import { mergedNameRedirect, mergedNameMessage } from './merged-name-redirect.js';
+import { mergedNameRedirect, mergedNameMessage, mergedNameTombstones } from './merged-name-redirect.js';
 import { ReticleTool } from './tool-names.js';
 import { ADVERTISE_ALL_ENV, type ToolSurfaceOrigin } from './tool-surface.js';
 import { getSessionMetrics } from '../telemetry/session-metrics.js';
@@ -128,9 +128,15 @@ export function buildDynamicTools(allTools: ToolDef[], profile?: ToolSurfaceOrig
           name: t.name,
           summary: firstSentence(t.description),
         }));
+        // Renamed/merged tools keep a tombstone in the catalog so older instructions are
+        // self-correcting: the surface itself says where each old name went, instead of making the
+        // agent trip over `unknown tool` and read the migration out of an error string. Live tools
+        // stay in `tools`; the `total` counts only those, and tombstones are not callable.
+        const tombstones = mergedNameTombstones();
         return Promise.resolve({
           total: catalog.length,
           tools: catalog,
+          ...(0 === tombstones.length ? {} : { retired: tombstones }),
           ...profileBlock,
           next: `All ${catalog.length} tools above are callable, advertised or not. Load full params with reticle_tools { names:[…] }, then call reticle_run { tool, args }.`,
         });
