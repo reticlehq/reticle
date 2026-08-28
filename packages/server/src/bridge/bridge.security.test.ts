@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { WebSocket } from 'ws';
 import {
   EventType,
@@ -174,6 +174,36 @@ describe('Bridge security boundary', () => {
     expect(() => new Bridge({ port: 0, host: '0.0.0.0', token: 'shared-secret' })).toThrow(
       /ALLOWED_ORIGINS/,
     );
+  });
+
+  // A scheme-less entry (`RETICLE_ALLOWED_ORIGINS=myapp.test`) fails URL construction and used to
+  // be filtered out with NO trace: the allow-list looked configured, every dial was refused, and
+  // nothing anywhere said the entry had been dropped. The drop stands (fail closed), but it must
+  // be loud and name the accepted form, so the fix is copy-pasteable from the log.
+  it('warns with the copy-pasteable form when an allow-list entry has no scheme', async () => {
+    const written: string[] = [];
+    const spy = vi.spyOn(process.stderr, 'write').mockImplementation((chunk: unknown) => {
+      written.push(String(chunk));
+      return true;
+    });
+    let port: number;
+    try {
+      ({ port } = await makeBridge({ allowedOrigins: ['myapp.test', 'https://app.example'] }));
+    } finally {
+      spy.mockRestore();
+    }
+    const line = written.find((entry) => entry.includes('allowed_origin_ignored'));
+    expect(line, 'dropping a configured origin must leave a trace').toBeDefined();
+    const parsed = JSON.parse(line ?? '{}') as Record<string, unknown>;
+    expect(parsed['entry']).toBe('myapp.test');
+    expect(String(parsed['warning'])).toContain('http://myapp.test');
+    // The drop itself is unchanged — the scheme-less entry does not allow-list anything…
+    await expect(openSocket(port, 'http://myapp.test')).rejects.toThrow(
+      /Unexpected server response: 403/,
+    );
+    // …and the valid sibling entry still made it into the allow-list.
+    const socket = await openSocket(port, 'https://app.example');
+    socket.close();
   });
 
   it('rejects protocol mismatches with a distinct "upgrade" reason (not a generic drop)', async () => {

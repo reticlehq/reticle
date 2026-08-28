@@ -6,6 +6,8 @@ All notable changes to the **`@reticlehq/*`** packages are documented here (each
 
 ### Fixed
 
+- **`@reticlehq/server` — a scheme-less `RETICLE_ALLOWED_ORIGINS` entry is no longer discarded silently.** `RETICLE_ALLOWED_ORIGINS=myapp.test` appeared to work and had no effect: an entry without a scheme fails origin normalization and was filtered out without a trace, so the allow-list looked configured while every dial from that origin was refused at the gate — and the refusal read as a problem with the page, not with the config. The bridge now logs an `allowed_origin_ignored` warning at startup for each dropped entry, naming the entry and the accepted form (`scheme://host[:port]`), with the corrected value spelled out so the fix is copy-pasteable. The drop itself is unchanged — an invalid entry still allows nothing.
+
 - **`reticle-tauri` — macOS `RETICLE_HEADLESS=1` parks off-screen instead of `hide()`.** Hiding after first paint is the remaining headless path we have not proved safe on every macOS WKWebView: a hidden window has been observed to go quiet after a pause while capture still works (it renders the webview, not the screen). Linux and Windows still hide. The timeout copy names that pause as a candidate, not a fact.
 
 ## [2.12.0] - 2026-08-24

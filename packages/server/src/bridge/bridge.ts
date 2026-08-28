@@ -253,11 +253,25 @@ export class Bridge {
     this.#clock = options.clock ?? (() => Date.now());
     this.#token =
       options.token !== undefined && options.token.length > 0 ? options.token : undefined;
-    this.#allowedOrigins = new Set(
-      (options.allowedOrigins ?? [])
-        .map(normalizeOrigin)
-        .filter((origin): origin is string => origin !== null),
-    );
+    // An entry that fails to normalize — typically a scheme-less `myapp.test` — used to be
+    // filtered out with no trace: the allow-list LOOKED configured, every dial from that origin
+    // was refused at the gate, and the refusal read as a scheme mismatch in the page rather than
+    // as a config value that was silently discarded. Warn at construction, naming the entry and
+    // the accepted form, so the config error surfaces at startup instead of as a mystery 403.
+    this.#allowedOrigins = new Set<string>();
+    for (const entry of options.allowedOrigins ?? []) {
+      const normalized = normalizeOrigin(entry);
+      if (null === normalized) {
+        log('allowed_origin_ignored', {
+          entry,
+          warning:
+            `${ReticleEnv.ALLOWED_ORIGINS} entry "${entry}" is not a valid origin and was ` +
+            `IGNORED — an origin needs a scheme, e.g. "http://${entry}" (scheme://host[:port]).`,
+        });
+        continue;
+      }
+      this.#allowedOrigins.add(normalized);
+    }
     // Binding beyond localhost means the browser dials in from a non-loopback Origin. With no
     // allow-list, #originAllowed rejects every such Origin at the WS handshake, so the bridge comes
     // up but accepts nothing — a silent, fail-closed footgun. Refuse to start with a clear message.
