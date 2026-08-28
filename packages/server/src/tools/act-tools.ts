@@ -8,8 +8,9 @@ import { resolveTargetRef, type TargetResolution } from './resolve-target.js';
  */
 import { z } from 'zod';
 import { aliasParam } from './alias-args.js';
+import { ACT_SEQUENCE_TOOL } from './act-sequence-tool.js';
 import { timeoutMsSchema } from './numeric-bounds.js';
-import { captureAct, compileSequenceStep } from '../flows/replay.js';
+import { captureAct } from '../flows/replay.js';
 import {
   ActionType,
   ActionWarning,
@@ -54,6 +55,7 @@ import { buildDivergenceCapsule } from '../capsule/capsule.js';
 import { predicateToExpectedLinks } from '../capsule/predicate-to-links.js';
 import { buildHonestyBlock } from '../honesty/honesty.js';
 import {
+  absenceBlindSpotNote,
   buildCoverageStatement,
   blindSpotsFromState,
   transportGapNote,
@@ -76,8 +78,7 @@ import {
   PAUSED_NO_VERDICT,
 } from '../session/control-envelope.js';
 import { asString, asNumber, asRecord, sourceOf } from './tools-helpers.js';
-import { describeStepResult, runStepWithStaleRetry } from './act-sequence-retry.js';
-import { assertSequenceSteps, dispatchAct, preflightAct } from './act-preflight.js';
+import { dispatchAct, preflightAct } from './act-preflight.js';
 import { followLostObservation } from './act-observation.js';
 import { type ToolDef, intentArg, sessionIdShape } from './tool-kit.js';
 import { asActionType, gradeOf } from './act-helpers.js';
@@ -94,7 +95,7 @@ import { tryRealInput, rewriteUploadArgs } from './real-input-attempt.js';
  * the agent actually wrote) rather than the base64 blob — replay would otherwise send 750 KiB of
  * base64 to the browser as if it were an inline content call.
  */
-async function actCommand(
+export async function actCommand(
   deps: Parameters<typeof rewriteUploadArgs>[0],
   session: {
     command: (
@@ -138,7 +139,7 @@ async function actCommand(
  */
 const ACTION_TYPE_VALUES = Object.values(ActionType);
 const ACTION_TYPE_LIST = ACTION_TYPE_VALUES.join(' | ');
-const actionTypeEnum = z.enum(ACTION_TYPE_VALUES as [string, ...string[]]);
+export const actionTypeEnum = z.enum(ACTION_TYPE_VALUES as [string, ...string[]]);
 
 /**
  * Resolve an action's element: an explicit `ref`, or a `target` query resolved in the SAME call.
@@ -151,7 +152,7 @@ const actionTypeEnum = z.enum(ACTION_TYPE_VALUES as [string, ...string[]]);
  * `ref` wins when both are given, because it is the more specific instruction and silently
  * preferring the query would act on something the caller did not name.
  */
-async function resolveActTarget(
+export async function resolveActTarget(
   session: Session,
   args: Record<string, unknown>,
 ): Promise<TargetResolution> {
@@ -321,125 +322,6 @@ export const ACT_TOOLS: ToolDef[] = [
           settledOutcome,
           true === settledOutcome ? session.elapsed() - since : undefined,
         );
-      }
-    },
-  },
-  {
-    name: ReticleTool.ACT_SEQUENCE,
-    // The example is required for a core tool, and this one carries weight: the measured loop it
-    // replaces is literally a login form driven as three separate reticle_act calls (98 clicks and
-    // 21 fills inside looping sessions, 2026-08-10/11). Showing fill -> fill -> click is showing the
-    // exact shape an agent otherwise spends three round trips on.
-    example: {
-      steps: [
-        { ref: 'e12', action: 'fill', args: { value: 'a@b.com' } },
-        { ref: 'e13', action: 'fill', args: { value: 'hunter2' } },
-        { ref: 'e14', action: 'click' },
-      ],
-    },
-    description:
-      'Run multiple actions in order (fill -> fill -> submit) in ONE round-trip. Prefer this over repeating reticle_act for a multi-step journey, then assert its consequence once. Returns per-step effects[] (see reticle_act).',
-    inputSchema: {
-      steps: z
-        .array(z.record(z.unknown()))
-        .describe(
-          'Ordered list of { ref, action, args? } objects. Each step is equivalent to one reticle_act call; put confirmDangerous:true in a destructive step args object.',
-        ),
-      timeout_ms: timeoutMsSchema
-        .optional()
-        .describe(
-          'Per-step timeout in milliseconds. Default: 8000. Each step gets this budget independently.',
-        ),
-      ...sessionIdShape,
-    },
-    outputSchema: {
-      since: z.number(),
-      dispatched: z.boolean(),
-      completed: z.number(),
-      stalled_at: z.number().optional(),
-      steps: z.array(z.record(z.unknown())).optional(),
-      result: z.unknown().optional(),
-      session: z
-        .object({ lastSeenMs: z.number(), throttled: z.boolean(), focused: z.boolean() })
-        .optional(),
-      // Short-circuits to pausedShortCircuit while paused — declare its fields (drained-once guidance).
-      ...pausedOutputShape,
-    },
-    handler: async (deps, args) => {
-      const session = deps.sessions.resolve(asString(args['sessionId']));
-      const paused = pausedShortCircuit(session);
-      if (paused !== undefined) return paused;
-      const since = session.elapsed();
-      session.beginAction(ReticleTool.ACT_SEQUENCE, asRecord(args));
-      try {
-        const inputSteps = Array.isArray(args['steps']) ? args['steps'] : [];
-        assertSequenceSteps(inputSteps);
-        const perStepTimeout = 'number' === typeof args['timeout_ms'] ? args['timeout_ms'] : 8000;
-        const stepResults: Record<string, unknown>[] = [];
-        let stalledAt: number | undefined;
-
-        // DIVERGENCE: live sends N individual ACT commands (for per-step timeout + progress);
-        // replay sends one batched ACT_SEQUENCE command (flows/replay.ts:294). A bug in either is
-        // invisible from the other — cover both when changing sequence semantics.
-        for (let i = 0; i < inputSteps.length; i++) {
-          const step = asRecord(inputSteps[i]);
-          try {
-            // One retry when the ref went stale under a re-render — see act-sequence-retry.ts.
-            const outcome = await runStepWithStaleRetry(
-              () =>
-                actCommand(
-                  deps,
-                  session,
-                  { ref: step['ref'], action: step['action'], args: step['args'] ?? {} },
-                  perStepTimeout,
-                ),
-              session,
-              since,
-              perStepTimeout,
-            );
-            if (!outcome.ok) {
-              stalledAt = i;
-              stepResults.push({
-                ref: step['ref'],
-                action: step['action'],
-                dispatched: false,
-                error: outcome.error ?? 'step failed',
-              });
-              break;
-            }
-            stepResults.push(describeStepResult(step, asRecord(outcome.result)));
-          } catch (err: unknown) {
-            stalledAt = i;
-            stepResults.push({
-              ref: step['ref'],
-              action: step['action'],
-              dispatched: null,
-              timedOut: true,
-              error: err instanceof Error ? err.message : 'step timed out',
-            });
-            break;
-          }
-        }
-
-        const completed = stalledAt ?? inputSteps.length;
-        if (completed > 0) {
-          session.lastAct.markActed(since, undefined, undefined);
-        }
-        if (deps.recordings.active().length > 0 && stalledAt === undefined) {
-          deps.recordings.capture(
-            compileSequenceStep(args, { count: inputSteps.length, steps: stepResults }),
-          );
-        }
-        return withControl(session, {
-          since,
-          dispatched: completed > 0,
-          completed,
-          ...(stalledAt !== undefined ? { stalled_at: stalledAt } : {}),
-          steps: stepResults,
-          ...healthEnvelope(session),
-        });
-      } finally {
-        session.finishAction();
       }
     },
   },
@@ -767,6 +649,7 @@ export const ACT_TOOLS: ToolDef[] = [
         // verdict didn't see everything — say so, never imply full coverage.
         const spots = blindSpotsFromState(session.blindSpots());
         const coverage = buildCoverageStatement(spots);
+        const absenceBlindSpot = absenceBlindSpotNote(until, spots);
         // Nothing subscribed ⇒ the state channel is dark, and the summary must say so rather than
         // report an empty diff list that reads like a fact about the app. See CausalSummary.
         const stateUnwatched = isStateUnwatched(spots);
@@ -875,6 +758,7 @@ export const ACT_TOOLS: ToolDef[] = [
           // the measured false red: a reload mid-wait, graded assertion_failed at the clicked
           // component's own file and line.
           ...(true === verdict.observationLost ? { observationLost: true } : {}),
+          ...(absenceBlindSpot === undefined ? {} : { absenceBlindSpot }),
           honesty,
           contradictions,
           ...(outcomePending ? { outcomePending } : {}),
@@ -997,4 +881,6 @@ export const ACT_TOOLS: ToolDef[] = [
       }
     },
   },
+  // Split into its own module for size; still shipped as one of the acting tools.
+  ACT_SEQUENCE_TOOL,
 ];

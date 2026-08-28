@@ -180,6 +180,48 @@ function droppedByTransport(events: readonly ReticleEvent[]): number {
   return dropped;
 }
 
+/**
+ * The narrow slice of a predicate the absence-blind-spot check needs.
+ *
+ * Kept minimal to avoid pulling the full Predicate type (and its transitive deps) into the
+ * honesty module. Anything that quacks like this works.
+ */
+interface AbsencePredicate {
+  kind: string;
+  absent?: boolean;
+  query?: { scope?: unknown };
+}
+
+/**
+ * When an absence assertion targets a page with regions Reticle cannot observe, "the element is
+ * absent" means only "it is absent in what I CAN see". Returns a note when that distinction
+ * matters, undefined otherwise.
+ *
+ * Fires on three blind-spot kinds:
+ *   - CROSS_ORIGIN_IFRAME (only when the predicate is scoped to a frame region)
+ *   - VIRTUALIZED_UNMOUNTED — a row that was never rendered could hold the element
+ *   - CLOSED_SHADOW_ROOT — a subtree Reticle cannot see into
+ */
+export function absenceBlindSpotNote(
+  predicate: AbsencePredicate,
+  spots: readonly BlindSpot[],
+): string | undefined {
+  if ('element' !== predicate.kind || true !== predicate.absent) return undefined;
+
+  const relevant = spots.filter(
+    (spot) =>
+      spot.count > 0 &&
+      (spot.kind === BlindSpotKind.CROSS_ORIGIN_IFRAME
+        ? undefined !== predicate.query?.scope
+        : spot.kind === BlindSpotKind.VIRTUALIZED_UNMOUNTED ||
+          spot.kind === BlindSpotKind.CLOSED_SHADOW_ROOT),
+  );
+  if (0 === relevant.length) return undefined;
+
+  const statement = buildCoverageStatement(relevant);
+  return `the absence assertion targeted a region Reticle could not observe (${statement.note ?? 'partial coverage'}), so a passing DOM check cannot prove absence`;
+}
+
 /** The impeaching note for a transport gap, or undefined when the window was intact. */
 export function transportGapNote(events: readonly ReticleEvent[]): string | undefined {
   const dropped = droppedByTransport(events);
