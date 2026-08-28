@@ -95,10 +95,18 @@ export const WS_CLOSE_REASON = {
  */
 function originRejectedReason(origin: string | undefined): string {
   const named = origin === undefined || 0 === origin.length ? 'a page sending no Origin' : origin;
+  // When the refused origin is a real web origin, the fix is copy-pasteable: print the exact string
+  // to allow-list. Opaque origins ("null") and missing Origins are not fixable with an allow-list
+  // entry — the pairing token is the gate there — so no Add clause is offered for those.
+  const normalized = origin === undefined || 0 === origin.length ? null : normalizeOrigin(origin);
+  const addClause =
+    normalized !== null && !isOpaqueOrigin(normalized)
+      ? ` To allow it, add this exact origin to ${ReticleEnv.ALLOWED_ORIGINS}: "${normalized}".`
+      : '';
   return (
     `a browser dialled this daemon and was REFUSED at the origin gate: ${named} is not allowed. ` +
     'Off localhost the SDK needs BOTH `allowNonLocalhost: true` AND a pairing token, and the ' +
-    'daemon needs that origin allow-listed (RETICLE_ALLOWED_ORIGINS). The app is running and ' +
+    `daemon needs that origin allow-listed (${ReticleEnv.ALLOWED_ORIGINS}).${addClause} The app is running and ` +
     'instrumented — it was turned away, so do not go looking for a stopped dev server.'
   );
 }
@@ -253,11 +261,28 @@ export class Bridge {
     this.#clock = options.clock ?? (() => Date.now());
     this.#token =
       options.token !== undefined && options.token.length > 0 ? options.token : undefined;
-    this.#allowedOrigins = new Set(
-      (options.allowedOrigins ?? [])
-        .map(normalizeOrigin)
-        .filter((origin): origin is string => origin !== null),
-    );
+    // A scheme-less entry like `myapp.test` fails `new URL` and was silently dropped, leaving the
+    // allow-list empty: the daemon came up, accepted nothing, and said nothing. Warn for every entry
+    // that fails to normalise, naming the entry and the accepted form, so the misconfiguration is
+    // visible at startup instead of surfacing later as an origin-gate refusal.
+    const allowedOrigins = new Set<string>();
+    for (const entry of options.allowedOrigins ?? []) {
+      const normalized = normalizeOrigin(entry);
+      if (normalized === null) {
+        const looksLikeBareHost = /^[A-Za-z0-9._-]+(:\d+)?$/.test(entry);
+        log('origin_entry_ignored', {
+          entry,
+          hint: looksLikeBareHost
+            ? `${ReticleEnv.ALLOWED_ORIGINS} entry '${entry}' could not be parsed and was ignored — ` +
+              `origins must include a scheme, in the accepted form http://host:port (try 'http://${entry}')`
+            : `${ReticleEnv.ALLOWED_ORIGINS} entry '${entry}' could not be parsed and was ignored — ` +
+              'origins must be in the accepted form http://host:port',
+        });
+        continue;
+      }
+      allowedOrigins.add(normalized);
+    }
+    this.#allowedOrigins = allowedOrigins;
     // Binding beyond localhost means the browser dials in from a non-loopback Origin. With no
     // allow-list, #originAllowed rejects every such Origin at the WS handshake, so the bridge comes
     // up but accepts nothing — a silent, fail-closed footgun. Refuse to start with a clear message.
