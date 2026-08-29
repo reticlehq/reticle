@@ -21,6 +21,13 @@ describe('MCP POST transport', () => {
     expect(shouldRetryUnsentPost(noBuffers, 0, 0)).toBe(true);
     expect(
       shouldRetryUnsentPost(
+        Object.assign(new Error('no buffer space'), { code: 'ERR_NO_BUFFER_SPACE' }),
+        0,
+        0,
+      ),
+    ).toBe(true);
+    expect(
+      shouldRetryUnsentPost(
         Object.assign(new Error('address unavailable'), { code: 'EADDRNOTAVAIL' }),
         0,
         0,
