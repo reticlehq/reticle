@@ -398,6 +398,12 @@ export function evalNet(
    * a UI wiring bug that did not exist, when the defect was the value the server answered with.
    */
   let bodyMismatch: string | undefined;
+  /**
+   * The prefix of a TRUNCATED body the needle was not found in. Held apart from `bodyMismatch`
+   * because the two are different verdicts: a full body without the needle decides the assertion,
+   * a truncated one cannot (#614).
+   */
+  let truncatedBody: string | undefined;
   const matches = events.filter((e) => {
     if (e.type !== EventType.NET_REQUEST || e.t < since) return false;
     const d = e.data;
@@ -431,6 +437,15 @@ export function evalNet(
         return false;
       }
       if (!response.includes(p.bodyContains)) {
+        // A needle missing from a body we only hold the FIRST N BYTES of is undecidable, not
+        // absent: the rest of the response was never recorded, so nothing here can say whether it
+        // was in there (#614). Grading it `pass: false` with "the response value is what differed"
+        // is the inversion the honesty rules exist to prevent — an unknown reported as decided,
+        // against a response that was very likely correct.
+        if (true === d['responseBodyTruncated']) {
+          truncatedBody ??= response;
+          return false;
+        }
         bodyMismatch ??= response;
         return false;
       }
@@ -455,6 +470,18 @@ export function evalNet(
       failureReason: `a call matched but its body was not recorded, so \`bodyContains\` could not be checked — enable it where the app calls connect(): reticle({ captureNetworkBodies: true })`,
       observed: 'a matching call with no recorded body',
       expected: `a body containing ${JSON.stringify(p.bodyContains)}`,
+      assertion: 'net.bodyContains',
+    };
+  }
+  // Ranked ABOVE the mismatch branch: when both a truncated and a full body missed the needle,
+  // the honest verdict is the undecidable one. Deciding on the full body would report a failure
+  // the truncated call may well contradict.
+  if (truncatedBody !== undefined && 0 === matches.length) {
+    return {
+      pass: false,
+      inconclusive: `a call matching ${describeNetFilter(p)} was answered with a body that was TRUNCATED before it was recorded, and ${JSON.stringify(p.bodyContains)} is not in the part that was kept — so this is undecidable, not a failure. Raise the capture cap or assert on something inside the recorded prefix`,
+      observed: `the first ${String(truncatedBody.length)} characters of a truncated response body ${JSON.stringify(clipBody(truncatedBody))}`,
+      expected: `a response body containing ${JSON.stringify(p.bodyContains)}`,
       assertion: 'net.bodyContains',
     };
   }
