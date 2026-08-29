@@ -85,16 +85,76 @@ export function describeSkew(peer: PeerIdentity, self: SelfIdentity): string | u
   );
 }
 
-/** The fix line for a page whose SDK disagrees with this daemon. */
+/**
+ * The fix line for a page whose SDK disagrees with this daemon, with no project to read.
+ *
+ * Names the framework-neutral sensor and plain npm, because those are the answers that are never
+ * actively wrong. When a project directory IS available, use `resolveSdkFix` in sdk-fix.ts, which
+ * reads the real UI library and package manager — this used to hardcode `@reticlehq/react` and
+ * told Vue projects to install a React package (#618).
+ */
 export function sdkFix(daemonVersion: string): string {
   return (
-    `Tell the human to install the matching SDK (\`npm i -D @reticlehq/react@${daemonVersion}\`) ` +
-    'or run `reticle update`, then restart their dev server so the page reloads with it.'
+    `Tell the human to install the matching SDK (\`npm i -D @reticlehq/browser@${daemonVersion}\`) ` +
+    'or run `reticle update`, then restart their dev server so the page reloads with it. The ' +
+    'restart is not optional: a bundler keeps serving the pre-bundled copy it already has, so an ' +
+    'upgrade can look applied — matching versions in `npm ls` — while the page runs the old module.'
   );
 }
 
-/** The fix line for another Reticle process that disagrees with the daemon it attached to. */
-export const DAEMON_FIX =
-  'A daemon outlives the agents attached to it, so it keeps serving its OWN code until it restarts ' +
-  '— anything fixed in the newer package is simply absent. Run `reticle stop` and retry to replace ' +
-  'it (other agents on that daemon will need to reconnect).';
+/**
+ * Compare two of our own version strings. Numeric dotted compare, prerelease tags ignored: both
+ * sides are Reticle package versions, so this never sees a range or build metadata. Undefined when
+ * either side does not parse, so the caller can decline to guess a direction.
+ */
+function compareVersions(a: string | undefined, b: string): number | undefined {
+  const parts = (v: string): number[] | undefined => {
+    const head = v.split('-')[0];
+    if (head === undefined) return undefined;
+    const nums = head.split('.').map((n) => parseInt(n, 10));
+    return nums.some(isNaN) ? undefined : nums;
+  };
+  if (a === undefined) return undefined;
+  const left = parts(a);
+  const right = parts(b);
+  if (left === undefined || right === undefined) return undefined;
+  for (let i = 0; i < Math.max(left.length, right.length); i += 1) {
+    const diff = (left[i] ?? 0) - (right[i] ?? 0);
+    if (0 !== diff) return diff;
+  }
+  return 0;
+}
+
+/**
+ * The fix line for another Reticle process that disagrees with the daemon it attached to.
+ *
+ * Branches on DIRECTION, which the old unconditional `reticle stop` did not (#618). Restarting the
+ * daemon converges the pair only when the daemon is the OLDER half. When the daemon is newer — the
+ * common case, because the MCP registration is deliberately unpinned and so resolves fresh while a
+ * long-lived daemon does not — `reticle stop` starts another newer daemon and leaves the same two
+ * contract hashes with the roles unchanged. Nothing the agent can do converges that, so say so and
+ * ask for the one thing that does, exactly as the SDK branch already does when the page is stale.
+ *
+ * Both versions are named by ROLE, not by which side is calling: this is read from both ends — a
+ * CLI judging the daemon it attached to, and the daemon judging an agent that announced itself —
+ * and the advice depends on which piece is behind, not on who noticed.
+ */
+export function daemonFix(
+  daemonVersion: string | undefined,
+  agentVersion: string | undefined,
+): string {
+  const order =
+    agentVersion === undefined ? undefined : compareVersions(daemonVersion, agentVersion);
+  if (order !== undefined && order > 0) {
+    return (
+      'The daemon is NEWER than this process, so `reticle stop` will not converge them — it would ' +
+      'replace it with another newer daemon and leave the same mismatch. Tell the human to restart ' +
+      'the agent so it spawns a current MCP server (or update the package it spawns), then retry.'
+    );
+  }
+  return (
+    'A daemon outlives the agents attached to it, so it keeps serving its OWN code until it restarts ' +
+    '— anything fixed in the newer package is simply absent. Run `reticle stop` and retry to replace ' +
+    'it (other agents on that daemon will need to reconnect).'
+  );
+}

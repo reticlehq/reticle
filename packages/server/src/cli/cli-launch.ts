@@ -2,7 +2,7 @@ import * as http from 'node:http';
 import { NodePlatform } from '../platform.js';
 import { spawn } from 'node:child_process';
 import { isOpaqueOrigin, LOOPBACK_HOST, STATUS_PATH } from '@reticlehq/core';
-import { describeSkew, DAEMON_FIX } from '../version/version-skew.js';
+import { daemonFix, describeSkew } from '../version/version-skew.js';
 import { CONTRACT_FINGERPRINT } from '@reticlehq/core';
 import { SERVER_VERSION } from '../version/server-version.js';
 import { log } from '../log.js';
@@ -74,12 +74,14 @@ function statusField(payload: unknown, key: string): string | undefined {
  */
 export async function warnOnDaemonSkew(port: number): Promise<void> {
   const status = await fetchStatus(port);
+  const daemonVersion = statusField(status, 'version');
   const skew = describeSkew(
     {
       what: 'the daemon already running on this port',
-      version: statusField(status, 'version'),
+      version: daemonVersion,
       contract: statusField(status, 'contract'),
-      fix: DAEMON_FIX,
+      // The daemon is the peer here and this process is the agent side.
+      fix: daemonFix(daemonVersion, SERVER_VERSION),
     },
     { version: SERVER_VERSION, contract: CONTRACT_FINGERPRINT },
   );

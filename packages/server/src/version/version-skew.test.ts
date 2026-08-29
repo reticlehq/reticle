@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { describeSkew, sdkFix, DAEMON_FIX, type PeerIdentity } from './version-skew.js';
+import { describeSkew, sdkFix, daemonFix, type PeerIdentity } from './version-skew.js';
 
 /**
  * A 2.2.1 SDK against a 2.4.0 daemon agrees on `protocolVersion`, connects fine, and then disagrees
@@ -70,7 +70,8 @@ describe('the daemon pair', () => {
           what: 'the daemon on this port',
           version: '2.3.0',
           contract: 'cccc3333',
-          fix: DAEMON_FIX,
+          // The daemon (2.3.0) is behind this process (2.4.1), so restarting it converges.
+          fix: daemonFix('2.3.0', SELF.version),
         },
         SELF,
       ) ?? '';
