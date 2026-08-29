@@ -59,6 +59,16 @@ import { OutageReason, OutageStage, reportMcpOutage } from './mcp-outage.js';
 /** Reconnect backoff: linear, capped, so a briefly-restarting daemon is picked up fast. */
 const RECONNECT_BASE_MS = 250;
 const RECONNECT_CAP_MS = 5_000;
+
+/** One bounded pool for the short-lived POST side of each MCP SSE session. */
+export const MCP_PROXY_HTTP_AGENT_OPTIONS = {
+  keepAlive: true,
+  keepAliveMsecs: 30_000,
+  timeout: 60_000,
+  maxSockets: 8,
+  scheduling: 'lifo',
+} as const satisfies http.AgentOptions;
+const MCP_PROXY_HTTP_AGENT = new http.Agent(MCP_PROXY_HTTP_AGENT_OPTIONS);
 /**
  * How many consecutive failed reconnects before the proxy stops RETRYING. It does not stop serving:
  * the budget ends the retry loop and the proxy goes dormant, where the handshake and `tools/list`
@@ -306,8 +316,8 @@ export class HandshakeReplay {
 }
 
 /**
- * POST one JSON-RPC line into the daemon's session. Resolves null on success, or a short reason
- * when the request never reached a server that will answer it.
+ * POST one JSON-RPC line into the daemon's session. Resolves null on success, or a structured
+ * failure when the request never reached a server that will answer it.
  *
  * It used to resolve `void` in every case, logging the failure and moving on. That is the THIRD way
  * a call goes unanswered, and the only one neither `streamLossReplies` nor the queue timer can see:
@@ -315,38 +325,102 @@ export class HandshakeReplay {
  * but the POST leg is its own TCP connection and an ECONNRESET on it means the daemon never received
  * the call. Nobody was ever going to reply, and the caller waited for its own timeout.
  */
-function postToSession(url: string, body: string): Promise<string | null> {
-  return new Promise<string | null>((resolve) => {
-    const parsed = new URL(url);
-    const bodyBuf = Buffer.from(body, 'utf8');
-    const options: http.RequestOptions = {
-      host: parsed.hostname,
-      port: parsed.port !== '' ? parseInt(parsed.port, 10) : 80,
-      path: `${parsed.pathname}${parsed.search}`,
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Content-Length': bodyBuf.byteLength,
-      },
-    };
-    const req = http.request(options, (res) => {
-      const status = res.statusCode ?? 0;
-      const rejected = status < 200 || status >= 300;
-      if (rejected) {
-        // A non-2xx from the daemon MCP endpoint used to be swallowed, hanging the JSON-RPC call
-        // client-side with no diagnostic. It is a refusal: no response is coming over the stream.
-        log('reticle_mcp_proxy_post_non2xx', { status, path: options.path });
-      }
-      res.resume(); // drain so the socket is reused
-      resolve(rejected ? `daemon rejected the call with HTTP ${String(status)}` : null);
+const RETRYABLE_UNSENT_POST_ERRORS = new Set(['ENOBUFS', 'ERR_NO_BUFFER_SPACE', 'EADDRNOTAVAIL']);
+
+export function shouldRetryUnsentPost(
+  error: unknown,
+  bytesWritten: number,
+  retryCount: number,
+): boolean {
+  const code = (error as { code?: unknown } | null | undefined)?.code;
+  return 0 === retryCount && 0 === bytesWritten && RETRYABLE_UNSENT_POST_ERRORS.has(String(code));
+}
+
+export interface PostFailure {
+  reason: string;
+  transport: boolean;
+  attempts: number;
+}
+
+type HttpRequest = (
+  options: http.RequestOptions,
+  callback: (response: http.IncomingMessage) => void,
+) => http.ClientRequest;
+
+export function postToSession(
+  url: string,
+  body: string,
+  request: HttpRequest = (options, callback) => http.request(options, callback),
+): Promise<PostFailure | null> {
+  const send = (retryCount: number): Promise<PostFailure | null> =>
+    new Promise<PostFailure | null>((resolve) => {
+      const parsed = new URL(url);
+      const bodyBuf = Buffer.from(body, 'utf8');
+      const options: http.RequestOptions = {
+        host: parsed.hostname,
+        port: parsed.port !== '' ? parseInt(parsed.port, 10) : 80,
+        path: `${parsed.pathname}${parsed.search}`,
+        method: 'POST',
+        agent: MCP_PROXY_HTTP_AGENT,
+        headers: {
+          'Content-Type': 'application/json',
+          'Content-Length': bodyBuf.byteLength,
+        },
+      };
+      // A keep-alive socket carries historical bytes; retry safety depends on this request's delta.
+      let socket: import('node:net').Socket | undefined;
+      let socketBytesBeforeRequest = 0;
+      let settled = false;
+      const req = request(options, (res) => {
+        if (settled) return;
+        settled = true;
+        const status = res.statusCode ?? 0;
+        const rejected = status < 200 || status >= 300;
+        if (rejected) {
+          // A non-2xx from the daemon MCP endpoint used to be swallowed, hanging the JSON-RPC call
+          // client-side with no diagnostic. It is a refusal: no response is coming over the stream.
+          log('reticle_mcp_proxy_post_non2xx', { status, path: options.path });
+        }
+        res.resume(); // drain so the socket is reused
+        resolve(
+          rejected
+            ? {
+                reason: `daemon rejected the call with HTTP ${String(status)}`,
+                transport: false,
+                attempts: retryCount + 1,
+              }
+            : null,
+        );
+      });
+      req.once('socket', (assigned) => {
+        socket = assigned;
+        socketBytesBeforeRequest = assigned.bytesWritten;
+      });
+      req.on('error', (err) => {
+        if (settled) return;
+        settled = true;
+        const bytesWritten =
+          socket === undefined ? 0 : Math.max(0, socket.bytesWritten - socketBytesBeforeRequest);
+        if (shouldRetryUnsentPost(err, bytesWritten, retryCount)) {
+          const retryInMs = reconnectDelayMs(retryCount + 1);
+          log('reticle_mcp_proxy_post_retry', {
+            code: (err as NodeJS.ErrnoException).code,
+            retryInMs,
+          });
+          setTimeout(() => void send(retryCount + 1).then(resolve), retryInMs);
+          return;
+        }
+        log('reticle_mcp_proxy_post_error', { error: err.message });
+        resolve({
+          reason: `post failed: ${err.message}`,
+          transport: true,
+          attempts: retryCount + 1,
+        });
+      });
+      req.end(bodyBuf);
     });
-    req.on('error', (err) => {
-      log('reticle_mcp_proxy_post_error', { error: err.message });
-      resolve(`post failed: ${err.message}`);
-    });
-    req.write(bodyBuf);
-    req.end();
-  });
+
+  return send(0);
 }
 
 /**
@@ -515,13 +589,20 @@ export function startMcpProxy(
         if (null === failure) return;
         const msg = parseJsonRpc(line);
         if (null === msg || msg.id === undefined || !pending.take(msg.id)) return;
+        if (failure.transport) {
+          reportMcpOutage(OutageStage.FIRST, {
+            reason: OutageReason.CONNECT_ERROR,
+            attempts: failure.attempts,
+            pendingLost: 1,
+          });
+        }
         proxyLog('reticle_mcp_proxy_post_unanswered', {
           port,
           method: String(msg.method),
-          reason: failure,
+          reason: failure.reason,
           note: 'the stream is still up, so nothing else would ever have answered this call',
         });
-        emit(transportLossReply(msg.id, failure));
+        emit(transportLossReply(msg.id, failure.reason));
       });
     };
 
