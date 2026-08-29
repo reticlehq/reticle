@@ -57,7 +57,8 @@ function hintFor(departed: string | undefined, reaped: string[]): string {
     initialized: true,
     directory: projectDir(),
     wasReapedLease: (id) => reaped.includes(id),
-    occupiedSiblings: async () => [],
+    // Not `async () =>`: the repo's require-await rule rejects an async function with no await.
+    occupiedSiblings: () => Promise.resolve([]),
   });
   const text = hint();
   stop();
