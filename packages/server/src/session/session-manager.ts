@@ -321,6 +321,22 @@ export class SessionManager {
   }
 
   /**
+   * The id of the session that most recently went away, if any.
+   *
+   * Distinct from {@link lastClosure}, which only records closes the bridge itself initiated
+   * (handshake refusals, auth failures) — an ordinary disconnect never reaches it. This reads the
+   * tombstone ring `remove()` maintains, so it covers every departure.
+   *
+   * Read by the no-session diagnosis, which needs to say something about the session that actually
+   * vanished rather than about the daemon's lifetime history (#611).
+   */
+  lastDeparted(): string | undefined {
+    let last: string | undefined;
+    for (const id of this.#tombstones.keys()) last = id;
+    return last;
+  }
+
+  /**
    * A dead `sessionId`, answered with what the caller needs to recover — not with an errand.
    *
    * Telemetry, 2026-08-10: one agent called `reticle_navigate` twelve times against an id that was

@@ -647,7 +647,7 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
     bridge.sessions,
     readProjectId(process.cwd()),
     port,
-    () => pool.reapedLeaseCount(),
+    (sessionId) => pool.wasReapedLease(sessionId),
     (url) => pool.acquire(url),
   );
   const deps = {

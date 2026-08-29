@@ -456,16 +456,19 @@ export function diagnoseNoSession(facts: NoSessionFacts): string {
     // from the field (#157): an aged-out lease produced "the tab was closed … ask the human to
     // reopen the app", which is wrong on every clause — there is no human tab, and the recovery it
     // names is unavailable to the caller while the one that works goes unmentioned. The reporter
-    // went looking for a port mismatch. Hedged rather than swapped: a human tab may ALSO have
-    // closed, and this does not know which session went.
+    // went looking for a port mismatch.
+    //
+    // The hedge that used to close this branch ("if you were driving a human tab instead…") is
+    // gone with the reason for it. `leaseExpired` was a lifetime count of reaps, so it could not
+    // tell which session went and had to cover both; it now names the session that actually
+    // departed (#611), so this branch is only reached when the thing that vanished WAS the lease.
     if (true === facts.leaseExpired) {
       return (
         'no browser session connected, but one WAS connected to this daemon earlier, so the wiring ' +
-        'is correct. This daemon has expired at least one pooled lease, so the likeliest cause is ' +
-        'that a lease you were using aged out; a lease is a headless context, not a human tab, and ' +
-        'it takes its cookies with it (so an authenticated app needs signing in again). Re-acquire ' +
-        'with reticle_lease {action:"acquire", url} and carry on. If you were driving a human tab ' +
-        `instead, it went away — reopen it or run ${OPEN_CMD_BARE}. ${RETRY}`
+        'is correct. The session that went away was a pooled lease and it aged out; a lease is a ' +
+        'headless context, not a human tab, and it takes its cookies with it (so an authenticated ' +
+        'app needs signing in again). Re-acquire with reticle_lease {action:"acquire", url} and ' +
+        `carry on. ${RETRY}`
       );
     }
     return (

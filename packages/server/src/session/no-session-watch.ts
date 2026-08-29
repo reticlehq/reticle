@@ -67,11 +67,15 @@ interface NoSessionWatchOptions {
    */
   occupiedSiblings?: () => Promise<readonly number[]>;
   /**
-   * How many pooled leases have aged out, if a pool exists. Injected as a reader rather than the
-   * pool itself: the diagnosis needs one number, and taking the whole pool would tie the session
-   * layer to the browser layer for it.
+   * Whether a given session id belonged to a pooled lease that aged out, if a pool exists.
+   * Injected as a predicate rather than the pool itself: the diagnosis needs one answer, and
+   * taking the whole pool would tie the session layer to the browser layer for it.
+   *
+   * Was a lifetime `reapedLeases: () => number` count, asked as `> 0`. That latched: after the
+   * first reap, every closed human tab was reported as an expired lease for the rest of the
+   * daemon's life, and the recovery it named would have thrown away the app session (#611).
    */
-  reapedLeases?: () => number;
+  wasReapedLease?: (sessionId: string) => boolean;
   /**
    * Opens a URL in a browser Reticle owns, and resolves once it is open.
    *
@@ -273,7 +277,12 @@ export function startNoSessionWatch(options: NoSessionWatchOptions): () => void 
           const framework = readProjectFramework(directory);
           return framework === undefined ? {} : { framework };
         })(),
-        leaseExpired: (options.reapedLeases?.() ?? 0) > 0,
+        // Decided from the session that actually went away, not from a lifetime tally: the lease
+        // sentence is only right when the thing that vanished WAS a lease.
+        leaseExpired: (() => {
+          const departed = options.sessions.lastDeparted();
+          return departed === undefined ? false : (options.wasReapedLease?.(departed) ?? false);
+        })(),
         // How long this daemon has been waiting with no app. The diagnosis uses it to surface
         // "install never finished" — the same condition telemetry already knows about.
         ...(() => {
@@ -314,8 +323,8 @@ export function wireSessionScope(
   sessions: SessionManager,
   activeProjectId: string | undefined,
   port: number,
-  /** Reader for the pool's aged-out-lease count; omitted when this daemon runs no pool. */
-  reapedLeases?: () => number,
+  /** Asks the pool whether a session id was a lease it aged out; omitted when there is no pool. */
+  wasReapedLease?: (sessionId: string) => boolean,
   /** Opens a URL in a Reticle-owned browser (the pool). Omitted ⇒ auto-attach is off. */
   attach?: (url: string) => Promise<unknown>,
 ): () => void {
@@ -324,7 +333,7 @@ export function wireSessionScope(
     sessions,
     port,
     initialized: activeProjectId !== undefined,
-    ...(reapedLeases === undefined ? {} : { reapedLeases }),
+    ...(wasReapedLease === undefined ? {} : { wasReapedLease }),
     ...(attach === undefined ? {} : { attach }),
   });
 }

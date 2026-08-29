@@ -64,6 +64,8 @@ function stubSessions(count = 0): Stub {
   const manager = {
     count: () => count,
     everConnected: () => false,
+    // Nothing has departed in these cases, so the lease branch stays off.
+    lastDeparted: () => undefined,
     setNoSessionHint: (fn: (() => string | undefined) | undefined) => {
       hint = fn;
     },
