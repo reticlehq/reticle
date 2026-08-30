@@ -17,6 +17,7 @@ import {
   countSchema,
   cursorSchema,
   httpStatusSchema,
+  MCP_CALL_BUDGET_MS,
   timeoutMsSchema,
   windowMsSchema,
 } from './numeric-bounds.js';
@@ -281,7 +282,9 @@ export const OBSERVE_TOOLS: ToolDef[] = [
       until: PredicateSchema.optional().describe("Alias for `predicate` (act_and_wait's name)."),
       timeout_ms: timeoutMsSchema
         .optional()
-        .describe('Maximum wait in milliseconds. Default: 4000.'),
+        .describe(
+          `Maximum wait in milliseconds. Default: 4000. Values above ${String(MCP_CALL_BUDGET_MS)} are honoured across multiple calls: when this call times out before the predicate is seen, resume_ms carries the remaining budget — call reticle_wait_for again with the same predicate, the same since, and timeout_ms set to resume_ms.`,
+        ),
       since: cursorSchema
         .optional()
         .describe('Cursor from a prior reticle_act — scopes the wait to events after that act.'),
@@ -331,6 +334,12 @@ export const OBSERVE_TOOLS: ToolDef[] = [
         .describe(
           'Where the code behind this verdict lives, as `file:line`. For an element/text assertion it is the matched element itself; for a FAILING signal/net/state assertion — which has no element to point at — it is the control last acted on, where the handler that should have fired lives. OMITTED when neither is known: this tool never borrows an unrelated location.',
         ),
+      resume_ms: z
+        .number()
+        .optional()
+        .describe(
+          `Present when the call returned before the full timeout_ms because the per-call limit (${String(MCP_CALL_BUDGET_MS)} ms) was reached and the predicate was not yet seen. Call reticle_wait_for again with the same predicate, the same since, and timeout_ms set to this value to continue waiting.`,
+        ),
     },
     handler: async (deps, args) => {
       const session = deps.sessions.resolve(asString(args['sessionId']));
@@ -338,12 +347,13 @@ export const OBSERVE_TOOLS: ToolDef[] = [
       const predicate = parsePredicate(aliasParam(args, 'predicate', ['until'])['predicate']);
       // Honesty: explicit since wins; else default to the last act's cursor; else the whole buffer.
       const since = asNumber(args['since']) ?? session.lastAct.cursor() ?? 0;
-      const verdict = await waitForPredicate(
-        session,
-        predicate,
-        asNumber(args['timeout_ms']) ?? DEFAULT_ASSERT_TIMEOUT_MS,
-        since,
-      );
+      // Cap each call to MCP_CALL_BUDGET_MS so the wait cannot outlast the MCP client's request
+      // timeout (SDK default 60 s, some clients lower). A larger requested budget is honoured via
+      // resume_ms: the caller re-invokes with the same predicate + since and timeout_ms: resume_ms.
+      const requestedMs = asNumber(args['timeout_ms']) ?? DEFAULT_ASSERT_TIMEOUT_MS;
+      const perCallMs = Math.min(requestedMs, MCP_CALL_BUDGET_MS);
+      const verdict = await waitForPredicate(session, predicate, perCallMs, since);
+      const resumeMs = !verdict.pass && requestedMs > perCallMs ? requestedMs - perCallMs : undefined;
       // match reticle_assert — wrap with control + session health (throttle matters most while blocking)
       // and the buffer envelope, so a verdict reached over an evicted window says so.
       return withControl(session, {
@@ -352,6 +362,7 @@ export const OBSERVE_TOOLS: ToolDef[] = [
         // `lastActSourceOnFailure` — an assert used to be blamed on the previous act's file:line.
         ...annotateStarvedFailure(session, verdict),
         ...assertionSource(session, predicate, verdict),
+        ...(resumeMs !== undefined ? { resume_ms: resumeMs } : {}),
         ...healthEnvelope(session),
         ...bufferEnvelope(session),
       });
