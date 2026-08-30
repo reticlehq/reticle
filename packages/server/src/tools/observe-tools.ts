@@ -353,7 +353,8 @@ export const OBSERVE_TOOLS: ToolDef[] = [
       const requestedMs = asNumber(args['timeout_ms']) ?? DEFAULT_ASSERT_TIMEOUT_MS;
       const perCallMs = Math.min(requestedMs, MCP_CALL_BUDGET_MS);
       const verdict = await waitForPredicate(session, predicate, perCallMs, since);
-      const resumeMs = !verdict.pass && requestedMs > perCallMs ? requestedMs - perCallMs : undefined;
+      const resumeMs =
+        !verdict.pass && requestedMs > perCallMs ? requestedMs - perCallMs : undefined;
       // match reticle_assert — wrap with control + session health (throttle matters most while blocking)
       // and the buffer envelope, so a verdict reached over an evicted window says so.
       return withControl(session, {
