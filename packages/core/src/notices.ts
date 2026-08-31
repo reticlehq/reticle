@@ -104,6 +104,20 @@ export const YIELD_WITHOUT_SESSION_NOTE =
  * through `reticle_run`, since lease is not on the default surface) and leaves `reticle drive` as
  * the human-side equivalent: an MCP-only agent has no shell, so a CLI sentence is advice it cannot
  * follow. Reticle cannot bring such a tab to front or recover it, so it names the limit instead.
+ *
+ * It also says what the escape hatch COSTS, and how sure the flag it fires on actually is. Both
+ * were missing, and both omissions were reported from the field.
+ *
+ * A lease moves every later verdict into a pooled context the human cannot see, so following the
+ * second half empties their HUD for the rest of the run and the product looks broken while working
+ * correctly. A recommendation that names only the remedy reads as though it were free — and the
+ * case where it is most expensive, a human sitting in front of the tab, is exactly the case where
+ * refocusing was available.
+ *
+ * And `throttled` is not proof the tab cannot be driven: the reporter who raised this drove the
+ * same throttled tab successfully afterwards. The flag was being read as a verdict because this
+ * sentence offered a remedy for it. Saying the drive is worth trying first costs one clause and
+ * stops the escape hatch being taken pre-emptively.
  */
 export const UNSCRIPTABLE_TAB_RECOMMENDATION =
-  'tab hidden/throttled and may be un-focusable from here; refocus it, or acquire a guaranteed scriptable context yourself with `reticle_run { tool: "reticle_lease", action: "acquire", url }` (a human can equivalently run `reticle drive <url>`)';
+  'tab hidden/throttled and may be un-focusable from here — though throttled does not mean undriveable, so trying the drive first is reasonable. If it fails: refocus the tab, or acquire a guaranteed scriptable context yourself with `reticle_run { tool: "reticle_lease", action: "acquire", url }` (a human can equivalently run `reticle drive <url>`). Leasing opens a context the human CANNOT watch — their HUD stays empty for the rest of the run — so prefer refocusing their tab if they are sitting in front of it.';
