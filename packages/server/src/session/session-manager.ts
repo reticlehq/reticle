@@ -18,6 +18,20 @@ interface ResolveScope {
   url?: string;
 }
 
+/**
+ * Thrown by `resolve` for the one refusal that TIME can fix: nothing is connected at all.
+ *
+ * Every other refusal is a fact about sessions that already exist — an unknown id, two candidate
+ * tabs, a session outside the scoped project — and waiting turns an instant accurate answer into the
+ * same answer N seconds later. This one is the app not being back YET, which is what a caller
+ * passing `timeout_ms` is asking to wait through (see `resolveWaitingForSession`).
+ *
+ * A subclass rather than a message check: the message here is frequently REPLACED by a richer
+ * diagnosis from `#noSessionHint`, so there is no stable text to match on, and matching the default
+ * wording would silently stop waiting exactly when the daemon knows most about why.
+ */
+export class NoSessionConnectedError extends Error {}
+
 /** The scheme://host:port of a URL, or undefined if it can't be parsed. Used to compare origins. */
 export function originOf(url: string | undefined): string | undefined {
   if (url === undefined) return undefined;
@@ -387,7 +401,7 @@ export class SessionManager {
         closure === undefined
           ? ''
           : ` NOTE: the bridge REFUSED or closed a connection recently — "${closure.reason}". The app is probably still running and trying to connect: it was turned away, and the SDK does not retry after a policy close. The reason above names the fix — do not go looking for a stopped dev server.`;
-      throw new Error(`${hint ?? NO_SESSION_CONNECTED_ERROR}${refusal}`);
+      throw new NoSessionConnectedError(`${hint ?? NO_SESSION_CONNECTED_ERROR}${refusal}`);
     }
     // Scope to the agent's active project FIRST, so a stray tab from another app/origin (e.g. a
     // leftover dashboard on a different port) is structurally unselectable — it never enters the

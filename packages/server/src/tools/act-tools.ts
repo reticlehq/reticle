@@ -1,5 +1,6 @@
 import { normalizeQueryArgs } from './query-shape.js';
 import type { Session } from '../session/session.js';
+import { resolveWaitingForSession } from '../session/session-wait.js';
 import { resolveTargetRef, type TargetResolution } from './resolve-target.js';
 /**
  * Action tools — reticle_act, reticle_act_sequence, reticle_act_and_wait. Split out of tools.ts to keep
@@ -477,7 +478,14 @@ export const ACT_TOOLS: ToolDef[] = [
       ...pausedOutputShape,
     },
     handler: async (deps, args) => {
-      let session = deps.sessions.resolve(asString(args['sessionId']));
+      // Resolved with the caller's budget in hand so a reconnecting app is waited for rather than
+      // refused because it is not back YET. `timeout` is re-read below with the other arguments;
+      // this one is needed before anything can be resolved. See resolveWaitingForSession.
+      let session = await resolveWaitingForSession(
+        deps.sessions,
+        asNumber(args['timeout_ms']) ?? DEFAULT_ASSERT_TIMEOUT_MS,
+        asString(args['sessionId']),
+      );
       const acted = session;
       const actedSessionId = session.id;
       // Live-control: refuse to drive the page (no act, no predicate eval) while paused.

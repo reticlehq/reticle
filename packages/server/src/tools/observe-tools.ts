@@ -66,6 +66,7 @@ import {
 } from '../intent/inline-intent.js';
 import { bodiesNotCaptured } from '../honesty/uncaptured-bodies.js';
 import { withControl } from '../session/control-envelope.js';
+import { resolveWaitingForSession } from '../session/session-wait.js';
 import { asString, asNumber, asRecord } from './tools-helpers.js';
 import { type ToolDef, intentArg, sessionIdShape, commandOrThrow } from './tool-kit.js';
 import { gradeOfPredicate } from './assert-grade.js';
@@ -334,17 +335,19 @@ export const OBSERVE_TOOLS: ToolDef[] = [
         ),
     },
     handler: async (deps, args) => {
-      const session = deps.sessions.resolve(asString(args['sessionId']));
+      const timeout = asNumber(args['timeout_ms']) ?? DEFAULT_ASSERT_TIMEOUT_MS;
+      // Spend the caller's budget waiting for the app to come back, rather than refusing because it
+      // is not back YET — see resolveWaitingForSession.
+      const session = await resolveWaitingForSession(
+        deps.sessions,
+        timeout,
+        asString(args['sessionId']),
+      );
       // `until` is act_and_wait's name for this — see alias-args.ts.
       const predicate = parsePredicate(aliasParam(args, 'predicate', ['until'])['predicate']);
       // Honesty: explicit since wins; else default to the last act's cursor; else the whole buffer.
       const since = asNumber(args['since']) ?? session.lastAct.cursor() ?? 0;
-      const verdict = await waitForPredicate(
-        session,
-        predicate,
-        asNumber(args['timeout_ms']) ?? DEFAULT_ASSERT_TIMEOUT_MS,
-        since,
-      );
+      const verdict = await waitForPredicate(session, predicate, timeout, since);
       // match reticle_assert — wrap with control + session health (throttle matters most while blocking)
       // and the buffer envelope, so a verdict reached over an evicted window says so.
       return withControl(session, {
@@ -456,10 +459,17 @@ export const OBSERVE_TOOLS: ToolDef[] = [
         ),
     },
     handler: async (deps, args) => {
-      const session = deps.sessions.resolve(asString(args['sessionId']));
+      const timeout = asNumber(args['timeout_ms']) ?? 0;
+      // Spend the caller's budget waiting for the app to come back, rather than refusing because it
+      // is not back YET. With no timeout this is exactly the old call — an assertion that asked to
+      // wait for nothing still refuses at once. See resolveWaitingForSession.
+      const session = await resolveWaitingForSession(
+        deps.sessions,
+        timeout,
+        asString(args['sessionId']),
+      );
       // `until` is act_and_wait's name for this — see alias-args.ts.
       const predicate = parsePredicate(aliasParam(args, 'predicate', ['until'])['predicate']);
-      const timeout = asNumber(args['timeout_ms']) ?? 0;
       // Honesty: explicit since wins; else default to the last act's cursor; else the whole buffer.
       const since = asNumber(args['since']) ?? session.lastAct.cursor() ?? 0;
       // Declared BEFORE the verdict, so the undeclared-change read below finds it open and stays
