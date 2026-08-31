@@ -58,6 +58,34 @@ export function mergedNameRedirect(name: string): MergedNameRedirect | undefined
   return BY_OLD_NAME.get(name);
 }
 
+/** A retired name, in the one-line form the `reticle_tools` catalog reports it. */
+export interface MergedNameTombstone {
+  /** The name an agent still uses. */
+  name: string;
+  /** Where it went: `retired; use reticle_verify { action: "crawl" }`. */
+  retired: string;
+}
+
+/**
+ * Every merged/retired name, for the `reticle_tools` catalog.
+ *
+ * The redirect table only answered when an agent CALLED an old name — `reticle_run` returned the
+ * migration, but the tool surface itself never recorded the rename, so an agent working from older
+ * instructions had to find the new name from an error string, or not at all. Tombstones make the
+ * migration discoverable in the one place every agent lists first.
+ */
+export function mergedNameTombstones(): MergedNameTombstone[] {
+  return [...BY_OLD_NAME.entries()]
+    .map(([name, redirect]) => ({
+      name,
+      retired:
+        redirect.action === undefined
+          ? `retired; ${redirect.note ?? `use ${redirect.tool}`}`
+          : `retired; use ${redirect.tool} { action: "${redirect.action}" }`,
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
 /** The sentence handed to an agent that called `name`. */
 export function mergedNameMessage(name: string, redirect: MergedNameRedirect): string {
   return redirect.action === undefined
