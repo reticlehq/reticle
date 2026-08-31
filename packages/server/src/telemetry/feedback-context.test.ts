@@ -62,8 +62,41 @@ describe('detectStack finds the app when it is not in the daemon cwd', () => {
     expect(detectStack(root).stack).toBe('vite');
   });
 
-  it('reports nothing for a directory with no app anywhere — silence beats a guess', () => {
+  it('finds an Angular app in a workspace', () => {
+    write('package.json', { workspaces: ['apps/*'] });
+    write('apps/web/package.json', { dependencies: { '@angular/core': '^18.0.0' } });
+    const got = detectStack(root);
+    expect(got.stack).toBe('angular');
+    expect(got.stackMajor).toBe(18);
+    expect(got.stackSource).toBe('workspace');
+  });
+
+  it('finds a SvelteKit app in a workspace', () => {
+    write('package.json', { workspaces: ['apps/*'] });
+    write('apps/web/package.json', { dependencies: { '@sveltejs/kit': '^2.0.0' } });
+    const got = detectStack(root);
+    expect(got.stack).toBe('sveltekit');
+    expect(got.stackMajor).toBe(2);
+    expect(got.stackSource).toBe('workspace');
+  });
+
+  it('reports no_manifest for a directory with no package.json anywhere', () => {
     mkdirSync(join(root, 'src'), { recursive: true });
-    expect(detectStack(root)).toEqual({});
+    expect(detectStack(root)).toEqual({ unknownStackReason: 'no_manifest' });
+  });
+
+  it('reports no_dependencies when package.json has no deps', () => {
+    write('package.json', { name: 'empty-app' });
+    expect(detectStack(root)).toEqual({ unknownStackReason: 'no_dependencies' });
+  });
+
+  it('reports unrecognized_deps when package.json has deps not in STACK_BY_DEP', () => {
+    write('package.json', { dependencies: { express: '^4.18.0' } });
+    expect(detectStack(root)).toEqual({ unknownStackReason: 'unrecognized_deps' });
+  });
+
+  it('reports no_workspace_apps when monorepo declares workspaces but has no app packages', () => {
+    write('package.json', { workspaces: ['packages/*'] });
+    expect(detectStack(root)).toEqual({ unknownStackReason: 'no_workspace_apps' });
   });
 });

@@ -210,6 +210,7 @@ A periodic roll-up from a daemon that is still running.
 | `stack` | string, optional | Framework detected from package.json |
 | `stackSource` | `cwd` \| `workspace` | Where it was found, and therefore how much to trust its absence |
 | `stackMajor` | int, optional | Major version only. A full semver is a fingerprint |
+| `unknownStackReason` | `UnknownStackReason`, optional | `no_manifest`, `no_dependencies`, `unrecognized_deps`, `no_workspace_apps`. Why stack was undetected |
 | `size` | `ProjectSize` | `tiny`, `small`, `medium`, `large`, `huge`. A bucket answers "toy or real codebase"; an exact file count starts to identify |
 | `monorepo` | boolean, optional |  |
 | `git` | `GitState` | `none`, `local_only`, `remote` |

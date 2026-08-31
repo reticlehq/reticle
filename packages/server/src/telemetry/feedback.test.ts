@@ -144,12 +144,12 @@ describe('feedback context detection', () => {
     });
   });
 
-  it('returns nothing rather than guessing when package.json is unreadable', () => {
+  it('returns no_manifest rather than guessing when package.json is unreadable', () => {
     expect(
       detectStack('/p', () => {
         throw new Error('ENOENT');
       }),
-    ).toEqual({});
+    ).toEqual({ unknownStackReason: 'no_manifest' });
   });
 
   it('reads project scope from a checked-in MCP registration, user scope otherwise', () => {

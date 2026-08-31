@@ -66,6 +66,19 @@ describe('project profiling', () => {
         expect(profile.featureDepth).toBe(0);
         expect(profile.featuresUsed).toEqual([]);
         expect(profile.flowCount).toBe(0);
+        expect(profile.stack).toBeUndefined();
+        expect(profile.unknownStackReason).toBe('no_manifest');
+      },
+    );
+  });
+
+  it('profiles a project with unrecognised dependencies with unknownStackReason unrecognized_deps', () => {
+    withTempProject(
+      (root) => writeFileSync(join(root, 'package.json'), JSON.stringify({ dependencies: { express: '^4.18.0' } })),
+      (root) => {
+        const profile = profileProject(root, Date.now());
+        expect(profile.stack).toBeUndefined();
+        expect(profile.unknownStackReason).toBe('unrecognized_deps');
       },
     );
   });

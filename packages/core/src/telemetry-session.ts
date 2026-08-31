@@ -377,6 +377,23 @@ export const ProjectSize = {
 export type ProjectSize = (typeof ProjectSize)[keyof typeof ProjectSize];
 
 /**
+ * WHY stack detection produced nothing, when `stack` is undefined on a project profile.
+ *
+ * An enum rather than a guess, so we can measure which failure mode dominates:
+ * - `no_manifest`: Neither cwd nor any workspace folder contained a readable package.json.
+ * - `no_dependencies`: Manifest exists but has no dependencies or devDependencies.
+ * - `unrecognized_deps`: Manifest exists with dependencies, but none matched STACK_BY_DEP.
+ * - `no_workspace_apps`: Monorepo root was detected, but discovery found no candidate app directories.
+ */
+export const UnknownStackReason = {
+  NO_MANIFEST: 'no_manifest',
+  NO_DEPENDENCIES: 'no_dependencies',
+  UNRECOGNIZED_DEPS: 'unrecognized_deps',
+  NO_WORKSPACE_APPS: 'no_workspace_apps',
+} as const;
+export type UnknownStackReason = (typeof UnknownStackReason)[keyof typeof UnknownStackReason];
+
+/**
  * The shape of the project and how much of Reticle it actually uses.
  *
  * `featureDepth` is the one to watch: someone running 40 saved flows with visual baselines and a
@@ -401,6 +418,14 @@ export const ProjectProfileSchema = z.object({
   stackSource: z.enum(['cwd', 'workspace']).optional(),
   /** Its MAJOR version only — "breaks on React 19" is a work item, a full semver is a fingerprint. */
   stackMajor: z.number().int().nonnegative().optional(),
+  /**
+   * WHY stack detection produced nothing, when `stack` is undefined.
+   *
+   * Distinguishes a daemon running outside the project (`no_manifest`), a monorepo where no app
+   * could be found (`no_workspace_apps`), an unrecognised/hoisted framework (`unrecognized_deps`),
+   * and an empty manifest (`no_dependencies`).
+   */
+  unknownStackReason: z.nativeEnum(UnknownStackReason).optional(),
   size: z.nativeEnum(ProjectSize).optional(),
   /** True when the repo has workspaces — monorepos exercise very different code paths. */
   monorepo: z.boolean().optional(),

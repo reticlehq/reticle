@@ -510,14 +510,41 @@ function gatherPlanInput(options: InitOptions, io: InitIo, pkgRaw: string): Plan
 /** pnpm's workspace declaration, read when present — it is authoritative about where packages live. */
 const PNPM_WORKSPACE = 'pnpm-workspace.yaml';
 /** Deps that mark a directory as a runnable web app even when it has no bundler config file. */
-const APP_DEPS = ['next', 'vite'] as const;
+const APP_DEPS = [
+  'next',
+  'vite',
+  '@sveltejs/kit',
+  'nuxt',
+  'astro',
+  '@remix-run/react',
+  '@angular/core',
+  'react',
+  'vue',
+  'svelte',
+  'solid-js',
+] as const;
+const APP_CONFIGS = [
+  ...VITE_CONFIG_CANDIDATES,
+  ...NEXT_CONFIG_CANDIDATES,
+  ...ASTRO_CONFIG_CANDIDATES,
+  'svelte.config.js',
+  'svelte.config.ts',
+  'svelte.config.mjs',
+  'svelte.config.cjs',
+  'nuxt.config.ts',
+  'nuxt.config.js',
+  'nuxt.config.mjs',
+  'remix.config.js',
+  'remix.config.ts',
+  'remix.config.mjs',
+  'angular.json',
+];
 
 function looksLikeApp(dir: string, io: Pick<InitIo, 'exists' | 'readFile'>): boolean {
   const pkgRaw = io.readFile(`${dir}/${PACKAGE_JSON}`);
   if (null === pkgRaw) return false;
-  const configs = [...VITE_CONFIG_CANDIDATES, ...NEXT_CONFIG_CANDIDATES];
-  if (configs.some((c) => io.exists(`${dir}/${c}`))) return true;
-  // `next.config` is optional in Next, so the dependency list is the other half of the signal.
+  if (APP_CONFIGS.some((c) => io.exists(`${dir}/${c}`))) return true;
+  // `next.config` and other bundler configs are optional, so the dependency list is the other half of the signal.
   return APP_DEPS.some((d) => pkgRaw.includes(`"${d}"`));
 }
 

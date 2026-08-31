@@ -12,7 +12,7 @@
 import { mcpClientIdentity, setMcpClientIdentityHook } from '../mcp/client-identity.js';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { isAbsolute, join } from 'node:path';
-import { AppRuntime, McpScope, PageDriver, type Feedback } from '@reticlehq/core';
+import { AppRuntime, McpScope, PageDriver, UnknownStackReason, type Feedback } from '@reticlehq/core';
 import { parseMajor } from '../init/detect.js';
 import { findWorkspaceApps, type InitIo } from '../init/run.js';
 
@@ -54,39 +54,75 @@ interface PackageJsonLike {
   devDependencies?: Record<string, string>;
 }
 
+interface ManifestResult {
+  stack?: string;
+  stackMajor?: number;
+  manifestFound: boolean;
+  hasDeps: boolean;
+}
+
 /**
- * The project's framework and its MAJOR version, or `{}` when package.json is absent, unreadable, or
- * names nothing we recognize. The major comes from `parseMajor` — the same range parser `reticle init`
- * uses to decide React 19 source mapping — so a range like `^15.0.0-canary.3` narrows the same way in
- * both places instead of via a second, subtly different reader.
+ * The project's framework and its MAJOR version, or `{ manifestFound: false, hasDeps: false }` when
+ * package.json is absent or unreadable. The major comes from `parseMajor` — the same range parser
+ * `reticle init` uses to decide React 19 source mapping — so a range like `^15.0.0-canary.3` narrows
+ * the same way in both places instead of via a second, subtly different reader.
  */
 function stackOfManifest(
   dir: string,
   read: (path: string) => string,
-): { stack?: string; stackMajor?: number } {
+): ManifestResult {
   let pkg: PackageJsonLike;
   try {
     pkg = JSON.parse(read(join(dir, PACKAGE_JSON))) as PackageJsonLike;
   } catch {
-    return {};
+    return { manifestFound: false, hasDeps: false };
   }
   const deps = { ...pkg.devDependencies, ...pkg.dependencies };
+  const hasDeps = Object.keys(deps).length > 0;
   for (const [dep, stack] of STACK_BY_DEP) {
     const range = deps[dep];
     if (range === undefined) continue;
     const stackMajor = parseMajor(range);
-    return { stack, ...(stackMajor !== undefined ? { stackMajor } : {}) };
+    return { stack, ...(stackMajor !== undefined ? { stackMajor } : {}), manifestFound: true, hasDeps: true };
   }
-  return {};
+  return { manifestFound: true, hasDeps };
 }
 
 export function detectStack(
   cwd: string,
   read: (path: string) => string = readFile,
-): { stack?: string; stackMajor?: number; stackSource?: 'cwd' | 'workspace' } {
+): {
+  stack?: string;
+  stackMajor?: number;
+  stackSource?: 'cwd' | 'workspace';
+  unknownStackReason?: UnknownStackReason;
+} {
   // The cwd wins when it IS an app — never redirect away from the real answer.
   const here = stackOfManifest(cwd, read);
-  if (here.stack !== undefined) return { ...here, stackSource: 'cwd' };
+  if (here.stack !== undefined) {
+    return {
+      stack: here.stack,
+      ...(here.stackMajor !== undefined ? { stackMajor: here.stackMajor } : {}),
+      stackSource: 'cwd',
+    };
+  }
+
+  let isMonorepoRoot = false;
+  try {
+    const pkgRaw = read(join(cwd, PACKAGE_JSON));
+    const parsed = JSON.parse(pkgRaw) as { workspaces?: unknown };
+    if (parsed.workspaces !== undefined) isMonorepoRoot = true;
+  } catch {
+    // no package.json or invalid json
+  }
+  if (!isMonorepoRoot) {
+    try {
+      read(join(cwd, 'pnpm-workspace.yaml'));
+      isMonorepoRoot = true;
+    } catch {
+      // no pnpm-workspace.yaml
+    }
+  }
 
   // Otherwise look for the app. The daemon's cwd is wherever the agent's client happened to launch,
   // which for a real repo is the ROOT while the app sits in `frontend/`, `web/`, or a declared
@@ -98,17 +134,51 @@ export function detectStack(
   // declared workspaces (pnpm-workspace.yaml, package.json `workspaces`) AND scans top-level
   // directories, and it was widened once already for a repo shape a user hit twice. A second
   // detector here would drift from it the first time either changed.
+  let workspaceApps: string[] = [];
   try {
-    for (const app of findWorkspaceApps(profileIo(cwd))) {
+    workspaceApps = findWorkspaceApps(profileIo(cwd));
+    for (const app of workspaceApps) {
       const found = stackOfManifest(join(cwd, app), read);
       // Reported as `workspace` so the share of projects needing discovery is measurable — that
       // number is what says whether our inference needs an agent to correct it.
-      if (found.stack !== undefined) return { ...found, stackSource: 'workspace' };
+      if (found.stack !== undefined) {
+        return {
+          stack: found.stack,
+          ...(found.stackMajor !== undefined ? { stackMajor: found.stackMajor } : {}),
+          stackSource: 'workspace',
+        };
+      }
     }
   } catch {
     // Discovery touches the filesystem; a permission error must never cost us the profile event.
   }
-  return {};
+
+  // If we found workspace apps, but none had a recognized framework:
+  if (workspaceApps.length > 0) {
+    const results = workspaceApps.map((app) => stackOfManifest(join(cwd, app), read));
+    if (results.some((r) => r.hasDeps)) {
+      return { unknownStackReason: UnknownStackReason.UNRECOGNIZED_DEPS };
+    }
+    if (results.some((r) => r.manifestFound)) {
+      return { unknownStackReason: UnknownStackReason.NO_DEPENDENCIES };
+    }
+    return { unknownStackReason: UnknownStackReason.NO_MANIFEST };
+  }
+
+  // If no workspace apps were found:
+  if (isMonorepoRoot) {
+    return { unknownStackReason: UnknownStackReason.NO_WORKSPACE_APPS };
+  }
+
+  if (here.manifestFound) {
+    return {
+      unknownStackReason: here.hasDeps
+        ? UnknownStackReason.UNRECOGNIZED_DEPS
+        : UnknownStackReason.NO_DEPENDENCIES,
+    };
+  }
+
+  return { unknownStackReason: UnknownStackReason.NO_MANIFEST };
 }
 
 /**
