@@ -11,8 +11,10 @@
  * the same since, and timeout_ms set to resume_ms to continue waiting.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { SessionState } from '@reticlehq/core';
+import { SessionState, Verified } from '@reticlehq/core';
 import { LastAct } from '../session/last-act.js';
+import { decideVerified } from '../honesty/verified.js';
+import { buildHonestyBlock, HonestyGrade } from '../honesty/honesty.js';
 import { MCP_CALL_BUDGET_MS } from './numeric-bounds.js';
 import { TOOLS, type ToolDef, type ToolDeps } from './tools.js';
 import { ReticleTool } from './tool-names.js';
@@ -78,9 +80,34 @@ describe('reticle_wait_for bounded-wait cursor (issue #601)', () => {
       });
       // Advance past the per-call budget so the timeout fires and the Promise resolves.
       await vi.advanceTimersByTimeAsync(MCP_CALL_BUDGET_MS + 100);
-      const result = (await promise) as { pass: boolean; resume_ms?: number };
+      const result = (await promise) as { pass: boolean; resume_ms?: number; inconclusive?: string };
       expect(result.pass).toBe(false);
       expect(result.resume_ms).toBe(extra);
+    });
+
+    it('sets inconclusive when the per-call budget is reached', async () => {
+      const promise = tool(ReticleTool.WAIT_FOR).handler(makeDeps(), {
+        predicate: neverFires,
+        timeout_ms: MCP_CALL_BUDGET_MS + 5_000,
+      });
+      await vi.advanceTimersByTimeAsync(MCP_CALL_BUDGET_MS + 100);
+      const result = (await promise) as { pass: boolean; resume_ms?: number; inconclusive?: string };
+      expect(result.inconclusive).toBeTruthy();
+    });
+
+    it('a budget-exceeded result is UNKNOWN, not a failure verdict', async () => {
+      // An agent that ignores resume_ms must not see Verified.NO — the predicate was not seen
+      // because the call was cut short, not because the app produced the wrong outcome.
+      const promise = tool(ReticleTool.WAIT_FOR).handler(makeDeps(), {
+        predicate: neverFires,
+        timeout_ms: MCP_CALL_BUDGET_MS + 5_000,
+      });
+      await vi.advanceTimersByTimeAsync(MCP_CALL_BUDGET_MS + 100);
+      const result = (await promise) as { pass: boolean; inconclusive?: string };
+      const clean = buildHonestyBlock({ grade: HonestyGrade.SIGNAL, attribution: 'window' });
+      const decided = decideVerified({ pass: result.pass, inconclusive: result.inconclusive, honesty: clean });
+      expect(decided.verified).toBe(Verified.UNKNOWN);
+      expect(decided.verified).not.toBe(Verified.NO);
     });
 
     it('omits resume_ms when the predicate satisfies within the first chunk', async () => {

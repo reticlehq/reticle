@@ -363,7 +363,18 @@ export const OBSERVE_TOOLS: ToolDef[] = [
         // `lastActSourceOnFailure` — an assert used to be blamed on the previous act's file:line.
         ...annotateStarvedFailure(session, verdict),
         ...assertionSource(session, predicate, verdict),
-        ...(resumeMs !== undefined ? { resume_ms: resumeMs } : {}),
+        ...(resumeMs !== undefined
+          ? {
+              resume_ms: resumeMs,
+              // A capped wait is undecidable, not a failure: the predicate was not observed in
+              // this window because the call was cut short to stay within the client's request
+              // timeout, not because the app produced the wrong outcome. Setting inconclusive
+              // causes decideVerified to return Verified.UNKNOWN rather than Verified.NO, so an
+              // agent that ignores resume_ms gets an honest "I could not tell" instead of a false
+              // failure verdict.
+              inconclusive: `per-call limit (${String(MCP_CALL_BUDGET_MS)} ms) reached; predicate not seen in this window — re-invoke with the same predicate, same since, and timeout_ms: resume_ms`,
+            }
+          : {}),
         ...healthEnvelope(session),
         ...bufferEnvelope(session),
       });
