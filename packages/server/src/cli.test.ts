@@ -200,6 +200,23 @@ describe('parseCliArgs', () => {
     });
   });
 
+  it('verify --session-id targets one connected session', () => {
+    expect(parseCliArgs(['verify', URL, '--session-id', 's2'], PORT)).toEqual({
+      kind: 'verify',
+      url: URL,
+      headless: true,
+      sessionId: 's2',
+      port: PORT,
+    });
+  });
+
+  it('verify --session-id with no id names the flag', () => {
+    expect(parseCliArgs(['verify', URL, '--session-id'], PORT)).toEqual({
+      kind: 'error',
+      message: '--session-id needs a value',
+    });
+  });
+
   it('verify keeps the resolved default port (RETICLE_PORT / .reticle.json)', () => {
     // cli.ts already folds env + .reticle.json into parseCliArgs's defaultPort. Dropping port
     // from the verify result made handleVerify fall back to 4400 anyway, so a project on any

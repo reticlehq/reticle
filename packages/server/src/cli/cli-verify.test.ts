@@ -109,6 +109,18 @@ describe('runVerify', () => {
     expect(rec.closed).toBe(1);
   });
 
+  it('passes the selected session id to flow replay', async () => {
+    let selectedSessionId: string | undefined;
+    const { ports } = harness({
+      verify: (sessionId?: string) => {
+        selectedSessionId = sessionId;
+        return Promise.resolve(makeRun(RunFlowStatus.PASS));
+      },
+    });
+    await runVerify({ ...ARGS, sessionId: 's2' }, ports);
+    expect(selectedSessionId).toBe('s2');
+  });
+
   it('exits 1 when a flow fails', async () => {
     const { ports, rec } = harness({ verify: () => Promise.resolve(makeRun(RunFlowStatus.FAIL)) });
     await runVerify(ARGS, ports);

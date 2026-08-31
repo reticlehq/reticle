@@ -37,7 +37,7 @@ export const CLI_USAGE = `usage:  npx @reticlehq/server <command>   (or \`reticl
   reticle status [--port N]
   reticle doctor [--port N]                            (one command to diagnose setup: Chromium, daemon, port)
   reticle open  [url] [--port N]                        (show the app: reuse the connected tab, else open one)
-  reticle verify <url> [--port N] [--headed] [--timeout N] [--storage-state <file>]  (one-shot: drive the URL, verify saved flows, exit 0=pass)
+  reticle verify <url> [--port N] [--headed] [--timeout N] [--storage-state <file>] [--session-id <id>]  (one-shot: drive the URL, verify saved flows, exit 0=pass)
   reticle affected [--since <ref>] [file...]           (which saved flows must re-verify for the changed files)
   reticle gate [--since <ref>] [file...]               (exit non-zero unless passing artifacts cover the affected flows)
   reticle watch [url]                                  (on save, report which saved flows must re-verify)
@@ -177,6 +177,7 @@ export const HTTP_PORT_FLAG = '--http-port';
 export const HTTP_TOKEN_FLAG = '--http-token';
 const TIMEOUT_FLAG = '--timeout';
 const STORAGE_STATE_FLAG = '--storage-state';
+const SESSION_ID_FLAG = '--session-id';
 
 export type CliResult =
   | {
@@ -225,6 +226,7 @@ export type CliResult =
       port: number;
       timeoutMs?: number;
       storageState?: string;
+      sessionId?: string;
     }
   | { kind: 'affected'; files: string[]; since?: string }
   | { kind: 'hunt'; dir: string }
@@ -399,11 +401,12 @@ type VerifySuffix =
       port: number;
       timeoutMs?: number;
       storageState?: string;
+      sessionId?: string;
     }
   | { kind: 'error'; message: string };
 
 /**
- * Parse `verify <url> [--port N] [--headed] [--timeout N] [--storage-state <file>]`. The first
+ * Parse `verify <url> [--port N] [--headed] [--timeout N] [--storage-state <file>] [--session-id <id>]`. The first
  * non-flag token is the preview URL. `defaultPort` is already env + `.reticle.json` + 4400.
  */
 function parseVerifySuffix(args: string[], defaultPort: number): VerifySuffix {
@@ -411,6 +414,7 @@ function parseVerifySuffix(args: string[], defaultPort: number): VerifySuffix {
   let url: string | undefined;
   let timeoutMs: number | undefined;
   let storageState: string | undefined;
+  let sessionId: string | undefined;
   let port = defaultPort;
   let i = 0;
   while (i < args.length) {
@@ -437,6 +441,11 @@ function parseVerifySuffix(args: string[], defaultPort: number): VerifySuffix {
       const v = args[i];
       if (v === undefined) return missingValue(STORAGE_STATE_FLAG);
       storageState = v;
+    } else if (arg === SESSION_ID_FLAG) {
+      i++;
+      const v = args[i];
+      if (v === undefined) return missingValue(SESSION_ID_FLAG);
+      sessionId = v;
     } else if (arg.startsWith('--')) {
       return unknownArgument(arg);
     } else if (url === undefined) {
@@ -454,6 +463,7 @@ function parseVerifySuffix(args: string[], defaultPort: number): VerifySuffix {
     port,
     ...(timeoutMs !== undefined ? { timeoutMs } : {}),
     ...(storageState !== undefined ? { storageState } : {}),
+    ...(sessionId !== undefined ? { sessionId } : {}),
   };
 }
 
@@ -681,6 +691,7 @@ export function parseCliArgs(
         port: r.port,
         ...(r.timeoutMs !== undefined ? { timeoutMs: r.timeoutMs } : {}),
         ...(r.storageState !== undefined ? { storageState: r.storageState } : {}),
+        ...(r.sessionId !== undefined ? { sessionId: r.sessionId } : {}),
       };
     }
     case CAPSULES_COMMAND:

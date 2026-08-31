@@ -70,7 +70,7 @@ export interface VerifyConnection {
   /** Resolve true once a browser session has connected, or false at timeout. */
   sessionReady(timeoutMs: number): Promise<boolean>;
   listFlows(): Promise<string[]>;
-  verify(): Promise<ReticleVerificationRun>;
+  verify(sessionId?: string): Promise<ReticleVerificationRun>;
   close(): Promise<void>;
 }
 
@@ -84,6 +84,7 @@ export interface VerifyPorts {
 interface VerifyArgs {
   url: string;
   timeoutMs: number;
+  sessionId?: string;
 }
 
 function errMessage(error: unknown): string {
@@ -117,7 +118,7 @@ export async function runVerify(args: VerifyArgs, ports: VerifyPorts): Promise<v
       ports.exit(EXIT_FAIL);
       return;
     }
-    const run = await conn.verify();
+    const run = await conn.verify(args.sessionId);
     await pushRunToCloud(run, ports); // best-effort; opt-in; never changes the verdict or exit code
     ports.out(renderRunReport(run));
     ports.exit(run.verdict.status === VerdictStatus.PASS ? EXIT_PASS : EXIT_FAIL);
@@ -238,11 +239,11 @@ async function openLiveConnection(opts: LiveOpts): Promise<VerifyConnection> {
     ...(opts.storageState !== undefined ? { storageState: opts.storageState } : {}),
   });
   const deps = buildVerifyDeps(running, opts.reticleRoot, opts.now);
-  const runner = new ReticleRunner(createRunnerPort(deps));
   return {
     sessionReady: (timeoutMs) => waitForSession(deps.sessions, timeoutMs, opts.now),
     listFlows: () => deps.flows.list(),
-    verify: async () => {
+    verify: async (sessionId) => {
+      const runner = new ReticleRunner(createRunnerPort(deps, sessionId));
       const run = await runner.verify({
         project: { name: opts.projectName, framework: RunFramework.OTHER, previewUrl: opts.url },
         agent: { id: VERIFY_AGENT_ID, kind: RunAgentKind.OEM_PIPELINE },
@@ -302,6 +303,7 @@ export function handleVerify(parsed: {
   headless: boolean;
   timeoutMs?: number;
   storageState?: string;
+  sessionId?: string;
   /** Bridge port — parseCliArgs already resolves --port / RETICLE_PORT / .reticle.json into this. */
   port: number;
 }): void {
@@ -337,7 +339,11 @@ export function handleVerify(parsed: {
       return;
     }
     await runVerify(
-      { url: parsed.url, timeoutMs: parsed.timeoutMs ?? DEFAULT_SESSION_TIMEOUT_MS },
+      {
+        url: parsed.url,
+        timeoutMs: parsed.timeoutMs ?? DEFAULT_SESSION_TIMEOUT_MS,
+        ...(parsed.sessionId !== undefined ? { sessionId: parsed.sessionId } : {}),
+      },
       ports,
     );
   })();
