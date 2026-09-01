@@ -35,24 +35,37 @@ function fakePool(): {
   let active = 0;
   const released: string[] = [];
   const aliased: [string, string][] = [];
+  const byOrigin = new Map<string, string>();
+  const originOf = (url: string): string | undefined => {
+    try {
+      return new URL(url).origin;
+    } catch {
+      return undefined;
+    }
+  };
   const pool = {
     acquire(url: string, opts: { sessionId?: string } = {}): Promise<Lease> {
       acquired.push({ url, sessionId: opts.sessionId });
       active += 1;
       const sessionId = opts.sessionId ?? 'gen';
+      const origin = originOf(url);
+      if (origin !== undefined) byOrigin.set(origin, sessionId);
       return Promise.resolve({ sessionId, url, release: () => Promise.resolve() });
     },
     release(sessionId: string): Promise<void> {
       released.push(sessionId);
       active = Math.max(0, active - 1);
+      for (const [origin, id] of byOrigin) {
+        if (id === sessionId) byOrigin.delete(origin);
+      }
       return Promise.resolve();
     },
     activeCount: () => active,
     queuedCount: () => 0,
-    leasedSessionIds: () => [],
+    leasedSessionIds: () => [...byOrigin.values()],
     leaseTtlMs: () => 300_000,
-    // Recorded, not stubbed away: the lease tells the pool the other name the lease answers to, and
-    // a double that silently lacked it would let that call be dropped without any test noticing.
+    leaseIdOnOrigin: (origin: string) => byOrigin.get(origin),
+    touch: () => undefined,
     alias: (registeredId: string, leaseId: string) => {
       aliased.push([registeredId, leaseId]);
     },
@@ -191,6 +204,65 @@ describe('reticle_lease_acquire', () => {
     expect(acquired[0]?.sessionId).toBe(result.sessionId);
   });
 
+  it('reuses a live lease on the same origin rather than minting a second tab', async () => {
+    // The reported case: acquire, the page needs a reload, acquire again. A second context
+    // leaves both tabs connected and every later tool requires sessionId.
+    const { pool, acquired } = fakePool();
+    const first = (await tool(ReticleTool.LEASE_ACQUIRE)(
+      { ...baseDeps, pool },
+      { url: 'http://localhost:3000/dashboard' },
+    )) as { sessionId: string; reused?: boolean };
+    const second = (await tool(ReticleTool.LEASE_ACQUIRE)(
+      { ...baseDeps, pool },
+      { url: 'http://localhost:3000/settings' },
+    )) as { sessionId: string; reused?: boolean; hint?: string; leased: number };
+
+    expect(second.sessionId).toBe(first.sessionId);
+    expect(second.reused).toBe(true);
+    expect(second.leased).toBe(1);
+    expect(second.hint).toMatch(/already hold a lease on this origin/);
+    expect(second.hint).toContain(first.sessionId);
+    expect(acquired).toHaveLength(1);
+  });
+
+  it('mints a second lease when the first is on a different origin', async () => {
+    const { pool, acquired } = fakePool();
+    const first = (await tool(ReticleTool.LEASE_ACQUIRE)(
+      { ...baseDeps, pool },
+      { url: 'http://localhost:3000/' },
+    )) as { sessionId: string };
+    const second = (await tool(ReticleTool.LEASE_ACQUIRE)(
+      { ...baseDeps, pool },
+      { url: 'http://localhost:3001/' },
+    )) as { sessionId: string; reused?: boolean };
+
+    expect(second.sessionId).not.toBe(first.sessionId);
+    expect(second.reused).toBeUndefined();
+    expect(acquired).toHaveLength(2);
+    expect(pool.activeCount()).toBe(2);
+  });
+
+  it('releases a dead lease on this origin and mints a fresh one', async () => {
+    const { pool, acquired } = fakePool();
+    const first = (await tool(ReticleTool.LEASE_ACQUIRE)(
+      { ...baseDeps, pool },
+      { url: 'http://localhost:3000/' },
+    )) as { sessionId: string };
+    const sessions = {
+      get: (id: string) => (id === first.sessionId ? undefined : { id }),
+    };
+
+    const second = (await tool(ReticleTool.LEASE_ACQUIRE)(
+      { ...baseDeps, pool, sessions } as unknown as ToolDeps,
+      { url: 'http://localhost:3000/' },
+    )) as { sessionId: string; reused?: boolean };
+
+    expect(second.sessionId).not.toBe(first.sessionId);
+    expect(second.reused).toBeUndefined();
+    expect(acquired).toHaveLength(2);
+    expect(pool.activeCount()).toBe(1);
+  });
+
   it('returns expiresInMs so the agent knows when the lease will die', async () => {
     const { pool } = fakePool();
     const result = (await tool(ReticleTool.LEASE_ACQUIRE)(
@@ -219,7 +291,7 @@ describe('reticle_lease_release', () => {
     const acq = (await tool(ReticleTool.LEASE_ACQUIRE)(
       { ...baseDeps, pool },
       {
-        url: 'http://localhost:3000/',
+        url: 'http://localhost:3001/',
       },
     )) as { sessionId: string };
     expect(pool.activeCount()).toBe(2);

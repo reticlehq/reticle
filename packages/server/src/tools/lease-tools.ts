@@ -1,10 +1,11 @@
 /**
  * Lease tools — the agent-facing surface of the BrowserPool.
  *
- * `reticle_lease_acquire` opens a fresh isolated headless context navigated to the app URL and returns
- * the sessionId the app's SDK will register (stamped via __reticle_session so the lease and the session
- * correlate 1:1). This is the "one of 10 flows" entry point: 10 agents acquire 10 leases, the pool
- * keeps them in ONE browser, capped and queued. `reticle_lease_release` frees the slot.
+ * `reticle_lease_acquire` opens an isolated headless context navigated to the app URL and returns
+ * the sessionId the app's SDK will register. A second acquire on the same origin reuses the live
+ * lease rather than minting another tab — that second tab used to poison default session resolution
+ * for the rest of the run. The parallel suite still mints via `acquireLeasedSession`, because ten
+ * flows on one origin need isolation on purpose.
  *
  * Attach-only: the pool drives a browser against an already-running dev server — it never starts one.
  */
@@ -52,6 +53,24 @@ async function leaseEvidence(deps: ToolDeps, port: number, url: string): Promise
 
 const POOL_UNAVAILABLE =
   'browser pool unavailable — the lease tools need the daemon-managed pool (start Reticle via `reticle mcp`).';
+
+/** The origin of a URL, or undefined when it does not parse. */
+export function originOf(url: string): string | undefined {
+  try {
+    return new URL(url).origin;
+  } catch {
+    return undefined;
+  }
+}
+
+const ALREADY_HELD_LEASE = 'you already hold a lease on this origin';
+
+function alreadyHeldHint(sessionId: string, origin: string): string {
+  return (
+    `${ALREADY_HELD_LEASE} (${origin}): ${sessionId} — reused it rather than opening a second ` +
+    'tab, which would make every later call require sessionId. Release first if you want a fresh one.'
+  );
+}
 
 /**
  * Append Reticle identity params (__reticle_session, optional __reticle_project) to a URL so the app's own SDK
@@ -238,7 +257,7 @@ export async function waitForLeasedSession(
 export const LEASE_ACQUIRE_TOOL: ToolDef = {
   name: ReticleTool.LEASE_ACQUIRE,
   description:
-    'Lease a fresh isolated headless browser context from the shared pool and navigate it to the app URL (the app must already be running and embed @reticlehq/core). Returns the sessionId the leased tab registers — pass it to other tools. The pool keeps all leases in ONE browser and caps concurrency; if at capacity this waits for a free slot. Release with reticle_lease{action:"release"} when the flow is done.',
+    'Lease an isolated headless browser context from the shared pool and navigate it to the app URL (the app must already be running and embed @reticlehq/core). If this origin is already leased and still connected, returns that session rather than minting a second tab — a second acquire on the same origin poisons default session resolution. Returns the sessionId the leased tab registers — pass it to other tools. The pool keeps all leases in ONE browser and caps concurrency; if at capacity this waits for a free slot. Release with reticle_lease{action:"release"} when the flow is done.',
   inputSchema: {
     url: z
       .string()
@@ -263,6 +282,12 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
       ),
     leased: z.number().describe('How many contexts are currently leased from the pool.'),
     queued: z.number().describe('How many acquires are waiting for a free slot.'),
+    reused: z
+      .boolean()
+      .optional()
+      .describe(
+        'True when this acquire returned an existing live lease on the same origin rather than minting a second context.',
+      ),
     hint: z.string().optional(),
   },
   handler: async (deps: ToolDeps, args) => {
@@ -283,6 +308,26 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
       }
     }
     const projectId = asString(args['projectId']);
+    const origin = originOf(url);
+    const existing = origin === undefined ? undefined : pool.leaseIdOnOrigin?.(origin);
+    if (existing !== undefined && origin !== undefined) {
+      if (deps.sessions.get(existing) !== undefined) {
+        pool.touch(existing);
+        return {
+          sessionId: existing,
+          url,
+          ready: true,
+          reused: true,
+          expiresInMs: pool.leaseTtlMs(),
+          leased: pool.activeCount(),
+          queued: pool.queuedCount(),
+          hint: alreadyHeldHint(existing, origin),
+        };
+      }
+      // The lease is still held but the tab has gone — a reload dropped the session. Free the
+      // slot and mint, rather than handing back a dead id or leaving both contexts occupied.
+      await pool.release(existing);
+    }
     const sessionId = newLeaseId();
     const navUrl = appendReticleParams(url, sessionId, projectId);
     let lease;

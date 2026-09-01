@@ -177,6 +177,32 @@ export class BrowserPool {
   }
 
   /**
+   * The public session id of an active lease on this origin, if we already hold one.
+   *
+   * The lease TOOL reuses that id instead of minting a second context: a second acquire on the same
+   * origin used to leave both tabs connected and poison default session resolution (#600). The pool's
+   * own `acquire` still mints — the parallel suite needs isolation on purpose.
+   *
+   * Prefers the alias the agent was given, when the app registered under its own name.
+   */
+  leaseIdOnOrigin(origin: string): string | undefined {
+    for (const [leaseId, lease] of this.#active) {
+      let leaseOrigin: string | undefined;
+      try {
+        leaseOrigin = new URL(lease.url).origin;
+      } catch {
+        continue;
+      }
+      if (leaseOrigin !== origin) continue;
+      for (const [alias, id] of this.#aliases) {
+        if (id === leaseId) return alias;
+      }
+      return leaseId;
+    }
+    return undefined;
+  }
+
+  /**
    * Release a lease by its sessionId (closes the context, frees the slot). No-op if unknown.
    *
    * Resolves an alias first, because the agent releases with the id it was GIVEN, which for an app
