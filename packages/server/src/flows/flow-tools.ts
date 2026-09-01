@@ -129,7 +129,7 @@ export const FLOW_TOOLS: ToolDef[] = [
   {
     name: ReticleTool.FLOW_SAVE,
     description:
-      'Persist the last/active recording (by name) as a git-checked, anchor-resolved flow at .reticle/flows/<name>.json. Each step is bound to a SEMANTIC anchor (testid/role/signal), never a volatile ref; steps without a resolvable testid are kept with degraded:true (a "add a data-testid here" marker) rather than dropped. Returns { name, stepCount, degraded, empty, assertions } — `assertions.grade` is asserted | presence-only | assertion-free: a flow that only acts (or only checks element presence) will pass even if the feature breaks, so when grade is not "asserted" follow assertions.warning and add a consequence assertion via reticle_annotate (assert-signal / assert-net / success-state).',
+      'Persist a stopped recording as a git-checked, anchor-resolved flow at .reticle/flows/<flowName>.json. Each step is bound to a SEMANTIC anchor (testid/role/signal), never a volatile ref; steps without a resolvable testid are kept with degraded:true (a "add a data-testid here" marker) rather than dropped. Returns { name, stepCount, degraded, empty, assertions } — `assertions.grade` is asserted | presence-only | assertion-free: a flow that only acts (or only checks element presence) will pass even if the feature breaks, so when grade is not "asserted" follow assertions.warning and add a consequence assertion via reticle_annotate (assert-signal / assert-net / success-state).',
     inputSchema: {
       flow: z
         .string()
@@ -138,7 +138,13 @@ export const FLOW_TOOLS: ToolDef[] = [
       flowName: z
         .string()
         .describe(
-          'Name for the flow file (saved to .reticle/flows/<flowName>.json). Use again in reticle_flow{action:"load"} / reticle_flow_replay.',
+          'Name to save the flow AS (.reticle/flows/<flowName>.json). Use again in reticle_flow{action:"load"} / reticle_flow_replay.',
+        ),
+      recording: z
+        .string()
+        .optional()
+        .describe(
+          'Which stopped recording to save — the name reticle_record{action:"start"} was given. Omit when only one recording is held, or when it was recorded under `flowName`.',
         ),
       intent: z
         .string()
@@ -177,25 +183,35 @@ export const FLOW_TOOLS: ToolDef[] = [
       code: z.string().optional(),
     },
     handler: (deps: ToolDeps, args) => {
-      const name = asString(aliasParam(args, 'flowName', ['flow'])['flowName']) ?? '';
-      const program = deps.recordings.getCompiled(name);
-      if (program === undefined) {
-        /*
-         * Name what DOES exist.
-         *
-         * `flowName` here is the RECORDING's name, while every other flow tool reads it as the name
-         * to save AS — so recording `default` and saving as `sign-in` looks obviously right and
-         * answers "no compiled recording by that name". The old message then said "record one
-         * first", which is advice to repeat the step that just succeeded. Cost a real investigation
-         * before the names were compared.
-         */
-        const held = deps.recordings.compiled();
+      const flowName = asString(aliasParam(args, 'flowName', ['flow'])['flowName']) ?? '';
+      const requested = asString(args['recording']);
+      const held = deps.recordings.compiled();
+      /*
+       * `flowName` is the name to save AS — what every other flow tool means by it. The recording
+       * to fold is `recording`, defaulting to the obvious one: a recording made under `flowName`,
+       * or the only one held. It used to mean the recording's name, so recording `default` and
+       * saving as `sign-in` answered "no recording named 'sign-in'", and a flow could only ever be
+       * called whatever the recording was started as.
+       */
+      const name =
+        requested ??
+        (deps.recordings.getCompiled(flowName) !== undefined
+          ? flowName
+          : 1 === held.length
+            ? held[0]
+            : undefined);
+      const program = name === undefined ? undefined : deps.recordings.getCompiled(name);
+      if (name === undefined || program === undefined) {
+        // Name what DOES exist, and how to pick from it.
+        const listed = held.map((n) => `'${n}'`).join(', ');
         return Promise.resolve({
           error:
             0 === held.length
               ? flowErrorMessage(FlowErrorCode.NO_RECORDING)
-              : `no recording named '${name}'. This is the name the RECORDING was made under, not ` +
-                `the name to save it as — stopped and ready to save: ${held.map((n) => `'${n}'`).join(', ')}.`,
+              : requested === undefined
+                ? `several recordings are stopped and ready to save: ${listed} — say which with ` +
+                  `recording: "<name>" (flowName is the name to save it as).`
+                : `no recording named '${requested}' — stopped and ready to save: ${listed}.`,
           code: FlowErrorCode.NO_RECORDING,
         });
       }
@@ -213,28 +229,30 @@ export const FLOW_TOOLS: ToolDef[] = [
       const projectId = sessionProjectId(deps, asString(args['sessionId']));
       // A zero-step recording is not a flow. Saving it wrote a file the suite reports "unverifiable"
       // forever while telling the agent it had saved a regression test — see empty-flow.
-      const emptyRefusal = emptyFlowRefusal(program.steps.length, name);
+      const emptyRefusal = emptyFlowRefusal(program.steps.length, flowName);
       if (emptyRefusal !== undefined) return Promise.resolve(emptyRefusal);
       const { flows, root } = flowsForSession(deps, projectId);
-      return flows.save(program, annotations, projectId).then(async (res) => {
-        if (!res.ok) return { error: flowErrorMessage(res.code), code: res.code };
-        deps.annotations.clear(name);
-        // Grade the saved flow's assertions so the agent learns immediately if it just saved a flow
-        // that asserts nothing observable (passes even when the feature is broken).
-        const loaded = await flows.load(res.value.name, projectId);
-        // The absolute path, always. A save that reports success and not WHERE cost a reporter a
-        // `find` across their disk to discover it had landed in an unrelated repo. The name came
-        // back from a save that succeeded, so the guard is a type narrowing rather than a doubt.
-        const saved = res.value.name;
-        const path = isValidFlowName(saved) ? flowPath(root, saved, projectId) : undefined;
-        return loaded.ok
-          ? {
-              ...res.value,
-              ...(path === undefined ? {} : { path }),
-              assertions: classifyFlowAssertions(loaded.value),
-            }
-          : { ...res.value, ...(path === undefined ? {} : { path }) };
-      });
+      return flows
+        .save({ ...program, name: flowName }, annotations, projectId)
+        .then(async (res) => {
+          if (!res.ok) return { error: flowErrorMessage(res.code), code: res.code };
+          deps.annotations.clear(name);
+          // Grade the saved flow's assertions so the agent learns immediately if it just saved a flow
+          // that asserts nothing observable (passes even when the feature is broken).
+          const loaded = await flows.load(res.value.name, projectId);
+          // The absolute path, always. A save that reports success and not WHERE cost a reporter a
+          // `find` across their disk to discover it had landed in an unrelated repo. The name came
+          // back from a save that succeeded, so the guard is a type narrowing rather than a doubt.
+          const saved = res.value.name;
+          const path = isValidFlowName(saved) ? flowPath(root, saved, projectId) : undefined;
+          return loaded.ok
+            ? {
+                ...res.value,
+                ...(path === undefined ? {} : { path }),
+                assertions: classifyFlowAssertions(loaded.value),
+              }
+            : { ...res.value, ...(path === undefined ? {} : { path }) };
+        });
     },
   },
   {
