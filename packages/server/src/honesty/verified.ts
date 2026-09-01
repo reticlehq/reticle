@@ -84,7 +84,8 @@ interface VerifiedInputs {
   outcomeUnread?: readonly string[];
   /**
    * The declared consequence that held does not depend on the response body — an exact string
-   * rendered, a store path, a signal. See `declaresBodyIndependentChannel`.
+   * rendered, a store path, a signal, a route, or an element located by role / name / testid. See
+   * `declaresBodyIndependentChannel`.
    *
    * The unread-body clause exists for the case where the body is the ONLY channel that could have
    * contradicted the screen (a 200 with batch/GraphQL errors inside). When a body-independent

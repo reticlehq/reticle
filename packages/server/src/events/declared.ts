@@ -76,13 +76,15 @@ export function declaredExpectations(predicate: Predicate | undefined): Declared
  *
  * The unread-body clause exists for the case where the body is the ONLY channel that could have
  * contradicted the screen — a 200 with per-item failures inside, a GraphQL error that is also a
- * 200. A declared string on screen, store path, or signal that held is a different channel, and
- * grading `unknown` there costs a real verdict (measured: a 201 plus the unique row, unread body,
- * agent went to enable capture instead of finishing the drive).
+ * 200. A declared string on screen, store path, signal, route, or an element located by role /
+ * name / testid that held is a different channel, and grading `unknown` there costs a real
+ * verdict (measured: a 201 plus the unique row, unread body, agent went to enable capture instead
+ * of finishing the drive).
  *
  * Same conservatism as `declaredExpectations`: only the top level and `allOf`. An `anyOf` branch
  * may never have held, and honouring it would skip the unread caveat on the strength of a net
- * success that was the branch that actually matched.
+ * success that was the branch that actually matched. An `absent` element is not a consequence the
+ * body cannot own.
  */
 export function declaresBodyIndependentChannel(predicate: Predicate | undefined): boolean {
   if (predicate === undefined) return false;
@@ -95,9 +97,17 @@ export function declaresBodyIndependentChannel(predicate: Predicate | undefined)
         return true !== p.absent;
       case PredicateKind.SIGNAL:
       case PredicateKind.STATE:
+      case PredicateKind.ROUTE:
         return true;
       case PredicateKind.ELEMENT:
-        return true !== p.absent && (p.query.value !== undefined || p.query.text !== undefined);
+        return (
+          true !== p.absent &&
+          (p.query.value !== undefined ||
+            p.query.text !== undefined ||
+            p.query.role !== undefined ||
+            p.query.name !== undefined ||
+            p.query.testid !== undefined)
+        );
       default:
         return false;
     }
