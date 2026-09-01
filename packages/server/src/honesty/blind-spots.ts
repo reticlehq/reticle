@@ -9,6 +9,7 @@
 // honesty-side imports keep working.
 export { BlindSpotKind } from '@reticlehq/core';
 import {
+  AppRuntime,
   BlindSpotKind,
   EventType,
   ReticleEnv,
@@ -152,6 +153,41 @@ export function blindSpotsFromEvents(events: readonly ReticleEvent[]): BlindSpot
  */
 export function blindSpotsFromState(state: Readonly<Record<string, number>>): BlindSpot[] {
   return Object.entries(state).map(([kind, count]) => ({ kind: kind as BlindSpotKind, count }));
+}
+
+/**
+ * Blind spots that can only be true of a DESKTOP renderer, and the sentences that say so.
+ *
+ * `UNOBSERVED_IPC` states "this Electron renderer has no Reticle preload", and `VERDICTLESS_SEND`
+ * describes `ipcRenderer.send`. Neither can be true of a web page, and both assert their runtime as
+ * fact rather than hedging.
+ */
+const DESKTOP_ONLY_SPOTS: readonly BlindSpotKind[] = [
+  BlindSpotKind.UNOBSERVED_IPC,
+  BlindSpotKind.VERDICTLESS_SEND,
+];
+
+/**
+ * Drop desktop-only blind spots when the session is not a desktop runtime.
+ *
+ * A plain Vite + React page on `localhost:5173` was reported as an Electron renderer with
+ * unobserved `ipcRenderer.invoke` coverage, on a session whose own `adapters` correctly read
+ * `["react"]` (#701). To a reader with no IPC that says their IPC instrumentation is broken, and the
+ * reporter's stated workaround was to stop reading the coverage block at all - which costs every
+ * other caveat in it, including the one that WAS applicable to them.
+ *
+ * The SDK gates its emission on the Electron user agent, so this is a second gate rather than the
+ * only one, and deliberately: the server knows the runtime the session reported at handshake, and a
+ * claim about the runtime should be checked against the runtime rather than against a user-agent
+ * string read in the page. An older SDK reports no runtime at all, and that case is left alone -
+ * withholding a caveat we cannot rule out is the wrong direction for an honesty surface.
+ */
+export function forRuntime(
+  spots: readonly BlindSpot[],
+  runtime: string | undefined,
+): readonly BlindSpot[] {
+  if (undefined === runtime || AppRuntime.WEB !== runtime) return spots;
+  return spots.filter((s) => !DESKTOP_ONLY_SPOTS.includes(s.kind));
 }
 
 /**
