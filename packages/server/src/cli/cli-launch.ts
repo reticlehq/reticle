@@ -1,7 +1,7 @@
 import * as http from 'node:http';
 import { NodePlatform } from '../platform.js';
 import { spawn } from 'node:child_process';
-import { isOpaqueOrigin, LOOPBACK_HOST, STATUS_PATH } from '@reticlehq/core';
+import { isOpaqueOrigin, LOOPBACK_HOST, SESSION_PROBE_PATH, STATUS_PATH } from '@reticlehq/core';
 import { daemonFix, describeSkew } from '../version/version-skew.js';
 import { CONTRACT_FINGERPRINT } from '@reticlehq/core';
 import { SERVER_VERSION } from '../version/server-version.js';
@@ -122,8 +122,15 @@ type OpenDecision =
   | { action: 'reuse'; url: string }
   /** A tab on that origin exists, but on another page — kept, and NOT reported as done. */
   | { action: 'left-as-is'; url: string; requested: string }
-  | { action: 'open'; url: string }
+  | { action: 'open'; url: string; replacing?: string }
   | { action: 'need-url' };
+
+/** A connected tab as `decideOpen` sees it. `alive` is omitted when the caller has not probed. */
+export interface OpenSession {
+  url: string;
+  /** False only when a probe proved the tab is not answering. Omitted / true → treat as live. */
+  alive?: boolean;
+}
 
 function sameOrigin(a: string, b: string): boolean {
   try {
@@ -137,32 +144,152 @@ function sameOrigin(a: string, b: string): boolean {
   }
 }
 
+function isLive(session: OpenSession): boolean {
+  return false !== session.alive;
+}
+
 /**
  * Decide what `reticle open [url]` does, given the currently-connected tabs. Pure.
- * - no url + a tab connected → reuse it (the app is already open; don't spawn a duplicate).
+ * - no url + a LIVE tab connected → reuse it (the app is already open; don't spawn a duplicate).
  * - no url + nothing connected → ask for one.
- * - url + a tab already AT that url → reuse it (idempotent — re-running never piles up tabs).
- * - url + a tab on that origin but another page → keep it, and say so (`left-as-is`).
- * - url + no matching tab → open it.
+ * - no url + only silent tabs → open the one we know about (`replacing`), rather than ask.
+ * - url + a LIVE tab already AT that url → reuse it (idempotent — re-running never piles up tabs).
+ * - url + a LIVE tab on that origin but another page → keep it, and say so (`left-as-is`).
+ * - url + no live matching tab → open it. If a silent tab was on that origin, `replacing` names it.
  *
- * The origin match is why re-running this never piles up tabs, and it stays. What changed is the
- * REPORT: matching by origin meant `reticle open http://localhost:3000/settings` answered `reusing`
- * for a tab sitting on `http://localhost:3000/` and exited 0, so the caller read a success for a page
- * that was never opened. Navigating the tab instead was the other option and is worse: `reticle open`
- * is run by a human whose browser this is, and yanking the page they are looking at to somewhere else
- * is a bigger surprise than being told where the tab actually is.
+ * The origin match is why re-running this never piles up tabs, and it stays — but only for tabs that
+ * still answer. A connected-but-silent tab is how `open` became a dead end (#593): every later
+ * command timed out, and `reticle_session end` only dropped the bookkeeping while the daemon's page
+ * stayed stuck. Those tabs are treated as absent so `open` can recover without a daemon restart.
  */
-export function decideOpen(sessions: { url: string }[], url: string | undefined): OpenDecision {
+export function decideOpen(sessions: OpenSession[], url: string | undefined): OpenDecision {
+  const live = sessions.filter(isLive);
   if (url === undefined) {
-    const first = sessions[0];
-    return first !== undefined ? { action: 'reuse', url: first.url } : { action: 'need-url' };
+    const firstLive = live[0];
+    if (firstLive !== undefined) return { action: 'reuse', url: firstLive.url };
+    const silent = sessions[0];
+    return silent !== undefined
+      ? { action: 'open', url: silent.url, replacing: silent.url }
+      : { action: 'need-url' };
   }
-  const exact = sessions.find((s) => s.url === url);
+  const exact = live.find((s) => s.url === url);
   if (exact !== undefined) return { action: 'reuse', url: exact.url };
-  const onOrigin = sessions.find((s) => sameOrigin(s.url, url));
-  return onOrigin !== undefined
-    ? { action: 'left-as-is', url: onOrigin.url, requested: url }
+  const onOrigin = live.find((s) => sameOrigin(s.url, url));
+  if (onOrigin !== undefined) return { action: 'left-as-is', url: onOrigin.url, requested: url };
+  const silentOnOrigin = sessions.find(
+    (s) => !isLive(s) && (s.url === url || sameOrigin(s.url, url)),
+  );
+  return silentOnOrigin !== undefined
+    ? { action: 'open', url, replacing: silentOnOrigin.url }
     : { action: 'open', url };
+}
+
+/** How long the CLI waits for the daemon's session probe — longer than the command budget inside it. */
+const SESSION_PROBE_HTTP_TIMEOUT_MS = 2500;
+
+type ProbePost = (port: number, sessionId: string) => Promise<{ status: number; body: string }>;
+
+/**
+ * POST `{sessionId}` to the daemon's probe route. The path is the named constant, never an
+ * argument — a parameterised path on `http.request` is what CodeQL reads as file data leaving
+ * the host, and this call is loopback-only to a route we named.
+ */
+function postSessionProbe(
+  port: number,
+  sessionId: string,
+): Promise<{ status: number; body: string }> {
+  const body = JSON.stringify({ sessionId });
+  return new Promise((resolve, reject) => {
+    const req = http.request(
+      {
+        host: LOOPBACK_HOST,
+        port,
+        path: SESSION_PROBE_PATH,
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) },
+        timeout: SESSION_PROBE_HTTP_TIMEOUT_MS,
+      },
+      (res) => {
+        let received = '';
+        res.setEncoding('utf8');
+        res.on('data', (chunk: string) => (received += chunk));
+        res.on('end', () => resolve({ status: res.statusCode ?? 0, body: received }));
+      },
+    );
+    req.on('error', reject);
+    req.on('timeout', () => {
+      req.destroy();
+      reject(new Error('probe timed out'));
+    });
+    req.end(body);
+  });
+}
+
+function aliveFromProbeBody(body: string): boolean | undefined {
+  try {
+    const parsed: unknown = JSON.parse(body);
+    if ('object' !== typeof parsed || null === parsed) return undefined;
+    const alive = (parsed as Record<string, unknown>)['alive'];
+    return true === alive ? true : false === alive ? false : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Whether this session is safe to reuse. True when the tab answered, and also when we cannot tell
+ * (older daemon 404s, transport blip) — a duplicate tab is worse than a reuse that might still work.
+ * False only when this daemon proved the tab is silent.
+ */
+export async function sessionAnswers(
+  port: number,
+  sessionId: string,
+  post: ProbePost = postSessionProbe,
+): Promise<boolean> {
+  try {
+    const res = await post(port, sessionId);
+    if (404 === res.status) return true;
+    if (200 !== res.status) return true;
+    const alive = aliveFromProbeBody(res.body);
+    return alive !== false;
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * Probe the tab `decideOpen` would reuse, and if it is silent, try again without it.
+ *
+ * Only the candidate is probed, so a live tab is a millisecond snapshot and a silent extra tab on
+ * another origin does not tax every `open`. `sessionAnswers` is injected so this stays hermetic.
+ */
+export async function resolveOpen(
+  sessions: { sessionId: string; url: string }[],
+  url: string | undefined,
+  probe: (sessionId: string) => Promise<boolean>,
+): Promise<OpenDecision> {
+  const remaining = [...sessions];
+  const silent: { url: string }[] = [];
+  for (;;) {
+    const decision = decideOpen(
+      remaining.map((s) => ({ url: s.url })),
+      url,
+    );
+    if (decision.action !== 'reuse' && decision.action !== 'left-as-is') {
+      return decideOpen(
+        [
+          ...remaining.map((s) => ({ url: s.url })),
+          ...silent.map((s) => ({ url: s.url, alive: false as const })),
+        ],
+        url,
+      );
+    }
+    const target = remaining.find((s) => s.url === decision.url);
+    if (target === undefined) return decision;
+    if (await probe(target.sessionId)) return decision;
+    silent.push({ url: target.url });
+    remaining.splice(remaining.indexOf(target), 1);
+  }
 }
 
 /**

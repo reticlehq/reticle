@@ -37,6 +37,15 @@ export const STATUS_PATH = '/status';
  * so the two never fight over the port. Same trust tier as STATUS_PATH.
  */
 export const DRIVE_PATH = '/drive';
+/**
+ * Local-only liveness check — `reticle open` POSTs `{sessionId}` here and gets `{alive}` back.
+ *
+ * A tab can stay in `/status` while answering nothing (hidden, throttled, one-way socket). Reusing
+ * that tab is how `open` became a dead end: every later command timed out, and `reticle_session end`
+ * only dropped the bookkeeping. Same trust tier as STATUS_PATH. An older daemon 404s; the CLI then
+ * fails open and reuses, which is the previous behaviour.
+ */
+export const SESSION_PROBE_PATH = '/session-probe';
 export const RETICLE_PROTOCOL_VERSION = 1;
 
 /**

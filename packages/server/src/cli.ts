@@ -57,9 +57,10 @@ import {
   fetchStatus,
   summarizeStatus,
   warnOnDaemonSkew,
-  decideOpen,
   openInBrowser,
   openCommand,
+  sessionAnswers,
+  resolveOpen,
 } from './cli/cli-launch.js';
 import { handleDrive } from './cli/drive-command.js';
 import { handleVerify } from './cli/cli-verify.js';
@@ -518,7 +519,7 @@ function handleOpen(requestedPort: number, url: string | undefined): void {
     .then(async (port) => {
       await ensureDaemon(port);
       const { sessions } = summarizeStatus(await fetchStatus(port));
-      const decision = decideOpen(sessions, url);
+      const decision = await resolveOpen(sessions, url, (id) => sessionAnswers(port, id));
       if ('need-url' === decision.action) {
         log('reticle_open', {
           port,
@@ -567,13 +568,21 @@ function handleOpen(requestedPort: number, url: string | undefined): void {
       // was printed unconditionally, so a run where nothing ever opened looked identical to a run
       // where it did — reported from the field as twenty minutes lost to a phantom port problem.
       const connected = await waitForNewSession(port, sessions.length);
+      const replacing = decision.replacing;
       log('reticle_open', {
         port,
         ...(port === requestedPort ? {} : { requestedPort }),
         opened: decision.url,
         connected,
+        ...(replacing === undefined ? {} : { replacing }),
         ...(connected
-          ? {}
+          ? replacing === undefined
+            ? {}
+            : {
+                note:
+                  'the connected tab did not answer a probe, so a new one was opened — ending the ' +
+                  'old session does not recover a wedged page',
+              }
           : {
               // Two claims used to live here that this command cannot support. It said the browser
               // "was launched" — it asked the OS to open a URL and cannot see whether a window

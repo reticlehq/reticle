@@ -16,6 +16,7 @@ import {
   AGENT_STOPPED_NOTICE,
   RETICLE_DEFAULT_PORT,
   ReticleCommand,
+  SnapshotMode,
   ReticleDir,
   ReticleEnv,
   LOOPBACK_HOST,
@@ -682,6 +683,24 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
   // through runTool, so it is counted and reported like any other call rather than being a second,
   // invisible dispatch path. See cli/drive-attach.ts for why attaching beats refereeing the race.
   shared.attachDrive((url) => runTool(LEASE_ACQUIRE_TOOL, effectiveDeps, { url }));
+  // `reticle open` probes before reuse: a tab can stay in /status while answering nothing, and
+  // ending the session does not recover it. Not routed through runTool — a failed probe IS the
+  // success case, and runTool's default 8s budget would make open wait out the wedged page.
+  const SESSION_PROBE_TIMEOUT_MS = 1_500;
+  shared.attachSessionProbe(async (sessionId) => {
+    const session = bridge.sessions.get(sessionId);
+    if (session === undefined) return false;
+    try {
+      await session.command(
+        ReticleCommand.SNAPSHOT,
+        { mode: SnapshotMode.STATUS },
+        SESSION_PROBE_TIMEOUT_MS,
+      );
+      return true;
+    } catch {
+      return false;
+    }
+  });
 
   // Optional OEM/CI verify endpoint: a host platform POSTs to /verify and gets an ReticleVerificationRun,
   // driving the same flow-replay machinery the agent uses — no MCP stdio, no human. Each verdict is

@@ -2,7 +2,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { DRIVE_PATH, MCP_SHUTDOWN_EVENT, MCP_SSE_PATH, STATUS_PATH } from '@reticlehq/core';
+import {
+  DRIVE_PATH,
+  MCP_SHUTDOWN_EVENT,
+  MCP_SSE_PATH,
+  SESSION_PROBE_PATH,
+  STATUS_PATH,
+} from '@reticlehq/core';
 import { createSharedServer, type SharedServer } from './http-server.js';
 
 let shared: SharedServer | undefined;
@@ -35,6 +41,33 @@ function get(
         res.on('end', () => resolve({ status: res.statusCode ?? 0, body }));
       })
       .on('error', reject);
+  });
+}
+
+function post(
+  port: number,
+  path: string,
+  body: string,
+  headers: http.OutgoingHttpHeaders = {},
+): Promise<{ status: number; body: string }> {
+  return new Promise((resolve, reject) => {
+    const req = http.request(
+      {
+        host: '127.0.0.1',
+        port,
+        path,
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...headers },
+      },
+      (res) => {
+        let received = '';
+        res.setEncoding('utf8');
+        res.on('data', (c: string) => (received += c));
+        res.on('end', () => resolve({ status: res.statusCode ?? 0, body: received }));
+      },
+    );
+    req.on('error', reject);
+    req.end(body);
   });
 }
 
@@ -167,33 +200,6 @@ describe('attachAgentPresence — agent-independent MCP connection presence', ()
  * competing with it for the bind — see cli/drive-attach.ts. This is the daemon's half of that.
  */
 describe('POST /drive', () => {
-  function post(
-    port: number,
-    path: string,
-    body: string,
-    headers: http.OutgoingHttpHeaders = {},
-  ): Promise<{ status: number; body: string }> {
-    return new Promise((resolve, reject) => {
-      const req = http.request(
-        {
-          host: '127.0.0.1',
-          port,
-          path,
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...headers },
-        },
-        (res) => {
-          let received = '';
-          res.setEncoding('utf8');
-          res.on('data', (c: string) => (received += c));
-          res.on('end', () => resolve({ status: res.statusCode ?? 0, body: received }));
-        },
-      );
-      req.on('error', reject);
-      req.end(body);
-    });
-  }
-
   /**
    * The daemon opens whatever this route is handed, in a browser it owns, so the scheme is part of
    * the request that has to be checked rather than part of the payload that gets passed through.
@@ -329,6 +335,55 @@ describe('POST /drive', () => {
       host: 'evil.com',
     });
     expect(res.status).toBe(401);
+  });
+});
+
+describe('POST /session-probe', () => {
+  it('returns {alive:true} when the provider says the tab answered', async () => {
+    shared = createSharedServer();
+    const seen: string[] = [];
+    shared.attachSessionProbe((sessionId) => {
+      seen.push(sessionId);
+      return Promise.resolve(true);
+    });
+    const port = await listen(shared);
+    const res = await post(port, SESSION_PROBE_PATH, JSON.stringify({ sessionId: 'tab-1' }));
+    expect(res.status).toBe(200);
+    expect(JSON.parse(res.body)).toEqual({ alive: true });
+    expect(seen).toEqual(['tab-1']);
+  });
+
+  it('returns {alive:false} when the provider says the tab is silent', async () => {
+    shared = createSharedServer();
+    shared.attachSessionProbe(() => Promise.resolve(false));
+    const port = await listen(shared);
+    const res = await post(port, SESSION_PROBE_PATH, JSON.stringify({ sessionId: 'wedged' }));
+    expect(res.status).toBe(200);
+    expect(JSON.parse(res.body)).toEqual({ alive: false });
+  });
+
+  it('treats a thrown provider as silent rather than 500 — a probe failure is an answer', async () => {
+    shared = createSharedServer();
+    shared.attachSessionProbe(() => Promise.reject(new Error('command timed out')));
+    const port = await listen(shared);
+    const res = await post(port, SESSION_PROBE_PATH, JSON.stringify({ sessionId: 'wedged' }));
+    expect(res.status).toBe(200);
+    expect(JSON.parse(res.body)).toEqual({ alive: false });
+  });
+
+  it('is 404 when no probe provider is attached, so a newer CLI can fail open', async () => {
+    shared = createSharedServer();
+    const port = await listen(shared);
+    const res = await post(port, SESSION_PROBE_PATH, JSON.stringify({ sessionId: 's1' }));
+    expect(res.status).toBe(404);
+  });
+
+  it('rejects a request with no sessionId', async () => {
+    shared = createSharedServer();
+    shared.attachSessionProbe(() => Promise.resolve(true));
+    const port = await listen(shared);
+    const res = await post(port, SESSION_PROBE_PATH, JSON.stringify({}));
+    expect(res.status).toBe(400);
   });
 });
 

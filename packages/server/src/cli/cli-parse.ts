@@ -36,7 +36,7 @@ export const CLI_USAGE = `usage:  npx @reticlehq/server <command>   (or \`reticl
   reticle restart [--port N] [--force]                 (kill, then start a daemon and wait for a real bind)
   reticle status [--port N]
   reticle doctor [--port N]                            (one command to diagnose setup: Chromium, daemon, port)
-  reticle open  [url] [--port N]                        (show the app: reuse the connected tab, else open one)
+  reticle open  [url] [--port N]                        (show the app: reuse a tab that answers, else open one)
   reticle verify <url> [--port N] [--headed] [--timeout N] [--storage-state <file>]  (one-shot: drive the URL, verify saved flows, exit 0=pass)
   reticle affected [--since <ref>] [file...]           (which saved flows must re-verify for the changed files)
   reticle gate [--since <ref>] [file...]               (exit non-zero unless passing artifacts cover the affected flows)

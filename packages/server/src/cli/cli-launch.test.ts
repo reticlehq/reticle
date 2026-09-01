@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { decideOpen, openCommand, openInBrowser } from './cli-launch.js';
+import {
+  decideOpen,
+  openCommand,
+  openInBrowser,
+  resolveOpen,
+  sessionAnswers,
+} from './cli-launch.js';
 
 describe('decideOpen', () => {
   it('with no url + a connected tab → reuse it (do not spawn a duplicate)', () => {
@@ -46,6 +52,158 @@ describe('decideOpen', () => {
     expect(decideOpen([], 'http://localhost:5173/')).toEqual({
       action: 'open',
       url: 'http://localhost:5173/',
+    });
+  });
+
+  /**
+   * Connected is not the same as answering. A hidden/throttled tab stays in /status while every
+   * command against it times out, and ending the session does not recover it — the wedged thing is
+   * the daemon's page. `reticle open` is the recovery command; it must not hand that page back.
+   */
+  it('does not reuse a tab that the probe said is not answering', () => {
+    expect(
+      decideOpen([{ url: 'http://localhost:4321/', alive: false }], 'http://localhost:4321/'),
+    ).toEqual({
+      action: 'open',
+      url: 'http://localhost:4321/',
+      replacing: 'http://localhost:4321/',
+    });
+  });
+
+  it('does not leave-as-is a silent tab on the same origin — that is the same dead end', () => {
+    expect(
+      decideOpen([{ url: 'http://localhost:4321/issues', alive: false }], 'http://localhost:4321/'),
+    ).toEqual({
+      action: 'open',
+      url: 'http://localhost:4321/',
+      replacing: 'http://localhost:4321/issues',
+    });
+  });
+
+  it('still reuses a live tab on the exact url, even when a silent one is listed first', () => {
+    expect(
+      decideOpen(
+        [
+          { url: 'http://localhost:4321/', alive: false },
+          { url: 'http://localhost:4321/', alive: true },
+        ],
+        'http://localhost:4321/',
+      ),
+    ).toEqual({ action: 'reuse', url: 'http://localhost:4321/' });
+  });
+
+  it('with no url and only a silent tab → open that url rather than ask or reuse', () => {
+    expect(decideOpen([{ url: 'http://localhost:4321/issues', alive: false }], undefined)).toEqual({
+      action: 'open',
+      url: 'http://localhost:4321/issues',
+      replacing: 'http://localhost:4321/issues',
+    });
+  });
+
+  it('treats a tab with no alive flag as live — that is the unprobed / older-daemon case', () => {
+    expect(decideOpen([{ url: 'http://localhost:4310/app' }], 'http://localhost:4310/app')).toEqual(
+      {
+        action: 'reuse',
+        url: 'http://localhost:4310/app',
+      },
+    );
+  });
+});
+
+describe('sessionAnswers — fail open on an older daemon, fail closed on a proven silence', () => {
+  it('treats a 404 as alive so an older daemon keeps the previous reuse behaviour', async () => {
+    await expect(
+      sessionAnswers(4400, 's1', () => Promise.resolve({ status: 404, body: 'not found' })),
+    ).resolves.toBe(true);
+  });
+
+  it('treats {alive:false} as dead — that is the probe the new daemon answers', async () => {
+    await expect(
+      sessionAnswers(4400, 's1', () =>
+        Promise.resolve({
+          status: 200,
+          body: JSON.stringify({ alive: false }),
+        }),
+      ),
+    ).resolves.toBe(false);
+  });
+
+  it('treats {alive:true} as live', async () => {
+    await expect(
+      sessionAnswers(4400, 's1', () =>
+        Promise.resolve({
+          status: 200,
+          body: JSON.stringify({ alive: true }),
+        }),
+      ),
+    ).resolves.toBe(true);
+  });
+
+  it('fails open on a transport error, so a brief blip does not spawn a duplicate tab', async () => {
+    await expect(
+      sessionAnswers(4400, 's1', () => Promise.reject(new Error('ECONNREFUSED'))),
+    ).resolves.toBe(true);
+  });
+});
+
+describe('resolveOpen — probe only the tab that would be reused', () => {
+  it('reuses a live tab after one probe, and does not probe a silent extra origin', async () => {
+    const probed: string[] = [];
+    const decision = await resolveOpen(
+      [
+        { sessionId: 'live', url: 'http://localhost:4321/' },
+        { sessionId: 'other', url: 'http://localhost:3000/' },
+      ],
+      'http://localhost:4321/',
+      (id) => {
+        probed.push(id);
+        return Promise.resolve('live' === id);
+      },
+    );
+    expect(decision).toEqual({ action: 'reuse', url: 'http://localhost:4321/' });
+    expect(probed).toEqual(['live']);
+  });
+
+  it('opens a fresh tab when the only candidate is silent, and names it as replacing', async () => {
+    const decision = await resolveOpen(
+      [{ sessionId: 'wedged', url: 'http://localhost:4321/' }],
+      'http://localhost:4321/',
+      () => Promise.resolve(false),
+    );
+    expect(decision).toEqual({
+      action: 'open',
+      url: 'http://localhost:4321/',
+      replacing: 'http://localhost:4321/',
+    });
+  });
+
+  it('skips a silent exact-url tab and reuses a later live one on the same url', async () => {
+    const probed: string[] = [];
+    const decision = await resolveOpen(
+      [
+        { sessionId: 'wedged', url: 'http://localhost:4321/' },
+        { sessionId: 'live', url: 'http://localhost:4321/' },
+      ],
+      'http://localhost:4321/',
+      (id) => {
+        probed.push(id);
+        return Promise.resolve('live' === id);
+      },
+    );
+    expect(decision).toEqual({ action: 'reuse', url: 'http://localhost:4321/' });
+    expect(probed).toEqual(['wedged', 'live']);
+  });
+
+  it('with no url and only a silent tab, opens that url instead of asking for one', async () => {
+    const decision = await resolveOpen(
+      [{ sessionId: 'wedged', url: 'http://localhost:4321/issues' }],
+      undefined,
+      () => Promise.resolve(false),
+    );
+    expect(decision).toEqual({
+      action: 'open',
+      url: 'http://localhost:4321/issues',
+      replacing: 'http://localhost:4321/issues',
     });
   });
 });

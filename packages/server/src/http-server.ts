@@ -7,6 +7,7 @@ import {
   MCP_SHUTDOWN_EVENT,
   STATUS_PATH,
   DRIVE_PATH,
+  SESSION_PROBE_PATH,
 } from '@reticlehq/core';
 import { getSessionMetrics } from './telemetry/session-metrics.js';
 import { noteAgentPeer, PEER_VERSION_PARAM, PEER_CONTRACT_PARAM } from './version/peer-announce.js';
@@ -41,6 +42,12 @@ export interface SharedServer {
    */
   attachDrive(provider: (url: string) => Promise<unknown>): void;
   /**
+   * Register the handler behind POST /session-probe: send a cheap command to that session and say
+   * whether it answered. `reticle open` uses this to refuse reuse of a connected-but-silent tab.
+   * Left unattached, the route 404s so a newer CLI talking to an older daemon fails open.
+   */
+  attachSessionProbe(provider: (sessionId: string) => Promise<boolean>): void;
+  /**
    * Register a callback fired when the AGENT presence changes — true when the first MCP client (any
    * agent: Codex/OpenCode/Claude/Hermes) connects, false when the last one disconnects. Agent-
    * independent: the MCP connection lives exactly as long as the agent session, so its presence IS
@@ -73,6 +80,7 @@ export function createSharedServer(options: { token?: string } = {}): SharedServ
   let mcpFactory: McpFactory | undefined;
   let statusProvider: (() => unknown) | undefined;
   let driveProvider: ((url: string) => Promise<unknown>) | undefined;
+  let sessionProbeProvider: ((sessionId: string) => Promise<boolean>) | undefined;
   let agentPresence: ((connected: boolean) => void) | undefined;
   const transports = new Map<string, SSEServerTransport>();
   /**
@@ -124,6 +132,7 @@ export function createSharedServer(options: { token?: string } = {}): SharedServ
     if (
       path === STATUS_PATH ||
       path === DRIVE_PATH ||
+      path === SESSION_PROBE_PATH ||
       path === MCP_SSE_PATH ||
       path === MCP_MESSAGE_PATH
     ) {
@@ -190,6 +199,38 @@ export function createSharedServer(options: { token?: string } = {}): SharedServ
           log('drive_request_error', { error: err instanceof Error ? err.message : String(err) });
           res.writeHead(500, { 'Content-Type': 'text/plain' });
           res.end('drive failed');
+        });
+      return;
+    }
+
+    if ('POST' === req.method && path === SESSION_PROBE_PATH) {
+      if (sessionProbeProvider === undefined) {
+        res.writeHead(404, { 'Content-Type': 'text/plain' });
+        res.end('not found');
+        return;
+      }
+      if (!isJsonRequest(req)) {
+        res.writeHead(415, { 'Content-Type': 'text/plain' });
+        res.end('expected content-type: application/json');
+        return;
+      }
+      const provider = sessionProbeProvider;
+      readBody(req)
+        .then(async (body) => {
+          const sessionId = sessionIdFromProbeRequest(body);
+          if (sessionId === undefined) {
+            res.writeHead(400, { 'Content-Type': 'text/plain' });
+            res.end('probe requires a sessionId');
+            return;
+          }
+          const alive = await provider(sessionId).catch(() => false);
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ alive }));
+        })
+        .catch((err: unknown) => {
+          log('session_probe_error', { error: err instanceof Error ? err.message : String(err) });
+          res.writeHead(500, { 'Content-Type': 'text/plain' });
+          res.end('probe failed');
         });
       return;
     }
@@ -281,6 +322,10 @@ export function createSharedServer(options: { token?: string } = {}): SharedServ
     driveProvider = provider;
   }
 
+  function attachSessionProbe(provider: (sessionId: string) => Promise<boolean>): void {
+    sessionProbeProvider = provider;
+  }
+
   function attachAgentPresence(cb: (connected: boolean) => void): void {
     agentPresence = cb;
   }
@@ -332,6 +377,7 @@ export function createSharedServer(options: { token?: string } = {}): SharedServ
     attachMcp,
     attachStatus,
     attachDrive,
+    attachSessionProbe,
     attachAgentPresence,
     announceShutdown,
     close,
@@ -425,6 +471,18 @@ function urlFromDriveRequest(body: string): string | undefined {
   if (typeof parsed !== 'object' || null === parsed) return undefined;
   const url = (parsed as Record<string, unknown>)['url'];
   return 'string' === typeof url && url.length > 0 ? url : undefined;
+}
+
+function sessionIdFromProbeRequest(body: string): string | undefined {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(body);
+  } catch {
+    return undefined;
+  }
+  if (typeof parsed !== 'object' || null === parsed) return undefined;
+  const sessionId = (parsed as Record<string, unknown>)['sessionId'];
+  return 'string' === typeof sessionId && sessionId.length > 0 ? sessionId : undefined;
 }
 
 /**
