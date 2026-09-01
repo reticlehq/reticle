@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DevToolingChannel, isDevToolingUrl, urlForMatch } from './net.js';
+import { DevToolingChannel, isDevToolingUrl, isFirstPartyUrl, urlForMatch } from './net.js';
 
 describe('isDevToolingUrl — traffic the framework makes about ITSELF', () => {
   it.each(Object.values(DevToolingChannel))('recognises %s', (pattern) => {
@@ -65,5 +65,34 @@ describe('urlForMatch — grader haystack, not the transcript', () => {
 
   it('falls back to the displayed URL when nothing was redacted', () => {
     expect(urlForMatch({ url: '/api/users' })).toBe('/api/users');
+  });
+});
+
+describe('isFirstPartyUrl — the page origin, not a hostname allowlist', () => {
+  const page = 'https://www.shop.com/dashboard';
+
+  it('keeps IPC, path-only URLs, and the page origin', () => {
+    expect(true).toBe(isFirstPartyUrl('ipc://save_invoice', page));
+    expect(true).toBe(isFirstPartyUrl('/api/checkout', page));
+    expect(true).toBe(isFirstPartyUrl('https://www.shop.com/api/checkout', page));
+  });
+
+  it('keeps an API subdomain of the same registrable domain', () => {
+    expect(true).toBe(isFirstPartyUrl('https://api.shop.com/orders', page));
+  });
+
+  it('drops an analytics beacon on another registrable domain', () => {
+    expect(false).toBe(isFirstPartyUrl('https://www.google-analytics.com/g/collect', page));
+    expect(false).toBe(isFirstPartyUrl('https://api.segment.io/v1/t', page));
+  });
+
+  it('treats an absolute URL with no page origin as third-party', () => {
+    expect(false).toBe(isFirstPartyUrl('https://www.google-analytics.com/g/collect', undefined));
+    expect(true).toBe(isFirstPartyUrl('/api/checkout', undefined));
+  });
+
+  it('does not drop a missing url — unattributed traffic stays in the hunter', () => {
+    expect(true).toBe(isFirstPartyUrl(undefined, page));
+    expect(true).toBe(isFirstPartyUrl('', page));
   });
 });

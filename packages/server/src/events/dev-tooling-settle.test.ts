@@ -1,8 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import { ContradictionKind, EventType, type ReticleEvent } from '@reticlehq/core';
 import { evalSettled } from './predicate-eval.js';
-import { findContradictions } from './contradictions.js';
+import { findContradictions as hunt } from './contradictions.js';
 import { causalSummary } from '../capsule/causal-summary.js';
+
+const findContradictions = (
+  events: readonly ReticleEvent[],
+  options: Parameters<typeof hunt>[1] = {},
+): ReturnType<typeof hunt> => hunt(events, { actionSince: 0, ...options });
 
 /**
  * A dev-tooling request in flight must not hold settle open, and must not read as "the UI advanced

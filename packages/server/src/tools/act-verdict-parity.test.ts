@@ -156,6 +156,12 @@ describe('act_and_wait and assert see the same evidence', () => {
     }
   });
 
+  it('both paths tell the contradiction engine the page origin', () => {
+    for (const file of [act, assert]) {
+      expect(file).toMatch(/pageUrl: session\.url/);
+    }
+  });
+
   /**
    * The caller's declaration has to reach the RULE, not only the detector.
    *

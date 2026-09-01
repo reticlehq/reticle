@@ -165,6 +165,27 @@ function responseRestatesRequest(
   return present * 2 >= comparable.length;
 }
 
+const CREATE_SENTINELS = new Set(['0', '']);
+
+/**
+ * A POST-create that sends a sentinel id (`0` or `""`) and gets the new row back is the most common
+ * REST create shape. The echoed `id` matching the non-sentinel value is the discriminator — this is
+ * assignment, not a dropped write.
+ */
+function isCreateSentinel(
+  want: string,
+  got: ReadonlySet<string>,
+  echoed: ReadonlyMap<string, Set<string>>,
+): boolean {
+  if (!CREATE_SENTINELS.has(want)) return false;
+  const ids = echoed.get('id');
+  if (ids === undefined) return false;
+  for (const value of got) {
+    if (ids.has(value)) return true;
+  }
+  return false;
+}
+
 /**
  * Contradictions for writes whose response echoes a different value than the request asked for.
  *
@@ -217,8 +238,10 @@ export function findEchoMismatches(
       // contradict the request, and silence is not a contradiction.
       if (values === undefined || 0 === values.size) continue;
       const [want] = [...wanted];
-      if (want !== undefined && !values.has(want))
+      if (want !== undefined && !values.has(want)) {
+        if (isCreateSentinel(want, values, echoed)) continue;
         dropped.push(`${key}: asked ${want}, got ${[...values].join('/')}`);
+      }
     }
     if (0 === dropped.length) continue;
 
@@ -231,7 +254,7 @@ export function findEchoMismatches(
       kind: ContradictionKind.WRITE_FIELD_IGNORED,
       claim: 'the write returned success and the page treated it as saved',
       counter: `its own echo shows ${String(dropped.length)} field(s) NOT applied — ${dropped.join('; ')}`,
-      detail: `${method} ${url} — the server answered OK and returned a different value than it was asked to set, so the write half-applied; the UI has no way to know and will show the value the user typed${attribution}`,
+      detail: `${method} ${url} — the response value differs from the request value${attribution}`,
     });
   }
   return found;

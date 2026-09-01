@@ -33,10 +33,16 @@ import type { Session, SessionManager } from '../session/session.js';
  * well-tested producer, consumers that stub it, and nothing on the delegation between them.
  */
 function depsWith(events: ReticleEvent[]): ToolDeps {
+  // The flagship false green is an assert AFTER the click that swallowed the 500. A passive assert
+  // with no attributed action does not sweep (see findWindowContradictions); this lastAct is the
+  // click, and `url` is the page origin the origin axis needs.
+  const lastAct = new LastAct();
+  lastAct.markActed(0, 'click', 1, 'e1');
   const session: Partial<Session> = {
     id: 'demo',
+    url: 'http://localhost:8787/',
     recordAction: () => 'a1',
-    lastAct: new LastAct(),
+    lastAct,
     bufferHealth: () => ({ total: 12, dropped: 0 }),
     blindSpots: () => ({}),
     eventsSince: () => events,

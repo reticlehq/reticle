@@ -35,6 +35,11 @@ export interface CrawlSession {
    *  says so. Optional for the same reason `currentDocumentId` is. */
   readonly currentEditEpoch?: number | undefined;
   /**
+   * The page currently under observation. Optional so a test fake can omit it; without it, only
+   * path-only URLs stay first-party (see `isFirstPartyUrl`).
+   */
+  readonly url?: string | undefined;
+  /**
    * Attribution window around each click. Optional so a caller can supply a minimal session, but a real
    * session MUST provide it: without a window the click's own effects carry no actionId, and an
    * unattributed ref-bearing event is learned as ambient background churn. A crawl clicks up to 25
@@ -337,6 +342,8 @@ export async function crawl(
     for (const c of findContradictions(events, {
       currentDocumentId: session.currentDocumentId,
       currentEditEpoch: session.currentEditEpoch,
+      pageUrl: session.url,
+      actionSince: since,
     })) {
       counts.contradictions += 1;
       anomalies.push({

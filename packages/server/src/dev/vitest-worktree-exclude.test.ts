@@ -47,24 +47,31 @@ afterEach(() => {
 });
 
 describe('root vitest excludes agent worktrees', () => {
-  it('does not run a failing test planted in a Claude worktree', () => {
-    mkdirSync(planted, { recursive: true });
-    writeFileSync(
-      join(planted, PROBE_FILE),
-      `import { it } from 'vitest';\nit('must not be collected', () => { throw new Error(${JSON.stringify(PROBE_SENTINEL)}); });\n`,
-    );
+  // Parent timeout must outlive the child. Vitest's default 5s is a statement about the machine:
+  // on a Windows runner this spawn took 7.4s, the assertion had not failed, and the suite
+  // reported the runner. Same class of flake as heavy-browser-tests-declare-a-timeout.test.ts.
+  it(
+    'does not run a failing test planted in a Claude worktree',
+    { timeout: SPAWN_TIMEOUT_MS + 5_000 },
+    () => {
+      mkdirSync(planted, { recursive: true });
+      writeFileSync(
+        join(planted, PROBE_FILE),
+        `import { it } from 'vitest';\nit('must not be collected', () => { throw new Error(${JSON.stringify(PROBE_SENTINEL)}); });\n`,
+      );
 
-    const result = spawnSync(
-      process.execPath,
-      [VITEST_CLI, VITEST_RUN, PASS_WITH_NO_TESTS, CLAUDE_WORKTREES],
-      { cwd: REPO, encoding: 'utf8', timeout: SPAWN_TIMEOUT_MS },
-    );
-    const spawnErr =
-      undefined === result.error ? '' : `${result.error.name}: ${result.error.message}`;
-    const output = `${spawnErr}\n${result.stdout ?? ''}\n${result.stderr ?? ''}`;
-    expect(result.status, output).toBe(0);
-    expect(output).not.toContain(PROBE_SENTINEL);
-  });
+      const result = spawnSync(
+        process.execPath,
+        [VITEST_CLI, VITEST_RUN, PASS_WITH_NO_TESTS, CLAUDE_WORKTREES],
+        { cwd: REPO, encoding: 'utf8', timeout: SPAWN_TIMEOUT_MS },
+      );
+      const spawnErr =
+        undefined === result.error ? '' : `${result.error.name}: ${result.error.message}`;
+      const output = `${spawnErr}\n${result.stdout ?? ''}\n${result.stderr ?? ''}`;
+      expect(result.status, output).toBe(0);
+      expect(output).not.toContain(PROBE_SENTINEL);
+    },
+  );
 
   it('keeps vitest defaults and names both in-repo agent worktree trees', async () => {
     const mod = (await import(pathToFileURL(join(REPO, ROOT_CONFIG)).href)) as {

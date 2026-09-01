@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { ContradictionKind, EventType, type ReticleEvent } from '@reticlehq/core';
-import { findContradictions } from './contradictions.js';
+import { findContradictions as hunt } from './contradictions.js';
+
+const findContradictions = (
+  events: readonly ReticleEvent[],
+  options: Parameters<typeof hunt>[1] = {},
+): ReturnType<typeof hunt> => hunt(events, { actionSince: 0, ...options });
 
 /**
  * Evidence recorded before the agent's last source edit landed is LABELLED, never dropped.

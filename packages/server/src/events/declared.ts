@@ -38,6 +38,25 @@ export interface DeclaredExpectations {
 /** Below this, a status is a success or a redirect: not a declared failure. */
 const FAILURE_STATUS_MIN = 400;
 
+/**
+ * Phrases that name a denial the caller is testing, not a surprise failure.
+ *
+ * A caller who declared `text: "Access denied"` has declared the 401/403 they were testing for.
+ * Without this, `declaredExpectations` only reads `net { ok: false | status >= 400 }`, so the 403
+ * contradicts them.
+ */
+const DENIAL =
+  /access denied|forbidden|unauthorized|not authorised|not authorized|permission denied|not permitted/i;
+
+const DENIAL_STATUSES = [401, 403] as const;
+
+function registerDenial(text: string, netFailures: DeclaredNetFailure[]): void {
+  if (!DENIAL.test(text)) return;
+  for (const status of DENIAL_STATUSES) {
+    netFailures.push({ status });
+  }
+}
+
 export function declaredExpectations(predicate: Predicate | undefined): DeclaredExpectations {
   const netFailures: DeclaredNetFailure[] = [];
   let rendersContent = false;
@@ -60,7 +79,12 @@ export function declaredExpectations(predicate: Predicate | undefined): Declared
       }
       case PredicateKind.ELEMENT:
       case PredicateKind.TEXT:
-        if (true !== p.absent) rendersContent = true;
+        if (true !== p.absent) {
+          rendersContent = true;
+          const denialText =
+            p.kind === PredicateKind.TEXT ? p.contains : (p.query.text ?? p.query.value);
+          if (denialText !== undefined) registerDenial(denialText, netFailures);
+        }
         return;
       default:
         return;

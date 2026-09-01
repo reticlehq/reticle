@@ -75,6 +75,15 @@ describe('a declared failing request is a declaration, not a contradiction', () 
       }).netFailures,
     ).toEqual([]);
   });
+
+  it('reads a denial phrase on screen as an expected 401/403', () => {
+    const declared = declaredExpectations({
+      kind: PredicateKind.TEXT,
+      contains: 'Access denied',
+    });
+    expect(declared.netFailures).toEqual([{ status: 401 }, { status: 403 }]);
+    expect(declared.rendersContent).toBe(true);
+  });
 });
 
 describe('a declared visible consequence', () => {

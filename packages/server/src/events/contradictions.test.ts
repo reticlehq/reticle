@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { ContradictionKind, EventType, type ReticleEvent } from '@reticlehq/core';
-import { findContradictions } from './contradictions.js';
+import { findContradictions as hunt, type ContradictionOptions } from './contradictions.js';
+
+function findContradictions(
+  events: readonly ReticleEvent[],
+  options: ContradictionOptions = {},
+): ReturnType<typeof hunt> {
+  return hunt(events, { actionSince: 0, ...options });
+}
 
 let seq = 0;
 function ev(type: EventType, data: Record<string, unknown> = {}): ReticleEvent {
@@ -150,7 +157,9 @@ describe('findContradictions — cross-channel disagreement', () => {
 
   it('says nothing about repeats in a window no action is attributed to', () => {
     expect(
-      kinds([okCall('POST', '/api/order'), okCall('POST', '/api/order'), domChanged()]),
+      hunt([okCall('POST', '/api/order'), okCall('POST', '/api/order'), domChanged()]).map(
+        (c) => c.kind,
+      ),
     ).not.toContain(ContradictionKind.DUPLICATE_REQUEST);
   });
 
@@ -698,7 +707,7 @@ describe('the app announced a consequence and nothing else moved', () => {
    * Unscoped, this rule reddened eight existing tests that assert exactly that.
    */
   it('stays silent on a window no action is attributed to', () => {
-    expect(kinds([signal('modal:opened')])).not.toContain(
+    expect(hunt([signal('modal:opened')]).map((c) => c.kind)).not.toContain(
       ContradictionKind.SIGNAL_WITHOUT_CONSEQUENCE,
     );
   });

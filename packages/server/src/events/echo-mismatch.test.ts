@@ -205,6 +205,17 @@ describe('findEchoMismatches — the response has to look like an echo', () => {
     ).toEqual([]);
   });
 
+  it('stays silent when a create sentinel is replaced by the new row id', () => {
+    expect(
+      kinds(
+        write(
+          { sub_category_id: 0, name: 'Widgets' },
+          { id: 19314, sub_category_id: 19314, name: 'Widgets' },
+        ),
+      ),
+    ).toEqual([]);
+  });
+
   it('still catches a nested echo of a real write', () => {
     expect(
       kinds(

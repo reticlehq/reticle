@@ -3,6 +3,7 @@ import {
   EventType,
   MUTATING_METHODS,
   isDevToolingUrl,
+  isFirstPartyUrl,
   isSameDocument,
   isSameEditEpoch,
   urlForMatch,
@@ -317,6 +318,14 @@ export interface ContradictionOptions {
    * treats absence as current on both sides.
    */
   currentEditEpoch?: number | undefined;
+  /**
+   * The page currently under observation, as `session.url`.
+   *
+   * First-party vs third-party is decided here, next to the dev-tooling split, not as a hostname
+   * allowlist: see `isFirstPartyUrl`. Undefined means the caller has no page (a unit test over
+   * path-only URLs), and those stay first-party.
+   */
+  pageUrl?: string | undefined;
 }
 
 /** Net-shaped events — the only ones that carry a URL a dev-tooling channel could occupy. */
@@ -345,6 +354,28 @@ function splitDevTooling(events: readonly ReticleEvent[]): {
     if (!NET_TYPES.has(e.type)) return true;
     const url = asString(e.data['url']);
     if (!isDevToolingUrl(url)) return true;
+    if (url !== undefined && !ignored.includes(url)) ignored.push(url);
+    return false;
+  });
+  return { app, ignored };
+}
+
+/**
+ * Split third-party network traffic out of the window the rules judge.
+ *
+ * Same shape as `splitDevTooling`, for the same reason: every rule below asks "what else was in
+ * this window", and answering that with an ad-blocked analytics beacon is a defect in all of them.
+ * The event stays in the timeline; the hunter simply does not let it decide `verified`.
+ */
+function splitThirdParty(
+  events: readonly ReticleEvent[],
+  pageUrl: string | undefined,
+): { app: readonly ReticleEvent[]; ignored: string[] } {
+  const ignored: string[] = [];
+  const app = events.filter((e) => {
+    if (!NET_TYPES.has(e.type)) return true;
+    const url = asString(e.data['url']);
+    if (isFirstPartyUrl(url, pageUrl)) return true;
     if (url !== undefined && !ignored.includes(url)) ignored.push(url);
     return false;
   });
@@ -395,20 +426,23 @@ function findWindowContradictions(
   options: ContradictionOptions,
 ): Contradiction[] {
   const found: OwnContradiction[] = [];
-  const { app: allApp, ignored: ignoredDevTooling } = splitDevTooling(allEvents);
+  const { app: afterDev, ignored: ignoredDevTooling } = splitDevTooling(allEvents);
+  const { app: allApp, ignored: ignoredThirdParty } = splitThirdParty(afterDev, options.pageUrl);
 
   // ── Evidence belonging to a document that has since been replaced ───────────────────────────
   // Scoped ONCE, here, for the same reason the dev-tooling split is: every rule below asks "what
   // else was in this window", and answering that with a dead page's traffic is a defect in all of
   // them rather than in whichever one reported it. Applied after the dev-tooling split so the count
   // reported below is the app's own evidence and not the toolchain's noise.
-  const events = allApp.filter((e) => isSameDocument(e.documentId, options.currentDocumentId));
-  const superseded = allApp.length - events.length;
+  const documentEvents = allApp.filter((e) =>
+    isSameDocument(e.documentId, options.currentDocumentId),
+  );
+  const superseded = allApp.length - documentEvents.length;
   // An empty window was always allowed to mean "nothing happened"; that reading is only unsafe once
   // supersession is what emptied it. Reported ALONE and before every rule below, because a window
   // with nothing left in it is exactly the shape `action-had-no-effect` fires on — so without this
   // the fix would have swapped a wrong citation for a wrong accusation.
-  if (superseded > 0 && 0 === events.length) {
+  if (superseded > 0 && 0 === documentEvents.length) {
     return [
       {
         kind: ContradictionKind.EVIDENCE_SUPERSEDED,
@@ -419,6 +453,18 @@ function findWindowContradictions(
       },
     ];
   }
+
+  // A passive assert with no action has no contradiction sweep. The ring buffer holds every
+  // analytics beacon and background poll of the session; judging those as the action is how a
+  // clean first-party assertion came back contradicted. `action` without `actionSince` still
+  // attributes the window (the no-effect check names the click).
+  if (options.actionSince === undefined && options.action === undefined) {
+    return found;
+  }
+
+  const since = options.actionSince;
+  const events =
+    since === undefined ? documentEvents : documentEvents.filter((event) => event.t >= since);
 
   const settled = events.filter((e) => e.type === EventType.NET_REQUEST).map(netCall);
 
@@ -453,7 +499,7 @@ function findWindowContradictions(
       },
     ];
   }
-  const failed = settled.filter((c) => false === c.ok);
+  const failed = settled.filter((c) => false === c.ok && 0 !== c.status);
   // The failures NOBODY declared — see ContradictionOptions.expectedFailures. Only the heuristic
   // "the UI moved while a request failed" rule reads this; the sharp rules still read `failed`.
   const unexpected = failed.filter(
@@ -693,6 +739,9 @@ function findWindowContradictions(
           ...(0 === ignoredDevTooling.length
             ? []
             : [`ignored as dev tooling: ${ignoredDevTooling.join(', ')}`]),
+          ...(0 === ignoredThirdParty.length
+            ? []
+            : [`ignored as third-party: ${ignoredThirdParty.join(', ')}`]),
         ].join(' — '),
       });
     }

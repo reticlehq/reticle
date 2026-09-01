@@ -15,8 +15,14 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { ContradictionKind, EventType, type ReticleEvent } from '@reticlehq/core';
-import { findContradictions } from './contradictions.js';
+import { ContradictionKind, EventType, PredicateKind, type ReticleEvent } from '@reticlehq/core';
+import { findContradictions as hunt } from './contradictions.js';
+import { declaredExpectations } from './declared.js';
+
+const findContradictions = (
+  events: readonly ReticleEvent[],
+  options: Parameters<typeof hunt>[1] = {},
+): ReturnType<typeof hunt> => hunt(events, { actionSince: 0, ...options });
 
 let seq = 0;
 function ev(type: EventType, data: Record<string, unknown> = {}): ReticleEvent {
@@ -74,6 +80,14 @@ describe('a declared expected failure is not a contradiction', () => {
     expect(kindsOf(findContradictions(loginFailed(500)))).toContain(
       ContradictionKind.UI_ADVANCED_REQUEST_FAILED,
     );
+  });
+
+  it('stays silent when the caller declared a denial phrase and the request was 403', () => {
+    const declared = declaredExpectations({ kind: PredicateKind.TEXT, contains: 'Access denied' });
+    const found = findContradictions([domChanged(), failedCall('GET', '/api/secret', 403)], {
+      expectedFailures: declared.netFailures,
+    });
+    expect(kindsOf(found)).not.toContain(ContradictionKind.UI_ADVANCED_REQUEST_FAILED);
   });
 
   /**

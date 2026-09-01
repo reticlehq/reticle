@@ -112,3 +112,40 @@ export function urlForMatch(data: Record<string, unknown>): string {
   const url = data['url'];
   return 'string' === typeof url ? url : '';
 }
+
+/**
+ * Is this request the PAGE's own origin (or an origin that page calls as itself)?
+ *
+ * Used to keep third-party beacons and ad-blocked pixels out of the contradiction hunter. A failed
+ * Google/Amplitude request must not overturn a first-party assertion — that is how every app with
+ * analytics installed struggled to produce a clean verdict.
+ *
+ * Not a hostname allowlist. Widening a list until it can swallow an app endpoint converts a false
+ * negative into a false green (see `DevToolingChannel`). First-party is: IPC, a path-only URL, the
+ * page origin, or the same registrable domain (so `api.shop.com` from `www.shop.com` stays in).
+ * Everything else is third-party. Last-two-labels is not a public-suffix list; `foo.co.uk` will
+ * join `bar.co.uk`. That is the cheaper of the two wrong answers — a missed third-party is an
+ * advisory we never reported, a swallowed app endpoint is a silent green.
+ */
+export function isFirstPartyUrl(url: string | undefined, pageUrl: string | undefined): boolean {
+  if (url === undefined || 0 === url.length) return true;
+  if (url.startsWith(IPC_URL_SCHEME)) return true;
+  if (url.startsWith('/') && !url.startsWith('//')) return true;
+  try {
+    const request = new URL(url, pageUrl ?? 'http://reticle.invalid');
+    if (pageUrl === undefined) {
+      return 'reticle.invalid' === request.hostname;
+    }
+    const page = new URL(pageUrl);
+    if (request.origin === page.origin) return true;
+    return registrableDomain(request.hostname) === registrableDomain(page.hostname);
+  } catch {
+    return true;
+  }
+}
+
+function registrableDomain(hostname: string): string {
+  const parts = hostname.split('.').filter((part) => 0 < part.length);
+  if (parts.length <= 2) return hostname;
+  return parts.slice(-2).join('.');
+}

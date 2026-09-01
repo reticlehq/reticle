@@ -1,7 +1,12 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { EventType, type ReticleEvent } from '@reticlehq/core';
-import { findContradictions } from './contradictions.js';
+import { findContradictions as hunt } from './contradictions.js';
 import { registerContradictionFold, registeredContradictionFolds } from './contradiction-folds.js';
+
+const findContradictions = (
+  events: readonly ReticleEvent[],
+  options: Parameters<typeof hunt>[1] = {},
+): ReturnType<typeof hunt> => hunt(events, { actionSince: 0, ...options });
 
 /**
  * A consumer may add its own rule to the verdict, without editing the ones this package ships.
@@ -109,7 +114,7 @@ describe('registered contradiction folds', () => {
       data: { method: 'GET', url: 'http://localhost:5173/@vite/client', status: 200, ok: true },
     } as unknown as ReticleEvent;
 
-    findContradictions([hmr, appRequest]);
+    findContradictions([hmr, appRequest], { pageUrl: 'https://app.test/' });
 
     expect(seen.map((e) => String((e.data as { url?: unknown }).url))).toEqual([
       'https://app.test/api/items',
