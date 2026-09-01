@@ -9,8 +9,6 @@ import { noPackageJsonMessage } from './non-js-project.js';
 import { devCommandFrom } from './dev-script.js';
 import { restartHint, FEEDBACK_HINT } from './closing-hint.js';
 import { spanSync } from '../trace.js';
-import { readFileSync } from 'node:fs';
-import { homedir } from 'node:os';
 import { projectIdOf, rememberProjectOnDisk } from '../project/remember-project.js';
 import { detect, Framework, namesAPackageManager, type DetectInput, UiLibrary } from './detect.js';
 import { wasMcpRegistered } from './mcp-registered.js';
@@ -20,6 +18,7 @@ import { chooseWorkspaceApp } from './app-choice.js';
 import { isConnectStep } from './connect-steps.js';
 import { CURSOR_RULE_PATH, RETICLE_MD_PATH } from './agent-rules.js';
 import { CRA_ENV_PATH } from './cra.js';
+import { defaultPairingTokenDir, readOrCreatePairingTokenSync } from '../bridge/pairing-token.js';
 
 /** CRA's bundled entry, in the order create-react-app itself generates them. */
 const CRA_ENTRY_CANDIDATES = ['src/index.tsx', 'src/index.jsx', 'src/index.ts', 'src/index.js'];
@@ -33,18 +32,14 @@ function craEntryOf(io: InitIo): { path: string; source: string } | null {
 }
 
 /**
- * The daemon's pairing token, for the one stack that cannot read it at build time.
+ * The daemon's pairing token, minted here if nothing has written it yet.
  *
- * Every other framework's snippet reads this file in Node when the dev server starts, so the token
- * is never written into the project. CRA bundles browser code and inlines only REACT_APP_*, so it
- * has to be materialised into .env.development.local — which CRA's own template gitignores.
+ * `init` used to READ the file and return empty when the daemon had never started. The CDN snippet
+ * inlined that empty value permanently, and regenerating the token made the pasted literal stale.
+ * Same mint as the daemon (`readOrCreatePairingToken`), honours `RETICLE_PAIRING_TOKEN_DIR`.
  */
 function readPairingToken(): string {
-  try {
-    return readFileSync(join(homedir(), '.reticle', 'pairing-token'), 'utf8').trim();
-  } catch {
-    return '';
-  }
+  return readOrCreatePairingTokenSync(defaultPairingTokenDir()) ?? '';
 }
 import {
   DEPS_TARGET,

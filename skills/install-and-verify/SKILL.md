@@ -109,7 +109,7 @@ This is the step the funnel dies on. The daemon runs, the MCP server registers, 
 `init` handles this automatically for a normal Vite or Next.js app. Your job is to confirm it, by reading the files rather than trusting the report:
 
 - **Vite**: `reticle()` is in the `plugins` array of `vite.config.*`.
-- **Next.js**: `withReticle` wraps the export in `next.config.*`, `reticle-dev.tsx` exists, and it is mounted in the root layout or `_app`.
+- **Next.js**: `withReticle` wraps the export in `next.config.*` (it mints the pairing token the connect needs, so starting `next dev` before the daemon still authenticates), `reticle-dev.tsx` exists, and it is mounted in the root layout or `_app`.
 - **Anything else**: nothing is wired. Do it by hand.
 
 Per-framework wiring for Vite, Next.js App Router, Next.js Pages Router, plain HTML, Electron and Tauri, plus which frameworks have no supported path, is in [references/setup.md](references/setup.md). Read it before writing any snippet.

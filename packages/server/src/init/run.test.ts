@@ -1,6 +1,19 @@
-import { describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it } from 'vitest';
+import { mkdtempSync, readFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { ReticleDir, ReticleEnv } from '@reticlehq/core';
 import { FEEDBACK_HINT } from './closing-hint.js';
 import { runInit, resolveLockfiles, type InitIo, type InitOptions } from './run.js';
+
+// init now mints the pairing token; keep it out of the real ~/.reticle during tests.
+const pairingDir = mkdtempSync(join(tmpdir(), 'reticle-init-token-'));
+const savedTokenDir = process.env[ReticleEnv.PAIRING_TOKEN_DIR];
+process.env[ReticleEnv.PAIRING_TOKEN_DIR] = pairingDir;
+afterAll(() => {
+  if (savedTokenDir === undefined) delete process.env[ReticleEnv.PAIRING_TOKEN_DIR];
+  else process.env[ReticleEnv.PAIRING_TOKEN_DIR] = savedTokenDir;
+});
 
 interface MemoryIo extends InitIo {
   written: Record<string, string>;
@@ -215,6 +228,18 @@ describe('runInit', () => {
     expect(out).toMatch(/import \{ reticle \} from 'https:\/\//);
     expect(out).toContain('reticle.connect(');
     expect(out).not.toMatch(/from '@reticlehq\/\w+'/);
+  });
+
+  it('mints a pairing token into that snippet when none exists yet', () => {
+    // The CDN path has no build step. An empty token here is a page that can never authenticate,
+    // and regenerating the file later makes the pasted literal stale as well as wrong.
+    const io = memoryIo({ 'requirements.txt': 'fastapi\n', 'app.py': 'x' });
+    runInit(OPTS, io);
+    const out = io.lines.join('\n');
+    const token = readFileSync(join(pairingDir, ReticleDir.PAIRING_TOKEN_FILE), 'utf8').trim();
+    expect(token.length).toBeGreaterThan(0);
+    expect(out).toContain(token);
+    expect(out).toMatch(/token:\s*'[0-9a-f]+'/);
   });
 
   /**

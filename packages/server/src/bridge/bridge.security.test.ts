@@ -440,7 +440,7 @@ describe('a session closed by the bridge explains itself to the agent', () => {
  * already knows:
  *
  *   PROTOCOL_MISMATCH: 'protocol version mismatch — upgrade @reticlehq/browser'
- *   AUTH_FAILED:       'authentication failed — reload the page to pick up the current pairing token'
+ *   AUTH_FAILED:       'authentication failed' (or 'no pairing token on the page' when none was sent)
  *
  * The SDK prints those and stops retrying. The agent, meanwhile, calls a tool and is told "no
  * browser session connected" — indistinguishable from an app nobody started. An outdated SDK and a

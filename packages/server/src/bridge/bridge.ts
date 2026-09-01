@@ -64,7 +64,7 @@ type SessionReadyHandler = (session: Session) => void;
  */
 export const WS_CLOSE_REASON = {
   PROTOCOL_MISMATCH: 'protocol version mismatch — upgrade @reticlehq/browser',
-  AUTH_FAILED: 'authentication failed — reload the page to pick up the current pairing token',
+  AUTH_FAILED: 'authentication failed',
   /**
    * The pool of half-open handshakes was full, so this dial was turned away before it could say
    * anything. Every other refusal here records why and this one did not — it closed the socket and
@@ -109,10 +109,9 @@ const WS_CLOSE = {
   HELLO_TIMEOUT: [1008, 'hello timeout'],
   INVALID_MESSAGE: [1008, 'invalid message'],
   HELLO_DUPLICATE: [1008, 'hello already received'],
-  // Names the recovery, because the SDK prints this reason and then stops retrying — so it is the
-  // last thing the developer sees. The common cause is a page served before the daemon existed,
-  // which carries no token; a reload re-fetches the connect module and picks the current one up.
-  // Kept under the 123-byte WebSocket close-reason limit.
+  // AUTH_FAILED's code is 1008; the reason string is chosen at close time by authFailureReason
+  // (no token vs wrong token vs different project). A reload cannot mint a credential into a CDN
+  // snippet or a Next env frozen at config eval. Kept under the 123-byte close-reason limit.
   AUTH_FAILED: [1008, WS_CLOSE_REASON.AUTH_FAILED],
   SESSION_LIMIT: [1013, 'session limit reached'],
   PROTOCOL_MISMATCH: [1008, WS_CLOSE_REASON.PROTOCOL_MISMATCH],
@@ -463,12 +462,13 @@ export class Bridge {
           // A daemon left running by ANOTHER project answers this app and rejects it on token. The
           // token is not wrong, it is somebody else's — and "authentication failed" sends the user to
           // check the one thing that is fine. See auth-failure-reason.
-          const reason = authFailureReason(this.#servedProjects, parsed.projectId);
+          const reason = authFailureReason(this.#servedProjects, parsed.projectId, parsed.token);
           log('authentication_failed', {
             served: [...this.#servedProjects],
             ...(parsed.projectId === undefined ? {} : { helloProject: parsed.projectId }),
+            presented: parsed.token !== undefined && 0 < parsed.token.length,
           });
-          this.sessions.noteClosure(WS_CLOSE_REASON.AUTH_FAILED, this.#clock());
+          this.sessions.noteClosure(reason, this.#clock());
           socket.close(WS_CLOSE.AUTH_FAILED[0], reason);
           return;
         }

@@ -594,7 +594,8 @@ export function reticle(options: ReticleVitePluginOptions = {}): ReticleVitePlug
     `[${RETICLE_VITE_PLUGIN_NAME}] could not inject reticle.connect(): the HTML entry module was ` +
     'never matched, so this app carries no instrumentation and will never connect. Check that ' +
     'index.html references your entry with a <script type="module" src="...">, or pass ' +
-    '`inject: false` and call reticle.connect() yourself.';
+    '`inject: false` and call reticle.connect({ token: __RETICLE_TOKEN__ }) yourself. The plugin ' +
+    'still inlines that define; a connect without it is refused.';
 
   /**
    * The DEV message, which must be weaker — and this is the whole reason the two are separate.
