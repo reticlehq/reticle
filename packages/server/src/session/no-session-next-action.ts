@@ -53,12 +53,24 @@ const LOCALHOST = 'http://localhost';
 
 export function nextActionFor(facts: NextActionFacts): NoSessionNextAction {
   if (facts.everConnected) {
+    const listening = facts.listening;
+    const only = 1 === listening.length ? listening[0] : undefined;
+    const bound =
+      0 === listening.length
+        ? ''
+        : only === undefined
+          ? ` An app is already listening on ${listening.join(', ')}; just open the URL the human names — do not start a second stack.`
+          : ` An app is already listening on ${String(only)}; just open ${LOCALHOST}:${String(only)} — do not start a second stack.`;
     return {
       action: NoSessionAction.REOPEN_APP,
+      ...(only === undefined
+        ? {}
+        : { command: `${OPEN_COMMAND} ${LOCALHOST}:${String(only)}`, port: only }),
       reason:
         'a session was connected to this daemon earlier, so the wiring is correct — the tab was ' +
         'closed, reloaded, or the lease aged out. Reopen the app, or take one you own with ' +
-        'reticle_lease {action:"acquire", url}.',
+        'reticle_lease {action:"acquire", url}.' +
+        bound,
     };
   }
 

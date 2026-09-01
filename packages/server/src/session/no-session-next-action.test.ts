@@ -122,6 +122,21 @@ describe('nextActionFor', () => {
     expect(next.action).toBe(NoSessionAction.REOPEN_APP);
     expect(next.command).toBeUndefined();
   });
+
+  it('a session was here AND a port is bound: say so, so nobody starts a second stack', () => {
+    const next = nextActionFor({
+      everConnected: true,
+      initialized: true,
+      listening: [5173],
+      dev: DEV,
+    });
+    expect(next.action).toBe(NoSessionAction.REOPEN_APP);
+    expect(next.reason).toContain('5173');
+    expect(next.reason).toMatch(/already listening/i);
+    expect(next.reason).toMatch(/do not start a second/i);
+    expect(next.command).toBe('reticle open http://localhost:5173');
+    expect(next.port).toBe(5173);
+  });
 });
 
 describe('renderNextAction', () => {

@@ -443,6 +443,21 @@ function stallClause(facts: NoSessionFacts): string {
   );
 }
 
+function alreadyListeningClause(listening: readonly number[]): string {
+  if (0 === listening.length) return '';
+  if (1 === listening.length) {
+    const port = listening[0];
+    return (
+      ` An app is already listening on ${String(port)}; just open http://localhost:${String(port)} ` +
+      '— do not start a second stack.'
+    );
+  }
+  return (
+    ` An app is already listening on ${listening.join(', ')}; just open one of those URLs — do not ` +
+    'start a second stack.'
+  );
+}
+
 export function diagnoseNoSession(facts: NoSessionFacts): string {
   const { everConnected, initialized, listening, port } = facts;
   // Named when known: a claim about a missing file is a claim about ONE directory.
@@ -468,13 +483,14 @@ export function diagnoseNoSession(facts: NoSessionFacts): string {
         'is correct. The session that went away was a pooled lease and it aged out; a lease is a ' +
         'headless context, not a human tab, and it takes its cookies with it (so an authenticated ' +
         'app needs signing in again). Re-acquire with reticle_lease {action:"acquire", url} and ' +
-        `carry on. ${RETRY}`
+        `carry on.${alreadyListeningClause(listening)} ${RETRY}`
       );
     }
     return (
       'no browser session connected, but one WAS connected to this daemon earlier, so the wiring ' +
       'is correct. The tab was closed, navigated away, or hard-reloaded. Ask the human to reopen ' +
-      `the app (or run ${OPEN_CMD_BARE}), or reload the tab. ${leaseAdvice(SELF_SERVE, facts)} ${RETRY}`
+      `the app (or run ${OPEN_CMD_BARE}), or reload the tab.${alreadyListeningClause(listening)} ` +
+      `${leaseAdvice(SELF_SERVE, facts)} ${RETRY}`
     );
   }
 
