@@ -161,3 +161,41 @@ describe('reticle_run reports a failure the way the rest of the surface does', (
     expect(out.params).toBeDefined();
   });
 });
+
+/**
+ * A name that was merged or retired is still a name an agent will reach for — guidance written
+ * against an earlier release is a permanent fact of the product. The catalog is where an agent goes
+ * to find out what exists, so the migration has to be readable THERE, not only from the error a
+ * dead call produces.
+ */
+describe('reticle_tools carries the renamed tools as tombstones', () => {
+  const discover = buildDynamicTools(fakeTools).find((t) => t.name === ReticleTool.TOOLS);
+
+  it('lists retired and merged names with their replacement, apart from the live tools', async () => {
+    const out = (await discover?.handler(NO_DEPS, {})) as {
+      total: number;
+      tools: { name: string }[];
+      retired: { name: string; tool: string; action?: string; summary: string }[];
+    };
+    expect(out.total).toBe(fakeTools.length);
+    expect(out.tools.map((t) => t.name)).not.toContain(ReticleTool.CRAWL);
+    const crawl = out.retired.find((t) => ReticleTool.CRAWL === t.name);
+    expect(crawl?.tool).toBe(ReticleTool.VERIFY);
+    expect(crawl?.action).toBe('crawl');
+    expect(crawl?.summary).toContain(ReticleTool.VERIFY);
+    const refresh = out.retired.find((t) => ReticleTool.REFRESH === t.name);
+    expect(refresh?.tool).toBe(ReticleTool.NAVIGATE);
+    expect(refresh?.action).toBeUndefined();
+  });
+
+  it('answers a load of a renamed tool with where it went, not "unknown tool"', async () => {
+    const out = (await discover?.handler(NO_DEPS, { names: [ReticleTool.CRAWL, 'nope'] })) as {
+      tools: { name: string; error?: string; tool?: string; action?: string }[];
+    };
+    const crawl = out.tools.find((t) => ReticleTool.CRAWL === t.name);
+    expect(crawl?.error).toContain(ReticleTool.VERIFY);
+    expect(crawl?.tool).toBe(ReticleTool.VERIFY);
+    expect(crawl?.action).toBe('crawl');
+    expect(out.tools.find((t) => 'nope' === t.name)?.error).toBe('unknown tool');
+  });
+});

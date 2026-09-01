@@ -2,7 +2,11 @@ import { z } from 'zod';
 import type { ToolDef, ToolDeps } from './tools.js';
 import { runTool } from './invoke-tool.js';
 import { buildErrorPayload } from './error-recovery.js';
-import { mergedNameRedirect, mergedNameMessage } from './merged-name-redirect.js';
+import {
+  mergedNameRedirect,
+  mergedNameRedirects,
+  mergedNameMessage,
+} from './merged-name-redirect.js';
 import { ReticleTool } from './tool-names.js';
 import { ADVERTISE_ALL_ENV, type ToolSurfaceOrigin } from './tool-surface.js';
 import { getSessionMetrics } from '../telemetry/session-metrics.js';
@@ -76,6 +80,17 @@ function unknownKeys(args: Record<string, unknown>, shape: object): string[] {
  */
 export function buildDynamicTools(allTools: ToolDef[], profile?: ToolSurfaceOrigin): ToolDef[] {
   const byName = new Map(allTools.map((t) => [t.name, t]));
+  // The names that stopped being tools, each with where its capability went. Instructions written
+  // against an earlier release are a permanent fact of the product, so the catalog carries the
+  // migration itself instead of leaving an agent to learn the new name from an error string.
+  const tombstones = mergedNameRedirects()
+    .filter(([name]) => !byName.has(name))
+    .map(([name, moved]) => ({
+      name,
+      tool: moved.tool,
+      ...(moved.action === undefined ? {} : { action: moved.action }),
+      summary: mergedNameMessage(name, moved),
+    }));
   // The profile is a DAEMON-startup decision, so an agent that exported RETICLE_TOOL_PROFILE into its
   // own environment sees no change and has, until now, no way to tell. Reported with the catalog.
   const profileBlock =
@@ -131,6 +146,7 @@ export function buildDynamicTools(allTools: ToolDef[], profile?: ToolSurfaceOrig
         return Promise.resolve({
           total: catalog.length,
           tools: catalog,
+          retired: tombstones,
           ...profileBlock,
           next: `All ${catalog.length} tools above are callable, advertised or not. Load full params with reticle_tools { names:[…] }, then call reticle_run { tool, args }.`,
         });
@@ -144,9 +160,19 @@ export function buildDynamicTools(allTools: ToolDef[], profile?: ToolSurfaceOrig
       return Promise.resolve({
         tools: names.map((n) => {
           const t = byName.get(n);
-          return t === undefined
+          if (t !== undefined) {
+            return { name: n, description: t.description, params: paramInfo(t.inputSchema) };
+          }
+          // The same answer reticle_run gives a dead name: where it went, not "unknown tool".
+          const moved = mergedNameRedirect(n);
+          return moved === undefined
             ? { name: n, error: 'unknown tool' }
-            : { name: n, description: t.description, params: paramInfo(t.inputSchema) };
+            : {
+                name: n,
+                error: mergedNameMessage(n, moved),
+                tool: moved.tool,
+                ...(moved.action === undefined ? {} : { action: moved.action }),
+              };
         }),
         ...(carriesPredicate ? { predicateGrammar: predicateGrammar() } : {}),
       });

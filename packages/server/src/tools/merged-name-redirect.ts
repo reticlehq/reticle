@@ -53,6 +53,11 @@ const BY_OLD_NAME = ((): ReadonlyMap<string, MergedNameRedirect> => {
   return map;
 })();
 
+/** Every old name and where it went, for a catalog that has to carry the migration itself. */
+export function mergedNameRedirects(): ReadonlyArray<readonly [string, MergedNameRedirect]> {
+  return [...BY_OLD_NAME.entries()];
+}
+
 /** Where `name` went, or undefined when it is a live tool or not ours. */
 export function mergedNameRedirect(name: string): MergedNameRedirect | undefined {
   return BY_OLD_NAME.get(name);
