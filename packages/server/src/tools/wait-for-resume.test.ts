@@ -105,7 +105,11 @@ describe('reticle_wait_for bounded-wait cursor (issue #601)', () => {
       await vi.advanceTimersByTimeAsync(MCP_CALL_BUDGET_MS + 100);
       const result = (await promise) as { pass: boolean; inconclusive?: string };
       const clean = buildHonestyBlock({ grade: HonestyGrade.SIGNAL, attribution: 'window' });
-      const decided = decideVerified({ pass: result.pass, inconclusive: result.inconclusive, honesty: clean });
+      const decided = decideVerified({
+        pass: result.pass,
+        ...(result.inconclusive !== undefined ? { inconclusive: result.inconclusive } : {}),
+        honesty: clean,
+      });
       expect(decided.verified).toBe(Verified.UNKNOWN);
       expect(decided.verified).not.toBe(Verified.NO);
     });
