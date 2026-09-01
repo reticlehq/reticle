@@ -20,7 +20,7 @@ import { asString, asRecord } from './tools-helpers.js';
 import { describeStepResult, runStepWithStaleRetry } from './act-sequence-retry.js';
 import { assertSequenceSteps } from './act-preflight.js';
 import { type ToolDef, sessionIdShape } from './tool-kit.js';
-import { actCommand } from './act-tools.js';
+import { actCommand, resolveActTarget } from './act-tools.js';
 
 export const ACT_SEQUENCE_TOOL: ToolDef = {
   name: ReticleTool.ACT_SEQUENCE,
@@ -41,7 +41,7 @@ export const ACT_SEQUENCE_TOOL: ToolDef = {
     steps: z
       .array(z.record(z.unknown()))
       .describe(
-        'Ordered list of { ref, action, args? } objects. Each step is equivalent to one reticle_act call; put confirmDangerous:true in a destructive step args object.',
+        'Ordered list of { ref | target, action, args? } objects. Each step is equivalent to one reticle_act call, and addresses its element the same way: an explicit `ref`, or a `target` query (e.g. { testid } or { role, name }) resolved in this call. put confirmDangerous:true in a destructive step args object.',
       ),
     timeout_ms: timeoutMsSchema
       .optional()
@@ -81,6 +81,21 @@ export const ACT_SEQUENCE_TOOL: ToolDef = {
       // invisible from the other — cover both when changing sequence semantics.
       for (let i = 0; i < inputSteps.length; i++) {
         const step = asRecord(inputSteps[i]);
+        // Resolve `target` per step, through the resolver `reticle_act` uses, so the two tools
+        // address an element identically. Resolved HERE rather than up front: an earlier step is
+        // what renders the element a later one names, so a batch resolved before the first
+        // dispatch would miss exactly the elements a sequence exists to reach.
+        const resolved = await resolveActTarget(session, step);
+        if ('error' === resolved.kind) {
+          stalledAt = i;
+          stepResults.push({
+            ...(step['target'] === undefined ? {} : { target: step['target'] }),
+            action: step['action'],
+            dispatched: false,
+            error: resolved.message,
+          });
+          break;
+        }
         try {
           // One retry when the ref went stale under a re-render — see act-sequence-retry.ts.
           const outcome = await runStepWithStaleRetry(
@@ -88,7 +103,7 @@ export const ACT_SEQUENCE_TOOL: ToolDef = {
               actCommand(
                 deps,
                 session,
-                { ref: step['ref'], action: step['action'], args: step['args'] ?? {} },
+                { ref: resolved.ref, action: step['action'], args: step['args'] ?? {} },
                 perStepTimeout,
               ),
             session,
@@ -98,7 +113,7 @@ export const ACT_SEQUENCE_TOOL: ToolDef = {
           if (!outcome.ok) {
             stalledAt = i;
             stepResults.push({
-              ref: step['ref'],
+              ref: resolved.ref,
               action: step['action'],
               dispatched: false,
               error: outcome.error ?? 'step failed',

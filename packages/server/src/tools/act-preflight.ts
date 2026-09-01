@@ -34,11 +34,15 @@ export function assertSequenceSteps(steps: readonly unknown[]): void {
   steps.forEach((raw, i) => {
     const step = 'object' === typeof raw && null !== raw ? (raw as Record<string, unknown>) : {};
     if ('string' === typeof step['ref'] && step['ref'].length > 0) return;
-    const usedTarget = step['target'] !== undefined;
+    // `target` is addressed too, resolved per step through the same resolver `reticle_act` uses.
+    // This used to refuse it with an explanation, which was the honest half-fix: the asymmetry it
+    // explained still cost a round trip per field, which is the exact cost this tool exists to
+    // remove (#702).
+    if (step['target'] !== undefined) return;
     throw new Error(
-      `step ${String(i)} has no \`ref\`${usedTarget ? ' (it has `target`, which this tool does not take)' : ''}. ` +
-        'Sequence steps are addressed by ref: resolve them with reticle_query or reticle_snapshot first, ' +
-        'or use reticle_act / reticle_act_and_wait, which do accept `target`. ' +
+      `step ${String(i)} has neither \`ref\` nor \`target\`. ` +
+        'Address a step by ref (from reticle_query or reticle_snapshot) or by target ' +
+        '(e.g. { testid } or { role, name }). ' +
         'Nothing was acted on — the whole sequence is refused so a bad step cannot leave the earlier ones half-applied.',
     );
   });

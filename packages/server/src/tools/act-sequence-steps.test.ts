@@ -7,24 +7,31 @@
  *
  * Found by driving this project's own dashboard, where exactly that happened — the form submitted an
  * empty email and the failure surfaced three screens later as a mystery 401.
+ *
+ * A `target` step is now ACTED ON rather than refused (#702): the refusal was the honest half-fix,
+ * and the asymmetry it explained still cost a round trip per field. What must never come back is the
+ * original defect — a step this tool cannot address being skipped while the call reports success —
+ * so the cases below moved from "refuses target" to "refuses a step it cannot address at all".
  */
 import { describe, expect, it } from 'vitest';
 import { assertSequenceSteps } from './act-preflight.js';
 import { describeStepResult } from './act-sequence-retry.js';
 
 describe('refusing a sequence that cannot act', () => {
-  it('refuses a step written with `target` instead of `ref`', () => {
+  it('accepts a step addressed by `target`, which it now resolves', () => {
     expect(() =>
       assertSequenceSteps([{ target: { testid: 'auth-email' }, action: 'fill' }]),
-    ).toThrow(/target/);
+    ).not.toThrow();
   });
 
-  it('says where to put a target instead, rather than only refusing', () => {
+  it('names BOTH ways to address a step when one has neither', () => {
+    // The recovery has to name the option the caller did not use, or the message only says no.
     try {
-      assertSequenceSteps([{ target: { testid: 'x' }, action: 'click' }]);
+      assertSequenceSteps([{ action: 'click' }]);
       expect.unreachable('should have thrown');
     } catch (e) {
-      expect((e as Error).message).toContain('reticle_act_and_wait');
+      expect((e as Error).message).toContain('ref');
+      expect((e as Error).message).toContain('target');
     }
   });
 
@@ -33,7 +40,7 @@ describe('refusing a sequence that cannot act', () => {
       assertSequenceSteps([
         { ref: 'e1', action: 'fill' },
         { ref: 'e2', action: 'fill' },
-        { target: { testid: 'x' }, action: 'click' },
+        { action: 'click' },
       ]),
     ).toThrow(/step 2/);
   });
@@ -50,8 +57,18 @@ describe('refusing a sequence that cannot act', () => {
     expect(() => assertSequenceSteps([])).toThrow(/no steps/);
   });
 
-  it('refuses a step with an empty ref', () => {
-    expect(() => assertSequenceSteps([{ ref: '', action: 'click' }])).toThrow(/no `ref`/);
+  it('refuses a step with an empty ref and no target', () => {
+    // An empty string is not an address. It reached the browser as `ref: ''` and came back as
+    // "ref '' no longer resolves to an element", which sends the reader looking for a re-render.
+    expect(() => assertSequenceSteps([{ ref: '', action: 'click' }])).toThrow(/neither/);
+  });
+
+  it('accepts an empty ref when the step also carries a target', () => {
+    // `resolveActTarget` prefers a non-empty ref and falls through to the target otherwise, so a
+    // caller who sends both with an empty ref is addressed rather than refused.
+    expect(() =>
+      assertSequenceSteps([{ ref: '', target: { testid: 'x' }, action: 'click' }]),
+    ).not.toThrow();
   });
 
   it('refuses junk in the steps array', () => {
