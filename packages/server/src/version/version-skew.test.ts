@@ -44,7 +44,7 @@ describe('describeSkew — the contract decides, not the version', () => {
     const msg = describeSkew(page({ version: '2.2.1', contract: 'bbbb2222' }), SELF) ?? '';
     expect(msg).toContain('2.2.1');
     expect(msg).toContain('2.4.1');
-    expect(msg).toMatch(/npm i -D @reticlehq\/react@2\.4\.1|reticle update/);
+    expect(msg).toMatch(/npm i -D @reticlehq\/browser@2\.4\.1|reticle update/);
   });
 
   it('treats a missing fingerprint plus a different version as skew — it predates the field', () => {

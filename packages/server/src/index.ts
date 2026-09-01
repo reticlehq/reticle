@@ -32,6 +32,8 @@ import { openLoopbackAlias } from './daemon/loopback-alias.js';
 import { reportAppInstrumented } from './telemetry/app-instrumented.js';
 import { resolveBridgeSecurityWithAutoToken } from './bridge/bridge-security.js';
 import { Bridge } from './bridge/bridge.js';
+import { sdkFixForDirectory } from './version/sdk-fix.js';
+import { SERVER_VERSION } from './version/server-version.js';
 import { BaselineStore } from './project/baselines.js';
 import { RecordingStore } from './flows/recordings.js';
 import { initImpact } from './impact/impact-recorder.js';
@@ -437,6 +439,15 @@ async function resolveRealInput(
 /** Start the Reticle bridge (browser WS endpoint) and, by default, the MCP stdio server. */
 
 /**
+ * The SDK-upgrade sentence for THIS project's package.json, evaluated at each HELLO so a
+ * just-edited manifest is what we name. Falls back to the framework-neutral sensor when cwd is
+ * not an app.
+ */
+function sdkFixForCwd(): string {
+  return sdkFixForDirectory(SERVER_VERSION, process.cwd());
+}
+
+/**
  * Resolve a session's artifact root, from everything this machine knows about where projects live.
  *
  * Built once per daemon and closed over by every tool call. The two sources are read lazily and
@@ -477,7 +488,7 @@ export async function start(options: StartOptions = {}): Promise<RunningServer> 
   // "nothing recorded yet" over a month of history on disk is the worst version of this feature.
   initImpact({ reticleRoot: options.reticleRoot ?? join(process.cwd(), ReticleDir.ROOT) });
   const security = await resolveBridgeSecurityWithAutoToken(options);
-  const bridge = new Bridge({ port, ...security });
+  const bridge = new Bridge({ port, sdkFix: sdkFixForCwd, ...security });
   // Server-authoritative liveness: a Node-side reaper (immune to browser throttling) ends sessions
   // whose agent has gone idle, so a forgotten/crashed agent never leaves the HUD "running" forever.
   const reaper = new SessionReaper(bridge.sessions);
@@ -582,7 +593,7 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
 
   const security = await resolveBridgeSecurityWithAutoToken(options);
   const shared = createSharedServer(security.token === undefined ? {} : { token: security.token });
-  const bridge = new Bridge({ port, server: shared.httpServer, ...security });
+  const bridge = new Bridge({ port, server: shared.httpServer, sdkFix: sdkFixForCwd, ...security });
   // The daemon owns listen (below), so the real bind error is reported there; absorb bridge.ready's
   // mirror rejection so a port collision can't surface as an unhandled promise rejection.
   void bridge.ready.catch(() => undefined);

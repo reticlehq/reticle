@@ -24,6 +24,8 @@
  * a human acts on.
  */
 
+import { resolveSdkFix } from './sdk-fix.js';
+
 /** Which pair disagreed. Named so the nudge can report each independently. */
 export const SkewPair = {
   /** The SDK in the page vs this daemon. */
@@ -89,17 +91,12 @@ export function describeSkew(peer: PeerIdentity, self: SelfIdentity): string | u
  * The fix line for a page whose SDK disagrees with this daemon, with no project to read.
  *
  * Names the framework-neutral sensor and plain npm, because those are the answers that are never
- * actively wrong. When a project directory IS available, use `resolveSdkFix` in sdk-fix.ts, which
- * reads the real UI library and package manager — this used to hardcode `@reticlehq/react` and
- * told Vue projects to install a React package (#618).
+ * actively wrong. When a project directory IS available, `resolveSdkFix` / `sdkFixForDirectory`
+ * in sdk-fix.ts read the real packages and package manager — this used to hardcode
+ * `@reticlehq/react` and told Vue projects to install a React package (#618).
  */
 export function sdkFix(daemonVersion: string): string {
-  return (
-    `Tell the human to install the matching SDK (\`npm i -D @reticlehq/browser@${daemonVersion}\`) ` +
-    'or run `reticle update`, then restart their dev server so the page reloads with it. The ' +
-    'restart is not optional: a bundler keeps serving the pre-bundled copy it already has, so an ' +
-    'upgrade can look applied — matching versions in `npm ls` — while the page runs the old module.'
-  );
+  return resolveSdkFix(daemonVersion);
 }
 
 /**
