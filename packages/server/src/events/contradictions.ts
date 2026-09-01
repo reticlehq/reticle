@@ -468,7 +468,19 @@ function findWindowContradictions(
   // A navigation that neither fetches nor renders arrived nowhere. Distinct from a dead control:
   // the control worked, the DESTINATION is empty — which is why every "did the click do something"
   // heuristic passes it, a route change being unambiguously something.
-  const routed = events.some((e) => e.type === EventType.ROUTE_CHANGE);
+  const routeEvents = events.filter((e) => e.type === EventType.ROUTE_CHANGE);
+  const routed = routeEvents.length > 0;
+  // A same-document hash navigation renders nothing BY DEFINITION, so this rule accused every one
+  // of arriving nowhere. A skip link — `href="#main-content"`, an accessibility primitive — reported
+  // `unknown` / route-rendered-nothing while the landmark it jumped to was present the whole time
+  // and a `reticle_assert({ role: "main" })` immediately after returned yes (#704).
+  //
+  // Its observable consequences are `location.hash`, focus and scroll position; a DOM mutation is
+  // not among them, and demanding one asks the page for evidence it has no reason to produce.
+  //
+  // EVERY route change in the window has to be same-document: a hash jump followed by a real
+  // navigation that rendered nothing is still the bug this rule is for.
+  const sameDocumentOnly = routed && routeEvents.every((e) => isHashOnlyNavigation(e));
   // `dom.text` counts as rendered, and it has to: React reconciles a destination IN PLACE far more
   // often than it adds nodes. Measured on three ordinary sidebar navigations of the bench app — every
   // one emitted { dom.attr:2, dom.text:2, render.commit, state.change } and ZERO dom.added/removed,
@@ -488,7 +500,7 @@ function findWindowContradictions(
   const fetched = events.some(
     (e) => e.type === EventType.NET_REQUEST || e.type === EventType.NET_PENDING,
   );
-  if (routed && !rendered && !fetched && true !== options.renderProved) {
+  if (routed && !sameDocumentOnly && !rendered && !fetched && true !== options.renderProved) {
     found.push({
       kind: ContradictionKind.ROUTE_RENDERED_NOTHING,
       claim: 'the app navigated to a new route',
@@ -701,4 +713,20 @@ function findWindowContradictions(
   // Consumer rules run LAST and over the same app-only window, so a service embedding this engine
   // adds to the verdict rather than forking the file that produces it.
   return [...found, ...runRegisteredFolds(events, options)];
+}
+
+/**
+ * Did this route change move only the fragment, within the same document?
+ *
+ * Compared on the full `from`/`to` hrefs rather than on the `hash` field alone: a navigation that
+ * changes both the path and the hash lands on a new document and must stay subject to the
+ * blank-destination rule. Requiring a hash on the destination keeps a plain same-URL replace — which
+ * genuinely rendered nothing — out of the exemption.
+ */
+function isHashOnlyNavigation(event: ReticleEvent): boolean {
+  const from = asString(event.data['from']);
+  const to = asString(event.data['to']);
+  if (from === undefined || to === undefined || from === to) return false;
+  const withoutHash = (url: string): string => url.split('#')[0] ?? url;
+  return to.includes('#') && withoutHash(from) === withoutHash(to);
 }

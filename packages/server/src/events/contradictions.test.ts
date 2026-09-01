@@ -336,6 +336,49 @@ describe('the route moved and nothing was rendered for it', () => {
   });
 
   /**
+   * A skip link is an accessibility primitive, and "did my skip link work" is a reasonable thing to
+   * verify. It reported `unknown` plus a spurious contradiction: a same-document hash navigation
+   * renders nothing BY DEFINITION, so this rule accused every one of arriving nowhere while the
+   * landmark it jumped to was present the whole time (#704).
+   */
+  const hashJump = (from: string, to: string): ReticleEvent =>
+    ev(EventType.ROUTE_CHANGE, { from, to, pathname: '/docs', hash: to.slice(to.indexOf('#')) });
+
+  it('stays silent for a same-document hash jump', () => {
+    expect(
+      kinds([hashJump('https://app.test/docs', 'https://app.test/docs#main-content'), attrOnly()]),
+    ).not.toContain(ContradictionKind.ROUTE_RENDERED_NOTHING);
+  });
+
+  it('still fires when the path moved as well as the hash', () => {
+    // A different document that rendered nothing is the bug this rule exists for; carrying a hash
+    // must not buy an exemption from it.
+    expect(
+      kinds([hashJump('https://app.test/docs', 'https://app.test/guide#intro'), attrOnly()]),
+    ).toContain(ContradictionKind.ROUTE_RENDERED_NOTHING);
+  });
+
+  it('still fires when the URL did not change at all', () => {
+    // A same-URL replace that rendered nothing genuinely arrived nowhere, and has no hash to jump
+    // to — the exemption must not swallow it.
+    expect(
+      kinds([hashJump('https://app.test/docs#a', 'https://app.test/docs#a'), attrOnly()]),
+    ).toContain(ContradictionKind.ROUTE_RENDERED_NOTHING);
+  });
+
+  it('still fires when a hash jump is followed by a real navigation that rendered nothing', () => {
+    // EVERY route change in the window has to be same-document, or a skip link at the start of a
+    // window would exempt whatever came after it.
+    expect(
+      kinds([
+        hashJump('https://app.test/docs', 'https://app.test/docs#main-content'),
+        routeChange(),
+        attrOnly(),
+      ]),
+    ).toContain(ContradictionKind.ROUTE_RENDERED_NOTHING);
+  });
+
+  /**
    * The window below is COPIED FROM A MEASUREMENT, not invented: three ordinary sidebar navigations
    * on the bench app, read back through reticle_observe. Every one of them emitted
    *
