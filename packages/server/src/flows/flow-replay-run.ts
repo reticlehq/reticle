@@ -11,6 +11,8 @@ import {
   type FlowStepResult,
   type ReticleEvent,
 } from '@reticlehq/core';
+
+import { routeOfEvent } from '../events/route-of-event.js';
 import { asString } from '../tools/tools-helpers.js';
 import { replayFlow } from './flow-replay.js';
 import { assertSuccess, dynamicTestids, successLabel, SUCCESS_STEP_TOOL } from './flow-success.js';
@@ -122,8 +124,7 @@ export function startPathMismatchHint(
   if (startPath === undefined || 0 === startPath.length) return undefined;
   const routes = session.eventsSince(0).filter((e) => e.type === EventType.ROUTE_CHANGE);
   const last = routes.at(-1);
-  const data = last?.data ?? {};
-  const current = asString(data['pathname']) ?? asString(data['to']);
+  const current = last === undefined ? undefined : routeOfEvent(last).full;
   if (current === undefined || current === startPath) return undefined;
   return `this flow's journey starts on ${startPath} but the tab is on ${current} — navigate there (reticle_navigate { url: "${startPath}" }), then replay`;
 }
