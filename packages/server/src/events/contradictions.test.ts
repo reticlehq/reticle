@@ -118,7 +118,7 @@ describe('findContradictions — cross-channel disagreement', () => {
     const found = findContradictions([
       domChanged(),
       ev(EventType.SIGNAL, { name: 'todo:archived' }),
-      failedCall(),
+      failedCall('IPC', 'ipc://todos:archive'),
     ]);
     expect(found).toHaveLength(1);
     expect(found[0]?.kind).toBe(ContradictionKind.SIGNAL_CONTRADICTED);
@@ -508,8 +508,108 @@ describe('failure misattributed — the server broke, the app blamed the user', 
     // widened until the rule never fires, and the suite would not notice.
     const found = findContradictions([
       ev(EventType.SIGNAL, { name: 'ack:saved' }),
-      failedCall(),
+      failedCall('POST', '/api/items/save'),
       domChanged(),
+    ]);
+    expect(found.map((c) => c.kind)).toContain(ContradictionKind.SIGNAL_CONTRADICTED);
+  });
+
+  /**
+   * #629: An ambient background failure (e.g. GET /api/poll) co-occurring in the window with an
+   * unrelated success signal (e.g. item:saved) is not a contradiction.
+   */
+  it('does not contradict a success signal when an unrelated background poll fails (#629)', () => {
+    const found = findContradictions([
+      ev(EventType.SIGNAL, { name: 'item:saved' }),
+      failedCall('GET', '/api/poll'),
+    ]);
+    expect(found.map((c) => c.kind)).not.toContain(ContradictionKind.SIGNAL_CONTRADICTED);
+  });
+
+  /**
+   * #629: A failed non-mutating read (GET/HEAD) must not contradict a success signal even if there
+   * is lexical/token overlap (e.g. GET /api/items failing does not contradict item:saved).
+   */
+  it('does not contradict a success signal when a non-mutating read with token overlap fails (#629)', () => {
+    const found = findContradictions([
+      ev(EventType.SIGNAL, { name: 'item:saved' }),
+      failedCall('GET', '/api/items'),
+    ]);
+    expect(found.map((c) => c.kind)).not.toContain(ContradictionKind.SIGNAL_CONTRADICTED);
+  });
+
+  /**
+   * #629: A lone unrelated failed mutation with zero correlation/token overlap must not be
+   * falsely attributed to a success signal (e.g. POST /api/delete-user failing does not contradict item:saved).
+   */
+  it('does not contradict a success signal when a lone unrelated mutation fails (#629)', () => {
+    const found = findContradictions([
+      ev(EventType.SIGNAL, { name: 'item:saved' }),
+      failedCall('POST', '/api/delete-user'),
+    ]);
+    expect(found.map((c) => c.kind)).not.toContain(ContradictionKind.SIGNAL_CONTRADICTED);
+  });
+
+  /**
+   * #629: Ambient endpoints with plural forms (events, metrics, stats, analytics) must be normalized
+   * and filtered out even after stemming.
+   */
+  it('does not contradict a success signal when ambient endpoints with plural forms fail (#629)', () => {
+    const found = findContradictions([
+      ev(EventType.SIGNAL, { name: 'item:saved' }),
+      failedCall('POST', '/api/events'),
+    ]);
+    expect(found.map((c) => c.kind)).not.toContain(ContradictionKind.SIGNAL_CONTRADICTED);
+  });
+
+  /**
+   * #629 flagship: the app asserting success while its own write failed is a contradiction even on a
+   * passive assert (no user action in the window).
+   */
+  it('catches an app that fired a success signal while its own write failed on a passive assert (#629)', () => {
+    const found = findContradictions([
+      ev(EventType.SIGNAL, { name: 'compose:generated' }),
+      failedCall('POST', '/api/generate-script'),
+    ]);
+    expect(found.map((c) => c.kind)).toContain(ContradictionKind.SIGNAL_CONTRADICTED);
+    expect(found[0]?.claim).toContain('compose:generated');
+    expect(found[0]?.detail).toContain('POST /api/generate-script');
+  });
+
+  /**
+   * #629 edge case: a successful domain write + unrelated background first-party mutation (e.g. analytics)
+   * must not falsely trigger signal-contradicted.
+   */
+  it('does not contradict a success signal when a background telemetry POST fails after domain write succeeded (#629)', () => {
+    const found = findContradictions([
+      okCall('POST', '/api/items/save'),
+      ev(EventType.SIGNAL, { name: 'item:saved' }),
+      failedCall('POST', '/api/analytics/event'),
+    ]);
+    expect(found.map((c) => c.kind)).not.toContain(ContradictionKind.SIGNAL_CONTRADICTED);
+  });
+
+  /**
+   * #629: when both a related write failure and an unrelated ambient poll failure exist, only the
+   * related write failure is cited in the contradiction.
+   */
+  it('cites only the related write failure when ambient poll failure also co-occurs (#629)', () => {
+    const found = findContradictions([
+      ev(EventType.SIGNAL, { name: 'item:saved' }),
+      failedCall('POST', '/api/items/save'),
+      failedCall('GET', '/api/poll'),
+    ]);
+    const contradiction = found.find((c) => c.kind === ContradictionKind.SIGNAL_CONTRADICTED);
+    expect(contradiction).toBeDefined();
+    expect(contradiction?.counter).toBe('1 write(s) in the same window failed');
+    expect(contradiction?.detail).toContain('POST /api/items/save');
+    expect(contradiction?.detail).not.toContain('/api/poll');
+  });
+
+  it('catches IPC write failures matching the signal (#629)', () => {
+    const found = findContradictions([
+      ev(EventType.SIGNAL, { name: 'todos:loaded' }),
+      failedCall('IPC', 'ipc://todos:archive'),
     ]);
     expect(found.map((c) => c.kind)).toContain(ContradictionKind.SIGNAL_CONTRADICTED);
   });

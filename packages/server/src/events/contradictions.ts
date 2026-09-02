@@ -191,6 +191,112 @@ function describe(call: NetCall): string {
 }
 
 /**
+ * Common background noise endpoints that run periodically or passively (telemetry, analytics, polling, etc.).
+ * Unless a signal specifically matches these terms, failures here do not contradict app-level success signals.
+ */
+const AMBIENT_ENDPOINTS =
+  /^(analytics?|telemetry|metrics?|track(ing)?|beacon|poll(ing)?|heartbeat|health|ping|logging|logs?|events?|stats?)$/i;
+
+const URL_STOPWORDS = new Set([
+  'api',
+  'v1',
+  'v2',
+  'v3',
+  'v4',
+  'http',
+  'https',
+  'ipc',
+  'rest',
+  'graphql',
+  'json',
+  'data',
+  'app',
+]);
+
+function stemToken(token: string): string {
+  let s = token.toLowerCase().replace(/[^a-z0-9]/g, '');
+  if (s.length <= 2) return s;
+  if (s.endsWith('ies') && s.length > 4) return s.slice(0, -3) + 'y';
+  if (s.endsWith('ing') && s.length > 5) s = s.slice(0, -3);
+  else if (s.endsWith('ed') && s.length > 4) s = s.slice(0, -2);
+  else if (s.endsWith('es') && s.length > 4) s = s.slice(0, -2);
+  else if (s.endsWith('s') && !s.endsWith('ss') && s.length > 3) s = s.slice(0, -1);
+  if (s.endsWith('e') && s.length > 3) s = s.slice(0, -1);
+  return s;
+}
+
+function isAmbientToken(token: string): boolean {
+  return AMBIENT_ENDPOINTS.test(token) || AMBIENT_ENDPOINTS.test(stemToken(token));
+}
+
+function extractTokens(input: string): string[] {
+  const rawParts = input
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .split(/[:/_.\-?&=#\s]+/)
+    .filter(Boolean);
+  const tokens: string[] = [];
+  for (const part of rawParts) {
+    const stemmed = stemToken(part);
+    if (stemmed.length >= 3 && !URL_STOPWORDS.has(stemmed)) {
+      tokens.push(stemmed);
+    }
+  }
+  return tokens;
+}
+
+/**
+ * Does this failed network call contradict the app's success signal?
+ *
+ * An app asserting success while its own write failed is the flagship false green and must be caught
+ * even on passive assertions (#629). But non-mutating reads (GET/HEAD), ambient background endpoints
+ * (analytics/telemetry/logging/polls), and lone unrelated writes must not contradict an unrelated signal.
+ */
+function isCallContradictingSignal(
+  call: NetCall,
+  signal: string,
+  allSettled: readonly NetCall[],
+): boolean {
+  if (false === call.ok ? false : true) return false;
+
+  // Reads (GET/HEAD) cannot contradict a success signal claim (#629).
+  if (!isMutating(call)) {
+    return false;
+  }
+
+  const signalTokens = extractTokens(signal);
+  const urlTokens = extractTokens(call.matchUrl || call.url);
+
+  const isAmbientUrl = urlTokens.some((t) => isAmbientToken(t));
+  const isAmbientSignal = signalTokens.some((t) => isAmbientToken(t));
+
+  // If the endpoint is ambient (analytics, polling, logging) and the signal is not about that ambient
+  // system, the failure does not contradict the signal.
+  if (isAmbientUrl && !isAmbientSignal) {
+    return false;
+  }
+
+  // Token overlap check: signal and URL must share domain stems (e.g. "item", "generate", "todo").
+  const hasTokenOverlap = signalTokens.some((st) => urlTokens.includes(st));
+  if (!hasTokenOverlap) {
+    return false;
+  }
+
+  // If another mutating call in this window succeeded (200) and was a domain match,
+  // then the primary write succeeded and this co-occurring failure was an ancillary write.
+  const hasSuccessfulMatchingWrite = allSettled.some(
+    (c) =>
+      true === c.ok &&
+      isMutating(c) &&
+      extractTokens(c.matchUrl || c.url).some((t) => signalTokens.includes(t)),
+  );
+  if (hasSuccessfulMatchingWrite) {
+    return false;
+  }
+
+  return true;
+}
+
+/**
  * Actions that are SUPPOSED to make something happen, so producing nothing is a finding.
  *
  * Deliberately narrow. `hover`, `focus` and `scrollIntoView` can legitimately move nothing, and
@@ -643,27 +749,22 @@ function findWindowContradictions(
   //
   // The claim is a thing the app said, so the attribution floor does not apply to it — the flagship
   // false green is an app asserting success on a PASSIVE assert while its own write failed, and
-  // requiring an action would lose exactly that. But the COUNTER was any failure in the window, and
-  // that is the same window statement scoped out of every other rule here. Measured: two of the
-  // three false positives surviving the first scoping pass were this rule.
-  //
-  // A success signal claims a CHANGE was made. A failed mutation is evidence against that claim; a
-  // failed read is not. Background polls, prefetches and telemetry GETs fail constantly in healthy
-  // apps and say nothing about whether a write landed. Structural, not a timing heuristic, and the
-  // distinction was already encoded next door in `isMutating`.
-  const failedWrites = failed.filter(isMutating);
-  // The same scoping, for the same reason, one branch down. "The UI moved forward" is also a claim
-  // that something CHANGED, and it was still reading ANY failure — so a first-party poll failing
-  // during an action contradicted a verdict the action had genuinely earned. Measured on the
-  // observation benchmark: one of two false positives across 47 cells, and the argument for it is
-  // the paragraph above, which had simply not been carried down here.
+  // requiring an action would lose exactly that. But the COUNTER must be correlated failed writes,
+  // preventing unrelated background polling/reads or telemetry from contradicting the verdict (#629).
   const unexpectedWrites = unexpected.filter(isMutating);
-  if (failedWrites.length > 0 && successSignals.length > 0 && !failureAcknowledged(events)) {
+  const contradictingFailed =
+    successSignals.length > 0 && !failureAcknowledged(events)
+      ? failed.filter((call) =>
+          successSignals.some((sig) => isCallContradictingSignal(call, sig, settled)),
+        )
+      : [];
+
+  if (contradictingFailed.length > 0) {
     found.push({
       kind: ContradictionKind.SIGNAL_CONTRADICTED,
       claim: `the app fired ${successSignals.map((s) => `"${s}"`).join(', ')}`,
-      counter: `${String(failedWrites.length)} write(s) in the same window failed`,
-      detail: failedWrites.map(describe).join('; '),
+      counter: `${String(contradictingFailed.length)} write(s) in the same window failed`,
+      detail: contradictingFailed.map(describe).join('; '),
     });
   } else if (
     unexpectedWrites.length > 0 &&
