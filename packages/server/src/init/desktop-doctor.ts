@@ -27,7 +27,7 @@ export const DesktopFinding = {
 } as const;
 export type DesktopFinding = (typeof DesktopFinding)[keyof typeof DesktopFinding];
 
-interface DesktopDiagnosis {
+export interface DesktopDiagnosis {
   code: DesktopFinding;
   /** Which file to look at. */
   file: string;
@@ -41,8 +41,11 @@ interface DesktopDiagnosis {
 type ReadFile = (path: string) => string | undefined;
 
 const TAURI_CONF = 'src-tauri/tauri.conf.json';
-const PRELOAD_REQUIRE = '@reticlehq/electron/preload';
-const CAPTURE_REQUIRE = '@reticlehq/electron/main';
+export const PRELOAD_REQUIRE = '@reticlehq/electron/preload';
+export const CAPTURE_REQUIRE = '@reticlehq/electron/main';
+/** The copy-pasteable line `diagnoseDesktop` already prints; the main patcher reuses it on MANUAL. */
+export const ELECTRON_CAPTURE_FIX = `add:  const { installReticleCapture } = require('${CAPTURE_REQUIRE}')  then installReticleCapture(win)`;
+export const ELECTRON_PRELOAD_FIX = `add as the FIRST line:  require('${PRELOAD_REQUIRE}')`;
 
 function parseJson(text: string | undefined): Record<string, unknown> | undefined {
   if (text === undefined) return undefined;
@@ -189,7 +192,7 @@ function diagnoseElectron(read: ReadFile, main: string): DesktopDiagnosis[] {
       file: preload.file,
       problem:
         'the preload never installs the Reticle IPC shim, so every ipcRenderer.invoke is invisible — reticle_network will report nothing and read as "this app makes no backend calls"',
-      fix: `add as the FIRST line:  require('${PRELOAD_REQUIRE}')`,
+      fix: ELECTRON_PRELOAD_FIX,
     });
   }
 
@@ -199,7 +202,7 @@ function diagnoseElectron(read: ReadFile, main: string): DesktopDiagnosis[] {
       code: DesktopFinding.ELECTRON_CAPTURE_MISSING,
       file: main,
       problem: 'the main process never installs the capture helper, so screenshots are unavailable',
-      fix: `add:  const { installReticleCapture } = require('${CAPTURE_REQUIRE}')  then installReticleCapture(win)`,
+      fix: ELECTRON_CAPTURE_FIX,
     });
   }
   return findings;

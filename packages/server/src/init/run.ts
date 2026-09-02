@@ -67,7 +67,12 @@ import {
   CURSOR_PROJECT_MARKER,
 } from './mcp-clients.js';
 import { deriveProjectId, packageName } from './project-id.js';
-import { VITE_DEV_MODULE_PATH, connectArgWithToken, staticPageSnippet } from './snippets.js';
+import {
+  VITE_DEV_MODULE_PATH,
+  ELECTRON_VITE_DEV_MODULE_PATH,
+  connectArgWithToken,
+  staticPageSnippet,
+} from './snippets.js';
 import { CLAUDE_COMMAND_PATH, CURSOR_COMMAND_PATH } from './slash-command.js';
 import { SERVER_VERSION } from '../version/server-version.js';
 import { InitFailure, reportInitOutcome } from '../telemetry/init-telemetry.js';
@@ -220,6 +225,35 @@ const VITE_CONFIG_CANDIDATES = [
   'vite.config.mjs',
   'vite.config.mts',
 ];
+const ELECTRON_VITE_CONFIG_CANDIDATES = [
+  'electron.vite.config.ts',
+  'electron.vite.config.js',
+  'electron.vite.config.mjs',
+  'electron.vite.config.mts',
+];
+/** electron-vite and the unbundled Electron layouts this repo already ships. */
+const ELECTRON_MAIN_SOURCES = [
+  'src/main/index.ts',
+  'src/main/index.js',
+  'src/main/index.mts',
+  'src/main/index.mjs',
+  'electron/main.cjs',
+  'electron/main.js',
+  'electron/main.ts',
+  'src/main.ts',
+  'src/main.js',
+];
+const ELECTRON_PRELOAD_SOURCES = [
+  'src/preload/index.ts',
+  'src/preload/index.js',
+  'src/preload/index.mts',
+  'src/preload/index.mjs',
+  'electron/preload.cjs',
+  'electron/preload.js',
+  'electron/preload.ts',
+  'src/preload.ts',
+  'src/preload.js',
+];
 const ASTRO_CONFIG_CANDIDATES = [
   'astro.config.mjs',
   'astro.config.js',
@@ -342,6 +376,17 @@ function firstPresent(files: ReadonlySet<string>, candidates: readonly string[])
   return null;
 }
 
+function firstReadable(
+  io: Pick<InitIo, 'readFile'>,
+  candidates: readonly string[],
+): { path: string; source: string } | null {
+  for (const path of candidates) {
+    const source = io.readFile(path);
+    if (source !== null) return { path, source };
+  }
+  return null;
+}
+
 /**
  * The directory the human's agent runs in, when it is not the app's directory.
  *
@@ -375,6 +420,15 @@ function gatherPlanInput(options: InitOptions, io: InitIo, pkgRaw: string): Plan
   const viteSource = null === vitePath ? null : io.readFile(vitePath);
   const viteConfig =
     vitePath !== null && viteSource !== null ? { path: vitePath, source: viteSource } : null;
+
+  const electronVitePath = firstPresent(rootFiles, ELECTRON_VITE_CONFIG_CANDIDATES);
+  const electronViteSource = null === electronVitePath ? null : io.readFile(electronVitePath);
+  const electronViteConfig =
+    electronVitePath !== null && electronViteSource !== null
+      ? { path: electronVitePath, source: electronViteSource }
+      : null;
+  const electronMain = firstReadable(io, ELECTRON_MAIN_SOURCES);
+  const electronPreload = firstReadable(io, ELECTRON_PRELOAD_SOURCES);
 
   // Global MCP registration targets each agent that's present: Claude via its CLI, Cursor via its
   // global config file. Only probe when the MCP step is in play.
@@ -450,6 +504,9 @@ function gatherPlanInput(options: InitOptions, io: InitIo, pkgRaw: string): Plan
     detectedClients,
     cursorProjectPresent: io.exists(CURSOR_PROJECT_MARKER),
     viteConfig,
+    electronViteConfig,
+    electronPreload,
+    electronMain,
     astroConfig:
       astroPath !== null && astroSource !== null ? { path: astroPath, source: astroSource } : null,
     astroLayout:
@@ -467,7 +524,11 @@ function gatherPlanInput(options: InitOptions, io: InitIo, pkgRaw: string): Plan
     storeHints: storeHints(dependencyNames(pkg)),
     foundStores: scanStores(sourceFiles, dependencyNames(pkg)),
     nextFoundStores: scanStores(sourceFiles, dependencyNames(pkg), dirname(devLocation.path)),
-    viteDevModuleExists: io.exists(VITE_DEV_MODULE_PATH),
+    viteDevModuleExists: io.exists(
+      detection.framework === Framework.ELECTRON_VITE
+        ? ELECTRON_VITE_DEV_MODULE_PATH
+        : VITE_DEV_MODULE_PATH,
+    ),
     nextReticleDevPath: devLocation.path,
     nextReticleDevImport: devLocation.importSpecifier,
     nextReticleDevExists: io.exists(devLocation.path),
@@ -510,12 +571,16 @@ function gatherPlanInput(options: InitOptions, io: InitIo, pkgRaw: string): Plan
 /** pnpm's workspace declaration, read when present — it is authoritative about where packages live. */
 const PNPM_WORKSPACE = 'pnpm-workspace.yaml';
 /** Deps that mark a directory as a runnable web app even when it has no bundler config file. */
-const APP_DEPS = ['next', 'vite'] as const;
+const APP_DEPS = ['next', 'vite', 'electron-vite'] as const;
 
 function looksLikeApp(dir: string, io: Pick<InitIo, 'exists' | 'readFile'>): boolean {
   const pkgRaw = io.readFile(`${dir}/${PACKAGE_JSON}`);
   if (null === pkgRaw) return false;
-  const configs = [...VITE_CONFIG_CANDIDATES, ...NEXT_CONFIG_CANDIDATES];
+  const configs = [
+    ...VITE_CONFIG_CANDIDATES,
+    ...ELECTRON_VITE_CONFIG_CANDIDATES,
+    ...NEXT_CONFIG_CANDIDATES,
+  ];
   if (configs.some((c) => io.exists(`${dir}/${c}`))) return true;
   // `next.config` is optional in Next, so the dependency list is the other half of the signal.
   return APP_DEPS.some((d) => pkgRaw.includes(`"${d}"`));

@@ -129,6 +129,39 @@ Keep \`reticle()\` LAST so it sees the output of your other plugins. It only app
 (dev) — it is dropped from \`vite build\`.`;
 }
 
+/**
+ * The electron-vite recipe: the plugin belongs in `renderer`, never in `main` or `preload`.
+ *
+ * `desktop: true` is load-bearing. Without it the plugin is serve-only, so a packaged renderer
+ * (a production build with no dev server) ships with no connect() at all.
+ */
+export function electronViteManual(
+  port: number | undefined,
+  uiLibrary: UiLibrary = UiLibrary.UNKNOWN,
+): string {
+  const extras =
+    port === undefined
+      ? 'desktop: true, captureNetworkBodies: true'
+      : `desktop: true, port: ${String(port)}, captureNetworkBodies: true`;
+  return `Add the Reticle plugin to the \`renderer\` block of electron.vite.config, not \`main\`:
+
+  import { reticle } from '@reticlehq/vite-plugin';
+
+  export default defineConfig({
+    main: { /* unchanged */ },
+    preload: { /* unchanged */ },
+    renderer: {
+      plugins: [${frameworkPluginExample(uiLibrary)}, reticle({ ${extras} })],
+    },
+  });
+
+\`desktop: true\` is required: a packaged renderer is a production build with no dev server, so the
+default serve-only plugin is dropped from \`vite build\` and the shipped app never connects.
+
+Also add \`import '@reticlehq/electron/preload'\` as the first line of your preload, and
+\`installReticleCapture(win)\` in main after you construct the BrowserWindow.`;
+}
+
 /** Next.js config wrap — always printed (we never auto-rewrite next.config). */
 export function nextConfigManual(configFile: string): string {
   return `Wrap your ${configFile} export with withReticle (keeps SWC, dev-only):
@@ -389,6 +422,11 @@ ${storeBlock}
 
 /** Where that module goes. Matches @reticlehq/vite-plugin's convention list. */
 export const VITE_DEV_MODULE_PATH = 'src/reticle-dev.ts';
+/**
+ * electron-vite's renderer Vite root is `src/renderer`, so the plugin looks for
+ * `src/renderer/src/reticle-dev.ts` — not the package-root path a plain Vite app uses.
+ */
+export const ELECTRON_VITE_DEV_MODULE_PATH = 'src/renderer/src/reticle-dev.ts';
 
 /** Default root-layout path, used when no layout was found on disk (reporting only). */
 export const NEXT_LAYOUT_PATH = 'app/layout.tsx';

@@ -41,6 +41,12 @@ const COVERAGE: Record<
   tauri: { app: 'apps/tauri-smoke', gate: 'apps/e2e/specs/tauri-desktop-test.mjs' },
 };
 
+/** The electron-vite path is a second Electron app, not a second package. Declared so it cannot go dark. */
+const ELECTRON_VITE_COVERAGE = {
+  app: 'apps/electron-vue-pinia',
+  gate: 'apps/e2e/specs/electron-vite-desktop-test.mjs',
+};
+
 function shippedPackages(): string[] {
   return readdirSync(join(REPO, 'packages')).filter((p) =>
     existsSync(join(REPO, 'packages', p, 'package.json')),
@@ -69,6 +75,15 @@ describe('every shipped integration is covered by an app AND a gate', () => {
       return;
     }
     expect(existsSync(join(REPO, entry?.gate ?? '')), `${entry?.gate} is missing`).toBe(true);
+  });
+
+  it('electron-vite has a covering app that a desktop spec drives', () => {
+    expect(existsSync(join(REPO, ELECTRON_VITE_COVERAGE.app)), ELECTRON_VITE_COVERAGE.app).toBe(
+      true,
+    );
+    expect(existsSync(join(REPO, ELECTRON_VITE_COVERAGE.gate)), ELECTRON_VITE_COVERAGE.gate).toBe(
+      true,
+    );
   });
 
   /**
