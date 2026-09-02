@@ -1,4 +1,5 @@
 import { EventType, PerfMetric, isDevToolingUrl, type ReticleEvent } from '@reticlehq/core';
+import { routeOfEvent } from '../events/route-of-event.js';
 
 /**
  * The causal summary (Tier 1) — the bounded ~50–100 token block on EVERY act, green included: what the
@@ -205,7 +206,7 @@ export function causalSummary(
         break;
       }
       case EventType.ROUTE_CHANGE:
-        if ('string' === typeof data['pathname']) route = data['pathname'];
+        route = routeOfEvent(event).routePath;
         break;
       case EventType.SIGNAL:
         pushUnique(signals, data['name']);

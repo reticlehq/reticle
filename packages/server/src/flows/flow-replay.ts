@@ -1,4 +1,5 @@
 import { span } from '../trace.js';
+import { routeOfEvent } from '../events/route-of-event.js';
 import {
   AnchorKind,
   DriftReason,
@@ -273,9 +274,8 @@ function currentRoute(session: FlowReplaySession): string | undefined {
   const routes = session.eventsSince(0).filter((e) => e.type === EventType.ROUTE_CHANGE);
   const last = routes.at(-1);
   if (last === undefined) return undefined;
-  const data = last.data ?? {};
-  const pathname = asString(data['pathname']) ?? asString(data['to']);
-  return pathname !== undefined && pathname.length > 0 ? pathname : undefined;
+  const route = routeOfEvent(last);
+  return route.routePath.length > 0 ? route.routePath : undefined;
 }
 
 /** Pathname only (drop origin + query) so a net URL stays terse in the journey. */
@@ -296,9 +296,8 @@ function summarizeConsequence(events: ReticleEvent[]): string | undefined {
   const parts: string[] = [];
   const lastRoute = events.filter((e) => e.type === EventType.ROUTE_CHANGE).at(-1);
   if (lastRoute !== undefined) {
-    const data = lastRoute.data ?? {};
-    const to = asString(data['pathname']) ?? asString(data['to']);
-    if (to !== undefined && to.length > 0) parts.push(`→ ${to}`);
+    const route = routeOfEvent(lastRoute);
+    if (route.routePath.length > 0) parts.push(`→ ${route.routePath}`);
   }
   const signals = new Set<string>();
   for (const e of events) {

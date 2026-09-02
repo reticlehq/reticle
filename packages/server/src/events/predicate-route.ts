@@ -5,8 +5,8 @@
  * app is right now — and keeping that reconciliation in one place is what makes it readable.
  */
 import { EventType, PredicateKind, type ReticleEvent } from '@reticlehq/core';
-import { str, type EvalResult, type Predicate } from './predicate-eval.js';
-
+import { type EvalResult, type Predicate } from './predicate-eval.js';
+import { routeOfEvent } from './route-of-event.js';
 /**
  * Which fact answered a `route` predicate: a navigation inside the window, or where the app is now.
  *
@@ -71,12 +71,16 @@ export function evalRoute(
   const last = routes.at(-1);
   const reading: RouteReading | undefined =
     last !== undefined
-      ? {
-          pathname: str(last.data['pathname']) ?? str(last.data['to']) ?? '',
-          full: `${str(last.data['pathname']) ?? str(last.data['to']) ?? ''}${str(last.data['search']) ?? ''}${str(last.data['hash']) ?? ''}`,
-          decidedBy: RouteDecidedBy.CHANGE,
-          data: { ...last.data, decidedBy: RouteDecidedBy.CHANGE },
-        }
+      ? (() => {
+          const route = routeOfEvent(last);
+
+          return {
+            pathname: route.routePath,
+            full: route.full,
+            decidedBy: RouteDecidedBy.CHANGE,
+            data: { ...last.data, decidedBy: RouteDecidedBy.CHANGE },
+          };
+        })()
       : currentUrl === undefined || 0 === currentUrl.length
         ? undefined
         : readCurrentRoute(currentUrl);

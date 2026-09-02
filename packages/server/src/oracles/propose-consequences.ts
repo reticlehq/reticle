@@ -1,5 +1,5 @@
 import { EventType, type ReticleEvent, PredicateKind } from '@reticlehq/core';
-
+import { routeOfEvent } from '../events/route-of-event.js';
 /**
  * Self-generating oracles, v1. Given the window a recording captured, propose ranked mustHold
  * predicates — the practical answer to "you recorded a flow, now what should it assert?". Ranking
@@ -87,7 +87,7 @@ export function proposeConsequences(events: readonly ReticleEvent[]): ProposedCo
         break;
       }
       case EventType.ROUTE_CHANGE: {
-        const to = data['pathname'];
+        const to = routeOfEvent(event).routePath;
         if ('string' === typeof to) {
           add(`route:${to}`, {
             predicate: { kind: PredicateKind.ROUTE, to },
