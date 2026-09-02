@@ -27,6 +27,16 @@ export const MAX_RESULT_COUNT = RING_BUFFER_DEFAULTS.MAX_EVENTS;
 export const MAX_TIMEOUT_MS = 120_000;
 
 /**
+ * Per-call ceiling so a reticle_wait_for call cannot outlast the MCP client's request timeout.
+ *
+ * The MCP SDK default is 60 s; some clients are configured lower. A timeout_ms larger than this
+ * is honoured across multiple calls: the handler waits one chunk and returns resume_ms with the
+ * remaining budget, so the caller can re-invoke with the same predicate and since until the
+ * predicate is satisfied or the full budget is spent.
+ */
+export const MCP_CALL_BUDGET_MS = 50_000;
+
+/**
  * `capDepth` at this many levels is already past any store an agent can read.
  *
  * Not lower: `numeric-args-are-bounded.test.ts` pins depth 50 as legal, because a large depth is a
