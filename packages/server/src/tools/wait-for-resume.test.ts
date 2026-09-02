@@ -80,7 +80,11 @@ describe('reticle_wait_for bounded-wait cursor (issue #601)', () => {
       });
       // Advance past the per-call budget so the timeout fires and the Promise resolves.
       await vi.advanceTimersByTimeAsync(MCP_CALL_BUDGET_MS + 100);
-      const result = (await promise) as { pass: boolean; resume_ms?: number; inconclusive?: string };
+      const result = (await promise) as {
+        pass: boolean;
+        resume_ms?: number;
+        inconclusive?: string;
+      };
       expect(result.pass).toBe(false);
       expect(result.resume_ms).toBe(extra);
     });
@@ -91,7 +95,11 @@ describe('reticle_wait_for bounded-wait cursor (issue #601)', () => {
         timeout_ms: MCP_CALL_BUDGET_MS + 5_000,
       });
       await vi.advanceTimersByTimeAsync(MCP_CALL_BUDGET_MS + 100);
-      const result = (await promise) as { pass: boolean; resume_ms?: number; inconclusive?: string };
+      const result = (await promise) as {
+        pass: boolean;
+        resume_ms?: number;
+        inconclusive?: string;
+      };
       expect(result.inconclusive).toBeTruthy();
     });
 
