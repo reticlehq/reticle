@@ -741,6 +741,60 @@ describe('runInit — an app outside the directory names anyone guessed', () => 
 });
 
 /**
+ * Two more shapes discovery still missed (#682), both reported from real repos.
+ *
+ * `apps/examples/react` sits two directories under a declared `apps/*` parent — `examples` itself
+ * has no package.json, so it read as "not an app" and nothing walked past it to find the one nested
+ * inside it.
+ *
+ * The second shape has no nesting at all: a root with nothing but `frontend/package.json`, where the
+ * `workspaces` declaration exists for OTHER packages and does not mention `frontend`. A declared
+ * workspace is authoritative for what it says, so an undeclared sibling is never scanned — and
+ * `--app frontend`, the flag that exists for exactly this, used to be refused for the same reason:
+ * it only accepted a name discovery had already found.
+ */
+describe('runInit — discovery misses that --app used to hit too', () => {
+  const NESTED_UNDER_UNDECLARED = {
+    'package.json': JSON.stringify({ name: 'mono', workspaces: ['apps/*'] }),
+    'apps/examples/react/package.json': JSON.stringify({
+      dependencies: { react: '^19', vite: '^7' },
+    }),
+    'apps/examples/react/vite.config.ts': `export default { plugins: [] };\n`,
+  };
+
+  it('walks past a child with no manifest of its own to find the app beneath it', () => {
+    const io = memoryIo(NESTED_UNDER_UNDECLARED);
+    runInit(OPTS, io);
+    expect(io.written['apps/examples/react/vite.config.ts']).toContain('reticle({');
+  });
+
+  it('--app accepts that same nested path directly', () => {
+    const io = memoryIo(NESTED_UNDER_UNDECLARED);
+    const result = runInit({ ...OPTS, app: 'apps/examples/react' }, io);
+    expect(result.ok).toBe(true);
+    expect(io.written['apps/examples/react/vite.config.ts']).toContain('reticle({');
+  });
+
+  it('--app accepts a real app the declared workspace globs do not mention at all', () => {
+    const io = memoryIo({
+      'package.json': JSON.stringify({ name: 'mono', workspaces: ['packages/*'] }),
+      'frontend/package.json': JSON.stringify({ dependencies: { react: '^19', vite: '^7' } }),
+      'frontend/vite.config.ts': `export default { plugins: [] };\n`,
+    });
+    const result = runInit({ ...OPTS, app: 'frontend' }, io);
+    expect(result.ok).toBe(true);
+    expect(io.written['frontend/vite.config.ts']).toContain('reticle({');
+  });
+
+  it('still refuses an --app path with no package.json of its own', () => {
+    const io = memoryIo(NESTED_UNDER_UNDECLARED);
+    const result = runInit({ ...OPTS, app: 'apps/examples/vue' }, io);
+    expect(result.ok).toBe(false);
+    expect(io.lines.join('\n')).toContain('apps/examples/vue');
+  });
+});
+
+/**
  * SKILL.md told the user "Type `/reticle` anytime to verify the app" in three separate places, and
  * `init` never wrote the file that makes the command exist. So the single most obvious way into the
  * product was a command that silently did nothing, in every tool, for everyone.
