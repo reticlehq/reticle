@@ -47,3 +47,29 @@ describe('choosing which app to wire', () => {
     expect(chooseWorkspaceApp(undefined, APPS)).toEqual({ ok: true, app: undefined });
   });
 });
+
+/**
+ * Discovery can miss a real app — a declared workspace does not cover it, or it sits two directories
+ * under a parent nothing walks that deep into (#682) — and refusing `--app` for exactly the same
+ * reason left no way in at all. An explicit path is an instruction, not a suggestion: if it has its
+ * own package.json, that settles it regardless of what discovery found.
+ */
+describe('an explicit --app that discovery missed', () => {
+  it('is accepted when it has a package.json of its own', () => {
+    const hasManifest = (dir: string): boolean => 'frontend' === dir;
+    expect(chooseWorkspaceApp('frontend', APPS, hasManifest)).toEqual({
+      ok: true,
+      app: 'frontend',
+    });
+  });
+
+  it('is still refused when nothing is there at all', () => {
+    const hasManifest = (): boolean => false;
+    expect(chooseWorkspaceApp('frontend', APPS, hasManifest).ok).toBe(false);
+  });
+
+  it('does not need the check when the name was already discovered', () => {
+    // hasManifest is not even asked — a discovered name is already trusted.
+    expect(chooseWorkspaceApp('web', APPS, () => false)).toEqual({ ok: true, app: 'web' });
+  });
+});

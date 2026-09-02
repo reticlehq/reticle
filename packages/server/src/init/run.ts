@@ -558,7 +558,20 @@ export function findWorkspaceApps(io: Pick<InitIo, 'exists' | 'readFile' | 'list
     if (looksLikeApp(parent, io)) found.push(parent);
     for (const name of io.listDirs(parent)) {
       const dir = `${parent}/${name}`;
-      if (looksLikeApp(dir, io)) found.push(dir);
+      if (looksLikeApp(dir, io)) {
+        found.push(dir);
+        continue;
+      }
+      // A child with no manifest of its own is not an app, but it is not a dead end either —
+      // `apps/examples/react` is a real shape (#682): `examples` groups several apps and owns no
+      // package.json itself, so the walk has to continue past it rather than stop at the first
+      // directory that is not one.
+      if (null === io.readFile(`${dir}/${PACKAGE_JSON}`)) {
+        for (const nested of io.listDirs(dir)) {
+          const nestedDir = `${dir}/${nested}`;
+          if (looksLikeApp(nestedDir, io)) found.push(nestedDir);
+        }
+      }
     }
   }
   return [...new Set(found)];
@@ -803,7 +816,15 @@ function redirectToWorkspaceApp(
   // An explicitly named app answers the ambiguity. Refusing to guess is right, but "re-run inside the
   // one you want" is not something a script, a CI step, or an agent that cannot change directory can
   // act on — so the refusal was a dead end for exactly the callers most likely to hit it.
-  const chosen = chooseWorkspaceApp(options.app, apps);
+  //
+  // `hasManifest` covers what discovery itself can still miss (#682): a declared workspace that does
+  // not mention this path, or an app buried past the one extra level `findWorkspaceApps` now walks.
+  // A readable package.json at the exact path the user named settles it either way.
+  const chosen = chooseWorkspaceApp(
+    options.app,
+    apps,
+    (dir) => null !== io.readFile(`${dir}/${PACKAGE_JSON}`),
+  );
   if (!chosen.ok) {
     io.print(chosen.message);
     return { ok: false, applied: 0, manual: 1 };
