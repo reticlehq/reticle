@@ -174,6 +174,50 @@ describe('detect — Astro', () => {
 });
 
 /**
+ * electron-vite ships `vite` as a dependency and uses `electron.vite.config.ts`, so the generic
+ * Vite branch would claim it and then fail to find a file to patch. Detected in its own right so
+ * the renderer-scoped patcher runs instead.
+ */
+describe('detect — electron-vite', () => {
+  it('is recognised from the dependency or the config, before the generic Vite branch', () => {
+    expect(
+      detect({
+        pkg: { devDependencies: { 'electron-vite': '^5' } },
+        configFiles: new Set(),
+        lockfiles: new Set(),
+      }).framework,
+    ).toBe(Framework.ELECTRON_VITE);
+    expect(
+      detect({
+        pkg: {},
+        configFiles: new Set(['electron.vite.config.ts']),
+        lockfiles: new Set(),
+      }).framework,
+    ).toBe(Framework.ELECTRON_VITE);
+  });
+
+  it('wins over a bare vite dependency, which electron-vite apps always list', () => {
+    expect(
+      detect({
+        pkg: { devDependencies: { 'electron-vite': '^5', vite: '^7' } },
+        configFiles: new Set(['electron.vite.config.ts']),
+        lockfiles: new Set(),
+      }).framework,
+    ).toBe(Framework.ELECTRON_VITE);
+  });
+
+  it('leaves a plain Vite app as Vite', () => {
+    expect(
+      detect({
+        pkg: { devDependencies: { vite: '^7' } },
+        configFiles: new Set(['vite.config.ts']),
+        lockfiles: new Set(),
+      }).framework,
+    ).toBe(Framework.VITE);
+  });
+});
+
+/**
  * No lockfile is not the same as "npm". A pnpm-installed project with an uncommitted lockfile was
  * read as npm, and `npm i -D` then died on pnpm's symlink layout with "Cannot read properties of
  * null (reading 'matches')" — leaving the package present in node_modules but absent from

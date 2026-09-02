@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildPlan, StepStatus, type PlanInput } from './plan.js';
+import { buildPlan, frameworkPackages, StepStatus, type PlanInput } from './plan.js';
 import { Framework, PackageManager, UiLibrary, type Detection } from './detect.js';
 import { NodePlatform } from '../platform.js';
 import { cursorRuleFile } from './agent-rules.js';
@@ -39,6 +39,9 @@ function input(partial: Partial<PlanInput>): PlanInput {
     cursorProjectPresent: partial.cursorProjectPresent,
     detectedClients: partial.detectedClients,
     viteConfig: partial.viteConfig ?? null,
+    electronViteConfig: partial.electronViteConfig,
+    electronPreload: partial.electronPreload,
+    electronMain: partial.electronMain,
     astroConfig: partial.astroConfig,
     astroLayout: partial.astroLayout,
     nextConfigFile: partial.nextConfigFile ?? null,
@@ -921,5 +924,69 @@ describe('the generated Next component is valid JavaScript', () => {
     expect(src).toContain('NEXT_PUBLIC_RETICLE_ROOT');
     expect(src).toContain('root');
     expect(src).not.toContain('globalThis');
+  });
+});
+
+const ELECTRON_VITE_SRC = `import { defineConfig } from 'electron-vite';
+import vue from '@vitejs/plugin-vue';
+export default defineConfig({
+  main: { plugins: [] },
+  renderer: { plugins: [vue()] },
+});
+`;
+
+const ELECTRON_PRELOAD_SRC = `import { contextBridge } from 'electron';
+`;
+
+const ELECTRON_MAIN_SRC = `import { BrowserWindow } from 'electron';
+function createWindow() {
+  const mainWindow = new BrowserWindow({ width: 800 });
+  mainWindow.loadURL('http://localhost');
+}
+`;
+
+describe('buildPlan — electron-vite', () => {
+  const electronPlan = (): ReturnType<typeof buildPlan> =>
+    buildPlan(
+      input({
+        detection: detection(Framework.ELECTRON_VITE, 0, UiLibrary.VUE),
+        electronViteConfig: { path: 'electron.vite.config.ts', source: ELECTRON_VITE_SRC },
+        electronPreload: { path: 'src/preload/index.ts', source: ELECTRON_PRELOAD_SRC },
+        electronMain: { path: 'src/main/index.ts', source: ELECTRON_MAIN_SRC },
+      }),
+    );
+
+  it('dispatches to the electron-vite steps, not the generic Vite path', () => {
+    const plan = electronPlan();
+    expect(plan.framework).toBe(Framework.ELECTRON_VITE);
+    expect(step(plan, 'Vite plugin (electron-vite renderer)').status).toBe(StepStatus.APPLY);
+    expect(step(plan, 'Vite plugin (electron-vite renderer)').write?.path).toBe(
+      'electron.vite.config.ts',
+    );
+    expect(maybeStep(plan, 'Vite plugin')).toBeUndefined();
+  });
+
+  it('installs the sensor and the Electron helper, not the React kit, for Vue', () => {
+    const packages = frameworkPackages(Framework.ELECTRON_VITE, UiLibrary.VUE);
+    expect(packages).toContain('@reticlehq/browser');
+    expect(packages).toContain('@reticlehq/vite-plugin');
+    expect(packages).toContain('@reticlehq/electron');
+    expect(packages).not.toContain('@reticlehq/react');
+  });
+
+  it('carries no MANUAL step for the conventional electron-vite shape', () => {
+    const plan = electronPlan();
+    const manual = plan.steps.filter(
+      (s) => s.status === StepStatus.MANUAL && s.title !== 'Install dependencies',
+    );
+    expect(manual.map((s) => s.title)).toEqual([]);
+    expect(step(plan, 'Electron preload (IPC shim)').status).toBe(StepStatus.APPLY);
+    expect(step(plan, 'Electron capture (screenshots)').status).toBe(StepStatus.APPLY);
+    const written = step(plan, 'Vite plugin (electron-vite renderer)').write?.content ?? '';
+    expect(written).toContain('desktop: true');
+    expect(written.slice(written.indexOf('renderer:'))).toContain('reticle(');
+    expect(written.slice(written.indexOf('main:'), written.indexOf('renderer:'))).not.toContain(
+      'reticle(',
+    );
   });
 });

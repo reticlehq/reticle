@@ -14,6 +14,12 @@ export const Framework = {
    */
   NUXT: 'nuxt',
   VITE: 'vite',
+  /**
+   * electron-vite is Vite-based but its config holds three build configs (main/preload/renderer)
+   * and only the renderer has a DOM. The generic Vite path patches the FIRST plugins array, which
+   * is main's — wiring the SDK where there is no document, and reporting success.
+   */
+  ELECTRON_VITE: 'electron-vite',
   SVELTEKIT: 'sveltekit',
   ASTRO: 'astro',
   /** Create React App. No config file exists, so `react-scripts` in the dependencies is the signal. */
@@ -77,6 +83,12 @@ export interface Detection {
 
 const NEXT_CONFIGS = ['next.config.js', 'next.config.mjs', 'next.config.ts', 'next.config.cjs'];
 const VITE_CONFIGS = ['vite.config.js', 'vite.config.ts', 'vite.config.mjs', 'vite.config.mts'];
+const ELECTRON_VITE_CONFIGS = [
+  'electron.vite.config.ts',
+  'electron.vite.config.js',
+  'electron.vite.config.mjs',
+  'electron.vite.config.mts',
+];
 const SVELTE_CONFIGS = ['svelte.config.js', 'svelte.config.ts', 'svelte.config.mjs'];
 const NUXT_CONFIGS = ['nuxt.config.ts', 'nuxt.config.js', 'nuxt.config.mjs'];
 const ASTRO_CONFIGS = [
@@ -165,6 +177,15 @@ function detectFramework(input: DetectInput): Framework {
   // connect instructions for a bundler it does not have. Check BEFORE the generic Vite branch.
   if (depVersion(pkg, 'astro') !== undefined || hasAnyConfig(configFiles, ASTRO_CONFIGS)) {
     return Framework.ASTRO;
+  }
+  // electron-vite is Vite-based but its config holds three build configs (main/preload/renderer)
+  // and only the renderer has a DOM. The generic Vite path patches the FIRST plugins array, which
+  // is main's — wiring the SDK where there is no document, and reporting success. Check BEFORE Vite.
+  if (
+    depVersion(pkg, 'electron-vite') !== undefined ||
+    hasAnyConfig(configFiles, ELECTRON_VITE_CONFIGS)
+  ) {
+    return Framework.ELECTRON_VITE;
   }
   if (depVersion(pkg, 'vite') !== undefined || hasAnyConfig(configFiles, VITE_CONFIGS)) {
     return Framework.VITE;

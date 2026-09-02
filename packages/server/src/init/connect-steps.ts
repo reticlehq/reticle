@@ -43,6 +43,9 @@ const CONNECT_STEP_TITLES: ReadonlySet<string> = new Set([
   // not, and `gate:install` scaffolds no CRA app, so that change would ship with no coverage of the
   // path it changes. It is worth doing, and worth doing with a scaffold behind it.
   'Vite plugin',
+  // electron-vite's connect is the renderer plugin. Without it the SDK never injects, and the
+  // preload/capture steps are not enough to produce a session.
+  'Vite plugin (electron-vite renderer)',
 ]);
 
 /** True when this step is what makes the app dial the daemon. */

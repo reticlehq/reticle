@@ -45,6 +45,7 @@ import {
   svelteKitSteps,
   nuxtSteps,
   astroSteps,
+  electronViteSteps,
   cspStep,
   VITE_PLUGIN_DETAIL,
 } from './plan-framework.js';
@@ -62,6 +63,7 @@ const RETICLE_REACT_KIT = '@reticlehq/react';
 const RETICLE_BROWSER_SDK = '@reticlehq/browser';
 const RETICLE_VITE_PLUGIN = '@reticlehq/vite-plugin';
 const RETICLE_NEXT_PLUGIN = '@reticlehq/next';
+const RETICLE_ELECTRON = '@reticlehq/electron';
 
 /**
  * Pin the SDK to the CLI's own version.
@@ -118,6 +120,11 @@ export function frameworkPackages(
       // The build plugin stamps `data-reticle-source` regardless of UI library, so a Vue or Svelte
       // app still gets source pointers — it is only component identity that needs the React kit.
       return [kit, RETICLE_VITE_PLUGIN];
+    case Framework.ELECTRON_VITE:
+      // Same kit + Vite plugin as a plain Vite app, plus the Electron main/preload helper. The
+      // plugin still stamps and injects; `@reticlehq/electron` is what makes IPC and screenshots
+      // exist at all.
+      return [kit, RETICLE_VITE_PLUGIN, RETICLE_ELECTRON];
     case Framework.NUXT:
       // The framework-neutral sensor, NOT the React kit. Nuxt renders Vue, and installing a package
       // named @reticlehq/react — with `react` in its peer dependencies — into a Vue codebase is the
@@ -219,6 +226,12 @@ export interface PlanInput {
     readonly { id: McpClient; configPath: string; existing: string | null }[] | undefined;
   /** Discovered Vite config: its path + source, or null if none found. */
   viteConfig: { path: string; source: string } | null;
+  /** Discovered electron-vite config: its path + source, or null if none found. */
+  electronViteConfig?: { path: string; source: string } | null | undefined;
+  /** Electron preload source we can patch, or null when none was found. */
+  electronPreload?: { path: string; source: string } | null | undefined;
+  /** Electron main-process source we can patch, or null when none was found. */
+  electronMain?: { path: string; source: string } | null | undefined;
   /** Discovered Astro config: its path + source, or null if none found. */
   astroConfig?: { path: string; source: string } | null | undefined;
   /**
@@ -941,6 +954,8 @@ export function buildPlan(input: PlanInput): Plan {
   ];
   if (input.detection.framework === Framework.VITE) {
     steps.push(...viteSteps(input));
+  } else if (input.detection.framework === Framework.ELECTRON_VITE) {
+    steps.push(...electronViteSteps(input));
   } else if (input.detection.framework === Framework.NEXT) {
     steps.push(...nextSteps(input));
   } else if (input.detection.framework === Framework.ASTRO) {

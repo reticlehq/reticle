@@ -53,6 +53,7 @@ describe('steps without which no session can ever appear', () => {
       'Reticle client hook',
       'Reticle connect module',
       'Vite plugin',
+      'Vite plugin (electron-vite renderer)',
     ]) {
       expect(isConnectStep(title), title).toBe(true);
     }

@@ -13,13 +13,13 @@
 // is slower and cannot block a PR. Conflating the two gives a gate too slow to block and too shallow
 // to trust.
 //
-// Four scaffolds, because `init` has four genuinely different paths into an app. The third matters
-// most for framework reasons: a Pages Router app has no `app/` root layout to patch, so connect has
-// to mount through `pages/_app` — and that is the path that once did nothing at all, silently.
+// Five scaffolds, because `init` has five genuinely different paths into an app. Vite Vue is the
+// non-React kit path. Pages Router has no `app/` root layout to patch, so connect has to mount
+// through `pages/_app` — and that is the path that once did nothing at all, silently.
 //
-// The fourth is a different axis entirely: the first three are all the same SHAPE — a single-app root
+// `monorepo-subdir` is a different axis: the other four are all the same SHAPE — a single-app root
 // with `init` run inside it — and that sameness is what made this gate blind to four init defects one
-// user hit in eight minutes. `monorepo-subdir` is the shape those live in.
+// user hit in eight minutes.
 //
 //   pnpm gate:install                 # all scaffolds
 //   node apps/e2e/install-gate.mjs --only next-pages-router [--keep]

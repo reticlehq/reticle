@@ -98,7 +98,7 @@ export async function bootDesktopSession({
       .map((s) => String(s.url))
       .join(' | ');
     throw new Error(
-      `no NEW session matching '${String(urlIncludes ?? 'any')}' after ${String(timeoutMs)}ms — sessions on the bridge: [${seen}]`,
+      `no NEW session matching '${String(urlIncludes ?? 'any')}' after ${String(timeoutMs)}ms — sessions on the bridge: [${seen}]\n--- app log ---\n${log.join('').slice(-4000)}`,
     );
   }
   const sessionId = found?.sessionId;
@@ -198,6 +198,18 @@ export async function spawnElectronSmoke(env, { port = 5174 } = {}) {
 }
 
 /**
+ * electron-vite boots the renderer server AND Electron from one command. Unlike electron-smoke
+ * (plain Vite on :5174 + a separate `electron .`), there is no second process to launch.
+ */
+export function spawnElectronVite(env) {
+  const appDir = path.join(ROOT, 'apps', 'electron-vue-pinia');
+  return spawn('pnpm', ['dev'], {
+    cwd: appDir,
+    env: { ...env, RETICLE_HEADLESS: '1' },
+  });
+}
+
+/**
  * Electron's own launcher path. `require('electron')` exports it as a string, so this is what the
  * `electron` CLI would exec — resolved directly so the spec does not depend on a bin shim.
  */
@@ -228,7 +240,12 @@ export function spawn(command, args, options = {}) {
   // POSIX concept, so the negative-pid kill below is skipped there; Windows already terminates the
   // whole tree for a detached child, which is what the group signal buys us on POSIX.
   const windows = process.platform === 'win32';
-  const child = nodeSpawn(command, args, { detached: true, shell: windows, ...options });
+  // Cursor/VS Code (themselves Electron) export ELECTRON_RUN_AS_NODE. If that reaches a
+  // child Electron, it boots as plain Node: `require('electron').app` is undefined and the
+  // window never exists. CI does not set the var; stripping it is a no-op there.
+  const env = { ...(options.env ?? process.env) };
+  delete env['ELECTRON_RUN_AS_NODE'];
+  const child = nodeSpawn(command, args, { detached: true, shell: windows, ...options, env });
   const killOne = child.kill.bind(child);
   child.kill = (signal = 'SIGTERM') => {
     try {
