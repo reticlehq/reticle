@@ -56,3 +56,12 @@ describe('the injected tag under a non-root base', () => {
     expect(srcOf(reticle())).toBe(RETICLE_CONNECT_MODULE);
   });
 });
+
+describe('the base trim is linear', () => {
+  it('handles a long run of trailing slashes without backtracking', () => {
+    // The `/\/+$/` this replaced is a polynomial-backtracking shape over a value read from the
+    // user's vite config. Same answer, no quantifier.
+    expect(connectModuleUrl(`/app${'/'.repeat(50_000)}`)).toBe('/app/@reticle-connect');
+    expect(connectModuleUrl('/'.repeat(50_000))).toBe(RETICLE_CONNECT_MODULE);
+  });
+});

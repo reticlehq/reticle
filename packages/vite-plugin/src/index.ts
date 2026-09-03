@@ -71,7 +71,12 @@ export const RETICLE_CONNECT_MODULE = '/@reticle-connect';
  */
 export function connectModuleUrl(base: string | undefined): string {
   if (undefined === base || !base.startsWith('/')) return RETICLE_CONNECT_MODULE;
-  const trimmed = base.replace(/\/+$/, '');
+  // Trimmed by slicing rather than with `/\/+$/`: a trailing-slash-run regex is a polynomial
+  // backtracking shape over a value that comes out of the user's config, and CodeQL is right to
+  // flag it. This is linear and says the same thing.
+  let end = base.length;
+  while (0 < end && '/' === base[end - 1]) end -= 1;
+  const trimmed = base.slice(0, end);
   return 0 === trimmed.length ? RETICLE_CONNECT_MODULE : `${trimmed}${RETICLE_CONNECT_MODULE}`;
 }
 
