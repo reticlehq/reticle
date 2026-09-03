@@ -28,7 +28,7 @@ export interface DeclaredNetFailure {
   status?: number;
 }
 
-export interface DeclaredExpectations {
+interface DeclaredExpectations {
   /** Requests the caller declared would FAIL, so failing is the expected outcome, not a disagreement. */
   netFailures: readonly DeclaredNetFailure[];
   /** The caller required something to be ON SCREEN — an element or text, present rather than absent. */
