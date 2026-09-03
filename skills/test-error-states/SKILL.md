@@ -3,7 +3,7 @@ name: test-error-states
 description: Force the states a happy-path run never reaches (a failing API, an empty list, a slow request, a timeout, an expired session, a toast that auto-dismisses) and check the UI actually handles them. Use when error handling was written but never run, when a loading or empty state needs verifying, when a bug only happens on a slow connection, or when a timer, poll, debounce or retry needs testing without sleeping.
 license: Apache-2.0
 metadata:
-  version: 2.9.0
+  version: 2.13.1
   homepage: https://www.reticle.sh
   repository: https://github.com/reticlehq/reticle
 ---

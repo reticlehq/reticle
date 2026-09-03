@@ -116,9 +116,10 @@ describe('a declared visible consequence', () => {
 
 /**
  * An unread 2xx body is only a veto when the body is the only remaining channel. The caller naming
- * a string on screen, a store path, or a signal — and that holding — is a channel the body does not
- * own, so the unread clause must be able to see it. Conservative about what counts, same as the
- * rest of this file: only the top level and `allOf`. An `anyOf` branch may never have held.
+ * a string on screen, a store path, a signal, a route, or an element located by role / name /
+ * testid — and that holding — is a channel the body does not own, so the unread clause must be
+ * able to see it. Conservative about what counts, same as the rest of this file: only the top
+ * level and `allOf`. An `anyOf` branch may never have held.
  */
 describe('a declared channel independent of the response body', () => {
   it('reads an exact string', () => {
@@ -177,6 +178,52 @@ describe('a declared channel independent of the response body', () => {
           { kind: PredicateKind.NET, urlContains: '/api/save', status: 200 },
           { kind: PredicateKind.TEXT, contains: 'Saved' },
         ],
+      }),
+    ).toBe(false);
+  });
+
+  it('reads a route the caller named before the action', () => {
+    expect(declaresBodyIndependentChannel({ kind: PredicateKind.ROUTE, pathname: '/lobby' })).toBe(
+      true,
+    );
+  });
+
+  it('reads an element located by role and name', () => {
+    expect(
+      declaresBodyIndependentChannel({
+        kind: PredicateKind.ELEMENT,
+        query: { role: 'heading', name: 'Lobby' },
+      }),
+    ).toBe(true);
+  });
+
+  it('reads an element located by testid', () => {
+    expect(
+      declaresBodyIndependentChannel({
+        kind: PredicateKind.ELEMENT,
+        query: { testid: 'lobby-heading' },
+      }),
+    ).toBe(true);
+  });
+
+  it('reads a route out of an allOf that also names the write', () => {
+    expect(
+      declaresBodyIndependentChannel({
+        kind: PredicateKind.ALL_OF,
+        predicates: [
+          { kind: PredicateKind.NET, urlContains: '/api/join', status: 200 },
+          { kind: PredicateKind.ROUTE, pathname: '/lobby' },
+        ],
+      }),
+    ).toBe(true);
+  });
+
+  it('does not read an absent element — absence is not a consequence the body cannot own', () => {
+    expect(
+      declaresBodyIndependentChannel({
+        kind: PredicateKind.ELEMENT,
+        query: { role: 'heading', name: 'Lobby' },
+        absent: true,
       }),
     ).toBe(false);
   });

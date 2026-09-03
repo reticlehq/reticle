@@ -1,6 +1,19 @@
-import { describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it } from 'vitest';
+import { mkdtempSync, readFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { ReticleDir, ReticleEnv } from '@reticlehq/core';
 import { FEEDBACK_HINT } from './closing-hint.js';
 import { runInit, resolveLockfiles, type InitIo, type InitOptions } from './run.js';
+
+// init now mints the pairing token; keep it out of the real ~/.reticle during tests.
+const pairingDir = mkdtempSync(join(tmpdir(), 'reticle-init-token-'));
+const savedTokenDir = process.env[ReticleEnv.PAIRING_TOKEN_DIR];
+process.env[ReticleEnv.PAIRING_TOKEN_DIR] = pairingDir;
+afterAll(() => {
+  if (savedTokenDir === undefined) delete process.env[ReticleEnv.PAIRING_TOKEN_DIR];
+  else process.env[ReticleEnv.PAIRING_TOKEN_DIR] = savedTokenDir;
+});
 
 interface MemoryIo extends InitIo {
   written: Record<string, string>;
@@ -76,6 +89,8 @@ function memoryIo(
       written[key(p)] = c;
     },
     exists: (p) => key(p) in present || key(p) in written,
+    // The in-memory project is always writable; preflight has its own tests for when it is not.
+    canWrite: () => true,
     homeDir: () => HOME,
     cwd: () => '/project',
     rootFiles: () => {
@@ -217,6 +232,18 @@ describe('runInit', () => {
     expect(out).not.toMatch(/from '@reticlehq\/\w+'/);
   });
 
+  it('mints a pairing token into that snippet when none exists yet', () => {
+    // The CDN path has no build step. An empty token here is a page that can never authenticate,
+    // and regenerating the file later makes the pasted literal stale as well as wrong.
+    const io = memoryIo({ 'requirements.txt': 'fastapi\n', 'app.py': 'x' });
+    runInit(OPTS, io);
+    const out = io.lines.join('\n');
+    const token = readFileSync(join(pairingDir, ReticleDir.PAIRING_TOKEN_FILE), 'utf8').trim();
+    expect(token.length).toBeGreaterThan(0);
+    expect(out).toContain(token);
+    expect(out).toMatch(/token:\s*'[0-9a-f]+'/);
+  });
+
   /**
    * A repo whose app is one directory down with nothing at the top — `frontend/`, `web/`, `client/`
    * — is an ordinary shape, and it was un-instrumentable. init read the root package.json, found
@@ -281,6 +308,45 @@ describe('runInit', () => {
       printed,
       'after a redirect the paths are relative to the APP, not to where the user ran the command',
     ).toContain('/app/frontend');
+  });
+
+  /**
+   * The redirect announces itself in the report, and until now told the CALLER nothing at all: the
+   * inner run returned an InitResult identical to one that never redirected. That was harmless
+   * while init only wrote files, because nothing downstream existed. A caller that goes on to boot
+   * the app has to know which directory was actually wired, and re-deriving it is how two halves of
+   * one command end up disagreeing about where they are.
+   */
+  it('tells the caller which directory it actually wired, after a redirect', () => {
+    const io = memoryIo({
+      'frontend/package.json': JSON.stringify({
+        dependencies: { next: '16', react: '^19' },
+        scripts: { dev: 'next dev' },
+      }),
+      'frontend/app/layout.tsx':
+        'export default function L({ children }) {\n' +
+        '  return (<html><body>{children}</body></html>);\n' +
+        '}\n',
+    });
+    const r = runInit(OPTS, io);
+    const appDir = (r.context?.appDir ?? '').replace(/\\/g, '/');
+    expect(appDir, 'the caller cannot see where the redirect landed').toContain('frontend');
+    expect(r.context?.redirectedTo, 'a redirect is invisible to the caller').toBeDefined();
+  });
+
+  it('reports the dev command it found, so a caller need not guess one', () => {
+    const io = memoryIo({
+      ...VITE_FILES,
+      'package.json': JSON.stringify({
+        dependencies: { vite: '^5', react: '^19' },
+        scripts: { dev: 'vite --port 5199' },
+      }),
+    });
+    const r = runInit(OPTS, io);
+    expect(r.context?.devCommand).toContain('dev');
+    // Never composed: a guessed command produces an error about a missing script, and the reader
+    // concludes their app is broken rather than that we were wrong.
+    expect(r.context?.packageManager).toBeTruthy();
   });
 
   it('honours --app when the root has no package.json', () => {
@@ -392,6 +458,20 @@ describe('runInit', () => {
     expect(io.written['app/reticle-dev.tsx']).toBeUndefined();
   });
 
+  it('writes a .js connect module for a JavaScript CRA app (#675)', () => {
+    const io = memoryIo({
+      'package.json': JSON.stringify({
+        dependencies: { 'react-scripts': '5.0.1', react: '^18', 'react-dom': '^18' },
+      }),
+      'src/index.js': "import React from 'react';\nimport App from './App';\n",
+    });
+    runInit(OPTS, io);
+    expect(io.written['src/reticle-dev.js']).toContain('reticle.connect');
+    expect(io.written['src/reticle-dev.js']).not.toContain('export {}');
+    expect(io.written['src/reticle-dev.ts']).toBeUndefined();
+    expect(io.written['src/index.js']).toContain("import './reticle-dev'");
+  });
+
   it('uses .tsx once the project has a tsconfig', () => {
     const io = memoryIo({
       'package.json': JSON.stringify({ dependencies: { next: '15', react: '^19' } }),
@@ -438,7 +518,7 @@ describe('runInit', () => {
     // Without the token the bridge answers "authentication failed" and no session ever appears —
     // the same silent no-connect Next.js shipped. The plugin inlines it as a define.
     expect(io.written['src/hooks.client.ts']).toContain('__RETICLE_TOKEN__');
-    expect(io.written['vite.config.ts']).toContain('reticle({');
+    expect(io.written['vite.config.ts']).toContain('reticle(');
     expect(io.written['vite.config.ts']).toContain('sveltekit()'); // the app's own plugin survives
   });
 });
@@ -459,13 +539,40 @@ describe('runInit — workspace roots', () => {
     const io = memoryIo({ 'package.json': WORKSPACE_ROOT, ...VITE_APP });
     runInit(OPTS, io);
     expect(io.lines.join('\n')).toContain('apps/web');
-    expect(io.written['apps/web/vite.config.ts']).toContain('reticle({');
+    expect(io.written['apps/web/vite.config.ts']).toContain('reticle(');
     expect(io.written['apps/web/.reticle.json']).toBeDefined();
     // The root is not the app — nothing of the app's WIRING belongs there. `.reticle.json` is not
     // wiring: it is runtime config the CLI and `reticle mcp` read from their own CWD, which is the
     // root, so it is written in both places (see the agent-root test below).
     expect(io.written['vite.config.ts']).toBeUndefined();
     expect(io.written['/app/.reticle.json']).toBeDefined();
+  });
+
+  // A monorepo ROOT that carries shared tooling looks like an app to `detect` — `vite` in its
+  // devDependencies is the ordinary shape of one. The redirect used to give up on exactly that
+  // signal, BEFORE reading `--app`, so the one flag documented for this layout was ignored: measured
+  // on a real pnpm+turbo Tauri app, `init --app packages/player` installed the SDK into the root's
+  // package.json, wrote a whole `src/reticle-dev.ts` into a repository root that has no `src/`, left
+  // the app untouched, and reported three ✓ and one ⚠.
+  it('honours --app even when the invocation directory itself looks like an app', () => {
+    const io = memoryIo({
+      // Root with shared tooling: a framework dependency, and no app of its own.
+      'package.json': JSON.stringify({ name: 'mono', devDependencies: { vite: '^7' } }),
+      ...VITE_APP,
+    });
+    runInit({ ...OPTS, app: 'apps/web' }, io);
+    expect(io.written['apps/web/vite.config.ts']).toContain('reticle(');
+    expect(io.written['apps/web/.reticle.json']).toBeDefined();
+    // The root gets runtime config and NOTHING else — no wiring, and no invented src/ tree.
+    expect(io.written['vite.config.ts']).toBeUndefined();
+    expect(io.written['src/reticle-dev.ts']).toBeUndefined();
+  });
+
+  it('says so when --app names a directory that is not there', () => {
+    const io = memoryIo({ 'package.json': JSON.stringify({ devDependencies: { vite: '^7' } }) });
+    const r = runInit({ ...OPTS, app: 'apps/nope' }, io);
+    expect(r.ok).toBe(false);
+    expect(io.lines.join('\n')).toContain('--app apps/nope');
   });
 
   it('asks for feedback exactly once, even though the redirect re-enters init', () => {
@@ -495,7 +602,7 @@ describe('runInit — workspace roots', () => {
       ...VITE_APP, // a nested apps/ dir must not hijack a root that is itself an app
     });
     runInit(OPTS, io);
-    expect(io.written['vite.config.ts']).toContain('reticle({');
+    expect(io.written['vite.config.ts']).toContain('reticle(');
     expect(io.written['apps/web/vite.config.ts']).toBeUndefined();
   });
 
@@ -845,7 +952,7 @@ describe('runInit — a refused pin falls back instead of blocking the install',
   it('still wires the app — a fallback install is a real install', () => {
     const io = pinRefusingIo(VITE_APP);
     runInit({ ...OPTS, install: true }, io);
-    expect(io.written['vite.config.ts']).toContain('reticle({');
+    expect(io.written['vite.config.ts']).toContain('reticle(');
   });
 });
 

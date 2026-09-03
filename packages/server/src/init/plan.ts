@@ -13,6 +13,7 @@ import {
   type Detection,
 } from './detect.js';
 import type { FoundStore } from './capabilities.js';
+import { installFailureHint } from './install-hint.js';
 import { claudeAddCommand, mcpManual, mcpWindowsNote } from './mcp.js';
 import { NodePlatform } from '../platform.js';
 import {
@@ -50,7 +51,7 @@ import {
 } from './plan-framework.js';
 import { join } from 'node:path';
 import { htmlManual, reticleConfigContent, unverifiedUiLibraryNote } from './snippets.js';
-import { declaredInstallSource } from '../telemetry/install-source.js';
+import { configWithInstallSource, declaredInstallSource } from '../telemetry/install-source.js';
 import { devServerPortWarning, isLikelyDevServerPort } from '../cli/cli-port.js';
 
 // An app dev installs exactly the audience-scoped browser-side dependencies — never the retired
@@ -201,6 +202,20 @@ export interface Plan {
 
 export interface PlanInput {
   detection: Detection;
+  /**
+   * Write `captureNetworkBodies: true` into the app's config. Off unless the caller asked (#705).
+   *
+   * Optional so every existing caller and test keeps the safe default without naming it — the one
+   * direction a default about somebody else's data should be wrong in.
+   */
+  captureBodies?: boolean | undefined;
+  /**
+   * The CSP-bearing files this project actually has, keyed by path — read once in `gatherPlanInput`.
+   *
+   * Pre-read rather than given a reader, because `PlanInput` is the pure input to a pure planner and
+   * handing it an io would let any later step reach the disk from inside `buildPlan`.
+   */
+  cspSources?: Readonly<Record<string, string | undefined>> | undefined;
   /** Whether the `claude` CLI is installed (so we can register the MCP server globally). */
   claudeCli: boolean;
   /** Whether an `reticle` MCP server is already registered with Claude (any scope) — idempotency. */
@@ -229,6 +244,11 @@ export interface PlanInput {
    * the file every page of the user's site inherits from.
    */
   astroLayout?: { path: string; source: string } | null | undefined;
+  /**
+   * Existing `src/env.d.ts` content, when present — where the Vite-define ambient declarations go
+   * so `astro check` can see `__RETICLE_TOKEN__` / `__RETICLE_ROOT__` (#677).
+   */
+  astroEnvDts?: string | null | undefined;
   /** Discovered Next config filename (e.g. 'next.config.mjs'), or null. */
   nextConfigFile: string | null;
   /** Source of that Next config, so the export can be wrapped in withReticle. */
@@ -729,17 +749,6 @@ function unpinnedRetryNote(version: string | undefined, pm: PackageManager): str
   );
 }
 
-function installFailureHint(pm: PackageManager): string {
-  if (pm !== PackageManager.PNPM) return 'If the version was refused, install the SDK yourself.';
-  return (
-    'If pnpm reported ERR_PNPM_NO_MATURE_MATCHING_VERSION, its minimumReleaseAge setting is holding ' +
-    'this release back. Either wait out the window, or allow these packages explicitly:\n' +
-    '  pnpm config set minimumReleaseAgeExclude "@reticlehq/*"\n' +
-    'Do NOT drop the version pin — unpinned, pnpm installs an older SDK against a newer daemon, and ' +
-    'that mismatch surfaces as a -32000 with nothing naming a version.'
-  );
-}
-
 function installStep(input: PlanInput): Step {
   const pm = input.detection.packageManager;
   const packages = pinnedPackages(
@@ -863,6 +872,18 @@ function reticleConfigStep(input: PlanInput, content: string): Step {
         target: RETICLE_CONFIG_FILE,
         status: StepStatus.NOTICE,
         detail: problem,
+      };
+    }
+    // The one thing a re-run can still learn: which channel the user actually arrived through.
+    // See configWithInstallSource — it only ever ADDS a field that is absent.
+    const backfilled = configWithInstallSource(input.reticleConfigSource, declaredInstallSource());
+    if (backfilled !== undefined) {
+      return {
+        title: RETICLE_CONFIG_TITLE,
+        target: RETICLE_CONFIG_FILE,
+        status: StepStatus.APPLY,
+        detail: 'record which install route this project came through',
+        write: { path: RETICLE_CONFIG_FILE, content: backfilled },
       };
     }
     return {

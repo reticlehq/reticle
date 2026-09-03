@@ -24,6 +24,7 @@ function depsWithThrottle(throttled: boolean): ToolDeps {
     recordAction: () => 'a1',
     lastAct: new LastAct(),
     bufferHealth: () => ({ total: 4, dropped: 0 }),
+    lostSince: () => false,
     blindSpots: () => ({}),
     eventsSince: () => [],
     queryEvents: () => Promise.resolve([]),

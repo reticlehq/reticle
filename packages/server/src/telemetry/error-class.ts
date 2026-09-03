@@ -33,7 +33,7 @@ export type ErrorClass = (typeof ErrorClass)[keyof typeof ErrorClass];
 const PATTERNS: readonly (readonly [RegExp, ErrorClass])[] = [
   [/confirmdangerous|destructive action blocked/i, ErrorClass.REFUSAL],
   [
-    /\brefus(e|ed|es|ing)\b|not supported|unsupported|cannot .* a <|contenteditable/i,
+    /\brefus(e|ed|es|ing)\b|not supported|unsupported|cannot .* a <|contenteditable|cannot hover/i,
     ErrorClass.REFUSAL,
   ],
   [

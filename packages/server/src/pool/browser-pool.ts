@@ -31,6 +31,12 @@ export interface PooledPage {
    * compare against and pass.
    */
   screenshot?(opts?: { fullPage?: boolean }): Promise<Uint8Array>;
+  /**
+   * Move the real pointer to (x, y) so CSS `:hover` applies. OPTIONAL, like `screenshot`: a fake
+   * that does not implement it makes hover refuse rather than dispatch a synthetic mouseover that
+   * reports dispatched/settled while the styles never ran.
+   */
+  hover?(x: number, y: number): Promise<void>;
 }
 
 /** An isolated browsing context (cookies/storage). Real Playwright `BrowserContext` satisfies this. */
@@ -63,6 +69,12 @@ export const DEFAULT_LEASE_TTL_MS = 5 * 60_000;
 
 /** Default cap on how long a lease's initial navigation may take before it fails (frees the slot). */
 const DEFAULT_NAV_TIMEOUT_MS = 30_000;
+
+/**
+ * How many reaped lease ids to remember. Only the most recent departure is ever asked about, so
+ * this is slack for a burst sweep, not a history.
+ */
+const MAX_REMEMBERED_REAPED_LEASES = 64;
 
 interface BrowserPoolOptions {
   /** Max simultaneous leased contexts. Over-cap acquires queue. */
@@ -110,6 +122,18 @@ export class BrowserPool {
   #closed = false;
   /** Leases reclaimed for going stale — see reapedLeaseCount(). */
   #reapedLeases = 0;
+  /**
+   * The session ids of recently reaped leases, most recent last.
+   *
+   * The count above answers "has anything ever aged out", which is not a
+   * question any caller actually has: it latches true for the life of the
+   * daemon (#611). The ids answer the question the no-session diagnosis is
+   * really asking — was THIS session a lease that aged out — so a closed
+   * human tab is no longer blamed on an expired lease forever after.
+   *
+   * Bounded because a long-lived daemon reaps unboundedly many.
+   */
+  readonly #reapedLeaseIds: string[] = [];
   readonly #active = new Map<string, ActiveLease>();
   /** Registered-session-id → lease id, for apps that keep their own session name. See `alias`. */
   readonly #aliases = new Map<string, string>();
@@ -156,6 +180,32 @@ export class BrowserPool {
   /** The sessionIds of every currently leased context — used to report/group leased sessions. */
   leasedSessionIds(): string[] {
     return [...this.#active.keys()];
+  }
+
+  /**
+   * The public session id of an active lease on this origin, if we already hold one.
+   *
+   * The lease TOOL reuses that id instead of minting a second context: a second acquire on the same
+   * origin used to leave both tabs connected and poison default session resolution (#600). The pool's
+   * own `acquire` still mints — the parallel suite needs isolation on purpose.
+   *
+   * Prefers the alias the agent was given, when the app registered under its own name.
+   */
+  leaseIdOnOrigin(origin: string): string | undefined {
+    for (const [leaseId, lease] of this.#active) {
+      let leaseOrigin: string | undefined;
+      try {
+        leaseOrigin = new URL(lease.url).origin;
+      } catch {
+        continue;
+      }
+      if (leaseOrigin !== origin) continue;
+      for (const [alias, id] of this.#aliases) {
+        if (id === leaseId) return alias;
+      }
+      return leaseId;
+    }
+    return undefined;
   }
 
   /**
@@ -228,6 +278,25 @@ export class BrowserPool {
     }
   }
 
+  /**
+   * Move the real pointer on a leased page, or false when this session is not a lease or cannot
+   * hover. Same optional-capability contract as screenshotLease: absence must read as "could not
+   * hover", never as a successful dispatch of a synthetic mouseover.
+   *
+   * Touches the lease like any other tool call, so hovering keeps it alive.
+   */
+  async hoverLease(sessionId: string, x: number, y: number): Promise<boolean> {
+    const lease = this.#active.get(sessionId);
+    if (lease === undefined || lease.page.hover === undefined) return false;
+    this.touch(sessionId);
+    try {
+      await lease.page.hover(x, y);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   async sweepExpired(): Promise<string[]> {
     const now = this.#now();
     const expired = [...this.#active.entries()]
@@ -235,19 +304,39 @@ export class BrowserPool {
       .map(([sessionId]) => sessionId);
     for (const sessionId of expired) await this.#release(sessionId);
     this.#reapedLeases += expired.length;
+    for (const sessionId of expired) {
+      this.#reapedLeaseIds.push(sessionId);
+      if (this.#reapedLeaseIds.length > MAX_REMEMBERED_REAPED_LEASES) this.#reapedLeaseIds.shift();
+    }
     return expired;
   }
 
   /**
    * How many leases this pool has reclaimed for going stale.
    *
-   * Read by the no-session diagnosis: an aged-out lease used to be reported as "the tab was closed
-   * … ask the human to reopen the app", which is wrong on every clause and sent one reporter looking
-   * for a port mismatch (#157). A count is enough — the message says "likeliest", not "certainly",
-   * because nothing here knows WHICH session the caller just lost.
+   * Kept for reporting. NOT a basis for diagnosis: it is a lifetime total that never resets, so
+   * `count > 0` latches true forever after the first reap. Ask `wasReapedLease` instead, which
+   * answers about a specific session.
    */
   reapedLeaseCount(): number {
     return this.#reapedLeases;
+  }
+
+  /**
+   * Did THIS session id belong to a lease this pool aged out?
+   *
+   * The question the no-session diagnosis actually has. It used to ask `reapedLeaseCount() > 0`,
+   * which meant that once any lease had ever aged out, every closed human tab for the rest of the
+   * daemon's life was reported as an expired lease — and the recovery that followed
+   * (`reticle_lease {acquire}`) would open an unauthenticated headless context and lose the app
+   * session (#611).
+   *
+   * Only the last {@link MAX_REMEMBERED_REAPED_LEASES} are remembered, so this answers `false` for
+   * a lease reaped long enough ago that thousands have followed. That direction is the safe one:
+   * it falls back to the generic "the tab was closed" wording rather than inventing a lease.
+   */
+  wasReapedLease(sessionId: string): boolean {
+    return this.#reapedLeaseIds.includes(sessionId);
   }
 
   /**

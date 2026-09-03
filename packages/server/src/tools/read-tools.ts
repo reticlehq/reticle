@@ -25,10 +25,19 @@ import { type ToolDef, sessionIdShape, commandOrThrow, snapshotTree } from './to
 import { bufferEnvelope } from '../session/session-health.js';
 
 /** The route part of a session URL. A host belongs to the machine, not to the journey. */
+/**
+ * The page a recording started on, as a NAVIGABLE path: pathname + hash.
+ *
+ * The hash matters and the pathname alone is not enough. Under a hash router every page has the
+ * document pathname `/`, so a recording made on `#/posts/12` stored `/`, the replay's start-path
+ * comparison saw `/` on both sides and never warned about drift, and the navigate it suggests
+ * pointed at the default route rather than the recorded one.
+ */
 function pathnameOf(url: string | undefined): string | undefined {
   if (url === undefined) return undefined;
   try {
-    return new URL(url).pathname;
+    const parsed = new URL(url);
+    return `${parsed.pathname}${parsed.hash}`;
   } catch {
     return undefined;
   }

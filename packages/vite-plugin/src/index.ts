@@ -16,6 +16,7 @@ import {
 } from '@reticlehq/core';
 import { resolveProjectId } from './project-id.js';
 import { discoverDaemonPort } from './discover-port.js';
+import { announceDevServer } from './announce.js';
 import { SVELTE_FILE, stampSvelte } from './svelte-source.js';
 import {
   resolvableChain,
@@ -259,6 +260,21 @@ export interface ReticleVitePlugin {
  * plugin never imports, the same way the Svelte compiler and Playwright are handled elsewhere.
  */
 export interface ViteDevServerLike {
+  /**
+   * Vite's own HTTP server, for the port it ACTUALLY bound and the moment it bound it. Optional and
+   * nullable because middleware mode has none — and because a structural stand-in that demands more
+   * than Vite guarantees stops being assignable, which red-builds every typechecked config.
+   */
+  httpServer?: {
+    once(event: string, listener: () => void): unknown;
+    address(): string | { port: number } | null;
+  } | null;
+  /**
+   * The URLs Vite prints on boot. Read rather than assembled: host, protocol and base are all
+   * configurable, so composing a URL here would be a guess about the one thing the dev server can
+   * simply be asked.
+   */
+  resolvedUrls?: { local: string[]; network: string[] } | null;
   middlewares: {
     // METHOD syntax throughout, deliberately. A property-style `(mod: object) => void` is checked
     // strictly (contravariantly) in its parameters, so widening a parameter to `object` makes the
@@ -594,7 +610,8 @@ export function reticle(options: ReticleVitePluginOptions = {}): ReticleVitePlug
     `[${RETICLE_VITE_PLUGIN_NAME}] could not inject reticle.connect(): the HTML entry module was ` +
     'never matched, so this app carries no instrumentation and will never connect. Check that ' +
     'index.html references your entry with a <script type="module" src="...">, or pass ' +
-    '`inject: false` and call reticle.connect() yourself.';
+    '`inject: false` and call reticle.connect({ token: __RETICLE_TOKEN__ }) yourself. The plugin ' +
+    'still inlines that define; a connect without it is refused.';
 
   /**
    * The DEV message, which must be weaker — and this is the whole reason the two are separate.
@@ -805,6 +822,49 @@ export function reticle(options: ReticleVitePluginOptions = {}): ReticleVitePlug
      */
     configureServer(server) {
       if (!inject) return;
+      // Tell `~/.reticle` this dev server exists, the moment it is actually listening.
+      //
+      // This is the one fact nobody outside this process could observe: the plugin is loaded in the
+      // dev server that is RUNNING, not merely present in a config file on disk. Its absence is the
+      // commonest setup failure there is — a plugin added to a config the running server already
+      // read — and until now that failure was indistinguishable from every other one.
+      //
+      // Deliberately reads the port and URL off the server rather than composing them. The port may
+      // be `strictPort: false` and have moved, the host and base are configurable, and every one of
+      // those is something the user can change under us.
+      const announce = (): void => {
+        const address = server.httpServer?.address();
+        const port =
+          'object' === typeof address && null !== address && undefined !== address
+            ? address.port
+            : undefined;
+        if (undefined === port) return;
+        const opts = resolveLazy();
+        const withdraw = announceDevServer({
+          port,
+          pid: process.pid,
+          root: opts.root ?? process.cwd(),
+          url: server.resolvedUrls?.local[0] ?? `http://localhost:${String(port)}/`,
+          ...(opts.sdkVersion === undefined || 0 === opts.sdkVersion.length
+            ? {}
+            : { sdkVersion: opts.sdkVersion }),
+          startedAt: Date.now(),
+          ...(opts.projectId === undefined ? {} : { projectId: opts.projectId }),
+        });
+        server.httpServer?.once('close', withdraw);
+        // `close` does not fire on Ctrl-C, which is how a dev server usually dies. The read side
+        // checks liveness anyway, so a missed withdrawal degrades rather than lies — these just
+        // keep the directory tidy in the cases we can catch.
+        process.once('exit', withdraw);
+        process.once('SIGINT', withdraw);
+        process.once('SIGTERM', withdraw);
+      };
+      // Already bound in some setups (middleware mode, a restart), not yet in the common one.
+      if (null === server.httpServer?.address() || undefined === server.httpServer?.address()) {
+        server.httpServer?.once('listening', announce);
+      } else {
+        announce();
+      }
       server.middlewares.use((req, _res, next) => {
         if ((req.url ?? '').split('?')[0] === RETICLE_CONNECT_MODULE) {
           if (currentConnectSource() !== lastServedConnectSource) {

@@ -230,3 +230,14 @@ export const BlindSpotKind = {
   UNWATCHED_STATE: 'unwatched-state',
 } as const;
 export type BlindSpotKind = (typeof BlindSpotKind)[keyof typeof BlindSpotKind];
+
+/**
+ * Blind spots that only exist in an Electron renderer.
+ *
+ * Presence in the vocabulary is not evidence the page is a desktop app — a web session can still
+ * carry these kinds if the SDK keyed off a user-agent substring. Gate them on the session runtime
+ * (which the page already reports) rather than on the kind existing.
+ */
+export function isDesktopBlindSpot(kind: BlindSpotKind): boolean {
+  return kind === BlindSpotKind.UNOBSERVED_IPC || kind === BlindSpotKind.VERDICTLESS_SEND;
+}

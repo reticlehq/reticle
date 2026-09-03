@@ -56,7 +56,10 @@ describe('a declared expected failure is not a contradiction', () => {
   it('still catches a failure the caller did NOT declare', () => {
     const found = findContradictions(
       [...loginFailed(500), failedCall('POST', '/api/v1/orders', 500)],
-      { expectedFailures: [{ method: 'POST', urlContains: '/api/v1/auth/login', status: 500 }] },
+      {
+        expectedFailures: [{ method: 'POST', urlContains: '/api/v1/auth/login', status: 500 }],
+        actionSince: 0,
+      },
     );
     expect(kindsOf(found)).toContain(ContradictionKind.UI_ADVANCED_REQUEST_FAILED);
     expect(found[0]?.detail).toContain('/api/v1/orders');
@@ -66,12 +69,13 @@ describe('a declared expected failure is not a contradiction', () => {
   it('still catches a failure whose status is not the declared one', () => {
     const found = findContradictions(loginFailed(503), {
       expectedFailures: [{ urlContains: '/api/v1/auth/login', status: 500 }],
+      actionSince: 0,
     });
     expect(kindsOf(found)).toContain(ContradictionKind.UI_ADVANCED_REQUEST_FAILED);
   });
 
   it('still catches it with no declaration at all', () => {
-    expect(kindsOf(findContradictions(loginFailed(500)))).toContain(
+    expect(kindsOf(findContradictions(loginFailed(500), { actionSince: 0 }))).toContain(
       ContradictionKind.UI_ADVANCED_REQUEST_FAILED,
     );
   });

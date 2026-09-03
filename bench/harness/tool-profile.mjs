@@ -15,6 +15,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { McpStdioClient, RETICLE_CLI } from './mcp-client.mjs';
 import { measure } from './tokenizer.mjs';
+import { buildToolProfileOutput } from './tool-profile-output.mjs';
 import * as PORTS from './ports.mjs';
 
 const NO_BOOT = process.argv.includes('--no-boot');
@@ -640,15 +641,11 @@ for (const fixture of FIXTURES) {
 }
 
 // Write JSON output
-const output = {
-  timestamp: new Date().toISOString(),
-  fixtures: Object.keys(multiResults),
-  tools_profiled_per_fixture: totalToolsProfiledCount,
-  matrix: multiResults,
-  // Flat backward-compatible results field for single fixture consumption
-  results: multiResults[FIXTURES[0].id]?.results ?? [],
-  summary: multiResults[FIXTURES[0].id]?.summary ?? {},
-};
+const output = buildToolProfileOutput(
+  multiResults,
+  FIXTURES.map((f) => f.id),
+  totalToolsProfiledCount,
+);
 
 const rawPath = join('bench', 'raw', 'tool-profile.json');
 mkdirSync(join('bench', 'raw'), { recursive: true });

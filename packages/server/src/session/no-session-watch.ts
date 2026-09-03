@@ -11,7 +11,8 @@
  */
 
 import { probeDevServers, probeDevServerStates } from './dev-server-probe.js';
-import { diagnoseNoSession } from './no-session-diagnosis.js';
+import type { NoSessionReason } from '@reticlehq/core';
+import { explainNoSession } from './no-session-diagnosis.js';
 import type { NoSessionFacts } from './no-session-diagnosis.js';
 import { detectDevCommand } from './dev-command.js';
 import { nextActionFor, renderNextAction } from './no-session-next-action.js';
@@ -19,7 +20,8 @@ import type { NoSessionNextAction } from './no-session-next-action.js';
 import { readProjectFramework, readProjectId, readProjectPort } from '../cli/cli-port.js';
 import { discoverProjectConfigs } from '../cli/config-discovery.js';
 import { hasProjectConnectedBefore, rememberConnected } from './connection-memory.js';
-import { reticleStateHome } from '../daemon/daemon.js';
+import { isAlive, reticleStateHome } from '../daemon/daemon.js';
+import { daemonsServingProjectElsewhere, splitBrainNote } from '../daemon/daemon-resolve.js';
 import { stallUptime } from './stall-clock.js';
 import type { SessionManager } from './session-manager.js';
 import { probeDaemon } from '../mcp/mcp-proxy.js';
@@ -67,11 +69,15 @@ interface NoSessionWatchOptions {
    */
   occupiedSiblings?: () => Promise<readonly number[]>;
   /**
-   * How many pooled leases have aged out, if a pool exists. Injected as a reader rather than the
-   * pool itself: the diagnosis needs one number, and taking the whole pool would tie the session
-   * layer to the browser layer for it.
+   * Whether a given session id belonged to a pooled lease that aged out, if a pool exists.
+   * Injected as a predicate rather than the pool itself: the diagnosis needs one answer, and
+   * taking the whole pool would tie the session layer to the browser layer for it.
+   *
+   * Was a lifetime `reapedLeases: () => number` count, asked as `> 0`. That latched: after the
+   * first reap, every closed human tab was reported as an expired lease for the rest of the
+   * daemon's life, and the recovery it named would have thrown away the app session (#611).
    */
-  reapedLeases?: () => number;
+  wasReapedLease?: (sessionId: string) => boolean;
   /**
    * Opens a URL in a browser Reticle owns, and resolves once it is open.
    *
@@ -159,6 +165,25 @@ export function startNoSessionWatch(options: NoSessionWatchOptions): () => void 
   const connectedBefore = (): boolean =>
     hasProjectConnectedBefore(stateDir, options.port, readProjectId(directory));
 
+  /**
+   * The split brain, asked fresh every time like everything else here.
+   *
+   * Cheap — a directory listing of `~/.reticle` and a few small JSON reads — and only ever reached
+   * on a daemon with no session, which is the state this whole file exists for. Reading it once at
+   * boot would miss the ordinary case entirely: the app connects to the other daemon SECONDS after
+   * this one starts, which is precisely the window the agent then spends being told to start a dev
+   * server that is already running.
+   */
+  const splitBrain = (): string | undefined => {
+    const projectId = readProjectId(directory);
+    return splitBrainNote(
+      options.port,
+      daemonsServingProjectElsewhere(projectId, options.port, stateDir, isAlive, (port) =>
+        hasProjectConnectedBefore(stateDir, port, projectId),
+      ),
+    );
+  };
+
   // Every path that registers a session goes through SessionManager.add, so this is the one hook
   // that makes the bit durable. Recorded per port + projectId so a shared 4400 cannot make one
   // project's success into evidence about another's.
@@ -231,64 +256,80 @@ export function startNoSessionWatch(options: NoSessionWatchOptions): () => void 
   const timer = setInterval(refresh, REFRESH_MS);
   timer.unref();
 
-  const nextAction = (scope: ProjectScopeFacts): NoSessionNextAction =>
-    nextActionFor({
+  const nextAction = (scope: ProjectScopeFacts): NoSessionNextAction => {
+    const split = splitBrain();
+    return nextActionFor({
       everConnected: options.sessions.everConnected(),
       initialized: scope.initialized,
       ...(scope.configsElsewhere === undefined ? {} : { configsElsewhere: scope.configsElsewhere }),
       previouslyConnected: connectedBefore(),
+      ...(split === undefined ? {} : { splitBrain: split }),
       listening,
       // Read when asked, like everything else here: a `package.json` can gain a dev script, and a
       // daemon that cached "there is none" at boot would keep saying so for the rest of the day.
       dev: detectDevCommand(directory),
     });
+  };
 
   options.sessions.setNoSessionNextAction(() => nextAction(projectScopeFacts()));
+
+  // ONE call for both registrations below. The prose and the branch code have to come from the
+  // same evaluation or they can describe different branches - the facts are read when asked, so two
+  // calls a moment apart can genuinely disagree (#615).
+  const explain = (): { reason: NoSessionReason; message: string } => {
+    const scope = projectScopeFacts();
+    return explainNoSession({
+      everConnected: options.sessions.everConnected(),
+      // Read WHEN ASKED, for the same reason `projectPort` below is: `.reticle.json` is routinely
+      // written by `init` after this daemon started — that is the ordinary first-install order — and
+      // the boot-time answer is then permanently stale. Reported from the field as `reticle status`
+      // saying the project had never been through `init` about a project whose config named its
+      // framework and its projectId, and whose real problem was a dev server older than the plugin.
+      // The boot value still counts: it is the one the daemon scoped its sessions with.
+      ...scope,
+      listening,
+      slowListeners,
+      port: options.port,
+      // The directory `initialized` was decided in. Named in the message because "there is no
+      // `.reticle.json`" is a claim about ONE directory, and a reader standing somewhere else
+      // cannot tell whether it is a claim about their app at all.
+      directory,
+      // The one fact that outranks every absence below it, and the reason a fresh daemon stopped
+      // claiming that an install which has demonstrably worked has never worked.
+      previouslyConnected: connectedBefore(),
+      // Ranks the causes. Read when asked, like the rest: `init` writes this file after the daemon
+      // starts on an ordinary first install.
+      ...(() => {
+        const framework = readProjectFramework(directory);
+        return framework === undefined ? {} : { framework };
+      })(),
+      // Decided from the session that actually went away, not from a lifetime tally: the lease
+      // sentence is only right when the thing that vanished WAS a lease.
+      leaseExpired: (() => {
+        const departed = options.sessions.lastDeparted();
+        return departed === undefined ? false : (options.wasReapedLease?.(departed) ?? false);
+      })(),
+      // How long this daemon has been waiting with no app. The diagnosis uses it to surface
+      // "install never finished" — the same condition telemetry already knows about.
+      ...(() => {
+        const upMs = stallUptime(Date.now());
+        return upMs === undefined ? {} : { daemonUpMs: upMs };
+      })(),
+      // Read here rather than at boot: `.reticle.json` can be written by `init` after this daemon
+      // started, which is the ordinary first-install order, and a port cached from before it existed
+      // would make the daemon confidently report no mismatch on the one run where there is one.
+      ...(() => {
+        const configured = readProjectPort(directory);
+        return configured === undefined ? {} : { projectPort: configured };
+      })(),
+      ...(0 === siblingListeners.length ? {} : { siblingListeners }),
+    });
+  };
 
   options.sessions.setNoSessionHint(() => {
     const scope = projectScopeFacts();
     return (
-      diagnoseNoSession({
-        everConnected: options.sessions.everConnected(),
-        // Read WHEN ASKED, for the same reason `projectPort` below is: `.reticle.json` is routinely
-        // written by `init` after this daemon started — that is the ordinary first-install order — and
-        // the boot-time answer is then permanently stale. Reported from the field as `reticle status`
-        // saying the project had never been through `init` about a project whose config named its
-        // framework and its projectId, and whose real problem was a dev server older than the plugin.
-        // The boot value still counts: it is the one the daemon scoped its sessions with.
-        ...scope,
-        listening,
-        slowListeners,
-        port: options.port,
-        // The directory `initialized` was decided in. Named in the message because "there is no
-        // `.reticle.json`" is a claim about ONE directory, and a reader standing somewhere else
-        // cannot tell whether it is a claim about their app at all.
-        directory,
-        // The one fact that outranks every absence below it, and the reason a fresh daemon stopped
-        // claiming that an install which has demonstrably worked has never worked.
-        previouslyConnected: connectedBefore(),
-        // Ranks the causes. Read when asked, like the rest: `init` writes this file after the daemon
-        // starts on an ordinary first install.
-        ...(() => {
-          const framework = readProjectFramework(directory);
-          return framework === undefined ? {} : { framework };
-        })(),
-        leaseExpired: (options.reapedLeases?.() ?? 0) > 0,
-        // How long this daemon has been waiting with no app. The diagnosis uses it to surface
-        // "install never finished" — the same condition telemetry already knows about.
-        ...(() => {
-          const upMs = stallUptime(Date.now());
-          return upMs === undefined ? {} : { daemonUpMs: upMs };
-        })(),
-        // Read here rather than at boot: `.reticle.json` can be written by `init` after this daemon
-        // started, which is the ordinary first-install order, and a port cached from before it existed
-        // would make the daemon confidently report no mismatch on the one run where there is one.
-        ...(() => {
-          const configured = readProjectPort(directory);
-          return configured === undefined ? {} : { projectPort: configured };
-        })(),
-        ...(0 === siblingListeners.length ? {} : { siblingListeners }),
-      }) +
+      explain().message +
       // Prose for the human, then the literal command for the agent. Both consume the same scope
       // facts so a discovered workspace config cannot become an `init` recommendation below it.
       ` ${renderNextAction(nextAction(scope))}` +
@@ -296,10 +337,13 @@ export function startNoSessionWatch(options: NoSessionWatchOptions): () => void 
     );
   });
 
+  options.sessions.setNoSessionReason(() => explain().reason);
+
   return () => {
     clearInterval(timer);
     options.sessions.setConnectionRecorder(undefined);
     options.sessions.setNoSessionHint(undefined);
+    options.sessions.setNoSessionReason(undefined);
     options.sessions.setNoSessionNextAction(undefined);
   };
 }
@@ -314,8 +358,8 @@ export function wireSessionScope(
   sessions: SessionManager,
   activeProjectId: string | undefined,
   port: number,
-  /** Reader for the pool's aged-out-lease count; omitted when this daemon runs no pool. */
-  reapedLeases?: () => number,
+  /** Asks the pool whether a session id was a lease it aged out; omitted when there is no pool. */
+  wasReapedLease?: (sessionId: string) => boolean,
   /** Opens a URL in a Reticle-owned browser (the pool). Omitted ⇒ auto-attach is off. */
   attach?: (url: string) => Promise<unknown>,
 ): () => void {
@@ -324,7 +368,7 @@ export function wireSessionScope(
     sessions,
     port,
     initialized: activeProjectId !== undefined,
-    ...(reapedLeases === undefined ? {} : { reapedLeases }),
+    ...(wasReapedLease === undefined ? {} : { wasReapedLease }),
     ...(attach === undefined ? {} : { attach }),
   });
 }

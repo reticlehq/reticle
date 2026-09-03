@@ -1,4 +1,5 @@
 import { span } from '../trace.js';
+import { routePathOf } from '../events/predicate-route.js';
 import {
   AnchorKind,
   DriftReason,
@@ -274,8 +275,13 @@ function currentRoute(session: FlowReplaySession): string | undefined {
   const last = routes.at(-1);
   if (last === undefined) return undefined;
   const data = last.data ?? {};
+  // The ROUTER's path. This field answers "which page did this step run on", and the document
+  // pathname is `/` on every page of a hash-routed app — so a whole desktop replay reported `/` for
+  // every step. Sixth place the same reading was wrong; see routePathOf.
   const pathname = asString(data['pathname']) ?? asString(data['to']);
-  return pathname !== undefined && pathname.length > 0 ? pathname : undefined;
+  if (pathname === undefined || 0 === pathname.length) return undefined;
+  const routed = routePathOf(pathname, asString(data['hash']) ?? '');
+  return routed.length > 0 ? routed : undefined;
 }
 
 /** Pathname only (drop origin + query) so a net URL stays terse in the journey. */
@@ -379,7 +385,9 @@ async function runTestidStep(
     act = await session.command(ReticleCommand.ACT, {
       ref,
       action: step.action ?? '',
-      args: replayActionArgs(step.args, confirmDangerous),
+      // `value` is the anchor's own name — the field this step types into — so a redacted fill can
+      // be supplied from RETICLE_SECRET_<FIELD> without the flow carrying the secret.
+      args: replayActionArgs(step.args, confirmDangerous, value),
     });
   } finally {
     session.finishAction?.();

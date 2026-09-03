@@ -1,6 +1,6 @@
 /**
  * Optional cloud sync for saved flows. "Logged in" here means the two cloud env vars are set (written by
- * `reticle login` later; settable by hand today): the hosted URL and an API key from the Reticle Cloud
+ * `reticle login` later; settable by hand today): the hosted URL and an API key from the Reticle
  * dashboard. When present, a freshly-saved flow is pushed to `POST /v1/flows` so the team's regression
  * suite lives in the cloud — surviving refactors and runnable in CI. When absent, sync is a no-op and
  * everything stays 100% local (the "no phone-home" default: nothing leaves the machine unless you opt in).
@@ -55,6 +55,40 @@ export const CLOUD_VERIFY_TIMEOUT_MS = 120_000;
 const TIMEOUT_ERROR_NAMES: ReadonlySet<string> = new Set(['TimeoutError', 'AbortError']);
 
 /**
+ * A header value `fetch` can actually send. Anything above U+00FF is not a valid ByteString.
+ *
+ * The one that happens in practice is an ellipsis. A dashboard masks a key as `rk_live_…` so it is
+ * never shown in full, somebody copies what they can SEE into `.env`, and the request dies deep
+ * inside undici with "Cannot convert argument to a ByteString because the character at index 15 has
+ * a value of 8230" — a byte offset into a header the user never wrote, naming no variable, no file
+ * and no fix.
+ */
+const UNSENDABLE_HEADER_CHAR = /[^ -ÿ]/;
+
+/** Which knob holds the credential behind a header, so the error can name the thing to go and edit. */
+const CREDENTIAL_SOURCE: Readonly<Record<string, string>> = {
+  authorization: `${CloudEnv.KEY} (or the session from \`reticle login\`)`,
+};
+
+/**
+ * Refuse a request whose headers cannot be encoded, before it is sent.
+ *
+ * Before dialling on purpose: a credential that cannot be encoded cannot succeed, so the round trip
+ * buys only a slower and less specific failure.
+ */
+function assertSendableHeaders(headers: Record<string, string>): void {
+  for (const [name, value] of Object.entries(headers)) {
+    if (!UNSENDABLE_HEADER_CHAR.test(value)) continue;
+    const source = CREDENTIAL_SOURCE[name];
+    throw new Error(
+      `the ${name} header carries a character that cannot be sent, which means the value is truncated — ` +
+        `a credential displayed masked as \`rk_live_…\` keeps that ellipsis when it is copied. ` +
+        `Paste the full value${source === undefined ? '' : ` into ${source}`}.`,
+    );
+  }
+}
+
+/**
  * The fetch every cloud call goes through. Adds the abort signal, and turns the abort into a message
  * that says what happened and what to do — a bare `AbortError` reaching a user or an agent is a riddle,
  * and the agent-facing half of this product is judged on whether its errors are actionable.
@@ -64,12 +98,13 @@ export async function cloudFetch(
   init: { method: string; headers: Record<string, string>; body?: string },
   timeoutMs: number = CLOUD_FETCH_TIMEOUT_MS,
 ): Promise<Response> {
+  assertSendableHeaders(init.headers);
   try {
     return await fetch(url, { ...init, signal: AbortSignal.timeout(timeoutMs) });
   } catch (err) {
     if (err instanceof Error && TIMEOUT_ERROR_NAMES.has(err.name)) {
       throw new Error(
-        `Reticle Cloud request timed out after ${Math.round(timeoutMs / 1000)}s: ${init.method} ${url}. ` +
+        `Reticle request timed out after ${Math.round(timeoutMs / 1000)}s: ${init.method} ${url}. ` +
           `The server accepted the connection but never answered. Check the network and ${CloudEnv.URL}, then retry — ` +
           `verification works locally without cloud.`,
       );

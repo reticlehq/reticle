@@ -22,9 +22,31 @@ export const RouteDecidedBy = {
 /** The parts of a route a predicate can be judged against, from either source. */
 interface RouteReading {
   pathname: string;
+  /** The path the ROUTER is on: the fragment's path under a hash router, else the document path. */
+  routePath: string;
   full: string;
   decidedBy: (typeof RouteDecidedBy)[keyof typeof RouteDecidedBy];
   data: Record<string, unknown>;
+}
+
+/**
+ * The path the router is actually on.
+ *
+ * Under a hash router the document pathname is `/` on every page and the whole route lives in the
+ * fragment — which is why `contains` below matches the full route. `pathname` was left comparing the
+ * document path, so `{ pathname: '/posts/12/show' }` could never pass on a HashRouter app, the
+ * standard router for a packaged Electron/Tauri renderer. That is a guaranteed false red: Reticle
+ * telling a user their working app is broken.
+ *
+ * The fragment WINS rather than being accepted alongside the document path. Honouring both would
+ * make `{ pathname: '/' }` trivially true on every hash-routed page — a green that says nothing
+ * about where the app is, which is the failure this predicate exists to prevent.
+ */
+export function routePathOf(pathname: string, hash: string): string {
+  if (!hash.startsWith('#/')) return pathname;
+  const withoutHash = hash.slice(1);
+  const query = withoutHash.indexOf('?');
+  return -1 === query ? withoutHash : withoutHash.slice(0, query);
 }
 
 /**
@@ -40,6 +62,7 @@ function readCurrentRoute(url: string): RouteReading {
   const hash = parsed?.hash ?? '';
   return {
     pathname,
+    routePath: routePathOf(pathname, hash),
     full: `${pathname}${search}${hash}`,
     decidedBy: RouteDecidedBy.CURRENT,
     data: { pathname, search, hash, url, decidedBy: RouteDecidedBy.CURRENT },
@@ -71,12 +94,17 @@ export function evalRoute(
   const last = routes.at(-1);
   const reading: RouteReading | undefined =
     last !== undefined
-      ? {
-          pathname: str(last.data['pathname']) ?? str(last.data['to']) ?? '',
-          full: `${str(last.data['pathname']) ?? str(last.data['to']) ?? ''}${str(last.data['search']) ?? ''}${str(last.data['hash']) ?? ''}`,
-          decidedBy: RouteDecidedBy.CHANGE,
-          data: { ...last.data, decidedBy: RouteDecidedBy.CHANGE },
-        }
+      ? ((): RouteReading => {
+          const changedPath = str(last.data['pathname']) ?? str(last.data['to']) ?? '';
+          const changedHash = str(last.data['hash']) ?? '';
+          return {
+            pathname: changedPath,
+            routePath: routePathOf(changedPath, changedHash),
+            full: `${changedPath}${str(last.data['search']) ?? ''}${changedHash}`,
+            decidedBy: RouteDecidedBy.CHANGE,
+            data: { ...last.data, decidedBy: RouteDecidedBy.CHANGE },
+          };
+        })()
       : currentUrl === undefined || 0 === currentUrl.length
         ? undefined
         : readCurrentRoute(currentUrl);
@@ -89,11 +117,13 @@ export function evalRoute(
       assertion: 'route.changed',
     };
   }
-  const pathname = reading.pathname;
+  // The ROUTER's path, not the document's — see routePathOf.
+  const pathname = reading.routePath;
   if (p.pathname !== undefined && pathname !== p.pathname) {
     return {
       pass: false,
-      failureReason: `${describeRouteSource(reading)} is '${pathname}', expected '${p.pathname}'`,
+      // No ` is` after the clause: it read "route changed to is '/'".
+      failureReason: `${describeRouteSource(reading)} '${pathname}', expected '${p.pathname}'`,
       observed: `${describeRouteSource(reading)} '${pathname}'`,
       expected: `route '${p.pathname}'`,
       assertion: 'route.pathname',

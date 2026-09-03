@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { LastAct } from '../session/last-act.js';
 import {
+  AppRuntime,
   BlindSpotKind,
   EventType,
   ReticleCommand,
@@ -33,10 +34,14 @@ import type { Session, SessionManager } from '../session/session.js';
  * The field stays OMITTED at full coverage: its PRESENCE is the warning, so emitting it always would
  * make it noise on every healthy call and it would stop being read.
  */
-function depsWithBlindSpots(blindSpots: Record<string, number>): ToolDeps {
+function depsWithBlindSpots(
+  blindSpots: Record<string, number>,
+  runtime?: (typeof AppRuntime)[keyof typeof AppRuntime],
+): ToolDeps {
   const session: Partial<Session> = {
     id: 'demo',
     bufferHealth: () => ({ total: 5, dropped: 0 }),
+    lostSince: () => false,
     recordAction: () => 'a1',
     lastAct: new LastAct(),
     command: () =>
@@ -53,6 +58,7 @@ function depsWithBlindSpots(blindSpots: Record<string, number>): ToolDeps {
     health: () => ({ lastSeenMs: 5, throttled: false, focused: true, hidden: false }),
     getState: () => SessionState.ACTIVE,
     drainInbox: () => [],
+    ...(runtime === undefined ? {} : { runtime }),
   };
   const sessions: Partial<SessionManager> = { resolve: () => session as Session };
   return { sessions: sessions as SessionManager } as unknown as ToolDeps;
@@ -175,6 +181,38 @@ describe('reticle_assert discloses partial coverage', () => {
 
     expect('coverage' in result).toBe(false);
   });
+
+  /**
+   * A browser tab was reported as an Electron renderer with unobserved IPC because the desktop
+   * kinds sit in the same coverage vocabulary. The session already knows it is web.
+   */
+  it('does not report Electron IPC coverage on a web session', async () => {
+    const result = (await tool(ReticleTool.ASSERT).handler(
+      depsWithBlindSpots(
+        {
+          [BlindSpotKind.UNOBSERVED_IPC]: 1,
+          [BlindSpotKind.UNWATCHED_STATE]: 1,
+        },
+        AppRuntime.WEB,
+      ),
+      absentConsole,
+    )) as Record<string, unknown>;
+
+    expect(String(result['coverage'])).toContain('no subscribable store');
+    expect(String(result['coverage'])).not.toContain('Electron');
+    expect(String(result['coverage'])).not.toContain('ipcRenderer');
+    const spots = result['coverage_spots'] as { kind: string }[] | undefined;
+    expect(spots?.map((s) => s.kind)).toEqual([BlindSpotKind.UNWATCHED_STATE]);
+  });
+
+  it('still names a missing Electron preload on an Electron renderer', async () => {
+    const result = (await tool(ReticleTool.ASSERT).handler(
+      depsWithBlindSpots({ [BlindSpotKind.UNOBSERVED_IPC]: 1 }, AppRuntime.ELECTRON),
+      absentConsole,
+    )) as Record<string, unknown>;
+
+    expect(String(result['coverage'])).toContain('@reticlehq/electron/preload');
+  });
 });
 
 describe('reticle_assert carries the verdict, not just pass', () => {
@@ -187,6 +225,7 @@ describe('reticle_assert carries the verdict, not just pass', () => {
     const session: Partial<Session> = {
       id: 'demo',
       bufferHealth: () => ({ total: 5, dropped: 0 }),
+      lostSince: () => false,
       recordAction: () => 'a1',
       lastAct: new LastAct(),
       blindSpots: () => ({}),

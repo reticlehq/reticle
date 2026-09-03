@@ -36,6 +36,7 @@ function depsWith(opts: { matched?: boolean; events?: ReticleEvent[] }): ToolDep
     // A verdict now carries the buffer-honesty block, so the fake has to be able to report it.
     // An intact buffer keeps the block omitted, which is what these advice assertions expect.
     bufferHealth: () => ({ total: 0, dropped: 0 }),
+    lostSince: () => false,
     recordAction: () => 'a1',
     lastAct: new LastAct(),
     queryEvents: () => Promise.resolve([]),

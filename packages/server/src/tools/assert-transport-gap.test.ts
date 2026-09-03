@@ -25,6 +25,7 @@ function depsWith(events: ReticleEvent[]): ToolDeps {
     recordAction: () => 'a1',
     lastAct: new LastAct(),
     bufferHealth: () => ({ total: 12, dropped: 0 }),
+    lostSince: () => false,
     blindSpots: () => ({}),
     eventsSince: () => events,
     queryEvents: () => Promise.resolve(events),

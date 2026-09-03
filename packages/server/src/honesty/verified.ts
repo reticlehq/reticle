@@ -84,7 +84,8 @@ interface VerifiedInputs {
   outcomeUnread?: readonly string[];
   /**
    * The declared consequence that held does not depend on the response body — an exact string
-   * rendered, a store path, a signal. See `declaresBodyIndependentChannel`.
+   * rendered, a store path, a signal, a route, or an element located by role / name / testid. See
+   * `declaresBodyIndependentChannel`.
    *
    * The unread-body clause exists for the case where the body is the ONLY channel that could have
    * contradicted the screen (a 200 with batch/GraphQL errors inside). When a body-independent
@@ -288,9 +289,24 @@ export function decideVerified(inputs: VerifiedInputs): VerifiedVerdict {
   // with routeChanges 0, because the text was the nav link already on screen — the real navigation
   // landed 1.8s later. UNKNOWN rather than NO on purpose: the app may well be fine, and reporting a
   // failure we did not observe would be its own false claim.
+  //
+  // `no-fault` rather than `unknown`, once the window settled — the same distinction
+  // `nothing_declared` already draws, gated the same way.
+  //
+  // The two words ask for opposite things. `unknown` means LOOK AGAIN WITH BETTER COVERAGE, so an
+  // agent reading it reasonably concludes the engine could not see, and spends its remaining turns
+  // enabling capture, widening timeouts and re-driving — none of which can help, because the engine
+  // saw the whole window and there was nothing wrong with the evidence. The fault is in the
+  // ASSERTION: it named something that was true before the action, so it cannot tell success from a
+  // no-op. `no-fault` says exactly that, and `because` already carried the remedy that `unknown`
+  // was burying.
+  //
+  // Gated on `true === settled` for the same reason `nothing_declared` is: no-fault claims the whole
+  // window was seen, and a call that returned before the app stopped moving has not earned that.
+  // Unsettled stays `unknown`, which is then the honest word for it.
   if (true === inputs.alreadyTrue) {
     return {
-      verified: Verified.UNKNOWN,
+      verified: true === settled ? Verified.NO_FAULT : Verified.UNKNOWN,
       verifiedReason: VerifiedReason.ALREADY_TRUE,
       because:
         'the declared consequence was already true before this action, so it proves nothing about it — assert something the action CHANGES (a signal, a request, a route, or store state)',

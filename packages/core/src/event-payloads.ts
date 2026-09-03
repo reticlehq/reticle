@@ -86,6 +86,7 @@ const netRequestSchema = z
     ok: z.boolean(),
     durationMs: z.number(),
     initiator: z.string(),
+    urlRaw: z.string().optional(),
   })
   .passthrough();
 
@@ -108,6 +109,7 @@ export const EVENT_PAYLOAD_SCHEMAS = {
     method: z.string(),
     url: z.string(),
     initiator: z.string(),
+    urlRaw: z.string().optional(),
   }),
   [EventType.NET_STREAM]: netStreamSchema,
   [EventType.DOWNLOAD]: downloadSchema,

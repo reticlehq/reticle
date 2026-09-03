@@ -22,8 +22,9 @@ import { buildSuiteVerdict } from './decision.js';
 import { classifyFlowAssertions } from './flow-classify.js';
 import { isValidFlowName, flowPath } from '../project/reticle-dir.js';
 import type { SuiteVerdict } from '@reticlehq/core';
-import { FlowStore, type FlowAnnotations } from './flows.js';
+import { type FlowAnnotations } from './flows.js';
 import type { ToolDef, ToolDeps } from '../tools/tools.js';
+import { flowsForSession } from './flow-store-for-session.js';
 import {
   replayNamedFlow,
   flowErrorMessage,
@@ -37,7 +38,7 @@ import { healFlow } from './heal-run.js';
 export { replayNamedFlow } from './flow-replay-run.js';
 
 /**
- * Best-effort mirror of a just-saved flow to Reticle Cloud (only when logged in — both cloud env vars
+ * Best-effort mirror of a just-saved flow to Reticle (only when logged in — both cloud env vars
  * set). Fire-and-forget: resolves the config, POSTs via the platform fetch, and logs the outcome. Any
  * failure is swallowed so a network hiccup never affects the local save.
  */
@@ -90,28 +91,6 @@ export function leaseFailureReplay(name: string, error: string | undefined): Flo
 const INVALID_FLOW_NAME_PATH = '(invalid flow name — not a usable path)';
 
 /**
- * The flow store a SESSION's artifacts belong in, and the root it resolved to.
- *
- * `deps.flows` is bound to the daemon's own root at construction, which is right only when the
- * daemon happens to have been started in the project it is driving. When a resolver is wired and it
- * names a different project, the write has to go there instead — so the store is rebound for this
- * call. Rebinding is cheap: a FlowStore is a filesystem port, a root and a clock.
- *
- * Returns `deps.flows` unchanged when nothing is wired or the roots already agree, so the common
- * case allocates nothing and behaves exactly as before.
- */
-function flowsForSession(
-  deps: ToolDeps,
-  projectId: string | undefined,
-): { flows: FlowStore; root: string } {
-  const resolved = deps.artifactRootFor?.(projectId);
-  if (resolved === undefined || resolved.root === deps.reticleRoot) {
-    return { flows: deps.flows, root: deps.reticleRoot };
-  }
-  return { flows: new FlowStore(deps.fs, resolved.root, { now: deps.now }), root: resolved.root };
-}
-
-/**
  * How a save reports that nobody said what the flow is for.
  *
  * Declared once and shared by every save tool: an undeclared field is stripped from
@@ -138,7 +117,13 @@ export const FLOW_TOOLS: ToolDef[] = [
       flowName: z
         .string()
         .describe(
-          'Name for the flow file (saved to .reticle/flows/<flowName>.json). Use again in reticle_flow{action:"load"} / reticle_flow_replay.',
+          'Which RECORDING to save — the name reticle_record{start} was called with. This is a lookup key, not the filename: pass `saveAs` to choose that.',
+        ),
+      saveAs: z
+        .string()
+        .optional()
+        .describe(
+          'Name for the flow file (.reticle/flows/<saveAs>.json), and the name reticle_flow{action:"load"} / reticle_flow_replay take. Omit to reuse the recording name.',
         ),
       intent: z
         .string()
@@ -199,7 +184,22 @@ export const FLOW_TOOLS: ToolDef[] = [
           code: FlowErrorCode.NO_RECORDING,
         });
       }
+      // The name to save AS, which is not the name looked up above.
+      //
+      // `flowName` selects the recording; a recording is named at `record{start}`, often `default`
+      // or whatever the drive began as. Every other flow tool reads a flow name as the thing you
+      // load and replay, so a caller naming their flow at save time had no way to do it and had to
+      // `mv` the file on disk. The error message below already had to explain this ambiguity; that
+      // it needed explaining is the bug (#698).
+      const saveAs = asString(args['saveAs']);
+      if (saveAs !== undefined && !isValidFlowName(saveAs)) {
+        return Promise.resolve({
+          error: `'${saveAs}' is not a usable flow name — it becomes a filename under .reticle/flows/.`,
+          code: FlowErrorCode.INVALID_NAME,
+        });
+      }
       // fold any structured annotations (expect/dynamic/success/intent) onto the saved flow.
+      // Keyed by the RECORDING name: annotations were left against the recording, not the file.
       const success = deps.annotations.success(name);
       // The inline argument wins over an annotation left from an earlier call: it is the more recent
       // statement, and it is the one the author just typed.
@@ -216,7 +216,8 @@ export const FLOW_TOOLS: ToolDef[] = [
       const emptyRefusal = emptyFlowRefusal(program.steps.length, name);
       if (emptyRefusal !== undefined) return Promise.resolve(emptyRefusal);
       const { flows, root } = flowsForSession(deps, projectId);
-      return flows.save(program, annotations, projectId).then(async (res) => {
+      const toSave = saveAs === undefined ? program : { ...program, name: saveAs };
+      return flows.save(toSave, annotations, projectId).then(async (res) => {
         if (!res.ok) return { error: flowErrorMessage(res.code), code: res.code };
         deps.annotations.clear(name);
         // Grade the saved flow's assertions so the agent learns immediately if it just saved a flow
@@ -261,7 +262,10 @@ export const FLOW_TOOLS: ToolDef[] = [
     // received string") — caught driving the live demo.
     handler: (deps: ToolDeps, args) => {
       const projectId = sessionProjectId(deps, asString(args['sessionId']));
-      return deps.flows.list(projectId).then((names) => ({
+      // The APP's flows, not the daemon's. Listing where the daemon was launched is what showed a
+      // React dashboard a HUD full of Electron and Tauri flows from an unrelated checkout.
+      const { flows: store, root } = flowsForSession(deps, projectId);
+      return store.list(projectId).then((names) => ({
         // `list` deliberately returns invalid names so they are reported rather than silently
         // dropped — but the declared outputSchema requires `path` on EVERY entry, and omitting it made
         // a strict MCP client reject the whole listing (the agent then sees no flows at all, which is
@@ -270,7 +274,7 @@ export const FLOW_TOOLS: ToolDef[] = [
         // happen for a traversal-shaped name.
         flows: names.map((name) =>
           isValidFlowName(name)
-            ? { name, path: flowPath(deps.reticleRoot, name, projectId) }
+            ? { name, path: flowPath(root, name, projectId) }
             : { name, path: INVALID_FLOW_NAME_PATH },
         ),
       }));
@@ -463,7 +467,7 @@ export const FLOW_TOOLS: ToolDef[] = [
       const projectId = sessionProjectId(deps, sessionId);
       const requested = Array.isArray(args['names'])
         ? args['names'].filter((n): n is string => 'string' === typeof n)
-        : await deps.flows.list(projectId);
+        : await flowsForSession(deps, projectId).flows.list(projectId);
       // verify:server — hand the whole suite to the hosted runner; it records the verification itself.
       const cloud = await resolveProjectCloud(deps.fs, deps.reticleRoot, homedir(), process.env);
       const server = await runServerVerify(deps, cloud, sessionId, requested);
@@ -502,7 +506,9 @@ export const FLOW_TOOLS: ToolDef[] = [
             const name = requested[i] ?? '';
             const replay =
               o.ok && o.value !== undefined ? o.value.replay : leaseFailureReplay(name, o.error);
-            const loaded = await deps.flows.load(name, projectId).catch(() => null);
+            const loaded = await flowsForSession(deps, projectId)
+              .flows.load(name, projectId)
+              .catch(() => null);
             const flow = loaded !== null && loaded.ok ? loaded.value : undefined;
             return flow === undefined ? { replay } : { replay, flow };
           }),
@@ -528,7 +534,9 @@ export const FLOW_TOOLS: ToolDef[] = [
       for (const flowName of requested) {
         const start = deps.now();
         const replay = await replayNamedFlow(deps, { flowName, sessionId });
-        const loaded = await deps.flows.load(flowName, projectId).catch(() => null);
+        const loaded = await flowsForSession(deps, projectId)
+          .flows.load(flowName, projectId)
+          .catch(() => null);
         const flow = loaded !== null && loaded.ok ? loaded.value : undefined;
         runs.push(flow === undefined ? { replay } : { replay, flow });
         timed.push({ replay, durationMs: deps.now() - start });
@@ -613,9 +621,15 @@ export const FLOW_TOOLS: ToolDef[] = [
       // daemon serves many apps), so location and content agree from one source of truth.
       const emptyRecorded = emptyFlowRefusal(flow.steps.length, flow.name);
       if (emptyRecorded !== undefined) return emptyRecorded;
-      const res = await deps.flows.saveFlow(flow, session.projectId);
+      // Resolved like every other path now. This save used to go to the daemon's root while the
+      // recorded-flow save resolved per session, so where a flow landed depended on which tool wrote
+      // it — and the pair that disagreed were the two ways to save the same thing.
+      const res = await flowsForSession(deps, session.projectId).flows.saveFlow(
+        flow,
+        session.projectId,
+      );
       if (!res.ok) return { error: flowErrorMessage(res.code), code: res.code };
-      // If logged into Reticle Cloud, mirror the saved flow to the team's regression suite. Best-effort
+      // If logged in to Reticle, mirror the saved flow to the team's regression suite. Best-effort
       // and non-blocking: the flow is already on disk, so a sync failure never fails the save.
       void syncSavedFlowToCloud(deps, flow, session.projectId);
       // Return the SaveSummary as-is ({ name, stepCount, degraded, empty }) — the outputSchema

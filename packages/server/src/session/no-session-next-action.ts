@@ -35,6 +35,13 @@ interface NextActionFacts {
   /** Configs found in other workspace directories: positive evidence of a scope mismatch. */
   configsElsewhere?: readonly { directory: string; projectId?: string }[];
   /**
+   * The sentence for a live daemon elsewhere that this project's app is actually connected to.
+   *
+   * Passed rendered rather than as ports, because the rule that produces it lives in the module that
+   * owns "which daemon is whose" and this file must stay pure. Absent when there is no split.
+   */
+  splitBrain?: string;
+  /**
    * An app for this project has connected on this port before, from durable state.
    *
    * Outranks `initialized`, which is only ever "is there a `.reticle.json` in the ONE directory this
@@ -52,13 +59,36 @@ const OPEN_COMMAND = 'reticle open';
 const LOCALHOST = 'http://localhost';
 
 export function nextActionFor(facts: NextActionFacts): NoSessionNextAction {
+  // FIRST, above every other cause, because it is the only one supported by positive evidence about
+  // a daemon rather than by an absence. This project's own connection record names a live daemon
+  // that is not this one, which means the app is up and instrumented and the agent is simply looking
+  // at the wrong process. Every branch below would send it to fix something that is not broken —
+  // start a dev server that is running, open a page that is open, or re-run `init` over a config
+  // that works — and the agent has no way to suspect the real cause from here.
+  const splitBrain = facts.splitBrain;
+  if (splitBrain !== undefined) {
+    return { action: NoSessionAction.DAEMON_SPLIT, reason: splitBrain };
+  }
+
   if (facts.everConnected) {
+    const listening = facts.listening;
+    const only = 1 === listening.length ? listening[0] : undefined;
+    const bound =
+      0 === listening.length
+        ? ''
+        : only === undefined
+          ? ` An app is already listening on ${listening.join(', ')}; just open the URL the human names — do not start a second stack.`
+          : ` An app is already listening on ${String(only)}; just open ${LOCALHOST}:${String(only)} — do not start a second stack.`;
     return {
       action: NoSessionAction.REOPEN_APP,
+      ...(only === undefined
+        ? {}
+        : { command: `${OPEN_COMMAND} ${LOCALHOST}:${String(only)}`, port: only }),
       reason:
         'a session was connected to this daemon earlier, so the wiring is correct — the tab was ' +
         'closed, reloaded, or the lease aged out. Reopen the app, or take one you own with ' +
-        'reticle_lease {action:"acquire", url}.',
+        'reticle_lease {action:"acquire", url}.' +
+        bound,
     };
   }
 
@@ -150,13 +180,30 @@ export function nextActionFor(facts: NextActionFacts): NoSessionNextAction {
         `\`${OPEN_COMMAND} <url>\`.`,
     };
   }
+  // Two causes sit under this branch and only one of them is fixed by opening a page.
+  //
+  // The prose diagnosis next door already ranks them and puts the stale bundle first: `init` writes
+  // the plugin into a config the RUNNING dev server has already read, so the served bundle carries
+  // no SDK and reloading it cannot ever produce a session. This function — the half an agent
+  // actually executes — used to say only "open the app", which is the answer to the OTHER cause.
+  // An agent that follows it opens a bundle with no Reticle in it, sees no session, and has been
+  // given no reason to suspect the one thing that would have worked.
+  //
+  // Named only while nothing has EVER connected. Once a session has been here the wiring is proven
+  // and sending an agent to restart a working dev server is a wild goose chase.
+  const neverConnected = true !== facts.previouslyConnected;
   return {
     action: NoSessionAction.OPEN_APP,
     command: `${OPEN_COMMAND} ${LOCALHOST}:${String(only)}`,
     port: only,
-    reason:
-      'this project is wired and a dev server is listening — Reticle only ever sees a page a ' +
-      'browser has LOADED, and nothing has loaded one.',
+    reason: neverConnected
+      ? 'this project is wired and a dev server is listening, but no app has ever connected to ' +
+        'this daemon — Reticle only ever sees a page a browser has LOADED, and nothing has loaded ' +
+        'one. If opening it does not produce a session, the dev server is older than the Reticle ' +
+        'plugin and its bundle carries no SDK: restart the dev server (do not rely on HMR) and ' +
+        'load the page again.'
+      : 'this project is wired and a dev server is listening — Reticle only ever sees a page a ' +
+        'browser has LOADED, and nothing has loaded one.',
   };
 }
 

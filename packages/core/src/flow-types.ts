@@ -321,6 +321,21 @@ export interface FlowReplayResult {
    * envelope, or a fall-back note below N=3 runs). Additive; present when segments were observed.
    */
   deviation?: unknown;
+  /**
+   * What the project already knows about this flow, fetched from shared memory on the agent's
+   * behalf.
+   *
+   * Present only when the project is linked, memory sync is on, and the team has actually captured
+   * something about this flow. Consulting shared memory used to be a separate act an agent had to
+   * remember to perform — measured across a real corpus, every subject showed zero reads, not
+   * because the knowledge was useless but because nothing ever asked for it. A verification that
+   * asks on the agent's behalf is the difference between memory the platform stores and memory the
+   * platform uses.
+   *
+   * Deliberately additive and deliberately small: a verdict whose own result has been pushed below
+   * a wall of statements is a worse verdict.
+   */
+  knows?: { statement: string; status: string }[];
 }
 
 /**

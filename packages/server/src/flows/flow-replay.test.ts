@@ -190,6 +190,28 @@ describe('replayFlow — anchor re-resolution + legible drift', () => {
     expect(steps[1]?.page).toBe('/deployments');
   });
 
+  // `page` answers "which page did this step run on", and it read the document pathname — `/` on
+  // every page of a hash-routed app, which is the router a packaged desktop renderer uses. Measured
+  // on the Electron fixture: a replayed step on `#/posts` reported `page: "/"`.
+  it('reports the router path on a hash-routed app', async () => {
+    const script = (testid: string): QueryScript => ({ elements: [el(`e-${testid}`, testid)] });
+    const session = new FakeSession(script, [
+      {
+        t: 1,
+        type: EventType.ROUTE_CHANGE,
+        sessionId: 's',
+        data: { pathname: '/', hash: '#/posts' },
+      },
+    ]);
+    const steps = await replayFlow(
+      session,
+      flow([testidStep('mark-seen')]),
+      waitForPredicate,
+      FAST,
+    );
+    expect(steps[0]?.page).toBe('/posts');
+  });
+
   it('summarizes the consequence after a step — route, signal, and network in one terse line', async () => {
     const script = (testid: string): QueryScript => ({ elements: [el(`e-${testid}`, testid)] });
     const session = new FakeSession(script, [

@@ -3,9 +3,12 @@ import {
   PredicateKind,
   StreamDirection,
   isDevToolingUrl,
+  urlForMatch,
+  REDACTED_VALUE,
   type ReticleEvent,
 } from '@reticlehq/core';
 import { describeObserved } from './observed-in-window.js';
+import { withoutUrlRaw } from './event-filters.js';
 import type { Predicate } from './predicate-schema.js';
 
 // The predicate SHAPE — the discriminated union, its aliases and its zod schema — lives in
@@ -198,6 +201,32 @@ function describeCall(e: ReticleEvent): string {
   const head = `${str(e.data['method']) ?? 'GET'} ${str(e.data['url']) ?? ''}`;
   const status = num(e.data['status']);
   return status === undefined ? head : `${head} → ${String(status)}`;
+}
+
+/**
+ * What a miss should say when the displayed URL was redacted. Matching uses `urlRaw` when present;
+ * an older SDK has no copy, and this is the sentence both reporters asked for.
+ */
+const REDACTED_PATH_HINT =
+  'this path segment was redacted — the literal you matched may be here, try bodyContains';
+
+function observedNetCalls(
+  events: readonly ReticleEvent[],
+  urlContains: string | undefined,
+): string {
+  const calls = events.filter((e) => e.type === EventType.NET_REQUEST);
+  const base = describeObserved('calls', calls.map(describeCall));
+  if (urlContains === undefined) return base;
+  const encoded = encodeURIComponent(REDACTED_VALUE);
+  const redacted = calls.some((e) => {
+    const url = str(e.data['url']) ?? '';
+    return url.includes(REDACTED_VALUE) || url.includes(encoded);
+  });
+  return redacted ? `${base}; ${REDACTED_PATH_HINT}` : base;
+}
+
+function netEvidence(data: Record<string, unknown>): unknown {
+  return (withoutUrlRaw({ data }) as { data: unknown }).data;
 }
 
 /**
@@ -398,13 +427,19 @@ export function evalNet(
    * a UI wiring bug that did not exist, when the defect was the value the server answered with.
    */
   let bodyMismatch: string | undefined;
+  /**
+   * The prefix of a TRUNCATED body the needle was not found in. Held apart from `bodyMismatch`
+   * because the two are different verdicts: a full body without the needle decides the assertion,
+   * a truncated one cannot (#614).
+   */
+  let truncatedBody: string | undefined;
   const matches = events.filter((e) => {
     if (e.type !== EventType.NET_REQUEST || e.t < since) return false;
     const d = e.data;
     if (p.method !== undefined && str(d['method'])?.toUpperCase() !== p.method.toUpperCase()) {
       return false;
     }
-    if (p.urlContains !== undefined && !(str(d['url']) ?? '').includes(p.urlContains)) {
+    if (p.urlContains !== undefined && !urlForMatch(d).includes(p.urlContains)) {
       return false;
     }
     if (p.status !== undefined) {
@@ -431,6 +466,15 @@ export function evalNet(
         return false;
       }
       if (!response.includes(p.bodyContains)) {
+        // A needle missing from a body we only hold the FIRST N BYTES of is undecidable, not
+        // absent: the rest of the response was never recorded, so nothing here can say whether it
+        // was in there (#614). Grading it `pass: false` with "the response value is what differed"
+        // is the inversion the honesty rules exist to prevent — an unknown reported as decided,
+        // against a response that was very likely correct.
+        if (true === d['responseBodyTruncated']) {
+          truncatedBody ??= response;
+          return false;
+        }
         bodyMismatch ??= response;
         return false;
       }
@@ -455,6 +499,18 @@ export function evalNet(
       failureReason: `a call matched but its body was not recorded, so \`bodyContains\` could not be checked — enable it where the app calls connect(): reticle({ captureNetworkBodies: true })`,
       observed: 'a matching call with no recorded body',
       expected: `a body containing ${JSON.stringify(p.bodyContains)}`,
+      assertion: 'net.bodyContains',
+    };
+  }
+  // Ranked ABOVE the mismatch branch: when both a truncated and a full body missed the needle,
+  // the honest verdict is the undecidable one. Deciding on the full body would report a failure
+  // the truncated call may well contradict.
+  if (truncatedBody !== undefined && 0 === matches.length) {
+    return {
+      pass: false,
+      inconclusive: `a call matching ${describeNetFilter(p)} was answered with a body that was TRUNCATED before it was recorded, and ${JSON.stringify(p.bodyContains)} is not in the part that was kept — so this is undecidable, not a failure. Raise the capture cap or assert on something inside the recorded prefix`,
+      observed: `the first ${String(truncatedBody.length)} characters of a truncated response body ${JSON.stringify(clipBody(truncatedBody))}`,
+      expected: `a response body containing ${JSON.stringify(p.bodyContains)}`,
       assertion: 'net.bodyContains',
     };
   }
@@ -501,25 +557,19 @@ export function evalNet(
       pass: false,
       failureReason: reason,
       inconclusive: reason,
-      observed: describeObserved(
-        'calls',
-        events.filter((e) => e.type === EventType.NET_REQUEST).map(describeCall),
-      ),
+      observed: observedNetCalls(events, p.urlContains),
       expected: `at least one call matching ${describeNetFilter(p)}`,
       assertion: 'net.unobserved-channel',
     };
   }
   return hit !== undefined
-    ? { pass: true, evidence: hit.data }
+    ? { pass: true, evidence: netEvidence(hit.data) }
     : {
         pass: false,
         failureReason: `no network call matched ${JSON.stringify(p)}`,
         // Same reasoning as the signal miss: "no matching call" cannot be told apart from "the app
         // made no calls at all", and those need different fixes.
-        observed: describeObserved(
-          'calls',
-          events.filter((e) => e.type === EventType.NET_REQUEST).map(describeCall),
-        ),
+        observed: observedNetCalls(events, p.urlContains),
         expected: `at least one call matching ${JSON.stringify(p)}`,
         assertion: 'net.present',
       };

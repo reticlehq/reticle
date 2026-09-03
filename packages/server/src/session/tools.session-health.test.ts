@@ -46,6 +46,7 @@ function fakeSession(throttled: boolean): Session {
     command,
     health: () => health,
     bufferHealth: () => ({ total: 0, dropped: 0 }),
+    lostSince: () => false,
     blindSpots: () => ({}),
     throttled: () => throttled,
     // Live-control: a clean active session — no pause short-circuit, no piggyback.

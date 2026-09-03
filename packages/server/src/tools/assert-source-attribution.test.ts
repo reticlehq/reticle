@@ -69,6 +69,7 @@ function fakeSession(
       return 'a1';
     },
     bufferHealth: () => ({ total: 5, dropped: 0 }),
+    lostSince: () => false,
     blindSpots: () => ({}),
     eventsSince: () => noEvents,
     queryEvents: () => Promise.resolve(noEvents),

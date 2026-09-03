@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { EventType, ReticleCommand, SnapshotMode } from '@reticlehq/core';
+import { EventType, ReticleCommand, SnapshotMode, urlForMatch } from '@reticlehq/core';
 import { ReticleTool } from './tool-names.js';
 import { cursorSchema } from './numeric-bounds.js';
 import { reconcile, type Mismatch } from '../events/reconcile.js';
@@ -38,7 +38,7 @@ async function capturedBodies(
   let truncated = 0;
   for (const event of events) {
     if (event.type !== EventType.NET_REQUEST) continue;
-    const url = 'string' === typeof event.data['url'] ? event.data['url'] : '';
+    const url = urlForMatch(event.data);
     if (urlContains !== undefined && !url.includes(urlContains)) continue;
     total += 1;
     const raw = event.data['responseBody'];

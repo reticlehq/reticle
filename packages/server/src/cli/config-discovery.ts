@@ -160,6 +160,7 @@ export function discoverProjectConfigs(cwd: string): ConfigDiscovery {
     } catch {
       continue; // A declared workspace directory that does not exist is not an error here.
     }
+    check(base);
     for (const entry of entries) {
       const candidate = join(base, entry);
       try {

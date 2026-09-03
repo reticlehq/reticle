@@ -140,7 +140,7 @@ async function pushRunToCloud(run: ReticleVerificationRun, ports: VerifyPorts): 
   if (null === config) return;
   const result = await syncRunToCloud(run, config, cloudFetch);
   if (result.outcome === SyncOutcome.SYNCED) {
-    ports.out(`↑ run ${run.runId} recorded on the Reticle Cloud dashboard`);
+    ports.out(`↑ run ${run.runId} recorded on the Reticle dashboard`);
   } else {
     ports.fail(
       `cloud run sync failed (${result.status ?? result.error ?? 'error'}); run kept locally`,
@@ -193,6 +193,8 @@ interface LiveOpts {
    *  (--port / RETICLE_PORT / .reticle.json), or a custom-port app never connects. */
   port: number;
   storageState?: string;
+  /** Which connected tab to verify, when the app has more than one open on this port. */
+  sessionId?: string;
 }
 
 /** Split a drive URL into its origin + whether it's loopback — decides token/injection pairing. */
@@ -238,7 +240,7 @@ async function openLiveConnection(opts: LiveOpts): Promise<VerifyConnection> {
     ...(opts.storageState !== undefined ? { storageState: opts.storageState } : {}),
   });
   const deps = buildVerifyDeps(running, opts.reticleRoot, opts.now);
-  const runner = new ReticleRunner(createRunnerPort(deps));
+  const runner = new ReticleRunner(createRunnerPort(deps, opts.sessionId));
   return {
     sessionReady: (timeoutMs) => waitForSession(deps.sessions, timeoutMs, opts.now),
     listFlows: () => deps.flows.list(),
@@ -302,6 +304,7 @@ export function handleVerify(parsed: {
   headless: boolean;
   timeoutMs?: number;
   storageState?: string;
+  sessionId?: string;
   /** Bridge port — parseCliArgs already resolves --port / RETICLE_PORT / .reticle.json into this. */
   port: number;
 }): void {
@@ -318,6 +321,7 @@ export function handleVerify(parsed: {
         now,
         port: parsed.port ?? RETICLE_DEFAULT_PORT,
         ...(parsed.storageState !== undefined ? { storageState: parsed.storageState } : {}),
+        ...(parsed.sessionId !== undefined ? { sessionId: parsed.sessionId } : {}),
       }),
     out: (line) => process.stdout.write(`${line}\n`),
     fail: (line) => process.stderr.write(`${line}\n`),
