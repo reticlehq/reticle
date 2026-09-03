@@ -39,6 +39,8 @@ import {
   astroManual,
   nuxtManual,
   NUXT_PLUGIN_PATH,
+  reactRouterManual,
+  REACT_ROUTER_ENTRY_PATH,
 } from './snippets.js';
 import { StepStatus, type PlanInput, type Step } from './plan.js';
 import { RETICLE_DEFAULT_PORT } from '@reticlehq/core';
@@ -56,6 +58,13 @@ export const VITE_PLUGIN_DETAIL = {
    * comes back with no file:line at all.
    */
   SVELTEKIT: 'add reticle() to plugins (stamps data-reticle-source in .svelte components)',
+  /**
+   * React Router framework mode renders through its own request handler, so the plugin's HTML
+   * injection never fires and connect() comes from the client entry instead. The plugin is still
+   * required for the same reason it is under SvelteKit: without it every verdict on the app comes
+   * back with no file:line at all.
+   */
+  REACT_ROUTER: 'add reticle() to plugins (stamps data-reticle-source in .tsx components)',
 } as const;
 
 const CAPABILITIES_TITLE = 'Capabilities + store';
@@ -510,6 +519,28 @@ export function nuxtSteps(input: PlanInput): Step[] {
       target: NUXT_PLUGIN_PATH,
       status: StepStatus.MANUAL,
       detail: nuxtManual(input.options.port, input.options.projectId),
+    },
+  ];
+}
+
+/**
+ * React Router framework mode: the client-entry connect, printed rather than written.
+ *
+ * `app/entry.client.tsx` is an override of a default React Router supplies, so writing one
+ * containing our import and nothing else would replace that default with a file that never
+ * hydrates. See `reactRouterManual`.
+ */
+export function reactRouterSteps(input: PlanInput): Step[] {
+  return [
+    {
+      title: 'Connect snippet (React Router)',
+      target: REACT_ROUTER_ENTRY_PATH,
+      status: StepStatus.MANUAL,
+      detail: reactRouterManual(
+        input.options.port,
+        input.options.projectId,
+        true === input.reactRouterEntryExists,
+      ),
     },
   ];
 }

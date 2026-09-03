@@ -44,6 +44,7 @@ import {
   nextSteps,
   craSteps,
   svelteKitSteps,
+  reactRouterSteps,
   nuxtSteps,
   astroSteps,
   cspStep,
@@ -113,7 +114,10 @@ export function frameworkPackages(
     case Framework.NEXT:
       // Next is React by construction, so the detection cannot disagree in a way worth honouring.
       return [RETICLE_REACT_KIT, RETICLE_NEXT_PLUGIN];
+    // React Router framework mode is a Vite app that renders React, so the kit and the plugin are
+    // both right for it too — only the connect INJECTION differs, and that is the plan's business.
     case Framework.VITE:
+    case Framework.REACT_ROUTER:
     case Framework.SVELTEKIT:
       // SvelteKit builds on Vite; until a dedicated Svelte kit exists it uses the Vite build plugin.
       // The build plugin stamps `data-reticle-source` regardless of UI library, so a Vue or Svelte
@@ -281,6 +285,8 @@ export interface PlanInput {
   viteDevModuleExists?: boolean | undefined;
   /** Whether src/hooks.client.ts already exists (SvelteKit idempotency). */
   svelteKitHooksExists?: boolean;
+  /** Whether app/entry.client.tsx already exists — it decides which React Router recipe to print. */
+  reactRouterEntryExists?: boolean;
   /** CRA's bundled entry (src/index.tsx or .js) — where the connect import has to go. */
   craEntry?: { path: string; source: string } | null;
   /** Existing .env.development.local, so an unrelated variable in it survives. */
@@ -970,6 +976,12 @@ export function buildPlan(input: PlanInput): Plan {
     steps.push(...craSteps(input));
   } else if (input.detection.framework === Framework.NUXT) {
     steps.push(...nuxtSteps(input));
+  } else if (input.detection.framework === Framework.REACT_ROUTER) {
+    steps.push(...reactRouterSteps(input));
+    // The Vite plugin too, for the reason SvelteKit gets it: React Router framework mode IS a Vite
+    // app, and the plugin is what stamps data-reticle-source. Without it the app connects and every
+    // verdict comes back with no file:line.
+    steps.push(...viteSteps(input, VITE_PLUGIN_DETAIL.REACT_ROUTER));
   } else if (input.detection.framework === Framework.SVELTEKIT) {
     steps.push(...svelteKitSteps(input));
     // The Vite plugin as well as the client hook. `init` already INSTALLS @reticlehq/vite-plugin for
