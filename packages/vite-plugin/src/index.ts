@@ -57,6 +57,25 @@ const NODE_MODULES = 'node_modules';
 export const RETICLE_CONNECT_MODULE = '/@reticle-connect';
 
 /**
+ * The URL the injected `<script src>` must actually point at: `base` + the module id.
+ *
+ * {@link RETICLE_CONNECT_MODULE} is a SERVER-ROOT path, and emitting it verbatim is only correct
+ * when Vite is serving from the root. Under `base: '/playground/'` the browser asked for
+ * `/@reticle-connect`, Vite answered 404 with its own "did you mean /playground/@reticle-connect"
+ * hint, and the page rendered perfectly while never connecting (#676) — the exact failure shape
+ * Reticle exists to catch, in Reticle's own setup path.
+ *
+ * Vite does not prefix tags returned from `transformIndexHtml`, so the prefix has to be applied
+ * here. Only a path base is joined: Vite serves the dev app from the root when `base` is an
+ * external URL, so prefixing a CDN origin onto a dev-server module would point the tag off-host.
+ */
+export function connectModuleUrl(base: string | undefined): string {
+  if (undefined === base || !base.startsWith('/')) return RETICLE_CONNECT_MODULE;
+  const trimmed = base.replace(/\/+$/, '');
+  return 0 === trimmed.length ? RETICLE_CONNECT_MODULE : `${trimmed}${RETICLE_CONNECT_MODULE}`;
+}
+
+/**
  * The pre-hook, as source for an inline <head> script.
  *
  * Deliberately dependency-free ES5 in a try/catch: it runs before anything else on the page, so it
@@ -246,7 +265,7 @@ export interface ReticleVitePlugin {
   load: (id: string) => string | null;
   transformIndexHtml: (html: string) => HtmlTag[];
   /** Vite hands over the resolved config; used to resolve the HTML entry exactly. */
-  configResolved?: (config: { root?: string; command?: string }) => void;
+  configResolved?: (config: { root?: string; command?: string; base?: string }) => void;
   /** Dev-server hook: keeps the served connect module from outliving the token it was built without. */
   configureServer?: (server: ViteDevServerLike) => void;
   /** Build-time post-condition: desktop injection must have happened. */
@@ -572,6 +591,8 @@ export function reticle(options: ReticleVitePluginOptions = {}): ReticleVitePlug
   let root: string | undefined;
   /** 'serve' | 'build'. The dev check only applies to serve; buildEnd covers the other. */
   let command: string | undefined;
+  /** Vite's resolved `base`. Undefined until configResolved, which is before any HTML is served. */
+  let base: string | undefined;
   const warn = options.onWarn ?? ((message: string) => globalThis.console.warn(message));
   /** Whether connect() actually reached a module — asserted at buildEnd, never assumed. */
   let injected = false;
@@ -795,6 +816,7 @@ export function reticle(options: ReticleVitePluginOptions = {}): ReticleVitePlug
     configResolved(config) {
       root = config.root;
       command = config.command;
+      base = config.base;
     },
     /**
      * Serve the connect module fresh, every time.
@@ -866,7 +888,11 @@ export function reticle(options: ReticleVitePluginOptions = {}): ReticleVitePlug
         announce();
       }
       server.middlewares.use((req, _res, next) => {
-        if ((req.url ?? '').split('?')[0] === RETICLE_CONNECT_MODULE) {
+        // Matched against BOTH forms: plugin middlewares run ahead of Vite's own base
+        // middleware, so the request still carries `base` here, while a middleware-mode host may
+        // have stripped it already.
+        const requestPath = (req.url ?? '').split('?')[0];
+        if (requestPath === RETICLE_CONNECT_MODULE || requestPath === connectModuleUrl(base)) {
           if (currentConnectSource() !== lastServedConnectSource) {
             connectChanges++;
             if (CONNECT_CHURN_LIMIT === connectChanges) warn(connectChurnWarning());
@@ -908,7 +934,7 @@ export function reticle(options: ReticleVitePluginOptions = {}): ReticleVitePlug
         // `renderers.size === 0`, so the render meter counted zero forever while the docs advertised
         // commit counts. This runs during parse, before any module, and the meter adopts its buffer.
         { tag: 'script', children: RENDER_PREHOOK_SOURCE, injectTo: 'head-prepend' },
-        { tag: 'script', attrs: { type: 'module', src: RETICLE_CONNECT_MODULE }, injectTo: 'body' },
+        { tag: 'script', attrs: { type: 'module', src: connectModuleUrl(base) }, injectTo: 'body' },
       ];
     },
   };
