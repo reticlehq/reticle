@@ -12,6 +12,7 @@ import {
   type FlowFile,
   type FlowStep,
   type FlowStepResult,
+  type FlowExpect,
   type ReticleEvent,
   type QueryEmptyHint,
   PredicateKind,
@@ -439,10 +440,13 @@ async function assertStepExpect(
   timeoutMs: number,
   since: number,
 ): Promise<Drift | undefined> {
-  // `element` is deliberately dropped: the step runner already asserts expect.element.testid against
-  // the live DOM before we get here, and re-asserting it through the predicate engine would be a
-  // second round trip for the same fact.
-  const { element: _element, ...consequences } = expect;
+  // A testid is already asserted against the live DOM by the step runner. A role/name locator is
+  // not that path — stripping every element made a recorded `until` by button name a no-op, so a
+  // flow that proved the control at capture time could not go red when it was gone.
+  const consequences: FlowExpect = { ...expect };
+  if (undefined !== consequences.element?.testid) {
+    delete consequences.element;
+  }
   const predicate = successToPredicate(consequences, dynamic);
   if (predicate === undefined) return undefined;
   const verdict = await waitForSignal(session, predicate, timeoutMs, since);
@@ -464,6 +468,9 @@ function expectLabel(expect: NonNullable<FlowStep['expect']>): string {
   if (expect.net !== undefined) return `net:${expect.net.urlContains ?? expect.net.method ?? '*'}`;
   if (expect.state !== undefined) return `state:${expect.state.path}`;
   if (expect.console !== undefined) return `console:${expect.console.level ?? '*'}`;
+  if (undefined !== expect.element) {
+    return expect.element.testid ?? expect.element.name ?? expect.element.role ?? 'element';
+  }
   return 'expect';
 }
 
