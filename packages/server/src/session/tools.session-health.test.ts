@@ -11,6 +11,7 @@ import { FlowStore } from '../flows/flows.js';
 import { ProjectStore } from '../project/project-store.js';
 import { AnnotationStore } from '../flows/annotation-store.js';
 import type { Session, SessionInfo, SessionManager } from './session.js';
+import { createFakeSession } from './fake-session.js';
 
 const SESSION_URL = 'http://localhost:5173/app';
 
@@ -31,7 +32,7 @@ function fakeSession(throttled: boolean): Session {
         recommendation: UNSCRIPTABLE_TAB_RECOMMENDATION,
       }
     : { lastSeenMs: 0, throttled: false, focused: true };
-  const stub: Partial<Session> = {
+  return createFakeSession({
     id: 'demo',
     url: SESSION_URL,
     elapsed: () => 0,
@@ -49,12 +50,10 @@ function fakeSession(throttled: boolean): Session {
     lostSince: () => false,
     blindSpots: () => ({}),
     throttled: () => throttled,
-    // Live-control: a clean active session — no pause short-circuit, no piggyback.
     getState: () => SessionState.ACTIVE,
     drainInbox: () => [],
     inboxSize: () => 0,
-  };
-  return stub as Session;
+  });
 }
 
 function fakeDeps(throttled: boolean, listRows: SessionInfo[]): ToolDeps {

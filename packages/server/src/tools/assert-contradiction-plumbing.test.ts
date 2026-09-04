@@ -9,7 +9,8 @@ import {
 import { LastAct } from '../session/last-act.js';
 import { TOOLS, type ToolDef, type ToolDeps } from './tools.js';
 import { ReticleTool } from './tool-names.js';
-import type { Session, SessionManager } from '../session/session.js';
+import type { SessionManager } from '../session/session.js';
+import { createFakeSession } from '../session/fake-session.js';
 
 /**
  * `reticle_assert` must SURFACE a contradiction, not merely be able to find one.
@@ -33,7 +34,7 @@ import type { Session, SessionManager } from '../session/session.js';
  * well-tested producer, consumers that stub it, and nothing on the delegation between them.
  */
 function depsWith(events: ReticleEvent[]): ToolDeps {
-  const session: Partial<Session> = {
+  const session = createFakeSession({
     id: 'demo',
     recordAction: () => 'a1',
     lastAct: new LastAct(),
@@ -43,11 +44,11 @@ function depsWith(events: ReticleEvent[]): ToolDeps {
     eventsSince: () => events,
     queryEvents: () => Promise.resolve(events),
     elapsed: () => 1000,
-    health: () => ({ lastSeenMs: 5, throttled: false, focused: true, hidden: false }),
+    health: () => ({ lastSeenMs: 5, throttled: false, focused: true }),
     getState: () => SessionState.ACTIVE,
     drainInbox: () => [],
-  };
-  const sessions: Partial<SessionManager> = { resolve: () => session as Session };
+  });
+  const sessions: Partial<SessionManager> = { resolve: () => session };
   return { sessions: sessions as SessionManager } as unknown as ToolDeps;
 }
 

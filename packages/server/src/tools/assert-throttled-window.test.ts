@@ -16,10 +16,11 @@ import { SessionState } from '@reticlehq/core';
 import { LastAct } from '../session/last-act.js';
 import { TOOLS, type ToolDef, type ToolDeps } from './tools.js';
 import { ReticleTool } from './tool-names.js';
-import type { Session, SessionManager } from '../session/session.js';
+import type { SessionManager } from '../session/session.js';
+import { createFakeSession } from '../session/fake-session.js';
 
 function depsWithThrottle(throttled: boolean): ToolDeps {
-  const session: Partial<Session> = {
+  const session = createFakeSession({
     id: 'demo',
     recordAction: () => 'a1',
     lastAct: new LastAct(),
@@ -39,8 +40,8 @@ function depsWithThrottle(throttled: boolean): ToolDeps {
     }),
     getState: () => SessionState.ACTIVE,
     drainInbox: () => [],
-  };
-  const sessions: Partial<SessionManager> = { resolve: () => session as Session };
+  });
+  const sessions: Partial<SessionManager> = { resolve: () => session };
   return { sessions: sessions as SessionManager } as unknown as ToolDeps;
 }
 

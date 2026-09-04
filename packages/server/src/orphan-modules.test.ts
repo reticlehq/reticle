@@ -24,6 +24,9 @@ const DECLARED_UNWIRED: Record<string, string> = {
     'decision logic for scripts/check-stale-issues.mjs, which runs in CI and imports it from dist. ' +
     'A repo-hygiene guard has no caller inside the product by definition; the unit tests are here ' +
     'so the rule is testable without a network or a repo.',
+  'session/fake-session.ts':
+    'test-only Session stub. Extracted after lostSince had to be copied into seven files; ' +
+    'imported by specs, which this scan deliberately does not count as production importers.',
   'project/memory-fs.ts':
     'test-only in-memory FileSystemPort. Extracted after a third spec hand-rolled its own copy; ' +
     'imported by specs, which this scan deliberately does not count as production importers.',

@@ -30,6 +30,7 @@ import { FlowStore } from '../flows/flows.js';
 import { ProjectStore } from '../project/project-store.js';
 import { AnnotationStore } from '../flows/annotation-store.js';
 import type { Session, SessionManager } from '../session/session.js';
+import { createFakeSession } from '../session/fake-session.js';
 
 const ACTED_SOURCE = 'app/page.tsx:22';
 const NAV_SOURCE = 'ui/global-nav.tsx:54';
@@ -59,7 +60,7 @@ function fakeSession(
       ok: true,
       result: { matched: elements.length > 0, count: elements.length, elements },
     });
-  const stub: Partial<Session> = {
+  const session = createFakeSession({
     id: 'demo',
     url: 'http://localhost:3000/',
     lastAct,
@@ -80,8 +81,7 @@ function fakeSession(
     throttled: () => false,
     getState: () => SessionState.ACTIVE,
     drainInbox: () => [],
-  };
-  const session = stub as Session;
+  });
   const sessions: Partial<SessionManager> = { resolve: () => session };
   return { session, deps: { sessions: sessions as SessionManager } as unknown as ToolDeps };
 }
@@ -190,7 +190,7 @@ describe('act_and_wait still reports the element it drove', () => {
           effect: { domMutatedWithin: 1 },
         },
       });
-    const stub: Partial<Session> = {
+    const session = createFakeSession({
       id: 'demo',
       url: 'http://localhost:3000/',
       lastAct: new LastAct(),
@@ -212,8 +212,8 @@ describe('act_and_wait still reports the element it drove', () => {
       onEvent: () => () => undefined,
       ambientCounts: () => ({}),
       elapsed: () => 1000,
-    };
-    const sessions: Partial<SessionManager> = { resolve: () => stub as Session };
+    });
+    const sessions: Partial<SessionManager> = { resolve: () => session };
     return {
       sessions,
       baselines: new BaselineStore(),

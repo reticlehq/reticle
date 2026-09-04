@@ -4,6 +4,10 @@ All notable changes to the **`@reticlehq/*`** packages are documented here (each
 
 ## [Unreleased]
 
+### Changed
+
+- **server:** Session tool tests share `createFakeSession` so a new public method is a compile error in one file, not a runtime miss in seven (`#726`).
+
 ## [2.13.1] — 2026-09-02
 
 ### Fixed

@@ -19,7 +19,8 @@ import { RecordingStore } from '../flows/recordings.js';
 import { FlowStore } from '../flows/flows.js';
 import { ProjectStore } from '../project/project-store.js';
 import { AnnotationStore } from '../flows/annotation-store.js';
-import type { Session, SessionManager } from '../session/session.js';
+import type { SessionManager } from '../session/session.js';
+import { createFakeSession } from '../session/fake-session.js';
 
 /**
  * A green verdict must never imply more coverage than the SDK actually had.
@@ -38,7 +39,7 @@ function depsWithBlindSpots(
   blindSpots: Record<string, number>,
   runtime?: (typeof AppRuntime)[keyof typeof AppRuntime],
 ): ToolDeps {
-  const session: Partial<Session> = {
+  const session = createFakeSession({
     id: 'demo',
     bufferHealth: () => ({ total: 5, dropped: 0 }),
     lostSince: () => false,
@@ -55,12 +56,12 @@ function depsWithBlindSpots(
     eventsSince: () => [],
     queryEvents: () => Promise.resolve([]),
     elapsed: () => 1000,
-    health: () => ({ lastSeenMs: 5, throttled: false, focused: true, hidden: false }),
+    health: () => ({ lastSeenMs: 5, throttled: false, focused: true }),
     getState: () => SessionState.ACTIVE,
     drainInbox: () => [],
     ...(runtime === undefined ? {} : { runtime }),
-  };
-  const sessions: Partial<SessionManager> = { resolve: () => session as Session };
+  });
+  const sessions: Partial<SessionManager> = { resolve: () => session };
   return { sessions: sessions as SessionManager } as unknown as ToolDeps;
 }
 
@@ -222,7 +223,7 @@ describe('reticle_assert carries the verdict, not just pass', () => {
   // only in act_and_wait — the tool an agent actually calls never consulted it.
   /** A console-absence assertion over a window we control, so only the WRITE varies. */
   const runAssert = async (events: ReticleEvent[]): Promise<unknown> => {
-    const session: Partial<Session> = {
+    const session = createFakeSession({
       id: 'demo',
       bufferHealth: () => ({ total: 5, dropped: 0 }),
       lostSince: () => false,
@@ -232,11 +233,11 @@ describe('reticle_assert carries the verdict, not just pass', () => {
       eventsSince: () => events,
       queryEvents: () => Promise.resolve(events),
       elapsed: () => 1000,
-      health: () => ({ lastSeenMs: 5, throttled: false, focused: true, hidden: false }),
+      health: () => ({ lastSeenMs: 5, throttled: false, focused: true }),
       getState: () => SessionState.ACTIVE,
       drainInbox: () => [],
-    };
-    const sessions: Partial<SessionManager> = { resolve: () => session as Session };
+    });
+    const sessions: Partial<SessionManager> = { resolve: () => session };
     const deps = { sessions: sessions as SessionManager } as unknown as ToolDeps;
     return tool(ReticleTool.ASSERT).handler(deps, absentConsole);
   };
@@ -284,7 +285,7 @@ describe('reticle_act_and_wait downgrades absence when blind spots hide the targ
         result: { dispatched: true, settled: true, effect: { domMutatedWithin: 1 } },
       });
     };
-    const session: Partial<Session> = {
+    const session = createFakeSession({
       id: 'demo',
       url: 'http://localhost:5173/app',
       elapsed: () => 1000,
@@ -304,8 +305,8 @@ describe('reticle_act_and_wait downgrades absence when blind spots hide the targ
       inboxSize: () => 0,
       onEvent: () => () => undefined,
       ambientCounts: () => ({}),
-    };
-    const sessions: Partial<SessionManager> = { resolve: () => session as Session };
+    });
+    const sessions: Partial<SessionManager> = { resolve: () => session };
     return {
       sessions: sessions as SessionManager,
       baselines: new BaselineStore(),

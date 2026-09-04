@@ -9,7 +9,8 @@ import {
 } from '@reticlehq/core';
 import { TOOLS, type ToolDeps } from './tools.js';
 import { ReticleTool } from './tool-names.js';
-import type { Session, SessionManager } from '../session/session.js';
+import type { SessionManager } from '../session/session.js';
+import { createFakeSession } from '../session/fake-session.js';
 
 /** A session whose MATCH answers `matched`, and whose buffer is a fixed event list. */
 function depsWith(opts: { matched?: boolean; events?: ReticleEvent[] }): ToolDeps {
@@ -21,7 +22,7 @@ function depsWith(opts: { matched?: boolean; events?: ReticleEvent[] }): ToolDep
         ? [{ ref: 'e1', role: 'button', name: 'X', states: [], visible: true }]
         : [],
   };
-  const stub: Partial<Session> = {
+  const session = createFakeSession({
     id: 'demo',
     command: (name: string): Promise<CommandResult> =>
       Promise.resolve({
@@ -43,8 +44,8 @@ function depsWith(opts: { matched?: boolean; events?: ReticleEvent[] }): ToolDep
     blindSpots: () => ({}),
     getState: () => SessionState.ACTIVE,
     drainInbox: () => [],
-  };
-  const sessions: Partial<SessionManager> = { resolve: () => stub as Session };
+  });
+  const sessions: Partial<SessionManager> = { resolve: () => session };
   return { sessions: sessions as SessionManager } as ToolDeps;
 }
 
