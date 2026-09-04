@@ -13,6 +13,7 @@ import { getSessionMetrics } from '../telemetry/session-metrics.js';
 import { classifyConnectFailure } from '../telemetry/connect-failure.js';
 import { chromiumInstallCommand, bundledPlaywrightVersion } from '../cli/chromium-hint.js';
 import type { Launcher, PooledBrowser, PooledContext, PooledPage } from './browser-pool.js';
+import { installNetworkMocks } from '../input/network-mock.js';
 
 /**
  * How a leased tab navigates. Pure, and exported, because the decision in it is worth a test while
@@ -58,6 +59,7 @@ function wrapBrowser(browser: Browser): PooledBrowser {
               await page.mouse.move(x + 1, y);
               await page.mouse.move(x, y);
             },
+            installMocks: (rules) => installNetworkMocks(page, [...rules]),
             onCrash: (handler) => page.on('crash', handler),
             onConsole: (handler) => page.on('console', (msg) => handler(msg.text())),
           };

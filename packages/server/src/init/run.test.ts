@@ -826,6 +826,44 @@ describe('runInit — an app outside the directory names anyone guessed', () => 
     expect(io.written['/app/.reticle.json']).toBe(io.written['src/admin/.reticle.json']);
   });
 
+  /**
+   * A monorepo has more than one app, and the root can only point at one of them.
+   *
+   * Reported from the field: two instrumented Next apps, each with its own correct config, and a
+   * root config committed pointing at the first. `init --app <the second>` rewrote the ROOT
+   * projectId to the second app's and said nothing — the printed line was the reassuring
+   * "the same config where the agent runs". An agent started at the root then drives a different
+   * project than the one whose config it is reading, which is the silent-wrong-target failure this
+   * product exists to prevent, arriving from our own installer.
+   *
+   * Absent and CONFLICTING are different situations and had the same branch. Absent is still
+   * written, because that is the case the root config was added for. Conflicting is not ours to
+   * resolve: overwriting loses the other app, refusing silently leaves the agent pointed away from
+   * the app just wired. So it is named, and the human picks.
+   */
+  it('refuses to silently repoint a root config that names a DIFFERENT project', () => {
+    const io = memoryIo(
+      {
+        ...NESTED,
+        '/app/.reticle.json': JSON.stringify({ projectId: 'the-other-app', port: 4400 }),
+      },
+      { mcpExists: true },
+    );
+    runInit(OPTS, io);
+    // The other app's identity survives.
+    expect(io.written['/app/.reticle.json']).toBeUndefined();
+    const printed = io.lines.join('\n');
+    expect(printed).toContain('the-other-app');
+  });
+
+  it('still writes a root config that is merely ABSENT — the case it was added for', () => {
+    const io = memoryIo(NESTED, { mcpExists: true });
+    runInit(OPTS, io);
+    expect(Object.keys(io.written).map((p) => p.replace(/\\/g, '/'))).toContain(
+      '/app/.reticle.json',
+    );
+  });
+
   it('and the agent rule with it — CLAUDE.md is read at the repo root, not in the app', () => {
     const io = memoryIo(NESTED, { mcpExists: true });
     runInit(OPTS, io);

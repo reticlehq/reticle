@@ -39,8 +39,10 @@ import {
   astroManual,
   nuxtManual,
   NUXT_PLUGIN_PATH,
+  htmlManual,
 } from './snippets.js';
 import { StepStatus, type PlanInput, type Step } from './plan.js';
+import { Framework } from './detect.js';
 import { RETICLE_DEFAULT_PORT } from '@reticlehq/core';
 import { CSP_STEP_TITLE } from './csp-check.js';
 import { diagnoseWebCsp } from './csp-doctor.js';
@@ -676,4 +678,42 @@ export function cspStep(input: PlanInput): Step[] {
       detail: first.problem,
     },
   ];
+}
+
+/**
+ * The per-framework half of the plan, dispatched on the detected framework.
+ *
+ * Lives here rather than in `buildPlan` because every branch of it calls a function defined in this
+ * file: the dispatch and the steps it dispatches to grow together, and keeping them apart put a
+ * list that is entirely per-framework detail in the file that owns the plan's SHAPE. The 1000-line
+ * backstop makes that cost concrete — two independent framework additions each grew `plan.ts`, and
+ * together they crossed the cap while neither did alone.
+ */
+export function frameworkSteps(input: PlanInput): Step[] {
+  const steps: Step[] = [];
+  if (input.detection.framework === Framework.VITE) {
+    steps.push(...viteSteps(input));
+  } else if (input.detection.framework === Framework.NEXT) {
+    steps.push(...nextSteps(input));
+  } else if (input.detection.framework === Framework.ASTRO) {
+    steps.push(...astroSteps(input));
+  } else if (input.detection.framework === Framework.CRA) {
+    steps.push(...craSteps(input));
+  } else if (input.detection.framework === Framework.NUXT) {
+    steps.push(...nuxtSteps(input));
+  } else if (input.detection.framework === Framework.SVELTEKIT) {
+    steps.push(...svelteKitSteps(input));
+    // The Vite plugin as well as the client hook. `init` already INSTALLS @reticlehq/vite-plugin for
+    // SvelteKit and then never wired it into the config, so it sat in package.json doing nothing —
+    // which is why a SvelteKit app connected fine and every verdict came back with no file:line.
+    steps.push(...viteSteps(input, VITE_PLUGIN_DETAIL.SVELTEKIT));
+  } else {
+    steps.push({
+      title: 'Connect snippet',
+      target: 'index.html',
+      status: StepStatus.MANUAL,
+      detail: htmlManual(input.options.port, input.options.projectId, input.pairingToken),
+    });
+  }
+  return steps;
 }
