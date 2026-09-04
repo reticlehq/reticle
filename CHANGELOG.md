@@ -6,6 +6,7 @@ All notable changes to the **`@reticlehq/*`** packages are documented here (each
 
 ### Fixed
 
+- **server:** A `{net}` assertion whose named request is still in flight is `unknown`, not `no` — the window closed early, the request had not finished (`#669`).
 - **`@reticlehq/server` — `init --app <dir>` no longer silently repoints a root config at a different project.** In a monorepo with two instrumented apps, each with its own correct `.reticle.json`, a root config naming the first was overwritten to name the second, reported as the reassuring "the same config where the agent runs". An agent started at that root then reads one project's config and drives another. Absent and conflicting were the same branch; a root config that is merely missing is still written, because that is the case it was added for, and one that names a different project is now named in the report and left alone — the app's own config is correct either way, so the app is fully instrumented and only the pointer is left for a human to settle.
 
 ## [2.13.1] — 2026-09-02
