@@ -11,7 +11,8 @@
  */
 
 /** The minimal page surface the pool drives. Real Playwright `Page` satisfies this. */
-import { unreachableUrlIn } from '@reticlehq/core';
+import { unreachableUrlIn, type SeedStorage } from '@reticlehq/core';
+import { seedStorageInto } from './storage-seed.js';
 
 export interface PooledPage {
   goto(url: string, opts?: { timeoutMs?: number }): Promise<unknown>;
@@ -37,12 +38,34 @@ export interface PooledPage {
    * reports dispatched/settled while the styles never ran.
    */
   hover?(x: number, y: number): Promise<void>;
+  /** Add an init script to run after document creation but before any page scripts run. */
+  addInitScript?<Arg>(
+    script: ((arg: Arg) => void) | string,
+    arg?: Arg,
+  ): Promise<InitScriptHandle | void>;
+}
+
+export interface InitScriptHandle {
+  dispose(): Promise<void>;
+}
+
+export interface PooledCookie {
+  name: string;
+  value: string;
+  url?: string;
+  domain?: string;
+  path?: string;
+  expires?: number;
+  httpOnly?: boolean;
+  secure?: boolean;
+  sameSite?: 'Strict' | 'Lax' | 'None';
 }
 
 /** An isolated browsing context (cookies/storage). Real Playwright `BrowserContext` satisfies this. */
 export interface PooledContext {
   newPage(): Promise<PooledPage>;
   close(): Promise<void>;
+  addCookies?(cookies: PooledCookie[]): Promise<void>;
 }
 
 /** The launched browser. Real Playwright `Browser` satisfies this. */
@@ -345,7 +368,7 @@ export class BrowserPool {
    */
   async acquire(
     url: string,
-    opts: { signal?: AbortSignal; sessionId?: string } = {},
+    opts: { signal?: AbortSignal; sessionId?: string; seedStorage?: SeedStorage } = {},
   ): Promise<Lease> {
     if (this.#closed) throw new Error('browser pool is shut down');
     // #waitForSlot claims the slot synchronously (bumps #occupied) before returning, so the cap holds
@@ -373,7 +396,21 @@ export class BrowserPool {
         if (active !== undefined) active.dialFailureUrl = dialled;
         else pending = dialled; // logged during goto, before the lease is registered below
       });
-      await page.goto(url, { timeoutMs: this.#navTimeout });
+      let seedHandle: InitScriptHandle | undefined;
+      let checkSeedError: (() => void) | undefined;
+      if (opts.seedStorage !== undefined) {
+        const seedResult = await seedStorageInto(context, page, url, opts.seedStorage);
+        seedHandle = seedResult?.handle;
+        checkSeedError = seedResult?.checkError;
+      }
+      try {
+        await page.goto(url, { timeoutMs: this.#navTimeout });
+        checkSeedError?.();
+      } finally {
+        if (seedHandle !== undefined) {
+          await seedHandle.dispose().catch(() => undefined);
+        }
+      }
       // The browser can crash WHILE goto is resolving; #onCrash then clears #active and zeroes
       // #occupied. Registering the lease now would resurrect a dead entry against a crashed browser with
       // the slot count out of sync (drifting below #active.size, eventually exceeding the cap). If we're

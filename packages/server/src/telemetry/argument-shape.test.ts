@@ -60,6 +60,21 @@ describe('tool parameters — names, plus only our own enums', () => {
     expect(described).toContain('args');
   });
 
+  it('NEVER reports values passed to seedStorage in telemetry', () => {
+    const described = describeToolParams({
+      url: 'http://localhost:3000',
+      seedStorage: {
+        local: { token: 'super-secret-jwt' },
+        session: { auth: 'session-secret' },
+        cookies: { id: 'cookie-secret' },
+      },
+    });
+    expect(described).toEqual(['seedStorage', 'url']);
+    expect(described.join()).not.toContain('super-secret-jwt');
+    expect(described.join()).not.toContain('session-secret');
+    expect(described.join()).not.toContain('cookie-secret');
+  });
+
   it('reports a value only for an allowlisted enum parameter', () => {
     expect(describeParam('action', 'click')).toBe('action:click');
     // `ref` is a selector the user's DOM defines — a name, never a value.

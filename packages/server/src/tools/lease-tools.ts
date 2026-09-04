@@ -21,7 +21,12 @@ import {
   watchersToNotify,
 } from '../session/lease-visibility.js';
 import { reticleStateHome } from '../daemon/daemon.js';
-import { RETICLE_URL_PARAM, RETICLE_DEFAULT_PORT } from '@reticlehq/core';
+import {
+  RETICLE_URL_PARAM,
+  RETICLE_DEFAULT_PORT,
+  SeedStorageSchema,
+  type SeedStorage,
+} from '@reticlehq/core';
 import { ReticleTool } from './tool-names.js';
 import type { ToolDef, ToolDeps } from './tool-kit.js';
 import { asString } from './tools-helpers.js';
@@ -209,7 +214,7 @@ export async function acquireLeasedSession(
   pool: {
     acquire: (
       url: string,
-      opts: { sessionId: string },
+      opts: { sessionId: string; seedStorage?: SeedStorage },
     ) => Promise<{ sessionId: string; release: () => Promise<void> }>;
     /**
      * The address this lease's page said it could not reach. Optional so a test double need not
@@ -222,9 +227,13 @@ export async function acquireLeasedSession(
   sessions: { get: (id: string) => unknown; all: () => { id: string; url?: string }[] },
   url: string,
   projectId?: string,
+  seedStorage?: SeedStorage,
 ): Promise<{ sessionId: string; release: () => Promise<void> }> {
   const sessionId = newLeaseId();
-  const lease = await pool.acquire(appendReticleParams(url, sessionId, projectId), { sessionId });
+  const lease = await pool.acquire(appendReticleParams(url, sessionId, projectId), {
+    sessionId,
+    ...(seedStorage !== undefined ? { seedStorage } : {}),
+  });
   // Resolved, not assumed — see resolveLeasedSessionId. The parallel suite replays against whatever
   // id comes back, so handing it the lease id for an app that named its own session sent every flow
   // in the run at a session that does not exist.
@@ -259,6 +268,14 @@ export async function waitForLeasedSession(
  * handler keeps that literal — the drive route dispatches through `runTool`, so it is counted like
  * any other call instead of being a second, invisible dispatch path.
  */
+// Serializes lease acquisitions on the same origin so concurrent callers (e.g. seeded replacements)
+// do not race and establish multiple overlapping contexts on that origin.
+const originAcquireLocks = new Map<string, Promise<unknown>>();
+
+export function hasOriginLock(origin: string): boolean {
+  return originAcquireLocks.has(origin);
+}
+
 export const LEASE_ACQUIRE_TOOL: ToolDef = {
   name: ReticleTool.LEASE_ACQUIRE,
   description:
@@ -271,6 +288,9 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
       .string()
       .optional()
       .describe('Stable project id to stamp on the leased tab so the agent can scope to it.'),
+    seedStorage: SeedStorageSchema.optional().describe(
+      'Initial storage state (localStorage, sessionStorage, cookies) to seed before the first navigation (e.g. to start already authenticated).',
+    ),
   },
   outputSchema: {
     sessionId: z.string(),
@@ -327,82 +347,124 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
       }
     }
     const projectId = asString(args['projectId']);
+    const seedStorageArg = args['seedStorage'];
+    let validatedSeed: SeedStorage | undefined;
+    if (seedStorageArg !== undefined) {
+      const parsed = SeedStorageSchema.safeParse(seedStorageArg);
+      if (!parsed.success) {
+        throw new Error(
+          `reticle_lease{action:"acquire"} seedStorage is invalid: ${parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join(', ')}`,
+        );
+      }
+      validatedSeed = parsed.data;
+    }
     // Sampled BEFORE acquiring: afterwards this lease is itself a session, and the point is to name
     // a tab that already existed. A human's open tab is the one they can watch, so if one is here
     // the agent should be told at the moment it is choosing — not after it has gone dark on them.
     const alreadyOpen = liveTabFor(deps, projectId);
     const origin = originOf(url);
-    const existing = origin === undefined ? undefined : pool.leaseIdOnOrigin?.(origin);
-    if (existing !== undefined && origin !== undefined) {
-      if (deps.sessions.get(existing) !== undefined) {
-        pool.touch(existing);
-        return {
-          sessionId: existing,
-          url,
-          ready: true,
-          reused: true,
-          expiresInMs: pool.leaseTtlMs(),
-          leased: pool.activeCount(),
-          queued: pool.queuedCount(),
-          hint: alreadyHeldHint(existing, origin),
-          ...(alreadyOpen === undefined
-            ? {}
-            : { preferExisting: { sessionId: alreadyOpen, note: PREFER_EXISTING_NOTE } }),
-        };
-      }
-      // The lease is still held but the tab has gone — a reload dropped the session. Free the
-      // slot and mint, rather than handing back a dead id or leaving both contexts occupied.
-      await pool.release(existing);
+    const priorLock = origin !== undefined ? originAcquireLocks.get(origin) : undefined;
+    let releaseLock: (() => void) | undefined;
+    let lockPromise: Promise<void> | undefined;
+    if (origin !== undefined) {
+      lockPromise = new Promise<void>((resolve) => {
+        releaseLock = resolve;
+      });
+      originAcquireLocks.set(origin, lockPromise);
     }
-    const sessionId = newLeaseId();
-    const navUrl = appendReticleParams(url, sessionId, projectId);
-    let lease;
+    if (priorLock !== undefined) {
+      await priorLock.catch(() => undefined);
+    }
     try {
-      lease = await pool.acquire(navUrl, { sessionId });
-    } catch (err) {
-      // A raw page.goto failure is noisy and leaks the internal URL params — surface a clean,
-      // actionable message instead.
-      throw new Error(`could not open ${url} — is the app running there? (${cleanNavError(err)})`);
+      const existing = origin === undefined ? undefined : pool.leaseIdOnOrigin?.(origin);
+      if (validatedSeed !== undefined && existing !== undefined) {
+        // Caller explicitly requested storage seeding: do not reuse an existing context on this origin,
+        // release it so the new lease starts clean with the caller-provided state.
+        await pool.release(existing);
+      } else if (existing !== undefined && origin !== undefined) {
+        if (deps.sessions.get(existing) !== undefined) {
+          pool.touch(existing);
+          return {
+            sessionId: existing,
+            url,
+            ready: true,
+            reused: true,
+            expiresInMs: pool.leaseTtlMs(),
+            leased: pool.activeCount(),
+            queued: pool.queuedCount(),
+            hint: alreadyHeldHint(existing, origin),
+            ...(alreadyOpen === undefined
+              ? {}
+              : { preferExisting: { sessionId: alreadyOpen, note: PREFER_EXISTING_NOTE } }),
+          };
+        }
+        // The lease is still held but the tab has gone — a reload dropped the session. Free the
+        // slot and mint, rather than handing back a dead id or leaving both contexts occupied.
+        await pool.release(existing);
+      }
+      const sessionId = newLeaseId();
+      const navUrl = appendReticleParams(url, sessionId, projectId);
+      let lease;
+      try {
+        lease = await pool.acquire(navUrl, {
+          sessionId,
+          ...(validatedSeed !== undefined ? { seedStorage: validatedSeed } : {}),
+        });
+      } catch (err) {
+        if (err instanceof Error && err.message.startsWith('Storage seeding failed')) {
+          throw err;
+        }
+        // A raw page.goto failure is noisy and leaks the internal URL params — surface a clean,
+        // actionable message instead.
+        throw new Error(
+          `could not open ${url} — is the app running there? (${cleanNavError(err)})`,
+        );
+      }
+      // Wait for the leased tab's SDK to connect so the returned sessionId is usable right away.
+      // Resolved rather than assumed: an app that names its own session registers under that name,
+      // and the id we hand back has to be the one the agent can actually drive.
+      let registeredId: string | undefined;
+      const ready = await waitForLeasedSession(() => {
+        registeredId = resolveLeasedSessionId(deps.sessions, lease.sessionId);
+        return registeredId !== undefined;
+      });
+      // Tell the pool the other name this lease answers to. Every later touch and release arrives
+      // under the id we are about to hand back, and the pool is keyed by the id it navigated with;
+      // without this the touches miss, the lease ages out despite continuous activity, and the
+      // reaper closes the context mid-flow. See BrowserPool.alias and #157.
+      if (registeredId !== undefined) pool.alias(registeredId, lease.sessionId);
+      // The lease now exists, so any HUD a human is watching has just gone dark. Say so.
+      tellWatchers(deps, projectId, AGENT_DRIVING_ELSEWHERE);
+      // ready means the SDK dialled in — not that contracts match. Carry the skew warning on acquire
+      // so the agent does not learn it only after a CDP tool invents a closed page (#688).
+      const versionSkew =
+        registeredId === undefined ? undefined : deps.sessions.get(registeredId)?.versionSkew;
+      return {
+        sessionId: registeredId ?? lease.sessionId,
+        url,
+        ready,
+        expiresInMs: pool.leaseTtlMs(),
+        leased: pool.activeCount(),
+        queued: pool.queuedCount(),
+        ...(alreadyOpen === undefined
+          ? {}
+          : {
+              preferExisting: {
+                sessionId: alreadyOpen,
+                note: PREFER_EXISTING_NOTE,
+              },
+            }),
+        ...(versionSkew === undefined ? {} : { versionSkew }),
+        ...(ready
+          ? {}
+          : { hint: await notConnectedHint(deps, url, pool.dialFailureUrl?.(lease.sessionId)) }),
+      };
+    } finally {
+      releaseLock?.();
+      if (origin !== undefined && originAcquireLocks.get(origin) === lockPromise) {
+        originAcquireLocks.delete(origin);
+      }
     }
-    // Wait for the leased tab's SDK to connect so the returned sessionId is usable right away.
-    // Resolved rather than assumed: an app that names its own session registers under that name,
-    // and the id we hand back has to be the one the agent can actually drive.
-    let registeredId: string | undefined;
-    const ready = await waitForLeasedSession(() => {
-      registeredId = resolveLeasedSessionId(deps.sessions, lease.sessionId);
-      return registeredId !== undefined;
-    });
-    // Tell the pool the other name this lease answers to. Every later touch and release arrives
-    // under the id we are about to hand back, and the pool is keyed by the id it navigated with;
-    // without this the touches miss, the lease ages out despite continuous activity, and the
-    // reaper closes the context mid-flow. See BrowserPool.alias and #157.
-    if (registeredId !== undefined) pool.alias(registeredId, lease.sessionId);
-    // The lease now exists, so any HUD a human is watching has just gone dark. Say so.
-    tellWatchers(deps, projectId, AGENT_DRIVING_ELSEWHERE);
-    // ready means the SDK dialled in — not that contracts match. Carry the skew warning on acquire
-    // so the agent does not learn it only after a CDP tool invents a closed page (#688).
-    const versionSkew =
-      registeredId === undefined ? undefined : deps.sessions.get(registeredId)?.versionSkew;
-    return {
-      sessionId: registeredId ?? lease.sessionId,
-      url,
-      ready,
-      expiresInMs: pool.leaseTtlMs(),
-      leased: pool.activeCount(),
-      queued: pool.queuedCount(),
-      ...(alreadyOpen === undefined
-        ? {}
-        : {
-            preferExisting: {
-              sessionId: alreadyOpen,
-              note: PREFER_EXISTING_NOTE,
-            },
-          }),
-      ...(versionSkew === undefined ? {} : { versionSkew }),
-      ...(ready
-        ? {}
-        : { hint: await notConnectedHint(deps, url, pool.dialFailureUrl?.(lease.sessionId)) }),
-    };
   },
 };
 

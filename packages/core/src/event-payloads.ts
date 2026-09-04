@@ -52,6 +52,44 @@ export type ScrollDirection = (typeof ScrollDirection)[keyof typeof ScrollDirect
 export const StorageArea = { LOCAL: 'local', SESSION: 'session', COOKIE: 'cookies' } as const;
 export type StorageArea = (typeof StorageArea)[keyof typeof StorageArea];
 
+/**
+ * A single cookie to seed before initial navigation.
+ */
+export const SeedCookieSchema = z.object({
+  name: z.string().describe('Cookie name.'),
+  value: z.string().describe('Cookie value.'),
+  domain: z.string().optional().describe('Cookie domain. Defaults to the navigation URL domain.'),
+  path: z.string().optional().describe('Cookie path. Defaults to "/".'),
+  url: z.string().optional().describe('Cookie URL. Defaults to the navigation URL.'),
+  httpOnly: z.boolean().optional().describe('Whether the cookie is httpOnly.'),
+  secure: z.boolean().optional().describe('Whether the cookie is secure.'),
+  sameSite: z.enum(['Strict', 'Lax', 'None']).optional().describe('SameSite policy.'),
+  expires: z.number().optional().describe('Unix timestamp in seconds for cookie expiration.'),
+});
+export type SeedCookie = z.infer<typeof SeedCookieSchema>;
+
+export const SeedCookiesSchema = z.union([z.record(z.string()), z.array(SeedCookieSchema)]);
+export type SeedCookies = z.infer<typeof SeedCookiesSchema>;
+
+/**
+ * Client storage and session state to seed into an isolated context before the first navigation.
+ * Matches the three storage areas Reticle already observes (localStorage, sessionStorage, cookies).
+ */
+export const SeedStorageSchema = z.object({
+  local: z
+    .record(z.string())
+    .optional()
+    .describe('Key-value pairs to seed into window.localStorage before first navigation.'),
+  session: z
+    .record(z.string())
+    .optional()
+    .describe('Key-value pairs to seed into window.sessionStorage before first navigation.'),
+  cookies: SeedCookiesSchema.optional().describe(
+    'Cookies to seed before first navigation: a name-value record scoped to the lease URL or an array of cookie objects.',
+  ),
+});
+export type SeedStorage = z.infer<typeof SeedStorageSchema>;
+
 const elementLabel = z.object({ role: z.string().optional(), name: z.string().optional() });
 
 /**

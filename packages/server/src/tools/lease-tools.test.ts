@@ -7,8 +7,10 @@ import { describe, expect, it } from 'vitest';
 import { RETICLE_URL_PARAM } from '@reticlehq/core';
 import {
   LEASE_TOOLS,
+  acquireLeasedSession,
   appendReticleParams,
   cleanNavError,
+  hasOriginLock,
   waitForLeasedSession,
 } from './lease-tools.js';
 import { ReticleTool } from './tool-names.js';
@@ -27,11 +29,12 @@ function tool(name: string): (deps: ToolDeps, args: Record<string, unknown>) => 
 /** A pool stub that records acquire calls and tracks active count. */
 function fakePool(): {
   pool: BrowserPool;
-  acquired: { url: string; sessionId: string | undefined }[];
+  acquired: { url: string; sessionId: string | undefined; seedStorage?: unknown }[];
   /** Every (registeredId, leaseId) pair the lease told the pool about. */
   aliased: [string, string][];
+  released: string[];
 } {
-  const acquired: { url: string; sessionId: string | undefined }[] = [];
+  const acquired: { url: string; sessionId: string | undefined; seedStorage?: unknown }[] = [];
   let active = 0;
   const released: string[] = [];
   const aliased: [string, string][] = [];
@@ -44,8 +47,8 @@ function fakePool(): {
     }
   };
   const pool = {
-    acquire(url: string, opts: { sessionId?: string } = {}): Promise<Lease> {
-      acquired.push({ url, sessionId: opts.sessionId });
+    acquire(url: string, opts: { sessionId?: string; seedStorage?: unknown } = {}): Promise<Lease> {
+      acquired.push({ url, sessionId: opts.sessionId, seedStorage: opts.seedStorage });
       active += 1;
       const sessionId = opts.sessionId ?? 'gen';
       const origin = originOf(url);
@@ -70,7 +73,7 @@ function fakePool(): {
       aliased.push([registeredId, leaseId]);
     },
   } as unknown as BrowserPool;
-  return { pool, acquired, aliased };
+  return { pool, acquired, aliased, released };
 }
 
 // A sessions stub where the leased tab is already "connected", so acquire's wait-for-ready resolves
@@ -455,5 +458,204 @@ describe('prioritising a tab that is already open', () => {
 
     expect(out['sessionId']).toBeDefined();
     expect(out['url']).toBe('http://localhost:3000/');
+  });
+});
+
+describe('reticle_lease with seedStorage', () => {
+  it('propagates seedStorage to pool.acquire and never echoes seeded values in the tool result', async () => {
+    const { pool, acquired } = fakePool();
+    const deps = { ...baseDeps, pool } as unknown as ToolDeps;
+    const seedStorage = {
+      local: { auth_token: 'secret-auth-token-12345' },
+      session: { user_session: 'secret-session-abcde' },
+      cookies: { session: 'secret-cookie-xyz99' },
+    };
+
+    const out = (await tool(ReticleTool.LEASE_ACQUIRE)(deps, {
+      url: 'http://localhost:3000/app',
+      seedStorage,
+    })) as Record<string, unknown>;
+
+    // seedStorage reached pool.acquire intact
+    expect(acquired).toHaveLength(1);
+    expect(acquired[0]?.seedStorage).toEqual(seedStorage);
+
+    // Tool output must NEVER echo the seeded values or the seedStorage object
+    expect('seedStorage' in out).toBe(false);
+    expect(JSON.stringify(out)).not.toContain('secret-auth-token-12345');
+    expect(JSON.stringify(out)).not.toContain('secret-session-abcde');
+    expect(JSON.stringify(out)).not.toContain('secret-cookie-xyz99');
+    expect(out['ready']).toBe(true);
+    expect(out['sessionId']).toBeDefined();
+  });
+
+  it('rejects malformed seedStorage without echoing raw values in the error', async () => {
+    const { pool } = fakePool();
+    const deps = { ...baseDeps, pool } as unknown as ToolDeps;
+
+    await expect(
+      tool(ReticleTool.LEASE_ACQUIRE)(deps, {
+        url: 'http://localhost:3000/',
+        seedStorage: { local: 12345 as unknown as Record<string, string> },
+      }),
+    ).rejects.toThrow(/seedStorage is invalid: local: Expected object, received number/);
+  });
+
+  it('releases an existing lease on the origin and mints fresh when seedStorage is provided', async () => {
+    const { pool, released } = fakePool();
+    const deps = { ...baseDeps, pool } as unknown as ToolDeps;
+
+    // First acquire without seedStorage
+    const first = (await tool(ReticleTool.LEASE_ACQUIRE)(deps, {
+      url: 'http://localhost:3000/',
+    })) as Record<string, unknown>;
+    const firstId = first['sessionId'] as string;
+
+    // Second acquire with seedStorage on same origin must NOT reuse firstId; it must release firstId
+    const second = (await tool(ReticleTool.LEASE_ACQUIRE)(deps, {
+      url: 'http://localhost:3000/',
+      seedStorage: { local: { token: 'new-token' } },
+    })) as Record<string, unknown>;
+    const secondId = second['sessionId'] as string;
+
+    expect(secondId).not.toBe(firstId);
+    expect(released).toContain(firstId);
+    expect(second['reused']).toBeUndefined();
+  });
+
+  it('acquireLeasedSession propagates seedStorage to pool.acquire', async () => {
+    const { pool, acquired } = fakePool();
+    const sessions = { get: () => ({ id: 'live' }), all: () => [] };
+    const seedStorage = { local: { token: 'auth-jwt' } };
+
+    await acquireLeasedSession(
+      pool,
+      sessions,
+      'http://localhost:3000/test',
+      undefined,
+      seedStorage,
+    );
+
+    expect(acquired).toHaveLength(1);
+    expect(acquired[0]?.seedStorage).toEqual(seedStorage);
+  });
+
+  it('preserves explicit empty seedStorage ({}) semantics by releasing existing lease', async () => {
+    const { pool, released } = fakePool();
+    const deps = { ...baseDeps, pool } as unknown as ToolDeps;
+
+    const first = (await tool(ReticleTool.LEASE_ACQUIRE)(deps, {
+      url: 'http://localhost:3000/',
+    })) as Record<string, unknown>;
+    const firstId = first['sessionId'] as string;
+
+    const second = (await tool(ReticleTool.LEASE_ACQUIRE)(deps, {
+      url: 'http://localhost:3000/',
+      seedStorage: {},
+    })) as Record<string, unknown>;
+    const secondId = second['sessionId'] as string;
+
+    expect(secondId).not.toBe(firstId);
+    expect(released).toContain(firstId);
+  });
+
+  it('re-throws sanitized Storage seeding failed error without masking as could not open', async () => {
+    const { pool } = fakePool();
+    pool.acquire = () =>
+      Promise.reject(
+        new Error('Storage seeding failed: localStorage write failed: QuotaExceededError'),
+      );
+    const deps = { ...baseDeps, pool } as unknown as ToolDeps;
+
+    await expect(
+      tool(ReticleTool.LEASE_ACQUIRE)(deps, {
+        url: 'http://localhost:3000/',
+        seedStorage: { local: { token: 'val' } },
+      }),
+    ).rejects.toThrow('Storage seeding failed: localStorage write failed: QuotaExceededError');
+  });
+
+  it('serializes concurrent seeded acquisitions on the same origin and cleans up lock', async () => {
+    const { pool, acquired } = fakePool();
+    const trace: string[] = [];
+    const origin = 'http://localhost:3000';
+    const originalAcquire = pool.acquire.bind(pool);
+    pool.acquire = async (url, opts) => {
+      const tag = url.includes('app1') ? 'req1' : 'req2';
+      trace.push(`${tag}:acquire-start`);
+      // Hold the lock for a moment to ensure concurrency contention
+      await new Promise((r) => setTimeout(r, 20));
+      const res = await originalAcquire(url, opts);
+      trace.push(`${tag}:acquire-end`);
+      return res;
+    };
+    const deps = { ...baseDeps, pool } as unknown as ToolDeps;
+
+    expect(hasOriginLock(origin)).toBe(false);
+
+    // Launch two concurrent seeded acquire calls for the same origin
+    const p1 = tool(ReticleTool.LEASE_ACQUIRE)(deps, {
+      url: `${origin}/app1`,
+      seedStorage: { local: { k: '1' } },
+    });
+    const p2 = tool(ReticleTool.LEASE_ACQUIRE)(deps, {
+      url: `${origin}/app2`,
+      seedStorage: { local: { k: '2' } },
+    });
+
+    // While in flight, the origin lock must be held
+    expect(hasOriginLock(origin)).toBe(true);
+
+    const [res1, res2] = await Promise.all([p1, p2]);
+
+    expect(acquired).toHaveLength(2);
+    expect(res1).toBeDefined();
+    expect(res2).toBeDefined();
+
+    // Critical assertion: req1 must have finished acquiring before req2 began acquiring!
+    expect(trace).toEqual([
+      'req1:acquire-start',
+      'req1:acquire-end',
+      'req2:acquire-start',
+      'req2:acquire-end',
+    ]);
+
+    // After completion, the origin lock must be completely cleaned up
+    expect(hasOriginLock(origin)).toBe(false);
+  });
+
+  it('cleans up origin lock and allows subsequent acquires when an acquire fails', async () => {
+    const { pool } = fakePool();
+    const origin = 'http://localhost:3000';
+    let failFirst = true;
+    const originalAcquire = pool.acquire.bind(pool);
+    pool.acquire = async (url, opts) => {
+      if (failFirst) {
+        failFirst = false;
+        throw new Error('Storage seeding failed: test failure');
+      }
+      return originalAcquire(url, opts);
+    };
+    const deps = { ...baseDeps, pool } as unknown as ToolDeps;
+
+    // First acquire fails
+    await expect(
+      tool(ReticleTool.LEASE_ACQUIRE)(deps, {
+        url: `${origin}/app`,
+        seedStorage: { local: { token: 'fail' } },
+      }),
+    ).rejects.toThrow('Storage seeding failed: test failure');
+
+    // Lock must be cleaned up despite the failure
+    expect(hasOriginLock(origin)).toBe(false);
+
+    // Second acquire on the same origin succeeds without being blocked or deadlocked
+    const second = (await tool(ReticleTool.LEASE_ACQUIRE)(deps, {
+      url: `${origin}/app`,
+      seedStorage: { local: { token: 'success' } },
+    })) as Record<string, unknown>;
+
+    expect(second['sessionId']).toBeDefined();
+    expect(hasOriginLock(origin)).toBe(false);
   });
 });

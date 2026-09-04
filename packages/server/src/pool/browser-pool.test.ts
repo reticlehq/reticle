@@ -10,6 +10,7 @@ import {
   type Launcher,
   type PooledBrowser,
   type PooledContext,
+  type PooledCookie,
   type PooledPage,
 } from './browser-pool.js';
 
@@ -18,7 +19,10 @@ class FakePage implements PooledPage {
   closed = false;
   failNav = false;
   #onCrash: (() => void) | undefined;
+  initScripts: Array<{ script: unknown; arg: unknown }> = [];
+  callOrder: string[] = [];
   goto(url: string): Promise<unknown> {
+    this.callOrder.push(`goto:${url}`);
     this.gotoUrls.push(url);
     return this.failNav ? Promise.reject(new Error('nav timeout')) : Promise.resolve(undefined);
   }
@@ -29,6 +33,21 @@ class FakePage implements PooledPage {
   onCrash(handler: () => void): void {
     this.#onCrash = handler;
   }
+  disposedScripts = 0;
+  addInitScript<Arg>(
+    script: ((arg: Arg) => void) | string,
+    arg?: Arg,
+  ): Promise<{ dispose: () => Promise<void> }> {
+    this.callOrder.push('addInitScript');
+    this.initScripts.push({ script, arg });
+    return Promise.resolve({
+      dispose: () => {
+        this.disposedScripts += 1;
+        this.callOrder.push('disposeInitScript');
+        return Promise.resolve();
+      },
+    });
+  }
   /** Test helper: simulate this page's renderer crashing. */
   crash(): void {
     this.#onCrash?.();
@@ -38,12 +57,19 @@ class FakePage implements PooledPage {
 class FakeContext implements PooledContext {
   readonly pages: FakePage[] = [];
   closed = false;
+  cookies: PooledCookie[] = [];
+  callOrder: string[] = [];
   constructor(private readonly failNav = false) {}
   newPage(): Promise<PooledPage> {
     const p = new FakePage();
     p.failNav = this.failNav;
     this.pages.push(p);
     return Promise.resolve(p);
+  }
+  addCookies(cookies: PooledCookie[]): Promise<void> {
+    this.callOrder.push('addCookies');
+    this.cookies.push(...cookies);
+    return Promise.resolve();
   }
   close(): Promise<void> {
     this.closed = true;
@@ -84,10 +110,14 @@ function counterIds(): () => string {
 }
 
 /** A launcher that hands out fresh FakeBrowsers and records how many it made. */
-function fakeLauncher(): { launch: Launcher; browsers: FakeBrowser[] } {
+function fakeLauncher(opts: { failNav?: boolean } = {}): {
+  launch: Launcher;
+  browsers: FakeBrowser[];
+} {
   const browsers: FakeBrowser[] = [];
   const launch: Launcher = () => {
     const b = new FakeBrowser();
+    if (true === opts.failNav) b.failNav = true;
     browsers.push(b);
     return Promise.resolve(b);
   };
@@ -513,5 +543,103 @@ describe('BrowserPool', () => {
     // The browser that resolved after shutdown must have been closed.
     expect(browsers[0]?.isConnected()).toBe(false);
     await expect(acquiring).rejects.toThrow();
+  });
+
+  it('seeds cookies, localStorage, and sessionStorage before page.goto and disposes init script immediately after', async () => {
+    const { launch, browsers } = fakeLauncher();
+    const pool = new BrowserPool(launch, { maxContexts: 4, genSessionId: counterIds() });
+
+    const seedStorage = {
+      local: { auth_token: 'secret-token', user: 'alice' },
+      session: { tab: '42' },
+      cookies: { session_id: 'sess-abc' },
+    };
+
+    const lease = await pool.acquire('http://localhost:3000/dashboard', { seedStorage });
+    expect(lease.sessionId).toBe('s1');
+
+    const context = browsers[0]?.contexts[0];
+    const page = context?.pages[0];
+
+    // Cookies were seeded into context before page navigation
+    expect(context?.cookies).toEqual([
+      { name: 'session_id', value: 'sess-abc', url: 'http://localhost:3000/' },
+    ]);
+    expect(context?.callOrder).toContain('addCookies');
+
+    // Init script was registered on page before goto, and disposed after goto
+    expect(page?.initScripts).toHaveLength(1);
+    expect(page?.initScripts[0]?.arg).toEqual({
+      local: seedStorage.local,
+      session: seedStorage.session,
+      targetOrigin: 'http://localhost:3000',
+    });
+    expect(page?.callOrder).toEqual([
+      'addInitScript',
+      'goto:http://localhost:3000/dashboard',
+      'disposeInitScript',
+    ]);
+    expect(page?.disposedScripts).toBe(1);
+  });
+
+  it('disposes init script and cleans up context if page.goto fails', async () => {
+    const { launch, browsers } = fakeLauncher({ failNav: true });
+    const pool = new BrowserPool(launch, { maxContexts: 4, genSessionId: counterIds() });
+
+    await expect(
+      pool.acquire('http://localhost:3000/fail', {
+        seedStorage: { local: { token: '123' } },
+      }),
+    ).rejects.toThrow('nav timeout');
+
+    const context = browsers[0]?.contexts[0];
+    const page = context?.pages[0];
+    // Must still have disposed the init script
+    expect(page?.callOrder).toContain('disposeInitScript');
+    expect(page?.disposedScripts).toBe(1);
+    // Context must have been closed
+    expect(context?.closed).toBe(true);
+  });
+
+  it('does not invoke addCookies or addInitScript when seedStorage is omitted', async () => {
+    const { launch, browsers } = fakeLauncher();
+    const pool = new BrowserPool(launch, { maxContexts: 4, genSessionId: counterIds() });
+
+    await pool.acquire('http://localhost:3000/dashboard');
+
+    const context = browsers[0]?.contexts[0];
+    const page = context?.pages[0];
+
+    expect(context?.cookies).toHaveLength(0);
+    expect(page?.initScripts).toHaveLength(0);
+    expect(page?.callOrder).toEqual(['goto:http://localhost:3000/dashboard']);
+  });
+
+  it('preserves isolation between multiple leases with different seedStorage', async () => {
+    const { launch, browsers } = fakeLauncher();
+    const pool = new BrowserPool(launch, { maxContexts: 4, genSessionId: counterIds() });
+
+    const lease1 = await pool.acquire('http://localhost:3000/app', {
+      seedStorage: { local: { user: 'user-1' } },
+    });
+    const lease2 = await pool.acquire('http://localhost:3000/app', {
+      seedStorage: { local: { user: 'user-2' } },
+    });
+
+    expect(lease1.sessionId).not.toBe(lease2.sessionId);
+    const ctx1 = browsers[0]?.contexts[0];
+    const ctx2 = browsers[0]?.contexts[1];
+
+    expect(ctx1).not.toBe(ctx2);
+    expect(ctx1?.pages[0]?.initScripts[0]?.arg).toEqual({
+      local: { user: 'user-1' },
+      session: undefined,
+      targetOrigin: 'http://localhost:3000',
+    });
+    expect(ctx2?.pages[0]?.initScripts[0]?.arg).toEqual({
+      local: { user: 'user-2' },
+      session: undefined,
+      targetOrigin: 'http://localhost:3000',
+    });
   });
 });

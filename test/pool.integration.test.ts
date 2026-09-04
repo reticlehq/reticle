@@ -11,6 +11,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
+import { chromium, type Page as PlaywrightPage } from 'playwright';
 import { BrowserPool, playwrightLauncher, type Launcher } from '@reticlehq/server';
 
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
@@ -81,7 +82,11 @@ describe('BrowserPool — real Chromium', () => {
     const acquires = Array.from({ length: 6 }, () => pool.acquire(url));
     let resolved = 0;
     acquires.forEach((p) => void p.then(() => (resolved += 1)));
-    await sleep(400); // let everything that CAN resolve, resolve
+    const start = Date.now();
+    while (resolved < 2 && Date.now() - start < 3000) {
+      await sleep(50);
+    }
+    await sleep(200);
 
     expect(resolved).toBe(2); // only the cap
     expect(pool.activeCount()).toBe(2);
@@ -136,6 +141,121 @@ describe('BrowserPool — real Chromium', () => {
     expect(pool.activeCount()).toBe(0);
     expect(pool.queuedCount()).toBe(0);
     expect(count()).toBeLessThanOrEqual(2); // browser reused across all 40
+    await pool.shutdown();
+  }, 15000);
+
+  it('seeds storage on initial navigation and proves one-time semantics on real Chromium reload', async () => {
+    let capturedPage: PlaywrightPage | undefined;
+    const launch: Launcher = async () => {
+      const browser = await chromium.launch({ headless: true });
+      return {
+        isConnected: () => browser.isConnected(),
+        close: () => browser.close(),
+        onDisconnected: (h) => browser.on('disconnected', h),
+        newContext: async () => {
+          const ctx = await browser.newContext();
+          return {
+            addCookies: (cookies) => ctx.addCookies(cookies),
+            close: () => ctx.close(),
+            newPage: async () => {
+              const p = await ctx.newPage();
+              capturedPage = p;
+              return {
+                goto: (u) => p.goto(u, { waitUntil: 'domcontentloaded' }),
+                close: () => p.close(),
+                onCrash: (h) => p.on('crash', h),
+                onConsole: (h) => p.on('console', (msg) => h(msg.text())),
+                addInitScript: async (script, arg) => {
+                  const handle = await p.addInitScript(script as never, arg);
+                  return { dispose: () => handle.dispose() };
+                },
+              };
+            },
+          };
+        },
+      };
+    };
+
+    const pool = new BrowserPool(launch, { maxContexts: 2, genSessionId: counter() });
+
+    const seedStorage = {
+      local: { auth_token: 'real-jwt-token-123' },
+      session: { tab_state: 'active-tab-99' },
+      cookies: { session_cookie: 'cookie-abc-456' },
+    };
+
+    // 1. Initial navigation seeds storage before application code runs
+    const lease = await pool.acquire(url, { seedStorage });
+    expect(capturedPage).toBeDefined();
+
+    const initialLocal = await capturedPage!.evaluate(() => localStorage.getItem('auth_token'));
+    const initialSession = await capturedPage!.evaluate(() => sessionStorage.getItem('tab_state'));
+    const initialCookies = await capturedPage!.context().cookies();
+
+    expect(initialLocal).toBe('real-jwt-token-123');
+    expect(initialSession).toBe('active-tab-99');
+    expect(
+      initialCookies.some((c) => c.name === 'session_cookie' && c.value === 'cookie-abc-456'),
+    ).toBe(true);
+
+    // 2. Application logs out and clears storage
+    await capturedPage!.evaluate(() => {
+      localStorage.clear();
+      sessionStorage.clear();
+    });
+    expect(await capturedPage!.evaluate(() => localStorage.getItem('auth_token'))).toBeNull();
+    expect(await capturedPage!.evaluate(() => sessionStorage.getItem('tab_state'))).toBeNull();
+
+    // 3. Real Chromium reload: init script was disposed, so the old seed MUST NOT be restored
+    await capturedPage!.reload();
+
+    const postReloadLocal = await capturedPage!.evaluate(() => localStorage.getItem('auth_token'));
+    const postReloadSession = await capturedPage!.evaluate(() =>
+      sessionStorage.getItem('tab_state'),
+    );
+
+    expect(postReloadLocal).toBeNull();
+    expect(postReloadSession).toBeNull();
+
+    // 4. Release cleans up context
+    await lease.release();
+    expect(pool.activeCount()).toBe(0);
+    await pool.shutdown();
+  });
+
+  it('detects real storage write failure, rejects acquire, cleans up context and releases slot', async () => {
+    const pool = new BrowserPool(playwrightLauncher({ headless: true }), {
+      maxContexts: 2,
+      genSessionId: counter(),
+    });
+
+    // In real Chromium, navigating to a data: URL results in an opaque origin (origin === 'null').
+    // In Chromium, attempting to access or write localStorage in an opaque origin throws a real SecurityError.
+    const failingDataUrl = 'data:text/html,<!doctype html><title>Opaque</title>';
+    const secretValue = 'super-sensitive-secret-value-999';
+
+    let errorThrown: Error | undefined;
+    try {
+      await pool.acquire(failingDataUrl, {
+        seedStorage: { local: { secret_token: secretValue } },
+      });
+    } catch (err) {
+      errorThrown = err as Error;
+    }
+
+    // 1. Browser-side failure was detected in Node
+    expect(errorThrown).toBeDefined();
+    expect(errorThrown!.message).toMatch(
+      /Storage seeding failed: localStorage write failed: SecurityError/,
+    );
+
+    // 2. Secret value is NEVER leaked in the error
+    expect(errorThrown!.message).not.toContain(secretValue);
+
+    // 3. Pool context was cleaned up and slot released
+    expect(pool.activeCount()).toBe(0);
+    expect(pool.queuedCount()).toBe(0);
+
     await pool.shutdown();
   });
 });
