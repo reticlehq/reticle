@@ -14,6 +14,7 @@ import { spanSync } from '../trace.js';
 import { projectIdOf, rememberProjectOnDisk } from '../project/remember-project.js';
 import { detect, Framework, namesAPackageManager, type DetectInput, UiLibrary } from './detect.js';
 import { wasMcpRegistered } from './mcp-registered.js';
+import { readInstalledPackages } from './install-step.js';
 import { pickAstroHost } from './astro-host.js';
 import {
   findWorkspaceApps,
@@ -147,6 +148,7 @@ const NEXT_PAGES_APP_CANDIDATES = [
   'src/pages/_app.js',
 ];
 const SVELTEKIT_HOOKS = 'src/hooks.client.ts';
+
 const SOURCE_FILE = /\.(tsx|jsx|ts|js|svelte|vue|astro)$/;
 /** Files read for the testid scan. A capabilities block is a hint; reading a whole repo for it is not. */
 const MAX_SCANNED_FILES = 200;
@@ -503,6 +505,7 @@ function gatherPlanInput(options: InitOptions, io: InitIo, pkg: unknown): PlanIn
     nextReticleDevImport: devLocation.importSpecifier,
     nextReticleDevExists: io.exists(devLocation.path),
     nextReticleDevSource: io.readFile(devLocation.path),
+    installedPackages: readInstalledPackages(io, detection),
     svelteKitHooksExists: io.exists(SVELTEKIT_HOOKS),
     craEntry: craEntryOf(io),
     craEnv: io.readFile(CRA_ENV_PATH),

@@ -4,16 +4,9 @@
  * runner performs the `write` side-effects; this module decides *what* should happen.
  */
 
-import {
-  Framework,
-  PackageManager,
-  UiLibrary,
-  installCommand,
-  installCommandParts,
-  type Detection,
-} from './detect.js';
+import { Framework, PackageManager, UiLibrary, type Detection } from './detect.js';
 import type { FoundStore } from './capabilities.js';
-import { installFailureHint } from './install-hint.js';
+import { installStep } from './install-step.js';
 import { claudeAddCommand, mcpManual, mcpWindowsNote } from './mcp.js';
 import { NodePlatform } from '../platform.js';
 import {
@@ -73,7 +66,7 @@ const RETICLE_NEXT_PLUGIN = '@reticlehq/next';
  * and nothing on either side names a version. Asking for the CLI's exact version makes the cache
  * irrelevant, and a skewed pair impossible to install by accident.
  */
-function pinnedPackages(
+export function pinnedPackages(
   packages: readonly string[],
   version: string | undefined,
 ): readonly string[] {
@@ -279,6 +272,13 @@ export interface PlanInput {
   nextFoundStores?: readonly FoundStore[] | undefined;
   /** Whether src/reticle-dev.ts already exists — it is the one generated file users are meant to edit. */
   viteDevModuleExists?: boolean | undefined;
+  /**
+   * Version each required package RESOLVES to from the app directory, or undefined when it does not
+   * resolve at all. Pre-read by `gatherPlanInput`, for the reason `cspSources` is: `PlanInput` is
+   * the pure input to a pure planner, and handing it a resolver would let a step reach the disk from
+   * inside `buildPlan`.
+   */
+  installedPackages?: Readonly<Record<string, string | undefined>> | undefined;
   /** Whether src/hooks.client.ts already exists (SvelteKit idempotency). */
   svelteKitHooksExists?: boolean;
   /** CRA's bundled entry (src/index.tsx or .js) — where the connect import has to go. */
@@ -733,7 +733,7 @@ function agentRuleSteps(input: PlanInput): Step[] {
  * the CONSEQUENCE (which is certain and is the part that bites) and offer the remedy that belongs to
  * the manager actually in use — rather than name a cause that is one possibility among several.
  */
-function unpinnedRetryNote(version: string | undefined, pm: PackageManager): string {
+export function unpinnedRetryNote(version: string | undefined, pm: PackageManager): string {
   const wanted = version === undefined ? 'the exact version' : version;
   // Kept verbatim for pnpm, where minimumReleaseAge is a real and common cause with a real remedy.
   const remedy =
@@ -747,44 +747,6 @@ function unpinnedRetryNote(version: string | undefined, pm: PackageManager): str
     `installed instead. That may not match the daemon — if the agent reports protocol errors, check ` +
     `\`versionSkew\` in reticle_sessions.${remedy}`
   );
-}
-
-function installStep(input: PlanInput): Step {
-  const pm = input.detection.packageManager;
-  const packages = pinnedPackages(
-    frameworkPackages(input.detection.framework, input.detection.uiLibrary),
-    input.options.sdkVersion,
-  );
-  const command = installCommand(pm, packages);
-  if (!input.options.install) {
-    return {
-      title: 'Install dependencies',
-      target: 'package.json',
-      status: StepStatus.MANUAL,
-      detail: command,
-    };
-  }
-  const parts = installCommandParts(pm, packages);
-  return {
-    title: 'Install dependencies',
-    target: 'package.json',
-    status: StepStatus.APPLY,
-    detail: command,
-    exec: {
-      command: parts.command,
-      args: parts.args,
-      fallback: `${command}\n\n${installFailureHint(pm)}`,
-    },
-    // Unpinned. pnpm resolves the newest MATURE version there, which is how a project with a
-    // release-age hold gets a working install instead of no install.
-    retry: {
-      ...installCommandParts(
-        pm,
-        frameworkPackages(input.detection.framework, input.detection.uiLibrary),
-      ),
-      note: unpinnedRetryNote(input.options.sdkVersion, pm),
-    },
-  };
 }
 
 /**
