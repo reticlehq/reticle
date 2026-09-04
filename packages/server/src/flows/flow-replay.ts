@@ -202,6 +202,27 @@ export function testidDrift(value: string, hint: QueryEmptyHint | undefined): Dr
 }
 
 /**
+ * Build the drift for a step whose `expect.element` testid was absent after the action ran.
+ *
+ * Deliberately not `testidDrift`: that one means "this step's anchor is gone", and reusing it here
+ * put the assertion's target in the result's `anchor` field — the field documented as the value the
+ * step is bound to. A caller then reads `testid_not_found` naming something that was never the
+ * step's locator and goes hunting for a rename, while the truth is the step ran and its
+ * consequence did not hold.
+ */
+export function expectElementDrift(value: string, hint: QueryEmptyHint | undefined): Drift {
+  const present = hint?.presentTestids ?? [];
+  const drift: Drift = {
+    reasonKind: DriftReason.EXPECT_ELEMENT_NOT_FOUND,
+    reason: `expect.element testid "${value}" not present after the action`,
+    anchor: value,
+    nearest: nearestTestid(value, present),
+  };
+  if (nearestIsAmbiguous(value, present)) drift.ambiguous = true;
+  return drift;
+}
+
+/**
  * Re-resolve any QUERY against the live DOM, tolerating an in-flight render: QUERY, and while it
  * returns zero refs, sleep and retry up to ANCHOR_SETTLE_ATTEMPTS. Returns as soon as refs appear,
  * so a present anchor costs one query; a genuinely missing one costs the full (bounded) settle and
@@ -409,9 +430,12 @@ async function runTestidStep(
       return {
         step: index,
         tool: step.tool,
-        anchor: expectTestid,
+        // The step's OWN anchor, not the expectation's target. Replay stops at the first drift, so
+        // this result is the only thing the caller sees about why the run ended — naming the
+        // assertion here reads as "step N's locator drifted" and hides that the action did run.
+        anchor: value,
         ok: false,
-        drift: testidDrift(expectTestid, expectRefs.hint),
+        drift: expectElementDrift(expectTestid, expectRefs.hint),
       };
     }
   }
