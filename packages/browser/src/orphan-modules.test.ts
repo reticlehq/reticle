@@ -16,6 +16,10 @@ const DECLARED_UNWIRED: Record<string, string> = {
   'presenter/presenter-test-helpers.ts':
     'Test-only DOM and presenter builders shared by presenter specs. Production code has no ' +
     'reason to import test fixture construction.',
+  'test-support/array-at.ts':
+    "Test-only `Array.prototype.at` replacement (ES2022 API removed from this package's ES2017 " +
+    'lib) shared by specs across observers/transport/recorder/actions. Production code indexes ' +
+    'arrays directly and has no reason to import it.',
 };
 
 /** Source files, excluding tests, type-only barrels and the entry points everything hangs off. */

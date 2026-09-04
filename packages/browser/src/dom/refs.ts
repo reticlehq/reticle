@@ -106,6 +106,12 @@ function readBase(store: Storage | undefined): number {
   }
 }
 
+/**
+ * `WeakRef` (ES2021) is a deliberate, minimal exception to the ES2017 target/lib pin (issue #680):
+ * unlike `.at()` or `Object.hasOwn`, there is no downlevel-able equivalent — a strong reference here
+ * would leak every detached element this registry has ever seen. Universally supported in evergreen
+ * browsers since 2021, well ahead of the webpack-4-parseable syntax floor this pin targets.
+ */
 export class RefRegistry {
   readonly #toRef = new WeakMap<Element, Ref>();
   readonly #fromRef = new Map<string, WeakRef<Element>>();

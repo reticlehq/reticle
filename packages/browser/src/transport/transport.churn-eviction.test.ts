@@ -8,6 +8,7 @@ import {
   type ReticleEvent,
 } from '@reticlehq/core';
 import { MAX_QUEUE, Transport } from './transport.js';
+import { at } from '../test-support/array-at.js';
 
 class FakeWebSocket {
   static readonly OPEN = 1;
@@ -93,7 +94,7 @@ describe('transport churn-aware eviction', () => {
   it('evicts churn before signal events when the queue overflows', () => {
     const t = makeTransport();
     t.connect();
-    const ws = FakeWebSocket.instances.at(-1);
+    const ws = at(FakeWebSocket.instances, -1);
 
     t.sendEvent(signalEvt(0));
     for (let i = 1; i < MAX_QUEUE + 10; i += 1) t.sendEvent(churnEvt(i));
@@ -108,7 +109,7 @@ describe('transport churn-aware eviction', () => {
   it('falls back to signal FIFO when the churn queue is empty', () => {
     const t = makeTransport();
     t.connect();
-    const ws = FakeWebSocket.instances.at(-1);
+    const ws = at(FakeWebSocket.instances, -1);
 
     for (let i = 0; i < MAX_QUEUE + 5; i += 1) t.sendEvent(signalEvt(i));
 
@@ -121,7 +122,7 @@ describe('transport churn-aware eviction', () => {
   it('preserves temporal insertion order across both queues on replay', () => {
     const t = makeTransport();
     t.connect();
-    const ws = FakeWebSocket.instances.at(-1);
+    const ws = at(FakeWebSocket.instances, -1);
 
     t.sendEvent(signalEvt(1));
     t.sendEvent(churnEvt(2));
@@ -138,7 +139,7 @@ describe('transport churn-aware eviction', () => {
   it('still emits a gap marker when churn events are evicted', () => {
     const t = makeTransport();
     t.connect();
-    const ws = FakeWebSocket.instances.at(-1);
+    const ws = at(FakeWebSocket.instances, -1);
 
     for (let i = 0; i < MAX_QUEUE + 3; i += 1) t.sendEvent(churnEvt(i));
 
@@ -151,7 +152,7 @@ describe('transport churn-aware eviction', () => {
   it('a signal event arriving into a full churn queue survives', () => {
     const t = makeTransport();
     t.connect();
-    const ws = FakeWebSocket.instances.at(-1);
+    const ws = at(FakeWebSocket.instances, -1);
 
     for (let i = 0; i < MAX_QUEUE - 1; i += 1) t.sendEvent(churnEvt(i));
     t.sendEvent(signalEvt(MAX_QUEUE));
@@ -168,7 +169,7 @@ describe('transport churn-aware eviction', () => {
     // receive in the same replay — a truncation marker that over-reports what is missing.
     const t = makeTransport();
     t.connect();
-    const ws = FakeWebSocket.instances.at(-1);
+    const ws = at(FakeWebSocket.instances, -1);
 
     t.sendEvent(signalEvt(500)); // t = 5000, survives — and is NEWER than every churn event below
     for (let i = 1; i <= MAX_QUEUE + 5; i += 1) t.sendEvent(churnEvt(i)); // t = 10..

@@ -7,6 +7,15 @@ import {
   type ElementQuery,
 } from '@reticlehq/core';
 import { z } from 'zod';
+import {
+  asServerZodType,
+  isZodDefault,
+  isZodEffects,
+  isZodLiteral,
+  isZodNullable,
+  isZodObject,
+  isZodOptional,
+} from '../schema-interop.js';
 
 export type Predicate =
   | {
@@ -309,7 +318,7 @@ function predicateUnion() {
     z
       .object({
         kind: z.literal(PredicateKind.ELEMENT),
-        query: ElementQuerySchema,
+        query: asServerZodType<ElementQuery>(ElementQuerySchema),
         state: z.nativeEnum(ElementState).optional(),
         absent: z.boolean().optional(),
       })
@@ -448,7 +457,7 @@ export function predicateFieldsFor(kind: string): readonly string[] {
 function shapeForKind(kind: string): z.ZodRawShape | null {
   for (const option of predicateUnion().options) {
     const literal = option.shape['kind'];
-    if (literal instanceof z.ZodLiteral && literal.value === kind) return option.shape;
+    if (isZodLiteral(literal) && literal.value === kind) return option.shape;
   }
   return null;
 }
@@ -466,7 +475,7 @@ function shapeForKind(kind: string): z.ZodRawShape | null {
  * spellings of "is this a predicate" is one chance for the surface and the grammar to disagree.
  */
 export function isPredicateParam(schema: z.ZodTypeAny): boolean {
-  const inner = schema instanceof z.ZodOptional ? (schema.unwrap() as z.ZodTypeAny) : schema;
+  const inner = isZodOptional(schema) ? (schema.unwrap() as z.ZodTypeAny) : schema;
   return inner === PredicateSchema || inner === (PredicateSchema as z.ZodTypeAny).optional();
 }
 
@@ -511,10 +520,9 @@ export function predicateGrammar(): Readonly<Record<string, string>> {
 export function nestedKeysOf(schema: z.ZodTypeAny | undefined): readonly string[] {
   if (undefined === schema) return [];
   const inner = unwrapSchema(schema);
-  // `instanceof z.ZodObject` narrows to ZodObject<any>, whose `.shape` is `any`. Name the shape
-  // type so the keys are read off something typed rather than laundering an `any` through
-  // Object.keys.
-  if (!(inner instanceof z.ZodObject)) return [];
+  // `isZodObject` narrows to `AnyZodObject`, whose `.shape` is `any`. Name the shape type so the
+  // keys are read off something typed rather than laundering an `any` through Object.keys.
+  if (!isZodObject(inner)) return [];
   return Object.keys((inner as z.ZodObject<z.ZodRawShape>).shape);
 }
 
@@ -522,15 +530,11 @@ export function nestedKeysOf(schema: z.ZodTypeAny | undefined): readonly string[
 function unwrapSchema(schema: z.ZodTypeAny): z.ZodTypeAny {
   let current = schema;
   for (;;) {
-    if (
-      current instanceof z.ZodOptional ||
-      current instanceof z.ZodNullable ||
-      current instanceof z.ZodDefault
-    ) {
+    if (isZodOptional(current) || isZodNullable(current) || isZodDefault(current)) {
       current = current._def.innerType as z.ZodTypeAny;
       continue;
     }
-    if (current instanceof z.ZodEffects) {
+    if (isZodEffects(current)) {
       current = current._def.schema as z.ZodTypeAny;
       continue;
     }

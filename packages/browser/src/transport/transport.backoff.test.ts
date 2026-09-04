@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { RETICLE_PROTOCOL_VERSION, MessageKind, type HelloMessage } from '@reticlehq/core';
 import { Transport, nextReconnectDelay, RECONNECT_MAX_DELAY_MS } from './transport.js';
+import { at } from '../test-support/array-at.js';
 
 /**
  * Reconnect backs off instead of retrying every second forever.
@@ -77,7 +78,7 @@ function harness(onVisibleRef?: { fire: () => void }) {
   t.connect();
   /** Drop the live socket, then run the retry it scheduled. */
   const failAndRetry = (): void => {
-    FakeWebSocket.instances.at(-1)?.close();
+    at(FakeWebSocket.instances, -1)?.close();
     pending.shift()?.();
   };
   return { t, delays, failAndRetry };
@@ -112,32 +113,32 @@ describe('reconnect backoff', () => {
     const { delays, failAndRetry } = harness();
     for (let i = 0; i < 20; i += 1) failAndRetry();
     expect(Math.max(...delays)).toBe(RECONNECT_MAX_DELAY_MS);
-    expect(delays.at(-1)).toBe(RECONNECT_MAX_DELAY_MS);
+    expect(at(delays, -1)).toBe(RECONNECT_MAX_DELAY_MS);
   });
 
   it('resets after a successful connection, so one bad night does not slow the next drop', () => {
     const { delays, failAndRetry } = harness();
     for (let i = 0; i < 5; i += 1) failAndRetry();
-    FakeWebSocket.instances.at(-1)?.open(); // recovered
-    FakeWebSocket.instances.at(-1)?.close(); // and drops again later
-    expect(delays.at(-1), 'the drop after a recovery is prompt again').toBe(1000);
+    at(FakeWebSocket.instances, -1)?.open(); // recovered
+    at(FakeWebSocket.instances, -1)?.close(); // and drops again later
+    expect(at(delays, -1), 'the drop after a recovery is prompt again').toBe(1000);
   });
 
   it('resets when the human comes back to the tab — what makes the 30s ceiling safe', () => {
     const visible = { fire: () => undefined };
     const { delays, failAndRetry } = harness(visible);
     for (let i = 0; i < 5; i += 1) failAndRetry();
-    expect(delays.at(-1)).toBeGreaterThan(1000);
+    expect(at(delays, -1)).toBeGreaterThan(1000);
     visible.fire(); // foregrounded: opens immediately
-    FakeWebSocket.instances.at(-1)?.close();
-    expect(delays.at(-1), 'foregrounding restarts the ladder').toBe(1000);
+    at(FakeWebSocket.instances, -1)?.close();
+    expect(at(delays, -1), 'foregrounding restarts the ladder').toBe(1000);
   });
 
   it('never schedules once the transport is closed', () => {
     const { t, delays } = harness();
     t.close();
     const before = delays.length;
-    FakeWebSocket.instances.at(-1)?.close();
+    at(FakeWebSocket.instances, -1)?.close();
     expect(delays.length).toBe(before);
   });
 
@@ -146,7 +147,10 @@ describe('reconnect backoff', () => {
     // would be strictly worse than the flat loop it replaced.
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const { delays } = harness();
-    FakeWebSocket.instances.at(-1)?.onclose?.({ code: 1008, reason: 'upgrade @reticlehq/browser' });
+    at(FakeWebSocket.instances, -1)?.onclose?.({
+      code: 1008,
+      reason: 'upgrade @reticlehq/browser',
+    });
     expect(delays).toHaveLength(0);
     warn.mockRestore();
   });

@@ -88,7 +88,9 @@ describe('store registry', () => {
   });
 
   it('returns redacted, JSON-safe state for secrets, BigInt, and cycles', () => {
-    const state: Record<string, unknown> = { password: 'secret', count: 2n };
+    // BigInt(2), not 2n: the browser package compiles to ES2017 for webpack 4 (issue #680),
+    // and BigInt literals need ES2020. Same runtime value; tests do not ship.
+    const state: Record<string, unknown> = { password: 'secret', count: BigInt(2) };
     state['self'] = state;
     registerStore('ws_safe', () => state);
     const out = readStores('ws_safe');

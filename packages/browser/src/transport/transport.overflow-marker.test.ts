@@ -8,6 +8,7 @@ import {
   type ReticleEvent,
 } from '@reticlehq/core';
 import { MAX_QUEUE, Transport } from './transport.js';
+import { at } from '../test-support/array-at.js';
 
 /**
  * The offline queue drops the OLDEST events once it is full. Those events are gone: they are not in
@@ -85,9 +86,9 @@ function makeTransport(): Transport {
 
 /** Drop the live socket and let the tab come back to the foreground, opening a fresh one. */
 function reconnect(): FakeWebSocket | undefined {
-  FakeWebSocket.instances.at(-1)?.close();
+  at(FakeWebSocket.instances, -1)?.close();
   becomeVisible();
-  return FakeWebSocket.instances.at(-1);
+  return at(FakeWebSocket.instances, -1);
 }
 
 /** Every EVENT message the socket received, validated against the real wire schema. */
@@ -104,7 +105,7 @@ const overflowMarkers = (ws: FakeWebSocket | undefined): ReticleEvent[] =>
 
 /** Queue `count` events while the socket is still connecting, then open it to flush the backlog. */
 function overflowThenOpen(t: Transport, count: number): FakeWebSocket | undefined {
-  const ws = FakeWebSocket.instances.at(-1);
+  const ws = at(FakeWebSocket.instances, -1);
   for (let i = 0; i < count; i += 1) t.sendEvent(evt(i));
   ws?.open();
   return ws;

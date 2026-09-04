@@ -159,7 +159,7 @@ export function compileRecording(
       if (ann.signal !== undefined) success = { signal: ann.signal };
       continue;
     }
-    const target = out.at(-1);
+    const target = out[out.length - 1];
     if (target === undefined) continue;
     if (ann.kind === AnnotationKind.ASSERT_SIGNAL && ann.signal !== undefined) {
       target.expect = { ...target.expect, signal: ann.signal };
@@ -358,7 +358,7 @@ class Recorder implements RecorderHandle {
   #confirmAnnotationOnPrior(): void {
     const draft = this.#draft;
     if (draft === undefined) return;
-    const last = this.#steps.at(-1);
+    const last = this.#steps[this.#steps.length - 1];
     if (last === undefined) {
       this.#draft = undefined;
       this.#setPhase(RecorderPhase.RECORDING);

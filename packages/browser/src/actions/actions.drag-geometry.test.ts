@@ -24,6 +24,7 @@
 
 import { describe, expect, it, beforeEach } from 'vitest';
 import { dragElement } from './actions-dom.js';
+import { at } from '../test-support/array-at.js';
 
 interface Captured {
   type: string;
@@ -90,7 +91,7 @@ describe('drag carries geometry', () => {
     await dragElement(source, target, undefined);
     const xs = of('pointermove').map((e) => e.clientX);
     expect(xs).toEqual([...xs].sort((a, b) => a - b));
-    expect(xs.at(-1)).toBe(450);
+    expect(at(xs, -1)).toBe(450);
   });
 
   it('holds the primary button down through every move', async () => {

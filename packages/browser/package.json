@@ -27,6 +27,7 @@
     "@iconify-json/heroicons-outline": "^1.2.1",
     "@iconify-json/heroicons-solid": "^1.2.1",
     "@tanstack/query-core": "^5.101.4",
+    "acorn": "^8.15.0",
     "jotai": "^2.20.2",
     "jsdom": "^30.0.1",
     "mobx": "^7.0.3",

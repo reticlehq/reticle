@@ -44,6 +44,7 @@
 import { z } from 'zod';
 import { IntentSchema, type Intent } from '@reticlehq/core';
 import type { FileSystemPort } from '../project/fs-port.js';
+import { asServerZodObject, asServerZodType } from '../schema-interop.js';
 import { subjectFor, UNSORTED_SUBJECT } from './intent-subject.js';
 
 export const INTENT_SHARD_VERSION = 1;
@@ -71,28 +72,56 @@ export const IntentStatus = {
 } as const;
 export type IntentStatus = (typeof IntentStatus)[keyof typeof IntentStatus];
 
-export const IntentRecordSchema = IntentSchema.extend({
+/**
+ * Written out explicitly (rather than inferred through `.extend()`) because `IntentSchema` is a
+ * core-zod-built schema and this file's `z` is server's own — see `schema-interop.ts`. Inference
+ * through a cross-instance `.extend()` collapses `IntentSchema`'s own fields (`id`, `statement`, …)
+ * to `unknown`, which broke every consumer of those fields below. Stating the shape by hand keeps
+ * it exact.
+ */
+export interface IntentRecord extends Intent {
   /** Which shard this lives in. Stored as well as implied, so a file read alone is self-describing. */
-  subject: z.string().min(1),
-  status: z.enum([
-    IntentStatus.PROPOSED,
-    IntentStatus.AGREED,
-    IntentStatus.PROVED,
-    IntentStatus.STALE,
-  ]),
+  subject: string;
+  status: IntentStatus;
   /** WHY it must be true. The half the old file had no room for. */
-  why: z.string().optional(),
+  why?: string;
   /** Where it came from — "the user, in conversation" beats an anonymous assertion in six months. */
-  source: z.string().optional(),
+  source?: string;
   /** When it was last touched, so a stale-looking record can be told from an untouched one. */
-  updatedAt: z.number().optional(),
-});
-export type IntentRecord = z.infer<typeof IntentRecordSchema>;
+  updatedAt?: number;
+}
+
+export const IntentRecordSchema = asServerZodType<IntentRecord>(
+  asServerZodObject(IntentSchema).extend({
+    /** Which shard this lives in. Stored as well as implied, so a file read alone is self-describing. */
+    subject: z.string().min(1),
+    status: z.enum([
+      IntentStatus.PROPOSED,
+      IntentStatus.AGREED,
+      IntentStatus.PROVED,
+      IntentStatus.STALE,
+    ]),
+    /** WHY it must be true. The half the old file had no room for. */
+    why: z.string().optional(),
+    /** Where it came from — "the user, in conversation" beats an anonymous assertion in six months. */
+    source: z.string().optional(),
+    /** When it was last touched, so a stale-looking record can be told from an untouched one. */
+    updatedAt: z.number().optional(),
+  }),
+);
 
 export const IntentShardSchema = z.object({
   version: z.literal(INTENT_SHARD_VERSION),
   subject: z.string().min(1),
-  intents: z.record(z.string(), IntentRecordSchema),
+  // One-arg form, not `z.record(z.string(), IntentRecordSchema)`: zod's own two-arg
+  // `ZodRecord.create` picks its branch with `second instanceof ZodType`, and `IntentRecordSchema`
+  // is built via `IntentSchema.extend(...)` — a REAL call to core's zod's own `.extend()` method,
+  // so the result is an instance of core's `ZodObject`, not server's. That `instanceof` is false
+  // across the module boundary, silently misreading `IntentRecordSchema` as an options object and
+  // making every intent value schema plain `z.string()` (see `schema-interop.ts`). The one-arg form
+  // has no such branch and defaults to string keys anyway — behaviorally identical, and immune to
+  // this class of zod-internal cross-instance check.
+  intents: z.record(IntentRecordSchema),
 });
 export type IntentShard = z.infer<typeof IntentShardSchema>;
 

@@ -113,11 +113,17 @@ export function selectPath(root: unknown, path: string): PathSelection {
       }
       return miss(current);
     }
-    // `Object.hasOwn`, not `in`: `in` walks the prototype, so a path segment of `constructor`,
+    // `hasOwnProperty`, not `in`: `in` walks the prototype, so a path segment of `constructor`,
     // `__proto__`, or `toString` reported found:true and returned a function from Object.prototype —
     // a state assertion on a typo'd path silently passed against a builtin instead of failing with
-    // availableKeys. Only an OWN key is a real state path.
-    if ('object' === typeof current && current !== null && Object.hasOwn(current, segment)) {
+    // availableKeys. Only an OWN key is a real state path. `Object.hasOwn` (ES2022) would ship
+    // verbatim in the ES2017 dist and throw on browsers that predate it (issue #680's target); the
+    // `Object.prototype` form is the same check, callable on any ES5+ engine.
+    if (
+      'object' === typeof current &&
+      current !== null &&
+      Object.prototype.hasOwnProperty.call(current, segment)
+    ) {
       current = (current as Record<string, unknown>)[segment];
       continue;
     }
