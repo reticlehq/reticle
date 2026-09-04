@@ -395,10 +395,17 @@ describe('Bridge security boundary', () => {
     expect(noisy.readyState).toBe(WebSocket.OPEN);
   });
 
+  /**
+   * The cap must fire while the holder is still pending. A 50ms hello timeout lost that race on a
+   * loaded Windows runner: idle expired first, the pool had a free slot, excess was accepted as the
+   * new pending handshake, and both sockets closed 1008. The sibling test already uses 5s so the
+   * holder survives the second dial; expiry is still asserted here, just against a window CI can
+   * keep.
+   */
   it('caps and expires unauthenticated pending handshakes', async () => {
     const limited = await makeBridge({
       maxPendingConnections: 1,
-      helloTimeoutMs: 50,
+      helloTimeoutMs: 2_000,
     });
     const idle = await openSocket(limited.port);
     const idleClosed = waitForClose(idle);

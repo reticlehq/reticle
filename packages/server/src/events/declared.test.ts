@@ -77,6 +77,36 @@ describe('a declared failing request is a declaration, not a contradiction', () 
   });
 });
 
+describe('a named net is a write the assertion asked about', () => {
+  it('reads a success net — the caller named the request, even if it was supposed to work', () => {
+    expect(
+      declaredExpectations({
+        kind: PredicateKind.NET,
+        method: 'POST',
+        urlContains: '/api/people/match',
+        status: 200,
+      }).namedNets,
+    ).toEqual([{ method: 'POST', urlContains: '/api/people/match' }]);
+  });
+
+  it('is empty when the caller only asked about the screen', () => {
+    expect(
+      declaredExpectations({ kind: PredicateKind.TEXT, contains: 'Jane recognised' }).namedNets,
+    ).toEqual([]);
+  });
+
+  it('reads the net out of an allOf that also names on-screen proof', () => {
+    const declared = declaredExpectations({
+      kind: PredicateKind.ALL_OF,
+      predicates: [
+        { kind: PredicateKind.NET, urlContains: '/api/people/match', status: 200 },
+        { kind: PredicateKind.TEXT, contains: 'Jane recognised' },
+      ],
+    });
+    expect(declared.namedNets).toEqual([{ urlContains: '/api/people/match' }]);
+  });
+});
+
 describe('a declared visible consequence', () => {
   it('counts an element predicate as content the caller required on screen', () => {
     expect(

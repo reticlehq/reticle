@@ -31,6 +31,11 @@ export interface DeclaredNetFailure {
 export interface DeclaredExpectations {
   /** Requests the caller declared would FAIL, so failing is the expected outcome, not a disagreement. */
   netFailures: readonly DeclaredNetFailure[];
+  /**
+   * Every net the caller named — success or failure. `duplicate-request` on a write that is not
+   * in this list is a poll or a beacon, not a double submit of the thing under test.
+   */
+  namedNets: readonly DeclaredNetFailure[];
   /** The caller required something to be ON SCREEN — an element or text, present rather than absent. */
   rendersContent: boolean;
 }
@@ -40,6 +45,7 @@ const FAILURE_STATUS_MIN = 400;
 
 export function declaredExpectations(predicate: Predicate | undefined): DeclaredExpectations {
   const netFailures: DeclaredNetFailure[] = [];
+  const namedNets: DeclaredNetFailure[] = [];
   let rendersContent = false;
 
   const walk = (p: Predicate): void => {
@@ -48,6 +54,10 @@ export function declaredExpectations(predicate: Predicate | undefined): Declared
         for (const child of p.predicates) walk(child);
         return;
       case PredicateKind.NET: {
+        namedNets.push({
+          ...(p.method === undefined ? {} : { method: p.method }),
+          ...(p.urlContains === undefined ? {} : { urlContains: p.urlContains }),
+        });
         const declaredFailure =
           false === p.ok || (p.status !== undefined && p.status >= FAILURE_STATUS_MIN);
         if (!declaredFailure) return;
@@ -68,7 +78,7 @@ export function declaredExpectations(predicate: Predicate | undefined): Declared
   };
 
   if (predicate !== undefined) walk(predicate);
-  return { netFailures, rendersContent };
+  return { netFailures, namedNets, rendersContent };
 }
 
 /**

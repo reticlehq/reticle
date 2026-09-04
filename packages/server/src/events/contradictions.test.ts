@@ -178,6 +178,68 @@ describe('findContradictions — cross-channel disagreement', () => {
   });
 
   /**
+   * A camera loop or an analytics beacon is not a double submit. The finding's claim is "one user
+   * action was performed"; N identical writes at a regular cadence are the app polling, and a burst
+   * of two is the double-click. Counted as a duplicate they made every verdict on those pages
+   * `unknown`, including assertions that never named the looping URL.
+   */
+  describe('a poll is not a double submit', () => {
+    const timed = (url: string, t: number): ReticleEvent => ({ ...okCall('POST', url), t });
+
+    it('stays silent for identical writes at a regular interval', () => {
+      const events = [
+        timed('/api/people/match', 1000),
+        timed('/api/people/match', 2000),
+        timed('/api/people/match', 3000),
+        timed('/api/people/match', 4000),
+        domChanged(),
+      ];
+      expect(findContradictions(events, { actionSince: 0 }).map((c) => c.kind)).not.toContain(
+        ContradictionKind.DUPLICATE_REQUEST,
+      );
+    });
+
+    it('still catches a burst of two — that is the double submit', () => {
+      const events = [timed('/api/order', 100), timed('/api/order', 108), domChanged()];
+      expect(findContradictions(events, { actionSince: 0 }).map((c) => c.kind)).toContain(
+        ContradictionKind.DUPLICATE_REQUEST,
+      );
+    });
+
+    it('does not let an unnamed analytics loop impeach an assertion about the screen', () => {
+      const events = [timed('/api/collect', 50), timed('/api/collect', 58), domChanged()];
+      expect(
+        findContradictions(events, { actionSince: 0, namedNets: [] }).map((c) => c.kind),
+      ).not.toContain(ContradictionKind.DUPLICATE_REQUEST);
+    });
+
+    it('still catches a double submit of the write the caller named', () => {
+      const events = [timed('/api/order', 50), timed('/api/order', 58), domChanged()];
+      expect(
+        findContradictions(events, {
+          actionSince: 0,
+          namedNets: [{ urlContains: '/api/order' }],
+        }).map((c) => c.kind),
+      ).toContain(ContradictionKind.DUPLICATE_REQUEST);
+    });
+
+    it('does not call a named save a duplicate of an unnamed beacon', () => {
+      const events = [
+        timed('/api/order', 50),
+        timed('/api/collect', 51),
+        timed('/api/collect', 59),
+        domChanged(),
+      ];
+      expect(
+        findContradictions(events, {
+          actionSince: 0,
+          namedNets: [{ urlContains: '/api/order' }],
+        }).map((c) => c.kind),
+      ).not.toContain(ContradictionKind.DUPLICATE_REQUEST);
+    });
+  });
+
+  /**
    * A command-bus API sends every mutation to ONE URL and discriminates on a JSON body field.
    * Reported from the field: one click firing three genuinely different commands read as "the same
    * write fired 3 times", nearly every act_and_wait in the session was flagged, and otherwise-clean

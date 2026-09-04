@@ -127,7 +127,7 @@ describe('act_and_wait and assert see the same evidence', () => {
 
   it('act_and_wait still passes the action and its effect — prior is added, not swapped', () => {
     expect(act).toMatch(/findContradictions\([\s\S]{0,450}action: acted/);
-    expect(act).toMatch(/findContradictions\([\s\S]{0,450}session\.lastAct\.effect\(\)/);
+    expect(act).toMatch(/findContradictions\([\s\S]{0,550}session\.lastAct\.effect\(\)/);
   });
 
   /**
@@ -139,6 +139,7 @@ describe('act_and_wait and assert see the same evidence', () => {
     for (const file of [act, assert]) {
       expect(file).toMatch(/declaredExpectations\(/);
       expect(file).toMatch(/expectedFailures:/);
+      expect(file).toMatch(/namedNets:/);
       expect(file).toMatch(/renderProved:/);
     }
   });

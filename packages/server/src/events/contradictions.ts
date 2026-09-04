@@ -119,6 +119,34 @@ function isMutating(call: NetCall): boolean {
   return MUTATING_METHODS.includes(call.method);
 }
 
+/** Identical writes closer than this are a burst (double-submit), not a poll. */
+const POLL_MIN_GAP_MS = 250;
+/** Two is a double submit; a poll has been seen ticking. */
+const POLL_MIN_TICKS = 3;
+/** Widest/narrowest gap still counted as a regular cadence. */
+const POLL_GAP_RATIO_MAX = 2.5;
+
+/**
+ * N identical writes at a regular interval are a camera loop or a beacon, not one action firing
+ * twice. A double submit is a burst: two writes a few milliseconds apart.
+ */
+function isRegularPoll(times: readonly number[]): boolean {
+  if (times.length < POLL_MIN_TICKS) return false;
+  const sorted = [...times].sort((a, b) => a - b);
+  const gaps: number[] = [];
+  for (let i = 1; i < sorted.length; i++) {
+    const prev = sorted[i - 1];
+    const next = sorted[i];
+    if (undefined === prev || undefined === next) continue;
+    gaps.push(next - prev);
+  }
+  if (0 === gaps.length) return false;
+  const min = Math.min(...gaps);
+  const max = Math.max(...gaps);
+  if (min < POLL_MIN_GAP_MS) return false;
+  return max <= min * POLL_GAP_RATIO_MAX;
+}
+
 /**
  * State paths/values that read as the app recording a failure rather than hiding one.
  *
@@ -283,6 +311,12 @@ export interface ContradictionOptions {
    * `contradictions.declared.test.ts`.
    */
   expectedFailures?: readonly DeclaredNetFailure[] | undefined;
+  /**
+   * Nets the caller named in the predicate. `duplicate-request` on a write that is not among them
+   * is a poll or a beacon, not a double submit of the thing under test. Undefined (observe, no
+   * predicate) keeps the old rule — every mutating repeat in the action window is still a finding.
+   */
+  namedNets?: readonly DeclaredNetFailure[] | undefined;
   /**
    * The caller declared an on-screen consequence and it HELD in this window.
    *
@@ -780,7 +814,10 @@ function findWindowContradictions(
     const navigatedAt = events.find(
       (e) => EventType.ROUTE_CHANGE === e.type && e.t >= actionSince,
     )?.t;
-    const writeCounts = new Map<string, { label: string; count: number }>();
+    const writeCounts = new Map<
+      string,
+      { label: string; count: number; times: number[]; call: ReturnType<typeof netCall> }
+    >();
     for (const event of events) {
       if (event.type !== EventType.NET_REQUEST || event.t < actionSince) continue;
       if (navigatedAt !== undefined && event.t >= navigatedAt) continue;
@@ -789,12 +826,16 @@ function findWindowContradictions(
       const label = `${call.method} ${call.url}`;
       const body = asString(event.data['requestBody']);
       const key = body === undefined || 0 === body.length ? label : `${label} ${body}`;
-      const entry = writeCounts.get(key) ?? { label, count: 0 };
+      const entry = writeCounts.get(key) ?? { label, count: 0, times: [], call };
       entry.count += 1;
+      entry.times.push(event.t);
       writeCounts.set(key, entry);
     }
-    for (const [, { label, count }] of writeCounts) {
+    const namedNets = options.namedNets;
+    for (const [, { label, count, times, call }] of writeCounts) {
       if (count < 2) continue;
+      if (isRegularPoll(times)) continue;
+      if (undefined !== namedNets && !matchesDeclaredFailure(call, namedNets)) continue;
       found.push({
         kind: ContradictionKind.DUPLICATE_REQUEST,
         claim: 'one user action was performed',
