@@ -39,18 +39,9 @@ import {
   RETICLE_MD_PATH,
   CURSOR_RULE_PATH,
 } from './agent-rules.js';
-import {
-  viteSteps,
-  nextSteps,
-  craSteps,
-  svelteKitSteps,
-  nuxtSteps,
-  astroSteps,
-  cspStep,
-  VITE_PLUGIN_DETAIL,
-} from './plan-framework.js';
+import { cspStep, frameworkSteps } from './plan-framework.js';
 import { join } from 'node:path';
-import { htmlManual, reticleConfigContent, unverifiedUiLibraryNote } from './snippets.js';
+import { reticleConfigContent, unverifiedUiLibraryNote } from './snippets.js';
 import { configWithInstallSource, declaredInstallSource } from '../telemetry/install-source.js';
 import { existingConfigProblem, projectIdOf, RETICLE_CONFIG_FILE } from './existing-config.js';
 
@@ -966,29 +957,6 @@ export function buildPlan(input: PlanInput): Plan {
     installStep(input),
     ...reticleConfigSteps(input),
   ];
-  if (input.detection.framework === Framework.VITE) {
-    steps.push(...viteSteps(input));
-  } else if (input.detection.framework === Framework.NEXT) {
-    steps.push(...nextSteps(input));
-  } else if (input.detection.framework === Framework.ASTRO) {
-    steps.push(...astroSteps(input));
-  } else if (input.detection.framework === Framework.CRA) {
-    steps.push(...craSteps(input));
-  } else if (input.detection.framework === Framework.NUXT) {
-    steps.push(...nuxtSteps(input));
-  } else if (input.detection.framework === Framework.SVELTEKIT) {
-    steps.push(...svelteKitSteps(input));
-    // The Vite plugin as well as the client hook. `init` already INSTALLS @reticlehq/vite-plugin for
-    // SvelteKit and then never wired it into the config, so it sat in package.json doing nothing —
-    // which is why a SvelteKit app connected fine and every verdict came back with no file:line.
-    steps.push(...viteSteps(input, VITE_PLUGIN_DETAIL.SVELTEKIT));
-  } else {
-    steps.push({
-      title: 'Connect snippet',
-      target: 'index.html',
-      status: StepStatus.MANUAL,
-      detail: htmlManual(input.options.port, input.options.projectId, input.pairingToken),
-    });
-  }
+  steps.push(...frameworkSteps(input));
   return { framework: input.detection.framework, uiLibrary: input.detection.uiLibrary, steps };
 }
