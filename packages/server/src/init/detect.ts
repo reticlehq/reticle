@@ -87,6 +87,17 @@ export interface Detection {
    */
   typescript: boolean;
   reactMajor: number | undefined;
+  /**
+   * `react-scripts`' major, when the project has it. `undefined` on every other stack.
+   *
+   * Load-bearing below 5: react-scripts 4 runs webpack 4, whose parser predates optional chaining
+   * and logical assignment. `@reticlehq/browser` ships both untranspiled, and react-scripts excludes
+   * `node_modules` from Babel, so the build dies inside our `dist/` before a session can exist
+   * (#680). The failure has no diagnostic of its own -- the app simply does not compile.
+   *
+   * Optional so every existing fixture keeps compiling without naming it; `detect` always sets it.
+   */
+  reactScriptsMajor?: number | undefined;
   /** React 19 dropped _debugSource, so it needs the build-time source-map stamp. */
   needsSourceMapping: boolean;
   packageManager: PackageManager;
@@ -226,6 +237,7 @@ export function detect(input: DetectInput): Detection {
   const reactMajor = parseMajor(depVersion(input.pkg, 'react'));
   return {
     framework: detectFramework(input),
+    reactScriptsMajor: parseMajor(depVersion(input.pkg, 'react-scripts')),
     uiLibrary: detectUiLibrary(input.pkg),
     typescript:
       hasAnyConfig(input.configFiles, TS_CONFIGS) ||

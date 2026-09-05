@@ -39,6 +39,8 @@ import {
   astroManual,
   nuxtManual,
   NUXT_PLUGIN_PATH,
+  webpack4TranspileNote,
+  WEBPACK4_REACT_SCRIPTS_MAJOR,
   reactRouterManual,
   REACT_ROUTER_ENTRY_PATH,
   htmlManual,
@@ -411,6 +413,31 @@ export function nextSteps(input: PlanInput): Step[] {
  * Silently emitting it reads as a support claim, which is the thing this project exists to not do.
  */
 /**
+ * The one failure `init` cannot otherwise see: the bundler will not parse our SDK.
+ *
+ * Every check in this report passes on a react-scripts 4 app -- the package installs, the entry
+ * import is written, the token is inlined -- and then `npm start` dies with a syntax error inside
+ * `@reticlehq/browser/dist/index.js`, a file the user did not write, naming nothing about Reticle
+ * (#680). A green report over a build that cannot compile is the same class of lie as a green report
+ * over an app that cannot connect.
+ *
+ * FIRST in the CRA step list, deliberately: it decides whether any of the steps below it can run at
+ * all.
+ */
+function webpack4Step(input: PlanInput): Step[] {
+  const major = input.detection.reactScriptsMajor;
+  if (major === undefined || major >= WEBPACK4_REACT_SCRIPTS_MAJOR) return [];
+  return [
+    {
+      title: `react-scripts ${String(major)} cannot parse the SDK`,
+      target: 'package.json',
+      status: StepStatus.NOTICE,
+      detail: webpack4TranspileNote(major),
+    },
+  ];
+}
+
+/**
  * Create React App: the connect goes in `src/index.tsx`, the token in `.env.development.local`.
  *
  * The previous plan pointed at `index.html`, which cannot work — CRA's is a static template the
@@ -421,6 +448,7 @@ export function craSteps(input: PlanInput): Step[] {
   // Match the project language the same way Next does (#675): a JS CRA app cannot resolve `.ts`.
   const modulePath = craDevModulePath(input.detection.typescript);
   const steps: Step[] = [
+    ...webpack4Step(input),
     {
       title: 'Reticle connect module',
       target: modulePath,
