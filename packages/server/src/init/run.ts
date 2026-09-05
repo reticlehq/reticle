@@ -305,7 +305,7 @@ export interface InitIo {
  * they are in — which is not hypothetical, because a monorepo redirect re-enters `runInit` with a
  * different cwd and the outer caller never learns that it happened.
  */
-export interface InitContext {
+interface InitContext {
   /** The directory actually wired, AFTER any monorepo redirect. */
   readonly appDir: string;
   readonly framework: string;

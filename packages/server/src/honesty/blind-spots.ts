@@ -19,7 +19,7 @@ import {
   type ReticleEvent,
 } from '@reticlehq/core';
 
-export interface BlindSpot {
+interface BlindSpot {
   kind: BlindSpotKind;
   count: number;
 }
