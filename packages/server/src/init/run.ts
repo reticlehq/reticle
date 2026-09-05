@@ -147,6 +147,7 @@ const NEXT_PAGES_APP_CANDIDATES = [
   'src/pages/_app.js',
 ];
 const SVELTEKIT_HOOKS = 'src/hooks.client.ts';
+const REACT_ROUTER_ENTRY = 'app/entry.client.tsx';
 const SOURCE_FILE = /\.(tsx|jsx|ts|js|svelte|vue|astro)$/;
 /** Files read for the testid scan. A capabilities block is a hint; reading a whole repo for it is not. */
 const MAX_SCANNED_FILES = 200;
@@ -504,6 +505,7 @@ function gatherPlanInput(options: InitOptions, io: InitIo, pkg: unknown): PlanIn
     nextReticleDevExists: io.exists(devLocation.path),
     nextReticleDevSource: io.readFile(devLocation.path),
     svelteKitHooksExists: io.exists(SVELTEKIT_HOOKS),
+    reactRouterEntryExists: io.exists(REACT_ROUTER_ENTRY),
     craEntry: craEntryOf(io),
     craEnv: io.readFile(CRA_ENV_PATH),
     pairingToken: readPairingToken(),
