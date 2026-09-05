@@ -4,6 +4,9 @@ All notable changes to the **`@reticlehq/*`** packages are documented here (each
 
 ## [Unreleased]
 
+### Changed
+
+- **`@reticlehq/server` — a `ROUTE_CHANGE` is read through one helper (`routeOfEvent`).** Six call sites (and the journey consequence line) each picked `pathname` / `to` / `hash` out of the event by hand, so a seventh hash-router miss was a field choice away: the document pathname is `/` on every HashRouter page, the default for a packaged Electron/Tauri renderer. The helper returns both the router path and the navigable `docPath + hash`; call sites pick, they do not re-index. Closes [#727](https://github.com/reticlehq/reticle/issues/727).
 ### Fixed
 
 - **`@reticlehq/server` — `write-field-ignored` stays silent on create sentinels and identity keys.** A POST that sent `sub_category_id: 0` and got back the new row's id, or a public workspace id echoed as an internal row id, was reported as a half-applied write — a strong claim about a data-integrity bug that did not exist — and one such request poisoned every later assert in the window. `0` / `""` / `null` mean "server, you decide"; `id` / `*_id` are identities the server assigns. A locale that came back as a different locale still fires. The copy names a different echo rather than a write the UI cannot know about. Closes [#670](https://github.com/reticlehq/reticle/issues/670).
