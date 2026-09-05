@@ -547,6 +547,69 @@ declare const __RETICLE_SDK_VERSION__: string | undefined;
 `;
 }
 
+/** React Router's client-entry override point, in framework mode. */
+export const REACT_ROUTER_ENTRY_PATH = 'app/entry.client.tsx';
+
+/**
+ * The React Router framework-mode recipe, printed rather than written.
+ *
+ * `app/entry.client.tsx` is an OVERRIDE: React Router supplies a default client entry, and the file
+ * only exists once an app opts out of it. Generating one containing our import and nothing else
+ * would replace that default with a file that never hydrates — an app that connected to Reticle and
+ * rendered nothing. Same judgement `astroSteps` already makes about a layout: a half-written entry
+ * is worse than a documented manual step.
+ *
+ * Two shapes, because the file may or may not be there, and the answer is different:
+ *   - it exists  -> add one line to it, and only that line
+ *   - it does not -> create it from React Router's own default, plus that line
+ */
+export function reactRouterManual(
+  port: number | undefined,
+  projectId?: string,
+  entryExists = false,
+): string {
+  const connect = connectArg(port, projectId);
+  const line = `if (import.meta.env.DEV) void import('/@reticle-connect');`;
+  const head = `React Router framework mode renders HTML through its own request handler, so the Vite
+  plugin's index.html injection never fires and the connect script never reaches the page. The
+  plugin is still required — it stamps data-reticle-source, which is what puts file:line on every
+  verdict — but connect() has to come from the client entry.`;
+  if (entryExists) {
+    return `${head}
+
+  Add this to the TOP of ${REACT_ROUTER_ENTRY_PATH}, above the hydration call:
+
+      ${line}
+
+  The import is the module @reticlehq/vite-plugin serves; it carries the port, the project id and
+  this machine's pairing token already, so there is nothing to fill in${0 === connect.length ? '' : ` (connect args: ${connect})`}.`;
+  }
+  return `${head}
+
+  ${REACT_ROUTER_ENTRY_PATH} does not exist yet. It is an OVERRIDE of React Router's default client
+  entry, so it has to hydrate as well as connect — a file containing only the import would replace
+  the default with one that never hydrates. Create it with React Router's own default plus the
+  import:
+
+      import { HydratedRouter } from 'react-router/dom';
+      import { StrictMode, startTransition } from 'react';
+      import { hydrateRoot } from 'react-dom/client';
+
+      ${line}
+
+      startTransition(() => {
+        hydrateRoot(
+          document,
+          <StrictMode>
+            <HydratedRouter />
+          </StrictMode>,
+        );
+      });
+
+  Check it against your React Router version's documented default entry before saving — this is the
+  v7 shape, and it is the half that must be right whether or not Reticle is in it.`;
+}
+
 /** Where a Nuxt dev-only client plugin belongs. `.client` keeps it out of SSR; Nuxt auto-registers it. */
 export const NUXT_PLUGIN_PATH = 'app/plugins/reticle.client.ts';
 
