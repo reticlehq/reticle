@@ -75,7 +75,15 @@ export function flowExpectHasConsequence(expect: FlowExpect | undefined): boolea
   return false;
 }
 
-/** True when a FlowExpect checks ONLY element presence — no consequence field is set. */
+/**
+ * True when a FlowExpect checks ONLY presence — an element or rendered text, no consequence field.
+ *
+ * `text` counts here for the same reason `element` does, and leaving it out would have been the
+ * expensive kind of omission: a text-only expect would have been neither a consequence nor
+ * presence-only, so it would have fallen through to `assertion-free` — a permanent green wearing
+ * an assertion (#811).
+ */
 export function flowExpectIsPresenceOnly(expect: FlowExpect | undefined): boolean {
-  return expect !== undefined && expect.element !== undefined && !flowExpectHasConsequence(expect);
+  if (expect === undefined || flowExpectHasConsequence(expect)) return false;
+  return expect.element !== undefined || expect.text !== undefined;
 }

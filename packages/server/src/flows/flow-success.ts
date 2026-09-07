@@ -37,6 +37,7 @@ export function successLabel(success: FlowExpect): string {
     return `console:${true === success.console.absent ? 'clean' : (success.console.level ?? 'error')}`;
   }
   if (success.state !== undefined) return `state:${success.state.path}`;
+  if (success.text !== undefined) return `text:${success.text.contains}`;
   return success.element?.testid ?? success.element?.name ?? success.element?.role ?? 'success';
 }
 
@@ -122,6 +123,25 @@ export function successToPredicate(
       if (element.name !== undefined) query['name'] = element.name;
       if (Object.keys(query).length > 0) parts.push({ kind: PredicateKind.ELEMENT, query });
     }
+  }
+
+  const text = success.text;
+  if (text !== undefined) {
+    const part: Extract<Predicate, { kind: typeof PredicateKind.TEXT }> = {
+      kind: PredicateKind.TEXT,
+      contains: text.contains,
+    };
+    if (text.scope !== undefined) part.scope = text.scope;
+    if (text.visible !== undefined) part.visible = text.visible;
+    if (true === text.absent) {
+      part.absent = true;
+      // Same post-settle reasoning as `console.absent` and `state.hold`: a wait-until-true waiter
+      // reads "not there yet" on the first poll and passes BEFORE the text it is meant to see
+      // disappear has even been rendered. Gate on `settled` so the read happens after the page
+      // quiets, by which point a text that was going to appear has.
+      parts.push({ kind: PredicateKind.SETTLED });
+    }
+    parts.push(part);
   }
 
   const [first] = parts;
