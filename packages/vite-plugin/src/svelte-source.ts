@@ -40,6 +40,18 @@ import { DATA_RETICLE_SOURCE_ATTR } from '@reticlehq/core';
 /** Files this module stamps. `.svelte.ts` (a runes module) is code, not markup — excluded. */
 export const SVELTE_FILE = /\.svelte$/;
 
+/** Matches `// @reticle-ignore` as the first non-empty line of a file. */
+const RETICLE_IGNORE_RE = /^\s*\/\/\s*@reticle-ignore\s*/;
+
+/**
+ * Check whether the source's first non-empty line is `// @reticle-ignore`.
+ * Used to skip stamping for generated files or snapshot-tested components.
+ */
+function isReticleIgnoreFile(code: string): boolean {
+  const firstLine = code.split('\n', 1)[0] ?? '';
+  return RETICLE_IGNORE_RE.test(firstLine);
+}
+
 /** Element node types that are a real place in the DOM, in Svelte 5's AST and Svelte 4's. */
 const HOST_ELEMENT_TYPES: ReadonlySet<string> = new Set(['RegularElement', 'Element']);
 
@@ -175,6 +187,7 @@ export function stampSvelte(
   id: string,
   load: LoadSvelteCompiler = defaultLoadCompiler,
 ): string | null {
+  if (isReticleIgnoreFile(code)) return null;
   const compiler = load();
   if (null === compiler) return null;
   let ast: unknown;

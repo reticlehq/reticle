@@ -46,4 +46,38 @@ describe('reticle babel plugin', () => {
     // it while real plugin-core drift stays unasserted, which is the alarm pointing the wrong way.
     expect((out.match(new RegExp(SOURCE_ATTR, 'g')) ?? []).length).toBe(1);
   });
+
+  describe('@reticle-ignore', () => {
+    it('skips stamping when the file starts with `// @reticle-ignore`', () => {
+      const out = transform(`// @reticle-ignore\nconst x = <button>Hi</button>;`);
+      expect(out).not.toContain(SOURCE_ATTR);
+    });
+
+    it('skips stamping even with leading whitespace before the comment', () => {
+      const out = transform(`   // @reticle-ignore\nconst x = <button>Hi</button>;`);
+      expect(out).not.toContain(SOURCE_ATTR);
+    });
+
+    it('still stamps when the comment is NOT the first non-empty line', () => {
+      const out = transform(
+        `import React from 'react';\n// @reticle-ignore\nconst x = <button>Hi</button>;`,
+      );
+      expect(out).toContain(SOURCE_ATTR);
+    });
+
+    it('stamps normally in a sibling file without the ignore comment', () => {
+      const out = transform('const x = <button>Hi</button>;', 'src/Other.tsx');
+      expect(out).toContain(SOURCE_ATTR);
+    });
+
+    it('does not stamp components in an ignored file (consistent behavior)', () => {
+      const out = transform(`// @reticle-ignore\nconst x = <App />;`);
+      expect(out).not.toContain(SOURCE_ATTR);
+    });
+
+    it('preserves the ignore comment in output', () => {
+      const out = transform(`// @reticle-ignore\nconst x = <button>Hi</button>;`);
+      expect(out).toContain('@reticle-ignore');
+    });
+  });
 });

@@ -143,3 +143,27 @@ describe('the compiler is reached only for a .svelte file', () => {
     expect(loader).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('@reticle-ignore', () => {
+  it('returns null (skips stamping) when the file starts with `// @reticle-ignore`', () => {
+    const out = stampSvelte('// @reticle-ignore\n<div>hi</div>', 'src/App.svelte');
+    expect(out).toBeNull();
+  });
+
+  it('returns null even with leading whitespace before the comment', () => {
+    const out = stampSvelte('   // @reticle-ignore\n<div>hi</div>', 'src/App.svelte');
+    expect(out).toBeNull();
+  });
+
+  it('still stamps when the comment is NOT the first non-empty line', () => {
+    const out = stampSvelte('<script>let n = 1;</script>\n// @reticle-ignore\n<div>hi</div>', 'src/App.svelte');
+    expect(out).not.toBeNull();
+    expect(stampedValues(out ?? '')).toEqual(['src/App.svelte:3:0']);
+  });
+
+  it('does not ask for the compiler when the file is ignored', () => {
+    const loader = vi.fn(() => null);
+    stampSvelte('// @reticle-ignore\n<div>hi</div>', 'src/App.svelte', loader);
+    expect(loader).not.toHaveBeenCalled();
+  });
+});
