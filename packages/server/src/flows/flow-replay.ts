@@ -29,6 +29,16 @@ import {
 } from './flow-step-runners.js';
 import { successToPredicate } from './flow-success.js';
 import { ReticleTool } from '../tools/tool-names.js';
+import { isStaleRefError } from '../tools/act-sequence-retry.js';
+import { waitForReaction } from '../tools/react-grace.js';
+
+/**
+ * How long a replay step waits for the render to finish before retrying a stale ref.
+ *
+ * `waitForReaction` clamps to its own 300ms grace, so this is a ceiling rather than a duration --
+ * the same shape `act_sequence` passes its per-step timeout in.
+ */
+const STALE_RETRY_BUDGET_MS = 1000;
 
 /**
  * The session surface flow-replay needs: QUERY to re-resolve a testid anchor against the live
@@ -385,6 +395,7 @@ async function runTestidStep(
   dynamic: ReadonlySet<string>,
   confirmDangerous: boolean,
   sleep: Sleep,
+  cursorBefore = 0,
 ): Promise<FlowStepResult> {
   const { refs, hint } = await resolveTestid(session, value, sleep);
   if (0 === refs.length) {
@@ -398,18 +409,51 @@ async function runTestidStep(
   }
   const ref = refs[0] ?? '';
   const note = refs.length > 1 ? ambiguousTestidNote(value) : undefined;
-  session.beginAction?.(ReticleTool.FLOW_REPLAY, { ref, action: step.action ?? '' });
-  let act;
-  try {
-    act = await session.command(ReticleCommand.ACT, {
-      ref,
-      action: step.action ?? '',
-      // `value` is the anchor's own name — the field this step types into — so a redacted fill can
-      // be supplied from RETICLE_SECRET_<FIELD> without the flow carrying the secret.
-      args: replayActionArgs(step.args, confirmDangerous, value),
-    });
-  } finally {
-    session.finishAction?.();
+  // One retry when the ref went stale between resolving it and dispatching against it.
+  //
+  // Replay already RE-RESOLVES every anchor per step, so the failure is not a drifted locator -- it
+  // is a race with the render inside a single step. `fill` triggers a search re-render, the ref
+  // resolved a moment earlier is invalidated, and the click reports `ref 'eNNNN' no longer resolves
+  // to an element` with a different number every attempt. `flow_heal` correctly returns
+  // `unhealable`: the locator is right, only the timing is wrong, and there is nothing to heal
+  // (#602).
+  //
+  // The attempt closure re-resolves the testid, so the retry dispatches against a FRESH ref rather
+  // than the stale one -- which is the whole point, and the difference from simply calling the same
+  // command twice. Everything else follows `act_sequence`'s rule exactly: retry only for staleness,
+  // after the grace period the app already gets, so a genuinely gone element fails again
+  // immediately and no other failure ever re-runs an action.
+  const dispatch = async (targetRef: string): Promise<CommandResult> => {
+    session.beginAction?.(ReticleTool.FLOW_REPLAY, { ref: targetRef, action: step.action ?? '' });
+    try {
+      return await session.command(ReticleCommand.ACT, {
+        ref: targetRef,
+        action: step.action ?? '',
+        // `value` is the anchor's own name — the field this step types into — so a redacted fill can
+        // be supplied from RETICLE_SECRET_<FIELD> without the flow carrying the secret.
+        args: replayActionArgs(step.args, confirmDangerous, value),
+      });
+    } finally {
+      session.finishAction?.();
+    }
+  };
+  let act = await dispatch(ref);
+  if (!act.ok && isStaleRefError(act.error)) {
+    await waitForReaction(session, cursorBefore, STALE_RETRY_BUDGET_MS, { sleep });
+    const fresh = await resolveTestid(session, value, sleep);
+    const freshRef = fresh.refs[0];
+    // Nothing to retry against: the element really is gone, so report the drift the second resolve
+    // proves rather than the stale-ref error, which would send the reader after a re-render.
+    if (freshRef === undefined) {
+      return {
+        step: index,
+        tool: step.tool,
+        anchor: value,
+        ok: false,
+        drift: testidDrift(value, fresh.hint),
+      };
+    }
+    act = await dispatch(freshRef);
   }
   const result: FlowStepResult = { step: index, tool: step.tool, anchor: value, ok: act.ok };
   if (!act.ok) {
@@ -600,7 +644,16 @@ export async function replayFlow(
           // and keeps its old path, where it fails legibly rather than querying a role as a testid.
           return runRoleStep(session, step, index, step.anchor, confirmDangerous, sleep);
         }
-        return runTestidStep(session, step, index, label, dynamic, confirmDangerous, sleep);
+        return runTestidStep(
+          session,
+          step,
+          index,
+          label,
+          dynamic,
+          confirmDangerous,
+          sleep,
+          cursorBefore,
+        );
       },
     );
     // Once the anchor resolved and the action ran, the step's own expect is evaluated — signal, net,
