@@ -626,6 +626,16 @@ export class Session {
     return this.#buffer.lostSince(cursor);
   }
 
+  /**
+   * Hold events at or after `cursor` against count-cap eviction until the returned function runs.
+   *
+   * Armed by a wait for as long as it is being graded, so the predicate's own match cannot be
+   * dropped inside the very window it is judged on -- see `RingBuffer.protect` (#668).
+   */
+  protectWindow(cursor: number): () => void {
+    return this.#buffer.protect(cursor);
+  }
+
   onEvent(listener: (event: ReticleEvent) => void): () => void {
     this.#listeners.add(listener);
     return () => this.#listeners.delete(listener);
