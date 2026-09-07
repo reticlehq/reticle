@@ -287,9 +287,13 @@ interface InstallCommand {
 export function installCommandParts(
   pm: PackageManager,
   pkgs: string | readonly string[],
+  extraArgs: readonly string[] = [],
 ): InstallCommand {
   const list = 'string' === typeof pkgs ? [pkgs] : pkgs;
-  return { command: pm, args: [...INSTALL_ARGS[pm], ...list, ...(QUIET_INSTALL_ARGS[pm] ?? [])] };
+  return {
+    command: pm,
+    args: [...INSTALL_ARGS[pm], ...list, ...extraArgs, ...(QUIET_INSTALL_ARGS[pm] ?? [])],
+  };
 }
 
 /**
@@ -300,7 +304,11 @@ export function installCommandParts(
  * directly for that reason; routing it through the parts would put `--no-audit --no-fund` in front of
  * every reader and teach them our noise-suppression as if it were part of installing Reticle.
  */
-export function installCommand(pm: PackageManager, pkgs: string | readonly string[]): string {
+export function installCommand(
+  pm: PackageManager,
+  pkgs: string | readonly string[],
+  extraArgs: readonly string[] = [],
+): string {
   const list = 'string' === typeof pkgs ? [pkgs] : pkgs;
-  return `${pm} ${[...INSTALL_ARGS[pm], ...list].join(' ')}`;
+  return `${pm} ${[...INSTALL_ARGS[pm], ...list, ...extraArgs].join(' ')}`;
 }

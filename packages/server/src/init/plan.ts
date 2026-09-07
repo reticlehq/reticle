@@ -14,6 +14,7 @@ import {
 } from './detect.js';
 import type { FoundStore } from './capabilities.js';
 import { installFailureHint } from './install-hint.js';
+import { LEGACY_PEER_DEPS_FLAG } from './legacy-peer-deps.js';
 import { claudeAddCommand, mcpManual, mcpWindowsNote } from './mcp.js';
 import { NodePlatform } from '../platform.js';
 import {
@@ -283,6 +284,14 @@ export interface PlanInput {
   craEntry?: { path: string; source: string } | null;
   /** Existing .env.development.local, so an unrelated variable in it survives. */
   craEnv?: string | null;
+  /**
+   * This project's `.npmrc` (or a parent's) already asks for `--legacy-peer-deps`.
+   *
+   * CRA repos with peer conflicts document that flag in `.npmrc` and in CI. A bare `npm i -D`
+   * then dies on ERESOLVE and every wiring step is skipped. When we already know, pass the flag
+   * on the first attempt rather than failing once to find out (#802).
+   */
+  legacyPeerDeps?: boolean;
   /** The daemon's pairing token, inlined for CRA through the one channel it supports. */
   pairingToken?: string;
   /** Whether .reticle.json already exists in the project root (idempotency). */
@@ -753,7 +762,9 @@ function installStep(input: PlanInput): Step {
     frameworkPackages(input.detection.framework, input.detection.uiLibrary),
     input.options.sdkVersion,
   );
-  const command = installCommand(pm, packages);
+  const extra =
+    pm === PackageManager.NPM && true === input.legacyPeerDeps ? [LEGACY_PEER_DEPS_FLAG] : [];
+  const command = installCommand(pm, packages, extra);
   if (!input.options.install) {
     return {
       title: 'Install dependencies',
@@ -762,7 +773,7 @@ function installStep(input: PlanInput): Step {
       detail: command,
     };
   }
-  const parts = installCommandParts(pm, packages);
+  const parts = installCommandParts(pm, packages, extra);
   return {
     title: 'Install dependencies',
     target: 'package.json',
@@ -779,6 +790,7 @@ function installStep(input: PlanInput): Step {
       ...installCommandParts(
         pm,
         frameworkPackages(input.detection.framework, input.detection.uiLibrary),
+        extra,
       ),
       note: unpinnedRetryNote(input.options.sdkVersion, pm),
     },

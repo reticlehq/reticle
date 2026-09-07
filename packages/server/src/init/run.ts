@@ -17,6 +17,11 @@ import { restartHint, FEEDBACK_HINT } from './closing-hint.js';
 import { spanSync } from '../trace.js';
 import { projectIdOf, rememberProjectOnDisk } from '../project/remember-project.js';
 import { detect, Framework, namesAPackageManager, type DetectInput, UiLibrary } from './detect.js';
+import {
+  LEGACY_PEER_DEPS_RETRY_NOTE,
+  npmLegacyPeerDepsRetry,
+  npmrcWantsLegacyPeerDeps,
+} from './legacy-peer-deps.js';
 import { wasMcpRegistered } from './mcp-registered.js';
 import { pickAstroHost } from './astro-host.js';
 import { NEXT_CONFIG_CANDIDATES, PACKAGE_JSON, VITE_CONFIG_CANDIDATES } from './workspace-apps.js';
@@ -512,6 +517,8 @@ function gatherPlanInput(options: InitOptions, io: InitIo, pkg: unknown): PlanIn
     reactRouterEntryExists: io.exists(REACT_ROUTER_ENTRY),
     craEntry: craEntryOf(io),
     craEnv: io.readFile(CRA_ENV_PATH),
+    // Project first, then the parent — a CRA app in a monorepo often inherits the flag from root.
+    legacyPeerDeps: npmrcWantsLegacyPeerDeps([io.readFile('.npmrc'), io.readFile('../.npmrc')]),
     pairingToken: readPairingToken(),
     reticleConfigExists: io.exists(RETICLE_CONFIG_FILE),
     // The CONTENT, so a config that exists can be checked rather than trusted — a `"port"` set to
@@ -725,6 +732,20 @@ function applyEffects(
       // should: this is a SECOND full package-manager run, and until it had its own span 1.6 of
       // init's 2.3 seconds simply vanished — the span above accounted for the first attempt and
       // nothing accounted for this one.
+      // npm ERESOLVE before the unpinned fallback: a CRA repo needs --legacy-peer-deps, not a
+      // looser version pin. Named when it succeeds so a later bare `npm i` is not a surprise (#802).
+      const legacyRetry = npmLegacyPeerDepsRetry(exec);
+      if (
+        legacyRetry !== undefined &&
+        spanSync(
+          'init.exec.retry-legacy-peer-deps',
+          { target: s.target, command: legacyRetry.command },
+          () => io.exec(legacyRetry.command, legacyRetry.args),
+        )
+      ) {
+        degraded.set(s.target, LEGACY_PEER_DEPS_RETRY_NOTE);
+        continue;
+      }
       const retry = s.retry;
       if (
         retry !== undefined &&

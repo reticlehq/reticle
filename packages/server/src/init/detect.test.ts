@@ -250,6 +250,12 @@ describe('the dependency install is quiet about things that are not ours', () =>
     );
   });
 
+  it('does put --legacy-peer-deps in the printed command, because that is what they must type (#802)', () => {
+    expect(installCommand(PackageManager.NPM, '@reticlehq/react', ['--legacy-peer-deps'])).toBe(
+      'npm i -D @reticlehq/react --legacy-peer-deps',
+    );
+  });
+
   it('leaves the other package managers alone — the flags are npm-specific', () => {
     // pnpm/yarn/bun do not take these, and passing an unknown flag turns a working install into a
     // hard failure of the one step everything downstream depends on.

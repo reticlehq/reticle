@@ -34,7 +34,15 @@ const VIRTUAL_STORE_HINT =
   '`pnpm install` once in that other checkout first, or point this one at its own store:\n' +
   '  pnpm add -D --config.virtual-store-dir=node_modules/.pnpm <packages>';
 
+const ERESOLVE_HINT =
+  'If npm reported ERESOLVE, this project likely needs --legacy-peer-deps (Create React App ' +
+  'and other peer-conflicted trees). Retry the same install with that flag, or put ' +
+  '`legacy-peer-deps=true` in `.npmrc`.';
+
 export function installFailureHint(pm: PackageManager): string {
+  if (pm === PackageManager.NPM) {
+    return `${ERESOLVE_HINT} ${REGISTRY_HINT}`;
+  }
   if (pm !== PackageManager.PNPM) {
     return `If the version was refused, install the SDK yourself. ${REGISTRY_HINT}`;
   }

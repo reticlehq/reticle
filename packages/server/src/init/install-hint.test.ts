@@ -25,4 +25,10 @@ describe('installFailureHint', () => {
     const hint = installFailureHint(PackageManager.NPM);
     expect(hint).not.toContain('ERR_PNPM');
   });
+
+  it('names ERESOLVE and --legacy-peer-deps for npm (#802)', () => {
+    const hint = installFailureHint(PackageManager.NPM);
+    expect(hint).toContain('ERESOLVE');
+    expect(hint).toContain('--legacy-peer-deps');
+  });
 });

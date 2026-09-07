@@ -1039,6 +1039,64 @@ describe('runInit — a refused pin falls back instead of blocking the install',
 });
 
 /**
+ * CRA (and other npm repos with peer conflicts) die on a bare `npm i -D` with ERESOLVE.
+ * The project's `.npmrc` already names `--legacy-peer-deps`; if we miss that, retry once with
+ * the flag rather than skipping every wiring step (#802).
+ */
+describe('runInit — an ERESOLVE project gets --legacy-peer-deps rather than a silent skip', () => {
+  const CRA_APP = {
+    'package.json': JSON.stringify({
+      dependencies: { 'react-scripts': '5.0.1', react: '^18', 'react-dom': '^18' },
+    }),
+    'src/index.js': "import React from 'react';\nimport App from './App';\n",
+  };
+
+  function eresolveIo(files: Record<string, string>): MemoryIo {
+    const io = memoryIo(files, { mcpExists: true });
+    const realExec = io.exec.bind(io);
+    return {
+      ...io,
+      exec(command: string, args: readonly string[]) {
+        realExec(command, args);
+        return command === 'npm' && args.includes('--legacy-peer-deps');
+      },
+    };
+  }
+
+  it('retries with --legacy-peer-deps after a bare npm install fails, and says that it did', () => {
+    const io = eresolveIo(CRA_APP);
+    runInit({ ...OPTS, install: true }, io);
+    const npmCalls = io.execCalls.filter((c) => c.command === 'npm' && c.args.includes('-D'));
+    expect(npmCalls.length).toBeGreaterThanOrEqual(2);
+    expect(npmCalls[0]?.args).not.toContain('--legacy-peer-deps');
+    expect(npmCalls[1]?.args).toContain('--legacy-peer-deps');
+    expect(io.lines.join('\n')).toContain('--legacy-peer-deps');
+  });
+
+  it('still wires the app after that retry — the packages are on disk', () => {
+    const io = eresolveIo(CRA_APP);
+    runInit({ ...OPTS, install: true }, io);
+    expect(io.written['src/reticle-dev.js']).toContain('reticle.connect');
+    expect(io.written['src/index.js']).toContain("import './reticle-dev'");
+  });
+
+  it('passes the flag on the first attempt when .npmrc already asks for it', () => {
+    const io = memoryIo({ ...CRA_APP, '.npmrc': 'legacy-peer-deps=true\n' }, { mcpExists: true });
+    runInit({ ...OPTS, install: true }, io);
+    const first = io.execCalls.find((c) => c.command === 'npm' && c.args.includes('-D'));
+    expect(first?.args).toContain('--legacy-peer-deps');
+  });
+
+  it('names skipped wiring when the install fails and the packages are absent', () => {
+    const io = memoryIo(CRA_APP, { execOk: false, mcpExists: true });
+    runInit({ ...OPTS, install: true }, io);
+    const report = io.lines.join('\n');
+    expect(report).toContain('skipped — the dependency install above failed');
+    expect(io.written['src/reticle-dev.js']).toBeUndefined();
+  });
+});
+
+/**
  * A `[✓]` for a filesystem effect must be backed by a `stat`, not by the intention to write.
  *
  * Reported from the field (#160): `init` printed `[✓] Reticle config → .reticle.json` and the file
