@@ -20,6 +20,7 @@ import type { ExpectedLink } from '../capsule/divergence.js';
 import { isAmbient, ambientKeyOf, type AmbientCounts } from '../journal/ambient.js';
 import { evalRoute } from './predicate-route.js';
 import { describeSuperseded } from './observed-in-window.js';
+import { presenceVerdict } from './predicate-presence.js';
 import {
   PredicateSchema,
   matchValue,
@@ -189,7 +190,7 @@ async function evalElement(
       evidence: { scopeMissing: true },
     };
   }
-  if (match.matched) return { pass: true, evidence: match.elements };
+  if (match.matched) return presenceVerdict(match, query, subject, state);
 
   // The near-miss diagnostic below costs one or two EXTRA MATCH round-trips. It only enriches a FAILED
   // verdict, and a wait loop's interim rechecks read nothing but `pass` — so on the poll path (diagnose

@@ -74,6 +74,16 @@ export interface EvalResult {
   observed?: string;
   expected?: string;
   assertion?: string;
+  /**
+   * A qualification on a verdict that stands. Not a failure and not an inconclusive: the predicate
+   * was answered, and something about HOW it was answered would change how a reader weighs it.
+   *
+   * Today this carries the hollow-match warnings from a presence check (#797): a role-only clause
+   * satisfied by a nameless live-region container reads as "an error is displayed" and proves
+   * nothing, but failing it would break every legitimate assertion on a genuinely unnamed element.
+   * Saying so is the honest middle.
+   */
+  caveat?: string;
 }
 
 export function str(value: unknown): string | undefined {
