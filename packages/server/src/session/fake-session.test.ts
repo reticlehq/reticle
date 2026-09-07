@@ -58,4 +58,12 @@ describe('createFakeSession', () => {
     expect(session.id).toBe('s-2');
     expect(fakeHello().sessionId).toBe('demo');
   });
+
+  it('keeps sdkVersion and captureNetworkBodies from HELLO, including an explicit false', () => {
+    const session = createFakeSession({}, { sdkVersion: '2.13.1', captureNetworkBodies: false });
+    expect(session.sdkVersion).toBe('2.13.1');
+    expect(session.captureNetworkBodies).toBe(false);
+    expect(createFakeSession().sdkVersion).toBeUndefined();
+    expect(createFakeSession().captureNetworkBodies).toBeUndefined();
+  });
 });

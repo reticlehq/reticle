@@ -7,6 +7,7 @@ import {
 } from '@reticlehq/core';
 import { HonestyGrade, type HonestyBlock } from './honesty.js';
 import { unsettledBecause, type UnsettledWindow } from './unsettled.js';
+import { bodyCaptureRemedy } from './body-capture-remedy.js';
 
 /**
  * The decision rule: eight trust dimensions in, one answer out.
@@ -112,6 +113,10 @@ interface VerifiedInputs {
   unsettled?: UnsettledWindow;
   /** A passing absence assertion targeted a region that the current capture could not observe. */
   absenceBlindSpot?: string;
+  /** SDK version from HELLO, so an unread-body remedy can name both versions or withhold the setting. */
+  sdkVersion?: string | undefined;
+  /** Body-capture flag from HELLO. Undefined when the SDK is too old to announce it. */
+  captureNetworkBodies?: boolean | undefined;
 }
 
 interface VerifiedVerdict {
@@ -424,12 +429,18 @@ export function decideVerified(inputs: VerifiedInputs): VerifiedVerdict {
   // body is still the remaining channel.
   const unreadHeldIndependently = declaredHeld && true === inputs.independentOfBody;
   if (outcomeUnread !== undefined && outcomeUnread.length > 0 && !unreadHeldIndependently) {
+    const advice = bodyCaptureRemedy({
+      sdkVersion: inputs.sdkVersion,
+      captureNetworkBodies: inputs.captureNetworkBodies,
+      bodiesMissing: true,
+    });
     return {
       verified: Verified.UNKNOWN,
       verifiedReason: VerifiedReason.OUTCOME_UNREAD,
       because:
         `a write returned 2xx with a response body that was never recorded (${outcomeUnread.join('; ')}), so its outcome is unread` +
-        ' — a 200 describes the transport, not the result (a batch reports per-item failures in the body, and every GraphQL error is a 200). Enable it where your app calls connect(): `reticle.connect({ captureNetworkBodies: true })`, then re-run',
+        ' — a 200 describes the transport, not the result (a batch reports per-item failures in the body, and every GraphQL error is a 200)' +
+        (undefined === advice ? '' : `. ${advice}`),
     };
   }
 

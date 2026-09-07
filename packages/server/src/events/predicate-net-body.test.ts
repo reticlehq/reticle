@@ -96,6 +96,55 @@ describe('evalNet — bodyContains', () => {
     );
   });
 
+  it('an SDK that predates the setting is named, and the setting is not', () => {
+    const unrecorded = netEvent(10, {
+      method: 'POST',
+      url: '/api/refund',
+      status: 200,
+      ok: true,
+    });
+    const r = evalNet(
+      [unrecorded],
+      { kind: PredicateKind.NET, urlContains: '/api/refund', bodyContains: '1187.01' },
+      { sdkVersion: '2.0.1' },
+    );
+    expect(r.failureReason).toContain('2.0.1');
+    expect(r.failureReason).toContain('2.1.0');
+    expect(r.failureReason).not.toContain('captureNetworkBodies');
+  });
+
+  it('a supported SDK with capture off is told how to turn it on', () => {
+    const unrecorded = netEvent(10, {
+      method: 'POST',
+      url: '/api/refund',
+      status: 200,
+      ok: true,
+    });
+    const r = evalNet(
+      [unrecorded],
+      { kind: PredicateKind.NET, urlContains: '/api/refund', bodyContains: '1187.01' },
+      { sdkVersion: '2.13.1', captureNetworkBodies: false },
+    );
+    expect(r.failureReason).toContain('captureNetworkBodies');
+    expect(r.failureReason).toContain('VITE_RETICLE_CAPTURE_BODIES');
+  });
+
+  it('capture already on does not advise flipping the setting', () => {
+    const unrecorded = netEvent(10, {
+      method: 'POST',
+      url: '/api/refund',
+      status: 200,
+      ok: true,
+    });
+    const r = evalNet(
+      [unrecorded],
+      { kind: PredicateKind.NET, urlContains: '/api/refund', bodyContains: '1187.01' },
+      { sdkVersion: '2.13.1', captureNetworkBodies: true },
+    );
+    expect(r.failureReason).toContain('not recorded');
+    expect(r.failureReason).not.toContain('captureNetworkBodies');
+  });
+
   it('still counts only the calls whose body matched', () => {
     // `count` is the double-submit guard. Combined with a body match it becomes "exactly one call
     // carried this value", which is what a retry storm on a money endpoint needs.

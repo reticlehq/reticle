@@ -84,6 +84,10 @@ export interface PredicateSession {
    * Optional: a fake that never throttles simply omits it.
    */
   throttled?(): boolean;
+  /** SDK version from HELLO. Optional: a fake that does not announce one omits it. */
+  sdkVersion?: string | undefined;
+  /** Body-capture flag from HELLO. Optional: omitted means the SDK is too old to announce it. */
+  captureNetworkBodies?: boolean | undefined;
 }
 
 /**
@@ -632,7 +636,10 @@ async function evaluatePredicateRaw(
         diagnose,
       );
     case PredicateKind.NET:
-      return evalNet(events, predicate);
+      return evalNet(events, predicate, {
+        sdkVersion: session.sdkVersion,
+        captureNetworkBodies: session.captureNetworkBodies,
+      });
     case PredicateKind.ROUTE:
       return evalRoute(events, predicate, session.url);
     case PredicateKind.CONSOLE:

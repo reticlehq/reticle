@@ -447,6 +447,41 @@ describe('an unread outcome names the write that decided the verdict', () => {
   });
 });
 
+describe('an unread outcome names a remedy this SDK can follow', () => {
+  const unread = {
+    pass: true as const,
+    honesty: clean(),
+    settled: true as const,
+    outcomeUnread: ['POST /api/bulk-hold'] as const,
+  };
+
+  it('names both versions and never the setting when the SDK predates body capture', () => {
+    const d = decideVerified({ ...unread, sdkVersion: '2.0.1' });
+    expect(d.because).toContain('2.0.1');
+    expect(d.because).toContain('2.1.0');
+    expect(d.because).not.toContain('captureNetworkBodies');
+  });
+
+  it('names connect() when the SDK supports capture and it is off', () => {
+    const d = decideVerified({
+      ...unread,
+      sdkVersion: '2.13.1',
+      captureNetworkBodies: false,
+    });
+    expect(d.because).toContain('reticle.connect({ captureNetworkBodies: true })');
+  });
+
+  it('does not advise flipping the setting when capture is already on', () => {
+    const d = decideVerified({
+      ...unread,
+      sdkVersion: '2.13.1',
+      captureNetworkBodies: true,
+    });
+    expect(d.because).toContain('never recorded');
+    expect(d.because).not.toContain('captureNetworkBodies');
+  });
+});
+
 describe('a settle that never happened is not a failed assertion', () => {
   /**
    * Measured on the hard fixture: `reticle_act_and_wait` with NO `until` on a healthy pagination

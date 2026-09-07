@@ -104,7 +104,7 @@ export function sdkFix(daemonVersion: string): string {
  * sides are Reticle package versions, so this never sees a range or build metadata. Undefined when
  * either side does not parse, so the caller can decline to guess a direction.
  */
-function compareVersions(a: string | undefined, b: string): number | undefined {
+export function compareVersions(a: string | undefined, b: string): number | undefined {
   const parts = (v: string): number[] | undefined => {
     const head = v.split('-')[0];
     if (head === undefined) return undefined;

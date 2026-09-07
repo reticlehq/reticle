@@ -93,6 +93,20 @@ describe('HelloMessageSchema', () => {
       }).success,
     ).toBe(false);
   });
+
+  it('accepts an older hello that omits captureNetworkBodies — omit is unknown, not off', () => {
+    const parsed = HelloMessageSchema.parse(hello());
+    expect(parsed.captureNetworkBodies).toBeUndefined();
+  });
+
+  it('keeps an explicit false, so off is distinct from an SDK that never announced the field', () => {
+    expect(
+      HelloMessageSchema.parse({ ...hello(), captureNetworkBodies: false }).captureNetworkBodies,
+    ).toBe(false);
+    expect(
+      HelloMessageSchema.parse({ ...hello(), captureNetworkBodies: true }).captureNetworkBodies,
+    ).toBe(true);
+  });
 });
 
 describe('HumanMarkDataSchema', () => {

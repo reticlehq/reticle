@@ -15,8 +15,9 @@
  * Nothing was acted on and no verdict is possible… This is a miss, not a Reticle defect: there is
  * nothing to report." This is that, applied one step earlier.
  */
-import type { ElementQuery } from '@reticlehq/core';
+import { PredicateKind, type ElementQuery } from '@reticlehq/core';
 import { residualQueryChecks } from './predicate-schema.js';
+import { bodyCaptureRemedy } from '../honesty/body-capture-remedy.js';
 
 /** Composite predicates nest; the unusable one can be at any depth. */
 const NESTED_KEYS = ['predicates', 'predicate'] as const;
@@ -35,14 +36,40 @@ function elementQueries(predicate: unknown, found: ElementQuery[] = []): Element
   return found;
 }
 
+/** True when any net clause in the tree asserts on a response body. */
+function hasBodyContains(predicate: unknown): boolean {
+  if (!isRecord(predicate)) return false;
+  if (PredicateKind.NET === predicate['kind'] && 'string' === typeof predicate['bodyContains']) {
+    return true;
+  }
+  for (const key of NESTED_KEYS) {
+    const nested = predicate[key];
+    if (Array.isArray(nested)) {
+      if (nested.some((child) => hasBodyContains(child))) return true;
+    } else if (hasBodyContains(nested)) return true;
+  }
+  return false;
+}
+
+const NOTHING_ACTED =
+  'Nothing was acted on: this predicate could never have been evaluated, so refusing it costs ' +
+  'you nothing and spending the action on it would have cost you the verdict.';
+
 /**
  * The reason this predicate cannot be evaluated, or undefined when it can.
  *
  * Only checks what is knowable WITHOUT the page — a locator that names fields the resolver drops is
  * wrong whatever the DOM contains, which is what makes it safe to refuse before acting. Anything
  * that depends on what is actually rendered is still decided after the action, where it belongs.
+ *
+ * `session` is the HELLO facts that decide a `bodyContains` clause: an SDK that cannot produce
+ * bodies, or one that announced capture off. Omitted (or a modern SDK that does not yet announce
+ * the flag) is left for after the action, when missing bodies prove the rest.
  */
-export function unevaluablePredicateReason(predicate: unknown): string | undefined {
+export function unevaluablePredicateReason(
+  predicate: unknown,
+  session?: { sdkVersion?: string | undefined; captureNetworkBodies?: boolean | undefined },
+): string | undefined {
   for (const query of elementQueries(predicate)) {
     const residual = residualQueryChecks(query);
     if (0 === residual.unusable.length) continue;
@@ -51,9 +78,14 @@ export function unevaluablePredicateReason(predicate: unknown): string | undefin
       `in ${JSON.stringify(query)} — it resolves by the first of by+value, component/source, role, ` +
       'text, label, placeholder, testid, alt that is present, and nothing here can check the rest. ' +
       'Assert them one locator at a time, or move the extra field into the locator. ' +
-      'Nothing was acted on: this predicate could never have been evaluated, so refusing it costs ' +
-      'you nothing and spending the action on it would have cost you the verdict.'
+      NOTHING_ACTED
     );
   }
-  return undefined;
+  if (!hasBodyContains(predicate)) return undefined;
+  const advice = bodyCaptureRemedy({
+    sdkVersion: session?.sdkVersion,
+    captureNetworkBodies: session?.captureNetworkBodies,
+  });
+  if (undefined === advice) return undefined;
+  return `${advice} ${NOTHING_ACTED}`;
 }

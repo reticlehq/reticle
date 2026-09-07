@@ -131,6 +131,14 @@ export const HelloMessageSchema = z.object({
    */
   sdkVersion: z.string().max(TRANSPORT_LIMITS.MAX_ADAPTER_NAME_LENGTH).optional(),
   /**
+   * Whether this page is recording request/response bodies.
+   *
+   * Optional for back-compat: an SDK that predates the field omits it, which is "unknown", not
+   * "off". A current SDK always sends the boolean, so the daemon can refuse a `bodyContains`
+   * clause before the action when capture is off, instead of spending the click to discover it.
+   */
+  captureNetworkBodies: z.boolean().optional(),
+  /**
    * The wire contract this SDK build speaks (see contract-fingerprint.ts) — DERIVED from core's
    * vocabulary, so it moves only when a name on the wire genuinely changes.
    *

@@ -136,6 +136,10 @@ export class Session {
    * never passes through the SDK, so nothing else would.
    */
   readonly redactKeys: readonly string[];
+  /** SDK version from HELLO. Undefined when the page omitted it. */
+  readonly sdkVersion: string | undefined;
+  /** Body-capture flag from HELLO. Undefined when the SDK is too old to announce it. */
+  readonly captureNetworkBodies: boolean | undefined;
 
   readonly #socket: WebSocket;
   readonly #clock: Clock;
@@ -206,6 +210,8 @@ export class Session {
     this.adapters = hello.adapters;
     this.hasCapabilities = hello.hasCapabilities ?? false;
     this.redactKeys = hello.redactKeys ?? [];
+    this.sdkVersion = hello.sdkVersion;
+    this.captureNetworkBodies = hello.captureNetworkBodies;
     this.#socket = socket;
     this.#clock = clock;
     this.#startedAt = clock();

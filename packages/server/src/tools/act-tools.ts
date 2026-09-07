@@ -492,7 +492,7 @@ export const ACT_TOOLS: ToolDef[] = [
       );
 
       // Everything refusable without touching the page — see act-preflight.ts.
-      preflightAct(asRecord(args['args']), until);
+      preflightAct(asRecord(args['args']), until, session);
 
       // Resolve `target` to a ref BEFORE the action window opens, so the lookup is not attributed to
       // the act and cannot be mistaken for something the action caused.
@@ -751,6 +751,10 @@ export const ACT_TOOLS: ToolDef[] = [
           contradictions,
           ...(outcomePending ? { outcomePending } : {}),
           ...(outcomeUnread.length > 0 ? { outcomeUnread } : {}),
+          ...(undefined === session.sdkVersion ? {} : { sdkVersion: session.sdkVersion }),
+          ...(undefined === session.captureNetworkBodies
+            ? {}
+            : { captureNetworkBodies: session.captureNetworkBodies }),
           // `settled` is genuinely optional: a wait that declared no predicate never measured it, and
           // passing `false` there would report "never settled" about something never asked to settle.
           ...(settledOutcome === undefined ? {} : { settled: settledOutcome }),

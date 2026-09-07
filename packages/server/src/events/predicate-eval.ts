@@ -10,6 +10,7 @@ import {
 import { describeObserved } from './observed-in-window.js';
 import { withoutUrlRaw } from './event-filters.js';
 import type { Predicate } from './predicate-schema.js';
+import { bodyCaptureRemedy } from '../honesty/body-capture-remedy.js';
 
 // The predicate SHAPE — the discriminated union, its aliases and its zod schema — lives in
 // predicate-schema.ts. Re-exported here so every existing importer of this module is unaffected:
@@ -430,6 +431,7 @@ const PRE_ATTACH_CAVEAT =
 export function evalNet(
   events: ReticleEvent[],
   p: Extract<Predicate, { kind: typeof PredicateKind.NET }>,
+  capture?: { sdkVersion?: string | undefined; captureNetworkBodies?: boolean | undefined },
 ): EvalResult {
   const since = p.since ?? 0;
   /**
@@ -524,9 +526,16 @@ export function evalNet(
     };
   }
   if (matchedButUnrecorded && 0 === matches.length) {
+    const advice = bodyCaptureRemedy({
+      sdkVersion: capture?.sdkVersion,
+      captureNetworkBodies: capture?.captureNetworkBodies,
+      bodiesMissing: true,
+    });
     return {
       pass: false,
-      failureReason: `a call matched but its body was not recorded, so \`bodyContains\` could not be checked — enable it where the app calls connect(): reticle({ captureNetworkBodies: true })`,
+      failureReason:
+        'a call matched but its body was not recorded, so `bodyContains` could not be checked' +
+        (undefined === advice ? '' : ` — ${advice}`),
       observed: 'a matching call with no recorded body',
       expected: `a body containing ${JSON.stringify(p.bodyContains)}`,
       assertion: 'net.bodyContains',

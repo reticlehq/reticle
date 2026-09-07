@@ -26,6 +26,7 @@ import { evaluatePredicate, waitForPredicate, PredicateSchema } from '../events/
 import { resolveSessionWithin } from '../session/resolve-within.js';
 import { WALL_CLOCK } from '../session/wall-clock.js';
 import { parsePredicate } from '../events/predicate-parse.js';
+import { unevaluablePredicateReason } from '../events/predicate-precheck.js';
 import {
   matchNet,
   matchConsole,
@@ -349,6 +350,8 @@ export const OBSERVE_TOOLS: ToolDef[] = [
       );
       // `until` is act_and_wait's name for this — see alias-args.ts.
       const predicate = parsePredicate(aliasParam(args, 'predicate', ['until'])['predicate']);
+      const unevaluable = unevaluablePredicateReason(predicate, session);
+      if (undefined !== unevaluable) throw new Error(unevaluable);
       // Honesty: explicit since wins; else default to the last act's cursor; else the whole buffer.
       const since = asNumber(args['since']) ?? session.lastAct.cursor() ?? 0;
       const verdict = await waitForPredicate(session, predicate, waitBudget, since);
@@ -473,6 +476,8 @@ export const OBSERVE_TOOLS: ToolDef[] = [
       );
       // `until` is act_and_wait's name for this — see alias-args.ts.
       const predicate = parsePredicate(aliasParam(args, 'predicate', ['until'])['predicate']);
+      const unevaluable = unevaluablePredicateReason(predicate, session);
+      if (undefined !== unevaluable) throw new Error(unevaluable);
       // Honesty: explicit since wins; else default to the last act's cursor; else the whole buffer.
       const since = asNumber(args['since']) ?? session.lastAct.cursor() ?? 0;
       // Declared BEFORE the verdict, so the undeclared-change read below finds it open and stays
@@ -655,7 +660,12 @@ export const OBSERVE_TOOLS: ToolDef[] = [
           {
             calls,
             ...(droppedOldest > 0 ? { total: matched.length, droppedOldest } : {}),
-            ...(bodies ? bodiesNotCaptured(calls) : {}),
+            ...(bodies
+              ? bodiesNotCaptured(calls, {
+                  sdkVersion: session.sdkVersion,
+                  captureNetworkBodies: session.captureNetworkBodies,
+                })
+              : {}),
             ...buffer,
           },
           'calls',

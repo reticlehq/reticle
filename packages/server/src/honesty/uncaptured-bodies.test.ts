@@ -35,3 +35,32 @@ describe('bodiesNotCaptured', () => {
     expect(out.bodiesNotCaptured).toBeUndefined();
   });
 });
+
+describe('bodiesNotCaptured — the remedy matches the SDK', () => {
+  const post = [{ method: 'POST', url: '/api/pay' }];
+
+  it('names both versions and never the setting when the SDK predates body capture', () => {
+    const out = bodiesNotCaptured(post, { sdkVersion: '2.0.1' });
+    expect(out.bodiesNotCaptured).toContain('2.0.1');
+    expect(out.bodiesNotCaptured).toContain('2.1.0');
+    expect(out.bodiesNotCaptured).not.toContain('captureNetworkBodies');
+    expect(out.bodiesNotCaptured).not.toContain('VITE_RETICLE_CAPTURE_BODIES');
+  });
+
+  it('names connect() and the env var when the SDK supports capture and it is off', () => {
+    const out = bodiesNotCaptured(post, {
+      sdkVersion: '2.13.1',
+      captureNetworkBodies: false,
+    });
+    expect(out.bodiesNotCaptured).toContain('reticle.connect({ captureNetworkBodies: true })');
+    expect(out.bodiesNotCaptured).toContain('VITE_RETICLE_CAPTURE_BODIES=1');
+  });
+
+  it('stays silent when HELLO said capture is on, even if this call carried no body', () => {
+    const out = bodiesNotCaptured(post, {
+      sdkVersion: '2.13.1',
+      captureNetworkBodies: true,
+    });
+    expect(out.bodiesNotCaptured).toBeUndefined();
+  });
+});

@@ -4,6 +4,7 @@ import { ReticleTool } from './tool-names.js';
 import { cursorSchema } from './numeric-bounds.js';
 import { reconcile, type Mismatch } from '../events/reconcile.js';
 import { salvageJson } from '../events/json-salvage.js';
+import { bodyCaptureRemedy } from '../honesty/body-capture-remedy.js';
 import { withControl } from '../session/control-envelope.js';
 import { asNumber, asString } from './tools-helpers.js';
 import { type ToolDef, sessionIdShape, commandOrThrow } from './tool-kit.js';
@@ -92,13 +93,19 @@ export const RECONCILE_TOOLS: ToolDef[] = [
       // An empty result over data that was never read is the exact false green this tool exists to
       // prevent, so the two cases are reported differently and neither is silent.
       if (0 === bodies.length) {
+        const advice = bodyCaptureRemedy({
+          sdkVersion: session.sdkVersion,
+          captureNetworkBodies: session.captureNetworkBodies,
+          bodiesMissing: 0 < total,
+        });
         return withControl(session, {
           mismatches: [],
           compared: 0,
           note:
             0 === total
               ? 'no responses in this window matched — nothing was compared'
-              : `${String(total)} response(s) matched but NONE carried a recorded body, so nothing was compared. Enable it where your app calls connect(): \`reticle.connect({ captureNetworkBodies: true })\`, then re-run`,
+              : `${String(total)} response(s) matched but NONE carried a recorded body, so nothing was compared` +
+                (undefined === advice ? '' : `. ${advice}`),
         });
       }
 

@@ -95,3 +95,46 @@ describe('refusing what could never be evaluated', () => {
     }
   });
 });
+
+const bodyNet = { kind: 'net', urlContains: '/api/refund', bodyContains: '1187.01' };
+
+describe('refusing a bodyContains the session cannot satisfy', () => {
+  it('leaves the clause alone when HELLO has not announced capture and the SDK is current', () => {
+    // 2.13.1 supports the setting but does not send the flag. Refusing here would break the field.
+    expect(unevaluablePredicateReason(bodyNet, { sdkVersion: '2.13.1' })).toBeUndefined();
+  });
+
+  it('refuses a known-old SDK before the action, and never names the setting', () => {
+    const reason = unevaluablePredicateReason(bodyNet, { sdkVersion: '2.0.1' });
+    expect(reason).toContain('2.0.1');
+    expect(reason).toContain('Nothing was acted on');
+    expect(reason).not.toContain('captureNetworkBodies');
+  });
+
+  it('refuses a supported SDK that announced capture off, and names how to turn it on', () => {
+    const reason = unevaluablePredicateReason(bodyNet, {
+      sdkVersion: '2.13.1',
+      captureNetworkBodies: false,
+    });
+    expect(reason).toContain('captureNetworkBodies');
+    expect(reason).toContain('VITE_RETICLE_CAPTURE_BODIES');
+    expect(reason).toContain('Nothing was acted on');
+  });
+
+  it('walks allOf so a nested bodyContains is refused too', () => {
+    const reason = unevaluablePredicateReason(
+      { kind: 'allOf', predicates: [{ kind: 'text', contains: 'ok' }, bodyNet] },
+      { captureNetworkBodies: false },
+    );
+    expect(reason).toContain('Nothing was acted on');
+  });
+
+  it('does not refuse when capture is on', () => {
+    expect(
+      unevaluablePredicateReason(bodyNet, {
+        sdkVersion: '2.13.1',
+        captureNetworkBodies: true,
+      }),
+    ).toBeUndefined();
+  });
+});

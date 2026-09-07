@@ -72,11 +72,15 @@ export function assertSequenceSteps(steps: readonly unknown[]): void {
  * Throws if this call cannot honestly be driven. Call it after the args are parsed and before the
  * first dispatch — anything that depends on what is actually rendered belongs after the action.
  */
-export function preflightAct(actArgs: Record<string, unknown>, until: unknown): void {
+export function preflightAct(
+  actArgs: Record<string, unknown>,
+  until: unknown,
+  session?: { sdkVersion?: string | undefined; captureNetworkBodies?: boolean | undefined },
+): void {
   // This path cannot honour a native-input request, and taking the argument and ignoring it told
   // the agent its trusted click had happened. See act-danger.
   assertNativeInputSupported(actArgs);
-  const unevaluable = unevaluablePredicateReason(until);
+  const unevaluable = unevaluablePredicateReason(until, session);
   if (unevaluable !== undefined) throw new Error(unevaluable);
 }
 

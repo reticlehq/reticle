@@ -240,6 +240,7 @@ export class Reticle {
   #eventCount = 0;
   #token: string | undefined;
   #sdkVersion: string | undefined;
+  #captureNetworkBodies = false;
   #projectId: string | undefined;
   /** App-declared extra redaction keys, announced in hello so the driven path honours them too. */
   #redactKeys: string[] = [];
@@ -359,9 +360,10 @@ export class Reticle {
     // mistaken for an ordinary one. See connect-options.ts.
     setPresenterVisible(true === options.exposePresenter);
 
+    this.#captureNetworkBodies = true === options.captureNetworkBodies;
     const emit = this.#emit;
     this.#teardowns = installAllObservers(emit, {
-      captureBodies: true === options.captureNetworkBodies,
+      captureBodies: this.#captureNetworkBodies,
     });
 
     if (true === options.overlay) {
@@ -538,6 +540,8 @@ export class Reticle {
       hasCapabilities: hasCapabilities(),
       // Absent when no build plugin supplied one - "unknown", never "matching".
       ...(this.#sdkVersion === undefined ? {} : { sdkVersion: this.#sdkVersion }),
+      // Always sent: omit vs false is how the daemon tells an old SDK from capture being off.
+      captureNetworkBodies: this.#captureNetworkBodies,
       // Always present: derived from THIS build's core, so it needs no build plugin to supply it.
       // It is the half of the skew check that works on a hand-wired connect.
       contract: CONTRACT_FINGERPRINT,
