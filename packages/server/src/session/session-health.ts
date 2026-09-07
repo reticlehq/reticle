@@ -34,7 +34,31 @@ export function bufferEnvelope(session: Session): BufferEnvelope {
 interface HealthEnvelope {
   session?: SessionHealth;
   warning?: string;
+  /**
+   * Present while the page's SDK and the daemon disagree on the wire contract.
+   *
+   * Skew is not a warning about the future -- it silently invalidates the verdict being returned.
+   * On a skewed link, clicks on Radix controls reported `dispatched: true`, `settled: true` and a
+   * `domMutatedWithin` in the tens of milliseconds while the app's React state never changed
+   * (#812). Nothing in that result said so, and the existing `version_skew` nudge is one-shot and
+   * lands on `reticle_sessions` / `reticle_lease` -- not on the surface an agent reads on every
+   * call.
+   */
+  skewSuspected?: string;
 }
+
+/**
+ * What a verdict taken over a skewed link is worth, said on the verdict.
+ *
+ * Deliberately not phrased as "may behave in ways neither side reports": the reporter trusted
+ * `dispatched: true, domMutatedWithin: Nms` for eight attempts across three interaction strategies
+ * before suspecting skew at all, and the same sequence worked first try once the versions
+ * converged. The sentence has to say that the fields above it cannot be believed.
+ */
+const SKEW_VERDICT_NOTE =
+  'the page SDK and the daemon disagree on the wire contract, so this result is NOT a verdict: ' +
+  'a dispatch can report dispatched/settled (and even a DOM mutation) while the app never changed ' +
+  'state. Converge the versions and re-run before concluding anything from this call';
 
 /**
  * Build the health envelope for a tool result. When the session is **nominal** (focused, not
@@ -44,10 +68,20 @@ interface HealthEnvelope {
  * so no health signal is lost — absence means healthy.
  */
 export function healthEnvelope(session: Session): HealthEnvelope {
+  // Skew rides EVERY result for as long as it holds, unlike the one-shot `version_skew` nudge.
+  // One-shot is right for "an upgrade is available" and wrong for this: the condition does not go
+  // away when it has been mentioned once, and the call it was mentioned on is rarely the call whose
+  // verdict mattered (#812).
+  const skew =
+    session.versionSkew === undefined
+      ? {}
+      : { skewSuspected: `${SKEW_VERDICT_NOTE} (${session.versionSkew})` };
   const health = session.health();
   const nominal = !health.throttled && health.focused && health.recommendation === undefined;
-  if (nominal) return {};
-  return health.throttled ? { session: health, warning: THROTTLED_WARNING } : { session: health };
+  if (nominal) return skew;
+  return health.throttled
+    ? { session: health, warning: THROTTLED_WARNING, ...skew }
+    : { session: health, ...skew };
 }
 
 /**
