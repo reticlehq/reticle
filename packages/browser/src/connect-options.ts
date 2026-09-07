@@ -41,6 +41,21 @@ export interface ReticleConnectOptions {
    */
   captureNetworkBodies?: boolean;
   /**
+   * Per-body character cap for captured request/response bodies. Default 8192; clamped to
+   * [256, 262144]. Only meaningful with `captureNetworkBodies`.
+   *
+   * Raise it to make a NEGATIVE `bodyContains` assertion decidable. A negation has to be checked
+   * over the whole payload, so on any list endpoint whose response exceeds the cap it is
+   * permanently undecidable -- and that is the class that proves safety invariants ("this dangerous
+   * field is absent from every row"). A positive assertion degrades gracefully by comparison, since
+   * the match is usually early in the body (#799).
+   *
+   * The cost is the shared ring buffer: bodies ride the same timeline as DOM, route and console
+   * events, so a large cap spends behavioural history on one response. Raise it for the run that
+   * needs it rather than leaving it high.
+   */
+  networkBodyMaxChars?: number;
+  /**
    * Make Reticle's OWN presenter visible to snapshots and queries. CONTRIBUTORS ONLY.
    *
    * The presenter is hidden from every tool by design, for a good reason: an agent that can drive

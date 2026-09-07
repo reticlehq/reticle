@@ -193,6 +193,20 @@ export interface ReticleVitePluginOptions {
    */
   captureNetworkBodies?: boolean;
   /**
+   * Per-body character cap for captured bodies. Default 8192; clamped to [256, 262144].
+   *
+   * Reachable here for the reason `captureNetworkBodies` is: the plugin is the only `connect()`
+   * most apps ever have, so an SDK option the plugin cannot pass is an option that does not exist.
+   *
+   * Raise it to make a NEGATIVE `bodyContains` decidable -- a negation is checked over the whole
+   * payload, so on a list endpoint bigger than the cap it is permanently undecidable, and that is
+   * the class that proves "this dangerous field is absent from every row" (#799).
+   *
+   * Also settable as `VITE_RETICLE_BODY_MAX_CHARS=65536`, so one run can raise it without editing
+   * vite.config.
+   */
+  networkBodyMaxChars?: number;
+  /**
    * Make Reticle's OWN presenter visible to snapshots and queries. CONTRIBUTORS ONLY.
    *
    * Reachable here for the same reason `captureNetworkBodies` is: the plugin is the only `connect()`
@@ -442,6 +456,16 @@ function connectArgs(options: ReticleVitePluginOptions): string {
   // model with it.
   if (true === options.captureNetworkBodies || '1' === process.env['VITE_RETICLE_CAPTURE_BODIES']) {
     args['captureNetworkBodies'] = true;
+  }
+  // Same shape, same reason -- except this one carries a value, so the env var is parsed rather than
+  // tested for '1'. A non-numeric env var is ignored rather than fatal: it must not take down an
+  // app's dev server, and the SDK clamps whatever does arrive.
+  const envBodyChars = Number(process.env['VITE_RETICLE_BODY_MAX_CHARS']);
+  const bodyChars =
+    options.networkBodyMaxChars ??
+    (Number.isFinite(envBodyChars) && envBodyChars > 0 ? envBodyChars : undefined);
+  if (bodyChars !== undefined) {
+    args['networkBodyMaxChars'] = bodyChars;
   }
   // Same shape, same reason. Off unless asked for, in a config or for one session.
   if (true === options.exposePresenter || '1' === process.env['VITE_RETICLE_EXPOSE_PRESENTER']) {

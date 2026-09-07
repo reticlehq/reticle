@@ -1,7 +1,8 @@
 /**
  * Read what CAN be read out of a truncated JSON payload.
  *
- * Response bodies are capped (8192 bytes) so one enormous payload cannot blow the transport budget.
+ * Response bodies are capped (8192 bytes by default, `networkBodyMaxChars` to raise it) so one
+ * enormous payload cannot blow the transport budget.
  * The cap is right; treating what it produces as "no body" is not. Measured on a 10,000-row console:
  * the list response is 19,932 bytes, arrives truncated mid-object, `JSON.parse` throws, and every
  * body-based check — currency reconciliation, per-item failures, unit mismatches — silently reported
