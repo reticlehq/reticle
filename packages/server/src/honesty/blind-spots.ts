@@ -301,6 +301,23 @@ export function restsOnCompleteWindow(predicate: {
   count?: number;
   predicate?: unknown;
 }): boolean {
+  return isAbsenceClaim(predicate);
+}
+
+/**
+ * Is this predicate a claim that something is NOT there?
+ *
+ * The three spellings a caller actually writes, in one place. Two checks depend on the answer and
+ * they must not drift: whether a passing verdict rests on the window being complete (above), and
+ * which side of a verdict a "the tab was starved" caveat belongs on, since an absence claim inverts
+ * the polarity of what counts as having looked.
+ */
+export function isAbsenceClaim(predicate: {
+  kind: string;
+  absent?: boolean;
+  count?: number;
+  predicate?: unknown;
+}): boolean {
   if (PredicateKind.NOT === predicate.kind) return true;
   // An exact cardinality of ZERO is the third spelling of an absence claim, and reading only
   // `absent` missed it: `{ kind: "net", urlContains: "/api/auth/sign-in", count: 0 }` says "this

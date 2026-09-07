@@ -2,7 +2,6 @@ import {
   ElementState,
   PredicateKind,
   ReticleCommand,
-  THROTTLED_STARVED_NOTE,
   isSameDocument,
   type CommandResult,
   type ElementQuery,
@@ -19,6 +18,7 @@ import { predicateToExpectedLinks } from '../capsule/predicate-to-links.js';
 import type { ExpectedLink } from '../capsule/divergence.js';
 import { isAmbient, ambientKeyOf, type AmbientCounts } from '../journal/ambient.js';
 import { evalRoute } from './predicate-route.js';
+import { annotateThrottledMiss } from './throttled-verdict.js';
 import { describeSuperseded } from './observed-in-window.js';
 import {
   PredicateSchema,
@@ -537,27 +537,6 @@ function predicateSince(predicate: Predicate): number {
   return 'since' in predicate && 'number' === typeof predicate.since ? predicate.since : 0;
 }
 
-/**
- * A miss on a throttled tab is not a missing render. The browser has starved the tab, so a timeout
- * there may mean it never ran — which must not look like "the text is absent".
- *
- * Sets `inconclusive` only. The PROSE is already handled one layer up by
- * `annotateStarvedFailure` (session-health.ts), which suffixes the same fact onto the
- * failureReason so the concrete diagnosis still leads; writing it here as well would put the
- * sentence in every throttled failure twice. What was missing was never the sentence — it was the
- * FIELD an agent gates on, so a starved wait graded `assertion-failed` and sent somebody to fix
- * working code.
- *
- * Idempotent, and a more specific `inconclusive` (unreadable locator, superseded window) is never
- * overwritten.
- */
-function annotateThrottledMiss(session: PredicateSession, result: EvalResult): EvalResult {
-  if (result.pass) return result;
-  if (true !== session.throttled?.()) return result;
-  if (result.inconclusive !== undefined) return result;
-  return { ...result, inconclusive: THROTTLED_STARVED_NOTE };
-}
-
 export async function evaluatePredicate(
   session: PredicateSession,
   predicate: Predicate,
@@ -566,6 +545,7 @@ export async function evaluatePredicate(
 ): Promise<EvalResult> {
   return annotateThrottledMiss(
     session,
+    predicate,
     await evaluatePredicateRaw(session, predicate, since, diagnose),
   );
 }
@@ -941,7 +921,7 @@ export function waitForPredicate(
           // assert. So the highest-value localization signal was computed and then thrown away exactly
           // on the failure path where it matters, no matter what the schema declared.
           finish(
-            annotateThrottledMiss(session, {
+            annotateThrottledMiss(session, predicate, {
               ...r,
               pass: false,
               failureReason: r.failureReason ?? 'timed out waiting for predicate',

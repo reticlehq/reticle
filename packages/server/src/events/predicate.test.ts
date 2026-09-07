@@ -690,6 +690,62 @@ describe('a throttled tab timeout is not a missing render', () => {
     expect(result.inconclusive).toBeUndefined();
   });
 
+  /**
+   * The polarity of an absence claim inverts what "could not look" undermines.
+   *
+   * Reported from a live drive: `{ kind: "text", contains: "ProgrammingError", absent: true }` over a
+   * framework error page matched thirteen elements, including the heading, and still graded
+   * `unknown` because the tab was throttled. The error was plainly there. An agent reading `unknown`
+   * re-drives or moves on rather than reporting the failure it just proved.
+   */
+  it('an absence claim that FOUND matches fails on a throttled tab, rather than going unknown', async () => {
+    const session = new ThrottledSession([], () => ({
+      matched: true,
+      count: 13,
+      elements: [],
+    }));
+    const result = await evaluatePredicate(session, {
+      kind: 'text',
+      contains: 'ProgrammingError',
+      absent: true,
+    });
+    expect(result.pass).toBe(false);
+    expect(result.inconclusive).toBeUndefined();
+  });
+
+  /**
+   * The other half, and the one that was a false green. An absence claim PASSES by finding nothing,
+   * which is exactly the reading a starved tab undermines, and it was never annotated at all.
+   */
+  it('an absence claim that found nothing is inconclusive on a throttled tab', async () => {
+    const session = new ThrottledSession([], () => ({
+      matched: false,
+      count: 0,
+      elements: [],
+    }));
+    const result = await evaluatePredicate(session, {
+      kind: 'text',
+      contains: 'ProgrammingError',
+      absent: true,
+    });
+    expect(result.inconclusive).toBe(THROTTLED_STARVED_NOTE);
+  });
+
+  /** Same inversion through the `not` spelling, which is the other way a caller writes absence. */
+  it('a not-wrapped element claim that found matches is not downgraded', async () => {
+    const session = new ThrottledSession([], () => ({
+      matched: true,
+      count: 1,
+      elements: [],
+    }));
+    const result = await evaluatePredicate(session, {
+      kind: 'not',
+      predicate: { kind: 'element', query: { text: 'Configuration' } },
+    });
+    expect(result.pass).toBe(false);
+    expect(result.inconclusive).toBeUndefined();
+  });
+
   it('an unthrottled timeout still looks like a near-miss, not a starved tab', async () => {
     const session = new FakeSession([]);
     const result = await waitForPredicate(
