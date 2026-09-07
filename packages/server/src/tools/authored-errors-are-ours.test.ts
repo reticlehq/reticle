@@ -29,6 +29,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { recoveryFor } from './error-recovery.js';
+import { resolveTargetRef } from './resolve-target.js';
 
 /** The exact string measured from a live daemon. */
 const DRAG =
@@ -78,5 +79,55 @@ describe('it does not swallow genuine failures', () => {
     expect(
       recoveryFor('TypeError at /node_modules/@reticlehq/server/dist/tools/act-tools.js:412:9'),
     ).toBeUndefined();
+  });
+});
+
+/**
+ * The guard the four previous patches did not leave behind.
+ *
+ * Each of them added one more spelling to `RULES` and a test pinning that one string, so the next
+ * authored refusal defaulted to "unrecognized" again. This drives the real producer instead:
+ * `resolveTargetRef` is pure, it is the function that writes both target-resolution refusals, and a
+ * message it emits that `recoveryFor` does not know is the exact defect this file exists to prevent.
+ *
+ * Ambiguous-target was the fifth. Its text ends "pass an explicit `ref` from reticle_query.", and the
+ * catch-all excludes a `reticle_*` name followed by `.` so that a module path in a stack trace stays
+ * an unanticipated crash. A tool named at the end of a sentence looks exactly like one, so the
+ * message fell through and told the caller their own underspecified selector might be a Reticle bug.
+ */
+describe('every refusal resolveTargetRef writes is recognized as ours', () => {
+  const messageFor = (candidates: readonly unknown[]): string => {
+    const resolution = resolveTargetRef(candidates);
+    if ('error' !== resolution.kind) throw new Error('expected a refusal, got a ref');
+    return resolution.message;
+  };
+
+  it('recognizes the no-match refusal', () => {
+    expect(recoveryFor(messageFor([]))).toBeDefined();
+  });
+
+  it('recognizes the ambiguous-target refusal', () => {
+    const message = messageFor([
+      { ref: 'e1309', role: 'button', name: 'Send', visible: true },
+      { ref: 'e1310', role: 'generic', visible: true },
+    ]);
+    expect(recoveryFor(message)).toBeDefined();
+  });
+
+  it('tells the caller the ambiguity is theirs to fix, not a defect to report', () => {
+    const message = messageFor([
+      { ref: 'e1', role: 'button', name: 'Send', visible: true },
+      { ref: 'e2', role: 'link', name: 'Send', visible: true },
+    ]);
+    expect(recoveryFor(message)).toContain('not a Reticle defect');
+  });
+
+  /**
+   * Deliberately NOT recognized. "matched an element with no usable ref" means the browser handed
+   * back a candidate without one, which is a shape Reticle did not anticipate rather than anything
+   * the caller can narrow. That is precisely the case the feedback ask exists for, so it keeps it.
+   */
+  it('leaves the unusable-ref refusal unrecognized, because that one may really be ours', () => {
+    expect(recoveryFor(messageFor([{ role: 'button', visible: true }]))).toBeUndefined();
   });
 });

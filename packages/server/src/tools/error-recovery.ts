@@ -116,6 +116,21 @@ export const RECOVERY = {
     'acted on. Take a reticle_snapshot to see what is actually there (a view may still be ' +
     'rendering, or the control may be named differently), then retry with what it shows. This is ' +
     'a miss, not a Reticle defect: there is nothing to report.',
+  /**
+   * The selector was underspecified, which is the caller's to fix and the same class as a miss.
+   *
+   * It reached the feedback ask for a punctuation reason: the text ends "pass an explicit `ref` from
+   * reticle_query.", and the catch-all excludes a `reticle_*` name followed by `.` so a module path
+   * in a stack trace stays an unanticipated crash. A tool named at the END of a sentence is
+   * indistinguishable from one under that rule, so the whole message fell through and told the
+   * caller their own ambiguous query might be a defect worth a root-cause report.
+   */
+  AMBIGUOUS_TARGET:
+    'The call was valid and the selector matched SEVERAL elements, so nothing was acted on. Acting ' +
+    'on one of them would report a verdict about an element you did not choose, which is the false ' +
+    'green Reticle refuses to produce. The message above names each match: narrow the query with a ' +
+    'role, name, testid or scope, or pass an explicit `ref` from reticle_query. This is an ' +
+    'underspecified selector, not a Reticle defect: there is nothing to report.',
   NO_SUCH_OPTION:
     'That <select> has no option with the value you asked for, and the message above lists the ones ' +
     'it does have. Reticle refuses rather than assigning it: an unmatched value deselects everything, ' +
@@ -233,6 +248,9 @@ const REASON_OF: Record<keyof typeof RECOVERY, RefusalReason> = {
   STALE_REF_AFTER_EDIT: RefusalReason.NO_MATCH,
   NO_SUCH_OPTION: RefusalReason.NO_MATCH,
   TARGET_MISSED: RefusalReason.NO_MATCH,
+  // Target resolution failed to name one element. NO_MATCH rather than BAD_ARGS: the arguments were
+  // well-formed and the query simply did not identify a single node, same as a miss.
+  AMBIGUOUS_TARGET: RefusalReason.NO_MATCH,
   FLOW_STEP_MISSING: RefusalReason.NO_MATCH,
   UNSUPPORTED_SURFACE: RefusalReason.UNSUPPORTED,
   HOVER_NEEDS_POINTER: RefusalReason.UNSUPPORTED,
@@ -310,6 +328,12 @@ const RULES: readonly { readonly match: RegExp; readonly hint: string }[] = [
   // agent to re-read arguments that were already correct costs it a turn, and this is the commonest
   // refusal there is.
   { match: /target matched no element/i, hint: RECOVERY.TARGET_MISSED },
+  // Also BEFORE the catch-all, and for the same reason the line above is: the caller's query is the
+  // thing to fix, so the answer must not be "re-read the tool's parameters" or a bug-report nudge.
+  {
+    match: /target matched \d+ elements and an action must not guess/i,
+    hint: RECOVERY.AMBIGUOUS_TARGET,
+  },
   // Authored by Reticle, about the caller's arguments: the message already names the valid answers.
   { match: /^unknown action '/i, hint: RECOVERY.BAD_ARGUMENTS },
   { match: /^unsupported query strategy '/i, hint: RECOVERY.BAD_ARGUMENTS },
