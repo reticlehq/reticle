@@ -251,6 +251,7 @@ export interface ReticleVitePlugin {
     define?: Record<string, string>;
     root?: string;
     server?: { watch?: { ignored?: (string | RegExp)[] } };
+    test?: unknown;
   }) => {
     optimizeDeps: {
       include: string[];
@@ -578,6 +579,10 @@ export function reticle(options: ReticleVitePluginOptions = {}): ReticleVitePlug
   const sourceMapping = options.sourceMapping !== false;
   const inject = options.inject !== false;
   const desktop = true === options.desktop;
+
+  let isVitest = false;
+
+  const shouldInject = () => inject && !isVitest;
   // Resolve the stable projectId once (explicit option, else derived from package.json + cwd) so the
   // app is identifiable across port changes with zero config.
   const resolved: ReticleVitePluginOptions = {
@@ -689,7 +694,9 @@ export function reticle(options: ReticleVitePluginOptions = {}): ReticleVitePlug
       root?: string;
       /** The app's own watcher config; its `ignored` list is preserved, never replaced. */
       server?: { watch?: { ignored?: (string | RegExp)[] } };
+      test?: unknown;
     }) {
+      isVitest = config.test !== undefined;
       // Everything below asks what the APP has installed, so every lookup is rooted here and never
       // at the plugin's own location. Vite defaults an omitted root to the cwd; so do we.
       const appRoot = config.root ?? process.cwd();
@@ -780,7 +787,7 @@ export function reticle(options: ReticleVitePluginOptions = {}): ReticleVitePlug
       // Desktop injection: prepend connect() to the HTML's own entry module. It is a REAL module, so
       // its bare `@reticlehq/react` import resolves through the normal pipeline in both dev and
       // build — which a virtual <script src> only ever did in dev.
-      if (desktop && inject && isHtmlEntry(id, htmlEntrySpecifier, root)) {
+      if (desktop && shouldInject() && isHtmlEntry(id, htmlEntrySpecifier, root)) {
         injected = true;
         const withConnect = `${connectModuleSource(resolveLazy())}\n${code}`;
         const stamped = sourceMapping && shouldStamp(id) ? stamp(withConnect, id) : null;
@@ -805,15 +812,15 @@ export function reticle(options: ReticleVitePluginOptions = {}): ReticleVitePlug
       // `includes`, not `endsWith`: in a BUILD Vite rewrites the html entry through an html-proxy
       // id (`/index.html?html-proxy&index=0.js`), so an endsWith check silently never matches and
       // nothing is injected — which is exactly how this shipped a bundle with no connect() in it.
-      if (desktop && inject && importer !== undefined && importer.includes('.html')) {
+      if (desktop && shouldInject() && importer !== undefined && importer.includes('.html')) {
         htmlEntrySpecifier = id;
       }
       // Return the id verbatim so Vite serves it back to load (the bare imports inside it then
       // go through normal resolution). No NUL prefix: the browser requests it as a URL.
-      return inject && id === RETICLE_CONNECT_MODULE ? RETICLE_CONNECT_MODULE : null;
+      return shouldInject() && id === RETICLE_CONNECT_MODULE ? RETICLE_CONNECT_MODULE : null;
     },
     load(id) {
-      if (!inject || id !== RETICLE_CONNECT_MODULE) return null;
+      if (!shouldInject() || id !== RETICLE_CONNECT_MODULE) return null;
       const source = currentConnectSource();
       lastServedConnectSource = source;
       return source;
@@ -848,7 +855,7 @@ export function reticle(options: ReticleVitePluginOptions = {}): ReticleVitePlug
      * module inert once it has settled.
      */
     configureServer(server) {
-      if (!inject) return;
+      if (!shouldInject()) return;
       // Tell `~/.reticle` this dev server exists, the moment it is actually listening.
       //
       // This is the one fact nobody outside this process could observe: the plugin is loaded in the
@@ -922,13 +929,13 @@ export function reticle(options: ReticleVitePluginOptions = {}): ReticleVitePlug
       // In serve, the HTML is sent BEFORE the browser requests the entry module, so the check has to
       // be deferred — asserting here would fire on every healthy start. Unref'd so a dev server is
       // never held open by it.
-      if (desktop && inject && 'serve' === command) {
+      if (desktop && shouldInject() && 'serve' === command) {
         const timer = setTimeout(checkInjected, DEV_INJECTION_GRACE_MS);
         (timer as { unref?: () => void }).unref?.();
       }
       // Desktop injects via the entry module instead (see transform) — a tag here would be a dead
       // URL in a packaged build.
-      if (!inject || desktop) return [];
+      if (!shouldInject() || desktop) return [];
       return [
         // A CLASSIC inline script in <head>, and it has to be both.
         //

@@ -167,6 +167,18 @@ describe('desktop mode', () => {
     expect(plugin.transformIndexHtml('')).toEqual([]);
   });
 
+  it('does not inject while Vitest is running', () => {
+    const plugin = reticle();
+
+    plugin.config?.({
+      test: {},
+    });
+
+    const html = plugin.transformIndexHtml?.('<html></html>');
+
+    expect(html).toEqual([]);
+  });
+
   it('leaves web behaviour untouched — no desktop keys leak into a normal connect', () => {
     // A non-default port, because the default one is deliberately omitted from the connect args.
     const web = connectModuleSource({ port: 4401 });
