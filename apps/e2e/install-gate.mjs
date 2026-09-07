@@ -83,6 +83,7 @@ import { fileURLToPath } from 'node:url';
 import { setTimeout as sleep } from 'node:timers/promises';
 import {
   freePortSafely,
+  portHolders,
   killTree,
   startOwnedDaemon,
   watchTransport,
@@ -354,10 +355,34 @@ const PNPM_LOCK_STUB = "lockfileVersion: '9.0'\n";
  *   - `dropLocalLockfile` — delete the app's own lockfile after install, so package-manager
  *     detection has to walk UP for one instead of short-circuiting on it
  */
+/**
+ * The ports a scaffold's OWN `npm run dev` can bind — the one `init` spawns, which takes no
+ * `--port` because the whole point is to run what the user runs.
+ *
+ * The gate's own dev server is given an explicit port and cannot collide. `init`'s cannot: every
+ * Vite scaffold defaults to 5173 and every Next one to 3000, in BOTH phases of this job. The
+ * self-test runs first and deliberately wires each app to a bridge port its daemon is not on, so
+ * what it leaves listening is an SDK-instrumented page that never dials — and if one survives, the
+ * real run's `init` finds that port already answering, watches it, and times out reporting
+ * "The SDK IS in the page … and never dialled the bridge". That is the self-test's designed
+ * symptom, attributed to a scaffold that was installed correctly.
+ *
+ * Observed on Windows: `vite-react`'s init announced :5175, which is only reachable if 5173 AND
+ * 5174 were already held when it started.
+ *
+ * The fallback range matters as much as the default. Freeing only 5173 leaves a leftover on 5174,
+ * and Vite walks up to it — so the range covers where the framework walks, not just where it starts.
+ */
+const INIT_DEV_PORTS = {
+  vite: [5173, 5174, 5175],
+  next: [3000, 3001, 3002],
+};
+
 const SCAFFOLDS = [
   {
     id: 'vite-react',
     what: 'Vite + React — the vite-plugin path (config patch + injected connect)',
+    initDevPorts: INIT_DEV_PORTS.vite,
     create: ['npm', ['create', 'vite@latest', 'app', '--yes', '--', '--template', 'react-ts']],
     dev: (port) => ['npm', ['run', 'dev', '--', '--port', String(port), '--strictPort']],
   },
@@ -373,12 +398,14 @@ const SCAFFOLDS = [
     // it is the larger population; both take the identical code path through the plugin.
     id: 'vite-vue',
     what: 'Vite + Vue — the non-React path (sensor instead of the React kit)',
+    initDevPorts: INIT_DEV_PORTS.vite,
     create: ['npm', ['create', 'vite@latest', 'app', '--yes', '--', '--template', 'vue']],
     dev: (port) => ['npm', ['run', 'dev', '--', '--port', String(port), '--strictPort']],
   },
   {
     id: 'next-app-router',
     what: 'Next App Router — withReticle plus the app/ root layout',
+    initDevPorts: INIT_DEV_PORTS.next,
     create: [
       'npx',
       [
@@ -403,6 +430,7 @@ const SCAFFOLDS = [
     // and connect has to mount through `pages/_app` — a different code path, and the one that
     // silently did nothing.
     what: 'Next Pages Router — no app/ at all, so connect must mount via pages/_app',
+    initDevPorts: INIT_DEV_PORTS.next,
     create: [
       'npx',
       [
@@ -444,6 +472,7 @@ const SCAFFOLDS = [
     what: 'monorepo root, app in frontend/, inherited pnpm lockfile, no pnpm on PATH',
     appDir: 'frontend',
     initFrom: '.',
+    initDevPorts: INIT_DEV_PORTS.next,
     seed: { [PNPM_LOCK]: PNPM_LOCK_STUB },
     hidePnpm: true,
     dropLocalLockfile: true,
@@ -635,6 +664,46 @@ function stepsOf(report) {
  */
 const fingerprint = (steps) => steps.map((s) => `${s.mark} ${s.title} → ${s.target}`);
 
+/**
+ * Free the framework's default dev ports — but only where nothing of the user's can be listening.
+ *
+ * These are 3000 and 5173, the two most-used ports on any web developer's machine, and this gate is
+ * runnable locally. Everywhere else it takes deliberately private ports "so this never fights the
+ * battery or a developer's own daemon"; killing whatever answers on :3000 would be the one place it
+ * broke that promise, and it would do it to the app somebody was working on.
+ *
+ * So: kill on a CI runner, where the only thing that can be holding these is a leftover of ours.
+ * Locally, SAY what is there and leave it alone — a named warning is a fair trade for not killing a
+ * developer's dev server, and it names the exact condition that makes the run untrustworthy.
+ *
+ * `GITHUB_ACTIONS`, not `CI`: this file SETS `CI=true` near the top (so its own telemetry is not
+ * counted as a user's), which makes `CI` true on a laptop too — exactly the machine this guard
+ * exists to protect.
+ */
+async function clearInitDevPorts(scaffold, note, exceptPort) {
+  for (const port of scaffold.initDevPorts ?? []) {
+    if (port === exceptPort) continue;
+    if ('true' !== process.env.GITHUB_ACTIONS) {
+      const held = portHolders(port).filter((h) => h.listener);
+      if (held.length > 0) {
+        note(
+          `:${String(port)} is already listening (${held.map((h) => `pid ${h.pid} ${h.command}`).join(', ')}) — ` +
+            'left alone because this is not CI. `init` may watch it instead of the app it starts, ' +
+            'which reads as "the SDK IS in the page and never dialled the bridge".',
+        );
+      }
+      continue;
+    }
+    const { freed, survivors } = await freePortSafely(port, { onNote: note });
+    if (!freed) {
+      note(
+        `could not free :${String(port)} — still held by ` +
+          `${survivors.map((h) => `pid ${h.pid} (${h.command})`).join(', ')}`,
+      );
+    }
+  }
+}
+
 /** Drive one scaffold end to end. Returns its own tally, so one bad scaffold cannot mask another. */
 async function driveScaffold(scaffold, index) {
   let pass = 0;
@@ -726,6 +795,12 @@ async function driveScaffold(scaffold, index) {
     // init DOES its own dependency install here, from the local registry. That is the whole point of
     // the registry: the previous `file:`-wired version had to pass `--no-install` and then excuse the
     // ⚠ it produced, which meant the one step most likely to regress was the one step not tested.
+    // `init` spawns the app's OWN dev script, which names no port — so it lands on the framework
+    // default, the same one every other scaffold and the self-test phase already used. Clear that
+    // range FIRST: anything still listening there is a leftover, and `init` cannot tell a leftover
+    // that answers from the app it just started. See INIT_DEV_PORTS.
+    await clearInitDevPorts(scaffold, note);
+
     let report = '';
     let initExit = 0;
     try {
@@ -853,6 +928,11 @@ async function driveScaffold(scaffold, index) {
     for (const port of handedOverPorts) {
       if (port !== appPort) await freePortSafely(port);
     }
+    // And the default range, whether or not `init` mentioned it. `handedOverPorts` is read out of
+    // init's STDOUT, so a dev server that bound a port without announcing one — or that init failed
+    // before printing — was never freed and outlived the scaffold. That is the leak this phase
+    // hands to the next one.
+    await clearInitDevPorts(scaffold, note, appPort);
     handedOverPorts = [];
 
     // Killing the process does not undo a half-written `.next`. That is the other half of the same
