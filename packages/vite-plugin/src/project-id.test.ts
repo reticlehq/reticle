@@ -3,7 +3,13 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { deriveProjectId, resolveProjectId, shortHash, slugifyPackageName } from './project-id.js';
+import {
+  deriveProjectId,
+  readConfiguredProjectId,
+  resolveProjectId,
+  shortHash,
+  slugifyPackageName,
+} from './project-id.js';
 
 describe('slugifyPackageName', () => {
   it('drops the @scope punctuation and dasherizes', () => {
@@ -63,5 +69,76 @@ describe('resolveProjectId', () => {
     expect(resolveProjectId(undefined, '/srv/widgets', () => undefined)).toMatch(
       /^widgets-[0-9a-f]{8}$/,
     );
+  });
+});
+
+/**
+ * The id of record is the one `init` wrote, not the one the plugin can re-derive.
+ *
+ * Both halves derived independently from `pkg.name + sha1(absolute root)`, and they agreed only
+ * while the plugin's `process.cwd()` matched the directory `init` ran in. A dev server in a
+ * container breaks that: the root is `/app` inside and the host path outside, so the page announced
+ * one project and the daemon expected another, and the bridge refused every connection with
+ * `authentication failed` — an error that says nothing about paths. Measured in the field at six
+ * minutes to diagnose, ending in a hand-written `projectId` option in vite.config.
+ *
+ * `.reticle.json` already carries the answer, it is already the file the server walks up to find,
+ * and the plugin simply never opened it.
+ */
+describe('resolveProjectId reads the id init recorded', () => {
+  const noPkg = (): undefined => undefined;
+
+  it('prefers .reticle.json over deriving from the root path', () => {
+    expect(resolveProjectId(undefined, '/app', noPkg, () => 'bluedot-frontend-ac78e745')).toBe(
+      'bluedot-frontend-ac78e745',
+    );
+  });
+
+  it('still lets an explicit option win — it is the most local statement of intent', () => {
+    expect(resolveProjectId('explicit', '/app', noPkg, () => 'from-config')).toBe('explicit');
+  });
+
+  it('derives as before when no config names an id', () => {
+    expect(resolveProjectId(undefined, '/srv/widgets', noPkg, () => undefined)).toMatch(
+      /^widgets-[0-9a-f]{8}$/,
+    );
+  });
+
+  it('ignores an empty id rather than stamping an empty string', () => {
+    expect(resolveProjectId(undefined, '/srv/widgets', noPkg, () => '')).toMatch(
+      /^widgets-[0-9a-f]{8}$/,
+    );
+  });
+});
+
+describe('readConfiguredProjectId', () => {
+  const tree = (files: Record<string, string>) => (path: string) => {
+    const found = files[path];
+    if (found === undefined) throw new Error(`ENOENT: ${path}`);
+    return found;
+  };
+
+  it('reads projectId from .reticle.json in the given directory', () => {
+    const read = tree({ '/app/.reticle.json': '{"framework":"vite","projectId":"acme-1234abcd"}' });
+    expect(readConfiguredProjectId('/app', read)).toBe('acme-1234abcd');
+  });
+
+  it('walks up to the config, for an app wired one directory below it', () => {
+    const read = tree({ '/repo/.reticle.json': '{"projectId":"acme-1234abcd"}' });
+    expect(readConfiguredProjectId('/repo/frontend', read)).toBe('acme-1234abcd');
+  });
+
+  it('returns undefined when no config exists', () => {
+    expect(readConfiguredProjectId('/nowhere', tree({}))).toBeUndefined();
+  });
+
+  it('returns undefined for a config that names no id, rather than throwing', () => {
+    const read = tree({ '/app/.reticle.json': '{"framework":"vite"}' });
+    expect(readConfiguredProjectId('/app', read)).toBeUndefined();
+  });
+
+  it('survives an unparseable config — a dev server must still start', () => {
+    const read = tree({ '/app/.reticle.json': '{not json' });
+    expect(readConfiguredProjectId('/app', read)).toBeUndefined();
   });
 });

@@ -259,3 +259,42 @@ describe('the dependency install is quiet about things that are not ours', () =>
     }
   });
 });
+
+/**
+ * A three.js app is a different rendering target, and the manifest is the only place that says so.
+ *
+ * See `Detection.nonDomReconciler` for the crash this exists to prevent. Detected from the
+ * dependency rather than from the source, because the stamp is applied at transform time to every
+ * file and the decision has to be made once, before any of them are read.
+ */
+describe('non-DOM reconcilers', () => {
+  const base = { configFiles: new Set<string>(), lockfiles: new Set<string>() };
+
+  it('flags react-three-fiber, whichever dependency block it sits in', () => {
+    expect(
+      detect({ ...base, pkg: { dependencies: { '@react-three/fiber': '^9.0.0' } } })
+        .nonDomReconciler,
+    ).toBe(true);
+    expect(
+      detect({ ...base, pkg: { devDependencies: { '@react-three/fiber': '^9.0.0' } } })
+        .nonDomReconciler,
+    ).toBe(true);
+  });
+
+  it('flags the other renderers whose host elements are not nodes', () => {
+    expect(
+      detect({ ...base, pkg: { dependencies: { '@react-pdf/renderer': '^4.0.0' } } })
+        .nonDomReconciler,
+    ).toBe(true);
+    expect(detect({ ...base, pkg: { dependencies: { ink: '^5.0.0' } } }).nonDomReconciler).toBe(
+      true,
+    );
+  });
+
+  it('leaves an ordinary React app alone — the stamp is what React 19 needs', () => {
+    const d = detect({ ...base, pkg: { dependencies: { react: '^19.0.0', three: '^0.170.0' } } });
+    // `three` on its own is not the signal: a plain three.js app has no JSX intrinsics at all.
+    expect(d.nonDomReconciler).toBe(false);
+    expect(d.needsSourceMapping).toBe(true);
+  });
+});

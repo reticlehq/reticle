@@ -100,6 +100,23 @@ export interface Detection {
   reactScriptsMajor?: number | undefined;
   /** React 19 dropped _debugSource, so it needs the build-time source-map stamp. */
   needsSourceMapping: boolean;
+  /**
+   * Whether this app renders through a reconciler whose host elements are NOT DOM nodes.
+   *
+   * react-three-fiber is the one that reaches people. Its lowercase JSX intrinsics are three.js
+   * objects, and `applyProps` reads any prop containing a dash as a pierced property path — so the
+   * `data-reticle-source` stamp is walked as `data` -> `reticle` -> `source`, finds no `data` object
+   * on the instance, and throws from inside the commit phase. Unhandled there, the whole React tree
+   * unmounts to a white screen; and because it needs an element UPDATE rather than a mount, it fires
+   * long after the install looked clean. Reported from the field against a CAD app that had already
+   * passed a dozen verdicts.
+   *
+   * The babel plugin now stamps only real DOM tags, which covers `mesh`, `group` and the rest. A few
+   * three.js names collide with real ones (`line`, `audio`) and no build-time rule can separate
+   * them, so when the manifest says this app is a three.js app `init` turns the stamp off outright.
+   * A missing source pointer costs one grep; a white screen costs the session.
+   */
+  nonDomReconciler: boolean;
   packageManager: PackageManager;
 }
 
@@ -118,6 +135,12 @@ const ASTRO_CONFIGS = [
   'astro.config.ts',
   'astro.config.cjs',
 ];
+
+/**
+ * Packages whose JSX host elements are not DOM nodes, so a `data-*` stamp on them is not an
+ * attribute. See `Detection.nonDomReconciler`.
+ */
+const NON_DOM_RECONCILERS = ['@react-three/fiber', '@react-pdf/renderer', 'ink'];
 
 function depVersion(pkg: PackageJsonLike, name: string): string | undefined {
   return pkg.dependencies?.[name] ?? pkg.devDependencies?.[name] ?? pkg.peerDependencies?.[name];
@@ -244,6 +267,7 @@ export function detect(input: DetectInput): Detection {
       depVersion(input.pkg, 'typescript') !== undefined,
     reactMajor,
     needsSourceMapping: reactMajor !== undefined && reactMajor >= 19,
+    nonDomReconciler: NON_DOM_RECONCILERS.some((name) => depVersion(input.pkg, name) !== undefined),
     packageManager: detectPackageManager(input.lockfiles, input.nodeModulesMarkers ?? new Set()),
   };
 }
