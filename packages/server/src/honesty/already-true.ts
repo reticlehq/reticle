@@ -1,15 +1,17 @@
 /**
  * Which predicates can be satisfied by something that was already true before the action.
  *
- * Event-based kinds (net, signal, route, console, animation, settled) are evaluated against the
+ * Event-based kinds (net, signal, console, animation, settled) are evaluated against the
  * event buffer floored at the act's own cursor, so a stale event cannot satisfy them — that floor is
- * why `act_and_wait` can trust them at all. `state` is read through the same floored path.
+ * why `act_and_wait` can trust them at all.
  *
- * `element` and `text` read the LIVE DOM, where no floor exists. A condition that held before the
+ * `element` and `text` read the LIVE DOM, `route` can fall back to the current route, and `state` reads
+ * live store memory via STATE_READ — where no event floor applies. A condition that held before the
  * click holds after it and passes instantly, whatever the action did. Measured in the field: a click
  * asserted with `{ kind: 'text', contains: 'Parallel Routes' }` returned `verified: "yes"` in 478ms
  * against `routeChanges: 0`, because the predicate matched the nav link that was already on screen —
- * the real navigation landed 1.8 seconds later.
+ * the real navigation landed 1.8 seconds later. Similarly, a pre-existing store value (e.g. cart.count == 3)
+ * satisfies an inert action if not checked before dispatch.
  *
  * So these are the kinds worth evaluating BEFORE the act, to find out whether the green means
  * anything.
@@ -33,9 +35,15 @@ export function readsDomState(predicate: Predicate): boolean {
     // One extra query on the act path buys `already_true`, reported as UNKNOWN with the reason
     // rather than as a pass. The fallback removed a false red; this is what stops it becoming a
     // false green, and that is the trade this codebase never makes.
+    //
+    // STATE is here for the same reason: it is evaluated via STATE_READ against live in-memory stores
+    // rather than through the floored event buffer. If the store already holds the expected value
+    // before dispatch, an inert click would immediately pass post-dispatch on the pre-existing state.
+    // Evaluating before dispatch routes that pre-existing condition into already_true.
     case PredicateKind.ELEMENT:
     case PredicateKind.TEXT:
     case PredicateKind.ROUTE:
+    case PredicateKind.STATE:
       return true;
     case PredicateKind.ALL_OF:
     case PredicateKind.ANY_OF:

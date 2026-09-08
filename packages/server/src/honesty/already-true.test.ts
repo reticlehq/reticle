@@ -103,20 +103,34 @@ describe('which predicates need the before-check at all', () => {
     expect(readsDomState({ kind: 'route' })).toBe(true);
   });
 
-  it('state reads a store, which the action is supposed to change — and it IS floored', () => {
-    expect(readsDomState({ kind: 'state', path: 'cart.total' })).toBe(false);
+  /**
+   * `state` was originally assumed to be floored like event-based kinds. It is not: STATE_READ
+   * queries live in-page store memory, where no event floor applies. An action asserting a state
+   * condition that already held before dispatch passes immediately without causing any change.
+   * Evaluating before dispatch catches this as already_true.
+   */
+  it('state reads live store memory via STATE_READ without an event floor, so it needs the before-check', () => {
+    expect(readsDomState({ kind: 'state', path: 'cart.total' })).toBe(true);
+    expect(readsDomState({ kind: 'state', store: 'cart', path: 'total' })).toBe(true);
   });
 
-  it('a combinator inherits it from any branch that reads the DOM', () => {
+  it('a combinator inherits it from any branch that reads the DOM or live state', () => {
     expect(
       readsDomState({
         kind: 'allOf',
         predicates: [{ kind: 'settled' }, { kind: 'text', contains: 'Done' }],
       }),
     ).toBe(true);
+    expect(
+      readsDomState({
+        kind: 'allOf',
+        predicates: [{ kind: 'settled' }, { kind: 'state', path: 'cart.count' }],
+      }),
+    ).toBe(true);
     expect(readsDomState({ kind: 'not', predicate: { kind: 'text', contains: 'Error' } })).toBe(
       true,
     );
+    expect(readsDomState({ kind: 'not', predicate: { kind: 'state', path: 'error' } })).toBe(true);
     expect(readsDomState({ kind: 'anyOf', predicates: [{ kind: 'signal', name: 'a' }] })).toBe(
       false,
     );
