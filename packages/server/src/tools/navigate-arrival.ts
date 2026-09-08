@@ -10,13 +10,22 @@
  * Bounded and best-effort by construction: a navigation to a page that is not instrumented, or not
  * there at all, must still return promptly with `confirmed:false` rather than hanging. The clock and
  * the sleep are injected so this is testable without waiting on a real one.
+ *
+ * The bound is the CALLER'S to set. It was a fixed 5s that `reticle_navigate` did not expose, and a
+ * Nuxt SPA reattaching under HMR was measured coming back in 30–60s — so every navigation to it
+ * answered `confirmed:false` while the app was still on its way, and nothing the agent could pass
+ * would make the daemon wait. `assert` / `wait_for` / `act_and_wait` all spend the caller's
+ * `timeout_ms` (resolve-within.ts); this is the same budget applied to the same wait.
  */
 
 import type { SessionManager } from '../session/session-manager.js';
 import type { NavigateArrival } from './navigate-result.js';
 
-/** Long enough for a dev server to serve a page and the SDK to dial back; short enough to not hang. */
-const ARRIVAL_TIMEOUT_MS = 5_000;
+/**
+ * The default when the caller gives no `timeout_ms`: long enough for a dev server to serve a page
+ * and the SDK to dial back; short enough to not hang. A caller who knows the app is slower says so.
+ */
+export const ARRIVAL_TIMEOUT_MS = 5_000;
 const POLL_MS = 100;
 
 /**

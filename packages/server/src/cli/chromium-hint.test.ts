@@ -125,3 +125,48 @@ describe('chromium doctor line', () => {
     expect(chromiumHint({ exists: false })).toContain('playwright package is not installed');
   });
 });
+
+/**
+ * The one verdict in this file that is still evidence-free.
+ *
+ * The header says it about the OTHER branch — "naming the path is what turns 'missing' from a
+ * verdict into evidence" — and then the playwright-absent branch says a bare "the playwright package
+ * is not installed" with nothing to check it against. A reporter on Windows installed that exact
+ * playwright version in BOTH the frontend and the repo root, confirmed Chromium was in the npx
+ * cache, and kept getting the same line.
+ *
+ * They were not wrong and the line was not lying. It means "not installed WHERE THIS PROCESS CAN
+ * RESOLVE IT", and the daemon usually runs from npx or a global install, so it resolves from its own
+ * location and not from the user's project. Without the search paths there is no way to see that —
+ * the only reading left is that the check is broken, which is what the header calls the unbreakable
+ * loop.
+ */
+describe('the playwright-absent verdict says where it looked', () => {
+  it('names the resolution roots it searched', () => {
+    const line = chromiumHint({ exists: false, searchedPaths: ['/opt/daemon/node_modules'] });
+    expect(line).toContain('/opt/daemon/node_modules');
+  });
+
+  it('still names the command, and does not pretend a browser is the problem', () => {
+    const line = chromiumHint({ exists: false, searchedPaths: ['/a/node_modules'] });
+    expect(line).toContain('playwright package is not installed');
+    expect(line, 'installing a browser cannot fix an absent playwright').not.toContain(
+      'wrong revision',
+    );
+  });
+
+  it('names at most two, so the line stays a sentence rather than an ancestor dump', () => {
+    const line = chromiumHint({
+      exists: false,
+      searchedPaths: ['/one/node_modules', '/two/node_modules'],
+    });
+    expect(line).toContain('/one/node_modules');
+    expect(line).toContain('/two/node_modules');
+  });
+
+  it('degrades to the old bare line when the roots could not be read', () => {
+    // Never worse than before: a probe that cannot enumerate its own resolution paths still answers.
+    expect(chromiumHint({ exists: false })).toContain('playwright package is not installed');
+    expect(chromiumHint({ exists: false })).not.toContain('looked in');
+  });
+});

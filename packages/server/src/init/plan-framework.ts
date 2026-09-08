@@ -45,6 +45,7 @@ import {
   REACT_ROUTER_ENTRY_PATH,
   htmlManual,
 } from './snippets.js';
+import { hasOptOut, OPT_OUT_MARKER } from './init-opt-out.js';
 import { StepStatus, type PlanInput, type Step } from './plan.js';
 import { Framework } from './detect.js';
 import { RETICLE_DEFAULT_PORT } from '@reticlehq/core';
@@ -212,6 +213,19 @@ export function viteSteps(input: PlanInput, detail: string = VITE_PLUGIN_DETAIL.
 function viteConfigSteps(input: PlanInput, detail: string): Step[] {
   const cfg = input.viteConfig;
   const port = input.options.port;
+  // An explicit "not here" is not an invitation. `init` runs unattended in a repo it has just met,
+  // and it was reported adding the plugin to an app whose config said Reticle was deliberately
+  // excluded. A NOTICE rather than a ⚠: opting out is a decision, not something to go and fix.
+  if (cfg !== null && hasOptOut(cfg.source)) {
+    return [
+      {
+        title: 'Vite plugin',
+        target: cfg.path,
+        status: StepStatus.NOTICE,
+        detail: `left alone: this config carries ${OPT_OUT_MARKER}. Remove that marker to instrument this app.`,
+      },
+    ];
+  }
   if (null === cfg) {
     return [
       {

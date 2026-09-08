@@ -1,13 +1,14 @@
 import { carryReticleIdentity } from './lease-tools.js';
 import { z } from 'zod';
 import { navigateResult } from './navigate-result.js';
-import { awaitArrival } from './navigate-arrival.js';
+import { awaitArrival, ARRIVAL_TIMEOUT_MS } from './navigate-arrival.js';
 import { reloadResult } from './reload-result.js';
 import { waitForReconnect, RELOAD_RECONNECT_TIMEOUT_MS } from '../session/session-reconnect.js';
 import { ReticleCommand } from '@reticlehq/core';
 import { ReticleTool } from './tool-names.js';
-import { asString } from './tools-helpers.js';
+import { asNumber, asString } from './tools-helpers.js';
 import { sessionIdShape, commandOrThrow } from './tool-kit.js';
+import { timeoutMsSchema } from './numeric-bounds.js';
 import type { ToolDef } from './tools.js';
 
 export const BROWSER_TOOLS: ToolDef[] = [
@@ -15,7 +16,7 @@ export const BROWSER_TOOLS: ToolDef[] = [
     name: ReticleTool.NAVIGATE,
     example: { url: '/settings' },
     description:
-      'Navigate the connected browser tab to a URL, or reload it in place with { reload: true } (add { hard: true } to bypass the cache). `ok` means the navigation was DISPATCHED — the SDK is torn down by the navigation, so the page itself cannot report on it. The daemon then waits briefly for the SDK to reconnect: `confirmed:true` with a new `sessionId` means the page arrived and you can act immediately. `confirmed:false` means it did not arrive within the window — the page may be slow, uninstrumented, or not there; check reticle_sessions before acting.',
+      'Navigate the connected browser tab to a URL, or reload it in place with { reload: true } (add { hard: true } to bypass the cache). `ok` means the navigation was DISPATCHED — the SDK is torn down by the navigation, so the page itself cannot report on it. The daemon then waits up to `timeout_ms` (default 5000) for the SDK to reconnect: `confirmed:true` with a new `sessionId` means the page arrived and you can act immediately. `confirmed:false` means it did not arrive within that window (reported as `waitedMs`) — the page may be slow, uninstrumented, or not there. A slow SPA can take 30-60s to reattach: raise `timeout_ms` rather than polling reticle_sessions.',
     inputSchema: {
       url: z.string().optional().describe('The URL to navigate to. Omit when using reload.'),
       reload: z
@@ -28,6 +29,11 @@ export const BROWSER_TOOLS: ToolDef[] = [
         .boolean()
         .optional()
         .describe('With reload:true, bypass the browser cache (Cmd+Shift+R). Default: false.'),
+      timeout_ms: timeoutMsSchema
+        .optional()
+        .describe(
+          'How long to wait for the page to come back (the SDK reconnecting at the new URL, or under the same id on a reload) before answering confirmed:false. Default 5000. 0 looks once without waiting. An SPA reattaching under HMR has been measured at 30-60s — say so here instead of polling reticle_sessions.',
+        ),
       ...sessionIdShape,
     },
     outputSchema: {
@@ -39,11 +45,19 @@ export const BROWSER_TOOLS: ToolDef[] = [
       confirmed: z.boolean().optional(),
       /** The session the SDK reconnected as, when arrival was confirmed — it is a NEW id. */
       sessionId: z.string().optional(),
+      /**
+       * On confirmed:false — the budget (ms) that expired without the page coming back. Says which
+       * of "Reticle stopped waiting" and "the page never came back" you are looking at.
+       */
+      waitedMs: z.number().optional(),
       note: z.string().optional(),
     },
     handler: async (deps, args) => {
       // reload:true is the absorbed reticle_refresh — same command, one fewer advertised tool.
       if (true === args['reload']) {
+        // The reload branch has its own default, sized for a cold dev-server rebuild; the caller's
+        // budget overrides it for the same reason it overrides the arrival wait below.
+        const timeoutMs = asNumber(args['timeout_ms']) ?? RELOAD_RECONNECT_TIMEOUT_MS;
         const before = deps.sessions.resolve(asString(args['sessionId']));
         // The verdict floor moves HERE, before the page goes away. A reload destroys the document,
         // so every request that failed under the old one belongs to a page that no longer exists —
@@ -61,14 +75,14 @@ export const BROWSER_TOOLS: ToolDef[] = [
         const back = await waitForReconnect({
           current: () => deps.sessions.get(before.id),
           previous: before,
-          timeoutMs: RELOAD_RECONNECT_TIMEOUT_MS,
+          timeoutMs,
           now: deps.now,
           sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
         });
         // Not a bare `{ ok: true }`. The URL branch below already discloses that `ok` means
         // DISPATCHED — the reload branch had identical semantics and said nothing, on the path most
         // likely to need it. See reload-result.
-        return reloadResult(back);
+        return reloadResult(back, timeoutMs);
       }
       const requested = asString(args['url']);
       if (requested === undefined || 0 === requested.length)
@@ -93,9 +107,12 @@ export const BROWSER_TOOLS: ToolDef[] = [
         )) as { ok?: unknown; url?: unknown; reason?: unknown };
         // `ok` is the browser accepting the instruction, not the page arriving — see navigate-result.
         // The daemon is the only party that CAN see arrival (the SDK reconnects to it), so it looks,
-        // briefly, instead of telling the agent to go poll reticle_sessions itself.
-        const arrival = true === result.ok ? await awaitArrival(deps.sessions, url) : null;
-        return navigateResult(result, arrival);
+        // for as long as the caller said to, instead of telling the agent to go poll
+        // reticle_sessions itself. A refusal skips the wait: there is nothing to wait FOR.
+        const timeoutMs = asNumber(args['timeout_ms']) ?? ARRIVAL_TIMEOUT_MS;
+        const arrival =
+          true === result.ok ? await awaitArrival(deps.sessions, url, timeoutMs) : null;
+        return navigateResult(result, arrival, timeoutMs);
       } finally {
         session.finishAction();
       }

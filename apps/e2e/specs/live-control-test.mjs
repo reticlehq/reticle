@@ -20,13 +20,18 @@ if (!(await p.isVisible('[data-reticle-pause]'))) { await p.click('[data-reticle
 // HUMAN clicks Pause on the panel
 await p.click('[data-reticle-pause]'); await sleep(300);
 chk('human Pause → server session state = paused', sess.getState?.()==='paused', `state=${sess.getState?.()}`);
-// HUMAN types guidance + Send
-await p.fill('[data-reticle-input]','please slow down and check the list'); await p.click('[data-reticle-send]'); await sleep(300);
-// AGENT's next act is short-circuited with the guidance
+// The HUD's composer is GONE, and with it the only producer of a HUMAN_CONTROL carrying `text`.
+// It was two text boxes that looked like the agent's chat and were not, with nothing on screen
+// saying which one you were in — there is no wording fix for that, so the panel was deleted rather
+// than relabelled. Guidance is typed in the agent's own chat now.
+//
+// So this spec no longer types anything. `HUMAN_CONTROL.text` survives in the wire contract and the
+// server still short-circuits a paused act with it, but nothing emits one, and an e2e battery
+// cannot cover a path with no producer. What IS still the live-control loop — pause blocks the
+// agent, resume releases it, end is pushed to the panel — is asserted below and unchanged.
 const act=await T('reticle_act',{ref,action:'click'});
 const js=JSON.stringify(act);
 chk('agent reticle_act while paused → paused:true (action NOT performed)', act.paused===true && act.result===undefined, js.slice(0,90));
-chk('agent receives the human guidance on that result', /please slow down/.test(js), (js.match(/please slow down[^"]*/)?.[0]||'(none)'));
 // HUMAN clicks Resume (same button toggles)
 await p.click('[data-reticle-pause]'); await sleep(300);
 chk('human Resume → server state = active', sess.getState?.()==='active', `state=${sess.getState?.()}`);

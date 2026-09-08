@@ -27,6 +27,7 @@ import { leanActResult, mutatedWithin } from './act-view.js';
 import { ReticleTool } from './tool-names.js';
 import { buildReactionReport, summarizeReaction } from '../events/reaction.js';
 import { parsePredicate } from '../events/predicate-parse.js';
+import { bodyClauseRefusal } from '../honesty/body-capture-remedy.js';
 import { causalSummary } from '../capsule/causal-summary.js';
 import { findContradictions } from '../events/contradictions.js';
 import { gapsForAction } from '../honesty/instrumentation-gaps.js';
@@ -480,6 +481,10 @@ export const ACT_TOOLS: ToolDef[] = [
         withUntil['until'] !== undefined
           ? parsePredicate(withUntil['until'])
           : ({ kind: PredicateKind.SETTLED } as const);
+      // BEFORE the action. A body clause this session cannot answer would fail whatever the app
+      // did, and on a drive that mutates state the action is not always repeatable. See #801(C).
+      const bodyRefusal = bodyClauseRefusal(until, session);
+      if (bodyRefusal !== undefined) throw new Error(bodyRefusal);
       const timeout = asNumber(args['timeout_ms']) ?? DEFAULT_ASSERT_TIMEOUT_MS;
       // An intent declared here lands in the ledger BEFORE the verdict is drawn, which is what makes
       // the undeclared-change gap silent on THIS verdict rather than the next one: it reads the
@@ -731,6 +736,9 @@ export const ACT_TOOLS: ToolDef[] = [
         const stillInFlight = inFlightRequestLabels(windowEvents);
         const decision = decideVerified({
           pass: verdict.pass,
+          // So the unread-body remedy can check it applies to THIS page. Threaded rather than
+          // looked up inside decideVerified, which is pure and has no session.
+          ...(session.sdkVersion === undefined ? {} : { sdkVersion: session.sdkVersion }),
           // The caller NAMED the consequence rather than defaulting to "wait for idle". A
           // declaration made before the action is what this tool sells, and idle-settlement was
           // overriding it — see `declaredConsequence`. An explicit `{ kind: "settled" }` is not a

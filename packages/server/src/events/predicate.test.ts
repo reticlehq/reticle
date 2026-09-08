@@ -675,6 +675,57 @@ describe('a throttled tab timeout is not a missing render', () => {
     expect(result.inconclusive).toBe(THROTTLED_STARVED_NOTE);
   });
 
+  /**
+   * The polarity the starved-tab rule was missing.
+   *
+   * Throttling makes a NEGATIVE observation untrustworthy — "I did not find it" may mean "I could
+   * not look". It says nothing about a POSITIVE one: elements that were found were found, and no
+   * amount of starvation conjures them. For an `absent: true` predicate the failure IS the positive
+   * observation, so the caveat is exactly inapplicable there.
+   *
+   * Reported against a framework debug page: an absence assertion matched 13 elements including a
+   * heading naming the server error, and came back `unknown`. An agent reading `unknown` re-drives
+   * or moves on; it does not report the failure it was holding proof of.
+   */
+  it('an absence check that FOUND matches is a product failure, not a starved read', async () => {
+    const session = new ThrottledSession([], () => ({ matched: true, count: 13, elements: [] }));
+    const result = await evaluatePredicate(session, {
+      kind: 'element',
+      query: { text: 'ProgrammingError' },
+      absent: true,
+    });
+    expect(result.pass, 'matches were found, so absence is false').toBe(false);
+    expect(
+      result.inconclusive,
+      'the matches were SEEN — throttling cannot have manufactured them',
+    ).toBeUndefined();
+  });
+
+  it('a `not`-wrapped predicate that failed on a real match is not annotated either', async () => {
+    // Same polarity, expressed the other way the surface allows. The inner predicate PASSED, which
+    // is a positive observation, and the `not` is what turned it into a failure.
+    const session = new ThrottledSession([], () => ({ matched: true, count: 1, elements: [] }));
+    const result = await evaluatePredicate(session, {
+      kind: 'not',
+      predicate: { kind: 'element', query: { text: 'ProgrammingError' } },
+    });
+    expect(result.pass).toBe(false);
+    expect(result.inconclusive).toBeUndefined();
+  });
+
+  it('an absence check that found NOTHING is still inconclusive on a throttled tab', async () => {
+    // The other half, and the reason the rule exists: here the pass rests on not having seen
+    // anything, which is precisely the reading a starved tab cannot be trusted to have made. It
+    // passes, so nothing is annotated — but it must not be reported as proof either.
+    const session = new ThrottledSession([], () => ({ matched: false, count: 0, elements: [] }));
+    const result = await evaluatePredicate(session, {
+      kind: 'element',
+      query: { text: 'ProgrammingError' },
+      absent: true,
+    });
+    expect(result.pass).toBe(true);
+  });
+
   it('a PASSING wait on a throttled tab is not annotated', async () => {
     const session = new ThrottledSession([], () => ({
       matched: true,

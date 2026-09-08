@@ -42,6 +42,23 @@ export interface PooledPage {
    * makes `reticle_network_mock` refuse rather than claiming it stubbed a request it cannot intercept.
    */
   installMocks?(rules: readonly PooledMockRule[]): Promise<void>;
+  /**
+   * Fires when the page opens a native `window.confirm`/`alert`/`prompt`. OPTIONAL, like `onConsole`:
+   * a fake that does not implement it means the pool cannot see or arbitrate the dialog, and the
+   * page is left to whatever the underlying engine does with no listener attached.
+   *
+   * The pool always dismisses on this handler (see `acquire`) — a page blocked on a native dialog
+   * previously wedged the whole session (every subsequent tool call timed out and no recovery
+   * existed short of restarting the daemon), because nothing in the stack ever answered it.
+   */
+  onDialog?(handler: (dialog: PooledDialog) => void): void;
+}
+
+/** A native dialog the page opened, handed to the pool so it can be dismissed instead of left blocking. */
+export interface PooledDialog {
+  /** The dialog's message text — kept for diagnostics (`BrowserPool#lastDialogMessage`). */
+  readonly message: string;
+  dismiss(): Promise<void>;
 }
 
 /**
@@ -122,6 +139,13 @@ interface ActiveLease {
    * after the first says the same thing.
    */
   dialFailureUrl?: string;
+  /**
+   * The message of the most recent native dialog dismissed on this lease, if any.
+   *
+   * One string, overwritten — not a buffer, same reasoning as `dialFailureUrl`: this is diagnostic
+   * context for "why did the page look frozen for a moment", not a log an agent needs to replay.
+   */
+  lastDialogMessage?: string;
 }
 
 /**
@@ -392,6 +416,7 @@ export class BrowserPool {
     const sessionId = opts.sessionId ?? this.#genId();
     let context: PooledContext | undefined;
     let pending: string | undefined;
+    let pendingDialogMessage: string | undefined;
     try {
       const browser = await this.#ensureBrowser();
       context = await browser.newContext();
@@ -411,6 +436,15 @@ export class BrowserPool {
         if (active !== undefined) active.dialFailureUrl = dialled;
         else pending = dialled; // logged during goto, before the lease is registered below
       });
+      // Same "listen before goto" reasoning as onConsole above: a dialog opened during the initial
+      // navigation (an app that confirms something in an onload handler) must still be dismissed, not
+      // just ones opened after the lease is registered.
+      page.onDialog?.((dialog) => {
+        const active = this.#active.get(sessionId);
+        if (active !== undefined) active.lastDialogMessage = dialog.message;
+        else pendingDialogMessage = dialog.message;
+        void dialog.dismiss();
+      });
       await page.goto(url, { timeoutMs: this.#navTimeout });
       // The browser can crash WHILE goto is resolving; #onCrash then clears #active and zeroes
       // #occupied. Registering the lease now would resurrect a dead entry against a crashed browser with
@@ -423,6 +457,7 @@ export class BrowserPool {
         url,
         touchedAt: this.#now(),
         ...(pending === undefined ? {} : { dialFailureUrl: pending }),
+        ...(pendingDialogMessage === undefined ? {} : { lastDialogMessage: pendingDialogMessage }),
       });
       return {
         sessionId,
@@ -445,6 +480,14 @@ export class BrowserPool {
    */
   dialFailureUrl(sessionId: string): string | undefined {
     return this.#active.get(sessionId)?.dialFailureUrl;
+  }
+
+  /**
+   * The message of the most recent native dialog (`confirm`/`alert`/`prompt`) auto-dismissed on this
+   * lease, if any. Diagnostic only — the dialog itself is already gone by the time this is readable.
+   */
+  lastDialogMessage(sessionId: string): string | undefined {
+    return this.#active.get(this.#leaseIdOf(sessionId))?.lastDialogMessage;
   }
 
   /** Close every context and the browser. Pending waiters are rejected (the pool is terminal now). */

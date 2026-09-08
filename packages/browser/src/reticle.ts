@@ -241,6 +241,9 @@ export class Reticle {
   #eventCount = 0;
   #token: string | undefined;
   #sdkVersion: string | undefined;
+  /** Whether this page records network bodies — announced in HELLO so a body clause can be refused
+   * before an action is spent on it. See messages.ts. */
+  #captureBodies = false;
   #projectId: string | undefined;
   /** App-declared extra redaction keys, announced in hello so the driven path honours them too. */
   #redactKeys: string[] = [];
@@ -366,9 +369,8 @@ export class Reticle {
     }
 
     const emit = this.#emit;
-    this.#teardowns = installAllObservers(emit, {
-      captureBodies: true === options.captureNetworkBodies,
-    });
+    this.#captureBodies = true === options.captureNetworkBodies;
+    this.#teardowns = installAllObservers(emit, { captureBodies: this.#captureBodies });
 
     if (true === options.overlay) {
       this.#overlay = installOverlay();
@@ -542,6 +544,8 @@ export class Reticle {
       adapters: adapterNames(),
       ...(this.#token === undefined ? {} : { token: this.#token }),
       hasCapabilities: hasCapabilities(),
+      // Announced so a body-reading assertion can be refused before an action is spent on it.
+      captureBodies: this.#captureBodies,
       // Absent when no build plugin supplied one - "unknown", never "matching".
       ...(this.#sdkVersion === undefined ? {} : { sdkVersion: this.#sdkVersion }),
       // Always present: derived from THIS build's core, so it needs no build plugin to supply it.

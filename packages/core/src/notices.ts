@@ -72,6 +72,27 @@ export const THROTTLED_STARVED_NOTE =
   '(the human can run `reticle drive <url>` if they have a shell)';
 
 /**
+ * Carried by a `console absent` pass whose window starts where the SDK attached.
+ *
+ * The console channel does not exist until `installConsole` patches `console`, and the documented
+ * Next.js install connects through a dynamic import inside a `useEffect` — so a `console.error`
+ * fired during first render is never captured. Not evicted, permanently invisible: a reporter
+ * proved it with a control, and the same error fired from a click seconds later IS captured.
+ * Meanwhile the response said the observation "ran and found none, which is a result, not a missing
+ * reading", which is the opposite of true for that stretch of the page's life.
+ *
+ * Same shape and same argument as PRE_ATTACH_CAVEAT one channel over, and the same deliberate
+ * restraint: the grade is NOT downgraded. A clean console is the finding this oracle exists to
+ * make, and turning every startup window into `unknown` would retire the check rather than fix it.
+ * What changes is only what the pass CLAIMS.
+ */
+export const CONSOLE_ATTACH_NOTE =
+  'this window starts where the SDK attached, and the console channel does not exist until then — ' +
+  'anything logged during first render (or before a dynamically-imported connect ran) was never ' +
+  'captured, so a clean read here cannot tell a silent page apart from one that logged before ' +
+  'anything was watching; drive the page and re-check, or assert on what the error produces';
+
+/**
  * Pushed to the panel when the last agent's MCP connection drops — the agent (any of
  * Codex/OpenCode/Claude/Hermes) has stopped or is waiting on you. Tells the human, who is
  * on the browser, that control is back on the terminal so a typed prompt isn't silently lost.

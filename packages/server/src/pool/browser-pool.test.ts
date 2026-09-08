@@ -10,6 +10,7 @@ import {
   type Launcher,
   type PooledBrowser,
   type PooledContext,
+  type PooledDialog,
   type PooledPage,
 } from './browser-pool.js';
 
@@ -17,7 +18,9 @@ class FakePage implements PooledPage {
   gotoUrls: string[] = [];
   closed = false;
   failNav = false;
+  dismissedMessages: string[] = [];
   #onCrash: (() => void) | undefined;
+  #onDialog: ((dialog: PooledDialog) => void) | undefined;
   goto(url: string): Promise<unknown> {
     this.gotoUrls.push(url);
     return this.failNav ? Promise.reject(new Error('nav timeout')) : Promise.resolve(undefined);
@@ -29,9 +32,22 @@ class FakePage implements PooledPage {
   onCrash(handler: () => void): void {
     this.#onCrash = handler;
   }
+  onDialog(handler: (dialog: PooledDialog) => void): void {
+    this.#onDialog = handler;
+  }
   /** Test helper: simulate this page's renderer crashing. */
   crash(): void {
     this.#onCrash?.();
+  }
+  /** Test helper: simulate the page opening a native confirm()/alert()/prompt(). */
+  openDialog(message: string): void {
+    this.#onDialog?.({
+      message,
+      dismiss: () => {
+        this.dismissedMessages.push(message);
+        return Promise.resolve();
+      },
+    });
   }
 }
 
@@ -513,5 +529,81 @@ describe('BrowserPool', () => {
     // The browser that resolved after shutdown must have been closed.
     expect(browsers[0]?.isConnected()).toBe(false);
     await expect(acquiring).rejects.toThrow();
+  });
+
+  it('dismisses a native dialog on a leased page instead of leaving it blocked (#786)', async () => {
+    const { launch, browsers } = fakeLauncher();
+    const pool = new BrowserPool(launch, { maxContexts: 4, genSessionId: counterIds() });
+
+    const lease = await pool.acquire('http://localhost:3000/checkout');
+    const page = browsers[0]?.contexts[0]?.pages[0] as FakePage;
+
+    page.openDialog('Are you sure you want to leave?');
+
+    expect(page.dismissedMessages).toEqual(['Are you sure you want to leave?']);
+    expect(pool.lastDialogMessage(lease.sessionId)).toBe('Are you sure you want to leave?');
+  });
+
+  it('dismisses a dialog opened during the initial navigation, before the lease is registered', async () => {
+    // A page whose goto() hangs until the test releases it — so the dialog can be fired while
+    // `acquire` is provably still mid-navigation, before the lease is registered in `#active`.
+    let releaseGoto: (() => void) | undefined;
+    const page = new FakePage();
+    page.goto = () =>
+      new Promise((resolve) => {
+        releaseGoto = () => resolve(undefined);
+      });
+    const launch: Launcher = () => {
+      const b = new FakeBrowser();
+      const originalNewContext = b.newContext.bind(b);
+      b.newContext = async () => {
+        const ctx = await originalNewContext();
+        ctx.newPage = () => Promise.resolve(page);
+        return ctx;
+      };
+      return Promise.resolve(b);
+    };
+    const pool = new BrowserPool(launch, { maxContexts: 4, genSessionId: counterIds() });
+
+    const acquiring = pool.acquire('http://localhost:3000/onload-confirm');
+    await vi.waitFor(() => expect(releaseGoto).toBeDefined());
+    page.openDialog('leaving so soon?');
+    releaseGoto?.();
+
+    const lease = await acquiring;
+
+    expect(page.dismissedMessages).toEqual(['leaving so soon?']);
+    expect(pool.lastDialogMessage(lease.sessionId)).toBe('leaving so soon?');
+  });
+
+  it('a fake with no onDialog leaves the pool with nothing to report (optional capability)', async () => {
+    // No onDialog at all — matches a fake (or a future adapter) that cannot see dialogs, same
+    // optional-capability contract as onConsole/screenshot/hover elsewhere in this suite.
+    class NoDialogPage implements PooledPage {
+      goto(): Promise<unknown> {
+        return Promise.resolve(undefined);
+      }
+      close(): Promise<void> {
+        return Promise.resolve();
+      }
+      onCrash(): void {
+        // never fires in this test
+      }
+    }
+    const launch: Launcher = () => {
+      const b = new FakeBrowser();
+      const originalNewContext = b.newContext.bind(b);
+      b.newContext = async () => {
+        const ctx = await originalNewContext();
+        ctx.newPage = () => Promise.resolve(new NoDialogPage());
+        return ctx;
+      };
+      return Promise.resolve(b);
+    };
+    const pool = new BrowserPool(launch, { maxContexts: 4, genSessionId: counterIds() });
+
+    const lease = await pool.acquire('http://localhost:3000/no-dialog-support');
+
+    expect(pool.lastDialogMessage(lease.sessionId)).toBeUndefined();
   });
 });

@@ -334,24 +334,37 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
     const origin = originOf(url);
     const existing = origin === undefined ? undefined : pool.leaseIdOnOrigin?.(origin);
     if (existing !== undefined && origin !== undefined) {
-      if (deps.sessions.get(existing) !== undefined) {
+      // Resolved, not looked up — the same resolver the mint path below uses, for the same reason
+      // it states: an app that names its own session registers under that name, so the id the pool
+      // holds is not always an id the other tools accept. A direct `sessions.get` missed exactly
+      // those apps and fell through to the release, which frees a LIVE lease and mints a second
+      // context — the tab-poisoning this branch exists to prevent, reached through the branch
+      // itself. It bites when the first acquire returned `ready: false`, since the mint path only
+      // aliases once its wait has resolved, so nothing recorded the app's own name (#692).
+      const resolved = resolveLeasedSessionId(deps.sessions, existing);
+      if (resolved !== undefined) {
+        // The other name this lease answers to, told to the pool exactly as the mint path tells it.
+        // A no-op when the id resolved to itself; load-bearing when it did not, because every later
+        // touch and release arrives under the id being handed back here.
+        pool.alias(resolved, existing);
         pool.touch(existing);
         return {
-          sessionId: existing,
+          sessionId: resolved,
           url,
           ready: true,
           reused: true,
           expiresInMs: pool.leaseTtlMs(),
           leased: pool.activeCount(),
           queued: pool.queuedCount(),
-          hint: alreadyHeldHint(existing, origin),
+          hint: alreadyHeldHint(resolved, origin),
           ...(alreadyOpen === undefined
             ? {}
             : { preferExisting: { sessionId: alreadyOpen, note: PREFER_EXISTING_NOTE } }),
         };
       }
-      // The lease is still held but the tab has gone — a reload dropped the session. Free the
-      // slot and mint, rather than handing back a dead id or leaving both contexts occupied.
+      // The lease is still held but the tab has gone — a reload dropped the session, and no session
+      // anywhere is driving it. Free the slot and mint, rather than handing back a dead id or
+      // leaving both contexts occupied.
       await pool.release(existing);
     }
     const sessionId = newLeaseId();
