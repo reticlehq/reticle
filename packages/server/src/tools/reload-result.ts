@@ -27,8 +27,13 @@ const RELOAD_RECONNECTED_NOTE =
   'the page came back and re-announced itself under the same session id, so this session is live ' +
   'again — no re-selection needed. Anything captured before the reload is gone with the old document.';
 
-export function reloadResult(reconnected = false): Record<string, unknown> {
+/**
+ * `waitedMs` is the budget that expired, reported on `confirmed:false` for the same reason the URL
+ * branch reports it (navigate-result.ts): so "Reticle stopped waiting" is distinguishable from "the
+ * page never came back", and the fix — a larger `timeout_ms` — is visible in the result.
+ */
+export function reloadResult(reconnected: boolean, waitedMs: number): Record<string, unknown> {
   return reconnected
     ? { ok: true, confirmed: true, note: RELOAD_RECONNECTED_NOTE }
-    : { ok: true, confirmed: false, note: RELOAD_NOTE };
+    : { ok: true, confirmed: false, waitedMs, note: RELOAD_NOTE };
 }

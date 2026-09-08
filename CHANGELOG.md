@@ -4,6 +4,10 @@ All notable changes to the **`@reticlehq/*`** packages are documented here (each
 
 ## [Unreleased]
 
+### Added
+
+- **`@reticlehq/server` — `reticle_navigate` takes a `timeout_ms`, and an unconfirmed result says what the wait ended on.** The arrival window was a fixed, unstated 5s: `navigate-arrival.ts` hard-coded it and the tool exposed nothing, so unlike `assert` / `wait_for` / `act_and_wait`, which all spend the caller's budget, nobody could tell navigate to wait longer. A Nuxt SPA reattaching under HMR was measured at 30–60s, so every navigation to it gave up while the app was still coming back and answered `confirmed: false`, which reads as a failed navigation rather than as Reticle having stopped waiting; the only escape was the blind `reticle_sessions` poll that `#612` removed everywhere else. `timeout_ms` now reaches the wait (default 5000, so nothing gets slower by accident; `0` looks once; the same bounds as the other tools), and applies to `{ reload: true }` too, since the page coming back is the same wait. `confirmed: false` carries `waitedMs`, the budget that expired, and its note names `timeout_ms` as the way to wait longer. Closes [#856](https://github.com/reticlehq/reticle/issues/856).
+
 ### Changed
 
 - **`@reticlehq/server` — a `ROUTE_CHANGE` is read through one helper (`routeOfEvent`).** Six call sites (and the journey consequence line) each picked `pathname` / `to` / `hash` out of the event by hand, so a seventh hash-router miss was a field choice away: the document pathname is `/` on every HashRouter page, the default for a packaged Electron/Tauri renderer. The helper returns both the router path and the navigable `docPath + hash`; call sites pick, they do not re-index. Closes [#727](https://github.com/reticlehq/reticle/issues/727).
