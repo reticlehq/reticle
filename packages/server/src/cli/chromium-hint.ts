@@ -38,6 +38,15 @@ export interface ChromiumProbe {
   browsersRoot?: string | undefined;
   /** Chromium revisions actually sitting in that root, wanted or not. */
   installedRevisions?: readonly string[] | undefined;
+  /**
+   * The `node_modules` roots this process would resolve `playwright` from, nearest first.
+   *
+   * Only meaningful when playwright is ABSENT, and it is the evidence that branch was missing. The
+   * daemon usually runs from npx or a global install, so it resolves from its OWN location and not
+   * from the user's project — a reporter installed the right playwright in two project directories
+   * and kept reading "not installed", with no way to see that neither was ever searched.
+   */
+  searchedPaths?: readonly string[] | undefined;
 }
 
 /**
@@ -120,6 +129,7 @@ function installedRevisions(root: string): string[] {
  * in, which is why the probe never reads `PLAYWRIGHT_BROWSERS_PATH` itself.
  */
 export async function probeChromium(): Promise<ChromiumProbe> {
+  const searched = playwrightResolutionRoots();
   try {
     const { chromium } = await import('playwright');
     const executablePath = chromium.executablePath();
@@ -138,7 +148,33 @@ export async function probeChromium(): Promise<ChromiumProbe> {
     };
   } catch {
     // Playwright itself is absent — a different problem from a missing browser, and the hint says so.
-    return { exists: false };
+    // The roots are gathered HERE rather than in the hint so the hint stays pure: this is the only
+    // place that knows which module did the resolving.
+    return { exists: false, ...(0 === searched.length ? {} : { searchedPaths: searched }) };
+  }
+}
+
+/**
+ * Where `import('playwright')` would look from HERE — the roots that EXIST, nearest first.
+ *
+ * The existence filter is the part that makes this evidence rather than noise. Node's ancestor chain
+ * runs to the filesystem root and its nearest entries are usually directories nobody ever created:
+ * measured from the built daemon, the two nearest are `dist/cli/node_modules` and `dist/node_modules`,
+ * and the informative one — the daemon's own `node_modules` — is third. Printing the first two
+ * unfiltered would name two paths the reader cannot check and hide the one they can.
+ *
+ * Capped after filtering, because the point is to show whether this process searched where the
+ * reader installed, not to dump the chain.
+ */
+const MAX_SEARCHED_ROOTS = 2;
+
+function playwrightResolutionRoots(): string[] {
+  try {
+    const roots = createRequire(import.meta.url).resolve.paths('playwright') ?? [];
+    return roots.filter((root) => existsSync(root)).slice(0, MAX_SEARCHED_ROOTS);
+  } catch {
+    // An environment that cannot enumerate its own resolution paths still gets the bare verdict.
+    return [];
   }
 }
 
@@ -168,7 +204,12 @@ export function chromiumHint(probe: ChromiumProbe): string {
   }
   const command = chromiumInstallCommand(probe.playwrightVersion);
   if (probe.executablePath === undefined) {
-    return `✗ the playwright package is not installed; run: ${command}`;
+    // Same rule as the missing-browser line below: a verdict with nowhere to check it against reads
+    // as a broken check. The roots say whether this process even searched the directory the reader
+    // installed into — which for a daemon run from npx or a global install it usually did not.
+    const searched = probe.searchedPaths ?? [];
+    const where = 0 === searched.length ? '' : ` — looked in ${searched.join(', ')}`;
+    return `✗ the playwright package is not installed${where}; run: ${command}`;
   }
   const present = probe.installedRevisions ?? [];
   if (present.length > 0 && probe.wantedRevision !== undefined) {
