@@ -385,10 +385,6 @@ export class HudShell {
     this.#chatToggle?.setAttribute('aria-pressed', 'true');
     this.#callbacks.onChatOpen?.();
     if (this.#dock !== undefined) scheduleSyncDockLayout(this.#dock, this.#root);
-    const input = this.#root.querySelector<HTMLTextAreaElement>('[data-reticle-input]');
-    if (input !== null && !input.disabled) {
-      requestAnimationFrame(() => input.focus());
-    }
   }
   closeChat(): void {
     if (this.#root === undefined || !this.isChatOpen()) return;
