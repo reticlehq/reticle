@@ -66,6 +66,10 @@ function wrapBrowser(browser: Browser): PooledBrowser {
             installMocks: (rules) => installNetworkMocks(page, [...rules]),
             onCrash: (handler) => page.on('crash', handler),
             onConsole: (handler) => page.on('console', (msg) => handler(msg.text())),
+            onDialog: (handler) =>
+              page.on('dialog', (dialog) =>
+                handler({ message: dialog.message(), dismiss: () => dialog.dismiss() }),
+              ),
           };
         },
         close: () => context.close(),
