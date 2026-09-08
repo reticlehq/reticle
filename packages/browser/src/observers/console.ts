@@ -67,7 +67,28 @@ export function installConsole(emit: Emit): Teardown {
     console[method] = wrapper;
   }
 
-  const onError = (event: ErrorEvent): void => {
+  const onError = (event: Event): void => {
+    // A SUBRESOURCE that failed to load — `<img>`, `<script>`, `<link>`, media. The browser writes
+    // these to the console and none of them passes through a console method, so patching console
+    // cannot see them. They dispatch on the ELEMENT and do not bubble, which is why this listener
+    // is registered in the CAPTURE phase: a bubble-phase listener on `window` never runs for one,
+    // and `console absent` came back green on pages visibly full of red.
+    //
+    // Told apart from a real script error by the event's own type, not by guessing: a script that
+    // loaded and then threw dispatches an `ErrorEvent` carrying `message`/`error`, while a resource
+    // failure dispatches a plain `Event` whose target is the element. No double-report either way.
+    if (!(event instanceof ErrorEvent)) {
+      const target = event.target;
+      if (!(target instanceof Element) || target === (document as unknown as Element)) return;
+      const tag = target.tagName.toLowerCase();
+      const url = target.getAttribute('src') ?? target.getAttribute('href') ?? '';
+      emit(EventType.ERROR_UNCAUGHT, {
+        message: `<${tag}> failed to load${0 === url.length ? '' : `: ${url}`}`,
+        kind: 'resource',
+        ...(0 === url.length ? {} : { source: url }),
+      });
+      return;
+    }
     const stack = capStack(event.error instanceof Error ? event.error.stack : undefined);
     emit(EventType.ERROR_UNCAUGHT, {
       message: event.message,
@@ -85,7 +106,10 @@ export function installConsole(emit: Emit): Teardown {
       ...(stack === undefined ? {} : { stack }),
     });
   };
-  window.addEventListener('error', onError);
+  // Capture phase: element `error` events do not bubble, so this is the only registration that
+  // sees a failed subresource. Uncaught script errors reach a capturing window listener too, so one
+  // registration covers both.
+  window.addEventListener('error', onError, true);
   window.addEventListener('unhandledrejection', onRejection);
 
   return () => {
@@ -94,7 +118,7 @@ export function installConsole(emit: Emit): Teardown {
       // that wrapped console AFTER connect() must keep its instrumentation on teardown.
       if (console[method] === patched.get(method)) console[method] = original as typeof console.log;
     }
-    window.removeEventListener('error', onError);
+    window.removeEventListener('error', onError, true);
     window.removeEventListener('unhandledrejection', onRejection);
   };
 }

@@ -14,7 +14,9 @@ export default defineConfig({
     },
     plugins: [
       vue(),
-      // @ts-expect-error: electron-vite and standard vite Plugin types mismatch in monorepo
+      // No suppression: the plugin is assignable to Vite's own `Plugin`, and this fixture is the
+      // only place in the repo that typechecks it through a WRAPPING framework's config, which is
+      // exactly the position users reported it failing in.
       reticle()
     ]
   }

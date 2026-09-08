@@ -409,6 +409,16 @@ export const EventType = {
    * `data: { href }` — the URL the page asked to open, when it named one.
    */
   CONTEXT_OPENED: 'context.opened',
+  /**
+   * The app opened a native `alert`/`confirm`/`prompt` while Reticle was driving it.
+   *
+   * Recorded because Reticle ANSWERS these rather than letting them block — a native dialog halts
+   * the main thread, and the SDK's own message pump is on that thread, so one `confirm` behind a
+   * driven click made the tab permanently unresponsive with no recovery from inside the session.
+   * Answering silently would trade a wedge for an invisible one, so the question the app asked, and
+   * the answer given, ride out as an event.
+   */
+  DIALOG_OPENED: 'dialog.opened',
   /** aggregated React commits over a throttle window (dev builds) — `data: { commits }`. Commit storms /
    * wasted re-renders show up here without a per-render flood. */
   RENDER_COMMIT: 'render.commit',

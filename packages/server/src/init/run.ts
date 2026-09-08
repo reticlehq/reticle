@@ -248,6 +248,15 @@ export interface InitOptions {
   /** Set on the recursive call after a workspace redirect, so the search happens at most once. */
   redirected?: boolean;
   /**
+   * `--url`: the address the app is ALREADY served on, so init starts nothing.
+   *
+   * Parsed by the CLI since the flag existed and never handed to `init`, which made the
+   * package-manager refusal name it as the escape hatch while being unable to see it. The value
+   * itself is not read here — only whether one was given — but it is typed as the URL rather than a
+   * boolean so the option means the same thing everywhere the flag does.
+   */
+  url?: string | undefined;
+  /**
    * Where the human ran the command, carried across a workspace redirect.
    *
    * The agent rule and `/reticle` command files are read by the AGENT, whose session runs where the
@@ -725,14 +734,15 @@ function applyEffects(
       // should: this is a SECOND full package-manager run, and until it had its own span 1.6 of
       // init's 2.3 seconds simply vanished — the span above accounted for the first attempt and
       // nothing accounted for this one.
-      const retry = s.retry;
-      if (
-        retry !== undefined &&
+      // Walked in order, cheapest concession first, and STOPS at the first success — a later,
+      // weaker attempt must never run once an earlier one has already produced a working tree.
+      const succeeded = (s.retries ?? []).find((retry) =>
         spanSync('init.exec.retry', { target: s.target, command: retry.command }, () =>
           io.exec(retry.command, retry.args),
-        )
-      ) {
-        degraded.set(s.target, retry.note);
+        ),
+      );
+      if (succeeded !== undefined) {
+        degraded.set(s.target, succeeded.note);
         continue;
       }
       // Verify, don't re-run: give the install step itself the same sdkPackagesPresent benefit
@@ -880,6 +890,7 @@ function runInitSteps(options: InitOptions, io: InitIo): InitResult {
       probe: (command, args) => io.probe(command, args),
     },
     planInput.detection.packageManager,
+    { alreadyServed: options.url !== undefined && '' !== options.url },
   );
   if (refusal !== undefined) {
     io.print(refusal);

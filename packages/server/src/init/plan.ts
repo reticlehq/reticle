@@ -6,7 +6,6 @@
 
 import {
   Framework,
-  PackageManager,
   UiLibrary,
   installCommand,
   installCommandParts,
@@ -14,6 +13,7 @@ import {
 } from './detect.js';
 import type { FoundStore } from './capabilities.js';
 import { installFailureHint } from './install-hint.js';
+import { installRetries } from './install-retries.js';
 import { claudeAddCommand, mcpManual, mcpWindowsNote } from './mcp.js';
 import { NodePlatform } from '../platform.js';
 import {
@@ -166,15 +166,25 @@ export interface Step {
   /** Present only when status is APPLY and a subprocess must run (the dependency install). */
   exec?: { command: string; args: string[]; fallback: string };
   /**
-   * A second, weaker attempt to run when `exec` fails, with what to tell the user if it succeeds.
+   * Weaker attempts to run when `exec` fails, IN ORDER, each with what to tell the user if it works.
    *
-   * The pinned install is refused outright by pnpm's `minimumReleaseAge` for as long as its window
-   * lasts — so for ~48 hours after every release, a project with that setting could not install
-   * Reticle at all. An unpinned install still works there (it resolves the newest MATURE version), so
-   * the fallback trades an exact version for a working install and says which it did. It must never
-   * be silent: an older SDK against a newer daemon is the skew this pin exists to prevent.
+   * Ordered by how much each one gives up, cheapest concession first, because the first that
+   * succeeds is the one that stands. Two causes are covered today and they cost different things:
+   *
+   * - **A peer-dependency conflict.** npm dies on ERESOLVE in repos that are built with
+   *   `--legacy-peer-deps` everywhere else. Relaxing peers keeps the VERSION PIN, so it goes first.
+   *   Reported from a CRA repo where the failed install also skipped the connect module and the
+   *   entry snippet, so the first run produced no wiring at all.
+   * - **A release-age hold.** The pinned install is refused outright by pnpm's `minimumReleaseAge`
+   *   for as long as its window lasts — so for ~48 hours after every release, a project with that
+   *   setting could not install Reticle. An unpinned install still works (it resolves the newest
+   *   MATURE version), so it trades the exact version for a working install. That is the more
+   *   expensive concession and it is last.
+   *
+   * A retry must never be silent: an older SDK against a newer daemon is the skew the pin exists to
+   * prevent, and a peer override the user did not ask for is theirs to know about.
    */
-  retry?: { command: string; args: string[]; note: string };
+  retries?: { command: string; args: string[]; note: string }[];
   /**
    * This step wires the app to a package the install step provides. If that install fails, applying
    * it anyway leaves the app importing a module that is not there — `next.config.ts` importing
@@ -718,34 +728,6 @@ function agentRuleSteps(input: PlanInput): Step[] {
  * with nothing naming a version. Pinning turns that into this loud failure, which is the better
  * trade — but only if the message says what to do about it.
  */
-/**
- * Said out loud when the exact-version install failed and the unpinned one worked.
- *
- * It used to assert a cause it cannot know. Every one of nine fixture apps got the same sentence —
- * "the registry refused 2.5.0 (pnpm's minimumReleaseAge holds new releases back)" — when the actual
- * cause on that run was that the version did not exist yet, and the remedy offered was a `pnpm
- * config` command handed to a yarn 1 project that will never read it.
- *
- * This note is built at PLAN time, before anything runs, and `io.exec` returns a bare boolean, so
- * the apply layer has no failure text to hand back either. The honest move is therefore to report
- * the CONSEQUENCE (which is certain and is the part that bites) and offer the remedy that belongs to
- * the manager actually in use — rather than name a cause that is one possibility among several.
- */
-function unpinnedRetryNote(version: string | undefined, pm: PackageManager): string {
-  const wanted = version === undefined ? 'the exact version' : version;
-  // Kept verbatim for pnpm, where minimumReleaseAge is a real and common cause with a real remedy.
-  const remedy =
-    pm === PackageManager.PNPM
-      ? ' One common cause on pnpm is minimumReleaseAge holding a new release back; if pnpm ' +
-        'reported ERR_PNPM_NO_MATURE_MATCHING_VERSION, either wait out the window or allow these ' +
-        'packages: pnpm config set minimumReleaseAgeExclude "@reticlehq/*"'
-      : '';
-  return (
-    `the pinned install of ${wanted} failed, so the newest version the registry WOULD accept was ` +
-    `installed instead. That may not match the daemon — if the agent reports protocol errors, check ` +
-    `\`versionSkew\` in reticle_sessions.${remedy}`
-  );
-}
 
 function installStep(input: PlanInput): Step {
   const pm = input.detection.packageManager;
@@ -773,15 +755,12 @@ function installStep(input: PlanInput): Step {
       args: parts.args,
       fallback: `${command}\n\n${installFailureHint(pm)}`,
     },
-    // Unpinned. pnpm resolves the newest MATURE version there, which is how a project with a
-    // release-age hold gets a working install instead of no install.
-    retry: {
-      ...installCommandParts(
-        pm,
-        frameworkPackages(input.detection.framework, input.detection.uiLibrary),
-      ),
-      note: unpinnedRetryNote(input.options.sdkVersion, pm),
-    },
+    retries: installRetries(
+      pm,
+      packages,
+      frameworkPackages(input.detection.framework, input.detection.uiLibrary),
+      input.options.sdkVersion,
+    ),
   };
 }
 

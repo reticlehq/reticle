@@ -131,6 +131,9 @@ export async function assertVerdict(
   const stillInFlight = inFlightRequestLabels(windowEvents);
   const decision = decideVerified({
     pass,
+    // So the unread-body remedy can check it applies to THIS page. Threaded rather than
+    // looked up inside decideVerified, which is pure and has no session.
+    ...(session.sdkVersion === undefined ? {} : { sdkVersion: session.sdkVersion }),
     // Same rule as the act path: the caller named a consequence, so a settlement-only finding must
     // not override it. A fix that lived on one half of the verdict surface would leave the other
     // half broken, and this is the tool agents call most.

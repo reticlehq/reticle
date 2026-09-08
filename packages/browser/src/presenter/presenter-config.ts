@@ -207,3 +207,23 @@ export const HUD_DOCK_MARGIN_PX = 8;
 export const HUD_DRAG_IGNORE_SEL: string =
   '[data-reticle-pause], [data-reticle-annotate-btn], [data-reticle-markers-btn], [data-reticle-clear-marks], [data-reticle-end], [data-reticle-min-btn], [data-reticle-settings-btn], [data-reticle-settings-panel], [data-reticle-report-btn], [data-reticle-report-panel], [data-reticle-chat-panel], [data-reticle-chat-toggle], [data-reticle-workspace-btn], [data-reticle-workspace-menu], [data-reticle-copy], [data-reticle-export], [data-reticle-send], input, textarea, select, a, .reticle-head-ctl, [data-reticle-tally], .reticle-maxhint';
 export const THROTTLED_ATTR = 'data-reticle-throttled';
+
+/**
+ * The toolbar tooltip's layer, INSIDE the HUD's own stacking context.
+ *
+ * A tooltip is the one element that is always transient and always meant to be read, so it belongs
+ * above everything else the HUD draws. It was at 3, below the chat panel (8) and the settings panel
+ * (30) — every one of them a sibling — so hovering a menu item with a panel open showed the tooltip
+ * behind the panel.
+ *
+ * Defined HERE rather than beside the other z-index constants: `presenter-styles.ts` imports every
+ * style module, so a constant there and a rule in `presenter-shell-styles.ts` form a CYCLE — the
+ * template literal evaluates before the import resolves and emits `z-index:undefined`, which
+ * browsers drop silently. A leaf module has no such edge.
+ *
+ * Above the HUD's panels and deliberately NOT above the page: the HUD lives in one stacking context
+ * on purpose, and a tooltip that outranked the document would paint over the app being verified.
+ * The headroom is for panels that do not exist yet; a test compares this against every panel's
+ * declared z-index rather than pinning the number, so a future panel cannot quietly overtake it.
+ */
+export const Z_HUD_TOOLTIP = 100;

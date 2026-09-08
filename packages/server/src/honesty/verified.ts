@@ -1,3 +1,4 @@
+import { bodyCaptureRemedy } from './body-capture-remedy.js';
 import {
   ContradictionKind,
   MUTATING_METHODS,
@@ -88,6 +89,14 @@ interface VerifiedInputs {
    * Empty means nothing went unread.
    */
   outcomeUnread?: readonly string[];
+  /**
+   * The page SDK's version, so the unread-body remedy can check whether it applies.
+   *
+   * This clause is the highest-traffic producer of that advice — every 2xx write whose body went
+   * unread lands here — and it inlined the setting unconditionally, which is what a reporter saw six
+   * times at a repo pinned below the release that introduced it. See body-capture-remedy.ts.
+   */
+  sdkVersion?: string | undefined;
   /**
    * The declared consequence that held does not depend on the response body — an exact string
    * rendered, a store path, a signal, a route, or an element located by role / name / testid. See
@@ -429,7 +438,8 @@ export function decideVerified(inputs: VerifiedInputs): VerifiedVerdict {
       verifiedReason: VerifiedReason.OUTCOME_UNREAD,
       because:
         `a write returned 2xx with a response body that was never recorded (${outcomeUnread.join('; ')}), so its outcome is unread` +
-        ' — a 200 describes the transport, not the result (a batch reports per-item failures in the body, and every GraphQL error is a 200). Enable it where your app calls connect(): `reticle.connect({ captureNetworkBodies: true })`, then re-run',
+        ' — a 200 describes the transport, not the result (a batch reports per-item failures in the body, and every GraphQL error is a 200). ' +
+        bodyCaptureRemedy(inputs.sdkVersion),
     };
   }
 

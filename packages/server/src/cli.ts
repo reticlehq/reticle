@@ -132,6 +132,9 @@ function handleInit(parsed: {
       dryRun: parsed.dryRun,
       install: parsed.install,
       ...(parsed.app === undefined ? {} : { app: parsed.app }),
+      // Handed to init, not only to the drive phase below: the preflight names `--url` as the way
+      // past a missing package manager, and could not honour that while never being told about it.
+      ...(parsed.url === undefined ? {} : { url: parsed.url }),
       captureBodies: true === parsed.captureBodies,
       // The outcome is reported by confirmInstall instead, once it knows whether an app connected —
       // `init` writing files was never the same thing as `init` working (#269).

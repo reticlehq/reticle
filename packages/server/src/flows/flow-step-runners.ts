@@ -18,6 +18,9 @@ import {
 } from '@reticlehq/core';
 import { ReticleTool } from '../tools/tool-names.js';
 import { replayActionArgs } from './replay.js';
+import { isStaleRefError } from '../tools/act-sequence-retry.js';
+import { waitForReaction } from '../tools/react-grace.js';
+import { anchorFieldName } from './flows.js';
 import type { FlowReplaySession, Sleep } from './flow-replay.js';
 import {
   anchorLabel,
@@ -112,7 +115,17 @@ export async function runRoleStep(
       },
     };
   }
-  return await actOnResolvedRef(session, step, index, label, ref, confirmDangerous);
+  return await actOnResolvedRef(
+    session,
+    step,
+    index,
+    label,
+    ref,
+    confirmDangerous,
+    anchorFieldName(anchor),
+    // The retry's whole point: run the SAME locator against the DOM as it is now.
+    async () => (await resolveQuery(session, roleQueryArgs(anchor), sleep)).refs[0],
+  );
 }
 
 /**
@@ -126,22 +139,64 @@ async function actOnResolvedRef(
   label: string,
   ref: string,
   confirmDangerous: boolean,
+  /**
+   * The field name a redacted fill is supplied under, from `anchorFieldName` — the SAME function
+   * redaction uses to decide what to hide. Without it a role-anchored secret is redacted at save
+   * and looked up at replay under no name at all, so the flow types the placeholder into the form.
+   */
+  field?: string,
+  /**
+   * Resolve the anchor again. Supplied by the caller because only it knows how this step's anchor is
+   * found, and the retry below is worthless without it: re-dispatching the SAME dead ref fails
+   * identically. What changed between the two attempts is the DOM, so the locator has to be run
+   * against it again.
+   */
+  reresolve?: () => Promise<string | undefined>,
 ): Promise<FlowStepResult> {
-  session.beginAction?.(ReticleTool.FLOW_REPLAY, { ref, action: step.action ?? '' });
-  let act;
-  try {
-    act = await session.command(ReticleCommand.ACT, {
-      ref,
-      action: step.action ?? '',
-      args: replayActionArgs(step.args, confirmDangerous),
+  const dispatch = async (at: string): Promise<{ ok: boolean; error?: string | undefined }> => {
+    session.beginAction?.(ReticleTool.FLOW_REPLAY, { ref: at, action: step.action ?? '' });
+    try {
+      const r = await session.command(ReticleCommand.ACT, {
+        ref: at,
+        action: step.action ?? '',
+        args: replayActionArgs(step.args, confirmDangerous, field),
+      });
+      return { ok: r.ok, error: r.error };
+    } finally {
+      session.finishAction?.();
+    }
+  };
+
+  let act = await dispatch(ref);
+  /*
+   * One retry, and only for staleness.
+   *
+   * A saved flow of `fill` then `click` failed with "ref 'eNNNN' no longer resolves to an element",
+   * a different ref each attempt: the fill re-rendered the page between the click step resolving its
+   * element and dispatching at it. `flow_heal` answered `unhealable` and was right — the locator was
+   * correct, only the timing was wrong — and the flow format has no way to express a wait, so there
+   * was nothing the user could do.
+   *
+   * `act_sequence` already solved this race for the same reason; the predicate and the grace period
+   * come from there rather than being written twice. A step that failed for any OTHER reason is
+   * never retried: a replay that quietly repeats actions turns one click into two, which is worse
+   * than the failure it papers over.
+   */
+  if (!act.ok && isStaleRefError(act.error) && reresolve !== undefined) {
+    await waitForReaction(session, 0, STALE_REF_GRACE_MS, {
+      sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
     });
-  } finally {
-    session.finishAction?.();
+    const fresh = await reresolve();
+    if (fresh !== undefined) act = await dispatch(fresh);
   }
+
   const result: FlowStepResult = { step: index, tool: step.tool, anchor: label, ok: act.ok };
   if (!act.ok) result.error = act.error ?? 'command failed';
   return result;
 }
+
+/** How long to let the app finish re-rendering before the one retry. Matches the sequence path. */
+const STALE_REF_GRACE_MS = 400;
 
 /** Run one component-anchored step: re-resolve via QUERY by:'component', ACT on the live ref, else drift. */
 export async function runComponentStep(
@@ -169,23 +224,18 @@ export async function runComponentStep(
     };
   }
   const ref = refs[0] ?? '';
-  // Attribute the step's effects to the step. Without this window they arrive with no actionId and are
-  // learned as ambient churn on the very regions the flow exercises.
-  session.beginAction?.(ReticleTool.FLOW_REPLAY, { ref, action: step.action ?? '' });
-  let act;
-  try {
-    act = await session.command(ReticleCommand.ACT, {
-      ref,
-      action: step.action ?? '',
-      args: replayActionArgs(step.args, confirmDangerous),
-    });
-  } finally {
-    // Close on every exit so a throwing step cannot leak the window onto the next step's events.
-    session.finishAction?.();
-  }
-  const result: FlowStepResult = { step: index, tool: step.tool, anchor: label, ok: act.ok };
-  if (!act.ok) result.error = act.error ?? 'command failed';
-  return result;
+  // Shared with the role path so both get the same action window AND the same stale-ref retry —
+  // this used to dispatch inline, which is how one anchor kind could gain a fix the other lacked.
+  return await actOnResolvedRef(
+    session,
+    step,
+    index,
+    label,
+    ref,
+    confirmDangerous,
+    anchorFieldName(anchor),
+    async () => (await resolveQuery(session, componentQueryArgs(anchor), sleep)).refs[0],
+  );
 }
 
 /**
@@ -290,7 +340,9 @@ export async function runSequenceStep(
     live.push({
       ref,
       action: sub.action ?? '',
-      args: replayActionArgs(sub.args, confirmDangerous),
+      // Each sub-step carries its OWN anchor, so each gets its own field name. A sequence that ends
+      // in a login is the shape this was reported on, and the sub-step is where the fill lives.
+      args: replayActionArgs(sub.args, confirmDangerous, anchorFieldName(sub.anchor)),
     });
   }
   session.beginAction?.(ReticleTool.FLOW_REPLAY, { steps: live.length });
