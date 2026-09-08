@@ -125,7 +125,7 @@ export class HudShell {
     const gear = hiToggleIconHtml(PresenterIcon.GEAR, PRESENTER_ICON_SIZE.TOOLBAR);
     const exit = hiIconHtml(PresenterIcon.REMOVE, PRESENTER_ICON_SIZE.TOOLBAR);
     return `<div ${DOCK_ATTR}>
-      <div ${CHAT_PANEL_ATTR} class="reticle-chat-panel ${HUD_SURFACE_CLASS}" role="dialog" aria-label="Reticle agent chat" aria-hidden="true">
+      <div ${CHAT_PANEL_ATTR} class="reticle-chat-panel ${HUD_SURFACE_CLASS}" role="dialog" aria-label="Reticle session" aria-hidden="true">
         <div class="reticle-chat-head">
           <span class="reticle-chat-brand">${MARK_SVG}<span class="reticle-chat-brandname">${BRAND_NAME}</span></span>
         </div>

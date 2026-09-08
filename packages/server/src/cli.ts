@@ -494,8 +494,11 @@ async function handleAffected(files: string[], since: string | undefined): Promi
   try {
     const fs = createNodeFileSystem();
     const reticleRoot = join(process.cwd(), ReticleDir.ROOT);
-    const changed = await resolveChangedFiles(files, since);
-    const result = affectedSavedFlows(await loadNamedFlows(fs, reticleRoot), changed);
+    const changed = await resolveChangedFiles(files, since, process.cwd());
+    const result = affectedSavedFlows(
+      await loadNamedFlows(fs, reticleRoot, readProjectId(process.cwd())),
+      changed,
+    );
     log('reticle_affected', {
       changedFiles: changed,
       affected: result.affected,

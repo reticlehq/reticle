@@ -84,3 +84,30 @@ describe('nothing still reaches for the composer', () => {
     expect(PRESENTER_SHELL_SRC).not.toContain('data-reticle-input');
   });
 });
+
+/**
+ * The panel's accessible name outlived the thing it named.
+ *
+ * `aria-label="Reticle agent chat"` was accurate when the panel hosted a composer. With the composer
+ * gone the panel holds the banner, the log well, the verdict tally, the replayable-flow chips and
+ * the export/copy controls — all read, none typed into — so the label promises an interaction that
+ * no longer exists. A screen-reader user is told they have reached a chat and then finds nothing to
+ * type into, which is a worse failure than a vague name.
+ *
+ * Safe to rename: `collectDialogs` excludes the HUD from `visibleDialogs` via `isReticleOverlay`,
+ * structurally, not by matching this string — so the label is free to change without the HUD
+ * reappearing in the app's dialog list.
+ */
+describe('the chat panel is not named after a control it no longer has', () => {
+  it('does not call itself a chat', () => {
+    expect(PRESENTER_SHELL_SRC).not.toContain('Reticle agent chat');
+  });
+
+  it('still carries an accessible name', () => {
+    // The attribute is interpolated in the template (`${CHAT_PANEL_ATTR}`), so match that, not the
+    // rendered attribute name — a regex over the literal silently matches nothing and passes.
+    const label = /\$\{CHAT_PANEL_ATTR\}[^>]*aria-label="([^"]+)"/.exec(PRESENTER_SHELL_SRC)?.[1];
+    expect(label).toBeDefined();
+    expect((label ?? '').length).toBeGreaterThan(0);
+  });
+});

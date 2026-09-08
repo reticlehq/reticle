@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { ReticleTool } from '../tools/tool-names.js';
 import type { ToolDef, ToolDeps } from '../tools/tools.js';
 import { loadNamedFlows, resolveChangedFiles } from '../cli/cli-flow-commands.js';
+import { sessionRoot, sessionProjectId } from '../project/session-root.js';
 import { affectedSavedFlows } from './flow-sources.js';
 
 /**
@@ -46,8 +47,17 @@ export const AFFECTED_TOOLS: ToolDef[] = [
         ? (args['files'] as unknown[]).filter((f): f is string => 'string' === typeof f)
         : [];
       const since = 'string' === typeof args['since'] ? args['since'] : undefined;
-      const changedFiles = await resolveChangedFiles(files, since);
-      const flows = await loadNamedFlows(deps.fs, deps.reticleRoot);
+      // Same address as verify_change, resolved the same way: `deps.reticleRoot` is the configured
+      // project directory (the daemon's cwd is not), and the session names which project's flows.
+      const changedFiles = await resolveChangedFiles(files, since, deps.reticleRoot);
+      // No `sessionId` on this tool's surface, and it does not need one: passing `undefined`
+      // resolves the single connected session, and falls back exactly as before when it cannot.
+      // Adding an argument here would be a surface change to fix an addressing bug.
+      const flows = await loadNamedFlows(
+        deps.fs,
+        sessionRoot(deps, undefined),
+        sessionProjectId(deps, undefined),
+      );
       const result = affectedSavedFlows(flows, changedFiles);
       // Three different situations produced the same empty answer: no files changed, no flows saved,
       // and a git ref that resolved to nothing. Only the first means "nothing to re-verify"; the
