@@ -524,3 +524,67 @@ describe('prioritising a tab that is already open', () => {
     expect(out['url']).toBe('http://localhost:3000/');
   });
 });
+
+/**
+ * A lease that cannot launch Chromium used to dead-end even when a human tab was already connected.
+ * Reporters then drove that tab by hand and it worked. Isolation still mints when launch works.
+ */
+describe('reticle_lease_acquire falls back to a connected tab when Chromium cannot launch', () => {
+  const watcher = {
+    id: 's-human',
+    projectId: 'acme',
+    pushNarration: () => undefined,
+  };
+
+  function depsWithWatcher(pool: BrowserPool, extra: Partial<ToolDeps> = {}): ToolDeps {
+    return {
+      sessions: { all: () => [watcher], get: () => watcher },
+      pool,
+      ...extra,
+    } as unknown as ToolDeps;
+  }
+
+  it('returns the live tab when the preflight says Chromium is absent, without asking the pool', async () => {
+    const { pool, acquired } = fakePool();
+    const out = (await tool(ReticleTool.LEASE_ACQUIRE)(
+      depsWithWatcher(pool, { browserProbe: () => Promise.resolve({ exists: false }) }),
+      { url: 'http://localhost:3000/', projectId: 'acme' },
+    )) as Record<string, unknown>;
+
+    expect(out['sessionId']).toBe('s-human');
+    expect(out['fellBackToExisting']).toBe(true);
+    expect(out['ready']).toBe(true);
+    expect(out['expiresInMs']).toBe(0);
+    expect(String(out['hint'])).toMatch(/already-connected tab/);
+    expect(acquired).toHaveLength(0);
+  });
+
+  it('returns the live tab when acquire throws, instead of "is the app running?"', async () => {
+    const { pool, acquired } = fakePool();
+    pool.acquire = () =>
+      Promise.reject(new Error('page.goto: net::ERR_CONNECTION_REFUSED at http://x/'));
+    const out = (await tool(ReticleTool.LEASE_ACQUIRE)(depsWithWatcher(pool), {
+      url: 'http://localhost:3000/',
+      projectId: 'acme',
+    })) as Record<string, unknown>;
+
+    expect(out['sessionId']).toBe('s-human');
+    expect(out['fellBackToExisting']).toBe(true);
+    expect(acquired).toHaveLength(0);
+  });
+
+  it('still refuses when Chromium is absent and no tab is connected', async () => {
+    const { pool, acquired } = fakePool();
+    await expect(
+      tool(ReticleTool.LEASE_ACQUIRE)(
+        {
+          ...baseDeps,
+          pool,
+          browserProbe: () => Promise.resolve({ exists: false }),
+        },
+        { url: 'http://localhost:3000/' },
+      ),
+    ).rejects.toThrow(/Chromium is not installed/);
+    expect(acquired).toHaveLength(0);
+  });
+});

@@ -262,7 +262,7 @@ export async function waitForLeasedSession(
 export const LEASE_ACQUIRE_TOOL: ToolDef = {
   name: ReticleTool.LEASE_ACQUIRE,
   description:
-    'Lease a fresh isolated headless browser context from the shared pool and navigate it to the app URL (the app must already be running and embed @reticlehq/core). If this origin is already leased and still connected, this returns THAT session rather than minting a second tab — a second acquire on the same origin poisons default session resolution. Returns the sessionId the leased tab registers — pass it to other tools. The pool keeps all leases in ONE browser and caps concurrency; if at capacity this waits for a free slot. Release with reticle_lease{action:"release"} when the flow is done. PREFER AN ALREADY-OPEN TAB: if reticle_sessions lists a non-leased session for this app, drive THAT instead — a lease is invisible to the person watching the app, whose HUD lives in their own tab, and a tab flagged hidden/throttled is often still driveable. Lease for isolation you actually need (a second identity, a clean context, parallel flows) or when driving the open tab has failed — this call answers with `preferExisting` when a live tab was available.',
+    'Lease a fresh isolated headless browser context from the shared pool and navigate it to the app URL (the app must already be running and embed @reticlehq/core). If this origin is already leased and still connected, this returns THAT session rather than minting a second tab — a second acquire on the same origin poisons default session resolution. Returns the sessionId the leased tab registers — pass it to other tools. The pool keeps all leases in ONE browser and caps concurrency; if at capacity this waits for a free slot. Release with reticle_lease{action:"release"} when the flow is done. PREFER AN ALREADY-OPEN TAB: if reticle_sessions lists a non-leased session for this app, drive THAT instead — a lease is invisible to the person watching the app, whose HUD lives in their own tab, and a tab flagged hidden/throttled is often still driveable. Lease for isolation you actually need (a second identity, a clean context, parallel flows) or when driving the open tab has failed — this call answers with `preferExisting` when a live tab was available. When Chromium cannot be launched and a live tab is already connected, this returns that tab with `fellBackToExisting: true` rather than failing — isolation still mints when launch works.',
   inputSchema: {
     url: z
       .string()
@@ -299,6 +299,12 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
       .describe(
         'True when this acquire returned an existing live lease on the same origin rather than minting a second context.',
       ),
+    fellBackToExisting: z
+      .boolean()
+      .optional()
+      .describe(
+        'True when Chromium could not be launched and this is the already-connected tab instead of a new lease. Drive this sessionId. It is not a pool lease and does not expire.',
+      ),
     hint: z.string().optional(),
     versionSkew: z
       .string()
@@ -315,6 +321,12 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
     const url = asString(args['url']);
     if (url === undefined || 0 === url.length)
       throw new Error('reticle_lease{action:"acquire"} requires a url');
+    const projectId = asString(args['projectId']);
+    // Sampled BEFORE acquiring (and before the Chromium preflight): afterwards this lease is itself
+    // a session, and the point is to name a tab that already existed. A launch failure with a live
+    // tab must degrade to that tab rather than dead-ending — reporters did this by hand and it
+    // worked, including against a throttled tab.
+    const alreadyOpen = liveTabFor(deps, projectId);
     // Preflight the browser before spending the round trip. Without it a missing Playwright Chromium
     // only surfaces inside pool.acquire, where the launch failure is caught and reported as
     // "could not open <url> — is the app running?" — sending the caller to debug an app that is
@@ -323,14 +335,10 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
     if (deps.browserProbe !== undefined) {
       const probe = await deps.browserProbe();
       if (!probe.exists) {
+        if (alreadyOpen !== undefined) return fallbackToOpenTab(alreadyOpen, url, pool);
         throw new Error(`Chromium is not installed for Playwright — ${chromiumHint(probe)}`);
       }
     }
-    const projectId = asString(args['projectId']);
-    // Sampled BEFORE acquiring: afterwards this lease is itself a session, and the point is to name
-    // a tab that already existed. A human's open tab is the one they can watch, so if one is here
-    // the agent should be told at the moment it is choosing — not after it has gone dark on them.
-    const alreadyOpen = liveTabFor(deps, projectId);
     const origin = originOf(url);
     const existing = origin === undefined ? undefined : pool.leaseIdOnOrigin?.(origin);
     if (existing !== undefined && origin !== undefined) {
@@ -374,7 +382,8 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
       lease = await pool.acquire(navUrl, { sessionId });
     } catch (err) {
       // A raw page.goto failure is noisy and leaks the internal URL params — surface a clean,
-      // actionable message instead.
+      // actionable message instead. A live tab is the exception: launching failed, driving did not.
+      if (alreadyOpen !== undefined) return fallbackToOpenTab(alreadyOpen, url, pool);
       throw new Error(`could not open ${url} — is the app running there? (${cleanNavError(err)})`);
     }
     // Wait for the leased tab's SDK to connect so the returned sessionId is usable right away.
@@ -474,6 +483,42 @@ const LEASE_RELEASE_TOOL: ToolDef = {
  */
 const PREFER_EXISTING_NOTE =
   'a non-leased tab for this app was already connected — that is the one a human can see, and this lease is not. Unless you need an isolated context (a second identity, a clean profile, parallel flows), release this lease and drive that sessionId instead.';
+
+/**
+ * What to say when Chromium could not launch and a live tab is already connected.
+ *
+ * Isolation is still a legitimate need, so a working launch still mints. A launch that cannot
+ * happen is not isolation — it is a dead end, and the connected tab is the path reporters already
+ * took by hand.
+ */
+const FALLBACK_TO_EXISTING_NOTE =
+  'Chromium could not be launched, so this is the already-connected tab rather than a new lease. Drive this sessionId. It is not a pool lease and does not expire.';
+
+function fallbackToOpenTab(
+  sessionId: string,
+  url: string,
+  pool: { activeCount: () => number; queuedCount: () => number },
+): {
+  sessionId: string;
+  url: string;
+  ready: true;
+  expiresInMs: 0;
+  leased: number;
+  queued: number;
+  fellBackToExisting: true;
+  hint: string;
+} {
+  return {
+    sessionId,
+    url,
+    ready: true,
+    expiresInMs: 0,
+    leased: pool.activeCount(),
+    queued: pool.queuedCount(),
+    fellBackToExisting: true,
+    hint: FALLBACK_TO_EXISTING_NOTE,
+  };
+}
 
 /**
  * The first live non-leased session for this project, if any.
