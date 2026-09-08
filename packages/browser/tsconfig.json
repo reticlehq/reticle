@@ -3,6 +3,18 @@
   "compilerOptions": {
     "outDir": "./dist",
     "rootDir": "./src",
+    // ES2019, deliberately lower than the repo's ES2022 base, and ONLY for this package.
+    //
+    // This is the one package whose build output is parsed by somebody else's bundler. react-scripts
+    // 4 / webpack 4 excludes node_modules from Babel, so it reads our dist as-is with acorn — and
+    // optional chaining, nullish coalescing (both ES2020) and logical assignment (ES2021) are all
+    // parse errors there. The app then fails to compile at dist/index.js with no diagnostic, before
+    // a session could ever connect. ES2019 is the last target before all three.
+    //
+    // `lib` stays high: this downlevels SYNTAX, and the runtime is a modern browser either way.
+    // Verified by dist-parses-on-webpack4.test.ts, which scans every emitted file rather than the
+    // entry — the entry is a 3 KB barrel and was already clean while 52 siblings were not.
+    "target": "ES2019",
     "lib": ["ES2023", "DOM", "DOM.Iterable"]
   },
   "include": ["src/**/*"],

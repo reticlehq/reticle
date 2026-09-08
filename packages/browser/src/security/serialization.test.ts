@@ -81,7 +81,7 @@ describe('transport serialization', () => {
   });
 
   it('handles BigInt and cycles without throwing', () => {
-    const value: Record<string, unknown> = { count: 2n };
+    const value: Record<string, unknown> = { count: BigInt(2) };
     value['self'] = value;
     expect(() => safeStringify(value)).not.toThrow();
     expect(JSON.parse(safeStringify(value))).toEqual({

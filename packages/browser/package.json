@@ -1,7 +1,7 @@
 {
   "name": "@reticlehq/browser",
   "version": "2.13.1",
-  "description": "Reticle browser SDK — installs observers, builds semantic snapshots, executes actions, talks to the bridge.",
+  "description": "Reticle browser SDK \u2014 installs observers, builds semantic snapshots, executes actions, talks to the bridge.",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -27,6 +27,7 @@
     "@iconify-json/heroicons-outline": "^1.2.1",
     "@iconify-json/heroicons-solid": "^1.2.1",
     "@tanstack/query-core": "^5.101.4",
+    "acorn": "^8.18.0",
     "jotai": "^2.20.2",
     "jsdom": "^30.0.1",
     "mobx": "^7.0.3",

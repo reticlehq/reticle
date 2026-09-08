@@ -549,6 +549,9 @@ importers:
       '@tanstack/query-core':
         specifier: ^5.101.4
         version: 5.101.4
+      acorn:
+        specifier: ^8.18.0
+        version: 8.18.0
       jotai:
         specifier: ^2.20.2
         version: 2.20.2(@babel/core@7.29.7)(@babel/template@7.29.7)(@types/react@19.2.18)(react@19.2.8)

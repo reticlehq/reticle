@@ -98,7 +98,7 @@ describe('Transport security', () => {
   });
 
   it('redacts and serializes arbitrary command results', async () => {
-    const value: Record<string, unknown> = { password: 'secret', count: 2n };
+    const value: Record<string, unknown> = { password: 'secret', count: BigInt(2) };
     value['self'] = value;
     const transport = new Transport({
       url: 'ws://localhost/reticle',

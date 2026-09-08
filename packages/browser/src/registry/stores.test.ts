@@ -88,7 +88,7 @@ describe('store registry', () => {
   });
 
   it('returns redacted, JSON-safe state for secrets, BigInt, and cycles', () => {
-    const state: Record<string, unknown> = { password: 'secret', count: 2n };
+    const state: Record<string, unknown> = { password: 'secret', count: BigInt(2) };
     state['self'] = state;
     registerStore('ws_safe', () => state);
     const out = readStores('ws_safe');
