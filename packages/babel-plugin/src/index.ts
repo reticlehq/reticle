@@ -23,7 +23,7 @@ interface ReticlePass extends PluginPass {
 function isReticleIgnoreFile(state: ReticlePass): boolean {
   if (state.reticleIgnoreFile !== undefined) return state.reticleIgnoreFile;
   const code = state.file?.code;
-  if (typeof code !== 'string' || code.length === 0) {
+  if (typeof code !== 'string' || 0 === code.length) {
     state.reticleIgnoreFile = false;
     return false;
   }
@@ -55,7 +55,7 @@ function reticleSourcePlugin({ types: t }: PluginApi): PluginObj<ReticlePass> {
         isReticleIgnoreFile(state);
       },
       JSXOpeningElement(path, state: ReticlePass) {
-        if (state.reticleIgnoreFile === true) return;
+        if (true === state.reticleIgnoreFile) return;
 
         const node = path.node;
         // Host elements only (e.g. <div>, <button>) — skip components (<App />).
