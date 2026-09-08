@@ -47,3 +47,60 @@ describe('reticle babel plugin', () => {
     expect((out.match(new RegExp(SOURCE_ATTR, 'g')) ?? []).length).toBe(1);
   });
 });
+
+/**
+ * A lowercase JSX tag is not the same thing as a DOM element.
+ *
+ * Filed from the field, against a CAD app: `sourceMapping` is on by default, and it stamped
+ * `data-reticle-source` onto `<mesh>`, `<group>` and every other react-three-fiber intrinsic.
+ * R3F is a separate reconciler whose "host elements" are three.js objects, and `applyProps` reads
+ * ANY prop containing a dash as a pierced property path — so `data-reticle-source` is walked as
+ * `data` -> `reticle` -> `source`, finds no `data` object on the instance, and throws:
+ *
+ *   Uncaught Error: R3F: Cannot set "data-reticle-source". Ensure it is an object before setting
+ *       at applyProps (react-three-fiber.esm:434:79)
+ *       at commitUpdate (react-three-fiber.esm:8631:5)
+ *
+ * The throw is unhandled inside the commit phase, so it does not degrade the 3D viewport — it
+ * unmounts the whole React app to a white screen with no error UI. And it fires on an UPDATE, not a
+ * mount: the reporter's app ran ~20 minutes and passed ~15 verdicts before a new mesh triggered it,
+ * which made an instrumentation bug read as an application bug.
+ *
+ * The rule was "lowercase means host element". The rule is "lowercase AND a real HTML or SVG tag",
+ * because only those are guaranteed to accept an arbitrary `data-*` attribute.
+ */
+describe('non-DOM reconcilers', () => {
+  const r3f = ['mesh', 'group', 'points', 'primitive', 'bufferGeometry', 'meshStandardMaterial'];
+
+  it.each(r3f)('does not stamp <%s>, which is a three.js object and not a DOM node', (tag) => {
+    expect(transform(`const x = <${tag} />;`)).not.toContain(SOURCE_ATTR);
+  });
+
+  it('leaves an unknown bare lowercase tag alone rather than guessing it is DOM', () => {
+    // A custom reconciler's intrinsics are unbounded; an allowlist is the only side that can be
+    // enumerated. Missing a stamp costs one source pointer, stamping wrongly costs the whole app.
+    expect(transform('const x = <box />;')).not.toContain(SOURCE_ATTR);
+  });
+
+  it('still stamps a custom element, which IS a DOM node and takes data-* like any other', () => {
+    // A dash is the HTML spec's own marker for a custom element, and no reconciler's intrinsics
+    // carry one — three.js names are bare identifiers. So the dash is a safe positive signal.
+    expect(transform('const x = <sl-button />;')).toContain(SOURCE_ATTR);
+  });
+
+  it('still stamps the HTML elements the source mapping exists for', () => {
+    for (const tag of ['div', 'button', 'input', 'a', 'form', 'li', 'td']) {
+      expect(transform(`const x = <${tag} />;`)).toContain(SOURCE_ATTR);
+    }
+  });
+
+  it('stamps SVG, which is DOM and takes data-* like any other element', () => {
+    for (const tag of ['svg', 'path', 'circle', 'g']) {
+      expect(transform(`const x = <${tag} />;`)).toContain(SOURCE_ATTR);
+    }
+  });
+
+  it('does not stamp a namespaced tag — <svg:rect> is a JSXNamespacedName, not an identifier', () => {
+    expect(transform('const x = <svg:rect />;')).not.toContain(SOURCE_ATTR);
+  });
+});
