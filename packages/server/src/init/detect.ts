@@ -287,9 +287,21 @@ interface InstallCommand {
 export function installCommandParts(
   pm: PackageManager,
   pkgs: string | readonly string[],
+  /**
+   * Extra flags for a RETRY, never for the first attempt.
+   *
+   * Appended after the quiet flags so a caller cannot accidentally displace them, and typed
+   * separately from `pkgs` so a flag can never be mistaken for a package name — which is exactly
+   * how `npm i -D --legacy-peer-deps` would become a request to install a package called
+   * `--legacy-peer-deps` on a manager that does not recognise the flag.
+   */
+  extraFlags: readonly string[] = [],
 ): InstallCommand {
   const list = 'string' === typeof pkgs ? [pkgs] : pkgs;
-  return { command: pm, args: [...INSTALL_ARGS[pm], ...list, ...(QUIET_INSTALL_ARGS[pm] ?? [])] };
+  return {
+    command: pm,
+    args: [...INSTALL_ARGS[pm], ...list, ...(QUIET_INSTALL_ARGS[pm] ?? []), ...extraFlags],
+  };
 }
 
 /**

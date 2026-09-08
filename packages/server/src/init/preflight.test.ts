@@ -78,3 +78,40 @@ describe('preflight refuses what cannot possibly work', () => {
     expect(refusal).not.toContain('--dev-cmd');
   });
 });
+
+/**
+ * The refusal names `--url` as the way past it, so `--url` has to actually get past it.
+ *
+ * Reported from the field: `init --app src/ui --url http://localhost:3100` with pnpm absent printed
+ * *"this project uses pnpm and pnpm is not installed... or pass --url with the address the app
+ * already serves"* — while `--url` WAS passed. The flag was parsed, and then never handed to `init`
+ * at all, so it could not have changed this decision. Installing pnpm was the only way forward.
+ *
+ * This is on the install path, it is the first command a user runs, and the message sends them in a
+ * circle: it describes the escape hatch they are already holding.
+ *
+ * The check is about the DEV SERVER — its whole purpose is to stop `spawn pnpm ENOENT` surfacing
+ * inside "the dev server exited". `--url` says the app is already served, so init starts nothing and
+ * the condition this guards does not arise. If the dependency install then fails, that is one step
+ * reporting ⚠, which is what a step that cannot complete is supposed to do — and is a far better
+ * outcome than refusing to write anything at all.
+ */
+describe('--url gets past the check that advertises it', () => {
+  const noPnpm = io({ probe: (command) => 'pnpm' !== command });
+
+  it('does not refuse for a missing package manager when the app is already served', () => {
+    expect(preflightRefusal(noPnpm, 'pnpm', { alreadyServed: true })).toBeUndefined();
+  });
+
+  it('still refuses without --url, which is the case the check was written for', () => {
+    expect(preflightRefusal(noPnpm, 'pnpm')).toContain('is not installed');
+  });
+
+  it('still refuses an unwritable checkout even with --url', () => {
+    // Orthogonal: nothing can be written wherever the app is served from, so this one still stands.
+    const refusal = preflightRefusal(io({ canWrite: () => false }), 'pnpm', {
+      alreadyServed: true,
+    });
+    expect(refusal).toContain('not writable');
+  });
+});

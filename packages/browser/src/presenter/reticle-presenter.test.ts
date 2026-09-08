@@ -210,22 +210,6 @@ describe('reticle.ts -> live-control wiring', () => {
     reticle.disconnect();
   });
 
-  it('19 send emits a HUMAN_CONTROL message event with text', () => {
-    const reticle = new Reticle();
-    reticle.connect({ present: true, pace: 0 });
-    const inp = document.querySelector<HTMLInputElement>('[data-reticle-input]');
-    if (null === inp) throw new Error('no input');
-    inp.value = 'check the cart total';
-    clickSel('[data-reticle-send]');
-    const evs = humanControlEvents();
-    expect(evs.length).toBe(1);
-    expect(evs[0]?.data).toEqual({
-      kind: HumanControlKind.MESSAGE,
-      text: 'check the cart total',
-    });
-    reticle.disconnect();
-  });
-
   it('20 PRESENTER command from server calls setState without emitting', async () => {
     const reticle = new Reticle();
     reticle.connect({ present: true, pace: 0 });

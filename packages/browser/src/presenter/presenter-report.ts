@@ -1,4 +1,9 @@
-import { IMPACT_DEFECT_LIMIT, type ImpactScope, type ImpactSnapshot } from '@reticlehq/core';
+import {
+  IMPACT_DEFECT_LIMIT,
+  type AccountState,
+  type ImpactScope,
+  type ImpactSnapshot,
+} from '@reticlehq/core';
 import { PresenterIcon, PRESENTER_ICON_SIZE, hiIconHtml } from './presenter-icons.js';
 import { HUD_SURFACE_CLASS } from './presenter-hud-chrome.js';
 import { REPORT_PANEL_ATTR, REPORT_ATTR, REPORT_CLOSE_ATTR } from './presenter-config.js';
@@ -138,6 +143,19 @@ function defects(scope: ImpactScope, dashboardUrl: string | undefined): string {
    */
   const list = (scope.defects ?? []).slice(0, IMPACT_DEFECT_LIMIT);
   if (0 === list.length) return '';
+  /*
+   * The way through, per row — but only for a project that is actually linked.
+   *
+   * An icon leading somewhere the user has no account for is an advert on a row about their own
+   * broken app, which is the worst possible moment for one. It is the DASHBOARD's icon rather than
+   * GitHub's: a GitHub mark promises "this files a GitHub issue", and the link goes to the
+   * dashboard, which is where pushing to a tracker is managed. The copy carries what the icon
+   * cannot.
+   */
+  const linked = dashboardUrl !== undefined && isSafeDashboardUrl(dashboardUrl);
+  const rowLink = linked
+    ? `<a class="reticle-report-defect-link" href="${esc(dashboardUrl)}" target="_blank" rel="noreferrer noopener" title="${REPORT_TEXT.DEFECT_LINK_TITLE}" aria-label="${REPORT_TEXT.DEFECT_LINK_TITLE}">${hiIconHtml(PresenterIcon.VIEW, PRESENTER_ICON_SIZE.SEND)}</a>`
+    : '';
   const rows = list
     .map((d) => {
       const detail =
@@ -148,19 +166,22 @@ function defects(scope: ImpactScope, dashboardUrl: string | undefined): string {
         d.source === undefined
           ? ''
           : `<span class="reticle-report-defect-source">${esc(d.source)}</span>`;
-      return `<li class="reticle-report-defect"><span class="reticle-report-defect-title">${esc(d.title)}</span>${detail}${source}</li>`;
+      return `<li class="reticle-report-defect"><span class="reticle-report-defect-title">${esc(d.title)}</span>${detail}${source}${rowLink}</li>`;
     })
     .join('');
   // Only claim there are more when there actually are — `counts.failed` is every defect ever, and
   // this list is the recent tail of it.
-  const more =
-    dashboardUrl === undefined || !isSafeDashboardUrl(dashboardUrl)
-      ? ''
-      : `<a class="reticle-report-defects-more" href="${esc(dashboardUrl)}" target="_blank" rel="noreferrer noopener">${REPORT_TEXT.DEFECTS_MORE}${scope.counts.failed > list.length ? ` (${String(scope.counts.failed)})` : ''}</a>`;
+  const more = !linked
+    ? ''
+    : `<a class="reticle-report-defects-more" href="${esc(dashboardUrl)}" target="_blank" rel="noreferrer noopener">${REPORT_TEXT.DEFECTS_MORE}${scope.counts.failed > list.length ? ` (${String(scope.counts.failed)})` : ''}</a>`;
   return `<div class="reticle-report-defects-wrap"><span class="reticle-report-section">${REPORT_TEXT.DEFECTS}</span><ul class="reticle-report-defects">${rows}</ul>${more}</div>`;
 }
 
-export function reportBodyHtml(scope: ImpactScope, dashboardUrl?: string): string {
+export function reportBodyHtml(
+  scope: ImpactScope,
+  dashboardUrl?: string,
+  account?: AccountState,
+): string {
   const c = scope.counts;
   if (0 === c.calls) return `<p class="reticle-report-empty">${REPORT_TEXT.EMPTY}</p>`;
   const streak =
@@ -191,24 +212,37 @@ export function reportBodyHtml(scope: ImpactScope, dashboardUrl?: string): strin
       scope.savings.minutes.basis,
     ),
   ].join('');
-  return `${streak}${hero}${verdicts}<div class="reticle-report-grid">${cards}</div>${defects(scope, dashboardUrl)}${chart(scope)}${localOnly(scope, dashboardUrl)}`;
+  return `${streak}${hero}${verdicts}<div class="reticle-report-grid">${cards}</div>${defects(scope, dashboardUrl)}${chart(scope)}${localOnly(scope, dashboardUrl, account)}`;
 }
 
 /**
- * The one line an UNLINKED user is shown about the dashboard.
+ * The one line about where this record lives, and what the next step is — if there is one.
  *
- * Absent `dashboardUrl` IS the unlinked signal — it is only ever set from a repo's cloud.json — so
- * this needs no new plumbing and cannot be wrong about the state it describes.
+ * `dashboardUrl` alone used to gate this, which conflated two states with opposite remedies:
+ * "nobody on this machine has signed in" (`reticle login`) and "signed in, but this repo is not
+ * linked" (`reticle link`). Telling a signed-in user to sign in is the kind of nag that gets a
+ * dev-only HUD switched off for good.
+ *
+ * An ABSENT `account` is unknown, never signed-out. An older daemon sends none, and guessing there
+ * would prompt a paying user on every panel they open. Silence is the only safe reading.
  *
  * Gated on a VERDICT, not on tool calls. Somebody who has driven the app but proved nothing has not
  * yet received the thing this offers to preserve, and offering to keep nothing is an advert. Past
  * that bar it is a fact about where their record lives, at the foot of a panel they opened on
  * purpose — which is why it does not need to be dismissible.
  */
-function localOnly(scope: ImpactScope, dashboardUrl: string | undefined): string {
+function localOnly(
+  scope: ImpactScope,
+  dashboardUrl: string | undefined,
+  account: AccountState | undefined,
+): string {
   if (dashboardUrl !== undefined) return '';
   if (scope.counts.verdicts <= 0) return '';
-  return `<p class="reticle-report-local-only">${REPORT_TEXT.LOCAL_ONLY} <code>${REPORT_TEXT.LOCAL_ONLY_ACTION}</code> ${REPORT_TEXT.LOCAL_ONLY_TAIL}</p>`;
+  if (account === undefined) return '';
+  const [lead, action, tail] = account.signedIn
+    ? [REPORT_TEXT.UNLINKED, REPORT_TEXT.UNLINKED_ACTION, REPORT_TEXT.UNLINKED_TAIL]
+    : [REPORT_TEXT.LOCAL_ONLY, REPORT_TEXT.LOCAL_ONLY_ACTION, REPORT_TEXT.LOCAL_ONLY_TAIL];
+  return `<p class="reticle-report-local-only">${lead} <code>${action}</code> ${tail}</p>`;
 }
 
 interface ReportHost {
@@ -323,7 +357,7 @@ export class PresenterReport {
     this.#body.innerHTML =
       scope === undefined
         ? `<p class="reticle-report-empty">${REPORT_TEXT.EMPTY}</p>`
-        : reportBodyHtml(scope, this.#snapshot?.dashboardUrl);
+        : reportBodyHtml(scope, this.#snapshot?.dashboardUrl, this.#snapshot?.account);
   }
 
   #openShare(url: string): void {

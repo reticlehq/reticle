@@ -480,17 +480,19 @@ describe('SDK dep optimization', () => {
  * plugin's job — an app author should not have to know we write there.
  */
 describe('the daemon journal does not drive the dev server', () => {
-  const ignoredFrom = (config: Record<string, unknown>): (string | RegExp)[] => {
+  type Matcher = string | RegExp | ((path: string) => boolean);
+
+  const ignoredFrom = (config: Record<string, unknown>): Matcher[] => {
     const plugin = reticle() as unknown as {
       config?: (config: Record<string, unknown>) => Record<string, unknown> | undefined;
     };
     const patch = plugin.config?.(config) ?? {};
-    const server = patch['server'] as { watch?: { ignored?: (string | RegExp)[] } } | undefined;
+    const server = patch['server'] as { watch?: { ignored?: Matcher[] } } | undefined;
     return server?.watch?.ignored ?? [];
   };
 
   /** Does this ignore list actually reject `path`, the way chokidar would? */
-  const rejects = (ignored: (string | RegExp)[], path: string): boolean =>
+  const rejects = (ignored: Matcher[], path: string): boolean =>
     ignored.some((m) => m instanceof RegExp && m.test(path));
 
   it('excludes the journal directory from the watcher', () => {
@@ -524,6 +526,40 @@ describe('the daemon journal does not drive the dev server', () => {
   it("keeps the app's own ignore patterns", () => {
     const ignored = ignoredFrom({ server: { watch: { ignored: ['**/fixtures/**'] } } });
     expect(ignored, "the app's own entries must survive").toContain('**/fixtures/**');
+    expect(rejects(ignored, `${ReticleDir.ROOT}/ambient.json`)).toBe(true);
+  });
+
+  /**
+   * `ignored` is not an array. Vite types it `AnymatchMatcher` — a string, a RegExp, a predicate
+   * function, or an array of those — and our own stand-in typed it as an array only, which hid
+   * every non-array case from the compiler AND from these tests.
+   *
+   * A bare string was the quiet one: spreading it produced one pattern per CHARACTER, so the app's
+   * exclusion vanished and nothing said so. A function matcher was the loud one: not iterable, so
+   * the spread threw at config time and took the dev server down with it — a crash on boot, blamed
+   * on whichever plugin ran last.
+   */
+  it('keeps a lone string pattern whole instead of shredding it into characters', () => {
+    const ignored = ignoredFrom({ server: { watch: { ignored: '**/fixtures/**' } } });
+    expect(ignored, 'the string must survive as ONE pattern').toContain('**/fixtures/**');
+    expect(
+      ignored.some((m) => '*' === m),
+      'never split per character',
+    ).toBe(false);
+    expect(rejects(ignored, `${ReticleDir.ROOT}/ambient.json`)).toBe(true);
+  });
+
+  it('keeps a predicate matcher instead of throwing at config time', () => {
+    const appMatcher = (path: string): boolean => path.startsWith('vendor/');
+    const ignored = ignoredFrom({ server: { watch: { ignored: appMatcher } } });
+    expect(ignored, "the app's predicate must survive").toContain(appMatcher);
+    expect(rejects(ignored, `${ReticleDir.ROOT}/ambient.json`)).toBe(true);
+  });
+
+  it('still ignores the journal when the app switched the watcher off with null', () => {
+    // `watch: null` is how a config disables the watcher, and it is what SvelteKit's template does.
+    // It must not read as "the app supplied an ignore list", and it must not throw.
+    const ignored = ignoredFrom({ server: { watch: null } });
     expect(rejects(ignored, `${ReticleDir.ROOT}/ambient.json`)).toBe(true);
   });
 });

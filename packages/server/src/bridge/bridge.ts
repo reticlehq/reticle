@@ -26,6 +26,7 @@ import { Session, SessionManager } from '../session/session.js';
 import { tokensMatch } from './token-auth.js';
 import { log } from '../log.js';
 import { getSessionMetrics } from '../telemetry/session-metrics.js';
+import { sessionReplacedReason } from '../session/session-replaced.js';
 import { describeSkew, sdkFix, SkewPair } from '../version/version-skew.js';
 import { noteVersionSkew } from '../version/version-nudge.js';
 import { protocolSkewReason } from './protocol-skew.js';
@@ -569,10 +570,7 @@ export class Bridge {
             // the old handle can finish against the live connection instead of returning an error whose
             // only answer is to go and rediscover an id that has not changed. See Session.succeededBy.
             replaced.succeededBy(session);
-            replaced.disconnect(
-              `session replaced by a newer connection claiming the same id (${session.id}) from ${session.url}`,
-              true,
-            );
+            replaced.disconnect(sessionReplacedReason(session.id, session.url), true);
           }
           // The daemon is the single judge of skew, and HELLO is where the page announces itself.
           // Reported on the session (reticle_sessions) AND queued for the next tool result, because an
@@ -586,6 +584,9 @@ export class Bridge {
             },
             { version: SERVER_VERSION, contract: CONTRACT_FINGERPRINT },
           );
+          // Kept so a remedy can check whether it applies to THIS page — see body-capture-remedy.
+          session.sdkVersion = parsed.sdkVersion;
+          session.captureBodies = parsed.captureBodies;
           if (skew !== undefined) {
             log('version_skew', {
               sessionId: session.id,

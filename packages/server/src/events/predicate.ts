@@ -5,21 +5,18 @@ import {
   THROTTLED_STARVED_NOTE,
   isSameDocument,
   type CommandResult,
-  type ElementQuery,
   type ReticleEvent,
-  type MatchResult,
 } from '@reticlehq/core';
 
 import { log } from '../log.js';
 import { bindSpanContext } from '../trace.js';
 import { selectPath, capDepth } from '../session/state-select.js';
-import { describeTestidMiss } from './testid-near-miss.js';
-import { describeSplitTextMiss } from './split-text-miss.js';
 import { predicateToExpectedLinks } from '../capsule/predicate-to-links.js';
 import type { ExpectedLink } from '../capsule/divergence.js';
 import { isAmbient, ambientKeyOf, type AmbientCounts } from '../journal/ambient.js';
 import { evalRoute } from './predicate-route.js';
 import { describeSuperseded } from './observed-in-window.js';
+import { evalElement } from './predicate-element.js';
 import {
   PredicateSchema,
   matchValue,
@@ -28,9 +25,6 @@ import {
   evalAnimation,
   evalSignal,
   evalSettled,
-  residualQueryChecks,
-  satisfiesResiduals,
-  describeResidual,
   type Predicate,
   type EvalResult,
 } from './predicate-eval.js';
@@ -99,171 +93,6 @@ function unreadableComposite(child: EvalResult, evidence: unknown): EvalResult {
   return { pass: false, failureReason: reason, inconclusive: reason, evidence };
 }
 
-async function matchOnce(
-  session: PredicateSession,
-  query: ElementQuery,
-  state: ElementState | undefined,
-): Promise<MatchResult> {
-  const res = await session.command(ReticleCommand.MATCH, { query, state });
-  if (!res.ok) return { matched: false, count: 0, elements: [] };
-  return (res.result ?? { matched: false, count: 0, elements: [] }) as MatchResult;
-}
-
-async function evalElement(
-  session: PredicateSession,
-  query: ElementQuery,
-  state: ElementState | undefined,
-  absent: boolean,
-  diagnose: boolean,
-): Promise<EvalResult> {
-  // Fields the browser's locator would have DROPPED, enforced back here — see residualQueryChecks.
-  // Checked before the round-trip when nothing can enforce them: a predicate that cannot be evaluated
-  // must say so rather than resolve to whatever the surviving half of it happened to match.
-  const residual = residualQueryChecks(query);
-  if (residual.unusable.length > 0) {
-    const reason =
-      `the element locator ignores ${residual.unusable.map((f) => `\`${f}\``).join(', ')} ` +
-      `in ${JSON.stringify(query)} — it resolves by the first of by+value, component/source, role, ` +
-      'text, label, placeholder, testid, alt that is present, and nothing here can check the rest. ' +
-      'Assert them one locator at a time, or move the extra field into the locator';
-    return { pass: false, failureReason: reason, inconclusive: reason };
-  }
-  let match = await matchOnce(session, query, state);
-  const subject = JSON.stringify(query);
-  // A residual narrows the SET; `count` is every match while `elements` is only the described prefix,
-  // so a locator broad enough to be truncated cannot be narrowed honestly. Say so instead of guessing.
-  if (residual.checks.length > 0 && match.count > match.elements.length) {
-    const reason = `${String(match.count)} elements matched ${subject} and only ${String(match.elements.length)} were described, so ${residual.checks.map(([f]) => `\`${f}\``).join(', ')} could not be checked against all of them — narrow the locator`;
-    return { pass: false, failureReason: reason, inconclusive: reason };
-  }
-  const kept = match.elements.filter((element) => satisfiesResiduals(element, residual.checks));
-  // The locator found something and the dropped fields disagree with it. Reported separately from a
-  // plain miss because the fixes are opposite: the element IS there, its value is not what was claimed.
-  if (residual.checks.length > 0 && match.matched && 0 === kept.length && !absent) {
-    const wanted = residual.checks.map(([f, want]) => `${f}=${JSON.stringify(want)}`).join(', ');
-    return {
-      pass: false,
-      failureReason: `element matching ${subject} is present but ${wanted} does not hold`,
-      observed: match.elements
-        .map((element) => residual.checks.map(([f]) => describeResidual(element, f)).join(', '))
-        .join('; '),
-      expected: `an element matching ${subject} with ${wanted}`,
-      assertion: `element.${residual.checks[0]?.[0] ?? 'residual'}`,
-      evidence: match.elements,
-    };
-  }
-  if (residual.checks.length > 0) {
-    match = { ...match, matched: kept.length > 0, count: kept.length, elements: kept };
-  }
-  // A given-but-missing scope is handled ASYMMETRICALLY, because "absent" and "present" ask different
-  // questions of a scope that no longer exists:
-  //  - ABSENT: an element is trivially absent from a container that isn't there. This is also the
-  //    everyday "wait for the #overlay/#spinner/#modal to disappear" pattern (scope the wait to the
-  //    node being removed) — treating scopeMissing as a hard fail there burned the whole timeout and
-  //    flipped a correct green to red. So scopeMissing satisfies an absence check.
-  //  - PRESENT: you cannot confirm an element is present inside a scope that resolved to nothing, and
-  //    silently widening to the whole page is the original false green. So scopeMissing FAILS presence
-  //    (on the wait_for path this just keeps polling until the scope appears).
-  if (absent) {
-    if (true === match.scopeMissing) {
-      return { pass: true, evidence: { absent: true, scopeMissing: true } };
-    }
-    return match.matched
-      ? {
-          pass: false,
-          failureReason: `expected element to be absent but found ${String(match.count)}`,
-          observed: `${String(match.count)} element(s) matching ${subject}`,
-          expected: `no element matching ${subject}`,
-          assertion: 'element.absent',
-          evidence: match.elements,
-        }
-      : { pass: true, evidence: { absent: true } };
-  }
-  if (true === match.scopeMissing) {
-    return {
-      pass: false,
-      failureReason: `scope resolved to no element — cannot confirm ${subject} is present`,
-      observed: 'the requested scope is not on the page (unmounted or selector matched nothing)',
-      expected: `an element matching ${subject} within an existing scope`,
-      assertion: 'element.present',
-      evidence: { scopeMissing: true },
-    };
-  }
-  if (match.matched) return { pass: true, evidence: match.elements };
-
-  // The near-miss diagnostic below costs one or two EXTRA MATCH round-trips. It only enriches a FAILED
-  // verdict, and a wait loop's interim rechecks read nothing but `pass` — so on the poll path (diagnose
-  // false) skip straight to the plain fail. Under an event flood a role+name element wait was firing
-  // two live-DOM scans per recheck for a diagnostic no interim eval ever reads; the final timeout eval
-  // still runs with diagnose=true and produces the full near-miss.
-  if (!diagnose) {
-    return {
-      pass: false,
-      failureReason: `no element matched ${subject}${state === undefined ? '' : ` in state '${state}'`}`,
-      observed: 'no matching element on the page',
-      expected: `an element matching ${subject}${state === undefined ? '' : ` in state '${state}'`}`,
-      assertion: 'element.present',
-    };
-  }
-
-  // Diagnostic near-miss: was it there but in the wrong state, or a similar element present?
-  if (state !== undefined) {
-    const relaxed = await matchOnce(session, query, undefined);
-    if (relaxed.matched) {
-      return {
-        pass: false,
-        failureReason: `element exists but not in state '${state}'`,
-        observed: `element matching ${subject} is present, states: ${
-          relaxed.elements[0]?.states.join(', ') ?? 'unknown'
-        }`,
-        expected: `element matching ${subject} in state '${state}'`,
-        assertion: 'element.state',
-        evidence: { nearMiss: relaxed.elements },
-      };
-    }
-  }
-  if (query.role !== undefined && query.name !== undefined) {
-    const roleOnly = await matchOnce(session, { role: query.role }, state);
-    if (roleOnly.matched) {
-      return {
-        pass: false,
-        failureReason: `no '${query.role}' named '${query.name}'; saw: ${roleOnly.elements
-          .map((e) => e.name)
-          .filter((n) => n.length > 0)
-          .join(', ')}`,
-        observed: `${String(roleOnly.count)} '${query.role}' element(s), named: ${roleOnly.elements
-          .map((e) => e.name)
-          .filter((n) => n.length > 0)
-          .join(', ')}`,
-        expected: `a '${query.role}' named '${query.name}'`,
-        assertion: 'element.role+name',
-        evidence: { nearMiss: roleOnly.elements },
-      };
-    }
-  }
-  // The testid near-miss: name what IS here, so a typo is one step from fixed rather than a dead
-  // end. reticle_query has always done this; the predicate path had no equivalent. See
-  // testid-near-miss.ts.
-  const present = match.hint?.presentTestids ?? [];
-  const alsoHere =
-    query.testid === undefined ? undefined : describeTestidMiss(query.testid, present);
-  // A text miss where the string is on the page but split across children reads exactly like an
-  // element that never rendered. Naming the container is the difference between a retry and a bug
-  // report against working code. See split-text-miss.ts.
-  const splitText = describeSplitTextMiss(match.hint?.splitText, query.text);
-  const clause = splitText ?? (alsoHere === undefined || '' === alsoHere ? undefined : alsoHere);
-  const suffix = clause === undefined ? '' : ` — ${clause}`;
-  return {
-    pass: false,
-    failureReason: `no element matched ${subject}${state === undefined ? '' : ` in state '${state}'`}${suffix}`,
-    observed: `no matching element on the page${suffix}`,
-    expected: `an element matching ${subject}${state === undefined ? '' : ` in state '${state}'`}`,
-    assertion: 'element.present',
-    ...(present.length > 0 ? { evidence: { presentTestids: present } } : {}),
-  };
-}
-
-/** The single element of a list, or undefined when there is not exactly one. */
 function oneOf(names: readonly string[]): string | undefined {
   return 1 === names.length ? names[0] : undefined;
 }
@@ -551,11 +380,40 @@ function predicateSince(predicate: Predicate): number {
  * Idempotent, and a more specific `inconclusive` (unreadable locator, superseded window) is never
  * overwritten.
  */
-function annotateThrottledMiss(session: PredicateSession, result: EvalResult): EvalResult {
+function annotateThrottledMiss(
+  session: PredicateSession,
+  predicate: Predicate,
+  result: EvalResult,
+): EvalResult {
   if (result.pass) return result;
   if (true !== session.throttled?.()) return result;
   if (result.inconclusive !== undefined) return result;
+  if (failureRestsOnSeeing(predicate)) return result;
   return { ...result, inconclusive: THROTTLED_STARVED_NOTE };
+}
+
+/**
+ * Does this predicate FAIL by having seen something, rather than by not having seen it?
+ *
+ * The starved-tab caveat only applies to a negative reading. Throttling can stop the tab rendering,
+ * so "I did not find it" may mean "I could not look" — but nothing about a starved tab conjures
+ * elements that were not there, so "I found 13 of them" is as true on a throttled tab as anywhere.
+ * An `absent: true` predicate inverts exactly that: its failure IS the positive observation.
+ *
+ * Getting this wrong understated real product failures. An absence assertion that matched a
+ * framework debug page's `ProgrammingError` heading came back `unknown`, and `unknown` is what an
+ * agent re-drives or walks away from — so the proof it was holding never reached anybody.
+ *
+ * `not` flips the polarity again, and nests, so this recurses rather than checking one level.
+ * Composites (`allOf` / `anyOf`) deliberately fall through to `false`: a composite fails for a
+ * reason this cannot name, and keeping the caveat is the conservative half of the trade — an
+ * over-cautious `unknown` costs a re-drive, a missing one costs a wrong verdict.
+ */
+function failureRestsOnSeeing(predicate: Predicate): boolean {
+  if (PredicateKind.NOT === predicate.kind) return !failureRestsOnSeeing(predicate.predicate);
+  if ('absent' in predicate && true === predicate.absent) return true;
+  // `count: 0` is absence written as arithmetic, and fails the same way: by matching something.
+  return 'count' in predicate && 0 === predicate.count;
 }
 
 export async function evaluatePredicate(
@@ -566,6 +424,7 @@ export async function evaluatePredicate(
 ): Promise<EvalResult> {
   return annotateThrottledMiss(
     session,
+    predicate,
     await evaluatePredicateRaw(session, predicate, since, diagnose),
   );
 }
@@ -634,7 +493,9 @@ async function evaluatePredicateRaw(
     case PredicateKind.NET:
       return evalNet(events, predicate);
     case PredicateKind.ROUTE:
-      return evalRoute(events, predicate, session.url);
+      // `since` so an unanswered request already in flight before this window is not counted
+      // against the app — see unansweredIn.
+      return evalRoute(events, predicate, session.url, Math.max(since, predicateSince(predicate)));
     case PredicateKind.CONSOLE:
       return evalConsole(events, predicate);
     case PredicateKind.ANIMATION:
@@ -941,7 +802,7 @@ export function waitForPredicate(
           // assert. So the highest-value localization signal was computed and then thrown away exactly
           // on the failure path where it matters, no matter what the schema declared.
           finish(
-            annotateThrottledMiss(session, {
+            annotateThrottledMiss(session, predicate, {
               ...r,
               pass: false,
               failureReason: r.failureReason ?? 'timed out waiting for predicate',

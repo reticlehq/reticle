@@ -1,6 +1,7 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { homedir } from 'node:os';
+import { readAccountState } from '../cloud/account-state.js';
 import {
   ReticleDir,
   IMPACT_DAILY_BUCKETS,
@@ -13,6 +14,7 @@ import {
   estimateImpactSavings,
   type ImpactCounts,
   type ImpactDefect,
+  type AccountState,
   type ImpactScope,
   type ImpactSnapshot,
 } from '@reticlehq/core';
@@ -41,12 +43,16 @@ interface ImpactPaths {
 
 /**
  * `reticleRoot` is the project's own `.reticle` directory (what every other store here is handed);
- * the global scope always lives beside the daemon's own state in `~/.reticle`.
+ * the global scope lives beside the daemon's own state in `~/.reticle`.
+ *
+ * `globalRoot` defaults to the home directory and exists to be overridden. Reaching for `homedir()`
+ * implicitly made the machine-wide scope untestable — the one scope with a concurrency bug in it —
+ * so the seam is the fix's precondition, not a test affordance.
  */
-function impactPaths(reticleRoot: string): ImpactPaths {
+function impactPaths(reticleRoot: string, globalRoot: string): ImpactPaths {
   return {
     project: join(reticleRoot, ReticleDir.IMPACT_FILE),
-    global: join(homedir(), ReticleDir.ROOT, ReticleDir.IMPACT_FILE),
+    global: join(globalRoot, ReticleDir.ROOT, ReticleDir.IMPACT_FILE),
   };
 }
 
@@ -207,11 +213,32 @@ export class ImpactStore {
   readonly #dashboardUrl: string | undefined;
   #project: ImpactScope;
   #global: ImpactScope;
+  /**
+   * Deltas folded since the last machine-wide write, kept so the write can be a MERGE.
+   *
+   * The project scope has one writer and can be written wholesale. The machine-wide file is shared
+   * by every daemon on the box, so writing an in-memory copy taken at construction erases whatever a
+   * sibling wrote in between — which is what made the machine streak read LOWER than a single
+   * project's. Replaying these onto whatever is on disk at flush time is what makes the write additive.
+   */
+  #pendingGlobal: { delta: Partial<ImpactCounts>; now: number; meta: ImpactFoldMeta }[] = [];
   #timer: ReturnType<typeof setTimeout> | undefined;
   #onChange: (() => void) | undefined;
+  readonly #account: () => AccountState;
 
-  constructor(opts: { reticleRoot: string; projectName?: string; now?: () => number }) {
-    this.#paths = impactPaths(opts.reticleRoot);
+  constructor(opts: {
+    reticleRoot: string;
+    projectName?: string;
+    now?: () => number;
+    /** Where `~/.reticle` lives. Defaults to the real home; overridden so the shared scope is testable. */
+    globalRoot?: string;
+    /** Reads whether this machine is signed in. Injected so the store stays testable and pure-ish. */
+    account?: () => AccountState;
+  }) {
+    this.#paths = impactPaths(opts.reticleRoot, opts.globalRoot ?? homedir());
+    // Resolved per snapshot, not cached: a user who runs `reticle login` in another terminal must
+    // see the HUD change without restarting the daemon that is watching their app.
+    this.#account = opts.account ?? ((): AccountState => readAccountState(homedir(), process.env));
     this.#now = opts.now ?? ((): number => Date.now());
     this.#projectName = opts.projectName;
     this.#dashboardUrl = readDashboardUrl(opts.reticleRoot);
@@ -228,7 +255,10 @@ export class ImpactStore {
   record(delta: Partial<ImpactCounts>, meta: ImpactFoldMeta = {}): void {
     const now = this.#now();
     this.#project = applyDelta(this.#project, delta, now, meta);
+    // Folded in memory so a reader sees it immediately, AND buffered so the durable write can replay
+    // it onto a file a sibling may have moved on since. The in-memory copy is rebased at flush.
     this.#global = applyDelta(this.#global, delta, now, meta);
+    this.#pendingGlobal.push({ delta, now, meta });
     this.#scheduleFlush();
     this.#onChange?.();
   }
@@ -241,6 +271,7 @@ export class ImpactStore {
     };
     if (this.#projectName !== undefined) snap.projectName = this.#projectName;
     if (this.#dashboardUrl !== undefined) snap.dashboardUrl = this.#dashboardUrl;
+    snap.account = this.#account();
     return snap;
   }
 
@@ -250,8 +281,32 @@ export class ImpactStore {
       clearTimeout(this.#timer);
       this.#timer = undefined;
     }
+    // One writer: the in-memory copy IS the truth.
     writeScope(this.#paths.project, this.#project);
-    writeScope(this.#paths.global, this.#global);
+    this.#flushGlobal();
+  }
+
+  /**
+   * Publish this store's contribution to the machine-wide scope WITHOUT discarding anyone else's.
+   *
+   * Re-reads what is on disk and replays only the deltas recorded since the last write, so a sibling
+   * daemon's day survives. The merged result is adopted in memory too, which is what keeps the HUD's
+   * "everything on this machine" honest rather than showing this process's private view forever.
+   *
+   * ponytail: read-modify-write, not locked. Two daemons flushing inside the same read→rename window
+   * can still drop one batch — far rarer than the every-second-flush loss this replaces, and it costs
+   * one debounce window rather than a whole history. Upgrade to a lock file (exclusive `wx` create
+   * plus a stale timeout) if the counters are ever load-bearing for anything but the HUD.
+   */
+  #flushGlobal(): void {
+    if (0 === this.#pendingGlobal.length) return;
+    const merged = this.#pendingGlobal.reduce(
+      (scope, p) => applyDelta(scope, p.delta, p.now, p.meta),
+      readScope(this.#paths.global, this.#now()),
+    );
+    writeScope(this.#paths.global, merged);
+    this.#global = merged;
+    this.#pendingGlobal = [];
   }
 
   #scheduleFlush(): void {
