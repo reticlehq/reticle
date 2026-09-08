@@ -190,6 +190,16 @@ describe('the run a drive leaves behind', () => {
     expect((await runsWritten()).filter((f) => f.endsWith('.json'))).toHaveLength(0);
   });
 
+  it('writes ONE run across reloads, not one per socket close', async () => {
+    // Teardown fires on every socket close, and a reconnecting tab keeps its id and goes on
+    // appending to the same journal. Without a stable run id this published a row per reload, each
+    // a superset of the last, so one drive read as several overlapping verifications.
+    const end = makeSessionEnd({ fs, reticleRoot: root, enabled: true, now: () => 1_700_000 });
+    await end(driven([Verified.YES]));
+    await end(driven([Verified.YES, Verified.NO]));
+    expect((await runsWritten()).filter((f) => f.endsWith('.json'))).toHaveLength(1);
+  });
+
   it('leaves teardown intact for a session that cannot answer — every existing double', async () => {
     const end = makeSessionEnd({ fs, reticleRoot: root, enabled: true });
     let flushed = false;

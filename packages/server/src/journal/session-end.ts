@@ -4,8 +4,7 @@ import type { JournalAction } from '@reticlehq/core';
 import type { FileSystemPort } from '../project/fs-port.js';
 import { pruneSessions } from './retention.js';
 import { buildVerificationRun } from '../runs/build-verification-run.js';
-import { driveRunFrom } from '../runs/drive-run.js';
-import { defaultRunId } from '../runs/runner-port.js';
+import { driveRunFrom, driveRunId } from '../runs/drive-run.js';
 import { RunStore } from '../runs/run-store.js';
 
 /**
@@ -128,7 +127,12 @@ async function recordDriveRun(deps: SessionEndDeps, session: SessionEndTarget): 
   if (session.readJournalActions === undefined) return;
   const actions = await session.readJournalActions();
   const input = driveRunFrom(actions, {
-    runId: defaultRunId(),
+    // Derived from the session, NOT random. Teardown fires on every socket close, and a reconnecting
+    // tab keeps its session id and appends to the same ledger — so a drive across two page reloads
+    // would fold the whole ledger twice and publish two overlapping rows, the second a superset of
+    // the first. A stable id makes the artifact idempotent: the same session rewrites its own run,
+    // and the cloud diffs by runId, so a re-push supersedes rather than duplicates.
+    runId: driveRunId(session.id),
     ...(session.projectId === undefined ? {} : { projectId: session.projectId }),
   });
   if (input === undefined) return;

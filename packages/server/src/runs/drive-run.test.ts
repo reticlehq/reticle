@@ -8,7 +8,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { RunCheckStatus, Verified, type JournalAction } from '@reticlehq/core';
-import { driveRunFrom } from './drive-run.js';
+import { driveRunFrom, driveRunId } from './drive-run.js';
 import { computeVerdict } from './build-verification-run.js';
 import { VerdictStatus } from '@reticlehq/core';
 
@@ -103,5 +103,36 @@ describe('a drive folded into a run', () => {
     expect(driveRunFrom([withSource], DEPS)?.checks[0]?.evidence).toEqual({
       source: 'src/Form.tsx:42:8',
     });
+  });
+});
+
+/**
+ * One row per drive, not one per page reload.
+ *
+ * Session teardown fires on every socket close, and a reconnecting tab keeps its session id and goes
+ * on appending to the same journal. A random run id per teardown would publish a row per reload,
+ * each a superset of the last, and one drive would look like five overlapping verifications.
+ */
+describe('the run id for a drive', () => {
+  it('is derived from the session, so a re-fold rewrites the same row', () => {
+    const id = 'scc5398dc-8e92-4733-bbdd-1787041cb69d';
+    expect(driveRunId(id)).toBe(driveRunId(id));
+    expect(driveRunId(id)).toContain(id);
+  });
+
+  it('separates two sessions, which are two drives', () => {
+    expect(driveRunId('s-one')).not.toBe(driveRunId('s-two'));
+  });
+
+  it('marks it as a drive, so it cannot collide with a replay run', () => {
+    expect(driveRunId('s-one').startsWith('drive-')).toBe(true);
+  });
+
+  it('falls back to a random id for a session id that is not a safe path segment', () => {
+    // A session id is a free string on the wire. Losing idempotence for one session is the right
+    // concession; letting `../` reach a file path is not.
+    const unsafe = '../../etc/passwd';
+    expect(driveRunId(unsafe)).not.toContain('..');
+    expect(driveRunId(unsafe)).not.toBe(driveRunId(unsafe));
   });
 });

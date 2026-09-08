@@ -33,7 +33,29 @@ import {
   type JournalAction,
   type RunCheck,
 } from '@reticlehq/core';
+import { isValidRunId } from '../project/reticle-dir.js';
+import { defaultRunId } from './runner-port.js';
 import type { VerificationRunInput } from './build-verification-run.js';
+
+/** Marks a run as the fold of a live drive rather than a flow replay, and keeps ids from colliding. */
+const DRIVE_RUN_PREFIX = 'drive-';
+
+/**
+ * The run id for a session's drive: stable, so the session rewrites its own row.
+ *
+ * Session teardown fires on every socket close, and a reconnecting tab keeps its session id and
+ * keeps appending to the same journal. A random id per teardown would therefore publish one row per
+ * reload, each a superset of the last, and the dashboard would fill with overlapping copies of one
+ * drive. Derived from the session instead, so the fold is idempotent.
+ *
+ * A session id is a free string on the wire, so the derived id is CHECKED before it becomes a path
+ * segment; anything that would not be a safe one falls back to a random id, which loses idempotence
+ * for that session rather than refusing to record it.
+ */
+export function driveRunId(sessionId: string): string {
+  const candidate = `${DRIVE_RUN_PREFIX}${sessionId}`;
+  return isValidRunId(candidate) ? candidate : defaultRunId();
+}
 
 /** The author of record when no MCP peer introduced itself. Mirrors verification-sync's default. */
 const UNNAMED_AGENT = 'reticle-mcp';
