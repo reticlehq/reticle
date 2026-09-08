@@ -39,6 +39,25 @@ type ReadFile = (path: string) => string;
 const readFileOrThrow: ReadFile = (path) => readFileSync(path, 'utf8');
 
 /**
+ * How far up to look for `.reticle.json`, and WHY it is not the package.json depth below.
+ *
+ * The same number, for the same reason, as the server's `MAX_CONFIG_SEARCH_DEPTH`: deep enough for
+ * an app in `frontend/` or `apps/web/`, a worktree beside its main checkout, and a package inside a
+ * monorepo — and shallow enough that a dev server started somewhere unrelated cannot silently adopt
+ * a distant ancestor's config and announce another app's identity. The two walkers have to agree,
+ * because the whole point of reading this file is that the plugin and the CLI stop disagreeing.
+ */
+const MAX_CONFIG_SEARCH_DEPTH = 6;
+
+/**
+ * How far up to look for `package.json`, which is a different question with a different answer.
+ *
+ * A package name is only ever used to BUILD an id, never to adopt one, so an over-eager walk here
+ * costs a less specific name rather than the wrong app's identity. Left as it was.
+ */
+const MAX_PACKAGE_SEARCH_DEPTH = 50;
+
+/**
  * Walk up from `startDir` looking for `basename`, and return the first non-empty string `field`
  * yields. Unreadable and unparseable files are skipped rather than fatal: a dev server must start.
  */
@@ -47,9 +66,10 @@ function readNearestField(
   basename: string,
   field: string,
   readFile: ReadFile,
+  maxDepth: number,
 ): string | undefined {
   let dir = startDir;
-  for (let depth = 0; depth < 50; depth++) {
+  for (let depth = 0; depth <= maxDepth; depth++) {
     try {
       const parsed: unknown = JSON.parse(readFile(join(dir, basename)));
       if ('object' === typeof parsed && parsed !== null) {
@@ -71,7 +91,7 @@ function readNearestPackageName(
   startDir: string,
   readFile: ReadFile = readFileOrThrow,
 ): string | undefined {
-  return readNearestField(startDir, 'package.json', 'name', readFile);
+  return readNearestField(startDir, 'package.json', 'name', readFile, MAX_PACKAGE_SEARCH_DEPTH);
 }
 
 /**
@@ -84,7 +104,13 @@ export function readConfiguredProjectId(
   startDir: string,
   readFile: ReadFile = readFileOrThrow,
 ): string | undefined {
-  return readNearestField(startDir, RETICLE_CONFIG_BASENAME, 'projectId', readFile);
+  return readNearestField(
+    startDir,
+    RETICLE_CONFIG_BASENAME,
+    'projectId',
+    readFile,
+    MAX_CONFIG_SEARCH_DEPTH,
+  );
 }
 
 /**

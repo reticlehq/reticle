@@ -132,6 +132,14 @@ describe('readConfiguredProjectId', () => {
     expect(readConfiguredProjectId('/nowhere', tree({}))).toBeUndefined();
   });
 
+  it("stops before a distant ancestor, which would be another app's identity", () => {
+    // The same cap, for the same reason, as the server's config walk: a dev server started somewhere
+    // unrelated must not adopt a config six directories above it and announce a project it is not.
+    const read = tree({ '/.reticle.json': '{"projectId":"someone-else-1234abcd"}' });
+    expect(readConfiguredProjectId('/a/b/c/d/e/f/g/h', read)).toBeUndefined();
+    expect(readConfiguredProjectId('/a/b/c', read)).toBe('someone-else-1234abcd');
+  });
+
   it('returns undefined for a config that names no id, rather than throwing', () => {
     const read = tree({ '/app/.reticle.json': '{"framework":"vite"}' });
     expect(readConfiguredProjectId('/app', read)).toBeUndefined();
