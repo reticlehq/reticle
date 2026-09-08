@@ -37,7 +37,7 @@ const {
 const MAIN_SUBJECT_DEPTH = 400;
 
 const limitFlag = process.argv.indexOf('--limit');
-const LIMIT = limitFlag === -1 ? '100' : (process.argv[limitFlag + 1] ?? '100');
+const LIMIT = -1 === limitFlag ? '100' : (process.argv[limitFlag + 1] ?? '100');
 
 /**
  * The negative control, for the reason its sibling has one: a guard nobody has watched go red proves

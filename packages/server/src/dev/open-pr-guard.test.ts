@@ -112,3 +112,40 @@ describe('the reports say what to do, not just what is wrong', () => {
     expect(unannouncedClaimReport([])).toBe('');
   });
 });
+
+/**
+ * The guard cried wolf on its own first live run, which is the failure its header warns about.
+ *
+ * The PR that introduced this check lists eighteen issue→PR pairs in its body — as EVIDENCE that the
+ * problem is real. It was then reported as a claimant on all eighteen, so every issue read as having
+ * two PRs against it and the output became noise on the day it shipped.
+ *
+ * A PR that fixes something references one issue, occasionally two or three (#429 legitimately closes
+ * #428, #430 and #433). A PR referencing many is describing them, not fixing them: a tracking issue,
+ * a release note, a triage summary. Counting those is how a signal becomes a wall of text nobody
+ * reads, and the first false positive is what teaches a reader to ignore the whole check.
+ */
+describe('a PR that references many issues is describing them, not claiming them', () => {
+  it('ignores a PR that lists more issues than any fix would close', () => {
+    const many = Array.from({ length: 18 }, (_, i) => `#${String(100 + i)}`).join(' ');
+    const prs = [PR(872, 'feat(dev): stop the open PR list lying', `Evidence: ${many}`)];
+    expect(issuesWithOpenPr(prs, [100, 101, 102])).toEqual([]);
+  });
+
+  it('still counts a PR that closes three, which real ones do', () => {
+    // #429 closes #428, #430 and #433. The cap must not catch honest multi-issue work.
+    const prs = [PR(429, 'feat(cloud): runner', 'Closes #428\nCloses #430\nCloses #433')];
+    expect(issuesWithOpenPr(prs, [428, 430, 433])).toEqual([
+      { issue: 428, prs: [429] },
+      { issue: 430, prs: [429] },
+      { issue: 433, prs: [429] },
+    ]);
+  });
+
+  it('counts references to CLOSED issues toward the cap, so a listing cannot slip under it', () => {
+    // The evidence list in #872 was mostly issues that are open; a listing of mixed state is still a
+    // listing. Filtering to open issues BEFORE the cap would let a long list qualify.
+    const refs = Array.from({ length: 12 }, (_, i) => `#${String(200 + i)}`).join(' ');
+    expect(issuesWithOpenPr([PR(1, 'triage sweep', refs)], [200])).toEqual([]);
+  });
+});

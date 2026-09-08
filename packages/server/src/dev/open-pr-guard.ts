@@ -66,6 +66,20 @@ export function landedPullRequests(
 const ANY_ISSUE_REF = /#(\d+)/g;
 
 /**
+ * Above this many references, a PR is DESCRIBING issues rather than claiming them.
+ *
+ * This guard cried wolf on its own first live run: the PR that introduced it lists eighteen
+ * issue→PR pairs in its body as evidence that the problem is real, and was then reported as a
+ * claimant on all eighteen. Every issue read as having two PRs against it and the output became
+ * noise on the day it shipped.
+ *
+ * Five, not three: #429 legitimately closes #428, #430 and #433, and a cap that caught honest
+ * multi-issue work would be the same failure in the other direction. Counted BEFORE filtering to
+ * open issues, so a long listing of mixed state cannot slip under the cap by being mostly closed.
+ */
+const MAX_CLAIMED_ISSUES = 5;
+
+/**
  * Open issues that an open PR references, so the claim can be made visible where people read it.
  *
  * Deliberately counts a BARE reference, which is the opposite call from `closedRefsIn`. There the
@@ -80,16 +94,17 @@ export function issuesWithOpenPr(
   const open = new Set(openIssues);
   const byIssue = new Map<number, number[]>();
   for (const pr of prs) {
-    const referenced = new Set<number>();
+    const allRefs = new Set<number>();
     for (const match of `${pr.title}\n${pr.body}`.matchAll(ANY_ISSUE_REF)) {
       const raw = match[1];
       if (raw === undefined) continue;
       const parsed = Number.parseInt(raw, 10);
       // A PR quoting its own number is noise, not a claim on an issue.
-      if (Number.isFinite(parsed) && parsed !== pr.number && open.has(parsed)) {
-        referenced.add(parsed);
-      }
+      if (Number.isFinite(parsed) && parsed !== pr.number) allRefs.add(parsed);
     }
+    // Counted over EVERY reference, before narrowing to open issues — see MAX_CLAIMED_ISSUES.
+    if (allRefs.size > MAX_CLAIMED_ISSUES) continue;
+    const referenced = [...allRefs].filter((number) => open.has(number));
     for (const issue of referenced) {
       byIssue.set(issue, [...(byIssue.get(issue) ?? []), pr.number]);
     }
