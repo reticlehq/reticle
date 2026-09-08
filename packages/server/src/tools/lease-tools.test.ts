@@ -250,6 +250,9 @@ describe('reticle_lease_acquire', () => {
     )) as { sessionId: string };
     const sessions = {
       get: (id: string) => (id === first.sessionId ? undefined : { id }),
+      // Genuinely dead: no session anywhere is driving that leased tab. `all` is present because
+      // the real sessions registry always has it, and resolving the lease now consults it.
+      all: () => [],
     };
 
     const second = (await tool(ReticleTool.LEASE_ACQUIRE)(
@@ -261,6 +264,70 @@ describe('reticle_lease_acquire', () => {
     expect(second.reused).toBeUndefined();
     expect(acquired).toHaveLength(2);
     expect(pool.activeCount()).toBe(1);
+  });
+
+  it('reuses a live lease whose app registered under its own name', async () => {
+    // The asymmetry: the MINT path resolves the id through `resolveLeasedSessionId` — because "an
+    // app that names its own session registers under that name, and the id we hand back has to be
+    // the one the agent can actually drive" — and the reuse branch looked the lease id up directly
+    // instead. The two paths disagreed about what a session id is.
+    //
+    // It bites when the first acquire returned `ready: false`: the mint path only aliases when its
+    // wait resolved, so nothing records the app's own name. If the app connects a moment later,
+    // `leaseIdOnOrigin` hands back the raw lease id, the direct lookup misses, and a LIVE lease is
+    // released to mint a second context — the tab-poisoning this branch exists to prevent.
+    const { pool, acquired } = fakePool();
+    const first = (await tool(ReticleTool.LEASE_ACQUIRE)(
+      { ...baseDeps, pool },
+      { url: 'http://localhost:3000/' },
+    )) as { sessionId: string };
+    const appNamed = {
+      id: 'my-app',
+      url: `http://localhost:3000/?${RETICLE_URL_PARAM.SESSION}=${first.sessionId}`,
+    };
+    const sessions = {
+      get: (id: string) => (id === appNamed.id ? appNamed : undefined),
+      all: () => [appNamed],
+    };
+
+    const second = (await tool(ReticleTool.LEASE_ACQUIRE)(
+      { ...baseDeps, pool, sessions } as unknown as ToolDeps,
+      { url: 'http://localhost:3000/checkout' },
+    )) as { sessionId: string; reused?: boolean; leased: number };
+
+    // The id handed back is the one the agent can drive, as on the mint path.
+    expect(second.sessionId).toBe(appNamed.id);
+    expect(second.reused).toBe(true);
+    // The live lease was kept: no second context, and the slot count did not move.
+    expect(acquired).toHaveLength(1);
+    expect(second.leased).toBe(1);
+    expect(pool.activeCount()).toBe(1);
+  });
+
+  it('tells the pool the other name a reused lease answers to', async () => {
+    // Half a fix without this. Every later touch and release arrives under the id just handed back;
+    // the pool is keyed by the id it navigated with, so without the alias the touches miss, the
+    // lease ages out despite continuous activity, and the reaper closes the context mid-flow.
+    const { pool, acquired, aliased } = fakePool();
+    const first = (await tool(ReticleTool.LEASE_ACQUIRE)(
+      { ...baseDeps, pool },
+      { url: 'http://localhost:3000/' },
+    )) as { sessionId: string };
+    const appNamed = {
+      id: 'my-app',
+      url: `http://localhost:3000/?${RETICLE_URL_PARAM.SESSION}=${first.sessionId}`,
+    };
+    const sessions = {
+      get: (id: string) => (id === appNamed.id ? appNamed : undefined),
+      all: () => [appNamed],
+    };
+
+    await tool(ReticleTool.LEASE_ACQUIRE)({ ...baseDeps, pool, sessions } as unknown as ToolDeps, {
+      url: 'http://localhost:3000/',
+    });
+
+    expect(aliased).toContainEqual([appNamed.id, first.sessionId]);
+    expect(acquired).toHaveLength(1);
   });
 
   it('returns expiresInMs so the agent knows when the lease will die', async () => {
