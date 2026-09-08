@@ -344,6 +344,47 @@ const DOCUMENT_ONLY_SUFFIXES: readonly string[] = [
 ];
 
 /**
+ * File suffixes a click typically downloads or navigates to as a document, never as fetch/XHR.
+ *
+ * Sibling of DOCUMENT_ONLY_SUFFIXES, not a member of it. Those are subresources: once resource
+ * timing is live, a miss is evidence. A click on `<a href="/export.pdf">` is a navigation (or a
+ * Content-Disposition attachment). Resource timing of stylesheets does not make it visible, so
+ * grading the miss as "0 network calls" / a 404 is the lie #805 exists to stop — even on a page
+ * whose observer is running. `.js` / `.json` stay off this list for the same reason they stay off
+ * the other: they are routinely fetched.
+ */
+const NATIVE_DOWNLOAD_SUFFIXES: readonly string[] = [
+  '.pdf',
+  '.csv',
+  '.tsv',
+  '.zip',
+  '.gz',
+  '.tar',
+  '.xlsx',
+  '.xls',
+  '.docx',
+  '.doc',
+  '.pptx',
+  '.ppt',
+  '.ods',
+  '.odt',
+  '.rtf',
+  '.7z',
+  '.rar',
+];
+
+/**
+ * Does this filter target a class of request the observer cannot see?
+ *
+ * Read off `urlContains` only, and only when the pattern ENDS in one of the suffixes — a filter of
+ * `/api/` that happens to contain `.css` somewhere in a query string is still an ordinary XHR
+ * target. Query strings and fragments are stripped first, since `favicon.ico?v=2` is the same asset.
+ */
+function filterPath(urlContains: string): string {
+  return (urlContains.split('#')[0] ?? '').split('?')[0]?.toLowerCase() ?? '';
+}
+
+/**
  * Does this filter target a class of request the observer cannot see?
  *
  * Read off `urlContains` only, and only when the pattern ENDS in one of the suffixes — a filter of
@@ -353,9 +394,41 @@ const DOCUMENT_ONLY_SUFFIXES: readonly string[] = [
 function targetsUnobservedChannel(
   p: Extract<Predicate, { kind: typeof PredicateKind.NET }>,
 ): boolean {
-  if (p.urlContains === undefined) return false;
-  const path = (p.urlContains.split('#')[0] ?? '').split('?')[0]?.toLowerCase() ?? '';
-  return DOCUMENT_ONLY_SUFFIXES.some((suffix) => path.endsWith(suffix));
+  const url = p.urlContains;
+  if (undefined === url) return false;
+  return DOCUMENT_ONLY_SUFFIXES.some((suffix) => filterPath(url).endsWith(suffix));
+}
+
+function targetsNativeDownload(p: Extract<Predicate, { kind: typeof PredicateKind.NET }>): boolean {
+  const url = p.urlContains;
+  if (undefined === url) return false;
+  return NATIVE_DOWNLOAD_SUFFIXES.some((suffix) => filterPath(url).endsWith(suffix));
+}
+
+function nativeDownloadReason(p: Extract<Predicate, { kind: typeof PredicateKind.NET }>): string {
+  return (
+    `no fetch or XHR matched ${describeNetFilter(p)}. A native download or document navigation ` +
+    `(an <a href> to a file, a Content-Disposition attachment, <a download>) never goes through ` +
+    `fetch or XMLHttpRequest, so an empty net window is not a 404 and is not evidence the export ` +
+    `failed. This is unobservable on the net channel. Assert the link href, or check the file ` +
+    `outside the browser — Reticle cannot see the bytes land`
+  );
+}
+
+function nativeDownloadMiss(
+  events: ReticleEvent[],
+  p: Extract<Predicate, { kind: typeof PredicateKind.NET }>,
+): EvalResult | undefined {
+  if (!targetsNativeDownload(p)) return undefined;
+  const reason = nativeDownloadReason(p);
+  return {
+    pass: false,
+    failureReason: reason,
+    inconclusive: reason,
+    observed: observedNetCalls(events, p.urlContains),
+    expected: `a fetch or XHR matching ${describeNetFilter(p)}`,
+    assertion: 'net.native-download',
+  };
 }
 
 /**
@@ -574,6 +647,10 @@ export function evalNet(
   // useEffect-double-fire / retry-storm regression class, where the request DID fire (presence passes)
   // but fired the WRONG number of times. Without `count`, the matcher is presence-only (≥1).
   if (p.count !== undefined) {
+    if (0 === matches.length) {
+      const download = nativeDownloadMiss(events, p);
+      if (download !== undefined) return download;
+    }
     if (
       matches.length !== p.count &&
       0 === matches.length &&
@@ -603,6 +680,10 @@ export function evalNet(
       : counted;
   }
   const hit = matches[0];
+  if (hit === undefined) {
+    const download = nativeDownloadMiss(events, p);
+    if (download !== undefined) return download;
+  }
   if (hit === undefined && targetsUnobservedChannel(p) && !sawSubresources) {
     const reason = unobservedChannelReason(p);
     return {
