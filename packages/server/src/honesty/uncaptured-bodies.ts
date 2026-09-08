@@ -1,3 +1,5 @@
+import { bodyCaptureRemedy } from './body-capture-remedy.js';
+
 /** Methods that normally carry a payload — the ones where a missing body is worth explaining. */
 const BODY_BEARING_METHODS = new Set(['POST', 'PUT', 'PATCH']);
 
@@ -17,6 +19,8 @@ const BODY_BEARING_METHODS = new Set(['POST', 'PUT', 'PATCH']);
  */
 export function bodiesNotCaptured(
   calls: { method?: string; requestBody?: string; responseBody?: string }[],
+  /** The page SDK's version, so the remedy can check whether it applies. See body-capture-remedy. */
+  sdkVersion?: string,
 ): {
   bodiesNotCaptured?: string;
 } {
@@ -35,6 +39,7 @@ export function bodiesNotCaptured(
     // none: it sends them to edit a file that is not there and reads as a tool that does not know
     // what it is looking at.
     bodiesNotCaptured:
-      'request/response bodies are NOT being recorded, so an absent body here means UNSEEN, not empty — the payload of these calls was never inspected. Turn it on where your app calls connect(): `reticle.connect({ captureNetworkBodies: true })`, or for the Vite plugin `reticle({ captureNetworkBodies: true })` / VITE_RETICLE_CAPTURE_BODIES=1. Then re-run the action.',
+      'request/response bodies are NOT being recorded, so an absent body here means UNSEEN, not ' +
+      `empty — the payload of these calls was never inspected. ${bodyCaptureRemedy(sdkVersion)}`,
   };
 }

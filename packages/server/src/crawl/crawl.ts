@@ -17,6 +17,7 @@ import {
   asString,
   sourceOf,
 } from '../tools/tools-helpers.js';
+import { isSessionReplacedError } from '../session/session-replaced.js';
 import { ReticleTool } from '../tools/tool-names.js';
 import { findContradictions } from '../events/contradictions.js';
 
@@ -285,6 +286,18 @@ export async function crawl(
     const since = session.elapsed();
     session.beginAction?.(ReticleTool.CRAWL, { ref: item.ref, action: ActionType.CLICK });
     let act;
+    /*
+     * A full page load reconnects the SDK, which rejects whatever command was in flight.
+     *
+     * On a server-rendered app that is what following a link DOES — every navigation replaces the
+     * session — so the rejection is evidence the click worked, not that it failed. Crawl used to let
+     * it propagate and died on link one of every Django, Rails or plain-HTML app.
+     *
+     * Recorded as a navigation rather than swallowed: a control that took the page somewhere is the
+     * opposite of a dead one, and reporting it as dead would be the false negative crawl exists to
+     * find.
+     */
+    let navigatedAway = false;
     try {
       // One span per control clicked, so a slow crawl names the control rather than reporting a
       // single multi-second total. The settle sleep below is INSIDE it deliberately: it is part of
@@ -298,6 +311,9 @@ export async function crawl(
         await sleep(settleMs);
         return clicked;
       });
+    } catch (err) {
+      if (!isSessionReplacedError(err)) throw err;
+      navigatedAway = true;
     } finally {
       // Close on every exit so a throw cannot leak the window onto the next control's events.
       session.finishAction?.();
@@ -367,8 +383,12 @@ export async function crawl(
     // Deliberately NOT fixed by counting focus as activity: focus moving is not the app reacting, and
     // treating it as such would make a genuinely dead button that takes focus look alive — trading
     // noise for the false negative this check exists to catch.
-    const dispatched = asRecord(act.result)['dispatched'] !== false && act.ok;
+    const dispatched = asRecord(act?.result)['dispatched'] !== false && true === act?.ok;
     if (
+      // A control that took the page somewhere is the OPPOSITE of a dead one. Without this, every
+      // link on a server-rendered app would be reported as an anomaly by the check that exists to
+      // find controls which do nothing.
+      !navigatedAway &&
       dispatched &&
       0 === errs.length &&
       !events.some(isActivity) &&

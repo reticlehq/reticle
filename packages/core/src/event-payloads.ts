@@ -172,6 +172,16 @@ export const EVENT_PAYLOAD_SCHEMAS = {
   // The page called window.open — the clicked consequence may continue in a context the SDK cannot
   // enter (#508). `href` is what the page asked to open, omitted for the blank-tab form.
   [EventType.CONTEXT_OPENED]: z.object({ href: z.string().optional() }).passthrough(),
+  [EventType.DIALOG_OPENED]: z
+    .object({
+      /** Which of the three, so a caller can tell a blocking question from a blocking notice. */
+      kind: z.enum(['alert', 'confirm', 'prompt']),
+      /** What the app asked. The whole point: a cancelled action is only legible with the question. */
+      message: z.string().optional(),
+      /** What Reticle answered on the app's behalf. `false`/`null` are the non-destructive replies. */
+      answered: z.union([z.boolean(), z.null()]).optional(),
+    })
+    .passthrough(),
   [EventType.RENDER_COMMIT]: z.object({ commits: z.number() }),
   [EventType.FOCUS_CHANGE]: z.object({
     to: z.string().optional(),

@@ -30,7 +30,14 @@ export function navigateResult(
    * one place that CAN answer this — the SDK reconnects to it — so making it answer removes a
    * `reticle_sessions` poll from every single navigation.
    */
-  arrival: NavigateArrival | null = null,
+  arrival: NavigateArrival | null,
+  /**
+   * The budget the daemon spent waiting for arrival, in ms. Reported on `confirmed:false` so the
+   * agent can tell "Reticle stopped waiting" from "the page never came back": the first is fixed by
+   * asking for a longer `timeout_ms`, the second is not. Without it the two read identically, and a
+   * slow SPA (30–60s to reattach under HMR) looked like a failed navigation on every call.
+   */
+  waitedMs: number,
 ): Record<string, unknown> {
   const ok = true === result.ok;
   const base: Record<string, unknown> = {
@@ -52,10 +59,13 @@ export function navigateResult(
   return {
     ...base,
     confirmed: false,
+    waitedMs,
     note:
       'ok means the navigation was DISPATCHED, not that the page arrived. The SDK is torn down by ' +
-      'the navigation itself, so nothing here can see the new document. Call reticle_sessions to ' +
-      'confirm a session reconnected at the new URL before acting; if none appears, the page did ' +
-      'not load or is not instrumented.',
+      'the navigation itself, so nothing here can see the new document, and no session reconnected ' +
+      `at the new URL within ${waitedMs}ms. A slow app may still be on its way (an SPA reattaching ` +
+      'under HMR can take 30-60s): navigate again with a larger timeout_ms, or call reticle_sessions ' +
+      'to confirm a session reconnected before acting; if none appears, the page did not load or is ' +
+      'not instrumented.',
   };
 }

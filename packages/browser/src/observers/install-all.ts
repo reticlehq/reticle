@@ -23,6 +23,7 @@ import { installIpc, ipcNetOverrides, isReticleOwnIpc } from './ipc.js';
 import { installPerf } from './perf.js';
 import { installRoute } from './route.js';
 import { installConsole } from './console.js';
+import { installDialogs } from './dialogs.js';
 import { installAnimation } from './animation.js';
 import { installScroll } from './scroll.js';
 import { installHealth } from './health.js';
@@ -63,6 +64,10 @@ export function installAllObservers(emit: Emit, options: InstallOptions): Teardo
     guard(emit, SdkSite.ANIMATION_OBSERVER, () => installPerf(emit)),
     guard(emit, SdkSite.ROUTER_OBSERVER, () => installRoute(emit)),
     guard(emit, SdkSite.CONSOLE_OBSERVER, () => installConsole(emit)),
+    // A native dialog behind a driven click wedges the tab permanently — the main thread stops and
+    // the SDK's own pump is on it, so nothing inside the session can recover. Answered, never
+    // silently: see dialogs.ts.
+    guard(emit, SdkSite.CONSOLE_OBSERVER, () => installDialogs(emit)),
     guard(emit, SdkSite.ANIMATION_OBSERVER, () => installAnimation(emit)),
     guard(emit, SdkSite.DOM_OBSERVER, () => installScroll(emit)),
     guard(emit, SdkSite.DOM_OBSERVER, () => installDom(emit)),

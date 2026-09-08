@@ -151,6 +151,8 @@ export function evalRoute(
    * (a replayed window) keeps the old answer instead of inventing a route.
    */
   currentUrl?: string,
+  /** Event-time floor for the window, so a request already in flight before it is not counted. */
+  since = 0,
 ): EvalResult {
   const routes = events.filter((e) => e.type === EventType.ROUTE_CHANGE);
   const last = routes.at(-1);
@@ -168,6 +170,24 @@ export function evalRoute(
         ? undefined
         : readCurrentRoute(currentUrl);
   if (reading === undefined) {
+    // A navigation the SERVER never answered reads exactly like one the APP prevented, and only one
+    // of those is the user's bug. See unansweredIn.
+    const unanswered = unansweredIn(events, since);
+    if (unanswered !== undefined) {
+      const reason =
+        `no route change, and ${unanswered.count} request(s) started in this window never ` +
+        `completed — first: ${unanswered.method} ${unanswered.url}. A navigation the server has ` +
+        'not answered is indistinguishable from one the app declined, so this is not evidence ' +
+        'against the app. Check the server directly (curl the route) before looking at components';
+      return {
+        pass: false,
+        failureReason: reason,
+        inconclusive: reason,
+        observed: `${unanswered.count} request(s) still in flight, no route change`,
+        expected: `a route change to ${p.pathname ?? p.contains ?? 'any route'}`,
+        assertion: 'route.server-pending',
+      };
+    }
     return {
       pass: false,
       failureReason: 'no route change observed',
@@ -203,5 +223,80 @@ export function evalRoute(
       assertion: 'route.contains',
     };
   }
-  return { pass: true, evidence: reading.data };
+  return {
+    pass: true,
+    evidence:
+      reading.decidedBy === RouteDecidedBy.CHANGE
+        ? { ...reading.data, viewSettled: sawActivityAfter(events, last?.t ?? 0) }
+        : reading.data,
+  };
+}
+
+/**
+ * Did the page do ANYTHING after the URL moved?
+ *
+ * A route predicate goes green the instant the URL commits, and on an async-loading page that is a
+ * verdict taken over a shell. The reporter's sequence is the whole argument: `allOf [route, console
+ * absent]` returned `verified: "yes"`, a snapshot of `main` came back with 9 nodes that read as an
+ * empty page, and re-snapshotting moments later showed 22 with the real content — one step from
+ * filing "this route renders nothing" against code that was fine.
+ *
+ * The grade is deliberately NOT changed. Requiring a settle would make every route assertion wait
+ * and would flip green suites red, and the report's own acceptance allows either that or evidence
+ * saying the view had not settled. This is the second, and it costs nothing that already worked.
+ *
+ * No clock is read: if the route change is the LAST thing in the window, nothing has been observed
+ * since the URL moved, which is exactly the trap. Activity BEFORE the change is ignored — a mutation
+ * that predates the navigation says nothing about what the new route rendered.
+ *
+ * Reported only for a CHANGE reading. A pass decided by "the app is already there" has no commit
+ * moment to be too close to, and a caveat there would describe a reading it is not about.
+ */
+function sawActivityAfter(events: readonly ReticleEvent[], routeAt: number): boolean {
+  return events.some((e) => e.t > routeAt && ROUTE_SETTLE_ACTIVITY.has(e.type));
+}
+
+/**
+ * What counts as the view still moving. Same set the `settled` oracle uses, and deliberately the
+ * same one: two different answers to "did the page do something" is how a vocabulary rots.
+ */
+const ROUTE_SETTLE_ACTIVITY: ReadonlySet<EventType> = new Set([
+  EventType.NET_REQUEST,
+  EventType.DOM_ADDED,
+  EventType.DOM_REMOVED,
+  EventType.DOM_ATTR,
+]);
+
+/**
+ * A request that STARTED in this window and never completed.
+ *
+ * The discriminator the route oracle was missing. `routeChanges: 0, network: 0` is reported the same
+ * way whether the app prevented the navigation or the server never answered the request the app
+ * made — and only the first is the user's bug. Reticle already saw the pending navigation; it just
+ * never said so, and attached a `source:` file:line that pointed at innocent code.
+ *
+ * Scoped to requests that started INSIDE the window, deliberately. A background poll that predates
+ * the action says nothing about this navigation, and counting it would make every route miss on a
+ * polling app inconclusive — softening away the finding this oracle exists to make. That is the same
+ * trap the duplicate-request and contradiction rules were each narrowed to avoid.
+ *
+ * Matched on the request id, the way `detectHungRequests` does: a NET_PENDING with no NET_REQUEST
+ * carrying the same id.
+ */
+function unansweredIn(
+  events: readonly ReticleEvent[],
+  since: number,
+): { count: number; url: string; method: string } | undefined {
+  const settled = new Set<unknown>();
+  for (const e of events) if (e.type === EventType.NET_REQUEST) settled.add(e.data['id']);
+  const open = events.filter(
+    (e) => e.type === EventType.NET_PENDING && e.t >= since && !settled.has(e.data['id']),
+  );
+  const first = open[0];
+  if (first === undefined) return undefined;
+  return {
+    count: open.length,
+    url: str(first.data['url']) ?? '(unknown url)',
+    method: str(first.data['method']) ?? 'GET',
+  };
 }
