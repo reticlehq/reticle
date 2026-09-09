@@ -1,3 +1,4 @@
+import { ElementState } from '@reticlehq/core';
 import { asRecord } from './tools-helpers.js';
 
 /** One candidate the browser returned for a target query. */
@@ -6,12 +7,45 @@ interface TargetCandidate {
   role?: unknown;
   name?: unknown;
   visible?: unknown;
+  inViewport?: unknown;
+  states?: unknown;
 }
 
 /** What the resolution produced: a ref to act on, or the reason there isn't one. */
 export type TargetResolution =
   | { readonly kind: 'ref'; readonly ref: string }
   | { readonly kind: 'error'; readonly message: string };
+
+function candidateInViewport(c: TargetCandidate): boolean {
+  if (true === c.inViewport) return true;
+  if (false === c.inViewport) return false;
+  const states = Array.isArray(c.states) ? c.states : [];
+  return states.includes(ElementState.IN_VIEWPORT) || states.includes('inViewport');
+}
+
+/** Higher is better: visible over hidden, in-viewport over off-screen. */
+function candidateRank(c: TargetCandidate): number {
+  const visible = c.visible !== false;
+  const inViewport = candidateInViewport(c);
+  return (visible ? 2 : 0) + (inViewport ? 1 : 0);
+}
+
+function formatCandidateLabel(c: TargetCandidate): string {
+  const role = 'string' === typeof c.role ? c.role : '?';
+  const name = 'string' === typeof c.name ? c.name : '';
+  const ref = 'string' === typeof c.ref ? c.ref : '?';
+  const base = name.length > 0 ? `${ref} (${role} "${name}")` : `${ref} (${role})`;
+  if (false === c.visible) return `${base}, hidden`;
+  if (candidateInViewport(c)) return `${base}, in viewport`;
+  return `${base}, off-screen`;
+}
+
+function rankAmbiguousCandidates(candidates: readonly TargetCandidate[]): TargetCandidate[] {
+  return candidates
+    .map((c, index) => ({ c, index, rank: candidateRank(c) }))
+    .sort((a, b) => b.rank - a.rank || a.index - b.index)
+    .map(({ c }) => c);
+}
 
 /**
  * Turn a target QUERY into the single ref an action can be performed on.
@@ -44,21 +78,17 @@ export function resolveTargetRef(candidates: readonly unknown[]): TargetResoluti
     };
   }
   if (usable.length > 1) {
-    const named = usable
+    const ranked = rankAmbiguousCandidates(usable);
+    const named = ranked
       .slice(0, 5)
-      .map((c) => {
-        const role = 'string' === typeof c.role ? c.role : '?';
-        const name = 'string' === typeof c.name ? c.name : '';
-        const ref = 'string' === typeof c.ref ? c.ref : '?';
-        return name.length > 0 ? `${ref} (${role} "${name}")` : `${ref} (${role})`;
-      })
+      .map((c) => formatCandidateLabel(c))
       .join(', ');
     return {
       kind: 'error',
       message:
         `target matched ${String(usable.length)} elements and an action must not guess between ` +
-        `them: ${named}. Narrow the query (add role/name/testid or a scope), or pass an explicit ` +
-        '`ref` from reticle_query.',
+        `them — ranked, best first: ${named}. Narrow the query (add role/name/testid or a scope), ` +
+        'or pass an explicit `ref` from reticle_query.',
     };
   }
   const only = usable[0];

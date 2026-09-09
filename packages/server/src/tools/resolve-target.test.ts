@@ -23,6 +23,19 @@ describe('resolving a target query to one ref', () => {
     expect(r.message, 'names the candidates so the caller can narrow').toContain('e3');
     expect(r.message).toContain('e9');
     expect(r.message, 'offers the way out').toContain('ref');
+    expect(r.message).toContain('ranked');
+  });
+
+  it('ranks in-viewport matches ahead of off-screen ones in the refusal', () => {
+    const r = resolveTargetRef([
+      { ref: 'e9', role: 'button', name: 'New bill', visible: true, inViewport: false },
+      { ref: 'e3', role: 'button', name: 'New bill', visible: true, inViewport: true },
+    ]);
+    expect(r.kind).toBe('error');
+    if (r.kind !== 'error') return;
+    expect(r.message.indexOf('e3')).toBeLessThan(r.message.indexOf('e9'));
+    expect(r.message).toContain('in viewport');
+    expect(r.message).toContain('off-screen');
   });
 
   it('ignores hidden duplicates, which would otherwise fake ambiguity', () => {

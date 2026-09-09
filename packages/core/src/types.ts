@@ -73,6 +73,12 @@ export interface ElementDescriptor {
   value?: string;
   states: ElementState[];
   visible: boolean;
+  /**
+   * Inside the viewport right now (bounding box intersects the window). Distinct from `visible`,
+   * which is true for content below the fold. Surfaced on descriptors so ambiguous-target
+   * refusals can rank and annotate candidates without a second query.
+   */
+  inViewport?: boolean;
   text?: string;
   /**
    * Attributes explicitly requested via `ElementQuery.attrs`. Absent attributes are omitted (so

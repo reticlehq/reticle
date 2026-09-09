@@ -404,6 +404,7 @@ export function describe(el: Element, memo?: Map<Element, boolean>): ElementDesc
     name,
     states: getStates(el, visible),
     visible,
+    inViewport: isInViewport(el, memo),
   };
   if (value !== undefined && value.length > 0) base.value = value;
   if (text.length > 0 && text !== name) base.text = text;
