@@ -165,7 +165,11 @@ export async function freePortSafely(port, { onNote = () => {} } = {}) {
 function kill(pids, hard) {
   for (const pid of pids) {
     try {
-      process.kill(Number(pid), hard ? 'SIGKILL' : 'SIGTERM');
+      if ('win32' === process.platform) {
+        killTree(pid);
+      } else {
+        process.kill(Number(pid), hard ? 'SIGKILL' : 'SIGTERM');
+      }
     } catch {
       // Already gone between the listing and the signal. Fine.
     }
