@@ -4,13 +4,26 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { RETICLE_URL_PARAM } from '@reticlehq/core';
+import {
+  LeaseNotReadyReason,
+  ReticleCommand,
+  RETICLE_URL_PARAM,
+  Verified,
+  VerifiedReason,
+} from '@reticlehq/core';
 import {
   LEASE_TOOLS,
+  acquireLeasedSession,
   appendReticleParams,
   cleanNavError,
+  evaluateSeedPrecondition,
+  hasOriginLock,
+  scrubSeedFromError,
   waitForLeasedSession,
 } from './lease-tools.js';
+import { assertVerdict } from './assert-verdict.js';
+import { evaluatePredicate, type Predicate, type PredicateSession } from '../events/predicate.js';
+import type { Session } from '../session/session.js';
 import { ReticleTool } from './tool-names.js';
 import type { ToolDeps } from './tool-kit.js';
 import type { BrowserPool, Lease } from '../pool/browser-pool.js';
@@ -27,11 +40,12 @@ function tool(name: string): (deps: ToolDeps, args: Record<string, unknown>) => 
 /** A pool stub that records acquire calls and tracks active count. */
 function fakePool(): {
   pool: BrowserPool;
-  acquired: { url: string; sessionId: string | undefined }[];
+  acquired: { url: string; sessionId: string | undefined; seedStorage?: unknown }[];
   /** Every (registeredId, leaseId) pair the lease told the pool about. */
   aliased: [string, string][];
+  released: string[];
 } {
-  const acquired: { url: string; sessionId: string | undefined }[] = [];
+  const acquired: { url: string; sessionId: string | undefined; seedStorage?: unknown }[] = [];
   let active = 0;
   const released: string[] = [];
   const aliased: [string, string][] = [];
@@ -44,8 +58,8 @@ function fakePool(): {
     }
   };
   const pool = {
-    acquire(url: string, opts: { sessionId?: string } = {}): Promise<Lease> {
-      acquired.push({ url, sessionId: opts.sessionId });
+    acquire(url: string, opts: { sessionId?: string; seedStorage?: unknown } = {}): Promise<Lease> {
+      acquired.push({ url, sessionId: opts.sessionId, seedStorage: opts.seedStorage });
       active += 1;
       const sessionId = opts.sessionId ?? 'gen';
       const origin = originOf(url);
@@ -70,7 +84,7 @@ function fakePool(): {
       aliased.push([registeredId, leaseId]);
     },
   } as unknown as BrowserPool;
-  return { pool, acquired, aliased };
+  return { pool, acquired, aliased, released };
 }
 
 // A sessions stub where the leased tab is already "connected", so acquire's wait-for-ready resolves
@@ -330,6 +344,133 @@ describe('reticle_lease_acquire', () => {
     expect(acquired).toHaveLength(1);
   });
 
+  /**
+   * A sessions stub whose tab answers, or does not, when probed.
+   *
+   * `answers: 'error'` is the interesting one: a reply saying the command failed still PROVES the
+   * SDK is alive, which is the whole question a liveness probe asks.
+   */
+  function sessionsThatAnswer(
+    id: string,
+    answers: 'ok' | 'error' | 'never',
+  ): {
+    deps: { get: (i: string) => unknown; all: () => { id: string; url?: string }[] };
+    probes: string[];
+  } {
+    const probes: string[] = [];
+    const session = {
+      id,
+      command: (name: string) => {
+        probes.push(name);
+        if ('never' === answers) return Promise.reject(new Error('command timed out after 1500ms'));
+        return Promise.resolve({
+          ok: 'ok' === answers,
+          error: 'error' === answers ? 'nope' : undefined,
+        });
+      },
+    };
+    // Answers for ANY id on purpose: the mint path's readiness wait then resolves on its first
+    // look, so a test about the mint path costs milliseconds instead of the full 10s wait.
+    return {
+      deps: { get: (i: string) => (i === id || 'any' === id ? session : undefined), all: () => [] },
+      probes,
+    };
+  }
+
+  it('probes a reused lease and reports a tab that has stopped answering', async () => {
+    // `ready: true` used to mean "a row is in the sessions map", which is why a lease could come back
+    // ready and then be rejected by snapshot, state and console. Presence is not liveness: the map
+    // still holds a tab that is attached, streaming events, and answering nothing.
+    const { pool, acquired } = fakePool();
+    const first = (await tool(ReticleTool.LEASE_ACQUIRE)(
+      { ...baseDeps, pool },
+      { url: 'http://localhost:3000/' },
+    )) as { sessionId: string };
+    const { deps: sessions, probes } = sessionsThatAnswer(first.sessionId, 'never');
+
+    const second = (await tool(ReticleTool.LEASE_ACQUIRE)(
+      { ...baseDeps, pool, sessions } as unknown as ToolDeps,
+      { url: 'http://localhost:3000/' },
+    )) as { sessionId: string; ready: boolean; reused?: boolean; notReadyReason?: string };
+
+    expect(probes).toEqual([ReticleCommand.CAPABILITIES]);
+    expect(second.ready).toBe(false);
+    expect(second.notReadyReason).toBe(LeaseNotReadyReason.SDK_STOPPED_ANSWERING);
+    // Still the lease it found. A wedged tab is reported, not silently swapped for a second context.
+    expect(second.sessionId).toBe(first.sessionId);
+    expect(acquired).toHaveLength(1);
+  });
+
+  it('counts any reply as alive, including one that says the command failed', async () => {
+    // The probe asks whether the SDK answers AT ALL, not what it says. An SDK too old to know the
+    // command replies `unknown command '...'` — which is an answer, and so is proof.
+    const { pool } = fakePool();
+    const first = (await tool(ReticleTool.LEASE_ACQUIRE)(
+      { ...baseDeps, pool },
+      { url: 'http://localhost:3000/' },
+    )) as { sessionId: string };
+    const { deps: sessions } = sessionsThatAnswer(first.sessionId, 'error');
+
+    const second = (await tool(ReticleTool.LEASE_ACQUIRE)(
+      { ...baseDeps, pool, sessions } as unknown as ToolDeps,
+      { url: 'http://localhost:3000/' },
+    )) as { ready: boolean; reused?: boolean; notReadyReason?: string };
+
+    expect(second.ready).toBe(true);
+    expect(second.reused).toBe(true);
+    expect(second.notReadyReason).toBeUndefined();
+  });
+
+  it('does not probe on the mint path, where the wait that just resolved is the evidence', async () => {
+    // Cost control, and the reason it is free: on a mint the readiness wait resolved moments ago, so
+    // a probe would re-ask a question just answered. On reuse the last evidence may be minutes old.
+    const { pool } = fakePool();
+    const { deps: sessions, probes } = sessionsThatAnswer('any', 'ok');
+
+    await tool(ReticleTool.LEASE_ACQUIRE)({ ...baseDeps, pool, sessions } as unknown as ToolDeps, {
+      url: 'http://localhost:3000/',
+    });
+
+    expect(probes).toEqual([]);
+  });
+
+  it('names the other reason when no SDK ever dialled in', async () => {
+    // The two `ready: false` situations are opposite, and they used to share a bare `false`: check
+    // the install, versus recover a tab that is wedged.
+    const { pool } = fakePool();
+    // `lastClosure` is present because the not-connected hint reads it on this branch — the stub is
+    // matching the registry's real shape, not widening the code under test.
+    const sessions = { get: () => undefined, all: () => [], lastClosure: () => undefined };
+
+    const result = (await tool(ReticleTool.LEASE_ACQUIRE)(
+      { ...baseDeps, pool, sessions } as unknown as ToolDeps,
+      { url: 'http://localhost:3000/' },
+    )) as { ready: boolean; notReadyReason?: string };
+
+    expect(result.ready).toBe(false);
+    expect(result.notReadyReason).toBe(LeaseNotReadyReason.SDK_NEVER_DIALLED);
+    // A generous per-test budget, not a duration assertion: this is the ONLY case that pays the
+    // real readiness wait, because proving "no SDK ever dialled in" means letting it run out.
+  }, 20_000);
+
+  it('treats a session it cannot probe as alive, rather than failing a working lease', async () => {
+    // Fail OPEN. A registry entry with no `command` is a shape this code did not put there, and
+    // turning a lease that works into a refusal over a probe that could not run would be a worse
+    // failure than the one being fixed.
+    const { pool, acquired } = fakePool();
+    await tool(ReticleTool.LEASE_ACQUIRE)({ ...baseDeps, pool }, { url: 'http://localhost:3000/' });
+
+    const second = (await tool(ReticleTool.LEASE_ACQUIRE)(
+      { ...baseDeps, pool },
+      { url: 'http://localhost:3000/' },
+    )) as { ready: boolean; reused?: boolean; notReadyReason?: string };
+
+    expect(second.ready).toBe(true);
+    expect(second.reused).toBe(true);
+    expect(second.notReadyReason).toBeUndefined();
+    expect(acquired).toHaveLength(1);
+  });
+
   it('returns expiresInMs so the agent knows when the lease will die', async () => {
     const { pool } = fakePool();
     const result = (await tool(ReticleTool.LEASE_ACQUIRE)(
@@ -522,5 +663,403 @@ describe('prioritising a tab that is already open', () => {
 
     expect(out['sessionId']).toBeDefined();
     expect(out['url']).toBe('http://localhost:3000/');
+  });
+});
+
+describe('reticle_lease with seedStorage', () => {
+  it('propagates seedStorage to pool.acquire and never echoes seeded values in the tool result', async () => {
+    const { pool, acquired } = fakePool();
+    const deps = { ...baseDeps, pool } as unknown as ToolDeps;
+    const seedStorage = {
+      local: { auth_token: 'secret-auth-token-12345' },
+      session: { user_session: 'secret-session-abcde' },
+      cookies: { session: 'secret-cookie-xyz99' },
+    };
+
+    const out = (await tool(ReticleTool.LEASE_ACQUIRE)(deps, {
+      url: 'http://localhost:3000/app',
+      seedStorage,
+    })) as Record<string, unknown>;
+
+    // seedStorage reached pool.acquire intact
+    expect(acquired).toHaveLength(1);
+    expect(acquired[0]?.seedStorage).toEqual(seedStorage);
+
+    // Tool output must NEVER echo the seeded values or the seedStorage object
+    expect('seedStorage' in out).toBe(false);
+    expect(JSON.stringify(out)).not.toContain('secret-auth-token-12345');
+    expect(JSON.stringify(out)).not.toContain('secret-session-abcde');
+    expect(JSON.stringify(out)).not.toContain('secret-cookie-xyz99');
+    expect(out['ready']).toBe(true);
+    expect(out['sessionId']).toBeDefined();
+  });
+
+  it('rejects malformed seedStorage without echoing raw values in the error', async () => {
+    const { pool } = fakePool();
+    const deps = { ...baseDeps, pool } as unknown as ToolDeps;
+
+    await expect(
+      tool(ReticleTool.LEASE_ACQUIRE)(deps, {
+        url: 'http://localhost:3000/',
+        seedStorage: { local: 12345 as unknown as Record<string, string> },
+      }),
+    ).rejects.toThrow(/seedStorage is invalid: local: Expected object, received number/);
+  });
+
+  it('releases an existing lease on the origin and mints fresh when seedStorage is provided', async () => {
+    const { pool, released } = fakePool();
+    const deps = { ...baseDeps, pool } as unknown as ToolDeps;
+
+    // First acquire without seedStorage
+    const first = (await tool(ReticleTool.LEASE_ACQUIRE)(deps, {
+      url: 'http://localhost:3000/',
+    })) as Record<string, unknown>;
+    const firstId = first['sessionId'] as string;
+
+    // Second acquire with seedStorage on same origin must NOT reuse firstId; it must release firstId
+    const second = (await tool(ReticleTool.LEASE_ACQUIRE)(deps, {
+      url: 'http://localhost:3000/',
+      seedStorage: { local: { token: 'new-token' } },
+    })) as Record<string, unknown>;
+    const secondId = second['sessionId'] as string;
+
+    expect(secondId).not.toBe(firstId);
+    expect(released).toContain(firstId);
+    expect(second['reused']).toBeUndefined();
+  });
+
+  it('acquireLeasedSession propagates seedStorage to pool.acquire', async () => {
+    const { pool, acquired } = fakePool();
+    const sessions = { get: () => ({ id: 'live' }), all: () => [] };
+    const seedStorage = { local: { token: 'auth-jwt' } };
+
+    await acquireLeasedSession(
+      pool,
+      sessions,
+      'http://localhost:3000/test',
+      undefined,
+      seedStorage,
+    );
+
+    expect(acquired).toHaveLength(1);
+    expect(acquired[0]?.seedStorage).toEqual(seedStorage);
+  });
+
+  it('preserves explicit empty seedStorage ({}) semantics by releasing existing lease', async () => {
+    const { pool, released } = fakePool();
+    const deps = { ...baseDeps, pool } as unknown as ToolDeps;
+
+    const first = (await tool(ReticleTool.LEASE_ACQUIRE)(deps, {
+      url: 'http://localhost:3000/',
+    })) as Record<string, unknown>;
+    const firstId = first['sessionId'] as string;
+
+    const second = (await tool(ReticleTool.LEASE_ACQUIRE)(deps, {
+      url: 'http://localhost:3000/',
+      seedStorage: {},
+    })) as Record<string, unknown>;
+    const secondId = second['sessionId'] as string;
+
+    expect(secondId).not.toBe(firstId);
+    expect(released).toContain(firstId);
+  });
+
+  it('re-throws sanitized Storage seeding failed error without masking as could not open', async () => {
+    const { pool } = fakePool();
+    pool.acquire = () =>
+      Promise.reject(
+        new Error('Storage seeding failed: localStorage write failed: QuotaExceededError'),
+      );
+    const deps = { ...baseDeps, pool } as unknown as ToolDeps;
+
+    await expect(
+      tool(ReticleTool.LEASE_ACQUIRE)(deps, {
+        url: 'http://localhost:3000/',
+        seedStorage: { local: { token: 'val' } },
+      }),
+    ).rejects.toThrow('Storage seeding failed: localStorage write failed: QuotaExceededError');
+  });
+
+  it('serializes concurrent seeded acquisitions on the same origin and cleans up lock', async () => {
+    const { pool, acquired } = fakePool();
+    const trace: string[] = [];
+    const origin = 'http://localhost:3000';
+    const originalAcquire = pool.acquire.bind(pool);
+    pool.acquire = async (url, opts) => {
+      const tag = url.includes('app1') ? 'req1' : 'req2';
+      trace.push(`${tag}:acquire-start`);
+      // Hold the lock for a moment to ensure concurrency contention
+      await new Promise((r) => setTimeout(r, 20));
+      const res = await originalAcquire(url, opts);
+      trace.push(`${tag}:acquire-end`);
+      return res;
+    };
+    const deps = { ...baseDeps, pool } as unknown as ToolDeps;
+
+    expect(hasOriginLock(origin)).toBe(false);
+
+    // Launch two concurrent seeded acquire calls for the same origin
+    const p1 = tool(ReticleTool.LEASE_ACQUIRE)(deps, {
+      url: `${origin}/app1`,
+      seedStorage: { local: { k: '1' } },
+    });
+    const p2 = tool(ReticleTool.LEASE_ACQUIRE)(deps, {
+      url: `${origin}/app2`,
+      seedStorage: { local: { k: '2' } },
+    });
+
+    // While in flight, the origin lock must be held
+    expect(hasOriginLock(origin)).toBe(true);
+
+    const [res1, res2] = await Promise.all([p1, p2]);
+
+    expect(acquired).toHaveLength(2);
+    expect(res1).toBeDefined();
+    expect(res2).toBeDefined();
+
+    // Critical assertion: req1 must have finished acquiring before req2 began acquiring!
+    expect(trace).toEqual([
+      'req1:acquire-start',
+      'req1:acquire-end',
+      'req2:acquire-start',
+      'req2:acquire-end',
+    ]);
+
+    // After completion, the origin lock must be completely cleaned up
+    expect(hasOriginLock(origin)).toBe(false);
+  });
+
+  it('cleans up origin lock and allows subsequent acquires when an acquire fails', async () => {
+    const { pool } = fakePool();
+    const origin = 'http://localhost:3000';
+    let failFirst = true;
+    const originalAcquire = pool.acquire.bind(pool);
+    pool.acquire = async (url, opts) => {
+      if (failFirst) {
+        failFirst = false;
+        throw new Error('Storage seeding failed: test failure');
+      }
+      return originalAcquire(url, opts);
+    };
+    const deps = { ...baseDeps, pool } as unknown as ToolDeps;
+
+    // First acquire fails
+    await expect(
+      tool(ReticleTool.LEASE_ACQUIRE)(deps, {
+        url: `${origin}/app`,
+        seedStorage: { local: { token: 'fail' } },
+      }),
+    ).rejects.toThrow('Storage seeding failed: test failure');
+
+    // Lock must be cleaned up despite the failure
+    expect(hasOriginLock(origin)).toBe(false);
+
+    // Second acquire on the same origin succeeds without being blocked or deadlocked
+    const second = (await tool(ReticleTool.LEASE_ACQUIRE)(deps, {
+      url: `${origin}/app`,
+      seedStorage: { local: { token: 'success' } },
+    })) as Record<string, unknown>;
+
+    expect(second['sessionId']).toBeDefined();
+    expect(hasOriginLock(origin)).toBe(false);
+  });
+
+  describe('credential redaction & seed precondition semantics', () => {
+    it('scrubSeedFromError redacts raw secret values and known secret patterns', () => {
+      const jwt =
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c';
+      const customSecret = 'SUPER_SECRET_COOKIE_VAL_123';
+      const seed = {
+        cookies: { session: customSecret },
+        local: { token: 'LOCAL_TOKEN_999' },
+      };
+
+      const errorMsg = `Error: failed to write cookie ${customSecret} with payload ${jwt} and local LOCAL_TOKEN_999`;
+      const scrubbed = scrubSeedFromError(errorMsg, seed);
+
+      expect(scrubbed).not.toContain(customSecret);
+      expect(scrubbed).not.toContain(jwt);
+      expect(scrubbed).not.toContain('LOCAL_TOKEN_999');
+      expect(scrubbed).toContain('[REDACTED]');
+    });
+
+    it('reticle_lease acquire scrubs secret values when cookie injection fails', async () => {
+      const secretToken = 'SECRET_TEST_TOKEN_AB12';
+      const { pool } = fakePool();
+      pool.acquire = () =>
+        Promise.reject(
+          new Error(
+            `Storage seeding failed: cookie injection failed (invalid cookie: ${secretToken})`,
+          ),
+        );
+      const deps = { ...baseDeps, pool } as unknown as ToolDeps;
+
+      try {
+        await tool(ReticleTool.LEASE_ACQUIRE)(deps, {
+          url: 'http://localhost:3000/',
+          seedStorage: { cookies: { auth: secretToken } },
+        });
+        expect.unreachable('should have thrown');
+      } catch (err: unknown) {
+        const msg = (err as Error).message;
+        expect(msg).toContain('Storage seeding failed');
+        expect(msg).not.toContain(secretToken);
+        expect(msg).toContain('[REDACTED]');
+      }
+    });
+
+    it('evaluateSeedPrecondition detects 401/403 status codes', () => {
+      const failure401 = evaluateSeedPrecondition(
+        'http://localhost:3000/dashboard',
+        'http://localhost:3000/dashboard',
+        { cookies: { token: 't' } },
+        401,
+      );
+      expect(failure401).toContain('HTTP 401');
+
+      const failure403 = evaluateSeedPrecondition(
+        'http://localhost:3000/dashboard',
+        'http://localhost:3000/dashboard',
+        { cookies: { token: 't' } },
+        403,
+      );
+      expect(failure403).toContain('HTTP 403');
+    });
+
+    it('evaluateSeedPrecondition detects cross-origin redirects when storage was seeded', () => {
+      const failure = evaluateSeedPrecondition(
+        'http://localhost:3000/app',
+        'https://auth.external.com/login',
+        { local: { key: 'val' } },
+        200,
+      );
+      expect(failure).toContain('cross-origin redirect');
+      expect(failure).toContain('skipped origin-scoped storage injection');
+    });
+
+    it('evaluateSeedPrecondition detects redirect to login endpoint when requested URL was not login', () => {
+      const failure = evaluateSeedPrecondition(
+        'http://localhost:3000/dashboard',
+        'http://localhost:3000/login',
+        { cookies: { auth: 'session' } },
+        200,
+      );
+      expect(failure).toContain('redirected from /dashboard to login page (/login)');
+    });
+
+    it('evaluateSeedPrecondition accepts normal application redirects (e.g. / -> /dashboard)', () => {
+      const ok = evaluateSeedPrecondition(
+        'http://localhost:3000/',
+        'http://localhost:3000/dashboard',
+        { cookies: { auth: 'session' } },
+        200,
+      );
+      expect(ok).toBeUndefined();
+    });
+
+    it('sets precondition failure on session and propagates to assertVerdict as UNKNOWN / INCONCLUSIVE', async () => {
+      let preconditionFailure: string | undefined;
+      const fakeSession = {
+        id: 'lease-test-1',
+        url: 'http://localhost:3000/login', // redirected to login!
+        setPreconditionFailure: (reason: string) => {
+          preconditionFailure = reason;
+        },
+        preconditionFailure: () => preconditionFailure,
+        blindSpots: () => ({}),
+        queryEvents: () => Promise.resolve([]),
+        lostSince: () => false,
+        lastAct: { cursor: () => 0, source: () => undefined },
+        hasCapabilities: true,
+        command: () =>
+          Promise.resolve({ ok: true, result: { matched: false, count: 0, elements: [] } }),
+        eventsSince: () => [],
+        onEvent: () => () => {},
+        elapsed: () => 100,
+      };
+
+      const { pool } = fakePool();
+      const deps = {
+        sessions: {
+          get: () => fakeSession,
+        },
+        pool,
+      } as unknown as ToolDeps;
+
+      // Acquire with seedStorage requested for /dashboard
+      const acquireResult = (await tool(ReticleTool.LEASE_ACQUIRE)(deps, {
+        url: 'http://localhost:3000/dashboard',
+        seedStorage: { cookies: { auth: 'cookie-val' } },
+      })) as { sessionId: string };
+
+      expect(acquireResult.sessionId).toBeDefined();
+      expect(fakeSession.preconditionFailure()).toContain(
+        'redirected from /dashboard to login page (/login)',
+      );
+
+      // Evaluate an assertion on this session that fails
+      const predicate: Predicate = { kind: 'element', query: { text: 'Dashboard Welcome' } };
+      const evalRes = await evaluatePredicate(
+        fakeSession as unknown as PredicateSession,
+        predicate,
+      );
+      expect(evalRes.pass).toBe(false);
+      expect(evalRes.inconclusive).toContain('seeded authentication precondition not established');
+
+      const verdict = await assertVerdict(
+        fakeSession as unknown as Session,
+        predicate,
+        evalRes.pass,
+        evalRes.evidence,
+        0,
+        evalRes.inconclusive,
+      );
+
+      expect(verdict.decision['verified']).toBe(Verified.UNKNOWN);
+      expect(verdict.decision['verifiedReason']).toBe(VerifiedReason.INCONCLUSIVE);
+      expect(verdict.decision['because']).toContain(
+        'seeded authentication precondition not established',
+      );
+    });
+
+    it('genuine workflow failure on authenticated session produces normal FAIL (NO / ASSERTION_FAILED)', async () => {
+      const fakeSession = {
+        id: 'lease-test-2',
+        url: 'http://localhost:3000/dashboard', // stays on dashboard!
+        setPreconditionFailure: () => {},
+        preconditionFailure: () => undefined, // Precondition succeeded
+        blindSpots: () => ({}),
+        queryEvents: () => Promise.resolve([]),
+        lostSince: () => false,
+        lastAct: { cursor: () => 0, source: () => undefined },
+        hasCapabilities: true,
+        command: () =>
+          Promise.resolve({ ok: true, result: { matched: false, count: 0, elements: [] } }),
+        eventsSince: () => [],
+        onEvent: () => () => {},
+        elapsed: () => 100,
+      };
+
+      const predicate: Predicate = { kind: 'element', query: { text: 'Missing Button' } };
+      const evalRes = await evaluatePredicate(
+        fakeSession as unknown as PredicateSession,
+        predicate,
+      );
+      expect(evalRes.pass).toBe(false);
+      expect(evalRes.inconclusive).toBeUndefined();
+
+      const verdict = await assertVerdict(
+        fakeSession as unknown as Session,
+        predicate,
+        evalRes.pass,
+        evalRes.evidence,
+        0,
+        evalRes.inconclusive,
+      );
+
+      expect(verdict.decision['verified']).toBe(Verified.NO);
+      expect(verdict.decision['verifiedReason']).toBe(VerifiedReason.ASSERTION_FAILED);
+      expect(verdict.decision['because']).toBe('the declared consequence did not hold');
+    });
   });
 });
