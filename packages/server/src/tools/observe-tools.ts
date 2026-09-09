@@ -19,6 +19,7 @@ import {
   httpStatusSchema,
   MCP_CALL_BUDGET_MS,
   timeoutMsSchema,
+  waitForTimeoutMsSchema,
   windowMsSchema,
 } from './numeric-bounds.js';
 import { buildReactionReport } from '../events/reaction.js';
@@ -280,10 +281,10 @@ export const OBSERVE_TOOLS: ToolDef[] = [
       ),
       // Same concept, the neighbouring tool's name. See alias-args.ts.
       until: PredicateSchema.optional().describe("Alias for `predicate` (act_and_wait's name)."),
-      timeout_ms: timeoutMsSchema
+      timeout_ms: waitForTimeoutMsSchema
         .optional()
         .describe(
-          `Maximum wait in milliseconds. Default: 4000. Values above ${String(MCP_CALL_BUDGET_MS)} are honoured across multiple calls: when this call times out before the predicate is seen, resume_ms carries the remaining budget — call reticle_wait_for again with the same predicate, the same since, and timeout_ms set to resume_ms.`,
+          `Maximum wait in milliseconds. Default: 4000. Accepts higher values than reticle_assert/reticle_act_and_wait because this tool never blocks the request past the per-call limit (${String(MCP_CALL_BUDGET_MS)} ms): when the budget is reached before the predicate is seen, resume_ms carries the remaining budget and the caller re-invokes. Values above ${String(MCP_CALL_BUDGET_MS)} are therefore honoured across multiple calls without holding the transport open that long.`,
         ),
       since: cursorSchema
         .optional()

@@ -7,6 +7,7 @@ import { z, type ZodTypeAny } from 'zod';
 import { ReticleTool } from './tool-names.js';
 import { RAW_TOOLS, TOOLS } from './tools.js';
 import {
+  MAX_BLOCKING_WAIT_MS,
   MAX_RESULT_COUNT,
   MAX_STATE_DEPTH,
   MAX_TIMEOUT_MS,
@@ -15,6 +16,7 @@ import {
   depthSchema,
   ratioSchema,
   timeoutMsSchema,
+  waitForTimeoutMsSchema,
 } from './numeric-bounds.js';
 
 function inputShape(name: string): z.ZodRawShape {
@@ -88,10 +90,28 @@ describe('numeric bound helpers', () => {
     expect(countSchema.safeParse(1e9).success).toBe(false);
   });
 
-  it('timeout_ms: 0 is evaluate-now; a hang-length wait is refused', () => {
+  it('timeout_ms: 0 is evaluate-now; values above MAX_BLOCKING_WAIT_MS are refused', () => {
     expect(timeoutMsSchema.safeParse(0).success).toBe(true);
     expect(timeoutMsSchema.safeParse(-1).success).toBe(false);
-    expect(timeoutMsSchema.safeParse(MAX_TIMEOUT_MS + 1).success).toBe(false);
+    expect(timeoutMsSchema.safeParse(MAX_BLOCKING_WAIT_MS).success).toBe(true);
+    expect(timeoutMsSchema.safeParse(MAX_BLOCKING_WAIT_MS + 1).success).toBe(false);
+  });
+
+  it('waitForTimeoutMsSchema accepts values above MAX_BLOCKING_WAIT_MS (wait_for can chunk)', () => {
+    expect(waitForTimeoutMsSchema.safeParse(0).success).toBe(true);
+    expect(waitForTimeoutMsSchema.safeParse(-1).success).toBe(false);
+    // The key assertion: wait_for accepts values a blocking tool cannot honour
+    expect(waitForTimeoutMsSchema.safeParse(MAX_BLOCKING_WAIT_MS + 1).success).toBe(true);
+    expect(waitForTimeoutMsSchema.safeParse(MAX_TIMEOUT_MS).success).toBe(true);
+    expect(waitForTimeoutMsSchema.safeParse(MAX_TIMEOUT_MS + 1).success).toBe(false);
+  });
+
+  it('reticle_wait_for timeout_ms accepts values above MAX_BLOCKING_WAIT_MS', () => {
+    const shape = inputShape(ReticleTool.WAIT_FOR);
+    // This would be dead code if the schema were bounded by MAX_BLOCKING_WAIT_MS
+    expect(parseField(shape, 'timeout_ms', MAX_BLOCKING_WAIT_MS + 1).success).toBe(true);
+    expect(parseField(shape, 'timeout_ms', MAX_TIMEOUT_MS).success).toBe(true);
+    expect(parseField(shape, 'timeout_ms', MAX_TIMEOUT_MS + 1).success).toBe(false);
   });
 
   it('since: 0 is a real cursor; a negative is not', () => {
