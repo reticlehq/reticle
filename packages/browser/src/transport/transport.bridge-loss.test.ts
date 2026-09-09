@@ -6,6 +6,7 @@ import {
   type HelloMessage,
 } from '@reticlehq/core';
 import { Transport } from './transport.js';
+import { at } from '../test-support/array-at.js';
 
 /**
  * A controllable WebSocket double. Construction is captured so the test can drive open/close and
@@ -90,7 +91,7 @@ describe('transport bridge-loss self-end', () => {
     // First socket never opens; it closes → schedules reconnect. Drive several failed reconnects
     // while advancing the injected clock past the loss threshold.
     for (let i = 0; i < 20; i += 1) {
-      FakeWebSocket.instances.at(-1)?.close();
+      at(FakeWebSocket.instances, -1)?.close();
       now += 1000;
       pending.shift()?.(); // the retry runs and opens a NEW socket to fail next round
     }
@@ -107,7 +108,7 @@ describe('transport bridge-loss self-end', () => {
       schedule: (fn) => void pending.push(fn),
     });
     t.connect();
-    const ws = FakeWebSocket.instances.at(-1);
+    const ws = at(FakeWebSocket.instances, -1);
     // Socket not open yet → events queue. Send MAX_QUEUE (500) + 3 so 3 must be dropped.
     for (let i = 0; i < 503; i += 1) {
       t.sendEvent({ t: i, type: EventType.DOM_ADDED, sessionId: 's', data: { seq: i } });
@@ -116,7 +117,7 @@ describe('transport bridge-loss self-end', () => {
     const events = (ws?.sent ?? []).filter((m) => m.includes('"seq":'));
     expect(events).toHaveLength(500);
     expect(events[0]).toContain('"seq":3}'); // 0,1,2 dropped (oldest)
-    expect(events.at(-1)).toContain('"seq":502}'); // newest kept
+    expect(at(events, -1)).toContain('"seq":502}'); // newest kept
   });
 
   it('does NOT fire onConnectionLost when reconnection succeeds quickly', () => {
@@ -133,10 +134,10 @@ describe('transport bridge-loss self-end', () => {
     });
     t.connect();
 
-    FakeWebSocket.instances.at(-1)?.close(); // brief blip
+    at(FakeWebSocket.instances, -1)?.close(); // brief blip
     now += 1000;
     pending.shift()?.();
-    FakeWebSocket.instances.at(-1)?.open(); // reconnected well within the window
+    at(FakeWebSocket.instances, -1)?.open(); // reconnected well within the window
 
     expect(lost).toBe(0);
   });
@@ -156,7 +157,7 @@ describe('transport bridge-loss self-end', () => {
     t.connect();
 
     for (let i = 0; i < 40; i += 1) {
-      FakeWebSocket.instances.at(-1)?.close();
+      at(FakeWebSocket.instances, -1)?.close();
       now += 1000;
       pending.shift()?.(); // the retry runs and opens a NEW socket to fail next round
     }

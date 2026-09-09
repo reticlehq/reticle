@@ -20,6 +20,7 @@ import {
 import { buildSnapshot } from '../dom/snapshot.js';
 import { isReticleOverlay } from '../dom/dom-ignore.js';
 import { registerCapabilities } from '../registry/capabilities.js';
+import { at } from '../test-support/array-at.js';
 
 const NOW = 1000;
 
@@ -380,7 +381,10 @@ describe('recorder annotate flow (interactive)', () => {
     toolbarButton('annotate-confirm').click();
     clickStop();
 
-    const recorded = emits.filter((e) => e.type === EventType.FLOW_RECORDED).at(-1);
+    const recorded = at(
+      emits.filter((e) => e.type === EventType.FLOW_RECORDED),
+      -1,
+    );
     const flow = RecordedFlowSchema.parse(recorded?.data).flow;
     expect(flow.steps[0]?.expect?.signal).toBe('diff:shown');
   });

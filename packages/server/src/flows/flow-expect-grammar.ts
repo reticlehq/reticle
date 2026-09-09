@@ -14,6 +14,7 @@
 import { FlowErrorCode, FlowFileSchema, type FlowFile } from '@reticlehq/core';
 import type { ZodError } from 'zod';
 import { PredicateSchema } from '../events/predicate.js';
+import { asServerZodError } from '../schema-interop.js';
 import { predicateToExpect } from './predicate-to-expect.js';
 import type { FlowResult } from './flows.js';
 
@@ -152,7 +153,7 @@ export function parseFlowFileText(text: string): FlowResult<FlowFile> {
     return {
       ok: false,
       code: FlowErrorCode.PARSE_FAILED,
-      detail: describeFlowZodFailure(result.error),
+      detail: describeFlowZodFailure(asServerZodError(result.error)),
     };
   }
   return { ok: true, value: result.data };

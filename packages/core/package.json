@@ -30,10 +30,10 @@
     "prepack": "tsc -b && node scripts/gen-schema.mjs && node scripts/gen-desktop-contract.mjs && node scripts/gen-source-constants.mjs && node ../../scripts/prepare-dist.mjs dist"
   },
   "dependencies": {
-    "zod": "^3.24.1"
+    "zod": "3.22.4"
   },
   "devDependencies": {
-    "zod-to-json-schema": "^3.24.0"
+    "zod-to-json-schema": "3.22.4"
   },
   "license": "Apache-2.0",
   "author": "Reticle contributors",

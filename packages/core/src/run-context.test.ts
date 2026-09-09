@@ -91,7 +91,7 @@ describe('foldEstablished', () => {
     );
     const out = foldEstablished([], many, 'd3', undefined);
     expect(out).toHaveLength(RUN_ESTABLISHED_CAP);
-    expect(out.at(-1)?.key).toBe(`k${String(RUN_ESTABLISHED_CAP + 4)}`);
+    expect(out[out.length - 1]?.key).toBe(`k${String(RUN_ESTABLISHED_CAP + 4)}`);
   });
 
   /**

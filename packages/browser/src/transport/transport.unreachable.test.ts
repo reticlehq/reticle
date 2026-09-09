@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { RETICLE_PROTOCOL_VERSION, MessageKind, type HelloMessage } from '@reticlehq/core';
 import { Transport } from './transport.js';
+import { at } from '../test-support/array-at.js';
 
 /**
  * The "unreachable" first-connect warning: when the very first connection never opens (wrong port,
@@ -74,7 +75,7 @@ beforeEach(() => {
 
 function failNTimes(n: number): void {
   for (let i = 0; i < n; i += 1) {
-    FakeWebSocket.instances.at(-1)?.close();
+    at(FakeWebSocket.instances, -1)?.close();
     // Run the retry the transport scheduled. Without this the next iteration re-closes a socket
     // that is already closed, which is what made this spec pass against a broken retry loop.
     pending.shift()?.();
@@ -111,9 +112,9 @@ describe('transport unreachable (first-connect) warning', () => {
     });
     t.connect();
 
-    FakeWebSocket.instances.at(-1)?.close(); // 1 blip
+    at(FakeWebSocket.instances, -1)?.close(); // 1 blip
     pending.shift()?.(); // the retry runs and opens a NEW socket
-    FakeWebSocket.instances.at(-1)?.open(); // connected before the 3rd failure
+    at(FakeWebSocket.instances, -1)?.open(); // connected before the 3rd failure
 
     expect(calls).toHaveLength(0);
   });
@@ -129,7 +130,7 @@ describe('transport unreachable (first-connect) warning', () => {
     });
     t.connect();
 
-    FakeWebSocket.instances.at(-1)?.open(); // a real connection happened
+    at(FakeWebSocket.instances, -1)?.open(); // a real connection happened
     failNTimes(10); // now the bridge goes away for a long time
 
     expect(calls).toHaveLength(0); // never an "unreachable" — it WAS reachable

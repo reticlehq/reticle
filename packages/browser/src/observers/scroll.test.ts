@@ -2,6 +2,7 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { EventType } from '@reticlehq/core';
 import { installScroll } from './scroll.js';
 import type { Teardown } from './types.js';
+import { at } from '../test-support/array-at.js';
 
 interface Captured {
   type: EventType;
@@ -30,7 +31,7 @@ describe('installScroll — trailing edge captures the resting position', () => 
     window.dispatchEvent(new Event('scroll')); // within the throttle window → schedules a trailing emit
 
     const positions = (): Captured[] => events.filter((e) => e.type === EventType.SCROLL_POSITION);
-    expect(positions().at(-1)?.data['y']).toBe(100); // only the leading sample so far
+    expect(at(positions(), -1)?.data['y']).toBe(100); // only the leading sample so far
 
     // Poll for the trailing emit rather than sleeping past it. A fixed `setTimeout(160)` is a
     // statement about the MACHINE: it passed alone and failed inside the full unit gate, where the
@@ -38,12 +39,12 @@ describe('installScroll — trailing edge captures the resting position', () => 
     // resting position eventually arrives, not that it arrives within 160ms — see the note on
     // timing assertions in CLAUDE.md.
     const deadline = Date.now() + 5000;
-    while (positions().at(-1)?.data['y'] !== 500 && Date.now() < deadline) {
+    while (at(positions(), -1)?.data['y'] !== 500 && Date.now() < deadline) {
       await new Promise((r) => setTimeout(r, 10));
     }
 
     // The resting position (500) must be reported — a leading-only throttle dropped it entirely.
-    expect(positions().at(-1)?.data['y']).toBe(500);
+    expect(at(positions(), -1)?.data['y']).toBe(500);
   });
 
   it('teardown removes the scroll listener', () => {

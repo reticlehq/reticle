@@ -12,6 +12,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { FLOW_FILE_VERSION, FlowErrorCode, FlowFileSchema } from '@reticlehq/core';
+import { asServerZodError } from '../schema-interop.js';
 import {
   FlowParseNote,
   coerceFlowExpect,
@@ -138,7 +139,7 @@ describe('describeFlowZodFailure', () => {
     );
     expect(result.success).toBe(false);
     if (result.success) throw new Error('expected schema failure');
-    const detail = describeFlowZodFailure(result.error);
+    const detail = describeFlowZodFailure(asServerZodError(result.error));
     expect(detail).toContain(FlowParseNote.UNSUPPORTED_SHAPE);
     expect(detail).toContain('step 0');
     expect(detail).toContain('signal');

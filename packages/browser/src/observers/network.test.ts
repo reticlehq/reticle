@@ -9,6 +9,7 @@ import {
 } from './network.js';
 import type { Emit, Teardown } from './types.js';
 import { requireCapturedMethod } from '../util/captured-method.js';
+import { at } from '../test-support/array-at.js';
 
 interface Emitted {
   type: EventType;
@@ -31,7 +32,10 @@ function collect(): { emit: Emit; events: Emitted[] } {
  * tests that were not about blind spots at all. Position is not part of the contract; type is.
  */
 function eventOf(events: Emitted[], type: EventType): Record<string, unknown> {
-  const hit = events.filter((e) => e.type === type).at(-1);
+  const hit = at(
+    events.filter((e) => e.type === type),
+    -1,
+  );
   if (hit === undefined)
     throw new Error(`no ${type} event emitted (got: ${events.map((e) => e.type).join(', ')})`);
   return hit.data;
@@ -613,7 +617,10 @@ describe('installNetwork (WebSocket / SSE frames, Network 1f)', () => {
     const ws = new window.WebSocket('ws://localhost:8787/live') as unknown as FakeWebSocket;
     ws.dispatch('message', { data: new ArrayBuffer(24) });
     teardown();
-    const inbound = events.filter((e) => e.type === EventType.NET_STREAM).at(-1);
+    const inbound = at(
+      events.filter((e) => e.type === EventType.NET_STREAM),
+      -1,
+    );
     expect(inbound?.data['frameType']).toBe('binary');
     expect(inbound?.data['frameBytes']).toBe(24);
   });
@@ -819,7 +826,7 @@ describe('document-initiated subresources (PerformanceObserver)', () => {
     teardown = installNetwork(emit);
     expect(observedTypes).toContain('resource');
 
-    const cb = FakePO.instances.at(0)?.callback;
+    const cb = at(FakePO.instances, 0)?.callback;
     if (cb === undefined) throw new Error('observer callback missing');
     cb({
       getEntries: () => [
@@ -850,7 +857,7 @@ describe('document-initiated subresources (PerformanceObserver)', () => {
     teardown = installNetwork(emit);
     const entry = fakeEntry('img', 'https://app.test/hero.png');
     delete (entry as unknown as Record<string, unknown>).responseStatus;
-    FakePO.instances.at(0)?.callback({ getEntries: () => [entry] });
+    at(FakePO.instances, 0)?.callback({ getEntries: () => [entry] });
 
     const net = events.find((e) => e.type === EventType.NET_REQUEST);
     expect(net).toBeDefined();
@@ -863,7 +870,7 @@ describe('document-initiated subresources (PerformanceObserver)', () => {
   it('disconnects the observer on teardown', () => {
     const { emit } = collect();
     teardown = installNetwork(emit);
-    const po = FakePO.instances.at(0);
+    const po = at(FakePO.instances, 0);
     expect(po).toBeDefined();
     teardown?.();
     teardown = undefined;

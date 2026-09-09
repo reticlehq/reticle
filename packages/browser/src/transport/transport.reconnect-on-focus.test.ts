@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { RETICLE_PROTOCOL_VERSION, MessageKind, type HelloMessage } from '@reticlehq/core';
 import { Transport } from './transport.js';
+import { at } from '../test-support/array-at.js';
 
 /** Controllable WebSocket double — captures every instance so the test can count reconnects. */
 class FakeWebSocket {
@@ -71,8 +72,8 @@ describe('transport reconnect-on-focus', () => {
   it('reconnects immediately on foreground, WITHOUT waiting for the throttled timer', () => {
     const t = makeTransport();
     t.connect();
-    FakeWebSocket.instances.at(-1)?.open(); // connected
-    FakeWebSocket.instances.at(-1)?.close(); // bridge blip while (soon) hidden
+    at(FakeWebSocket.instances, -1)?.open(); // connected
+    at(FakeWebSocket.instances, -1)?.close(); // bridge blip while (soon) hidden
     expect(FakeWebSocket.instances).toHaveLength(1); // timer NOT advanced → no retry yet
 
     becomeVisible(); // tab returns to foreground
@@ -82,7 +83,7 @@ describe('transport reconnect-on-focus', () => {
   it('does not open a duplicate when already connected', () => {
     const t = makeTransport();
     t.connect();
-    FakeWebSocket.instances.at(-1)?.open();
+    at(FakeWebSocket.instances, -1)?.open();
     becomeVisible(); // focus while healthy
     expect(FakeWebSocket.instances).toHaveLength(1);
   });
@@ -90,7 +91,7 @@ describe('transport reconnect-on-focus', () => {
   it('does not open a duplicate when the throttled timer fires after a focus reconnect', () => {
     const t = makeTransport();
     t.connect();
-    FakeWebSocket.instances.at(-1)?.close(); // down
+    at(FakeWebSocket.instances, -1)?.close(); // down
     becomeVisible(); // focus reconnect beats the timer
     expect(FakeWebSocket.instances).toHaveLength(2);
     vi.advanceTimersByTime(1000); // the throttled reconnect timer now fires
@@ -100,7 +101,7 @@ describe('transport reconnect-on-focus', () => {
   it('stops reconnecting on foreground once closed (unsubscribes)', () => {
     const t = makeTransport();
     t.connect();
-    FakeWebSocket.instances.at(-1)?.open();
+    at(FakeWebSocket.instances, -1)?.open();
     t.close();
     expect(unsubscribed).toBe(1);
     becomeVisible(); // a late visibility event after teardown
