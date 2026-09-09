@@ -70,8 +70,20 @@ function wrapBrowser(browser: Browser): PooledBrowser {
               page.on('dialog', (dialog) =>
                 handler({ message: dialog.message(), dismiss: () => dialog.dismiss() }),
               ),
+            addInitScript: async (script, arg) => {
+              const handle = (await page.addInitScript(script as never, arg)) as
+                { dispose?: () => Promise<void> } | undefined;
+              const dispose = handle?.dispose;
+              if ('function' !== typeof dispose) {
+                throw new Error(
+                  'Storage seeding failed: Playwright page.addInitScript did not return a disposable handle',
+                );
+              }
+              return { dispose: () => dispose() };
+            },
           };
         },
+        addCookies: (cookies) => context.addCookies(cookies),
         close: () => context.close(),
       };
     },

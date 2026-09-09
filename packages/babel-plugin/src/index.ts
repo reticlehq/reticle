@@ -1,6 +1,7 @@
 import { relative } from 'node:path';
 import type { PluginObj, PluginPass, types as BabelTypes } from '@babel/core';
 import { DATA_RETICLE_SOURCE_ATTR } from '@reticlehq/core/source-constants';
+import { isDomTag } from './dom-tags.js';
 
 const SOURCE_ATTR = DATA_RETICLE_SOURCE_ATTR;
 
@@ -27,8 +28,14 @@ function reticleSourcePlugin({ types: t }: PluginApi): PluginObj<PluginPass> {
         const node = path.node;
         // Host elements only (e.g. <div>, <button>) — skip components (<App />).
         if (node.name.type !== 'JSXIdentifier') return;
-        const first = node.name.name[0];
+        const tag = node.name.name;
+        const first = tag[0];
         if (first === undefined || first !== first.toLowerCase()) return;
+        // ...and only host elements that are DOM. React is a reconciler interface, so a lowercase
+        // intrinsic can belong to react-three-fiber, react-pdf or ink, whose host instances are not
+        // nodes. R3F reads a dashed prop as a pierced property path and throws from the commit
+        // phase, which unmounts the entire app to a white screen. See dom-tags.ts.
+        if (!isDomTag(tag)) return;
 
         const alreadyStamped = node.attributes.some(
           (attr) =>
