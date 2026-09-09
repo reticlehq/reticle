@@ -308,6 +308,41 @@ describe('desktop injection is loud in dev too, not only in build', () => {
     expect(text).toMatch(/cache/i);
   });
 
+  /**
+   * The web case, and the one that actually cost users.
+   *
+   * On the web the connect script is added by `transformIndexHtml`. Several frameworks render their
+   * own HTML and never call that hook at all — SvelteKit, Nuxt, Astro, React Router in framework
+   * mode, TanStack Start. When that happens the script is never added, the app never connects, and
+   * the plugin used to say nothing whatsoever.
+   *
+   * It could not have said anything: the old warning's timer was started INSIDE
+   * `transformIndexHtml`, so a hook that never runs also never starts the timer. The check was
+   * unreachable in precisely the situation it existed for.
+   */
+  it('warns on the web when the HTML hook never ran at all', () => {
+    const warnings: string[] = [];
+    const plugin = reticle({ onWarn: (m) => warnings.push(m) });
+    plugin.configResolved?.({ root: '/app', command: 'serve' });
+    // transformIndexHtml is deliberately NOT called — this is the framework-owns-its-HTML case.
+    plugin.checkHtmlHookForTest?.();
+    const text = warnings.join(' ');
+    expect(text, 'the user must be told the app will not connect').toMatch(
+      /never connect|no session/i,
+    );
+    // Name the likely cause in plain words, so the fix is obvious without reading our source.
+    expect(text).toMatch(/renders its own HTML|owns its HTML/i);
+  });
+
+  it('stays quiet on the web once the HTML hook has run', () => {
+    const warnings: string[] = [];
+    const plugin = reticle({ onWarn: (m) => warnings.push(m) });
+    plugin.configResolved?.({ root: '/app', command: 'serve' });
+    plugin.transformIndexHtml('<html></html>');
+    plugin.checkHtmlHookForTest?.();
+    expect(warnings).toEqual([]);
+  });
+
   it('stays quiet when the entry was injected', () => {
     const warnings: string[] = [];
     const plugin = reticle({ desktop: true, onWarn: (m) => warnings.push(m) });

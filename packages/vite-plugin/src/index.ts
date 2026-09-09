@@ -27,7 +27,15 @@ import {
   optimizerOptions,
 } from './installed.js';
 
-export const RETICLE_VITE_PLUGIN_NAME = 'reticle';
+import {
+  DEV_INJECTION_GRACE_MS,
+  htmlHookNeverRanMessage,
+  notInjectedMessage,
+  unconfirmedInjectionMessage,
+} from './injection-postcondition.js';
+import { RETICLE_VITE_PLUGIN_NAME } from './plugin-name.js';
+
+export { RETICLE_VITE_PLUGIN_NAME } from './plugin-name.js';
 
 // The React kit the host app imports the SDK from. It re-exports the browser sensor, so a single
 // specifier yields both `reticle` (connect) and `install` (the React adapter). NOT `@reticlehq/core`
@@ -104,14 +112,6 @@ onScheduleFiberRoot:function(){},onCommitFiberRoot:fire,onPostCommitFiberRoot:fu
 }else{var prev=h.onCommitFiberRoot;h.onCommitFiberRoot=function(){try{fire.apply(null,arguments);}catch(e){}
 if(typeof prev==='function')return prev.apply(this,arguments);};}
 }catch(e){}})();`;
-
-/**
- * How long after serving the HTML to wait before concluding the entry was never injected.
- *
- * Generous on purpose: the browser has to request the entry, and a cold dev server transforming a
- * large app can take a moment. A false warning would train people to ignore a real one.
- */
-const DEV_INJECTION_GRACE_MS = 10_000;
 
 /**
  * How many times the connect module's source may legitimately change in one dev-server session
@@ -322,6 +322,7 @@ export interface ReticleVitePlugin {
   buildEnd?: () => void;
   /** Runs the dev-mode injection check immediately. Test seam for the deferred timer. */
   checkInjectedForTest?: () => void;
+  checkHtmlHookForTest?: () => void;
 }
 
 /**
@@ -658,6 +659,14 @@ export function reticle(options: ReticleVitePluginOptions = {}): ReticleVitePlug
   /** Whether connect() actually reached a module — asserted at buildEnd, never assumed. */
   let injected = false;
   /**
+   * Whether Vite ever asked us to transform the app's HTML.
+   *
+   * On the web this is how the connect script gets in, so "this never happened" and "this app will
+   * not connect" are the same statement — which is what makes a warning safe here, unlike the
+   * desktop entry-module flag above.
+   */
+  let htmlTransformed = false;
+  /**
    * Resolve port + token at the moment of injection, not at plugin construction. By the time a
    * module is served or built the daemon is up and has written its pairing token; resolving early
    * would bake in `undefined` and the app would fail auth on every connect.
@@ -684,35 +693,16 @@ export function reticle(options: ReticleVitePluginOptions = {}): ReticleVitePlug
   let lastServedConnectSource: string | undefined;
   /** How many times the served source has actually changed. See connectChurnWarning. */
   let connectChanges = 0;
-  /**
-   * The BUILD message. A build always runs every transform, so "my transform never ran" and "the
-   * bundle has no connect()" are the same statement there, and stating it as a certainty is correct.
-   */
-  const notInjectedMessage = (): string =>
-    `[${RETICLE_VITE_PLUGIN_NAME}] could not inject reticle.connect(): the HTML entry module was ` +
-    'never matched, so this app carries no instrumentation and will never connect. Check that ' +
-    'index.html references your entry with a <script type="module" src="...">, or pass ' +
-    '`inject: false` and call reticle.connect({ token: __RETICLE_TOKEN__ }) yourself. The plugin ' +
-    'still inlines that define; a connect without it is refused.';
 
   /**
-   * The DEV message, which must be weaker — and this is the whole reason the two are separate.
-   *
-   * In serve, `injected` records "my transform ran THIS session", which is not the same as "the app
-   * has no connect()". Vite serves an unchanged module straight from its transform cache, so on a
-   * warm cache the transform never runs, the flag stays false, and the old wording announced that
-   * the app "will never connect" while the served entry demonstrably contained the injection —
-   * verified by fetching it from the dev server. A false alarm, in the tool whose entire argument is
-   * that it does not raise them.
-   *
-   * So dev reports what it actually knows: unconfirmed, with the benign explanation first.
+   * Warn when the HTML hook never ran. Scheduled from `configureServer`, NOT from
+   * `transformIndexHtml` — the desktop check below is armed inside that hook, which means a hook
+   * that never runs also never arms it, and the check is unreachable in exactly the case it is for.
    */
-  const unconfirmedInjectionMessage = (): string =>
-    `[${RETICLE_VITE_PLUGIN_NAME}] could not confirm reticle.connect() was injected: the HTML entry ` +
-    'module was not transformed this session. That is expected when Vite served it from its ' +
-    'transform cache. If the app does not appear in `reticle status`, restart the dev server with ' +
-    '`--force` to bypass the cache, then check that index.html references your entry with a ' +
-    '<script type="module" src="...">.';
+  const checkHtmlHookRan = (): void => {
+    if (desktop || !inject || htmlTransformed) return;
+    warn(htmlHookNeverRanMessage());
+  };
 
   /** Warn (never throw) in dev — a running dev server should report the doubt, not die of it. */
   const checkInjected = (): void => {
@@ -895,6 +885,16 @@ export function reticle(options: ReticleVitePluginOptions = {}): ReticleVitePlug
      */
     configureServer(server) {
       if (!inject) return;
+      // Arm the web post-condition HERE rather than in `transformIndexHtml`.
+      //
+      // This is the whole point: if the framework renders its own HTML, that hook never runs — so a
+      // timer started inside it would never be started either, and the app fails silently. Anchoring
+      // to the server means the check fires whether or not the hook was ever called. Unref'd so a
+      // dev server is never held open by it.
+      if (!desktop) {
+        const htmlTimer = setTimeout(checkHtmlHookRan, DEV_INJECTION_GRACE_MS);
+        (htmlTimer as { unref?: () => void }).unref?.();
+      }
       // Tell `~/.reticle` this dev server exists, the moment it is actually listening.
       //
       // This is the one fact nobody outside this process could observe: the plugin is loaded in the
@@ -964,7 +964,9 @@ export function reticle(options: ReticleVitePluginOptions = {}): ReticleVitePlug
       throw new Error(notInjectedMessage());
     },
     checkInjectedForTest: checkInjected,
+    checkHtmlHookForTest: checkHtmlHookRan,
     transformIndexHtml() {
+      htmlTransformed = true;
       // In serve, the HTML is sent BEFORE the browser requests the entry module, so the check has to
       // be deferred — asserting here would fire on every healthy start. Unref'd so a dev server is
       // never held open by it.
