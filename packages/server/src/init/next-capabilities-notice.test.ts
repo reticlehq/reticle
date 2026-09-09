@@ -31,6 +31,7 @@ function input(partial: Partial<PlanInput>): PlanInput {
       typescript: true,
       reactMajor: 18,
       needsSourceMapping: true,
+      nonDomReconciler: false,
       packageManager: PackageManager.PNPM,
     } satisfies Detection,
     claudeCli: true,

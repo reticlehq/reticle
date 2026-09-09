@@ -641,3 +641,33 @@ describe('parseCliArgs — the browser is visible unless something says otherwis
     expect(headlessOf(parseCliArgs(['verify', URL, '--headed'], PORT))).toBe(false);
   });
 });
+
+/**
+ * `<command> --help` is the first thing anybody types, and it answered with an error.
+ *
+ * From a field install transcript: the very first Reticle command run was
+ * `npx @reticlehq/server@latest init --help`, and it produced
+ * `{"event":"reticle_usage_error","message":"unknown argument '--help'"}` on stderr with exit 1 —
+ * because `--help` was recognised only in first position, so anywhere else it reached the
+ * subcommand's own flag parser. The usage text WAS printed underneath, so the question was answered;
+ * it was answered as a failure, which is a poor first impression and reads like a broken install.
+ */
+describe('--help anywhere in the command line', () => {
+  it('answers `init --help` with usage rather than an unknown-argument error', () => {
+    expect(parseCliArgs(['init', '--help'], 4400).kind).toBe('help');
+  });
+
+  it('answers the short flag the same way', () => {
+    expect(parseCliArgs(['init', '-h'], 4400).kind).toBe('help');
+  });
+
+  it('works for every other subcommand too — it is a property of the CLI, not of init', () => {
+    for (const cmd of ['serve', 'status', 'link', 'verify']) {
+      expect(parseCliArgs([cmd, '--help'], 4400).kind).toBe('help');
+    }
+  });
+
+  it('still parses a command that did not ask for help', () => {
+    expect(parseCliArgs(['init', '--dry-run'], 4400).kind).toBe('init');
+  });
+});

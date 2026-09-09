@@ -74,3 +74,37 @@ describe('why the bridge refused', () => {
     expect(Buffer.byteLength(reason, 'utf8')).toBeLessThanOrEqual(123);
   });
 });
+
+/**
+ * A wrong token that the page really did present is the containerised-dev-server signature.
+ *
+ * Measured in the field: a Vite server in Docker, the daemon on the host. The plugin reads-or-mints
+ * the token from `$HOME/.reticle`, which inside the container is the image's throwaway root — so it
+ * minted its own, inlined it, and the bridge refused every page. `authentication failed` sends the
+ * reader to check a token that is present, well-formed and simply from the wrong filesystem, and it
+ * cost six minutes and a grep through `dist/` to find `RETICLE_PAIRING_TOKEN_DIR`.
+ *
+ * The close reason is capped at 123 bytes, so it names the fact and the command that explains it;
+ * `reticle status` carries the diagnosis and the fix.
+ */
+describe('a token that was presented and did not match', () => {
+  const reason = (): string => authFailureReason(new Set(), 'proj-xyz', 'a-token-from-elsewhere');
+
+  it('says the token is wrong, not merely that authentication failed', () => {
+    expect(reason()).toContain('pairing token');
+  });
+
+  it('names the command that explains why', () => {
+    expect(reason()).toContain('reticle status');
+  });
+
+  it('fits the WebSocket close-reason cap, or it closes with nothing at all', () => {
+    expect(Buffer.byteLength(reason(), 'utf8')).toBeLessThanOrEqual(123);
+  });
+
+  it('still yields to the different-project diagnosis, which is more specific', () => {
+    expect(authFailureReason(new Set(['proj-abc']), 'proj-xyz', 'tok')).toContain(
+      'different project',
+    );
+  });
+});

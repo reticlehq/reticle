@@ -13,7 +13,7 @@
  * Pure. The facts arrive from the watch; nothing here touches the disk or the clock.
  */
 
-import { NoSessionAction } from '@reticlehq/core';
+import { NoSessionAction, ReticleEnv } from '@reticlehq/core';
 import type { DevCommand } from './dev-command.js';
 
 /** The executable half of the no-session payload. */
@@ -178,6 +178,32 @@ export function nextActionFor(facts: NextActionFacts): NoSessionNextAction {
   // `.reticle.json` in the ONE directory this daemon stands in". A globally-registered daemon stands
   // in `/` or `$HOME`, so that answer is no for every project it serves -- and every page it turns
   // away is proof that the project it turned away is wired.
+  // A refusal against a project that IS initialised here. The daemon has the config, so this is not
+  // a scope problem — the page reached the right daemon and presented a credential it would not
+  // accept. Measured in the field on a Vite server inside Docker with the daemon on the host: the
+  // plugin reads-or-mints the pairing token from `$HOME/.reticle`, which inside the container is the
+  // image's throwaway root, so it minted its own and every page was refused. `authentication failed`
+  // named nothing, `status` said `sessionCount: 0` and nothing else, and the cause was found by
+  // grepping the plugin's `dist/` inside the container for an environment variable that appears in
+  // no documentation. Six minutes, for a fact the daemon held the whole time.
+  if (true === facts.initialized && true === facts.authRefused) {
+    return {
+      action: NoSessionAction.OPEN_APP,
+      ...(only === undefined ? {} : { port: only }),
+      reason:
+        `a page dialled this daemon and was refused on the pairing token (${ports} listening), so ` +
+        'the app IS running and instrumented and this project IS wired — the page simply presented ' +
+        'a token this daemon does not own. The usual cause is a dev server that does not share a ' +
+        'filesystem with the daemon (Docker, a devcontainer, WSL): the build plugin reads the token ' +
+        'from `$HOME/.reticle/pairing-token`, which over there is a different file, so it mints its ' +
+        "own. Point the plugin at the daemon's copy — mount `~/.reticle/pairing-token` into the " +
+        `container read-only and set \`${ReticleEnv.PAIRING_TOKEN_DIR}\` to the directory holding ` +
+        'it — then ' +
+        'restart the dev server, because the token is inlined when Vite resolves its config. If the ' +
+        'dev server IS on this machine, the page is older than the current token: hard-reload it.',
+    };
+  }
+
   if (!facts.initialized && true === facts.authRefused) {
     return {
       action: NoSessionAction.OPEN_APP,

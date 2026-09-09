@@ -16,6 +16,7 @@ function detection(framework: Framework): Detection {
     typescript: true,
     reactMajor: 19,
     needsSourceMapping: true,
+    nonDomReconciler: false,
     packageManager: PackageManager.PNPM,
   };
 }

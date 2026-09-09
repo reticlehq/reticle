@@ -22,6 +22,14 @@
  */
 
 const PLAIN = 'authentication failed';
+/**
+ * A token WAS presented and did not match. That is not "check your credentials" — the page holds a
+ * real token from a state directory this daemon does not own, which in the field means a dev server
+ * that does not share a filesystem with the daemon (container, devcontainer, WSL), or a page served
+ * before `~/.reticle` was replaced. Both need the same first move: ask `status`, which can say which.
+ */
+const WRONG_TOKEN =
+  'authentication failed: wrong pairing token — run `reticle status` for the cause';
 /** A paste-in snippet or a Next config that never saw a token. Reload cannot mint one. */
 const NO_TOKEN = 'authentication failed: no pairing token on the page';
 /** WebSocket close reasons are capped at 123 bytes; a longer one throws and closes with nothing. */
@@ -37,5 +45,5 @@ export function authFailureReason(
     return Buffer.byteLength(reason, 'utf8') <= MAX_REASON_BYTES ? reason : PLAIN;
   }
   if (helloToken === undefined || 0 === helloToken.length) return NO_TOKEN;
-  return PLAIN;
+  return Buffer.byteLength(WRONG_TOKEN, 'utf8') <= MAX_REASON_BYTES ? WRONG_TOKEN : PLAIN;
 }

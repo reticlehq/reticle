@@ -5,6 +5,7 @@
  */
 
 import { dirname, join } from 'node:path';
+import { CONTAINER_MARKERS } from './containerised-dev-server.js';
 import { CSP_FILES } from './csp-doctor.js';
 import { preflightRefusal } from './preflight.js';
 import {
@@ -493,6 +494,15 @@ function gatherPlanInput(options: InitOptions, io: InitIo, pkg: unknown): PlanIn
     platform: process.platform,
     detectedClients,
     cursorProjectPresent: io.exists(CURSOR_PROJECT_MARKER),
+    // Looked for beside the app AND one level up, because the app is routinely a subdirectory of the
+    // repo that containerises it — `frontend/` under a root `docker-compose.yml` is the shape this
+    // came from. Only the first match is reported; the note is the same whichever file found it.
+    ...(() => {
+      const marker = CONTAINER_MARKERS.find(
+        (name) => io.exists(name) || io.exists(join('..', name)),
+      );
+      return marker === undefined ? {} : { containerMarker: marker };
+    })(),
     viteConfig,
     astroConfig:
       astroPath !== null && astroSource !== null ? { path: astroPath, source: astroSource } : null,

@@ -181,3 +181,29 @@ describe('the plugin call init writes', () => {
     expect(r.code).toContain('captureNetworkBodies: true');
   });
 });
+
+/**
+ * A three.js app gets the stamp turned off, in its own config, where it can be seen.
+ *
+ * Filed from the field: `sourceMapping` is on by default, it stamps `data-reticle-source` on every
+ * lowercase JSX tag, and react-three-fiber's tags are three.js objects. `applyProps` walks the
+ * dashed prop as a property path and throws from the commit phase, which unmounts the whole app to
+ * a white screen — after ~20 minutes of the install looking perfect, because it needs an element
+ * UPDATE rather than a mount. The babel plugin now stamps DOM tags only; this closes the residue,
+ * because `line` and `audio` are both real DOM tags AND three.js classes.
+ */
+describe('a non-DOM reconciler in the manifest', () => {
+  const patched = (nonDom: boolean): string => {
+    const out = patchViteConfig(BASIC, undefined, false, nonDom);
+    expect(out.kind).toBe(VitePatchKind.APPLY);
+    return out.kind === VitePatchKind.APPLY ? out.code : '';
+  };
+
+  it('writes sourceMapping: false so the stamp cannot reach a three.js tree', () => {
+    expect(patched(true)).toContain('sourceMapping: false');
+  });
+
+  it('leaves an ordinary app on the default, which is what React 19 needs', () => {
+    expect(patched(false)).not.toContain('sourceMapping');
+  });
+});

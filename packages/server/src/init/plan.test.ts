@@ -26,6 +26,7 @@ function detection(
     typescript: true,
     reactMajor,
     needsSourceMapping: reactMajor >= 19,
+    nonDomReconciler: false,
     packageManager: PackageManager.PNPM,
   };
 }

@@ -236,7 +236,12 @@ function viteConfigSteps(input: PlanInput, detail: string): Step[] {
       },
     ];
   }
-  const patch = patchViteConfig(cfg.source, port, true === input.captureBodies);
+  const patch = patchViteConfig(
+    cfg.source,
+    port,
+    true === input.captureBodies,
+    input.detection.nonDomReconciler,
+  );
   if (patch.kind === VitePatchKind.ALREADY) {
     return [
       {

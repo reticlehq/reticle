@@ -37,10 +37,26 @@ const RETICLE_MARKER = '@reticlehq/vite-plugin';
  * and reconcile-tools.ts — so the capability is discovered at the moment it is wanted, by the person
  * who wanted it, instead of being switched on before anyone has asked.
  */
-function reticlePluginCall(port: number | undefined, captureBodies: boolean): string {
+/**
+ * `sourceMapping` is opt-OUT, and this is the one shape that has to opt out.
+ *
+ * The stamp assumes every lowercase JSX tag is a DOM element. Under react-three-fiber they are
+ * three.js objects, `applyProps` walks a dashed prop as a property path, and the throw unmounts the
+ * whole app to a white screen — see `Detection.nonDomReconciler`. The babel plugin now stamps only
+ * real DOM tags, which covers all of it except the handful of three.js names that collide with real
+ * ones (`line`, `audio`). Those cannot be told apart from a tag name, so on an app whose manifest
+ * says it is a three.js app the option goes off in the config, where the user can see it and turn
+ * it back on. Losing a source pointer is a grep; losing the app is the session.
+ */
+function reticlePluginCall(
+  port: number | undefined,
+  captureBodies: boolean,
+  nonDomReconciler: boolean,
+): string {
   const options = [
     ...(port === undefined ? [] : [`port: ${String(port)}`]),
     ...(captureBodies ? ['captureNetworkBodies: true'] : []),
+    ...(nonDomReconciler ? ['sourceMapping: false'] : []),
   ];
   return 0 === options.length ? 'reticle()' : `reticle({ ${options.join(', ')} })`;
 }
@@ -84,11 +100,16 @@ function insertImport(source: string): string {
  * what a formatter rewrites, turning a one-line install into a diff against the user's own style. A
  * single-line array needs the space, or the result reads `[reticle(),react()]`.
  */
-function insertPlugin(source: string, port: number | undefined, captureBodies: boolean): string {
+function insertPlugin(
+  source: string,
+  port: number | undefined,
+  captureBodies: boolean,
+  nonDomReconciler: boolean,
+): string {
   return source.replace(PLUGINS_ARRAY, (match, _g, offset: number) => {
     const next = source[offset + match.length] ?? '';
     const separator = '' === next || /\s/.test(next) ? '' : ' ';
-    return `${match}${reticlePluginCall(port, captureBodies)},${separator}`;
+    return `${match}${reticlePluginCall(port, captureBodies, nonDomReconciler)},${separator}`;
   });
 }
 
@@ -100,30 +121,36 @@ function insertPluginsKey(
   source: string,
   port: number | undefined,
   captureBodies: boolean,
+  nonDomReconciler: boolean,
 ): string {
   return source.replace(CONFIG_OBJECT, (_match, prefix: string, offset: number) => {
     const rest = source.slice(offset + _match.length);
     const multiline = /^\s*\n/.test(rest);
     const indent = /^\s*\n(\s*)\S/.exec(rest)?.[1] ?? '  ';
-    const key = `plugins: [${reticlePluginCall(port, captureBodies)}],`;
+    const key = `plugins: [${reticlePluginCall(port, captureBodies, nonDomReconciler)}],`;
     return multiline ? `${prefix}{\n${indent}${key}` : `${prefix}{ ${key}`;
   });
 }
 
-export function patchViteConfig(source: string, port?: number, captureBodies = false): VitePatch {
+export function patchViteConfig(
+  source: string,
+  port?: number,
+  captureBodies = false,
+  nonDomReconciler = false,
+): VitePatch {
   if (source.includes(RETICLE_MARKER)) {
     return { kind: VitePatchKind.ALREADY };
   }
   if (PLUGINS_ARRAY.test(source)) {
     return {
       kind: VitePatchKind.APPLY,
-      code: insertImport(insertPlugin(source, port, captureBodies)),
+      code: insertImport(insertPlugin(source, port, captureBodies, nonDomReconciler)),
     };
   }
   if (CONFIG_OBJECT.test(source)) {
     return {
       kind: VitePatchKind.APPLY,
-      code: insertImport(insertPluginsKey(source, port, captureBodies)),
+      code: insertImport(insertPluginsKey(source, port, captureBodies, nonDomReconciler)),
     };
   }
   return { kind: VitePatchKind.MANUAL, reason: NO_PLUGINS_REASON };

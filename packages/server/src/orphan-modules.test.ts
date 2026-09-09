@@ -25,6 +25,11 @@ const PACKAGE_DIR = join(__dirname, '..');
 
 /** Modules with no production importer, each with the reason it is allowed to stay. */
 const DECLARED_UNWIRED: Record<string, string> = {
+  'dev/open-pr-guard.ts':
+    'decision logic for scripts/check-open-prs.mjs, the sibling of the stale-issue guard below and ' +
+    'unwired for the same reason: a repo-hygiene check has no caller inside the product, and the ' +
+    'script imports it from dist. Kept pure and unit-tested here so the rule can be exercised ' +
+    'without gh, a network or an open PR to look at.',
   'dev/stale-issue-guard.ts':
     'decision logic for scripts/check-stale-issues.mjs, which runs in CI and imports it from dist. ' +
     'A repo-hygiene guard has no caller inside the product by definition; the unit tests are here ' +
