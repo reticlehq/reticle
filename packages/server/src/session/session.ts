@@ -177,28 +177,16 @@ export class Session {
   #journalReader: JournalReader | undefined;
   /** What this session has learned by watching its own stream: ambient churn + blind-spot levels. */
   readonly #observed = new ObservedState();
+  /** Set when a required application precondition (e.g. seedStorage) was not established. */
+  #preconditionFailure?: string;
   /**
    * Which document is on screen right now — the one the most recent stamped event was observed under.
-   *
-   * DERIVED, never announced. The SDK mints a document id once per real document and stamps it on
-   * every event, so the stream already carries the answer; asking the page for it separately would be
-   * a second source of truth that can disagree with the evidence it is supposed to scope. A full
-   * navigation or a reload builds a new document, mints a new id, and the first event carrying it
-   * moves this forward — which is exactly the moment the previous document's evidence stops being
-   * about the world. An SPA route change keeps the same document and so keeps the same id, which is
-   * correct rather than a limitation: same JavaScript context, same in-flight requests, same evidence.
-   *
-   * An UNSTAMPED event never clears this. An SDK older than the field stamps nothing, and letting one
-   * such event blank the current document would make every later comparison vacuous.
+   * DERIVED, never announced: the SDK stamps it on events. An unstamped event never clears this.
    */
   #documentId: string | undefined;
   /**
-   * The edit epoch of the most recent stamped event. DERIVED for the same reason `#documentId` is:
-   * the stream already carries it, and asking the page separately would be a second source of truth.
-   *
-   * A hot update advances it INSIDE the same document, which is the case `#documentId` structurally
-   * cannot see — no navigation, same page, replaced code. An unstamped event never clears it: most
-   * pages have no hot-update channel at all, so absence is "unknown", never "back to no edits".
+   * The edit epoch of the most recent stamped event. DERIVED for the same reason `#documentId` is.
+   * A hot update advances it inside the same document. An unstamped event never clears it.
    */
   #editEpoch: number | undefined;
 
@@ -342,6 +330,14 @@ export class Session {
   /** The edit epoch the most recent stamped event was observed under. See `#editEpoch`. */
   get currentEditEpoch(): number | undefined {
     return this.#editEpoch;
+  }
+
+  /** Seed/auth precondition failure reason, if any. */
+  setPreconditionFailure(reason: string): void {
+    this.#preconditionFailure = reason;
+  }
+  preconditionFailure(): string | undefined {
+    return this.#preconditionFailure;
   }
 
   /** Re-stamp an incoming event with server-relative time, buffer it, and fan out. */
@@ -992,9 +988,5 @@ export class Session {
   }
 }
 
-/**
- * Re-exported from session-manager.ts so the public import path (`./session.js`) is unchanged for
- * the many call sites that resolve a target session. The class lives in its own file to keep both
- * units under the file-size cap.
- */
+/** Re-exported so the public import path (`./session.js`) is unchanged. */
 export { SessionManager } from './session-manager.js';
