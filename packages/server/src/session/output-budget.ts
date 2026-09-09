@@ -33,6 +33,24 @@ const LARGE_TIMELINE_BYTES = 8000;
  */
 export const DEFAULT_QUERY_LIMIT = 200;
 
+/**
+ * Default cap for `reticle_observe`'s timeline when the caller passes no `max_events`.
+ *
+ * Without one, the whole window is returned. That is fine for a quiet page and pathological for a
+ * busy one: a page with count-up animations emits an event per frame, and a single observe result
+ * was measured at ~60KB. The sibling tools (`reticle_network`, `reticle_console`) have had a default
+ * for exactly this reason; observe was simply missed.
+ *
+ * Capping is safe for accuracy — and that is the only reason it is allowed. Contradiction detection
+ * runs over the FILTERED-BUT-UNBUDGETED window (see `observe-tools.ts`), so a finding can never
+ * disappear because the timeline was trimmed for tokens. What the cap changes is how much of the
+ * timeline is printed, never what was examined.
+ *
+ * Nothing is hidden: whenever the cap bites, `cost.droppedOldest` says how many older events fell
+ * outside it, and the caller can pass a larger `max_events` to see them.
+ */
+export const DEFAULT_OBSERVE_EVENT_LIMIT = 200;
+
 /** Keep only the most recent `maxEvents` events; report how many older ones were dropped. */
 export function applyEventBudget(
   events: ReticleEvent[],

@@ -43,6 +43,7 @@ import {
   applyEventBudget,
   costHint,
   withSizeCost,
+  DEFAULT_OBSERVE_EVENT_LIMIT,
   DEFAULT_QUERY_LIMIT,
 } from '../session/output-budget.js';
 import {
@@ -219,7 +220,7 @@ export const OBSERVE_TOOLS: ToolDef[] = [
       // Output budget: cap to the most recent N (no silent caps — droppedOldest is surfaced in cost).
       const { events: budgeted, droppedOldest } = applyEventBudget(
         filtered,
-        asNumber(args['max_events']),
+        asNumber(args['max_events']) ?? DEFAULT_OBSERVE_EVENT_LIMIT,
       );
       const report = buildReactionReport(budgeted, windowMs);
       // Run over the FILTERED-but-unbudgeted window: a contradiction must not vanish because the

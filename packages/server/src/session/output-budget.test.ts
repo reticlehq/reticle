@@ -4,6 +4,7 @@ import { EventType, SessionState, type ReticleEvent } from '@reticlehq/core';
 import {
   applyEventBudget,
   costHint,
+  DEFAULT_OBSERVE_EVENT_LIMIT,
   estimateTokens,
   sizeCost,
   withSizeCost,
@@ -146,6 +147,30 @@ describe('reticle_observe output budget', () => {
     };
     expect(res.cost?.events).toBe(2);
     expect(res.cost?.bytes).toBeGreaterThan(0);
+  });
+
+  it('caps an unbounded timeline to the default limit when the caller passes no max_events', async () => {
+    // The pathological case this guards: a page whose animations emit an event per frame. Without a
+    // default the whole timeline is returned, which was measured at 60KB in a single tool result.
+    const many = Array.from({ length: DEFAULT_OBSERVE_EVENT_LIMIT + 50 }, (_, i) => ev(i + 1));
+    const res = (await observeTool().handler(fakeDeps(many), {})) as {
+      events: ReticleEvent[];
+      cost?: { events: number; droppedOldest?: number };
+    };
+    expect(res.events.length).toBe(DEFAULT_OBSERVE_EVENT_LIMIT);
+    // Nothing is hidden: the agent is told how many older events fell outside the cap.
+    expect(res.cost?.droppedOldest).toBe(50);
+    // The most recent event is kept, not the oldest.
+    expect(res.events[res.events.length - 1]?.t).toBe(DEFAULT_OBSERVE_EVENT_LIMIT + 50);
+  });
+
+  it('lets an explicit max_events raise the cap above the default', async () => {
+    const many = Array.from({ length: DEFAULT_OBSERVE_EVENT_LIMIT + 50 }, (_, i) => ev(i + 1));
+    const res = (await observeTool().handler(fakeDeps(many), {
+      max_events: DEFAULT_OBSERVE_EVENT_LIMIT + 50,
+    })) as { events: ReticleEvent[]; cost?: { droppedOldest?: number } };
+    expect(res.events.length).toBe(DEFAULT_OBSERVE_EVENT_LIMIT + 50);
+    expect(res.cost?.droppedOldest).toBeUndefined();
   });
 
   it('caps events to max_events (most recent) and reports droppedOldest', async () => {
