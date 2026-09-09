@@ -39,7 +39,16 @@ interface FlowBaseline {
 }
 type FlowTiers = Record<string, FlowBaseline>;
 
-const ASSERTION_TIERS_VERSION = 1;
+/**
+ * The shape version of the file on disk.
+ *
+ * Exported so a test can pin it. Changing this number makes every baseline already on disk fail to
+ * parse, and because an unreadable baseline degrades to "no baseline" (see the note above), the
+ * anti-downgrade check would quietly stop checking anything with nothing going red to say so. If you
+ * change it, add a way to handle the old file in the same commit — convert it on load, or tell the
+ * user their baseline was reset.
+ */
+export const ASSERTION_TIERS_VERSION = 1;
 
 export class AssertionTiersStore {
   readonly #fs: FileSystemPort;
