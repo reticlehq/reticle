@@ -1,5 +1,5 @@
 import { EventType, REDACTED_VALUE, StorageArea } from '@reticlehq/core';
-import { isSensitiveKey } from '../security/serialization.js';
+import { isSensitiveKey, scrubKnownSecrets } from '../security/serialization.js';
 import { observeSafely, observeValue, type Emit, type Teardown } from './types.js';
 
 /** The three readable client-side storage areas. httpOnly cookies are invisible to JS by design. */
@@ -25,7 +25,9 @@ function readArea(storage: Storage | null): Record<string, string> {
     const key = storage.key(i);
     if (null === key) continue;
     // Redact credential-bearing keys (token/session/password/…) so auth state never leaks verbatim.
-    out[key] = isSensitiveKey(key) ? REDACTED_VALUE : (storage.getItem(key) ?? '');
+    // Also scrub high-confidence secret shapes (e.g. JWTs) from values under benign keys.
+    const val = storage.getItem(key) ?? '';
+    out[key] = isSensitiveKey(key) ? REDACTED_VALUE : scrubKnownSecrets(val);
   }
   return out;
 }
@@ -49,11 +51,13 @@ function readCookies(): Record<string, string> {
       out[key] = REDACTED_VALUE;
       continue;
     }
+    let val = '';
     try {
-      out[key] = decodeURIComponent(part.slice(eq + 1).trim());
+      val = decodeURIComponent(part.slice(eq + 1).trim());
     } catch {
-      out[key] = part.slice(eq + 1).trim();
+      val = part.slice(eq + 1).trim();
     }
+    out[key] = scrubKnownSecrets(val);
   }
   return out;
 }
@@ -78,7 +82,7 @@ export function readStorage(area?: string): StorageSnapshot | Record<string, str
 /** Redact a value when its key is credential-bearing — the same rule the pull path applies. */
 function redactFor(key: string, value: string | null): string | undefined {
   if (null === value) return undefined;
-  return isSensitiveKey(key) ? REDACTED_VALUE : value;
+  return isSensitiveKey(key) ? REDACTED_VALUE : scrubKnownSecrets(value);
 }
 
 type SetItemFn = (this: Storage, key: string, value: string) => void;

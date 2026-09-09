@@ -129,6 +129,8 @@ export async function assertVerdict(
   const outcomePending = hasAcceptedWrite(windowEvents);
   const outcomeUnread = unreadWriteLabels(windowEvents);
   const stillInFlight = inFlightRequestLabels(windowEvents);
+  const effectiveInconclusive =
+    inconclusive ?? (!pass ? session.preconditionFailure?.() : undefined);
   const decision = decideVerified({
     pass,
     // So the unread-body remedy can check it applies to THIS page. Threaded rather than
@@ -139,7 +141,7 @@ export async function assertVerdict(
     // half broken, and this is the tool agents call most.
     declaredConsequence: predicate.kind !== PredicateKind.SETTLED,
     ...(declaresBodyIndependentChannel(predicate) ? { independentOfBody: true } : {}),
-    ...(inconclusive === undefined ? {} : { inconclusive }),
+    ...(effectiveInconclusive === undefined ? {} : { inconclusive: effectiveInconclusive }),
     ...(true === observationLost ? { observationLost: true } : {}),
     ...(absenceBlindSpot === undefined ? {} : { absenceBlindSpot }),
     ...(namedNetIsInFlight(predicate, stillInFlight) ? { namedRequestInFlight: true } : {}),
