@@ -45,6 +45,12 @@ const DECLARED_UNWIRED: Record<string, string> = {
     'Mermaid confidence report. No caller can produce it today — needs a CLI or tool surface first.',
   'phenomena/phenomena.ts':
     'Phenomenon classification over journal actions. Staged for the deviation reporter; not yet called.',
+  'import-graph.ts':
+    'Test-only walker over this package’s own imports, shared by the two boundary guards ' +
+    '(library-path-boundary and ee-boundary). Both need the TRANSITIVE reach from an entry point, ' +
+    'because the import that breaks a boundary is never in the entry file — it is four modules down. ' +
+    'It lived inside one of those tests until a second guard needed the same forty lines. Production ' +
+    'code has no reason to read its own source, so a production importer would be the surprise here.',
   'temp-dir.ts':
     'Test-only teardown helper: removing a temp directory tolerantly of Windows’ delayed handle ' +
     'release. Production code never deletes a temp tree, so a production importer would be the ' +

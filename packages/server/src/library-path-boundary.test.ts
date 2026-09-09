@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
-import { dirname, join, normalize, relative, sep } from 'node:path';
+import { join, relative, sep } from 'node:path';
+import { importsOf, reachableFrom, resolveImport } from './import-graph.js';
 
 /**
  * The library entry point may never reach the install-time surface.
@@ -63,58 +63,14 @@ const DECLARED_CROSSINGS: Record<string, string> = {
     'the writer lives with it; this module stays the one place to read about install attribution.',
 };
 
-/** Resolve a relative specifier (always written with a `.js` extension) to a repo-relative `.ts` path. */
-function resolveImport(fromFile: string, specifier: string): string | undefined {
-  if (!specifier.startsWith('.')) return undefined;
-  const resolved = normalize(join(dirname(fromFile), specifier))
-    .split(sep)
-    .join('/');
-  return resolved.replace(/\.js$/, '.ts');
-}
-
-/** Every import specifier in a module, relative and bare alike, in source order. */
-function importsOf(file: string): string[] {
-  let text: string;
-  try {
-    text = readFileSync(join(SRC, file), 'utf8');
-  } catch {
-    return [];
-  }
-  const specifiers: string[] = [];
-  // `from '...'` covers static imports, type imports and re-exports; `import('...')` the dynamic ones.
-  for (const match of text.matchAll(/(?:from|import)\s*\(?\s*['"]([^'"]+)['"]/g)) {
-    const specifier = match[1];
-    if (specifier !== undefined) specifiers.push(specifier);
-  }
-  return specifiers;
-}
-
-/** Breadth-first reachability from an entry module, returning every module reached and how. */
-function reachableFrom(entry: string): Map<string, string> {
-  // value = the importer that first reached it, so a violation can name the edge rather than the file.
-  const seen = new Map<string, string>([[entry, entry]]);
-  const queue = [entry];
-  while (queue.length > 0) {
-    const file = queue.shift();
-    if (file === undefined) continue;
-    for (const specifier of importsOf(file)) {
-      const target = resolveImport(file, specifier);
-      if (target === undefined || seen.has(target)) continue;
-      seen.set(target, file);
-      queue.push(target);
-    }
-  }
-  return seen;
-}
-
 /** Every module in `reached` that imports the scaffolder package directly. */
 function crossings(reached: Iterable<string>): string[] {
-  return [...reached].filter((file) => importsOf(file).includes(CLI_ONLY_PACKAGE)).sort();
+  return [...reached].filter((file) => importsOf(SRC, file).includes(CLI_ONLY_PACKAGE)).sort();
 }
 
 describe('library path boundary', () => {
   it('the root barrel never reaches the install-time surface', () => {
-    const violations = crossings(reachableFrom('index.ts').keys()).filter(
+    const violations = crossings(reachableFrom(SRC, 'index.ts').keys()).filter(
       (file) => DECLARED_CROSSINGS[file] === undefined,
     );
     expect(violations).toEqual([]);
@@ -123,7 +79,7 @@ describe('library path boundary', () => {
   it('every declared crossing is still a real one', () => {
     // A declaration that has stopped being true is a stale exemption, and a stale exemption is a hole
     // nobody knows is open. If the reach is gone, the entry belongs deleted, not kept "just in case".
-    const reached = new Set(crossings(reachableFrom('index.ts').keys()));
+    const reached = new Set(crossings(reachableFrom(SRC, 'index.ts').keys()));
     for (const declared of Object.keys(DECLARED_CROSSINGS)) {
       expect(reached, `${declared} is declared but no longer crosses`).toContain(declared);
     }
@@ -132,7 +88,7 @@ describe('library path boundary', () => {
   it('the CLI entry point still owns the install-time surface', () => {
     // The counterpart, so the first assertion can never be satisfied by DELETING the install path —
     // which is the one fix that would pass this file and break the free product.
-    expect(crossings(reachableFrom('cli.ts').keys()).length).toBeGreaterThan(0);
+    expect(crossings(reachableFrom(SRC, 'cli.ts').keys()).length).toBeGreaterThan(0);
   });
 
   it('relative specifiers resolve the way the runtime resolves them', () => {
