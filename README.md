@@ -455,7 +455,7 @@ A pnpm + turbo monorepo — each audience installs only what it needs (apps embe
 | `@reticlehq/vite-plugin` · `-next` · `-babel-plugin` | dev-only source mapping + `connect()` injection (Vite / Next.js / React 19) |
 | `@reticlehq/electron` | the Electron adapter: makes main-process IPC observable and the window screenshottable, from the two places the renderer cannot reach |
 | `@reticlehq/server` | the bridge + MCP server + the `reticle` CLI |
-| `@reticlehq/test` · `-eslint-plugin` | declarative CI specs · the "state change must fire a signal" lint rule |
+| `@reticlehq/test` · `-eslint-plugin` | write your own checks in code, no agent needed (and run them in CI) · the "state change must fire a signal" lint rule |
 
 **Tauri apps get a Rust crate too.** [`reticle-tauri`](https://crates.io/crates/reticle-tauri) on crates.io adds screenshots and headless runs to a Tauri app. IPC observation needs nothing on the Rust side, so the crate is optional: an `invoke('load_todos')` already reaches Reticle as `ipc://load_todos`. It is versioned **independently** of the npm packages, so its version number is its own.
 
