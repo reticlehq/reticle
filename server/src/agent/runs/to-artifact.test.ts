@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   PredicateKind,
   RUN_FILE_VERSION,
-  RunCheckStatus,
+  Verified,
   RunConfidence,
   RunAgentKind,
   RunIdSchema,
@@ -41,8 +41,10 @@ const RUN: ReticleVerificationRun = {
   changedFiles: [],
   flows: [],
   checks: [
-    { kind: PredicateKind.NET, predicate: 'POST /api/save 200', status: RunCheckStatus.PASS },
-    { kind: PredicateKind.STATE, predicate: 'cart.items increased', status: RunCheckStatus.FAIL },
+    { kind: PredicateKind.NET, predicate: 'POST /api/save 200', status: Verified.YES },
+    { kind: PredicateKind.STATE, predicate: 'cart.items increased', status: Verified.NO },
+    { kind: PredicateKind.ELEMENT, predicate: 'the toast appears', status: Verified.UNKNOWN },
+    { kind: PredicateKind.TEXT, predicate: 'nothing was declared', status: Verified.NO_FAULT },
   ],
   risks: [],
   evidence: { consoleErrors: [], networkAnomalies: [], stateAssertions: [], timeline: [] },
@@ -61,18 +63,38 @@ describe('exporting a run for somebody else to read', () => {
     expect(artifact.specVersion).toBe(1);
   });
 
-  it('carries each check in the vocabulary the specification names', () => {
+  it('carries each check in the four-valued vocabulary the specification names', () => {
+    // All four, and the last two are the reason this test exists. They used to be dropped here,
+    // because the exported outcome was a boolean and neither value is true of them -- so the
+    // document a stranger reads listed the app's failures and was silent about our own blind spots.
     const artifact = toArtifact(RUN);
     expect(artifact.checks).toEqual([
-      { claim: 'POST /api/save 200', reads: PredicateKind.NET, held: true },
-      { claim: 'cart.items increased', reads: PredicateKind.STATE, held: false },
+      { claim: 'POST /api/save 200', reads: PredicateKind.NET, verdict: Verified.YES },
+      { claim: 'cart.items increased', reads: PredicateKind.STATE, verdict: Verified.NO },
+      { claim: 'the toast appears', reads: PredicateKind.ELEMENT, verdict: Verified.UNKNOWN },
+      { claim: 'nothing was declared', reads: PredicateKind.TEXT, verdict: Verified.NO_FAULT },
     ]);
   });
 
-  it('carries the verdict and what it was based on', () => {
+  it('carries the run summary and what it was based on', () => {
     const artifact = toArtifact(RUN);
-    expect(artifact.verdict.status).toBe(VerdictStatus.PASS);
-    expect(artifact.verdict.because).toEqual(['every declared consequence held']);
+    expect(artifact.summary.status).toBe(VerdictStatus.PASS);
+    expect(artifact.summary.because).toEqual(['every declared consequence held']);
+  });
+
+  it('carries a correction, so a verdict can be revised where somebody else can see it', () => {
+    const corrected: ReticleVerificationRun = {
+      ...RUN,
+      verdict: { ...RUN.verdict, checkId: 'c_1', supersedes: 'run-0#c_1' },
+    };
+    const artifact = toArtifact(corrected);
+    expect(artifact.summary.checkId).toBe('c_1');
+    expect(artifact.summary.supersedes).toBe('run-0#c_1');
+  });
+
+  it('does not carry an empty citation when nothing was corrected', () => {
+    const artifact = toArtifact(RUN);
+    expect('supersedes' in artifact.summary).toBe(false);
   });
 
   it('leaves out what the run did not record, rather than inventing a default', () => {

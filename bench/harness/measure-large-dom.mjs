@@ -31,7 +31,7 @@ function refFromQuery(text, testid) {
 
 const c = new McpStdioClient(
   'node',
-  ['server/dist/cli.js', 'mcp', '--port', PORT, '--drive', URL],
+  ['server/dist/command/cli.js', 'mcp', '--port', PORT, '--drive', URL],
   { RETICLE_PORT: PORT },
 );
 await c.start();

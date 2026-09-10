@@ -87,7 +87,7 @@ artifacts/                charts + diagrams (SVG + PNG) + screens/ (real PNGs + 
 
 - Node v22+, pnpm, `python3` with `tiktoken` (proxy tokenizer; harness degrades gracefully without it).
 - Playwright Chromium installed (`pnpm exec playwright install chromium`), local Chrome (DevTools MCP).
-- `@reticlehq/server` built: `pnpm build` (the harness runs `node server/dist/cli.js mcp`).
+- `@reticlehq/server` built: `pnpm build` (the harness runs `node server/dist/command/cli.js mcp`).
 
 ## Run it
 
@@ -167,7 +167,7 @@ pgrep -f chrome-headless-shell | wc -l   # browsers still attached
 **Clean up:**
 
 ```bash
-node server/dist/cli.js stop --port 4460 --quiet   # the polite way, first
+node server/dist/command/cli.js stop --port 4460 --quiet   # the polite way, first
 pkill -f "cli.js _daemon"                                   # then anything that ignored it
 pkill -f chrome-headless-shell
 ```

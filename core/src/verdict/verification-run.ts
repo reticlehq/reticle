@@ -12,9 +12,10 @@
 
 import { z } from 'zod';
 import { PredicateKind } from './consequence.js';
+import { Verified } from './verified-constants.js';
 
 /** Schema version stamped into every run file so a reader can reject/upgrade old artifacts. */
-export const RUN_FILE_VERSION = 2;
+export const RUN_FILE_VERSION = 3;
 
 /**
  * The version this artifact used before checks were recorded in the assertion vocabulary.
@@ -25,6 +26,25 @@ export const RUN_FILE_VERSION = 2;
  * is the dangerous outcome -- it looks like a run that found nothing.
  */
 const RUN_FILE_VERSION_BEFORE_ONE_VOCABULARY = 1;
+
+/**
+ * The version this artifact used before a check could say it was undetermined.
+ *
+ * Version 2 recorded a check as `pass` or `fail` and nothing else, so a check nobody could evaluate
+ * had no spelling and was dropped on the way in. That is the exact loss this whole system exists to
+ * prevent, committed by our own artifact: "I could not see" left the document silently, and a reader
+ * counting checks counted our blind spots as the app's clean bill of health.
+ *
+ * Files already on disk are still read. `pass` and `fail` translate to `yes` and `no`, which is what
+ * they always meant.
+ */
+const RUN_FILE_VERSION_BEFORE_UNDETERMINED_CHECKS = 2;
+
+/** The old spelling of each check outcome, for reading a version 2 file. */
+const OLD_CHECK_STATUS_SPELLING: Readonly<Record<string, string>> = {
+  pass: Verified.YES,
+  fail: Verified.NO,
+};
 
 /** The old spelling of each check kind, for reading a version 1 file. */
 const OLD_CHECK_KIND_SPELLING: Readonly<Record<string, string>> = {
@@ -96,12 +116,17 @@ export type RunFlowStatus = (typeof RunFlowStatus)[keyof typeof RunFlowStatus];
  */
 export { PredicateKind };
 
-/** Binary status of a single check. */
-export const RunCheckStatus = {
-  PASS: 'pass',
-  FAIL: 'fail',
-} as const;
-export type RunCheckStatus = (typeof RunCheckStatus)[keyof typeof RunCheckStatus];
+/**
+ * What a check came out as.
+ *
+ * `Verified` and not a second list. There used to be a binary one here, and the two had already
+ * done what two vocabularies for one thing always do: a verdict was four-valued everywhere it was
+ * decided and two-valued the moment it was written down, so `unknown` and `no-fault` -- the two the
+ * specification says make the other two mean anything -- could not be recorded at all.
+ *
+ * Re-exported so the places that read it from this file still can.
+ */
+export { Verified };
 
 /**
  * A risk surface a changed file / observed behaviour touches. The governance seed: a host can gate
@@ -228,7 +253,10 @@ export const RunCheckSchema = z.object({
     z.nativeEnum(PredicateKind),
   ),
   predicate: z.string(),
-  status: z.nativeEnum(RunCheckStatus),
+  status: z.preprocess(
+    (given) => ('string' === typeof given ? (OLD_CHECK_STATUS_SPELLING[given] ?? given) : given),
+    z.nativeEnum(Verified),
+  ),
   evidence: z.unknown().optional(),
   /**
    * Was this claim written down BEFORE the action, or after it?
@@ -354,11 +382,12 @@ export const RunSignatureSchema = z.object({
  * single smoke flow) still validates. Version 1 files are still read; see the note on the constant.
  */
 export const ReticleVerificationRunSchema = z.object({
-  // Both versions are read; only the current one is written. A version 1 file differs from a
-  // version 2 file in exactly one way -- how a check's kind is spelled -- and that is translated
-  // above, so there is nothing else to migrate.
+  // All three versions are read; only the current one is written. Each older version differs from
+  // its successor in exactly one way -- how a check's kind is spelled, then how its outcome is --
+  // and both are translated above, so there is nothing else to migrate.
   schemaVersion: z.union([
     z.literal(RUN_FILE_VERSION),
+    z.literal(RUN_FILE_VERSION_BEFORE_UNDETERMINED_CHECKS),
     z.literal(RUN_FILE_VERSION_BEFORE_ONE_VOCABULARY),
   ]),
   runId: RunIdSchema,

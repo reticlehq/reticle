@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import {
   RunAgentKind,
   PredicateKind,
-  RunCheckStatus,
+  Verified,
   RunFramework,
   RunProfile,
   RunTrigger,
@@ -51,9 +51,7 @@ const failingRun = (runId: string): VerificationRunInput => ({
   trigger: { kind: RunTrigger.CI },
   changedFiles: [],
   flows: [],
-  checks: [
-    { kind: PredicateKind.NET, predicate: 'POST /api/order 200', status: RunCheckStatus.FAIL },
-  ],
+  checks: [{ kind: PredicateKind.NET, predicate: 'POST /api/order 200', status: Verified.NO }],
   risks: [],
   evidence: { consoleErrors: [], networkAnomalies: [], stateAssertions: [], timeline: [] },
 });

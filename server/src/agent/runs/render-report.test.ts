@@ -4,7 +4,7 @@ import {
   RiskSurface,
   RunAgentKind,
   PredicateKind,
-  RunCheckStatus,
+  Verified,
   RunFlowStatus,
   RunFramework,
   RunProfile,
@@ -43,7 +43,7 @@ describe('renderRunReport', () => {
           {
             kind: PredicateKind.CONSOLE,
             predicate: 'no console errors',
-            status: RunCheckStatus.FAIL,
+            status: Verified.NO,
           },
         ],
         risks: [

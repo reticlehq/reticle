@@ -18,7 +18,7 @@ const SERVERS = {
   reticle: {
     command: 'node',
     args: [
-      'server/dist/cli.js',
+      'server/dist/command/cli.js',
       'mcp',
       '--port',
       PROBE_RETICLE_PORT,

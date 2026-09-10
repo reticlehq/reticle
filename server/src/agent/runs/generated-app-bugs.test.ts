@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   RunAgentKind,
   PredicateKind,
-  RunCheckStatus,
+  Verified,
   RunFlowStatus,
   RunFramework,
   RunProfile,
@@ -33,7 +33,7 @@ const base: Omit<VerificationRunInput, 'flows' | 'checks'> = {
 
 const failingCheck = (kind: PredicateKind, predicate: string) =>
   buildVerificationRun(
-    { ...base, flows: [], checks: [{ kind, predicate, status: RunCheckStatus.FAIL }] },
+    { ...base, flows: [], checks: [{ kind, predicate, status: Verified.NO }] },
     () => 1,
   );
 
@@ -108,17 +108,17 @@ describe('Reticle catches generated-app silent-failure classes', () => {
           {
             kind: PredicateKind.NET,
             predicate: 'POST /api/expense 200 count:1',
-            status: RunCheckStatus.PASS,
+            status: Verified.YES,
           },
           {
             kind: PredicateKind.STATE,
             predicate: 'store.expenses.length increased',
-            status: RunCheckStatus.PASS,
+            status: Verified.YES,
           },
           {
             kind: PredicateKind.CONSOLE,
             predicate: 'no console errors',
-            status: RunCheckStatus.PASS,
+            status: Verified.YES,
           },
         ],
         flows: [

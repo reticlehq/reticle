@@ -7,7 +7,7 @@
  * artifact and therefore synced nothing.
  */
 import { describe, expect, it } from 'vitest';
-import { RunCheckStatus, Verified, type JournalAction } from '@reticlehq/core';
+import { Verified, type JournalAction } from '@reticlehq/core';
 import { buildVerificationRun, type VerificationRunInput } from './build-verification-run.js';
 import { driveRunFrom, driveRunId } from './drive-run.js';
 import { computeVerdict } from './build-verification-run.js';
@@ -34,13 +34,13 @@ describe('a drive folded into a run', () => {
   it('turns a proved verdict into a passing check', () => {
     const run = driveRunFrom([action(Verified.YES, 'the row disappears')], DEPS);
     expect(run?.checks).toHaveLength(1);
-    expect(run?.checks[0]?.status).toBe(RunCheckStatus.PASS);
+    expect(run?.checks[0]?.status).toBe(Verified.YES);
     expect(run?.checks[0]?.predicate).toBe('the row disappears');
   });
 
   it('turns a disproved verdict into a failing check, and the run verdict follows', () => {
     const run = driveRunFrom([action(Verified.NO)], DEPS);
-    expect(run?.checks[0]?.status).toBe(RunCheckStatus.FAIL);
+    expect(run?.checks[0]?.status).toBe(Verified.NO);
     expect(run === undefined ? undefined : computeVerdict(run).status).toBe(VerdictStatus.FAIL);
   });
 
@@ -49,20 +49,22 @@ describe('a drive folded into a run', () => {
   });
 
   /**
-   * The false-green guard, and the reason this fold is not a one-liner. `RunCheckStatus` is binary;
-   * `Verified` is not. `unknown` means "I could not tell" and `no-fault` means "nothing was declared
-   * to prove", and the product reports both as NOT PROVED.
+   * The false-green guard. `unknown` means "I could not tell" and `no-fault` means "nothing was
+   * declared to prove", and the product reports both as NOT PROVED.
+   *
+   * They used to be DROPPED here and counted in a sentence, because the outcome on disk was binary
+   * and had no spelling for either. Not proved is not the same as not recorded: a reader of the
+   * artifact saw only the verdicts we could spell, so our blind spots left the document and the
+   * app's failures stayed in it. Both are written down now, and neither may become a pass.
    */
   describe('verdicts that proved nothing', () => {
-    it('writes a run that says nothing was proved, rather than staying silent', () => {
-      // Written the other way round on the branch this came from, for a reason true then: a run with
-      // zero checks computed to PASS, so writing one put a green row meaning "nothing was measured"
-      // on a dashboard. Silence was the only honest option available.
-      //
-      // A zero-check run now reads UNKNOWN, so the honest option exists and is the better one. A
-      // drive that produced verdicts and resolved none of them is what somebody most needs to see.
+    it('writes them down rather than dropping them', () => {
       const run = driveRunFrom([action(Verified.UNKNOWN), action(Verified.NO_FAULT)], DEPS);
-      expect(run?.checks).toHaveLength(0);
+      expect(run?.checks.map((c) => c.status)).toEqual([Verified.UNKNOWN, Verified.NO_FAULT]);
+    });
+
+    it('says nothing was proved, rather than staying silent', () => {
+      const run = driveRunFrom([action(Verified.UNKNOWN), action(Verified.NO_FAULT)], DEPS);
       expect(buildVerificationRun(run as VerificationRunInput, () => 1).verdict.status).toBe(
         VerdictStatus.UNKNOWN,
       );
@@ -70,22 +72,20 @@ describe('a drive folded into a run', () => {
 
     it('never counts one as a pass when there were real verdicts alongside it', () => {
       const run = driveRunFrom([action(Verified.YES), action(Verified.UNKNOWN)], DEPS);
-      expect(run?.checks).toHaveLength(1);
+      expect(run?.checks).toHaveLength(2);
+      // One proved, one not, and nothing failed. The undetermined one must not tip this to
+      // PARTIAL either -- it is not a failure, it is an absence of evidence.
       expect(run === undefined ? undefined : computeVerdict(run).status).toBe(VerdictStatus.PASS);
     });
 
-    it('says how many it dropped, so the row is not silently lossy', () => {
-      const run = driveRunFrom(
-        [action(Verified.YES), action(Verified.UNKNOWN), action(Verified.NO_FAULT)],
-        DEPS,
-      );
-      expect(run?.trigger.note).toContain('2 further verdict(s) were undetermined');
+    it('does not let one become a failure', () => {
+      const run = driveRunFrom([action(Verified.UNKNOWN), action(Verified.NO)], DEPS);
+      expect(run === undefined ? undefined : computeVerdict(run).status).toBe(VerdictStatus.FAIL);
     });
 
-    it('says nothing about them when there were none', () => {
-      expect(driveRunFrom([action(Verified.YES)], DEPS)?.trigger.note).not.toContain(
-        'undetermined',
-      );
+    it('no longer explains itself in prose, because it no longer drops anything', () => {
+      const run = driveRunFrom([action(Verified.YES), action(Verified.UNKNOWN)], DEPS);
+      expect(run?.trigger.note).not.toContain('undetermined');
     });
   });
 

@@ -21,7 +21,7 @@ import { startFaultProxy, Fault } from '../fault-proxy.mjs';
 import { freePortSafely, startOwnedDaemon } from '../gate-harness.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
-const CLI = path.join(ROOT, 'server/dist/cli.js');
+const CLI = path.join(ROOT, 'server/dist/command/cli.js');
 /** The daemon's real port, and the port the MCP proxy is pointed at. The fault sits between them. */
 const DAEMON_PORT = Number(process.env.TRANSPORT_FAULTS_DAEMON_PORT ?? '4746');
 const LINK_PORT = Number(process.env.TRANSPORT_FAULTS_LINK_PORT ?? '4747');

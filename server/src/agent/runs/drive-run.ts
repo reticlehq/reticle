@@ -11,14 +11,16 @@
  * So this folds the session's journal into the same artifact the replay path writes, and the sync
  * daemon that was already running picks it up with no other change.
  *
- * ── WHAT IT REFUSES TO SAY ──────────────────────────────────────────────────────────────────────
- * `RunCheckStatus` is binary, and `Verified` is not: `unknown` ("I could not tell") and `no-fault`
- * ("nothing was declared to prove") are neither pass nor fail, and the product's own rule is to
- * report both as NOT PROVED. Mapping them to PASS would put a false green on a dashboard, which is
- * the single failure this codebase exists to prevent; mapping them to FAIL would invent bugs. So
- * they are excluded from the checks and COUNTED IN THE NOTE, and a session whose verdicts were all
- * undetermined produces no run at all — because a run with zero checks computes to PASS, and a green
- * that means "nothing was measured" is worse than no row on the dashboard.
+ * ── WHAT IT WRITES DOWN ─────────────────────────────────────────────────────────────────────────
+ * Every verdict, in the words it was given. `unknown` ("I could not tell") and `no-fault` ("nothing
+ * was declared to prove") are neither pass nor fail, and this used to drop them, because the check
+ * outcome on disk was binary and had no spelling for either. They were counted in a sentence in the
+ * trigger note instead.
+ *
+ * That was the product's own failure mode wearing our clothes. A reader of the artifact saw only
+ * the verdicts we happened to be able to spell, and "I could not see" left the document. The
+ * outcome is four-valued now, so all four are recorded, and the run verdict counts an undetermined
+ * check as neither a pass nor a failure -- which is what those words already meant everywhere else.
  */
 
 import type { JournalVerdictEffect } from '@reticlehq/core/artifacts';
@@ -28,11 +30,9 @@ import {
   JournalVerdictEffectSchema,
   RunAgentKind,
   PredicateKind,
-  RunCheckStatus,
   RunFramework,
   RunProfile,
   RunTrigger,
-  Verified,
   type JournalAction,
   type RunCheck,
 } from '@reticlehq/core';
@@ -40,12 +40,6 @@ import type { VerificationRunInput } from './build-verification-run.js';
 
 /** The author of record when no MCP peer introduced itself. Mirrors verification-sync's default. */
 const UNNAMED_AGENT = 'reticle-mcp';
-
-/** Only these two are evidence about the app. See the note above on why the others are not. */
-const CHECK_STATUS: Partial<Record<Verified, RunCheckStatus>> = {
-  [Verified.YES]: RunCheckStatus.PASS,
-  [Verified.NO]: RunCheckStatus.FAIL,
-};
 
 export interface DriveRunDeps {
   runId: string;
@@ -116,17 +110,11 @@ export function driveRunFrom(
 ): VerificationRunInput | undefined {
   const found = verdicts(actions);
   const checks: RunCheck[] = [];
-  let undetermined = 0;
   for (const verdict of found) {
-    const status = CHECK_STATUS[verdict.verified];
-    if (status === undefined) {
-      undetermined += 1;
-      continue;
-    }
     checks.push({
       kind: PredicateKind.ELEMENT,
       predicate: verdict.claim,
-      status,
+      status: verdict.verified,
       ...(verdict.source === undefined ? {} : { evidence: { source: verdict.source } }),
       // Carried through rather than recomputed. These were established at the moment the verdict
       // was made and written down then; a run built later cannot know any of them, and inferring
@@ -140,16 +128,9 @@ export function driveRunFrom(
   }
   // A session that never verified anything has nothing to report, and saying so on a dashboard every
   // time somebody opens an app would be noise. A session that DID verify and resolved none of it is
-  // the opposite: it is the thing they most need to see, because it means their verification is not
-  // working.
-  //
-  // This used to refuse both, and the reason was sound at the time -- a run with zero checks computed
-  // to PASS, so writing one put a green row meaning "nothing was measured" on the dashboard, which is
-  // the false green this product exists to prevent. Silence was the only honest answer available.
-  //
-  // A zero-check run now reads UNKNOWN, so the honest answer exists and can be given. The count of
-  // what went undetermined already travels in the note.
-  if (0 === checks.length && 0 === undetermined) return undefined;
+  // the opposite: it is the thing they most need to see -- and those checks are now in the list
+  // rather than counted in a sentence, so the row shows what happened instead of alluding to it.
+  if (0 === checks.length) return undefined;
   return {
     runId: deps.runId,
     durationMs: spanOf(actions),
@@ -161,14 +142,7 @@ export function driveRunFrom(
     agent: { id: deps.agentId ?? UNNAMED_AGENT, kind: RunAgentKind.CODING_AGENT },
     trigger: {
       kind: RunTrigger.EDIT,
-      // The undetermined count is stated rather than dropped: a reader comparing this row against
-      // their transcript would otherwise find verdicts that are simply missing, and conclude the
-      // artifact is lossy rather than deliberately silent about what was never proved.
-      note:
-        0 === undetermined
-          ? 'driven live through the Reticle tools'
-          : `driven live through the Reticle tools; ${String(undetermined)} further verdict(s) were ` +
-            'undetermined (unknown / no-fault) and are not counted as passes or failures',
+      note: 'driven live through the Reticle tools',
     },
     ...(deps.editEpoch === undefined ? {} : { editEpoch: deps.editEpoch }),
     changedFiles: [],

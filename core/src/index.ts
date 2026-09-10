@@ -69,7 +69,14 @@ export * from './wire/platform.js';
 export * from './wire/channel.js';
 export * from './verdict/revision.js';
 export * from './realm/registry.js';
-export * from '@reticlehq/openreality';
+// The protocol is NOT re-exported here, deliberately.
+//
+// `@reticlehq/openreality` is the specification this codebase implements, and it is a separate
+// package precisely so that somebody implementing it does not have to install the product. Blanket
+// re-exporting it from core erases that line: a consumer reaches a protocol name through Reticle
+// and now depends on Reticle for a contract that was written not to need it. Import the protocol
+// from the protocol. What core re-exports are the few names this repository has always spelled its
+// own way -- see wire/channel.ts, which imports the rule rather than restating it.
 export * from './telemetry-session.js'; // the session/project rollup payloads
 export * from './telemetry-license.js'; // LicenseActivation — shared by the licence gate and telemetry
 export * from './telemetry-feedback.js'; // the two things a PERSON writes: feedback + a self-declared identity // anonymous adoption telemetry wire contract (DAU/WAU/MAU/installs)

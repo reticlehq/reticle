@@ -67,6 +67,20 @@ A conformance suite whose author passes everything is a suite shaped around its 
 
 ## What is here, and what is not
 
-The scenarios, the profiles and the scoring rules are here and are checked by tests that need nothing running.
+The scenarios, the profiles, the scoring rules and the **driver** are all here, and every one of them is checked by tests that need nothing running.
 
-The driver — the part that starts a bridge, launches your process and speaks the wire — is the piece that needs a live connection, and it is **not yet written**. Until it is, this directory defines what conformance means without being able to measure it. That is stated here rather than implied, because a suite that cannot run is not a suite that passes.
+What is still yours to supply is the **binding**: `driveAll` takes a client with three methods — `hello()`, `command(name, args)` and `verify(claim)` — and how those reach your implementation is your business, because we have never seen your platform. Wire them to a socket, a pipe, or a function call.
+
+```js
+import { driveAll } from '@reticlehq/conformance/drive.mjs';
+
+const report = await driveAll(myClient, {
+  name: 'my-implementation',
+  version: '0.1.0',
+  platform: 'native',
+  channels: ['net', 'log', 'state', 'signal'],
+  profile: 'in-realm',
+});
+```
+
+The driver refuses to help you. A plant that is refused, a call that throws and a scenario that runs long are all **absent** — never failed, and never quietly retried until they pass. A suite that helps is a suite whose scores mean nothing.

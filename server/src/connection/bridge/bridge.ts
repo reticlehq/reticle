@@ -607,6 +607,10 @@ export class Bridge {
           // Kept so a remedy can check whether it applies to THIS page — see body-capture-remedy.
           session.sdkVersion = parsed.sdkVersion;
           session.captureBodies = parsed.captureBodies;
+          // What this page says it is watching. Read at assert time to refuse a claim that needs
+          // a channel nobody declared, rather than answering it with an empty result that reads
+          // exactly like the value not being there.
+          session.channels = parsed.channels;
           if (skew !== undefined) {
             log('version_skew', {
               sessionId: session.id,

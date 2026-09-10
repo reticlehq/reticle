@@ -1,6 +1,12 @@
 /**
  * One record per realm, in a table the compiler refuses to leave a hole in.
  *
+ * NOT the protocol's `Realm`. That is an abstract class in `@reticlehq/openreality` describing what
+ * a realm can DO -- eight questions an implementation answers. This describes what a realm IS LIKE:
+ * four fixed traits the rest of the codebase branches on. Both were called `Realm` for a while,
+ * in one repository, which is how a barrel export starts refusing to compile and how a reader
+ * starts believing this file is the specification. It is not; it is a lookup table.
+ *
  * A realm is the kind of place an app runs: a browser tab, an Electron window, a Tauri window. Most
  * of Reticle does not care which — a click is a click and a failed request is a failed request — but
  * a handful of decisions genuinely differ, and until now each was a separate `if` in whichever file
@@ -17,7 +23,7 @@
  * with a grep and hoping the grep was complete — and a missed one does not break loudly, it quietly
  * gives a new realm the *web* answer, which is the answer most likely to look plausible and be wrong.
  *
- * Gathered here, adding a realm is one row. `Record<AppRuntime, Realm>` means leaving it out is a
+ * Gathered here, adding a realm is one row. `Record<AppRuntime, RealmTraits>` means leaving it out is a
  * COMPILE error rather than a silent default, which is the whole reason this is a table and not a
  * lookup function with a fallback.
  *
@@ -31,7 +37,7 @@ import { AppRuntime } from '../telemetry-feedback.js';
 import { PlatformProfile } from '../wire/platform.js';
 
 /** What Reticle needs to know about a realm that it cannot work out by looking. */
-export interface Realm {
+export interface RealmTraits {
   /**
    * Does the app run in a window of its own, rather than a browser tab?
    *
@@ -87,7 +93,7 @@ export interface Realm {
  * Adding one is a row here plus a value on `AppRuntime`. The compiler will not let you add the value
  * without the row, which is the point: the alternative is a lookup that quietly answers "web".
  */
-export const REALMS: Record<AppRuntime, Realm> = {
+export const REALMS: Record<AppRuntime, RealmTraits> = {
   [AppRuntime.WEB]: {
     isDesktopShell: false,
     usesWebKit: false,
@@ -143,7 +149,7 @@ export function isKnownRealm(runtime: string | undefined): runtime is AppRuntime
  * a page that may be newer than this build, so "a realm I have never heard of" is a case that has to
  * exist -- and typing the parameter as the enum would describe a guarantee the wire cannot make.
  */
-export function realmOf(runtime: string | undefined): Realm {
+export function realmOf(runtime: string | undefined): RealmTraits {
   const known = Object.hasOwn(REALMS, runtime ?? '')
     ? REALMS[runtime as AppRuntime]
     : REALMS[AppRuntime.WEB];

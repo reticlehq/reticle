@@ -10,7 +10,7 @@
 import {
   ReticleVerificationRunSchema,
   RUN_FILE_VERSION,
-  RunCheckStatus,
+  Verified,
   RunConfidence,
   RunFlowStatus,
   VerdictStatus,
@@ -33,15 +33,19 @@ export type VerificationRunInput = Omit<
  * Compute the verdict deterministically from the run's flows, checks, and risks.
  * Rules (in order): a gated risk blocks → FAIL; mixed pass+fail → PARTIAL; any fail → FAIL;
  * nothing proved either way → UNKNOWN; else PASS.
+ *
+ * A check that came out `unknown` or `no-fault` counts as NEITHER, which is what those words mean.
+ * A run of nothing but undetermined checks therefore reaches UNKNOWN rather than PASS -- the whole
+ * reason those two values now survive into the artifact instead of being dropped at its door.
  * Confidence: nothing ran → LOW; an oracle-backed flow or any check ran → HIGH; only smoke → MEDIUM.
  */
 export function computeVerdict(input: VerificationRunInput): RunVerdict {
   const passes =
     input.flows.filter((f) => f.status === RunFlowStatus.PASS || f.status === RunFlowStatus.HEALED)
-      .length + input.checks.filter((c) => c.status === RunCheckStatus.PASS).length;
+      .length + input.checks.filter((c) => c.status === Verified.YES).length;
   const fails =
     input.flows.filter((f) => f.status === RunFlowStatus.FAIL).length +
-    input.checks.filter((c) => c.status === RunCheckStatus.FAIL).length;
+    input.checks.filter((c) => c.status === Verified.NO).length;
   const blockingRisks = input.risks.filter((r) => r.gated).length;
 
   const reasons: string[] = [];
@@ -55,7 +59,7 @@ export function computeVerdict(input: VerificationRunInput): RunVerdict {
     }
   }
   for (const c of input.checks) {
-    if (c.status === RunCheckStatus.FAIL) reasons.push(`check failed: ${c.predicate}`);
+    if (c.status === Verified.NO) reasons.push(`check failed: ${c.predicate}`);
   }
   for (const r of input.risks) {
     if (r.gated) reasons.push(`blocked: ${r.surface} risk — ${r.detail}`);

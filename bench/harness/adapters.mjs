@@ -238,7 +238,7 @@ export class ReticleAdapter {
   async start() {
     this.c = new McpStdioClient(
       'node',
-      ['server/dist/cli.js', 'mcp', '--port', this.port, '--drive', this.url],
+      ['server/dist/command/cli.js', 'mcp', '--port', this.port, '--drive', this.url],
       // The default `hybrid` profile advertises only the core verify tools directly and reaches the
       // rest through 2 meta-tools. This deterministic client calls tools BY NAME (record_start,
       // flow_save, flow_replay…), so it needs them advertised directly — opt into the full profile.
@@ -486,7 +486,7 @@ export class ReticleAdapter {
     // Explicit daemon teardown — reticle mcp leaves a persistent daemon + driven browser otherwise.
     try {
       const { execFileSync } = await import('node:child_process');
-      execFileSync('node', ['server/dist/cli.js', 'stop', '--port', this.port, '--quiet'], {
+      execFileSync('node', ['server/dist/command/cli.js', 'stop', '--port', this.port, '--quiet'], {
         stdio: 'ignore',
       });
     } catch {

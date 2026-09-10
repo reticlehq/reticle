@@ -1,5 +1,6 @@
 import type { WebSocket } from 'ws';
-import type { ImpactSnapshot } from '@reticlehq/core';
+import type { ChannelId, ImpactSnapshot } from '@reticlehq/core';
+import type { HandshakeFacts } from './handshake-facts.js';
 import { recordImpact } from '../../features/impact/impact-recorder.js';
 import { LastAct } from './last-act.js';
 import { GapLedger } from '@reticlehq/engine/evidence/gap-ledger.js';
@@ -110,7 +111,7 @@ const WS_OPEN = 1;
  * One connected browser tab. Owns its socket, a ring buffer of observations, and the
  * in-flight command map. `clock` is injected so elapsed-time logic stays testable.
  */
-export class Session {
+export class Session implements HandshakeFacts {
   readonly id: string;
   /** Stable build-stamped project identity; undefined for v1.0 SDKs that omit it. */
   readonly projectId: string | undefined;
@@ -129,22 +130,13 @@ export class Session {
   title: string;
   adapters: string[];
   hasCapabilities: boolean;
-  /** Set when the page's SDK version differs from the daemon's (see version-skew.ts). */
+  // What the page said about itself at HELLO. Declared on `HandshakeFacts`, which is where the
+  // reasoning lives -- including the rule that `undefined` means "too old to say" and never "no".
   versionSkew?: string;
-  /** SDK version from HELLO; kept so a remedy can check it applies — see body-capture-remedy.ts. */
   sdkVersion?: string | undefined;
-  /** Whether the page records network bodies; undefined on an SDK too old to say. See HELLO. */
   captureBodies?: boolean | undefined;
-  /**
-   * Whether this build stamps `data-reticle-source`, when the build plugin said. See HELLO.
-   * `false` separates "the project turned it off" from "nothing provides one"; undefined is unknown.
-   */
+  channels?: readonly ChannelId[] | undefined;
   sourceMapping?: boolean | undefined;
-  /**
-   * Extra key names this app declared sensitive via `connect({ redact: { keys } })`. Held so the
-   * DRIVEN path can redact them too — a request body the daemon captures from the network stack
-   * never passes through the SDK, so nothing else would.
-   */
   readonly redactKeys: readonly string[];
 
   readonly #socket: WebSocket;

@@ -35,6 +35,8 @@ import {
 import { Transport, type CommandOutcome } from './transport/transport.js';
 import { unreachableMessage } from './transport/unreachable-message.js';
 import { adapterNames } from './registry/adapters.js';
+import { declaredChannels } from './registry/declared-channels.js';
+import { declaredCommands, declaredPlatform } from './registry/declared-platform.js';
 import {
   registerCapabilities,
   setCapabilitiesListener,
@@ -612,6 +614,15 @@ export class Reticle {
       adapters: adapterNames(),
       ...(this.#token === undefined ? {} : { token: this.#token }),
       hasCapabilities: hasCapabilities(),
+      // The protocol's first assertion, and one this implementation did not used to make. A claim
+      // reading a channel absent from this list is `unknown` before an action is spent on it,
+      // rather than after -- and "nothing was watching" stops reading like "it did not happen".
+      channels: declaredChannels(),
+      // The other two halves of the same declaration. What kind of place this is, and what it
+      // will answer — so a decider learns at connect time which requests would be refused,
+      // instead of one spent action at a time.
+      platform: declaredPlatform(),
+      commands: declaredCommands(),
       // Announced so a body-reading assertion can be refused before an action is spent on it.
       captureBodies: this.#captureBodies,
       // Absent when no build plugin said either way — "unknown", never "on". A red verdict with no

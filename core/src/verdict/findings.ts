@@ -4,6 +4,8 @@
  * file under the size cap.
  */
 
+import { ChannelId, disagreementCanConvict } from '../wire/channel.js';
+
 /**
  * Cross-channel contradictions: two observation channels making INCOMPATIBLE claims about the same
  * action. This is the bug class a human structurally cannot see, because a human has one channel
@@ -322,6 +324,56 @@ export function tierOfFinding(kind: string): FindingTier {
  * write. Narrowing to writes is what keeps the rules from crying wolf on ordinary reads.
  */
 export const MUTATING_METHODS: readonly string[] = ['POST', 'PUT', 'PATCH', 'DELETE', 'IPC'];
+
+/**
+ * Which two channels each contradiction sets against each other.
+ *
+ * `Record<ContradictionKind, ...>` on purpose: a new kind does not compile until somebody says what
+ * it compares. That is the point -- the independence rule is only checkable if the pairing is
+ * written down, and until now it was carried in the head of whoever added the rule.
+ *
+ * The pairing is causal, not observational: it names where each side of the disagreement was
+ * PRODUCED. A screenshot is `ui` even though it is taken out of process, because the pixels came
+ * from the render the action caused.
+ */
+export const CONTRADICTION_CHANNELS: Record<ContradictionKind, readonly [ChannelId, ChannelId]> = {
+  [ContradictionKind.UI_ADVANCED_REQUEST_FAILED]: [ChannelId.UI, ChannelId.NET],
+  [ContradictionKind.SIGNAL_CONTRADICTED]: [ChannelId.SIGNAL, ChannelId.NET],
+  [ContradictionKind.RESPONSE_IGNORED]: [ChannelId.NET, ChannelId.UI],
+  [ContradictionKind.SIGNAL_WITHOUT_CONSEQUENCE]: [ChannelId.SIGNAL, ChannelId.NET],
+  [ContradictionKind.CONSEQUENCE_ELSEWHERE]: [ChannelId.NET, ChannelId.UI],
+  [ContradictionKind.DUPLICATE_REQUEST]: [ChannelId.NET, ChannelId.NET],
+  [ContradictionKind.DUPLICATE_REQUEST_UNRELATED]: [ChannelId.NET, ChannelId.NET],
+  // The evidence is the interleaving of two responses, read against what the screen ended up showing.
+  [ContradictionKind.STALE_RESPONSE_APPLIED]: [ChannelId.NET, ChannelId.UI],
+  // Both sides are the server's own answer: the status line and the payload under it.
+  [ContradictionKind.PARTIAL_FAILURE_IN_OK_RESPONSE]: [ChannelId.NET, ChannelId.NET],
+  [ContradictionKind.UNIT_MISMATCH]: [ChannelId.UI, ChannelId.NET],
+  // What was sent against what came back -- the request and its echo, neither derived from the click.
+  [ContradictionKind.WRITE_FIELD_IGNORED]: [ChannelId.NET, ChannelId.NET],
+  [ContradictionKind.REQUEST_NEVER_SETTLED]: [ChannelId.TIME, ChannelId.NET],
+  // The app's message to the user, against the status the server actually returned.
+  [ContradictionKind.FAILURE_MISATTRIBUTED]: [ChannelId.UI, ChannelId.NET],
+  // "Nothing anywhere moved" is a claim about every channel; `net` is the independent one in it.
+  [ContradictionKind.ACTION_HAD_NO_EFFECT]: [ChannelId.NET, ChannelId.UI],
+  [ContradictionKind.ROUTE_RENDERED_NOTHING]: [ChannelId.ROUTE, ChannelId.NET],
+  // Not two channels disagreeing but evidence disagreeing with the clock, which is the independent
+  // side. Recorded rather than exempted: an exemption is a hole somebody later widens.
+  [ContradictionKind.EVIDENCE_SUPERSEDED]: [ChannelId.TIME, ChannelId.UI],
+  [ContradictionKind.EVIDENCE_PREDATES_EDIT]: [ChannelId.TIME, ChannelId.UI],
+};
+
+/**
+ * May this kind of disagreement be reported as a fault in the app?
+ *
+ * False when both sides come from the app's own actuation path. Such a disagreement is real and
+ * worth reporting -- the app contradicted itself -- but it is not evidence that the action failed,
+ * and treating it as such is how a verdict channel earns a reputation for crying wolf.
+ */
+export function contradictionCanConvict(kind: ContradictionKind): boolean {
+  const pair = CONTRADICTION_CHANNELS[kind];
+  return disagreementCanConvict(pair[0], pair[1]);
+}
 
 export const CrawlAnomalyKind = {
   CONSOLE_ERROR: 'console-error', // the click logged a console.error / uncaught error

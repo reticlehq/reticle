@@ -26,7 +26,7 @@ process.chdir(ROOT);
 
 const client = new McpStdioClient(
   'node',
-  ['server/dist/cli.js', 'mcp', '--port', PORT, '--drive', APP],
+  ['server/dist/command/cli.js', 'mcp', '--port', PORT, '--drive', APP],
   { RETICLE_PORT: PORT, RETICLE_TELEMETRY: '0' },
 );
 await client.start();

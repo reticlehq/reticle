@@ -43,5 +43,8 @@
   "dependencies": {
     "@reticlehq/core": "workspace:*",
     "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@reticlehq/openreality": "workspace:*"
   }
 }

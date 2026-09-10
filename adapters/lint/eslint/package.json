@@ -16,7 +16,7 @@
     "typecheck": "tsc -b",
     "lint": "eslint src",
     "test:unit": "vitest run src --passWithNoTests",
-    "prepack": "tsc -b && node ../scripts/prepare-dist.mjs dist"
+    "prepack": "tsc -b && node ../../../scripts/prepare-dist.mjs dist"
   },
   "dependencies": {
     "@typescript-eslint/utils": "^8.67.0"

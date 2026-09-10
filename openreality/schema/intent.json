@@ -1,0 +1,43 @@
+{
+  "$id": "https://openreality.dev/schema/v1/intent.json",
+  "$ref": "#/definitions/intent",
+  "definitions": {
+    "intent": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "statement": {
+          "type": "string",
+          "minLength": 1
+        },
+        "origin": {
+          "type": "string",
+          "enum": ["user", "developer", "agent", "system", "workflow", "derived"]
+        },
+        "status": {
+          "type": "string",
+          "enum": ["declared", "bound", "abandoned"]
+        },
+        "claims": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "abandonedBecause": {
+          "type": "string"
+        },
+        "declaredAt": {
+          "type": "integer"
+        }
+      },
+      "required": ["id", "statement", "origin", "status"],
+      "additionalProperties": false
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}

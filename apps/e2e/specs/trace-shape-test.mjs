@@ -57,7 +57,7 @@ process.chdir(ROOT);
 await freePortSafely(Number(PORT));
 const before = sizeOf(DAEMON_LOG);
 
-const client = new McpStdioClient('node', ['server/dist/cli.js', 'mcp', '--port', PORT], {
+const client = new McpStdioClient('node', ['server/dist/command/cli.js', 'mcp', '--port', PORT], {
   RETICLE_PORT: PORT,
   RETICLE_TRACE: '1',
   RETICLE_TELEMETRY: '0',

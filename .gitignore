@@ -56,7 +56,7 @@ build/
 *.tsbuildinfo
 # Rust build output for the Tauri smoke app (multi-GB; never committed)
 apps/tauri-smoke/src-tauri/target/
-packages/tauri/target/
+adapters/realm/tauri/target/
 apps/tauri-smoke/src-tauri/Cargo.lock
 apps/tauri-smoke/src-tauri/gen/
 
@@ -116,10 +116,10 @@ leads/
 # a branch model this repo cannot give them: a pristine `clean` branch to install into, because a
 # fresh install is only meaningful on a surface that has never seen Reticle.
 
-# Copied into packages/server at prepack so the skill and docs ship with the CLI users npx.
+# Copied into server/ at prepack so the skill and docs ship with the CLI users npx.
 # The originals at the repo root are the only editable copies.
-/packages/server/SKILL.md
-/packages/server/docs/
+/server/SKILL.md
+/server/docs/
 
 # Maintainer rules for GitHub conduct — issues, PRs, releases. Deliberately private: it names the
 # mistakes that produced each rule, and those belong to the people who made them, not to the repo.

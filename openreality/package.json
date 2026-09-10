@@ -1,7 +1,7 @@
 {
   "name": "@reticlehq/openreality",
   "version": "2.14.0",
-  "description": "The open specification Reticle is built on: what a realm must be able to do, and what a verdict is allowed to say.",
+  "description": "The Open Verification Protocol: the vocabulary, the rules and the interface an implementation answers, so that \"it works\" can be checked from outside the thing claiming it.",
   "license": "Apache-2.0",
   "type": "module",
   "main": "./dist/index.js",
@@ -10,15 +10,25 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
-    }
+    },
+    "./schema/*.json": "./schema/*.json"
   },
   "files": [
     "dist",
-    "README.md"
+    "schema",
+    "README.md",
+    "SPEC.md",
+    "GOVERNANCE.md"
   ],
   "scripts": {
-    "build": "tsc -b",
+    "build": "tsc -b && node scripts/gen-schema.mjs",
     "test:unit": "vitest run --passWithNoTests",
     "test:guards": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "zod-to-json-schema": "^3.23.5"
   }
 }

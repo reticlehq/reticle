@@ -42,6 +42,11 @@ const PINNED_VERSIONS: Record<string, string> = {
   'core/src/wire/messages.ts':
     '.int().min(RETICLE_MIN_PROTOCOL_VERSION).max(RETICLE_PROTOCOL_VERSION)',
   'core/src/wire/types.ts': 'CONTRACT_FILE_VERSION,PROJECT_FILE_VERSION',
+  // `Flow.version` in the protocol. A recorded route is written down and replayed later, so it is
+  // an on-disk format like any other and belongs under this pin. Nothing reads a stored flow at a
+  // version it does not understand yet -- there is only version 1 -- and the day there are two,
+  // this line going red is the reminder to decide what happens to the ones already written.
+  'openreality/src/vocabulary/memory.ts': '.int().positive()',
   'server/src/agent/capsule/capsule-store.ts': 'CAPSULE_VERSION',
   'server/src/features/flows/assertion-tiers-store.ts': '1',
   'server/src/features/flows/flake.ts': '1',

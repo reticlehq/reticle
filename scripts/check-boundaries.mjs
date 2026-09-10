@@ -69,9 +69,15 @@ export const SIDE = Object.freeze({
   // it, which needs neither a page nor a socket. That is the whole reason they can be lifted out of
   // the daemon and used on their own.
   '@reticlehq/engine': 'iso',
-  // The specification. Isomorphic for the same reason core is, and stricter in practice: it has no
-  // dependencies at all, because a contract that needs a library to read is a contract with a
-  // dependency somebody else has to accept.
+  // The specification, and the BOTTOM of the graph -- `@reticlehq/core` depends on it, not the
+  // reverse. A protocol defined inside the product it describes is two definitions of one
+  // contract, and the two drift in the product's favour.
+  //
+  // It carries `zod` and nothing else. That is one dependency more than it had, and it buys the
+  // thing that makes the contract readable without this ecosystem at all: the JSON Schemas under
+  // `schema/` are GENERATED from those definitions at build time, so an implementation in another
+  // language validates against JSON and imports none of this. Hand-written JSON Schema beside
+  // hand-written types is the drift problem wearing a solution's clothes.
   '@reticlehq/openreality': 'iso',
 });
 

@@ -1,0 +1,127 @@
+{
+  "$id": "https://openreality.dev/schema/v1/evidence.json",
+  "$ref": "#/definitions/evidence",
+  "definitions": {
+    "evidence": {
+      "type": "object",
+      "properties": {
+        "observation": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "window": {
+              "type": "string",
+              "minLength": 1
+            },
+            "channel": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "ui",
+                    "net",
+                    "state",
+                    "signal",
+                    "log",
+                    "route",
+                    "storage",
+                    "time",
+                    "visual"
+                  ]
+                },
+                {
+                  "type": "string",
+                  "pattern": "^x-[a-z0-9-]+$"
+                }
+              ]
+            },
+            "at": {
+              "type": "integer"
+            },
+            "value": {},
+            "summary": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": ["id", "window", "channel", "at", "summary"],
+          "additionalProperties": false
+        },
+        "provenance": {
+          "type": "object",
+          "properties": {
+            "class": {
+              "type": "string",
+              "enum": ["authoritative", "derived", "observed", "learned"]
+            },
+            "source": {
+              "type": "string",
+              "minLength": 1
+            },
+            "method": {
+              "type": "string",
+              "minLength": 1
+            },
+            "subject": {
+              "type": "object",
+              "properties": {
+                "surface": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "enum": ["web", "desktop", "mobile", "service", "game", "device"]
+                    },
+                    {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  ]
+                },
+                "instance": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "epoch": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "locator": {
+                  "type": "string"
+                },
+                "revision": {
+                  "type": "string"
+                }
+              },
+              "required": ["surface", "instance"],
+              "additionalProperties": false
+            },
+            "at": {
+              "type": "integer"
+            },
+            "confidence": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            }
+          },
+          "required": ["class", "source", "method", "subject", "at"],
+          "additionalProperties": false
+        },
+        "independence": {
+          "type": "string",
+          "enum": ["independent", "actuation-derived"]
+        },
+        "grade": {
+          "type": "string",
+          "enum": ["consequence", "presence", "context"]
+        }
+      },
+      "required": ["observation", "provenance", "independence", "grade"],
+      "additionalProperties": false
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}

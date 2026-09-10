@@ -57,7 +57,7 @@ console.log('\n=== DAEMON LIFECYCLE: idle exit, no loop, wake on demand ===');
 process.chdir(ROOT);
 const client = new McpStdioClient(
   'node',
-  ['server/dist/cli.js', 'mcp', '--port', PORT],
+  ['server/dist/command/cli.js', 'mcp', '--port', PORT],
   {
     RETICLE_PORT: PORT,
     RETICLE_TELEMETRY: '0',
@@ -130,7 +130,7 @@ chk('a fresh daemon was started on demand', secondPid !== null && secondPid !== 
 chk('and the wake was transparent to the agent', Array.isArray(result?.sessions), `${answeredMs}ms`);
 
 try {
-  execSync(`node server/dist/cli.js stop --port ${PORT}`, { stdio: 'ignore' });
+  execSync(`node server/dist/command/cli.js stop --port ${PORT}`, { stdio: 'ignore' });
 } catch {
   /* already gone */
 }

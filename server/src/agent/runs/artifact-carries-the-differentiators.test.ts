@@ -3,7 +3,7 @@ import {
   PredicateKind,
   RUN_FILE_VERSION,
   RunAgentKind,
-  RunCheckStatus,
+  Verified,
   RunConfidence,
   RunIdSchema,
   RunProfile,
@@ -46,7 +46,7 @@ const run = (over: Partial<ReticleVerificationRun> = {}): ReticleVerificationRun
     {
       kind: PredicateKind.NET,
       predicate: 'POST /api/save 200',
-      status: RunCheckStatus.PASS,
+      status: Verified.YES,
       declaredBeforeActing: true,
       grade: 'net',
       couldNotSee: [],
@@ -82,7 +82,7 @@ describe('the exported artifact carries what makes a verdict a verdict', () => {
           {
             kind: PredicateKind.NET,
             predicate: 'POST /api/save 200',
-            status: RunCheckStatus.PASS,
+            status: Verified.YES,
             declaredBeforeActing: true,
             grade: 'net',
             couldNotSee: ['closed-shadow-root'],
@@ -104,7 +104,7 @@ describe('the exported artifact carries what makes a verdict a verdict', () => {
     const artifact = toArtifact(
       run({
         editEpoch: undefined,
-        checks: [{ kind: PredicateKind.NET, predicate: 'x', status: RunCheckStatus.PASS }],
+        checks: [{ kind: PredicateKind.NET, predicate: 'x', status: Verified.YES }],
       }),
     );
     expect('editEpoch' in artifact).toBe(false);

@@ -1,8 +1,8 @@
 import {
   type PredicateKind,
-  RunCheckStatus,
   type ReticleVerificationRun,
   type VerdictStatus,
+  type Verified,
 } from '@reticlehq/core';
 
 /**
@@ -27,7 +27,7 @@ export const OPENREALITY_ARTIFACT_KIND = 'openreality.verification';
 /** The version of the specification this document follows. See openreality/SPEC.md. */
 export const OPENREALITY_ARTIFACT_VERSION = 1;
 
-/** One thing that was claimed, and whether it held. */
+/** One thing that was claimed, and what checking it came out as. */
 export interface ExportedCheck {
   /** What was claimed, as the person or agent wrote it. */
   readonly claim: string;
@@ -55,13 +55,15 @@ export interface ExportedCheck {
    */
   readonly couldNotSee?: readonly string[];
   /**
-   * Whether it held.
+   * What it came out as: `yes`, `no`, `unknown` or `no-fault`.
    *
-   * A boolean here and not a verdict, deliberately: a check is one observation, and the four-valued
-   * verdict belongs to the run as a whole. A check nobody could evaluate is not exported as `false`
-   * -- see `exportedChecks`.
+   * This was a boolean, on the reasoning that a check is one observation and the four-valued
+   * verdict belongs to the run. That reasoning was wrong in the way this project exists to catch:
+   * a boolean has no way to say "I could not tell", so checks that said it were dropped on the way
+   * out, and the document a stranger reads was silent about our own blind spots while listing the
+   * app's. The specification says a verdict is one of four things; this is that verdict.
    */
-  readonly held: boolean;
+  readonly verdict: Verified;
 }
 
 /** What was verified, and about what. */
@@ -87,27 +89,43 @@ export interface ExportedArtifact {
    */
   readonly editEpoch?: number;
   readonly checks: readonly ExportedCheck[];
-  readonly verdict: {
+  /**
+   * The run's own summary over its checks.
+   *
+   * A different question from a check's verdict and so a different vocabulary, deliberately:
+   * `partial` says some held and some did not, which is not something a single claim can be.
+   */
+  readonly summary: {
     readonly status: VerdictStatus;
     /** Why, in the words the run recorded. Never re-worded here. */
     readonly because: readonly string[];
+    /** Which check this is about, when it is about one, so a later document can correct it. */
+    readonly checkId?: string;
+    /**
+     * The earlier verdict this replaces, written `<runId>#<checkId>`.
+     *
+     * Present only on a correction, and the document it names is not withdrawn. Both stand, so
+     * "we always knew" stops being expressible.
+     */
+    readonly supersedes?: string;
   };
 }
 
 /**
- * Only the checks that were actually decided.
+ * Every check, including the ones nothing could decide.
  *
- * A check the run could not evaluate is dropped rather than exported as "did not hold". The two are
- * not the same thing, and a reader counting failures would be counting our own gaps as the app's.
+ * This used to drop those, because the exported outcome was a boolean and neither `true` nor
+ * `false` is true of them. Dropping was the least-wrong option available and it was still wrong:
+ * a reader comparing the document to their session found verdicts simply absent, and a reader who
+ * did not compare read a shorter, cleaner list than the evidence supports.
  */
 function exportedChecks(run: ReticleVerificationRun): ExportedCheck[] {
   const decided: ExportedCheck[] = [];
   for (const check of run.checks) {
-    if (check.status !== RunCheckStatus.PASS && check.status !== RunCheckStatus.FAIL) continue;
     decided.push({
       claim: check.predicate,
       reads: check.kind,
-      held: check.status === RunCheckStatus.PASS,
+      verdict: check.status,
       // Spread, so a value the run did not record leaves the key out rather than writing a
       // comfortable default. `declaredBeforeActing: false` says the claim came afterwards; absent
       // says nobody recorded which, and a reader must be able to tell those apart.
@@ -143,6 +161,13 @@ export function toArtifact(run: ReticleVerificationRun): ExportedArtifact {
     durationMs: run.durationMs,
     ...(run.editEpoch === undefined ? {} : { editEpoch: run.editEpoch }),
     checks: exportedChecks(run),
-    verdict: { status: run.verdict.status, because: run.verdict.reasons },
+    summary: {
+      status: run.verdict.status,
+      because: run.verdict.reasons,
+      // Spread, per the rule at the top: a correction that is not one must not carry an empty
+      // pointer, which a reader would take for a citation nothing resolves.
+      ...(run.verdict.checkId === undefined ? {} : { checkId: run.verdict.checkId }),
+      ...(run.verdict.supersedes === undefined ? {} : { supersedes: run.verdict.supersedes }),
+    },
   };
 }

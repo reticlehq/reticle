@@ -1,0 +1,49 @@
+{
+  "$id": "https://openreality.dev/schema/v1/assertion.json",
+  "$ref": "#/definitions/assertion",
+  "definitions": {
+    "assertion": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "predicate": {},
+        "reads": {
+          "type": "string",
+          "minLength": 1
+        },
+        "channels": {
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "ui",
+                  "net",
+                  "state",
+                  "signal",
+                  "log",
+                  "route",
+                  "storage",
+                  "time",
+                  "visual"
+                ]
+              },
+              {
+                "type": "string",
+                "pattern": "^x-[a-z0-9-]+$"
+              }
+            ]
+          },
+          "minItems": 1
+        }
+      },
+      "required": ["id", "reads", "channels"],
+      "additionalProperties": false
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}

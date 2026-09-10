@@ -1,0 +1,40 @@
+{
+  "$id": "https://openreality.dev/schema/v1/subject-ref.json",
+  "$ref": "#/definitions/subject-ref",
+  "definitions": {
+    "subject-ref": {
+      "type": "object",
+      "properties": {
+        "surface": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": ["web", "desktop", "mobile", "service", "game", "device"]
+            },
+            {
+              "type": "string",
+              "minLength": 1
+            }
+          ]
+        },
+        "instance": {
+          "type": "string",
+          "minLength": 1
+        },
+        "epoch": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "locator": {
+          "type": "string"
+        },
+        "revision": {
+          "type": "string"
+        }
+      },
+      "required": ["surface", "instance"],
+      "additionalProperties": false
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}

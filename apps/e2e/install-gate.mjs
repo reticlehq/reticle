@@ -124,7 +124,7 @@ function pm(cmd, args = []) {
 }
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
-const CLI = join(ROOT, 'server/dist/cli.js');
+const CLI = join(ROOT, 'server/dist/command/cli.js');
 /** Private ports, so this never fights the battery or a developer's own daemon. */
 /**
  * Separate port ranges for the self-test, which runs FIRST in CI and in the same job.

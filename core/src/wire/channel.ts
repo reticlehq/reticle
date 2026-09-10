@@ -1,3 +1,9 @@
+import {
+  CHANNEL_DEFAULTS,
+  ChannelId,
+  Independence,
+  disagreementCanConvict as protocolRule,
+} from '@reticlehq/openreality';
 import { PredicateKind } from '../verdict/consequence.js';
 
 /**
@@ -18,27 +24,7 @@ import { PredicateKind } from '../verdict/consequence.js';
  * phone's log stream and a server's stdout are one channel: `log`. A realm that has no console still
  * has somewhere errors go.
  */
-export const ChannelId = {
-  /** What is on screen and can be pointed at. Elements, text, whatever the surface renders. */
-  UI: 'ui',
-  /** Requests leaving and answers arriving. */
-  NET: 'net',
-  /** Application state somebody can read: a store, a model, a view model. */
-  STATE: 'state',
-  /** Events the app announces about itself. */
-  SIGNAL: 'signal',
-  /** Where errors and messages go. A console, a log stream, stderr. */
-  LOG: 'log',
-  /** Where the user is: a URL, a screen, a navigation stack. */
-  ROUTE: 'route',
-  /** Values that outlive a single screen: cookies, local storage, preferences. */
-  STORAGE: 'storage',
-  /** Time itself -- whether things settled, how long something took, what is still in flight. */
-  TIME: 'time',
-  /** Pixels. Only a surface that renders has this one. */
-  VISUAL: 'visual',
-} as const;
-export type ChannelId = (typeof ChannelId)[keyof typeof ChannelId];
+export { ChannelId };
 
 /**
  * Which channels each kind of claim needs to look at.
@@ -91,3 +77,34 @@ function ANY_CHANNEL_A_CLAIM_CAN_READ(): readonly ChannelId[] {
 export function channelsRead(kind: PredicateKind): readonly ChannelId[] {
   return CHANNELS_OF[kind];
 }
+
+/**
+ * The independence rule, and where it lives.
+ *
+ * It is not defined here. It is defined in `@reticlehq/openreality`, which is the specification
+ * this codebase implements, and re-exported so the rest of the repository can reach it by the name
+ * it has always used.
+ *
+ * That direction is the point. A rule this load-bearing, defined in the product and described in
+ * the spec, is two definitions of one contract -- and the two would drift the way every such pair
+ * drifts, silently and in the product's favour. Defining it in the protocol and importing it here
+ * means an implementation cannot quietly hold a more convenient version of the rule than the one
+ * it publishes.
+ */
+export { Independence, CHANNEL_DEFAULTS };
+
+/**
+ * May a disagreement between these two channels be reported as a fault?
+ *
+ * The protocol's rule, reached by channel id rather than by descriptor, because that is the shape
+ * every caller here already holds. The judgement itself is not re-implemented -- it is the
+ * specification's function, applied to this repository's defaults.
+ */
+export function disagreementCanConvict(a: ChannelId, b: ChannelId): boolean {
+  return protocolRule({ id: a, ...CHANNEL_DEFAULTS[a] }, { id: b, ...CHANNEL_DEFAULTS[b] });
+}
+
+/** How independent each channel is, in the shape this repository already reads it in. */
+export const CHANNEL_INDEPENDENCE: Record<ChannelId, Independence> = Object.fromEntries(
+  Object.entries(CHANNEL_DEFAULTS).map(([id, spec]) => [id, spec.independence]),
+) as Record<ChannelId, Independence>;

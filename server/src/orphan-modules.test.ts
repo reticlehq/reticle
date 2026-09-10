@@ -50,6 +50,15 @@ const DECLARED_UNWIRED: Record<string, string> = {
     'check-stale-issues across .github/ returns nothing. A repo-hygiene guard has no caller inside ' +
     'the product by definition; the unit tests are here so the rule is testable without a network ' +
     'or a repo. Unwired in the sense that matters: no automation depends on it today.',
+  'connection/realm/web-realm.ts':
+    'answers the OpenReality SPI on behalf of a live session, so the web and desktop realms this ' +
+    'product ships can be scored against the specification this product publishes. Unwired on ' +
+    'purpose and honestly: the driven path still goes through the tools, and swapping it for this ' +
+    'adapter is a behaviour change that belongs with its own measurement. What it earns today is ' +
+    'conformance -- writing the eight answers down in the protocol shape is what surfaced that ' +
+    '`eventsSince` takes a timestamp and was being handed a count, and that a dispatch path here ' +
+    'opened no attribution window. Both were real, and neither was visible from inside the ' +
+    'wire-shaped code.',
   'connection/session/fake-session.ts':
     'test-only Session factory. Returns a REAL Session with inert defaults so a new method on the ' +
     'class arrives with a working default instead of undefined in seven stub files (#726); ' +

@@ -1,0 +1,75 @@
+{
+  "$id": "https://openreality.dev/schema/v1/claim.json",
+  "$ref": "#/definitions/claim",
+  "definitions": {
+    "claim": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "intent": {
+          "type": "string"
+        },
+        "statement": {
+          "type": "string",
+          "minLength": 1
+        },
+        "declaredAt": {
+          "type": "string",
+          "enum": ["before-action", "after-action"]
+        },
+        "assertions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "predicate": {},
+              "reads": {
+                "type": "string",
+                "minLength": 1
+              },
+              "channels": {
+                "type": "array",
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "enum": [
+                        "ui",
+                        "net",
+                        "state",
+                        "signal",
+                        "log",
+                        "route",
+                        "storage",
+                        "time",
+                        "visual"
+                      ]
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^x-[a-z0-9-]+$"
+                    }
+                  ]
+                },
+                "minItems": 1
+              }
+            },
+            "required": ["id", "reads", "channels"],
+            "additionalProperties": false
+          },
+          "default": []
+        }
+      },
+      "required": ["id", "statement", "declaredAt"],
+      "additionalProperties": false
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}

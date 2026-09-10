@@ -5,7 +5,7 @@
  */
 
 import {
-  RunCheckStatus,
+  Verified,
   RunFlowStatus,
   VerdictStatus,
   type ReticleVerificationRun,
@@ -35,9 +35,22 @@ function flowLine(f: RunFlowResult): string {
   return f.failureReason !== undefined ? `${head} — ${f.failureReason}` : head;
 }
 
+/**
+ * One glyph per verdict, and four of them.
+ *
+ * A check that could not be decided used to print `✗`, because anything that was not a pass was
+ * rendered as a failure. That told a reader the app was broken when the truth was that we could not
+ * see -- opposite next moves, one symbol.
+ */
+const CHECK_GLYPH: Record<Verified, string> = {
+  [Verified.YES]: '✓',
+  [Verified.NO]: '✗',
+  [Verified.UNKNOWN]: '?',
+  [Verified.NO_FAULT]: '–',
+};
+
 function checkLine(c: RunCheck): string {
-  const glyph = c.status === RunCheckStatus.PASS ? '✓' : '✗';
-  return `  ${glyph} ${c.kind}: ${c.predicate}`;
+  return `  ${CHECK_GLYPH[c.status]} ${c.kind}: ${c.predicate}`;
 }
 
 function riskLine(r: RunRisk): string {
@@ -61,9 +74,11 @@ export function renderRunReport(run: ReticleVerificationRun): string {
     for (const f of run.flows) out.push(flowLine(f));
   }
 
-  const failedChecks = run.checks.filter((c) => c.status === RunCheckStatus.FAIL);
+  // Counted, not subtracted. `total - failed` called every undetermined check a pass, which is the
+  // arithmetic version of the same false green.
+  const provedChecks = run.checks.filter((c) => c.status === Verified.YES).length;
   if (run.checks.length > 0) {
-    out.push('', `Checks: ${run.checks.length - failedChecks.length}/${run.checks.length} passed`);
+    out.push('', `Checks: ${provedChecks}/${run.checks.length} proved`);
     for (const c of run.checks) out.push(checkLine(c));
   }
 

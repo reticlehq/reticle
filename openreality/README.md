@@ -1,17 +1,37 @@
 # @reticlehq/openreality
 
-The specification Reticle implements, and the four verbs a realm has to answer.
+**The Open Verification Protocol** — a protocol for establishing machine-verifiable evidence that an intended action produced a claimed outcome in a real environment.
 
-**Read [SPEC.md](SPEC.md).** That is the specification; this file says what the package is.
+- **[SPEC.md](./SPEC.md)** — the normative specification.
+- **[GOVERNANCE.md](./GOVERNANCE.md)** — how it changes, and the vendor conflict it does not hide.
+- **`schema/`** — JSON Schema for every noun, generated from the source. Implement in any language by validating against these; you need none of this code.
 
-## What is in the package
+## Implementing it
 
-Very little on purpose: the four realm verbs as data, so code can enumerate them, and nothing else. It has no dependencies at all, because a contract that needs a library to read is a contract with a dependency somebody else has to accept.
+```bash
+npm i @reticlehq/openreality
+```
 
-## Where the normative part lives
+```ts
+import { Realm } from '@reticlehq/openreality';
 
-The message shapes and event payloads are defined once, as schemas, in `@reticlehq/core`, and both ends of the connection are checked against them. They are NOT copied into the specification document: two definitions of one contract is the drift problem rather than the fix. SPEC.md points at them and explains what they mean, and a check in this repository fails if the document and the code stop agreeing about the message kinds, the verdicts or the protocol version.
+class MyRealm extends Realm {
+  // The compiler tells you what you must answer.
+  // The rules you must not break are already written, and are not yours to override.
+}
+```
 
-## What this is not, yet
+`perform()` refuses undeclared capabilities on your behalf. There is no method that returns a verdict — a realm that could decide whether its own action succeeded would be the thing under test grading its own work, and every honest property of this protocol descends from the fact that it cannot.
 
-SPEC.md ends with the gaps, stated plainly: no required transport, no conformance suite you can run against your own realm, no version negotiation, and no way to discover which realms exist. Those are real, and listing them is the point -- somebody deciding whether to build on this deserves to know what they would be building on.
+## The four things that make it different from a test report
+
+|  |  |
+| --- | --- |
+| **Independence** | Evidence for a consequence must not come from the channel that performed the action. The application agreeing with itself is not evidence that it acted. |
+| **Grade** | A green has a price. "Something was on screen" cannot pay for it. |
+| **Coverage** | The verdict states what it could _not_ see. No other verification format does. |
+| **Epoch** | Evidence is bound to a round of source edits, so observations of code that has been rewritten cannot answer for the code that replaced it. |
+
+## Verdicts
+
+`yes` · `no` · `unknown` · `no-fault` — and the last two are the point. An implementation that turns "I could not see" into `yes` is worse than no implementation, because it costs you the one thing you came for.

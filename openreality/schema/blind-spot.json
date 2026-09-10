@@ -1,0 +1,47 @@
+{
+  "$id": "https://openreality.dev/schema/v1/blind-spot.json",
+  "$ref": "#/definitions/blind-spot",
+  "definitions": {
+    "blind-spot": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "channel-unobserved",
+            "boundary-uncrossable",
+            "buffer-truncated",
+            "redacted",
+            "still-in-flight",
+            "effect-elsewhere"
+          ]
+        },
+        "channel": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": ["ui", "net", "state", "signal", "log", "route", "storage", "time", "visual"]
+            },
+            {
+              "type": "string",
+              "pattern": "^x-[a-z0-9-]+$"
+            }
+          ]
+        },
+        "detail": {
+          "type": "string",
+          "minLength": 1
+        },
+        "impeaching": {
+          "type": "boolean"
+        },
+        "remedy": {
+          "type": "string"
+        }
+      },
+      "required": ["kind", "detail", "impeaching"],
+      "additionalProperties": false
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}

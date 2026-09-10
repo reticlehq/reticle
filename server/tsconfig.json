@@ -7,5 +7,18 @@
     "types": ["node"]
   },
   "include": ["src/**/*"],
-  "references": [{ "path": "../core" }, { "path": "../init" }, { "path": "../engine" }]
+  "references": [
+    {
+      "path": "../core"
+    },
+    {
+      "path": "../init"
+    },
+    {
+      "path": "../engine"
+    },
+    {
+      "path": "../openreality"
+    }
+  ]
 }

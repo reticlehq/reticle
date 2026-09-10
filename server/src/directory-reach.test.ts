@@ -70,6 +70,11 @@ function reaches(): Map<string, Set<string>> {
  * somewhere odd rather than a dependency anybody needed.
  */
 const REACHES_FOR: Record<string, readonly string[]> = {
+  // One way, and it stays one way: the OpenReality adapter reads a live session to answer the
+  // protocol's eight questions, and nothing in `session` knows the adapter exists. The mutual-pair
+  // count is unchanged by it, which is the test that matters -- a grouping that raises that number
+  // is a shorter directory listing bought with a real property.
+  realm: ['session'],
   bridge: ['flows', 'impact', 'project', 'session', 'telemetry', 'tools', 'version'],
   capsule: ['project'],
   cli: [

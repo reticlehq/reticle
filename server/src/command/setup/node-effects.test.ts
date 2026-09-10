@@ -146,7 +146,7 @@ describe('handing the dev server over', () => {
   // had succeeded, which is why it survived every gate except the one that reads exit codes.
   it('lets the process exit, rather than holding it open on the child’s pipes', () => {
     const script = `
-      import { OwnedDevServer } from '${pathToFileURL(join(process.cwd(), 'dist/setup/node-effects.js')).href}';
+      import { OwnedDevServer } from '${pathToFileURL(join(process.cwd(), 'dist/command/setup/node-effects.js')).href}';
       const server = new OwnedDevServer();
       // A stand-in dev server: long-lived and chatty, so its pipes are genuinely active.
       server.start('node -e "setInterval(() => console.log(1), 50)"', process.cwd(), {});

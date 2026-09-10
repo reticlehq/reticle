@@ -477,8 +477,18 @@ function toolNameOf(request: unknown): string | undefined {
 /**
  * The tools this codebase ships. Anything outside it came from a host via the `tools` parameter, and
  * is held to the verdict rule below.
+ *
+ * Read from the NAME ENUM and not from the tool table, because not every tool this codebase ships
+ * is in the table. `reticle_run` is synthesised at startup rather than declared, so the table did
+ * not contain it, so our own dispatcher was treated as somebody else's tool -- and every verdict
+ * forwarded through it was refused with a message telling its author to stop minting verdicts. The
+ * one path SKILL.md tells a reader to use for a tool that is not advertised was the one path that
+ * could not return the field SKILL.md tells them to read.
+ *
+ * The enum is a strict superset of the table, so a tool that is built rather than declared is
+ * covered the day it is added instead of the day somebody notices.
  */
-const FIRST_PARTY_TOOL_NAMES: ReadonlySet<string> = new Set(TOOLS.map((t) => t.name));
+const FIRST_PARTY_TOOL_NAMES: ReadonlySet<string> = new Set(Object.values(ReticleTool));
 
 export function createMcpServer(
   deps: ToolDeps,

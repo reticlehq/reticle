@@ -14,37 +14,18 @@
  * whatever this implementation happens to say.
  */
 
-/** The verdicts a scenario can require. Mirrors the specification's four. */
-export const Verdict = {
-  YES: 'yes',
-  NO: 'no',
-  UNKNOWN: 'unknown',
-  NO_FAULT: 'no-fault',
-};
-
 /**
- * The three profiles, from the least an implementation can do to the most.
+ * The vocabulary, imported rather than restated.
  *
- * Profiles rather than one bar, because a single bar silently sorts implementations by architecture
- * and only the one it was written against scores full marks. An implementation that cannot address
- * elements is not a worse implementation; it is a different one, and it should be able to say so and
- * still be conformant.
+ * These were declared here, as literals that "mirror the specification". They mirrored it for
+ * about a day. A suite that keeps its own copy of the thing it is scoring against will eventually
+ * score an implementation as wrong for disagreeing with a stale copy -- and it will be the suite
+ * that is wrong, loudly and in public, which is the worst possible place for this particular
+ * mistake to surface.
  */
-export const Profile = {
-  /** The floor. Something watching from outside the app can pass this. */
-  EFFECT: 'effect',
-  /** Code running inside the app's own world, so it can see state and the app's own signals. */
-  IN_REALM: 'in-realm',
-  /** Adds addressing things on screen and checking they are there. */
-  SURFACE: 'surface',
-};
+import { Verdict, Profile, CHANNELS_REQUIRED } from '@reticlehq/openreality';
 
-/** Which channels each profile requires an implementation to observe. */
-export const CHANNELS_REQUIRED = {
-  [Profile.EFFECT]: ['net', 'log'],
-  [Profile.IN_REALM]: ['net', 'log', 'state', 'signal'],
-  [Profile.SURFACE]: ['net', 'log', 'state', 'signal', 'ui'],
-};
+export { Verdict, Profile, CHANNELS_REQUIRED };
 
 /**
  * The scenarios.
@@ -151,9 +132,13 @@ export const SCENARIOS = [
     knownFailingForUs: true,
     why:
       'Knowable when the connection opens, rather than after the action has been spent. The rule ' +
-      'exists; what does not yet exist is any implementation that declares its channels, including ' +
-      'ours -- so nothing can currently be scored on it. Listed as failing rather than quietly ' +
-      'skipped, because a scenario nobody can run is not a scenario anybody passes.',
+      'existed for a while with nothing to read: no implementation declared its channels, ' +
+      'including ours, so this could not be scored against anybody. The web realm now declares ' +
+      'them at HELLO and the daemon reads them at assert time, so the blocker is gone -- but the ' +
+      'scenario has still not been DRIVEN end to end against a planted subject, and a rule whose ' +
+      'mechanism is wired is not the same as a rule that has been observed to fire. It stays ' +
+      'marked failing until something measures it, because claiming the pass first is the exact ' +
+      'move this suite exists to catch.',
   },
   {
     id: 'stale-data-in-a-nested-document',

@@ -671,7 +671,11 @@ importers:
         specifier: ^8.2.1
         version: 8.2.1(@types/node@26.4.0)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0)
 
-  conformance: {}
+  conformance:
+    dependencies:
+      '@reticlehq/openreality':
+        specifier: workspace:*
+        version: link:../openreality
 
   core:
     dependencies:
@@ -694,6 +698,10 @@ importers:
       zod:
         specifier: ^3.24.1
         version: 3.25.76
+    devDependencies:
+      '@reticlehq/openreality':
+        specifier: workspace:*
+        version: link:../openreality
 
   init:
     dependencies:
@@ -701,7 +709,15 @@ importers:
         specifier: workspace:*
         version: link:../core
 
-  openreality: {}
+  openreality:
+    dependencies:
+      zod:
+        specifier: ^3.23.8
+        version: 3.25.76
+    devDependencies:
+      zod-to-json-schema:
+        specifier: ^3.23.5
+        version: 3.25.2(zod@3.25.76)
 
   server:
     dependencies:
@@ -717,6 +733,9 @@ importers:
       '@reticlehq/init':
         specifier: workspace:*
         version: link:../init
+      '@reticlehq/openreality':
+        specifier: workspace:*
+        version: link:../openreality
       ws:
         specifier: ^8.21.3
         version: 8.21.3
