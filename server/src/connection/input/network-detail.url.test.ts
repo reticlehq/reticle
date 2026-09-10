@@ -1,7 +1,7 @@
 import { EventType, REDACTED_VALUE, URL_RAW, type ReticleEvent } from '@reticlehq/core';
 import { describe, expect, it } from 'vitest';
 import { buildNetworkDetail } from './network-detail.js';
-import { mergeNetworkDetail } from '@reticlehq/engine/events/network-detail-merge.js';
+import { mergeNetworkDetail } from '@reticlehq/engine/window/network-detail-merge.js';
 
 /**
  * The URL is the third credential-bearing field on a NET_DETAIL, beside the headers and the request

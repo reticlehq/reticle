@@ -17,7 +17,7 @@
  */
 
 import { PredicateKind } from '@reticlehq/core';
-import type { Predicate } from '../events/predicate.js';
+import type { Predicate } from '../question/predicate.js';
 
 /** Enough to recognise the one that is stuck; not so many that a chatty window eats the verdict. */
 const MAX_LISTED_REQUESTS = 3;

@@ -6,7 +6,7 @@ import {
   clearCrashedRules,
   registerContradictionFold,
   runRegisteredFolds,
-} from '@reticlehq/engine/events/contradiction-folds.js';
+} from '@reticlehq/engine/disagreement/contradiction-folds.js';
 
 /**
  * The rules that decide a verdict ask whoever is running them to write down anything they could not

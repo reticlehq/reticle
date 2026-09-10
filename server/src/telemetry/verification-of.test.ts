@@ -18,8 +18,8 @@
 
 import { describe, expect, it } from 'vitest';
 import { BrowserBrand, CaptureLoss, Verified, VerifiedReason } from '@reticlehq/core';
-import { decideVerified } from '@reticlehq/engine/honesty/verified.js';
-import { HonestyGrade } from '@reticlehq/engine/honesty/honesty.js';
+import { decideVerified } from '@reticlehq/engine/evidence/verified.js';
+import { HonestyGrade } from '@reticlehq/engine/evidence/honesty.js';
 import { verificationOf } from './verification-of.js';
 import { ReticleTool } from '@reticlehq/core';
 import { BrowserMode, setBrowserMode, resetBrowserMode } from './browser-mode.js';

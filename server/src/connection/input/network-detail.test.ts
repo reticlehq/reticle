@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { EventType, type ReticleEvent } from '@reticlehq/core';
-import { mergeNetworkDetail } from '@reticlehq/engine/events/network-detail-merge.js';
+import { mergeNetworkDetail } from '@reticlehq/engine/window/network-detail-merge.js';
 import {
   buildNetworkDetail,
   attachNetworkDetail,

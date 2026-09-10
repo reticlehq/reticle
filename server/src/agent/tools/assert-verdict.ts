@@ -1,17 +1,20 @@
 import { CaptureLoss, PredicateKind } from '@reticlehq/core';
-import { gapsForAction } from '@reticlehq/engine/honesty/instrumentation-gaps.js';
-import { noteSessionGaps } from '@reticlehq/engine/honesty/gap-ledger.js';
-import { declaresState } from '@reticlehq/engine/events/predicate-asks.js';
-import { isStateUnwatched } from '@reticlehq/engine/honesty/blind-spots.js';
+import { gapsForAction } from '@reticlehq/engine/evidence/instrumentation-gaps.js';
+import { noteSessionGaps } from '@reticlehq/engine/evidence/gap-ledger.js';
+import { declaresState } from '@reticlehq/engine/question/predicate-asks.js';
+import { isStateUnwatched } from '@reticlehq/engine/evidence/blind-spots.js';
 import type { InstrumentationGap, JournalVerdictEffect } from '@reticlehq/core/artifacts';
-import type { Predicate } from '@reticlehq/engine/events/predicate.js';
+import type { Predicate } from '@reticlehq/engine/question/predicate.js';
 import type { Session } from '../../connection/session/session.js';
-import { findContradictions, type Contradiction } from '@reticlehq/engine/events/contradictions.js';
-import { crashedRuleNotes } from '@reticlehq/engine/events/contradiction-folds.js';
+import {
+  findContradictions,
+  type Contradiction,
+} from '@reticlehq/engine/disagreement/contradictions.js';
+import { crashedRuleNotes } from '@reticlehq/engine/disagreement/contradiction-folds.js';
 import {
   declaredExpectations,
   declaresBodyIndependentChannel,
-} from '@reticlehq/engine/events/declared.js';
+} from '@reticlehq/engine/question/declared.js';
 import {
   absenceBlindSpotNote,
   blindSpotsFromState,
@@ -20,12 +23,12 @@ import {
   Coverage,
   impeachesCapture,
   transportGapNote,
-} from '@reticlehq/engine/honesty/blind-spots.js';
-import { buildHonestyBlock } from '@reticlehq/engine/honesty/honesty.js';
-import { acceptedWriteLabels } from '@reticlehq/engine/honesty/accepted-write.js';
-import { unreadWriteLabels } from '@reticlehq/engine/honesty/unread-outcome.js';
-import { decideVerified } from '@reticlehq/engine/honesty/verified.js';
-import { describeWaitTarget, namedNetIsInFlight } from '@reticlehq/engine/honesty/unsettled.js';
+} from '@reticlehq/engine/evidence/blind-spots.js';
+import { buildHonestyBlock } from '@reticlehq/engine/evidence/honesty.js';
+import { acceptedWriteLabels } from '@reticlehq/engine/evidence/accepted-write.js';
+import { unreadWriteLabels } from '@reticlehq/engine/evidence/unread-outcome.js';
+import { decideVerified } from '@reticlehq/engine/evidence/verified.js';
+import { describeWaitTarget, namedNetIsInFlight } from '@reticlehq/engine/evidence/unsettled.js';
 import { inFlightRequestLabels, repeatedRequestLabels } from './settle-in-flight.js';
 import { gradeOfPredicate } from './assert-grade.js';
 import { assertSource } from './assert-source.js';

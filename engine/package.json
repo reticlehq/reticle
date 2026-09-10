@@ -11,13 +11,21 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
-    "./events/*.js": {
-      "types": "./dist/events/*.d.ts",
-      "default": "./dist/events/*.js"
+    "./question/*.js": {
+      "types": "./dist/question/*.d.ts",
+      "default": "./dist/question/*.js"
     },
-    "./honesty/*.js": {
-      "types": "./dist/honesty/*.d.ts",
-      "default": "./dist/honesty/*.js"
+    "./disagreement/*.js": {
+      "types": "./dist/disagreement/*.d.ts",
+      "default": "./dist/disagreement/*.js"
+    },
+    "./window/*.js": {
+      "types": "./dist/window/*.d.ts",
+      "default": "./dist/window/*.js"
+    },
+    "./evidence/*.js": {
+      "types": "./dist/evidence/*.d.ts",
+      "default": "./dist/evidence/*.js"
     },
     "./package.json": "./package.json"
   },

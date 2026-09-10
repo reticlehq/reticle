@@ -498,7 +498,7 @@ jobs:
           # The observation payloads (snapshot, query, the verdict reasons) sit in browser and events.
           # bench-app is the fixture the numbers are measured against, so changing it moves the
           # baseline whether or not any product code changed.
-          if echo "$CHANGED" | grep -qE '^(core/src/|adapters/realm/dom/src/|server/src/(agent/tools|connection/session)/|engine/src/(events|honesty)/|apps/bench-app/|bench/|\.github/workflows/ci\.yml)'; then
+          if echo "$CHANGED" | grep -qE '^(core/src/|adapters/realm/dom/src/|server/src/(agent/tools|connection/session)/|engine/src/(question|disagreement|window|evidence)/|apps/bench-app/|bench/|\.github/workflows/ci\.yml)'; then
             echo "bench=true" >> "$GITHUB_OUTPUT"
           else
             echo "bench=false" >> "$GITHUB_OUTPUT"

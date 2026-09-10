@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { EVENT_PAYLOAD_SCHEMAS, EventType, Verified } from '@reticlehq/core';
 import { barestEvents } from './adversary.js';
-import { findContradictions } from './contradictions.js';
-import { decideVerified } from '../honesty/verified.js';
-import { buildHonestyBlock } from '../honesty/honesty.js';
+import { findContradictions } from '../disagreement/contradictions.js';
+import { decideVerified } from '../evidence/verified.js';
+import { buildHonestyBlock } from '../evidence/honesty.js';
 
 /**
  * What happens when the page tells us the bare minimum.

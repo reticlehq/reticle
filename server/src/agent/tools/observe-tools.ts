@@ -21,16 +21,16 @@ import {
   timeoutMsSchema,
   windowMsSchema,
 } from './numeric-bounds.js';
-import { buildReactionReport } from '@reticlehq/engine/events/reaction.js';
-import { findContradictions } from '@reticlehq/engine/events/contradictions.js';
+import { buildReactionReport } from '@reticlehq/engine/question/reaction.js';
+import { findContradictions } from '@reticlehq/engine/disagreement/contradictions.js';
 import {
   evaluatePredicate,
   waitForPredicate,
   PredicateSchema,
-} from '@reticlehq/engine/events/predicate.js';
+} from '@reticlehq/engine/question/predicate.js';
 import { resolveSessionWithin } from '../../connection/session/resolve-within.js';
 import { WALL_CLOCK } from '../../connection/session/wall-clock.js';
-import { parsePredicate } from '@reticlehq/engine/events/predicate-parse.js';
+import { parsePredicate } from '@reticlehq/engine/question/predicate-parse.js';
 import {
   matchNet,
   matchConsole,
@@ -42,7 +42,7 @@ import {
   projectNetCall,
   projectConsoleLog,
   withoutUrlRaw,
-} from '@reticlehq/engine/events/event-filters.js';
+} from '@reticlehq/engine/window/event-filters.js';
 import {
   applyEventBudget,
   costHint,
@@ -63,15 +63,15 @@ import {
 } from './assert-grade.js';
 import { assertVerdict } from './assert-verdict.js';
 import { assertionSource } from './assert-source.js';
-import { isChangeUndeclared } from '@reticlehq/engine/honesty/undeclared-change.js';
+import { isChangeUndeclared } from '@reticlehq/engine/evidence/undeclared-change.js';
 import { openSessionIntents } from '../../features/intent/open-intents.js';
 import {
   dischargeInlineIntent,
   inlineVerdictId,
   linkInlineIntent,
 } from '../../features/intent/inline-intent.js';
-import { bodiesNotCaptured } from '@reticlehq/engine/honesty/uncaptured-bodies.js';
-import { bodyClauseRefusal } from '@reticlehq/engine/honesty/body-capture-remedy.js';
+import { bodiesNotCaptured } from '@reticlehq/engine/evidence/uncaptured-bodies.js';
+import { bodyClauseRefusal } from '@reticlehq/engine/evidence/body-capture-remedy.js';
 import { withControl } from '../../connection/session/control-envelope.js';
 import { asNumber, asRecord, asString } from '@reticlehq/core';
 import { type ToolDef, intentArg, sessionIdShape, commandOrThrow } from './tool-kit.js';

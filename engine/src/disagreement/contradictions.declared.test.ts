@@ -17,7 +17,7 @@
 import { describe, expect, it } from 'vitest';
 import { ContradictionKind, EventType, PredicateKind, type ReticleEvent } from '@reticlehq/core';
 import { findContradictions } from './contradictions.js';
-import { declaredExpectations } from './declared.js';
+import { declaredExpectations } from '../question/declared.js';
 
 let seq = 0;
 function ev(type: EventType, data: Record<string, unknown> = {}): ReticleEvent {

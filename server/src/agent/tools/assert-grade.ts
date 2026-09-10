@@ -12,8 +12,8 @@
  */
 
 import { isConsequenceKind, isPresenceKind, PredicateKind } from '@reticlehq/core';
-import { HonestyGrade } from '@reticlehq/engine/honesty/honesty.js';
-import type { Predicate } from '@reticlehq/engine/events/predicate.js';
+import { HonestyGrade } from '@reticlehq/engine/evidence/honesty.js';
+import type { Predicate } from '@reticlehq/engine/question/predicate.js';
 
 export const PRESENCE_ONLY_ADVICE =
   'This predicate only checks element/text presence, not an observable consequence. A locator healed to the wrong element (or a stale render) can satisfy it while the feature is broken. Prefer a { signal } or { net } assertion (or allOf it with one) so green means the feature actually worked.';

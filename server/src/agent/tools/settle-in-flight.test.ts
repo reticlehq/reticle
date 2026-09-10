@@ -22,7 +22,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { ContradictionKind, EventType, type ReticleEvent } from '@reticlehq/core';
-import { findContradictions } from '@reticlehq/engine/events/contradictions.js';
+import { findContradictions } from '@reticlehq/engine/disagreement/contradictions.js';
 import {
   inFlightRequestIds,
   inFlightRequestLabels,

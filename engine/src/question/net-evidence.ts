@@ -8,7 +8,7 @@
  */
 
 import { PredicateKind } from '@reticlehq/core';
-import { withoutUrlRaw } from './event-filters.js';
+import { withoutUrlRaw } from '../window/event-filters.js';
 import type { Predicate } from './predicate-schema.js';
 
 /**

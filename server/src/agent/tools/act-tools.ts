@@ -25,44 +25,44 @@ import {
 } from '@reticlehq/core';
 import { leanActResult, mutatedWithin } from './act-view.js';
 import { ReticleTool } from '@reticlehq/core';
-import { buildReactionReport, summarizeReaction } from '@reticlehq/engine/events/reaction.js';
-import { parsePredicate } from '@reticlehq/engine/events/predicate-parse.js';
-import { bodyClauseRefusal } from '@reticlehq/engine/honesty/body-capture-remedy.js';
+import { buildReactionReport, summarizeReaction } from '@reticlehq/engine/question/reaction.js';
+import { parsePredicate } from '@reticlehq/engine/question/predicate-parse.js';
+import { bodyClauseRefusal } from '@reticlehq/engine/evidence/body-capture-remedy.js';
 import { causalSummary } from '../capsule/causal-summary.js';
-import { findContradictions } from '@reticlehq/engine/events/contradictions.js';
-import { crashedRuleNotes } from '@reticlehq/engine/events/contradiction-folds.js';
-import { gapsForAction } from '@reticlehq/engine/honesty/instrumentation-gaps.js';
-import { noteSessionGaps } from '@reticlehq/engine/honesty/gap-ledger.js';
-import { isChangeUndeclared } from '@reticlehq/engine/honesty/undeclared-change.js';
+import { findContradictions } from '@reticlehq/engine/disagreement/contradictions.js';
+import { crashedRuleNotes } from '@reticlehq/engine/disagreement/contradiction-folds.js';
+import { gapsForAction } from '@reticlehq/engine/evidence/instrumentation-gaps.js';
+import { noteSessionGaps } from '@reticlehq/engine/evidence/gap-ledger.js';
+import { isChangeUndeclared } from '@reticlehq/engine/evidence/undeclared-change.js';
 import { intentDebt, openSessionIntents } from '../../features/intent/open-intents.js';
 import {
   dischargeInlineIntent,
   inlineVerdictId,
   linkInlineIntent,
 } from '../../features/intent/inline-intent.js';
-import { declaresState } from '@reticlehq/engine/events/predicate-asks.js';
-import { isStateUnwatched } from '@reticlehq/engine/honesty/blind-spots.js';
+import { declaresState } from '@reticlehq/engine/question/predicate-asks.js';
+import { isStateUnwatched } from '@reticlehq/engine/evidence/blind-spots.js';
 import {
   inFlightRequestLabels,
   repeatedRequestLabels,
   waitForInFlight,
 } from './settle-in-flight.js';
 import { waitForReaction } from './react-grace.js';
-import { decideVerified } from '@reticlehq/engine/honesty/verified.js';
-import { honestyForVerdict } from '@reticlehq/engine/honesty/honesty.js';
+import { decideVerified } from '@reticlehq/engine/evidence/verified.js';
+import { honestyForVerdict } from '@reticlehq/engine/evidence/honesty.js';
 import {
   declaredExpectations,
   declaresBodyIndependentChannel,
-} from '@reticlehq/engine/events/declared.js';
+} from '@reticlehq/engine/question/declared.js';
 import {
   readsDomState,
   alreadyTrueHiddenMatch as alreadyTrueHiddenMatchOf,
-} from '@reticlehq/engine/honesty/already-true.js';
-import { describeWaitTarget, namedNetIsInFlight } from '@reticlehq/engine/honesty/unsettled.js';
+} from '@reticlehq/engine/evidence/already-true.js';
+import { describeWaitTarget, namedNetIsInFlight } from '@reticlehq/engine/evidence/unsettled.js';
 import { saveFailedAssertCapsule } from './act-capsule.js';
 import { buildDivergenceCapsule } from '../capsule/capsule.js';
-import { predicateToExpectedLinks } from '@reticlehq/engine/events/predicate-to-links.js';
-import { buildHonestyBlock } from '@reticlehq/engine/honesty/honesty.js';
+import { predicateToExpectedLinks } from '@reticlehq/engine/question/predicate-to-links.js';
+import { buildHonestyBlock } from '@reticlehq/engine/evidence/honesty.js';
 import {
   absenceBlindSpotNote,
   buildCoverageStatement,
@@ -70,15 +70,15 @@ import {
   transportGapNote,
   Coverage,
   impeachesCapture,
-} from '@reticlehq/engine/honesty/blind-spots.js';
-import { acceptedWriteLabels } from '@reticlehq/engine/honesty/accepted-write.js';
-import { unreadWriteLabels } from '@reticlehq/engine/honesty/unread-outcome.js';
+} from '@reticlehq/engine/evidence/blind-spots.js';
+import { acceptedWriteLabels } from '@reticlehq/engine/evidence/accepted-write.js';
+import { unreadWriteLabels } from '@reticlehq/engine/evidence/unread-outcome.js';
 import {
   evaluatePredicate,
   waitForPredicate,
   provenExpectedLinks,
   PredicateSchema,
-} from '@reticlehq/engine/events/predicate.js';
+} from '@reticlehq/engine/question/predicate.js';
 import { healthEnvelope, refuseIfThrottled } from '../../connection/session/session-health.js';
 import {
   pausedShortCircuit,

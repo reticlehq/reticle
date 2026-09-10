@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { ContradictionKind, EventType, type ReticleEvent } from '@reticlehq/core';
-import { evalSettled } from '@reticlehq/engine/events/predicate-eval.js';
-import { findContradictions } from '@reticlehq/engine/events/contradictions.js';
+import { evalSettled } from '@reticlehq/engine/question/predicate-eval.js';
+import { findContradictions } from '@reticlehq/engine/disagreement/contradictions.js';
 import { causalSummary } from './agent/capsule/causal-summary.js';
 
 /**

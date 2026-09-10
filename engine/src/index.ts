@@ -13,17 +13,17 @@
  */
 
 /** Ask whether something held, once. */
-export { evaluatePredicate, PredicateSchema } from './events/predicate.js';
+export { evaluatePredicate, PredicateSchema } from './question/predicate.js';
 /** Ask whether something holds, and keep watching until it does or the time runs out. */
-export { waitForPredicate } from './events/predicate.js';
-export type { Predicate, EvalResult, PredicateSession } from './events/predicate.js';
+export { waitForPredicate } from './question/predicate.js';
+export type { Predicate, EvalResult, PredicateSession } from './question/predicate.js';
 
 /** What the rules need from you, and what happens when you do not supply it. */
-export type { NoteFn, KeepCallerContextFn } from './events/engine-host.js';
+export type { NoteFn, KeepCallerContextFn } from './window/engine-host.js';
 
 /** Things that disagree with each other in a window: a double submit, a stale answer, a wrong unit. */
-export { findContradictions } from './events/contradictions.js';
-export type { Contradiction, ContradictionOptions } from './events/contradictions.js';
+export { findContradictions } from './disagreement/contradictions.js';
+export type { Contradiction, ContradictionOptions } from './disagreement/contradictions.js';
 
 /** Add a rule of your own to the set that looks for disagreements. */
 export {
@@ -31,11 +31,11 @@ export {
   registeredContradictionFolds,
   crashedRuleNotes,
   clearCrashedRules,
-} from './events/contradiction-folds.js';
-export type { ContradictionFold } from './events/contradiction-folds.js';
+} from './disagreement/contradiction-folds.js';
+export type { ContradictionFold } from './disagreement/contradiction-folds.js';
 
 /** A bounded window of what happened, which is what every rule above reads. */
-export { RingBuffer } from './events/ring-buffer.js';
+export { RingBuffer } from './window/ring-buffer.js';
 
 /** What an action provoked, summarised. */
-export { buildReactionReport } from './events/reaction.js';
+export { buildReactionReport } from './question/reaction.js';

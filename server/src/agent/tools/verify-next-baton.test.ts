@@ -17,7 +17,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { verifyNextBaton, UNTIL_PLACEHOLDER } from './verify-next-baton.js';
-import { parsePredicate } from '@reticlehq/engine/events/predicate-parse.js';
+import { parsePredicate } from '@reticlehq/engine/question/predicate-parse.js';
 import { ReticleTool } from '@reticlehq/core';
 
 const PROSE = 'you have driven this page 3 times without asking for a verdict.';

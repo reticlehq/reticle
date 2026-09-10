@@ -144,7 +144,7 @@ describe('reticle_verify_change — a green suite is not the end of the check', 
       .spyOn(await import('./flow-sources.js'), 'affectedSavedFlows')
       .mockReturnValue({ affected: ['checkout'], unknownProvenance: [] });
     const contradictionSpy = vi
-      .spyOn(await import('@reticlehq/engine/events/contradictions.js'), 'findContradictions')
+      .spyOn(await import('@reticlehq/engine/disagreement/contradictions.js'), 'findContradictions')
       .mockReturnValue([{ kind: 'ui-advanced-request-failed' }] as never);
 
     const result = (await tool.handler(sessionWith([], '', []), {

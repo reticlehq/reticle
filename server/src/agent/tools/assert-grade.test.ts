@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { isPresenceOnlyAssertion, assertsDerivedIpcStatus } from './assert-grade.js';
-import type { Predicate } from '@reticlehq/engine/events/predicate.js';
+import type { Predicate } from '@reticlehq/engine/question/predicate.js';
 
 describe('isPresenceOnlyAssertion', () => {
   it('flags a bare element predicate', () => {

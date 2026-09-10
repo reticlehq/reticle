@@ -11,7 +11,7 @@ import { FlowStore } from '../../features/flows/flows.js';
 import { ProjectStore } from '../../features/project/project-store.js';
 import { AnnotationStore } from '../../features/flows/annotation-store.js';
 import type { CausalSummary } from '../capsule/causal-summary.js';
-import type { HonestyBlock } from '@reticlehq/engine/honesty/honesty.js';
+import type { HonestyBlock } from '@reticlehq/engine/evidence/honesty.js';
 import type { Session, SessionManager } from '../../connection/session/session.js';
 
 /**

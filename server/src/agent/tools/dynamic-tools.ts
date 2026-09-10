@@ -7,7 +7,7 @@ import { takeVersionSkewOnto } from '../../command/version/version-nudge.js';
 import { ReticleTool } from '@reticlehq/core';
 import { ADVERTISE_ALL_ENV, type ToolSurfaceOrigin } from './tool-surface.js';
 import { getSessionMetrics } from '../../telemetry/session-metrics.js';
-import { isPredicateParam, predicateGrammar } from '@reticlehq/engine/events/predicate-eval.js';
+import { isPredicateParam, predicateGrammar } from '@reticlehq/engine/question/predicate-eval.js';
 
 /**
  * On-demand tool loading for MCP — the answer to the per-turn tool-definition tax.

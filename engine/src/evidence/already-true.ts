@@ -17,7 +17,7 @@
  * anything.
  */
 import { PredicateKind, type ElementDescriptor } from '@reticlehq/core';
-import type { Predicate } from '../events/predicate.js';
+import type { Predicate } from '../question/predicate.js';
 
 export function readsDomState(predicate: Predicate): boolean {
   switch (predicate.kind) {

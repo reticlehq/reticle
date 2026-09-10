@@ -13,7 +13,7 @@ import {
 } from '@reticlehq/core';
 import { replayFlow, type FlowReplaySession } from './flow-replay.js';
 import { proposeRebind } from './heal.js';
-import { waitForPredicate } from '@reticlehq/engine/events/predicate.js';
+import { waitForPredicate } from '@reticlehq/engine/question/predicate.js';
 import { asString } from '@reticlehq/core';
 import { ReticleTool } from '@reticlehq/core';
 

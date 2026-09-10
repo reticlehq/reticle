@@ -101,7 +101,7 @@ function replayVerdictLine(result: FlowReplayResult): string {
 // Re-exported from the contract, where the names now live: a consumer importing the server should
 // not have to know that the vocabulary moved.
 export { ReticleTool } from '@reticlehq/core';
-export { RingBuffer } from '@reticlehq/engine/events/ring-buffer.js';
+export { RingBuffer } from '@reticlehq/engine/window/ring-buffer.js';
 export { Bridge } from './connection/bridge/bridge.js';
 export { Session, SessionManager } from './connection/session/session.js';
 export type { SessionInfo, SessionHealth } from './connection/session/session.js';
@@ -140,7 +140,7 @@ export { crawl } from './features/crawl/crawl.js';
  * without these it would have to re-implement the fold — a second implementation of the one thing
  * this product is judged on, and the one nobody dogfoods is the one that rots.
  */
-export { findContradictions } from '@reticlehq/engine/events/contradictions.js';
+export { findContradictions } from '@reticlehq/engine/disagreement/contradictions.js';
 /**
  * The MCP server factory, so a consumer can serve the tool surface it composed.
  *
@@ -151,12 +151,12 @@ export { createMcpServer } from './agent/mcp/mcp.js';
 export type {
   Contradiction,
   ContradictionOptions,
-} from '@reticlehq/engine/events/contradictions.js';
+} from '@reticlehq/engine/disagreement/contradictions.js';
 export {
   registerContradictionFold,
   registeredContradictionFolds,
-} from '@reticlehq/engine/events/contradiction-folds.js';
-export type { ContradictionFold } from '@reticlehq/engine/events/contradiction-folds.js';
+} from '@reticlehq/engine/disagreement/contradiction-folds.js';
+export type { ContradictionFold } from '@reticlehq/engine/disagreement/contradiction-folds.js';
 export { MCP_SSE_PATH, MCP_MESSAGE_PATH } from '@reticlehq/core';
 export { BrowserPool, DEFAULT_LEASE_TTL_MS } from './connection/pool/browser-pool.js';
 export type { Lease, Launcher, PooledBrowser } from './connection/pool/browser-pool.js';
@@ -239,9 +239,9 @@ export {
   evaluatePredicate,
   waitForPredicate,
   PredicateSchema,
-} from '@reticlehq/engine/events/predicate.js';
-export type { Predicate, EvalResult } from '@reticlehq/engine/events/predicate.js';
-export { buildReactionReport } from '@reticlehq/engine/events/reaction.js';
+} from '@reticlehq/engine/question/predicate.js';
+export type { Predicate, EvalResult } from '@reticlehq/engine/question/predicate.js';
+export { buildReactionReport } from '@reticlehq/engine/question/reaction.js';
 export {
   CdpRealInputProvider,
   LaunchedRealInputProvider,

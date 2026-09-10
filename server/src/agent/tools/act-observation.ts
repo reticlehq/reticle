@@ -16,7 +16,7 @@ import {
   awaitDocumentSuccessor,
   type SuccessorRegistry,
 } from '../../connection/session/session-successor.js';
-import type { EvalResult } from '@reticlehq/engine/events/predicate-eval.js';
+import type { EvalResult } from '@reticlehq/engine/question/predicate-eval.js';
 
 interface FollowSuccessor {
   sessions: SuccessorRegistry;

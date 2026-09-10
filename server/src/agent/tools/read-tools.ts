@@ -27,12 +27,12 @@ import {
   projectComponentState,
 } from '../../connection/session/state-select.js';
 import { costHint } from '../../connection/session/output-budget.js';
-import { buildReactionReport, summarizeReaction } from '@reticlehq/engine/events/reaction.js';
+import { buildReactionReport, summarizeReaction } from '@reticlehq/engine/question/reaction.js';
 import { asNumber, asString } from '@reticlehq/core';
 import { parseInteractive } from './tools-helpers.js';
 import { type ToolDef, sessionIdShape, commandOrThrow, snapshotTree } from './tool-kit.js';
 import { bufferEnvelope } from '../../connection/session/session-health.js';
-import { routeOfUrl } from '@reticlehq/engine/events/predicate-route.js';
+import { routeOfUrl } from '@reticlehq/engine/question/predicate-route.js';
 
 /** The route part of a session URL. A host belongs to the machine, not to the journey. */
 /**

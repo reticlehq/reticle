@@ -150,13 +150,13 @@ export const READ_PATH = Object.freeze({
       'a full offline queue evicts its oldest events and then emits TRANSPORT_OVERFLOW { dropped } to the bridge, so the gap is declared on the stream it happened to',
     ],
   },
-  'engine/src/events/ring-buffer.ts': {
+  'engine/src/window/ring-buffer.ts': {
     RingBuffer: [
       Declaration.SIGNAL,
       'eviction is counted and surfaced by bufferHealth() as { total, dropped }, which session health and act summaries read to mark a window truncated',
     ],
   },
-  'engine/src/events/network-detail-merge.ts': {
+  'engine/src/window/network-detail-merge.ts': {
     mergeNetworkDetail: [
       Declaration.REPORT,
       'the wire body is the one field that REPLACES the in-page one rather than filling a gap, so both caveats ride with it: requestBodyTruncated follows the body that won, and requestBodyDivergedFromPage states that the two disagreed',
@@ -204,7 +204,7 @@ export const CONFORMANCE_TESTS = Object.freeze([
   'adapters/realm/dom/src/security/lossy-conformance.test.ts',
   'adapters/realm/dom/src/security/serialization.test.ts',
   'adapters/realm/dom/src/transport/transport.overflow-marker.test.ts',
-  'engine/src/events/ring-buffer.test.ts',
+  'engine/src/window/ring-buffer.test.ts',
   'server/src/connection/input/network-detail.lossy-conformance.test.ts',
 ]);
 

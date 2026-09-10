@@ -17,7 +17,7 @@ import { PredicateKind } from '@reticlehq/core';
  * than recording none — a flow that asserts something nobody chose is a false green with extra steps.
  */
 import type { FlowExpect } from '@reticlehq/core';
-import type { Predicate } from '@reticlehq/engine/events/predicate.js';
+import type { Predicate } from '@reticlehq/engine/question/predicate.js';
 
 /** Merge two partial expectations; later keys win only where the earlier one said nothing. */
 function merge(into: FlowExpect, from: FlowExpect): FlowExpect {

@@ -12,7 +12,7 @@
  */
 import { SessionReplacedError } from '../../connection/session/pending-commands.js';
 import { assertNativeInputSupported } from './act-danger.js';
-import { unevaluablePredicateReason } from '@reticlehq/engine/events/predicate-precheck.js';
+import { unevaluablePredicateReason } from '@reticlehq/engine/question/predicate-precheck.js';
 
 /**
  * Refuse a sequence whose steps cannot be addressed.

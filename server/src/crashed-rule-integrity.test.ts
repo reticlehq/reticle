@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { findContradictions } from '@reticlehq/engine/events/contradictions.js';
+import { findContradictions } from '@reticlehq/engine/disagreement/contradictions.js';
 import {
   clearCrashedRules,
   crashedRuleNotes,
   registerContradictionFold,
-} from '@reticlehq/engine/events/contradiction-folds.js';
+} from '@reticlehq/engine/disagreement/contradiction-folds.js';
 import { SessionState, Verified, type ReticleEvent } from '@reticlehq/core';
 import { LastAct } from './connection/session/last-act.js';
 import { TOOLS, type ToolDef, type ToolDeps } from './agent/tools/tools.js';
