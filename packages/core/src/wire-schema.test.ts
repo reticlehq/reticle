@@ -12,6 +12,37 @@ const convert = zodToJsonSchema as unknown as (schema: unknown, name: string) =>
 const schemas = buildWireSchemas(core, convert, z);
 
 describe('wire-contract JSON Schema', () => {
+  /**
+   * The published contract has to describe what an event CONTAINS, not just that it has some.
+   *
+   * `reticle-event.json` was 1,317 bytes and its payload read
+   * `data: { type: "object", additionalProperties: {} }` -- "an object, any keys". So a Python, Go or
+   * Rust SDK validating against these files was told an event has a `type` from a list and a `data`
+   * object of arbitrary shape, and could not construct a valid `page.health`, `net` or `dom` payload
+   * from the contract at all.
+   *
+   * That matters twice over. It is the multi-language promise this generator's own header makes, and
+   * it is the foundation the conformance kit is designed on: a runner that validates against these
+   * schemas and nothing else is only as strong as what they describe.
+   */
+  it('publishes a payload schema for every event type, not just the envelope', () => {
+    const payloads = (schemas as Record<string, unknown>)['event-payloads'] as {
+      properties?: Record<string, unknown>;
+    };
+    expect(payloads, 'no event-payloads schema is generated').toBeDefined();
+    const described = Object.keys(payloads.properties ?? {});
+    for (const type of Object.values(core.EventType)) {
+      expect(described, `event ${String(type)} has no published payload schema`).toContain(type);
+    }
+  });
+
+  it('the published payload schema names the fields the server depends on', () => {
+    const json = JSON.stringify((schemas as Record<string, unknown>)['event-payloads']);
+    // `runtime` is the realm the page reports. The server reads it; until it was declared it rode
+    // an untyped passthrough and appeared in none of the generated files.
+    expect(json).toContain('runtime');
+  });
+
   it('emits exactly the declared set of wire schemas', () => {
     expect(Object.keys(schemas).sort()).toEqual([...WIRE_SCHEMA_NAMES].sort());
   });

@@ -205,6 +205,24 @@ export const EVENT_PAYLOAD_SCHEMAS = {
        * one, and a desktop webview has no brand to report.
        */
       brand: z.nativeEnum(BrowserBrand).optional(),
+      /**
+       * Which shell the page is running in: `web`, `electron`, `tauri`, or something newer.
+       *
+       * The SDK has always sent this and the server has always read it, but until now the field was
+       * not declared here, so it travelled through `.passthrough()` and appeared in NONE of the
+       * generated `dist/schema/*.json` files. Anyone implementing this contract from the published
+       * schemas -- which is what a third-party realm does -- could not see that the field exists, let
+       * alone that the server depends on it.
+       *
+       * A plain string on purpose, NOT a closed list of the three shells that ship today. A realm
+       * that does not exist yet has to be able to name itself, and an enum here would mean one
+       * unknown value fails the whole health report, taking visibility, focus and the heartbeat down
+       * with it. The wire says the field exists and is a string; which values mean something stays
+       * with the reader, where it already is.
+       */
+      runtime: z.string().optional(),
+      /** The rendering engine, coarse on purpose (blink / gecko / webkit). Same reasoning as `runtime`. */
+      engine: z.string().optional(),
     })
     .passthrough(),
   // The page called window.open — the clicked consequence may continue in a context the SDK cannot

@@ -18,6 +18,10 @@ export const WIRE_SCHEMA_NAMES = Object.freeze([
   'command-result',
   'event-message',
   'event-type', // the enum of event `type` strings
+  // What each event actually CONTAINS. Without this the published contract described the envelope
+  // and nothing else: `data` was `{ type: "object", additionalProperties: {} }`, so an SDK in
+  // another language was told an event has a type from a list and a payload of arbitrary shape.
+  'event-payloads',
 ]);
 
 /**
@@ -38,6 +42,37 @@ export function buildWireSchemas(core, zodToJsonSchema, z) {
     'command-result': zodToJsonSchema(core.CommandResultSchema, 'CommandResult'),
     'event-message': zodToJsonSchema(core.EventMessageSchema, 'EventMessage'),
     'event-type': zodToJsonSchema(eventTypeEnum, 'EventType'),
+    'event-payloads': buildEventPayloadSchema(core, zodToJsonSchema),
+  };
+}
+
+/**
+ * One document mapping every event `type` to the shape of its `data`.
+ *
+ * Kept as a map rather than folded into `reticle-event.json` as a discriminated union on purpose:
+ * the union form makes a single enormous schema whose error messages, when a payload is wrong, name
+ * the whole union rather than the one event that failed. A reader implementing `page.health` wants
+ * to look up `page.health`, and a validator reporting on it should say so.
+ *
+ * @param {Record<string, unknown>} core  The @reticlehq/core module namespace.
+ * @param {(schema: unknown, name?: string) => object} zodToJsonSchema  The converter.
+ * @returns {object}  A JSON Schema object whose `properties` are keyed by event type.
+ */
+export function buildEventPayloadSchema(core, zodToJsonSchema) {
+  const properties = {};
+  for (const [type, schema] of Object.entries(core.EVENT_PAYLOAD_SCHEMAS)) {
+    properties[type] = zodToJsonSchema(schema);
+  }
+  return {
+    $schema: 'http://json-schema.org/draft-07/schema#',
+    title: 'EventPayloads',
+    description:
+      'The shape of `data` for each Reticle event type. Look up an event by its `type` string. ' +
+      'Every payload allows unknown keys, so a newer SDK can add a field without failing an older ' +
+      'reader; a field being absent here means this version never described it, not that sending it ' +
+      'is an error.',
+    type: 'object',
+    properties,
   };
 }
 
