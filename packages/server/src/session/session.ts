@@ -16,7 +16,7 @@ const IMPACT_PUSH_DEBOUNCE_MS = 700;
 import { PendingCommands, CommandTimeoutError } from './pending-commands.js';
 import { span } from '../trace.js';
 import {
-  AppRuntime,
+  isKnownRealm,
   EventType,
   HumanControlDataSchema,
   HumanControlKind,
@@ -241,11 +241,10 @@ export class Session {
   ): void {
     this.#hidden = hidden;
     this.#focused = focused;
-    if (
-      AppRuntime.ELECTRON === runtime ||
-      AppRuntime.TAURI === runtime ||
-      AppRuntime.WEB === runtime
-    ) {
+    // Asked of the table, not listed again here. A realm missing from a repeated list is not
+    // rejected loudly -- its name is dropped, and every later question about this session answers as
+    // though the page never said what it was.
+    if (isKnownRealm(runtime)) {
       this.#runtime = runtime;
     }
     if (engine !== undefined) this.#engine = engine;

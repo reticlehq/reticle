@@ -102,6 +102,22 @@ export const REALMS: Record<AppRuntime, Realm> = {
 };
 
 /**
+ * Is this a realm this build knows about?
+ *
+ * Asked where a runtime arrives from the page and has to be accepted or ignored. Derived from the
+ * table rather than listed again, because a list repeated somewhere else is a list that gets one
+ * entry behind: a realm missing from it is not rejected loudly, its name is simply dropped, and every
+ * later question about that session answers as though the page never said what it was.
+ *
+ * Written as a type guard so the caller gets the narrowing the hand-written chain of comparisons gave
+ * it for free. Without that, replacing the chain would have widened a field back to a plain string,
+ * and the compiler would have stopped catching a runtime that is not one of ours.
+ */
+export function isKnownRealm(runtime: string | undefined): runtime is AppRuntime {
+  return runtime !== undefined && Object.hasOwn(REALMS, runtime);
+}
+
+/**
  * The facts for a realm, or the web's, when the page has not said which it is.
  *
  * An older SDK sends no runtime at all. Reading that silence as a desktop shell would show desktop

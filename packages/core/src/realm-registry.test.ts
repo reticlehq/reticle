@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { AppRuntime } from './telemetry-feedback.js';
-import { REALMS, realmOf } from './realm-registry.js';
+import { REALMS, isKnownRealm, realmOf } from './realm-registry.js';
 
 /**
  * The table has to be complete, and the unknown case has to be the safe one.
@@ -72,5 +72,28 @@ describe('a session that has not said what it is', () => {
   it('but a realm it DOES know is looked up, not defaulted', () => {
     // The check that stops the two above from passing on a function that always returns the web.
     expect(realmOf(AppRuntime.TAURI).usesWebKit).toBe(true);
+  });
+});
+
+describe('recognising a realm the page names', () => {
+  it('accepts every realm in the table', () => {
+    // Derived from the table rather than listed again. A list repeated elsewhere is a list that ends
+    // up one entry behind, and the failure is silent: the name is dropped and the session answers
+    // every later question as though the page never said what it was.
+    for (const realm of Object.keys(REALMS)) expect(isKnownRealm(realm), realm).toBe(true);
+  });
+
+  it('refuses one it has never heard of', () => {
+    expect(isKnownRealm('holodeck')).toBe(false);
+  });
+
+  it('and refuses silence, which is not a realm', () => {
+    expect(isKnownRealm(undefined)).toBe(false);
+  });
+
+  it('agrees with the lookup: anything it refuses is treated as the web', () => {
+    // The two functions answer different questions -- "do we know this name" and "what are its
+    // facts" -- and they must not disagree about which names are known.
+    expect(realmOf('holodeck')).toEqual(realmOf(undefined));
   });
 });
