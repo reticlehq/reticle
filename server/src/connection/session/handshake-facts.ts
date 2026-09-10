@@ -1,4 +1,4 @@
-import type { ChannelId } from '@reticlehq/core';
+import type { ChannelId, PlatformProfile } from '@reticlehq/core';
 
 /**
  * What the page told us about itself when it connected.
@@ -33,6 +33,22 @@ export interface HandshakeFacts {
    * all. See `declaredChannels()` in the browser SDK for what makes the list truthful.
    */
   channels?: readonly ChannelId[] | undefined;
+  /**
+   * The commands this build will answer.
+   *
+   * Read before a command is sent, so one the page does not serve is refused rather than waited
+   * out. See `Session.command`, and the same `undefined` rule as `channels`: silence is an SDK
+   * too old to say, never an empty list.
+   */
+  commands?: readonly string[] | undefined;
+  /**
+   * What kind of place this is: a browser document, a webview inside somebody's shell, a native
+   * view tree, or no rendering surface at all.
+   *
+   * Declared rather than inferred, because inferring it from the URL was wrong for every desktop
+   * app that serves its frontend over http during development.
+   */
+  platform?: PlatformProfile | undefined;
   /**
    * Whether this build stamps `data-reticle-source`, when the build plugin said.
    *

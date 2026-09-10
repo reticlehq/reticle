@@ -1,6 +1,7 @@
 import type { WebSocket } from 'ws';
-import type { ChannelId, ImpactSnapshot } from '@reticlehq/core';
+import type { ChannelId, ImpactSnapshot, PlatformProfile } from '@reticlehq/core';
 import type { HandshakeFacts } from './handshake-facts.js';
+import { refusedResult } from './undeclared-command.js';
 import { recordImpact } from '../../features/impact/impact-recorder.js';
 import { LastAct } from './last-act.js';
 import { GapLedger } from '@reticlehq/engine/evidence/gap-ledger.js';
@@ -130,12 +131,14 @@ export class Session implements HandshakeFacts {
   title: string;
   adapters: string[];
   hasCapabilities: boolean;
-  // What the page said about itself at HELLO. Declared on `HandshakeFacts`, which is where the
-  // reasoning lives -- including the rule that `undefined` means "too old to say" and never "no".
+  // What the page said about itself at HELLO. `HandshakeFacts` holds the reasoning, including
+  // the rule that `undefined` means "too old to say" and never "no".
   versionSkew?: string;
   sdkVersion?: string | undefined;
   captureBodies?: boolean | undefined;
   channels?: readonly ChannelId[] | undefined;
+  commands?: readonly string[] | undefined;
+  platform?: PlatformProfile | undefined;
   sourceMapping?: boolean | undefined;
   readonly redactKeys: readonly string[];
 
@@ -659,6 +662,10 @@ export class Session implements HandshakeFacts {
       const ref = args['ref'];
       if ('string' === typeof ref) this.recordActedRef(ref);
     }
+    // Refused before it is sent, when the page said it does not serve this. The rule, and why
+    // an absent declaration is not an empty list, live in `undeclared-command.ts`.
+    const refused = refusedResult(name, this.commands, `${COMMAND_ID_PREFIX}refused`);
+    if (refused !== undefined) return Promise.resolve(refused);
     // The page already re-dialled under this same id. Nothing has been sent yet, so handing the
     // command to the live connection cannot perform anything twice — it is the call the agent would
     // have made itself after a `reticle_sessions` round trip, minus the round trip.

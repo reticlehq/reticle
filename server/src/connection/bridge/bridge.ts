@@ -611,6 +611,10 @@ export class Bridge {
           // a channel nobody declared, rather than answering it with an empty result that reads
           // exactly like the value not being there.
           session.channels = parsed.channels;
+          // What it will answer, and what kind of place it is. Both read at dispatch time, so a
+          // command the page does not serve is refused instead of waited out.
+          session.commands = parsed.commands;
+          session.platform = parsed.platform;
           if (skew !== undefined) {
             log('version_skew', {
               sessionId: session.id,
