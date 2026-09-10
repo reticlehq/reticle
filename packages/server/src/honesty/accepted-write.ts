@@ -1,5 +1,5 @@
 import { EventType, HTTP_ACCEPTED, isDevToolingUrl, type ReticleEvent } from '@reticlehq/core';
-import { asNumber, asString } from '../tools/tools-helpers.js';
+import { asNumber, asString } from '@reticlehq/core';
 
 /**
  * Did a write in this window answer `202 Accepted`?

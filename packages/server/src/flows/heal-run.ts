@@ -14,7 +14,7 @@ import {
   type HealChange,
   type HealProposal,
 } from '@reticlehq/core';
-import { asString } from '../tools/tools-helpers.js';
+import { asString } from '@reticlehq/core';
 import { waitForPredicate } from '../events/predicate.js';
 import { replayFlow } from './flow-replay.js';
 import { applyHealChanges, collectProposals } from './heal.js';

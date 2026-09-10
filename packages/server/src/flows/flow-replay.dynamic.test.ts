@@ -12,7 +12,7 @@ import {
 } from '@reticlehq/core';
 import { replayFlow, type FlowReplaySession } from './flow-replay.js';
 import { waitForPredicate } from '../events/predicate.js';
-import { asString } from '../tools/tools-helpers.js';
+import { asString } from '@reticlehq/core';
 import { ReticleTool } from '../tools/tool-names.js';
 
 /**

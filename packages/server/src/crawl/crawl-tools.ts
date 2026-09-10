@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { ReticleTool } from '../tools/tool-names.js';
-import { asNumber, asString } from '../tools/tools-helpers.js';
+import { asNumber, asString } from '@reticlehq/core';
 import { stepCountSchema, timeoutMsSchema } from '../tools/numeric-bounds.js';
 import { crawl, type CrawlOptions } from './crawl.js';
 import type { ToolDef, ToolDeps } from '../tools/tools.js';

@@ -83,7 +83,8 @@ import {
   withControl,
   PAUSED_NO_VERDICT,
 } from '../session/control-envelope.js';
-import { asString, asNumber, asRecord, sourceOf } from './tools-helpers.js';
+import { asNumber, asRecord, asString } from '@reticlehq/core';
+import { sourceOf } from './tools-helpers.js';
 import { dispatchAct, preflightAct } from './act-preflight.js';
 import { followLostObservation } from './act-observation.js';
 import { type ToolDef, type ToolDeps, intentArg, sessionIdShape } from './tool-kit.js';

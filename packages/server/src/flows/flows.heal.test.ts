@@ -34,7 +34,7 @@ import { AnnotationStore } from './annotation-store.js';
 import { createNodeFileSystem } from '../project/fs-port.js';
 import { BaselineStore } from '../project/baselines.js';
 import { RecordingStore } from './recordings.js';
-import { asString } from '../tools/tools-helpers.js';
+import { asString } from '@reticlehq/core';
 import { flowPath } from '../project/reticle-dir.js';
 import type { FileSystemPort } from '../project/fs-port.js';
 import type { Session, SessionManager } from '../session/session.js';

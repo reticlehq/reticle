@@ -15,7 +15,7 @@ import { z } from 'zod';
 import { ReticleTool } from '../tools/tool-names.js';
 import { countSchema } from '../tools/numeric-bounds.js';
 import { sessionIdShape } from '../tools/tool-kit.js';
-import { asNumber, asString } from '../tools/tools-helpers.js';
+import { asNumber, asString } from '@reticlehq/core';
 import { sessionRoot } from '../project/session-root.js';
 import type { ToolDef, ToolDeps } from '../tools/tools.js';
 import { MemoryUnavailable, readProjectMemory } from './project-memory.js';

@@ -3,7 +3,7 @@ import { ProjectReadError, RunStatus, type RunRecord } from '@reticlehq/core';
 import { ReticleTool } from '../tools/tool-names.js';
 import { countSchema } from '../tools/numeric-bounds.js';
 import { sessionIdShape } from '../tools/tool-kit.js';
-import { asNumber, asString } from '../tools/tools-helpers.js';
+import { asNumber, asString } from '@reticlehq/core';
 import {
   cloudFetch,
   fetchProjectRegressionFromCloud,

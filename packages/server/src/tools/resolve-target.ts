@@ -1,4 +1,4 @@
-import { asRecord } from './tools-helpers.js';
+import { asRecord } from '@reticlehq/core';
 
 /** One candidate the browser returned for a target query. */
 interface TargetCandidate {

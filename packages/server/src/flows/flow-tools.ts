@@ -10,7 +10,7 @@ import {
 import type { FlowFile } from '@reticlehq/core';
 import { recordSuiteFlakes } from './suite-flakes.js';
 import { ReticleTool } from '../tools/tool-names.js';
-import { asNumber, asString } from '../tools/tools-helpers.js';
+import { asNumber, asString } from '@reticlehq/core';
 import { workerCountSchema } from '../tools/numeric-bounds.js';
 import { log } from '../log.js';
 import { cloudFetch, syncFlowToCloud, SyncOutcome } from '../cloud/cloud-sync.js';

@@ -15,7 +15,7 @@ import {
   type ReticleEvent,
 } from '@reticlehq/core';
 import { haltedFrom } from './replay-halt.js';
-import { asRecord, asString } from '../tools/tools-helpers.js';
+import { asRecord, asString } from '@reticlehq/core';
 import { routeOfEvent, routeOfUrl } from '../events/predicate-route.js';
 import type { ArrivalClock } from '../tools/navigate-arrival.js';
 import { carryReticleIdentity } from '../tools/lease-tools.js';

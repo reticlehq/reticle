@@ -10,7 +10,7 @@ import { predicateToExpect, enforcedOnReplay } from './predicate-to-expect.js';
 import { PredicateSchema } from '../events/predicate.js';
 import type { RecordedStep, CompiledProgram } from './recordings.js';
 import type { Session } from '../session/session.js';
-import { asString, asRecord } from '../tools/tools-helpers.js';
+import { asRecord, asString } from '@reticlehq/core';
 
 /**
  * The note attached when a testid resolves to multiple live elements (the first match is used).

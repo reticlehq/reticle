@@ -3,7 +3,7 @@ import { CDP_NO_PROVIDER_REASON, CDP_NO_PROVIDER_RECOMMENDATION } from '@reticle
 import { ReticleTool } from '../tools/tool-names.js';
 import { sessionIdShape } from '../tools/tool-kit.js';
 import { MAX_VIEWPORT_PX, MIN_VIEWPORT_PX, viewportPxSchema } from '../tools/numeric-bounds.js';
-import { asString } from '../tools/tools-helpers.js';
+import { asString } from '@reticlehq/core';
 import type { RealInputProvider } from './real-input.js';
 import type { ToolDef, ToolDeps } from '../tools/tools.js';
 

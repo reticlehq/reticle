@@ -33,7 +33,7 @@ import {
 } from '@reticlehq/core';
 import { ReticleTool } from './tool-names.js';
 import type { ToolDef, ToolDeps } from './tool-kit.js';
-import { asString } from './tools-helpers.js';
+import { asString } from '@reticlehq/core';
 import { chromiumHint } from '../cli/chromium-hint.js';
 
 /**

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { sessionRoot } from '../project/session-root.js';
-import { asNumber, asString } from '../tools/tools-helpers.js';
+import { asNumber, asString } from '@reticlehq/core';
 import type { FlowFile } from '@reticlehq/core';
 import { ReticleTool } from '../tools/tool-names.js';
 import { countSchema } from '../tools/numeric-bounds.js';

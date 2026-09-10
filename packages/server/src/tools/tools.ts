@@ -3,7 +3,7 @@ import { NoSessionAction, QueryBy, ReticleCommand, SnapshotMode } from '@reticle
 import { ReticleTool } from './tool-names.js';
 import { withSizeCost } from '../session/output-budget.js';
 import { applySnapshotDelta, SnapshotCache } from './snapshot-delta.js';
-import { asRecord, asString, asNumber } from './tools-helpers.js';
+import { asNumber, asRecord, asString } from '@reticlehq/core';
 import { countSchema } from './numeric-bounds.js';
 import { normalizeQueryArgs } from './query-shape.js';
 import { paginateQueryResult } from './query-paginate.js';

@@ -6,7 +6,7 @@ import { cursorSchema } from './numeric-bounds.js';
 import { reconcile, type Mismatch } from '../events/reconcile.js';
 import { salvageJson } from '../events/json-salvage.js';
 import { withControl } from '../session/control-envelope.js';
-import { asNumber, asString } from './tools-helpers.js';
+import { asNumber, asString } from '@reticlehq/core';
 import { type ToolDef, sessionIdShape, commandOrThrow } from './tool-kit.js';
 import { readCompleteTree } from './complete-snapshot.js';
 

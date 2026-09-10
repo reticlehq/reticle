@@ -69,7 +69,7 @@ import {
 import { bodiesNotCaptured } from '../honesty/uncaptured-bodies.js';
 import { bodyClauseRefusal } from '../honesty/body-capture-remedy.js';
 import { withControl } from '../session/control-envelope.js';
-import { asString, asNumber, asRecord } from './tools-helpers.js';
+import { asNumber, asRecord, asString } from '@reticlehq/core';
 import { type ToolDef, intentArg, sessionIdShape, commandOrThrow } from './tool-kit.js';
 import { gradeOfPredicate } from './assert-grade.js';
 

@@ -9,7 +9,7 @@ import { ActionType, ConsequenceKind } from '@reticlehq/core';
 import type { ElementBox } from '../input/real-input.js';
 import { HonestyGrade } from '../honesty/honesty.js';
 import type { ExpectedLink } from '../capsule/divergence.js';
-import { asNumber, asRecord, asString } from './tools-helpers.js';
+import { asNumber, asRecord, asString } from '@reticlehq/core';
 
 /** The strongest consequence grade a set of expected links proves (signal > net > state > presence). */
 export function gradeOf(links: readonly ExpectedLink[]): HonestyGrade {

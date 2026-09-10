@@ -12,7 +12,8 @@ import { join } from 'node:path';
  * liftable out of all of that, because somebody implementing the specification wants the rules
  * without the daemon.
  *
- * It is not liftable today. Thirteen runtime imports cross out of it, and they are listed below
+ * It is not liftable today. Eight runtime imports cross out of it -- thirteen when this was written --
+ * and they are listed below
  * rather than banned, because a guard that is red the day it is written teaches people to switch it
  * off rather than to fix anything.
  *
@@ -34,19 +35,14 @@ const ENGINE = ['packages/server/src/events', 'packages/server/src/honesty'];
  * Grouped by what each one will need. Read this as the extraction's to-do list.
  */
 const CROSSINGS_TODAY: Record<string, string> = {
-  // Generic value narrowing -- `asString`, `asNumber` -- that lives under `tools/` because that is
-  // where it was first needed, not because it has anything to do with tools. Moving it somewhere
-  // neutral removes four of these at once, and touches forty-nine files.
-  'accepted-write.ts -> tools': 'asString / asNumber, generic narrowing under the wrong roof',
-  'contradictions.ts -> tools': 'asString / asNumber, generic narrowing under the wrong roof',
-  'unread-outcome.ts -> tools': 'asString / asNumber, generic narrowing under the wrong roof',
-  'event-filters.ts -> tools': 'asString / asNumber, generic narrowing under the wrong roof',
+  // Four crossings that used to be here are gone: `asString` and `asNumber` were generic value
+  // narrowing filed under `tools/` because that is where they were first needed, and they now live in
+  // the shared foundation where the engine can read them without reaching through the tool surface.
   // Genuinely about the tool surface. These files measure how an agent used the tools, which is a
   // question about the surface rather than about a verdict -- so the answer is probably that they
   // belong with `tools/`, not that the engine needs to reach them.
   'tool-hit-rate.ts -> tools':
     'reads the tool tables; likely belongs beside tools rather than here',
-  'lineage.ts -> tools': 'reads tool names; same question',
   'feature-capture.ts -> tools': 'reads the tool tables',
   'feature-capture.ts -> runs': 'reads run shapes',
   // Live session state reached from inside a rule. The engine should be given what it needs rather
@@ -95,13 +91,26 @@ describe('the verdict engine is one lift away from its own package', () => {
     expect(files.split('\n').filter((f) => f.endsWith('.ts')).length).toBeGreaterThan(20);
   });
 
-  it('reaches out of itself only where it already did', () => {
+  it('gains no new dependency on the rest of the server', () => {
+    // Growth is the failure. Two assertions rather than one equality, because equality would fail on
+    // a REMOVED crossing too -- and a guard that goes red when the work goes well is one people learn
+    // to silence. That mistake was in this file's first version.
     expect(
-      crossings(),
+      crossings().filter((c) => !Object.hasOwn(CROSSINGS_TODAY, c)),
       'The verdict engine gained a new runtime dependency on the rest of the server. Every one of ' +
-        'these has to be answered before the engine can be its own package, so the list is allowed ' +
-        'to shrink and not to grow. If the new one is unavoidable, add it here with what it needs.',
-    ).toEqual(Object.keys(CROSSINGS_TODAY).sort());
+        'these has to be answered before the engine can be its own package. If the new one is ' +
+        'unavoidable, add it to the list with what it will take to remove.',
+    ).toEqual([]);
+  });
+
+  it('and the list does not describe crossings that are gone', () => {
+    // The other direction, and the reason it is a separate check: a stale entry makes the remaining
+    // work look bigger than it is, and the list is meant to be read as a to-do list.
+    const live = new Set(crossings());
+    expect(
+      Object.keys(CROSSINGS_TODAY).filter((c) => !live.has(c)),
+      'These crossings no longer exist. Remove them from the list: it is read as what is left to do.',
+    ).toEqual([]);
   });
 
   it('every crossing says what it will take to remove', () => {

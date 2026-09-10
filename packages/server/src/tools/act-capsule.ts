@@ -14,7 +14,7 @@ import { CapsuleStore, capsuleId, CAPSULE_VERSION } from '../capsule/capsule-sto
 import type { ExpectedLink } from '../capsule/divergence.js';
 import type { DivergenceCapsule } from '../capsule/capsule.js';
 import { ReticleTool } from './tool-names.js';
-import { asRecord, asString } from './tools-helpers.js';
+import { asRecord, asString } from '@reticlehq/core';
 import type { ToolDeps } from './tool-kit.js';
 import { sessionRoot } from '../project/session-root.js';
 

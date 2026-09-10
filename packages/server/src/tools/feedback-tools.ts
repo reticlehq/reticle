@@ -19,7 +19,7 @@ import {
   FEEDBACK_RATING_MIN,
 } from '@reticlehq/core/telemetry';
 import { ReticleTool } from './tool-names.js';
-import { asNumber, asString } from './tools-helpers.js';
+import { asNumber, asString } from '@reticlehq/core';
 import { submitFeedback, feedbackDisabled } from '../telemetry/feedback.js';
 import { getTelemetry } from '../telemetry/telemetry.js';
 import type { ToolDef, ToolDeps } from './tools.js';

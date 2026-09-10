@@ -14,7 +14,7 @@ import { findStaleResponses } from './stale-response.js';
 import { findBodyFailures } from './body-failures.js';
 import { findEchoMismatches } from './echo-mismatch.js';
 import { findUnitMismatches } from './unit-mismatch.js';
-import { asNumber, asString } from '../tools/tools-helpers.js';
+import { asNumber, asString } from '@reticlehq/core';
 import { matchesDeclaredFailure, type DeclaredNetFailure } from './declared.js';
 import { runRegisteredFolds } from './contradiction-folds.js';
 

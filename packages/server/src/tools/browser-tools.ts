@@ -6,7 +6,7 @@ import { reloadResult } from './reload-result.js';
 import { waitForReconnect, RELOAD_RECONNECT_TIMEOUT_MS } from '../session/session-reconnect.js';
 import { ReticleCommand } from '@reticlehq/core';
 import { ReticleTool } from './tool-names.js';
-import { asNumber, asString } from './tools-helpers.js';
+import { asNumber, asString } from '@reticlehq/core';
 import { sessionIdShape, commandOrThrow } from './tool-kit.js';
 import { timeoutMsSchema } from './numeric-bounds.js';
 import type { ToolDef } from './tools.js';

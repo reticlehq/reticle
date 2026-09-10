@@ -6,7 +6,7 @@ import { allSessionIntents } from '../intent/open-intents.js';
 import { ReticleCommand, SnapshotMode } from '@reticlehq/core';
 import { ReticleTool } from './tool-names.js';
 import type { ToolDef, ToolDeps } from './tools.js';
-import { asString } from './tools-helpers.js';
+import { asString } from '@reticlehq/core';
 import { exercisedCount } from './coverage-identity.js';
 import { commandOrThrow, sessionIdShape } from './tool-kit.js';
 

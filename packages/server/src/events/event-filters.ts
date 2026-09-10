@@ -1,5 +1,5 @@
 import { EventType, URL_RAW, urlForMatch, type ReticleEvent } from '@reticlehq/core';
-import { asString, asNumber } from '../tools/tools-helpers.js';
+import { asNumber, asString } from '@reticlehq/core';
 import { mergeNetworkDetail } from '../input/network-detail.js';
 
 /**

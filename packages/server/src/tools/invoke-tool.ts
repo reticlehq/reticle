@@ -18,7 +18,8 @@ import { noteToolServed, reportToolRefused } from '../telemetry/tool-refused.js'
 import { buildErrorPayload, refusalReasonFor } from './error-recovery.js';
 import { resultIsError } from '../mcp/mcp-is-error.js';
 import { verificationOf } from '../telemetry/verification-of.js';
-import { asString, sessionIdFromArgs, spentRefFromArgs } from './tools-helpers.js';
+import { asString } from '@reticlehq/core';
+import { sessionIdFromArgs, spentRefFromArgs } from './tools-helpers.js';
 import { EnvelopeKey } from './tool-kit.js';
 import { ReticleTool } from './tool-names.js';
 import { takeFeedbackPrompt } from './feedback-tools.js';

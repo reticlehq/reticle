@@ -5,7 +5,7 @@ import {
   isDevToolingUrl,
   type ReticleEvent,
 } from '@reticlehq/core';
-import { asString } from '../tools/tools-helpers.js';
+import { asString } from '@reticlehq/core';
 
 const IPC_METHOD = NetInitiator.IPC.toUpperCase();
 

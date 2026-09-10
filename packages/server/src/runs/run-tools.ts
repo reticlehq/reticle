@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { sessionRoot } from '../project/session-root.js';
 import { RunReadError, type ReticleVerificationRun } from '@reticlehq/core';
 import { ReticleTool } from '../tools/tool-names.js';
-import { asString } from '../tools/tools-helpers.js';
+import { asString } from '@reticlehq/core';
 import { sessionIdShape } from '../tools/tool-kit.js';
 import { isValidRunId } from '../project/reticle-dir.js';
 import type { ToolDef, ToolDeps } from '../tools/tools.js';

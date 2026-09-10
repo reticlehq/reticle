@@ -18,7 +18,7 @@ import {
   PredicateKind,
 } from '@reticlehq/core';
 import type { EvalResult, Predicate } from '../events/predicate.js';
-import { asRecord, asString } from '../tools/tools-helpers.js';
+import { asRecord, asString } from '@reticlehq/core';
 import { replayActionArgs, ambiguousTestidNote, queryRefs } from './replay.js';
 import { anchorFieldName } from './flow-secret-field.js';
 import {

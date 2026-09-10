@@ -20,7 +20,7 @@
  */
 
 import { EventType, type ReticleEvent } from '@reticlehq/core';
-import { asString } from '../tools/tools-helpers.js';
+import { asString } from '@reticlehq/core';
 
 /** What the caller is asking about. `value` narrows a path that changed more than once. */
 export interface LineageQuery {

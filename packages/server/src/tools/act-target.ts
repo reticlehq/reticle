@@ -11,7 +11,7 @@ import { ReticleCommand } from '@reticlehq/core';
 import type { Session } from '../session/session.js';
 import { normalizeQueryArgs } from './query-shape.js';
 import { resolveTargetRef, type TargetResolution } from './resolve-target.js';
-import { asRecord, asString } from './tools-helpers.js';
+import { asRecord, asString } from '@reticlehq/core';
 
 /**
  * Resolve an action's element: an explicit `ref`, or a `target` query resolved in the SAME call.

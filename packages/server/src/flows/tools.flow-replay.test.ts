@@ -33,7 +33,7 @@ import { ProjectStore } from '../project/project-store.js';
 import { AnnotationStore } from './annotation-store.js';
 import { createNodeFileSystem, type FileSystemPort } from '../project/fs-port.js';
 import { flowPath } from '../project/reticle-dir.js';
-import { asRecord, asString } from '../tools/tools-helpers.js';
+import { asRecord, asString } from '@reticlehq/core';
 import type { Session, SessionManager } from '../session/session.js';
 import type { CompiledProgram, RecordedStep } from './recordings.js';
 

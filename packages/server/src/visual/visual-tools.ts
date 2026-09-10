@@ -9,7 +9,7 @@ import {
 import { ReticleTool } from '../tools/tool-names.js';
 import { sessionIdShape } from '../tools/tool-kit.js';
 import { ratioSchema } from '../tools/numeric-bounds.js';
-import { asNumber, asRecord, asString } from '../tools/tools-helpers.js';
+import { asNumber, asRecord, asString } from '@reticlehq/core';
 import { diffPng, type VisualRect } from './visual-diff.js';
 import { VisualStore } from './visual-store.js';
 import { trackCaptureDirectory } from './capture-cleanup.js';

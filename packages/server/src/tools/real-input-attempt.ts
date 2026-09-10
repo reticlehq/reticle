@@ -24,7 +24,7 @@ import type { ElementBox, RealInputArgs } from '../input/real-input.js';
 import { boxCenter, isPointerAction } from '../input/real-input.js';
 import { assertDragNotDestructive, assertNotDestructive } from './act-danger.js';
 import { NATIVE_INPUT_ARG } from '@reticlehq/core';
-import { asString, asRecord } from './tools-helpers.js';
+import { asRecord, asString } from '@reticlehq/core';
 import { type ToolDeps, commandOrThrow } from './tool-kit.js';
 import { asBox } from './act-helpers.js';
 import { isAbsolute, join, relative, extname, basename } from 'node:path';

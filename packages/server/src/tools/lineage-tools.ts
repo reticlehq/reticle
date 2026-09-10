@@ -15,7 +15,7 @@ import { z } from 'zod';
 import { ReticleTool } from './tool-names.js';
 import type { ToolDef, ToolDeps } from './tools.js';
 import { traceLineage } from '../events/lineage.js';
-import { asString } from './tools-helpers.js';
+import { asString } from '@reticlehq/core';
 import { cursorSchema } from './numeric-bounds.js';
 
 export const LINEAGE_TOOLS: ToolDef[] = [

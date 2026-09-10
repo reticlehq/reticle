@@ -4,7 +4,7 @@ import {
   NATIVE_INPUT_ARG,
   isDangerousActionText,
 } from '@reticlehq/core';
-import { asRecord, asString } from './tools-helpers.js';
+import { asRecord, asString } from '@reticlehq/core';
 
 /**
  * Refuse to drive a money-moving or destructive control by accident.

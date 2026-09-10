@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { QueryBy } from '@reticlehq/core';
 import { ReticleTool } from '../tools/tool-names.js';
-import { asNumber, asString } from '../tools/tools-helpers.js';
+import { asNumber, asString } from '@reticlehq/core';
 import { listIndexSchema, scrollCountSchema } from '../tools/numeric-bounds.js';
 import { scrollToFind, type ScrollFindQuery } from './scroll-find.js';
 import type { ToolDef, ToolDeps } from '../tools/tools.js';

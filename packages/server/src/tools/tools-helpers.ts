@@ -1,3 +1,4 @@
+import { asRecord, asString } from '@reticlehq/core';
 /** Small pure helpers shared by the MCP tool handlers. */
 
 interface InteractiveItem {
@@ -15,18 +16,6 @@ export function parseInteractive(tree: string): InteractiveItem[] {
     }
   }
   return items;
-}
-
-export function asString(value: unknown): string | undefined {
-  return 'string' === typeof value ? value : undefined;
-}
-
-export function asNumber(value: unknown): number | undefined {
-  return 'number' === typeof value ? value : undefined;
-}
-
-export function asRecord(value: unknown): Record<string, unknown> {
-  return 'object' === typeof value && value !== null ? (value as Record<string, unknown>) : {};
 }
 
 /**
