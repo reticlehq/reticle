@@ -23,7 +23,7 @@ const REPO_ROOT = execFileSync('git', ['rev-parse', '--show-toplevel'], {
   cwd: __dirname,
   encoding: 'utf8',
 }).trim();
-const CORE_SRC = join(REPO_ROOT, 'packages', 'core', 'src');
+const CORE_SRC = join(REPO_ROOT, 'core', 'src');
 const ARTIFACTS_ENTRY = 'artifacts-entry.ts';
 const CORE_SPECIFIER = '@reticlehq/core';
 const TS_EXTENSION = '.ts';

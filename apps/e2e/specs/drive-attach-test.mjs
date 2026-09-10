@@ -19,7 +19,7 @@ import { fileURLToPath } from 'node:url';
 import { freePortSafely } from '../gate-harness.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
-const CLI = path.join(ROOT, 'packages/server/dist/cli.js');
+const CLI = path.join(ROOT, 'server/dist/cli.js');
 // :4400 and not a private port: the apps this battery boots were built to dial 4400, so a lease on
 // any other port would open a tab that can never connect and the spec would be measuring the port
 // mismatch instead of the attach. The runner frees this port between specs.

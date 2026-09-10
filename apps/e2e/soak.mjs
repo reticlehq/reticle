@@ -35,7 +35,7 @@ import { existsSync, readFileSync, writeFileSync, appendFileSync } from 'node:fs
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 // NOT imported at the top. `mcp-client.mjs` resolves the built CLI at module load and THROWS if
-// `packages/server/dist/cli.js` is absent — so a static import would make `--self-check` require a
+// `server/dist/cli.js` is absent — so a static import would make `--self-check` require a
 // full build, when the entire point of the self-check is that it needs no infrastructure at all.
 // Caught by running it in an empty directory rather than by assuming; it is imported at the one
 // place that genuinely needs a CLI, below.
@@ -330,7 +330,7 @@ await sweepBatteryOrphans([], { onNote: (n) => console.log(`   · ${n}`) });
 const { McpStdioClient } = await import('../../bench/harness/mcp-client.mjs');
 const client = new McpStdioClient(
   'node',
-  ['packages/server/dist/cli.js', 'mcp', '--port', PORT, '--drive', APP],
+  ['server/dist/cli.js', 'mcp', '--port', PORT, '--drive', APP],
   { RETICLE_PORT: PORT, RETICLE_ADVERTISE_ALL_TOOLS: '1', RETICLE_TELEMETRY: '0' },
 );
 

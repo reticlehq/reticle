@@ -6,6 +6,6 @@
     "lib": ["ES2023"],
     "types": ["node"]
   },
-  "references": [{ "path": "../../../packages/core" }, { "path": "../babel-plugin" }],
+  "references": [{ "path": "../../../core" }, { "path": "../babel-plugin" }],
   "include": ["src/**/*"]
 }

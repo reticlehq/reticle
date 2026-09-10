@@ -38,16 +38,16 @@ importers:
         version: 9.39.5
       '@reticlehq/core':
         specifier: workspace:*
-        version: link:packages/core
+        version: link:core
       '@reticlehq/eslint-plugin':
         specifier: workspace:*
-        version: link:packages/eslint-plugin
+        version: link:eslint-plugin
       '@reticlehq/next':
         specifier: workspace:*
         version: link:adapters/build/next
       '@reticlehq/server':
         specifier: workspace:*
-        version: link:packages/server
+        version: link:server
       '@types/node':
         specifier: ^26.4.0
         version: 26.4.0
@@ -92,7 +92,7 @@ importers:
     dependencies:
       '@reticlehq/core':
         specifier: workspace:*
-        version: link:../../../packages/core
+        version: link:../../../core
     devDependencies:
       '@babel/core':
         specifier: ^7.26.0
@@ -123,7 +123,7 @@ importers:
         version: link:../babel-plugin
       '@reticlehq/core':
         specifier: workspace:*
-        version: link:../../../packages/core
+        version: link:../../../core
     devDependencies:
       '@reticlehq/react':
         specifier: workspace:*
@@ -148,7 +148,7 @@ importers:
         version: link:../../realm/dom
       '@reticlehq/core':
         specifier: workspace:*
-        version: link:../../../packages/core
+        version: link:../../../core
     devDependencies:
       '@types/react':
         specifier: ^19.2.18
@@ -170,7 +170,7 @@ importers:
     dependencies:
       '@reticlehq/core':
         specifier: workspace:*
-        version: link:../../../packages/core
+        version: link:../../../core
     devDependencies:
       '@iconify-json/heroicons-outline':
         specifier: ^1.2.1
@@ -216,7 +216,7 @@ importers:
     dependencies:
       '@reticlehq/core':
         specifier: workspace:*
-        version: link:../../../packages/core
+        version: link:../../../core
       electron:
         specifier: 43.3.0
         version: 43.3.0
@@ -317,10 +317,10 @@ importers:
     dependencies:
       '@reticlehq/server':
         specifier: workspace:*
-        version: link:../../packages/server
+        version: link:../../server
       '@reticlehq/test':
         specifier: workspace:*
-        version: link:../../packages/test
+        version: link:../../spec-runner
       playwright:
         specifier: ^1.62.1
         version: 1.62.1
@@ -653,7 +653,7 @@ importers:
     devDependencies:
       '@reticlehq/server':
         specifier: workspace:*
-        version: link:../../packages/server
+        version: link:../../server
       vite:
         specifier: ^8.2.1
         version: 8.2.1(@types/node@26.4.0)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0)
@@ -662,18 +662,18 @@ importers:
     dependencies:
       '@reticlehq/core':
         specifier: workspace:*
-        version: link:../packages/core
+        version: link:../core
       zod:
         specifier: ^3.24.1
         version: 3.25.76
 
   openreality: {}
 
-  packages/core:
+  core:
     dependencies:
       '@reticlehq/openreality':
         specifier: workspace:*
-        version: link:../../openreality
+        version: link:../openreality
       zod:
         specifier: ^3.24.1
         version: 3.25.76
@@ -682,7 +682,7 @@ importers:
         specifier: ^3.24.0
         version: 3.25.2(zod@3.25.76)
 
-  packages/eslint-plugin:
+  eslint-plugin:
     dependencies:
       '@typescript-eslint/utils':
         specifier: ^8.67.0
@@ -695,13 +695,13 @@ importers:
         specifier: ^8.67.0
         version: 8.67.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3)
 
-  packages/init:
+  init:
     dependencies:
       '@reticlehq/core':
         specifier: workspace:*
         version: link:../core
 
-  packages/server:
+  server:
     dependencies:
       '@modelcontextprotocol/sdk':
         specifier: ^1.30.0
@@ -711,7 +711,7 @@ importers:
         version: link:../core
       '@reticlehq/engine':
         specifier: workspace:*
-        version: link:../../engine
+        version: link:../engine
       '@reticlehq/init':
         specifier: workspace:*
         version: link:../init
@@ -742,7 +742,7 @@ importers:
         specifier: ^7.0.0
         version: 7.0.0
 
-  packages/test:
+  spec-runner:
     dependencies:
       '@reticlehq/core':
         specifier: workspace:*

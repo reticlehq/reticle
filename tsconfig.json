@@ -2,11 +2,12 @@
   "files": [],
   "references": [
     { "path": "openreality" },
-    { "path": "packages/core" },
-    { "path": "packages/init" },
+    { "path": "core" },
+    { "path": "engine" },
+    { "path": "init" },
     { "path": "adapters/realm/dom" },
-    { "path": "packages/server" },
-    { "path": "packages/test" },
+    { "path": "server" },
+    { "path": "spec-runner" },
     { "path": "adapters/framework/react" },
     { "path": "adapters/build/babel-plugin" },
     { "path": "adapters/build/vite" }

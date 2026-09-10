@@ -86,7 +86,7 @@ export default tseslint.config(
     // This suite proves the runner survives a non-Error throw, so it has to perform one. The rule is
     // asking the test not to create the condition it exists to verify. Scoped here for the same
     // reason as the console files below: declared once, where the rule is governed.
-    files: ['packages/test/src/runner.test.ts'],
+    files: ['spec-runner/src/runner.test.ts'],
     rules: {
       '@typescript-eslint/only-throw-error': 'off',
     },
@@ -177,7 +177,7 @@ export default tseslint.config(
     // Service boundary (CLAUDE.md): the Node server never touches the DOM. Forbid DOM globals and
     // importing the browser SDK, so a stray `document`/`window` use fails lint instead of only
     // breaking at runtime in the (never-run) browser bundle.
-    files: ['packages/server/src/**/*.ts'],
+    files: ['server/src/**/*.ts'],
     rules: {
       'no-restricted-imports': [
         'error',
@@ -201,19 +201,23 @@ export default tseslint.config(
   },
   {
     // The file-size cap, enforced on SHIPPING code rather than merely asked for. It was prose-only, and
-    // the prose-only rules are precisely the ones that drifted. Scoped to packages/ because the rule's
-    // rationale is cohesion in code we ship; the bench fixtures are catalogues, where length is not the
-    // same smell. apps/bench-app's bug injector (1036 lines) is known debt and wants splitting by
-    // category — deliberately not done in the same pass that is verifying those fixtures' behaviour.
-    files: ['packages/*/src/**'],
-    ignores: ['**/*.test.ts', '**/*.test.tsx'],
+    // the prose-only rules are precisely the ones that drifted.
+    //
+    // Written as "everything, except the places we do not ship" rather than as a list of the places
+    // we do. A list would have to be edited every time a package moves, and a cap that silently
+    // stops applying is worse than no cap: the code keeps growing and nothing says so. The bench
+    // fixtures and the example apps are catalogues, where length is not the same smell.
+    // apps/bench-app's bug injector (1036 lines) is known debt and wants splitting by category —
+    // deliberately not done in the same pass that is verifying those fixtures' behaviour.
+    files: ['**/src/**/*.ts', '**/src/**/*.tsx'],
+    ignores: ['**/*.test.ts', '**/*.test.tsx', 'apps/**', 'bench/**', 'setup/**', 'test/**'],
     rules: { 'max-lines': ['error', { max: 1000, skipBlankLines: false, skipComments: false }] },
   },
   {
     // The rule that BANS these tokens has to name them — in its own doc comment explaining the ban, and
     // in fixtures asserting it fires. Exempting only this package keeps the rule enforceable everywhere
     // else while letting it document itself.
-    files: ['packages/eslint-plugin/src/**'],
+    files: ['eslint-plugin/src/**'],
     rules: { 'reticle/no-internal-tags': 'off' },
   },
 );

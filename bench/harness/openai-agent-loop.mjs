@@ -37,7 +37,7 @@ const SERVERS = {
   },
   reticle: {
     command: 'node',
-    args: ['packages/server/dist/cli.js', 'mcp', '--port', RETICLE_PORT, '--drive', URL],
+    args: ['server/dist/cli.js', 'mcp', '--port', RETICLE_PORT, '--drive', URL],
     env: {
       RETICLE_PORT,
       RETICLE_ADVERTISE_ALL_TOOLS: process.env.BENCH_RETICLE_ADVERTISE_ALL ?? '1',
@@ -193,13 +193,9 @@ async function runCell(scenarioId, toolKey) {
     if ('reticle' === toolKey) {
       try {
         const { execFileSync } = await import('node:child_process');
-        execFileSync(
-          'node',
-          ['packages/server/dist/cli.js', 'stop', '--port', RETICLE_PORT, '--quiet'],
-          {
-            stdio: 'ignore',
-          },
-        );
+        execFileSync('node', ['server/dist/cli.js', 'stop', '--port', RETICLE_PORT, '--quiet'], {
+          stdio: 'ignore',
+        });
       } catch {
         /* */
       }

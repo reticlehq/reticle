@@ -7,5 +7,5 @@
     "jsx": "react-jsx"
   },
   "include": ["src/**/*"],
-  "references": [{ "path": "../../../packages/core" }, { "path": "../../../adapters/realm/dom" }]
+  "references": [{ "path": "../../../core" }, { "path": "../../../adapters/realm/dom" }]
 }

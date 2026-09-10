@@ -81,9 +81,17 @@ const connectAndWaitForPanel = async (
 ): Promise<void> => {
   reticle.connect(options);
   if (false === options['present']) return;
-  await vi.waitFor(() => {
-    if (null === document.querySelector('[data-reticle-glow]')) throw new Error('no panel yet');
-  });
+  await vi.waitFor(
+    () => {
+      if (null === document.querySelector('[data-reticle-glow]')) throw new Error('no panel yet');
+    },
+    // Generous on purpose. The panel is fetched, and how long a fetch takes is a fact about the
+    // machine, not about the code: this passed alone and on this package's own suite, and failed
+    // only when every package's tests ran at once. A deadline tight enough to fail under load is a
+    // deadline that fails in CI and nowhere else, which teaches people to re-run rather than to
+    // look. The check here is that the panel ARRIVES, not that it arrives quickly.
+    { timeout: 20_000, interval: 10 },
+  );
 };
 
 const clickSel = (sel: string): void => {

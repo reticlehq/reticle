@@ -9,19 +9,19 @@
 // its own bridge so the leased tabs register with US, not with whatever external daemon is around).
 
 import { join } from 'node:path';
-import { Bridge } from '../../packages/server/dist/bridge/bridge.js';
-import { FLOW_TOOLS } from '../../packages/server/dist/flows/flow-tools.js';
-import { FlowStore } from '../../packages/server/dist/flows/flows.js';
-import { ProjectStore } from '../../packages/server/dist/project/project-store.js';
-import { BaselineStore } from '../../packages/server/dist/project/baselines.js';
-import { RecordingStore } from '../../packages/server/dist/flows/recordings.js';
-import { AnnotationStore } from '../../packages/server/dist/flows/annotation-store.js';
-import { createNodeFileSystem } from '../../packages/server/dist/project/fs-port.js';
-import { BrowserPool } from '../../packages/server/dist/pool/browser-pool.js';
+import { Bridge } from '../../server/dist/bridge/bridge.js';
+import { FLOW_TOOLS } from '../../server/dist/flows/flow-tools.js';
+import { FlowStore } from '../../server/dist/flows/flows.js';
+import { ProjectStore } from '../../server/dist/project/project-store.js';
+import { BaselineStore } from '../../server/dist/project/baselines.js';
+import { RecordingStore } from '../../server/dist/flows/recordings.js';
+import { AnnotationStore } from '../../server/dist/flows/annotation-store.js';
+import { createNodeFileSystem } from '../../server/dist/project/fs-port.js';
+import { BrowserPool } from '../../server/dist/pool/browser-pool.js';
 import {
   playwrightLauncher,
   resolveMaxContexts,
-} from '../../packages/server/dist/pool/playwright-launcher.js';
+} from '../../server/dist/pool/playwright-launcher.js';
 import { cpus } from 'node:os';
 
 const APP_URL = process.argv[2] ?? 'http://localhost:4312';

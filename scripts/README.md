@@ -4,7 +4,7 @@ Sixteen files, and none of them is dead. This page says what each one does, who 
 
 They are grouped by **who runs them**, because that is the question people actually have. A script you never type is a very different thing from one you type during a release.
 
-`packages/server/src/loose-scripts.test.ts` fails if a script here is reachable from nothing, and `scripts-documented.test.ts` fails if one is missing from this page. So both "quietly dead" and "quietly undocumented" are caught rather than noticed years later.
+`server/src/loose-scripts.test.ts` fails if a script here is reachable from nothing, and `scripts-documented.test.ts` fails if one is missing from this page. So both "quietly dead" and "quietly undocumented" are caught rather than noticed years later.
 
 ## Nobody runs these — they run themselves
 

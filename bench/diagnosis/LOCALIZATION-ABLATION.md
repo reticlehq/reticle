@@ -51,7 +51,7 @@ Re-run with the pointer Reticle genuinely emits: **6 tool calls instead of 4**, 
 - **Two runs per cell, not more.** Enough to show the spread is small (±2 on a total of ~22), not enough for a confidence interval. Per-bug numbers move by 1–2 calls between runs.
 - **The fixture was assumed to flatter condition A. I tried to prove that and could not.**
 
-  The reasoning was: `apps/bench-app` is 34 files, so a symptom greps to the right file in 4 calls; on a real codebase the baseline would be far higher and the gap would widen. Two attempts to build that harder case, both in `packages/server/src` — **337 files, 42k lines, ten times the fixture**:
+  The reasoning was: `apps/bench-app` is 34 files, so a symptom greps to the right file in 4 calls; on a real codebase the baseline would be far higher and the gap would widen. Two attempts to build that harder case, both in `server/src` — **337 files, 42k lines, ten times the fixture**:
 
   | attempt | condition A tool calls |
   | --- | --: |

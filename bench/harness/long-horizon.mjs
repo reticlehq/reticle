@@ -130,7 +130,7 @@ const toAnthropicTools = (tools) =>
  * driven, what was already proved.
  */
 async function runArm(compact) {
-  const client = connect({ cli: join(ROOT, 'packages/server/dist/cli.js'), port: PORT, cwd: ROOT });
+  const client = connect({ cli: join(ROOT, 'server/dist/cli.js'), port: PORT, cwd: ROOT });
   await client.init();
   const tools = toAnthropicTools((await client.listTools()).result?.tools ?? []);
 

@@ -9,18 +9,18 @@ Reticle is the **proof layer for AI agents** — it verifies a running web app f
 ## Monorepo layout
 
 ```
-packages/core          @reticlehq/core         — bottom-of-graph foundation: wire contract, constants, zod schemas (deps: zod)
+core          @reticlehq/core         — bottom-of-graph foundation: wire contract, constants, zod schemas (deps: zod)
 adapters/realm/dom       @reticlehq/browser      — instrumentation SDK embedded in the app (DOM-side)
-packages/server        @reticlehq/server       — bridge + MCP server, the `reticle` CLI (Node-side)
-packages/init          @reticlehq/init         — project scaffolder: `reticle init`'s codemod, no runtime (Node-side)
+server        @reticlehq/server       — bridge + MCP server, the `reticle` CLI (Node-side)
+init          @reticlehq/init         — project scaffolder: `reticle init`'s codemod, no runtime (Node-side)
 packages/react         @reticlehq/react        — React adapter: DOM ref -> component -> source file
 packages/vite-plugin   @reticlehq/vite-plugin  — Vite integration: stamps source + auto-injects connect()
 packages/babel-plugin  @reticlehq/babel-plugin — stamps data-reticle-source (source mapping, React 19)
 packages/next          @reticlehq/next         — Next.js source mapping (keeps SWC) via withReticle (CJS)
 packages/electron      @reticlehq/electron     — Electron main-process adapter (IPC observer, capture)
 packages/tauri         reticle-tauri           — Tauri capture backend (RUST — outside every JS gate)
-packages/test          @reticlehq/test         — spec runner + matchers for CI (peer vitest)
-packages/eslint-plugin @reticlehq/eslint-plugin — dev-only lint rule: state changed ⇒ signal fired
+spec-runner          @reticlehq/test         — spec runner + matchers for CI (peer vitest)
+eslint-plugin @reticlehq/eslint-plugin — dev-only lint rule: state changed ⇒ signal fired
 apps/bench-app         @reticlehq/bench-app    — integration proof (Vite + React) AND the primary benchmark target
 apps/api               @reticlehq/api          — support infra: backend the web e2e battery drives against
 apps/next-smoke        @reticlehq/next-smoke   — integration proof: Next.js 15 App Router, RSC, SWC source mapping
@@ -58,7 +58,7 @@ This is **one git repo** at the root (pnpm + turbo monorepo). The TS library pac
 7. **Inject the clock.** Never call `Date.now()`/`Math.random()` inside pure logic — pass them in.
 8. **Scope every data access to the authenticated principal.**
 9. **Design tokens are the only place design values live.**
-10. **Telemetry is part of the feature, not a follow-up.** Adding a tool? Put it in `TOOLS` and, if it produces a verdict, in `VERDICT_TOOLS` (`packages/server/src/tools/feedback-tools.ts`). Adding a finding kind? Add it to core's enum and never re-list it locally. Adding a dispatch path that bypasses `runTool`? It is invisible until you give it a reporter. Telemetry fails SILENTLY — nothing throws, no test reddens, the data is just permanently gone — so the rules are enforced by `telemetry-contract.test.ts` and written down in [`docs/telemetry-contract.md`](docs/telemetry-contract.md). Read that before touching anything that emits.
+10. **Telemetry is part of the feature, not a follow-up.** Adding a tool? Put it in `TOOLS` and, if it produces a verdict, in `VERDICT_TOOLS` (`server/src/tools/feedback-tools.ts`). Adding a finding kind? Add it to core's enum and never re-list it locally. Adding a dispatch path that bypasses `runTool`? It is invisible until you give it a reporter. Telemetry fails SILENTLY — nothing throws, no test reddens, the data is just permanently gone — so the rules are enforced by `telemetry-contract.test.ts` and written down in [`docs/telemetry-contract.md`](docs/telemetry-contract.md). Read that before touching anything that emits.
 11. **No internal tracking tags.** Comments, file names, directory names, and test descriptions must never contain design-doc reference codes (letter + digit patterns like `N5`, `G4`, `M8`, `P2`, `F1`, `R1`) or internal version strings (like `0.3.7`).
 
 ## Naming conventions

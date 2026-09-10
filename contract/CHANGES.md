@@ -8,7 +8,7 @@ This file is the history of that contract, newest first. It exists because softw
 
 The fingerprint is a short code worked out from the contract itself. Nobody types it or bumps it: add a command, rename an event, and it changes on its own. Refactor something internal and it does not.
 
-`packages/core/src/contract-changes.test.ts` recomputes it and compares it with the top entry here. Change the contract and that test goes red until an entry is added, so this file cannot quietly fall behind the thing it describes.
+`core/src/contract-changes.test.ts` recomputes it and compares it with the top entry here. Change the contract and that test goes red until an entry is added, so this file cannot quietly fall behind the thing it describes.
 
 Entries are only ever added at the top. An old entry describes what the contract looked like then, which stays true no matter what happens later, so editing one would make this a worse record than no record.
 

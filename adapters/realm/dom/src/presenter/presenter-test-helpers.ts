@@ -6,7 +6,16 @@ export const flush = (): Promise<void> => new Promise((r) => setTimeout(r, 0));
 export const wait = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
 /** Poll a predicate until true or timeout - robust to real-timer lateness under load (no flake). */
-export const until = async (pred: () => boolean, ms = 1000): Promise<boolean> => {
+/**
+ * Wait for something to become true, and say whether it did.
+ *
+ * The default deadline is deliberately far longer than any of these transitions takes. What is being
+ * checked is that the panel SETTLES, which is a fact about the code; how long it takes to get there
+ * is a fact about the machine. A deadline tight enough to trip under load trips in CI and nowhere
+ * else, and a check that only fails on a busy runner teaches people to press re-run instead of to
+ * look. A real failure still ends quickly, because the test's own timeout bounds it.
+ */
+export const until = async (pred: () => boolean, ms = 10_000): Promise<boolean> => {
   const t0 = Date.now();
   while (!pred()) {
     if (Date.now() - t0 > ms) return false;

@@ -163,7 +163,7 @@ export class McpStdioClient {
  * The reticle CLI entrypoint, resolved once.
  *
  * This lived as a hand-written path literal in three call sites, all of which still said
- * `packages/core/dist/cli.js` after the CLI moved to `packages/server`. Nothing referenced a missing
+ * `core/dist/cli.js` after the CLI moved to `server`. Nothing referenced a missing
  * file until spawn time, where it surfaced only as `mcp process exited code=1` — so the head-to-head
  * suite was simply unrunnable, with no error that named the cause. Resolved and existence-checked here
  * so a future move fails loudly, in one place.

@@ -228,7 +228,7 @@ async function warnAboutForeignSessions() {
     onNote: (note) => process.stdout.write(`[e2e] ${note}\n`),
   });
   await freePort();
-  const daemon = spawn('node', ['packages/server/dist/cli.js', 'serve', '--port', String(BRIDGE_PORT)], {
+  const daemon = spawn('node', ['server/dist/cli.js', 'serve', '--port', String(BRIDGE_PORT)], {
     stdio: 'ignore',
     detached: true,
   });

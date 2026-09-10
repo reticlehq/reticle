@@ -7,7 +7,7 @@
 
 area/core:
   - changed-files:
-      - any-glob-to-any-file: ['packages/core/**']
+      - any-glob-to-any-file: ['core/**']
 
 area/browser:
   - changed-files:
@@ -15,7 +15,7 @@ area/browser:
 
 area/server:
   - changed-files:
-      - any-glob-to-any-file: ['packages/server/**']
+      - any-glob-to-any-file: ['server/**']
 
 area/react:
   - changed-files:
@@ -44,11 +44,11 @@ area/tauri:
 
 area/test:
   - changed-files:
-      - any-glob-to-any-file: ['packages/test/**']
+      - any-glob-to-any-file: ['spec-runner/**']
 
 area/eslint-plugin:
   - changed-files:
-      - any-glob-to-any-file: ['packages/eslint-plugin/**']
+      - any-glob-to-any-file: ['eslint-plugin/**']
 
 area/docs:
   - changed-files:

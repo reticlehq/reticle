@@ -1,0 +1,58 @@
+{
+  "name": "@reticlehq/eslint-plugin",
+  "version": "2.14.0",
+  "description": "Reticle ESLint plugin — keeps the signal layer self-enforcing (mutation-without-signal).",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b",
+    "lint": "eslint src",
+    "test:unit": "vitest run src --passWithNoTests",
+    "prepack": "tsc -b && node ../scripts/prepare-dist.mjs dist"
+  },
+  "dependencies": {
+    "@typescript-eslint/utils": "^8.67.0"
+  },
+  "peerDependencies": {
+    "eslint": ">=9"
+  },
+  "devDependencies": {
+    "@typescript-eslint/rule-tester": "^8.67.0"
+  },
+  "license": "Apache-2.0",
+  "author": "Reticle contributors",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/reticlehq/reticle.git",
+    "directory": "eslint-plugin"
+  },
+  "homepage": "https://github.com/reticlehq/reticle#readme",
+  "bugs": "https://github.com/reticlehq/reticle/issues",
+  "files": [
+    "dist",
+    "README.md",
+    "NOTICE"
+  ],
+  "sideEffects": false,
+  "keywords": [
+    "mcp",
+    "ai-agents",
+    "eslint",
+    "eslint-plugin",
+    "testing"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

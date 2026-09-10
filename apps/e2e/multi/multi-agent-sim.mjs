@@ -17,7 +17,7 @@ import { fileURLToPath } from 'node:url';
 import net from 'node:net';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '../../..');
-const CLI = join(ROOT, 'packages/server/dist/cli.js');
+const CLI = join(ROOT, 'server/dist/cli.js');
 const STATE = mkdtempSync(join(tmpdir(), 'reticle-sim-state-'));
 const WORK = mkdtempSync(join(tmpdir(), 'reticle-sim-work-'));
 const children = [];
@@ -96,8 +96,8 @@ function resolvePortFor(cwd, requested) {
   const out = execFileSync(
     process.execPath,
     ['-e', `
-      const { resolveMcpPort } = require(${JSON.stringify(join(ROOT, 'packages/server/dist/daemon/daemon-resolve.js'))});
-      const { pickDaemonPortToBind } = require(${JSON.stringify(join(ROOT, 'packages/server/dist/daemon/free-port.js'))});
+      const { resolveMcpPort } = require(${JSON.stringify(join(ROOT, 'server/dist/daemon/daemon-resolve.js'))});
+      const { pickDaemonPortToBind } = require(${JSON.stringify(join(ROOT, 'server/dist/daemon/free-port.js'))});
       const net = require('node:net');
       const open = (p) => new Promise((res) => { const s = new net.Socket(); s.setTimeout(600);
         s.on('connect',()=>{s.destroy();res(true)}); s.on('error',()=>res(false));

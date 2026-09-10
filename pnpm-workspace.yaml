@@ -1,11 +1,21 @@
 packages:
   # The open specification. First, because everything else is an implementation of it.
   - 'openreality'
-  # The rules that decide a verdict. Second, because it implements the specification and nothing else.
+  # The rules that decide a verdict. They implement the specification and nothing else.
   - 'engine'
-  - 'packages/*'
-  # Adapters teach Reticle about one framework, build tool or kind of app. Same package rules as
-  # anything in packages/, kept apart so somebody writing their own can see the shape at a glance.
+  # The shared vocabulary: the names and shapes both ends of the connection agree on.
+  - 'core'
+  # The daemon, the agent's tool surface, and the `reticle` command.
+  - 'server'
+  # The scaffolder that wires Reticle into somebody's project.
+  - 'init'
+  # The spec runner and matchers a project uses in its own test suite.
+  - 'spec-runner'
+  # The lint rule we ship: state changed, so a signal should have been fired.
+  - 'eslint-plugin'
+  # Adapters teach Reticle about one framework, build tool, or kind of environment. Grouped by which
+  # of those they are, so somebody writing their own can see the shape at a glance.
   - 'adapters/*/*'
+  # Local fixtures and demos. Never published; deliberately allowed to depend on anything.
   - 'apps/*'
   - 'apps/examples/*'

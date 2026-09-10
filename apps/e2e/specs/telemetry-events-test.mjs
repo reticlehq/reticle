@@ -21,7 +21,7 @@ import { join } from 'node:path';
 
 import { fileURLToPath } from 'node:url';
 import { waitUntil } from '../wait-until.mjs';
-const DIST = join(fileURLToPath(new URL('../../../packages/server/dist', import.meta.url)));
+const DIST = join(fileURLToPath(new URL('../../../server/dist', import.meta.url)));
 // The rules that decide a verdict are their own package now, so they build to their own dist.
 const ENGINE_DIST = join(fileURLToPath(new URL('../../../engine/dist', import.meta.url)));
 const PORT = 9960;
@@ -33,7 +33,7 @@ const PORT = 9960;
 // out of core is the exact drift the telemetry contract forbids, and it is worst here, in the gate
 // that exists to catch telemetry going missing.
 const { isSessionScoped } = await import(
-  new URL('../../../packages/core/dist/index.js', import.meta.url).href
+  new URL('../../../core/dist/index.js', import.meta.url).href
 );
 const SESSION_SCOPED_EVENTS = { has: (event) => isSessionScoped(event) };
 
@@ -82,7 +82,7 @@ const { reportMcpOutage, resetOutageReporting, OutageStage } = await import(`${D
 const { decideVerified } = await import(`${ENGINE_DIST}/honesty/verified.js`);
 // Derived from core, never re-listed here — a copied vocabulary is correct on the day it is written
 // and silently wrong at the next addition, which has already cost this repo twice.
-const { VerifiedReason } = await import(new URL('../../../packages/core/dist/index.js', import.meta.url).href);
+const { VerifiedReason } = await import(new URL('../../../core/dist/index.js', import.meta.url).href);
 const VERIFIED_REASONS = new Set(Object.values(VerifiedReason));
 const { classifyConnectFailure } = await import(`${DIST}/telemetry/connect-failure.js`);
 

@@ -57,7 +57,7 @@ console.log('\n=== DAEMON LIFECYCLE: idle exit, no loop, wake on demand ===');
 process.chdir(ROOT);
 const client = new McpStdioClient(
   'node',
-  ['packages/server/dist/cli.js', 'mcp', '--port', PORT],
+  ['server/dist/cli.js', 'mcp', '--port', PORT],
   {
     RETICLE_PORT: PORT,
     RETICLE_TELEMETRY: '0',
@@ -89,7 +89,7 @@ chk('a daemon comes up for the attached agent', born && firstPid !== null, `pid 
 // 1. It exits when it has served nothing and no browser ever connected — even though an agent is
 //    still attached. Before, `agentConnected` alone kept it alive for the whole editor session.
 // 20s, not 5: an ATTACHED daemon now waits ATTACHED_GRACE_MULTIPLIER x the base before exiting
-// (see packages/server/src/idle-grace.ts), because a 5-minute flat grace was killing live runs
+// (see server/src/idle-grace.ts), because a 5-minute flat grace was killing live runs
 // mid-install. At the 2s base above that is 12s, so this window must stay comfortably past it.
 // 45s, not 20: the grace is ~12s at this base, and the old window left only 8s of headroom. Under a
 // full battery — three HTTP servers, a browser, and a stress spec's worth of sockets — that headroom
@@ -130,7 +130,7 @@ chk('a fresh daemon was started on demand', secondPid !== null && secondPid !== 
 chk('and the wake was transparent to the agent', Array.isArray(result?.sessions), `${answeredMs}ms`);
 
 try {
-  execSync(`node packages/server/dist/cli.js stop --port ${PORT}`, { stdio: 'ignore' });
+  execSync(`node server/dist/cli.js stop --port ${PORT}`, { stdio: 'ignore' });
 } catch {
   /* already gone */
 }
