@@ -1,5 +1,5 @@
 /**
- * P5c — self-registering domains. Instead of one hand-maintained flat-map of the whole testable
+ * Self-registering domains. Instead of one hand-maintained flat-map of the whole testable
  * surface, each app domain co-locates its `{ testids, signals, stores }` and calls
  * `registerReticleDomain...)`; the capability registry assembles itself from every domain. Thin
  * adapter over `registerCapabilities`, so merge/dedupe (and HMR persistence) are reused, not

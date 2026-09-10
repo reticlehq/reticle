@@ -41,6 +41,12 @@ export interface ReticleConnectOptions {
    */
   captureNetworkBodies?: boolean;
   /**
+   * Whether this build stamps `data-reticle-source`. Supplied by the build plugin, which is the only
+   * thing that knows: the page cannot tell "no plugin" from "plugin with the stamp turned off", and
+   * a verdict that cannot name a line prescribes opposite fixes for the two. Absent means unknown.
+   */
+  sourceMapping?: boolean;
+  /**
    * Retain the response body of a FAILED request (HTTP >= 400) even with `captureNetworkBodies`
    * off. **Default true.** Set `false` for a workspace that wants nothing retained at all.
    *

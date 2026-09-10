@@ -598,6 +598,42 @@ function wantedTextOf(query: ElementQuery): string | undefined {
   return QueryBy.TEXT === query.by ? query.value : undefined;
 }
 
+/** How many near-miss names are worth offering. Beyond a few this is a snapshot, not a hint. */
+const MAX_NAME_NEAR_MISSES = 5;
+
+/**
+ * The names this ROLE does carry that nearly matched the one asked for.
+ *
+ * "Nearly" in BOTH directions, because the two spellings are the same mistake: a query for "Mesh"
+ * against a button reading "2 Mesh" (the asked-for name is contained), and a query for "2 Mesh"
+ * against a button reading "Mesh" (the asked-for name contains it). Normalised and case-folded the
+ * same way the exact matcher is, so this can never suggest something the exact match would have
+ * found already.
+ *
+ * Scoped to the requested role on purpose. A link called "2 Mesh" is not a recovery for a BUTTON
+ * called "Mesh": pointing at it would recommend acting on a different control, which is the failure
+ * keeping the match exact was meant to avoid.
+ */
+function nameNearMisses(container: HTMLElement, query: ElementQuery): string[] {
+  const role = QueryBy.ROLE === query.by ? query.value : undefined;
+  const wanted = query.name;
+  if (role === undefined || wanted === undefined || 0 === wanted.length) return [];
+  const target = normaliseVisibleText(wanted).toLowerCase();
+  if (0 === target.length) return [];
+  const out: string[] = [];
+  for (const el of elementsUnder(container)) {
+    if (isIgnored(el) || getRole(el) !== role) continue;
+    const name = normaliseVisibleText(getAccessibleName(el));
+    if (0 === name.length) continue;
+    const folded = name.toLowerCase();
+    // Equality is impossible here — the exact query already missed — so this is strictly "close".
+    if (!folded.includes(target) && !target.includes(folded)) continue;
+    if (!out.includes(name)) out.push(name);
+    if (out.length >= MAX_NAME_NEAR_MISSES) break;
+  }
+  return out;
+}
+
 /** Diagnostic hint for a zero-match query: what testids ARE present in the searched scope. */
 function buildEmptyHint(query: ElementQuery): QueryEmptyHint {
   const container = resolveContainer(query.scope).container ?? document.body;
@@ -629,6 +665,8 @@ function buildEmptyHint(query: ElementQuery): QueryEmptyHint {
     const owner = splitTextOwner(container, wanted);
     if (owner !== undefined) hint.splitText = describe(owner);
   }
+  const near = nameNearMisses(container, query);
+  if (near.length > 0) hint.nameNearMiss = near;
   return hint;
 }
 

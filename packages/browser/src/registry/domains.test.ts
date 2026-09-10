@@ -12,7 +12,7 @@ async function fresh(): Promise<DomainsModule & CapModule> {
   return { ...domains, ...capabilities };
 }
 
-describe('registerReticleDomain (P5c self-registering domains)', () => {
+describe('registerReticleDomain — a domain declares its own testable surface', () => {
   it('merges a domain into reticle_capabilities', async () => {
     const { registerReticleDomain, getCapabilities } = await fresh();
     registerReticleDomain({ testids: ['a'], signals: ['s'], stores: ['st'] });

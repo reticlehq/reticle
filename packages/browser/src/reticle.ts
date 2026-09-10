@@ -41,7 +41,7 @@ import {
   hasCapabilities,
   type CapabilitiesInput,
 } from './registry/capabilities.js';
-import { installAllObservers } from './observers/install-all.js';
+import { installAllObservers, runTeardowns } from './observers/install-all.js';
 import { installOverlay, type OverlayHandle } from './presenter/overlay.js';
 import {
   Presenter,
@@ -243,6 +243,8 @@ export class Reticle {
   /** Whether this page records network bodies — announced in HELLO so a body clause can be refused
    * before an action is spent on it. See messages.ts. */
   #captureBodies = false;
+  /** Whether this build stamps data-reticle-source, when the build plugin said. See #hello. */
+  #sourceMapping: boolean | undefined = undefined;
   #projectId: string | undefined;
   /** App-declared extra redaction keys, announced in hello so the driven path honours them too. */
   #redactKeys: string[] = [];
@@ -364,6 +366,10 @@ export class Reticle {
 
     const emit = this.#emit;
     this.#captureBodies = true === options.captureNetworkBodies;
+    // Only a definite `false` is carried. Absent stays absent all the way to the daemon, so an older
+    // plugin that says nothing is never reported as having turned the stamp off.
+    this.#sourceMapping =
+      'boolean' === typeof options.sourceMapping ? options.sourceMapping : undefined;
     this.#teardowns = installAllObservers(emit, {
       captureBodies: this.#captureBodies,
       ...(options.captureErrorBodies === undefined
@@ -428,7 +434,7 @@ export class Reticle {
     this.#connected = true;
   }
 
-  /** Whether the in-page SDK is connected to the bridge (read by createReticleEmitter, P5a). */
+  /** Whether the in-page SDK is connected to the bridge (read by createReticleEmitter). */
   get connected(): boolean {
     return this.#connected;
   }
@@ -477,7 +483,7 @@ export class Reticle {
 
   disconnect(): void {
     if (!this.#connected) return;
-    for (const teardown of this.#teardowns) teardown();
+    runTeardowns(this.#emit, this.#teardowns);
     this.#teardowns = [];
     this.#transport?.close();
     this.#transport = undefined;
@@ -545,6 +551,9 @@ export class Reticle {
       hasCapabilities: hasCapabilities(),
       // Announced so a body-reading assertion can be refused before an action is spent on it.
       captureBodies: this.#captureBodies,
+      // Absent when no build plugin said either way — "unknown", never "on". A red verdict with no
+      // source pointer prescribes opposite fixes for "no plugin" and "plugin, stamp off".
+      ...(this.#sourceMapping === undefined ? {} : { sourceMapping: this.#sourceMapping }),
       // Absent when no build plugin supplied one - "unknown", never "matching".
       ...(this.#sdkVersion === undefined ? {} : { sdkVersion: this.#sdkVersion }),
       // Always present: derived from THIS build's core, so it needs no build plugin to supply it.
