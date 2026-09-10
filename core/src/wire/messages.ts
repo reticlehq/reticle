@@ -11,6 +11,7 @@ import { MAX_WIRE_REDACT_KEYS, MAX_WIRE_REDACT_KEY_LENGTH } from './redaction.js
 import { DOCUMENT_ID_LENGTH } from '../identity/document-identity.js';
 import { NO_EDITS_OBSERVED } from '../identity/edit-epoch.js';
 import { PlatformProfile } from './platform.js';
+import { ChannelId } from './channel.js';
 
 const sessionIdSchema = z.string().min(1).max(TRANSPORT_LIMITS.MAX_SESSION_ID_LENGTH);
 const refSchema = z.string().max(TRANSPORT_LIMITS.MAX_REF_LENGTH);
@@ -132,6 +133,28 @@ export const HelloMessageSchema = z.object({
    * which product you are.
    */
   platform: z.nativeEnum(PlatformProfile).optional(),
+  /**
+   * The channels this build can actually observe. See channel.ts.
+   *
+   * ABSENT MEANS "everything", not "nothing" -- an SDK built before this field existed watched
+   * whatever it watched, and reading its silence as "observes nothing" would refuse every claim it
+   * makes. Same convention as every other optional field on this message.
+   *
+   * A closed list rather than free strings, because the rule that refuses a claim reading an
+   * undeclared channel has to switch on these. Commands below are free strings for the opposite
+   * reason: nothing switches on them, and command names are already opaque on this wire.
+   */
+  channels: z.array(z.nativeEnum(ChannelId)).max(TRANSPORT_LIMITS.MAX_ADAPTERS).optional(),
+  /**
+   * The commands this build can serve.
+   *
+   * Absent means "assume the usual set". Present and missing a name means asking for it is a
+   * mistake somebody can be told about before they spend an action on it, rather than after.
+   */
+  commands: z
+    .array(z.string().max(TRANSPORT_LIMITS.MAX_TOKEN_LENGTH))
+    .max(TRANSPORT_LIMITS.MAX_ADAPTERS)
+    .optional(),
   /** Whether the app has advertised a capability registry (reticle.describe). */
   hasCapabilities: z.boolean().optional(),
   /**

@@ -66,6 +66,7 @@ export * from './telemetry-refusal.js';
 export * from './wire/narrow.js';
 export * from './wire/tool-names.js';
 export * from './wire/platform.js';
+export * from './wire/channel.js';
 export * from './realm/registry.js';
 export * from '@reticlehq/openreality';
 export * from './telemetry-session.js'; // the session/project rollup payloads
