@@ -35,6 +35,15 @@ describe('what the facts actually say', () => {
     expect(REALMS[AppRuntime.TAURI].isDesktopShell).toBe(true);
   });
 
+  it('but only Electron raises coverage warnings of its own', () => {
+    // The trap this table exists to hold open. "Desktop" and "has its own coverage warnings" look
+    // like the same fact and are not: an Electron renderer needs a preload script to see its IPC,
+    // and Tauri's invoke is already a fetch, so it has no unobserved-IPC case to report.
+    expect(REALMS[AppRuntime.ELECTRON].ownsCoverageKinds).toBe(true);
+    expect(REALMS[AppRuntime.TAURI].ownsCoverageKinds).toBe(false);
+    expect(REALMS[AppRuntime.TAURI].isDesktopShell).toBe(true);
+  });
+
   it('only Tauri draws with WebKit — Electron carries its own Chromium', () => {
     // The distinction a hidden window depends on, and the one most likely to be got wrong by
     // somebody grouping "the two desktop ones" together.

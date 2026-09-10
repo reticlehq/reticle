@@ -46,11 +46,18 @@ export interface Realm {
    */
   readonly usesWebKit: boolean;
   /**
-   * Does it own coverage warnings that make no sense for other realms?
+   * Does it raise coverage warnings that make no sense for any other realm?
    *
-   * A missing preload script is a real problem in an Electron renderer and a meaningless one in a
-   * browser tab. Reported for the wrong realm it reads as an un-instrumented app, which is how a
-   * plain Vite page once looked like a broken Electron install.
+   * Only Electron does, and this is narrower than "is a desktop shell", which is what it looks like
+   * at first glance. The warnings in question are about IPC going unobserved, and they exist because
+   * an Electron renderer needs a preload script to see its own IPC: without one, everything is
+   * unobserved and nothing says so.
+   *
+   * Tauri is a desktop shell and raises none of them, because its `invoke` travels as an ordinary
+   * fetch to a custom protocol and is already visible. A browser tab has no IPC at all.
+   *
+   * Reported for the wrong realm, a missing-preload warning reads as an un-instrumented app -- which
+   * is how a plain Vite page once looked like a broken Electron install.
    */
   readonly ownsCoverageKinds: boolean;
   /**
@@ -86,7 +93,10 @@ export const REALMS: Record<AppRuntime, Realm> = {
     isDesktopShell: true,
     // The system webview: WKWebView on macOS, WebKitGTK on Linux.
     usesWebKit: true,
-    ownsCoverageKinds: true,
+    // A desktop shell that raises none of its own coverage warnings. Its `invoke` is a fetch to a
+    // custom protocol, so the IPC is already observed and there is no unobserved-IPC case to report.
+    // The obvious grouping -- "the two desktop ones behave alike" -- is wrong here.
+    ownsCoverageKinds: false,
     hasOwnBaselineDirectory: true,
   },
 };

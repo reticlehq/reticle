@@ -9,13 +9,13 @@
 // honesty-side imports keep working.
 export { BlindSpotKind } from '@reticlehq/core';
 import {
-  AppRuntime,
   BlindSpotKind,
   EventType,
   PredicateKind,
   ReticleEnv,
   TRANSPORT_LIMITS,
   isDesktopBlindSpot,
+  realmOf,
   type ReticleEvent,
 } from '@reticlehq/core';
 
@@ -156,7 +156,11 @@ export function spotsForRuntime(
   spots: readonly BlindSpot[],
   runtime: string | undefined,
 ): BlindSpot[] {
-  if (runtime === undefined || AppRuntime.ELECTRON === runtime) return [...spots];
+  // Unknown runtime keeps the rows, deliberately and separately from the table below: an older SDK
+  // sends none, and dropping a real missing-preload warning is worse than showing one that does not
+  // apply. The table answers "does this realm raise these", not "should silence be treated as no".
+  if (runtime === undefined) return [...spots];
+  if (realmOf(runtime).ownsCoverageKinds) return [...spots];
   return spots.filter((spot) => !isDesktopBlindSpot(spot.kind));
 }
 
