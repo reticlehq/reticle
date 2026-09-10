@@ -37,6 +37,8 @@ const PINNED_VERSIONS: Record<string, string> = {
   'core/src/artifacts/flow-types.ts': 'FLOW_FILE_VERSION',
   'core/src/verdict/intent.ts': 'INTENT_FILE_VERSION',
   'core/src/registry/project-registry.ts': '1',
+  'core/src/verdict/verification-run.ts': 'z.literal(RUN_FILE_VERSION',
+  'core/src/wire/messages.ts': 'RETICLE_PROTOCOL_VERSION',
   'core/src/wire/types.ts': 'CONTRACT_FILE_VERSION,PROJECT_FILE_VERSION',
   'server/src/agent/capsule/capsule-store.ts': 'CAPSULE_VERSION',
   'server/src/features/flows/assertion-tiers-store.ts': '1',
@@ -63,8 +65,16 @@ function declaredVersions(): Record<string, string> {
     } catch {
       continue;
     }
-    const matches = [...text.matchAll(/version:\s*z\.literal\(([^)]+)\)/g)].map((m) =>
-      (m[1] ?? '').trim(),
+    // `schemaVersion:` as well as `version:`, and a union as well as a single literal. The pattern
+    // used to be `version:` alone and lowercase, so a field called `schemaVersion` was invisible --
+    // which hid the run artifact, a versioned file written to disk, from the check that exists to
+    // pin exactly those. It was found by changing that file's version and watching nothing go red.
+    const matches = [...text.matchAll(/version:\s*z\.(?:literal|union)\(([^;]+?)\)[,\n]/gi)].map(
+      (m) =>
+        (m[1] ?? '')
+          .replace(/\s+/g, ' ')
+          .replace(/^\[\s*/, '')
+          .trim(),
     );
     if (matches.length > 0) found[file] = matches.join(',');
   }
@@ -77,7 +87,7 @@ describe('on-disk format versions are pinned', () => {
   it('finds the versioned stores at all', () => {
     // Without this, a change to how versions are written would empty the scan and the check below
     // would pass by having nothing to compare.
-    expect(Object.keys(declared).length).toBeGreaterThanOrEqual(10);
+    expect(Object.keys(declared).length).toBeGreaterThanOrEqual(12);
   });
 
   it('no version has changed, and no store has appeared or vanished', () => {

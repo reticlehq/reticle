@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   RunAgentKind,
-  RunCheckKind,
+  PredicateKind,
   RunCheckStatus,
   RunFramework,
   RunProfile,
@@ -52,7 +52,7 @@ const failingRun = (runId: string): VerificationRunInput => ({
   changedFiles: [],
   flows: [],
   checks: [
-    { kind: RunCheckKind.NETWORK, predicate: 'POST /api/order 200', status: RunCheckStatus.FAIL },
+    { kind: PredicateKind.NET, predicate: 'POST /api/order 200', status: RunCheckStatus.FAIL },
   ],
   risks: [],
   evidence: { consoleErrors: [], networkAnomalies: [], stateAssertions: [], timeline: [] },

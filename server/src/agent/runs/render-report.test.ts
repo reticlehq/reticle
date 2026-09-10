@@ -3,7 +3,7 @@ import {
   RiskSeverity,
   RiskSurface,
   RunAgentKind,
-  RunCheckKind,
+  PredicateKind,
   RunCheckStatus,
   RunFlowStatus,
   RunFramework,
@@ -41,7 +41,7 @@ describe('renderRunReport', () => {
         ],
         checks: [
           {
-            kind: RunCheckKind.CONSOLE,
+            kind: PredicateKind.CONSOLE,
             predicate: 'no console errors',
             status: RunCheckStatus.FAIL,
           },

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   RunAgentKind,
-  RunCheckKind,
+  PredicateKind,
   RunCheckStatus,
   RunFlowStatus,
   RunFramework,
@@ -31,7 +31,7 @@ const base: Omit<VerificationRunInput, 'flows' | 'checks'> = {
   evidence: { consoleErrors: [], networkAnomalies: [], stateAssertions: [], timeline: [] },
 };
 
-const failingCheck = (kind: RunCheckKind, predicate: string) =>
+const failingCheck = (kind: PredicateKind, predicate: string) =>
   buildVerificationRun(
     { ...base, flows: [], checks: [{ kind, predicate, status: RunCheckStatus.FAIL }] },
     () => 1,
@@ -40,30 +40,24 @@ const failingCheck = (kind: RunCheckKind, predicate: string) =>
 describe('Reticle catches generated-app silent-failure classes', () => {
   it('mock data instead of real persistence → state check FAILS (the #1 generated-app complaint)', () => {
     // "Looks saved" but the store/DB never changed — a `state` success-oracle catches it.
-    const run = failingCheck(RunCheckKind.STATE, 'store.expenses.length increased after add');
+    const run = failingCheck(PredicateKind.STATE, 'store.expenses.length increased after add');
     expect(run.verdict.status).toBe(VerdictStatus.FAIL);
-    expect(run.checks[0]?.kind).toBe(RunCheckKind.STATE);
+    expect(run.checks[0]?.kind).toBe(PredicateKind.STATE);
   });
 
   it('dead handler / UI-vs-store desync → state check FAILS', () => {
-    const run = failingCheck(RunCheckKind.STATE, 'deployments.0.status === "live" after Ship');
+    const run = failingCheck(PredicateKind.STATE, 'deployments.0.status === "live" after Ship');
     expect(run.verdict.status).toBe(VerdictStatus.FAIL);
   });
 
   it('double-submit (POST fires twice) → network cardinality check FAILS', () => {
-    const run = failingCheck(
-      RunCheckKind.NETWORK,
-      'POST /api/expense fires exactly once (count:1)',
-    );
+    const run = failingCheck(PredicateKind.NET, 'POST /api/expense fires exactly once (count:1)');
     expect(run.verdict.status).toBe(VerdictStatus.FAIL);
-    expect(run.checks[0]?.kind).toBe(RunCheckKind.NETWORK);
+    expect(run.checks[0]?.kind).toBe(PredicateKind.NET);
   });
 
   it('forbidden call (a must-never-fire endpoint fired) → network count:0 check FAILS', () => {
-    const run = failingCheck(
-      RunCheckKind.NETWORK,
-      'POST /api/legacy-telemetry never fires (count:0)',
-    );
+    const run = failingCheck(PredicateKind.NET, 'POST /api/legacy-telemetry never fires (count:0)');
     expect(run.verdict.status).toBe(VerdictStatus.FAIL);
   });
 
@@ -91,16 +85,16 @@ describe('Reticle catches generated-app silent-failure classes', () => {
 
   it('silent console error (UI still renders) → console check FAILS', () => {
     const run = failingCheck(
-      RunCheckKind.CONSOLE,
+      PredicateKind.CONSOLE,
       'no console.error during checkout (absent:true)',
     );
     expect(run.verdict.status).toBe(VerdictStatus.FAIL);
-    expect(run.checks[0]?.kind).toBe(RunCheckKind.CONSOLE);
+    expect(run.checks[0]?.kind).toBe(PredicateKind.CONSOLE);
   });
 
   it('blast-radius (an action corrupts UNRELATED state, nothing visible) → state invariant FAILS', () => {
     const run = failingCheck(
-      RunCheckKind.STATE,
+      PredicateKind.STATE,
       'deployments.0.status unchanged by Compose (invariant)',
     );
     expect(run.verdict.status).toBe(VerdictStatus.FAIL);
@@ -112,17 +106,17 @@ describe('Reticle catches generated-app silent-failure classes', () => {
         ...base,
         checks: [
           {
-            kind: RunCheckKind.NETWORK,
+            kind: PredicateKind.NET,
             predicate: 'POST /api/expense 200 count:1',
             status: RunCheckStatus.PASS,
           },
           {
-            kind: RunCheckKind.STATE,
+            kind: PredicateKind.STATE,
             predicate: 'store.expenses.length increased',
             status: RunCheckStatus.PASS,
           },
           {
-            kind: RunCheckKind.CONSOLE,
+            kind: PredicateKind.CONSOLE,
             predicate: 'no console errors',
             status: RunCheckStatus.PASS,
           },

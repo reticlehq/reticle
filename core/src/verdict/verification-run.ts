@@ -11,9 +11,28 @@
  */
 
 import { z } from 'zod';
+import { PredicateKind } from './consequence.js';
 
 /** Schema version stamped into every run file so a reader can reject/upgrade old artifacts. */
-export const RUN_FILE_VERSION = 1;
+export const RUN_FILE_VERSION = 2;
+
+/**
+ * The version this artifact used before checks were recorded in the assertion vocabulary.
+ *
+ * Version 1 spelled a network check `network` where an assertion says `net`, and had a `layout` kind
+ * nothing could produce. Files already on disk are still read: the two old spellings are translated
+ * on the way in, so a stored run from before this change opens rather than reading as empty. Empty
+ * is the dangerous outcome -- it looks like a run that found nothing.
+ */
+const RUN_FILE_VERSION_BEFORE_ONE_VOCABULARY = 1;
+
+/** The old spelling of each check kind, for reading a version 1 file. */
+const OLD_CHECK_KIND_SPELLING: Readonly<Record<string, string>> = {
+  network: PredicateKind.NET,
+  // `layout` was never produced by anything, so a file cannot contain one. Mapped to the nearest
+  // truthful thing rather than dropped, so a hand-written file does not fail to open.
+  layout: PredicateKind.ELEMENT,
+};
 
 /**
  * A run's identity, branded so it can't be confused with another id (e.g. a flow name) that also feeds
@@ -66,16 +85,16 @@ export const RunFlowStatus = {
 } as const;
 export type RunFlowStatus = (typeof RunFlowStatus)[keyof typeof RunFlowStatus];
 
-/** The kind of standalone assertion captured outside a flow (drives `evidence` narrowing downstream). */
-export const RunCheckKind = {
-  SIGNAL: 'signal',
-  NETWORK: 'network',
-  ELEMENT: 'element',
-  STATE: 'state',
-  CONSOLE: 'console',
-  LAYOUT: 'layout',
-} as const;
-export type RunCheckKind = (typeof RunCheckKind)[keyof typeof RunCheckKind];
+/**
+ * The kind of standalone assertion captured outside a flow.
+ *
+ * This is `PredicateKind` -- the vocabulary assertions are written in -- and not a second list.
+ * There used to be one here, and the two had already drifted: the same idea was spelled `net` in an
+ * assertion and `network` in the artifact, and `layout` existed here and in nothing anybody could
+ * write, so it could never be recorded. Re-exported under the old name so the places that read it
+ * from this file still can.
+ */
+export { PredicateKind };
 
 /** Binary status of a single check. */
 export const RunCheckStatus = {
@@ -204,7 +223,10 @@ export type RunFlowResult = z.infer<typeof RunFlowResultSchema>;
 
 /** A standalone assertion not tied to a flow. `evidence` is opaque (narrowed per kind by the caller). */
 export const RunCheckSchema = z.object({
-  kind: z.nativeEnum(RunCheckKind),
+  kind: z.preprocess(
+    (given) => ('string' === typeof given ? (OLD_CHECK_KIND_SPELLING[given] ?? given) : given),
+    z.nativeEnum(PredicateKind),
+  ),
   predicate: z.string(),
   status: z.nativeEnum(RunCheckStatus),
   evidence: z.unknown().optional(),
@@ -286,12 +308,18 @@ export const RunSignatureSchema = z.object({
 });
 
 /**
- * The top-level verification-run artifact. Stable contract — additive changes only within
- * RUN_FILE_VERSION 1; a breaking change bumps the version. Arrays default to empty so a minimal
- * run (e.g. a single smoke flow) still validates.
+ * The top-level verification-run artifact. Stable contract — additive changes only within a
+ * RUN_FILE_VERSION; a breaking change bumps it. Arrays default to empty so a minimal run (e.g. a
+ * single smoke flow) still validates. Version 1 files are still read; see the note on the constant.
  */
 export const ReticleVerificationRunSchema = z.object({
-  schemaVersion: z.literal(RUN_FILE_VERSION),
+  // Both versions are read; only the current one is written. A version 1 file differs from a
+  // version 2 file in exactly one way -- how a check's kind is spelled -- and that is translated
+  // above, so there is nothing else to migrate.
+  schemaVersion: z.union([
+    z.literal(RUN_FILE_VERSION),
+    z.literal(RUN_FILE_VERSION_BEFORE_ONE_VOCABULARY),
+  ]),
   runId: RunIdSchema,
   createdAt: z.number(), // epoch ms — INJECTED, never computed in pure logic
   durationMs: z.number(),

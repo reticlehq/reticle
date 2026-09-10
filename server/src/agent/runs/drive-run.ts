@@ -26,7 +26,7 @@ import { defaultRunId } from './runner-port.js';
 import {
   JournalVerdictEffectSchema,
   RunAgentKind,
-  RunCheckKind,
+  PredicateKind,
   RunCheckStatus,
   RunFramework,
   RunProfile,
@@ -118,7 +118,7 @@ export function driveRunFrom(
       continue;
     }
     checks.push({
-      kind: RunCheckKind.ELEMENT,
+      kind: PredicateKind.ELEMENT,
       predicate: verdict.claim,
       status,
       ...(verdict.source === undefined ? {} : { evidence: { source: verdict.source } }),

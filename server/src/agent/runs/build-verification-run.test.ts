@@ -4,7 +4,7 @@ import {
   RiskSeverity,
   RiskSurface,
   RunAgentKind,
-  RunCheckKind,
+  PredicateKind,
   RunCheckStatus,
   RunConfidence,
   RunFlowStatus,
@@ -92,7 +92,7 @@ describe('computeVerdict', () => {
     const v = computeVerdict({
       ...base,
       checks: [
-        { kind: RunCheckKind.NETWORK, predicate: 'POST /api 200', status: RunCheckStatus.FAIL },
+        { kind: PredicateKind.NET, predicate: 'POST /api 200', status: RunCheckStatus.FAIL },
       ],
     });
     expect(v.status).toBe(VerdictStatus.FAIL);
