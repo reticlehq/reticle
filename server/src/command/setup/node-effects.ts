@@ -24,7 +24,7 @@ import {
   parseNetstatListeners,
   parseWmicProcesses,
   type ProcessPair,
-} from './listeners.js';
+} from './terminal/listeners.js';
 import type { CandidateSession } from './session-pick.js';
 import type { PageProbe } from './page-probe.js';
 

@@ -13,7 +13,7 @@
  */
 
 import { judgeWait, QUIET_MEANS_HUNG_MS, urlToWatch, WaitVerdict } from './dev-server-wait.js';
-import { waitProgressLine } from './wait-progress.js';
+import { waitProgressLine } from './terminal/wait-progress.js';
 
 /**
  * Windows gets longer to say something before silence counts as a wedge.

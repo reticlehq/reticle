@@ -11,7 +11,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { planAgentConfigs, type PlatformPaths } from './agent-configs.js';
 import { AppShape, readShape } from './desktop-shape.js';
-import { stopOnInterrupt } from './interrupt.js';
+import { stopOnInterrupt } from './terminal/interrupt.js';
 import { applyAgentPlan, applyAgentSkills } from './agent-writer.js';
 import { ApprovalOutcome, grantAutoApproval } from './auto-approve.js';
 import { agentIo } from './agent-io.js';

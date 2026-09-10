@@ -105,6 +105,14 @@ const REACHES_FOR: Record<string, readonly string[]> = {
    * reaches for nothing itself.
    */
   ports: [],
+  /**
+   * Talking to the person at the terminal: asking, interrupting, showing progress, recording what
+   * was said. Named `terminal` and not `console`, which in a JavaScript codebase means the API.
+   *
+   * It reaches for four things and that is honest -- it prints daemon state, port state and
+   * telemetry notices, because that is what a setup transcript is made of.
+   */
+  terminal: ['cli', 'daemon', 'ports', 'telemetry'],
   bridge: ['flows', 'impact', 'project', 'session', 'telemetry', 'tools', 'version'],
   capsule: ['project'],
   cli: [
@@ -179,7 +187,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
     'telemetry',
     'tools',
   ],
-  setup: ['ports', 'bridge', 'cli', 'daemon', 'mcp', 'telemetry'],
+  setup: ['terminal', 'bridge', 'cli', 'daemon', 'mcp', 'telemetry'],
   telemetry: ['ports', 'cli', 'daemon', 'license', 'mcp', 'session', 'tools', 'update', 'version'],
   tools: [
     'ports',

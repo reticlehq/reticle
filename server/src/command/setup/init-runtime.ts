@@ -9,12 +9,12 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { RETICLE_DEFAULT_PORT } from '@reticlehq/core';
 import type { InitResult } from '@reticlehq/init';
-import { confirmInstall, nodeConfirmDeps } from './confirm.js';
+import { confirmInstall, nodeConfirmDeps } from './terminal/confirm.js';
 import { writeLicenseKey } from './license-key.js';
 import { registerOtherAgents, runSetupCommand } from './setup-command.js';
 import { bridgeOccupied } from './bridge-port.js';
 import { relaunchDecision } from './relaunch.js';
-import { claudeTranscriptExists, codexSessionFor } from './transcripts.js';
+import { claudeTranscriptExists, codexSessionFor } from './terminal/transcripts.js';
 import { probePresence } from '../daemon/port-presence.js';
 import { probeDaemon } from '../../agent/mcp/proxy-daemon-probe.js';
 import { fetchStatus } from '../cli/cli-launch.js';
