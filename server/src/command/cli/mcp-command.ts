@@ -24,7 +24,7 @@ import {
   setProxyLogPort,
 } from '../../agent/mcp/mcp-proxy.js';
 import { installProxyResilience } from '../daemon/daemon-resilience.js';
-import { readProjectId } from './ports/cli-port.js';
+import { readProjectId } from './ports/resolve/cli-port.js';
 import { resolveMcpPort, daemonProjectAt } from '../daemon/daemon-resolve.js';
 import { daemonSpawnArgs } from './daemon-start-options.js';
 import { WakeAction, decideWake } from '../daemon/wake-decision.js';

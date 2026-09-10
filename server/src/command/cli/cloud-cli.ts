@@ -15,7 +15,7 @@ import { createNodeFileSystem } from '../../features/project/fs/fs-port.js';
 import { CLOUD_LINK_FILE, resolveProjectCloud } from '../../features/cloud/cloud-config.js';
 import { applyCredential, findCredential } from './cloud-keystore.js';
 import { defaultProjectFor } from './project-name.js';
-import { RETICLE_CONFIG_BASENAME } from './ports/cli-port.js';
+import { RETICLE_CONFIG_BASENAME } from './ports/resolve/cli-port.js';
 import { normalizeUrl } from './cloud-session.js';
 import { cmdLogin, cmdLogout } from './cloud-login.js';
 import {

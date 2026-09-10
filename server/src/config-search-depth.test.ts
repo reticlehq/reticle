@@ -23,7 +23,7 @@ import { REPO_ROOT } from './repo-root.js';
  */
 
 const WALKERS = [
-  'server/src/command/cli/ports/cli-port.ts',
+  'server/src/command/cli/ports/resolve/cli-port.ts',
   'adapters/build/vite/src/project-id.ts',
 ];
 

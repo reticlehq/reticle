@@ -23,7 +23,7 @@
  * are indistinguishable once they are in the same column.
  */
 import { InstallSource } from '@reticlehq/core/telemetry';
-import { findProjectConfig } from '../command/cli/ports/cli-port.js';
+import { findProjectConfig } from '../command/cli/ports/resolve/cli-port.js';
 
 /** The one marker. Set by a channel on the process that runs the install. */
 export const INSTALL_SOURCE_ENV = 'RETICLE_INSTALL_SOURCE';

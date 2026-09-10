@@ -111,7 +111,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
    * Getting something running and waiting for it: the bridge port, the daemon, the dev server,
    * the relaunch. Everything `reticle init` does between writing files and having a session.
    */
-  bringup: ['launch', 'cli', 'daemon', 'mcp'],
+  bringup: ['cli', 'daemon', 'launch', 'mcp'],
   /**
    * What the daemon remembers between sessions: which projects have registered, what a previous
    * connection looked like, whether an address smells like somebody's dev server.
@@ -152,7 +152,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
    * Freed four reaches on `cli`. `license`, `project` and `session` never wanted the
    * command-line; they wanted to know where the configuration is.
    */
-  config: ['ports'],
+  config: ['resolve'],
   /**
    * What version this daemon is, as a fact rather than as a comparison.
    *
@@ -161,6 +161,23 @@ const REACHES_FOR: Record<string, readonly string[]> = {
    * comparison at all. Freed `command -> version`, `telemetry -> version` and `update -> version`.
    */
   identity: [],
+  /**
+   * Which port the daemon is on, resolved once for everybody who needs to reach it.
+   *
+   * Extracted out of `ports/`, a grouping made earlier in this same audit. Seven directories
+   * reached `ports` and wanted only this file; the port HOLDER and the sibling scan are a
+   * different question that only the CLI asks. Grouping by theme buried a high-demand file
+   * behind two low-demand ones, and the fan-in measure is what caught it afterwards.
+   */
+  resolve: [],
+  /**
+   * What a previous connection to this project looked like.
+   *
+   * Extracted out of `recall/` for the same reason, and named `prior` rather than `memory`
+   * because `features/memory` already exists -- caught by the basename-uniqueness guard added
+   * earlier in this audit, on a collision introduced by this audit.
+   */
+  prior: [],
   /**
    * Who is attached to a session, and who may drive it. Reaches for NOTHING -- not even its own
    * parent -- which is the strongest form a group can take: `session` needs it, and it needs
@@ -193,18 +210,18 @@ const REACHES_FOR: Record<string, readonly string[]> = {
    * It reaches for four things and that is honest -- it prints daemon state, port state and
    * telemetry notices, because that is what a setup transcript is made of.
    */
-  terminal: ['launch', 'daemon', 'ports', 'telemetry'],
+  terminal: ['daemon', 'launch', 'resolve', 'telemetry'],
   /** A recorded flow and what became of it: the tape, the rewind, the flake, the halt. */
   recording: [],
   /** What a human wrote on a step, and where they pointed when they wrote it. */
   'annotate-notes': [],
   bridge: [
-    'identity',
-    'fs',
-    'recording',
     'flows',
+    'fs',
+    'identity',
     'impact',
     'project',
+    'recording',
     'session',
     'telemetry',
     'tools',
@@ -212,21 +229,22 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   ],
   capsule: ['dir', 'fs'],
   cli: [
-    'identity',
-    'launch',
-    'fs',
-    'recall',
-    'doctor',
-    'recording',
-    'ports',
-    'outcome',
     'bridge',
     'capsule',
     'cloud',
     'daemon',
+    'doctor',
     'flows',
+    'fs',
+    'identity',
+    'launch',
     'mcp',
+    'outcome',
+    'ports',
+    'prior',
     'project',
+    'recording',
+    'resolve',
     'runs',
     'session',
     'setup',
@@ -234,19 +252,19 @@ const REACHES_FOR: Record<string, readonly string[]> = {
     'update',
     'version',
   ],
-  cloud: ['fs', 'cli', 'intent'],
+  cloud: ['cli', 'fs', 'intent'],
   command: [
-    'identity',
-    'launch',
-    'fs',
-    'recall',
-    'ports',
     'cli',
     'daemon',
     'flows',
+    'fs',
     'hunt',
+    'identity',
+    'launch',
     'license',
     'mcp',
+    'prior',
+    'resolve',
     'setup',
     'telemetry',
     'update',
@@ -256,18 +274,18 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   domain: ['dir', 'flows', 'oracles', 'project', 'tools'],
   ee: ['license'],
   flows: [
-    'dir',
-    'fs',
-    'fields',
-    'annotate-notes',
-    'recording',
-    'outcome',
     'act',
+    'annotate-notes',
     'cli',
     'cloud',
+    'dir',
+    'fields',
+    'fs',
     'intent',
     'journal',
+    'outcome',
     'project',
+    'recording',
     'runs',
     'session',
     'tools',
@@ -277,56 +295,54 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   intent: ['dir', 'fs', 'project', 'tools'],
   journal: ['dir', 'fs', 'project', 'runs'],
   license: ['config'],
-  mcp: ['identity', 'launch', 'recall', 'ports', 'daemon', 'telemetry', 'tools', 'version'],
-  memory: ['fs', 'cloud', 'project', 'tools'],
+  mcp: ['daemon', 'identity', 'launch', 'prior', 'resolve', 'telemetry', 'tools', 'version'],
+  memory: ['cloud', 'fs', 'project', 'tools'],
   pool: ['doctor', 'input', 'telemetry'],
-  project: ['config', 'dir', 'fs', 'cloud', 'flows', 'runs', 'tools'],
-  runs: ['dir', 'fs', 'cloud', 'flows', 'intent', 'mcp', 'project', 'telemetry', 'tools'],
+  project: ['cloud', 'config', 'dir', 'flows', 'fs', 'runs', 'tools'],
+  runs: ['cloud', 'dir', 'flows', 'fs', 'intent', 'mcp', 'project', 'telemetry', 'tools'],
   session: [
+    'bridge',
     'config',
-    'recall',
+    'daemon',
     'gaps',
     'human',
-    'ports',
-    'presence',
-    'bridge',
-    'daemon',
     'impact',
     'input',
     'journal',
     'mcp',
+    'ports',
+    'presence',
+    'prior',
+    'recall',
+    'resolve',
     'telemetry',
     'tools',
   ],
-  setup: ['launch', 'bringup', 'terminal', 'bridge', 'daemon', 'mcp', 'telemetry'],
+  setup: ['bridge', 'bringup', 'daemon', 'launch', 'mcp', 'telemetry', 'terminal'],
   telemetry: [
-    'identity',
-    'recall',
-    'ports',
     'cli',
     'daemon',
+    'identity',
     'license',
     'mcp',
+    'prior',
+    'resolve',
     'session',
     'tools',
     'update',
   ],
   tools: [
-    'dir',
-    'fs',
-    'recall',
-    'doctor',
-    'gaps',
-    'annotate-notes',
-    'recording',
-    'ports',
-    'read',
     'act',
+    'annotate-notes',
     'capsule',
     'crawl',
     'daemon',
+    'dir',
+    'doctor',
     'domain',
     'flows',
+    'fs',
+    'gaps',
     'impact',
     'input',
     'intent',
@@ -334,7 +350,11 @@ const REACHES_FOR: Record<string, readonly string[]> = {
     'memory',
     'oracles',
     'pool',
+    'prior',
     'project',
+    'read',
+    'recording',
+    'resolve',
     'runs',
     'session',
     'telemetry',

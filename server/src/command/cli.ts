@@ -9,7 +9,7 @@ import { readDevServers } from './daemon/dev-servers.js';
 import {
   hasConnectedBefore,
   hasProjectConnectedBefore,
-} from '../connection/session/recall/connection-memory.js';
+} from '../connection/session/recall/prior/connection-memory.js';
 import { attachStatusFields } from '../agent/mcp/attach-memory.js';
 import { reticleStateHome } from './daemon/daemon.js';
 import { handleMcp } from './cli/mcp-command.js';
@@ -94,7 +94,7 @@ import {
   devServerPortWarning,
   readProjectPort,
   readProjectId,
-} from './cli/ports/cli-port.js';
+} from './cli/ports/resolve/cli-port.js';
 import type { StartOptions } from '../index.js';
 
 import { DAEMON_INNER_COMMAND, PORT_FLAG, parseCliArgs, CLI_USAGE } from './cli/cli-parse.js';

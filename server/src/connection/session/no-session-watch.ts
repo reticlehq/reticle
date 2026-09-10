@@ -23,9 +23,9 @@ import {
   readProjectFramework,
   readProjectId,
   readProjectPort,
-} from '../../command/cli/ports/cli-port.js';
+} from '../../command/cli/ports/resolve/cli-port.js';
 import { discoverProjectConfigs } from '../../command/cli/config/config-discovery.js';
-import { hasProjectConnectedBefore, rememberConnected } from './recall/connection-memory.js';
+import { hasProjectConnectedBefore, rememberConnected } from './recall/prior/connection-memory.js';
 import { isAlive, reticleStateHome } from '../../command/daemon/daemon.js';
 import {
   daemonsServingProjectElsewhere,
