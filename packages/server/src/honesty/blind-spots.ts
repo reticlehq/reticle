@@ -218,7 +218,12 @@ function droppedByTransport(events: readonly ReticleEvent[]): number {
 interface AbsencePredicate {
   kind: string;
   absent?: boolean;
-  query?: { scope?: unknown };
+  /**
+   * Element locators carry `scope`; the style predicate carries `css`. Both have to be assignable
+   * here — a query object with only `css` has no properties in common with `{ scope?: unknown }`,
+   * and TypeScript then refuses to pass a `Predicate` into this check at all.
+   */
+  query?: { scope?: unknown; [key: string]: unknown };
   predicate?: AbsencePredicate;
 }
 

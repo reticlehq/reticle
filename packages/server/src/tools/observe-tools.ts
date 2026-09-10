@@ -257,7 +257,7 @@ export const OBSERVE_TOOLS: ToolDef[] = [
       'Block until a predicate is satisfied (or already true in the recent buffer), else time out. Returns matching evidence or a near-miss diagnosis. By default it only counts events since your last act, so a signal buffered BEFORE the action can never fake a pass; pass `since` (an observe/act cursor) to widen or narrow that window explicitly.',
     inputSchema: {
       predicate: PredicateSchema.optional().describe(
-        'Predicate to wait for: { signal }, { net }, { element }, { kind: "net", ok: false } (assert on the OUTCOME — the honest field for IPC, which has no status code), { kind: "state", store, path, equals } (assert a registered store\'s value directly — the source of truth no DOM read can reach; equals takes a literal or { $gte | $contains | $length } pattern), { kind: "settled", quietMs } (deterministic network + DOM idle — prefer this over a fixed sleep), or a combination via allOf/anyOf.',
+        'Predicate to wait for: { signal }, { net }, { element }, { kind: "net", ok: false } (assert on the OUTCOME — the honest field for IPC, which has no status code), { kind: "state", store, path, equals } (assert a registered store\'s value directly — the source of truth no DOM read can reach; equals takes a literal or { $gte | $contains | $length } pattern), { kind: "style", query: { css }, properties } (computed style — what the browser resolved, not the stylesheet), { kind: "settled", quietMs } (deterministic network + DOM idle — prefer this over a fixed sleep), or a combination via allOf/anyOf.',
       ),
       // Same concept, the neighbouring tool's name. See alias-args.ts.
       until: PredicateSchema.optional().describe("Alias for `predicate` (act_and_wait's name)."),
@@ -362,7 +362,7 @@ export const OBSERVE_TOOLS: ToolDef[] = [
           '{ net, urlContains|method|status|count|bodyContains } ' +
           '{ state, path|equals } { route, pathname (exact) | contains (path+query+hash) } ' +
           '{ element, testid|role|text } { text } { console, level|contains|absent } { animation, name } ' +
-          '{ settled } — combine with { allOf | anyOf | not }. Prefer a signal/net/state consequence ' +
+          '{ style, query.css|properties } { settled } — combine with { allOf | anyOf | not }. Prefer a signal/net/state consequence ' +
           'over element/text presence.',
       ),
       until: PredicateSchema.optional().describe("Alias for `predicate` (act_and_wait's name)."),

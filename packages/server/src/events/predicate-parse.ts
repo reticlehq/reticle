@@ -35,6 +35,8 @@ const EXAMPLES: Readonly<Partial<Record<string, string>>> = {
   [PredicateKind.ROUTE]: '{ kind: "route", pathname: "/dashboard" }',
   [PredicateKind.CONSOLE]: '{ kind: "console", level: "error", absent: true }',
   [PredicateKind.ANIMATION]: '{ kind: "animation", name: "slide-in", completed: true }',
+  [PredicateKind.STYLE]:
+    '{ kind: "style", query: { css: ".pro-card" }, properties: { "background-color": "rgb(255, 255, 255)" } }',
   [PredicateKind.SIGNAL]: '{ kind: "signal", name: "todos:loaded" }',
   [PredicateKind.STATE]: '{ kind: "state", path: "cart.total", equals: 0 }',
   [PredicateKind.SETTLED]: '{ kind: "settled" }',

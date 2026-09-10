@@ -68,6 +68,8 @@ export function describeWaitTarget(predicate: Predicate): string {
       return 'a console message';
     case PredicateKind.ANIMATION:
       return predicate.name === undefined ? 'an animation' : `animation '${predicate.name}'`;
+    case PredicateKind.STYLE:
+      return `computed style of ${predicate.query.css}`;
     case PredicateKind.ALL_OF:
       return `all of (${predicate.predicates.map(describeWaitTarget).join('; ')})`;
     case PredicateKind.ANY_OF:

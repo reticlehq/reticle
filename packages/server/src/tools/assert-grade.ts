@@ -39,7 +39,7 @@ function walk(predicate: Predicate, negated = false): PredicateKinds {
   // never matched anything in the first place. Negation makes a presence check weaker, not stronger.
   if (PredicateKind.NOT === predicate.kind) return walk(predicate.predicate, true);
   // Leaf: classify against the single source of truth in core. Kinds that are neither consequence
-  // nor presence (route/console/settled/animation) correctly return false for both.
+  // nor presence (route/console/settled/animation/style) correctly return false for both.
   return {
     consequence: isConsequenceKind(predicate.kind),
     presence: isPresenceKind(predicate.kind) && (negated || !assertsElementContent(predicate)),

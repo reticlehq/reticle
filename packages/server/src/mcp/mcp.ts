@@ -99,7 +99,7 @@ export function firstSentence(description: string): string {
 /**
  * Parameters carrying the recursive predicate grammar. Advertised compactly in lean profiles.
  *
- * `PredicateSchema` is a 12-variant discriminated union whose `allOf`/`anyOf`/`not` members embed the
+ * `PredicateSchema` is a 13-variant discriminated union whose `allOf`/`anyOf`/`not` members embed the
  * union again. Zod's JSON-Schema emitter inlines that recursion rather than emitting one `$ref`, so a
  * single tool ships the word "kind" 48 times and `reticle_wait_for` alone costs 6,571 characters.
  * Across the three tools that take a predicate that is 72% of the entire advertised input schema — a
@@ -126,7 +126,7 @@ export function firstSentence(description: string): string {
  */
 const PREDICATE_KINDS =
   'Predicate object: { kind, ...fields }. kind is one of element | text | net | route | console | ' +
-  'animation | signal | state | settled | allOf | anyOf | not.';
+  'animation | style | signal | state | settled | allOf | anyOf | not.';
 
 /**
  * Said once per turn: the bug-catching options, and where to get the rest of the field grammar.

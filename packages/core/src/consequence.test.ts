@@ -21,8 +21,8 @@ describe('consequence classification (the moat rule, single source)', () => {
     }
   });
 
-  it('route/console/settled/animation are neither consequence nor presence', () => {
-    for (const k of ['route', 'console', 'settled', 'animation']) {
+  it('route/console/settled/animation/style are neither consequence nor presence', () => {
+    for (const k of ['route', 'console', 'settled', 'animation', 'style']) {
       expect(isConsequenceKind(k)).toBe(false);
       expect(isPresenceKind(k)).toBe(false);
     }

@@ -76,6 +76,11 @@ export type Predicate =
       since?: number;
     }
   | { kind: typeof PredicateKind.STATE; store?: string; path: string; equals?: unknown }
+  | {
+      kind: typeof PredicateKind.STYLE;
+      query: { css: string };
+      properties: Record<string, string | { contains: string } | { matches: string }>;
+    }
   | { kind: typeof PredicateKind.SETTLED; quietMs?: number }
   | { kind: typeof PredicateKind.ALL_OF; predicates: Predicate[] }
   | { kind: typeof PredicateKind.ANY_OF; predicates: Predicate[] }
@@ -281,7 +286,9 @@ function applyPredicateAliases(input: unknown): unknown {
       delete out[from];
     }
   }
-  return PredicateKind.ELEMENT === kind ? liftElementQuery(out) : out;
+  if (PredicateKind.ELEMENT === kind) return liftElementQuery(out);
+  if (PredicateKind.STYLE === kind) return liftStyleQuery(out);
+  return out;
 }
 
 /**
@@ -298,6 +305,19 @@ function liftElementQuery(obj: Record<string, unknown>): Record<string, unknown>
     delete out[field];
   }
   if (out['query'] === undefined) out['query'] = query;
+  return out;
+}
+
+/**
+ * Fold a flat `css` into `query`, the same lift element does for a flat testid.
+ * `{ kind: "style", css: ".card", properties }` is what someone who just wrote a class selector
+ * reaches for, and rejecting it costs the verdict entirely.
+ */
+function liftStyleQuery(obj: Record<string, unknown>): Record<string, unknown> {
+  if (obj['query'] !== undefined || 'string' !== typeof obj['css']) return obj;
+  const out = { ...obj };
+  out['query'] = { css: out['css'] };
+  delete out['css'];
   return out;
 }
 
@@ -413,6 +433,24 @@ function predicateUnion() {
       .strict(),
     z
       .object({
+        kind: z.literal(PredicateKind.STYLE),
+        query: z.object({ css: z.string().min(1) }).strict(),
+        properties: z
+          .record(
+            z.string().min(1),
+            z.union([
+              z.string().min(1),
+              z.object({ contains: z.string().min(1) }).strict(),
+              z.object({ matches: z.string().min(1) }).strict(),
+            ]),
+          )
+          .refine((obj) => 0 < Object.keys(obj).length, {
+            message: 'properties must name at least one CSS property',
+          }),
+      })
+      .strict(),
+    z
+      .object({
         kind: z.literal(PredicateKind.SETTLED),
         quietMs: z.number().positive().optional(),
       })
@@ -480,7 +518,7 @@ export function isPredicateParam(schema: z.ZodTypeAny): boolean {
  * Every kind's fields, in one block an agent can write a predicate from.
  *
  * The tool surface advertises the KIND list and points at `reticle_tools` for the fields, because
- * inlining the 12-variant recursive union in the declared JSON Schema costs thousands of characters
+ * inlining the 13-variant recursive union in the declared JSON Schema costs thousands of characters
  * per predicate parameter, re-sent every turn, to describe a grammar most calls use one variant of.
  * That trade is right — but the pointer has to land somewhere, and it landed on a parameter
  * description reading "same shape as reticle_assert". So the grammar was reachable from nothing, and

@@ -9,6 +9,7 @@ describe('command-kind classifier', () => {
       ReticleCommand.QUERY,
       ReticleCommand.MATCH,
       ReticleCommand.INSPECT,
+      ReticleCommand.COMPUTED_STYLE,
       ReticleCommand.ANIMATIONS,
       ReticleCommand.STATE_READ,
       ReticleCommand.CAPABILITIES,

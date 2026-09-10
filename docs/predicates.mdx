@@ -5,7 +5,7 @@ description: The grammar for declaring what should be true. Every kind, every fi
 icon: filter
 ---
 
-A predicate declares what should be true, as `{ kind, ...fields }`. Reticle has twelve kinds: `signal`, `state`, `net`, `route`, `element`, `text`, `console`, `animation`, `settled`, and the combinators `allOf`, `anyOf` and `not`. Which one you pick decides whether a green means anything.
+A predicate declares what should be true, as `{ kind, ...fields }`. Reticle has thirteen kinds: `signal`, `state`, `net`, `route`, `element`, `text`, `console`, `animation`, `style`, `settled`, and the combinators `allOf`, `anyOf` and `not`. Which one you pick decides whether a green means anything.
 
 It is the argument to `until` on [`reticle_act_and_wait`](/tools-act-and-wait), and to `predicate` on [`reticle_assert`](/tools-assert) and [`reticle_wait_for`](/tools-wait-for).
 
@@ -33,6 +33,7 @@ Take the advice. `element` and `text` are convenient and weak; `signal`, `state`
 | `route`            | medium    | Navigation happened                                    |
 | `console`          | medium    | Something logged, or nothing did                       |
 | `element` / `text` | weak      | Something rendered. A mock renders too                 |
+| `style`            | medium    | The browser resolved these CSS properties              |
 | `animation`        | weak      | An animation ran or finished                           |
 | `settled`          | timing    | The page went quiet. A precondition, not a proof       |
 
@@ -182,6 +183,25 @@ This is the predicate that catches a UI-versus-store desync. A deploy that only 
 ```
 
 `target` narrows it to one element. `completed: false` matches an animation that is still running.
+
+### style
+
+```json
+{
+  "kind": "style",
+  "query": { "css": ".pro-card" },
+  "properties": {
+    "background-color": "rgb(255, 255, 255)",
+    "box-shadow": { "contains": "0px 1px 2px" }
+  }
+}
+```
+
+Computed style via `getComputedStyle` — what the browser resolved, not what the stylesheet said. A design-system token change that leaves the same class on the card cannot produce a verdict from `element`/`text`; this can.
+
+Values are compared in the browser's normalised form (`rgb(...)`, `px`). Exact match for colors. `{ "contains": "…" }` or `{ "matches": "…" }` (a regex) for compound values like `box-shadow` and `font-family`. CamelCase (`backgroundColor`) and kebab-case (`background-color`) both work. A miss names the property and both sides.
+
+This does not persist into saved flows — same as `route` and `animation`.
 
 ### settled
 

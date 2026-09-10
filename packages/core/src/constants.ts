@@ -721,6 +721,11 @@ export const ReticleCommand = {
   QUERY: 'query',
   MATCH: 'match',
   INSPECT: 'inspect',
+  /**
+   * Read `getComputedStyle` for named properties on the first node matching a CSS selector.
+   * The style predicate's round-trip — not a locator for `element` / `reticle_query`.
+   */
+  COMPUTED_STYLE: 'computed_style',
   ACT: 'act',
   ACT_SEQUENCE: 'act_sequence',
   ANIMATIONS: 'animations',

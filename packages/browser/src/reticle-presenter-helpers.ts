@@ -30,6 +30,7 @@ export function modeForCommand(commandName: string): PresenterMode {
     case ReticleCommand.QUERY:
     case ReticleCommand.MATCH:
     case ReticleCommand.INSPECT:
+    case ReticleCommand.COMPUTED_STYLE:
     case ReticleCommand.ANIMATIONS:
     case ReticleCommand.STATE_READ:
     case ReticleCommand.CAPABILITIES:
@@ -57,6 +58,10 @@ export function presentStatus(commandName: string, args: Record<string, unknown>
     case ReticleCommand.INSPECT: {
       const ref = str(args['ref']);
       return ref !== undefined ? `Inspecting ${refLabel(ref)}` : 'Inspecting an element';
+    }
+    case ReticleCommand.COMPUTED_STYLE: {
+      const css = str(args['css']);
+      return 0 < css.length ? `Reading computed style of ${css}` : 'Reading computed style';
     }
     case ReticleCommand.ANIMATIONS:
       return 'Reading animations';

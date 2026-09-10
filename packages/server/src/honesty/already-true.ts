@@ -44,6 +44,7 @@ export function readsDomState(predicate: Predicate): boolean {
     case PredicateKind.TEXT:
     case PredicateKind.ROUTE:
     case PredicateKind.STATE:
+    case PredicateKind.STYLE:
       return true;
     case PredicateKind.ALL_OF:
     case PredicateKind.ANY_OF:

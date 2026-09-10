@@ -45,6 +45,12 @@ export const PredicateKind = {
   ROUTE: 'route',
   CONSOLE: 'console',
   ANIMATION: 'animation',
+  /**
+   * Computed style on a live node — `getComputedStyle`, not the stylesheet text. Neither presence
+   * nor consequence: a class selector can still match the wrong card, but a token change that
+   * presence cannot see is exactly what this is for.
+   */
+  STYLE: 'style',
   SETTLED: 'settled',
   ALL_OF: 'allOf',
   ANY_OF: 'anyOf',

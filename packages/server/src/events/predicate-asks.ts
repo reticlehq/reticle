@@ -38,8 +38,13 @@ export function declaresState(predicate: Predicate): boolean {
  * the DOM exactly as much as a bare `{element}` did.
  */
 export function declaresDom(predicate: Predicate): boolean {
-  if (predicate.kind === PredicateKind.ELEMENT || predicate.kind === PredicateKind.TEXT)
+  if (
+    predicate.kind === PredicateKind.ELEMENT ||
+    predicate.kind === PredicateKind.TEXT ||
+    predicate.kind === PredicateKind.STYLE
+  ) {
     return true;
+  }
   if (predicate.kind === PredicateKind.ALL_OF || predicate.kind === PredicateKind.ANY_OF) {
     return predicate.predicates.some(declaresDom);
   }

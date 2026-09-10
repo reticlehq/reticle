@@ -262,4 +262,34 @@ describe('command registry (driven by the bridge)', () => {
     expect(result.testids).toContain('item-list');
     expect(result.flows.some((f) => 'checkout' === f.name)).toBe(true);
   });
+
+  it('COMPUTED_STYLE returns getComputedStyle values for a CSS selector', () => {
+    document.body.innerHTML = '<div class="pro-card">Card</div>';
+    const card = document.querySelector('.pro-card');
+    expect(card).not.toBeNull();
+    const spy = vi.spyOn(window, 'getComputedStyle').mockReturnValue({
+      getPropertyValue: (name: string) =>
+        'background-color' === name ? 'rgb(255, 255, 255)' : 'none',
+    } as CSSStyleDeclaration);
+    const result = run(ReticleCommand.COMPUTED_STYLE, {
+      css: '.pro-card',
+      properties: ['background-color', 'backgroundColor', 'box-shadow'],
+    }) as { matched: boolean; count: number; styles: Record<string, string> };
+    spy.mockRestore();
+    expect(result.matched).toBe(true);
+    expect(result.count).toBe(1);
+    expect(result.styles['background-color']).toBe('rgb(255, 255, 255)');
+    expect(result.styles['backgroundColor']).toBe('rgb(255, 255, 255)');
+    expect(result.styles['box-shadow']).toBe('none');
+  });
+
+  it('COMPUTED_STYLE reports a miss rather than inventing a node', () => {
+    document.body.innerHTML = '<div class="other">Nope</div>';
+    const result = run(ReticleCommand.COMPUTED_STYLE, {
+      css: '.pro-card',
+      properties: ['color'],
+    }) as { matched: boolean; count: number };
+    expect(result.matched).toBe(false);
+    expect(result.count).toBe(0);
+  });
 });

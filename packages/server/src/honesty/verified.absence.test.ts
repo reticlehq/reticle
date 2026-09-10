@@ -3,7 +3,7 @@
  *
  * The contradiction clause outranks a passing assertion, and that inversion is the product: a green
  * assertion sitting on top of a failed write is the exact bug class Reticle exists to catch. But it
- * applied to all twelve kinds, including the ones inferred from the ABSENCE of evidence in a window
+ * applied to all thirteen kinds, including the ones inferred from the ABSENCE of evidence in a window
  * whose end Reticle itself chose — and that window closes the moment the predicate first passes.
  *
  * Reproduced on the bench app before this split: `auth:granted` fired WITH matching data, state

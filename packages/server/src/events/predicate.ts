@@ -17,6 +17,7 @@ import { isAmbient, ambientKeyOf, type AmbientCounts } from '../journal/ambient.
 import { evalRoute } from './predicate-route.js';
 import { describeSuperseded } from './observed-in-window.js';
 import { evalElement } from './predicate-element.js';
+import { evalStyle } from './predicate-style.js';
 import {
   PredicateSchema,
   matchValue,
@@ -510,6 +511,8 @@ async function evaluatePredicateRaw(
       return evalSignal(events, predicate);
     case PredicateKind.STATE:
       return evalState(session, predicate);
+    case PredicateKind.STYLE:
+      return evalStyle(session, predicate);
     case PredicateKind.SETTLED: {
       // Drop events on learned-ambient regions (chat/ticker churn) before the settle check — by ref
       // alone, NOT by attribution: window-attribution ("happened during the action window") is a time

@@ -159,6 +159,42 @@ function isOccluded(el: Element, rect: DOMRect): boolean {
   return hitTestOccluder(el, rect) !== null;
 }
 
+/**
+ * `backgroundColor` and `background-color` both have to work: agents type camelCase from inspect
+ * output and kebab-case from CSS. Custom properties (`--token`) stay untouched.
+ */
+function cssPropertyName(name: string): string {
+  if (name.startsWith('--')) return name;
+  return name.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
+}
+
+/**
+ * First node matching `css`, with the named properties read through `getComputedStyle`.
+ * The style predicate's round-trip: the stylesheet text is not what the user sees.
+ */
+function computedStyle(args: Record<string, unknown>): unknown {
+  const css = str(args['css']);
+  const names = Array.isArray(args['properties'])
+    ? args['properties'].filter((p): p is string => 'string' === typeof p)
+    : [];
+  if (undefined === css || 0 === css.length) return { matched: false, count: 0 };
+  let nodes: NodeListOf<Element>;
+  try {
+    nodes = document.querySelectorAll(css);
+  } catch {
+    return { matched: false, count: 0, invalidSelector: true };
+  }
+  const first = nodes.item(0);
+  if (null === first) return { matched: false, count: 0 };
+  const view = first.ownerDocument.defaultView;
+  const cs = null === view ? null : view.getComputedStyle(first);
+  const styles: Record<string, string> = {};
+  for (const name of names) {
+    styles[name] = null === cs ? '' : cs.getPropertyValue(cssPropertyName(name)).trim();
+  }
+  return { matched: true, count: nodes.length, styles };
+}
+
 /** Narrowing guard: an adapter returned a ComponentStateResult (has a boolean `ok`). */
 function isComponentStateResult(value: unknown): value is ComponentStateResult {
   return (
@@ -322,6 +358,7 @@ export function createCommandRegistry(): Map<string, CommandHandler> {
     executeSequence((Array.isArray(args['steps']) ? args['steps'] : []) as ActionStep[]),
   );
   reg.set(ReticleCommand.INSPECT, (args) => inspect(str(args['ref']) ?? ''));
+  reg.set(ReticleCommand.COMPUTED_STYLE, (args) => computedStyle(args));
   reg.set(ReticleCommand.ANIMATIONS, () => listAnimations());
   reg.set(ReticleCommand.CLOCK, (args) => {
     if (true === args['reset']) {
