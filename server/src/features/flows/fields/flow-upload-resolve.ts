@@ -1,6 +1,6 @@
 import { ActionType, type FlowFile, type FlowStep } from '@reticlehq/core';
-import { rewriteUploadArgs } from '../../agent/tools/real-input-attempt.js';
-import type { ToolDeps } from '../../agent/tools/tools.js';
+import { rewriteUploadArgs } from '../../../agent/tools/real-input-attempt.js';
+import type { ToolDeps } from '../../../agent/tools/tools.js';
 
 /**
  * Turn a recorded upload's `path` into the bytes the browser can actually take, once, before replay

@@ -20,7 +20,7 @@ import {
 import type { EvalResult, Predicate } from '@reticlehq/engine/question/predicate.js';
 import { asRecord, asString } from '@reticlehq/core';
 import { replayActionArgs, ambiguousTestidNote, queryRefs } from './replay.js';
-import { anchorFieldName } from './flow-secret-field.js';
+import { anchorFieldName } from './fields/flow-secret-field.js';
 import {
   degradedStepResult,
   isDegradedAnchor,

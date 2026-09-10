@@ -1,4 +1,4 @@
-import { resolveFlowUploads } from './flow-upload-resolve.js';
+import { resolveFlowUploads } from './fields/flow-upload-resolve.js';
 import {
   EventType,
   FLOW_SIGNAL_TIMEOUT_MS,

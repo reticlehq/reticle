@@ -94,6 +94,11 @@ const REACHES_FOR: Record<string, readonly string[]> = {
    */
   gaps: [],
   /**
+   * The two kinds of form field a replay cannot just re-type: a secret, which must not be
+   * recorded, and a file, which has to be found again on disk.
+   */
+  fields: ['tools'],
+  /**
    * Who is attached to a session, and who may drive it. Reaches for NOTHING -- not even its own
    * parent -- which is the strongest form a group can take: `session` needs it, and it needs
    * nobody, so the edge cannot ever become mutual however either side grows.
@@ -171,6 +176,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   domain: ['flows', 'oracles', 'project', 'tools'],
   ee: ['license'],
   flows: [
+    'fields',
     'annotate-notes',
     'recording',
     'outcome',
