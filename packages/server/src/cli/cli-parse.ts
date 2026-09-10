@@ -792,7 +792,16 @@ export function parseCliArgs(
 
   // `help` (and the conventional -h/--help) print usage to stdout and exit 0 — the universal first move
   // for a new user, which otherwise fell through to a JSON error with exit 1.
-  if ('help' === cmd || '--help' === cmd || '-h' === cmd) return { kind: 'help' };
+  //
+  // Recognised ANYWHERE in the argv, not only in first position. `reticle init --help` is the shape
+  // people actually type — it was the very first command in a field install transcript — and it hit
+  // the subcommand's own flag parser, which does not know the flag and answered
+  // `reticle_usage_error: unknown argument '--help'` on stderr with exit 1. The usage text was
+  // printed underneath it, so the request was in fact answered; it was simply answered as a failure,
+  // which is the wrong first impression to give somebody who has just asked a tool what it does.
+  if ('help' === cmd || argv.some((arg) => '--help' === arg || '-h' === arg)) {
+    return { kind: 'help' };
+  }
 
   switch (cmd) {
     case INIT_COMMAND: {
