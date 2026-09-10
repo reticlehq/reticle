@@ -68,6 +68,13 @@ describe('the React kit is only installed into a React codebase', () => {
   it('still gives Nuxt the sensor, which is where this rule was already right', () => {
     expect(frameworkPackages(Framework.NUXT, UiLibrary.VUE)).not.toContain(REACT_KIT);
   });
+
+  it('gives a Vue electron-vite app the sensor plus the Electron helper', () => {
+    const packages = frameworkPackages(Framework.ELECTRON_VITE, UiLibrary.VUE);
+    expect(packages).not.toContain(REACT_KIT);
+    expect(packages).toContain(SENSOR);
+    expect(packages).toContain('@reticlehq/electron');
+  });
 });
 
 /**

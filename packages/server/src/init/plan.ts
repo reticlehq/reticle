@@ -57,6 +57,7 @@ const RETICLE_REACT_KIT = '@reticlehq/react';
 const RETICLE_BROWSER_SDK = '@reticlehq/browser';
 const RETICLE_VITE_PLUGIN = '@reticlehq/vite-plugin';
 const RETICLE_NEXT_PLUGIN = '@reticlehq/next';
+const RETICLE_ELECTRON = '@reticlehq/electron';
 
 /**
  * Pin the SDK to the CLI's own version.
@@ -111,11 +112,17 @@ export function frameworkPackages(
     // both right for it too — only the connect INJECTION differs, and that is the plan's business.
     case Framework.VITE:
     case Framework.REACT_ROUTER:
+    case Framework.TANSTACK_START:
     case Framework.SVELTEKIT:
       // SvelteKit builds on Vite; until a dedicated Svelte kit exists it uses the Vite build plugin.
       // The build plugin stamps `data-reticle-source` regardless of UI library, so a Vue or Svelte
       // app still gets source pointers — it is only component identity that needs the React kit.
       return [kit, RETICLE_VITE_PLUGIN];
+    case Framework.ELECTRON_VITE:
+      // Same kit + Vite plugin as a plain Vite app, plus the Electron main/preload helper. The
+      // plugin still stamps and injects; `@reticlehq/electron` is what makes IPC and screenshots
+      // exist at all.
+      return [kit, RETICLE_VITE_PLUGIN, RETICLE_ELECTRON];
     case Framework.NUXT:
       // The framework-neutral sensor, NOT the React kit. Nuxt renders Vue, and installing a package
       // named @reticlehq/react — with `react` in its peer dependencies — into a Vue codebase is the
@@ -240,6 +247,12 @@ export interface PlanInput {
     readonly { id: McpClient; configPath: string; existing: string | null }[] | undefined;
   /** Discovered Vite config: its path + source, or null if none found. */
   viteConfig: { path: string; source: string } | null;
+  /** Discovered electron-vite config: its path + source, or null if none found. */
+  electronViteConfig?: { path: string; source: string } | null | undefined;
+  /** Electron preload source we can patch, or null when none was found. */
+  electronPreload?: { path: string; source: string } | null | undefined;
+  /** Electron main-process source we can patch, or null when none was found. */
+  electronMain?: { path: string; source: string } | null | undefined;
   /** Discovered Astro config: its path + source, or null if none found. */
   astroConfig?: { path: string; source: string } | null | undefined;
   /**
@@ -289,6 +302,13 @@ export interface PlanInput {
   svelteKitHooksExists?: boolean;
   /** Whether app/entry.client.tsx already exists — it decides which React Router recipe to print. */
   reactRouterEntryExists?: boolean;
+  /**
+   * TanStack Start's document module, when found (`src/routes/__root.tsx` or `app/routes/__root.tsx`).
+   *
+   * The recipe is printed rather than written either way — a static import on that file SSRs and
+   * 500s — but the path has to be the one that actually exists, not a guess.
+   */
+  tanstackStartRoot?: string | undefined;
   /** CRA's bundled entry (src/index.tsx or .js) — where the connect import has to go. */
   craEntry?: { path: string; source: string } | null;
   /** Existing .env.development.local, so an unrelated variable in it survives. */
@@ -916,7 +936,8 @@ function uiLibraryStep(input: PlanInput): Step[] {
   if (
     lib === UiLibrary.REACT ||
     framework === Framework.SVELTEKIT ||
-    framework === Framework.NUXT
+    framework === Framework.NUXT ||
+    framework === Framework.TANSTACK_START
   ) {
     return [];
   }

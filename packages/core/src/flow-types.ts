@@ -153,6 +153,22 @@ export interface FlowStep {
   expect?: FlowExpect;
   /** true when the anchor is best-effort (no testid was resolvable at record time). NOT dropped. */
   degraded?: boolean;
+  /**
+   * How long THIS step's `expect` waits for its consequence, in ms. Overrides the flow's
+   * `signalTimeoutMs` and the built-in FLOW_SIGNAL_TIMEOUT_MS default.
+   *
+   * Replay's wait was a fixed 4s with no way to raise it, and that is not a tuning knob — it decides
+   * whether an honest flow can ever be green. Two field reports, same shape: a login whose POST takes
+   * a measured 5.5s against a remote Postgres, and a CAD import whose LLM-backed perception takes
+   * ~22s. Both were verified live with `act_and_wait { timeout_ms }`, both drifted on replay at
+   * ~4020ms with `signal_not_observed`, and both were reported to the user as NO LONGER TRUE — a
+   * working feature called a regression. The only ways to green them were to weaken or delete the
+   * assertion, which the rules correctly forbid, so the flow was honest and permanently red.
+   *
+   * One agent tried exactly this field and `expect.timeout_ms`, and both were silently dropped.
+   * Replay must not be stricter than the tool that recorded the step.
+   */
+  timeoutMs?: number;
   /** sub-steps for an act_sequence, each independently anchored. */
   steps?: FlowStep[];
 }
@@ -164,6 +180,7 @@ const baseFlowStep = z.object({
   args: z.record(z.unknown()).optional(),
   expect: FlowExpectSchema.optional(),
   degraded: z.boolean().optional(),
+  timeoutMs: z.number().int().positive().optional(),
 });
 
 export const FlowStepSchema: z.ZodType<FlowStep> = baseFlowStep.extend({
@@ -318,6 +335,16 @@ export interface FlowReplayResult {
   /** Set when status === 'error' (load failure or resolved action failure). */
   error?: { code: string; message: string };
   /**
+   * Set when the replay STOPPED before the end of the flow.
+   *
+   * Replay breaks on the first failing step, so a flow that halted returns fewer step results than
+   * it has steps — and nothing said so. A caller reading a two-step flow's one result saw a step
+   * that was simply absent, which was reported as replay "silently skipping" an action. It does not
+   * skip; it stops, and now it says where and how much it never reached. Omitted entirely when every
+   * step ran, so a clean pass carries no extra bytes.
+   */
+  halted?: { atStep: number; notAttempted: number };
+  /**
    * Set on an `ok` replay whose flow cannot fail: it asserts no observable consequence, or has no
    * steps at all. The replay genuinely completed, so the status stays `ok` — but a bare `ok` read
    * as proof the feature works is exactly the false confidence `flow-risk.ts` argues against, and
@@ -403,6 +430,15 @@ export const FlowFileSchema = z.object({
   /** From the injected clock (ms) — deterministic in tests, byte-stable on disk. */
   createdAt: z.number(),
   steps: z.array(FlowStepSchema),
+  /**
+   * How long every step of this flow waits for its declared consequence, in ms. A step's own
+   * `timeoutMs` wins over it; absent both, FLOW_SIGNAL_TIMEOUT_MS applies.
+   *
+   * Flow-level because slowness is usually a property of the APP, not of one control — a remote
+   * database, a model-backed endpoint, a cold container. Optional + back-compat: a flow without it
+   * replays exactly as before and the on-disk version stays FLOW_FILE_VERSION 1.
+   */
+  signalTimeoutMs: z.number().int().positive().optional(),
   success: FlowExpectSchema.optional(),
   /**
    * Anchors whose CONTENT must not be asserted (e.g. LLM output). Replay asserts

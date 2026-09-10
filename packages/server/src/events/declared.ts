@@ -33,6 +33,17 @@ interface DeclaredExpectations {
   netFailures: readonly DeclaredNetFailure[];
   /** The caller required something to be ON SCREEN — an element or text, present rather than absent. */
   rendersContent: boolean;
+  /**
+   * The `urlContains` of every net clause the predicate carries, failure or not.
+   *
+   * Distinct from `netFailures`, which is about EXPECTED failures. This answers a different
+   * question: which traffic did the caller actually mention? A rule that reports on writes the
+   * assertion never named is reporting on something else, and must not decide this verdict (#673).
+   *
+   * A net clause with no `urlContains` names ALL traffic — it asked about the whole channel — which
+   * is why an empty-string entry is meaningful and is preserved rather than skipped.
+   */
+  netUrls: readonly string[];
 }
 
 /** Below this, a status is a success or a redirect: not a declared failure. */
@@ -90,6 +101,7 @@ function pushAuthDenialStatuses(into: DeclaredNetFailure[]): void {
 
 export function declaredExpectations(predicate: Predicate | undefined): DeclaredExpectations {
   const netFailures: DeclaredNetFailure[] = [];
+  const netUrls: string[] = [];
   let rendersContent = false;
 
   const walk = (p: Predicate): void => {
@@ -98,6 +110,7 @@ export function declaredExpectations(predicate: Predicate | undefined): Declared
         for (const child of p.predicates) walk(child);
         return;
       case PredicateKind.NET: {
+        netUrls.push(p.urlContains ?? '');
         const declaredFailure =
           false === p.ok || (p.status !== undefined && p.status >= FAILURE_STATUS_MIN);
         if (!declaredFailure) return;
@@ -126,7 +139,7 @@ export function declaredExpectations(predicate: Predicate | undefined): Declared
   };
 
   if (predicate !== undefined) walk(predicate);
-  return { netFailures, rendersContent };
+  return { netFailures, rendersContent, netUrls };
 }
 
 /**

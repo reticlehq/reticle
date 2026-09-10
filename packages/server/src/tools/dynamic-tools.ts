@@ -271,5 +271,14 @@ export function buildDynamicTools(allTools: ToolDef[], profile?: ToolSurfaceOrig
     },
   };
 
+  // The server instructions say, verbatim, "reticle_tools lists it, reticle_run calls it" — naming
+  // these two meta-tools as reachable through EACH OTHER, same as everything else on the surface.
+  // `byName` was built from `allTools` before either was constructed, so it never held them:
+  // `reticle_run { tool: "reticle_tools" }` — the exact discovery path the instructions document —
+  // answered "unknown tool 'reticle_tools'" (#876). Registered here, after both exist, so the
+  // dispatch this closure reads from (`byName.get`, evaluated lazily on each call) can find them.
+  byName.set(ReticleTool.TOOLS, reticleTools);
+  byName.set(ReticleTool.RUN, reticleRun);
+
   return [reticleTools, reticleRun];
 }

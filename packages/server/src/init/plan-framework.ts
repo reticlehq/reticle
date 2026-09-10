@@ -13,6 +13,9 @@ import {
   patchAstroEnvDts,
   patchAstroLayout,
 } from './astro-patch.js';
+import { patchElectronViteConfig } from './electron-vite-patch.js';
+import { patchElectronMain, patchElectronPreload } from './electron-patch.js';
+import { ELECTRON_CAPTURE_FIX, ELECTRON_PRELOAD_FIX } from './desktop-doctor.js';
 import {
   CRA_DEV_MODULE_IMPORT,
   CRA_ENV_PATH,
@@ -30,6 +33,7 @@ import {
   NEXT_LAYOUT_PATH,
   viteDevModuleFile,
   VITE_DEV_MODULE_PATH,
+  ELECTRON_VITE_DEV_MODULE_PATH,
   nextReticleDevFile,
   NEXT_RETICLE_DEV_PATH,
   nextConfigManual,
@@ -38,11 +42,15 @@ import {
   UNVERIFIED_FRAMEWORK_NOTE,
   astroManual,
   nuxtManual,
+  electronViteManual,
   NUXT_PLUGIN_PATH,
   webpack4TranspileNote,
   WEBPACK4_REACT_SCRIPTS_MAJOR,
   reactRouterManual,
   REACT_ROUTER_ENTRY_PATH,
+  tanstackStartManual,
+  TANSTACK_START_ROOT_PATH,
+  UNVERIFIED_TANSTACK_START_NOTE,
   htmlManual,
 } from './snippets.js';
 import { hasOptOut, OPT_OUT_MARKER } from './init-opt-out.js';
@@ -70,6 +78,15 @@ export const VITE_PLUGIN_DETAIL = {
    * back with no file:line at all.
    */
   REACT_ROUTER: 'add reticle() to plugins (stamps data-reticle-source in .tsx components)',
+  /**
+   * TanStack Start SSRs its own HTML, so the plugin's HTML injection never fires and connect()
+   * comes from a client effect instead. `inject: false` is load-bearing honesty: leaving the
+   * default would keep reporting "also injects connect()" for a transform that never runs.
+   * The plugin is still required for the same reason it is under SvelteKit: without it every
+   * verdict on the app comes back with no file:line at all.
+   */
+  TANSTACK_START:
+    'add reticle({ inject: false }) to plugins (stamps data-reticle-source; Start SSRs its own HTML so connect() cannot come from the plugin)',
 } as const;
 
 const CAPABILITIES_TITLE = 'Capabilities + store';
@@ -131,12 +148,12 @@ function needsManualStore(hints: readonly string[], wired: readonly unknown[]): 
   return hints.length > 0 && 0 === wired.length;
 }
 
-function capabilitiesStep(input: PlanInput): Step[] {
+function capabilitiesStep(input: PlanInput, path: string = VITE_DEV_MODULE_PATH): Step[] {
   if (true === input.viteDevModuleExists) {
     return [
       {
         title: CAPABILITIES_TITLE,
-        target: VITE_DEV_MODULE_PATH,
+        target: path,
         status: StepStatus.ALREADY,
         detail: 'file exists, left alone, it is yours to edit',
       },
@@ -168,7 +185,7 @@ function capabilitiesStep(input: PlanInput): Step[] {
   return [
     {
       title: CAPABILITIES_TITLE,
-      target: VITE_DEV_MODULE_PATH,
+      target: path,
       status: StepStatus.APPLY,
       detail: `${found}; ${
         wired.length > 0
@@ -178,7 +195,7 @@ function capabilitiesStep(input: PlanInput): Step[] {
             : 'no state library detected'
       }`,
       write: {
-        path: VITE_DEV_MODULE_PATH,
+        path,
         content: viteDevModuleFile(testids, stores, wired, input.detection.uiLibrary),
       },
       dependsOnInstall: true,
@@ -195,24 +212,116 @@ function capabilitiesStep(input: PlanInput): Step[] {
       ? [
           {
             title: CAPABILITIES_TODO_TITLE,
-            target: VITE_DEV_MODULE_PATH,
+            target: path,
             status: StepStatus.NOTICE,
-            detail: capabilitiesTodo(VITE_DEV_MODULE_PATH, stores),
+            detail: capabilitiesTodo(path, stores),
           } satisfies Step,
         ]
       : []),
   ];
 }
 
-export function viteSteps(input: PlanInput, detail: string = VITE_PLUGIN_DETAIL.VITE): Step[] {
-  // Capabilities are independent of whether the config needed patching. Attaching them to the APPLY
-  // branch meant a re-run on an already-wired app silently never created the module.
-  return [...viteConfigSteps(input, detail), ...capabilitiesStep(input)];
+export const ELECTRON_VITE_PLUGIN_TITLE = 'Vite plugin (electron-vite renderer)';
+export const ELECTRON_PRELOAD_TITLE = 'Electron preload (IPC shim)';
+export const ELECTRON_CAPTURE_TITLE = 'Electron capture (screenshots)';
+
+/**
+ * electron-vite: the renderer plugin, then capabilities, then the two Electron halves.
+ *
+ * The plugin and the Electron steps are independent. A renderer without the preload still
+ * connects — it only loses IPC visibility — so they stay separate rather than collapsing to one
+ * manual recipe the way Astro's config+layout pair does.
+ */
+export function electronViteSteps(input: PlanInput): Step[] {
+  const port = input.options.port;
+  const manual = electronViteManual(port, input.detection.uiLibrary);
+  const cfg = input.electronViteConfig ?? null;
+  const plugin: Step =
+    null === cfg
+      ? {
+          title: ELECTRON_VITE_PLUGIN_TITLE,
+          target: 'electron.vite.config',
+          status: StepStatus.MANUAL,
+          detail: manual,
+        }
+      : patchStep(
+          ELECTRON_VITE_PLUGIN_TITLE,
+          cfg.path,
+          patchElectronViteConfig(cfg.source, port),
+          'add reticle({ desktop: true }) to the renderer plugins (also injects connect())',
+          manual,
+        );
+  return [
+    plugin,
+    ...capabilitiesStep(input, ELECTRON_VITE_DEV_MODULE_PATH),
+    ...electronPreloadStep(input),
+    ...electronCaptureStep(input),
+  ];
 }
 
-function viteConfigSteps(input: PlanInput, detail: string): Step[] {
+function electronPreloadStep(input: PlanInput): Step[] {
+  const file = input.electronPreload ?? null;
+  if (null === file) {
+    return [
+      {
+        title: ELECTRON_PRELOAD_TITLE,
+        target: 'preload',
+        status: StepStatus.MANUAL,
+        detail: ELECTRON_PRELOAD_FIX,
+      },
+    ];
+  }
+  return [
+    patchStep(
+      ELECTRON_PRELOAD_TITLE,
+      file.path,
+      patchElectronPreload(file.source, file.path),
+      'require the IPC shim as the first line of preload',
+      ELECTRON_PRELOAD_FIX,
+    ),
+  ];
+}
+
+function electronCaptureStep(input: PlanInput): Step[] {
+  const file = input.electronMain ?? null;
+  if (null === file) {
+    return [
+      {
+        title: ELECTRON_CAPTURE_TITLE,
+        target: 'main',
+        status: StepStatus.MANUAL,
+        detail: ELECTRON_CAPTURE_FIX,
+      },
+    ];
+  }
+  return [
+    patchStep(
+      ELECTRON_CAPTURE_TITLE,
+      file.path,
+      patchElectronMain(file.source, file.path),
+      'installReticleCapture on the BrowserWindow so screenshots work',
+      ELECTRON_CAPTURE_FIX,
+    ),
+  ];
+}
+
+export function viteSteps(
+  input: PlanInput,
+  detail: string = VITE_PLUGIN_DETAIL.VITE,
+  inject = true,
+): Step[] {
+  // Capabilities are independent of whether the config needed patching. Attaching them to the APPLY
+  // branch meant a re-run on an already-wired app silently never created the module.
+  return [...viteConfigSteps(input, detail, inject), ...capabilitiesStep(input)];
+}
+
+function viteConfigSteps(input: PlanInput, detail: string, inject = true): Step[] {
   const cfg = input.viteConfig;
   const port = input.options.port;
+  // Stamp `data-reticle-source` unless this app renders through a non-DOM React reconciler, where a
+  // lowercase JSX tag is not an element and the stamp crashes the app at commit time. See
+  // `Detection.customReconciler`.
+  const stampSource = true !== input.detection?.customReconciler;
   // An explicit "not here" is not an invitation. `init` runs unattended in a repo it has just met,
   // and it was reported adding the plugin to an app whose config said Reticle was deliberately
   // excluded. A NOTICE rather than a ⚠: opting out is a decision, not something to go and fix.
@@ -232,11 +341,17 @@ function viteConfigSteps(input: PlanInput, detail: string): Step[] {
         title: 'Vite plugin',
         target: 'vite.config',
         status: StepStatus.MANUAL,
-        detail: viteManual(port, input.detection.uiLibrary),
+        detail: viteManual(port, input.detection.uiLibrary, inject, stampSource),
       },
     ];
   }
-  const patch = patchViteConfig(cfg.source, port, true === input.captureBodies);
+  const patch = patchViteConfig(
+    cfg.source,
+    port,
+    true === input.captureBodies,
+    inject,
+    stampSource,
+  );
   if (patch.kind === VitePatchKind.ALREADY) {
     return [
       {
@@ -253,7 +368,7 @@ function viteConfigSteps(input: PlanInput, detail: string): Step[] {
         title: 'Vite plugin',
         target: cfg.path,
         status: StepStatus.MANUAL,
-        detail: `${patch.reason}\n\n${viteManual(port, input.detection.uiLibrary)}`,
+        detail: `${patch.reason}\n\n${viteManual(port, input.detection.uiLibrary, inject, stampSource)}`,
       },
     ];
   }
@@ -371,7 +486,7 @@ export function nextSteps(input: PlanInput): Step[] {
   const configPatch: SourcePatch =
     null === input.nextConfigSource || input.nextConfigSource === undefined
       ? { kind: PatchKind.MANUAL, reason: `no ${configFile} found` }
-      : patchNextConfig(input.nextConfigSource);
+      : patchNextConfig(input.nextConfigSource, true !== input.detection?.customReconciler);
   const layout = input.nextLayout ?? null;
   // Pages Router mounts through pages/_app, App Router through the root layout — different edits,
   // and picking by path is what stops a Pages app being handed the layout patch that cannot apply.
@@ -406,7 +521,7 @@ export function nextSteps(input: PlanInput): Step[] {
       configFile,
       configPatch,
       'wrap the export in withReticle (source mapping, dev-only)',
-      nextConfigManual(configFile),
+      nextConfigManual(configFile, true !== input.detection?.customReconciler),
     ),
     patchStep(
       'Mount ReticleDev',
@@ -589,6 +704,30 @@ export function reactRouterSteps(input: PlanInput): Step[] {
   ];
 }
 
+/**
+ * TanStack Start: the client-document connect, printed rather than written.
+ *
+ * `src/routes/__root.tsx` is the document Start SSRs. A static import of the SDK on that module
+ * 500s, so writing one is worse than a documented manual step. See `tanstackStartManual`.
+ */
+export function tanstackStartSteps(input: PlanInput): Step[] {
+  const root = input.tanstackStartRoot ?? TANSTACK_START_ROOT_PATH;
+  return [
+    {
+      title: 'TanStack Start is UNVERIFIED',
+      target: root,
+      status: StepStatus.NOTICE,
+      detail: UNVERIFIED_TANSTACK_START_NOTE,
+    },
+    {
+      title: 'Connect snippet (TanStack Start)',
+      target: root,
+      status: StepStatus.MANUAL,
+      detail: tanstackStartManual(input.options.port, input.options.projectId, root),
+    },
+  ];
+}
+
 export function svelteKitSteps(input: PlanInput): Step[] {
   const unverified: Step = {
     title: 'SvelteKit is UNVERIFIED',
@@ -766,6 +905,8 @@ export function frameworkSteps(input: PlanInput): Step[] {
   const steps: Step[] = [];
   if (input.detection.framework === Framework.VITE) {
     steps.push(...viteSteps(input));
+  } else if (input.detection.framework === Framework.ELECTRON_VITE) {
+    steps.push(...electronViteSteps(input));
   } else if (input.detection.framework === Framework.NEXT) {
     steps.push(...nextSteps(input));
   } else if (input.detection.framework === Framework.ASTRO) {
@@ -780,6 +921,13 @@ export function frameworkSteps(input: PlanInput): Step[] {
     // app, and the plugin is what stamps data-reticle-source. Without it the app connects and every
     // verdict comes back with no file:line.
     steps.push(...viteSteps(input, VITE_PLUGIN_DETAIL.REACT_ROUTER));
+  } else if (input.detection.framework === Framework.TANSTACK_START) {
+    steps.push(...tanstackStartSteps(input));
+    // The Vite plugin too, for the reason SvelteKit and React Router get it: Start IS a Vite app,
+    // and the plugin is what stamps data-reticle-source. `inject: false` because Start never
+    // transforms index.html — leaving the default would keep promising connect injection that
+    // cannot fire. Without the plugin the app connects and every verdict comes back with no file:line.
+    steps.push(...viteSteps(input, VITE_PLUGIN_DETAIL.TANSTACK_START, false));
   } else if (input.detection.framework === Framework.SVELTEKIT) {
     steps.push(...svelteKitSteps(input));
     // The Vite plugin as well as the client hook. `init` already INSTALLS @reticlehq/vite-plugin for

@@ -1,3 +1,4 @@
+import { resolveFlowUploads } from './flow-upload-resolve.js';
 import {
   EventType,
   FLOW_SIGNAL_TIMEOUT_MS,
@@ -13,6 +14,7 @@ import {
   type FlowStepResult,
   type ReticleEvent,
 } from '@reticlehq/core';
+import { haltedFrom } from './replay-halt.js';
 import { asRecord, asString } from '../tools/tools-helpers.js';
 import { routeOfEvent, routeOfUrl } from '../events/predicate-route.js';
 import type { ArrivalClock } from '../tools/navigate-arrival.js';
@@ -401,13 +403,19 @@ export async function replayNamedFlow(
   // Floor the success oracle at the start of THIS replay so a stale signal from a prior run
   // in the same session can't fake a pass.
   const replayFloor = session.elapsed();
+  // A recorded upload names a path on disk; the browser can only take bytes. Resolved once, before
+  // step 1, through the same helper the live `reticle_act` uses. See resolveFlowUploads.
+  const replayable = await resolveFlowUploads(deps, loaded.value);
   const steps = await replayFlow(
     session,
-    loaded.value,
+    replayable,
     waitForPredicate,
     FLOW_SIGNAL_TIMEOUT_MS,
     true === args['confirmDangerous'],
   );
+  // Computed HERE, before the synthetic success row is appended below: once that row is pushed,
+  // `steps.length` no longer counts only the flow's own steps and the arithmetic is wrong.
+  const halted = haltedFrom(steps, loaded.value.steps.length);
   // "green means intent satisfied": when every step ran clean, assert the flow's success
   // end-condition as a real consequence. A signal/net success that never fires FAILS the replay
   // even though all locators resolved — the regression a healed-but-wrong locator ships green.
@@ -418,7 +426,10 @@ export async function replayNamedFlow(
       loaded.value.success,
       dynamicTestids(loaded.value),
       waitForPredicate,
-      FLOW_SIGNAL_TIMEOUT_MS,
+      // The flow's own declaration, not the built-in floor: an app slow enough to need a longer
+      // step wait is slow enough that its OUTCOME lands late too, and greening every step only to
+      // fail the success oracle at 4s is the same false red one layer down.
+      loaded.value.signalTimeoutMs ?? FLOW_SIGNAL_TIMEOUT_MS,
       replayFloor,
     );
     const row: FlowStepResult = {
@@ -494,6 +505,7 @@ export async function replayNamedFlow(
     return errored;
   }
   const result: FlowReplayResult = { name, status, steps };
+  if (halted !== undefined) result.halted = halted;
   if (knows !== undefined) result.knows = knows;
   // A green that cannot go red is not a pass. `reticle_flow_verify` already refuses to count these,
   // via this same function -- a single-flow caller saw a bare `ok` and had no way to learn the flow

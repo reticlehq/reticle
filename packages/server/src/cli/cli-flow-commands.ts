@@ -9,7 +9,7 @@
 import { GateExit } from './gate-exit.js';
 import { gateHookMessage, GATE_SKIP_ENV } from './gate-hook-message.js';
 import { readProjectId } from './cli-port.js';
-import { changedFilesSince } from '../flows/git-changed.js';
+import { changedFilesSince, type ChangedFiles } from '../flows/git-changed.js';
 import { join } from 'node:path';
 import { ReticleDir, RunFlowStatus } from '@reticlehq/core';
 import { FlowStore } from '../flows/flows.js';
@@ -37,9 +37,15 @@ export async function resolveChangedFiles(
   files: string[],
   since: string | undefined,
   cwd: string,
-): Promise<string[]> {
-  if (since === undefined) return files;
-  return [...new Set([...files, ...(await changedFilesSince(since, cwd))])];
+): Promise<ChangedFiles> {
+  // No ref means no question was asked of git, which is not a failure to answer one.
+  if (since === undefined) return { files, failed: false };
+  const changed = await changedFilesSince(since, cwd);
+  return {
+    files: [...new Set([...files, ...changed.files])],
+    failed: changed.failed,
+    ...(changed.reason === undefined ? {} : { reason: changed.reason }),
+  };
 }
 
 /**
@@ -185,7 +191,8 @@ export async function handleGate(
   try {
     const fs = createNodeFileSystem();
     const reticleRoot = join(process.cwd(), ReticleDir.ROOT);
-    const changed = await resolveChangedFiles(files, since, process.cwd());
+    // Same deliberate degradation as the gate: a terminal caller sees git's own error anyway.
+    const changed = (await resolveChangedFiles(files, since, process.cwd())).files;
     const allFlows = await loadNamedFlows(fs, reticleRoot, readProjectId(process.cwd()));
     const affected = affectedSavedFlows(allFlows, changed).affected;
     const latest = await new RunStore(fs, reticleRoot).latest();

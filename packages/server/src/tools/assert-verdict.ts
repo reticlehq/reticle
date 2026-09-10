@@ -115,6 +115,7 @@ export async function assertVerdict(
     currentEditEpoch: session.currentEditEpoch,
     appOrigin: session.url,
     expectedFailures: declared.netFailures,
+    namedNetUrls: declared.netUrls,
     renderProved: pass && declared.rendersContent,
     ...(actCursor !== undefined && actCursor >= since ? { actionSince: actCursor } : {}),
   });
@@ -142,7 +143,7 @@ export async function assertVerdict(
     declaredConsequence: predicate.kind !== PredicateKind.SETTLED,
     ...(declaresBodyIndependentChannel(predicate) ? { independentOfBody: true } : {}),
     ...(effectiveInconclusive === undefined ? {} : { inconclusive: effectiveInconclusive }),
-    ...(true === observationLost ? { observationLost: true } : {}),
+    ...(true === observationLost ? { observationLost: true, lastUrl: session.url } : {}),
     ...(absenceBlindSpot === undefined ? {} : { absenceBlindSpot }),
     ...(namedNetIsInFlight(predicate, stillInFlight) ? { namedRequestInFlight: true } : {}),
     honesty: buildHonestyBlock({

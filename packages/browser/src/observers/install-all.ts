@@ -32,6 +32,7 @@ import type { Emit, Teardown } from './types.js';
 
 interface InstallOptions {
   captureBodies: boolean;
+  captureErrorBodies?: boolean;
 }
 
 /** Run one install, reporting rather than throwing if it cannot start. */
@@ -51,6 +52,9 @@ export function installAllObservers(emit: Emit, options: InstallOptions): Teardo
     guard(emit, SdkSite.NETWORK_OBSERVER, () =>
       installNetwork(emit, {
         captureBodies: options.captureBodies,
+        ...(options.captureErrorBodies === undefined
+          ? {}
+          : { captureErrorBodies: options.captureErrorBodies }),
         reinterpret: ipcNetOverrides,
         // The SDK's own Tauri screenshot is a fetch like any other — skip it, or the observer
         // reports its own captures as the app's writes.

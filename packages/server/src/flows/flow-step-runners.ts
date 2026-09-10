@@ -129,6 +129,35 @@ export async function runRoleStep(
 }
 
 /**
+ * `assertActionAllowed`'s refusal — "potentially destructive action blocked; retry with
+ * args.confirmDangerous=true" — is written for a LIVE call, where retrying with that arg works. It
+ * does not during replay: `replayActionArgs` deliberately strips any `confirmDangerous` a step's own
+ * args carry and restores it only from the ONE call-level boolean this run was given, because a
+ * destructive confirmation has to be a decision made for THIS run, never a value saved into the
+ * recording (#94). A caller who hand-edits the flow file's step args to add it gets it silently
+ * deleted, replays again, and reads the identical refusal — which reads as though nothing they tried
+ * worked, when what happened is they tried the one thing that cannot work here.
+ *
+ * Appends the path that does, rather than replacing the message: an agent that has already learned
+ * to recognise the raw refusal still finds it, plus the fix for this specific caller.
+ */
+const DESTRUCTIVE_ACTION_PATTERN = /potentially destructive (?:\w+ )*(?:action|tool) blocked/i;
+
+export function replayDestructiveActionHint(rawError: string): string {
+  if (!DESTRUCTIVE_ACTION_PATTERN.test(rawError)) return rawError;
+  return (
+    `${rawError} — this is a flow REPLAY: a step's own args.confirmDangerous is stripped before ` +
+    'dispatch and never persists, so editing the flow file does nothing. Pass it at the call level ' +
+    `instead: ${ReticleTool.FLOW_REPLAY} { confirmDangerous: true } acknowledges every flagged step ` +
+    // `reticle_verify{action:"flows"}` (the batch suite runner) has no such argument today — naming
+    // it here would repeat the exact defect this message exists to fix, so the honest statement is
+    // that a flow with a flagged step currently has to be replayed on its own to pass it.
+    'for this run. The batch reticle_verify{action:"flows"} has no equivalent option yet, so a flow ' +
+    'with a flagged step has to be replayed on its own to acknowledge it.'
+  );
+}
+
+/**
  * Dispatch one already-resolved step. Shared so every anchor kind runs the action the same way —
  * including the action window, whose open/close must not depend on which anchor found the element.
  */
@@ -191,7 +220,7 @@ async function actOnResolvedRef(
   }
 
   const result: FlowStepResult = { step: index, tool: step.tool, anchor: label, ok: act.ok };
-  if (!act.ok) result.error = act.error ?? 'command failed';
+  if (!act.ok) result.error = replayDestructiveActionHint(act.error ?? 'command failed');
   return result;
 }
 
@@ -358,6 +387,6 @@ export async function runSequenceStep(
     anchor: anchorLabel(step.anchor),
     ok: act.ok,
   };
-  if (!act.ok) result.error = act.error ?? 'command failed';
+  if (!act.ok) result.error = replayDestructiveActionHint(act.error ?? 'command failed');
   return result;
 }

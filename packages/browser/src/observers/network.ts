@@ -7,7 +7,13 @@ import {
 } from '@reticlehq/core';
 import { captureMethod } from '../patching/capture-method.js';
 import type { Emit, Teardown } from './types.js';
-import { isCapturableType, projectBody, withBodyDeadline } from './network-body.js';
+import {
+  isCapturableType,
+  projectBody,
+  projectErrorBody,
+  shouldCaptureErrorBody,
+  withBodyDeadline,
+} from './network-body.js';
 import { redactUrl, netUrlFields } from './network-redact.js';
 import { watchStreamedBody } from './network-stream.js';
 import { requireCapturedMethod } from '../util/captured-method.js';
@@ -33,6 +39,8 @@ type NetResponseReinterpreter = (
 interface NetworkOptions {
   /** Capture request/response bodies (text-like content only, redacted, per-body capped). */
   captureBodies?: boolean;
+  /** Retain the response body of a FAILED request even with `captureBodies` off. Default true (#800). */
+  captureErrorBodies?: boolean;
   /** Optional hook that reinterprets a completed request — see NetResponseReinterpreter. */
   reinterpret?: NetResponseReinterpreter;
   /**
@@ -260,6 +268,10 @@ const OURS = new WeakSet<typeof window.fetch>();
 
 export function installNetwork(emit: Emit, opts: NetworkOptions = {}): Teardown {
   const captureBodies = true === opts.captureBodies;
+  // Default TRUE, unlike `captureBodies`. The two answer different questions: the general flag is a
+  // volume-and-privacy decision about every 200 the app makes, and this one is about the handful of
+  // bytes that say why something broke. See `shouldCaptureErrorBody`.
+  const captureErrorBodies = false !== opts.captureErrorBodies;
   const reinterpret = opts.reinterpret;
   // Keep the true original for teardown identity, plus a window-bound copy to invoke
   // (fetch throws "Illegal invocation" if called with the wrong `this`).
@@ -336,7 +348,11 @@ export function installNetwork(emit: Emit, opts: NetworkOptions = {}): Teardown 
           ...(reinterpret?.(url, (name) => res.headers.get(name)) ?? {}),
         });
       };
-      if (captureBodies && isCapturableType(contentType)) {
+      // A failure's body is read on the default path too, so the deferral documented below now
+      // applies to non-2xx responses even with body capture off. That is the intended trade: an
+      // ordering caveat on requests that already failed, in exchange for the cause of the failure.
+      const wantErrorBody = shouldCaptureErrorBody(res.status, captureErrorBodies);
+      if ((captureBodies || wantErrorBody) && isCapturableType(contentType)) {
         // ONLY the body read can make the app wait (a chunked response with no content-length can be
         // arbitrarily long). Clone synchronously so the app's stream is untouched, then read + emit from
         // a DETACHED promise — the app already has res, so our bounded read is invisible to it. Without
@@ -363,10 +379,18 @@ export function installNetwork(emit: Emit, opts: NetworkOptions = {}): Teardown 
             try {
               const text = await withBodyDeadline(clone.text());
               if (text !== undefined) {
-                const { body, truncated } = projectBody(text, contentType);
-                responseBodyFields = truncated
-                  ? { responseBody: body, responseBodyTruncated: true }
-                  : { responseBody: body };
+                // Under the error-only path the tighter cap applies; when the app asked for body
+                // capture, a failure is projected exactly like any other response.
+                const { body, truncated } = captureBodies
+                  ? projectBody(text, contentType)
+                  : projectErrorBody(text, contentType);
+                responseBodyFields = {
+                  responseBody: body,
+                  ...(truncated ? { responseBodyTruncated: true } : {}),
+                  // Says WHY a body is here when the app never asked for bodies, so a reader does
+                  // not conclude that capture is on and trust an absent body on a 200.
+                  ...(captureBodies ? {} : { responseBodyReason: 'error-status' }),
+                };
               }
             } catch {
               /* body not readable — skip, keep the envelope */
@@ -457,12 +481,21 @@ export function installNetwork(emit: Emit, opts: NetworkOptions = {}): Teardown 
           let responseBodyFields: Record<string, unknown> = {};
           // responseText throws unless responseType is '' or 'text' — guard before reading.
           const textReadable = '' === this.responseType || 'text' === this.responseType;
-          if (captureBodies && textReadable && isCapturableType(xhrContentType)) {
+          const wantXhrErrorBody = shouldCaptureErrorBody(this.status, captureErrorBodies);
+          if (
+            (captureBodies || wantXhrErrorBody) &&
+            textReadable &&
+            isCapturableType(xhrContentType)
+          ) {
             try {
-              const { body: rb, truncated } = projectBody(this.responseText, xhrContentType);
-              responseBodyFields = truncated
-                ? { responseBody: rb, responseBodyTruncated: true }
-                : { responseBody: rb };
+              const { body: rb, truncated } = captureBodies
+                ? projectBody(this.responseText, xhrContentType)
+                : projectErrorBody(this.responseText, xhrContentType);
+              responseBodyFields = {
+                responseBody: rb,
+                ...(truncated ? { responseBodyTruncated: true } : {}),
+                ...(captureBodies ? {} : { responseBodyReason: 'error-status' }),
+              };
             } catch {
               /* unreadable body — skip */
             }

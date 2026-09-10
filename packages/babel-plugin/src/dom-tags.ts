@@ -20,8 +20,12 @@
  * with real DOM tags — `line` is both `<line>` in SVG and `THREE.Line`, and `audio` is both. A tag
  * name alone cannot separate them, and a lexical "is it under a <Canvas>" walk only sees the file
  * it is transforming, so a scene component in its own file would still slip through. The complete
- * answer for a three.js app is `reticle({ sourceMapping: false })`, which `reticle init` now writes
- * on its own when it finds react-three-fiber in the manifest.
+ * answer for a three.js app is `reticle({ sourceMapping: false })` — which `reticle init` writes on
+ * its own when it finds one of these renderers in the manifest (see `Detection.customReconciler`).
+ *
+ * This paragraph described that as already true for a release in which it was not: nothing read the
+ * manifest, and the crash reached new installs anyway. The allowlist below is a mitigation, not the
+ * remedy; the manifest check is the remedy.
  */
 
 /** Every HTML element name, including the deprecated ones a real codebase still contains. */

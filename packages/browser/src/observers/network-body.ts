@@ -196,6 +196,54 @@ function redactText(text: string): string {
 }
 
 /**
+ * Cap for a body retained only because the response FAILED.
+ *
+ * Smaller than the general cap on purpose: an error payload that says why is measured in tens or
+ * hundreds of bytes -- the case that prompted this was 74 -- and this path runs whether or not the
+ * app asked for body capture, so it must not be the reason a page holds a large buffer.
+ */
+const ERROR_BODY_CHARS = 4096;
+
+/**
+ * Should this response's body be retained even with `captureNetworkBodies` off?
+ *
+ * The response body of a FAILED request is the single most diagnostic thing on the wire, and it was
+ * the one thing dropped by default. A confirmed `POST /auth/v1/signup -> 500, responseSize: 74`
+ * told an agent that signup is broken; the 74 bytes would have said the mail provider refuses this
+ * domain, which is the half that is actionable (#800).
+ *
+ * Recovering it after the fact is not a cheap retry -- it means editing the app's instrumentation,
+ * restarting the dev server, re-driving a multi-field form and re-submitting against a rate-limited
+ * path -- so "turn body capture on and re-run" is not a real answer for the case that needs it.
+ *
+ * Scoped to keep faith with #705, which asks for bodies OFF by default because a first drive
+ * buffered authenticated and sensitive payloads:
+ *
+ *  - failures only, never a 2xx or 3xx, so the volume case #705 is about is untouched;
+ *  - a smaller cap ({@link ERROR_BODY_CHARS});
+ *  - the same redaction path as any other captured body, applied before retention;
+ *  - and switchable off with `connect({ captureErrorBodies: false })` for a workspace that wants
+ *    nothing retained at all.
+ *
+ * Failures are rare by definition, so the retained volume is bounded by how broken the app is.
+ */
+export function shouldCaptureErrorBody(status: number, enabled: boolean): boolean {
+  // A network-level failure reports status 0 and has no body to read; `statusIsOk` in network.ts
+  // treats 3xx as success (a normal navigation redirect), and so does this.
+  return enabled && status >= 400;
+}
+
+/** Project a failure body under the error-only cap, with the ordinary redaction applied. */
+export function projectErrorBody(
+  rawText: string,
+  contentType: string | null,
+): { body: string; truncated: boolean } {
+  const projected = projectBody(rawText, contentType);
+  if (projected.body.length <= ERROR_BODY_CHARS) return projected;
+  return { body: projected.body.slice(0, ERROR_BODY_CHARS), truncated: true };
+}
+
+/**
  * Redact + cap a body for the agent transcript. JSON is parsed and run through the same
  * sanitizeForTransport redaction used for state (sensitive keys -> [REDACTED]); every other text body
  * (and JSON that didn't parse) goes through redactText so form/plain-text credentials can't leak.

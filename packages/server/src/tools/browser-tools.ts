@@ -1,7 +1,7 @@
 import { carryReticleIdentity } from './lease-tools.js';
 import { z } from 'zod';
 import { navigateResult } from './navigate-result.js';
-import { awaitArrival, ARRIVAL_TIMEOUT_MS } from './navigate-arrival.js';
+import { awaitArrival, idsAtTarget, ARRIVAL_TIMEOUT_MS } from './navigate-arrival.js';
 import { reloadResult } from './reload-result.js';
 import { waitForReconnect, RELOAD_RECONNECT_TIMEOUT_MS } from '../session/session-reconnect.js';
 import { ReticleCommand } from '@reticlehq/core';
@@ -93,6 +93,10 @@ export const BROWSER_TOOLS: ToolDef[] = [
       // A leased tab is addressed by a URL param, so navigating away from it used to strand the
       // lease — see carryReticleIdentity. A tab that claims no identity is untouched.
       const url = carryReticleIdentity(session.url, requested);
+      // Sampled BEFORE dispatch, because that is the only moment it can be known. A session already
+      // sitting on the target is not evidence that THIS navigation arrived — and the arrival scan,
+      // which reads whatever is at the target afterwards, cannot tell the two apart on its own.
+      const priorIds = idsAtTarget(deps.sessions, url);
       session.beginAction(ReticleTool.NAVIGATE, { url });
       // Same floor as the reload path above, for the same reason: going to a new URL replaces the
       // document just as thoroughly. `beginAction` attributes events to this action; it does not move
@@ -111,7 +115,14 @@ export const BROWSER_TOOLS: ToolDef[] = [
         // reticle_sessions itself. A refusal skips the wait: there is nothing to wait FOR.
         const timeoutMs = asNumber(args['timeout_ms']) ?? ARRIVAL_TIMEOUT_MS;
         const arrival =
-          true === result.ok ? await awaitArrival(deps.sessions, url, timeoutMs) : null;
+          true === result.ok
+            ? await awaitArrival(
+                deps.sessions,
+                url,
+                { navigatedId: session.id, priorIds },
+                timeoutMs,
+              )
+            : null;
         return navigateResult(result, arrival, timeoutMs);
       } finally {
         session.finishAction();

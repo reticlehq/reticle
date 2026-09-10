@@ -13,6 +13,7 @@
  */
 
 import { judgeWait, QUIET_MEANS_HUNG_MS, urlToWatch, WaitVerdict } from './dev-server-wait.js';
+import { waitProgressLine } from './wait-progress.js';
 
 /**
  * Windows gets longer to say something before silence counts as a wedge.
@@ -163,8 +164,18 @@ export async function runSetupPhases(input: SetupInput, fx: SetupEffects): Promi
     }
     await fx.startDevServer(input.devCommand, input.appDir);
     const startedAt = fx.now();
+    // This loop used to poll in complete silence. Reported as thirty minutes of nothing ending in a
+    // SIGKILL — and whatever made that wait long, a user who cannot tell "still starting" from
+    // "wedged" has been given no way to act. See wait-progress.ts.
+    let spokeAtMs: number | undefined;
     for (;;) {
       const watching = urlToWatch(fx.devServerOutput(), fx.observedPorts());
+      const waitedMs = fx.now() - startedAt;
+      const progress = waitProgressLine(waitedMs, watching, spokeAtMs);
+      if (progress !== undefined) {
+        note(progress);
+        spokeAtMs = waitedMs;
+      }
       const serving = undefined === watching ? false : (await fx.probePage(watching)).served;
       const verdict = judgeWait({
         output: fx.devServerOutput(),

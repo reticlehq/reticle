@@ -98,6 +98,23 @@ describe('a contradiction outranks a passing assertion', () => {
     expect(v.because).toContain('duplicate-request');
     expect(v.because).toContain('response-ignored');
   });
+
+  /**
+   * #897: a route that rendered nothing AND left a console error behind is positive evidence of a
+   * crash, not mere absence — so it belongs in this describe block (an observed contradiction), not
+   * with the absence-derived kinds below. `route-rendered-nothing` alone stays absence-derived and
+   * downgrades to UNKNOWN; the crashed variant must not.
+   */
+  it('says NO for a crashed destination (route-rendered-nothing-crashed), not UNKNOWN', () => {
+    const v = decideVerified({
+      pass: true,
+      honesty: clean(),
+      settled: true,
+      contradictions: [{ kind: 'route-rendered-nothing-crashed' }],
+    });
+    expect(v.verified).toBe(Verified.NO);
+    expect(v.because).toContain('route-rendered-nothing-crashed');
+  });
 });
 
 /**
@@ -177,6 +194,19 @@ describe('a lost connection is not a failed assertion', () => {
     });
     expect(v.because).toMatch(/disconnected/);
     // The specific sentence that sent an agent to the wrong file.
+    expect(v.because).not.toMatch(/did not hold/);
+  });
+
+  it('names the last URL when the page was torn down mid-wait', () => {
+    const v = decideVerified({
+      pass: false,
+      observationLost: true,
+      lastUrl: 'http://localhost:3000/orders/explode',
+      honesty: clean(),
+      settled: true,
+    });
+    expect(v.because).toMatch(/torn down while on/);
+    expect(v.because).toContain('http://localhost:3000/orders/explode');
     expect(v.because).not.toMatch(/did not hold/);
   });
 
@@ -552,5 +582,74 @@ describe('a signal nothing corroborated explains itself', () => {
     const { because } = decideVerified(signalOnly);
     expect(because).toMatch(/NOTHING else moved/);
     expect(because).toMatch(/reticle_snapshot|reticle_state/);
+  });
+});
+
+/**
+ * An advisory finding is reported and decides nothing (#673).
+ *
+ * The camera-scan case: the assertion had already seen the person recognised, the heading and the
+ * 200s, and came back `unknown` because a scan loop the assertion never mentioned was posting. A
+ * verdict field that answers "I could not tell" to a question it could tell has stopped being a
+ * verdict field.
+ */
+describe('a duplicate on an endpoint the assertion never named does not decide it', () => {
+  const honest = clean();
+
+  it('stays YES when the only finding is advisory', () => {
+    const r = decideVerified({
+      pass: true,
+      honesty: honest,
+      settled: true,
+      contradictions: [{ kind: ContradictionKind.DUPLICATE_REQUEST_UNRELATED }],
+    });
+    expect(r.verified).toBe(Verified.YES);
+  });
+
+  it('still downgrades when the duplicate WAS on the named endpoint', () => {
+    const r = decideVerified({
+      pass: true,
+      honesty: honest,
+      settled: true,
+      contradictions: [{ kind: ContradictionKind.DUPLICATE_REQUEST }],
+    });
+    expect(r.verified, 'the rule keeps working for what it is for').not.toBe(Verified.YES);
+  });
+
+  it('does not let an advisory finding rescue a real contradiction beside it', () => {
+    const r = decideVerified({
+      pass: true,
+      honesty: honest,
+      settled: true,
+      contradictions: [
+        { kind: ContradictionKind.DUPLICATE_REQUEST_UNRELATED },
+        { kind: ContradictionKind.UI_ADVANCED_REQUEST_FAILED },
+      ],
+    });
+    expect(r.verified).toBe(Verified.NO);
+    expect(r.verifiedReason).toBe(VerifiedReason.CONTRADICTED);
+  });
+
+  it('does not let an advisory finding rescue an absence-derived one beside it', () => {
+    const r = decideVerified({
+      pass: true,
+      honesty: honest,
+      settled: true,
+      contradictions: [
+        { kind: ContradictionKind.DUPLICATE_REQUEST_UNRELATED },
+        { kind: ContradictionKind.SIGNAL_WITHOUT_CONSEQUENCE },
+      ],
+    });
+    expect(r.verified).toBe(Verified.UNKNOWN);
+  });
+
+  it('a failing assertion is still NO, advisory finding or not', () => {
+    const r = decideVerified({
+      pass: false,
+      honesty: honest,
+      settled: true,
+      contradictions: [{ kind: ContradictionKind.DUPLICATE_REQUEST_UNRELATED }],
+    });
+    expect(r.verified).toBe(Verified.NO);
   });
 });

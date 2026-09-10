@@ -3,7 +3,7 @@ import { ActionType, type ElementQuery, type ElementState } from '@reticlehq/cor
 import { resolveTestid } from './resolve.js';
 import { buildClock, type TestClock } from './clock.js';
 import { InputModeTracker, expectInputModeReal } from './input-mode.js';
-import { failFromVerdict } from './matchers.js';
+import { failFromVerdict, proved } from './matchers.js';
 import type { MatcherDeps, Verdict } from './matchers.js';
 import {
   expectAbsent,
@@ -54,9 +54,16 @@ function asVerdict(value: unknown): Verdict {
   }
   const v = verdict as Record<string, unknown>;
   const failureReason = 'string' === typeof v['failureReason'] ? v['failureReason'] : undefined;
+  // `verified` and `because` sit at the TOP level of the act_and_wait result, beside `verdict`
+  // rather than inside it: the nested object carries the raw predicate match and nothing else. That
+  // split is why reading `verdict.pass` alone could not see an overturn.
+  const verified = 'string' === typeof record['verified'] ? record['verified'] : undefined;
+  const because = 'string' === typeof record['because'] ? record['because'] : undefined;
   return {
     pass: true === v['pass'],
     evidence: v['evidence'],
+    ...(verified !== undefined ? { verified } : {}),
+    ...(because !== undefined ? { because } : {}),
     ...(failureReason !== undefined ? { failureReason } : {}),
   };
 }
@@ -110,7 +117,7 @@ export function createTestContext(
       };
       const raw = await invoke(ReticleTool.ACT_AND_WAIT, waitArgs);
       const verdict = asVerdict(raw);
-      if (!verdict.pass) {
+      if (!proved(verdict)) {
         const trace = (raw as Record<string, unknown>)['trace'];
         failFromVerdict(verdict, trace !== undefined ? { trace } : undefined);
       }

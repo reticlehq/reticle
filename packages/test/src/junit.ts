@@ -4,12 +4,22 @@ import { summarize } from './summary.js';
 import type { SpecResult } from './types.js';
 
 /**
- * XML 1.0 section 2.2: every code point below U+0020 is illegal EXCEPT tab, newline and carriage
- * return. Stated as codes rather than a regex character class, which cannot express control
- * characters without tripping `no-control-regex` and needing the rule turned off to read it.
+ * XML 1.0 section 2.2, the whole `Char` production:
+ *
+ *   #x9 | #xA | #xD | [#x20-#xD7FF] | [#xE000-#xFFFD] | [#x10000-#x10FFFF]
+ *
+ * Stated as codes rather than a regex character class, which cannot express control characters
+ * without tripping `no-control-regex` and needing the rule turned off to read it.
  *
  * Iterating code points also means an astral character (an emoji in a test name) survives intact;
  * the regex worked on UTF-16 units.
+ *
+ * Only the LOWER bound used to be enforced, which left the production's two upper holes open:
+ * the surrogate block, and the noncharacters U+FFFE and U+FFFF. A test name or an assertion message
+ * carrying U+FFFF produced a document a real parser rejects outright ("disallowed character"), which
+ * is the same outcome the strip exists to prevent: CI shows nothing instead of showing the failure.
+ * A lone surrogate is the milder case, since writing the file as UTF-8 turns it into U+FFFD, but it
+ * is illegal by the same clause and dropping it keeps the rule one thing rather than two.
  */
 const XML_MIN_LEGAL_CODE = 0x20;
 const XML_LEGAL_CONTROL_CODES: ReadonlySet<number> = new Set([
@@ -17,13 +27,25 @@ const XML_LEGAL_CONTROL_CODES: ReadonlySet<number> = new Set([
   0x0a, // newline
   0x0d, // carriage return
 ]);
+/** The surrogate block: legal only as a PAIR, which iteration has already resolved to one code point. */
+const XML_SURROGATE_FIRST = 0xd800;
+const XML_SURROGATE_LAST = 0xdfff;
+/** U+FFFE and U+FFFF are noncharacters; the production stops the BMP at U+FFFD. */
+const XML_BMP_LAST_LEGAL = 0xfffd;
+const XML_ASTRAL_FIRST = 0x10000;
 
-/** Drop the control characters no XML parser will accept. */
+function isXmlLegal(code: number): boolean {
+  if (XML_LEGAL_CONTROL_CODES.has(code)) return true;
+  if (code < XML_MIN_LEGAL_CODE) return false;
+  if (code >= XML_SURROGATE_FIRST && code <= XML_SURROGATE_LAST) return false;
+  return code <= XML_BMP_LAST_LEGAL || code >= XML_ASTRAL_FIRST;
+}
+
+/** Drop the characters no XML parser will accept. */
 function stripXmlIllegal(value: string): string {
   let out = '';
   for (const ch of value) {
-    const code = ch.codePointAt(0) ?? 0;
-    if (code >= XML_MIN_LEGAL_CODE || XML_LEGAL_CONTROL_CODES.has(code)) out += ch;
+    if (isXmlLegal(ch.codePointAt(0) ?? 0)) out += ch;
   }
   return out;
 }

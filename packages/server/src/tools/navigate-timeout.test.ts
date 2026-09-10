@@ -40,12 +40,21 @@ function fakeSession(id: string, url: string): Session {
 function fakeDeps(arrivesOnLook: number): { deps: ToolDeps; looks: () => number } {
   const before = fakeSession('s-old', FROM);
   const after = fakeSession('s-new', TO);
+  // Navigate reads the map ONCE before dispatch, to record who was already on the target so arrival
+  // cannot be attributed to them. That read is not a poll, and these tests are about the arrival
+  // budget — so it is answered "nobody was there" and left out of the count, or every assertion
+  // below would silently be measuring one thing while describing another.
+  let sampled = false;
   let look = 0;
   const sessions: Partial<SessionManager> = {
     resolve: () => before,
     // The reload branch asks whether a DIFFERENT object holds the id now. Same object: not back.
     get: () => before,
     all: () => {
+      if (!sampled) {
+        sampled = true;
+        return [];
+      }
       look++;
       return look >= arrivesOnLook ? [after] : [];
     },

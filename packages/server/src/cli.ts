@@ -494,7 +494,9 @@ async function handleAffected(files: string[], since: string | undefined): Promi
   try {
     const fs = createNodeFileSystem();
     const reticleRoot = join(process.cwd(), ReticleDir.ROOT);
-    const changed = await resolveChangedFiles(files, since, process.cwd());
+    // The CLI gate still degrades to "no changes" rather than crash CI over a bad ref — the
+    // original reasoning, now opted into explicitly instead of handed a clean-looking empty list.
+    const changed = (await resolveChangedFiles(files, since, process.cwd())).files;
     const result = affectedSavedFlows(
       await loadNamedFlows(fs, reticleRoot, readProjectId(process.cwd())),
       changed,

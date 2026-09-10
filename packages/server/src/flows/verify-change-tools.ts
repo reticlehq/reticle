@@ -100,7 +100,8 @@ export const VERIFY_CHANGE_TOOLS: ToolDef[] = [
       // The daemon's cwd is not the project — it is wherever the MCP host started it, which for a
       // globally-registered server is `/` or `$HOME`. `deps.reticleRoot` is the project directory
       // this daemon was configured with, and it is the right tree to diff.
-      const changedFiles = await resolveChangedFiles(files, since, deps.reticleRoot);
+      const changed = await resolveChangedFiles(files, since, deps.reticleRoot);
+      const changedFiles = changed.files;
       // Same root flow_save wrote to. A read that resolved differently would report "no flows
       // covered this change" over flows that exist, which reads as a clean result rather than
       // an error, so the disagreement would be invisible.
@@ -117,7 +118,12 @@ export const VERIFY_CHANGE_TOOLS: ToolDef[] = [
       if (0 === changedFiles.length) {
         return {
           verified: Verified.UNKNOWN,
-          because: 'no changed files were given, so there was nothing to decide about',
+          // A git failure and a clean tree both arrive here with no files, and they are opposite
+          // answers: one means there was nothing to decide about, the other means the question was
+          // never asked. `unknown` is right either way, but the REASON is what the caller acts on.
+          because: changed.failed
+            ? `could not read the diff for \`${String(since)}\`, so nothing was compared: ${changed.reason ?? 'git failed'}`
+            : 'no changed files were given, so there was nothing to decide about',
           changedFiles,
           flowsRun: [],
           unknownProvenance,

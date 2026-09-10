@@ -16,7 +16,7 @@
  * So these are the kinds worth evaluating BEFORE the act, to find out whether the green means
  * anything.
  */
-import { PredicateKind } from '@reticlehq/core';
+import { PredicateKind, type ElementDescriptor } from '@reticlehq/core';
 import type { Predicate } from '../events/predicate.js';
 
 export function readsDomState(predicate: Predicate): boolean {
@@ -53,4 +53,36 @@ export function readsDomState(predicate: Predicate): boolean {
     default:
       return false;
   }
+}
+
+/** True when `value` looks like an element/text predicate's passing evidence — an array of descriptors. */
+function isDescriptorArray(value: unknown): value is readonly ElementDescriptor[] {
+  if (!Array.isArray(value)) return false;
+  return (value as unknown[]).every((v) => {
+    if ('object' !== typeof v || null === v) return false;
+    return 'boolean' === typeof (v as Record<string, unknown>)['visible'];
+  });
+}
+
+/**
+ * #889: an `already_true` verdict says the declared consequence held before the action, so nothing
+ * was proven — but a `text`/`element` predicate matches DOM presence by default, not visibility (a
+ * caller has to pass `visible: true` to ask for that). A dialog's content mounted-but-hidden before
+ * the click therefore reads as "already true", identically to genuinely-visible content that was
+ * already on screen — and the `already_true` message named neither which node it matched nor that
+ * the match was invisible, which is what made it read as proof of nothing rather than as the
+ * mid-load/hidden-mount trap it actually was.
+ *
+ * True only when the predicate itself did not ask for a state (an explicit `visible`/other state
+ * constraint already means the caller saw and handled this) AND every matched element is hidden —
+ * one visible match among several is a fair, ordinary read and is left alone.
+ */
+export function alreadyTrueHiddenMatch(predicate: Predicate, evidence: unknown): boolean {
+  if (predicate.kind !== PredicateKind.ELEMENT && predicate.kind !== PredicateKind.TEXT) {
+    return false;
+  }
+  if (predicate.kind === PredicateKind.ELEMENT && predicate.state !== undefined) return false;
+  if (predicate.kind === PredicateKind.TEXT && true === predicate.visible) return false;
+  if (!isDescriptorArray(evidence) || 0 === evidence.length) return false;
+  return evidence.every((el) => !el.visible);
 }

@@ -370,7 +370,12 @@ export class Reticle {
 
     const emit = this.#emit;
     this.#captureBodies = true === options.captureNetworkBodies;
-    this.#teardowns = installAllObservers(emit, { captureBodies: this.#captureBodies });
+    this.#teardowns = installAllObservers(emit, {
+      captureBodies: this.#captureBodies,
+      ...(options.captureErrorBodies === undefined
+        ? {}
+        : { captureErrorBodies: options.captureErrorBodies }),
+    });
 
     if (true === options.overlay) {
       this.#overlay = installOverlay();

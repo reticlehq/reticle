@@ -5,9 +5,11 @@ import {
   Verified,
   VerifiedReason,
   isAbsenceDerived,
+  isAdvisory,
 } from '@reticlehq/core';
 import { HonestyGrade, type HonestyBlock } from './honesty.js';
 import { unsettledBecause, type UnsettledWindow } from './unsettled.js';
+import { pageTornDownWhileOn } from '../session/no-session-diagnosis.js';
 
 /**
  * The decision rule: eight trust dimensions in, one answer out.
@@ -33,6 +35,14 @@ interface VerifiedInputs {
    * confidently-wrong-by-accident this clause exists to remove.
    */
   observationLost?: boolean;
+  /**
+   * The URL the session was on when observation was lost.
+   *
+   * Only meaningful with `observationLost`. A route that 500s tears the page down mid-wait; naming
+   * the last URL in the verdict is the difference between "install problem" and "the page died on
+   * /X" (#808). Absent when we never knew, which must not invent a route.
+   */
+  lastUrl?: string;
   honesty: HonestyBlock;
   /**
    * Set when the assertion could not be EVALUATED at all — an under-specified call, or nothing
@@ -45,6 +55,15 @@ interface VerifiedInputs {
    * ones are floored at the act's cursor and cannot be satisfied by the past.
    */
   alreadyTrue?: boolean;
+  /**
+   * The `alreadyTrue` match was against a HIDDEN element/text — DOM presence, not something a person
+   * could see on screen. `text`/`element` predicates match presence by default (`visible: true` is
+   * opt-in), so a dialog's content mounted-but-hidden before the click reads identically to content
+   * that was genuinely already showing, and named neither fact (#889). Only changes `because`; the
+   * verdict itself is unchanged; a hidden pre-existing match is exactly as unfalsifiable as a visible
+   * one.
+   */
+  alreadyTrueHiddenMatch?: boolean;
   /** Cross-channel disagreements found in the action's window. */
   contradictions?: readonly { kind: string }[];
   /** Did a real frame flush before the wait gave up? */
@@ -159,11 +178,15 @@ export function decideVerified(inputs: VerifiedInputs): VerifiedVerdict {
   //
   // UNKNOWN, for the same reason `unclean_capture` is: the evidence is ABSENT, not negative.
   if (true === inputs.observationLost) {
+    const lost =
+      undefined === inputs.lastUrl || '' === inputs.lastUrl
+        ? 'the tab disconnected'
+        : pageTornDownWhileOn(inputs.lastUrl);
     return {
       verified: Verified.UNKNOWN,
       verifiedReason: VerifiedReason.OBSERVATION_LOST,
       because:
-        'the tab disconnected while this action was being observed, so its outcome was never ' +
+        `${lost} while this action was being observed, so its outcome was never ` +
         'seen — this says nothing about the app. Call reticle_sessions for the current session ' +
         '(a reloaded tab keeps its id; a closed one is gone) and repeat the action if it is safe ' +
         'to repeat',
@@ -232,7 +255,11 @@ export function decideVerified(inputs: VerifiedInputs): VerifiedVerdict {
   // every `no` verdict in the field. See ABSENCE_DERIVED_CONTRADICTIONS for why a false negative
   // costs more than it looks: it makes an agent redo work that succeeded, or stop believing the
   // verdict channel, which is the product.
-  const observed = contradictions.filter((c) => !isAbsenceDerived(c.kind));
+  // Advisory findings are dropped from the decision entirely, at both tiers below. They are true and
+  // they ride out in `contradictions`; what they are not is evidence about the consequence the
+  // caller declared, because they concern traffic the assertion never named (#673).
+  const deciding = contradictions.filter((c) => !isAdvisory(c.kind));
+  const observed = deciding.filter((c) => !isAbsenceDerived(c.kind));
   if (observed.length > 0) {
     const kinds = observed.map((c) => c.kind).join(', ');
     return {
@@ -262,7 +289,7 @@ export function decideVerified(inputs: VerifiedInputs): VerifiedVerdict {
     declaredHeld &&
     inputs.unsettled !== undefined &&
     !openWrite &&
-    contradictions.every((c) => c.kind === ContradictionKind.REQUEST_NEVER_SETTLED);
+    deciding.every((c) => c.kind === ContradictionKind.REQUEST_NEVER_SETTLED);
   // `signal-without-consequence` gets its own sentence, because the generic one is FALSE for it.
   //
   // That sentence says the window "closed before the app finished" and then explains that a poll or
@@ -272,8 +299,8 @@ export function decideVerified(inputs: VerifiedInputs): VerifiedVerdict {
   // was that the app announced a consequence it did not deliver. A right verdict with a wrong reason
   // sends an agent to the wrong place, which costs as much as the wrong verdict did.
   const signalOnly =
-    contradictions.length > 0 &&
-    contradictions.every((c) => c.kind === ContradictionKind.SIGNAL_WITHOUT_CONSEQUENCE);
+    deciding.length > 0 &&
+    deciding.every((c) => c.kind === ContradictionKind.SIGNAL_WITHOUT_CONSEQUENCE);
   if (signalOnly) {
     return {
       verified: Verified.UNKNOWN,
@@ -286,8 +313,8 @@ export function decideVerified(inputs: VerifiedInputs): VerifiedVerdict {
         'the store holds) before trusting it',
     };
   }
-  if (contradictions.length > 0 && !settlementOnly) {
-    const kinds = contradictions.map((c) => c.kind).join(', ');
+  if (deciding.length > 0 && !settlementOnly) {
+    const kinds = deciding.map((c) => c.kind).join(', ');
     return {
       verified: Verified.UNKNOWN,
       // NOT `unsettled`: this clause fires whether or not the page went idle, and naming it after
@@ -342,7 +369,10 @@ export function decideVerified(inputs: VerifiedInputs): VerifiedVerdict {
       verified: true === settled ? Verified.NO_FAULT : Verified.UNKNOWN,
       verifiedReason: VerifiedReason.ALREADY_TRUE,
       because:
-        'the declared consequence was already true before this action, so it proves nothing about it — assert something the action CHANGES (a signal, a request, a route, or store state)',
+        'the declared consequence was already true before this action, so it proves nothing about it — assert something the action CHANGES (a signal, a request, a route, or store state)' +
+        (true === inputs.alreadyTrueHiddenMatch
+          ? '. That prior match was against a HIDDEN element — this predicate checks DOM presence, not visibility, by default; add `visible: true` if you meant "this is showing", not merely "this exists"'
+          : ''),
     };
   }
 

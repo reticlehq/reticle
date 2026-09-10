@@ -49,7 +49,8 @@ export const AFFECTED_TOOLS: ToolDef[] = [
       const since = 'string' === typeof args['since'] ? args['since'] : undefined;
       // Same address as verify_change, resolved the same way: `deps.reticleRoot` is the configured
       // project directory (the daemon's cwd is not), and the session names which project's flows.
-      const changedFiles = await resolveChangedFiles(files, since, deps.reticleRoot);
+      const changed = await resolveChangedFiles(files, since, deps.reticleRoot);
+      const changedFiles = changed.files;
       // No `sessionId` on this tool's surface, and it does not need one: passing `undefined`
       // resolves the single connected session, and falls back exactly as before when it cannot.
       // Adding an argument here would be a surface change to fix an addressing bug.
@@ -64,13 +65,18 @@ export const AFFECTED_TOOLS: ToolDef[] = [
       // others mean the question could not be answered, and re-running nothing on that basis is how a
       // regression ships. Say which one it is.
       const why =
-        0 === flows.length
-          ? 'no saved flows exist yet, so nothing COULD be affected — record one with reticle_record then reticle_flow_save'
-          : 0 === changedFiles.length
-            ? since === undefined && 0 === files.length
-              ? 'no files were given and no `since` ref was passed, so nothing was compared — pass the files you edited, or a git ref'
-              : 'nothing changed against that input, so no saved flow needs re-verifying'
-            : undefined;
+        // A git failure OUTRANKS every other explanation: the others describe a question that was
+        // answered, and this one is a question that was not. Reporting "nothing changed" over a
+        // mistyped ref or a shallow clone is how a regression ships past the tool meant to catch it.
+        changed.failed
+          ? `could not read the diff for \`${String(since)}\`, so NOTHING was compared and this result proves nothing: ${changed.reason ?? 'git failed'}`
+          : 0 === flows.length
+            ? 'no saved flows exist yet, so nothing COULD be affected — record one with reticle_record then reticle_flow_save'
+            : 0 === changedFiles.length
+              ? since === undefined && 0 === files.length
+                ? 'no files were given and no `since` ref was passed, so nothing was compared — pass the files you edited, or a git ref'
+                : 'nothing changed against that input, so no saved flow needs re-verifying'
+              : undefined;
       return {
         changedFiles,
         ...result,

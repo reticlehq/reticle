@@ -124,6 +124,13 @@ export function installStorage(emit: Emit): Teardown {
     // The app's write happens FIRST and outside the guard — it must succeed or fail on its own terms.
     const old = observeValue(() => readOld(this, key)) ?? null;
     origSet.call(this, key, value);
+    // A rewrite of the same bytes is not a change, and emitting it is not free. One field app wrote a
+    // single UI key thousands of times a minute with byte-identical content; those no-ops filled the
+    // ring buffer (held 2000, dropped 70482), and the verdict taken in that window reported
+    // `net.total: 0` and "state never changed" while the request carrying the root cause was on the
+    // wire. Dropped HERE rather than at the verdict, because the cost is the buffer slot, not the
+    // rendering — and a diff whose `old` equals its `new` carries nothing to render either way.
+    if (old === value) return;
     observeSafely(() => {
       emit(EventType.STORAGE_CHANGE, {
         area: areaOf(this),

@@ -4,6 +4,13 @@ on:
   push:
     branches: [main]
   pull_request:
+  # The merge queue builds its own ref and reports against `merge_group`, NOT against the PR. Without
+  # this trigger no workflow runs for a queued entry, so the required `gate` check never reports and
+  # every entry sits in AWAITING_CHECKS forever — which is exactly what happened: the queue was
+  # enabled, eighteen PRs were enqueued, position one waited five hours, and GitHub marked the nine
+  # behind it UNMERGEABLE. Nothing had ever merged through the queue, and the backlog read as
+  # "stale contributor PRs" rather than as a workflow that was never wired to the thing gating it.
+  merge_group:
 
 # Least privilege by default (OpenSSF Scorecard Token-Permissions): the whole workflow is read-only;
 # any job that needs more must declare it explicitly. Nothing here writes to the repo.

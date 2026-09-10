@@ -260,9 +260,17 @@ function sdkPackageVersion() {
 
 /**
  * @param {import('next').NextConfig} [nextConfig]
+ * @param {{ sourceMapping?: boolean }} [options] Pass `{ sourceMapping: false }` for an app that
+ *   renders through a non-DOM React reconciler — react-three-fiber, react-pdf, ink. A lowercase JSX
+ *   tag is a host element in every React renderer, but only React DOM's host instances are nodes
+ *   that take attributes. R3F reads the dashed `data-reticle-source` as a pierced property path,
+ *   walks `data` -> `reticle` on a three.js instance that has no `data`, and throws from the commit
+ *   phase — unmounting the whole tree to a white screen. The babel plugin's allowlist keeps the
+ *   stamp off `<mesh>`, and cannot help with the tags that COLLIDE: `<line>` is SVG's AND
+ *   `THREE.Line`; `<audio>` is both. Turning the stamp off costs source pointers, not the app.
  * @returns {import('next').NextConfig}
  */
-function withReticle(nextConfig = {}) {
+function withReticle(nextConfig = {}, options = {}) {
   // Production builds are untouched — this is a dev-time aid only.
   if (process.env.NODE_ENV === 'production') return nextConfig;
 
@@ -292,14 +300,16 @@ function withReticle(nextConfig = {}) {
       NEXT_PUBLIC_RETICLE_SDK_VERSION: sdkPackageVersion(),
     },
     webpack(config, ctx) {
-      config.module = config.module || { rules: [] };
-      config.module.rules = config.module.rules || [];
-      config.module.rules.push({
-        test: /\.(t|j)sx$/,
-        exclude: /node_modules/,
-        enforce: 'pre',
-        use: [{ loader: require.resolve('./loader.cjs') }],
-      });
+      if (options.sourceMapping !== false) {
+        config.module = config.module || { rules: [] };
+        config.module.rules = config.module.rules || [];
+        config.module.rules.push({
+          test: /\.(t|j)sx$/,
+          exclude: /node_modules/,
+          enforce: 'pre',
+          use: [{ loader: require.resolve('./loader.cjs') }],
+        });
+      }
       return typeof userWebpack === 'function' ? userWebpack(config, ctx) : config;
     },
   };
