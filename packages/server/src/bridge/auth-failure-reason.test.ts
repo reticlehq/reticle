@@ -110,3 +110,32 @@ describe('a multi-project daemon does not claim to belong to one project', () =>
     );
   });
 });
+
+describe('a token that was presented and did not match', () => {
+  /**
+   * "authentication failed" on its own is the sentence a field install spent six and a half minutes
+   * getting past. The page DID hold a real pairing token; it came from a state directory this daemon
+   * does not own, which in practice means a dev server that does not share a filesystem with the
+   * daemon -- a container, a devcontainer, WSL -- or a page served before `~/.reticle` was replaced.
+   *
+   * Those need different fixes and look identical from here, so the message does not guess. It says
+   * which of the two failures this is, and points at the one command that can tell them apart.
+   */
+  it('says the token is wrong, not merely that something failed', () => {
+    const reason = authFailureReason(new Set(['app-a', 'app-b']), 'app-a', 'a-token');
+    expect(reason).toContain('wrong pairing token');
+    expect(reason).toContain('reticle status');
+  });
+
+  it('does not say it when no token was presented at all', () => {
+    // A different failure with a different fix: a frozen snippet that never had one, which a reload
+    // cannot mint. Telling that user their token is "wrong" sends them looking for a token to fix.
+    expect(authFailureReason(new Set(['app-a']), 'app-a', '')).not.toContain('wrong pairing token');
+  });
+
+  it('still fits a WebSocket close reason, which is capped at 123 bytes', () => {
+    // The cap is why this file exists. A reason over it throws, and the socket closes saying nothing.
+    const reason = authFailureReason(new Set(['app-a', 'app-b']), 'app-a', 'a-token');
+    expect(Buffer.byteLength(reason, 'utf8')).toBeLessThanOrEqual(123);
+  });
+});
