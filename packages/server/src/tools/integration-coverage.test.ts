@@ -128,7 +128,13 @@ describe('every shipped integration is covered by an app AND a gate', () => {
   };
 
   it('every framework SKILL.md offers has an app that a gate drives', () => {
-    const skill = readFileSync(join(REPO, 'SKILL.md'), 'utf8');
+    // The framework table lives in the setup companion now: it is setup-time guidance, and an
+    // already-running agent should not pay to read it every session. Both files are read so that
+    // moving a rule between them is a non-event, while dropping one entirely still fails.
+    const skill = [
+      readFileSync(join(REPO, 'SKILL.md'), 'utf8'),
+      readFileSync(join(REPO, 'docs', 'skill-setup.md'), 'utf8'),
+    ].join('\n');
     const offered = Object.keys(HAS_APP);
     const missingFromSkill = offered.filter((f) => !skill.includes(f));
     expect(missingFromSkill, 'SKILL.md dropped a framework — update HAS_APP deliberately').toEqual(
@@ -157,7 +163,13 @@ describe('every shipped integration is covered by an app AND a gate', () => {
    * must arrive with an app and a gate — which the test above then enforces.
    */
   it('SKILL.md does not offer a framework we cannot prove', () => {
-    const skill = readFileSync(join(REPO, 'SKILL.md'), 'utf8');
+    // The framework table lives in the setup companion now: it is setup-time guidance, and an
+    // already-running agent should not pay to read it every session. Both files are read so that
+    // moving a rule between them is a non-event, while dropping one entirely still fails.
+    const skill = [
+      readFileSync(join(REPO, 'SKILL.md'), 'utf8'),
+      readFileSync(join(REPO, 'docs', 'skill-setup.md'), 'utf8'),
+    ].join('\n');
     const offeredOptions = skill
       .split('\n')
       .filter((line) => /^\s+[a-z]\)\s/.test(line))

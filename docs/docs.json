@@ -50,7 +50,7 @@
               },
               {
                 "group": "Install",
-                "pages": ["install-agentic", "install-manual", "frameworks"]
+                "pages": ["install-agentic", "install-manual", "skill-setup", "frameworks"]
               },
               {
                 "group": "Instrument",

@@ -3,8 +3,8 @@
  *
  * `DEV_SERVER_POLICY` in `agent-rules.ts` is the source: it is what `init` writes into the user's
  * CLAUDE.md / AGENTS.md, and it is the text an agent re-reads every turn. Four of its nine
- * sentences are ALSO typed by hand into SKILL.md, which is the paste-URL an agent reads once at
- * setup.
+ * sentences are ALSO typed by hand into the agent-facing guidance (`SKILL.md` and its setup
+ * companion `docs/skill-setup.md`), which an agent reads at setup.
  *
  * Two copies of the same instruction with no link between them drift in the direction that is
  * hardest to notice: the constant gets corrected after a field report, and the hand-typed copy
@@ -27,7 +27,20 @@ import { fileURLToPath } from 'node:url';
 import { DEV_SERVER_POLICY } from './agent-rules.js';
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
-const skill = readFileSync(join(REPO, 'SKILL.md'), 'utf8');
+
+/**
+ * The agent-facing guidance, as one body of text.
+ *
+ * The dev-server rules used to sit in `SKILL.md`. They now live in `docs/skill-setup.md`, because
+ * they are setup-time instructions and an agent that is already running should not pay to read them
+ * every session. What matters to this guard is unchanged: the rules are quoted SOMEWHERE an agent
+ * reads, and that copy must not drift from the constant. So both files are checked together, and
+ * moving a rule between them stays a non-event.
+ */
+const skill = [
+  readFileSync(join(REPO, 'SKILL.md'), 'utf8'),
+  readFileSync(join(REPO, 'docs', 'skill-setup.md'), 'utf8'),
+].join('\n');
 
 /** Sentences long enough to be a rule rather than a connective. */
 const sentences = DEV_SERVER_POLICY.split(/\.\s+/)

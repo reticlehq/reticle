@@ -19,7 +19,15 @@ import { ReticleTool } from './tool-names.js';
 
 const REPO = join(import.meta.dirname, '..', '..', '..', '..');
 /** The docs an AGENT is pointed at. Internal design notes are not a contract with anyone. */
-const AGENT_DOCS = ['SKILL.md', 'docs/agent-cheatsheet.md', 'docs/debugging.md', 'docs/usage.md'];
+const AGENT_DOCS = [
+  'SKILL.md',
+  // The setup half of SKILL.md, split out so an already-installed agent stops paying to read it.
+  // Same audience and the same rules apply, so it is checked the same way.
+  'docs/skill-setup.md',
+  'docs/agent-cheatsheet.md',
+  'docs/debugging.md',
+  'docs/usage.md',
+];
 
 /** Every `reticle_*` identifier we actually ship: tool names, plus every event any source emits. */
 function shippedNames(): Set<string> {

@@ -29,13 +29,15 @@ const SKILL = readFileSync(join(REPO_ROOT, 'SKILL.md'), 'utf8');
 /**
  * The size ratchet, in bytes.
  *
- * MEASURED 2026-09-10: 274 lines, 3,308 words, 19,918 bytes. The budget is that plus about 1.5%:
- * room to fix a typo, none to add a section.
+ * MEASURED 2026-09-10, after the split: 187 lines, 12,540 bytes. Was 19,918 before the setup half
+ * moved to `docs/skill-setup.md` — a 37% cut to what every agent reads, every session, with no
+ * content deleted. The budget is today's size plus about 2%: room to fix a typo, none to add a
+ * section.
  *
  * Going over is not forbidden, it is a DECISION. Move the number and write the reason here, the way
  * the tool-surface ratchet does. Coming in well under, move it down and keep the win.
  */
-const SKILL_BYTE_BUDGET = 20_200;
+const SKILL_BYTE_BUDGET = 12_800;
 
 /** Where the file stops being general advice and starts being about one situation or the other. */
 const SETUP_HEADING = '\n# SETUP\n';
@@ -66,22 +68,22 @@ describe('the skill file is a cost every session pays', () => {
     const setupHalf = bytesOf(SKILL.slice(setupAt, verifyAt));
     const wastedShare = setupHalf / bytesOf(SKILL);
 
-    // Measured 2026-09-10: preamble 6,100 B, setup half 7,896 B, verify half 5,922 B.
+    // The split landed, and this is the number that shows it.
     //
-    // So an agent that is already set up reads 19,918 B to use 12,022 B of it. It pays 39.6% for
-    // instructions about a job it finished once, weeks ago.
+    // BEFORE: preamble 6,100 B, setup half 7,896 B, verify half 5,922 B. An agent that was already
+    // set up read 19,918 B to use 12,022 of them, paying 39.6% for instructions about a job it
+    // finished once.
     //
-    // Worth saying plainly, because it changes what the fix is: splitting this file by situation
-    // cuts the common case by about 40% WITHOUT DELETING A SINGLE WORD. The problem is not that too
-    // much was written; it is that two audiences share one document.
+    // AFTER: the setup half is a short pointer to `docs/skill-setup.md`, which ships in the package
+    // (`files` includes `docs`), so it is a local read rather than a network call for the one
+    // session that needs it. No content was deleted; it moved.
     //
-    // This bound is a marker, not a claim that 39.6% is acceptable. When the split lands the number
-    // drops sharply, and this is how anyone will see that it did.
+    // The bound stays low so the setup half cannot quietly grow back inside this file.
     expect(
       wastedShare,
       `the setup half is ${String(Math.round(wastedShare * 100))}% of SKILL.md (${String(setupHalf)} B). ` +
         'An agent that is already set up reads all of it for nothing. If you have split the file by ' +
         'situation, this number should have dropped sharply — update the bound and keep the win.',
-    ).toBeLessThanOrEqual(0.45);
+    ).toBeLessThanOrEqual(0.12);
   });
 });
