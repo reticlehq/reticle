@@ -13,12 +13,12 @@ Everything else is built on top of that. A **framework adapter** (React, Vue, Sv
 
 ## The kinds of adapter
 
-| Kind | What it teaches Reticle |
-| --- | --- |
-| `realm/` | How to interact with a kind of environment. This file. |
+| Kind         | What it teaches Reticle                                              |
+| ------------ | -------------------------------------------------------------------- |
+| `realm/`     | How to interact with a kind of environment. This file.               |
 | `framework/` | How to turn a thing on screen into a named component in your source. |
-| `build/` | How to get the SDK into your app, and how to stamp source locations. |
-| `lint/` | Rules for your own linter, so a mistake is caught before it runs. |
+| `build/`     | How to get the SDK into your app, and how to stamp source locations. |
+| `lint/`      | Rules for your own linter, so a mistake is caught before it runs.    |
 
 ## What is here
 

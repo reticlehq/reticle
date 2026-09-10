@@ -1,23 +1,17 @@
-# OpenReality
+# @reticlehq/openreality
 
-The rules Reticle is built on, published on their own so somebody can read them without installing anything.
+The specification Reticle implements, and the four verbs a realm has to answer.
 
-## What it is
+**Read [SPEC.md](SPEC.md).** That is the specification; this file says what the package is.
 
-Two things, and nothing else.
+## What is in the package
 
-**What a realm must be able to do.** A realm is the layer that lets a program interact with an environment: a browser page, a desktop window, a phone screen, anything an agent can act on and watch. There are four verbs, and each one names where the web realm already implements it, so this is a description of code that exists rather than a design nobody has written.
+Very little on purpose: the four realm verbs as data, so code can enumerate them, and nothing else. It has no dependencies at all, because a contract that needs a library to read is a contract with a dependency somebody else has to accept.
 
-**What a verdict is allowed to say.** Four answers, not two: it held, it did not hold, I could not tell, and nothing was declared to prove. The third and fourth are the point. A system that can only say yes or no will say yes when it means "I did not see", and that is the failure this whole thing exists to prevent.
+## Where the normative part lives
 
-## The rule underneath both
+The message shapes and event payloads are defined once, as schemas, in `@reticlehq/core`, and both ends of the connection are checked against them. They are NOT copied into the specification document: two definitions of one contract is the drift problem rather than the fix. SPEC.md points at them and explains what they mean, and a check in this repository fails if the document and the code stop agreeing about the message kinds, the verdicts or the protocol version.
 
-**A realm reports what it did and what it saw. It never reports whether that proved anything.**
+## What this is not, yet
 
-Whether a declared consequence held is decided from evidence on a channel other than the one that performed the action. An observation made on the same channel that acted is not evidence for it, and the honest answer there is "I could not tell", never "it worked".
-
-That separation is the whole idea. A verdict that could be supplied by the thing being verified is not a verdict, and a realm that could return one would make every realm author a trusted party.
-
-## Status
-
-Early, and honest about it: the verbs are named and the verdict vocabulary is fixed, but this is one implementation's rules written down rather than a standard with several implementations behind it. Read [`docs/adapters.md`](../docs/adapters.md) in this repository for how to build against it today.
+SPEC.md ends with the gaps, stated plainly: no required transport, no conformance suite you can run against your own realm, no version negotiation, and no way to discover which realms exist. Those are real, and listing them is the point -- somebody deciding whether to build on this deserves to know what they would be building on.
