@@ -18,7 +18,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { haltedFrom } from './replay-halt.js';
+import { haltedFrom } from './recording/replay-halt.js';
 import { FLOW_TOOLS } from './flow-tools.js';
 import { ReticleTool } from '@reticlehq/core';
 

@@ -14,10 +14,10 @@ const UNKNOWN_KIND_RECOVERY =
   '{ kind: "success-state", signal|testid }, or { kind: "intent", text }.';
 import { ReticleTool } from '@reticlehq/core';
 import { asString } from '@reticlehq/core';
-import { compileAnnotation } from './annotate.js';
+import { compileAnnotation } from './annotate-notes/annotate.js';
 import type { ToolDef, ToolDeps } from '../../agent/tools/tools.js';
 
-import { resolveAnnotateTarget } from './annotate-target.js';
+import { resolveAnnotateTarget } from './annotate-notes/annotate-target.js';
 
 /**
  * The reticle_annotate tool. A STRUCTURED annotation (the AnnotationSchema

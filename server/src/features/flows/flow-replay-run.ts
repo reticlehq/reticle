@@ -14,7 +14,7 @@ import {
   type FlowStepResult,
   type ReticleEvent,
 } from '@reticlehq/core';
-import { haltedFrom } from './replay-halt.js';
+import { haltedFrom } from './recording/replay-halt.js';
 import { asRecord, asString } from '@reticlehq/core';
 import { routeOfEvent, routeOfUrl } from '@reticlehq/engine/question/predicate-route.js';
 import type { ArrivalClock } from '../../agent/tools/act/navigate-arrival.js';

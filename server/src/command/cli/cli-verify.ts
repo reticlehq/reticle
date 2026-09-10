@@ -48,7 +48,7 @@ import { createRunnerPort } from '../../agent/runs/runner-port.js';
 import { RunStore } from '../../agent/runs/run-store.js';
 import { renderRunReport } from '../../agent/runs/render-report.js';
 import { BaselineStore } from '../../features/project/baselines.js';
-import { RecordingStore } from '../../features/flows/recordings.js';
+import { RecordingStore } from '../../features/flows/recording/recordings.js';
 import { FlowStore } from '../../features/flows/flows.js';
 import { ProjectStore } from '../../features/project/project-store.js';
 import { AnnotationStore } from '../../features/flows/annotation-store.js';

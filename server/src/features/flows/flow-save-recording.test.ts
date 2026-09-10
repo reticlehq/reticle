@@ -16,7 +16,7 @@ import { ActionType, QueryBy } from '@reticlehq/core';
 import { TOOLS, type ToolDeps } from '../../agent/tools/tools.js';
 import { ReticleTool } from '@reticlehq/core';
 import { BaselineStore } from '../project/baselines.js';
-import { RecordingStore, type CompiledProgram } from './recordings.js';
+import { RecordingStore, type CompiledProgram } from './recording/recordings.js';
 import { AnnotationStore } from './annotation-store.js';
 import { FlowStore } from './flows.js';
 import { ProjectStore } from '../project/project-store.js';

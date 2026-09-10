@@ -16,7 +16,7 @@ import {
 import { createMemoryFs } from '../project/memory-fs.js';
 import { IntentStore } from './intent-store.js';
 import { LastAct } from '../../connection/session/last-act.js';
-import { RecordingStore } from '../flows/recordings.js';
+import { RecordingStore } from '../flows/recording/recordings.js';
 import { Session, type SessionManager } from '../../connection/session/session.js';
 import { TOOLS, type ToolDef, type ToolDeps } from '../../agent/tools/tools.js';
 import { ReticleTool } from '@reticlehq/core';

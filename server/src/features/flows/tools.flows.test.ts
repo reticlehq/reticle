@@ -4,13 +4,13 @@ import { ActionType, FlowErrorCode, QueryBy } from '@reticlehq/core';
 import { TOOLS, type ToolDeps } from '../../agent/tools/tools.js';
 import { ReticleTool } from '@reticlehq/core';
 import { BaselineStore } from '../project/baselines.js';
-import { RecordingStore } from './recordings.js';
+import { RecordingStore } from './recording/recordings.js';
 import { FlowStore } from './flows.js';
 import { ProjectStore } from '../project/project-store.js';
 import { AnnotationStore } from './annotation-store.js';
 import type { FileSystemPort } from '../project/fs-port.js';
 import type { Session, SessionManager } from '../../connection/session/session.js';
-import type { CompiledProgram, RecordedStep } from './recordings.js';
+import type { CompiledProgram, RecordedStep } from './recording/recordings.js';
 
 const ROOT = '/virtual/.reticle';
 

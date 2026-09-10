@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { AnnotationErrorCode, AnnotationKind, AnnotationTarget } from '@reticlehq/core';
 import type { Annotation } from '@reticlehq/core';
-import { compileAnnotation, describeCompiled } from './annotate.js';
+import { compileAnnotation, describeCompiled } from './annotate-notes/annotate.js';
 
 /**
  * Pure compiler matrix. No IO, no clock: compileAnnotation maps a

@@ -49,7 +49,7 @@ const PINNED_VERSIONS: Record<string, string> = {
   'openreality/src/vocabulary/memory.ts': '.int().positive()',
   'server/src/agent/capsule/capsule-store.ts': 'CAPSULE_VERSION',
   'server/src/features/flows/assertion-tiers-store.ts': '1',
-  'server/src/features/flows/flake.ts': '1',
+  'server/src/features/flows/recording/flake.ts': '1',
   'server/src/features/intent/intent-shard.ts': 'INTENT_SHARD_VERSION,INTENT_SHARD_VERSION',
   'server/src/features/journal/ambient-file.ts': '1',
   'server/src/features/journal/envelope-store.ts': 'ENVELOPE_FILE_VERSION',

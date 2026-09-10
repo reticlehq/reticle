@@ -16,7 +16,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { AnnotationKind, AnnotationTarget } from '@reticlehq/core';
-import { compileAnnotation } from './annotate.js';
+import { compileAnnotation } from './annotate-notes/annotate.js';
 
 const ONE_STEP = 1;
 

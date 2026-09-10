@@ -4,7 +4,7 @@ import { READ_TOOLS } from './read-tools.js';
 import { ReticleTool } from '@reticlehq/core';
 import type { ToolDeps } from './tools.js';
 import type { Session, SessionManager } from '../../connection/session/session.js';
-import { RecordingStore, type CompiledProgram } from '../../features/flows/recordings.js';
+import { RecordingStore, type CompiledProgram } from '../../features/flows/recording/recordings.js';
 
 function recordStopTool() {
   const t = READ_TOOLS.find((x) => x.name === ReticleTool.RECORD_STOP);

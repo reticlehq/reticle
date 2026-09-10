@@ -15,7 +15,7 @@ import { FlowStore, type FlowAnnotations } from './flows.js';
 import { ProjectStore } from '../project/project-store.js';
 import { BaselineStore } from '../project/baselines.js';
 import { AnnotationStore } from './annotation-store.js';
-import { RecordingStore, type CompiledProgram } from './recordings.js';
+import { RecordingStore, type CompiledProgram } from './recording/recordings.js';
 import { FLOW_TOOLS } from './flow-tools.js';
 import { ReticleTool } from '@reticlehq/core';
 import { flowIntentId } from './flow-intent.js';

@@ -113,9 +113,14 @@ const REACHES_FOR: Record<string, readonly string[]> = {
    * telemetry notices, because that is what a setup transcript is made of.
    */
   terminal: ['cli', 'daemon', 'ports', 'telemetry'],
-  bridge: ['flows', 'impact', 'project', 'session', 'telemetry', 'tools', 'version'],
+  /** A recorded flow and what became of it: the tape, the rewind, the flake, the halt. */
+  recording: [],
+  /** What a human wrote on a step, and where they pointed when they wrote it. */
+  'annotate-notes': [],
+  bridge: ['recording', 'flows', 'impact', 'project', 'session', 'telemetry', 'tools', 'version'],
   capsule: ['project'],
   cli: [
+    'recording',
     'ports',
     'outcome',
     'bridge',
@@ -153,6 +158,8 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   domain: ['flows', 'oracles', 'project', 'tools'],
   ee: ['license'],
   flows: [
+    'annotate-notes',
+    'recording',
     'outcome',
     'act',
     'cli',
@@ -190,6 +197,8 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   setup: ['terminal', 'bridge', 'cli', 'daemon', 'mcp', 'telemetry'],
   telemetry: ['ports', 'cli', 'daemon', 'license', 'mcp', 'session', 'tools', 'update', 'version'],
   tools: [
+    'annotate-notes',
+    'recording',
     'ports',
     'read',
     'act',

@@ -15,7 +15,7 @@ import { ReticleTool } from '@reticlehq/core';
 import type { ToolDeps } from '../tools/tools.js';
 import type { SessionManager } from '../../connection/session/session.js';
 import { BaselineStore } from '../../features/project/baselines.js';
-import { RecordingStore } from '../../features/flows/recordings.js';
+import { RecordingStore } from '../../features/flows/recording/recordings.js';
 import { FlowStore } from '../../features/flows/flows.js';
 import { ProjectStore } from '../../features/project/project-store.js';
 import { AnnotationStore } from '../../features/flows/annotation-store.js';
