@@ -14,7 +14,7 @@
 
 import { installCommandParts, type PackageManager } from '@reticlehq/init';
 
-export { reticleDepsOf } from './reticle-deps.js';
+export { reticleDepsOf } from '../project/reticle-deps.js';
 
 /** The install to run, or null when this project has nothing of ours to sync. */
 export function sdkSyncCommand(

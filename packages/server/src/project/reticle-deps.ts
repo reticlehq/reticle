@@ -2,8 +2,14 @@
  * The `@reticlehq/*` packages a project actually declares.
  *
  * Shared by `reticle update` (which syncs them) and the version-skew remedy (which names them).
- * Lives here, not in `init/`, so the daemon library path can read a package.json without pulling
- * the installer in behind it.
+ *
+ * It is a fact about the PROJECT -- what this app has declared -- rather than a step in updating
+ * anything, so it lives with the rest of what we know about a project. It used to sit under
+ * `update/`, where it was the only thing the version code needed from there, and the two directories
+ * ended up needing each other for one twenty-line function.
+ *
+ * It is not in the scaffolder, deliberately: the daemon has to be able to read a project's
+ * package.json without pulling the installer in behind it.
  */
 
 /** Everything we publish is scoped here. */
