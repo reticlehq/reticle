@@ -12,6 +12,7 @@ import {
   type Detection,
 } from './detect.js';
 import type { FoundStore } from './capabilities.js';
+import { CONTAINERISED_TITLE, containerisedDevServerNote } from './containerised-dev-server.js';
 import { installFailureHint } from './install-hint.js';
 import { installRetries } from './install-retries.js';
 import { claudeAddCommand, mcpManual, mcpWindowsNote } from './mcp.js';
@@ -169,6 +170,23 @@ export interface Plan {
   steps: Step[];
 }
 
+/**
+ * The two things a containerised dev server does differently, said before they go wrong.
+ *
+ * Null for every project with no container marker near it, which is almost all of them — so this
+ * adds nothing to the ordinary plan and does not move the install baseline.
+ */
+function containerisedStep(input: PlanInput): Step | null {
+  const marker = input.containerMarker;
+  if (marker === undefined || 0 === marker.length) return null;
+  return {
+    title: CONTAINERISED_TITLE,
+    target: marker,
+    status: StepStatus.NOTICE,
+    detail: containerisedDevServerNote(marker),
+  };
+}
+
 export interface PlanInput {
   detection: Detection;
   /**
@@ -296,6 +314,13 @@ export interface PlanInput {
   pairingToken?: string;
   /** Whether .reticle.json already exists in the project root (idempotency). */
   reticleConfigExists?: boolean;
+  /**
+   * The container marker found near the app (`Dockerfile`, `docker-compose.yml`, …), or undefined.
+   *
+   * Not proof the dev server runs in one — see containerised-dev-server.ts for why over-eager is the
+   * right direction here, and for what goes wrong when it does.
+   */
+  containerMarker?: string | undefined;
   /**
    * Its CONTENT, so an existing config can be checked instead of trusted.
    *
@@ -961,5 +986,9 @@ export function buildPlan(input: PlanInput): Plan {
     ...reticleConfigSteps(input),
   ];
   steps.push(...frameworkSteps(input));
+  // LAST, and a notice rather than an action: it is a statement about this machine's shape, and it
+  // only matters once every file above has been written. See containerised-dev-server.ts.
+  const container = containerisedStep(input);
+  if (container !== null) steps.push(container);
   return { framework: input.detection.framework, uiLibrary: input.detection.uiLibrary, steps };
 }
