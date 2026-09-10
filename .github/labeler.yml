@@ -23,7 +23,7 @@ area/react:
 
 area/vite-plugin:
   - changed-files:
-      - any-glob-to-any-file: ['packages/vite-plugin/**']
+      - any-glob-to-any-file: ['adapters/build/vite/**']
 
 area/babel-plugin:
   - changed-files:
@@ -40,7 +40,7 @@ area/electron:
 
 area/tauri:
   - changed-files:
-      - any-glob-to-any-file: ['packages/tauri/**', 'apps/tauri-smoke/**']
+      - any-glob-to-any-file: ['adapters/realm/tauri/**', 'apps/tauri-smoke/**']
 
 area/test:
   - changed-files:

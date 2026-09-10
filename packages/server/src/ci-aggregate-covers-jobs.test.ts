@@ -13,7 +13,7 @@ import { join } from 'node:path';
  * with a test behind it.
  *
  * The cost of getting it wrong is not theoretical for this repo. `rust` is the only job in CI that
- * compiles `packages/tauri` at all, because that package sits outside every JavaScript gate. While it
+ * compiles `adapters/realm/tauri` at all, because that package sits outside every JavaScript gate. While it
  * was missing from this list, a red Rust build merged clean.
  */
 

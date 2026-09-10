@@ -91,7 +91,7 @@ describe('the CI router only names paths that exist', () => {
     // Without this, a change to how ci.yml writes its filters would empty the list and every check
     // below would pass by having nothing to check.
     expect(paths.length).toBeGreaterThan(10);
-    expect(paths).toContain('packages/tauri');
+    expect(paths).toContain('adapters/realm/tauri');
   });
 
   it('every routed path still matches a real file', () => {

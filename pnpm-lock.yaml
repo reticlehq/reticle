@@ -113,6 +113,34 @@ importers:
         specifier: 15.5.24
         version: 15.5.24(@babel/core@7.29.7)(@types/node@26.4.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
 
+  adapters/build/vite:
+    dependencies:
+      '@babel/core':
+        specifier: ^7.26.0
+        version: 7.29.7
+      '@reticlehq/babel-plugin':
+        specifier: workspace:*
+        version: link:../babel-plugin
+      '@reticlehq/core':
+        specifier: workspace:*
+        version: link:../../../packages/core
+    devDependencies:
+      '@reticlehq/react':
+        specifier: workspace:*
+        version: link:../../framework/react
+      '@types/babel__core':
+        specifier: ^7.20.5
+        version: 7.20.5
+      esbuild:
+        specifier: ^0.28.2
+        version: 0.28.2
+      svelte:
+        specifier: ^5.56.10
+        version: 5.56.10(@typescript-eslint/types@8.67.0)
+      vite:
+        specifier: ^8
+        version: 8.2.2(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.0)
+
   adapters/framework/react:
     dependencies:
       '@reticlehq/browser':
@@ -222,7 +250,7 @@ importers:
         version: link:../../adapters/framework/react
       '@reticlehq/vite-plugin':
         specifier: workspace:*
-        version: link:../../packages/vite-plugin
+        version: link:../../adapters/build/vite
       '@types/react':
         specifier: ^19.2.18
         version: 19.2.18
@@ -320,7 +348,7 @@ importers:
         version: link:../../adapters/framework/react
       '@reticlehq/vite-plugin':
         specifier: workspace:*
-        version: link:../../packages/vite-plugin
+        version: link:../../adapters/build/vite
       '@types/react':
         specifier: ^19.2.18
         version: 19.2.18
@@ -375,7 +403,7 @@ importers:
         version: link:../../adapters/realm/electron
       '@reticlehq/vite-plugin':
         specifier: workspace:*
-        version: link:../../packages/vite-plugin
+        version: link:../../adapters/build/vite
       '@types/node':
         specifier: ^26.4.0
         version: 26.4.0
@@ -426,7 +454,7 @@ importers:
         version: link:../../../adapters/framework/react
       '@reticlehq/vite-plugin':
         specifier: workspace:*
-        version: link:../../../packages/vite-plugin
+        version: link:../../../adapters/build/vite
       astro:
         specifier: 7.0.3
         version: 7.0.3(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.3)(@types/node@26.4.0)(jiti@2.7.0)(rollup@4.61.1)(yaml@2.9.0)
@@ -472,7 +500,7 @@ importers:
         version: link:../../../adapters/framework/react
       '@reticlehq/vite-plugin':
         specifier: workspace:*
-        version: link:../../../packages/vite-plugin
+        version: link:../../../adapters/build/vite
       react:
         specifier: ^19.2.8
         version: 19.2.8
@@ -516,7 +544,7 @@ importers:
         version: 8.3.0(@react-router/serve@8.3.0(react-router@8.3.0(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(typescript@5.9.3))(react-router@8.3.0(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(typescript@5.9.3)(vite@8.2.1(@types/node@26.4.0)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
       '@reticlehq/vite-plugin':
         specifier: workspace:*
-        version: link:../../../packages/vite-plugin
+        version: link:../../../adapters/build/vite
       '@types/node':
         specifier: ^26
         version: 26.4.0
@@ -600,7 +628,7 @@ importers:
         version: link:../../adapters/framework/react
       '@reticlehq/vite-plugin':
         specifier: workspace:*
-        version: link:../../packages/vite-plugin
+        version: link:../../adapters/build/vite
       '@tauri-apps/cli':
         specifier: ^2.2.0
         version: 2.11.4
@@ -725,34 +753,6 @@ importers:
       vitest:
         specifier: ^3.2.6
         version: 3.2.6(@types/debug@4.1.13)(@types/node@26.4.0)(jiti@2.7.0)(jsdom@30.0.1(@noble/hashes@2.3.0))(lightningcss@1.33.0)(yaml@2.9.0)
-
-  packages/vite-plugin:
-    dependencies:
-      '@babel/core':
-        specifier: ^7.26.0
-        version: 7.29.7
-      '@reticlehq/babel-plugin':
-        specifier: workspace:*
-        version: link:../../adapters/build/babel-plugin
-      '@reticlehq/core':
-        specifier: workspace:*
-        version: link:../core
-    devDependencies:
-      '@reticlehq/react':
-        specifier: workspace:*
-        version: link:../../adapters/framework/react
-      '@types/babel__core':
-        specifier: ^7.20.5
-        version: 7.20.5
-      esbuild:
-        specifier: ^0.28.2
-        version: 0.28.2
-      svelte:
-        specifier: ^5.56.10
-        version: 5.56.10(@typescript-eslint/types@8.67.0)
-      vite:
-        specifier: ^8
-        version: 8.2.2(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.0)
 
 packages:
 

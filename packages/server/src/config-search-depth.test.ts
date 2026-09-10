@@ -23,7 +23,7 @@ import { join } from 'node:path';
 
 const REPO_ROOT = join(__dirname, '..', '..', '..');
 
-const WALKERS = ['packages/server/src/cli/cli-port.ts', 'packages/vite-plugin/src/project-id.ts'];
+const WALKERS = ['packages/server/src/cli/cli-port.ts', 'adapters/build/vite/src/project-id.ts'];
 
 /** The `.reticle.json` search depth a file declares. */
 function declaredDepth(file: string): number | undefined {

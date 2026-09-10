@@ -13,7 +13,7 @@ import { fileURLToPath } from 'node:url';
  *
  * This is not hypothetical. FOUR jobs were in that state at once — `windows`, `rust`, `rust-macos`
  * and `desktop-e2e`. `rust` is the sharpest case: it is the only thing in all of CI that compiles
- * `packages/tauri`, which sits outside every JS gate, so a red Rust build could merge clean. Each
+ * `adapters/realm/tauri`, which sits outside every JS gate, so a red Rust build could merge clean. Each
  * was added to the workflow by somebody who reasonably believed adding it was the whole job.
  *
  * So the rule moves out of prose, for the reason every other rule in this repo did: the ones a

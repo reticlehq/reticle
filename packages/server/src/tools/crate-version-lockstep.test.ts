@@ -27,7 +27,7 @@ import { fileURLToPath } from 'node:url';
 import { SERVER_VERSION } from '../version/server-version.js';
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..');
-const CARGO = join(REPO, 'packages', 'tauri', 'Cargo.toml');
+const CARGO = join(REPO, 'adapters', 'realm', 'tauri', 'Cargo.toml');
 
 /** The `version = "x.y.z"` of the `[package]` table — the first one in the file. */
 function crateVersion(source: string): string | undefined {
@@ -44,7 +44,7 @@ describe('the Rust crate ships the version everything else ships', () => {
   it('is in lockstep with the npm packages', () => {
     expect(
       crateVersion(readFileSync(CARGO, 'utf8')),
-      'packages/tauri/Cargo.toml is behind the release. A version already on crates.io is SKIPPED by ' +
+      'adapters/realm/tauri/Cargo.toml is behind the release. A version already on crates.io is SKIPPED by ' +
         'publish-crate.yml, which then reports success — so forgetting this ships nothing and says ' +
         'it worked. Bump it with the npm packages.',
     ).toBe(SERVER_VERSION);

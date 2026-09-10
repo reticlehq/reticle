@@ -4,7 +4,7 @@
  * `gate` is the single required status check, and its `needs:` array is hand-maintained. A job absent
  * from that array runs, reports, and is structurally incapable of stopping a merge — the workflow's
  * own comment records that `windows`, `rust`, `rust-macos` and `desktop-e2e` were all in exactly that
- * state, and `rust` is the only thing in CI that compiles `packages/tauri` at all. Four jobs, four
+ * state, and `rust` is the only thing in CI that compiles `adapters/realm/tauri` at all. Four jobs, four
  * separate discoveries, none of them by a machine.
  *
  * Adding a job to the workflow is half the work; adding it to `needs:` is the other half, and nothing

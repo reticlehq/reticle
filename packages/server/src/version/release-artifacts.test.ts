@@ -40,7 +40,7 @@ describe('nothing under apps/ can reach a registry', () => {
 
 describe('the Rust crate can actually be published', () => {
   it('Cargo.lock records the version Cargo.toml declares', () => {
-    const dir = join(REPO, 'packages/tauri');
+    const dir = join(REPO, 'adapters/realm/tauri');
     const toml = readFileSync(join(dir, 'Cargo.toml'), 'utf8');
     const lock = readFileSync(join(dir, 'Cargo.lock'), 'utf8');
     const declared = /^version = "([^"]+)"/m.exec(toml)?.[1];

@@ -9,6 +9,6 @@
     { "path": "packages/test" },
     { "path": "adapters/framework/react" },
     { "path": "adapters/build/babel-plugin" },
-    { "path": "packages/vite-plugin" }
+    { "path": "adapters/build/vite" }
   ]
 }

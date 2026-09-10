@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+// The same derivation the other repo-wide checks use, so they cannot disagree about what exists.
+import { workspaceGlobs } from '../../../../scripts/check-boundaries.mjs';
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..');
 
@@ -23,7 +25,7 @@ const REPO = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..
  */
 
 /** Integration packages: ones a USER installs to wire Reticle into their app. */
-const INTEGRATIONS = ['react', 'next', 'vite-plugin', 'babel-plugin', 'electron', 'tauri'] as const;
+const INTEGRATIONS = ['react', 'next', 'vite', 'babel-plugin', 'electron', 'tauri'] as const;
 
 /**
  * Which app proves each integration, and which gate runs that app. `null` = a known, deliberate hole
@@ -34,7 +36,8 @@ const COVERAGE: Record<
   { app: string; gate: string } | { app: string; gate: null; why: string }
 > = {
   react: { app: 'apps/bench-app', gate: 'apps/e2e/specs/real-world-tests.mjs' },
-  'vite-plugin': { app: 'apps/bench-app', gate: 'apps/e2e/specs/real-world-tests.mjs' },
+  // Keyed by the directory it lives in. Published as `@reticlehq/vite-plugin`.
+  vite: { app: 'apps/bench-app', gate: 'apps/e2e/specs/real-world-tests.mjs' },
   'babel-plugin': { app: 'apps/bench-app', gate: 'apps/e2e/specs/real-world-tests.mjs' },
   next: { app: 'apps/next-smoke', gate: 'apps/e2e/specs/next-smoke-test.mjs' },
   electron: { app: 'apps/electron-smoke', gate: 'apps/e2e/specs/electron-desktop-test.mjs' },
@@ -47,10 +50,35 @@ const ELECTRON_VITE_COVERAGE = {
   gate: 'apps/e2e/specs/electron-vite-desktop-test.mjs',
 };
 
+/**
+ * The name of every package this repo publishes, wherever it lives.
+ *
+ * Read from the pnpm workspace file rather than by listing one directory. Not everything lives under
+ * `packages/` any more -- the realms and the build plugins are grouped by what they are -- and a
+ * scan that looks in one place goes on reporting success about what it can still see. This check in
+ * particular would then say every integration is covered while quietly not looking at most of them.
+ */
 function shippedPackages(): string[] {
-  return readdirSync(join(REPO, 'packages')).filter((p) =>
-    existsSync(join(REPO, 'packages', p, 'package.json')),
-  );
+  const yaml = readFileSync(join(REPO, 'pnpm-workspace.yaml'), 'utf8');
+  const names: string[] = [];
+  for (const glob of workspaceGlobs(yaml)) {
+    if (glob.startsWith('apps')) continue;
+    const [head, ...rest] = glob.split('/');
+    const here = join(REPO, head ?? '');
+    if (!existsSync(here)) continue;
+    const levels = rest.length;
+    const walk = (dir: string, depth: number): void => {
+      if (depth === levels) {
+        if (existsSync(join(dir, 'package.json'))) names.push(dir.split('/').pop() ?? '');
+        return;
+      }
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        if (entry.isDirectory()) walk(join(dir, entry.name), depth + 1);
+      }
+    };
+    walk(here, 0);
+  }
+  return names;
 }
 
 describe('every shipped integration is covered by an app AND a gate', () => {
@@ -88,14 +116,18 @@ describe('every shipped integration is covered by an app AND a gate', () => {
 
   /**
    * A new integration package must not be able to arrive without coverage. This is the half that
-   * makes the rest self-maintaining: the list above cannot silently fall behind `packages/`.
+   * makes the rest self-maintaining: the list above cannot silently fall behind what is published.
    */
   it('has no shipped integration package missing from the coverage map', () => {
     const known = new Set<string>([
       ...INTEGRATIONS,
-      // Not integrations: the contract, the SDK itself, the daemon, and dev tooling.
+      // Not integrations: the contract, the rules that decide a verdict, the specification they
+      // implement, the realm the SDK itself is, the daemon, and dev tooling. None of these teaches
+      // Reticle about somebody's framework or build tool, so none of them needs an app proving it.
       'core',
-      'browser',
+      'openreality',
+      'engine',
+      'dom',
       'server',
       'test',
       'eslint-plugin',

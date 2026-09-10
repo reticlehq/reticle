@@ -245,21 +245,21 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            packages/tauri/target
-          key: cargo-linux-${{ hashFiles('packages/tauri/Cargo.lock') }}
+            adapters/realm/tauri/target
+          key: cargo-linux-${{ hashFiles('adapters/realm/tauri/Cargo.lock') }}
           restore-keys: cargo-linux-
       - name: Format
-        working-directory: packages/tauri
+        working-directory: adapters/realm/tauri
         run: cargo fmt --check
       - name: Lint (Linux capture path, natively)
-        working-directory: packages/tauri
+        working-directory: adapters/realm/tauri
         run: cargo clippy --all-targets -- -D warnings
       # Cross-CHECK the Windows path. It does not link here, but it does type-check `capture/
       # windows.rs` against the real `webview2-com` / `windows` bindings — verified to actually
       # compile that module, not skip it. Without this, an API bump in either crate is discovered by
       # a Windows user rather than by CI.
       - name: Check the Windows capture path
-        working-directory: packages/tauri
+        working-directory: adapters/realm/tauri
         run: cargo check --target x86_64-pc-windows-msvc
 
   # macOS gets its own runner rather than a cross-check: `capture/macos.rs` talks to WKWebView
@@ -289,11 +289,11 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            packages/tauri/target
-          key: cargo-macos-${{ hashFiles('packages/tauri/Cargo.lock') }}
+            adapters/realm/tauri/target
+          key: cargo-macos-${{ hashFiles('adapters/realm/tauri/Cargo.lock') }}
           restore-keys: cargo-macos-
       - name: Lint (macOS capture path, natively)
-        working-directory: packages/tauri
+        working-directory: adapters/realm/tauri
         run: cargo clippy --all-targets -- -D warnings
 
   # Advisory scan for the Rust tree. Nothing watched it: the npm ecosystem in dependabot.yml cannot
@@ -341,7 +341,7 @@ jobs:
       # The published crate is scanned against the COMMITTED lockfile, which is the exact set of
       # versions a consumer of the crate builds.
       - name: Audit reticle-tauri
-        working-directory: packages/tauri
+        working-directory: adapters/realm/tauri
         run: cargo audit
       # The smoke app is not published, but the desktop battery compiles and RUNS it, so a
       # vulnerable dependency here still executes on a runner. Its lockfile is gitignored, so one is
@@ -468,7 +468,7 @@ jobs:
           # are the whole of one-command onboarding — agent registration, pre-approval, the skill
           # file, the drive — and neither was on this list, so the release that made `init` an
           # install could edit every one of them without the install gate running once.
-          if echo "$CHANGED" | grep -qE '^(packages/(init|server/src/setup|core|vite-plugin)/|adapters/|setup/|apps/e2e/(install-gate|gate-harness|install-baseline)|package\.json|pnpm-lock\.yaml|\.github/workflows/ci\.yml)'; then
+          if echo "$CHANGED" | grep -qE '^(packages/(init|server/src/setup|core)/|adapters/|setup/|apps/e2e/(install-gate|gate-harness|install-baseline)|package\.json|pnpm-lock\.yaml|\.github/workflows/ci\.yml)'; then
             echo "install=true" >> "$GITHUB_OUTPUT"
           else
             echo "install=false" >> "$GITHUB_OUTPUT"
@@ -487,7 +487,7 @@ jobs:
           # by definition: the IPC observer, desktop capture, and the setup/doctor pair that shape
           # and diagnose a desktop install. Anything broader (all of adapters/realm/dom, say) would
           # route most PRs here and give the routing back for nothing.
-          if echo "$CHANGED" | grep -qE '^(adapters/realm/electron/|packages/tauri/|apps/(electron|tauri)-smoke/|adapters/realm/dom/src/observers/ipc\.ts|adapters/realm/dom/src/dom/desktop-capture\.ts|packages/server/src/setup/desktop-shape\.ts|packages/init/src/desktop-doctor\.ts|\.github/workflows/ci\.yml)'; then
+          if echo "$CHANGED" | grep -qE '^(adapters/realm/electron/|adapters/realm/tauri/|apps/(electron|tauri)-smoke/|adapters/realm/dom/src/observers/ipc\.ts|adapters/realm/dom/src/dom/desktop-capture\.ts|packages/server/src/setup/desktop-shape\.ts|packages/init/src/desktop-doctor\.ts|\.github/workflows/ci\.yml)'; then
             echo "desktop=true" >> "$GITHUB_OUTPUT"
           else
             echo "desktop=false" >> "$GITHUB_OUTPUT"
@@ -505,9 +505,9 @@ jobs:
           fi
           # Only `rust-macos` reads this. The Linux `rust` job stays unconditional: it is an ubuntu
           # runner at 1x, it cross-checks the Windows capture path, and it is the ONLY thing in CI
-          # that compiles packages/tauri at all — a skip there is a real hole, a skip on the second
+          # that compiles adapters/realm/tauri at all — a skip there is a real hole, a skip on the second
           # macOS opinion of the same crate is not.
-          if echo "$CHANGED" | grep -qE '^(packages/tauri/|apps/tauri-smoke/src-tauri/|\.github/workflows/ci\.yml)'; then
+          if echo "$CHANGED" | grep -qE '^(adapters/realm/tauri/|apps/tauri-smoke/src-tauri/|\.github/workflows/ci\.yml)'; then
             echo "rust=true" >> "$GITHUB_OUTPUT"
           else
             echo "rust=false" >> "$GITHUB_OUTPUT"
@@ -893,7 +893,7 @@ jobs:
     # Every job that can fail a PR is listed HERE. A job missing from this list runs, reports, and is
     # structurally incapable of stopping a merge — which is what `windows`, `rust`, `rust-macos` and
     # `desktop-e2e` all were until they were added. `rust` in particular is the only thing in CI that
-    # compiles packages/tauri at all: it sits outside every JS gate, so an absent entry here meant a
+    # compiles adapters/realm/tauri at all: it sits outside every JS gate, so an absent entry here meant a
     # red Rust build merged clean. Adding a job to the workflow is half the work; this line is the
     # other half.
     #

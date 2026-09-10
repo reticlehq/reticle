@@ -8,7 +8,7 @@
     "packages/react/src/index.ts",
     "packages/server/src/index.ts",
     "packages/test/src/index.ts",
-    "packages/vite-plugin/src/index.ts"
+    "adapters/build/vite/src/index.ts"
   ],
   "exclude": ["**/*.test.ts", "**/*.integration.test.ts", "**/node_modules/**"],
   "out": "docs-api",

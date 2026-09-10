@@ -3,6 +3,22 @@ import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { DESKTOP_CONTRACT } from './desktop-contract.js';
 import { renderDesktopContract } from '../scripts/gen-desktop-contract.mjs';
+import { execFileSync } from 'node:child_process';
+
+/**
+ * Where the Rust crate's source is.
+ *
+ * Asked rather than counted: walking up a fixed number of directories is a statement about how deep
+ * this package happens to sit, and the crate has just moved to sit with the other adapters. Git
+ * already knows where the repository starts.
+ */
+const CRATE_SRC = join(
+  execFileSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8' }).trim(),
+  'adapters',
+  'realm',
+  'tauri',
+  'src',
+);
 
 /**
  * The desktop contract has to hold across module systems that cannot import each other: a CommonJS
@@ -68,7 +84,7 @@ describe('desktop contract generation', () => {
  * written while the daemon silently refuses every one of them.
  */
 describe('desktop contract — the Rust capture helper', () => {
-  const CRATE = join(process.cwd(), '..', 'tauri', 'src', 'capture.rs');
+  const CRATE = join(CRATE_SRC, 'capture.rs');
 
   it('spells the capture prefix exactly as the daemon requires', () => {
     if (!existsSync(CRATE)) return; // the crate is not part of the TypeScript build
@@ -77,7 +93,7 @@ describe('desktop contract — the Rust capture helper', () => {
   });
 
   it('defines that prefix as the value the daemon checks for', () => {
-    const lib = join(process.cwd(), '..', 'tauri', 'src', 'lib.rs');
+    const lib = join(CRATE_SRC, 'lib.rs');
     if (!existsSync(lib)) return;
     expect(readFileSync(lib, 'utf8')).toContain(
       `const CAPTURE_FILE_PREFIX: &str = "${DESKTOP_CONTRACT.RETICLE_CAPTURE_FILE_PREFIX}";`,
@@ -85,7 +101,7 @@ describe('desktop contract — the Rust capture helper', () => {
   });
 
   it('spells the full-page refusal exactly as the daemon reads it', () => {
-    const lib = join(process.cwd(), '..', 'tauri', 'src', 'lib.rs');
+    const lib = join(CRATE_SRC, 'lib.rs');
     if (!existsSync(lib)) return;
     expect(readFileSync(lib, 'utf8')).toContain(
       `pub const FULL_PAGE_UNSUPPORTED: &str = "${DESKTOP_CONTRACT.RETICLE_FULL_PAGE_UNSUPPORTED}";`,
@@ -104,7 +120,7 @@ describe('desktop contract — the Rust capture helper', () => {
    * that `hide()` is dead on every machine.
    */
   it('parks the macOS headless window off-screen rather than calling hide()', () => {
-    const lib = join(process.cwd(), '..', 'tauri', 'src', 'lib.rs');
+    const lib = join(CRATE_SRC, 'lib.rs');
     if (!existsSync(lib)) return;
     const source = readFileSync(lib, 'utf8');
     expect(source).toContain('OFFSCREEN_PX');

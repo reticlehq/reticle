@@ -31,7 +31,7 @@
     },
     "@reticlehq/core#test:unit": {
       "dependsOn": ["^build"],
-      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/packages/tauri/src/**"]
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/adapters/realm/tauri/src/**"]
     },
     "test:guards": {
       "dependsOn": ["^build"]
@@ -42,6 +42,7 @@
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/packages/*/src/**",
         "$TURBO_ROOT$/adapters/**",
+        "$TURBO_ROOT$/pnpm-workspace.yaml",
         "$TURBO_ROOT$/packages/*/package.json",
         "$TURBO_ROOT$/engine/src/**",
         "$TURBO_ROOT$/engine/package.json",
