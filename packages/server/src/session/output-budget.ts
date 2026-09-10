@@ -1,4 +1,4 @@
-import type { ReticleEvent } from '@reticlehq/core';
+import { CHURN_TYPES, type ReticleEvent } from '@reticlehq/core';
 
 /**
  * A self-budgeting hint returned on event-bearing tool results so the agent can decide whether to
@@ -51,7 +51,23 @@ export const DEFAULT_QUERY_LIMIT = 200;
  */
 export const DEFAULT_OBSERVE_EVENT_LIMIT = 200;
 
-/** Keep only the most recent `maxEvents` events; report how many older ones were dropped. */
+/**
+ * Trim a timeline to `maxEvents`, sacrificing noise before evidence.
+ *
+ * The obvious rule -- keep the most recent N -- is wrong here, and a live session showed why. A page
+ * emits a health heartbeat every few seconds forever, so on any idle app the most recent events are
+ * all heartbeats. A real observe call came back with 200 events and 46 KB whose own summary read:
+ * zero network, zero DOM changes, zero route changes, zero console errors, zero signals. The budget
+ * had been spent entirely on heartbeats, and the click the caller was asking about had been dropped
+ * for being older.
+ *
+ * So evidence is kept first, and `CHURN_TYPES` -- which core already defines as the high-volume,
+ * low-signal events that are "the ONLY thing that should be sacrificed when a buffer is full" -- is
+ * used to fill whatever room is left. That rule already governed buffer eviction; it governs this
+ * budget now too, so both agree on what is worth keeping.
+ *
+ * Order is preserved: the result reads oldest-first, like the timeline it came from.
+ */
 export function applyEventBudget(
   events: ReticleEvent[],
   maxEvents: number | undefined,
@@ -59,9 +75,16 @@ export function applyEventBudget(
   if (maxEvents === undefined || maxEvents < 0 || events.length <= maxEvents) {
     return { events, droppedOldest: 0 };
   }
+  const isNoise = (event: ReticleEvent): boolean => CHURN_TYPES.has(event.type);
+  const evidence = events.filter((event) => !isNoise(event));
+  // Evidence alone can overflow the budget; then it is the most recent evidence that survives.
+  const keptEvidence = evidence.slice(Math.max(0, evidence.length - maxEvents));
+  const roomLeft = maxEvents - keptEvidence.length;
+  const keptNoise = roomLeft <= 0 ? [] : events.filter(isNoise).slice(-roomLeft);
+  const keep = new Set<ReticleEvent>([...keptEvidence, ...keptNoise]);
   return {
-    events: events.slice(events.length - maxEvents),
-    droppedOldest: events.length - maxEvents,
+    events: events.filter((event) => keep.has(event)),
+    droppedOldest: events.length - keep.size,
   };
 }
 

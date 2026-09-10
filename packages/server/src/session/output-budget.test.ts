@@ -184,3 +184,56 @@ describe('reticle_observe output budget', () => {
     expect(res.cost?.droppedOldest).toBe(3);
   });
 });
+
+describe('the budget sacrifices noise before evidence', () => {
+  /**
+   * Found by driving a real session, not by reading code.
+   *
+   * A live page emits a health heartbeat every few seconds forever. In a two-second window on a
+   * quiet app, a real observe call came back with 200 events, 46 KB, and this summary: zero network,
+   * zero DOM changes, zero route changes, zero console errors, zero signals. Every single event was
+   * a heartbeat.
+   *
+   * Keeping "the most recent N" is what caused that. Heartbeats are the most recent thing on any
+   * idle page, so a recency-only cap fills the whole budget with them and throws away the click that
+   * happened thirty seconds ago -- which is the one thing the caller asked about.
+   *
+   * Core already knows which events are noise: CHURN_TYPES exists and its comment calls them "the
+   * ONLY thing that should be sacrificed when a buffer is full". That rule was applied to buffer
+   * eviction and not to this budget. Now it is applied to both.
+   */
+  const heartbeat = (t: number): ReticleEvent =>
+    ({ t, type: EventType.PAGE_HEALTH, seq: t, data: {} }) as unknown as ReticleEvent;
+  const click = (t: number): ReticleEvent =>
+    ({ t, type: EventType.DOM_ADDED, seq: t, data: {} }) as unknown as ReticleEvent;
+
+  it('keeps the evidence and drops the heartbeats when it cannot keep both', () => {
+    // One real event, then a flood of heartbeats. Recency alone would lose the real one.
+    const events = [click(1), ...Array.from({ length: 10 }, (_, i) => heartbeat(i + 2))];
+    const { events: kept, droppedOldest } = applyEventBudget(events, 3);
+    expect(kept.length).toBe(3);
+    expect(
+      kept.some((e) => e.type === EventType.DOM_ADDED),
+      'the click must survive',
+    ).toBe(true);
+    expect(droppedOldest).toBe(8);
+  });
+
+  it('still returns events oldest-first, so the timeline reads in order', () => {
+    const events = [click(1), heartbeat(2), click(3), heartbeat(4)];
+    const { events: kept } = applyEventBudget(events, 3);
+    expect(kept.map((e) => e.t)).toEqual([...kept.map((e) => e.t)].sort((a, b) => a - b));
+  });
+
+  it('keeps the most recent evidence when evidence alone overflows the budget', () => {
+    const events = [click(1), click(2), click(3), click(4)];
+    const { events: kept } = applyEventBudget(events, 2);
+    expect(kept.map((e) => e.t)).toEqual([3, 4]);
+  });
+
+  it('still fills spare room with the most recent noise', () => {
+    const events = [click(1), heartbeat(2), heartbeat(3), heartbeat(4)];
+    const { events: kept } = applyEventBudget(events, 3);
+    expect(kept.map((e) => e.t)).toEqual([1, 3, 4]);
+  });
+});
