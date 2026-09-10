@@ -477,6 +477,12 @@ export async function handleStatus(port: number): Promise<void> {
 /** Print the running package version (resolved once in server-version.ts). */
 function handleVersion(): void {
   log('reticle_version', { version: SERVER_VERSION });
+  // Also on stdout, bare, because every diagnostic here starts by asking which build is running and
+  // that answer has to be copyable. The event alone looked fine in a terminal -- stderr is on the
+  // screen too -- but `V=$(reticle version)` came back empty, which is exactly the shape somebody
+  // reaches for when writing an issue template or a CI check. The event stays; machine-readable
+  // events all go to stderr and that consistency is worth keeping.
+  process.stdout.write(`${SERVER_VERSION}\n`);
 }
 
 /** `reticle license` — show enterprise activation resolved from the environment (offline; nothing leaves). */
