@@ -268,6 +268,16 @@ describe('the dev-server diagnoses name their cause', () => {
     expect(out).toContain('dev server exited');
   });
 
+  it('names the port when CRA says it is already in use (#802)', async () => {
+    const out = await notesFrom({
+      devServerExited: () => true,
+      devServerOutput: () =>
+        'Something is already running on port 3000.\nWould you like to run the app on another port instead?',
+    });
+    expect(out).toContain('port 3000 is already in use');
+    expect(out).not.toContain('exited without serving anything');
+  });
+
   // Both halves matter: a server that prints nothing but IS listening is the CRA case and must not
   // be failed, so the sentence has to say that both were checked.
   it('says it checked BOTH the output and the ports', async () => {
