@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { noteEmptyRead } from '../../agent/tools/observed-nothing.js';
+import { noteEmptyRead } from '../../agent/tools/gaps/observed-nothing.js';
 import {
   AGENT_ASK_NOTICE,
   AGENT_WAITING_NOTICE,

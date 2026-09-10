@@ -77,7 +77,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
    * nothing in it imports upward. The three reaches below are the ones these files already had
    * under their old home; they are the same edges, now attributed to the directory that owns them.
    */
-  act: ['capsule', 'input', 'session'],
+  act: ['capsule', 'input', 'read', 'session'],
   /**
    * The read leaves: what a snapshot or a query LOOKS like, with no opinion about what it means.
    *
@@ -85,6 +85,14 @@ const REACHES_FOR: Record<string, readonly string[]> = {
    * become mutual.
    */
   read: [],
+  /**
+   * What this build could not see, and what it lacks to see it: an absent capability, a coverage
+   * identity, an action that produced nothing observable, a missing source marker.
+   *
+   * The protocol calls this coverage, and it is the half of a verdict every other test format
+   * leaves out. Reaches for nothing.
+   */
+  gaps: [],
   /**
    * Who is attached to a session, and who may drive it. Reaches for NOTHING -- not even its own
    * parent -- which is the strongest form a group can take: `session` needs it, and it needs
@@ -187,6 +195,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   project: ['cli', 'cloud', 'flows', 'runs', 'tools'],
   runs: ['cloud', 'flows', 'intent', 'mcp', 'project', 'telemetry', 'tools'],
   session: [
+    'gaps',
     'human',
     'ports',
     'presence',
@@ -203,6 +212,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   setup: ['terminal', 'bridge', 'cli', 'daemon', 'mcp', 'telemetry'],
   telemetry: ['ports', 'cli', 'daemon', 'license', 'mcp', 'session', 'tools', 'update', 'version'],
   tools: [
+    'gaps',
     'annotate-notes',
     'recording',
     'ports',

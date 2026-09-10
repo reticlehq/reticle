@@ -7,7 +7,7 @@ import {
   ReticleCommand,
 } from '@reticlehq/core';
 import { ReticleTool } from '@reticlehq/core';
-import { capabilityAbsences } from './capability-absences.js';
+import { capabilityAbsences } from './gaps/capability-absences.js';
 import { asString } from '@reticlehq/core';
 import { sessionIdShape, commandOrThrow } from './tool-kit.js';
 import {

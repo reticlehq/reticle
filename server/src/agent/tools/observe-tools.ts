@@ -2,7 +2,7 @@
  * Observe / wait / assert tools — reticle_observe, reticle_wait_for, reticle_assert, reticle_network,
  * reticle_console, reticle_animations. Split out of tools.ts; assembled back via...OBSERVE_TOOLS.
  */
-import { noteEmptyRead } from './observed-nothing.js';
+import { noteEmptyRead } from './gaps/observed-nothing.js';
 import { z } from 'zod';
 import { aliasParam } from './alias-args.js';
 import {

@@ -7,7 +7,7 @@ import { ReticleCommand, SnapshotMode } from '@reticlehq/core';
 import { ReticleTool } from '@reticlehq/core';
 import type { ToolDef, ToolDeps } from './tools.js';
 import { asString } from '@reticlehq/core';
-import { exercisedCount } from './coverage-identity.js';
+import { exercisedCount } from './gaps/coverage-identity.js';
 import { commandOrThrow, sessionIdShape } from './tool-kit.js';
 
 /**

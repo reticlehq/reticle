@@ -8,7 +8,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { assertSequenceSteps } from './act/act-preflight.js';
-import { describeStepResult } from './act-sequence-retry.js';
+import { describeStepResult } from './act/act-sequence-retry.js';
 
 describe('refusing a sequence that cannot act', () => {
   it('accepts a step written with `target` instead of `ref`', () => {

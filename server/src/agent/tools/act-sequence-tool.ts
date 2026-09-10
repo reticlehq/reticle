@@ -22,13 +22,13 @@ import {
 } from '../../connection/session/control-envelope.js';
 import { asRecord } from '@reticlehq/core';
 import { sessionIdFromArgs } from './tools-helpers.js';
-import { describeStepResult, runStepWithStaleRetry } from './act-sequence-retry.js';
+import { describeStepResult, runStepWithStaleRetry } from './act/act-sequence-retry.js';
 import { assertSequenceSteps } from './act/act-preflight.js';
 import { type ToolDef, sessionIdShape } from './tool-kit.js';
 import { actCommand } from './act-tools.js';
 // resolveActTarget moved out of act-tools into its own module on this branch; #706 was written
 // against the older layout where act-tools re-exported it.
-import { resolveActTarget } from './act-target.js';
+import { resolveActTarget } from './act/act-target.js';
 
 export const ACT_SEQUENCE_TOOL: ToolDef = {
   name: ReticleTool.ACT_SEQUENCE,
