@@ -83,7 +83,7 @@ Every page arrives with the rules that matter prepended, so a single fetch orien
 
 You do not have to decide. `init` is idempotent and reports what is already wired, so running it is the cheapest way to find out, and on an installed project it goes straight to proving the app still works.
 
-Read **VERIFY** below when the question is "does this still work?" rather than "is this set up?". If `reticle_sessions` returns an empty list on a project that is already wired, fetch `https://docs.reticle.sh/troubleshooting.md`; do not restart setup.
+Read **VERIFY** below when the question is "does this still work?" rather than "is this set up?". If `reticle_sessions` returns an empty list on a project that is already wired, read `docs/troubleshooting.mdx` beside this file, or fetch `https://docs.reticle.sh/troubleshooting.md` if it is not there; do not restart setup. The on-disk copy is the same content and needs no network call, which matters most here: this is the page you reach for when something is already not working.
 
 ---
 
