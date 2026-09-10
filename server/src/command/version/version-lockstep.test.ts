@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { RETICLE_NPM_PACKAGE, RETICLE_VERSION } from '@reticlehq/init';
-import { SERVER_VERSION } from './server-version.js';
+import { SERVER_VERSION } from './identity/server-version.js';
 import { REPO_ROOT } from '../../repo-root.js';
 
 /**

@@ -4,7 +4,7 @@ import { existsSync } from 'node:fs';
 import { platform } from 'node:os';
 import { dirname, join } from 'node:path';
 import { loadManifest, saveManifest } from './update-checker.js';
-import { RETICLE_NPM_PACKAGE, SERVER_VERSION } from '../version/server-version.js';
+import { RETICLE_NPM_PACKAGE, SERVER_VERSION } from '../version/identity/server-version.js';
 import { log } from '../../log.js';
 import { TelemetryEventKind } from '@reticlehq/core/telemetry';
 import { getTelemetry } from '../../telemetry/telemetry.js';

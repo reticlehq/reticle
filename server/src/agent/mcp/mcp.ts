@@ -39,7 +39,7 @@ export const CALL_TOOL_METHOD = 'tools/call';
  */
 const SDK_SHAPE_MISSING = 'sdk_internal_missing';
 import { log } from '../../log.js';
-import { SERVER_VERSION } from '../../command/version/server-version.js';
+import { SERVER_VERSION } from '../../command/version/identity/server-version.js';
 import { setMcpClientNameHook } from '../../telemetry/feedback-context.js';
 import { getSessionMetrics } from '../../telemetry/session-metrics.js';
 import { parsePredicate } from '@reticlehq/engine/question/predicate-parse.js';

@@ -8,7 +8,7 @@
  */
 import type { SessionInfo } from './connection/session/session-info.js';
 import { CONTRACT_FINGERPRINT } from '@reticlehq/core';
-import { SERVER_VERSION } from './command/version/server-version.js';
+import { SERVER_VERSION } from './command/version/identity/server-version.js';
 
 interface StatusPayload {
   running: true;

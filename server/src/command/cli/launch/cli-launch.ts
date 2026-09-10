@@ -4,7 +4,7 @@ import { spawn } from 'node:child_process';
 import { isOpaqueOrigin, LOOPBACK_HOST, STATUS_PATH } from '@reticlehq/core';
 import { daemonFix, describeSkew } from '../../version/version-skew.js';
 import { CONTRACT_FINGERPRINT } from '@reticlehq/core';
-import { SERVER_VERSION } from '../../version/server-version.js';
+import { SERVER_VERSION } from '../../version/identity/server-version.js';
 import { log } from '../../../log.js';
 import { loopbackAgent } from '../../../loopback-agent.js';
 

@@ -48,7 +48,7 @@ import {
   type Verification,
   type VersionChange,
 } from '@reticlehq/core/telemetry';
-import { SERVER_VERSION } from '../command/version/server-version.js';
+import { SERVER_VERSION } from '../command/version/identity/server-version.js';
 
 const RETICLE_DIR = join(homedir(), '.reticle');
 const ID_FILE = join(RETICLE_DIR, 'telemetry-id');

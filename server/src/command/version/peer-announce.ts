@@ -12,7 +12,7 @@
  * = a build that predates the field).
  */
 import { CONTRACT_FINGERPRINT } from '@reticlehq/core';
-import { SERVER_VERSION } from './server-version.js';
+import { SERVER_VERSION } from './identity/server-version.js';
 import { daemonFix, describeSkew, SkewPair } from './version-skew.js';
 import { noteVersionSkew } from './version-nudge.js';
 

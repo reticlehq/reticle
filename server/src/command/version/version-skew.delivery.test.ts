@@ -106,7 +106,7 @@ describe('a skewed page is reported on the next tool result', () => {
 
   it('says nothing at all when the page agrees with this build', async () => {
     const { CONTRACT_FINGERPRINT } = await import('@reticlehq/core');
-    const { SERVER_VERSION } = await import('./server-version.js');
+    const { SERVER_VERSION } = await import('./identity/server-version.js');
     await connect({
       sessionId: 'in-sync',
       version: SERVER_VERSION,

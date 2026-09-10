@@ -31,7 +31,7 @@ import { sessionReplacedReason } from '../session/session-replaced.js';
 import { describeSkew, sdkFix, SkewPair } from '../../command/version/version-skew.js';
 import { noteVersionSkew } from '../../command/version/version-nudge.js';
 import { protocolSkewReason } from './protocol-skew.js';
-import { SERVER_VERSION } from '../../command/version/server-version.js';
+import { SERVER_VERSION } from '../../command/version/identity/server-version.js';
 
 /**
  * Take the mutable half of a session's identity from a repeat HELLO.

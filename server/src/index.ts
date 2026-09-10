@@ -41,7 +41,7 @@ import { reportAppInstrumented } from './telemetry/app-instrumented.js';
 import { resolveBridgeSecurityWithAutoToken } from './connection/bridge/bridge-security.js';
 import { Bridge } from './connection/bridge/bridge.js';
 import { sdkFixForDirectory } from './command/version/sdk-fix.js';
-import { SERVER_VERSION } from './command/version/server-version.js';
+import { SERVER_VERSION } from './command/version/identity/server-version.js';
 import { BaselineStore } from './features/project/baselines.js';
 import { RecordingStore } from './features/flows/recording/recordings.js';
 import { initImpact } from './features/impact/impact-recorder.js';

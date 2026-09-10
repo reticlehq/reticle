@@ -20,7 +20,7 @@ import { SseFrameParser } from './sse-frame-parser.js';
 export { SseFrameParser, type SseFrame } from './sse-frame-parser.js';
 export { probeDaemon, waitForDaemon } from './proxy-daemon-probe.js';
 import { probeDaemon } from './proxy-daemon-probe.js';
-import { SERVER_VERSION } from '../../command/version/server-version.js';
+import { SERVER_VERSION } from '../../command/version/identity/server-version.js';
 import { buildServerInstructions } from './server-instructions.js';
 import { hasProjectConnectedBefore } from '../../connection/session/recall/connection-memory.js';
 import { reticleStateHome } from '../../command/daemon/daemon.js';

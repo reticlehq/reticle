@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { RETICLE_NPM_PACKAGE, SERVER_VERSION } from './server-version.js';
+import { RETICLE_NPM_PACKAGE, SERVER_VERSION } from './identity/server-version.js';
 
 /**
  * The version we report has to be a real one.

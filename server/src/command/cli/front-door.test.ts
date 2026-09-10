@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { SERVER_VERSION } from '../version/server-version.js';
+import { SERVER_VERSION } from '../version/identity/server-version.js';
 import { REPO_ROOT } from '../../repo-root.js';
 
 /**

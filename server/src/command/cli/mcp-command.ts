@@ -33,7 +33,7 @@ import { fetchStatus } from './launch/cli-launch.js';
 import { migrateApprovals } from '../setup/approval-migration.js';
 import { ReticleEnv } from '@reticlehq/core';
 import { agentIo } from '../setup/agent-io.js';
-import { SERVER_VERSION } from '../version/server-version.js';
+import { SERVER_VERSION } from '../version/identity/server-version.js';
 import { homedir } from 'node:os';
 import type { PlatformPaths } from '../setup/agent-configs.js';
 

@@ -9,7 +9,7 @@ import { checkForUpdate } from '../update/update-checker.js';
 import { updateTarget } from '../update/update-nudge.js';
 import { applyUpdate, rollback } from '../update/updater.js';
 import { refreshAgentRules, detectPackageManager, buildNodeIo, SILENT_HOST } from '@reticlehq/init';
-import { SERVER_VERSION } from '../version/server-version.js';
+import { SERVER_VERSION } from '../version/identity/server-version.js';
 import { log } from '../../log.js';
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';

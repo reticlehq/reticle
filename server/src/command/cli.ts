@@ -45,7 +45,7 @@ import { handleUpdate, handleRollback } from './cli/cli-update-commands.js';
 import { startDaemon, RETICLE_VERIFY_DEFAULT_PORT } from '../index.js';
 import { verifyEndpointMismatch } from '../status-payload.js';
 import { isCloudCommand, runCloudCommand } from './cli/cloud-cli.js';
-import { SERVER_VERSION } from './version/server-version.js';
+import { SERVER_VERSION } from './version/identity/server-version.js';
 import { log } from '../log.js';
 import {
   readPid,

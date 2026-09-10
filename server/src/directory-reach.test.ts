@@ -138,7 +138,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
    * `mcp -> cli`, `setup -> cli` and `terminal -> cli` are gone. None of them wanted the
    * command-line surface; each wanted to start a process. Mutual pairs 29 -> 27.
    */
-  launch: ['version'],
+  launch: ['identity', 'version'],
   /**
    * Where `.reticle/` is for a given project, and the id derived from it.
    *
@@ -153,6 +153,14 @@ const REACHES_FOR: Record<string, readonly string[]> = {
    * command-line; they wanted to know where the configuration is.
    */
   config: ['ports'],
+  /**
+   * What version this daemon is, as a fact rather than as a comparison.
+   *
+   * `version/` is about SKEW -- is the page's build the same as ours, and what to say when it is
+   * not. Six directories reached it only to learn our own version number, which is not a
+   * comparison at all. Freed `command -> version`, `telemetry -> version` and `update -> version`.
+   */
+  identity: [],
   /**
    * Who is attached to a session, and who may drive it. Reaches for NOTHING -- not even its own
    * parent -- which is the strongest form a group can take: `session` needs it, and it needs
@@ -191,6 +199,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   /** What a human wrote on a step, and where they pointed when they wrote it. */
   'annotate-notes': [],
   bridge: [
+    'identity',
     'fs',
     'recording',
     'flows',
@@ -203,6 +212,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   ],
   capsule: ['dir', 'fs'],
   cli: [
+    'identity',
     'launch',
     'fs',
     'recall',
@@ -226,6 +236,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   ],
   cloud: ['fs', 'cli', 'intent'],
   command: [
+    'identity',
     'launch',
     'fs',
     'recall',
@@ -239,7 +250,6 @@ const REACHES_FOR: Record<string, readonly string[]> = {
     'setup',
     'telemetry',
     'update',
-    'version',
   ],
   crawl: ['project', 'session', 'tools'],
   daemon: ['telemetry'],
@@ -267,7 +277,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   intent: ['dir', 'fs', 'project', 'tools'],
   journal: ['dir', 'fs', 'project', 'runs'],
   license: ['config'],
-  mcp: ['launch', 'recall', 'ports', 'daemon', 'telemetry', 'tools', 'version'],
+  mcp: ['identity', 'launch', 'recall', 'ports', 'daemon', 'telemetry', 'tools', 'version'],
   memory: ['fs', 'cloud', 'project', 'tools'],
   pool: ['doctor', 'input', 'telemetry'],
   project: ['config', 'dir', 'fs', 'cloud', 'flows', 'runs', 'tools'],
@@ -290,6 +300,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   ],
   setup: ['launch', 'bringup', 'terminal', 'bridge', 'daemon', 'mcp', 'telemetry'],
   telemetry: [
+    'identity',
     'recall',
     'ports',
     'cli',
@@ -299,7 +310,6 @@ const REACHES_FOR: Record<string, readonly string[]> = {
     'session',
     'tools',
     'update',
-    'version',
   ],
   tools: [
     'dir',
@@ -332,8 +342,8 @@ const REACHES_FOR: Record<string, readonly string[]> = {
     'version',
     'visual',
   ],
-  update: ['project', 'telemetry', 'version'],
-  version: ['project', 'tools'],
+  update: ['identity', 'project', 'telemetry'],
+  version: ['identity', 'project', 'tools'],
   visual: ['dir', 'fs', 'input', 'tools'],
 };
 

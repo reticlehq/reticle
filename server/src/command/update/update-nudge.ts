@@ -17,7 +17,7 @@
  * decision stays with the people whose machine it is.
  */
 import { checkForUpdate, loadManifest } from './update-checker.js';
-import { SERVER_VERSION } from '../version/server-version.js';
+import { SERVER_VERSION } from '../version/identity/server-version.js';
 import { log } from '../../log.js';
 import { creditNudge } from './nudge-credit.js';
 

@@ -11,7 +11,7 @@ import { hasProjectConnectedBefore } from '../../connection/session/recall/conne
 import { sessionsLine, type SessionsLine } from './doctor-sessions-line.js';
 import { captureLookup, describeForeignHolder, findPortHolder } from './ports/port-holder.js';
 import { chromiumHint, probeChromium } from './doctor/chromium-hint.js';
-import { SERVER_VERSION } from '../version/server-version.js';
+import { SERVER_VERSION } from '../version/identity/server-version.js';
 import { CONTRACT_FINGERPRINT } from '@reticlehq/core';
 import { diagnoseDesktop, isDesktopProject, diagnoseWebCsp } from '@reticlehq/init';
 import {
