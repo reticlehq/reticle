@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { install, connect, reticle } from './index.js';
+import { install, connect, reticle } from '../index.js';
 
 /**
  * `@reticlehq/core` is the wire contract, not the browser SDK — but its name reads like the thing you

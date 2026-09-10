@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { CONTRACT_FINGERPRINT } from './contract-fingerprint.js';
+import { CONTRACT_FINGERPRINT } from './identity/contract-fingerprint.js';
 import { execFileSync } from 'node:child_process';
 
 /**

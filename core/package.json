@@ -15,8 +15,8 @@
       "default": "./dist/telemetry-entry.js"
     },
     "./artifacts": {
-      "types": "./dist/artifacts-entry.d.ts",
-      "default": "./dist/artifacts-entry.js"
+      "types": "./dist/artifacts/artifacts-entry.d.ts",
+      "default": "./dist/artifacts/artifacts-entry.js"
     },
     "./schema/*.json": "./dist/schema/*.json",
     "./desktop-contract": {

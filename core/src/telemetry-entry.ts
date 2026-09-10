@@ -8,7 +8,7 @@
  * Every name below is ALSO exported from the root entry point, which stays as it was.
  */
 export * from './telemetry.js';
-export * from './no-session-reason.js';
+export * from './words/no-session-reason.js';
 export * from './telemetry-refusal.js';
 export * from './telemetry-session.js';
 export * from './telemetry-license.js';

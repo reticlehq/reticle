@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { TRANSPORT_LIMITS } from './constants.js';
-import { Verified } from './verified-constants.js';
+import { TRANSPORT_LIMITS } from '../wire/constants.js';
+import { Verified } from '../verdict/verified-constants.js';
 
 /**
  * The durable causal journal. Each session gets an append-only pair on disk:

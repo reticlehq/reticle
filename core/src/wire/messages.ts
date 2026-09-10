@@ -8,8 +8,8 @@ import {
 } from './constants.js';
 import { HumanControlKind, MarkAnchorStrategy } from './session-constants.js';
 import { MAX_WIRE_REDACT_KEYS, MAX_WIRE_REDACT_KEY_LENGTH } from './redaction.js';
-import { DOCUMENT_ID_LENGTH } from './document-identity.js';
-import { NO_EDITS_OBSERVED } from './edit-epoch.js';
+import { DOCUMENT_ID_LENGTH } from '../identity/document-identity.js';
+import { NO_EDITS_OBSERVED } from '../identity/edit-epoch.js';
 
 const sessionIdSchema = z.string().min(1).max(TRANSPORT_LIMITS.MAX_SESSION_ID_LENGTH);
 const refSchema = z.string().max(TRANSPORT_LIMITS.MAX_REF_LENGTH);

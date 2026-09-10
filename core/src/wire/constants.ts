@@ -364,7 +364,7 @@ export const ContractReadError = {
 export type ContractReadError = (typeof ContractReadError)[keyof typeof ContractReadError];
 
 /** On-disk artifact constants (project/flow/replay/recorder/heal/annotation) live here. */
-export * from './flow-constants.js';
+export * from '../artifacts/flow-constants.js';
 
 /** Bounds for the per-session ring buffer (see plan/02-architecture.md). */
 export const RING_BUFFER_DEFAULTS = {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { capDepth, selectPath, projectComponentState } from './state-select.js';
-import { toToon, resultToToon } from './toon.js';
+import { capDepth, selectPath, projectComponentState } from './wire/state-select.js';
+import { toToon, resultToToon } from './wire/toon.js';
 
 /**
  * Conformance half of the lossy-transform invariant, for the transforms that live in core.

@@ -6,7 +6,7 @@ import {
   FLOW_FILE_VERSION,
   type HealStatus,
   type ReplayStatus,
-} from './constants.js';
+} from '../wire/constants.js';
 
 /**
  * The MCP tool names that can appear as a recorded flow step's `tool`. These are the ONLY tool names

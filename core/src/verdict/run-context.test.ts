@@ -6,7 +6,7 @@ import {
   foldProven,
   remainingFor,
 } from './run-context.js';
-import { NO_EDITS_OBSERVED } from './edit-epoch.js';
+import { NO_EDITS_OBSERVED } from '../identity/edit-epoch.js';
 import { Verified } from './verified-constants.js';
 import { IntentState, type Intent } from './intent.js';
 

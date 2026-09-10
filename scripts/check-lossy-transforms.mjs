@@ -94,7 +94,7 @@ export const READ_PATH = Object.freeze({
       're-exported from @reticlehq/core — replaces a high-confidence secret shape in place with REDACTED_VALUE, so the returned text carries an in-band sentinel over any redacted span',
     ],
   },
-  'core/src/state-select.ts': {
+  'core/src/wire/state-select.ts': {
     PathSelection: [Declaration.NONE, 'the selection result type'],
     selectPath: [
       Declaration.REPORT,
@@ -175,7 +175,7 @@ export const READ_PATH = Object.freeze({
       'a response whose headers() rejects is dropped with nothing said. It rejects when the page or CDP session is closing, which is exactly when responses race teardown, and the alternative on the stdio start() path is an unhandled rejection that takes down the MCP server. A real gap: a drive that navigates away mid-flight loses those details and the window does not say so',
     ],
   },
-  'core/src/toon.ts': {
+  'core/src/wire/toon.ts': {
     ToonElement: [Declaration.NONE, 'type'],
     toToon: [
       Declaration.MARKER,

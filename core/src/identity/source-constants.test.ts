@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import * as constants from './source-constants.js';
-import { renderSourceConstants } from '../scripts/gen-source-constants.mjs';
+import { renderSourceConstants } from '../../scripts/gen-source-constants.mjs';
 
 describe('source constants generation', () => {
   it('renders every exported constant into the CommonJS view', () => {

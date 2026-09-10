@@ -10,11 +10,11 @@
  * exists so a Node-side importer can say which half of core it depends on, and so
  * `core-boundary.test.ts` in @reticlehq/browser can fail when the DOM side reaches for one of them.
  */
-export * from './daemon-registry.js';
-export * from './dev-server-registry.js';
-export * from './project-registry.js';
-export * from './intent.js';
-export * from './run-context.js';
-export * from './instrumentation-gap.js';
-export * from './upgrade.js';
+export * from '../registry/daemon-registry.js';
+export * from '../registry/dev-server-registry.js';
+export * from '../registry/project-registry.js';
+export * from '../verdict/intent.js';
+export * from '../verdict/run-context.js';
+export * from '../verdict/instrumentation-gap.js';
+export * from '../words/upgrade.js';
 export * from './journal.js';

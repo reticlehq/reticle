@@ -7,7 +7,7 @@ import {
   flowExpectHasConsequence,
   flowExpectIsPresenceOnly,
 } from './consequence.js';
-import type { FlowExpect } from './flow-types.js';
+import type { FlowExpect } from '../artifacts/flow-types.js';
 
 describe('consequence classification (the moat rule, single source)', () => {
   it('signal/net/state are consequences; element/text are presence', () => {

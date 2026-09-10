@@ -23,7 +23,7 @@ import {
   SessionSummarySchema,
 } from './telemetry-session.js';
 import { BrowserBrand, FeedbackSchema } from './telemetry-feedback.js';
-import { CaptureLoss, VerifiedReason } from './verified-constants.js';
+import { CaptureLoss, VerifiedReason } from './verdict/verified-constants.js';
 import { IdentitySchema } from './telemetry-feedback.js';
 import { LicenseActivation } from './telemetry-license.js';
 

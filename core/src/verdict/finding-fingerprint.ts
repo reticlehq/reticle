@@ -6,7 +6,7 @@
  * `projectId`: hash the identifying bits, send only the hash, let the analytics side group by it.
  */
 
-import { fnv1a } from './contract-fingerprint.js';
+import { fnv1a } from '../identity/contract-fingerprint.js';
 
 export interface FindingIdentity {
   /** The classified kind from Reticle's findings vocabulary (`signal-contradicted`, `console-error`, …). */

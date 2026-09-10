@@ -42,7 +42,7 @@ const REPO = REPO_ROOT;
  * This file is where the notices live, it is 100% user-facing prose, and it is where the miss
  * happened. Widening is a follow-up that needs the exemption list built first.
  */
-const PROSE_FILES = [join(REPO, 'core', 'src', 'notices.ts')];
+const PROSE_FILES = [join(REPO, 'core', 'src', 'words', 'notices.ts')];
 
 /** Every `reticle_*` token inside a string literal — not comments, which nobody receives. */
 const STRING_LITERAL =

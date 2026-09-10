@@ -34,10 +34,10 @@ import { REPO_ROOT } from './repo-root.js';
  * moving, and a rename is as much a change as a renumber.
  */
 const PINNED_VERSIONS: Record<string, string> = {
-  'core/src/flow-types.ts': 'FLOW_FILE_VERSION',
-  'core/src/intent.ts': 'INTENT_FILE_VERSION',
-  'core/src/project-registry.ts': '1',
-  'core/src/types.ts': 'CONTRACT_FILE_VERSION,PROJECT_FILE_VERSION',
+  'core/src/artifacts/flow-types.ts': 'FLOW_FILE_VERSION',
+  'core/src/verdict/intent.ts': 'INTENT_FILE_VERSION',
+  'core/src/registry/project-registry.ts': '1',
+  'core/src/wire/types.ts': 'CONTRACT_FILE_VERSION,PROJECT_FILE_VERSION',
   'server/src/agent/capsule/capsule-store.ts': 'CAPSULE_VERSION',
   'server/src/features/flows/assertion-tiers-store.ts': '1',
   'server/src/features/flows/flake.ts': '1',

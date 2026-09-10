@@ -1,4 +1,4 @@
-import { FlowStepTool } from './flow-types.js';
+import { FlowStepTool } from '../artifacts/flow-types.js';
 
 /**
  * The names an agent calls Reticle by.

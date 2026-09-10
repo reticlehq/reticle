@@ -16,7 +16,7 @@
  * and a forgotten bump is silent skew — the failure this exists to end.
  */
 
-import { ActionType, EventType, MessageKind, ReticleCommand } from './constants.js';
+import { ActionType, EventType, MessageKind, ReticleCommand } from '../wire/constants.js';
 
 /**
  * FNV-1a, 32-bit. Chosen over a crypto hash because this runs in the PAGE: `crypto.subtle` is async

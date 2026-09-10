@@ -40,8 +40,8 @@
  * not a prediction.
  */
 
-import { isSameDocument } from './document-identity.js';
-import { isSameEditEpoch } from './edit-epoch.js';
+import { isSameDocument } from '../identity/document-identity.js';
+import { isSameEditEpoch } from '../identity/edit-epoch.js';
 import { IntentState, type Intent } from './intent.js';
 import type { Verified } from './verified-constants.js';
 

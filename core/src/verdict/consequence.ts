@@ -1,4 +1,4 @@
-import type { FlowExpect } from './flow-types.js';
+import type { FlowExpect } from '../artifacts/flow-types.js';
 
 /**
  * The product thesis, in one place: a verification "kind" is either a CONSEQUENCE (the app provably

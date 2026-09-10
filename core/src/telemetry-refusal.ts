@@ -8,7 +8,7 @@
  */
 
 import { z } from 'zod';
-import { NoSessionReason } from './no-session-reason.js';
+import { NoSessionReason } from './words/no-session-reason.js';
 
 /**
  * WHY a tool could not do what was asked.

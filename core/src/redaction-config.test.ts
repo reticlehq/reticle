@@ -6,7 +6,7 @@ import {
   resetActiveRedactionPolicy,
   setActiveRedactionPolicy,
   wireRedactionKeys,
-} from './redaction.js';
+} from './wire/redaction.js';
 
 afterEach(() => {
   resetActiveRedactionPolicy();

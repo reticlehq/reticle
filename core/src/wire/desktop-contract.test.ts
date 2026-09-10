@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { DESKTOP_CONTRACT } from './desktop-contract.js';
-import { renderDesktopContract } from '../scripts/gen-desktop-contract.mjs';
+import { renderDesktopContract } from '../../scripts/gen-desktop-contract.mjs';
 import { execFileSync } from 'node:child_process';
 
 /**

@@ -1,6 +1,6 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
@@ -24,7 +24,10 @@ const REPO_ROOT = execFileSync('git', ['rev-parse', '--show-toplevel'], {
   encoding: 'utf8',
 }).trim();
 const CORE_SRC = join(REPO_ROOT, 'core', 'src');
-const ARTIFACTS_ENTRY = 'artifacts-entry.ts';
+// The entry, and the directory its re-exports are relative to. Resolving against that directory
+// rather than against the top of `core/src` is what keeps this working now that core's modules are
+// grouped: the entry says `./journal.js`, and where that lands depends on where the entry itself is.
+const ARTIFACTS_ENTRY = join('artifacts', 'artifacts-entry.ts');
 const CORE_SPECIFIER = '@reticlehq/core';
 const TS_EXTENSION = '.ts';
 const TEST_SUFFIX = '.test.ts';
@@ -45,7 +48,8 @@ function artifactsGroupNames(): ReadonlySet<string> {
   const names = new Set<string>();
   for (const [, moduleName] of entry.matchAll(RE_ENTRY_MODULE)) {
     if (moduleName === undefined) continue;
-    const source = readFileSync(join(CORE_SRC, `${moduleName}${TS_EXTENSION}`), 'utf8');
+    const beside = join(CORE_SRC, dirname(ARTIFACTS_ENTRY));
+    const source = readFileSync(join(beside, `${moduleName}${TS_EXTENSION}`), 'utf8');
     for (const [, exported] of source.matchAll(RE_EXPORTED_NAME)) {
       if (exported !== undefined) names.add(exported);
     }

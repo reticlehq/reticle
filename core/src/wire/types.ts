@@ -1,4 +1,4 @@
-import type { Ref } from './brand.js';
+import type { Ref } from '../identity/brand.js';
 import { z } from 'zod';
 import {
   AnnotationKind,
@@ -10,9 +10,9 @@ import {
   RunKind,
   RunStatus,
 } from './constants.js';
-import { PROJECT_FILE_VERSION } from './flow-constants.js';
-import { RiskSurface } from './verification-run.js';
-import type { FlowExpect } from './flow-types.js';
+import { PROJECT_FILE_VERSION } from '../artifacts/flow-constants.js';
+import { RiskSurface } from '../verdict/verification-run.js';
+import type { FlowExpect } from '../artifacts/flow-types.js';
 
 /**
  * A query describing which element(s) to find, Testing-Library style.
