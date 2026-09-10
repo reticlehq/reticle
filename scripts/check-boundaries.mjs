@@ -62,6 +62,9 @@ export const SIDE = Object.freeze({
   '@reticlehq/electron': 'node',
   // Isomorphic foundation — imported by every side, imports none of them.
   '@reticlehq/core': 'iso',
+  // The conformance suite. Isomorphic and dependency-free: it describes behaviours to plant and
+  // scores what came back, and does neither in a browser nor a daemon.
+  '@reticlehq/conformance': 'iso',
   // The rules that decide a verdict. Isomorphic: they read what happened and answer a question about
   // it, which needs neither a page nor a socket. That is the whole reason they can be lifted out of
   // the daemon and used on their own.

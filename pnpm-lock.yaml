@@ -671,6 +671,8 @@ importers:
         specifier: ^8.2.1
         version: 8.2.1(@types/node@26.4.0)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0)
 
+  conformance: {}
+
   core:
     dependencies:
       '@reticlehq/openreality':

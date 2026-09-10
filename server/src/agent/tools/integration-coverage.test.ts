@@ -130,6 +130,9 @@ describe('every shipped integration is covered by an app AND a gate', () => {
       'dom',
       'server',
       'spec-runner',
+      // The suite that scores an implementation of the specification. It teaches Reticle nothing
+      // about anybody's framework, so there is no app it would be proven by.
+      'conformance',
       // The lint rule we ship. Its directory is `eslint`, under `adapters/lint/`.
       'eslint',
       // The project scaffolder. It is what WIRES an integration, so every scaffold the install gate

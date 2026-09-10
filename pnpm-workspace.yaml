@@ -11,6 +11,8 @@ packages:
   - 'init'
   # The spec runner and matchers a project uses in its own test suite.
   - 'spec-runner'
+  # The suite that says whether an implementation of the specification behaves like one.
+  - 'conformance'
   # Adapters teach Reticle about one framework, build tool, or kind of environment. Grouped by which
   # of those they are, so somebody writing their own can see the shape at a glance.
   - 'adapters/*/*'
