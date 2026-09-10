@@ -22,7 +22,7 @@
 
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
-import { RETICLE_CONFIG_BASENAME } from './cli-port.js';
+import { RETICLE_CONFIG_BASENAME } from './ports/cli-port.js';
 
 /** How far up to walk. Matches the existing config search so the two cannot disagree. */
 const MAX_UP_LEVELS = 6;

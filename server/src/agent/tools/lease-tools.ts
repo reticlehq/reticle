@@ -13,7 +13,7 @@
 import { z } from 'zod';
 import { leaseNotConnectedHint, type LeaseEvidence } from './lease-hint.js';
 import { probeSdkMarker } from './sdk-marker-probe.js';
-import { readProjectFramework, readProjectId } from '../../command/cli/cli-port.js';
+import { readProjectFramework, readProjectId } from '../../command/cli/ports/cli-port.js';
 import { hasConnectedBefore } from '../../connection/session/connection-memory.js';
 import {
   AGENT_DRIVING_ELSEWHERE,

@@ -22,8 +22,8 @@
 import { NoSessionReason } from '@reticlehq/core/telemetry';
 
 import { leaseCaveat, type LeaseBrowserState } from './presence/lease-availability.js';
-import { DEV_SERVER_PORTS } from '../../command/cli/cli-port.js';
-import { siblingListenerNote } from '../../command/cli/sibling-ports.js';
+import { DEV_SERVER_PORTS } from '../../command/cli/ports/cli-port.js';
+import { siblingListenerNote } from '../../command/cli/ports/sibling-ports.js';
 import { STALL_AFTER_MS } from './stall-clock.js';
 import { pageTornDownWhileOn } from '@reticlehq/engine/evidence/page-teardown.js';
 

@@ -8,7 +8,7 @@
 
 import { GateExit } from './gate-exit.js';
 import { gateHookMessage, GATE_SKIP_ENV } from './gate-hook-message.js';
-import { readProjectId } from './cli-port.js';
+import { readProjectId } from './ports/cli-port.js';
 import { changedFilesSince, type ChangedFiles } from '../../features/flows/git-changed.js';
 import { join } from 'node:path';
 import { ReticleDir, RunFlowStatus } from '@reticlehq/core';

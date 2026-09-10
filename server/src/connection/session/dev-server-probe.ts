@@ -11,7 +11,7 @@
  */
 
 import { request } from 'node:http';
-import { DEV_SERVER_PORTS } from '../../command/cli/cli-port.js';
+import { DEV_SERVER_PORTS } from '../../command/cli/ports/cli-port.js';
 import { looksLikeDevServer } from './looks-like-dev-server.js';
 
 /**

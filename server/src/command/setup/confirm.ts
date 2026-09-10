@@ -33,7 +33,7 @@ import type { DevServerEntry, InitOutcome } from '@reticlehq/core';
 import { fetchStatus, summarizeStatus } from '../cli/cli-launch.js';
 import { readDevServers } from '../daemon/dev-servers.js';
 import { devServersForProject } from '@reticlehq/core/artifacts';
-import { readProjectId } from '../cli/cli-port.js';
+import { readProjectId } from '../cli/ports/cli-port.js';
 import { reticleStateHome } from '../daemon/daemon.js';
 import { reportInitOutcome } from '../../telemetry/init-telemetry.js';
 

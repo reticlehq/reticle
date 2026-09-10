@@ -13,7 +13,7 @@ import { probePresence, describePresence } from '../daemon/port-presence.js';
 import { probeDaemon } from '../../agent/mcp/mcp-proxy.js';
 import { readPid } from '../daemon/daemon.js';
 import { fetchStatus } from './cli-launch.js';
-import { captureLookup, findPortHolder } from './port-holder.js';
+import { captureLookup, findPortHolder } from './ports/port-holder.js';
 import {
   DriveMode,
   decideDriveMode,

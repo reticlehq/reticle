@@ -94,7 +94,7 @@ import {
   devServerPortWarning,
   readProjectPort,
   readProjectId,
-} from './cli/cli-port.js';
+} from './cli/ports/cli-port.js';
 import type { StartOptions } from '../index.js';
 
 import { DAEMON_INNER_COMMAND, PORT_FLAG, parseCliArgs, CLI_USAGE } from './cli/cli-parse.js';

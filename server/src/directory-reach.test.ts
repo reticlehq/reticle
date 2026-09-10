@@ -32,6 +32,17 @@ import { REPO_ROOT } from './repo-root.js';
 
 const SERVER_SRC = join(REPO_ROOT, 'server', 'src');
 
+/** Every directory under `src` that holds a source file, as a repo-relative path. */
+function directories(): string[] {
+  const files = execFileSync('git', ['ls-files', 'src'], {
+    cwd: join(SERVER_SRC, '..'),
+    encoding: 'utf8',
+  })
+    .split('\n')
+    .filter((f) => f.endsWith('.ts') && !f.includes('.test.'));
+  return [...new Set(files.map((f) => posix.dirname(f)))].filter((d) => 'src' !== d);
+}
+
 /** The directory each import actually lands in, for every file that has neighbours. */
 function reaches(): Map<string, Set<string>> {
   const files = execFileSync('git', ['ls-files', 'src'], {
@@ -119,9 +130,18 @@ const REACHES_FOR: Record<string, readonly string[]> = {
    * permanently one-way.
    */
   outcome: [],
+  /**
+   * Which port a daemon binds, who already holds one, and which siblings are up.
+   *
+   * Seven directories reach for it, which is the argument for its existing: a question that many
+   * parts of a program ask is a thing, and it was seven files in the middle of the CLI. It
+   * reaches for nothing itself.
+   */
+  ports: [],
   bridge: ['flows', 'impact', 'project', 'session', 'telemetry', 'tools', 'version'],
   capsule: ['project'],
   cli: [
+    'ports',
     'outcome',
     'bridge',
     'capsule',
@@ -139,6 +159,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   ],
   cloud: ['cli', 'intent', 'project'],
   command: [
+    'ports',
     'cli',
     'daemon',
     'flows',
@@ -173,12 +194,13 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   intent: ['project', 'tools'],
   journal: ['project', 'runs'],
   license: ['cli'],
-  mcp: ['cli', 'daemon', 'session', 'telemetry', 'tools', 'version'],
+  mcp: ['ports', 'cli', 'daemon', 'session', 'telemetry', 'tools', 'version'],
   memory: ['cloud', 'project', 'tools'],
   pool: ['cli', 'input', 'telemetry'],
   project: ['cli', 'cloud', 'flows', 'runs', 'tools'],
   runs: ['cloud', 'flows', 'intent', 'mcp', 'project', 'telemetry', 'tools'],
   session: [
+    'ports',
     'presence',
     'bridge',
     'cli',
@@ -190,9 +212,10 @@ const REACHES_FOR: Record<string, readonly string[]> = {
     'telemetry',
     'tools',
   ],
-  setup: ['bridge', 'cli', 'daemon', 'mcp', 'telemetry'],
-  telemetry: ['cli', 'daemon', 'license', 'mcp', 'session', 'tools', 'update', 'version'],
+  setup: ['ports', 'bridge', 'cli', 'daemon', 'mcp', 'telemetry'],
+  telemetry: ['ports', 'cli', 'daemon', 'license', 'mcp', 'session', 'tools', 'update', 'version'],
   tools: [
+    'ports',
     'read',
     'act',
     'capsule',
@@ -239,6 +262,42 @@ function mutualPairs(found: Map<string, Set<string>>): string[] {
   }
   return [...pairs].sort();
 }
+
+/**
+ * Two directories may not share a name.
+ *
+ * The reach graph identifies a directory by its BASENAME, so `command/cli/cloud` and
+ * `features/cloud` are one node to it. That is not a rounding error: reaches into one are
+ * attributed to the other, a mutual pair between them is unreportable, and the count below --
+ * the number this whole audit is steered by -- quietly measures a graph that does not exist.
+ *
+ * Found by walking into it. A grouping created a second `cloud/`, every reach test still passed,
+ * and the only symptom was that the new directory appeared to have no reaches at all: they had
+ * been credited to its namesake. A guard that can be silently defeated by naming is worse than
+ * one that is missing, because it goes on reporting a number.
+ *
+ * Keyed on the basename rather than fixed by using full paths deliberately. Full paths would make
+ * the reach list unreadable -- `agent/tools -> connection/session` twice a line -- and unique
+ * short names are worth having for their own sake. This is the price of that, made loud.
+ */
+describe('directory names in this package are unique', () => {
+  it('has no two directories sharing a basename', () => {
+    const seen = new Map<string, string[]>();
+    for (const dir of directories()) {
+      const name = dir.split('/').pop() ?? dir;
+      seen.set(name, [...(seen.get(name) ?? []), dir]);
+    }
+    const clashes = [...seen.entries()]
+      .filter(([, paths]) => paths.length > 1)
+      .map(([name, paths]) => `${name}: ${paths.join(' and ')}`);
+    expect(
+      clashes,
+      'The reach graph identifies a directory by its basename, so these are one node to it -- ' +
+        'their reaches are merged and a mutual pair between them cannot be reported. Rename one, ' +
+        'or put the files in the directory that already has the name.',
+    ).toEqual([]);
+  });
+});
 
 describe('the directories in this package know only what they are allowed to know', () => {
   it('finds the directories at all — a check over nothing passes about nothing', () => {

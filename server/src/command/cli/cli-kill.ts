@@ -23,7 +23,7 @@ import { isAlive, readPid, removePid } from '../daemon/daemon.js';
 import { probeDaemon } from '../../agent/mcp/mcp-proxy.js';
 import { log } from '../../log.js';
 import { fetchStatus } from './cli-launch.js';
-import { captureLookup, findPortHolder, type PortHolder } from './port-holder.js';
+import { captureLookup, findPortHolder, type PortHolder } from './ports/port-holder.js';
 
 /** What the plan says to do with the port. */
 export const KillAction = {

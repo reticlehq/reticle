@@ -22,7 +22,10 @@ import { REPO_ROOT } from './repo-root.js';
  * problem deserves.
  */
 
-const WALKERS = ['server/src/command/cli/cli-port.ts', 'adapters/build/vite/src/project-id.ts'];
+const WALKERS = [
+  'server/src/command/cli/ports/cli-port.ts',
+  'adapters/build/vite/src/project-id.ts',
+];
 
 /** The `.reticle.json` search depth a file declares. */
 function declaredDepth(file: string): number | undefined {

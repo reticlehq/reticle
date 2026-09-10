@@ -53,7 +53,7 @@ const DECLARED_CROSSINGS: Record<string, string> = {
     'branches on. It is DEFINED in the scaffolder because `node-io.ts` needs it and that package may ' +
     'not import this one; re-exported here so the five runtime readers are unchanged. A type-level ' +
     'constant, not a code path — nothing of the installer runs.',
-  'command/cli/cli-port.ts':
+  'command/cli/ports/cli-port.ts':
     'Re-exports the dev-server port heuristics. `existing-config.ts` diagnoses a `.reticle.json` ' +
     'whose `port` is the app’s own dev-server port, so the set is defined there; the runtime ' +
     'readers (the dev-server probe, the no-session diagnosis) read it through here. Data, not a code ' +

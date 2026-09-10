@@ -23,7 +23,7 @@ import {
   readProjectFramework,
   readProjectId,
   readProjectPort,
-} from '../../command/cli/cli-port.js';
+} from '../../command/cli/ports/cli-port.js';
 import { discoverProjectConfigs } from '../../command/cli/config-discovery.js';
 import { hasProjectConnectedBefore, rememberConnected } from './connection-memory.js';
 import { isAlive, reticleStateHome } from '../../command/daemon/daemon.js';
@@ -34,7 +34,7 @@ import {
 import { stallUptime } from './stall-clock.js';
 import type { SessionManager } from './session-manager.js';
 import { probeDaemon } from '../../agent/mcp/mcp-proxy.js';
-import { findOccupiedSiblings } from '../../command/cli/sibling-ports.js';
+import { findOccupiedSiblings } from '../../command/cli/ports/sibling-ports.js';
 import { WS_CLOSE_REASON } from '../bridge/bridge.js';
 
 /** Slow enough to be free, fast enough that a dev server started 15s ago is already reflected. */

@@ -15,7 +15,7 @@ import { join } from 'node:path';
 import { ProjectSize, ReticleDir, type ProjectProfile } from '@reticlehq/core';
 import { gitFacts } from './git-facts.js';
 import { detectStack } from './feedback-context.js';
-import { readProjectId } from '../command/cli/cli-port.js';
+import { readProjectId } from '../command/cli/ports/cli-port.js';
 
 /**
  * The feature FAMILIES, and the on-disk evidence that a project has adopted each. Named rather than

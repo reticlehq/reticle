@@ -74,7 +74,7 @@ import {
 } from './connection/session/lease-visibility.js';
 import { playwrightLauncher, resolveMaxContexts } from './connection/pool/playwright-launcher.js';
 import { LeaseReaper } from './connection/pool/lease-reaper.js';
-import { readJournalEnabled, readProjectId } from './command/cli/cli-port.js';
+import { readJournalEnabled, readProjectId } from './command/cli/ports/cli-port.js';
 import { hasProjectConnectedBefore } from './connection/session/connection-memory.js';
 import { reticleStateHome } from './command/daemon/daemon.js';
 import { probeChromium } from './command/cli/chromium-hint.js';
