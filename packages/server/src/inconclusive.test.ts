@@ -19,9 +19,9 @@
 
 import { describe, expect, it } from 'vitest';
 import { Verified } from '@reticlehq/core';
-import { decideVerified } from './verified.js';
-import { buildHonestyBlock, HonestyGrade } from './honesty.js';
-import { bugsInResult } from '../telemetry/bug-found.js';
+import { decideVerified } from '@reticlehq/engine/honesty/verified.js';
+import { buildHonestyBlock, HonestyGrade } from '@reticlehq/engine/honesty/honesty.js';
+import { bugsInResult } from './telemetry/bug-found.js';
 
 const clean = buildHonestyBlock({ grade: HonestyGrade.SIGNAL, attribution: 'window' });
 

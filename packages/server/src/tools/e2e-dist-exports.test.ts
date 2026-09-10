@@ -16,8 +16,19 @@ import { fileURLToPath } from 'node:url';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = join(HERE, '..', '..', '..', '..');
 const TELEMETRY_EVENTS_SPEC = join(REPO, 'apps', 'e2e', 'specs', 'telemetry-events-test.mjs');
-const SERVER_SRC = join(REPO, 'packages', 'server', 'src');
-const DIST_IMPORT = /const \{([^}]+)\} = await import\(`\$\{DIST\}\/([^`]+)`\)/g;
+/**
+ * Where each `dist` the spec loads from has its source.
+ *
+ * There is more than one now: the rules that decide a verdict are their own package, so the spec
+ * loads some names from the server's build and one from the engine's. A guard that knew about only
+ * the first would report a missing file for the second, which is what happened the moment the rules
+ * moved -- and it is the good failure, because the spec really was still pointing at the old place.
+ */
+const SOURCE_OF: Record<string, string> = {
+  DIST: join(REPO, 'packages', 'server', 'src'),
+  ENGINE_DIST: join(REPO, 'engine', 'src'),
+};
+const DIST_IMPORT = /const \{([^}]+)\} = await import\(`\$\{(\w+)\}\/([^`]+)`\)/g;
 const JS_SUFFIX = '.js';
 const TS_SUFFIX = '.ts';
 
@@ -33,17 +44,20 @@ function isValueExport(source: string, name: string): boolean {
   return patterns.some((p) => p.test(source));
 }
 
-function distImports(spec: string): readonly { names: readonly string[]; distPath: string }[] {
-  const found: { names: readonly string[]; distPath: string }[] = [];
+function distImports(
+  spec: string,
+): readonly { names: readonly string[]; distName: string; distPath: string }[] {
+  const found: { names: readonly string[]; distName: string; distPath: string }[] = [];
   for (const match of spec.matchAll(DIST_IMPORT)) {
     const namesRaw = match[1];
-    const distPath = match[2];
-    if (namesRaw === undefined || distPath === undefined) continue;
+    const distName = match[2];
+    const distPath = match[3];
+    if (namesRaw === undefined || distName === undefined || distPath === undefined) continue;
     const names = namesRaw
       .split(',')
       .map((n) => n.trim())
       .filter((n) => n.length > 0);
-    found.push({ names, distPath });
+    found.push({ names, distName, distPath });
   }
   return found;
 }
@@ -55,9 +69,15 @@ describe('e2e dist named imports stay exported from server source', () => {
     expect(imports.length).toBeGreaterThan(0);
 
     const missing: string[] = [];
-    for (const { names, distPath } of imports) {
+    for (const { names, distName, distPath } of imports) {
       const rel = distPath.endsWith(JS_SUFFIX) ? distPath.slice(0, -JS_SUFFIX.length) : distPath;
-      const srcPath = join(SERVER_SRC, `${rel}${TS_SUFFIX}`);
+      const sourceRoot = SOURCE_OF[distName];
+      expect(
+        sourceRoot,
+        `${distName} is loaded by the spec but this guard does not know where its source is. ` +
+          'Add it to SOURCE_OF.',
+      ).toBeDefined();
+      const srcPath = join(sourceRoot ?? '', `${rel}${TS_SUFFIX}`);
       expect(existsSync(srcPath), srcPath).toBe(true);
       const source = readFileSync(srcPath, 'utf8');
       for (const name of names) {

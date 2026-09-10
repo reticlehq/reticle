@@ -1,10 +1,10 @@
-import { bodyCaptureRemedy } from '../honesty/body-capture-remedy.js';
+import { bodyCaptureRemedy } from '@reticlehq/engine/honesty/body-capture-remedy.js';
 import { z } from 'zod';
 import { EventType, ReticleCommand, SnapshotMode, urlForMatch } from '@reticlehq/core';
 import { ReticleTool } from '@reticlehq/core';
 import { cursorSchema } from './numeric-bounds.js';
-import { reconcile, type Mismatch } from '../events/reconcile.js';
-import { salvageJson } from '../events/json-salvage.js';
+import { reconcile, type Mismatch } from '@reticlehq/engine/events/reconcile.js';
+import { salvageJson } from '@reticlehq/engine/events/json-salvage.js';
 import { withControl } from '../session/control-envelope.js';
 import { asNumber, asString } from '@reticlehq/core';
 import { type ToolDef, sessionIdShape, commandOrThrow } from './tool-kit.js';

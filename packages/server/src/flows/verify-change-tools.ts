@@ -10,7 +10,7 @@ import { workerCountSchema } from '../tools/numeric-bounds.js';
 import { loadNamedFlows, resolveChangedFiles } from '../cli/cli-flow-commands.js';
 import { affectedSavedFlows } from './flow-sources.js';
 import { FLOW_TOOLS } from './flow-tools.js';
-import { findContradictions } from '../events/contradictions.js';
+import { findContradictions } from '@reticlehq/engine/events/contradictions.js';
 import { parseControls } from '../tools/coverage-tools.js';
 import { ReticleCommand, SnapshotMode } from '@reticlehq/core';
 

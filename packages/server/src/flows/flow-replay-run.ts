@@ -16,7 +16,7 @@ import {
 } from '@reticlehq/core';
 import { haltedFrom } from './replay-halt.js';
 import { asRecord, asString } from '@reticlehq/core';
-import { routeOfEvent, routeOfUrl } from '../events/predicate-route.js';
+import { routeOfEvent, routeOfUrl } from '@reticlehq/engine/events/predicate-route.js';
 import type { ArrivalClock } from '../tools/navigate-arrival.js';
 import { carryReticleIdentity } from '../tools/lease-tools.js';
 import type { SessionManager } from '../session/session-manager.js';
@@ -30,7 +30,7 @@ import { classifyFlowAssertions } from './flow-classify.js';
 import { dischargeFlowIntent, flowIntentStatement, flowReplayVerdictId } from './flow-intent.js';
 import { IntentStore } from '../intent/intent-store.js';
 import { sessionRoot } from '../project/session-root.js';
-import { waitForPredicate } from '../events/predicate.js';
+import { waitForPredicate } from '@reticlehq/engine/events/predicate.js';
 import { computeSegments } from '../journal/rollups.js';
 import { AssertionTiersStore } from './assertion-tiers-store.js';
 import { toFlowSources } from './flow-sources.js';

@@ -41,13 +41,15 @@
 
 import { describe, expect, it } from 'vitest';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+// The same derivation the dependency-boundary guard uses, so the two cannot come to disagree about
+// which packages exist. Both went blind once by keeping their own list of directories.
+import { workspaceGlobs } from '../../../../scripts/check-boundaries.mjs';
 import { execFileSync } from 'node:child_process';
 import { dirname, join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = join(HERE, '..', '..', '..', '..');
-const PACKAGES = join(REPO, 'packages');
 
 /** This file's own name, so its example strings are not read as real reads. */
 const SELF = 'guards-are-cache-invalidated.test.ts';
@@ -68,8 +70,8 @@ function declaredInputs(task: string): string[] {
 interface Package {
   /** The npm name, which is also the turbo task prefix. */
   readonly name: string;
-  /** Directory name under `packages/`, which is what a relative escape spells. */
-  readonly directory: string;
+  /** Where the package lives, relative to the repo root: `packages/server`, `engine`, and so on. */
+  readonly path: string;
   readonly src: string;
   /**
    * The turbo task that actually RUNS this package's repo-scanning tests, and so is the task whose
@@ -86,16 +88,51 @@ interface Package {
 }
 
 /**
+ * Every directory the workspace covers, other than the local fixture apps.
+ *
+ * Read from `pnpm-workspace.yaml` rather than by looking in `packages/`. Not every package lives
+ * there any more -- the specification and the rules that decide a verdict are top-level -- and a
+ * scan that looks in one place goes on reporting success about the packages it can still see, which
+ * reads as "these are fine" when it means "these were not looked at".
+ */
+function packageDirectories(): string[] {
+  const yaml = readFileSync(join(REPO, 'pnpm-workspace.yaml'), 'utf8');
+  const out: string[] = [];
+  for (const glob of workspaceGlobs(yaml)) {
+    if (glob.startsWith('apps')) continue;
+    const [head, ...rest] = glob.split('/');
+    const here = join(REPO, head ?? '');
+    if (!existsSync(here)) continue;
+    if (0 === rest.length) {
+      out.push(head ?? '');
+      continue;
+    }
+    const children = readdirSync(here, { withFileTypes: true }).filter((e) => e.isDirectory());
+    for (const child of children) {
+      if (1 === rest.length) {
+        out.push(`${head ?? ''}/${child.name}`);
+        continue;
+      }
+      const inner = readdirSync(join(here, child.name), { withFileTypes: true });
+      for (const leaf of inner.filter((e) => e.isDirectory())) {
+        out.push(`${head ?? ''}/${child.name}/${leaf.name}`);
+      }
+    }
+  }
+  return out;
+}
+
+/**
  * Every package with a `src` and a `test:unit` script.
  *
- * Driven off the filesystem rather than a list, because a hand-maintained list of packages is the
+ * Driven off the workspace rather than a list, because a hand-maintained list of packages is the
  * same class of thing this file exists to stop: correct when written, silently short later.
  */
 function packages(): Package[] {
   const out: Package[] = [];
-  for (const directory of readdirSync(PACKAGES)) {
-    const src = join(PACKAGES, directory, 'src');
-    const manifest = join(PACKAGES, directory, 'package.json');
+  for (const path of packageDirectories()) {
+    const src = join(REPO, path, 'src');
+    const manifest = join(REPO, path, 'package.json');
     if (!existsSync(src) || !existsSync(manifest)) continue;
     const parsed = JSON.parse(readFileSync(manifest, 'utf8')) as {
       name?: string;
@@ -104,7 +141,7 @@ function packages(): Package[] {
     const name = parsed.name;
     if (undefined === name || undefined === parsed.scripts?.['test:unit']) continue;
     const half = undefined === parsed.scripts['test:guards'] ? 'test:unit' : 'test:guards';
-    out.push({ name, directory, src, task: `${name}#${half}` });
+    out.push({ name, path, src, task: `${name}#${half}` });
   }
   return out;
 }
@@ -169,7 +206,7 @@ function repoPathsRead(pkg: Package): Set<string> {
  * A package's own tree is already covered by `$TURBO_DEFAULT$`, so it is never a gap.
  */
 function isCovered(path: string, inputs: readonly string[], own: string): boolean {
-  if (path.startsWith(`packages/${own}`)) return true;
+  if (path.startsWith(own)) return true;
   const segments = (p: string): string[] => p.split('/').filter((s) => '' !== s && '**' !== s);
   const want = segments(path);
   return inputs.some((input) => {
@@ -188,7 +225,7 @@ function isCovered(path: string, inputs: readonly string[], own: string): boolea
 const reaching = packages()
   .map((pkg) => ({
     pkg,
-    reads: [...repoPathsRead(pkg)].filter((p) => !p.startsWith(`packages/${pkg.directory}`)),
+    reads: [...repoPathsRead(pkg)].filter((p) => !p.startsWith(pkg.path)),
   }))
   .filter(({ reads }) => reads.length > 0);
 
@@ -222,7 +259,7 @@ describe('cross-package guards are cache-invalidated by what they scan', () => {
 
     it('covers every repo-root path these tests actually read', () => {
       const inputs = declaredInputs(task);
-      const missing = reads.filter((path) => !isCovered(path, inputs, pkg.directory)).sort();
+      const missing = reads.filter((path) => !isCovered(path, inputs, pkg.path)).sort();
 
       expect(
         missing,
@@ -258,7 +295,7 @@ describe('the guard/unit split covers every test that reads the repo', () => {
   describe.each(split)('$name', (pkg) => {
     const listed = new Set(
       execFileSync(process.execPath, [join(REPO, 'scripts', 'guard-tests.mjs'), 'list'], {
-        cwd: join(PACKAGES, pkg.directory),
+        cwd: join(REPO, pkg.path),
         encoding: 'utf8',
       })
         .split('\n')
@@ -270,7 +307,7 @@ describe('the guard/unit split covers every test that reads the repo', () => {
       const missing = sourceFiles(pkg.src)
         .filter((file) => file.endsWith('.test.ts'))
         .filter((file) => 0 < readsRepo(file).length)
-        .map((file) => relative(join(PACKAGES, pkg.directory), file).split(sep).join('/'))
+        .map((file) => relative(join(REPO, pkg.path), file).split(sep).join('/'))
         .filter((rel) => !listed.has(rel))
         .sort();
 

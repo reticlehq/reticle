@@ -14,7 +14,7 @@
  */
 
 import { AnchorKind, PredicateKind, type FlowExpect, type FlowFile } from '@reticlehq/core';
-import type { EvalResult, Predicate } from '../events/predicate.js';
+import type { EvalResult, Predicate } from '@reticlehq/engine/events/predicate.js';
 import type { FlowReplaySession, WaitForSignal } from './flow-replay.js';
 
 /** The dynamic (LLM-output) testids whose presence is never asserted — same rule replay uses. */

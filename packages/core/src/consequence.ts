@@ -79,3 +79,23 @@ export function flowExpectHasConsequence(expect: FlowExpect | undefined): boolea
 export function flowExpectIsPresenceOnly(expect: FlowExpect | undefined): boolean {
   return expect !== undefined && expect.element !== undefined && !flowExpectHasConsequence(expect);
 }
+
+/**
+ * One thing an app can be shown to have done, named in a way both sides agree on.
+ *
+ * Two separate parts of Reticle need this exact shape. The rules that decide a verdict produce it
+ * when they read a declared consequence; the part that explains a red verdict walks it, step by
+ * step, to say which link in the chain broke. Neither one owns it, so it lives here with the rest of
+ * the shared vocabulary, and neither has to reach into the other to say the same thing.
+ *
+ * It is exactly `ConsequenceKind` spelled out, so the two can never drift apart.
+ *
+ * Examples:
+ *   { kind: ConsequenceKind.SIGNAL, name: 'cart:updated' }
+ *   { kind: ConsequenceKind.NET, urlContains: '/api/save', status: 200 }
+ *   { kind: ConsequenceKind.STATE, name: 'cart.items' }
+ */
+export type ExpectedLink =
+  | { kind: typeof ConsequenceKind.SIGNAL; name: string }
+  | { kind: typeof ConsequenceKind.NET; urlContains: string; status?: number }
+  | { kind: typeof ConsequenceKind.STATE; name: string };

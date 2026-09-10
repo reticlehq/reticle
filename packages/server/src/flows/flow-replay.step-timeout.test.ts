@@ -22,7 +22,7 @@ import {
   type ReticleEvent,
 } from '@reticlehq/core';
 import { replayFlow, type FlowReplaySession } from './flow-replay.js';
-import { waitForPredicate } from '../events/predicate.js';
+import { waitForPredicate } from '@reticlehq/engine/events/predicate.js';
 
 const SIGNAL = 'geometry:perceived';
 

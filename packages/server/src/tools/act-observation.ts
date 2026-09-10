@@ -13,7 +13,7 @@
 
 import type { Session } from '../session/session.js';
 import { awaitDocumentSuccessor, type SuccessorRegistry } from '../session/session-successor.js';
-import type { EvalResult } from '../events/predicate-eval.js';
+import type { EvalResult } from '@reticlehq/engine/events/predicate-eval.js';
 
 interface FollowSuccessor {
   sessions: SuccessorRegistry;

@@ -1,5 +1,5 @@
 import { EventType, type ReticleEvent, PredicateKind } from '@reticlehq/core';
-import { routeOfEvent } from '../events/predicate-route.js';
+import { routeOfEvent } from '@reticlehq/engine/events/predicate-route.js';
 
 /**
  * Self-generating oracles, v1. Given the window a recording captured, propose ranked mustHold

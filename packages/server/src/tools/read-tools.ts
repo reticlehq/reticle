@@ -20,12 +20,12 @@ import { replayProgram } from '../flows/replay.js';
 import { diffLines } from '../project/baselines.js';
 import { selectPath, capDepth, projectComponentState } from '../session/state-select.js';
 import { costHint } from '../session/output-budget.js';
-import { buildReactionReport, summarizeReaction } from '../events/reaction.js';
+import { buildReactionReport, summarizeReaction } from '@reticlehq/engine/events/reaction.js';
 import { asNumber, asString } from '@reticlehq/core';
 import { parseInteractive } from './tools-helpers.js';
 import { type ToolDef, sessionIdShape, commandOrThrow, snapshotTree } from './tool-kit.js';
 import { bufferEnvelope } from '../session/session-health.js';
-import { routeOfUrl } from '../events/predicate-route.js';
+import { routeOfUrl } from '@reticlehq/engine/events/predicate-route.js';
 
 /** The route part of a session URL. A host belongs to the machine, not to the journey. */
 /**

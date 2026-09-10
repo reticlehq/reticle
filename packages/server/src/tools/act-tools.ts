@@ -25,41 +25,44 @@ import {
 } from '@reticlehq/core';
 import { leanActResult, mutatedWithin } from './act-view.js';
 import { ReticleTool } from '@reticlehq/core';
-import { buildReactionReport, summarizeReaction } from '../events/reaction.js';
-import { parsePredicate } from '../events/predicate-parse.js';
-import { bodyClauseRefusal } from '../honesty/body-capture-remedy.js';
+import { buildReactionReport, summarizeReaction } from '@reticlehq/engine/events/reaction.js';
+import { parsePredicate } from '@reticlehq/engine/events/predicate-parse.js';
+import { bodyClauseRefusal } from '@reticlehq/engine/honesty/body-capture-remedy.js';
 import { causalSummary } from '../capsule/causal-summary.js';
-import { findContradictions } from '../events/contradictions.js';
-import { crashedRuleNotes } from '../events/contradiction-folds.js';
-import { gapsForAction } from '../honesty/instrumentation-gaps.js';
-import { noteSessionGaps } from '../honesty/gap-ledger.js';
-import { isChangeUndeclared } from '../honesty/undeclared-change.js';
+import { findContradictions } from '@reticlehq/engine/events/contradictions.js';
+import { crashedRuleNotes } from '@reticlehq/engine/events/contradiction-folds.js';
+import { gapsForAction } from '@reticlehq/engine/honesty/instrumentation-gaps.js';
+import { noteSessionGaps } from '@reticlehq/engine/honesty/gap-ledger.js';
+import { isChangeUndeclared } from '@reticlehq/engine/honesty/undeclared-change.js';
 import { intentDebt, openSessionIntents } from '../intent/open-intents.js';
 import {
   dischargeInlineIntent,
   inlineVerdictId,
   linkInlineIntent,
 } from '../intent/inline-intent.js';
-import { declaresState } from '../events/predicate-asks.js';
-import { isStateUnwatched } from '../honesty/blind-spots.js';
+import { declaresState } from '@reticlehq/engine/events/predicate-asks.js';
+import { isStateUnwatched } from '@reticlehq/engine/honesty/blind-spots.js';
 import {
   inFlightRequestLabels,
   repeatedRequestLabels,
   waitForInFlight,
 } from './settle-in-flight.js';
 import { waitForReaction } from './react-grace.js';
-import { decideVerified } from '../honesty/verified.js';
-import { honestyForVerdict } from '../honesty/honesty.js';
-import { declaredExpectations, declaresBodyIndependentChannel } from '../events/declared.js';
+import { decideVerified } from '@reticlehq/engine/honesty/verified.js';
+import { honestyForVerdict } from '@reticlehq/engine/honesty/honesty.js';
+import {
+  declaredExpectations,
+  declaresBodyIndependentChannel,
+} from '@reticlehq/engine/events/declared.js';
 import {
   readsDomState,
   alreadyTrueHiddenMatch as alreadyTrueHiddenMatchOf,
-} from '../honesty/already-true.js';
-import { describeWaitTarget, namedNetIsInFlight } from '../honesty/unsettled.js';
+} from '@reticlehq/engine/honesty/already-true.js';
+import { describeWaitTarget, namedNetIsInFlight } from '@reticlehq/engine/honesty/unsettled.js';
 import { saveFailedAssertCapsule } from './act-capsule.js';
 import { buildDivergenceCapsule } from '../capsule/capsule.js';
-import { predicateToExpectedLinks } from '../events/predicate-to-links.js';
-import { buildHonestyBlock } from '../honesty/honesty.js';
+import { predicateToExpectedLinks } from '@reticlehq/engine/events/predicate-to-links.js';
+import { buildHonestyBlock } from '@reticlehq/engine/honesty/honesty.js';
 import {
   absenceBlindSpotNote,
   buildCoverageStatement,
@@ -67,15 +70,15 @@ import {
   transportGapNote,
   Coverage,
   impeachesCapture,
-} from '../honesty/blind-spots.js';
-import { acceptedWriteLabels } from '../honesty/accepted-write.js';
-import { unreadWriteLabels } from '../honesty/unread-outcome.js';
+} from '@reticlehq/engine/honesty/blind-spots.js';
+import { acceptedWriteLabels } from '@reticlehq/engine/honesty/accepted-write.js';
+import { unreadWriteLabels } from '@reticlehq/engine/honesty/unread-outcome.js';
 import {
   evaluatePredicate,
   waitForPredicate,
   provenExpectedLinks,
   PredicateSchema,
-} from '../events/predicate.js';
+} from '@reticlehq/engine/events/predicate.js';
 import { healthEnvelope, refuseIfThrottled } from '../session/session-health.js';
 import {
   pausedShortCircuit,

@@ -2,7 +2,7 @@ import type { WebSocket } from 'ws';
 import type { ImpactSnapshot } from '@reticlehq/core';
 import { recordImpact } from '../impact/impact-recorder.js';
 import { LastAct } from './last-act.js';
-import { GapLedger } from '../honesty/gap-ledger.js';
+import { GapLedger } from '@reticlehq/engine/honesty/gap-ledger.js';
 import { CaptureLedger } from '../tools/feature-capture.js';
 import { commandTimeoutMessage, type PageRuntime } from './command-timeout.js';
 import { readHealthEvent, pendingNavigationMs, type SessionHealth } from './session-health.js';
@@ -37,14 +37,14 @@ import {
   type HumanControlData,
   type ReticleEvent,
 } from '@reticlehq/core';
-import { RingBuffer } from '../events/ring-buffer.js';
+import { RingBuffer } from '@reticlehq/engine/events/ring-buffer.js';
 import type { JournalReader, JournalRecorder } from '../journal/journal-recorder.js';
 import {
   filterEvents,
   mergeEventsBySeq,
   type EventQueryOptions,
 } from '../journal/journal-query.js';
-import { type AmbientCounts } from '../events/ambient.js';
+import { type AmbientCounts } from '@reticlehq/engine/events/ambient.js';
 import { ObservedState } from './observed-state.js';
 import { recordBrowserLatency, recordSdkFailure } from '../telemetry/session-metrics.js';
 import { LiveControl, type InboxMessage } from './live-control.js';

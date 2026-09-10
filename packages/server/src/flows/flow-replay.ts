@@ -1,5 +1,5 @@
 import { span } from '../trace.js';
-import { routeOfEvent } from '../events/predicate-route.js';
+import { routeOfEvent } from '@reticlehq/engine/events/predicate-route.js';
 import {
   AnchorKind,
   DriftReason,
@@ -17,7 +17,7 @@ import {
   type QueryEmptyHint,
   PredicateKind,
 } from '@reticlehq/core';
-import type { EvalResult, Predicate } from '../events/predicate.js';
+import type { EvalResult, Predicate } from '@reticlehq/engine/events/predicate.js';
 import { asRecord, asString } from '@reticlehq/core';
 import { replayActionArgs, ambiguousTestidNote, queryRefs } from './replay.js';
 import { anchorFieldName } from './flow-secret-field.js';

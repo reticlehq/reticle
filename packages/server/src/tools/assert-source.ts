@@ -1,5 +1,5 @@
-import { declaresDom } from '../events/predicate-asks.js';
-import type { Predicate } from '../events/predicate-schema.js';
+import { declaresDom } from '@reticlehq/engine/events/predicate-asks.js';
+import type { Predicate } from '@reticlehq/engine/events/predicate-schema.js';
 import type { Session } from '../session/session.js';
 
 /**

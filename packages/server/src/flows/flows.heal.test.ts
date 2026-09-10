@@ -29,7 +29,7 @@ import { ReticleTool } from '@reticlehq/core';
 import { FlowStore } from './flows.js';
 import { ProjectStore } from '../project/project-store.js';
 import { replayFlow } from './flow-replay.js';
-import { waitForPredicate } from '../events/predicate.js';
+import { waitForPredicate } from '@reticlehq/engine/events/predicate.js';
 import { AnnotationStore } from './annotation-store.js';
 import { createNodeFileSystem } from '../project/fs-port.js';
 import { BaselineStore } from '../project/baselines.js';

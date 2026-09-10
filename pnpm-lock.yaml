@@ -584,6 +584,15 @@ importers:
         specifier: ^8.2.1
         version: 8.2.1(@types/node@26.4.0)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0)
 
+  engine:
+    dependencies:
+      '@reticlehq/core':
+        specifier: workspace:*
+        version: link:../packages/core
+      zod:
+        specifier: ^3.24.1
+        version: 3.25.76
+
   openreality: {}
 
   packages/browser:
@@ -672,6 +681,9 @@ importers:
       '@reticlehq/core':
         specifier: workspace:*
         version: link:../core
+      '@reticlehq/engine':
+        specifier: workspace:*
+        version: link:../../engine
       '@reticlehq/init':
         specifier: workspace:*
         version: link:../init

@@ -25,7 +25,7 @@ import { leaseCaveat, type LeaseBrowserState } from './lease-availability.js';
 import { DEV_SERVER_PORTS } from '../cli/cli-port.js';
 import { siblingListenerNote } from '../cli/sibling-ports.js';
 import { STALL_AFTER_MS } from './stall-clock.js';
-import { pageTornDownWhileOn } from '../honesty/page-teardown.js';
+import { pageTornDownWhileOn } from '@reticlehq/engine/honesty/page-teardown.js';
 
 export interface NoSessionFacts {
   /** Whether ANY session has connected to this daemon since it booted. */

@@ -1,5 +1,5 @@
 import { EventType, PerfMetric, isDevToolingUrl, type ReticleEvent } from '@reticlehq/core';
-import { routeOfEvent } from '../events/predicate-route.js';
+import { routeOfEvent } from '@reticlehq/engine/events/predicate-route.js';
 
 /**
  * The causal summary (Tier 1) — the bounded ~50–100 token block on EVERY act, green included: what the

@@ -22,7 +22,11 @@ import {
   waitForLeasedSession,
 } from './lease-tools.js';
 import { assertVerdict } from './assert-verdict.js';
-import { evaluatePredicate, type Predicate, type PredicateSession } from '../events/predicate.js';
+import {
+  evaluatePredicate,
+  type Predicate,
+  type PredicateSession,
+} from '@reticlehq/engine/events/predicate.js';
 import type { Session } from '../session/session.js';
 import { ReticleTool } from '@reticlehq/core';
 import type { ToolDeps } from './tool-kit.js';

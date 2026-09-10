@@ -14,7 +14,7 @@
 import { z } from 'zod';
 import { ReticleTool } from '@reticlehq/core';
 import type { ToolDef, ToolDeps } from './tools.js';
-import { traceLineage } from '../events/lineage.js';
+import { traceLineage } from '@reticlehq/engine/events/lineage.js';
 import { asString } from '@reticlehq/core';
 import { cursorSchema } from './numeric-bounds.js';
 

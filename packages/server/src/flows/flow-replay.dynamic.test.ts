@@ -11,7 +11,7 @@ import {
   type FlowStep,
 } from '@reticlehq/core';
 import { replayFlow, type FlowReplaySession } from './flow-replay.js';
-import { waitForPredicate } from '../events/predicate.js';
+import { waitForPredicate } from '@reticlehq/engine/events/predicate.js';
 import { asString } from '@reticlehq/core';
 import { ReticleTool } from '@reticlehq/core';
 

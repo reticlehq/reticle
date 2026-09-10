@@ -97,7 +97,7 @@ function replayVerdictLine(result: FlowReplayResult): string {
 // Re-exported from the contract, where the names now live: a consumer importing the server should
 // not have to know that the vocabulary moved.
 export { ReticleTool } from '@reticlehq/core';
-export { RingBuffer } from './events/ring-buffer.js';
+export { RingBuffer } from '@reticlehq/engine/events/ring-buffer.js';
 export { Bridge } from './bridge/bridge.js';
 export { Session, SessionManager } from './session/session.js';
 export type { SessionInfo, SessionHealth } from './session/session.js';
@@ -136,7 +136,7 @@ export { crawl } from './crawl/crawl.js';
  * without these it would have to re-implement the fold — a second implementation of the one thing
  * this product is judged on, and the one nobody dogfoods is the one that rots.
  */
-export { findContradictions } from './events/contradictions.js';
+export { findContradictions } from '@reticlehq/engine/events/contradictions.js';
 /**
  * The MCP server factory, so a consumer can serve the tool surface it composed.
  *
@@ -144,12 +144,15 @@ export { findContradictions } from './events/contradictions.js';
  * list and has nothing to hand it to.
  */
 export { createMcpServer } from './mcp/mcp.js';
-export type { Contradiction, ContradictionOptions } from './events/contradictions.js';
+export type {
+  Contradiction,
+  ContradictionOptions,
+} from '@reticlehq/engine/events/contradictions.js';
 export {
   registerContradictionFold,
   registeredContradictionFolds,
-} from './events/contradiction-folds.js';
-export type { ContradictionFold } from './events/contradiction-folds.js';
+} from '@reticlehq/engine/events/contradiction-folds.js';
+export type { ContradictionFold } from '@reticlehq/engine/events/contradiction-folds.js';
 export { MCP_SSE_PATH, MCP_MESSAGE_PATH } from '@reticlehq/core';
 export { BrowserPool, DEFAULT_LEASE_TTL_MS } from './pool/browser-pool.js';
 export type { Lease, Launcher, PooledBrowser } from './pool/browser-pool.js';
@@ -212,9 +215,13 @@ export {
   TOKEN_HEADER,
 } from './runs/verify-server.js';
 export type { VerifyServerOptions } from './runs/verify-server.js';
-export { evaluatePredicate, waitForPredicate, PredicateSchema } from './events/predicate.js';
-export type { Predicate, EvalResult } from './events/predicate.js';
-export { buildReactionReport } from './events/reaction.js';
+export {
+  evaluatePredicate,
+  waitForPredicate,
+  PredicateSchema,
+} from '@reticlehq/engine/events/predicate.js';
+export type { Predicate, EvalResult } from '@reticlehq/engine/events/predicate.js';
+export { buildReactionReport } from '@reticlehq/engine/events/reaction.js';
 export {
   CdpRealInputProvider,
   LaunchedRealInputProvider,

@@ -25,7 +25,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { ContradictionKind, EventType, type ReticleEvent } from '@reticlehq/core';
-import { findContradictions } from '../events/contradictions.js';
+import { findContradictions } from '@reticlehq/engine/events/contradictions.js';
 import { awaitsReaction, waitForReaction } from './react-grace.js';
 
 type Ev = { type: string; t: number; data: Record<string, unknown> };

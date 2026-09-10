@@ -26,7 +26,7 @@ const REPO_ROOT = join(__dirname, '..', '..', '..');
  * The files that decide a verdict. Not the whole server: the tools that carry an action out are
  * allowed to know they are driving a browser, because they are.
  */
-const VERDICT_KERNEL = ['packages/server/src/honesty', 'packages/core/src'];
+const VERDICT_KERNEL = ['engine/src/honesty', 'packages/core/src'];
 
 /** How a question about the kind of app looks in source. */
 const ASKS_ABOUT_RUNTIME = /AppRuntime\.|runtime ===|=== runtime/;
@@ -43,7 +43,7 @@ const ALLOWED_TO_ASK: Record<string, string> = {
     'entire job, and it is what lets the rules stop branching -- two of them already have. Listed ' +
     'rather than exempted by narrowing the search, because the search being wide is what makes it ' +
     'worth having.',
-  'packages/server/src/honesty/blind-spots.ts':
+  'engine/src/honesty/blind-spots.ts':
     'Electron-only coverage rows must not be reported for a web page, or a plain browser tab reads ' +
     'as an un-instrumented Electron renderer. The realm should declare which coverage kinds are ' +
     'its own; until a second realm exists there is nothing to ask.',

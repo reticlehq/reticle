@@ -30,16 +30,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const PACKAGES_DIR = join(HERE, '..', 'packages');
-/**
- * Adapters live under `adapters/<kind>/<name>` and are packages like any other, so they are checked
- * like any other. Added when they moved out of `packages/`: the guard read one directory, so the move
- * took four packages out of its sight and it went on reporting success about the ones that remained.
- * A boundary guard that silently stops covering something is worse than none, because the green is
- * read as "these are fine" rather than "these were not looked at".
- */
-const ADAPTERS_DIR = join(HERE, '..', 'adapters');
-const SPEC_DIR = join(HERE, '..', 'openreality');
+const REPO_ROOT = join(HERE, '..');
 
 /**
  * Which runtime each package lives in. Untagged → 'iso' (isomorphic). Four sides, because a build
@@ -71,6 +62,10 @@ export const SIDE = Object.freeze({
   '@reticlehq/electron': 'node',
   // Isomorphic foundation — imported by every side, imports none of them.
   '@reticlehq/core': 'iso',
+  // The rules that decide a verdict. Isomorphic: they read what happened and answer a question about
+  // it, which needs neither a page nor a socket. That is the whole reason they can be lifted out of
+  // the daemon and used on their own.
+  '@reticlehq/engine': 'iso',
   // The specification. Isomorphic for the same reason core is, and stricter in practice: it has no
   // dependencies at all, because a contract that needs a library to read is a contract with a
   // dependency somebody else has to accept.
@@ -159,27 +154,56 @@ export function findViolations(manifests, side = SIDE) {
 }
 
 /**
- * Read every package.json manifest under the given packages directory.
+ * Where the packages are, taken from `pnpm-workspace.yaml`.
  *
- * A directory without one is not an error: `packages/tauri` is a Rust crate, which has a Cargo
+ * This used to be a list of directories written out by hand here, and twice a package moved somewhere
+ * the list did not mention. Both times the guard went on printing success about the packages it could
+ * still see, which is worse than no guard at all -- a green then reads as "these are fine" when what
+ * it means is "these were not looked at".
+ *
+ * The workspace file cannot go stale in the same way, because it is the list the package manager
+ * itself installs from. A package missing from it is not quietly unchecked; it is not installed, and
+ * everything that depends on it stops working loudly.
+ *
+ * The globs used here are simple by convention -- `name`, `dir/*`, `dir/*\/*` -- so they are expanded
+ * directly rather than by pulling in a glob library for four shapes.
+ */
+export function workspaceGlobs(yamlText) {
+  return [...yamlText.matchAll(/^\s*-\s*'([^']+)'/gm)].map((m) => m[1]);
+}
+
+/** Expand one glob to the directories it names, relative to the repo root. */
+function directoriesFor(glob, root) {
+  const [head, ...rest] = glob.split('/');
+  const here = join(root, head ?? '');
+  if (!existsSync(here)) return [];
+  if (rest.length === 0) return [here];
+  const children = readdirSync(here, { withFileTypes: true })
+    .filter((e) => e.isDirectory())
+    .map((e) => join(here, e.name));
+  if (rest.length === 1) return children;
+  // Only one more level is ever used (`adapters/<kind>/<name>`), and it is expanded the same way.
+  return children.flatMap((child) =>
+    readdirSync(child, { withFileTypes: true })
+      .filter((e) => e.isDirectory())
+      .map((e) => join(child, e.name)),
+  );
+}
+
+/**
+ * Read every package.json the workspace covers, skipping the local fixture apps.
+ *
+ * A directory without a manifest is not an error: `packages/tauri` is a Rust crate, which has a Cargo
  * manifest and no npm one. It has no JavaScript dependency edges, so there is nothing here to check.
  */
-function readManifests(packagesDir) {
-  const direct = readdirSync(packagesDir, { withFileTypes: true })
-    .filter((e) => e.isDirectory())
-    .map((e) => join(packagesDir, e.name, 'package.json'));
-  // Adapters are one level deeper, grouped by the kind of adapter they are.
-  const nested = existsSync(ADAPTERS_DIR)
-    ? readdirSync(ADAPTERS_DIR, { withFileTypes: true })
-        .filter((e) => e.isDirectory())
-        .flatMap((kind) =>
-          readdirSync(join(ADAPTERS_DIR, kind.name), { withFileTypes: true })
-            .filter((e) => e.isDirectory())
-            .map((e) => join(ADAPTERS_DIR, kind.name, e.name, 'package.json')),
-        )
-    : [];
-  const spec = [join(SPEC_DIR, 'package.json')];
-  return [...direct, ...nested, ...spec]
+function readManifests(root = REPO_ROOT) {
+  const globs = workspaceGlobs(readFileSync(join(root, 'pnpm-workspace.yaml'), 'utf8'))
+    // Everything under `apps/` is a local fixture, never published, and deliberately allowed to
+    // depend on anything at all -- that is what makes it a fixture.
+    .filter((glob) => !glob.startsWith('apps'));
+  return globs
+    .flatMap((glob) => directoriesFor(glob, root))
+    .map((dir) => join(dir, 'package.json'))
     .filter((p) => existsSync(p))
     .map((p) => JSON.parse(readFileSync(p, 'utf8')));
 }
@@ -216,7 +240,7 @@ function main() {
     selfTest();
     return;
   }
-  const violations = findViolations(readManifests(PACKAGES_DIR));
+  const violations = findViolations(readManifests());
   if (violations.length > 0) {
     console.error('Dependency-boundary violations:\n');
     for (const v of violations) {
@@ -227,10 +251,7 @@ function main() {
     console.error(`\n${violations.length} violation(s). See scripts/check-boundaries.mjs.`);
     process.exit(1);
   }
-  console.log(
-    'Dependency boundaries OK (%d packages checked).',
-    readManifests(PACKAGES_DIR).length,
-  );
+  console.log('Dependency boundaries OK (%d packages checked).', readManifests().length);
 }
 
 // Only run when invoked directly, not when imported by a test.

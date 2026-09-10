@@ -7,7 +7,7 @@ import {
 } from '@reticlehq/core';
 import { ReticleTool } from '@reticlehq/core';
 import { predicateToExpect, enforcedOnReplay } from './predicate-to-expect.js';
-import { PredicateSchema } from '../events/predicate.js';
+import { PredicateSchema } from '@reticlehq/engine/events/predicate.js';
 import type { RecordedStep, CompiledProgram } from './recordings.js';
 import type { Session } from '../session/session.js';
 import { asRecord, asString } from '@reticlehq/core';

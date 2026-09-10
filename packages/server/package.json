@@ -31,6 +31,7 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
     "@reticlehq/core": "workspace:*",
+    "@reticlehq/engine": "workspace:*",
     "@reticlehq/init": "workspace:*",
     "ws": "^8.21.3",
     "zod": "^3.24.1"

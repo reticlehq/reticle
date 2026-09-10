@@ -7,7 +7,7 @@
  * stop/save can warn instead of writing a flow that fails on the next click.
  */
 import { EventType, type ReticleEvent } from '@reticlehq/core';
-import { routePathOf } from '../events/predicate-route.js';
+import { routePathOf } from '@reticlehq/engine/events/predicate-route.js';
 
 function asString(value: unknown): string | undefined {
   return 'string' === typeof value ? value : undefined;

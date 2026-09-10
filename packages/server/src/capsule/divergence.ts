@@ -1,4 +1,4 @@
-import { ConsequenceKind, EventType, type ReticleEvent } from '@reticlehq/core';
+import { ConsequenceKind, EventType, type ExpectedLink, type ReticleEvent } from '@reticlehq/core';
 
 /**
  * First-divergence — the brain of the divergence capsule (Tier 2). Given the chain the flow DECLARED
@@ -9,14 +9,12 @@ import { ConsequenceKind, EventType, type ReticleEvent } from '@reticlehq/core';
  */
 
 /**
- * The links a capsule can walk. Exactly core's ConsequenceKind — a link is a thing the app provably
- * DID, which is the same set signal/net/state names everywhere else. Spelled through the shared
- * constant so the two can never drift apart.
+ * The links a capsule can walk. Defined in the shared vocabulary, because the rules that decide a
+ * verdict produce this shape and the explanation of a red verdict consumes it, and neither should
+ * have to reach into the other to name the same thing. Re-exported here so the places that already
+ * read it from this file still can.
  */
-export type ExpectedLink =
-  | { kind: typeof ConsequenceKind.SIGNAL; name: string }
-  | { kind: typeof ConsequenceKind.NET; urlContains: string; status?: number }
-  | { kind: typeof ConsequenceKind.STATE; name: string };
+export type { ExpectedLink };
 
 export interface Divergence {
   /** The declared link that did not hold. */

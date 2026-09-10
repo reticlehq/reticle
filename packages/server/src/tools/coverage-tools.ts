@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { coverageRegressed, observabilityOf } from '../honesty/observability.js';
+import { coverageRegressed, observabilityOf } from '@reticlehq/engine/honesty/observability.js';
 import { foldFeatureCapture } from '../tools/feature-capture.js';
 import { foldToolHitRate } from '../tools/tool-hit-rate.js';
 import { allSessionIntents } from '../intent/open-intents.js';

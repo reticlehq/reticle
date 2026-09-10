@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { ContradictionKind, EventType, type ReticleEvent } from '@reticlehq/core';
-import { evalSettled } from './predicate-eval.js';
-import { findContradictions } from './contradictions.js';
-import { causalSummary } from '../capsule/causal-summary.js';
+import { evalSettled } from '@reticlehq/engine/events/predicate-eval.js';
+import { findContradictions } from '@reticlehq/engine/events/contradictions.js';
+import { causalSummary } from './capsule/causal-summary.js';
 
 /**
  * A dev-tooling request in flight must not hold settle open, and must not read as "the UI advanced

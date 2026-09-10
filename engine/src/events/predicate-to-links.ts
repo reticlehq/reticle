@@ -1,6 +1,6 @@
 import { ConsequenceKind, PredicateKind } from '@reticlehq/core';
 import type { Predicate } from './predicate.js';
-import type { ExpectedLink } from '../capsule/divergence.js';
+import type { ExpectedLink } from '@reticlehq/core';
 
 /**
  * Convert a mustHold predicate into the ordered ExpectedLinks the divergence capsule walks. Only the

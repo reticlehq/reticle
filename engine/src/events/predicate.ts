@@ -13,7 +13,7 @@ import {
 import type { KeepCallerContextFn, NoteFn } from './engine-host.js';
 
 import { predicateToExpectedLinks } from './predicate-to-links.js';
-import type { ExpectedLink } from '../capsule/divergence.js';
+import type { ExpectedLink } from '@reticlehq/core';
 import { isAmbient, ambientKeyOf, type AmbientCounts } from './ambient.js';
 import { evalRoute } from './predicate-route.js';
 import { describeSuperseded } from './observed-in-window.js';

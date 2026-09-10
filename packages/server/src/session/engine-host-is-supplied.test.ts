@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { WebSocket } from 'ws';
 import { MessageKind, RETICLE_PROTOCOL_VERSION, type HelloMessage } from '@reticlehq/core';
-import { Session } from '../session/session.js';
+import { Session } from './session.js';
 import {
   clearCrashedRules,
   registerContradictionFold,
   runRegisteredFolds,
-} from './contradiction-folds.js';
+} from '@reticlehq/engine/events/contradiction-folds.js';
 
 /**
  * The rules that decide a verdict ask whoever is running them to write down anything they could not
