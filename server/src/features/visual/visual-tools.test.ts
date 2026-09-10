@@ -12,7 +12,7 @@ import { RecordingStore } from '../flows/recording/recordings.js';
 import { FlowStore } from '../flows/flows.js';
 import { ProjectStore } from '../project/project-store.js';
 import { AnnotationStore } from '../flows/annotation-store.js';
-import { createNodeFileSystem, type FileSystemPort } from '../project/fs-port.js';
+import { createNodeFileSystem, type FileSystemPort } from '../project/fs/fs-port.js';
 import type { RealInputProvider } from '../../connection/input/real-input.js';
 import type { Session, SessionManager } from '../../connection/session/session.js';
 

@@ -8,7 +8,7 @@ import {
 } from '@reticlehq/core';
 import type { Bridge } from './bridge.js';
 import { BaselineStore } from '../../features/project/baselines.js';
-import { createNodeFileSystem } from '../../features/project/fs-port.js';
+import { createNodeFileSystem } from '../../features/project/fs/fs-port.js';
 import { RecordingStore } from '../../features/flows/recording/recordings.js';
 import { FlowStore } from '../../features/flows/flows.js';
 import { ProjectStore } from '../../features/project/project-store.js';

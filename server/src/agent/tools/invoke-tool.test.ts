@@ -11,7 +11,7 @@ import { RecordingStore } from '../../features/flows/recording/recordings.js';
 import { FlowStore } from '../../features/flows/flows.js';
 import { ProjectStore } from '../../features/project/project-store.js';
 import { AnnotationStore } from '../../features/flows/annotation-store.js';
-import { createNodeFileSystem } from '../../features/project/fs-port.js';
+import { createNodeFileSystem } from '../../features/project/fs/fs-port.js';
 import type { Session, SessionManager } from '../../connection/session/session.js';
 
 const ROOT = '/tmp/reticle-invoke-test/.reticle';

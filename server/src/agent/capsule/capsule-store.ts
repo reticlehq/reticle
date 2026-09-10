@@ -1,7 +1,7 @@
 import { join } from 'node:path';
 import { z } from 'zod';
 import { FlowStepSchema, type FlowStep } from '@reticlehq/core';
-import type { FileSystemPort } from '../../features/project/fs-port.js';
+import type { FileSystemPort } from '../../features/project/fs/fs-port.js';
 import { reticleDirPaths } from '../../features/project/reticle-dir.js';
 
 /**

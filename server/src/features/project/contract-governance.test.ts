@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { RiskSurface, type CapabilitiesContract } from '@reticlehq/core';
 import { reticleDirPaths, readContract, writeContract } from './reticle-dir.js';
-import { createNodeFileSystem, type FileSystemPort } from './fs-port.js';
+import { createNodeFileSystem, type FileSystemPort } from './fs/fs-port.js';
 
 const FROZEN = 1_700_000_000_000;
 

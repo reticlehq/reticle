@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ProjectReadError, RunKind } from '@reticlehq/core';
 import { ProjectStore } from './project-store.js';
-import { createNodeFileSystem } from './fs-port.js';
+import { createNodeFileSystem } from './fs/fs-port.js';
 
 /**
  * A file written by a version we do not understand is not corrupt, and must not be treated as if it

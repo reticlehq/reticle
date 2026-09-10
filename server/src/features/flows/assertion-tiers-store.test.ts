@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdtemp, writeFile, mkdir, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createNodeFileSystem } from '../project/fs-port.js';
+import { createNodeFileSystem } from '../project/fs/fs-port.js';
 import { ASSERTION_TIERS_VERSION, AssertionTiersStore } from './assertion-tiers-store.js';
 import { detectDowngrades } from './outcome/assertion-integrity.js';
 

@@ -47,7 +47,7 @@ import { buildFlowChips } from './features/flows/flow-scope.js';
 import { ProjectStore } from './features/project/project-store.js';
 import { attachRouteLearning } from './features/project/learned-routes.js';
 import { AnnotationStore } from './features/flows/annotation-store.js';
-import { createNodeFileSystem, type FileSystemPort } from './features/project/fs-port.js';
+import { createNodeFileSystem, type FileSystemPort } from './features/project/fs/fs-port.js';
 import { cleanupCaptureDirectories } from './features/visual/capture-cleanup.js';
 import { ReticleRunner } from './agent/runs/reticle-runner.js';
 import { createRunnerPort } from './agent/runs/runner-port.js';
@@ -212,8 +212,8 @@ export {
   baselinePath,
 } from './features/project/reticle-dir.js';
 export type { ReticleDirPaths, ReadContractResult } from './features/project/reticle-dir.js';
-export { createNodeFileSystem } from './features/project/fs-port.js';
-export type { FileSystemPort } from './features/project/fs-port.js';
+export { createNodeFileSystem } from './features/project/fs/fs-port.js';
+export type { FileSystemPort } from './features/project/fs/fs-port.js';
 // Replay/Verify API — the programmatic surface an OEM/CI pipeline drives (see docs/platform-integration.md).
 export { ReticleRunner } from './agent/runs/reticle-runner.js';
 export type { RunnerPort, VerifyOptions } from './agent/runs/reticle-runner.js';

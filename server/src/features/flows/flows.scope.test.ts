@@ -4,7 +4,7 @@ import { mkdtemp, writeFile, mkdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { asFlowName, AnchorKind, FLOW_FILE_VERSION, type FlowFile } from '@reticlehq/core';
-import { createNodeFileSystem, type FileSystemPort } from '../project/fs-port.js';
+import { createNodeFileSystem, type FileSystemPort } from '../project/fs/fs-port.js';
 import { flowPath, reticleDirPaths } from '../project/reticle-dir.js';
 import { FlowStore } from './flows.js';
 

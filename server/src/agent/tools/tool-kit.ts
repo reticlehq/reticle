@@ -11,7 +11,7 @@ import type { RealInputProvider } from '../../connection/input/real-input.js';
 import type { BaselineStore } from '../../features/project/baselines.js';
 import { normalizeLines } from '../../features/project/baselines.js';
 import type { RecordingStore } from '../../features/flows/recording/recordings.js';
-import type { FileSystemPort } from '../../features/project/fs-port.js';
+import type { FileSystemPort } from '../../features/project/fs/fs-port.js';
 import type { ArtifactRoot } from '../../features/project/artifact-root.js';
 import type { FlowStore } from '../../features/flows/flows.js';
 import type { ProjectStore } from '../../features/project/project-store.js';

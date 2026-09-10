@@ -19,7 +19,7 @@ import { RecordingStore } from '../../features/flows/recording/recordings.js';
 import { FlowStore } from '../../features/flows/flows.js';
 import { ProjectStore } from '../../features/project/project-store.js';
 import { AnnotationStore } from '../../features/flows/annotation-store.js';
-import { createNodeFileSystem } from '../../features/project/fs-port.js';
+import { createNodeFileSystem } from '../../features/project/fs/fs-port.js';
 import { RUN_TOOLS } from './run-tools.js';
 import { RunStore } from './run-store.js';
 import { buildVerificationRun, type VerificationRunInput } from './build-verification-run.js';

@@ -20,7 +20,7 @@
  * is a separate decision somebody can take once they believe the migration.
  */
 import { parseIntentFile, type Intent } from '@reticlehq/core/artifacts';
-import type { FileSystemPort } from '../project/fs-port.js';
+import type { FileSystemPort } from '../project/fs/fs-port.js';
 import { reticleDirPaths } from '../project/reticle-dir.js';
 import { withFileLock } from '../project/file-lock.js';
 import { subjectFor } from './intent-subject.js';

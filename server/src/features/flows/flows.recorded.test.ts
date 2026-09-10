@@ -14,7 +14,7 @@ import {
   type FlowFile,
   type ReticleEvent,
 } from '@reticlehq/core';
-import { createNodeFileSystem, type FileSystemPort } from '../project/fs-port.js';
+import { createNodeFileSystem, type FileSystemPort } from '../project/fs/fs-port.js';
 import { FlowStore } from './flows.js';
 import { ProjectStore } from '../project/project-store.js';
 import { AnnotationStore } from './annotation-store.js';

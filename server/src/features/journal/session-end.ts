@@ -1,7 +1,7 @@
 import { AmbientStore } from './ambient-store.js';
 import type { AmbientCounts } from '@reticlehq/engine/window/ambient.js';
 import type { JournalAction } from '@reticlehq/core';
-import type { FileSystemPort } from '../project/fs-port.js';
+import type { FileSystemPort } from '../project/fs/fs-port.js';
 import { pruneSessions } from './retention.js';
 import { buildVerificationRun } from '../../agent/runs/build-verification-run.js';
 import { driveRunFrom, driveRunId } from '../../agent/runs/drive-run.js';

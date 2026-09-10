@@ -31,12 +31,12 @@ import { ProjectStore } from '../project/project-store.js';
 import { replayFlow } from './flow-replay.js';
 import { waitForPredicate } from '@reticlehq/engine/question/predicate.js';
 import { AnnotationStore } from './annotation-store.js';
-import { createNodeFileSystem } from '../project/fs-port.js';
+import { createNodeFileSystem } from '../project/fs/fs-port.js';
 import { BaselineStore } from '../project/baselines.js';
 import { RecordingStore } from './recording/recordings.js';
 import { asString } from '@reticlehq/core';
 import { flowPath } from '../project/reticle-dir.js';
-import type { FileSystemPort } from '../project/fs-port.js';
+import type { FileSystemPort } from '../project/fs/fs-port.js';
 import type { Session, SessionManager } from '../../connection/session/session.js';
 import type { ToolDeps } from '../../agent/tools/tools.js';
 

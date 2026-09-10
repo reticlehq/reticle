@@ -8,7 +8,7 @@ import { describe, expect, it, beforeEach } from 'vitest';
 import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createNodeFileSystem } from '../project/fs-port.js';
+import { createNodeFileSystem } from '../project/fs/fs-port.js';
 import { IntentShardStore } from './intent-shard-store.js';
 import { IntentStatus } from './intent-shard.js';
 

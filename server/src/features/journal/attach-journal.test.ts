@@ -4,7 +4,7 @@ import { mkdtemp, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { EventType, type ReticleEvent } from '@reticlehq/core';
-import { createNodeFileSystem, type FileSystemPort } from '../project/fs-port.js';
+import { createNodeFileSystem, type FileSystemPort } from '../project/fs/fs-port.js';
 import { makeJournalAttach, type JournalTarget } from './attach-journal.js';
 import * as logModule from '../../log.js';
 import type { JournalRecorder } from './journal-recorder.js';

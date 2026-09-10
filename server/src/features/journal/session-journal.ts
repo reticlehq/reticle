@@ -5,7 +5,7 @@ import {
   type JournalAction,
   type ReticleEvent,
 } from '@reticlehq/core';
-import type { FileSystemPort } from '../project/fs-port.js';
+import type { FileSystemPort } from '../project/fs/fs-port.js';
 import {
   isValidSessionId,
   journalActionsPath,

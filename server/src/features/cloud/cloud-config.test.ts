@@ -4,7 +4,7 @@ import { mkdtemp, mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { resolveProjectCloud, CLOUD_LINK_FILE, CREDENTIALS_FILE } from './cloud-config.js';
-import { createNodeFileSystem, type FileSystemPort } from '../project/fs-port.js';
+import { createNodeFileSystem, type FileSystemPort } from '../project/fs/fs-port.js';
 
 describe('resolveProjectCloud — per-project cloud binding + sync policy', () => {
   let dir: string;

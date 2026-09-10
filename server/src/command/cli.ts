@@ -36,7 +36,7 @@ import {
 import { loadDotEnv } from '../telemetry/dev-repo.js';
 import { licenseKeyFromEnvFiles } from '../features/license/license-env.js';
 import { LICENSE_KEY_ENV } from '../features/license/license.js';
-import { createNodeFileSystem } from '../features/project/fs-port.js';
+import { createNodeFileSystem } from '../features/project/fs/fs-port.js';
 import { affectedSavedFlows } from '../features/flows/flow-sources.js';
 
 import { availableUpdate } from './update/update-nudge.js';

@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 import { ReticleDir } from '@reticlehq/core';
-import type { FileSystemPort } from '../project/fs-port.js';
+import type { FileSystemPort } from '../project/fs/fs-port.js';
 
 /**
  * The `.reticle/` entries that are LOCAL state, and must never be committed by accident.

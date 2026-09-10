@@ -11,7 +11,7 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import { homedir } from 'node:os';
 import { basename, join } from 'node:path';
 import { z } from 'zod';
-import { createNodeFileSystem } from '../../features/project/fs-port.js';
+import { createNodeFileSystem } from '../../features/project/fs/fs-port.js';
 import { CLOUD_LINK_FILE, resolveProjectCloud } from '../../features/cloud/cloud-config.js';
 import { applyCredential, findCredential } from './cloud-keystore.js';
 import { defaultProjectFor } from './project-name.js';

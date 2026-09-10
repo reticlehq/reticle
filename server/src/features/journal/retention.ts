@@ -1,4 +1,4 @@
-import type { FileSystemPort } from '../project/fs-port.js';
+import type { FileSystemPort } from '../project/fs/fs-port.js';
 import { reticleDirPaths, sessionDirPath } from '../project/reticle-dir.js';
 
 /** Keep at most this many session journals on disk; older ones are pruned by recency. */

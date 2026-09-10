@@ -1,5 +1,5 @@
 import { dirname } from 'node:path';
-import type { FileSystemPort } from '../project/fs-port.js';
+import type { FileSystemPort } from '../project/fs/fs-port.js';
 import { reticleDirPaths } from '../project/reticle-dir.js';
 import {
   FlakeFileSchema,

@@ -13,7 +13,7 @@ import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { z } from 'zod';
 import { setTimeout as sleep } from 'node:timers/promises';
-import { createNodeFileSystem } from '../../features/project/fs-port.js';
+import { createNodeFileSystem } from '../../features/project/fs/fs-port.js';
 import { CLOUD_LINK_FILE } from '../../features/cloud/cloud-config.js';
 import { RETICLE_CONFIG_BASENAME } from './ports/cli-port.js';
 import { DevicePollSchema, DeviceStartSchema, openBrowser } from './device-flow.js';

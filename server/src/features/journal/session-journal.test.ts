@@ -9,7 +9,7 @@ import {
   type JournalAction,
   type ReticleEvent,
 } from '@reticlehq/core';
-import { createNodeFileSystem, type FileSystemPort } from '../project/fs-port.js';
+import { createNodeFileSystem, type FileSystemPort } from '../project/fs/fs-port.js';
 import { SessionJournal } from './session-journal.js';
 
 function evt(seq: number, over: Partial<ReticleEvent> = {}): ReticleEvent {

@@ -13,7 +13,7 @@
  */
 import { cloudFetch } from '../cloud/cloud-sync.js';
 import { resolveProjectCloud } from '../cloud/cloud-config.js';
-import type { FileSystemPort } from '../project/fs-port.js';
+import type { FileSystemPort } from '../project/fs/fs-port.js';
 
 /** Named so a read from the tool surface is distinguishable from the CLI's and from replay's. */
 const MCP_AGENT_ID = 'reticle-mcp';

@@ -14,7 +14,7 @@ import {
 } from '@reticlehq/core';
 import { ProjectStore } from './project-store.js';
 import { reticleDirPaths } from './reticle-dir.js';
-import { createNodeFileSystem, type FileSystemPort } from './fs-port.js';
+import { createNodeFileSystem, type FileSystemPort } from './fs/fs-port.js';
 
 const FROZEN = 1_700_000_000_000;
 const frozenClock = { now: (): number => FROZEN };

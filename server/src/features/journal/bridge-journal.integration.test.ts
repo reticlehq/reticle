@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { EventType, type JournalAction, type ReticleEvent } from '@reticlehq/core';
 import { Bridge } from '../../connection/bridge/bridge.js';
 import { ReticleTool } from '@reticlehq/core';
-import { createNodeFileSystem } from '../project/fs-port.js';
+import { createNodeFileSystem } from '../project/fs/fs-port.js';
 import type { ToolDeps } from '../../agent/tools/tools.js';
 import {
   FakeBrowser,

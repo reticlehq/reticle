@@ -43,7 +43,7 @@
  */
 import { z } from 'zod';
 import { IntentSchema, type Intent } from '@reticlehq/core/artifacts';
-import type { FileSystemPort } from '../project/fs-port.js';
+import type { FileSystemPort } from '../project/fs/fs-port.js';
 import { subjectFor, UNSORTED_SUBJECT } from './intent-subject.js';
 
 const INTENT_SHARD_VERSION = 1;

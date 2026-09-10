@@ -4,7 +4,7 @@ import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ReplayStatus } from '@reticlehq/core';
-import { createNodeFileSystem } from '../project/fs-port.js';
+import { createNodeFileSystem } from '../project/fs/fs-port.js';
 import { FlakeStore } from './flake-store.js';
 import { FLOW_TOOLS } from './flow-tools.js';
 import { ReticleTool } from '@reticlehq/core';

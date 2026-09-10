@@ -11,7 +11,7 @@
  */
 import { join } from 'node:path';
 import { ReticleDir } from '@reticlehq/core';
-import type { FileSystemPort } from '../project/fs-port.js';
+import type { FileSystemPort } from '../project/fs/fs-port.js';
 import { resolveCloudConfig, type CloudConfig } from './cloud-sync.js';
 
 /** `<reticleRoot>/cloud.json` — the project's cloud binding + sync policy (non-secret). */

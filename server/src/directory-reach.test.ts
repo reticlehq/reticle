@@ -121,6 +121,17 @@ const REACHES_FOR: Record<string, readonly string[]> = {
    */
   recall: [],
   /**
+   * The filesystem, as a port.
+   *
+   * Thirteen directories reach for it, and until now every one of them reached for `project` to
+   * get there -- a file filed in the feature that happened to need it first. Extracting it
+   * removed `cloud -> project` and `command -> project` outright: neither wanted a project, both
+   * wanted to read a file.
+   *
+   * Reaches for nothing itself, which is what a port should do.
+   */
+  fs: [],
+  /**
    * Who is attached to a session, and who may drive it. Reaches for NOTHING -- not even its own
    * parent -- which is the strongest form a group can take: `session` needs it, and it needs
    * nobody, so the edge cannot ever become mutual however either side grows.
@@ -157,9 +168,20 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   recording: [],
   /** What a human wrote on a step, and where they pointed when they wrote it. */
   'annotate-notes': [],
-  bridge: ['recording', 'flows', 'impact', 'project', 'session', 'telemetry', 'tools', 'version'],
-  capsule: ['project'],
+  bridge: [
+    'fs',
+    'recording',
+    'flows',
+    'impact',
+    'project',
+    'session',
+    'telemetry',
+    'tools',
+    'version',
+  ],
+  capsule: ['fs', 'project'],
   cli: [
+    'fs',
     'recall',
     'doctor',
     'recording',
@@ -179,8 +201,9 @@ const REACHES_FOR: Record<string, readonly string[]> = {
     'update',
     'version',
   ],
-  cloud: ['cli', 'intent', 'project'],
+  cloud: ['fs', 'cli', 'intent'],
   command: [
+    'fs',
     'recall',
     'ports',
     'cli',
@@ -189,7 +212,6 @@ const REACHES_FOR: Record<string, readonly string[]> = {
     'hunt',
     'license',
     'mcp',
-    'project',
     'setup',
     'telemetry',
     'update',
@@ -200,6 +222,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   domain: ['flows', 'oracles', 'project', 'tools'],
   ee: ['license'],
   flows: [
+    'fs',
     'fields',
     'annotate-notes',
     'recording',
@@ -216,14 +239,14 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   ],
   impact: ['cloud', 'session'],
   input: ['pool', 'telemetry', 'tools'],
-  intent: ['project', 'tools'],
-  journal: ['project', 'runs'],
+  intent: ['fs', 'project', 'tools'],
+  journal: ['fs', 'project', 'runs'],
   license: ['cli'],
   mcp: ['recall', 'ports', 'cli', 'daemon', 'telemetry', 'tools', 'version'],
-  memory: ['cloud', 'project', 'tools'],
+  memory: ['fs', 'cloud', 'project', 'tools'],
   pool: ['doctor', 'input', 'telemetry'],
-  project: ['cli', 'cloud', 'flows', 'runs', 'tools'],
-  runs: ['cloud', 'flows', 'intent', 'mcp', 'project', 'telemetry', 'tools'],
+  project: ['fs', 'cli', 'cloud', 'flows', 'runs', 'tools'],
+  runs: ['fs', 'cloud', 'flows', 'intent', 'mcp', 'project', 'telemetry', 'tools'],
   session: [
     'recall',
     'gaps',
@@ -254,6 +277,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
     'version',
   ],
   tools: [
+    'fs',
     'recall',
     'doctor',
     'gaps',
@@ -284,7 +308,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   ],
   update: ['project', 'telemetry', 'version'],
   version: ['project', 'tools'],
-  visual: ['input', 'project', 'tools'],
+  visual: ['fs', 'input', 'project', 'tools'],
 };
 
 /**
@@ -293,7 +317,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
  * A count rather than a list: the list is derivable and printed on failure, and a hand-written copy
  * would be one more thing to keep in step.
  */
-const MUTUAL_PAIRS_TODAY = 30;
+const MUTUAL_PAIRS_TODAY = 29;
 
 /**
  * Two directories may not share a name.

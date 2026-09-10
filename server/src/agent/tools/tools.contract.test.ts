@@ -15,7 +15,7 @@ import {
   writeContract,
   type ReadContractResult,
 } from '../../features/project/reticle-dir.js';
-import type { FileSystemPort } from '../../features/project/fs-port.js';
+import type { FileSystemPort } from '../../features/project/fs/fs-port.js';
 
 const ROOT = '/virtual/.reticle';
 const FROZEN = 1_700_000_000_000;

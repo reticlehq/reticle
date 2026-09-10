@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createNodeFileSystem } from '../project/fs-port.js';
+import { createNodeFileSystem } from '../project/fs/fs-port.js';
 import { Verified } from '@reticlehq/core';
 import { AmbientStore } from './ambient-store.js';
 import { makeSessionEnd, type SessionEndTarget } from './session-end.js';

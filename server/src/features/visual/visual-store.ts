@@ -1,4 +1,4 @@
-import type { FileSystemPort } from '../project/fs-port.js';
+import type { FileSystemPort } from '../project/fs/fs-port.js';
 import { isValidFlowName, visualDiffPath, visualDir, visualPath } from '../project/reticle-dir.js';
 
 /**

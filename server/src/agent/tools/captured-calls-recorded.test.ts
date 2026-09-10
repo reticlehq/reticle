@@ -12,7 +12,7 @@ import { ReticleTool } from '@reticlehq/core';
 import { runTool } from './invoke-tool.js';
 import { buildDynamicTools } from './dynamic-tools.js';
 import { CaptureLedger } from '../tools/feature-capture.js';
-import { createNodeFileSystem } from '../../features/project/fs-port.js';
+import { createNodeFileSystem } from '../../features/project/fs/fs-port.js';
 import { BaselineStore } from '../../features/project/baselines.js';
 import { RecordingStore } from '../../features/flows/recording/recordings.js';
 import { FlowStore } from '../../features/flows/flows.js';

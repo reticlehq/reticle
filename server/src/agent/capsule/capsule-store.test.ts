@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ActionType, AnchorKind, type FlowStep } from '@reticlehq/core';
 import { ReticleTool } from '@reticlehq/core';
-import { createNodeFileSystem } from '../../features/project/fs-port.js';
+import { createNodeFileSystem } from '../../features/project/fs/fs-port.js';
 import {
   CapsuleStore,
   capsuleId,

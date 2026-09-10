@@ -14,7 +14,7 @@ import { TRANSPORT_LIMITS } from '@reticlehq/core';
 import { ActionType } from '@reticlehq/core';
 import { rewriteUploadArgs } from './real-input-attempt.js';
 import type { ToolDeps } from './tools.js';
-import type { FileSystemPort } from '../../features/project/fs-port.js';
+import type { FileSystemPort } from '../../features/project/fs/fs-port.js';
 
 /**
  * A stable cross-platform root for all test paths.

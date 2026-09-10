@@ -1,4 +1,4 @@
-import type { FileSystemPort } from './fs-port.js';
+import type { FileSystemPort } from './fs/fs-port.js';
 
 /**
  * An in-memory `FileSystemPort`, and the map it wrote into.
