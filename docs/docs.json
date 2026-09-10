@@ -203,6 +203,7 @@
                   "gate-plan",
                   "required-checks",
                   "state-files",
+                  "adapters",
                   "fixtures",
                   "local-registry"
                 ]

@@ -84,6 +84,7 @@ Everything here is published to [docs.reticle.sh](https://docs.reticle.sh) by `d
 | [gates.md](gates.md) | **I changed some files. Which gate do I run?** |
 | [gate-plan.md](gate-plan.md) | why the gates are shaped this way, and what is still unbuilt |
 | [required-checks.md](required-checks.md) | which checks actually block a merge, and which only look like they do |
+| [adapters.md](adapters.md) | what an adapter is, the three kinds, and how to write one |
 | [state-files.md](state-files.md) | what to do when a file on disk came from a different version of Reticle |
 | [system-map.md](system-map.md) | how a tool call reaches the app, and which failures are silent |
 | [telemetry-contract.md](telemetry-contract.md) | required reading before touching anything that emits |
