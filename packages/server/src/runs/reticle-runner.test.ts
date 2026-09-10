@@ -101,10 +101,12 @@ describe('ReticleRunner.verify', () => {
     expect(run.verdict.status).toBe(VerdictStatus.PASS);
   });
 
-  it('an empty suite produces a PASS with no flows', async () => {
+  it('an empty suite produces UNKNOWN, not a PASS', async () => {
+    // Zero flows means zero evidence. A pass here would say "we checked and it is fine" about a run
+    // that checked nothing.
     const run = await new ReticleRunner(fakePort({}, [])).verify(opts);
     expect(run.flows).toHaveLength(0);
-    expect(run.verdict.status).toBe(VerdictStatus.PASS);
+    expect(run.verdict.status).toBe(VerdictStatus.UNKNOWN);
   });
 
   it('a gated risk surface fails the verdict even when every flow passes', async () => {

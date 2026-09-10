@@ -48,7 +48,10 @@ describe('reticle serve --http (daemon wiring)', () => {
     });
     expect(res.status).toBe(200);
     const json = (await res.json()) as { run: { verdict: { status: string }; runId: string } };
-    expect(json.run.verdict.status).toBe('pass');
+    // 'unknown', not 'pass': this daemon runs against a fresh temp root with no saved flows, so the
+    // run replayed nothing. It used to answer 'pass' here -- a real server, over real HTTP, telling a
+    // caller its app was verified when not one flow had run.
+    expect(json.run.verdict.status).toBe('unknown');
 
     const runFiles = await readdir(join(root, 'runs'));
     expect(runFiles).toContain(`${json.run.runId}.json`);

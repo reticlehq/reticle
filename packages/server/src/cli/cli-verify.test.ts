@@ -109,6 +109,16 @@ describe('runVerify', () => {
     expect(rec.closed).toBe(1);
   });
 
+  it('exits 1 when nothing ran, so CI cannot go green on an empty run', async () => {
+    // The case the exit code exists for. A project with no saved flows used to verify "successfully"
+    // in seconds and hand CI a zero -- a green build that proved nothing, which is worse than a red
+    // one because nobody goes and looks at it.
+    const { ports, rec } = harness({ verify: () => Promise.resolve(makeRun(undefined)) });
+    await runVerify(ARGS, ports);
+    expect(rec.exit).toEqual([1]);
+    expect(rec.out.join('\n')).toContain('NOTHING PROVED');
+  });
+
   it('exits 1 when a flow fails', async () => {
     const { ports, rec } = harness({ verify: () => Promise.resolve(makeRun(RunFlowStatus.FAIL)) });
     await runVerify(ARGS, ports);

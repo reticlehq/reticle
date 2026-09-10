@@ -18,6 +18,7 @@ const VERDICT_GLYPH: Readonly<Record<VerdictStatus, string>> = {
   [VerdictStatus.PASS]: '✓ PASS',
   [VerdictStatus.FAIL]: '✗ FAIL',
   [VerdictStatus.PARTIAL]: '◑ PARTIAL',
+  [VerdictStatus.UNKNOWN]: '? NOTHING PROVED',
 };
 
 const flowGlyph = (s: RunFlowStatus): string =>

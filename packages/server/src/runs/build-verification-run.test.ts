@@ -98,10 +98,21 @@ describe('computeVerdict', () => {
     expect(v.status).toBe(VerdictStatus.FAIL);
   });
 
-  it('nothing ran → PASS but LOW confidence', () => {
+  it('nothing ran → UNKNOWN, and says so in its reasons', () => {
     const v = computeVerdict(base);
-    expect(v.status).toBe(VerdictStatus.PASS);
+    expect(v.status).toBe(VerdictStatus.UNKNOWN);
     expect(v.confidence).toBe(RunConfidence.LOW);
+    expect(v.reasons.join(' ')).toContain('nothing was proved');
+  });
+
+  it('every flow skipped → UNKNOWN, not PASS', () => {
+    // The same hole one step along: skipping is neither passing nor failing, so a run of nothing but
+    // skips proves exactly as much as an empty one.
+    const v = computeVerdict({
+      ...base,
+      flows: [flow('checkout', RunFlowStatus.SKIPPED)],
+    });
+    expect(v.status).toBe(VerdictStatus.UNKNOWN);
   });
 
   it('smoke flow with no oracle and no checks → MEDIUM confidence', () => {

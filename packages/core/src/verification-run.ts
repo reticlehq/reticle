@@ -44,6 +44,16 @@ export const VerdictStatus = {
   PASS: 'pass',
   FAIL: 'fail',
   PARTIAL: 'partial',
+  /**
+   * Nothing was proved either way -- no flow and no check produced an outcome, so there is nothing
+   * to pass and nothing to fail.
+   *
+   * This is deliberately NOT a pass. A run that checked nothing and a run that checked everything
+   * successfully are different facts, and flattening them into one word is how a green light comes
+   * to mean "we did not look". It matches how a single action is already judged, where "could not
+   * tell" has always been its own answer.
+   */
+  UNKNOWN: 'unknown',
 } as const;
 export type VerdictStatus = (typeof VerdictStatus)[keyof typeof VerdictStatus];
 

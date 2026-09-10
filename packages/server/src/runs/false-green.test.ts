@@ -116,13 +116,21 @@ describe('false-green guarantee', () => {
     }
   });
 
-  it('"nothing verified" is NOT a confident pass — empty run is PASS only at LOW confidence', async () => {
-    // The honest boundary: with zero flows there is nothing to fail, but the verdict must signal that
-    // nothing was actually checked. A deploy gate keys on confidence !== low (or flows.length > 0).
+  it('"nothing verified" is UNKNOWN, never PASS', async () => {
+    // This test used to assert PASS at LOW confidence, on a stated rationale: with zero flows there
+    // is nothing to fail, and "a deploy gate keys on confidence !== low".
+    //
+    // The rationale was reasonable and the placement was wrong. Nothing keys on confidence. All three
+    // consumers in this repo read `status` alone: the CLI exits 0, the report prints a tick with no
+    // reasons, and the run is recorded as verified. A signal in a field nobody reads is not a signal.
+    //
+    // So it moves into the field everyone reads. This also puts the run level back in step with the
+    // action level, where "could not tell" has always been its own answer rather than a quiet pass.
     const run = await new ReticleRunner(port({}, [])).verify(opts);
     expect(run.flows).toHaveLength(0);
-    expect(run.verdict.status).toBe(VerdictStatus.PASS);
+    expect(run.verdict.status).toBe(VerdictStatus.UNKNOWN);
     expect(run.verdict.confidence).toBe(RunConfidence.LOW);
+    expect(run.verdict.reasons.join(' ')).toContain('nothing');
   });
 
   it('a mix of one healthy and one severed flow is PARTIAL (not a blanket PASS)', async () => {

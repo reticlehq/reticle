@@ -31,7 +31,8 @@ export type VerificationRunInput = Omit<
 
 /**
  * Compute the verdict deterministically from the run's flows, checks, and risks.
- * Rules (in order): a gated risk blocks → FAIL; mixed pass+fail → PARTIAL; any fail → FAIL; else PASS.
+ * Rules (in order): a gated risk blocks → FAIL; mixed pass+fail → PARTIAL; any fail → FAIL;
+ * nothing proved either way → UNKNOWN; else PASS.
  * Confidence: nothing ran → LOW; an oracle-backed flow or any check ran → HIGH; only smoke → MEDIUM.
  */
 export function computeVerdict(input: VerificationRunInput): RunVerdict {
@@ -64,7 +65,14 @@ export function computeVerdict(input: VerificationRunInput): RunVerdict {
   if (blockingRisks > 0) status = VerdictStatus.FAIL;
   else if (fails > 0 && passes > 0) status = VerdictStatus.PARTIAL;
   else if (fails > 0) status = VerdictStatus.FAIL;
-  else status = VerdictStatus.PASS;
+  else if (0 === passes) {
+    // Nothing passed and nothing failed, so nothing was proved -- an empty run, or one whose every
+    // flow was skipped. Reporting that as PASS is the false green this whole file exists to prevent:
+    // every consumer here reads `status` and none reads `confidence`, so a caveat parked in the
+    // confidence field would never reach the person deciding whether to ship.
+    status = VerdictStatus.UNKNOWN;
+    reasons.push('nothing ran, so nothing was proved');
+  } else status = VerdictStatus.PASS;
 
   const ran = input.flows.length + input.checks.length;
   let confidence: RunConfidence;
