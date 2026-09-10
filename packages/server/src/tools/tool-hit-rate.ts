@@ -1,4 +1,4 @@
-import { CORE_TOOL_NAMES, EXTENDED_TOOL_NAMES } from '../tools/tool-surface.js';
+import { CORE_TOOL_NAMES, EXTENDED_TOOL_NAMES } from './tool-surface.js';
 
 /**
  * Which tools this session called, and how reachable each one was.

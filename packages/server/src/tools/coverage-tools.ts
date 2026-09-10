@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { coverageRegressed, observabilityOf } from '../honesty/observability.js';
-import { foldFeatureCapture } from '../honesty/feature-capture.js';
-import { foldToolHitRate } from '../honesty/tool-hit-rate.js';
+import { foldFeatureCapture } from '../tools/feature-capture.js';
+import { foldToolHitRate } from '../tools/tool-hit-rate.js';
 import { allSessionIntents } from '../intent/open-intents.js';
 import { ReticleCommand, SnapshotMode } from '@reticlehq/core';
 import { ReticleTool } from './tool-names.js';

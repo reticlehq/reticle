@@ -26,11 +26,7 @@ import { takeFeedbackPrompt } from './feedback-tools.js';
 import { takeFeedbackUndelivered } from '../telemetry/feedback-delivery.js';
 import type { Session } from '../session/session.js';
 import { noteRefsMinted, wrongTabRefusal } from '../session/ref-provenance.js';
-import {
-  CAPTURED_TOOLS,
-  noteCapturedCall,
-  noteToolDispatched,
-} from '../honesty/feature-capture.js';
+import { CAPTURED_TOOLS, noteCapturedCall, noteToolDispatched } from '../tools/feature-capture.js';
 import { span } from '../trace.js';
 import {
   defectForToolResult,

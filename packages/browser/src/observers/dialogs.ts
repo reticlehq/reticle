@@ -16,7 +16,7 @@
  */
 
 import { EventType } from '@reticlehq/core';
-import { observeSafely, type Emit, type Teardown } from './types.js';
+import type { Emit, Teardown } from './types.js';
 import { isSyntheticInput } from '../actions/synthetic-input.js';
 
 /**
@@ -64,15 +64,11 @@ export function installDialogs(emit: Emit): Teardown {
       if (!isSyntheticInput()) return callOriginal(...args);
       const answered = DECLINED[kind];
       const message = args[0];
-      // The answer is what the app is waiting on, so observation cannot be allowed to replace it with
-      // a throw: the dialog is being answered whether or not the event lands.
-      observeSafely(() => {
-        emit(EventType.DIALOG_OPENED, {
-          kind,
-          ...('string' === typeof message ? { message } : {}),
-          // `alert` has nothing to answer, so the field is omitted rather than reported as a value.
-          ...(answered === undefined ? {} : { answered }),
-        });
+      emit(EventType.DIALOG_OPENED, {
+        kind,
+        ...('string' === typeof message ? { message } : {}),
+        // `alert` has nothing to answer, so the field is omitted rather than reported as a value.
+        ...(answered === undefined ? {} : { answered }),
       });
       return answered;
     };

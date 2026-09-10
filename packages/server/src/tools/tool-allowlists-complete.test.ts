@@ -44,7 +44,7 @@ const ALLOWLISTS: ReadonlyArray<{ readonly name: string; readonly file: string }
   { name: 'SESSION_BOUND_TOOLS', file: 'tools/invoke-tool.ts' },
   { name: 'SESSION_EXEMPT_TOOLS', file: 'tools/invoke-tool.ts' },
   { name: 'VERDICT_TOOLS', file: 'tools/feedback-tools.ts' },
-  { name: 'CAPTURED_TOOLS', file: 'honesty/feature-capture.ts' },
+  { name: 'CAPTURED_TOOLS', file: 'tools/feature-capture.ts' },
   { name: 'CORE_TOOL_NAMES', file: 'tools/tool-surface.ts' },
   { name: 'EXTENDED_TOOL_NAMES', file: 'tools/tool-surface.ts' },
   { name: 'VERIFY_TOOL_NAMES', file: 'tools/tool-surface.ts' },

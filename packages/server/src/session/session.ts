@@ -3,7 +3,7 @@ import type { ImpactSnapshot } from '@reticlehq/core';
 import { recordImpact } from '../impact/impact-recorder.js';
 import { LastAct } from './last-act.js';
 import { GapLedger } from '../honesty/gap-ledger.js';
-import { CaptureLedger } from '../honesty/feature-capture.js';
+import { CaptureLedger } from '../tools/feature-capture.js';
 import { commandTimeoutMessage, type PageRuntime } from './command-timeout.js';
 import { readHealthEvent, pendingNavigationMs, type SessionHealth } from './session-health.js';
 import { MIRRORED_COMMANDS, mirroredNarration } from './session-mirror.js';

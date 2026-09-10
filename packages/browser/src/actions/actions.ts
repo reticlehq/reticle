@@ -3,16 +3,12 @@ import {
   ActionWarning,
   DANGEROUS_ACTION_CONFIRM_ARG,
   ElementState,
+  isDangerousActionText,
   NATIVE_INPUT_ARG,
   SettleReason,
 } from '@reticlehq/core';
 import { asSyntheticInput } from './synthetic-input.js';
 import { echoRef, refs } from '../dom/refs.js';
-import {
-  dangerousActionContext,
-  requiresDangerousConfirmation,
-  submitControlFor,
-} from './danger-context.js';
 import { assertEditable, assertNotRichText, setNativeValue } from './value-input.js';
 import { getAccessibleName, getRole, isVisible, getStates } from '../dom/a11y.js';
 import { elementHasHoverHandlers, identifyComponent } from '../registry/adapters.js';
@@ -260,6 +256,22 @@ function alreadyAtCheckedState(el: HTMLElement, action: string): boolean {
  * The form's `action` stays — that is a URL this element submits to, i.e. a property of what this
  * click DOES, not of what happens to be on screen beside it.
  */
+function dangerousActionContext(el: HTMLElement): string {
+  const form = el.closest('form');
+  return [
+    getAccessibleName(el),
+    el.textContent ?? '',
+    el.getAttribute('value') ?? '',
+    el.getAttribute('title') ?? '',
+    el.getAttribute('aria-label') ?? '',
+    el.getAttribute('href') ?? '',
+    form?.getAttribute('action') ?? '',
+  ].join(' ');
+}
+
+function requiresDangerousConfirmation(text: string, role?: string): boolean {
+  return isDangerousActionText(text, role);
+}
 
 /**
  * Which key a `press` is asking for.
@@ -451,14 +463,7 @@ function assertActionAllowed(el: HTMLElement, action: string, args: Record<strin
   // Same resolver as the dispatch below, so the destructive-action guard cannot classify a drag
   // by a target the dispatch will not use.
   const dragTarget = action === ActionType.DRAG ? refs.resolve(dragTargetRef(args)) : null;
-  // Enter is judged by what it submits as well as by the field itself. Any OTHER key submits
-  // nothing, so the form is none of its business.
-  const submitter =
-    action === ActionType.PRESS && 'Enter' === pressKey(args) ? submitControlFor(el) : null;
-  const sourceDangerous =
-    requiresDangerousConfirmation(dangerousActionContext(el), getRole(el)) ||
-    (submitter !== null &&
-      requiresDangerousConfirmation(dangerousActionContext(submitter), getRole(submitter)));
+  const sourceDangerous = requiresDangerousConfirmation(dangerousActionContext(el), getRole(el));
   const targetDangerous =
     isHtmlElement(dragTarget) &&
     requiresDangerousConfirmation(dangerousActionContext(dragTarget), getRole(dragTarget));

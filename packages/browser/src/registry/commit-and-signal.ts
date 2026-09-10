@@ -1,5 +1,5 @@
 /**
- * Pair a mutation with its signal so the two cannot drift. The lighter alternative to a
+ * P5b — pair a mutation with its signal so the two can't drift. The lighter alternative to a
  * Zustand middleware: one call runs the mutation, then emits the signal exactly once, and returns
  * the mutation's value. If `mutate` throws, the mutation never happened — so the signal is NOT
  * emitted and the error propagates unchanged (no try/finally, which would wrongly emit on throw).

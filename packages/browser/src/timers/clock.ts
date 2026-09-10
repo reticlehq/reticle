@@ -4,7 +4,6 @@
 // on those, and freezing them would stall the page. Opt-in + reversible.
 
 import { requireCapturedMethod } from '../util/captured-method.js';
-import { captureMethod } from '../patching/capture-method.js';
 
 interface Task {
   id: number;
@@ -21,50 +20,12 @@ interface Originals {
   dateNow: () => number;
 }
 
-/**
- * How long a frozen clock may stand untouched before the SDK hands the page its real time back.
- *
- * Freezing is a step inside an agent's turn — freeze, advance, assert — and every one of those hops
- * is seconds. The failure this bounds is the agent simply stopping: the socket stays open (so
- * `onConnectionLost` never fires), nothing ever advances the virtual clock, and the developer's page
- * keeps `Date.now()` pinned forever. Every lodash debounce/throttle reads `now - lastCall === 0`, so
- * search boxes, autosave, polling and auto-dismiss are dead until a reload, with nothing on screen
- * explaining why.
- *
- * Two minutes is far longer than any legitimate gap between an agent's own clock commands, and short
- * enough that a person who tabs back to their app is not left holding a stopped one. Auto-restoring
- * costs the agent nothing it cannot redo, and loses no work: `resetClock` re-arms everything queued
- * during the freeze onto real timers.
- */
-export const FREEZE_WATCHDOG_MS = 120_000;
-
 let installed = false;
 let virtualNow = 0;
 let realBase = 0;
 let seq = 1;
 let tasks: Task[] = [];
 let originals: Originals | null = null;
-let watchdog: number | undefined;
-/** The functions WE put in the timer slots, so teardown can tell ours from a later wrapper's. */
-let ourFakes: Partial<Originals> = {};
-
-/**
- * (Re)arm the deadman on the page's REAL setTimeout.
- *
- * Deliberately not `window.setTimeout`, which is the fake we just installed — scheduling the
- * watchdog there would queue it into a clock only the agent can advance, i.e. exactly the thing that
- * has stopped happening.
- */
-function armWatchdog(): void {
-  if (null === originals) return;
-  const natives = originals;
-  const clear = natives.clearTimeout.bind(window);
-  if (watchdog !== undefined) clear(watchdog);
-  watchdog = natives.setTimeout.bind(window)(() => {
-    watchdog = undefined;
-    resetClock();
-  }, FREEZE_WATCHDOG_MS);
-}
 
 export function isClockFrozen(): boolean {
   return installed;
@@ -95,39 +56,15 @@ export function freezeClock(): void {
     tasks = tasks.filter((t) => t.id !== id);
   };
 
-  // The trailing arguments are part of the signature: `setTimeout(cb, ms, a, b)` calls `cb(a, b)`.
-  // The old two-parameter form dropped them silently — the `as unknown as` cast is what let a fake
-  // with the wrong arity stand in for the real thing — so every callback written that way saw
-  // `undefined` for the whole freeze. Bound here rather than at fire time so a later mutation of the
-  // args array cannot change what the callback receives.
-  const withArgs =
-    (cb: (...args: unknown[]) => void, args: unknown[]): (() => void) =>
-    () => {
-      cb(...args);
-    };
-  window.setTimeout = ((cb: (...args: unknown[]) => void, delay = 0, ...args: unknown[]) =>
-    schedule(withArgs(cb, args), delay)) as unknown as typeof window.setTimeout;
+  window.setTimeout = ((cb: () => void, delay = 0) =>
+    schedule(cb, delay)) as unknown as typeof window.setTimeout;
   window.clearTimeout = ((id: number) => cancel(id)) as unknown as typeof window.clearTimeout;
-  window.setInterval = ((cb: (...args: unknown[]) => void, delay = 0, ...args: unknown[]) =>
-    schedule(
-      withArgs(cb, args),
-      delay,
-      Math.max(1, delay),
-    )) as unknown as typeof window.setInterval;
+  window.setInterval = ((cb: () => void, delay = 0) =>
+    schedule(cb, delay, Math.max(1, delay))) as unknown as typeof window.setInterval;
   window.clearInterval = ((id: number) => cancel(id)) as unknown as typeof window.clearInterval;
-  // Read back through captureMethod: these are stored function values we are holding to compare by
-  // identity later, which is exactly the intent that helper exists to state.
-  ourFakes = {
-    setTimeout: captureMethod(window, 'setTimeout'),
-    clearTimeout: captureMethod(window, 'clearTimeout'),
-    setInterval: captureMethod(window, 'setInterval'),
-    clearInterval: captureMethod(window, 'clearInterval'),
-  };
   // Note: we deliberately do NOT patch performance.now — React 19's scheduler uses it to
   // flush updates, and freezing it stalls re-renders. setTimeout/Date.now cover app timers.
   Date.now = () => realBase + virtualNow;
-  ourFakes.dateNow = captureMethod(Date, 'now');
-  armWatchdog();
 }
 
 /** Run all timers due within the next `ms` of virtual time, in order. */
@@ -152,8 +89,6 @@ export function advanceClock(ms: number): void {
     }
   }
   virtualNow = target;
-  // The agent is still here, so the deadman starts over.
-  armWatchdog();
 }
 
 /**
@@ -173,20 +108,11 @@ export function resetClock(): void {
   if (!installed || null === originals) return;
   const natives = originals;
   const pending = tasks;
-  if (watchdog !== undefined) {
-    natives.clearTimeout.bind(window)(watchdog);
-    watchdog = undefined;
-  }
-  // Restore ONLY the slots that still hold OUR fake. A router, a Sentry shim or the app's own test
-  // harness may have wrapped a timer AFTER the freeze; writing the native back over it would
-  // silently uninstall their instrumentation — the rule route.ts states for history.
-  const fakes = ourFakes;
-  ourFakes = {};
-  if (window.setTimeout === fakes.setTimeout) window.setTimeout = natives.setTimeout;
-  if (window.clearTimeout === fakes.clearTimeout) window.clearTimeout = natives.clearTimeout;
-  if (window.setInterval === fakes.setInterval) window.setInterval = natives.setInterval;
-  if (window.clearInterval === fakes.clearInterval) window.clearInterval = natives.clearInterval;
-  if (Date.now === fakes.dateNow) Date.now = natives.dateNow;
+  window.setTimeout = natives.setTimeout;
+  window.clearTimeout = natives.clearTimeout;
+  window.setInterval = natives.setInterval;
+  window.clearInterval = natives.clearInterval;
+  Date.now = natives.dateNow;
   const resumeFrom = virtualNow;
   originals = null;
   tasks = [];
@@ -216,12 +142,9 @@ export function resetClock(): void {
   const nativeSetInterval = natives.setInterval.bind(window);
 
   const reArmed = new Map<number, number>();
-  // Filled by installTranslatingClears below, read by `done` only after a timer has fired — i.e.
-  // always after the shims exist.
-  const shims: { current?: Pick<Originals, 'clearTimeout' | 'clearInterval'> } = {};
   const done = (virtualId: number): void => {
     reArmed.delete(virtualId);
-    if (0 === reArmed.size && shims.current !== undefined) restoreRawClears(natives, shims.current);
+    if (0 === reArmed.size) restoreRawClears(natives);
   };
   for (const task of pending) {
     if (task.interval !== undefined) {
@@ -239,7 +162,7 @@ export function resetClock(): void {
       );
     }
   }
-  shims.current = installTranslatingClears(reArmed, natives, done);
+  installTranslatingClears(reArmed, natives, done);
 }
 
 /** Route a clear() for a re-armed virtual id to its real native id; everything else passes through. */
@@ -247,7 +170,7 @@ function installTranslatingClears(
   reArmed: Map<number, number>,
   natives: Originals,
   done: (virtualId: number) => void,
-): Pick<Originals, 'clearTimeout' | 'clearInterval'> {
+): void {
   // `.bind(window)` for the same reason as the re-arm above: a bare `rawClear(id)` reaches the DOM
   // with the wrong receiver and throws `Illegal invocation` in a real browser.
   const translate = (rawClear: (id?: number) => void) => {
@@ -264,18 +187,10 @@ function installTranslatingClears(
   };
   window.clearTimeout = translate(natives.clearTimeout);
   window.clearInterval = translate(natives.clearInterval);
-  return {
-    clearTimeout: captureMethod(window, 'clearTimeout'),
-    clearInterval: captureMethod(window, 'clearInterval'),
-  };
 }
 
 /** Drop the shim once no re-armed work is outstanding — it costs nothing to remove and one hop to keep. */
-function restoreRawClears(
-  natives: Originals,
-  shims: Pick<Originals, 'clearTimeout' | 'clearInterval'>,
-): void {
-  // Only if the slot still holds the shim WE installed, for the same reason resetClock checks.
-  if (window.clearTimeout === shims.clearTimeout) window.clearTimeout = natives.clearTimeout;
-  if (window.clearInterval === shims.clearInterval) window.clearInterval = natives.clearInterval;
+function restoreRawClears(natives: Originals): void {
+  window.clearTimeout = natives.clearTimeout;
+  window.clearInterval = natives.clearInterval;
 }

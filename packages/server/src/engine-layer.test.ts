@@ -12,7 +12,7 @@ import { join } from 'node:path';
  * liftable out of all of that, because somebody implementing the specification wants the rules
  * without the daemon.
  *
- * It is not liftable today. Eight runtime imports cross out of it -- thirteen when this was written --
+ * It is not liftable today. Five runtime imports cross out of it -- thirteen when this was written --
  * and they are listed below
  * rather than banned, because a guard that is red the day it is written teaches people to switch it
  * off rather than to fix anything.
@@ -38,15 +38,11 @@ const CROSSINGS_TODAY: Record<string, string> = {
   // Four crossings that used to be here are gone: `asString` and `asNumber` were generic value
   // narrowing filed under `tools/` because that is where they were first needed, and they now live in
   // the shared foundation where the engine can read them without reaching through the tool surface.
-  // Genuinely about the tool surface. These files measure how an agent used the tools, which is a
-  // question about the surface rather than about a verdict -- so the answer is probably that they
-  // belong with `tools/`, not that the engine needs to reach them.
-  'tool-hit-rate.ts -> tools':
-    'reads the tool tables; likely belongs beside tools rather than here',
-  'feature-capture.ts -> tools': 'reads the tool tables',
-  'feature-capture.ts -> runs': 'reads run shapes',
-  // Live session state reached from inside a rule. The engine should be given what it needs rather
-  // than fetching it, which is also what makes a rule testable without a browser.
+  // Three more are gone, and the answer was that the files sat in the wrong place rather than that
+  // the engine needed them. `tool-hit-rate` and `feature-capture` measure how an agent used the tool
+  // surface, which is a question about the surface and not about whether a consequence held. Both
+  // were imported BY tools/ as well as importing FROM it, so the dependency already pointed there in
+  // both directions.
   'predicate.ts -> session': 'asks the live session directly',
   'verified.ts -> session': 'asks the live session directly',
   'predicate.ts -> capsule': 'reads stored capsules',

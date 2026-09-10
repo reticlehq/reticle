@@ -11,7 +11,7 @@ import { SessionState } from '@reticlehq/core';
 import { ReticleTool } from './tool-names.js';
 import { runTool } from './invoke-tool.js';
 import { buildDynamicTools } from './dynamic-tools.js';
-import { CaptureLedger } from '../honesty/feature-capture.js';
+import { CaptureLedger } from '../tools/feature-capture.js';
 import { createNodeFileSystem } from '../project/fs-port.js';
 import { BaselineStore } from '../project/baselines.js';
 import { RecordingStore } from '../flows/recordings.js';

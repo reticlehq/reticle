@@ -1,7 +1,7 @@
 import { EventType } from '@reticlehq/core';
 import { captureMethod } from '../patching/capture-method.js';
 import { projectBody } from './network-body.js';
-import { observeSafely, observeValue, type Emit, type Teardown } from './types.js';
+import type { Emit, Teardown } from './types.js';
 
 /**
  * Files the app PRODUCES — the one artifact class an outside-the-browser tool cannot inspect.
@@ -60,31 +60,24 @@ export function installDownload(emit: Emit, opts: DownloadOptions = {}): Teardow
    * generated preview, an <img> src) is still visible.
    */
   const originalCreate = captureMethod(URL, 'createObjectURL');
-  const patchedCreate = function reticleObservedObjectUrl(obj: Blob | MediaSource): string {
+  URL.createObjectURL = function reticleObservedObjectUrl(obj: Blob | MediaSource): string {
     const url = objectUrl(obj);
-    // The app already has its url. Everything below is observation — reading `type`/`size` off an
-    // exotic Blob subclass can throw, and that must not come out of `URL.createObjectURL`.
-    observeSafely(() => {
-      if (typeof Blob !== 'undefined' && obj instanceof Blob) {
-        // Started here, awaited at report time — never blocking the app's own download path.
-        const text = TEXTUAL.test(obj.type)
-          ? obj.text().catch(() => undefined)
-          : Promise.resolve(undefined);
-        known.set(url, { type: obj.type, size: obj.size, text });
-      }
-    });
+    if (typeof Blob !== 'undefined' && obj instanceof Blob) {
+      // Started here, awaited at report time — never blocking the app's own download path.
+      const text = TEXTUAL.test(obj.type)
+        ? obj.text().catch(() => undefined)
+        : Promise.resolve(undefined);
+      known.set(url, { type: obj.type, size: obj.size, text });
+    }
     return url;
   };
-  URL.createObjectURL = patchedCreate;
 
   const report = (url: string, filename?: string): void => {
     const record = known.get(url);
     if (record === undefined) return;
     known.delete(url);
     void record.text.then((text) => {
-      observeSafely(() => {
-        emitDownload(record, filename, text);
-      });
+      emitDownload(record, filename, text);
     });
   };
 
@@ -109,46 +102,29 @@ export function installDownload(emit: Emit, opts: DownloadOptions = {}): Teardow
    * app dispatches it programmatically or a human does, and whether or not the anchor is in the DOM.
    */
   const onClick = (event: Event): void => {
-    observeSafely(() => {
-      const target = event.target;
-      const anchor =
-        target instanceof Element ? target.closest<HTMLAnchorElement>('a[download]') : null;
-      if (null === anchor) return;
-      report(anchor.getAttribute('href') ?? '', anchor.getAttribute('download') ?? undefined);
-    });
+    const target = event.target;
+    const anchor =
+      target instanceof Element ? target.closest<HTMLAnchorElement>('a[download]') : null;
+    if (null === anchor) return;
+    report(anchor.getAttribute('href') ?? '', anchor.getAttribute('download') ?? undefined);
   };
   document.addEventListener('click', onClick, true);
 
   // A programmatic `a.click()` on an anchor never inserted into the document dispatches no bubbling
   // event this listener can see, so the anchor path is patched too.
   const originalClick = captureMethod(HTMLAnchorElement.prototype, 'click');
-  const patchedClick = function reticleObservedAnchorClick(this: HTMLAnchorElement) {
-    // Read the two attributes under a guard, let the app's click happen, then report. The click is
-    // the app's; nothing observation does may stand between the caller and it.
-    const pending = observeValue(() =>
-      this.hasAttribute('download')
-        ? {
-            href: this.getAttribute('href') ?? '',
-            name: this.getAttribute('download') ?? undefined,
-          }
-        : undefined,
-    );
+  HTMLAnchorElement.prototype.click = function reticleObservedAnchorClick(this: HTMLAnchorElement) {
+    if (this.hasAttribute('download')) {
+      report(this.getAttribute('href') ?? '', this.getAttribute('download') ?? undefined);
+    }
     originalClick.call(this);
-    observeSafely(() => {
-      if (pending !== undefined) report(pending.href, pending.name);
-    });
   };
-  HTMLAnchorElement.prototype.click = patchedClick;
 
   return () => {
-    // A REAL restore, so teardown leaves the page exactly as it was found — but ONLY of the slots
-    // that still hold OUR wrapper. Something that wrapped these AFTER connect() (a download shim, an
-    // analytics SDK, a test harness) must keep its instrumentation; the rule route.ts states.
+    // A REAL restore, so teardown leaves the page exactly as it was found.
     document.removeEventListener('click', onClick, true);
-    if (URL.createObjectURL === patchedCreate) URL.createObjectURL = originalCreate;
-    if (HTMLAnchorElement.prototype.click === patchedClick) {
-      HTMLAnchorElement.prototype.click = originalClick;
-    }
+    URL.createObjectURL = originalCreate;
+    HTMLAnchorElement.prototype.click = originalClick;
     known.clear();
   };
 }

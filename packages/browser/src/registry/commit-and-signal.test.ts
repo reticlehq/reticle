@@ -6,7 +6,7 @@ function spyEmitter(): ReticleEmitter & { signal: ReturnType<typeof vi.fn> } {
   return { signal: vi.fn(), state: vi.fn() };
 }
 
-describe('commitAndSignal — a mutation and its signal cannot drift apart', () => {
+describe('commitAndSignal (P5b drift-proof pairing)', () => {
   it('runs mutate then emits the signal exactly once', () => {
     const emitter = spyEmitter();
     let mutated = false;

@@ -110,21 +110,6 @@ export interface SnapshotResult {
    */
   hiddenSkipped?: number;
   /**
-   * How many elements exist under the scope at all, present ONLY when the walk produced no nodes.
-   *
-   * The third cause of an empty tree, and the one no count of the WALK can reach: a walk that
-   * visited nothing has nothing to report. Filed from the field after the source-mapping stamp
-   * crashed a react-three-fiber app — React unmounted everything, the page went white, and
-   * `{ tree: "", nodes: 0 }` was indistinguishable from a page that had not rendered yet. A
-   * diagnosis pass went on establishing which.
-   *
-   * Counted off the DOM instead, which settles it outright: a handful of elements is a mount
-   * container with nothing in it, and dozens is a page whose elements were all skipped (see
-   * `hiddenSkipped`). Deliberately a number rather than a verdict, for the reason `hiddenSkipped`
-   * gives — the walk knows this for certain and cannot know why the app unmounted.
-   */
-  domElements?: number;
-  /**
    * Refs of the subtree roots the walk never entered, present ONLY when `truncated`. This is the
    * cut's own frontier: re-snapshot each with `{ scope: ref, includeRoot: true }` and the union is
    * the whole tree. Without it `truncated` says only THAT the read stopped, never WHERE, so nobody
@@ -544,9 +529,6 @@ export function buildSnapshot(options: SnapshotOptions = {}): SnapshotResult {
     status,
     nodes: ctx.nodes,
     truncated: ctx.truncated,
-    // Only when the tree is empty: on any other result it is a number nobody reads, paid for on
-    // every snapshot. `querySelectorAll` on an empty container is the cheapest possible count.
-    ...(0 === ctx.nodes ? { domElements: root.querySelectorAll('*').length } : {}),
     ...(ctx.leanSkipped > 0 ? { leanSkipped: ctx.leanSkipped } : {}),
     ...(ctx.hiddenSkipped > 0 ? { hiddenSkipped: ctx.hiddenSkipped } : {}),
     ...(ctx.unread.length > 0 ? { unread: ctx.unread } : {}),
