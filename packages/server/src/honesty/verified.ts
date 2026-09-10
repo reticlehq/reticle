@@ -231,6 +231,32 @@ export function decideVerified(inputs: VerifiedInputs): VerifiedVerdict {
     };
   }
 
+  // ABOVE the failure clause, and for the same reason `observationLost` is: a consequence that has
+  // not happened YET has not failed. `202 Accepted` is the only word HTTP has for "the outcome does
+  // not exist yet", and a not-yet-reconciled write is indistinguishable from a broken one at the
+  // instant the predicate is evaluated — so whichever clause answers first decides whether Reticle
+  // blames the app for being asynchronous.
+  //
+  // It used to sit below, which made it unreachable in the case it was written for: the moment the
+  // predicate came back false, `assertion_failed` answered and the pending clause never ran. It only
+  // ever fired for a PASSING predicate, which is the half that needed it least.
+  //
+  // Measured on a logistics console with server-side reconciliation: a dispatch answered 202, the row
+  // optimistically rendered "dispatched", the page settled, and the verdict came back `yes` — then
+  // the server REVERTED it to `held` 1.2s later. Every channel agreed, and every channel was early.
+  //
+  // UNKNOWN rather than NO, in both directions now: nothing is known to have failed, and saying it
+  // has would be its own false report. This matters most outside the browser, where a write that is
+  // accepted and reflected a moment later is the normal healthy path rather than an edge case.
+  if (true === outcomePending) {
+    return {
+      verified: Verified.UNKNOWN,
+      verifiedReason: VerifiedReason.OUTCOME_PENDING,
+      because:
+        'a write returned 202 Accepted, so the server has not finished processing it — this window cannot contain the outcome; re-check once it reconciles',
+    };
+  }
+
   // A failed assertion is the most actionable fact there is; it leads — including over
   // `alreadyTrue`, because a condition that held before AND fails now is a real regression.
   if (false === pass) {
@@ -427,23 +453,6 @@ export function decideVerified(inputs: VerifiedInputs): VerifiedVerdict {
       verifiedReason: VerifiedReason.VACUOUS_GRADE,
       because:
         'nothing was asserted at a real grade, so passing proves nothing — assert a signal, request, or state path',
-    };
-  }
-
-  // A `202 Accepted` is the server saying, in the only word HTTP has for it, that the outcome does
-  // not exist yet. Treating 2xx as success makes every asynchronous workflow verifiable at exactly
-  // the moment nothing has been decided.
-  //
-  // Measured on a logistics console with server-side reconciliation: a dispatch answered 202, the row
-  // optimistically rendered "dispatched", the page settled, and the verdict came back `yes` — then
-  // the server REVERTED it to `held` 1.2s later. Every channel agreed, and every channel was early.
-  // UNKNOWN rather than NO: nothing has failed, and saying it has would be its own false report.
-  if (true === outcomePending) {
-    return {
-      verified: Verified.UNKNOWN,
-      verifiedReason: VerifiedReason.OUTCOME_PENDING,
-      because:
-        'a write returned 202 Accepted, so the server has not finished processing it — this window cannot contain the outcome; re-check once it reconciles',
     };
   }
 

@@ -44,8 +44,31 @@ describe('a 202 means the outcome does not exist yet', () => {
     ).not.toBe(Verified.NO);
   });
 
-  it('a real failure still outranks it', () => {
+  it('a failing predicate with the write still in flight is UNKNOWN too, not NO', () => {
+    // CHANGED DELIBERATELY. This used to assert NO, under the title "a real failure still outranks
+    // it" — and the question that title assumes is the one actually in dispute: is a predicate that
+    // fails while the write is still being processed a REAL failure, or a consequence that has not
+    // arrived yet? At the instant of evaluation the two are indistinguishable.
+    //
+    // The clause directly above already answers it for the passing case, in its own words:
+    // "reporting a failure that has not happened is its own false report". The failing case is the
+    // one where that reasoning bites hardest, and it was the one the old ordering excluded — the
+    // pending clause sat below `assertion_failed`, so it could only ever fire when the predicate
+    // PASSED, which is the half that needed it least.
+    //
+    // The cost is named rather than hidden: a genuine failure that happens to coincide with an
+    // in-flight 202 is now UNKNOWN instead of NO. That is a real softening, and it is accepted
+    // because the caller is told to re-check once the write reconciles, and because the alternative
+    // is blaming an app for being asynchronous — which for a non-browser realm is the normal healthy
+    // path, not an edge case.
     const r = decideVerified({ pass: false, honesty: clean, settled: true, outcomePending: true });
+    expect(r.verified).toBe(Verified.UNKNOWN);
+    expect(r.verifiedReason).toBe(VerifiedReason.OUTCOME_PENDING);
+  });
+
+  it('an ordinary failure with NO write in flight is still NO', () => {
+    // The other direction, so the change above cannot quietly turn every failure into an unknown.
+    const r = decideVerified({ pass: false, honesty: clean, settled: true });
     expect(r.verified).toBe(Verified.NO);
   });
 
