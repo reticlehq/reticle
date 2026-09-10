@@ -31,6 +31,15 @@ import { dirname, join } from 'node:path';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const PACKAGES_DIR = join(HERE, '..', 'packages');
+/**
+ * Adapters live under `adapters/<kind>/<name>` and are packages like any other, so they are checked
+ * like any other. Added when they moved out of `packages/`: the guard read one directory, so the move
+ * took four packages out of its sight and it went on reporting success about the ones that remained.
+ * A boundary guard that silently stops covering something is worse than none, because the green is
+ * read as "these are fine" rather than "these were not looked at".
+ */
+const ADAPTERS_DIR = join(HERE, '..', 'adapters');
+const SPEC_DIR = join(HERE, '..', 'openreality');
 
 /**
  * Which runtime each package lives in. Untagged → 'iso' (isomorphic). Four sides, because a build
@@ -62,6 +71,10 @@ export const SIDE = Object.freeze({
   '@reticlehq/electron': 'node',
   // Isomorphic foundation — imported by every side, imports none of them.
   '@reticlehq/core': 'iso',
+  // The specification. Isomorphic for the same reason core is, and stricter in practice: it has no
+  // dependencies at all, because a contract that needs a library to read is a contract with a
+  // dependency somebody else has to accept.
+  '@reticlehq/openreality': 'iso',
 });
 
 /** Node-runtime npm packages a browser/build/iso package must never depend on (a "needs a server" proxy). */
@@ -152,9 +165,21 @@ export function findViolations(manifests, side = SIDE) {
  * manifest and no npm one. It has no JavaScript dependency edges, so there is nothing here to check.
  */
 function readManifests(packagesDir) {
-  return readdirSync(packagesDir, { withFileTypes: true })
+  const direct = readdirSync(packagesDir, { withFileTypes: true })
     .filter((e) => e.isDirectory())
-    .map((e) => join(packagesDir, e.name, 'package.json'))
+    .map((e) => join(packagesDir, e.name, 'package.json'));
+  // Adapters are one level deeper, grouped by the kind of adapter they are.
+  const nested = existsSync(ADAPTERS_DIR)
+    ? readdirSync(ADAPTERS_DIR, { withFileTypes: true })
+        .filter((e) => e.isDirectory())
+        .flatMap((kind) =>
+          readdirSync(join(ADAPTERS_DIR, kind.name), { withFileTypes: true })
+            .filter((e) => e.isDirectory())
+            .map((e) => join(ADAPTERS_DIR, kind.name, e.name, 'package.json')),
+        )
+    : [];
+  const spec = [join(SPEC_DIR, 'package.json')];
+  return [...direct, ...nested, ...spec]
     .filter((p) => existsSync(p))
     .map((p) => JSON.parse(readFileSync(p, 'utf8')));
 }

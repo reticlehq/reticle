@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { REALM_VERBS } from './interaction.js';
+import { REALM_VERBS } from './realm-interaction.js';
 
 /**
  * The four verbs are a description of code that exists, not a wish about code that might.

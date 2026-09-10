@@ -1,0 +1,24 @@
+{
+  "name": "@reticlehq/openreality",
+  "version": "2.14.0",
+  "description": "The open specification Reticle is built on: what a realm must be able to do, and what a verdict is allowed to say.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -b",
+    "test:unit": "vitest run --passWithNoTests",
+    "test:guards": "vitest run --passWithNoTests"
+  }
+}

@@ -1,6 +1,7 @@
 {
   "files": [],
   "references": [
+    { "path": "openreality" },
     { "path": "packages/core" },
     { "path": "packages/init" },
     { "path": "packages/browser" },
