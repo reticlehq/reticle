@@ -179,9 +179,6 @@ describe('the run a drive leaves behind', () => {
   });
 
   it('writes a run when every verdict was undetermined, because that is worth seeing', async () => {
-    // The end-to-end half of the same decision. A drive that verified things and resolved none of
-    // them means the verification is not working, and an empty dashboard looks identical to never
-    // having driven at all. It reads UNKNOWN, not PASS, so saying it is now honest.
     const end = makeSessionEnd({ fs, reticleRoot: root, enabled: true, now: () => 1_700_000 });
     await end(driven([Verified.UNKNOWN, Verified.NO_FAULT]));
     expect((await runsWritten()).filter((f) => f.endsWith('.json'))).toHaveLength(1);
@@ -191,6 +188,16 @@ describe('the run a drive leaves behind', () => {
     const end = makeSessionEnd({ fs, reticleRoot: root, enabled: true, now: () => 1_700_000 });
     await end(driven([]));
     expect((await runsWritten()).filter((f) => f.endsWith('.json'))).toHaveLength(0);
+  });
+
+  it('writes ONE run across reloads, not one per socket close', async () => {
+    // Teardown fires on every socket close, and a reconnecting tab keeps its id and goes on
+    // appending to the same journal. Without a stable run id this published a row per reload, each
+    // a superset of the last, so one drive read as several overlapping verifications.
+    const end = makeSessionEnd({ fs, reticleRoot: root, enabled: true, now: () => 1_700_000 });
+    await end(driven([Verified.YES]));
+    await end(driven([Verified.YES, Verified.NO]));
+    expect((await runsWritten()).filter((f) => f.endsWith('.json'))).toHaveLength(1);
   });
 
   it('leaves teardown intact for a session that cannot answer — every existing double', async () => {

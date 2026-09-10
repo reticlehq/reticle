@@ -9,7 +9,7 @@
 import { describe, expect, it } from 'vitest';
 import { RunCheckStatus, Verified, type JournalAction } from '@reticlehq/core';
 import { buildVerificationRun, type VerificationRunInput } from './build-verification-run.js';
-import { driveRunFrom } from './drive-run.js';
+import { driveRunFrom, driveRunId } from './drive-run.js';
 import { computeVerdict } from './build-verification-run.js';
 import { VerdictStatus } from '@reticlehq/core';
 
@@ -55,19 +55,14 @@ describe('a drive folded into a run', () => {
    */
   describe('verdicts that proved nothing', () => {
     it('writes a run that says nothing was proved, rather than staying silent', () => {
-      // This was written the other way round, and for a reason that was true then: a run with zero
-      // checks computed to PASS, so writing one would have put a green row meaning "nothing was
-      // measured" on a dashboard -- the exact false green the product exists to prevent. Staying
-      // silent was the only honest option available.
+      // Written the other way round on the branch this came from, for a reason true then: a run with
+      // zero checks computed to PASS, so writing one put a green row meaning "nothing was measured"
+      // on a dashboard. Silence was the only honest option available.
       //
-      // A zero-check run now computes to UNKNOWN, so the honest option is available, and it is the
-      // better one. A drive that produced verdicts and resolved none of them is precisely what
-      // somebody needs to see: their verification is not working. Silence hides that behind an empty
-      // dashboard that looks the same as never having driven at all.
+      // A zero-check run now reads UNKNOWN, so the honest option exists and is the better one. A
+      // drive that produced verdicts and resolved none of them is what somebody most needs to see.
       const run = driveRunFrom([action(Verified.UNKNOWN), action(Verified.NO_FAULT)], DEPS);
       expect(run?.checks).toHaveLength(0);
-      // And it must read UNKNOWN, not PASS. If that ever changes back, this row becomes the false
-      // green the original refusal existed to avoid, and the refusal is no longer there to stop it.
       expect(buildVerificationRun(run as VerificationRunInput, () => 1).verdict.status).toBe(
         VerdictStatus.UNKNOWN,
       );
@@ -115,5 +110,36 @@ describe('a drive folded into a run', () => {
     expect(driveRunFrom([withSource], DEPS)?.checks[0]?.evidence).toEqual({
       source: 'src/Form.tsx:42:8',
     });
+  });
+});
+
+/**
+ * One row per drive, not one per page reload.
+ *
+ * Session teardown fires on every socket close, and a reconnecting tab keeps its session id and goes
+ * on appending to the same journal. A random run id per teardown would publish a row per reload,
+ * each a superset of the last, and one drive would look like five overlapping verifications.
+ */
+describe('the run id for a drive', () => {
+  it('is derived from the session, so a re-fold rewrites the same row', () => {
+    const id = 'scc5398dc-8e92-4733-bbdd-1787041cb69d';
+    expect(driveRunId(id)).toBe(driveRunId(id));
+    expect(driveRunId(id)).toContain(id);
+  });
+
+  it('separates two sessions, which are two drives', () => {
+    expect(driveRunId('s-one')).not.toBe(driveRunId('s-two'));
+  });
+
+  it('marks it as a drive, so it cannot collide with a replay run', () => {
+    expect(driveRunId('s-one').startsWith('drive-')).toBe(true);
+  });
+
+  it('falls back to a random id for a session id that is not a safe path segment', () => {
+    // A session id is a free string on the wire. Losing idempotence for one session is the right
+    // concession; letting `../` reach a file path is not.
+    const unsafe = '../../etc/passwd';
+    expect(driveRunId(unsafe)).not.toContain('..');
+    expect(driveRunId(unsafe)).not.toBe(driveRunId(unsafe));
   });
 });
