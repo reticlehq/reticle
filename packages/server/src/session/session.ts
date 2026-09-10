@@ -634,10 +634,8 @@ export class Session {
   }
 
   /**
-   * Hold events at or after `cursor` against count-cap eviction until the returned function runs.
-   *
-   * Armed by a wait for as long as it is being graded, so the predicate's own match cannot be
-   * dropped inside the very window it is judged on -- see `RingBuffer.protect` (#668).
+   * Hold events at/after `cursor` against count-cap eviction until the returned function runs, so a
+   * predicate's own match cannot be dropped inside the window it is graded on (#668).
    */
   protectWindow(cursor: number): () => void {
     return this.#buffer.protect(cursor);
