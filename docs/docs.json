@@ -202,6 +202,7 @@
                   "gates",
                   "gate-plan",
                   "required-checks",
+                  "state-files",
                   "fixtures",
                   "local-registry"
                 ]
