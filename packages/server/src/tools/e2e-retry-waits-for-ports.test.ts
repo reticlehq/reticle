@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
+import { REPO_ROOT } from '../repo-root.js';
 
 /**
  * The e2e retry must WAIT for the ports it just killed, not assume they are free.
@@ -23,11 +23,7 @@ import { fileURLToPath } from 'node:url';
  * Asserted on the workflow text because CI is the one place where a rule left to prose is never
  * re-read until it is already costing someone a build.
  */
-const HERE = dirname(fileURLToPath(import.meta.url));
-const CI = readFileSync(
-  join(HERE, '..', '..', '..', '..', '.github', 'workflows', 'ci.yml'),
-  'utf8',
-);
+const CI = readFileSync(join(REPO_ROOT, '.github', 'workflows', 'ci.yml'), 'utf8');
 
 /**
  * The e2e job's retry block, bounded at BOTH ends.

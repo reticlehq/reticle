@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
+import { REPO_ROOT } from '../repo-root.js';
 
 /**
  * The DCO failure must carry the fix, not a pointer to a document that lacks it.
@@ -23,8 +23,7 @@ import { fileURLToPath } from 'node:url';
  * Pinned here rather than trusted, because a CI message is the one piece of documentation nobody
  * re-reads until it is already failing someone.
  */
-const HERE = dirname(fileURLToPath(import.meta.url));
-const REPO = join(HERE, '..', '..', '..', '..');
+const REPO = REPO_ROOT;
 const DCO = readFileSync(join(REPO, '.github', 'workflows', 'dco.yml'), 'utf8');
 
 /**

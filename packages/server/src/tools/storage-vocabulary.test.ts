@@ -24,13 +24,13 @@
 
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 import { StorageArea } from '@reticlehq/core';
 import { READ_TOOLS } from './read-tools.js';
 import { ReticleTool } from '@reticlehq/core';
+import { REPO_ROOT } from '../repo-root.js';
 
-const REPO = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..');
+const REPO = REPO_ROOT;
 const read = (path: string): string => readFileSync(join(REPO, path), 'utf8');
 
 describe('one vocabulary for one storage area', () => {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
-import { dirname, join, relative } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join, relative } from 'node:path';
+import { REPO_ROOT } from '../repo-root.js';
 
 /**
  * No bench-app source may fetch a RELATIVE `/api/...` URL.
@@ -27,8 +27,7 @@ import { fileURLToPath } from 'node:url';
  * and the pattern in this repo is unambiguous — every rule a machine enforces has held, and every
  * rule left to prose has been violated.
  */
-const HERE = dirname(fileURLToPath(import.meta.url));
-const REPO = join(HERE, '..', '..', '..', '..');
+const REPO = REPO_ROOT;
 const SRC = join(REPO, 'apps', 'bench-app', 'src');
 
 /**

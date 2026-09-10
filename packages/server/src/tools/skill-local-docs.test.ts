@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { REPO_ROOT } from '../repo-root.js';
 
 /**
  * A page SKILL.md says is "on disk beside this file" has to actually be there.
@@ -16,8 +17,6 @@ import { join } from 'node:path';
  * in the other fails in the copy every user downloads, and silently -- the agent simply fetches
  * instead, or gives up on the page entirely.
  */
-
-const REPO_ROOT = join(__dirname, '..', '..', '..', '..');
 const SKILL = join(REPO_ROOT, 'SKILL.md');
 
 /** Every `docs/...` path SKILL.md names as available on disk. */

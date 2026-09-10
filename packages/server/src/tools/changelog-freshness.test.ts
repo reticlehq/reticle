@@ -24,10 +24,9 @@
 
 import { describe, expect, it } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { REPO_ROOT } from '../repo-root.js';
 
-const REPO = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..');
+const REPO = REPO_ROOT;
 
 /**
  * The two places a release note can live, and both satisfy freshness.

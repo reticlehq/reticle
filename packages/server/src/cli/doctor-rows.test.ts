@@ -1,8 +1,8 @@
 import { readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { DOCTOR_ROW_LABELS, DoctorRow, LABEL_COLUMN, doctorRow } from './doctor-rows.js';
+import { REPO_ROOT } from '../repo-root.js';
 
 /**
  * The guard for #340: `doctor`'s row vocabulary and the docs pages that reproduce its output must
@@ -20,8 +20,6 @@ import { DOCTOR_ROW_LABELS, DoctorRow, LABEL_COLUMN, doctorRow } from './doctor-
  * adding a row to the command is what updates the test's expectation. A hardcoded list would only
  * catch the direction that does not bite.
  */
-
-const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..');
 
 /** The reference table of rows. This is the page that promises to list every line. */
 const ROW_TABLE_PAGE = join(REPO_ROOT, 'docs', 'cli', 'doctor.mdx');

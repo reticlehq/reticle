@@ -45,11 +45,10 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 // which packages exist. Both went blind once by keeping their own list of directories.
 import { workspaceGlobs } from '../../../../scripts/check-boundaries.mjs';
 import { execFileSync } from 'node:child_process';
-import { dirname, join, relative, sep } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join, relative, sep } from 'node:path';
+import { REPO_ROOT } from '../repo-root.js';
 
-const HERE = dirname(fileURLToPath(import.meta.url));
-const REPO = join(HERE, '..', '..', '..', '..');
+const REPO = REPO_ROOT;
 
 /** This file's own name, so its example strings are not read as real reads. */
 const SELF = 'guards-are-cache-invalidated.test.ts';

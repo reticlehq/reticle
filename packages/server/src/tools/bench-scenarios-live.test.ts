@@ -19,10 +19,10 @@
 
 import { describe, expect, it } from 'vitest';
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
+import { REPO_ROOT } from '../repo-root.js';
 
-const REPO = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..');
+const REPO = REPO_ROOT;
 const INJECTOR = join(REPO, 'apps', 'bench-app', 'src', 'reticle-bug-injector.ts');
 /** The one function a URL parameter reaches. Anything it does not call is dead. */
 const ENTRY = 'installBugInjector';

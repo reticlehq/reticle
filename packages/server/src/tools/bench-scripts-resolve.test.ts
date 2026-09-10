@@ -21,8 +21,9 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { REPO_ROOT } from '../repo-root.js';
 
-const REPO = path.resolve(__dirname, '..', '..', '..', '..');
+const REPO = REPO_ROOT;
 
 function benchScripts(): string[] {
   const listed = execFileSync('git', ['ls-files', 'bench/'], { cwd: REPO, encoding: 'utf8' });

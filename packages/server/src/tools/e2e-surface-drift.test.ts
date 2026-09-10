@@ -4,6 +4,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { TOOLS } from './tools.js';
 import { ReticleTool } from '@reticlehq/core';
+import { REPO_ROOT } from '../repo-root.js';
 
 /**
  * Every `reticle_*` tool an e2e spec calls must still exist on the surface.
@@ -26,7 +27,7 @@ import { ReticleTool } from '@reticlehq/core';
  * silently deleting a spec's coverage.
  */
 const HERE = dirname(fileURLToPath(import.meta.url));
-const REPO = join(HERE, '..', '..', '..', '..');
+const REPO = REPO_ROOT;
 const SPEC_DIR = join(REPO, 'apps', 'e2e', 'specs');
 /**
  * The bench harnesses drive the SAME tool surface and rot the SAME way — which is not hypothetical:

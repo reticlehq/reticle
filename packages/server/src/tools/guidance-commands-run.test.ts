@@ -24,10 +24,11 @@ import { fileURLToPath } from 'node:url';
 import { parseCliArgs } from '../cli/cli-parse.js';
 import { isCloudCommand } from '../cli/cloud-cli.js';
 import { RETICLE_DEFAULT_PORT } from '@reticlehq/core';
+import { REPO_ROOT } from '../repo-root.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SRC = join(HERE, '..');
-const REPO = join(HERE, '..', '..', '..', '..');
+const REPO = REPO_ROOT;
 
 /** How the product spells an invocation of its own CLI in user-facing prose. */
 const INVOCATION = /npx @reticlehq\/server ([^`'"\n)]+)/g;

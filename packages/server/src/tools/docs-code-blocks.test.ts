@@ -20,11 +20,10 @@
 
 import { describe, expect, it } from 'vitest';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
-import { dirname, join, relative } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join, relative } from 'node:path';
+import { REPO_ROOT } from '../repo-root.js';
 
-const HERE = dirname(fileURLToPath(import.meta.url));
-const REPO = join(HERE, '..', '..', '..', '..');
+const REPO = REPO_ROOT;
 
 /** Files a reader is expected to copy out of. */
 const DOC_ROOTS = ['docs', 'skills'];

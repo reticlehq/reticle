@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { readdirSync, readFileSync } from 'node:fs';
-import { dirname, join, relative } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join, relative } from 'node:path';
+import { REPO_ROOT } from '../repo-root.js';
 
 /**
  * A test that builds thousands of DOM nodes must declare its own timeout.
@@ -33,8 +33,7 @@ import { fileURLToPath } from 'node:url';
  *     would not have found it. I found it by reading, and gave it a timeout too. A guard that
  *     cannot see indirection should say so instead of implying coverage it does not have.
  */
-const HERE = dirname(fileURLToPath(import.meta.url));
-const REPO = join(HERE, '..', '..', '..', '..');
+const REPO = REPO_ROOT;
 /**
  * Scanned from the SERVER package, not the browser one, because `@reticlehq/browser` may not import
  * Node builtins — it runs in the DOM, and the lint rule that says so is a real architectural

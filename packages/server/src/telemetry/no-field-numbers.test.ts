@@ -22,11 +22,10 @@
 
 import { describe, expect, it } from 'vitest';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
+import { REPO_ROOT } from '../repo-root.js';
 
-const HERE = dirname(fileURLToPath(import.meta.url));
-const REPO = join(HERE, '..', '..', '..', '..');
+const REPO = REPO_ROOT;
 
 /** Everything we publish: source we ship, the docs site, and the reader-facing top-level files. */
 const SCANNED_ROOTS = [join(REPO, 'packages'), join(REPO, 'docs'), join(REPO, 'skills')] as const;

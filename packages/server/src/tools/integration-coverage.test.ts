@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 // The same derivation the other repo-wide checks use, so they cannot disagree about what exists.
 import { workspaceGlobs } from '../../../../scripts/check-boundaries.mjs';
+import { REPO_ROOT } from '../repo-root.js';
 
-const REPO = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..');
+const REPO = REPO_ROOT;
 
 /**
  * Every integration we SHIP has an app that exercises it, and a gate that runs that app.

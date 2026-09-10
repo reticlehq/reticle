@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 import { CORE_TOOL_NAMES } from '../tools/tool-surface.js';
 import { ReticleTool } from '@reticlehq/core';
 import { buildServerInstructions } from './server-instructions.js';
+import { REPO_ROOT } from '../repo-root.js';
 
 /**
  * Three sources describe the tool surface, and they have to agree.
@@ -28,8 +28,7 @@ import { buildServerInstructions } from './server-instructions.js';
  * `CORE_TOOL_NAMES` rather than restated here, because a hand-maintained copy of the surface is the
  * same defect one level up.
  */
-const HERE = dirname(fileURLToPath(import.meta.url));
-const REPO = join(HERE, '..', '..', '..', '..');
+const REPO = REPO_ROOT;
 const SKILL = join(REPO, 'SKILL.md');
 
 /** Any `reticle_*` token. Narrowed against DECLARED below: most of them were never tools. */

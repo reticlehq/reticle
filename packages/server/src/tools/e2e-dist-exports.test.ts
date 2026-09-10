@@ -10,11 +10,10 @@
 
 import { describe, expect, it } from 'vitest';
 import { existsSync, readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
+import { REPO_ROOT } from '../repo-root.js';
 
-const HERE = dirname(fileURLToPath(import.meta.url));
-const REPO = join(HERE, '..', '..', '..', '..');
+const REPO = REPO_ROOT;
 const TELEMETRY_EVENTS_SPEC = join(REPO, 'apps', 'e2e', 'specs', 'telemetry-events-test.mjs');
 /**
  * Where each `dist` the spec loads from has its source.

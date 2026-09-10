@@ -8,14 +8,14 @@
  */
 
 import { readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { advertisedTools } from '../mcp/mcp.js';
 import { ADVERTISE_ALL_ENV, TOOL_PROFILE_ENV, TOOL_SURFACE } from './tool-surface.js';
 import { TOOLS } from './tools.js';
+import { REPO_ROOT } from '../repo-root.js';
 
-const REPO = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..');
+const REPO = REPO_ROOT;
 const read = (rel: string): string => readFileSync(join(REPO, rel), 'utf8');
 
 describe('retired RETICLE_TOOL_PROFILE is not advertised as the live knob', () => {

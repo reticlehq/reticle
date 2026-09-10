@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 import { RETICLE_NPM_PACKAGE, RETICLE_VERSION } from '@reticlehq/init';
 import { SERVER_VERSION } from './server-version.js';
+import { REPO_ROOT } from '../repo-root.js';
 
 /**
  * The scaffolder and the daemon must agree about what they are.
@@ -20,7 +20,7 @@ import { SERVER_VERSION } from './server-version.js';
  * themselves rather than against each other's constants — a guard that reads the same source twice
  * proves nothing.
  */
-const REPO = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..');
+const REPO = REPO_ROOT;
 
 const manifest = (pkg: string): { name?: string; version?: string } =>
   JSON.parse(readFileSync(join(REPO, 'packages', pkg, 'package.json'), 'utf8')) as {

@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 import { parseCliArgs, knownCommand, UNKNOWN_COMMAND } from '../cli/cli-parse.js';
+import { REPO_ROOT } from '../repo-root.js';
 
 /**
  * Every command the docs tell somebody to run is EXECUTED against the shipped parser, not read.
@@ -23,8 +23,7 @@ import { parseCliArgs, knownCommand, UNKNOWN_COMMAND } from '../cli/cli-parse.js
  * syntax (`verify <url> [--headed]`) which is documentation of the shape, not an instruction, and
  * feeding it to the parser would fail on the angle brackets rather than on anything real.
  */
-const HERE = dirname(fileURLToPath(import.meta.url));
-const REPO = join(HERE, '..', '..', '..', '..');
+const REPO = REPO_ROOT;
 const RUNNABLE_FENCES: ReadonlySet<string> = new Set(['bash', 'sh', 'shell', 'console']);
 
 /** The invocation prefix the docs use everywhere, optionally version-pinned. */

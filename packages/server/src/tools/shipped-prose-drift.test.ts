@@ -22,14 +22,13 @@
  */
 import { describe, expect, it } from 'vitest';
 import { readFileSync, statSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 import { TOOLS } from './tools.js';
 import { ReticleTool } from '@reticlehq/core';
 import { mergedNameRedirect } from './merged-name-redirect.js';
+import { REPO_ROOT } from '../repo-root.js';
 
-const HERE = dirname(fileURLToPath(import.meta.url));
-const REPO = join(HERE, '..', '..', '..', '..');
+const REPO = REPO_ROOT;
 
 /**
  * The shipped user-facing prose: the notices `@reticlehq/core` hands out, and nothing else yet.

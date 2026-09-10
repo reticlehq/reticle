@@ -14,11 +14,11 @@
 
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 import { parse } from 'yaml';
+import { REPO_ROOT } from '../repo-root.js';
 
-const REPO = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..');
+const REPO = REPO_ROOT;
 const WORKFLOW = join(REPO, '.github', 'workflows', 'ci.yml');
 
 /** The aggregate job itself — the thing branch protection requires. */

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { REPO_ROOT } from '../repo-root.js';
 
 /**
  * How much an agent has to read before it can do anything.
@@ -22,8 +23,6 @@ import { join } from 'node:path';
  * lines after the reader started, which is the whole problem in one sentence. Splitting by
  * situation is the fix; these numbers are how anyone will know whether the split actually worked.
  */
-
-const REPO_ROOT = join(__dirname, '..', '..', '..', '..');
 const SKILL = readFileSync(join(REPO_ROOT, 'SKILL.md'), 'utf8');
 
 /**

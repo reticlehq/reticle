@@ -25,6 +25,13 @@ const PACKAGE_DIR = join(__dirname, '..');
 
 /** Modules with no production importer, each with the reason it is allowed to stay. */
 const DECLARED_UNWIRED: Record<string, string> = {
+  'repo-root.ts':
+    'answers "where does this repository start" once, by asking git, for the forty-odd checks in ' +
+    'this package that read files outside it. It has no production caller because the product ' +
+    'never reads the repository it was built from — only the checks do. It exists because those ' +
+    'checks used to find the root by counting `..` segments, which is a statement about how deeply ' +
+    'this package happens to sit rather than about the repository, and every one of them broke ' +
+    'silently the first time a package moved.',
   'events/adversary.ts':
     'builds the smallest wire events the contract accepts, so the readers can be checked against a ' +
     'client that offers nothing. It has no production caller by design — shipping a generator of ' +

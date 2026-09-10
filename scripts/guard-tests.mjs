@@ -50,6 +50,12 @@ const ESCAPES = [
   /'\.\.'\s*,\s*'\.\.'\s*,\s*'\.\.'/,
   /["'`]\.\.\/\.\.\/\.\./,
   /process\.cwd\(\)\s*,\s*'\.\.'/,
+  // Asking git where the repository starts, which is what those walks were doing by hand. Added the
+  // moment they stopped being written as `..` segments: every test that had been correctly put in
+  // the guard half became invisible to this in one commit, and would have quietly moved to the
+  // cheap half and replayed stale passes -- the exact failure this split exists to prevent.
+  /from '[^']*repo-root\.js'/,
+  /rev-parse'?\s*,\s*'--show-toplevel'/,
 ];
 
 function testFiles(dir, out = []) {

@@ -10,8 +10,8 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
+import { REPO_ROOT } from '../repo-root.js';
 
 /**
  * The published skills and the Claude Code plugin are shipped artifacts nothing else checks.
@@ -30,8 +30,7 @@ import { fileURLToPath } from 'node:url';
  * Both are one-line mistakes that survive every other gate in this repo, which is the whole argument
  * for checking them here.
  */
-const HERE = dirname(fileURLToPath(import.meta.url));
-const REPO = join(HERE, '..', '..', '..', '..');
+const REPO = REPO_ROOT;
 const SKILLS = join(REPO, 'skills');
 /**
  * The Claude Code plugin lives in its OWN root, `plugin/`, and not at the repo root.

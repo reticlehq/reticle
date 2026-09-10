@@ -32,9 +32,9 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { REPO_ROOT } from '../repo-root.js';
 
-const REPO = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..');
+const REPO = REPO_ROOT;
 const DOCS = join(REPO, 'docs');
 
 /** Directories `prepack` deletes after copying `docs/`. Assets the site serves and npm need not. */
