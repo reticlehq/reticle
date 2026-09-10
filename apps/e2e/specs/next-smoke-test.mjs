@@ -94,7 +94,17 @@ check(
   saCalls.some((c) => c.method === 'POST' && String(c.url).includes('/actions')),
   saCalls.map((c) => `${c.method} ${String(c.url).replace(/^https?:\/\/[^/]+/, '')} -> ${c.status}`).join(', ') || 'no calls seen',
 );
-const countAfter = (await T('reticle_query', { by: 'testid', value: 'note-count' })).elements?.[0]?.text;
+// Wait for the CONSEQUENCE, not for the observation. The check above waits for the POST to be
+// OBSERVED, which happens when the request STARTS — its status is still `pending` at that moment.
+// Reading the count right then races the server action's round trip and the revalidate that follows
+// it, and the race is won or lost on how loaded the machine is. It read `0 notes -> 0 notes` here
+// while the very same page served `1 notes` three seconds later, which is the same "product
+// accusation manufactured by a timer" the comment above already warns about, one level up.
+const countAfter =
+  (await waitUntil(async () => {
+    const now = (await T('reticle_query', { by: 'testid', value: 'note-count' })).elements?.[0]?.text;
+    return now !== countBefore ? now : undefined;
+  })) ?? (await T('reticle_query', { by: 'testid', value: 'note-count' })).elements?.[0]?.text;
 check('and the write really landed on the server', countBefore !== countAfter, `${String(countBefore)} -> ${String(countAfter)}`);
 
 console.log(`\n${fail === 0 ? '✅ NEXT.JS SMOKE TEST PASSED' : `❌ ${fail} FAILED`}  (${pass} passed, ${fail} failed)`);
