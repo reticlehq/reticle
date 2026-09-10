@@ -71,7 +71,7 @@ const LOSSY = new Set([Declaration.REPORT, Declaration.MARKER, Declaration.SIGNA
  * To add a module here, list EVERY export. An unlisted export fails the guard, which is the point.
  */
 export const READ_PATH = Object.freeze({
-  'packages/browser/src/security/serialization.ts': {
+  'adapters/realm/dom/src/security/serialization.ts': {
     TruncationReport: [Declaration.NONE, 'the report type itself'],
     sanitizeWithReport: [
       Declaration.REPORT,
@@ -109,7 +109,7 @@ export const READ_PATH = Object.freeze({
       'collapses past the budget to a sized sentinel — "[Array(5)]", "{…3 keys}", "[Set(2)]", "{Map(3)}". In-band because the caller asked for a depth cap and the value shape has to survive it',
     ],
   },
-  'packages/browser/src/registry/stores.ts': {
+  'adapters/realm/dom/src/registry/stores.ts': {
     StoreGetter: [Declaration.NONE, 'type'],
     StoreSubscribe: [Declaration.NONE, 'type'],
     StoreRegisteredListener: [Declaration.NONE, 'type'],
@@ -134,7 +134,7 @@ export const READ_PATH = Object.freeze({
       'returns { stores, truncation? } keyed by store name, so a 1,000-entity store that came back as 142 says so',
     ],
   },
-  'packages/browser/src/transport/transport.ts': {
+  'adapters/realm/dom/src/transport/transport.ts': {
     CommandOutcome: [Declaration.NONE, 'type'],
     MAX_QUEUE: [Declaration.NONE, 'the bound itself, exported so tests overflow the real one'],
     RECONNECT_MAX_DELAY_MS: [
@@ -201,9 +201,9 @@ export const READ_PATH = Object.freeze({
  */
 export const CONFORMANCE_TESTS = Object.freeze([
   'packages/core/src/lossy-conformance.test.ts',
-  'packages/browser/src/security/lossy-conformance.test.ts',
-  'packages/browser/src/security/serialization.test.ts',
-  'packages/browser/src/transport/transport.overflow-marker.test.ts',
+  'adapters/realm/dom/src/security/lossy-conformance.test.ts',
+  'adapters/realm/dom/src/security/serialization.test.ts',
+  'adapters/realm/dom/src/transport/transport.overflow-marker.test.ts',
   'engine/src/events/ring-buffer.test.ts',
   'packages/server/src/input/network-detail.lossy-conformance.test.ts',
 ]);

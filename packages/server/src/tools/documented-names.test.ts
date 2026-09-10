@@ -46,7 +46,7 @@ function shippedNames(): Set<string> {
     }
   };
   walk(join(REPO, 'packages', 'server', 'src'));
-  walk(join(REPO, 'packages', 'browser', 'src'));
+  walk(join(REPO, 'adapters', 'realm', 'dom', 'src'));
   walk(join(REPO, 'packages', 'core', 'src'));
   return names;
 }

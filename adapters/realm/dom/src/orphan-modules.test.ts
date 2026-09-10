@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { join } from 'node:path';
 
-import { scanPackage } from '../../../scripts/orphan-scan.mjs';
+import { scanPackage } from '../../../../scripts/orphan-scan.mjs';
 
 /**
  * A module that nothing imports must be declared unwired, not discovered later as dead code.

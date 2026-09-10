@@ -468,7 +468,7 @@ jobs:
           # are the whole of one-command onboarding — agent registration, pre-approval, the skill
           # file, the drive — and neither was on this list, so the release that made `init` an
           # install could edit every one of them without the install gate running once.
-          if echo "$CHANGED" | grep -qE '^(packages/(init|server/src/setup|browser|core|vite-plugin)/|adapters/|setup/|apps/e2e/(install-gate|gate-harness|install-baseline)|package\.json|pnpm-lock\.yaml|\.github/workflows/ci\.yml)'; then
+          if echo "$CHANGED" | grep -qE '^(packages/(init|server/src/setup|core|vite-plugin)/|adapters/|setup/|apps/e2e/(install-gate|gate-harness|install-baseline)|package\.json|pnpm-lock\.yaml|\.github/workflows/ci\.yml)'; then
             echo "install=true" >> "$GITHUB_OUTPUT"
           else
             echo "install=false" >> "$GITHUB_OUTPUT"
@@ -485,9 +485,9 @@ jobs:
           # Rust — the slowest job in this file — and it ran on every PR including docs-only ones.
           # Both adapters, both smoke apps, and the three browser/server files that are desktop-only
           # by definition: the IPC observer, desktop capture, and the setup/doctor pair that shape
-          # and diagnose a desktop install. Anything broader (all of packages/browser, say) would
+          # and diagnose a desktop install. Anything broader (all of adapters/realm/dom, say) would
           # route most PRs here and give the routing back for nothing.
-          if echo "$CHANGED" | grep -qE '^(adapters/realm/electron/|packages/tauri/|apps/(electron|tauri)-smoke/|packages/browser/src/observers/ipc\.ts|packages/browser/src/dom/desktop-capture\.ts|packages/server/src/setup/desktop-shape\.ts|packages/init/src/desktop-doctor\.ts|\.github/workflows/ci\.yml)'; then
+          if echo "$CHANGED" | grep -qE '^(adapters/realm/electron/|packages/tauri/|apps/(electron|tauri)-smoke/|adapters/realm/dom/src/observers/ipc\.ts|adapters/realm/dom/src/dom/desktop-capture\.ts|packages/server/src/setup/desktop-shape\.ts|packages/init/src/desktop-doctor\.ts|\.github/workflows/ci\.yml)'; then
             echo "desktop=true" >> "$GITHUB_OUTPUT"
           else
             echo "desktop=false" >> "$GITHUB_OUTPUT"
@@ -498,7 +498,7 @@ jobs:
           # The observation payloads (snapshot, query, the verdict reasons) sit in browser and events.
           # bench-app is the fixture the numbers are measured against, so changing it moves the
           # baseline whether or not any product code changed.
-          if echo "$CHANGED" | grep -qE '^(packages/(browser|core)/src/|packages/server/src/(tools|session)/|engine/src/(events|honesty)/|apps/bench-app/|bench/|\.github/workflows/ci\.yml)'; then
+          if echo "$CHANGED" | grep -qE '^(packages/core/src/|adapters/realm/dom/src/|packages/server/src/(tools|session)/|engine/src/(events|honesty)/|apps/bench-app/|bench/|\.github/workflows/ci\.yml)'; then
             echo "bench=true" >> "$GITHUB_OUTPUT"
           else
             echo "bench=false" >> "$GITHUB_OUTPUT"

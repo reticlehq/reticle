@@ -23,7 +23,7 @@ import { loadPresenterSettings } from './presenter-settings.js';
 const SRC = path.resolve(__dirname, '..');
 const SETTINGS_FILE = 'presenter-settings.ts';
 
-/** Every .ts under packages/browser/src, excluding tests and the settings module itself. */
+/** Every .ts under adapters/realm/dom/src, excluding tests and the settings module itself. */
 function sources(dir: string, out: string[] = []): string[] {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const full = path.join(dir, entry.name);

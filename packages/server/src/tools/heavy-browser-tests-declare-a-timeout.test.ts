@@ -44,7 +44,7 @@ const REPO = join(HERE, '..', '..', '..', '..');
 /**
  * EVERY package's sources, not only the browser's.
  *
- * Scoped to `packages/browser/src` originally because that is where the incident happened. The
+ * Scoped to `adapters/realm/dom/src` originally because that is where the incident happened. The
  * identical failure then arrived in `packages/server/src`: a test timed out at vitest's 5s default
  * on Windows CI and nowhere else, which reads as a product failure and is a statement about the
  * machine. Guarding one directory against a repo-wide failure mode is a mistake this repo has now

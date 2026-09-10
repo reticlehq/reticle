@@ -60,7 +60,7 @@ Run during this sweep, it silently redrew the detection chart with Chrome DevToo
 
 `clock-timetravel.mjs` failed on `reticle_clock {reset:true}` with `TypeError: Illegal invocation`. The cause was in the SDK, not the bench: `resetClock()` re-armed the app's pending timers by calling the captured natives off a plain object (`natives.setTimeout(...)`), so the DOM received a foreign `this` and refused. An early return when nothing is pending meant it fired **only** when the app had actually queued work during the freeze — the exact case the function exists to serve.
 
-Every unit test passed throughout, because jsdom does not enforce the receiver. Only a real browser does, and in this repo the things that drive a real browser are the e2e battery and this directory. That is the argument for keeping `bench/` alive even though it gates nothing: it is one of the few places a jsdom-invisible defect can surface. Fixed in `packages/browser/src/timers/clock.ts`, with three tests that install a WebIDL-faithful strict double and go red without the fix.
+Every unit test passed throughout, because jsdom does not enforce the receiver. Only a real browser does, and in this repo the things that drive a real browser are the e2e battery and this directory. That is the argument for keeping `bench/` alive even though it gates nothing: it is one of the few places a jsdom-invisible defect can surface. Fixed in `adapters/realm/dom/src/timers/clock.ts`, with three tests that install a WebIDL-faithful strict double and go red without the fix.
 
 ## Layout
 

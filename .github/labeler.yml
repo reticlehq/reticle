@@ -11,7 +11,7 @@ area/core:
 
 area/browser:
   - changed-files:
-      - any-glob-to-any-file: ['packages/browser/**']
+      - any-glob-to-any-file: ['adapters/realm/dom/**']
 
 area/server:
   - changed-files:

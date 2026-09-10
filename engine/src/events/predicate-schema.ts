@@ -153,7 +153,7 @@ const ELEMENT_QUERY_FIELDS = [
 
 /**
  * The locator fields the browser actually CONSUMES for a given query — mirrors the precedence in
- * `findIn` (packages/browser/src/dom/query.ts).
+ * `findIn` (adapters/realm/dom/src/dom/query.ts).
  *
  * An element query is not a conjunction. It is a first-match dispatch: `by`+`value` wins, then the
  * component/source anchor, then `role` (which alone also consumes `name`), then the first of

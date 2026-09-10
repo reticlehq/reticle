@@ -1,6 +1,10 @@
 {
   "$schema": "https://turbo.build/schema.json",
-  "globalDependencies": ["packages/browser/src/**/*.ts", "tsconfig.base.json", "eslint.config.mjs"],
+  "globalDependencies": [
+    "adapters/realm/dom/src/**/*.ts",
+    "tsconfig.base.json",
+    "eslint.config.mjs"
+  ],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
@@ -37,6 +41,7 @@
       "inputs": [
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/packages/*/src/**",
+        "$TURBO_ROOT$/adapters/**",
         "$TURBO_ROOT$/packages/*/package.json",
         "$TURBO_ROOT$/engine/src/**",
         "$TURBO_ROOT$/engine/package.json",

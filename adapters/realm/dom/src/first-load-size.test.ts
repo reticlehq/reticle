@@ -30,6 +30,17 @@ import { join } from 'node:path';
  */
 
 const PACKAGE_ROOT = join(__dirname, '..');
+/**
+ * Where the repository is, asked rather than counted.
+ *
+ * Counting `..` segments up to the root is a statement about how deep this package happens to sit,
+ * and this package has just moved. Three checks broke on that count in one afternoon, each one
+ * silently reading the wrong directory. Git already knows the answer.
+ */
+const REPO_ROOT = execFileSync('git', ['rev-parse', '--show-toplevel'], {
+  cwd: PACKAGE_ROOT,
+  encoding: 'utf8',
+}).trim();
 const DIST_ENTRY = join(PACKAGE_ROOT, 'dist', 'index.js');
 
 /**
@@ -56,7 +67,7 @@ function bundlerPath(): string {
     'bash',
     [
       '-c',
-      `ls -d "${join(PACKAGE_ROOT, '..', '..')}"/node_modules/.pnpm/esbuild@*/node_modules/esbuild/bin/esbuild 2>/dev/null | tail -1`,
+      `ls -d "${REPO_ROOT}"/node_modules/.pnpm/esbuild@*/node_modules/esbuild/bin/esbuild 2>/dev/null | tail -1`,
     ],
     { encoding: 'utf8' },
   ).trim();

@@ -1,4 +1,5 @@
 import { readFileSync, readdirSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
@@ -16,7 +17,13 @@ import { describe, expect, it } from 'vitest';
  * the artifacts group extends the guard without anyone remembering to update it.
  */
 
-const CORE_SRC = join(__dirname, '..', '..', 'core', 'src');
+// Asked rather than counted: a count of `..` up to the root is a statement about how deep this
+// package sits, and it moved. Git already knows where the repository starts.
+const REPO_ROOT = execFileSync('git', ['rev-parse', '--show-toplevel'], {
+  cwd: __dirname,
+  encoding: 'utf8',
+}).trim();
+const CORE_SRC = join(REPO_ROOT, 'packages', 'core', 'src');
 const ARTIFACTS_ENTRY = 'artifacts-entry.ts';
 const CORE_SPECIFIER = '@reticlehq/core';
 const TS_EXTENSION = '.ts';

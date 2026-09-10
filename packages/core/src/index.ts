@@ -15,7 +15,7 @@
  * This root entry point still exports everything it did before — the subpaths are additive, and
  * removing a name from here would be a breaking change to a published package. The boundary that is
  * actually ENFORCED is the one the browser SDK must not cross: `core-boundary.test.ts` in
- * @reticlehq/browser fails if packages/browser/src imports any artifacts-group name from
+ * @reticlehq/browser fails if adapters/realm/dom/src imports any artifacts-group name from
  * '@reticlehq/core'. That test, not this comment, is what keeps the DOM side off the Node-side
  * plumbing.
  */

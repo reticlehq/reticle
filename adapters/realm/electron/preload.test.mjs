@@ -7,7 +7,7 @@ const require = createRequire(import.meta.url);
 
 /**
  * The record the preload pushes to the renderer. Same fields as `PreloadRecord` in
- * `packages/browser/src/observers/ipc.ts` — that is the contract the SDK consumes. Core owns the
+ * `adapters/realm/dom/src/observers/ipc.ts` — that is the contract the SDK consumes. Core owns the
  * global name and the capture channel (`desktop-contract`); the record shape is what this file
  * must keep honest so a payload-based check is not silently web-only.
  */

@@ -15,7 +15,7 @@
  * repo's own history is unambiguous about what that is worth: a rule everyone agrees with and
  * nothing checks is the shape of every silent failure here. Telemetry failed that way for months.
  *
- * So the rule is mechanical, in the same spirit as "`packages/browser` never imports Node APIs" and
+ * So the rule is mechanical, in the same spirit as "`adapters/realm/dom` never imports Node APIs" and
  * "`core` may not gain dependencies": the ground-truth module imports NOTHING. Not Reticle, not a
  * helper that might one day import Reticle, not anything at all. A registry of what is broken is
  * data, and data has no dependencies.

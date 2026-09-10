@@ -34,7 +34,7 @@ ruleTester.run('no-internal-tags (paths)', noInternalTags, {
     { code: '// ordinary', filename: 'packages/core/src/base64.ts' },
     // Established terms keep their exemption in a path, same as in prose.
     { code: '// ordinary', filename: 'packages/server/src/s3-upload.ts' },
-    { code: '// ordinary', filename: 'packages/browser/src/v8-heap.ts' },
+    { code: '// ordinary', filename: 'adapters/realm/dom/src/v8-heap.ts' },
     // No file to judge: a RuleTester case or a piped snippet.
     { code: '// ordinary' },
   ],
@@ -45,7 +45,7 @@ ruleTester.run('no-internal-tags (paths)', noInternalTags, {
       // digits, so `P5` was caught and `P5a` was not. The suffix is how a design document tells its
       // parts apart, which makes it the form most likely to appear, not the least.
       code: '/** P5c — self-registering domains. */\nconst x = 1;',
-      filename: 'packages/browser/src/registry/domains.ts',
+      filename: 'adapters/realm/dom/src/registry/domains.ts',
       errors: [{ messageId: 'internalTag', data: { tag: 'P5c' } }],
     },
 

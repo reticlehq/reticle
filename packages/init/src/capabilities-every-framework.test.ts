@@ -7,7 +7,7 @@
  * "is instrumented and connected — but NOT verified". A connect that advertises nothing to drive is
  * an app an agent cannot act on without guessing.
  *
- * `hasCapabilities()` also counts LIVE testids (packages/browser/src/registry/capabilities.ts), so a
+ * `hasCapabilities()` also counts LIVE testids (adapters/realm/dom/src/registry/capabilities.ts), so a
  * DECLARED list is not the only route to true — it is the only one `init` controls, and the one that
  * survives an app whose testids all arrive after a route change.
  */

@@ -50,7 +50,7 @@ describe('one vocabulary for one storage area', () => {
   });
 
   it('the browser observer matches the cookie area by the enum, not a bare string', () => {
-    const source = read('packages/browser/src/observers/storage.ts');
+    const source = read('adapters/realm/dom/src/observers/storage.ts');
     expect(
       /'cookies'\s*===\s*area/.test(source),
       'storage.ts compares `area` against a free string while the two lines above it use ' +

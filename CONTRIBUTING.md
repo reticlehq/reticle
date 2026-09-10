@@ -68,7 +68,7 @@ Five top-level directories, each with one job. If you can name which of these yo
 
 ```
 packages/core          @reticlehq/core         — wire contract, constants, zod schemas (deps: zod)
-packages/browser       @reticlehq/browser      — instrumentation SDK embedded in the app (DOM-side)
+adapters/realm/dom       @reticlehq/browser      — instrumentation SDK embedded in the app (DOM-side)
 packages/server        @reticlehq/server       — bridge + MCP server, the `reticle` CLI (Node-side)
 packages/react         @reticlehq/react        — React adapter: DOM ref -> component -> source file
 packages/vite-plugin   @reticlehq/vite-plugin  — Vite integration: stamps source + auto-injects connect()

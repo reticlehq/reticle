@@ -43,7 +43,7 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/reticlehq/reticle.git",
-    "directory": "packages/browser"
+    "directory": "adapters/realm/dom"
   },
   "homepage": "https://github.com/reticlehq/reticle#readme",
   "bugs": "https://github.com/reticlehq/reticle/issues",

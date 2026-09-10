@@ -4,7 +4,7 @@
     { "path": "openreality" },
     { "path": "packages/core" },
     { "path": "packages/init" },
-    { "path": "packages/browser" },
+    { "path": "adapters/realm/dom" },
     { "path": "packages/server" },
     { "path": "packages/test" },
     { "path": "adapters/framework/react" },

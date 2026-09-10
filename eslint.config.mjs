@@ -97,8 +97,8 @@ export default tseslint.config(
     // here rather than as an inline disable so the exception is declared once, in the place that
     // governs the rule, instead of being re-argued in a comment at each use.
     files: [
-      'packages/browser/src/observers/console.ts',
-      'packages/browser/src/observers/console.test.ts',
+      'adapters/realm/dom/src/observers/console.ts',
+      'adapters/realm/dom/src/observers/console.test.ts',
     ],
     rules: {
       'no-console': 'off',
@@ -117,7 +117,7 @@ export default tseslint.config(
     // Service boundary (CLAUDE.md): the browser SDK + React adapter run in the DOM and must NEVER
     // drag in Node. Enforced at the import level so a `node:*`/Node-builtin import or a reach into the
     // server package fails lint — closing the blind spot in the manifest-only check-boundaries.mjs.
-    files: ['packages/browser/src/**/*.ts', 'adapters/framework/react/src/**/*.{ts,tsx}'],
+    files: ['adapters/realm/dom/src/**/*.ts', 'adapters/framework/react/src/**/*.{ts,tsx}'],
     rules: {
       'no-restricted-imports': [
         'error',
@@ -155,7 +155,10 @@ export default tseslint.config(
     // Meta-tests that scan the package's own sources (settings-are-wired) need node:fs to read them.
     // The rule above is about SHIPPED code — a .test.ts is never bundled — so the DOM-only half is
     // lifted here. The server-package half is not: that boundary is just as real inside a test.
-    files: ['packages/browser/src/**/*.test.ts', 'adapters/framework/react/src/**/*.test.{ts,tsx}'],
+    files: [
+      'adapters/realm/dom/src/**/*.test.ts',
+      'adapters/framework/react/src/**/*.test.{ts,tsx}',
+    ],
     rules: {
       'no-restricted-imports': [
         'error',

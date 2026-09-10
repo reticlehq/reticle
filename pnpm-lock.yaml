@@ -117,7 +117,7 @@ importers:
     dependencies:
       '@reticlehq/browser':
         specifier: workspace:*
-        version: link:../../../packages/browser
+        version: link:../../realm/dom
       '@reticlehq/core':
         specifier: workspace:*
         version: link:../../../packages/core
@@ -137,6 +137,52 @@ importers:
       react-dom:
         specifier: ^19.2.8
         version: 19.2.8(react@19.2.8)
+
+  adapters/realm/dom:
+    dependencies:
+      '@reticlehq/core':
+        specifier: workspace:*
+        version: link:../../../packages/core
+    devDependencies:
+      '@iconify-json/heroicons-outline':
+        specifier: ^1.2.1
+        version: 1.2.1
+      '@iconify-json/heroicons-solid':
+        specifier: ^1.2.1
+        version: 1.2.1
+      '@tanstack/query-core':
+        specifier: ^5.101.4
+        version: 5.101.4
+      jotai:
+        specifier: ^2.20.2
+        version: 2.20.2(@babel/core@7.29.7)(@babel/template@7.29.7)(@types/react@19.2.18)(react@19.2.8)
+      jsdom:
+        specifier: ^30.0.1
+        version: 30.0.1(@noble/hashes@2.3.0)
+      mobx:
+        specifier: ^7.0.3
+        version: 7.0.3
+      pinia:
+        specifier: ^4.0.3
+        version: 4.0.3(@vue/devtools-api@8.2.1)(typescript@5.9.3)(vue@3.5.41(typescript@5.9.3))
+      react:
+        specifier: ^19.2.8
+        version: 19.2.8
+      recoil:
+        specifier: ^0.7.7
+        version: 0.7.7(react@19.2.8)
+      svelte:
+        specifier: ^5.56.10
+        version: 5.56.10(@typescript-eslint/types@8.67.0)
+      valtio:
+        specifier: ^2.3.2
+        version: 2.3.2(@types/react@19.2.18)(react@19.2.8)
+      vue:
+        specifier: ^3.5.41
+        version: 3.5.41(typescript@5.9.3)
+      xstate:
+        specifier: ^5.32.5
+        version: 5.32.5
 
   adapters/realm/electron:
     dependencies:
@@ -170,7 +216,7 @@ importers:
     devDependencies:
       '@reticlehq/browser':
         specifier: workspace:*
-        version: link:../../packages/browser
+        version: link:../../adapters/realm/dom
       '@reticlehq/react':
         specifier: workspace:*
         version: link:../../adapters/framework/react
@@ -197,7 +243,7 @@ importers:
     dependencies:
       '@reticlehq/browser':
         specifier: workspace:*
-        version: link:../../packages/browser
+        version: link:../../adapters/realm/dom
       '@reticlehq/react':
         specifier: workspace:*
         version: link:../../adapters/framework/react
@@ -265,7 +311,7 @@ importers:
     devDependencies:
       '@reticlehq/browser':
         specifier: workspace:*
-        version: link:../../packages/browser
+        version: link:../../adapters/realm/dom
       '@reticlehq/electron':
         specifier: workspace:*
         version: link:../../adapters/realm/electron
@@ -323,7 +369,7 @@ importers:
         version: 2.0.0(@types/node@26.4.0)
       '@reticlehq/browser':
         specifier: workspace:*
-        version: link:../../packages/browser
+        version: link:../../adapters/realm/dom
       '@reticlehq/electron':
         specifier: workspace:*
         version: link:../../adapters/realm/electron
@@ -491,7 +537,7 @@ importers:
     dependencies:
       '@reticlehq/browser':
         specifier: workspace:*
-        version: link:../../packages/browser
+        version: link:../../adapters/realm/dom
     devDependencies:
       vite:
         specifier: ^8.2.1
@@ -511,7 +557,7 @@ importers:
     devDependencies:
       '@reticlehq/browser':
         specifier: workspace:*
-        version: link:../../packages/browser
+        version: link:../../adapters/realm/dom
       '@reticlehq/next':
         specifier: workspace:*
         version: link:../../adapters/build/next
@@ -548,7 +594,7 @@ importers:
     devDependencies:
       '@reticlehq/browser':
         specifier: workspace:*
-        version: link:../../packages/browser
+        version: link:../../adapters/realm/dom
       '@reticlehq/react':
         specifier: workspace:*
         version: link:../../adapters/framework/react
@@ -575,7 +621,7 @@ importers:
     dependencies:
       '@reticlehq/browser':
         specifier: workspace:*
-        version: link:../../packages/browser
+        version: link:../../adapters/realm/dom
     devDependencies:
       '@reticlehq/server':
         specifier: workspace:*
@@ -594,52 +640,6 @@ importers:
         version: 3.25.76
 
   openreality: {}
-
-  packages/browser:
-    dependencies:
-      '@reticlehq/core':
-        specifier: workspace:*
-        version: link:../core
-    devDependencies:
-      '@iconify-json/heroicons-outline':
-        specifier: ^1.2.1
-        version: 1.2.1
-      '@iconify-json/heroicons-solid':
-        specifier: ^1.2.1
-        version: 1.2.1
-      '@tanstack/query-core':
-        specifier: ^5.101.4
-        version: 5.101.4
-      jotai:
-        specifier: ^2.20.2
-        version: 2.20.2(@babel/core@7.29.7)(@babel/template@7.29.7)(@types/react@19.2.18)(react@19.2.8)
-      jsdom:
-        specifier: ^30.0.1
-        version: 30.0.1(@noble/hashes@2.3.0)
-      mobx:
-        specifier: ^7.0.3
-        version: 7.0.3
-      pinia:
-        specifier: ^4.0.3
-        version: 4.0.3(@vue/devtools-api@8.2.1)(typescript@5.9.3)(vue@3.5.41(typescript@5.9.3))
-      react:
-        specifier: ^19.2.8
-        version: 19.2.8
-      recoil:
-        specifier: ^0.7.7
-        version: 0.7.7(react@19.2.8)
-      svelte:
-        specifier: ^5.56.10
-        version: 5.56.10(@typescript-eslint/types@8.67.0)
-      valtio:
-        specifier: ^2.3.2
-        version: 2.3.2(@types/react@19.2.18)(react@19.2.8)
-      vue:
-        specifier: ^3.5.41
-        version: 3.5.41(typescript@5.9.3)
-      xstate:
-        specifier: ^5.32.5
-        version: 5.32.5
 
   packages/core:
     dependencies:
