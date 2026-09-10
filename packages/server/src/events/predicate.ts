@@ -497,7 +497,9 @@ async function evaluatePredicateRaw(
         diagnose,
       );
     case PredicateKind.NET:
-      return evalNet(events, predicate);
+      // `session.url` so a miss on the document URL is named as the blind spot it is, rather than
+      // graded as a request that never fired -- see net-document-navigation.ts.
+      return evalNet(events, predicate, session.url);
     case PredicateKind.ROUTE:
       // `since` so an unanswered request already in flight before this window is not counted
       // against the app — see unansweredIn.

@@ -1,4 +1,8 @@
 import {
+  documentNavigationReason,
+  missedTheDocumentNavigation,
+} from './net-document-navigation.js';
+import {
   EventType,
   PredicateKind,
   StreamDirection,
@@ -504,6 +508,12 @@ const PRE_ATTACH_CAVEAT =
 export function evalNet(
   events: ReticleEvent[],
   p: Extract<Predicate, { kind: typeof PredicateKind.NET }>,
+  /**
+   * Where the session IS now, if the caller can say. Only read on a zero-match, to tell a request
+   * that never fired from the document navigation that fetched the page the caller is standing on.
+   * Optional for the same reason `evalRoute`'s is: a replayed window has no session.
+   */
+  currentUrl?: string,
 ): EvalResult {
   const since = p.since ?? 0;
   /**
@@ -669,6 +679,20 @@ export function evalNet(
   if (hit === undefined) {
     const download = nativeDownloadMiss(events, p);
     if (download !== undefined) return download;
+    // Ranked with the download miss and for the same reason: both are requests the SDK provably
+    // could not see, and grading either as absence is a claim about the app. See
+    // net-document-navigation.ts.
+    if (currentUrl !== undefined && missedTheDocumentNavigation(events, p, currentUrl)) {
+      const reason = documentNavigationReason(p, currentUrl);
+      return {
+        pass: false,
+        failureReason: reason,
+        inconclusive: reason,
+        observed: observedNetCalls(events, p.urlContains),
+        expected: `at least one call matching ${describeNetFilter(p)}`,
+        assertion: 'net.document-navigation',
+      };
+    }
   }
   if (hit === undefined && targetsUnobservedChannel(p) && !sawSubresources) {
     const reason = unobservedChannelReason(p);
