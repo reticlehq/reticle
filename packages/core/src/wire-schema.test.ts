@@ -13,6 +13,28 @@ const schemas = buildWireSchemas(core, convert, z);
 
 describe('wire-contract JSON Schema', () => {
   /**
+   * The contract published the names of everything the app SAYS and none of what it can be ASKED.
+   *
+   * `event-type.json` lists every event name, so a reader knows what can arrive. There was no
+   * equivalent for commands, so the same reader could not discover that `snapshot`, `query` or `act`
+   * exist at all -- the half of the contract that drives the app was anonymous.
+   *
+   * Names only. What each command CARRIES is a separate and larger job: those shapes live implicitly
+   * in sixteen handlers that pick fields out of an untyped `args` bag, and inventing schemas for them
+   * from the outside would be guessing at a wire contract. Publishing the names is the part that is
+   * certain today.
+   */
+  it('publishes the command names, the way it already publishes event names', () => {
+    const emitted = JSON.stringify((schemas as Record<string, unknown>)['command-name']);
+    expect(emitted, 'no command-name schema is generated').toBeDefined();
+    for (const value of Object.values(core.ReticleCommand)) {
+      expect(emitted, `command ${String(value)} missing from the published enum`).toContain(
+        `"${String(value)}"`,
+      );
+    }
+  });
+
+  /**
    * The published contract has to describe what an event CONTAINS, not just that it has some.
    *
    * `reticle-event.json` was 1,317 bytes and its payload read

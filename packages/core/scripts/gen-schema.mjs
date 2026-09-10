@@ -18,6 +18,9 @@ export const WIRE_SCHEMA_NAMES = Object.freeze([
   'command-result',
   'event-message',
   'event-type', // the enum of event `type` strings
+  // The other half of the vocabulary. Event names were published and command names were not, so a
+  // reader could see everything the app SAYS and nothing it can be ASKED.
+  'command-name',
   // What each event actually CONTAINS. Without this the published contract described the envelope
   // and nothing else: `data` was `{ type: "object", additionalProperties: {} }`, so an SDK in
   // another language was told an event has a type from a list and a payload of arbitrary shape.
@@ -34,6 +37,7 @@ export const WIRE_SCHEMA_NAMES = Object.freeze([
 export function buildWireSchemas(core, zodToJsonSchema, z) {
   const eventTypeValues = Object.values(core.EventType);
   const eventTypeEnum = z.enum(eventTypeValues);
+  const commandNameEnum = z.enum(Object.values(core.ReticleCommand));
   return {
     'reticle-message': zodToJsonSchema(core.ReticleMessageSchema, 'ReticleMessage'),
     'reticle-event': zodToJsonSchema(core.ReticleEventSchema, 'ReticleEvent'),
@@ -42,6 +46,7 @@ export function buildWireSchemas(core, zodToJsonSchema, z) {
     'command-result': zodToJsonSchema(core.CommandResultSchema, 'CommandResult'),
     'event-message': zodToJsonSchema(core.EventMessageSchema, 'EventMessage'),
     'event-type': zodToJsonSchema(eventTypeEnum, 'EventType'),
+    'command-name': zodToJsonSchema(commandNameEnum, 'ReticleCommand'),
     'event-payloads': buildEventPayloadSchema(core, zodToJsonSchema),
   };
 }
