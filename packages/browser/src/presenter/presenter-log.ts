@@ -1,4 +1,5 @@
 import { PresenterMode } from '@reticlehq/core';
+import { LOG_KIND, LOG_RESULT, type LogKind, type LogResult } from './log-kinds.js';
 import { nativeSetTimeout } from '../timers/native-timers.js';
 import {
   PresenterIcon,
@@ -15,17 +16,8 @@ import {
 /** Default cap on accumulated activity-log rows (bounds DOM). Presenter-local UI tunable. */
 const DEFAULT_LOG_MAX = 50;
 /** Activity-log entry kinds (presenter-only UI; never a wire string). */
-export const LOG_KIND = {
-  READ: 'read',
-  ACT: 'act',
-  NARRATION: 'narration',
-  HUMAN: 'human',
-} as const;
-export type LogKind = (typeof LOG_KIND)[keyof typeof LOG_KIND];
-
-/** Act-row outcome glyph keys (presenter-only UI). */
-export const LOG_RESULT = { PASS: 'pass', FAIL: 'fail' } as const;
-export type LogResult = (typeof LOG_RESULT)[keyof typeof LOG_RESULT];
+export { LOG_KIND, LOG_RESULT };
+export type { LogKind, LogResult };
 
 const LOG_CHIP: Record<LogKind, string> = { read: 'READ', act: 'ACT', narration: '', human: '' };
 const LOG_CHIP_ICON: Partial<Record<LogKind, PresenterIconName>> = {

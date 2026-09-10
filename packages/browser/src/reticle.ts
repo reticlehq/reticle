@@ -43,15 +43,17 @@ import {
 } from './registry/capabilities.js';
 import { installAllObservers, runTeardowns } from './observers/install-all.js';
 import { installOverlay, type OverlayHandle } from './presenter/overlay.js';
-import {
+// TYPES only. Naming the panel's class here would put the whole panel in the first thing a page
+// downloads, and the panel is wanted only once an agent connects. It is fetched below instead, at
+// the moment the page says it wants one. Types cost nothing: they are gone once the code is built.
+import type {
   Presenter,
-  LOG_KIND,
-  LOG_RESULT,
-  type PresenterOptions,
-  type LogHandle,
-  type ControlIntent,
+  PresenterOptions,
+  LogHandle,
+  ControlIntent,
 } from './presenter/presenter.js';
-import { getPresenterSettings } from './presenter/presenter-settings.js';
+// Values, from a leaf file that pulls nothing in behind it. See log-kinds.ts.
+import { LOG_KIND, LOG_RESULT } from './presenter/log-kinds.js';
 import { actionVerb } from './presenter/presenter-verbs.js';
 import { str, refLabel, modeForCommand, presentStatus } from './reticle-presenter-helpers.js';
 import { resetClock } from './timers/clock.js';
@@ -235,6 +237,24 @@ export class Reticle {
   #start = 0;
   #overlay: OverlayHandle | undefined;
   #presenter: Presenter | undefined;
+  /**
+   * Reading the panel's settings, once the panel has arrived.
+   *
+   * The panel is fetched rather than bundled, so for the first moments of a session there is nothing
+   * to ask. Callers fall back to the same default the settings themselves start from, so the
+   * behaviour before and after it lands is the same.
+   */
+  #readPanelSettings: (() => { blockPageInteractions: boolean }) | undefined;
+  /** True once the panel has been asked for, so a second connect does not fetch it twice. */
+  #panelRequested = false;
+  /**
+   * True once the bridge has connected.
+   *
+   * The panel wakes when the bridge does, and the two now race: the bridge can get there first,
+   * while the panel is still being fetched. Without this, a panel that arrived second would sit
+   * asleep for a session that was already live.
+   */
+  #bridgeConnected = false;
   #recorder: RecorderHandle | undefined;
   #annotator: Annotator | undefined;
   #eventCount = 0;
@@ -330,7 +350,10 @@ export class Reticle {
       handleCommand: (command) => this.#handleCommand(command),
       // Show the presenter HUD as soon as the agent bridge connects - the user immediately sees
       // the glow border and narration panel, even before the first tool call lands.
-      onConnected: () => this.#presenter?.sessionStart(),
+      onConnected: () => {
+        this.#bridgeConnected = true;
+        this.#presenter?.sessionStart();
+      },
       // Liveness fallback: if the bridge stays unreachable (the agent killed the server process),
       // no server-pushed end can arrive - so end the run we're presenting ourselves. A returning
       // agent revives it via the normal sessionStart path on its next command.
@@ -382,31 +405,7 @@ export class Reticle {
       this.#overlay.update({ connected: true, events: 0 });
     }
 
-    if (options.present !== false) {
-      const presenterOptions: PresenterOptions = {};
-      if (options.pace !== undefined) presenterOptions.paceMs = options.pace;
-      if (options.narrationDwellMs !== undefined) {
-        presenterOptions.narrationDwellMs = options.narrationDwellMs;
-      }
-      if (options.border !== undefined) presenterOptions.border = options.border;
-      if (options.logMax !== undefined) presenterOptions.logMax = options.logMax;
-      if (options.endedFadeMs !== undefined) presenterOptions.endedFadeMs = options.endedFadeMs;
-      if (options.idleEndMs !== undefined) presenterOptions.idleEndMs = options.idleEndMs;
-      presenterOptions.sessionId = this.#session;
-      // The panel calls this when the human pauses/resumes/ends or sends a message. We emit a
-      // HUMAN_CONTROL event over the existing transport; #emit stamps `t` from the elapsed clock.
-      presenterOptions.onControl = (intent: ControlIntent) =>
-        this.#emit(
-          EventType.HUMAN_CONTROL,
-          intent.text !== undefined
-            ? { kind: intent.kind, text: intent.text }
-            : { kind: intent.kind },
-        );
-      this.#presenter = new Presenter(presenterOptions);
-      // Mount the overlay. The session (glow + HUD) activates on bridge connect via onConnected,
-      // so the presenter is visible as soon as the agent is reachable - not just on first command.
-      this.#presenter.mount();
-    }
+    if (options.present !== false) this.#fetchAndShowPanel(options);
 
     if (true === options.recorder) {
       this.#recorder = installRecorder({ emit, now: () => Date.now() });
@@ -415,16 +414,19 @@ export class Reticle {
 
     // The page annotator rides with the presenter (the human surface) unless explicitly off.
     if (options.annotate ?? options.present !== false) {
-      const presenter = this.#presenter;
       this.#annotator = new Annotator({
         emit,
         now: () => Date.now(),
+        // Read at the moment a mark is made, not captured now: the panel may not have arrived yet
+        // when this is built, and a captured `undefined` would stay undefined for the whole session.
         onMark: (mark) =>
-          presenter?.log(
+          this.#presenter?.log(
             LOG_KIND.HUMAN,
             `🚩 #${String(mark.index)} ${mark.anchor}${mark.source !== undefined ? ` · ${mark.source}` : ''} — ${mark.note}`,
           ),
-        shouldBlock: () => getPresenterSettings().blockPageInteractions,
+        // The panel may not have arrived yet. `true` is what the panel's own settings start at,
+        // so the answer does not change when it does.
+        shouldBlock: () => this.#readPanelSettings?.().blockPageInteractions ?? true,
       });
       this.#annotator.mount();
       this.#presenter?.bindAnnotator(this.#annotator);
@@ -432,6 +434,67 @@ export class Reticle {
 
     this.#transport.connect();
     this.#connected = true;
+  }
+
+  /**
+   * Fetch the in-page panel and show it.
+   *
+   * The panel is what makes Reticle visible while an agent drives, and it is roughly a third of this
+   * package. It is also wanted only once somebody is actually driving, which during ordinary
+   * development is almost never -- so it is fetched at the moment the page asks for one rather than
+   * bundled into everything a page downloads. A developer whose page never connects never pays for
+   * it.
+   *
+   * Nothing waits for it. Every place that talks to the panel already copes with there not being
+   * one -- that was true long before this, because `present: false` has always been allowed -- so
+   * the moments before it arrives look exactly like a session with the panel turned off.
+   *
+   * If the fetch fails, the session carries on without a panel. Losing the picture of what is
+   * happening is bad; losing the session because the picture would not load is worse.
+   */
+  #fetchAndShowPanel(options: ReticleConnectOptions): void {
+    if (this.#panelRequested) return;
+    this.#panelRequested = true;
+    void import('./presenter/presenter.js')
+      .then(({ Presenter }) =>
+        import('./presenter/presenter-settings.js').then((settings) => ({ Presenter, settings })),
+      )
+      .then(({ Presenter, settings }) => {
+        // The page may have disconnected while this was in flight. Mounting a panel for a session
+        // that is over would leave it on screen with nothing behind it.
+        if (!this.#connected) return;
+        this.#readPanelSettings = settings.getPresenterSettings;
+        const panelOptions: PresenterOptions = {};
+        if (options.pace !== undefined) panelOptions.paceMs = options.pace;
+        if (options.narrationDwellMs !== undefined) {
+          panelOptions.narrationDwellMs = options.narrationDwellMs;
+        }
+        if (options.border !== undefined) panelOptions.border = options.border;
+        if (options.logMax !== undefined) panelOptions.logMax = options.logMax;
+        if (options.endedFadeMs !== undefined) panelOptions.endedFadeMs = options.endedFadeMs;
+        if (options.idleEndMs !== undefined) panelOptions.idleEndMs = options.idleEndMs;
+        panelOptions.sessionId = this.#session;
+        // The panel calls this when the human pauses, resumes, ends, or sends a message. We emit a
+        // HUMAN_CONTROL event over the existing transport; #emit stamps `t` from the elapsed clock.
+        panelOptions.onControl = (intent: ControlIntent) =>
+          this.#emit(
+            EventType.HUMAN_CONTROL,
+            intent.text !== undefined
+              ? { kind: intent.kind, text: intent.text }
+              : { kind: intent.kind },
+          );
+        const panel = new Presenter(panelOptions);
+        this.#presenter = panel;
+        panel.mount();
+        // The glow and panel wake on bridge connect, so if the bridge got there first, say so now.
+        if (this.#bridgeConnected) panel.sessionStart();
+        if (this.#annotator !== undefined) panel.bindAnnotator(this.#annotator);
+      })
+      .catch(() => {
+        // Deliberately silent. There is nowhere useful to report this from inside a page, and a
+        // console error here would land in the developer's own log about a panel they may not have
+        // asked for.
+      });
   }
 
   /** Whether the in-page SDK is connected to the bridge (read by createReticleEmitter). */

@@ -1,3 +1,4 @@
+import { Z_OVERLAY } from './layers.js';
 import { LOG_CSS } from './presenter-log.js';
 import { CONTROLS_CSS } from './presenter-controls.js';
 import { SHELL_CSS } from './presenter-shell-styles.js';
@@ -8,12 +9,8 @@ import { REPORT_CSS } from './presenter-report-styles.js';
  * All presenter overlay CSS - glow border, synthetic cursor/ring/ripple, and the floating HUD shell.
  * Split across shell-styles + controls + log modules so each file stays under the size cap.
  */
-/**
- * The presenter overlay's stacking layer. Exported because the annotator has to sit ABOVE it: the
- * overlay holds the page blocker, and anything below this number is covered by that shield - which
- * is what buried the annotate composer and made its Cancel/Add buttons unclickable.
- */
-export const Z_OVERLAY = 2147483600;
+/** Re-exported so the places that already read it from here still can. See layers.ts. */
+export { Z_OVERLAY };
 
 export const PRESENTER_CSS = `
 [data-reticle-overlay]{position:fixed;inset:0;pointer-events:none;z-index:${String(Z_OVERLAY)};}

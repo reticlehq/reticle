@@ -1,4 +1,4 @@
-import { Z_OVERLAY } from '../presenter/presenter-styles.js';
+import { Z_OVERLAY } from '../presenter/layers.js';
 
 /** Markup + CSS for the in-page annotation HUD (markers, hover box, composer). */
 const MARK_ATTR = 'data-reticle-mark';

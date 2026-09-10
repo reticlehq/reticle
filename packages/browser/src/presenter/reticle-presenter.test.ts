@@ -62,6 +62,30 @@ const FAST_FADE_MS = 5;
 const wait = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 const flush = (): Promise<void> => new Promise((r) => setTimeout(r, 0));
 
+/**
+ * Connect, and wait for the panel to actually be there.
+ *
+ * The panel is fetched at the moment the page asks for one rather than bundled into everything a
+ * page downloads, so it lands shortly after `connect` returns rather than during it. Every test
+ * below is about what the panel does, so every one has to wait for it. A test that did not would be
+ * describing the gap before it arrives -- a real state, just not the one being described here.
+ *
+ * The wait is for the panel to be ON THE PAGE, not for a fixed number of ticks. A tick count is a
+ * statement about how fast the machine is, and it goes green locally and flaky under load.
+ *
+ * A session asked to have no panel waits for nothing, because nothing is coming.
+ */
+const connectAndWaitForPanel = async (
+  reticle: { connect: (options: Record<string, unknown>) => void },
+  options: Record<string, unknown>,
+): Promise<void> => {
+  reticle.connect(options);
+  if (false === options['present']) return;
+  await vi.waitFor(() => {
+    if (null === document.querySelector('[data-reticle-glow]')) throw new Error('no panel yet');
+  });
+};
+
 const clickSel = (sel: string): void => {
   document.querySelector(sel)?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
 };
@@ -81,7 +105,7 @@ afterEach(() => {
 describe('reticle.ts session wiring (border)', () => {
   it('17 connect({present:true}) mounts the overlay but stays dormant until the first command', async () => {
     const reticle = new Reticle();
-    reticle.connect({ present: true, pace: 0 });
+    await connectAndWaitForPanel(reticle, { present: true, pace: 0 });
     // Overlay is mounted (ready) but the session has NOT started - no glow, no panel - because
     // nothing has happened yet. (The page merely loaded the SDK.)
     expect(document.querySelector('[data-reticle-glow]')).not.toBeNull();
@@ -94,7 +118,7 @@ describe('reticle.ts session wiring (border)', () => {
 
   it('18 disconnect() calls sessionEnd -> border off then overlay removed', async () => {
     const reticle = new Reticle();
-    reticle.connect({ present: true, pace: 0 });
+    await connectAndWaitForPanel(reticle, { present: true, pace: 0 });
     await dispatch(ReticleCommand.SNAPSHOT); // start the session so the border is on
     expect(dataOn()).toBe('1');
     reticle.disconnect();
@@ -103,7 +127,7 @@ describe('reticle.ts session wiring (border)', () => {
 
   it('19 connect({present:true, border:"busy"}) restores fade behavior end-to-end', async () => {
     const reticle = new Reticle();
-    reticle.connect({ present: true, border: 'busy', pace: 0 });
+    await connectAndWaitForPanel(reticle, { present: true, border: 'busy', pace: 0 });
     await dispatch(ReticleCommand.SNAPSHOT);
     // go quiet; busy machine fades the border out (old behavior)
     await wait(FAST_IDLE_MS + FAST_FADE_MS + 700 + 300);
@@ -114,7 +138,7 @@ describe('reticle.ts session wiring (border)', () => {
 
   it('20 connect({present:false}) - no presenter, session calls are skipped', async () => {
     const reticle = new Reticle();
-    reticle.connect({ present: false });
+    await connectAndWaitForPanel(reticle, { present: false });
     const out = await dispatch(ReticleCommand.NARRATE, { text: 'hi' });
     expect((out as { ok: boolean }).ok).toBe(true);
     expect(document.querySelector('[data-reticle-glow]')).toBeNull();
@@ -127,9 +151,9 @@ describe('reticle.ts session wiring (border)', () => {
     expect(document.querySelector('[data-reticle-overlay]')).toBeNull();
   });
 
-  it('22 double disconnect() after connect({present:true}) is a safe no-op', () => {
+  it('22 double disconnect() after connect({present:true}) is a safe no-op', async () => {
     const reticle = new Reticle();
-    reticle.connect({ present: true });
+    await connectAndWaitForPanel(reticle, { present: true });
     reticle.disconnect();
     expect(() => reticle.disconnect()).not.toThrow();
     expect(document.querySelector('[data-reticle-overlay]')).toBeNull();
@@ -139,7 +163,7 @@ describe('reticle.ts session wiring (border)', () => {
 describe('reticle.ts -> presenter log wiring', () => {
   it('read commands log("read", label)', async () => {
     const reticle = new Reticle();
-    reticle.connect({ present: true, pace: 0 });
+    await connectAndWaitForPanel(reticle, { present: true, pace: 0 });
     await dispatch(ReticleCommand.SNAPSHOT);
     const rows = logRows();
     const readRows = rows.filter(
@@ -155,7 +179,7 @@ describe('reticle.ts -> presenter log wiring', () => {
   it('act command logs act then updates result on success', async () => {
     document.body.innerHTML = '<button id="b">Save</button>';
     const reticle = new Reticle();
-    reticle.connect({ present: true, pace: 0 });
+    await connectAndWaitForPanel(reticle, { present: true, pace: 0 });
     // act on a ref that does not resolve still succeeds via the registry (no-op path); we only
     // need the act row + a pass glyph. Use a query first to register a ref is overkill; the act
     // handler tolerates an unknown ref by failing - so assert via a known-good snapshot+act.
@@ -179,7 +203,7 @@ describe('reticle.ts -> presenter log wiring', () => {
 
   it('narrate command appends (never overwrites) across 3 calls', async () => {
     const reticle = new Reticle();
-    reticle.connect({ present: true, pace: 0 });
+    await connectAndWaitForPanel(reticle, { present: true, pace: 0 });
     await dispatch(ReticleCommand.NARRATE, { text: 'one' });
     await dispatch(ReticleCommand.NARRATE, { text: 'two' });
     await dispatch(ReticleCommand.NARRATE, { text: 'three' });
@@ -190,7 +214,7 @@ describe('reticle.ts -> presenter log wiring', () => {
 
   it('present:false → narrate/act commands are no-ops', async () => {
     const reticle = new Reticle();
-    reticle.connect({ present: false });
+    await connectAndWaitForPanel(reticle, { present: false });
     const n = await dispatch(ReticleCommand.NARRATE, { text: 'x' });
     expect((n as { ok: boolean }).ok).toBe(true);
     expect(document.querySelector('[data-reticle-log]')).toBeNull();
@@ -199,9 +223,9 @@ describe('reticle.ts -> presenter log wiring', () => {
 });
 
 describe('reticle.ts -> live-control wiring', () => {
-  it('18 panel pause emits a HUMAN_CONTROL event over transport', () => {
+  it('18 panel pause emits a HUMAN_CONTROL event over transport', async () => {
     const reticle = new Reticle();
-    reticle.connect({ present: true, pace: 0 });
+    await connectAndWaitForPanel(reticle, { present: true, pace: 0 });
     clickSel('[data-reticle-pause]');
     const evs = humanControlEvents();
     expect(evs.length).toBe(1);
@@ -212,7 +236,7 @@ describe('reticle.ts -> live-control wiring', () => {
 
   it('20 PRESENTER command from server calls setState without emitting', async () => {
     const reticle = new Reticle();
-    reticle.connect({ present: true, pace: 0 });
+    await connectAndWaitForPanel(reticle, { present: true, pace: 0 });
     const out = await dispatch(ReticleCommand.PRESENTER, { state: SessionState.PAUSED });
     expect((out as { ok: boolean }).ok).toBe(true);
     expect(
@@ -226,7 +250,7 @@ describe('reticle.ts -> live-control wiring', () => {
 
   it('21 PRESENTER with unknown state is a safe no-op', async () => {
     const reticle = new Reticle();
-    reticle.connect({ present: true, pace: 0 });
+    await connectAndWaitForPanel(reticle, { present: true, pace: 0 });
     const out = await dispatch(ReticleCommand.PRESENTER, { state: 'bogus' });
     expect((out as { ok: boolean }).ok).toBe(true);
     expect(
