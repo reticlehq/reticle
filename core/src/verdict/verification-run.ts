@@ -297,6 +297,22 @@ export const RunVerdictSchema = z.object({
   reasons: z.array(z.string()).default([]),
   confidence: z.nativeEnum(RunConfidence),
   blockingRisks: z.number().default(0),
+  /**
+   * Which check this verdict is about, so a later one can say it corrects this.
+   *
+   * Optional because a run's overall verdict is not about one check. A verdict with no check named
+   * cannot be cited, and therefore cannot be corrected -- see revision.ts.
+   */
+  checkId: z.string().optional(),
+  /**
+   * The verdict this one replaces, written as `<runId>#<checkId>`.
+   *
+   * Present only on a correction. The verdict it names is NOT edited: it stays exactly as it was
+   * given, and this is a second, later answer that cites it. Rewriting the first in place would
+   * erase the fact that it was ever given, and "we always knew" is the shape of the problem this
+   * whole system exists to prevent.
+   */
+  supersedes: z.string().optional(),
 });
 export type RunVerdict = z.infer<typeof RunVerdictSchema>;
 
