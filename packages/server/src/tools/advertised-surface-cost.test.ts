@@ -125,6 +125,48 @@ describe('advertised surface cost', () => {
   });
 });
 
+/**
+ * The output-schema surface has a budget too, because somebody is paying it.
+ *
+ * `RETICLE_ADVERTISE_ALL_TOOLS` sends every tool's output schema as well as its input schema. It is a
+ * development switch, and a development switch that is set on a machine is paid on every turn of
+ * every session on that machine, exactly like the default is paid everywhere else.
+ *
+ * Measured through this same harness, it is roughly five times the default. That is a defensible
+ * price for knowing the shape of every reply while working on the tools themselves. What is not
+ * defensible is nobody noticing when it doubles, which is what an unbudgeted surface allows.
+ *
+ * The budget is deliberately loose. This one is not shipped to users, so the number is here to catch
+ * a surprise rather than to squeeze; the DEFAULT budget above is the ratchet that matters.
+ */
+const ALL_SURFACE_BYTE_BUDGET = 140_000;
+
+describe('the output-schema surface is budgeted too', () => {
+  it(`fits in ${String(ALL_SURFACE_BYTE_BUDGET)} bytes of tools/list`, async () => {
+    const bytes = bytesOf(await listToolsJson(TOOL_SURFACE.ALL, 'no-session', false));
+    expect(
+      bytes,
+      'the surface serialized to nothing — this measures a broken transport',
+    ).toBeGreaterThan(30_000);
+    expect(
+      bytes,
+      `the output-schema surface is ${String(bytes)} B (~${String(Math.round(bytes / 4))} tokens). ` +
+        'It is re-sent every turn on any machine with RETICLE_ADVERTISE_ALL_TOOLS set. Trim, or raise ' +
+        'this deliberately with the reason written here.',
+    ).toBeLessThanOrEqual(ALL_SURFACE_BYTE_BUDGET);
+  });
+
+  it('costs meaningfully more than the default, which is why the default omits it', async () => {
+    // If these ever converge, either the default started carrying output schemas -- a silent
+    // multiplication of everybody's per-turn cost -- or the flag stopped doing anything.
+    const [lean, full] = await Promise.all([
+      listToolsJson(TOOL_SURFACE.DEFAULT, 'no-session', false),
+      listToolsJson(TOOL_SURFACE.ALL, 'no-session', false),
+    ]);
+    expect(bytesOf(full)).toBeGreaterThan(bytesOf(lean) * 2);
+  });
+});
+
 describe('advertised surface is byte-stable across tools/list calls', () => {
   it('is identical on two consecutive lists from one session', async () => {
     const first = await listToolsJson(TOOL_SURFACE.DEFAULT, 'one-session', true);
