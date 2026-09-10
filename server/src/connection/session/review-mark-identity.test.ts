@@ -21,7 +21,7 @@
 
 import { describe, expect, it, beforeEach } from 'vitest';
 import { MarkStatus, MarkAnchorStrategy } from '@reticlehq/core';
-import { ReviewStore, resetMarkIdsForTest } from './review-store.js';
+import { ReviewStore, resetMarkIdsForTest } from './human/review-store.js';
 
 const mark = (note: string): Parameters<ReviewStore['add']>[0] => ({
   note,

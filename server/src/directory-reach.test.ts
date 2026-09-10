@@ -92,6 +92,11 @@ const REACHES_FOR: Record<string, readonly string[]> = {
    */
   presence: [],
   /**
+   * The person in the loop: their review marks, their messages to the agent, and what the panel
+   * is told to show them. Reaches for nothing.
+   */
+  human: [],
+  /**
    * What a flow's result MEANS -- whether an assertion still has integrity, who a failure belongs
    * to, why a role drifted. Reaches for nothing, like `presence`, so both edges into it are
    * permanently one-way.
@@ -182,6 +187,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   project: ['cli', 'cloud', 'flows', 'runs', 'tools'],
   runs: ['cloud', 'flows', 'intent', 'mcp', 'project', 'telemetry', 'tools'],
   session: [
+    'human',
     'ports',
     'presence',
     'bridge',

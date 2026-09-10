@@ -18,7 +18,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { LiveControl } from './live-control.js';
+import { LiveControl } from './human/live-control.js';
 
 describe('inbox history', () => {
   it('still delivers a queued message exactly once', () => {

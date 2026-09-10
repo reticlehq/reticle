@@ -48,11 +48,11 @@ import {
 import { type AmbientCounts } from '@reticlehq/engine/window/ambient.js';
 import { ObservedState } from './observed-state.js';
 import { recordBrowserLatency, recordSdkFailure } from '../../telemetry/session-metrics.js';
-import { LiveControl, type InboxMessage } from './live-control.js';
-export type { InboxMessage } from './live-control.js'; // moved; still part of Session's surface
-import { ReviewStore, type ReviewMark } from './review-store.js';
+import { LiveControl, type InboxMessage } from './human/live-control.js';
+export type { InboxMessage } from './human/live-control.js'; // moved; still part of Session's surface
+import { ReviewStore, type ReviewMark } from './human/review-store.js';
 import { buildSessionRecommendation } from './presence/session-recommendation.js';
-import { buildPresenterArgs } from './presenter-args.js';
+import { buildPresenterArgs } from './human/presenter-args.js';
 import { buildSessionLease, type SessionLease } from './presence/session-lease.js';
 import type { SessionInfo } from './session-info.js';
 export type { SessionInfo } from './session-info.js';
