@@ -99,6 +99,32 @@ describe('gates that run on a pull request are accounted for', () => {
   });
 });
 
+/**
+ * Workflows that exist to catch a security problem before it is merged.
+ *
+ * Named here rather than guessed from the filename, so that adding one is a decision somebody makes
+ * rather than something a naming convention does for them.
+ */
+const SECURITY_WORKFLOWS = ['codeql.yml'];
+
+describe('a security scan runs on every pull request, not just the ones aimed at main', () => {
+  it.each(SECURITY_WORKFLOWS)('%s does not filter its pull_request trigger by branch', (file) => {
+    // `pull_request: { branches: [main] }` is what GitHub's template ships, and it reads as harmless.
+    // In this repository it is not: work lands on a release or feature branch for weeks and only that
+    // branch's final merge targets main. So the filter scanned the last merge of a release and none
+    // of the pull requests that built it.
+    const yaml = readFileSync(join(WORKFLOWS_DIR, file), 'utf8');
+    const trigger = yaml.slice(yaml.indexOf('pull_request:'));
+    const nextTrigger = trigger.slice(1).search(/\n {2}\w+:/);
+    const block = -1 === nextTrigger ? trigger : trigger.slice(0, nextTrigger + 1);
+    expect(
+      block.includes('branches:'),
+      `${file} only scans pull requests aimed at the named branches. Remove the branches filter so ` +
+        'every pull request is scanned, whatever it targets.',
+    ).toBe(false);
+  });
+});
+
 describe('the aggregate gate covers every job in ci.yml', () => {
   const yaml = readFileSync(CI_FILE, 'utf8');
   const jobs = jobNames(yaml);
