@@ -234,9 +234,10 @@ describe('crawl — autonomous smart-monkey', () => {
  * A crawl report is the output most likely to be read as a work list — it sweeps a whole app and
  * hands back everything broken. "e42 does nothing" is a work item that starts with a search, and the
  * location costs nothing to include: the crawl already clicks each control, and the act result
- * carries the source captured alongside its anchor.
+ * carries the source captured alongside its anchor. A console fault can be more precise still: its
+ * own component/error stack names what crashed, while the control remains the reproduction context.
  */
-describe('crawl anomalies name the file the control is written in', () => {
+describe('crawl anomalies name the file that needs attention', () => {
   it('attaches source to a dead control', async () => {
     const session = fakeSession(tree(['button "Save" (ref=e1)']), {
       e1: { events: [], source: { file: 'src/components/Toolbar.tsx', line: 44 } },
@@ -259,6 +260,99 @@ describe('crawl anomalies name the file the control is written in', () => {
     const r = await crawl(session, {}, noSleep);
     expect(r.anomalies.length).toBeGreaterThanOrEqual(2);
     for (const a of r.anomalies) expect(a.source).toBe('src/views/Checkout.tsx:88');
+  });
+
+  it('prefers the crashing component over the navigation control that exposed it', async () => {
+    const session = fakeSession(tree(['link "Dispatch" (ref=e1)']), {
+      e1: {
+        events: [
+          {
+            type: EventType.CONSOLE_ERROR,
+            data: {
+              message:
+                'Rendered more hooks than during the previous render' +
+                '\n    at LoadsPage (http://localhost:5173/src/routes/loads.tsx?t=123:37:9)' +
+                '\n    at RenderedRoute (http://localhost:5173/node_modules/react-router.js:10:2)',
+              stack:
+                'Error: Rendered more hooks than during the previous render' +
+                '\n    at onClick (http://localhost:5173/src/components/app-sidebar.tsx:24:5)',
+            },
+          },
+        ],
+        source: { file: 'src/components/app-sidebar.tsx', line: 24 },
+      },
+    });
+
+    const r = await crawl(session, {}, noSleep);
+
+    expect(r.anomalies[0]).toMatchObject({
+      desc: 'link "Dispatch"',
+      source: 'src/routes/loads.tsx:37',
+    });
+  });
+
+  it('finds the first app frame when a console error carries only a JavaScript stack', async () => {
+    const session = fakeSession(tree(['link "Dispatch" (ref=e1)']), {
+      e1: {
+        events: [
+          {
+            type: EventType.CONSOLE_ERROR,
+            data: {
+              message: 'Rendered more hooks than during the previous render',
+              stack:
+                'Error: Rendered more hooks than during the previous render' +
+                '\n    at updateHook (http://localhost:5173/node_modules/react-dom.js:100:2)' +
+                '\n    at LoadsPage (http://localhost:5173/src/routes/loads.tsx?t=456:41:7)',
+            },
+          },
+        ],
+        source: { file: 'src/components/app-sidebar.tsx', line: 24 },
+      },
+    });
+
+    const r = await crawl(session, {}, noSleep);
+
+    expect(r.anomalies[0]?.source).toBe('src/routes/loads.tsx:41');
+  });
+
+  it('uses the uncaught error location when it is carried as structured fields', async () => {
+    const session = fakeSession(tree(['link "Dispatch" (ref=e1)']), {
+      e1: {
+        events: [
+          {
+            type: EventType.ERROR_UNCAUGHT,
+            data: {
+              message: 'Rendered more hooks than during the previous render',
+              source: 'http://localhost:5173/src/routes/loads.tsx?t=789',
+              line: 46,
+            },
+          },
+        ],
+        source: { file: 'src/components/app-sidebar.tsx', line: 24 },
+      },
+    });
+
+    const r = await crawl(session, {}, noSleep);
+
+    expect(r.anomalies[0]?.source).toBe('src/routes/loads.tsx:46');
+  });
+
+  it('does not mistake colon-separated message data for a stack frame', async () => {
+    const session = fakeSession(tree(['button "Save" (ref=e1)']), {
+      e1: {
+        events: [
+          {
+            type: EventType.CONSOLE_ERROR,
+            data: { message: 'validation failed for interval 12:34:56' },
+          },
+        ],
+        source: { file: 'src/components/save-button.tsx', line: 15 },
+      },
+    });
+
+    const r = await crawl(session, {}, noSleep);
+
+    expect(r.anomalies[0]?.source).toBe('src/components/save-button.tsx:15');
   });
 
   it('omits source when the app was not built with the stamp', async () => {

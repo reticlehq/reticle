@@ -29,9 +29,6 @@ const CONTROL_LABEL = {
   END: 'End',
   SEND: 'Send',
 };
-const INPUT_PLACEHOLDER = 'Tell the agent something…';
-/** Accessible name for the composer (a placeholder is not an accessible name). */
-const INPUT_ARIA_LABEL = 'Message to the agent';
 const PAUSED_BADGE_TEXT = 'PAUSED';
 const ENDED_BANNER_TEXT = 'Session ended';
 const COPY_LABEL = 'Copy run';
@@ -42,9 +39,6 @@ const COPIED_TEXT = 'Copied ✓';
 const RUN_FILENAME = 'reticle-run.json';
 /** Border fade-out delay after a session ends (native timer; presenter-only tunable). */
 export const ENDED_FADE_MS = 4000;
-/** Max composer height (px) before it scrolls. One source for both the CSS cap and the JS auto-grow
- * clamp - they measure the same border-box, so the scrollbar appears exactly when growth stops. */
-const MSG_MAX_H = 96;
 
 /** Payload the panel hands to its host when the human drives a control. */
 export interface ControlIntent {
@@ -58,7 +52,6 @@ export const CONTROLS_CSS = `
 [data-reticle-chat-panel] [data-reticle-foot]{flex:none;padding:8px 10px 10px;border-top:1px solid rgba(255,255,255,.07);
   background:linear-gradient(180deg,rgba(0,0,0,.35) 0%,rgba(0,0,0,.55) 100%);pointer-events:auto;}
 [data-reticle-chat-panel] .reticle-hud-log-well{margin:0 0 4px;}
-[data-reticle-chat-panel] .reticle-composer-stack{display:flex;flex-direction:column;gap:6px;}
 [data-reticle-chat-panel] .reticle-workspace-wrap{position:relative;align-self:flex-start;max-width:100%;}
 [data-reticle-chat-panel] .reticle-workspace{
   display:inline-flex;align-items:center;gap:5px;max-width:100%;padding:3px 8px 3px 6px;border-radius:999px;cursor:pointer;
@@ -93,30 +86,6 @@ export const CONTROLS_CSS = `
 [data-reticle-chat-panel] .reticle-workspace-menu-row{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;padding:4px 0;}
 [data-reticle-chat-panel] .reticle-workspace-menu-k{flex:none;color:rgba(255,255,255,.42);}
 [data-reticle-chat-panel] .reticle-workspace-menu-v{min-width:0;text-align:right;color:rgba(255,255,255,.9);font-weight:500;word-break:break-all;}
-[data-reticle-chat-panel] .reticle-composer{display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.03);
-  border:1px solid rgba(255,255,255,.1);border-radius:999px;padding:4px 4px 4px 14px;
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.05);transition:border-color .2s,box-shadow .2s,background .2s;}
-[data-reticle-chat-panel] .reticle-composer:focus-within{
-  border-color:color-mix(in srgb,var(--reticle-accent) 50%,transparent);background:rgba(255,255,255,.06);
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.06),
-    0 0 0 1px color-mix(in srgb,var(--reticle-accent) 50%,transparent);}
-[data-reticle-chat-panel] .reticle-msg{flex:1;min-width:0;pointer-events:auto;background:transparent;border:none;outline:none;resize:none;
-  box-sizing:border-box;color:var(--reticle-fg);font-family:var(--reticle-font);font-size:12.5px;line-height:18px;
-  height:28px;min-height:28px;max-height:${MSG_MAX_H}px;padding:5px 0;overflow-y:auto;
-  scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.14) transparent;}
-[data-reticle-chat-panel] .reticle-msg::-webkit-scrollbar{width:9px;}
-[data-reticle-chat-panel] .reticle-msg::-webkit-scrollbar-thumb{background:rgba(255,255,255,.14);border-radius:9px;border:2px solid transparent;background-clip:content-box;}
-[data-reticle-chat-panel] .reticle-msg::placeholder{color:var(--reticle-faint);}
-[data-reticle-chat-panel] .reticle-msg:disabled{opacity:.5;}
-[data-reticle-chat-panel] .reticle-send{flex:none;width:28px;height:28px;padding:0;border-radius:50%;border:none;cursor:pointer;pointer-events:auto;
-  background:var(--reticle-accent);color:#ffffff;display:inline-flex;align-items:center;justify-content:center;
-  transition:background .15s,transform .1s,box-shadow .15s;
-  box-shadow:0 1px 3px color-mix(in srgb,var(--reticle-accent) 30%,transparent);}
-[data-reticle-chat-panel] .reticle-send:hover{
-  background:color-mix(in srgb,var(--reticle-accent) 85%,#000);
-  box-shadow:0 2px 6px color-mix(in srgb,var(--reticle-accent) 40%,transparent);}
-[data-reticle-chat-panel] .reticle-send:active{transform:scale(.92);}
-[data-reticle-chat-panel] .reticle-send:disabled{background:#374151;color:#9ca3af;box-shadow:none;opacity:.5;cursor:default;}
 [data-reticle-chat-panel] .reticle-banner{display:none;flex:none;align-items:center;gap:8px;padding:10px 14px;color:var(--reticle-fg);
   font-size:12px;font-weight:500;border-bottom:1px solid var(--reticle-line2);background:var(--reticle-surface);}
 [data-reticle-overlay][data-reticle-state="ended"] [data-reticle-chat-panel] .reticle-banner{display:block;}
@@ -209,14 +178,20 @@ export const CONTROLS_TOOLBAR_HTML = [
 export const CONTROLS_BANNER_HTML = `<div data-reticle-banner class="reticle-banner">${ENDED_BANNER_TEXT}</div>`;
 /** Replay-a-flow row (between log and footer); buttons are filled in by setFlows once flows arrive. */
 export const CONTROLS_FLOWS_HTML = `<div data-reticle-flows class="reticle-flows"><span class="reticle-flows-cap">${FLOWS_LABEL}</span></div>`;
-/** Footer markup: composer only (export icons live in the toolbar). */
-export const CONTROLS_FOOT_HTML = `<div data-reticle-foot><div class="reticle-composer-stack">${workspaceRowHtml()}<div class="reticle-composer"><textarea data-reticle-input class="reticle-msg" rows="1" aria-label="${INPUT_ARIA_LABEL}" placeholder="${INPUT_PLACEHOLDER}"></textarea><button type="button" data-reticle-send class="reticle-send" aria-label="${CONTROL_LABEL.SEND}">${hiIconHtml(PresenterIcon.SEND, PRESENTER_ICON_SIZE.SEND)}</button></div></div></div>`;
+/**
+ * Footer markup: the workspace row.
+ *
+ * The composer was here and is gone. Users could not tell when to type into the HUD and when to type
+ * at their agent, because both were a box on the same screen and nothing said which was which — and
+ * there is no wording that fixes two inputs that look alike and do different things.
+ *
+ * The row it shared a stack with stays: it is read and clicked, not typed into.
+ */
+export const CONTROLS_FOOT_HTML = `<div data-reticle-foot><div class="reticle-foot-stack">${workspaceRowHtml()}</div></div>`;
 
 interface ControlRefs {
   pauseBtn: HTMLButtonElement | undefined;
   endBtn: HTMLButtonElement | undefined;
-  input: HTMLTextAreaElement | undefined;
-  sendBtn: HTMLButtonElement | undefined;
   banner: HTMLElement | undefined;
   copyBtn: HTMLButtonElement | undefined;
   exportBtn: HTMLButtonElement | undefined;
@@ -228,8 +203,6 @@ function queryControlRefs(root: HTMLElement): ControlRefs {
   return {
     pauseBtn: root.querySelector<HTMLButtonElement>('[data-reticle-pause]') ?? undefined,
     endBtn: root.querySelector<HTMLButtonElement>('[data-reticle-end]') ?? undefined,
-    input: root.querySelector<HTMLTextAreaElement>('[data-reticle-input]') ?? undefined,
-    sendBtn: root.querySelector<HTMLButtonElement>('[data-reticle-send]') ?? undefined,
     banner: root.querySelector<HTMLElement>('[data-reticle-banner]') ?? undefined,
     copyBtn: root.querySelector<HTMLButtonElement>('[data-reticle-copy]') ?? undefined,
     exportBtn: root.querySelector<HTMLButtonElement>('[data-reticle-export]') ?? undefined,
@@ -257,8 +230,6 @@ export class ControlPanel {
   #refs: ControlRefs = {
     pauseBtn: undefined,
     endBtn: undefined,
-    input: undefined,
-    sendBtn: undefined,
     banner: undefined,
     copyBtn: undefined,
     exportBtn: undefined,
@@ -301,19 +272,6 @@ export class ControlPanel {
     }
     this.#refs.pauseBtn?.addEventListener('click', () => this.#onPauseToggle(), { signal });
     this.#refs.endBtn?.addEventListener('click', () => this.#onEnd(), { signal });
-    this.#refs.sendBtn?.addEventListener('click', () => this.#onSend(), { signal });
-    this.#refs.input?.addEventListener(
-      'keydown',
-      (e) => {
-        // Enter sends; Shift+Enter inserts a newline (falls through to the textarea's default).
-        if (e instanceof KeyboardEvent && 'Enter' === e.key && !e.shiftKey) {
-          e.preventDefault();
-          this.#onSend();
-        }
-      },
-      { signal },
-    );
-    this.#refs.input?.addEventListener('input', () => this.#autosize(), { signal });
     // Replay-a-flow: one ▶ click re-runs a saved flow (no agent). Delegated so it covers all chips.
     this.#refs.flows?.addEventListener(
       'click',
@@ -385,26 +343,6 @@ export class ControlPanel {
     if (this.#state === SessionState.ENDED) return;
     this.#host.emit(HumanControlKind.END);
     this.setState(SessionState.ENDED);
-  }
-  #onSend(): void {
-    if (this.#state === SessionState.ENDED) return;
-    const text = (this.#refs.input?.value ?? '').trim();
-    if (0 === text.length) return;
-    this.#host.emit(HumanControlKind.MESSAGE, text);
-    this.#host.logHuman(text);
-    if (getPresenterSettings().clearOnCopy) {
-      this.#host.clearRunLog?.();
-    }
-    if (this.#refs.input !== undefined) this.#refs.input.value = '';
-    this.#autosize();
-  }
-  /** Grow the composer to fit its content (up to the CSS max-height), then shrink back - soothing,
-   * no scrollbar until it's genuinely long. Driven on input and after a send clears the field. */
-  #autosize(): void {
-    const el = this.#refs.input;
-    if (el === undefined) return;
-    el.style.height = 'auto';
-    el.style.height = `${String(Math.min(el.scrollHeight, MSG_MAX_H))}px`;
   }
   /** Render the replayable-flow chips from the server push. Each ▶ click re-runs that flow, no agent.
    * Takes the raw wire value and narrows it here (the panel is the consumer of this push). */
@@ -485,8 +423,6 @@ export class ControlPanel {
       if (ended) refs.exportBtn.removeAttribute('hidden');
       else refs.exportBtn.setAttribute('hidden', '');
     }
-    if (refs.sendBtn !== undefined) refs.sendBtn.disabled = ended;
-    if (refs.input !== undefined) refs.input.disabled = ended;
     // A calm end leads with "Session ended"; a handoff (waiting/ask/warn) leads with the notice itself,
     // since the toned styling already conveys "ended" and the notice is the actionable headline.
     if (refs.banner !== undefined) {

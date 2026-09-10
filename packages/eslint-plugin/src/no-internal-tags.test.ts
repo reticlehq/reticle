@@ -14,6 +14,50 @@ const ruleTester = new RuleTester();
  * rule must NOT punish — a rule that fires on ordinary technical writing gets disabled, and a disabled
  * rule enforces nothing.
  */
+/**
+ * The project rule names four surfaces: comments, file names, directory names and test descriptions.
+ * The rule enforced two. A path is the FIRST thing a reader meets, before any comment, so a module
+ * called `n5-ring-buffer.ts` states the banned shape in the loudest place available.
+ *
+ * `filename` is relative here because the rule judges the path relative to the project root: an
+ * absolute path runs through directories nobody chose as part of this codebase, and flagging a CI
+ * runner's workspace would report a violation the author cannot fix.
+ */
+ruleTester.run('no-internal-tags (paths)', noInternalTags, {
+  valid: [
+    { code: '// ordinary', filename: 'packages/server/src/ring-buffer.ts' },
+    // Each of these matches the code SHAPE and must not fire: the boundaries, not the case, are what
+    // rule them out.
+    { code: '// ordinary', filename: 'apps/e2e/install-gate.ts' },
+    { code: '// ordinary', filename: 'packages/core/src/utf8-decode.ts' },
+    { code: '// ordinary', filename: 'packages/server/src/http2-client.ts' },
+    { code: '// ordinary', filename: 'packages/core/src/base64.ts' },
+    // Established terms keep their exemption in a path, same as in prose.
+    { code: '// ordinary', filename: 'packages/server/src/s3-upload.ts' },
+    { code: '// ordinary', filename: 'packages/browser/src/v8-heap.ts' },
+    // No file to judge: a RuleTester case or a piped snippet.
+    { code: '// ordinary' },
+  ],
+  invalid: [
+    {
+      code: '// ordinary',
+      filename: 'packages/server/src/n5-ring-buffer.ts',
+      errors: [{ messageId: 'pathTag', data: { tag: 'n5' } }],
+    },
+    {
+      // A DIRECTORY name is the other half the project rule names.
+      code: '// ordinary',
+      filename: 'packages/server/src/w11/ring-buffer.ts',
+      errors: [{ messageId: 'pathTag', data: { tag: 'w11' } }],
+    },
+    {
+      code: '// ordinary',
+      filename: 'packages/server/src/replay-v2.2.0.ts',
+      errors: [{ messageId: 'pathTag', data: { tag: 'v2.2.0' } }],
+    },
+  ],
+});
+
 ruleTester.run('no-internal-tags', noInternalTags, {
   valid: [
     { code: '// Flush the journal tail so the last events reach disk.' },

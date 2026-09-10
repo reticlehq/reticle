@@ -18,13 +18,32 @@ const TESTID_ATTR = /data-testid\s*=\s*[{]?\s*["'`]([^"'`]+)["'`]/g;
 /** Cap the generated list. A capabilities block is a hint for an agent, not an inventory. */
 export const MAX_TESTIDS = 60;
 
+/**
+ * An unresolved template interpolation, anywhere in a captured value.
+ *
+ * The attribute regex excludes quote characters and nothing else, so `data-testid={`chip-${x}`}`
+ * captures `chip-${x}` whole. Reported from a monorepo audit, where the generated capabilities file
+ * listed `'${testId}'` and `` 'chip-${group.label}' `` verbatim.
+ *
+ * Nothing in the running app ever carries those as an attribute value, so each one is an advertised
+ * handle that cannot be driven. The capabilities block exists to tell an agent what it CAN act on,
+ * and a list that is partly fiction is worse than a shorter true one — an agent that tries three
+ * imaginary testids learns to distrust the whole block.
+ *
+ * A bare `$` is fine and stays: it is legal in an attribute value and appears in real ids
+ * (`total$usd`). Only `${` is evidence of an interpolation that was never resolved.
+ */
+const UNRESOLVED_INTERPOLATION = '${';
+
 /** Every distinct `data-testid` literal in the given sources, in first-seen order. */
 export function scanTestids(sources: readonly string[]): string[] {
   const found = new Set<string>();
   for (const src of sources) {
     for (const m of src.matchAll(TESTID_ATTR)) {
       const id = m[1];
-      if (id !== undefined && id.length > 0) found.add(id);
+      if (id !== undefined && id.length > 0 && !id.includes(UNRESOLVED_INTERPOLATION)) {
+        found.add(id);
+      }
       if (found.size >= MAX_TESTIDS) return [...found];
     }
   }

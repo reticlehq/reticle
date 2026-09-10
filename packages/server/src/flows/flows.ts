@@ -578,8 +578,13 @@ function redactSecretFill(
  * (auth-password), an accessible name (role=textbox, name="Password"), a signal. Checking only the
  * testid variant would redact the app that uses test ids and quietly leak the one that does not —
  * and an app without test ids is exactly the app whose flows were recorded by role.
+ *
+ * Exported because REPLAY has to agree with redaction about what the field is called. It did not:
+ * the replay paths took a `field` argument that only the testid caller passed, so a role-anchored
+ * secret was redacted at save under one name and looked up at replay under none — the flow typed
+ * the placeholder into the form. One function decides it for both sides, or the two drift again.
  */
-function anchorFieldName(anchor: FlowAnchor): string | undefined {
+export function anchorFieldName(anchor: FlowAnchor): string | undefined {
   if (AnchorKind.TESTID === anchor.kind) return anchor.value;
   if (AnchorKind.ROLE === anchor.kind) return anchor.name;
   if (AnchorKind.SIGNAL === anchor.kind) return anchor.name;

@@ -13,13 +13,13 @@
 // is slower and cannot block a PR. Conflating the two gives a gate too slow to block and too shallow
 // to trust.
 //
-// Four scaffolds, because `init` has four genuinely different paths into an app. The third matters
-// most for framework reasons: a Pages Router app has no `app/` root layout to patch, so connect has
-// to mount through `pages/_app` — and that is the path that once did nothing at all, silently.
+// Five scaffolds, because `init` has five genuinely different paths into an app. Vite Vue is the
+// non-React kit path. Pages Router has no `app/` root layout to patch, so connect has to mount
+// through `pages/_app` — and that is the path that once did nothing at all, silently.
 //
-// The fourth is a different axis entirely: the first three are all the same SHAPE — a single-app root
+// `monorepo-subdir` is a different axis: the other four are all the same SHAPE — a single-app root
 // with `init` run inside it — and that sameness is what made this gate blind to four init defects one
-// user hit in eight minutes. `monorepo-subdir` is the shape those live in.
+// user hit in eight minutes.
 //
 //   pnpm gate:install                 # all scaffolds
 //   node apps/e2e/install-gate.mjs --only next-pages-router [--keep]
@@ -806,7 +806,7 @@ async function driveScaffold(scaffold, index) {
     try {
       report = run(
         'node',
-        [CLI, 'init', '--port', String(SELF_TEST ? bridgePort + 1 : bridgePort), '--no-mcp'],
+        [CLI, 'init', '--port', String(SELF_TEST ? bridgePort + 1 : bridgePort), '--no-mcp', '--no-drive'],
         initFrom,
         {
           npm_config_registry: REGISTRY,
@@ -1123,6 +1123,23 @@ async function driveScaffold(scaffold, index) {
 console.log('\n=== INSTALL GATE: pristine apps, installed into, opened, and asked to connect ===');
 if (SELF_TEST) console.log('   (self-test: every scaffold is mis-wired and MUST fail)');
 await sweepBatteryOrphans([], { onNote: (n) => console.log(`   · ${n}`) });
+
+// Free ports used by either the real run or a preceding self-test (which runs first in CI in the
+// same job). On Windows, where detached daemons outlive process termination, an un-freed daemon
+// from self-test (e.g. port 4855) stays listening and tricks subsequent scaffolds into probing it.
+const allGatePorts = new Set([REGISTRY_PORT]);
+for (const offset of [0, SELF_TEST_PORT_OFFSET]) {
+  for (let i = 0; i < SCAFFOLDS.length; i++) {
+    const b = Number(process.env.INSTALL_GATE_PORT ?? '4788') + offset + i * 2;
+    allGatePorts.add(b);
+    allGatePorts.add(b + 1);
+    const a = Number(process.env.INSTALL_GATE_APP_PORT ?? '4820') + offset + i * 2;
+    allGatePorts.add(a);
+  }
+}
+for (const port of allGatePorts) {
+  await freePortSafely(port);
+}
 
 const chosen = SCAFFOLDS.filter((s) => ONLY === undefined || s.id === ONLY);
 if (chosen.length === 0) {

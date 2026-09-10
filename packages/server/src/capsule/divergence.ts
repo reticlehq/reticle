@@ -54,17 +54,39 @@ function satisfies(link: ExpectedLink, events: readonly ReticleEvent[]): boolean
   }
 }
 
-/** Describe what WAS observed for a link that failed — the closest attempt, for a side-by-side. */
-function observedFor(link: ExpectedLink, events: readonly ReticleEvent[]): string {
+/**
+ * Describe what WAS observed for a link that failed — the closest attempt, for a side-by-side.
+ *
+ * `truncated` says the buffer dropped events belonging to this window, which turns every sentence
+ * below from a claim about the app into a claim about a partial reading. It is the difference
+ * between "the request was never made" and "no surviving event shows the request", and a field
+ * session proved they are not interchangeable: a POST that returned 200 inside the window carried
+ * the whole root cause, and the capsule for that same window said `state "cad" never changed`. The
+ * agent believed the absolute — the strongest, most specific, and most wrong thing this tool can
+ * say. Absence of evidence must never be typed as evidence of absence.
+ */
+function observedFor(
+  link: ExpectedLink,
+  events: readonly ReticleEvent[],
+  truncated: boolean,
+): string {
   if (ConsequenceKind.NET === link.kind) {
     const match = net(events).find(
       (e) => 'string' === typeof e.data['url'] && e.data['url'].includes(link.urlContains),
     );
-    if (match === undefined) return `no request to ${link.urlContains}`;
-    return `${link.urlContains} responded ${String(match.data['status'])} (expected ${String(link.status)})`;
+    if (match !== undefined) {
+      return `${link.urlContains} responded ${String(match.data['status'])} (expected ${String(link.status)})`;
+    }
+    return truncated
+      ? `no surviving event shows a request to ${link.urlContains} — capture truncated, so this is not evidence there was none`
+      : `no request to ${link.urlContains}`;
   }
-  if (ConsequenceKind.SIGNAL === link.kind) return `signal "${link.name}" never fired`;
-  return `state "${link.name}" never changed`;
+  const subject =
+    ConsequenceKind.SIGNAL === link.kind ? `signal "${link.name}"` : `state "${link.name}"`;
+  if (truncated) return `${subject} was not observed — capture truncated, so absence is unproven`;
+  return ConsequenceKind.SIGNAL === link.kind
+    ? `${subject} never fired`
+    : `${subject} never changed`;
 }
 
 /**
@@ -74,10 +96,11 @@ function observedFor(link: ExpectedLink, events: readonly ReticleEvent[]): strin
 export function firstDivergence(
   expected: readonly ExpectedLink[],
   observed: readonly ReticleEvent[],
+  truncated = false,
 ): Divergence | null {
   for (const link of expected) {
     if (!satisfies(link, observed)) {
-      return { expected: link, observed: observedFor(link, observed) };
+      return { expected: link, observed: observedFor(link, observed, truncated) };
     }
   }
   return null;

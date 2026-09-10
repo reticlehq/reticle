@@ -14,7 +14,7 @@ import type { ToolDeps } from '../tools/tool-kit.js';
  * behaviour every call site had before the resolver existed.
  */
 export function sessionRoot(deps: ToolDeps, sessionId: string | undefined): string {
-  return deps.artifactRootFor?.(sessionProjectIdOf(deps, sessionId)).root ?? deps.reticleRoot;
+  return deps.artifactRootFor?.(sessionProjectId(deps, sessionId)).root ?? deps.reticleRoot;
 }
 
 /**
@@ -24,7 +24,17 @@ export function sessionRoot(deps: ToolDeps, sessionId: string | undefined): stri
  * several are connected and none was named. All three mean the same thing here — we cannot tell
  * which project this call is about — and none of them is a reason to fail the caller's tool.
  */
-function sessionProjectIdOf(deps: ToolDeps, sessionId: string | undefined): string | undefined {
+/*
+ * Exported alongside `sessionRoot`, and that is the point rather than a convenience. A caller that
+ * takes the ROOT from the session and the PROJECT ID from somewhere else has resolved half an
+ * address, which is the defect the comment above predicted and `loadNamedFlows` then shipped: it
+ * read the id from `readProjectId(process.cwd())` while its root came from here. Both halves come
+ * from this file so they cannot disagree again.
+ */
+export function sessionProjectId(
+  deps: ToolDeps,
+  sessionId: string | undefined,
+): string | undefined {
   try {
     return deps.sessions.resolve(sessionId).projectId;
   } catch {

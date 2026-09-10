@@ -142,7 +142,7 @@ curl https://docs.reticle.sh/install-manual.md      # register the MCP, wire the
 curl https://docs.reticle.sh/troubleshooting.md     # nothing connected, click did nothing, verdict unknown
 ```
 
-**Vite + React**, **Next.js**, **Remix** and **Astro** are the frameworks with an app and a CI gate behind them, so their wiring is proven rather than assumed. The SDK is framework-agnostic and usually connects elsewhere, but say that honestly rather than reporting a proven install.
+**Vite + React**, **Next.js**, **Remix** and **Astro** are the frameworks with an app and a CI gate behind them, so their wiring is proven rather than assumed. **TanStack Start** is detected and given a client-only recipe, but nothing in CI proves it. The SDK is framework-agnostic and usually connects elsewhere, but say that honestly rather than reporting a proven install.
 
 Do not reconstruct it from memory. Three things decide whether it works, and all three get skipped:
 

@@ -71,6 +71,17 @@ export function replayActionArgs(
   return args;
 }
 
+/**
+ * The field a compiled recording step names — the same mapping `anchorFieldName` uses on a
+ * FlowAnchor, read off the `by`/`value`/`name` shape `compileAnchorArgs` emits.
+ */
+function recordedFieldName(step: Record<string, unknown>): string | undefined {
+  const by = asString(step['by']);
+  if (QueryBy.TESTID === by) return asString(step['value']);
+  if (QueryBy.ROLE === by) return asString(step['name']);
+  return undefined;
+}
+
 /** The element's source location from an action result, when the framework stamped one. */
 function sourceFromResult(res: Record<string, unknown>): Record<string, unknown> | undefined {
   const source = asRecord(res['source']);
@@ -311,7 +322,7 @@ export async function replayProgram(
           liveSteps.push({
             ref,
             action: asString(sub['action']) ?? '',
-            args: replayActionArgs(sub['args'], confirmDangerous),
+            args: replayActionArgs(sub['args'], confirmDangerous, recordedFieldName(sub)),
           });
         }
         // Attribute the step's effects to the step: unattributed effects are learned as ambient
@@ -336,7 +347,11 @@ export async function replayProgram(
           r = await session.command(ReticleCommand.ACT, {
             ref,
             action: asString(step.args['action']) ?? '',
-            args: replayActionArgs(step.args['args'], confirmDangerous),
+            args: replayActionArgs(
+              step.args['args'],
+              confirmDangerous,
+              recordedFieldName(step.args),
+            ),
           });
         } finally {
           session.finishAction();

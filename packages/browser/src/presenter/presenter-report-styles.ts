@@ -90,6 +90,12 @@ export const REPORT_CSS = `
 [${REPORT_PANEL_ATTR}] .reticle-report-defect-source{
   color:var(--reticle-faint);font-size:9.5px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
   overflow-wrap:anywhere;}
+.reticle-report-defect-link{flex:none;display:inline-flex;align-items:center;justify-content:center;
+  width:20px;height:20px;border-radius:6px;color:var(--reticle-faint);pointer-events:auto;
+  opacity:0;transition:opacity .12s ease,color .12s ease,background .12s ease;}
+.reticle-report-defect:hover .reticle-report-defect-link,
+.reticle-report-defect-link:focus-visible{opacity:1;}
+.reticle-report-defect-link:hover{color:var(--reticle-fg);background:rgba(255,255,255,.07);}
 [${REPORT_PANEL_ATTR}] .reticle-report-defects-more{
   display:inline-block;margin-top:8px;font-size:10px;color:var(--reticle-c-active);
   text-decoration:none;}

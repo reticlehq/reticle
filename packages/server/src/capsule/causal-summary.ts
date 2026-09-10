@@ -73,11 +73,31 @@ export interface CausalSummary {
    * `stateSettleMs` and `elided` follow.
    */
   stateUnwatched?: true;
+  /**
+   * TRUE when the ring buffer evicted events belonging to this window, so every count and list here
+   * is a FLOOR, not a total — `net.total: 0` means "none survived", never "none happened".
+   *
+   * The same distinction `stateUnwatched` draws, from the other cause, and it was the more expensive
+   * one. A field app rewrote one localStorage key thousands of times a minute; the no-op writes
+   * starved the buffer (`held: 2000, dropped: 70482`), and the verdict for that window reported
+   * `net.total: 0`, `stateDiffs: []` and "state never changed" — while a POST that had returned 200
+   * in that exact window carried the entire root cause in its body. The agent read the zero and was
+   * about to report "clicking Accept fires no network request", which points a developer at the
+   * click handler instead of at the payload the server rejected.
+   *
+   * `honesty.integrity.losses` already said `buffer_loss`. It was not enough: the headline fields an
+   * agent reads to form a verdict are these, and a bare `0` several levels above a nested integrity
+   * flag reads as a fact. The absolute and the caveat must not be separable, so the caveat rides on
+   * the summary that carries the absolutes.
+   */
+  truncated?: true;
 }
 
 /** What only the SESSION knows — level facts the event window cannot contain. See `stateUnwatched`. */
 interface SummaryContext {
   stateUnwatched?: boolean;
+  /** Did the buffer drop events from this window — see `CausalSummary.truncated`. */
+  truncated?: boolean;
 }
 
 /**
@@ -252,5 +272,6 @@ export function causalSummary(
     ...(layoutShift === undefined ? {} : { layoutShift }),
     longTasks,
     ...(true === context.stateUnwatched ? { stateUnwatched: true as const } : {}),
+    ...(true === context.truncated ? { truncated: true as const } : {}),
   };
 }

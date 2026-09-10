@@ -29,7 +29,10 @@ function projectDir(): string {
 }
 
 /** The few things the watch asks of a SessionManager, and nothing else. */
-function stubSessions(departed: string | undefined): {
+function stubSessions(
+  departed: string | undefined,
+  lastUrl?: string,
+): {
   manager: SessionManager;
   hint: () => string;
 } {
@@ -40,6 +43,8 @@ function stubSessions(departed: string | undefined): {
     // the lease sentence is a candidate at all.
     everConnected: () => true,
     lastDeparted: () => departed,
+    lastKnown: () =>
+      departed === undefined || lastUrl === undefined ? undefined : { id: departed, url: lastUrl },
     // Registered alongside the hint (#615): the branch code for the same diagnosis.
     setNoSessionReason: () => {},
     setNoSessionHint: (hint: (() => string | undefined) | undefined) => {
@@ -51,8 +56,8 @@ function stubSessions(departed: string | undefined): {
   return { manager, hint: () => installed?.() ?? '' };
 }
 
-function hintFor(departed: string | undefined, reaped: string[]): string {
-  const { manager, hint } = stubSessions(departed);
+function hintFor(departed: string | undefined, reaped: string[], lastUrl?: string): string {
+  const { manager, hint } = stubSessions(departed, lastUrl);
   const stop = startNoSessionWatch({
     sessions: manager,
     port: 4599,
@@ -89,5 +94,12 @@ describe('attributing a vanished session to an expired lease', () => {
 
   it('does not blame a lease when nothing has departed at all', () => {
     expect(hintFor(undefined, ['lease-1'])).not.toContain('was a pooled lease and it aged out');
+  });
+
+  it('names the last URL of a vanished human tab', () => {
+    const text = hintFor('human-tab', [], 'http://localhost:3000/orders/explode');
+    expect(text).toContain('http://localhost:3000/orders/explode');
+    expect(text).toMatch(/torn down while on/i);
+    expect(text).not.toContain('was a pooled lease and it aged out');
   });
 });

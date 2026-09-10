@@ -67,6 +67,73 @@ describe('pickDocumentSuccessor', () => {
     ).toBeUndefined();
   });
 
+  it('does not pick a different project even when the id matches', () => {
+    // The guard above exists and is tested — but its test uses a DIFFERENT id, and the same-id
+    // branch returned before the guard ran. Reachable exactly as reported: `sessionStorage` is
+    // scoped to the ORIGIN, not the app, so recycling a port (stop app A on :3000, start app B,
+    // reload the same tab) has app B read app A's id out of storage and register under it with its
+    // own projectId. `resolve()` then answers an explicit sessionId with a different product.
+    expect(
+      pickDocumentSuccessor(
+        [{ id: 'old', url: 'http://localhost:3000/admin', projectId: 'admin' }],
+        departed,
+      ),
+    ).toBeUndefined();
+  });
+
+  it('refuses rather than falling through to another candidate when the id matches but is not eligible', () => {
+    // Refusal, not a second guess. An exact id match that is ineligible is the strongest evidence
+    // available that the caller's id is stale, and picking some other session on the origin would
+    // be the silent redirect this whole function exists to prevent.
+    expect(
+      pickDocumentSuccessor(
+        [
+          { id: 'old', url: 'http://localhost:3000/admin', projectId: 'admin' },
+          { id: 'fresh', url: 'http://localhost:3000/orders/42', projectId: 'shop' },
+        ],
+        departed,
+      ),
+    ).toBeUndefined();
+  });
+
+  it('still follows a same-id reload that dropped the session param from the url', () => {
+    // `mayInherit` must NOT gate the same-id path, and this is the case that proves it. A driven or
+    // leased tab carries `__reticle_session` in its URL, but `navigate { url, reload: true }`
+    // reloads the BARE address, so the reconnecting document has no param. Demanding the claim
+    // again refuses the ordinary reload this whole mechanism exists for — caught by the benchmark
+    // gate, as a per-run cost rise, when an earlier version of this fix applied that gate here.
+    //
+    // The id is the identity on this path: it survived in sessionStorage, which a leased context
+    // does not share with anybody's real browser tab. A human's tab could only carry the id by
+    // carrying the param, which satisfies `mayInherit` anyway.
+    expect(
+      pickDocumentSuccessor(
+        [{ id: 'lease-7', url: 'http://localhost:3000/orders', projectId: 'shop' }],
+        {
+          id: 'lease-7',
+          url: 'http://localhost:3000/orders?__reticle_session=lease-7',
+          projectId: 'shop',
+        },
+      )?.id,
+    ).toBe('lease-7');
+  });
+
+  it('still refuses a DIFFERENT id that never made the claim', () => {
+    // The guard `mayInherit` was actually written for is untouched: another session inheriting a
+    // claimed identity is the case where an expired lease redirected the next call into somebody's
+    // real browser tab.
+    expect(
+      pickDocumentSuccessor(
+        [{ id: 'human-tab', url: 'http://localhost:3000/orders', projectId: 'shop' }],
+        {
+          id: 'lease-7',
+          url: 'http://localhost:3000/orders?__reticle_session=lease-7',
+          projectId: 'shop',
+        },
+      ),
+    ).toBeUndefined();
+  });
+
   it('with no projectId, origin alone is the match', () => {
     expect(
       pickDocumentSuccessor([{ id: 'new', url: 'http://localhost:3000/done' }], {

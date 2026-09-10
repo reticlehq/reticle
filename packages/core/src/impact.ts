@@ -135,6 +135,23 @@ export const ImpactScopeSchema = z.object({
 export type ImpactScope = z.infer<typeof ImpactScopeSchema>;
 
 /** What the HUD receives: this project, and the machine-wide total. */
+/**
+ * Whether this machine is signed in to a Reticle workspace, as the HUD is allowed to know it.
+ *
+ * Deliberately the smallest shape that answers the question, because it is pushed to a BROWSER: a
+ * token here would be a token in the DOM of the user's own app, readable by anything else running
+ * on it. There is no field for one and the reader is tested for never emitting one.
+ *
+ * `org` and `host` are present only when signed in. `host` matters because a self-hosted install is
+ * not app.reticle.sh, and telling that user to visit a host they do not use is worse than silence.
+ */
+export const AccountStateSchema = z.object({
+  signedIn: z.boolean(),
+  org: z.string().optional(),
+  host: z.string().optional(),
+});
+export type AccountState = z.infer<typeof AccountStateSchema>;
+
 export const ImpactSnapshotSchema = z.object({
   schemaVersion: z.number().int().positive(),
   project: ImpactScopeSchema,
@@ -147,6 +164,12 @@ export const ImpactSnapshotSchema = z.object({
    * short list without a link: the free tool is complete on its own.
    */
   dashboardUrl: z.string().optional(),
+  /**
+   * Whether this machine is signed in. Absent on an SDK/daemon pair too old to send it, which the
+   * HUD must read as "unknown", never as "signed out" — prompting a signed-in user to sign in is the
+   * kind of nag that gets a dev-only HUD switched off for good.
+   */
+  account: AccountStateSchema.optional(),
 });
 export type ImpactSnapshot = z.infer<typeof ImpactSnapshotSchema>;
 

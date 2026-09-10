@@ -50,9 +50,12 @@ describe('steps without which no session can ever appear', () => {
       'Connect snippet (CRA)',
       'Connect snippet (Astro)',
       'Connect snippet (Nuxt)',
+      'Connect snippet (React Router)',
+      'Connect snippet (TanStack Start)',
       'Reticle client hook',
       'Reticle connect module',
       'Vite plugin',
+      'Vite plugin (electron-vite renderer)',
     ]) {
       expect(isConnectStep(title), title).toBe(true);
     }

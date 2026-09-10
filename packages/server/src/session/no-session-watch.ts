@@ -328,6 +328,13 @@ export function startNoSessionWatch(options: NoSessionWatchOptions): () => void 
         const departed = options.sessions.lastDeparted();
         return departed === undefined ? false : (options.wasReapedLease?.(departed) ?? false);
       })(),
+      // The URL of the session that went away, when the tombstone still holds it. Optional: a
+      // stub SessionManager in tests has no lastKnown, and a daemon that never saw a session
+      // has none to name.
+      ...(() => {
+        const known = options.sessions.lastKnown?.();
+        return undefined === known ? {} : { lastKnownUrl: known.url };
+      })(),
       // How long this daemon has been waiting with no app. The diagnosis uses it to surface
       // "install never finished" — the same condition telemetry already knows about.
       ...(() => {

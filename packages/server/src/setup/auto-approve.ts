@@ -13,9 +13,12 @@
  *    defensible; the same edit made globally would hand the same pass to every other MCP server
  *    they ever install, including ones that reach the network. Their approval gate is not ours to
  *    dismantle, only ours to step out of.
- * 2. Nothing is written for an agent that is not installed. An absent agent has no Accept button to
- *    remove, and the file would be litter — Cursor's especially, since that one TAKES OVER from an
- *    allowlist we cannot read.
+ * 2. Nothing is CREATED where the file itself takes over settings we cannot read — Cursor's
+ *    permissions.json supersedes its in-app allowlist and pins the run mode to Allowlist, so a user
+ *    who ran everything without asking loses that and cannot switch back while the file exists.
+ *    Merging into one they already have is fine; making one is not, so that case is DEFERRED with
+ *    the in-app step to take instead. Nothing is written at all for an agent that is not installed:
+ *    an absent agent has no Accept button to remove.
  *
  * Codex is absent by design: its approval policy is global (`approval_policy`), so there is no
  * reticle-shaped rule to write, and its config is TOML, which this repo never rewrites. Its
@@ -41,8 +44,8 @@ export interface ApprovalGrant {
   /** Adds our rule to a parsed config, leaving everything else exactly as it was. */
   readonly grant: (current: Record<string, unknown>) => Record<string, unknown>;
   /**
-   * True where creating this file supersedes an in-app allowlist we cannot read, so the user has to
-   * be told rather than have their other servers quietly start prompting again.
+   * True where CREATING this file supersedes in-app settings we can neither read nor restore. Such
+   * a grant is only ever merged into a file the user already owns, never created.
    */
   readonly supersedesInApp?: boolean;
 }
@@ -84,8 +87,11 @@ export const APPROVAL_GRANTS: readonly ApprovalGrant[] = [
     markers: [home('.cursor')],
     rule: 'mcpAllowlist += "reticle:*"',
     // Documented: "when a key appears in permissions.json, it fully replaces the in-app allowlist
-    // for that type". Merging keeps everything already in the FILE; it cannot restore what was only
-    // ever clicked in the UI, so the user is told.
+    // for that type" — and in practice it costs more than that. A non-empty mcpAllowlist also locks
+    // the run mode to Allowlist, so a user who had Run Everything ("YOLO") on loses it and cannot
+    // turn it back on while the file exists; Cursor has acknowledged that as their bug. Merging into
+    // a file the user already made is safe — they are already in Allowlist mode. Creating one is
+    // not, so we never do: see the DEFERRED branch below.
     supersedesInApp: true,
     grant: (c) => addToList(c, null, 'mcpAllowlist', `${RETICLE_KEY}:*`),
   },
@@ -151,19 +157,6 @@ interface ApprovalWhere {
   readonly platform: keyof PlatformPaths;
 }
 
-interface ApprovalOptions {
-  /**
-   * Refuse any grant that would CREATE a file superseding an allowlist we cannot read.
-   *
-   * Set on the unattended path. Writing Cursor's permissions.json for the first time takes over
-   * from what the user approved inside the app, which is a fair trade when they just ran a command
-   * and can read the line saying so, and not a fair trade at all when a version bump did it behind
-   * them: their OTHER MCP servers would start prompting again and nothing would connect that to us.
-   * Merging into a file they already own stays safe either way.
-   */
-  readonly onlyIfNoSupersede?: boolean;
-}
-
 /**
  * Pre-approve Reticle's tools everywhere the machine has an agent that would otherwise ask.
  *
@@ -174,7 +167,6 @@ export function grantAutoApproval(
   io: AgentWriterIo,
   where: ApprovalWhere,
   grants: readonly ApprovalGrant[] = APPROVAL_GRANTS,
-  options: ApprovalOptions = {},
 ): ApprovalResult[] {
   const join = joinFor(where.platform);
   return grants.map((grant): ApprovalResult => {
@@ -184,11 +176,11 @@ export function grantAutoApproval(
     if (!installed) return { ...base, outcome: ApprovalOutcome.ABSENT };
     try {
       const existed = io.exists(file);
-      if (true === options.onlyIfNoSupersede && true === grant.supersedesInApp && !existed) {
+      if (true === grant.supersedesInApp && !existed) {
         return {
           ...base,
           outcome: ApprovalOutcome.DEFERRED,
-          warn: `creating ${file} would supersede what you approved inside ${grant.name}, which is not something to do unannounced. Run: npx @reticlehq/server init --files-only`,
+          warn: `left ${grant.name}'s approvals alone — creating ${file} would take over its in-app settings and pin the run mode to Allowlist. If ${grant.name} asks before every reticle tool call, add \`${RETICLE_KEY}:*\` under Settings → Agents → Approvals & Execution (nothing to do if you run everything already).`,
         };
       }
       // A settings file we cannot parse is left exactly as it is. Reformatting somebody's config to
@@ -200,11 +192,7 @@ export function grantAutoApproval(
       if (next === current) return { ...base, outcome: ApprovalOutcome.ALREADY };
       io.mkdirp(file.slice(0, Math.max(0, file.lastIndexOf('/'))));
       io.writeFile(file, `${JSON.stringify(next, null, INDENT)}\n`);
-      const warn =
-        true === grant.supersedesInApp && !existed
-          ? `${file} now governs which MCP tools run without asking; anything you had approved inside ${grant.name} itself will ask again until it is listed here too`
-          : undefined;
-      return { ...base, outcome: ApprovalOutcome.GRANTED, ...(undefined === warn ? {} : { warn }) };
+      return { ...base, outcome: ApprovalOutcome.GRANTED };
     } catch (err) {
       return {
         ...base,

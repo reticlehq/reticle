@@ -18,6 +18,9 @@ import {
 } from '@reticlehq/core';
 import { ReticleTool } from '../tools/tool-names.js';
 import { replayActionArgs } from './replay.js';
+import { isStaleRefError } from '../tools/act-sequence-retry.js';
+import { waitForReaction } from '../tools/react-grace.js';
+import { anchorFieldName } from './flows.js';
 import type { FlowReplaySession, Sleep } from './flow-replay.js';
 import {
   anchorLabel,
@@ -112,7 +115,46 @@ export async function runRoleStep(
       },
     };
   }
-  return await actOnResolvedRef(session, step, index, label, ref, confirmDangerous);
+  return await actOnResolvedRef(
+    session,
+    step,
+    index,
+    label,
+    ref,
+    confirmDangerous,
+    anchorFieldName(anchor),
+    // The retry's whole point: run the SAME locator against the DOM as it is now.
+    async () => (await resolveQuery(session, roleQueryArgs(anchor), sleep)).refs[0],
+  );
+}
+
+/**
+ * `assertActionAllowed`'s refusal — "potentially destructive action blocked; retry with
+ * args.confirmDangerous=true" — is written for a LIVE call, where retrying with that arg works. It
+ * does not during replay: `replayActionArgs` deliberately strips any `confirmDangerous` a step's own
+ * args carry and restores it only from the ONE call-level boolean this run was given, because a
+ * destructive confirmation has to be a decision made for THIS run, never a value saved into the
+ * recording (#94). A caller who hand-edits the flow file's step args to add it gets it silently
+ * deleted, replays again, and reads the identical refusal — which reads as though nothing they tried
+ * worked, when what happened is they tried the one thing that cannot work here.
+ *
+ * Appends the path that does, rather than replacing the message: an agent that has already learned
+ * to recognise the raw refusal still finds it, plus the fix for this specific caller.
+ */
+const DESTRUCTIVE_ACTION_PATTERN = /potentially destructive (?:\w+ )*(?:action|tool) blocked/i;
+
+export function replayDestructiveActionHint(rawError: string): string {
+  if (!DESTRUCTIVE_ACTION_PATTERN.test(rawError)) return rawError;
+  return (
+    `${rawError} — this is a flow REPLAY: a step's own args.confirmDangerous is stripped before ` +
+    'dispatch and never persists, so editing the flow file does nothing. Pass it at the call level ' +
+    `instead: ${ReticleTool.FLOW_REPLAY} { confirmDangerous: true } acknowledges every flagged step ` +
+    // `reticle_verify{action:"flows"}` (the batch suite runner) has no such argument today — naming
+    // it here would repeat the exact defect this message exists to fix, so the honest statement is
+    // that a flow with a flagged step currently has to be replayed on its own to pass it.
+    'for this run. The batch reticle_verify{action:"flows"} has no equivalent option yet, so a flow ' +
+    'with a flagged step has to be replayed on its own to acknowledge it.'
+  );
 }
 
 /**
@@ -126,22 +168,64 @@ async function actOnResolvedRef(
   label: string,
   ref: string,
   confirmDangerous: boolean,
+  /**
+   * The field name a redacted fill is supplied under, from `anchorFieldName` — the SAME function
+   * redaction uses to decide what to hide. Without it a role-anchored secret is redacted at save
+   * and looked up at replay under no name at all, so the flow types the placeholder into the form.
+   */
+  field?: string,
+  /**
+   * Resolve the anchor again. Supplied by the caller because only it knows how this step's anchor is
+   * found, and the retry below is worthless without it: re-dispatching the SAME dead ref fails
+   * identically. What changed between the two attempts is the DOM, so the locator has to be run
+   * against it again.
+   */
+  reresolve?: () => Promise<string | undefined>,
 ): Promise<FlowStepResult> {
-  session.beginAction?.(ReticleTool.FLOW_REPLAY, { ref, action: step.action ?? '' });
-  let act;
-  try {
-    act = await session.command(ReticleCommand.ACT, {
-      ref,
-      action: step.action ?? '',
-      args: replayActionArgs(step.args, confirmDangerous),
+  const dispatch = async (at: string): Promise<{ ok: boolean; error?: string | undefined }> => {
+    session.beginAction?.(ReticleTool.FLOW_REPLAY, { ref: at, action: step.action ?? '' });
+    try {
+      const r = await session.command(ReticleCommand.ACT, {
+        ref: at,
+        action: step.action ?? '',
+        args: replayActionArgs(step.args, confirmDangerous, field),
+      });
+      return { ok: r.ok, error: r.error };
+    } finally {
+      session.finishAction?.();
+    }
+  };
+
+  let act = await dispatch(ref);
+  /*
+   * One retry, and only for staleness.
+   *
+   * A saved flow of `fill` then `click` failed with "ref 'eNNNN' no longer resolves to an element",
+   * a different ref each attempt: the fill re-rendered the page between the click step resolving its
+   * element and dispatching at it. `flow_heal` answered `unhealable` and was right — the locator was
+   * correct, only the timing was wrong — and the flow format has no way to express a wait, so there
+   * was nothing the user could do.
+   *
+   * `act_sequence` already solved this race for the same reason; the predicate and the grace period
+   * come from there rather than being written twice. A step that failed for any OTHER reason is
+   * never retried: a replay that quietly repeats actions turns one click into two, which is worse
+   * than the failure it papers over.
+   */
+  if (!act.ok && isStaleRefError(act.error) && reresolve !== undefined) {
+    await waitForReaction(session, 0, STALE_REF_GRACE_MS, {
+      sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
     });
-  } finally {
-    session.finishAction?.();
+    const fresh = await reresolve();
+    if (fresh !== undefined) act = await dispatch(fresh);
   }
+
   const result: FlowStepResult = { step: index, tool: step.tool, anchor: label, ok: act.ok };
-  if (!act.ok) result.error = act.error ?? 'command failed';
+  if (!act.ok) result.error = replayDestructiveActionHint(act.error ?? 'command failed');
   return result;
 }
+
+/** How long to let the app finish re-rendering before the one retry. Matches the sequence path. */
+const STALE_REF_GRACE_MS = 400;
 
 /** Run one component-anchored step: re-resolve via QUERY by:'component', ACT on the live ref, else drift. */
 export async function runComponentStep(
@@ -169,23 +253,18 @@ export async function runComponentStep(
     };
   }
   const ref = refs[0] ?? '';
-  // Attribute the step's effects to the step. Without this window they arrive with no actionId and are
-  // learned as ambient churn on the very regions the flow exercises.
-  session.beginAction?.(ReticleTool.FLOW_REPLAY, { ref, action: step.action ?? '' });
-  let act;
-  try {
-    act = await session.command(ReticleCommand.ACT, {
-      ref,
-      action: step.action ?? '',
-      args: replayActionArgs(step.args, confirmDangerous),
-    });
-  } finally {
-    // Close on every exit so a throwing step cannot leak the window onto the next step's events.
-    session.finishAction?.();
-  }
-  const result: FlowStepResult = { step: index, tool: step.tool, anchor: label, ok: act.ok };
-  if (!act.ok) result.error = act.error ?? 'command failed';
-  return result;
+  // Shared with the role path so both get the same action window AND the same stale-ref retry —
+  // this used to dispatch inline, which is how one anchor kind could gain a fix the other lacked.
+  return await actOnResolvedRef(
+    session,
+    step,
+    index,
+    label,
+    ref,
+    confirmDangerous,
+    anchorFieldName(anchor),
+    async () => (await resolveQuery(session, componentQueryArgs(anchor), sleep)).refs[0],
+  );
 }
 
 /**
@@ -290,7 +369,9 @@ export async function runSequenceStep(
     live.push({
       ref,
       action: sub.action ?? '',
-      args: replayActionArgs(sub.args, confirmDangerous),
+      // Each sub-step carries its OWN anchor, so each gets its own field name. A sequence that ends
+      // in a login is the shape this was reported on, and the sub-step is where the fill lives.
+      args: replayActionArgs(sub.args, confirmDangerous, anchorFieldName(sub.anchor)),
     });
   }
   session.beginAction?.(ReticleTool.FLOW_REPLAY, { steps: live.length });
@@ -306,6 +387,6 @@ export async function runSequenceStep(
     anchor: anchorLabel(step.anchor),
     ok: act.ok,
   };
-  if (!act.ok) result.error = act.error ?? 'command failed';
+  if (!act.ok) result.error = replayDestructiveActionHint(act.error ?? 'command failed');
   return result;
 }

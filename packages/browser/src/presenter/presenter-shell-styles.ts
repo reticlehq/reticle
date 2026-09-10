@@ -3,6 +3,7 @@
  * Split from presenter-styles.ts so the controller stays under the size cap.
  */
 import { LOG_TIME_ATTR } from './presenter-log.js';
+import { Z_HUD_TOOLTIP } from './presenter-config.js';
 import {
   CHAT_ATTR,
   CHAT_PILL_ATTR,
@@ -301,7 +302,7 @@ export const SHELL_CSS = `
 [${HUD}] .reticle-tb-tip{
   position:absolute;bottom:calc(100% + 14px);left:50%;transform:translateX(-50%) scale(.95);
   padding:6px 10px;background:#1a1a1a;color:rgba(255,255,255,.9);font-size:12px;font-weight:500;
-  border-radius:8px;white-space:nowrap;opacity:0;visibility:hidden;pointer-events:none;z-index:3;
+  border-radius:8px;white-space:nowrap;opacity:0;visibility:hidden;pointer-events:none;z-index:${String(Z_HUD_TOOLTIP)};
   box-shadow:0 2px 8px rgba(0,0,0,.3);transition:opacity .135s ease,transform .135s ease,visibility .135s;}
 [${HUD}] .reticle-tb-tip::after{
   content:"";position:absolute;top:calc(100% - 4px);left:50%;transform:translateX(-50%) rotate(45deg);

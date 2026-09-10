@@ -60,7 +60,9 @@ export const CRAWL_TOOLS: ToolDef[] = [
           source: z
             .string()
             .optional()
-            .describe('Where the control is written, as `file:line` — open this to fix it.'),
+            .describe(
+              'Where the fault is written, as `file:line`; console errors prefer their own stack and fall back to the clicked control.',
+            ),
         }),
       ),
       counts: z.record(z.number()),

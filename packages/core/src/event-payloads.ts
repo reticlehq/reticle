@@ -52,6 +52,44 @@ export type ScrollDirection = (typeof ScrollDirection)[keyof typeof ScrollDirect
 export const StorageArea = { LOCAL: 'local', SESSION: 'session', COOKIE: 'cookies' } as const;
 export type StorageArea = (typeof StorageArea)[keyof typeof StorageArea];
 
+/**
+ * A single cookie to seed before initial navigation.
+ */
+export const SeedCookieSchema = z.object({
+  name: z.string().describe('Cookie name.'),
+  value: z.string().describe('Cookie value.'),
+  domain: z.string().optional().describe('Cookie domain. Defaults to the navigation URL domain.'),
+  path: z.string().optional().describe('Cookie path. Defaults to "/".'),
+  url: z.string().optional().describe('Cookie URL. Defaults to the navigation URL.'),
+  httpOnly: z.boolean().optional().describe('Whether the cookie is httpOnly.'),
+  secure: z.boolean().optional().describe('Whether the cookie is secure.'),
+  sameSite: z.enum(['Strict', 'Lax', 'None']).optional().describe('SameSite policy.'),
+  expires: z.number().optional().describe('Unix timestamp in seconds for cookie expiration.'),
+});
+export type SeedCookie = z.infer<typeof SeedCookieSchema>;
+
+export const SeedCookiesSchema = z.union([z.record(z.string()), z.array(SeedCookieSchema)]);
+export type SeedCookies = z.infer<typeof SeedCookiesSchema>;
+
+/**
+ * Client storage and session state to seed into an isolated context before the first navigation.
+ * Matches the three storage areas Reticle already observes (localStorage, sessionStorage, cookies).
+ */
+export const SeedStorageSchema = z.object({
+  local: z
+    .record(z.string())
+    .optional()
+    .describe('Key-value pairs to seed into window.localStorage before first navigation.'),
+  session: z
+    .record(z.string())
+    .optional()
+    .describe('Key-value pairs to seed into window.sessionStorage before first navigation.'),
+  cookies: SeedCookiesSchema.optional().describe(
+    'Cookies to seed before first navigation: a name-value record scoped to the lease URL or an array of cookie objects.',
+  ),
+});
+export type SeedStorage = z.infer<typeof SeedStorageSchema>;
+
 const elementLabel = z.object({ role: z.string().optional(), name: z.string().optional() });
 
 /**
@@ -172,6 +210,16 @@ export const EVENT_PAYLOAD_SCHEMAS = {
   // The page called window.open — the clicked consequence may continue in a context the SDK cannot
   // enter (#508). `href` is what the page asked to open, omitted for the blank-tab form.
   [EventType.CONTEXT_OPENED]: z.object({ href: z.string().optional() }).passthrough(),
+  [EventType.DIALOG_OPENED]: z
+    .object({
+      /** Which of the three, so a caller can tell a blocking question from a blocking notice. */
+      kind: z.enum(['alert', 'confirm', 'prompt']),
+      /** What the app asked. The whole point: a cancelled action is only legible with the question. */
+      message: z.string().optional(),
+      /** What Reticle answered on the app's behalf. `false`/`null` are the non-destructive replies. */
+      answered: z.union([z.boolean(), z.null()]).optional(),
+    })
+    .passthrough(),
   [EventType.RENDER_COMMIT]: z.object({ commits: z.number() }),
   [EventType.FOCUS_CHANGE]: z.object({
     to: z.string().optional(),
