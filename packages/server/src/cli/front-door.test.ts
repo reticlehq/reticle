@@ -23,6 +23,12 @@ import { SERVER_VERSION } from '../version/server-version.js';
  * So this spawns the built CLI. It is slower than a unit test and it is the only thing here that
  * would have caught any of the three.
  *
+ * Each check spawns a real process, and there are more than a dozen of them. Under a loaded runner --
+ * the full gate, or a machine running several suites at once -- that exceeds vitest's five-second
+ * default and the suite fails for a reason that has nothing to do with the code. The ceiling below is
+ * a BOUND, not a duration: nothing here asserts how long anything took, which this repository forbids
+ * outright, so raising it cannot hide a regression. A broken expectation still fails, just later.
+ *
  * Everything below must work with no network, no daemon and no project. That is the state a new
  * person is in, and it is also what keeps this runnable anywhere.
  *
@@ -54,7 +60,7 @@ function run(...args: string[]): Result {
  */
 const HELP_MUST_ANSWER = ['init', 'serve', 'status', 'link', 'push', 'runs'];
 
-describe('the first commands anybody types', () => {
+describe('the first commands anybody types', { timeout: 30_000 }, () => {
   it('the built CLI is there to test', () => {
     // Without this the whole file would pass by failing to find anything to run.
     expect(existsSync(CLI), `${CLI} is missing — run \`pnpm build\` first`).toBe(true);
