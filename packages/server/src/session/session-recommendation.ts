@@ -1,5 +1,5 @@
 import {
-  AppRuntime,
+  realmOf,
   DESKTOP_WINDOW_BACKGROUNDED,
   HIDDEN_TAB_RECOMMENDATION,
   THROTTLED_TAB_RECOMMENDATION,
@@ -41,7 +41,7 @@ export function buildSessionRecommendation(inputs: RecommendationInputs): string
   // A desktop window gets the one answer it can act on. Checked BEFORE hidden/throttled are told
   // apart, because the distinction between them is about browser tab lifecycle and neither of its
   // two answers exists for an app whose window is the client. See DESKTOP_WINDOW_BACKGROUNDED.
-  if (AppRuntime.ELECTRON === inputs.runtime || AppRuntime.TAURI === inputs.runtime) {
+  if (realmOf(inputs.runtime).isDesktopShell) {
     return DESKTOP_WINDOW_BACKGROUNDED;
   }
   if (inputs.hidden) return HIDDEN_TAB_RECOMMENDATION;

@@ -1,4 +1,4 @@
-import { AppRuntime, isOpaqueOrigin } from '@reticlehq/core';
+import { realmOf, AppRuntime, isOpaqueOrigin } from '@reticlehq/core';
 
 /**
  * Turn a bare command timeout into something the reader can act on.
@@ -71,7 +71,7 @@ const HIDDEN_ADVICE =
 
 /** True when this session is a WebKit desktop shell — the only runtime that suffers this. */
 function isWebKitDesktop(context: TimeoutContext): boolean {
-  if (AppRuntime.TAURI === context.runtime) return true;
+  if (realmOf(context.runtime).usesWebKit) return true;
   // A `tauri://` origin is unambiguous even before the first health report lands.
   if (context.runtime !== undefined) return false;
   return isOpaqueOrigin(context.url) && context.url.startsWith('tauri:');

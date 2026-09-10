@@ -38,6 +38,11 @@ const ASKS_ABOUT_RUNTIME = /AppRuntime\.|runtime ===|=== runtime/;
  * than banned because each is CORRECT today and deleting it would break something real.
  */
 const ALLOWED_TO_ASK: Record<string, string> = {
+  'packages/core/src/realm-registry.ts':
+    'this is the table that ANSWERS the question, not a rule that asks it. Naming every realm is its ' +
+    'entire job, and it is what lets the rules stop branching -- two of them already have. Listed ' +
+    'rather than exempted by narrowing the search, because the search being wide is what makes it ' +
+    'worth having.',
   'packages/server/src/honesty/blind-spots.ts':
     'Electron-only coverage rows must not be reported for a web page, or a plain browser tab reads ' +
     'as an un-instrumented Electron renderer. The realm should declare which coverage kinds are ' +
@@ -46,10 +51,18 @@ const ALLOWED_TO_ASK: Record<string, string> = {
 
 /** Every tracked source file under the deciding layer that asks about the runtime. */
 function filesThatAsk(): string[] {
-  const tracked = execFileSync('git', ['ls-files', ...VERDICT_KERNEL], {
-    cwd: REPO_ROOT,
-    encoding: 'utf8',
-  })
+  // `--others --exclude-standard` as well as tracked files: a guard that runs before `git add` and
+  // one that runs after must agree, or it passes in the terminal and fails in the commit hook -- which
+  // is where this file first met a new module. Ignored paths stay invisible, so build output and
+  // scratch files do not appear.
+  const tracked = execFileSync(
+    'git',
+    ['ls-files', '--cached', '--others', '--exclude-standard', ...VERDICT_KERNEL],
+    {
+      cwd: REPO_ROOT,
+      encoding: 'utf8',
+    },
+  )
     .split('\n')
     .filter((file) => file.endsWith('.ts') && !file.includes('.test.'));
 

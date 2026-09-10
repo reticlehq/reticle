@@ -1,6 +1,5 @@
 import { join } from 'node:path';
-import type { FlowName, SessionId } from '@reticlehq/core';
-import { AppRuntime } from '@reticlehq/core/telemetry';
+import { realmOf, type FlowName, type SessionId } from '@reticlehq/core';
 import {
   CONTRACT_FILE_VERSION,
   ContractFileSchema,
@@ -123,7 +122,9 @@ export function visualPath(root: string, name: string, runtime?: string): string
  */
 export function visualDir(root: string, runtime?: string): string {
   const visual = join(root, ReticleDir.VISUAL_SUBDIR);
-  return runtime === undefined || AppRuntime.WEB === runtime ? visual : join(visual, runtime);
+  return realmOf(runtime).hasOwnBaselineDirectory && runtime !== undefined
+    ? join(visual, runtime)
+    : visual;
 }
 
 /** The overlay-diff PNG path for `name`.reticle/visual/<name>.diff.png). */
