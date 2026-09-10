@@ -2,6 +2,6 @@ packages:
   - 'packages/*'
   # Adapters teach Reticle about one framework, build tool or kind of app. Same package rules as
   # anything in packages/, kept apart so somebody writing their own can see the shape at a glance.
-  - 'adapters/*'
+  - 'adapters/*/*'
   - 'apps/*'
   - 'apps/examples/*'

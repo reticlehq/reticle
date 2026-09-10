@@ -54,10 +54,11 @@
     "@reticlehq/core": "workspace:*"
   },
   "devDependencies": {
+    "@reticlehq/react": "workspace:*",
     "@types/babel__core": "^7.20.5",
+    "esbuild": "^0.28.2",
     "svelte": "^5.56.10",
-    "vite": "^8",
-    "esbuild": "^0.28.2"
+    "vite": "^8"
   },
   "peerDependencies": {
     "vite": ">=4"

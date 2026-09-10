@@ -6,8 +6,8 @@
     { "path": "packages/browser" },
     { "path": "packages/server" },
     { "path": "packages/test" },
-    { "path": "packages/react" },
-    { "path": "adapters/babel-plugin" },
+    { "path": "adapters/framework/react" },
+    { "path": "adapters/build/babel-plugin" },
     { "path": "packages/vite-plugin" }
   ]
 }

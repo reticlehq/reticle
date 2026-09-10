@@ -16,10 +16,10 @@ export default tseslint.config(
       'apps/api/**',
       'apps/next-smoke/**',
       'apps/e2e/**',
-      'packages/next/**',
-      // Plain CommonJS, like packages/next: an Electron preload must be CJS (a sandboxed one cannot
+      'adapters/build/next/**',
+      // Plain CommonJS, like adapters/build/next: an Electron preload must be CJS (a sandboxed one cannot
       // load ESM at all), so the TypeScript rules — no-require-imports above all — do not apply.
-      'packages/electron/**',
+      'adapters/realm/electron/**',
     ],
   },
   js.configs.recommended,
@@ -106,7 +106,7 @@ export default tseslint.config(
   },
   {
     // React surfaces: enforce rules-of-hooks (drives the useX naming rule)
-    files: ['packages/react/**/*.{ts,tsx}', 'apps/bench-app/**/*.{ts,tsx}'],
+    files: ['adapters/framework/react/**/*.{ts,tsx}', 'apps/bench-app/**/*.{ts,tsx}'],
     plugins: { 'react-hooks': reactHooks },
     rules: {
       'react-hooks/rules-of-hooks': 'error',
@@ -117,7 +117,7 @@ export default tseslint.config(
     // Service boundary (CLAUDE.md): the browser SDK + React adapter run in the DOM and must NEVER
     // drag in Node. Enforced at the import level so a `node:*`/Node-builtin import or a reach into the
     // server package fails lint — closing the blind spot in the manifest-only check-boundaries.mjs.
-    files: ['packages/browser/src/**/*.ts', 'packages/react/src/**/*.{ts,tsx}'],
+    files: ['packages/browser/src/**/*.ts', 'adapters/framework/react/src/**/*.{ts,tsx}'],
     rules: {
       'no-restricted-imports': [
         'error',
@@ -155,7 +155,7 @@ export default tseslint.config(
     // Meta-tests that scan the package's own sources (settings-are-wired) need node:fs to read them.
     // The rule above is about SHIPPED code — a .test.ts is never bundled — so the DOM-only half is
     // lifted here. The server-package half is not: that boundary is just as real inside a test.
-    files: ['packages/browser/src/**/*.test.ts', 'packages/react/src/**/*.test.{ts,tsx}'],
+    files: ['packages/browser/src/**/*.test.ts', 'adapters/framework/react/src/**/*.test.{ts,tsx}'],
     rules: {
       'no-restricted-imports': [
         'error',

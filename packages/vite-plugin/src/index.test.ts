@@ -680,9 +680,14 @@ describe('the injected connect imports the SDK that is installed', () => {
     expect(installedSdk('/app', () => false).specifier).toBe('@reticlehq/react');
   });
 
-  it('drops install() from the generated source on the sensor path', () => {
-    const source = connectModuleSource({ root: '/does-not-resolve' });
-    // Nothing resolves under that root, so this is the React path — install() present.
-    expect(source).toContain('install()');
+  it('drops install() on the sensor path, because the sensor has no install to call', () => {
+    // Asked of `installedSdk` with the resolver injected, like the two above. It used to name a root
+    // that resolves nothing and assert the REACT path -- which duplicated its neighbour, contradicted
+    // its own title, and depended on what happened to be linked in node_modules rather than on
+    // anything declared. Moving a package to another directory changed the answer, which is the
+    // definition of a test measuring its environment instead of its subject.
+    const sensorOnly = installedSdk('/app', (dep) => '@reticlehq/browser' === dep);
+    expect(sensorOnly.specifier).toBe('@reticlehq/browser');
+    expect(sensorOnly.usesInstall).toBe(false);
   });
 });
