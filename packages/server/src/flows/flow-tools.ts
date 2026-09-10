@@ -374,7 +374,10 @@ export const FLOW_TOOLS: ToolDef[] = [
       'Returns { name, status: ok|drift|error, steps:[...] }; missing/malformed files and action ' +
       'failures are status:error with a structured code (distinct from contract-changed drift). ' +
       'An ok replay of a flow that asserts no consequence also carries unverifiable:{reason} — it ' +
-      'would read ok even if the feature were broken, so do NOT treat that ok as proof.',
+      'would read ok even if the feature were broken, so do NOT treat that ok as proof. ' +
+      'A run that stops early carries halted:{atStep, notAttempted}: `steps` is SHORTER than the ' +
+      'flow because replay stopped, not because a step was skipped — do not read a missing step as ' +
+      'an action that failed to dispatch.',
     inputSchema: {
       flow: z
         .string()
@@ -408,6 +411,13 @@ export const FLOW_TOOLS: ToolDef[] = [
           'Push-default deviation report over the replay segments: ranked deviations vs the learned envelope + a nominal count, or a fall-back note below 3 runs.',
         ),
       error: z.object({ code: z.string(), message: z.string() }).optional(),
+      // Same rule as `unverifiable` below, and the same failure if it is left out.
+      halted: z
+        .object({ atStep: z.number(), notAttempted: z.number() })
+        .optional()
+        .describe(
+          'Set when the replay STOPPED at a failing step: `steps` is shorter than the flow, and this says where it stopped and how many steps were never attempted. Absent means every step ran.',
+        ),
       // Declared here or a validating profile strips it -- the same way `name` was stripped once.
       // A field the handler sets and the schema omits arrives as nothing, silently.
       unverifiable: z

@@ -6,6 +6,7 @@ import { noteEmptyRead } from './observed-nothing.js';
 import { z } from 'zod';
 import { aliasParam } from './alias-args.js';
 import {
+  CONSOLE_ATTACH_NOTE,
   CONSOLE_LEVELS,
   ReticleCommand,
   DEFAULT_ASSERT_TIMEOUT_MS,
@@ -49,8 +50,6 @@ import {
   healthEnvelope,
   bufferEnvelope,
 } from '../session/session-health.js';
-import type { Session } from '../session/session.js';
-import type { Predicate } from '../events/predicate.js';
 import {
   assertsDerivedIpcStatus,
   DERIVED_IPC_STATUS_ADVICE,
@@ -58,7 +57,7 @@ import {
   PRESENCE_ONLY_ADVICE,
 } from './assert-grade.js';
 import { assertVerdict } from './assert-verdict.js';
-import { assertSource } from './assert-source.js';
+import { assertionSource } from './assert-source.js';
 import { isChangeUndeclared } from '../honesty/undeclared-change.js';
 import { openSessionIntents } from '../intent/open-intents.js';
 import {
@@ -67,6 +66,7 @@ import {
   linkInlineIntent,
 } from '../intent/inline-intent.js';
 import { bodiesNotCaptured } from '../honesty/uncaptured-bodies.js';
+import { bodyClauseRefusal } from '../honesty/body-capture-remedy.js';
 import { withControl } from '../session/control-envelope.js';
 import { asString, asNumber, asRecord } from './tools-helpers.js';
 import { type ToolDef, intentArg, sessionIdShape, commandOrThrow } from './tool-kit.js';
@@ -84,28 +84,6 @@ const bufferOutputShape = {
       'Present only when the event buffer evicted events — a negative result may then be a false negative.',
     ),
 };
-
-/**
- * The file:line an assertion may report — see `assertSource`.
- *
- * Neither `reticle_assert` nor `reticle_wait_for` drives anything, so the last act's source is about
- * some earlier action and not about this verdict. The pointer comes from the assertion's own matched
- * evidence; the last driven control is borrowed only for a RED whose predicate has no DOM clause at
- * all, which is the failure that genuinely has no element to point at.
- */
-function assertionSource(
-  session: Session,
-  predicate: Predicate,
-  verdict: { pass: boolean; evidence?: unknown },
-): { source?: string } {
-  const source = assertSource({
-    predicate,
-    evidence: verdict.evidence,
-    pass: verdict.pass,
-    lastActSource: session.lastAct.source(),
-  });
-  return source === undefined ? {} : { source };
-}
 
 /**
  * Drop `sessionId` from an event in a response the caller scoped to ONE session.
@@ -349,6 +327,10 @@ export const OBSERVE_TOOLS: ToolDef[] = [
       );
       // `until` is act_and_wait's name for this — see alias-args.ts.
       const predicate = parsePredicate(aliasParam(args, 'predicate', ['until'])['predicate']);
+      // Refused up front rather than waited out: a body clause this session cannot answer would
+      // burn the whole timeout to report something knowable now. See #801(C).
+      const bodyRefusal = bodyClauseRefusal(predicate, session);
+      if (bodyRefusal !== undefined) throw new Error(bodyRefusal);
       // Honesty: explicit since wins; else default to the last act's cursor; else the whole buffer.
       const since = asNumber(args['since']) ?? session.lastAct.cursor() ?? 0;
       const verdict = await waitForPredicate(session, predicate, waitBudget, since);
@@ -377,7 +359,7 @@ export const OBSERVE_TOOLS: ToolDef[] = [
         // is the most common thing an agent wants to assert. A field report reached us from an agent
         // that guessed `urlContains` on route (net's spelling) and got unrecognized_keys.
         'Predicate to evaluate. Kinds: { signal, name|dataMatches|count } ' +
-          '{ net, urlContains|method|status|count|bodyContains } ' +
+          '{ net, urlContains|method|status|count|bodyContains|requestBodyContains|requestBodyMatches } ' +
           '{ state, path|equals } { route, pathname (exact) | contains (path+query+hash) } ' +
           '{ element, testid|role|text } { text } { console, level|contains|absent } { animation, name } ' +
           '{ settled } — combine with { allOf | anyOf | not }. Prefer a signal/net/state consequence ' +
@@ -473,6 +455,10 @@ export const OBSERVE_TOOLS: ToolDef[] = [
       );
       // `until` is act_and_wait's name for this — see alias-args.ts.
       const predicate = parsePredicate(aliasParam(args, 'predicate', ['until'])['predicate']);
+      // Refused up front rather than waited out: a body clause this session cannot answer would
+      // burn the whole timeout to report something knowable now. See #801(C).
+      const bodyRefusal = bodyClauseRefusal(predicate, session);
+      if (bodyRefusal !== undefined) throw new Error(bodyRefusal);
       // Honesty: explicit since wins; else default to the last act's cursor; else the whole buffer.
       const since = asNumber(args['since']) ?? session.lastAct.cursor() ?? 0;
       // Declared BEFORE the verdict, so the undeclared-change read below finds it open and stays
@@ -655,7 +641,7 @@ export const OBSERVE_TOOLS: ToolDef[] = [
           {
             calls,
             ...(droppedOldest > 0 ? { total: matched.length, droppedOldest } : {}),
-            ...(bodies ? bodiesNotCaptured(calls) : {}),
+            ...(bodies ? bodiesNotCaptured(calls, session.sdkVersion) : {}),
             ...buffer,
           },
           'calls',
@@ -737,7 +723,11 @@ export const OBSERVE_TOOLS: ToolDef[] = [
             ? { logs, total: matched.length, droppedOldest, ...buffer }
             : { logs, ...buffer },
           'logs',
-          { noun: 'console lines' },
+          // Same gate as the predicate path, for the same reason and at the same price: the blind
+          // stretch is between page load and attach, so only a window that starts at attach can
+          // contain it. A read since an action already began after the channel was live, and
+          // stapling 369 bytes onto every quiet read would be paying for a caveat that is not true.
+          { noun: 'console lines', ...(0 === since ? { caveat: CONSOLE_ATTACH_NOTE } : {}) },
         ),
       );
     },

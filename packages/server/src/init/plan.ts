@@ -6,7 +6,6 @@
 
 import {
   Framework,
-  PackageManager,
   UiLibrary,
   installCommand,
   installCommandParts,
@@ -14,7 +13,7 @@ import {
 } from './detect.js';
 import type { FoundStore } from './capabilities.js';
 import { installFailureHint } from './install-hint.js';
-import { LEGACY_PEER_DEPS_FLAG } from './legacy-peer-deps.js';
+import { installRetries } from './install-retries.js';
 import { claudeAddCommand, mcpManual, mcpWindowsNote } from './mcp.js';
 import { NodePlatform } from '../platform.js';
 import {
@@ -58,6 +57,7 @@ const RETICLE_REACT_KIT = '@reticlehq/react';
 const RETICLE_BROWSER_SDK = '@reticlehq/browser';
 const RETICLE_VITE_PLUGIN = '@reticlehq/vite-plugin';
 const RETICLE_NEXT_PLUGIN = '@reticlehq/next';
+const RETICLE_ELECTRON = '@reticlehq/electron';
 
 /**
  * Pin the SDK to the CLI's own version.
@@ -112,11 +112,17 @@ export function frameworkPackages(
     // both right for it too — only the connect INJECTION differs, and that is the plan's business.
     case Framework.VITE:
     case Framework.REACT_ROUTER:
+    case Framework.TANSTACK_START:
     case Framework.SVELTEKIT:
       // SvelteKit builds on Vite; until a dedicated Svelte kit exists it uses the Vite build plugin.
       // The build plugin stamps `data-reticle-source` regardless of UI library, so a Vue or Svelte
       // app still gets source pointers — it is only component identity that needs the React kit.
       return [kit, RETICLE_VITE_PLUGIN];
+    case Framework.ELECTRON_VITE:
+      // Same kit + Vite plugin as a plain Vite app, plus the Electron main/preload helper. The
+      // plugin still stamps and injects; `@reticlehq/electron` is what makes IPC and screenshots
+      // exist at all.
+      return [kit, RETICLE_VITE_PLUGIN, RETICLE_ELECTRON];
     case Framework.NUXT:
       // The framework-neutral sensor, NOT the React kit. Nuxt renders Vue, and installing a package
       // named @reticlehq/react — with `react` in its peer dependencies — into a Vue codebase is the
@@ -167,15 +173,25 @@ export interface Step {
   /** Present only when status is APPLY and a subprocess must run (the dependency install). */
   exec?: { command: string; args: string[]; fallback: string };
   /**
-   * A second, weaker attempt to run when `exec` fails, with what to tell the user if it succeeds.
+   * Weaker attempts to run when `exec` fails, IN ORDER, each with what to tell the user if it works.
    *
-   * The pinned install is refused outright by pnpm's `minimumReleaseAge` for as long as its window
-   * lasts — so for ~48 hours after every release, a project with that setting could not install
-   * Reticle at all. An unpinned install still works there (it resolves the newest MATURE version), so
-   * the fallback trades an exact version for a working install and says which it did. It must never
-   * be silent: an older SDK against a newer daemon is the skew this pin exists to prevent.
+   * Ordered by how much each one gives up, cheapest concession first, because the first that
+   * succeeds is the one that stands. Two causes are covered today and they cost different things:
+   *
+   * - **A peer-dependency conflict.** npm dies on ERESOLVE in repos that are built with
+   *   `--legacy-peer-deps` everywhere else. Relaxing peers keeps the VERSION PIN, so it goes first.
+   *   Reported from a CRA repo where the failed install also skipped the connect module and the
+   *   entry snippet, so the first run produced no wiring at all.
+   * - **A release-age hold.** The pinned install is refused outright by pnpm's `minimumReleaseAge`
+   *   for as long as its window lasts — so for ~48 hours after every release, a project with that
+   *   setting could not install Reticle. An unpinned install still works (it resolves the newest
+   *   MATURE version), so it trades the exact version for a working install. That is the more
+   *   expensive concession and it is last.
+   *
+   * A retry must never be silent: an older SDK against a newer daemon is the skew the pin exists to
+   * prevent, and a peer override the user did not ask for is theirs to know about.
    */
-  retry?: { command: string; args: string[]; note: string };
+  retries?: { command: string; args: string[]; note: string }[];
   /**
    * This step wires the app to a package the install step provides. If that install fails, applying
    * it anyway leaves the app importing a module that is not there — `next.config.ts` importing
@@ -231,6 +247,12 @@ export interface PlanInput {
     readonly { id: McpClient; configPath: string; existing: string | null }[] | undefined;
   /** Discovered Vite config: its path + source, or null if none found. */
   viteConfig: { path: string; source: string } | null;
+  /** Discovered electron-vite config: its path + source, or null if none found. */
+  electronViteConfig?: { path: string; source: string } | null | undefined;
+  /** Electron preload source we can patch, or null when none was found. */
+  electronPreload?: { path: string; source: string } | null | undefined;
+  /** Electron main-process source we can patch, or null when none was found. */
+  electronMain?: { path: string; source: string } | null | undefined;
   /** Discovered Astro config: its path + source, or null if none found. */
   astroConfig?: { path: string; source: string } | null | undefined;
   /**
@@ -280,18 +302,17 @@ export interface PlanInput {
   svelteKitHooksExists?: boolean;
   /** Whether app/entry.client.tsx already exists — it decides which React Router recipe to print. */
   reactRouterEntryExists?: boolean;
+  /**
+   * TanStack Start's document module, when found (`src/routes/__root.tsx` or `app/routes/__root.tsx`).
+   *
+   * The recipe is printed rather than written either way — a static import on that file SSRs and
+   * 500s — but the path has to be the one that actually exists, not a guess.
+   */
+  tanstackStartRoot?: string | undefined;
   /** CRA's bundled entry (src/index.tsx or .js) — where the connect import has to go. */
   craEntry?: { path: string; source: string } | null;
   /** Existing .env.development.local, so an unrelated variable in it survives. */
   craEnv?: string | null;
-  /**
-   * This project's `.npmrc` (or a parent's) already asks for `--legacy-peer-deps`.
-   *
-   * CRA repos with peer conflicts document that flag in `.npmrc` and in CI. A bare `npm i -D`
-   * then dies on ERESOLVE and every wiring step is skipped. When we already know, pass the flag
-   * on the first attempt rather than failing once to find out (#802).
-   */
-  legacyPeerDeps?: boolean;
   /** The daemon's pairing token, inlined for CRA through the one channel it supports. */
   pairingToken?: string;
   /** Whether .reticle.json already exists in the project root (idempotency). */
@@ -727,34 +748,6 @@ function agentRuleSteps(input: PlanInput): Step[] {
  * with nothing naming a version. Pinning turns that into this loud failure, which is the better
  * trade — but only if the message says what to do about it.
  */
-/**
- * Said out loud when the exact-version install failed and the unpinned one worked.
- *
- * It used to assert a cause it cannot know. Every one of nine fixture apps got the same sentence —
- * "the registry refused 2.5.0 (pnpm's minimumReleaseAge holds new releases back)" — when the actual
- * cause on that run was that the version did not exist yet, and the remedy offered was a `pnpm
- * config` command handed to a yarn 1 project that will never read it.
- *
- * This note is built at PLAN time, before anything runs, and `io.exec` returns a bare boolean, so
- * the apply layer has no failure text to hand back either. The honest move is therefore to report
- * the CONSEQUENCE (which is certain and is the part that bites) and offer the remedy that belongs to
- * the manager actually in use — rather than name a cause that is one possibility among several.
- */
-function unpinnedRetryNote(version: string | undefined, pm: PackageManager): string {
-  const wanted = version === undefined ? 'the exact version' : version;
-  // Kept verbatim for pnpm, where minimumReleaseAge is a real and common cause with a real remedy.
-  const remedy =
-    pm === PackageManager.PNPM
-      ? ' One common cause on pnpm is minimumReleaseAge holding a new release back; if pnpm ' +
-        'reported ERR_PNPM_NO_MATURE_MATCHING_VERSION, either wait out the window or allow these ' +
-        'packages: pnpm config set minimumReleaseAgeExclude "@reticlehq/*"'
-      : '';
-  return (
-    `the pinned install of ${wanted} failed, so the newest version the registry WOULD accept was ` +
-    `installed instead. That may not match the daemon — if the agent reports protocol errors, check ` +
-    `\`versionSkew\` in reticle_sessions.${remedy}`
-  );
-}
 
 function installStep(input: PlanInput): Step {
   const pm = input.detection.packageManager;
@@ -762,9 +755,7 @@ function installStep(input: PlanInput): Step {
     frameworkPackages(input.detection.framework, input.detection.uiLibrary),
     input.options.sdkVersion,
   );
-  const extra =
-    pm === PackageManager.NPM && true === input.legacyPeerDeps ? [LEGACY_PEER_DEPS_FLAG] : [];
-  const command = installCommand(pm, packages, extra);
+  const command = installCommand(pm, packages);
   if (!input.options.install) {
     return {
       title: 'Install dependencies',
@@ -773,7 +764,7 @@ function installStep(input: PlanInput): Step {
       detail: command,
     };
   }
-  const parts = installCommandParts(pm, packages, extra);
+  const parts = installCommandParts(pm, packages);
   return {
     title: 'Install dependencies',
     target: 'package.json',
@@ -784,16 +775,12 @@ function installStep(input: PlanInput): Step {
       args: parts.args,
       fallback: `${command}\n\n${installFailureHint(pm)}`,
     },
-    // Unpinned. pnpm resolves the newest MATURE version there, which is how a project with a
-    // release-age hold gets a working install instead of no install.
-    retry: {
-      ...installCommandParts(
-        pm,
-        frameworkPackages(input.detection.framework, input.detection.uiLibrary),
-        extra,
-      ),
-      note: unpinnedRetryNote(input.options.sdkVersion, pm),
-    },
+    retries: installRetries(
+      pm,
+      packages,
+      frameworkPackages(input.detection.framework, input.detection.uiLibrary),
+      input.options.sdkVersion,
+    ),
   };
 }
 
@@ -949,7 +936,8 @@ function uiLibraryStep(input: PlanInput): Step[] {
   if (
     lib === UiLibrary.REACT ||
     framework === Framework.SVELTEKIT ||
-    framework === Framework.NUXT
+    framework === Framework.NUXT ||
+    framework === Framework.TANSTACK_START
   ) {
     return [];
   }

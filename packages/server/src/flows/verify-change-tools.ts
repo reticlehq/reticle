@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { sessionRoot } from '../project/session-root.js';
+import { sessionRoot, sessionProjectId } from '../project/session-root.js';
 import { verdictForSuite } from './verify-change-verdict.js';
 import { attributedFailures } from './attributed-failure.js';
 import { Verified } from '@reticlehq/core';
@@ -97,17 +97,33 @@ export const VERIFY_CHANGE_TOOLS: ToolDef[] = [
         ? (args['files'] as unknown[]).filter((f): f is string => 'string' === typeof f)
         : [];
       const since = asString(args['since']);
-      const changedFiles = await resolveChangedFiles(files, since);
+      // The daemon's cwd is not the project — it is wherever the MCP host started it, which for a
+      // globally-registered server is `/` or `$HOME`. `deps.reticleRoot` is the project directory
+      // this daemon was configured with, and it is the right tree to diff.
+      const changed = await resolveChangedFiles(files, since, deps.reticleRoot);
+      const changedFiles = changed.files;
       // Same root flow_save wrote to. A read that resolved differently would report "no flows
       // covered this change" over flows that exist, which reads as a clean result rather than
       // an error, so the disagreement would be invisible.
-      const flows = await loadNamedFlows(deps.fs, sessionRoot(deps, asString(args['sessionId'])));
+      // Both halves of the address from one place. The root was already resolved from the session;
+      // the id used to come from the daemon's cwd, so they named different projects.
+      const sid = asString(args['sessionId']);
+      const flows = await loadNamedFlows(
+        deps.fs,
+        sessionRoot(deps, sid),
+        sessionProjectId(deps, sid),
+      );
       const { affected, unknownProvenance } = affectedSavedFlows(flows, changedFiles);
 
       if (0 === changedFiles.length) {
         return {
           verified: Verified.UNKNOWN,
-          because: 'no changed files were given, so there was nothing to decide about',
+          // A git failure and a clean tree both arrive here with no files, and they are opposite
+          // answers: one means there was nothing to decide about, the other means the question was
+          // never asked. `unknown` is right either way, but the REASON is what the caller acts on.
+          because: changed.failed
+            ? `could not read the diff for \`${String(since)}\`, so nothing was compared: ${changed.reason ?? 'git failed'}`
+            : 'no changed files were given, so there was nothing to decide about',
           changedFiles,
           flowsRun: [],
           unknownProvenance,

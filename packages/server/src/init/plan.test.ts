@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildPlan, StepStatus, type PlanInput } from './plan.js';
+import { buildPlan, frameworkPackages, StepStatus, type PlanInput } from './plan.js';
 import { Framework, PackageManager, UiLibrary, type Detection } from './detect.js';
 import { NodePlatform } from '../platform.js';
 import { cursorRuleFile } from './agent-rules.js';
@@ -39,6 +39,9 @@ function input(partial: Partial<PlanInput>): PlanInput {
     cursorProjectPresent: partial.cursorProjectPresent,
     detectedClients: partial.detectedClients,
     viteConfig: partial.viteConfig ?? null,
+    electronViteConfig: partial.electronViteConfig,
+    electronPreload: partial.electronPreload,
+    electronMain: partial.electronMain,
     astroConfig: partial.astroConfig,
     astroLayout: partial.astroLayout,
     ...(partial.astroEnvDts === undefined ? {} : { astroEnvDts: partial.astroEnvDts }),
@@ -852,7 +855,8 @@ describe('the unpinned-retry note does not assert a cause it cannot know', () =>
       ),
       'Install dependencies',
     );
-    return s.retry?.note ?? '';
+    // The unpinned attempt is the LAST rung of the ladder — the one that gives up the pin.
+    return s.retries?.at(-1)?.note ?? '';
   };
 
   it('says the pinned install failed, not WHY, since it cannot know why', () => {
@@ -986,5 +990,141 @@ describe('a failed dependency install names the registry', () => {
     for (const pm of [PackageManager.NPM, PackageManager.YARN]) {
       expect(installFallback(pm)).not.toContain('ERR_PNPM_UNEXPECTED_VIRTUAL_STORE');
     }
+  });
+});
+
+/**
+ * An ERESOLVE peer conflict must not be the end of the install.
+ *
+ * Reported from a Create React App repo: `init` ran a plain `npm i -D @reticlehq/react`, npm died on
+ * ERESOLVE, and because the install failed the connect module and the entry snippet were skipped
+ * too — the first run produced no wiring at all. That repo requires `--legacy-peer-deps`, documented
+ * in its own agent rules and used by every CI buildspec it has.
+ *
+ * Detecting it up front does not work, and that is worth stating: when `legacy-peer-deps=true` IS in
+ * an `.npmrc`, npm already applies it on its own and the first attempt succeeds. The repos that fail
+ * are exactly the ones carrying the requirement somewhere npm does not read. So the signal is the
+ * FAILURE, and the retry ladder is the right place for it.
+ *
+ * Ordered by how much it gives up. `--legacy-peer-deps` keeps the version pin and only relaxes peer
+ * resolution; the unpinned retry gives up the pin, which is the thing that keeps SDK and daemon in
+ * step. Trying the cheaper concession first means a peer conflict no longer costs the pin as well.
+ */
+describe('a peer-dependency conflict gets its own retry before the pin is given up', () => {
+  const retriesFor = (pm: PackageManager): { args: string[]; note: string }[] => {
+    const s = step(
+      buildPlan(
+        input({
+          detection: { ...detection(Framework.VITE), packageManager: pm },
+          options: { port: undefined, mcp: true, install: true, sdkVersion: '2.5.0' },
+        }),
+      ),
+      'Install dependencies',
+    );
+    return (s.retries ?? []).map((r) => ({ args: r.args, note: r.note }));
+  };
+
+  it('tries --legacy-peer-deps on npm, and tries it FIRST', () => {
+    const retries = retriesFor(PackageManager.NPM);
+    const legacy = retries.findIndex((r) => r.args.includes('--legacy-peer-deps'));
+    expect(legacy, 'npm must get a peer-conflict retry at all').toBeGreaterThanOrEqual(0);
+    expect(legacy, 'it concedes less than dropping the pin, so it goes first').toBe(0);
+  });
+
+  it('keeps the version pin on the peer-conflict retry', () => {
+    const legacy = retriesFor(PackageManager.NPM).find((r) =>
+      r.args.includes('--legacy-peer-deps'),
+    );
+    expect(
+      legacy?.args.some((a) => a.includes('@2.5.0')),
+      'the whole point is conceding peers WITHOUT conceding the version',
+    ).toBe(true);
+  });
+
+  it('says what it relaxed, because a silent peer override is a lie by omission', () => {
+    const legacy = retriesFor(PackageManager.NPM).find((r) =>
+      r.args.includes('--legacy-peer-deps'),
+    );
+    expect(legacy?.note).toContain('peer');
+  });
+
+  it('does not offer it to package managers that do not have the flag', () => {
+    for (const pm of [PackageManager.PNPM, PackageManager.YARN, PackageManager.BUN]) {
+      expect(
+        retriesFor(pm).some((r) => r.args.includes('--legacy-peer-deps')),
+        `${pm} has no --legacy-peer-deps`,
+      ).toBe(false);
+    }
+  });
+
+  it('still ends with the unpinned attempt, for every manager', () => {
+    for (const pm of [PackageManager.NPM, PackageManager.PNPM, PackageManager.YARN]) {
+      const last = retriesFor(pm).at(-1);
+      expect(last?.note, `${pm} keeps its unpinned last resort`).toContain('reticle_sessions');
+    }
+  });
+});
+
+const ELECTRON_VITE_SRC = `import { defineConfig } from 'electron-vite';
+import vue from '@vitejs/plugin-vue';
+export default defineConfig({
+  main: { plugins: [] },
+  renderer: { plugins: [vue()] },
+});
+`;
+
+const ELECTRON_PRELOAD_SRC = `import { contextBridge } from 'electron';
+`;
+
+const ELECTRON_MAIN_SRC = `import { BrowserWindow } from 'electron';
+function createWindow() {
+  const mainWindow = new BrowserWindow({ width: 800 });
+  mainWindow.loadURL('http://localhost');
+}
+`;
+
+describe('buildPlan — electron-vite', () => {
+  const electronPlan = (): ReturnType<typeof buildPlan> =>
+    buildPlan(
+      input({
+        detection: detection(Framework.ELECTRON_VITE, 0, UiLibrary.VUE),
+        electronViteConfig: { path: 'electron.vite.config.ts', source: ELECTRON_VITE_SRC },
+        electronPreload: { path: 'src/preload/index.ts', source: ELECTRON_PRELOAD_SRC },
+        electronMain: { path: 'src/main/index.ts', source: ELECTRON_MAIN_SRC },
+      }),
+    );
+
+  it('dispatches to the electron-vite steps, not the generic Vite path', () => {
+    const plan = electronPlan();
+    expect(plan.framework).toBe(Framework.ELECTRON_VITE);
+    expect(step(plan, 'Vite plugin (electron-vite renderer)').status).toBe(StepStatus.APPLY);
+    expect(step(plan, 'Vite plugin (electron-vite renderer)').write?.path).toBe(
+      'electron.vite.config.ts',
+    );
+    expect(maybeStep(plan, 'Vite plugin')).toBeUndefined();
+  });
+
+  it('installs the sensor and the Electron helper, not the React kit, for Vue', () => {
+    const packages = frameworkPackages(Framework.ELECTRON_VITE, UiLibrary.VUE);
+    expect(packages).toContain('@reticlehq/browser');
+    expect(packages).toContain('@reticlehq/vite-plugin');
+    expect(packages).toContain('@reticlehq/electron');
+    expect(packages).not.toContain('@reticlehq/react');
+  });
+
+  it('carries no MANUAL step for the conventional electron-vite shape', () => {
+    const plan = electronPlan();
+    const manual = plan.steps.filter(
+      (s) => s.status === StepStatus.MANUAL && s.title !== 'Install dependencies',
+    );
+    expect(manual.map((s) => s.title)).toEqual([]);
+    expect(step(plan, 'Electron preload (IPC shim)').status).toBe(StepStatus.APPLY);
+    expect(step(plan, 'Electron capture (screenshots)').status).toBe(StepStatus.APPLY);
+    const written = step(plan, 'Vite plugin (electron-vite renderer)').write?.content ?? '';
+    expect(written).toContain('desktop: true');
+    expect(written.slice(written.indexOf('renderer:'))).toContain('reticle(');
+    expect(written.slice(written.indexOf('main:'), written.indexOf('renderer:'))).not.toContain(
+      'reticle(',
+    );
   });
 });

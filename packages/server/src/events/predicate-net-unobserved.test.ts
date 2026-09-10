@@ -180,3 +180,78 @@ describe('evalNet — the unobserved-channel downgrade is gated on observer live
     ).toBe(true);
   });
 });
+
+/**
+ * A native download or document navigation never goes through fetch/XHR, so "0 network calls"
+ * is the same shape as a 404 and is a lie either way (#805).
+ *
+ * Distinct from the favicon/stylesheet class above: those ARE subresources, and once resource
+ * timing is live a miss is real evidence. A click on `<a href="/export.pdf">` is a navigation
+ * (or a Content-Disposition attachment). Resource timing of stylesheets does not make it
+ * visible, so the honest unknown must fire even when the observer is running.
+ */
+describe('evalNet — a native download is not a missing fetch', () => {
+  const STYLESHEET = netEvent(5, {
+    method: 'GET',
+    url: '/assets/app.css',
+    initiator: 'link',
+    status: 200,
+    ok: true,
+  });
+
+  it.each(['/api/invoices/export.pdf', '/reports/q3.csv', '/backup.zip', '/ledger.xlsx'])(
+    'reports %s as inconclusive rather than 0 calls',
+    (urlContains) => {
+      const r = evalNet([API_CALL], { kind: PredicateKind.NET, urlContains });
+
+      expect(r.pass).toBe(false);
+      expect(r.inconclusive).toBeDefined();
+      expect(r.inconclusive).toMatch(/download|navigation/i);
+      expect(r.inconclusive).not.toMatch(/saw 0|0 network call/i);
+      expect(r.assertion).toBe('net.native-download');
+    },
+  );
+
+  it('stays inconclusive when resource timing IS live — a download is not a subresource', () => {
+    const r = evalNet([STYLESHEET], {
+      kind: PredicateKind.NET,
+      urlContains: '/api/invoices/export.pdf',
+    });
+
+    expect(r.pass).toBe(false);
+    expect(r.inconclusive).toBeDefined();
+    expect(r.assertion).toBe('net.native-download');
+  });
+
+  it('still passes when the PDF WAS fetched (an XHR of a file is observable)', () => {
+    const pdf = netEvent(20, {
+      method: 'GET',
+      url: '/api/invoices/export.pdf',
+      status: 200,
+      ok: true,
+    });
+
+    expect(evalNet([pdf], { kind: PredicateKind.NET, urlContains: '/export.pdf' }).pass).toBe(true);
+  });
+
+  it('does not downgrade an API path that merely contains .pdf mid-pattern', () => {
+    const r = evalNet([API_CALL], {
+      kind: PredicateKind.NET,
+      urlContains: '/api/export.pdf/status',
+    });
+
+    expect(r.inconclusive).toBeUndefined();
+  });
+
+  it('downgrades a zero-match count assertion the same way', () => {
+    const r = evalNet([STYLESHEET], {
+      kind: PredicateKind.NET,
+      urlContains: '/q3.csv',
+      count: 1,
+    });
+
+    expect(r.pass).toBe(false);
+    expect(r.inconclusive).toBeDefined();
+    expect(r.assertion).toBe('net.native-download');
+  });
+});

@@ -131,6 +131,26 @@ describe('buildDynamicTools — the dynamic profile meta-tools', () => {
     expect(out.error).toContain('reticle_missing');
     expect(out.available).toEqual(['reticle_alpha', 'reticle_beta']);
   });
+
+  /**
+   * #876: the server instructions say, verbatim, "reticle_tools lists it, reticle_run calls it" —
+   * naming reticle_tools itself as one of the things reticle_run can reach. It could not: `byName`
+   * inside `buildDynamicTools` was built from `allTools` alone, and the two meta-tools it goes on to
+   * construct were never added back to that map. `reticle_tools { names: [...] }` (the direct call)
+   * always worked; only the documented `reticle_run { tool: "reticle_tools" }` indirection failed,
+   * with "unknown tool 'reticle_tools'" — which is also how the flows workflow (reticle_record,
+   * reticle_flow_save, reticle_verify) went undiscoverable: it lives behind reticle_tools, and the
+   * one path the instructions name to reach it did not.
+   */
+  it('reticle_run can invoke reticle_tools — the discovery path the instructions name', async () => {
+    const run = buildDynamicTools(fakeTools).find((t) => t.name === ReticleTool.RUN);
+    const out = (await run?.handler(NO_DEPS, { tool: ReticleTool.TOOLS, args: {} })) as {
+      error?: string;
+      tools?: { name: string }[];
+    };
+    expect(out.error).toBeUndefined();
+    expect(out.tools?.map((t) => t.name)).toEqual(['reticle_alpha', 'reticle_beta']);
+  });
 });
 
 /**

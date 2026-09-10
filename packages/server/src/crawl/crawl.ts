@@ -17,6 +17,7 @@ import {
   asString,
   sourceOf,
 } from '../tools/tools-helpers.js';
+import { isSessionReplacedError } from '../session/session-replaced.js';
 import { ReticleTool } from '../tools/tool-names.js';
 import { findContradictions } from '../events/contradictions.js';
 
@@ -68,12 +69,12 @@ export interface CrawlAnomaly {
   desc: string;
   detail: string;
   /**
-   * Where the control is written, as `file:line`.
+   * Where the fault is written, as `file:line`.
    *
-   * A crawl reports problems across a whole app, so it is the output most likely to be read as a
-   * work list — and "e42 does nothing" is a work list item that starts with a search. The location
-   * comes free: the crawl already clicks each control, and an act result carries the source captured
-   * alongside its anchor. Absent in production builds and apps without the build plugin.
+   * Console faults prefer their own component/error stack. The clicked control stays in `ref` and
+   * `desc`, and its source is only the fallback: a navigation link explains what exposed a render
+   * crash, while the crashing component explains what to fix. Other anomaly kinds still use the
+   * control source captured alongside the action. Absent when neither source can be localized.
    */
   source?: string;
 }
@@ -144,6 +145,107 @@ function isActivity(e: ReticleEvent): boolean {
 
 function isConsoleError(e: ReticleEvent): boolean {
   return e.type === EventType.CONSOLE_ERROR || e.type === EventType.ERROR_UNCAUGHT;
+}
+
+const SOURCE_FRAME = /^(.*):(\d+):(\d+)$/;
+const COMPONENT_STACK_FIELDS = ['componentStack', 'message'] as const;
+const URL_SOURCE_PROTOCOLS: ReadonlySet<string> = new Set([
+  'http:',
+  'https:',
+  'file:',
+  'webpack:',
+  'webpack-internal:',
+]);
+
+/** Turn a browser/dev-server frame URL into the file-shaped pointer the rest of Reticle emits. */
+function sourceFile(raw: string): string | undefined {
+  let file = raw.trim();
+  if (0 === file.length) return undefined;
+  try {
+    const parsed = new URL(file);
+    if (URL_SOURCE_PROTOCOLS.has(parsed.protocol)) file = decodeURIComponent(parsed.pathname);
+  } catch {
+    // A repo-relative or Windows path is already the more useful form; keep it as-is.
+  }
+  file = file.replace(/[?#].*$/, '').replace(/\\/g, '/');
+  const bundledPrefix = file.lastIndexOf('/./');
+  if (-1 !== bundledPrefix) file = file.slice(bundledPrefix + 3);
+  if (file.startsWith('/@fs/')) file = file.slice('/@fs/'.length);
+  if (/^\/[A-Za-z]:\//.test(file)) file = file.slice(1);
+  else file = file.replace(/^\/+/, '');
+  if (file.startsWith('./')) file = file.slice(2);
+  return 0 === file.length ? undefined : file;
+}
+
+/** The location part of a Chrome/React or Firefox stack frame. */
+function frameLocation(line: string): string | undefined {
+  let frame = line.trim();
+  if (frame.startsWith('at ')) frame = frame.slice(3).trim();
+  else {
+    const firefoxSeparator = frame.lastIndexOf('@');
+    if (-1 === firefoxSeparator) return undefined;
+    frame = frame.slice(firefoxSeparator + 1);
+  }
+  const opening = frame.lastIndexOf('(');
+  if (-1 !== opening && frame.endsWith(')')) return frame.slice(opening + 1, -1);
+  return frame;
+}
+
+function isFrameworkSource(file: string): boolean {
+  const normalized = `/${file.toLowerCase().replace(/^\/+/, '')}`;
+  return normalized.includes('/node_modules/') || normalized.startsWith('/node:');
+}
+
+/** First editable app frame in a component/error stack, excluding framework internals. */
+function sourceFromStack(stack: string): string | undefined {
+  for (const line of stack.split('\n')) {
+    const location = frameLocation(line);
+    if (location === undefined) continue;
+    const match = SOURCE_FRAME.exec(location);
+    if (null === match) continue;
+    const [, rawFile, rawLine] = match;
+    if (rawFile === undefined || rawLine === undefined) continue;
+    const file = sourceFile(rawFile);
+    const lineNumber = Number(rawLine);
+    if (
+      file === undefined ||
+      isFrameworkSource(file) ||
+      !Number.isSafeInteger(lineNumber) ||
+      lineNumber <= 0
+    ) {
+      continue;
+    }
+    return `${file}:${String(lineNumber)}`;
+  }
+  return undefined;
+}
+
+/** Prefer where a console fault occurred over the control whose click merely exposed it. */
+function sourceFromConsoleError(event: ReticleEvent): string | undefined {
+  // React currently passes its component stack as a console.error string argument, so the browser
+  // observer carries it inside `message`; richer producers can send `componentStack` directly.
+  for (const field of COMPONENT_STACK_FIELDS) {
+    const componentStack = asString(event.data[field]);
+    if (componentStack === undefined) continue;
+    const componentSource = sourceFromStack(componentStack);
+    if (componentSource !== undefined) return componentSource;
+  }
+
+  // The ordinary error stack can also identify a component better than ErrorEvent.filename (for
+  // example, a bundle or click-handler frame), so try app frames before the structured fallback.
+  const stack = asString(event.data['stack']);
+  if (stack !== undefined) {
+    const stackSource = sourceFromStack(stack);
+    if (stackSource !== undefined) return stackSource;
+  }
+
+  const directFile = asString(event.data['source']);
+  const directLine = asNumber(event.data['line']);
+  if (directFile === undefined || directLine === undefined || directLine <= 0) return undefined;
+  const file = sourceFile(directFile);
+  return file === undefined || isFrameworkSource(file)
+    ? undefined
+    : `${file}:${String(directLine)}`;
 }
 
 function failedRequests(events: ReticleEvent[], floor: number): ReticleEvent[] {
@@ -285,6 +387,18 @@ export async function crawl(
     const since = session.elapsed();
     session.beginAction?.(ReticleTool.CRAWL, { ref: item.ref, action: ActionType.CLICK });
     let act;
+    /*
+     * A full page load reconnects the SDK, which rejects whatever command was in flight.
+     *
+     * On a server-rendered app that is what following a link DOES — every navigation replaces the
+     * session — so the rejection is evidence the click worked, not that it failed. Crawl used to let
+     * it propagate and died on link one of every Django, Rails or plain-HTML app.
+     *
+     * Recorded as a navigation rather than swallowed: a control that took the page somewhere is the
+     * opposite of a dead one, and reporting it as dead would be the false negative crawl exists to
+     * find.
+     */
+    let navigatedAway = false;
     try {
       // One span per control clicked, so a slow crawl names the control rather than reporting a
       // single multi-second total. The settle sleep below is INSIDE it deliberately: it is part of
@@ -298,6 +412,9 @@ export async function crawl(
         await sleep(settleMs);
         return clicked;
       });
+    } catch (err) {
+      if (!isSessionReplacedError(err)) throw err;
+      navigatedAway = true;
     } finally {
       // Close on every exit so a throw cannot leak the window onto the next control's events.
       session.finishAction?.();
@@ -305,17 +422,19 @@ export async function crawl(
     const events = session.eventsSince(since);
     // Captured at act time, so it survives a click that unmounts its own control.
     const src = sourceOf(asRecord(act?.result)['source']);
-    const source = src === undefined ? {} : { source: `${src.file}:${String(src.line)}` };
+    const controlSource = src === undefined ? undefined : `${src.file}:${String(src.line)}`;
+    const source = controlSource === undefined ? {} : { source: controlSource };
 
     const errs = events.filter(isConsoleError);
     for (const e of errs) {
       counts.consoleErrors += 1;
+      const errorSource = sourceFromConsoleError(e) ?? controlSource;
       anomalies.push({
         kind: CrawlAnomalyKind.CONSOLE_ERROR,
         ref: item.ref,
         desc: item.desc,
         detail: asString(e.data['message']) ?? e.type,
-        ...source,
+        ...(errorSource === undefined ? {} : { source: errorSource }),
       });
     }
 
@@ -367,8 +486,12 @@ export async function crawl(
     // Deliberately NOT fixed by counting focus as activity: focus moving is not the app reacting, and
     // treating it as such would make a genuinely dead button that takes focus look alive — trading
     // noise for the false negative this check exists to catch.
-    const dispatched = asRecord(act.result)['dispatched'] !== false && act.ok;
+    const dispatched = asRecord(act?.result)['dispatched'] !== false && true === act?.ok;
     if (
+      // A control that took the page somewhere is the OPPOSITE of a dead one. Without this, every
+      // link on a server-rendered app would be reported as an anomaly by the check that exists to
+      // find controls which do nothing.
+      !navigatedAway &&
       dispatched &&
       0 === errs.length &&
       !events.some(isActivity) &&

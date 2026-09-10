@@ -113,9 +113,9 @@ const ORDER = [
   'release-smoke-test',
 ];
 // The desktop battery — `pnpm e2e:desktop`. Each of these starts its OWN runtime (an Electron main
-// process, a packaged Tauri binary) and waits for it to dial the bridge, so they need no server from
-// run-ci.sh and would only fail inside it for want of a display.
-const DESKTOP = ['electron-desktop-test', 'tauri-desktop-test'];
+// process, including the electron-vite path, or a packaged Tauri binary) and waits for it to dial
+// the bridge, so they need no server from run-ci.sh and would only fail inside it for want of a display.
+const DESKTOP = ['electron-desktop-test', 'electron-vite-desktop-test', 'tauri-desktop-test'];
 // Specs intentionally excluded from BOTH batteries (add here WITH a reason, never by omission).
 const present = new Set(
   readdirSync(specsDir)

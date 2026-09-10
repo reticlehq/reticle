@@ -24,7 +24,7 @@ interface MemoryIo extends InitIo {
 const HOME = '/home/u';
 
 interface MemoryOpts {
-  execOk?: boolean;
+  execOk?: boolean | ((command: string, args: readonly string[]) => boolean);
   claudeAvailable?: boolean;
   mcpExists?: boolean;
   cursor?: boolean;
@@ -122,7 +122,7 @@ function memoryIo(
     scoped: (rel) => memoryIo(files, opts, key(rel), sinks),
     exec: (command, args) => {
       execCalls.push({ command, args });
-      return execOk;
+      return 'function' === typeof execOk ? execOk(command, args) : execOk;
     },
     probe: (_command, args) => (args.includes('get') ? mcpExists : claudeAvailable),
     print: (l) => lines.push(l),
@@ -1039,64 +1039,6 @@ describe('runInit — a refused pin falls back instead of blocking the install',
 });
 
 /**
- * CRA (and other npm repos with peer conflicts) die on a bare `npm i -D` with ERESOLVE.
- * The project's `.npmrc` already names `--legacy-peer-deps`; if we miss that, retry once with
- * the flag rather than skipping every wiring step (#802).
- */
-describe('runInit — an ERESOLVE project gets --legacy-peer-deps rather than a silent skip', () => {
-  const CRA_APP = {
-    'package.json': JSON.stringify({
-      dependencies: { 'react-scripts': '5.0.1', react: '^18', 'react-dom': '^18' },
-    }),
-    'src/index.js': "import React from 'react';\nimport App from './App';\n",
-  };
-
-  function eresolveIo(files: Record<string, string>): MemoryIo {
-    const io = memoryIo(files, { mcpExists: true });
-    const realExec = io.exec.bind(io);
-    return {
-      ...io,
-      exec(command: string, args: readonly string[]) {
-        realExec(command, args);
-        return command === 'npm' && args.includes('--legacy-peer-deps');
-      },
-    };
-  }
-
-  it('retries with --legacy-peer-deps after a bare npm install fails, and says that it did', () => {
-    const io = eresolveIo(CRA_APP);
-    runInit({ ...OPTS, install: true }, io);
-    const npmCalls = io.execCalls.filter((c) => c.command === 'npm' && c.args.includes('-D'));
-    expect(npmCalls.length).toBeGreaterThanOrEqual(2);
-    expect(npmCalls[0]?.args).not.toContain('--legacy-peer-deps');
-    expect(npmCalls[1]?.args).toContain('--legacy-peer-deps');
-    expect(io.lines.join('\n')).toContain('--legacy-peer-deps');
-  });
-
-  it('still wires the app after that retry — the packages are on disk', () => {
-    const io = eresolveIo(CRA_APP);
-    runInit({ ...OPTS, install: true }, io);
-    expect(io.written['src/reticle-dev.js']).toContain('reticle.connect');
-    expect(io.written['src/index.js']).toContain("import './reticle-dev'");
-  });
-
-  it('passes the flag on the first attempt when .npmrc already asks for it', () => {
-    const io = memoryIo({ ...CRA_APP, '.npmrc': 'legacy-peer-deps=true\n' }, { mcpExists: true });
-    runInit({ ...OPTS, install: true }, io);
-    const first = io.execCalls.find((c) => c.command === 'npm' && c.args.includes('-D'));
-    expect(first?.args).toContain('--legacy-peer-deps');
-  });
-
-  it('names skipped wiring when the install fails and the packages are absent', () => {
-    const io = memoryIo(CRA_APP, { execOk: false, mcpExists: true });
-    runInit({ ...OPTS, install: true }, io);
-    const report = io.lines.join('\n');
-    expect(report).toContain('skipped — the dependency install above failed');
-    expect(io.written['src/reticle-dev.js']).toBeUndefined();
-  });
-});
-
-/**
  * A `[✓]` for a filesystem effect must be backed by a `stat`, not by the intention to write.
  *
  * Reported from the field (#160): `init` printed `[✓] Reticle config → .reticle.json` and the file
@@ -1212,5 +1154,88 @@ describe('the closing hint names the MCP reload before it tells you to ask the a
     const out = io.lines.join('\n');
     expect(out).not.toMatch(/\/mcp\b|reload the window/i);
     expect(out, 'the dev-server restart still stands').toContain('Restart');
+  });
+});
+
+/**
+ * `--url` has to actually reach `init`, or the refusal that advertises it is a circle.
+ *
+ * The flag was parsed by the CLI for as long as it has existed and then dropped between the parser
+ * and `runInit`, so `init --app src/ui --url http://localhost:3100` on a machine without pnpm was
+ * refused BY A MESSAGE NAMING `--url` as the way past. The rule in preflight.ts is only half the
+ * fix; without the option carrying it, the rule is correct and inert.
+ */
+describe('runInit honours --url on the package-manager preflight', () => {
+  const PNPM_APP = {
+    'package.json': JSON.stringify({ devDependencies: { vite: '^5', react: '^19' } }),
+    'pnpm-lock.yaml': 'lockfileVersion: 6.0\n',
+    'vite.config.ts': `export default { plugins: [] };\n`,
+  };
+  // `claudeAvailable: false` is how this harness makes every `probe` say no, which is what a machine
+  // without the project's package manager looks like from here.
+  const noTooling = { claudeAvailable: false };
+
+  it('refuses without --url — the case the check exists for', () => {
+    const io = memoryIo(PNPM_APP, noTooling);
+    runInit({ ...OPTS, dryRun: true }, io);
+    expect(io.lines.join('\n')).toContain('is not installed on this machine');
+  });
+
+  it('does not refuse when the app is already served', () => {
+    const io = memoryIo(PNPM_APP, noTooling);
+    runInit({ ...OPTS, dryRun: true, url: 'http://localhost:3100' }, io);
+    expect(
+      io.lines.join('\n'),
+      'the message names --url as the escape, so --url must be one',
+    ).not.toContain('is not installed on this machine');
+  });
+});
+
+/**
+ * The retry ladder stops at the first rung that works.
+ *
+ * It is ordered by how much each attempt gives up — `--legacy-peer-deps` keeps the version pin and
+ * relaxes only peer resolution; the unpinned attempt gives up the pin, which is the thing that keeps
+ * SDK and daemon in step. Running a later, weaker rung after an earlier one already produced a
+ * working tree would throw away the pin for no reason and then report having done so.
+ */
+describe('the install retry ladder', () => {
+  const CRA_APP = {
+    'package.json': JSON.stringify({
+      dependencies: { react: '^18', 'react-scripts': '5.0.1' },
+    }),
+    'package-lock.json': '{}',
+    'src/index.tsx': 'import React from "react";\n',
+  };
+  const installArgs = (io: ReturnType<typeof memoryIo>): string[][] =>
+    io.execCalls.filter((c) => 'npm' === c.command).map((c) => [...c.args]);
+
+  it('retries with --legacy-peer-deps when the pinned install fails, and stops there', () => {
+    // ERESOLVE: the first attempt fails, the peer-relaxed one succeeds. Exactly the CRA report.
+    const io = memoryIo(CRA_APP, {
+      execOk: (command, args) => 'npm' !== command || args.includes('--legacy-peer-deps'),
+    });
+    runInit({ ...OPTS, install: true }, io);
+    const attempts = installArgs(io);
+    expect(attempts.length, 'the first attempt plus one retry, and no more').toBe(2);
+    expect(attempts[1]).toContain('--legacy-peer-deps');
+    expect(
+      attempts.some((a) => a.some((x) => x.startsWith('@reticlehq/') && !x.includes('@', 1))),
+      'the unpinned rung must not run once peers-relaxed succeeded',
+    ).toBe(false);
+  });
+
+  it('falls through to the unpinned attempt when relaxing peers does not help', () => {
+    const io = memoryIo(CRA_APP, { execOk: (command) => 'npm' !== command });
+    runInit({ ...OPTS, install: true }, io);
+    const attempts = installArgs(io);
+    expect(attempts.length, 'pinned, peers-relaxed, then unpinned').toBe(3);
+    expect(attempts[2]).not.toContain('--legacy-peer-deps');
+  });
+
+  it('does not retry at all when the first install works', () => {
+    const io = memoryIo(CRA_APP, { execOk: true });
+    runInit({ ...OPTS, install: true }, io);
+    expect(installArgs(io).length).toBe(1);
   });
 });

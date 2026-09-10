@@ -66,7 +66,16 @@ export const REPORT_TEXT = {
   ESTIMATE_TAG: 'estimate',
   CHART: 'Verdicts, last 30 days',
   DEFECTS: 'What broke',
-  DEFECTS_MORE: 'Manage all of them on the dashboard',
+  DEFECTS_MORE: 'Manage all of them on the dashboard — triage, assign, and push to GitHub',
+  /**
+   * The row link's accessible name and tooltip.
+   *
+   * It says DASHBOARD, not GitHub, because that is where the link goes. A GitHub mark here would
+   * promise "this files a GitHub issue" and then not do it; pushing to a tracker is something the
+   * dashboard manages, so the icon is honest about the destination and this sentence carries the
+   * rest.
+   */
+  DEFECT_LINK_TITLE: 'Open on the dashboard to triage or push to GitHub',
   /**
    * What an UNLINKED user is told, and the only place the product tells them.
    *
@@ -81,6 +90,10 @@ export const REPORT_TEXT = {
   LOCAL_ONLY: 'This record stops at this machine.',
   LOCAL_ONLY_ACTION: 'reticle login',
   LOCAL_ONLY_TAIL: 'keeps it, and lets a team see it.',
+  /** Signed in, repo not linked — a different state with a different next step. */
+  UNLINKED: 'Signed in, but this repo is not linked.',
+  UNLINKED_ACTION: 'reticle link',
+  UNLINKED_TAIL: 'sends this record to your workspace.',
   DEFECTS_NONE: 'Nothing has failed a declared consequence yet.',
   EMPTY: 'Nothing recorded yet. Drive the app once and this fills in.',
   SHARE: 'Share',

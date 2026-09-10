@@ -144,3 +144,36 @@ describe('scanStores', () => {
     ).toEqual([]);
   });
 });
+
+/**
+ * A scraped testid that still contains an interpolation is a PATTERN, not an id.
+ *
+ * Reported from a monorepo audit: the generated capabilities file listed entries such as
+ * `'${testId}'` and `` 'chip-${group.label}' `` verbatim. The regex excludes only quote characters,
+ * and `$`, `{` and `}` are not quotes, so a template literal is captured whole.
+ *
+ * Nothing in the app will ever carry those as an attribute value, so every one of them is an
+ * advertised handle that cannot be driven — the capabilities block exists to tell an agent what it
+ * CAN act on, and a list that is partly fiction is worse than a shorter true one.
+ */
+describe('scanning testids out of source', () => {
+  it('drops an id that is a whole interpolation', () => {
+    expect(scanTestids(['<div data-testid={`${testId}`} />'])).toEqual([]);
+  });
+
+  it('drops an id that merely CONTAINS an interpolation', () => {
+    expect(scanTestids(['<li data-testid={`chip-${group.label}`} />'])).toEqual([]);
+  });
+
+  it('keeps the literal testids beside a templated one', () => {
+    // The common real file: some static, some generated. The static ones are still drivable.
+    const src =
+      '<a data-testid="nav-home" /><li data-testid={`chip-${x}`} /><b data-testid=\'save\' />';
+    expect(scanTestids([src])).toEqual(['nav-home', 'save']);
+  });
+
+  it('keeps an id with a dollar that is not an interpolation', () => {
+    // `$` alone is legal in an attribute value and appears in real ids (price$, usd$total).
+    expect(scanTestids(['<i data-testid="total$usd" />'])).toEqual(['total$usd']);
+  });
+});

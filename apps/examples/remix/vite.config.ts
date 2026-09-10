@@ -15,6 +15,8 @@ import { join } from 'node:path';
 // STAMPING half is what puts data-reticle-source on the JSX, and without it a verdict comes back with
 // a component name and no file:line — the pointer an agent uses to go straight to the code. Dropping
 // the plugin wholesale because one of its two jobs did not apply cost this example the other one.
+// TanStack Start is the same class: it SSRs <html> from src/routes/__root.tsx and never sends Vite's
+// index.html, so inject: false plus a client-only connect is the wiring there too.
 function readPairingToken(): string {
   const dir = process.env['RETICLE_PAIRING_TOKEN_DIR'] || join(homedir(), '.reticle');
   try {

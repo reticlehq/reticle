@@ -32,7 +32,11 @@ const ALWAYS_PRESENT = 'npm';
  * here from `exists('pnpm-lock.yaml')` refused an npm app sitting under a pnpm monorepo on a machine
  * with no pnpm, which the install gate proves must succeed.
  */
-export function preflightRefusal(io: PreflightIo, packageManager: string): string | undefined {
+export function preflightRefusal(
+  io: PreflightIo,
+  packageManager: string,
+  options: { alreadyServed?: boolean } = {},
+): string | undefined {
   // First: on a read-only checkout nothing else matters, and one access check is cheaper and
   // quieter than spawning a subprocess to discover the same thing.
   if (!io.canWrite()) {
@@ -43,7 +47,23 @@ export function preflightRefusal(io: PreflightIo, packageManager: string): strin
   }
   // What the project resolves to says nothing about what the machine HAS, and a project committed to
   // pnpm on an npm-only box is an ordinary Monday.
-  if (ALWAYS_PRESENT !== packageManager && !io.probe(packageManager, ['--version'])) {
+  //
+  // `alreadyServed` is `--url`, and skipping the check for it is the message keeping its own promise.
+  // This guard exists for the DEV SERVER — to stop `spawn pnpm ENOENT` surfacing inside "the dev
+  // server exited" — and `--url` says the app is already up, so init starts nothing and the failure
+  // it protects against cannot happen. Reported from the field as a circle: the refusal named `--url`
+  // as the way past it while `--url` was being passed, because the flag was parsed and then never
+  // handed to init at all.
+  //
+  // The dependency install can still fail without the package manager. That is one step reporting ⚠,
+  // which is what a step that cannot complete is for, and is a better outcome than writing nothing:
+  // the config, the connect module and `.reticle.json` all land, and the user is told the one thing
+  // left to do rather than being sent to install a package manager they were trying to avoid.
+  if (
+    true !== options.alreadyServed &&
+    ALWAYS_PRESENT !== packageManager &&
+    !io.probe(packageManager, ['--version'])
+  ) {
     return (
       `this project uses ${packageManager} (its lockfile says so) and ${packageManager} is not ` +
       `installed on this machine. Install it (npm i -g ${packageManager}, or corepack enable), or ` +

@@ -360,6 +360,48 @@ describe('a reaped lease is not reported as a closed tab', () => {
 });
 
 /**
+ * A route that 500s tears the page down and the SDK never reconnects. The diagnosis already knew
+ * a tab HAD been here (`everConnected`); it just refused to say WHERE, so the agent got the same
+ * empty-list story as "never installed" and could not tell a server error from a closed tab (#808).
+ *
+ * Naming the last URL is not a `route-500` verdict. It is the fact we already held.
+ */
+describe('a vanished session names the last URL it was on', () => {
+  const torn = diagnoseNoSession({
+    everConnected: true,
+    initialized: true,
+    listening: [3000],
+    port: 4400,
+    lastKnownUrl: 'http://localhost:3000/orders/explode',
+  });
+
+  it('names the last route, so this is not an empty session list', () => {
+    expect(torn).toContain('http://localhost:3000/orders/explode');
+    expect(torn).toMatch(/torn down while on/i);
+  });
+
+  it('still says the wiring worked — the install is not in question', () => {
+    expect(torn).toContain('one WAS connected to this daemon earlier');
+    expect(torn).not.toMatch(/reticle init/);
+  });
+
+  it('does not invent a 500 — we did not fetch the route', () => {
+    expect(torn).not.toMatch(/route-500|status 500|server error overlay/i);
+  });
+
+  it('stays on the closed-tab wording when no URL was remembered', () => {
+    const plain = diagnoseNoSession({
+      everConnected: true,
+      initialized: true,
+      listening: [3000],
+      port: 4400,
+    });
+    expect(plain).not.toMatch(/torn down while on/i);
+    expect(plain).toMatch(/tab was closed, navigated away, or hard-reloaded/i);
+  });
+});
+
+/**
  * Nothing listening AND never instrumented is a TWO-step problem, and saying only one step is a
  * dead end that costs the reader a whole round trip.
  *

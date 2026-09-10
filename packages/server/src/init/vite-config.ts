@@ -37,12 +37,35 @@ const RETICLE_MARKER = '@reticlehq/vite-plugin';
  * and reconcile-tools.ts — so the capability is discovered at the moment it is wanted, by the person
  * who wanted it, instead of being switched on before anyone has asked.
  */
-function reticlePluginCall(port: number | undefined, captureBodies: boolean): string {
+function reticlePluginCall(opts: PluginCallOptions): string {
   const options = [
-    ...(port === undefined ? [] : [`port: ${String(port)}`]),
-    ...(captureBodies ? ['captureNetworkBodies: true'] : []),
+    ...(opts.port === undefined ? [] : [`port: ${String(opts.port)}`]),
+    ...(false === opts.inject ? ['inject: false'] : []),
+    ...(opts.captureBodies ? ['captureNetworkBodies: true'] : []),
+    ...(opts.sourceMapping ? [] : ['sourceMapping: false']),
   ];
   return 0 === options.length ? 'reticle()' : `reticle({ ${options.join(', ')} })`;
+}
+
+/**
+ * What `init` decided to write into the call. Grouped rather than threaded positionally: two
+ * adjacent booleans through three helpers is a swap waiting to happen, and the swap is silent.
+ */
+interface PluginCallOptions {
+  port: number | undefined;
+  captureBodies: boolean;
+  /**
+   * Let the plugin inject `connect()` into `index.html`. False for a framework that SSRs its own
+   * document and never serves Vite's — TanStack Start, Remix — where only the injection half is
+   * inapplicable and the stamping half still earns its place.
+   */
+  inject: boolean;
+  /**
+   * Stamp `data-reticle-source`. Written as `sourceMapping: false` for an app whose React renderer
+   * is not React DOM — see `Detection.customReconciler`, where the whole argument lives. The plugin
+   * defaults it ON, so the only way to spare such an app is to say so in the config.
+   */
+  sourceMapping: boolean;
 }
 /** Matches the start of a `plugins: [` array literal. */
 const PLUGINS_ARRAY = /plugins\s*:\s*\[/;
@@ -84,11 +107,11 @@ function insertImport(source: string): string {
  * what a formatter rewrites, turning a one-line install into a diff against the user's own style. A
  * single-line array needs the space, or the result reads `[reticle(),react()]`.
  */
-function insertPlugin(source: string, port: number | undefined, captureBodies: boolean): string {
+function insertPlugin(source: string, call: string): string {
   return source.replace(PLUGINS_ARRAY, (match, _g, offset: number) => {
     const next = source[offset + match.length] ?? '';
     const separator = '' === next || /\s/.test(next) ? '' : ' ';
-    return `${match}${reticlePluginCall(port, captureBodies)},${separator}`;
+    return `${match}${call},${separator}`;
   });
 }
 
@@ -96,35 +119,32 @@ function insertPlugin(source: string, port: number | undefined, captureBodies: b
  * Add a whole `plugins: [reticle()]` key to a config object that has none, matching the layout of
  * the object it lands in: a multi-line object gets its own indented line, a one-liner stays inline.
  */
-function insertPluginsKey(
-  source: string,
-  port: number | undefined,
-  captureBodies: boolean,
-): string {
+function insertPluginsKey(source: string, call: string): string {
   return source.replace(CONFIG_OBJECT, (_match, prefix: string, offset: number) => {
     const rest = source.slice(offset + _match.length);
     const multiline = /^\s*\n/.test(rest);
     const indent = /^\s*\n(\s*)\S/.exec(rest)?.[1] ?? '  ';
-    const key = `plugins: [${reticlePluginCall(port, captureBodies)}],`;
+    const key = `plugins: [${call}],`;
     return multiline ? `${prefix}{\n${indent}${key}` : `${prefix}{ ${key}`;
   });
 }
 
-export function patchViteConfig(source: string, port?: number, captureBodies = false): VitePatch {
+export function patchViteConfig(
+  source: string,
+  port?: number,
+  captureBodies = false,
+  inject = true,
+  sourceMapping = true,
+): VitePatch {
   if (source.includes(RETICLE_MARKER)) {
     return { kind: VitePatchKind.ALREADY };
   }
+  const call = reticlePluginCall({ port, captureBodies, inject, sourceMapping });
   if (PLUGINS_ARRAY.test(source)) {
-    return {
-      kind: VitePatchKind.APPLY,
-      code: insertImport(insertPlugin(source, port, captureBodies)),
-    };
+    return { kind: VitePatchKind.APPLY, code: insertImport(insertPlugin(source, call)) };
   }
   if (CONFIG_OBJECT.test(source)) {
-    return {
-      kind: VitePatchKind.APPLY,
-      code: insertImport(insertPluginsKey(source, port, captureBodies)),
-    };
+    return { kind: VitePatchKind.APPLY, code: insertImport(insertPluginsKey(source, call)) };
   }
   return { kind: VitePatchKind.MANUAL, reason: NO_PLUGINS_REASON };
 }

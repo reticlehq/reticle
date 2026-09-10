@@ -82,7 +82,7 @@ export function portBusyMessage(output: string): string | undefined {
   const match =
     CRA_PORT_BUSY.exec(output) ?? NAMED_PORT_BUSY.exec(output) ?? EADDRINUSE_PORT.exec(output);
   const port = match?.[1];
-  if (port === undefined) return undefined;
+  if (undefined === port) return undefined;
   return (
     `port ${port} is already in use — something else is serving there, so this launcher did not ` +
     `bind. Pass --url http://localhost:${port} if that process is this app, or free the port and re-run.`

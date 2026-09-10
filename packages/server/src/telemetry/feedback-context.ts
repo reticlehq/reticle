@@ -44,6 +44,8 @@ const STACK_BY_DEP: readonly (readonly [string, string])[] = [
   ['nuxt', 'nuxt'],
   ['astro', 'astro'],
   ['@remix-run/react', 'remix'],
+  ['@tanstack/react-start', 'tanstack-start'],
+  ['@tanstack/start', 'tanstack-start'],
   ['@angular/core', 'angular'],
   ['react', 'react'],
   ['vue', 'vue'],
@@ -275,7 +277,7 @@ export interface SessionFacts {
  * `sveltekit` are not — that pairing means the daemon's directory is not this session's project.
  */
 const ADAPTER_IMPLIES: Readonly<Record<string, readonly string[]>> = {
-  react: ['react', 'next', 'remix'],
+  react: ['react', 'next', 'remix', 'tanstack-start'],
   svelte: ['svelte', 'sveltekit'],
   vue: ['vue', 'nuxt'],
   solid: ['solid'],

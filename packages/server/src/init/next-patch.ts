@@ -159,25 +159,43 @@ function exportSites(source: string, head: RegExp): ExportSite[] {
  *
  * Applied back-to-front so each splice leaves the earlier offsets valid.
  */
-function wrapAll(source: string, sites: readonly ExportSite[]): string {
+function wrapAll(source: string, sites: readonly ExportSite[], secondArg: string): string {
   let out = source;
   for (const site of [...sites].sort((a, b) => b.start - a.start)) {
-    out = `${out.slice(0, site.start)}withReticle(${out.slice(site.start, site.end)})${out.slice(site.end)}`;
+    out = `${out.slice(0, site.start)}withReticle(${out.slice(site.start, site.end)}${secondArg})${out.slice(site.end)}`;
   }
   return out;
 }
 
-export function patchNextConfig(source: string): SourcePatch {
+/**
+ * The second argument to `withReticle`, or nothing at all.
+ *
+ * A Next app has no plugin call to carry `sourceMapping: false`, so the only place to say it is the
+ * config wrap itself. Omitted entirely when the stamp stays on, because an install that appends
+ * `, {}` to every config it touches is a diff against the user's file for no reason.
+ */
+function withReticleOptions(sourceMapping: boolean): string {
+  return sourceMapping ? '' : ', { sourceMapping: false }';
+}
+
+export function patchNextConfig(source: string, sourceMapping = true): SourcePatch {
   if (source.includes(RETICLE_NEXT_PACKAGE)) return { kind: PatchKind.ALREADY };
 
+  const options = withReticleOptions(sourceMapping);
   const esm = exportSites(source, ESM_DEFAULT_HEAD);
   if (esm.length > 0) {
-    return { kind: PatchKind.APPLY, code: `${NEXT_CONFIG_IMPORT}\n${wrapAll(source, esm)}` };
+    return {
+      kind: PatchKind.APPLY,
+      code: `${NEXT_CONFIG_IMPORT}\n${wrapAll(source, esm, options)}`,
+    };
   }
 
   const cjs = exportSites(source, CJS_EXPORT_HEAD);
   if (cjs.length > 0) {
-    return { kind: PatchKind.APPLY, code: `${NEXT_CONFIG_REQUIRE}\n${wrapAll(source, cjs)}` };
+    return {
+      kind: PatchKind.APPLY,
+      code: `${NEXT_CONFIG_REQUIRE}\n${wrapAll(source, cjs, options)}`,
+    };
   }
 
   return { kind: PatchKind.MANUAL, reason: NO_EXPORT_REASON };

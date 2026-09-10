@@ -15,6 +15,12 @@ export const Framework = {
   NUXT: 'nuxt',
   VITE: 'vite',
   /**
+   * electron-vite is Vite-based but its config holds three build configs (main/preload/renderer)
+   * and only the renderer has a DOM. The generic Vite path patches the FIRST plugins array, which
+   * is main's — wiring the SDK where there is no document, and reporting success.
+   */
+  ELECTRON_VITE: 'electron-vite',
+  /**
    * React Router in FRAMEWORK mode (v7's `@react-router/dev`, the successor to Remix).
    *
    * Vite-based, and it renders HTML through its own request handler — so the Vite plugin's
@@ -31,6 +37,19 @@ export const Framework = {
    * path.
    */
   REACT_ROUTER: 'react-router',
+  /**
+   * TanStack Start SSRs `<html>` from `src/routes/__root.tsx` and never sends Vite's index.html, so
+   * the plugin's `transformIndexHtml` injection never fires. It used to fall through to
+   * `Framework.VITE`, where `init` wired the plugin, reported every step green ("also injects
+   * connect()"), and produced zero sessions — confirmed in the field as ~13 minutes of "still
+   * verifying" against a daemon showing none (#773).
+   *
+   * Keyed on `@tanstack/react-start` or the older `@tanstack/start`, never on
+   * `@tanstack/react-query` or `@tanstack/react-router` alone — those are libraries on a Vite SPA
+   * whose index.html the plugin does reach. Not `@tanstack/solid-start` either: that would install
+   * the React kit into a Solid app.
+   */
+  TANSTACK_START: 'tanstack-start',
   SVELTEKIT: 'sveltekit',
   ASTRO: 'astro',
   /** Create React App. No config file exists, so `react-scripts` in the dependencies is the signal. */
@@ -100,11 +119,39 @@ export interface Detection {
   reactScriptsMajor?: number | undefined;
   /** React 19 dropped _debugSource, so it needs the build-time source-map stamp. */
   needsSourceMapping: boolean;
+  /**
+   * Whether this project renders through a NON-DOM React reconciler, in which case the
+   * `data-reticle-source` stamp must be switched off for the whole app.
+   *
+   * React is a reconciler interface, not a renderer. A lowercase JSX tag is a host element in
+   * every renderer, but only in React DOM is a host element a node that takes attributes. The
+   * babel plugin's allowlist keeps the stamp off `<mesh>` and `<group>`, and it cannot help with
+   * the tags that COLLIDE: `<line>` is both SVG's and `THREE.Line`, `<audio>` is both. R3F's
+   * `applyProps` reads any dashed prop as a pierced property path, walks `data` -> `reticle` on a
+   * three.js instance that has no `data`, and throws from inside the commit phase — which unmounts
+   * the entire tree to a white screen, long after the app looked fine.
+   *
+   * A tag name alone cannot separate the two, and a lexical "is it under a <Canvas>" walk only sees
+   * the file being transformed. The manifest can: an app that depends on one of these renderers has
+   * the collision, so `init` writes `sourceMapping: false` rather than shipping a crash. The cost is
+   * source pointers on that app; the alternative cost is the app.
+   *
+   * Optional so every existing fixture keeps compiling without naming it, in the one direction a
+   * default here can be wrong safely: absent means an ordinary React DOM app, which is what an
+   * unstated fixture is. `detect` always sets it.
+   */
+  customReconciler?: boolean | undefined;
   packageManager: PackageManager;
 }
 
 const NEXT_CONFIGS = ['next.config.js', 'next.config.mjs', 'next.config.ts', 'next.config.cjs'];
 const VITE_CONFIGS = ['vite.config.js', 'vite.config.ts', 'vite.config.mjs', 'vite.config.mts'];
+const ELECTRON_VITE_CONFIGS = [
+  'electron.vite.config.ts',
+  'electron.vite.config.js',
+  'electron.vite.config.mjs',
+  'electron.vite.config.mts',
+];
 const SVELTE_CONFIGS = ['svelte.config.js', 'svelte.config.ts', 'svelte.config.mjs'];
 const REACT_ROUTER_CONFIGS = [
   'react-router.config.ts',
@@ -122,6 +169,18 @@ const ASTRO_CONFIGS = [
 function depVersion(pkg: PackageJsonLike, name: string): string | undefined {
   return pkg.dependencies?.[name] ?? pkg.devDependencies?.[name] ?? pkg.peerDependencies?.[name];
 }
+
+/**
+ * React renderers whose host instances are not DOM nodes. Presence of any one of them means a
+ * lowercase JSX tag in this project may not be an element. See `Detection.customReconciler`.
+ */
+const CUSTOM_RECONCILER_DEPS = [
+  '@react-three/fiber',
+  'react-three-fiber',
+  '@react-pdf/renderer',
+  'ink',
+  'react-native',
+];
 
 function hasAnyConfig(files: ReadonlySet<string>, candidates: readonly string[]): boolean {
   return candidates.some((c) => files.has(c));
@@ -190,7 +249,19 @@ function detectFramework(input: DetectInput): Framework {
   }
   // SvelteKit is Vite-based but renders through app.html, so the Vite plugin's index.html injection
   // never fires (verified) — it needs a manual client connect. Check BEFORE the generic Vite branch.
-  if (depVersion(pkg, '@sveltejs/kit') !== undefined || hasAnyConfig(configFiles, SVELTE_CONFIGS)) {
+  //
+  // `svelte.config.js` alone is NOT sufficient: a plain Svelte + Vite SPA ships one too, for
+  // `@sveltejs/vite-plugin-svelte`'s own preprocessor options, with no `kit` block in it. That
+  // config-file-alone read misclassified a real project (#883) — `init` wrote a SvelteKit-only
+  // `src/hooks.client.ts` bootstrap that nothing on that project could ever import. SvelteKit itself
+  // never ships a root `index.html` (it renders through `src/app.html` instead), where a plain Vite
+  // SPA — Svelte or otherwise — always has one; that absence is what the config-file fallback needs
+  // alongside the file, since the presence of `@sveltejs/kit` in package.json is checked first and is
+  // conclusive on its own whether or not a root `index.html` exists.
+  if (
+    depVersion(pkg, '@sveltejs/kit') !== undefined ||
+    (hasAnyConfig(configFiles, SVELTE_CONFIGS) && !configFiles.has('index.html'))
+  ) {
     return Framework.SVELTEKIT;
   }
   // Astro is Vite-based but SSRs its own HTML, so the plugin's index.html injection never fires and
@@ -198,6 +269,15 @@ function detectFramework(input: DetectInput): Framework {
   // connect instructions for a bundler it does not have. Check BEFORE the generic Vite branch.
   if (depVersion(pkg, 'astro') !== undefined || hasAnyConfig(configFiles, ASTRO_CONFIGS)) {
     return Framework.ASTRO;
+  }
+  // electron-vite is Vite-based but its config holds three build configs (main/preload/renderer)
+  // and only the renderer has a DOM. The generic Vite path patches the FIRST plugins array, which
+  // is main's — wiring the SDK where there is no document, and reporting success. Check BEFORE Vite.
+  if (
+    depVersion(pkg, 'electron-vite') !== undefined ||
+    hasAnyConfig(configFiles, ELECTRON_VITE_CONFIGS)
+  ) {
+    return Framework.ELECTRON_VITE;
   }
   // React Router framework mode before Vite, for the reason SvelteKit and Astro are: it renders
   // HTML through its own request handler, so the plugin's index.html injection never fires. Keyed on
@@ -208,6 +288,16 @@ function detectFramework(input: DetectInput): Framework {
     hasAnyConfig(configFiles, REACT_ROUTER_CONFIGS)
   ) {
     return Framework.REACT_ROUTER;
+  }
+  // TanStack Start before Vite, for the reason SvelteKit, Astro and React Router framework mode
+  // are: it SSRs its own HTML, so the plugin's index.html injection never fires. Vite is always a
+  // dependency of Start, so this has to win. Keyed on the Start packages, never on Query or Router
+  // alone — those stay on the Vite path.
+  if (
+    depVersion(pkg, '@tanstack/react-start') !== undefined ||
+    depVersion(pkg, '@tanstack/start') !== undefined
+  ) {
+    return Framework.TANSTACK_START;
   }
   if (depVersion(pkg, 'vite') !== undefined || hasAnyConfig(configFiles, VITE_CONFIGS)) {
     return Framework.VITE;
@@ -244,6 +334,9 @@ export function detect(input: DetectInput): Detection {
       depVersion(input.pkg, 'typescript') !== undefined,
     reactMajor,
     needsSourceMapping: reactMajor !== undefined && reactMajor >= 19,
+    customReconciler: CUSTOM_RECONCILER_DEPS.some(
+      (name) => depVersion(input.pkg, name) !== undefined,
+    ),
     packageManager: detectPackageManager(input.lockfiles, input.nodeModulesMarkers ?? new Set()),
   };
 }
@@ -287,12 +380,20 @@ interface InstallCommand {
 export function installCommandParts(
   pm: PackageManager,
   pkgs: string | readonly string[],
-  extraArgs: readonly string[] = [],
+  /**
+   * Extra flags for a RETRY, never for the first attempt.
+   *
+   * Appended after the quiet flags so a caller cannot accidentally displace them, and typed
+   * separately from `pkgs` so a flag can never be mistaken for a package name — which is exactly
+   * how `npm i -D --legacy-peer-deps` would become a request to install a package called
+   * `--legacy-peer-deps` on a manager that does not recognise the flag.
+   */
+  extraFlags: readonly string[] = [],
 ): InstallCommand {
   const list = 'string' === typeof pkgs ? [pkgs] : pkgs;
   return {
     command: pm,
-    args: [...INSTALL_ARGS[pm], ...list, ...extraArgs, ...(QUIET_INSTALL_ARGS[pm] ?? [])],
+    args: [...INSTALL_ARGS[pm], ...list, ...(QUIET_INSTALL_ARGS[pm] ?? []), ...extraFlags],
   };
 }
 
@@ -304,11 +405,7 @@ export function installCommandParts(
  * directly for that reason; routing it through the parts would put `--no-audit --no-fund` in front of
  * every reader and teach them our noise-suppression as if it were part of installing Reticle.
  */
-export function installCommand(
-  pm: PackageManager,
-  pkgs: string | readonly string[],
-  extraArgs: readonly string[] = [],
-): string {
+export function installCommand(pm: PackageManager, pkgs: string | readonly string[]): string {
   const list = 'string' === typeof pkgs ? [pkgs] : pkgs;
-  return `${pm} ${[...INSTALL_ARGS[pm], ...list, ...extraArgs].join(' ')}`;
+  return `${pm} ${[...INSTALL_ARGS[pm], ...list].join(' ')}`;
 }

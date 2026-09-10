@@ -71,7 +71,7 @@ export function migrateApprovals(deps: MigrationDeps): MigrationResult {
 
   let results: ApprovalResult[] = [];
   try {
-    results = grantAutoApproval(io, { home, platform }, undefined, { onlyIfNoSupersede: true });
+    results = grantAutoApproval(io, { home, platform });
   } catch {
     return NOTHING;
   }

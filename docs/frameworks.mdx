@@ -1,11 +1,11 @@
 ---
 title: 'Frameworks: proven, wired, and the difference'
 sidebarTitle: Frameworks
-description: Which frameworks Reticle supports, which are wired but unverified, and the exact wiring for each one. React, Next.js, Remix, Astro, SvelteKit, Nuxt, Vue and plain HTML.
+description: Which frameworks Reticle supports, which are wired but unverified, and the exact wiring for each one. React, Next.js, Remix, Astro, SvelteKit, TanStack Start, Nuxt, Vue and plain HTML.
 icon: layer-group
 ---
 
-**React + Vite, Next.js, Remix and Astro are fully supported, each with an example app driven to a verdict in CI. SvelteKit, Nuxt, Vue, Preact, Create React App and plain HTML are wired and documented but not gated, so treat them as plausible rather than proven.** The exact wiring for each is below.
+**React + Vite, Next.js, Remix and Astro are fully supported, each with an example app driven to a verdict in CI. SvelteKit, TanStack Start, Nuxt, Vue, Preact, Create React App and plain HTML are wired and documented but not gated, so treat them as plausible rather than proven.** The exact wiring for each is below.
 
 Reticle is a verification layer that embeds a dev-only SDK in your running web app so an AI coding agent can prove a change works. Its core is framework-neutral: DOM, network, console, routing, animations and source mapping work anywhere JavaScript runs.
 
@@ -28,6 +28,7 @@ Two columns say different things and it is worth keeping them apart. **CI gate**
 | **Remix** | yes | yes | yes | yes | Supported |
 | **Astro** | yes | yes | yes | yes | Supported |
 | **SvelteKit** | yes | no | no | unproven | Wired, unverified |
+| **TanStack Start** | yes | no | no | unproven | Wired, unverified |
 | **Nuxt** | yes | no | no | unproven | Wired, unverified |
 | **Create React App** | yes | no | no | unproven | Wired, unverified |
 | **Plain HTML** | yes | no | no | no | Wired, unverified |
@@ -99,6 +100,26 @@ if (import.meta.env.DEV) reticle.connect();
 The Vite plugin still stamps `data-reticle-source` into `.svelte` components, so verdicts carry `file:line`.
 
 For state, use the `svelteStore` adapter. See [State management](/state-management).
+
+## TanStack Start
+
+TanStack Start SSRs `<html>` from `src/routes/__root.tsx` and never sends Vite's `index.html`, so the plugin cannot auto-connect. Keep the plugin with `inject: false`: only the injection half is inapplicable, and the stamping half is what puts `file:line` on a verdict.
+
+Connect from a client-only effect. A static import of the SDK on `__root.tsx` SSRs and 500s.
+
+```tsx
+useEffect(() => {
+  if (import.meta.env.DEV) {
+    const token = typeof __RETICLE_TOKEN__ !== 'undefined' ? __RETICLE_TOKEN__ : '';
+    void import('@reticlehq/react').then(({ reticle, install }) => {
+      install();
+      reticle.connect({ ...(token.length > 0 ? { token } : {}) });
+    });
+  }
+}, []);
+```
+
+`init` detects Start and prints this recipe. There is no example app and no CI gate, so treat a connected session as the proof, not the plan.
 
 ## Nuxt
 

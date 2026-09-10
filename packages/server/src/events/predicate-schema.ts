@@ -43,6 +43,10 @@ export type Predicate =
       count?: number;
       /** A substring the RESPONSE body must contain — what the server answered, not what was sent. */
       bodyContains?: string;
+      /** A substring the REQUEST body must contain — what the UI sent, not what came back. */
+      requestBodyContains?: string;
+      /** Shallow JSON match over the REQUEST body, in the style of `signal.dataMatches`. */
+      requestBodyMatches?: Record<string, unknown>;
     }
   | { kind: typeof PredicateKind.ROUTE; pathname?: string; contains?: string; since?: number }
   | {
@@ -356,6 +360,35 @@ function predicateUnion() {
          * was never recorded rather than reporting an ordinary mismatch.
          */
         bodyContains: z.string().min(1).optional(),
+        /**
+         * A substring the REQUEST body must contain — the other half of `bodyContains`.
+         *
+         * `bodyContains` deliberately searches only the response, and the comment above says why:
+         * searching the request too would let it pass on the very defect it exists to catch. That
+         * reasoning is sound and it leaves a real gap. For a filter, a search or a form, the thing
+         * under test IS the outgoing payload: "applying this filter actually sends it" had no
+         * verdict at all, only `reticle_network { bodies: true }` and a human reading `requestBody`
+         * by eye (#798).
+         *
+         * A separate field rather than a mode on `bodyContains`, so neither assertion can ever be
+         * satisfied by the wrong half of the exchange.
+         *
+         * Requires body capture, and says so when the request body was never recorded rather than
+         * reporting an ordinary mismatch.
+         */
+        requestBodyContains: z.string().min(1).optional(),
+        /**
+         * Shallow JSON match over the REQUEST body, keyed like `signal.dataMatches` and sharing its
+         * `matchValue` operators (`*`, `$gte`, `$contains`, …).
+         *
+         * `{ requestBodyMatches: { filter: "manual_review" } }` is the one-call verdict for "the UI
+         * put the selected value into the payload", and it does not care about key order,
+         * whitespace or how the client serialised the object — all of which a substring does.
+         *
+         * A field whose captured value was REDACTED cannot be matched, and the verdict says so
+         * instead of reporting a mismatch: a redacted field is unknown, not different.
+         */
+        requestBodyMatches: z.record(z.string(), z.unknown()).optional(),
       })
       .strict(),
     z
