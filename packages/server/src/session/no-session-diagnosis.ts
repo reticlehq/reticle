@@ -25,6 +25,7 @@ import { leaseCaveat, type LeaseBrowserState } from './lease-availability.js';
 import { DEV_SERVER_PORTS } from '../cli/cli-port.js';
 import { siblingListenerNote } from '../cli/sibling-ports.js';
 import { STALL_AFTER_MS } from './stall-clock.js';
+import { pageTornDownWhileOn } from '../honesty/page-teardown.js';
 
 export interface NoSessionFacts {
   /** Whether ANY session has connected to this daemon since it booted. */
@@ -204,16 +205,6 @@ const SELF_SERVE =
 
 /** The hedge that is true for every vanished tab we did not watch leave. */
 const TAB_GONE_WHAT = 'The tab was closed, navigated away, or hard-reloaded.';
-
-/**
- * The last URL a connected session was on when it disappeared without a successor HELLO.
- *
- * Shared with the observation-lost verdict so the two surfaces cannot drift into naming different
- * routes for the same teardown (#808).
- */
-export function pageTornDownWhileOn(url: string): string {
-  return `the page was torn down while on ${url}`;
-}
 
 /**
  * What happened to the tab, with the last URL named when we still hold it.

@@ -1,6 +1,7 @@
 import { EventType, type ReticleEvent } from '@reticlehq/core';
 import { describe, expect, it } from 'vitest';
-import { buildNetworkDetail, mergeNetworkDetail } from './network-detail.js';
+import { buildNetworkDetail } from './network-detail.js';
+import { mergeNetworkDetail } from '../events/network-detail-merge.js';
 
 /**
  * Conformance for the lossy-transform rule on the driven network capture.

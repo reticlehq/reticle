@@ -1,6 +1,6 @@
 import { EventType, URL_RAW, urlForMatch, type ReticleEvent } from '@reticlehq/core';
 import { asNumber, asString } from '@reticlehq/core';
-import { mergeNetworkDetail } from '../input/network-detail.js';
+import { mergeNetworkDetail } from './network-detail-merge.js';
 
 /**
  * The friendly bucket names reticle_observe's `filters` param advertises → the real event types.

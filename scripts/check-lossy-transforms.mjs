@@ -156,6 +156,12 @@ export const READ_PATH = Object.freeze({
       'eviction is counted and surfaced by bufferHealth() as { total, dropped }, which session health and act summaries read to mark a window truncated',
     ],
   },
+  'packages/server/src/events/network-detail-merge.ts': {
+    mergeNetworkDetail: [
+      Declaration.REPORT,
+      'the wire body is the one field that REPLACES the in-page one rather than filling a gap, so both caveats ride with it: requestBodyTruncated follows the body that won, and requestBodyDivergedFromPage states that the two disagreed',
+    ],
+  },
   'packages/server/src/input/network-detail.ts': {
     NetworkDetail: [Declaration.NONE, 'the payload type'],
     ResponseLike: [Declaration.NONE, 'type: the Playwright surface the attachment reads'],
@@ -163,10 +169,6 @@ export const READ_PATH = Object.freeze({
     buildNetworkDetail: [
       Declaration.REPORT,
       'bounds the request body it takes raw off the network stack and returns requestBodyTruncated beside it, so a capped payload cannot be read as a whole one; redaction inside that body and the headers replaces values in place with REDACTED_VALUE, an in-band marker',
-    ],
-    mergeNetworkDetail: [
-      Declaration.REPORT,
-      'the wire body is the one field that REPLACES the in-page one rather than filling a gap, so both caveats ride with it: requestBodyTruncated follows the body that won, and requestBodyDivergedFromPage states that the two disagreed',
     ],
     attachNetworkDetail: [
       Declaration.SILENT,

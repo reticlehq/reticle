@@ -9,7 +9,7 @@ import {
 } from '@reticlehq/core';
 import { HonestyGrade, type HonestyBlock } from './honesty.js';
 import { unsettledBecause, type UnsettledWindow } from './unsettled.js';
-import { pageTornDownWhileOn } from '../session/no-session-diagnosis.js';
+import { pageTornDownWhileOn } from './page-teardown.js';
 
 /**
  * The decision rule: eight trust dimensions in, one answer out.
