@@ -63,8 +63,35 @@ for (const p of files) {
 }
 
 const mutual = [...out].filter((d) => inbound.has(d)).sort();
+
+/**
+ * Reaches on the PARENT that this extraction would delete.
+ *
+ * The property that separates a grouping worth making from one that merely moves a file. A
+ * directory stops reaching for the parent only if the extracted files were the ONLY reason it
+ * reached at all -- and that is the difference between `fs-port`, whose extraction deleted
+ * `cloud -> project` and `command -> project`, and `numeric-bounds`, whose extraction deleted
+ * nothing and added nine reaches for one file.
+ *
+ * High fan-in suggests a candidate. This decides whether it is a good one.
+ */
+const parent = resolve(DIR);
+const freed = [];
+for (const d of inbound) {
+  if (d === 'PARENT') continue;
+  const others = [...files].some(
+    (p) =>
+      label(p) === d &&
+      [...(imports.get(p) ?? [])].some((t) => dirname(t) === parent && !group.has(t)),
+  );
+  if (!others) freed.push(d);
+}
+
 console.log(`group of ${String(group.size)} in ${DIR}`);
 console.log(`  reaches out to : ${[...out].sort().join(', ') || '(nothing)'}`);
 console.log(`  reached in from: ${[...inbound].sort().join(', ') || '(nobody)'}`);
+console.log(
+  `  would FREE     : ${freed.sort().join(', ') || '(nothing — this only moves a file)'}`,
+);
 console.log(mutual.length > 0 ? `  UNSAFE — mutual with: ${mutual.join(', ')}` : '  SAFE');
 process.exit(mutual.length > 0 ? 1 : 0);

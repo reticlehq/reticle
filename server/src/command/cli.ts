@@ -79,7 +79,7 @@ import {
   decideOpen,
   openInBrowser,
   openCommand,
-} from './cli/cli-launch.js';
+} from './cli/launch/cli-launch.js';
 import { handleDrive } from './cli/drive-command.js';
 import { handleVerify } from './cli/cli-verify.js';
 import { runKill } from './cli/cli-kill.js';

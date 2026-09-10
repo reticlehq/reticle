@@ -111,7 +111,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
    * Getting something running and waiting for it: the bridge port, the daemon, the dev server,
    * the relaunch. Everything `reticle init` does between writing files and having a session.
    */
-  bringup: ['cli', 'daemon', 'mcp'],
+  bringup: ['launch', 'cli', 'daemon', 'mcp'],
   /**
    * What the daemon remembers between sessions: which projects have registered, what a previous
    * connection looked like, whether an address smells like somebody's dev server.
@@ -131,6 +131,14 @@ const REACHES_FOR: Record<string, readonly string[]> = {
    * Reaches for nothing itself, which is what a port should do.
    */
   fs: [],
+  /**
+   * Starting the CLI as a child process and waiting for it.
+   *
+   * Predicted to free three reaches before it was moved, and it freed exactly those three:
+   * `mcp -> cli`, `setup -> cli` and `terminal -> cli` are gone. None of them wanted the
+   * command-line surface; each wanted to start a process. Mutual pairs 29 -> 27.
+   */
+  launch: ['version'],
   /**
    * Who is attached to a session, and who may drive it. Reaches for NOTHING -- not even its own
    * parent -- which is the strongest form a group can take: `session` needs it, and it needs
@@ -163,7 +171,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
    * It reaches for four things and that is honest -- it prints daemon state, port state and
    * telemetry notices, because that is what a setup transcript is made of.
    */
-  terminal: ['cli', 'daemon', 'ports', 'telemetry'],
+  terminal: ['launch', 'daemon', 'ports', 'telemetry'],
   /** A recorded flow and what became of it: the tape, the rewind, the flake, the halt. */
   recording: [],
   /** What a human wrote on a step, and where they pointed when they wrote it. */
@@ -181,6 +189,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   ],
   capsule: ['fs', 'project'],
   cli: [
+    'launch',
     'fs',
     'recall',
     'doctor',
@@ -203,6 +212,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   ],
   cloud: ['fs', 'cli', 'intent'],
   command: [
+    'launch',
     'fs',
     'recall',
     'ports',
@@ -242,7 +252,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   intent: ['fs', 'project', 'tools'],
   journal: ['fs', 'project', 'runs'],
   license: ['cli'],
-  mcp: ['recall', 'ports', 'cli', 'daemon', 'telemetry', 'tools', 'version'],
+  mcp: ['launch', 'recall', 'ports', 'daemon', 'telemetry', 'tools', 'version'],
   memory: ['fs', 'cloud', 'project', 'tools'],
   pool: ['doctor', 'input', 'telemetry'],
   project: ['fs', 'cli', 'cloud', 'flows', 'runs', 'tools'],
@@ -263,7 +273,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
     'telemetry',
     'tools',
   ],
-  setup: ['bringup', 'terminal', 'bridge', 'cli', 'daemon', 'mcp', 'telemetry'],
+  setup: ['launch', 'bringup', 'terminal', 'bridge', 'daemon', 'mcp', 'telemetry'],
   telemetry: [
     'recall',
     'ports',
@@ -317,7 +327,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
  * A count rather than a list: the list is derivable and printed on failure, and a hand-written copy
  * would be one more thing to keep in step.
  */
-const MUTUAL_PAIRS_TODAY = 29;
+const MUTUAL_PAIRS_TODAY = 27;
 
 /**
  * Two directories may not share a name.

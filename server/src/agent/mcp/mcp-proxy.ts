@@ -41,7 +41,7 @@ import { flushProxySessionMetrics } from '../../telemetry/proxy-telemetry.js';
  * the whole defect this import closes was the proxy answering a DIFFERENT question from every other
  * surface, and a second copy of the probe is how that comes back.
  */
-import { fetchStatus as fetchDaemonStatus } from '../../command/cli/cli-launch.js';
+import { fetchStatus as fetchDaemonStatus } from '../../command/cli/launch/cli-launch.js';
 /**
  * Re-exported so every existing caller (and every spec) keeps importing the proxy's log from the
  * proxy. Where the code lives is a file-size decision; where it is imported from is an API.

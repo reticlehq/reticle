@@ -17,7 +17,7 @@ import { relaunchDecision } from './bringup/relaunch.js';
 import { claudeTranscriptExists, codexSessionFor } from './terminal/transcripts.js';
 import { probePresence } from '../daemon/port-presence.js';
 import { probeDaemon } from '../../agent/mcp/proxy-daemon-probe.js';
-import { fetchStatus } from '../cli/cli-launch.js';
+import { fetchStatus } from '../cli/launch/cli-launch.js';
 import { collectEnv, DEFAULT_DRIVE_BUDGET_USD, DEFAULT_PHASE_TIMEOUT_MS } from './setup-options.js';
 
 /** How often the runtime phases look again: fast enough not to be the wait, slow enough to be free. */

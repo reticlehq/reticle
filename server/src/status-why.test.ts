@@ -14,7 +14,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { statusPayload, verifyEndpointMismatch } from './status-payload.js';
-import { summarizeStatus } from './command/cli/cli-launch.js';
+import { summarizeStatus } from './command/cli/launch/cli-launch.js';
 
 const session = {
   sessionId: 's1',

@@ -34,7 +34,7 @@ import {
 import { start, type RunningServer } from '../../index.js';
 import { probePresence, PortPresence } from '../daemon/port-presence.js';
 import { probeDaemon } from '../../agent/mcp/mcp-proxy.js';
-import { fetchStatus } from './cli-launch.js';
+import { fetchStatus } from './launch/cli-launch.js';
 import {
   cloudFetch,
   createProgressReporter,
