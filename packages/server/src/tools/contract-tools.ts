@@ -7,6 +7,7 @@ import {
   ReticleCommand,
 } from '@reticlehq/core';
 import { ReticleTool } from './tool-names.js';
+import { capabilityAbsences } from './capability-absences.js';
 import { asString } from './tools-helpers.js';
 import { sessionIdShape, commandOrThrow } from './tool-kit.js';
 import { reticleDirPaths, readContract, writeContract } from '../project/reticle-dir.js';
@@ -68,6 +69,12 @@ export const CONTRACT_TOOLS: ToolDef[] = [
       // governance-gated app lost its policy block, and disk reads lost their freshness stamp.
       generatedAt: z.number().optional(),
       governance: z.unknown().optional(),
+      // Only on a live read, and only when the page declared something switched off. A disk read has
+      // no session to ask, and an empty list on every healthy call is a line agents learn to skip.
+      cannot: z
+        .array(z.object({ capability: z.string(), meaning: z.string(), remedy: z.string() }))
+        .optional()
+        .describe('what this session cannot observe, why it matters, and how to change it'),
     },
     handler: async (deps, args) => {
       if (true === args[FROM_DISK_ARG]) {
@@ -86,7 +93,14 @@ export const CONTRACT_TOOLS: ToolDef[] = [
         ReticleCommand.CAPABILITIES,
         {},
       );
-      return { ...(caps as object), source: 'live' };
+      // The surface above says what the app OFFERS. This says what the instrumentation cannot watch,
+      // so a plan is not built around evidence this session was never going to have.
+      const cannot = capabilityAbsences(deps.sessions.resolve(asString(args['sessionId'])));
+      return {
+        ...(caps as object),
+        source: 'live',
+        ...(0 === cannot.length ? {} : { cannot }),
+      };
     },
   },
   {
