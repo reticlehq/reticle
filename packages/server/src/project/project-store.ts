@@ -22,6 +22,19 @@ export type ReadProjectResult =
 const EMPTY_PROJECT: ProjectFile = { version: PROJECT_FILE_VERSION, runs: [] };
 
 /**
+ * The `version` a file declares, if it declares one this release does not use.
+ *
+ * `undefined` covers both "no version at all" and "the version we expect", which are the two cases
+ * that mean the file is damaged rather than foreign.
+ */
+function versionOf(parsed: unknown): number | undefined {
+  if ('object' !== typeof parsed || null === parsed) return undefined;
+  const version = (parsed as { version?: unknown }).version;
+  if ('number' !== typeof version || version === PROJECT_FILE_VERSION) return undefined;
+  return version;
+}
+
+/**
  * Cross-run outcome memory persisted at .reticle/project.json. Models FlowStore:
  * injected FileSystemPort + Clock, byte-stable serialize, never-throws read. The clock is the
  * single `at`-stamp site so handlers pass an un-stamped record and no Date.now leaks into logic.
@@ -74,8 +87,17 @@ export class ProjectStore {
     }
 
     const result = ProjectFileSchema.safeParse(parsed);
-    if (!result.success) return { ok: false, reason: ProjectReadError.MALFORMED };
-    return { ok: true, file: result.data };
+    if (result.success) return { ok: true, file: result.data };
+    // Which KIND of unreadable. A file whose version we do not recognise is intact and belongs to
+    // another release; anything else is damage. They are repaired differently, so they are named
+    // differently -- one message for both would send somebody hunting a typo in a healthy file.
+    return {
+      ok: false,
+      reason:
+        versionOf(parsed) === undefined
+          ? ProjectReadError.MALFORMED
+          : ProjectReadError.WRONG_VERSION,
+    };
   }
 
   /**
@@ -90,6 +112,15 @@ export class ProjectStore {
     // read-append-write drops every run but the last writer's (each read the same base list).
     await withFileLock(path, async () => {
       const existing = await this.read();
+      // Refuse rather than repair. Starting fresh here would overwrite a history this release cannot
+      // read but the one that wrote it can, and the user would lose it without anything failing.
+      if (!existing.ok && ProjectReadError.WRONG_VERSION === existing.reason) {
+        throw new Error(
+          `refusing to record: ${reticleDirPaths(this.#root).project} was written by a different ` +
+            'version of Reticle and this one cannot read it. Nothing has been changed. Upgrade ' +
+            'Reticle, or move that file aside if you do not need its history.',
+        );
+      }
       const base: ProjectFile = existing.ok ? existing.file : EMPTY_PROJECT;
       const stamped: RunRecord = { ...record, at: this.#clock.now() };
       const runs = truncate([...base.runs, stamped]);
@@ -111,6 +142,15 @@ export class ProjectStore {
     const path = reticleDirPaths(this.#root).project;
     await withFileLock(path, async () => {
       const existing = await this.read();
+      // Refuse rather than repair. Starting fresh here would overwrite a history this release cannot
+      // read but the one that wrote it can, and the user would lose it without anything failing.
+      if (!existing.ok && ProjectReadError.WRONG_VERSION === existing.reason) {
+        throw new Error(
+          `refusing to record: ${reticleDirPaths(this.#root).project} was written by a different ` +
+            'version of Reticle and this one cannot read it. Nothing has been changed. Upgrade ' +
+            'Reticle, or move that file aside if you do not need its history.',
+        );
+      }
       const base: ProjectFile = existing.ok ? existing.file : EMPTY_PROJECT;
       const current = base.learned?.routes ?? [];
       const merged = [...new Set([...current, ...additions])].slice(0, PROJECT_ROUTE_CAP);
@@ -148,6 +188,15 @@ export class ProjectStore {
     const path = reticleDirPaths(this.#root).project;
     await withFileLock(path, async () => {
       const existing = await this.read();
+      // Refuse rather than repair. Starting fresh here would overwrite a history this release cannot
+      // read but the one that wrote it can, and the user would lose it without anything failing.
+      if (!existing.ok && ProjectReadError.WRONG_VERSION === existing.reason) {
+        throw new Error(
+          `refusing to record: ${reticleDirPaths(this.#root).project} was written by a different ` +
+            'version of Reticle and this one cannot read it. Nothing has been changed. Upgrade ' +
+            'Reticle, or move that file aside if you do not need its history.',
+        );
+      }
       const base: ProjectFile = existing.ok ? existing.file : EMPTY_PROJECT;
       const current = base.learned?.bestObservability?.percent;
       if (current !== undefined && percent <= current) return;

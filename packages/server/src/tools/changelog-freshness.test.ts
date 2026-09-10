@@ -69,8 +69,26 @@ function git(...args: string[]): string | null {
   }
 }
 
+/**
+ * Is somebody writing the changelog right now?
+ *
+ * This guard runs in the pre-commit hook, and it measures COMMITTED history. Without this, the
+ * commit that adds the missing entry cannot pass it: at the moment the hook runs, the entry is
+ * staged and the last commit touching the changelog is still the old one, so the count is unchanged
+ * and the commit is rejected. The only ways out would be to bypass the hook or to weaken the limit,
+ * and a guard whose own fix requires bypassing it is one people learn to bypass.
+ *
+ * An edit that is staged or merely saved counts. Both mean the notes are being written, which is
+ * exactly what is being asked for.
+ */
+function changelogBeingWrittenNow(): boolean {
+  const pending = git('status', '--porcelain', '--', ...NOTES);
+  return null !== pending && pending.trim().length > 0;
+}
+
 /** Subjects of the user-facing commits landed since the changelog was last touched. */
 function undocumented(): string[] | null {
+  if (changelogBeingWrittenNow()) return [];
   const last = git('log', '-1', '--format=%H', '--', ...NOTES);
   if (null === last || 0 === last.length) return null;
   const subjects = git('log', '--no-merges', '--format=%s', `${last}..HEAD`, '--', SHIPPED_SOURCE);

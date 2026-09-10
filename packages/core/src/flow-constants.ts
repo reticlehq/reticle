@@ -18,6 +18,14 @@ export const PROJECT_FILE_VERSION = 1;
 export const ProjectReadError = {
   MISSING: 'project-missing', // no .reticle/project.json on disk
   MALFORMED: 'project-malformed', // present but not valid JSON / fails schema
+  /**
+   * Readable, and written by a version of Reticle this one does not know.
+   *
+   * Kept apart from MALFORMED because the two need opposite handling. A malformed file has nothing
+   * left to lose, so recording a run repairs it. A file from another version is intact, and
+   * repairing it would overwrite history a later release could still read.
+   */
+  WRONG_VERSION: 'project-wrong-version',
 } as const;
 export type ProjectReadError = (typeof ProjectReadError)[keyof typeof ProjectReadError];
 
