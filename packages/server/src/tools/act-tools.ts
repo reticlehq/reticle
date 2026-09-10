@@ -30,6 +30,7 @@ import { parsePredicate } from '../events/predicate-parse.js';
 import { bodyClauseRefusal } from '../honesty/body-capture-remedy.js';
 import { causalSummary } from '../capsule/causal-summary.js';
 import { findContradictions } from '../events/contradictions.js';
+import { crashedRuleNotes } from '../events/contradiction-folds.js';
 import { gapsForAction } from '../honesty/instrumentation-gaps.js';
 import { noteSessionGaps } from '../honesty/gap-ledger.js';
 import { isChangeUndeclared } from '../honesty/undeclared-change.js';
@@ -665,7 +666,9 @@ export const ACT_TOOLS: ToolDef[] = [
         // loss — an act_and_wait that graded `proved` over 34 dropped events said so in a sentence
         // whose own words were "over a clean capture".
         const gapNote = transportGapNote(windowEvents);
-        const impeachingNotes = [impeaching.note, gapNote].filter(
+        // Same rule as the assert path: a crashed consumer rule means the engine looked with fewer
+        // rules than it has, which is a blind spot and not a clean look.
+        const impeachingNotes = [impeaching.note, gapNote, ...crashedRuleNotes()].filter(
           (n): n is string => n !== undefined,
         );
         // Which loss, as an enum, beside the prose that describes it. Classified here because this is

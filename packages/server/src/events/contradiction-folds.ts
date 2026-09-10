@@ -54,12 +54,47 @@ export function registeredContradictionFolds(): readonly ContradictionFold[] {
 }
 
 /**
+ * Rules that have crashed, by the message they crashed with.
+ *
+ * Deliberately sticky and engine-wide rather than per-window. A rule that threw is still registered
+ * and still throwing, so every verdict after it really is being decided with fewer rules than the
+ * engine claims to have. Saying so once and then forgetting would be the less accurate answer.
+ *
+ * Keyed by message so a rule failing on every event reports one blind spot, not thousands.
+ */
+const crashedRules = new Set<string>();
+
+/**
+ * What the engine can no longer see, in words meant for whoever reads the verdict.
+ *
+ * Empty is the normal case and the honest one: no rule has crashed, so nothing is missing.
+ */
+export function crashedRuleNotes(): string[] {
+  return [...crashedRules].map(
+    (why) => `a consumer rule crashed, so findings may be missing: ${why}`,
+  );
+}
+
+/** Forget the crashes. For tests, which must not inherit the previous test's damage. */
+export function clearCrashedRules(): void {
+  crashedRules.clear();
+}
+
+/**
  * Run every registered rule, containing anything one of them throws.
  *
  * A registered fold is somebody else's code running inside every verdict path this package has. If a
  * throw could propagate, one defect in a consumer's rule would take down `assert`, `act_and_wait`,
- * `observe` and `crawl` at once — turning a missing finding into a dead engine. Contained and logged:
- * the rules that did run still report, and the failure is visible rather than swallowed.
+ * `observe` and `crawl` at once — turning a missing finding into a dead engine. So it is contained.
+ *
+ * Containment on its own is not enough, and this is the part that took a while to see. This engine
+ * reports what is WRONG with an app, so running with fewer rules produces FEWER findings, and fewer
+ * findings read as a healthier app. A crashing rule would quietly make things look better. That is
+ * the exact shape of a false green.
+ *
+ * The failure was already being reported -- to a log. Nothing that decides a verdict reads the log.
+ * So it is also recorded here, where the verdict path does read it, and a crashed rule becomes a
+ * blind spot: we did not see everything we were meant to see, so we do not claim a clean look.
  */
 export function runRegisteredFolds(
   events: readonly ReticleEvent[],
@@ -70,9 +105,9 @@ export function runRegisteredFolds(
     try {
       found.push(...fold(events, options));
     } catch (error) {
-      log('contradiction_fold_failed', {
-        error: error instanceof Error ? error.message : String(error),
-      });
+      const why = error instanceof Error ? error.message : String(error);
+      log('contradiction_fold_failed', { error: why });
+      crashedRules.add(why);
     }
   }
   return found;

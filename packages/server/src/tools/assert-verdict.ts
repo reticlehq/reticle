@@ -7,6 +7,7 @@ import type { InstrumentationGap, JournalVerdictEffect } from '@reticlehq/core/a
 import type { Predicate } from '../events/predicate.js';
 import type { Session } from '../session/session.js';
 import { findContradictions, type Contradiction } from '../events/contradictions.js';
+import { crashedRuleNotes } from '../events/contradiction-folds.js';
 import { declaredExpectations, declaresBodyIndependentChannel } from '../events/declared.js';
 import {
   absenceBlindSpotNote,
@@ -126,7 +127,11 @@ export async function assertVerdict(
   // rule — part of what happened was not seen — so both belong in `blindSpots`, which is the only
   // input `decideVerified` reads for that.
   const gap = transportGapNote(windowEvents);
-  const impeachingNotes = [impeaching.note, gap].filter((n): n is string => n !== undefined);
+  // A consumer rule that crashed belongs here too: the engine ran with fewer rules than it claims,
+  // so part of what happened may simply not have been looked for.
+  const impeachingNotes = [impeaching.note, gap, ...crashedRuleNotes()].filter(
+    (n): n is string => n !== undefined,
+  );
   const outcomePending = hasAcceptedWrite(windowEvents);
   const outcomeUnread = unreadWriteLabels(windowEvents);
   const stillInFlight = inFlightRequestLabels(windowEvents);
