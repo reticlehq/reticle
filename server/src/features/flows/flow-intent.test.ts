@@ -7,7 +7,7 @@ import { flowIntentGap } from './flow-intent.js';
 import { InstrumentationGapKind } from '@reticlehq/core/artifacts';
 import { ReticleTool } from '@reticlehq/core';
 import { dischargeFlowIntent, flowIntentId, flowIntentStatement } from './flow-intent.js';
-import type { CompiledProgram } from './recording/recordings.js';
+import type { CompiledProgram } from './recording/tape/recordings.js';
 
 const ROOT = '/repo/.reticle';
 const NOW = 1_000;

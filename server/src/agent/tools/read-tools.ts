@@ -14,7 +14,7 @@ import {
 import { ReticleTool } from '@reticlehq/core';
 import { advanceMsSchema, depthSchema } from './numeric-bounds.js';
 import { proposeConsequences } from '../oracles/propose-consequences.js';
-import type { CompiledProgram } from '../../features/flows/recording/recordings.js';
+import type { CompiledProgram } from '../../features/flows/recording/tape/recordings.js';
 import {
   recordingBacktrackWarning,
   routesFromRecording,

@@ -15,7 +15,7 @@ import {
 } from './danger-context.js';
 import { assertEditable, assertNotRichText, setNativeValue } from './value-input.js';
 import { getAccessibleName, getRole, isVisible, getStates } from '../dom/a11y.js';
-import { elementHasHoverHandlers, identifyComponent } from '../registry/adapters.js';
+import { elementHasHoverHandlers, identifyComponent } from '../registry/stores/adapters.js';
 import { isForm, isHtmlElement, isInput, isSelect, isTextArea } from '../dom/realm.js';
 import { nativeSetTimeout, settle } from '../timers/native/native-timers.js';
 import { AppearedText } from './appeared-text.js';

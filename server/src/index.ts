@@ -43,7 +43,7 @@ import { Bridge } from './connection/bridge/bridge.js';
 import { sdkFixForDirectory } from './command/version/sdk-fix.js';
 import { SERVER_VERSION } from './command/version/identity/server-version.js';
 import { BaselineStore } from './features/project/baselines.js';
-import { RecordingStore } from './features/flows/recording/recordings.js';
+import { RecordingStore } from './features/flows/recording/tape/recordings.js';
 import { initImpact } from './features/impact/impact-recorder.js';
 import { FlowStore } from './features/flows/flows.js';
 import { buildFlowChips } from './features/flows/flow-scope.js';
@@ -116,8 +116,8 @@ export { createToolInvoker, UNKNOWN_TOOL_ERROR } from './agent/tools/tool-invoke
 export { runTool, SESSION_BOUND_TOOLS, SESSION_EXEMPT_TOOLS } from './agent/tools/invoke-tool.js';
 export type { ToolInvoker } from './agent/tools/tool-invoker.js';
 export { BaselineStore, normalizeLines, diffLines } from './features/project/baselines.js';
-export { RecordingStore } from './features/flows/recording/recordings.js';
-export type { RecordedStep, CompiledProgram } from './features/flows/recording/recordings.js';
+export { RecordingStore } from './features/flows/recording/tape/recordings.js';
+export type { RecordedStep, CompiledProgram } from './features/flows/recording/tape/recordings.js';
 export { FlowStore, recordedStepToFlowStep } from './features/flows/flows.js';
 export type { FlowResult, Clock } from './features/flows/flows.js';
 export {

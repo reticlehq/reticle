@@ -29,7 +29,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createNodeFileSystem } from '../project/fs/fs-port.js';
 import { FlowStore } from './flows.js';
-import type { CompiledProgram } from './recording/recordings.js';
+import type { CompiledProgram } from './recording/tape/recordings.js';
 
 const SESSION_PROJECT = 'app-under-test';
 const DAEMON_PROJECT = 'somewhere-else';

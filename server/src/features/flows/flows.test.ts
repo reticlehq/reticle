@@ -16,7 +16,7 @@ import {
 import { createNodeFileSystem, type FileSystemPort } from '../project/fs/fs-port.js';
 import { flowPath, reticleDirPaths } from '../project/dir/reticle-dir.js';
 import { anchorForStep, FlowStore, recordedStepToFlowStep } from './flows.js';
-import type { CompiledProgram, RecordedStep } from './recording/recordings.js';
+import type { CompiledProgram, RecordedStep } from './recording/tape/recordings.js';
 
 const FROZEN = 1234;
 const clock = { now: (): number => FROZEN };

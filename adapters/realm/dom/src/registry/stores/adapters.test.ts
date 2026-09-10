@@ -1,4 +1,4 @@
-import { registerCapabilities, setCapabilitiesListener } from './capabilities.js';
+import { registerCapabilities, setCapabilitiesListener } from '../capabilities.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { registerAdapter, elementHasHoverHandlers, type ReticleAdapter } from './adapters.js';
 

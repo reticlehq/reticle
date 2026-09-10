@@ -34,7 +34,7 @@ import {
 } from './commands/commands.js';
 import { Transport, type CommandOutcome } from './transport/transport.js';
 import { unreachableMessage } from './transport/unreachable-message.js';
-import { adapterNames } from './registry/adapters.js';
+import { adapterNames } from './registry/stores/adapters.js';
 import { declaredChannels } from './registry/declared-channels.js';
 import { declaredCommands, declaredPlatform } from './registry/declared-platform.js';
 import {

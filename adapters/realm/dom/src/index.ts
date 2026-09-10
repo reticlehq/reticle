@@ -24,8 +24,8 @@ export {
   readComponentState,
   elementHasHoverHandlers,
   adapterNames,
-} from './registry/adapters.js';
-export type { ReticleAdapter, ComponentInfo, ComponentSource } from './registry/adapters.js';
+} from './registry/stores/adapters.js';
+export type { ReticleAdapter, ComponentInfo, ComponentSource } from './registry/stores/adapters.js';
 
 // Store registry: pull live framework/store state on demand.
 export {

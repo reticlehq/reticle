@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { ActionWarning, ReticleCommand } from '@reticlehq/core';
 import { executeAction, executeSequence } from './actions.js';
 import { createCommandRegistry } from '../commands/commands.js';
-import { registerAdapter, type ReticleAdapter } from '../registry/adapters.js';
+import { registerAdapter, type ReticleAdapter } from '../registry/stores/adapters.js';
 import { refs } from '../dom/refs.js';
 
 const adapters = ((

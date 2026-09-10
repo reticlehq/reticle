@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { identifyComponent, registerAdapter } from './adapters.js';
+import { identifyComponent, registerAdapter } from './stores/adapters.js';
 
 /**
  * The adapter guide's example has to compile and behave as written.

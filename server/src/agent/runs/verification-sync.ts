@@ -8,7 +8,7 @@
  * lighter per-flow RunRecord that feeds regression memory is synced separately in flow-replay-run.ts.
  * Both are best-effort + opt-in: no creds → the artifact still lands on disk, nothing leaves the machine.
  */
-import { mcpClientIdentity } from '../mcp/client-identity.js';
+import { mcpClientIdentity } from '../mcp/peer/client-identity.js';
 import {
   RunAgentKind,
   RunFramework,

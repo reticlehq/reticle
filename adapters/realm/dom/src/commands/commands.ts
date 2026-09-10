@@ -29,7 +29,7 @@ import { isButton, isInput } from '../dom/realm.js';
 import { hitTestOccluder } from '../dom/occlusion.js';
 import { readStorage } from '../observers/storage.js';
 import { captureDesktopWindow } from '../dom/desktop-capture.js';
-import { identifyComponent, readComponentState } from '../registry/adapters.js';
+import { identifyComponent, readComponentState } from '../registry/stores/adapters.js';
 import { readStoresWithTruncation, readStoresRaw, storeNames } from '../registry/stores.js';
 import { sanitizeWithReport } from '../security/serialization.js';
 import { getCapabilities } from '../registry/capabilities.js';

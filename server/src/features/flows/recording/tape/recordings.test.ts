@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { ActionType, DANGEROUS_ACTION_CONFIRM_ARG, QueryBy } from '@reticlehq/core';
 import { RecordingStore, type RecordedStep, type CompiledProgram } from './recordings.js';
-import { captureAct, compileActStep, compileSequenceStep } from '../replay.js';
+import { captureAct, compileActStep, compileSequenceStep } from '../../replay.js';
 
 const step = (tool: string, stable = true): RecordedStep => ({ tool, stable, args: {} });
 

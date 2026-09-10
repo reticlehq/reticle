@@ -24,7 +24,7 @@ import {
 import { isIgnored } from './dom-ignore.js';
 import { isSensitiveKey } from '../security/serialization.js';
 import { declaredTestids } from '../registry/capabilities.js';
-import { identifyComponent } from '../registry/adapters.js';
+import { identifyComponent } from '../registry/stores/adapters.js';
 import { refs } from './refs.js';
 
 const TESTID_ATTR = 'data-testid';

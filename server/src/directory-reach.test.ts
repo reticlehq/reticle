@@ -178,6 +178,8 @@ const REACHES_FOR: Record<string, readonly string[]> = {
    * earlier in this audit, on a collision introduced by this audit.
    */
   prior: [],
+  peer: [],
+  tape: [],
   /**
    * Who is attached to a session, and who may drive it. Reaches for NOTHING -- not even its own
    * parent -- which is the strongest form a group can take: `session` needs it, and it needs
@@ -221,8 +223,8 @@ const REACHES_FOR: Record<string, readonly string[]> = {
     'identity',
     'impact',
     'project',
-    'recording',
     'session',
+    'tape',
     'telemetry',
     'tools',
     'version',
@@ -243,11 +245,11 @@ const REACHES_FOR: Record<string, readonly string[]> = {
     'ports',
     'prior',
     'project',
-    'recording',
     'resolve',
     'runs',
     'session',
     'setup',
+    'tape',
     'tools',
     'update',
     'version',
@@ -288,6 +290,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
     'recording',
     'runs',
     'session',
+    'tape',
     'tools',
   ],
   impact: ['cloud', 'session'],
@@ -299,7 +302,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   memory: ['cloud', 'fs', 'project', 'tools'],
   pool: ['doctor', 'input', 'telemetry'],
   project: ['cloud', 'config', 'dir', 'flows', 'fs', 'runs', 'tools'],
-  runs: ['cloud', 'dir', 'flows', 'fs', 'intent', 'mcp', 'project', 'telemetry', 'tools'],
+  runs: ['cloud', 'dir', 'flows', 'fs', 'intent', 'peer', 'project', 'telemetry', 'tools'],
   session: [
     'bridge',
     'config',
@@ -324,7 +327,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
     'daemon',
     'identity',
     'license',
-    'mcp',
+    'peer',
     'prior',
     'resolve',
     'session',
@@ -357,6 +360,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
     'resolve',
     'runs',
     'session',
+    'tape',
     'telemetry',
     'update',
     'version',
@@ -373,7 +377,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
  * A count rather than a list: the list is derivable and printed on failure, and a hand-written copy
  * would be one more thing to keep in step.
  */
-const MUTUAL_PAIRS_TODAY = 25;
+const MUTUAL_PAIRS_TODAY = 24;
 
 /**
  * Two directories may not share a name.

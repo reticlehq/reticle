@@ -1,7 +1,7 @@
 import { MarkAnchorStrategy } from '@reticlehq/core';
 import { AnchorStrategy, synthesizeAnchor, type AnchorInput } from '../dom/auto-anchor.js';
 import { getAccessibleName, getRole } from '../dom/a11y.js';
-import { identifyComponent } from '../registry/adapters.js';
+import { identifyComponent } from '../registry/stores/adapters.js';
 import { sourceFor } from '../dom/source.js';
 
 /** Attribute names — defined locally per the recorder/query convention (no shared free string). */

@@ -27,7 +27,7 @@ import { TOOLS, type ToolDeps } from '../../agent/tools/tools.js';
 import { buildSuiteVerdict } from './decision.js';
 import { ReticleTool } from '@reticlehq/core';
 import { BaselineStore } from '../project/baselines.js';
-import { RecordingStore } from './recording/recordings.js';
+import { RecordingStore } from './recording/tape/recordings.js';
 import { FlowStore, type FlowAnnotations } from './flows.js';
 import { ProjectStore } from '../project/project-store.js';
 import { AnnotationStore } from './annotation-store.js';
@@ -35,7 +35,7 @@ import { createNodeFileSystem, type FileSystemPort } from '../project/fs/fs-port
 import { flowPath } from '../project/dir/reticle-dir.js';
 import { asRecord, asString } from '@reticlehq/core';
 import type { Session, SessionManager } from '../../connection/session/session.js';
-import type { CompiledProgram, RecordedStep } from './recording/recordings.js';
+import type { CompiledProgram, RecordedStep } from './recording/tape/recordings.js';
 
 const clock = { now: (): number => 1234 };
 

@@ -5,7 +5,7 @@ import { TOOLS, type ToolDeps } from '../../agent/tools/tools.js';
 import { ReticleTool } from '@reticlehq/core';
 import { BaselineStore } from '../../features/project/baselines.js';
 import { createNodeFileSystem } from '../../features/project/fs/fs-port.js';
-import { RecordingStore } from '../../features/flows/recording/recordings.js';
+import { RecordingStore } from '../../features/flows/recording/tape/recordings.js';
 import { FlowStore } from '../../features/flows/flows.js';
 import { ProjectStore } from '../../features/project/project-store.js';
 import { AnnotationStore } from '../../features/flows/annotation-store.js';

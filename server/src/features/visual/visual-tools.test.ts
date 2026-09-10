@@ -8,7 +8,7 @@ import { VisualReason } from '@reticlehq/core';
 import { TOOLS, type ToolDeps } from '../../agent/tools/tools.js';
 import { ReticleTool } from '@reticlehq/core';
 import { BaselineStore } from '../project/baselines.js';
-import { RecordingStore } from '../flows/recording/recordings.js';
+import { RecordingStore } from '../flows/recording/tape/recordings.js';
 import { FlowStore } from '../flows/flows.js';
 import { ProjectStore } from '../project/project-store.js';
 import { AnnotationStore } from '../flows/annotation-store.js';

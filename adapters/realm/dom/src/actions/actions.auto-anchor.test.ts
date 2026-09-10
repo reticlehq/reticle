@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { executeAction } from './actions.js';
 import { refs } from '../dom/refs.js';
-import { registerAdapter, type ComponentInfo } from '../registry/adapters.js';
+import { registerAdapter, type ComponentInfo } from '../registry/stores/adapters.js';
 
 /**
  * Auto-anchor capture at act time: when an acted element has NO data-testid, the result carries the

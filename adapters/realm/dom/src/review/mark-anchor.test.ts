@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { MarkAnchorStrategy } from '@reticlehq/core';
-import { registerAdapter, type ComponentInfo } from '../registry/adapters.js';
+import { registerAdapter, type ComponentInfo } from '../registry/stores/adapters.js';
 import { resolveMarkAnchor } from './mark-anchor.js';
 
 function render(html: string): HTMLElement {

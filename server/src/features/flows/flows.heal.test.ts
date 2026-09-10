@@ -33,7 +33,7 @@ import { waitForPredicate } from '@reticlehq/engine/question/predicate.js';
 import { AnnotationStore } from './annotation-store.js';
 import { createNodeFileSystem } from '../project/fs/fs-port.js';
 import { BaselineStore } from '../project/baselines.js';
-import { RecordingStore } from './recording/recordings.js';
+import { RecordingStore } from './recording/tape/recordings.js';
 import { asString } from '@reticlehq/core';
 import { flowPath } from '../project/dir/reticle-dir.js';
 import type { FileSystemPort } from '../project/fs/fs-port.js';

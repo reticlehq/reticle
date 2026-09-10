@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { QueryBy } from '@reticlehq/core';
 import { matchQuery } from './query.js';
-import { registerAdapter, type ComponentInfo } from '../registry/adapters.js';
+import { registerAdapter, type ComponentInfo } from '../registry/stores/adapters.js';
 
 /**
  * Auto-anchor resolution: address an element by its source location or component identity, with NO
