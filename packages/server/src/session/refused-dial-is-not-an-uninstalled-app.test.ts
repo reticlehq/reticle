@@ -158,3 +158,68 @@ describe('the branches it must not disturb', () => {
     expect(next.action).toBe(NoSessionAction.START_DEV_SERVER);
   });
 });
+
+/**
+ * The same refusal, against a project this daemon DOES have the config for.
+ *
+ * #685's branch is gated on `!initialized`, so it never fires for the case measured in the field: a
+ * Vite dev server in Docker, the daemon on the host, `.reticle.json` present in the directory the
+ * daemon stands in. The refusal fell through to a generic "open the app", which is advice about a
+ * page that was already open. The cause — the build plugin reads-or-mints the pairing token from
+ * `$HOME/.reticle`, and inside a container that is the image's throwaway root — was found by
+ * grepping the plugin's shipped `dist/` for an environment variable documented nowhere. Six minutes.
+ */
+describe('a refused dial against a wired project names the filesystem split', () => {
+  const next = (): ReturnType<typeof nextActionFor> =>
+    nextActionFor({
+      everConnected: false,
+      initialized: true,
+      listening: LISTENING,
+      dev: undefined,
+      authRefused: true,
+    });
+
+  it('says the project is wired rather than asking for an install', () => {
+    expect(next().action).not.toBe(NoSessionAction.RUN_INIT);
+    expect(next().reason).toContain('wired');
+  });
+
+  it('names the container/devcontainer/WSL cause, which is the one that reproduces', () => {
+    expect(next().reason).toMatch(/docker|devcontainer|wsl/i);
+  });
+
+  it('names the environment variable that fixes it — it appears in no other message', () => {
+    expect(next().reason).toContain('RETICLE_PAIRING_TOKEN_DIR');
+  });
+
+  it('says to restart the dev server, because the token is inlined at config time', () => {
+    expect(next().reason).toMatch(/restart the dev server/i);
+  });
+
+  it('offers the same-machine cause too, so a stale page is not misread as a container', () => {
+    expect(next().reason).toMatch(/reload/i);
+  });
+
+  it('still yields to a daemon split, which outranks every other cause', () => {
+    const out = nextActionFor({
+      everConnected: false,
+      initialized: true,
+      listening: LISTENING,
+      dev: undefined,
+      authRefused: true,
+      splitBrain: 'another daemon on 4401 serves this project',
+    });
+    expect(out.action).toBe(NoSessionAction.DAEMON_SPLIT);
+  });
+
+  it('does not fire without a refusal — an ordinary wired project with a page to open', () => {
+    const out = nextActionFor({
+      everConnected: false,
+      initialized: true,
+      listening: LISTENING,
+      dev: undefined,
+      authRefused: false,
+    });
+    expect(out.reason).not.toContain('RETICLE_PAIRING_TOKEN_DIR');
+  });
+});
