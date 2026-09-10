@@ -35,7 +35,7 @@ import { createNodeFileSystem } from '../project/fs/fs-port.js';
 import { BaselineStore } from '../project/baselines.js';
 import { RecordingStore } from './recording/recordings.js';
 import { asString } from '@reticlehq/core';
-import { flowPath } from '../project/reticle-dir.js';
+import { flowPath } from '../project/dir/reticle-dir.js';
 import type { FileSystemPort } from '../project/fs/fs-port.js';
 import type { Session, SessionManager } from '../../connection/session/session.js';
 import type { ToolDeps } from '../../agent/tools/tools.js';

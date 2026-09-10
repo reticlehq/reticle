@@ -14,7 +14,7 @@ import {
   reticleDirPaths,
   readContract,
   writeContract,
-} from '../../features/project/reticle-dir.js';
+} from '../../features/project/dir/reticle-dir.js';
 import type { ToolDef, ToolDeps } from './tools.js';
 
 /**

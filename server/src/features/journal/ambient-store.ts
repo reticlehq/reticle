@@ -1,6 +1,6 @@
 import { dirname } from 'node:path';
 import type { FileSystemPort } from '../project/fs/fs-port.js';
-import { reticleDirPaths } from '../project/reticle-dir.js';
+import { reticleDirPaths } from '../project/dir/reticle-dir.js';
 import { AmbientFileSchema } from './ambient-file.js';
 import { type AmbientCounts } from '@reticlehq/engine/window/ambient.js';
 

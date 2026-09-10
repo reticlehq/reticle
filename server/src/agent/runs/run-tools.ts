@@ -4,7 +4,7 @@ import { RunReadError, type ReticleVerificationRun } from '@reticlehq/core';
 import { ReticleTool } from '@reticlehq/core';
 import { asString } from '@reticlehq/core';
 import { sessionIdShape } from '../tools/tool-kit.js';
-import { isValidRunId } from '../../features/project/reticle-dir.js';
+import { isValidRunId } from '../../features/project/dir/reticle-dir.js';
 import type { ToolDef, ToolDeps } from '../tools/tools.js';
 import { RunStore } from './run-store.js';
 import { renderRunReport } from './render-report.js';

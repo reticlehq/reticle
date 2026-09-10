@@ -8,7 +8,7 @@ import { Verified } from '@reticlehq/core';
 import { AmbientStore } from './ambient-store.js';
 import { makeSessionEnd, type SessionEndTarget } from './session-end.js';
 import { DEFAULT_SESSION_RETENTION } from './retention.js';
-import { reticleDirPaths, sessionDirPath } from '../project/reticle-dir.js';
+import { reticleDirPaths, sessionDirPath } from '../project/dir/reticle-dir.js';
 
 function fakeSession(
   id: string,

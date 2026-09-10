@@ -14,7 +14,7 @@ import {
   QueryBy,
 } from '@reticlehq/core';
 import { createNodeFileSystem, type FileSystemPort } from '../project/fs/fs-port.js';
-import { flowPath, reticleDirPaths } from '../project/reticle-dir.js';
+import { flowPath, reticleDirPaths } from '../project/dir/reticle-dir.js';
 import { anchorForStep, FlowStore, recordedStepToFlowStep } from './flows.js';
 import type { CompiledProgram, RecordedStep } from './recording/recordings.js';
 

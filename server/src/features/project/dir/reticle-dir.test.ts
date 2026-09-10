@@ -1,4 +1,4 @@
-import { removeTempDir } from '../../temp-dir.js';
+import { removeTempDir } from '../../../temp-dir.js';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -19,7 +19,7 @@ import {
   visualPath,
   writeContract,
 } from './reticle-dir.js';
-import { createNodeFileSystem, type FileSystemPort } from './fs/fs-port.js';
+import { createNodeFileSystem, type FileSystemPort } from '../fs/fs-port.js';
 
 const FROZEN = 1_700_000_000_000;
 const frozenClock = (): number => FROZEN;

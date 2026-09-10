@@ -1,6 +1,6 @@
 import type { FileSystemPort } from '../project/fs/fs-port.js';
 import { log } from '../../log.js';
-import { isValidSessionId } from '../project/reticle-dir.js';
+import { isValidSessionId } from '../project/dir/reticle-dir.js';
 import { JournalRecorder, type JournalReader } from './journal-recorder.js';
 import { SessionJournal } from './session-journal.js';
 

@@ -140,6 +140,20 @@ const REACHES_FOR: Record<string, readonly string[]> = {
    */
   launch: ['version'],
   /**
+   * Where `.reticle/` is for a given project, and the id derived from it.
+   *
+   * Freed `capsule -> project` and `visual -> project`: neither wanted the project feature, both
+   * wanted to know which directory to write into.
+   */
+  dir: ['fs'],
+  /**
+   * Finding the config a command should read, before any command has run.
+   *
+   * Freed four reaches on `cli`. `license`, `project` and `session` never wanted the
+   * command-line; they wanted to know where the configuration is.
+   */
+  config: ['ports'],
+  /**
    * Who is attached to a session, and who may drive it. Reaches for NOTHING -- not even its own
    * parent -- which is the strongest form a group can take: `session` needs it, and it needs
    * nobody, so the edge cannot ever become mutual however either side grows.
@@ -187,7 +201,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
     'tools',
     'version',
   ],
-  capsule: ['fs', 'project'],
+  capsule: ['dir', 'fs'],
   cli: [
     'launch',
     'fs',
@@ -229,9 +243,10 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   ],
   crawl: ['project', 'session', 'tools'],
   daemon: ['telemetry'],
-  domain: ['flows', 'oracles', 'project', 'tools'],
+  domain: ['dir', 'flows', 'oracles', 'project', 'tools'],
   ee: ['license'],
   flows: [
+    'dir',
     'fs',
     'fields',
     'annotate-notes',
@@ -249,22 +264,22 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   ],
   impact: ['cloud', 'session'],
   input: ['pool', 'telemetry', 'tools'],
-  intent: ['fs', 'project', 'tools'],
-  journal: ['fs', 'project', 'runs'],
-  license: ['cli'],
+  intent: ['dir', 'fs', 'project', 'tools'],
+  journal: ['dir', 'fs', 'project', 'runs'],
+  license: ['config'],
   mcp: ['launch', 'recall', 'ports', 'daemon', 'telemetry', 'tools', 'version'],
   memory: ['fs', 'cloud', 'project', 'tools'],
   pool: ['doctor', 'input', 'telemetry'],
-  project: ['fs', 'cli', 'cloud', 'flows', 'runs', 'tools'],
-  runs: ['fs', 'cloud', 'flows', 'intent', 'mcp', 'project', 'telemetry', 'tools'],
+  project: ['config', 'dir', 'fs', 'cloud', 'flows', 'runs', 'tools'],
+  runs: ['dir', 'fs', 'cloud', 'flows', 'intent', 'mcp', 'project', 'telemetry', 'tools'],
   session: [
+    'config',
     'recall',
     'gaps',
     'human',
     'ports',
     'presence',
     'bridge',
-    'cli',
     'daemon',
     'impact',
     'input',
@@ -287,6 +302,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
     'version',
   ],
   tools: [
+    'dir',
     'fs',
     'recall',
     'doctor',
@@ -318,7 +334,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   ],
   update: ['project', 'telemetry', 'version'],
   version: ['project', 'tools'],
-  visual: ['fs', 'input', 'project', 'tools'],
+  visual: ['dir', 'fs', 'input', 'tools'],
 };
 
 /**
@@ -327,7 +343,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
  * A count rather than a list: the list is derivable and printed on failure, and a hand-written copy
  * would be one more thing to keep in step.
  */
-const MUTUAL_PAIRS_TODAY = 27;
+const MUTUAL_PAIRS_TODAY = 25;
 
 /**
  * Two directories may not share a name.

@@ -5,7 +5,7 @@ import {
   type ProjectCandidate,
   type ProjectRegistry,
 } from '@reticlehq/core';
-import type { ConfigDiscovery } from '../../command/cli/config-discovery.js';
+import type { ConfigDiscovery } from '../../command/cli/config/config-discovery.js';
 
 /**
  * Which `.reticle/` a session's artifacts belong in.

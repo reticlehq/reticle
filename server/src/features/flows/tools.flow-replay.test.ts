@@ -32,7 +32,7 @@ import { FlowStore, type FlowAnnotations } from './flows.js';
 import { ProjectStore } from '../project/project-store.js';
 import { AnnotationStore } from './annotation-store.js';
 import { createNodeFileSystem, type FileSystemPort } from '../project/fs/fs-port.js';
-import { flowPath } from '../project/reticle-dir.js';
+import { flowPath } from '../project/dir/reticle-dir.js';
 import { asRecord, asString } from '@reticlehq/core';
 import type { Session, SessionManager } from '../../connection/session/session.js';
 import type { CompiledProgram, RecordedStep } from './recording/recordings.js';

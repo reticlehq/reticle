@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { ReticleDir } from '@reticlehq/core';
 import { emptyProjectRegistry, rememberProject } from '@reticlehq/core/artifacts';
 import { ArtifactRootReason, projectCandidatesFrom, resolveArtifactRoot } from './artifact-root.js';
-import type { ConfigDiscovery } from '../../command/cli/config-discovery.js';
+import type { ConfigDiscovery } from '../../command/cli/config/config-discovery.js';
 
 /**
  * Every artifact Reticle writes resolved against the DAEMON's `process.cwd()`, never against the

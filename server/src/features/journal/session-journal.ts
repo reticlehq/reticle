@@ -11,7 +11,7 @@ import {
   journalActionsPath,
   journalEventsPath,
   sessionDirPath,
-} from '../project/reticle-dir.js';
+} from '../project/dir/reticle-dir.js';
 
 /**
  * The durable per-session journal: append-only JSONL for events and actions, the ledger the ring

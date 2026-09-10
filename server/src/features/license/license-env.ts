@@ -24,7 +24,7 @@
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { LICENSE_KEY_ENV } from './license.js';
-import { discoverProjectConfigs } from '../../command/cli/config-discovery.js';
+import { discoverProjectConfigs } from '../../command/cli/config/config-discovery.js';
 
 /** The files a framework tells people to put secrets in, most specific first. */
 const ENV_FILES = ['.env.local', '.env'] as const;

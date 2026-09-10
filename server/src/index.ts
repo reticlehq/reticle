@@ -9,7 +9,10 @@ import {
   parseProjectRegistry,
   projectCandidates,
 } from '@reticlehq/core/artifacts';
-import { discoverProjectConfigs, type ConfigDiscovery } from './command/cli/config-discovery.js';
+import {
+  discoverProjectConfigs,
+  type ConfigDiscovery,
+} from './command/cli/config/config-discovery.js';
 import {
   projectCandidatesFrom,
   resolveArtifactRoot,
@@ -210,8 +213,8 @@ export {
   reticleDirPaths,
   flowPath,
   baselinePath,
-} from './features/project/reticle-dir.js';
-export type { ReticleDirPaths, ReadContractResult } from './features/project/reticle-dir.js';
+} from './features/project/dir/reticle-dir.js';
+export type { ReticleDirPaths, ReadContractResult } from './features/project/dir/reticle-dir.js';
 export { createNodeFileSystem } from './features/project/fs/fs-port.js';
 export type { FileSystemPort } from './features/project/fs/fs-port.js';
 // Replay/Verify API — the programmatic surface an OEM/CI pipeline drives (see docs/platform-integration.md).

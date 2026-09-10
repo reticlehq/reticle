@@ -10,7 +10,7 @@ import {
 } from '@reticlehq/core';
 import type { FileSystemPort } from './fs/fs-port.js';
 import type { Clock } from '../flows/flows.js';
-import { reticleDirPaths } from './reticle-dir.js';
+import { reticleDirPaths } from './dir/reticle-dir.js';
 import { withFileLock } from './file-lock.js';
 
 const JSON_INDENT = 2;
