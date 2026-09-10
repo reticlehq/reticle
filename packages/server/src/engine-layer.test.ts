@@ -4,24 +4,28 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 /**
- * The rules that decide a verdict should not need the machinery that delivers one.
+ * The rules that decide a verdict do not need the machinery that delivers one.
  *
- * `events/` and `honesty/` are the engine: they read what happened and say whether the declared
+ * `events/` and `honesty/` are the rules: they read what happened and say whether the declared
  * consequence held. Everything else in this package is delivery -- a socket to the page, a tool
- * surface for an agent, a command line, somewhere to put the answer. The engine is meant to be
- * liftable out of all of that, because somebody implementing the specification wants the rules
- * without the daemon.
+ * surface for an agent, a command line, somewhere to put the answer. The rules have to be liftable
+ * out of all of that, because somebody implementing the specification wants the rules without the
+ * daemon.
  *
- * It is not liftable today. Three runtime imports cross out of it -- thirteen when this was written --
- * and they are listed below
- * rather than banned, because a guard that is red the day it is written teaches people to switch it
- * off rather than to fix anything.
+ * Nothing crosses out of them any more. This started as a list of thirteen and was written as a
+ * ratchet -- the list could shrink, never grow -- because a check that is red the day it is written
+ * teaches people to switch it off rather than to fix anything. The list is now empty, so the same
+ * check has become a wall, with no change to what it does.
  *
- * So this is a ratchet, not a wall. The list cannot grow. Every entry is a thing the extraction will
- * have to answer, and the list shrinking is the work going well.
+ * Every one of the thirteen was answered the same two ways. Most were files simply filed in the
+ * wrong place: value narrowing under the tool surface because that is where it was first needed,
+ * measurements of the tool surface under the rules, one shared sentence written on the side that
+ * happened to say it first. The last two were real needs -- somewhere to write a note, and a way to
+ * keep a re-check attached to the call that asked for it -- and those are now handed to the rules by
+ * whoever runs them, on the object they were already being handed.
  *
- * TYPE-ONLY imports are not counted. `import type` is erased at build time, so it creates no runtime
- * dependency and does not stand between the engine and its own package.
+ * TYPE-ONLY imports are not counted. `import type` is erased when the code is built, so it creates
+ * no dependency at run time and nothing has to travel with the rules to satisfy it.
  */
 
 const REPO_ROOT = join(__dirname, '..', '..', '..');
@@ -34,30 +38,7 @@ const ENGINE = ['packages/server/src/events', 'packages/server/src/honesty'];
  *
  * Grouped by what each one will need. Read this as the extraction's to-do list.
  */
-const CROSSINGS_TODAY: Record<string, string> = {
-  // What used to be here, and what the answer turned out to be each time.
-  //
-  // Nothing was extracted by force. In every case the file was simply in the wrong place: `asString`
-  // and `asNumber` were generic value narrowing filed under the tool surface because that is where
-  // they were first needed; `tool-hit-rate` and `feature-capture` measure how an agent used the tool
-  // surface, which is a question about the surface; `pageTornDownWhileOn` is one sentence both the
-  // verdict and the setup diagnosis say; folding the daemon's view of a network request onto the
-  // page's own view is a decision about what happened rather than a way of finding out; learning
-  // which parts of a page change on their own is the same kind of judgement, and only the storing of
-  // what was learned stayed behind; turning a declared consequence into the shape the capsule walks
-  // is the rules reading their own input.
-  //
-  // Two are left, and they are a different kind. Neither is a rule in the wrong folder -- they are
-  // the two things every part of this package uses.
-  'predicate.ts -> log':
-    'writes to the daemon log. A lifted engine has no daemon to log to, so this becomes something ' +
-    'handed in by whoever runs the rules, the way the scaffolder is handed everything it cannot ' +
-    'know for itself, rather than something reached for',
-  'contradiction-folds.ts -> log': 'the same, in the second file that writes to the log',
-  'predicate.ts -> trace':
-    'attaches the current trace span. Same answer as the log: a lifted engine is handed somewhere ' +
-    'to record what it did, and does not go looking for the daemon it was cut out of',
-};
+const CROSSINGS_TODAY: Record<string, string> = {};
 
 /** Runtime (non-type) imports leaving the engine, as `file -> layer`. */
 function crossings(): string[] {

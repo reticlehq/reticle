@@ -16,6 +16,7 @@ import { findEchoMismatches } from './echo-mismatch.js';
 import { findUnitMismatches } from './unit-mismatch.js';
 import { asNumber, asString } from '@reticlehq/core';
 import { matchesDeclaredFailure, type DeclaredNetFailure } from './declared.js';
+import type { NoteFn } from './engine-host.js';
 import { runRegisteredFolds } from './contradiction-folds.js';
 
 /**
@@ -251,6 +252,13 @@ function didNothing(
 }
 
 export interface ContradictionOptions {
+  /**
+   * Somewhere to record a rule that threw while it ran. See engine-host.ts.
+   *
+   * Optional: leave it out and the crash is still collected and surfaced by `crashedRuleNotes`, it
+   * just is not written down anywhere else.
+   */
+  note?: NoteFn;
   /** The action that opened this window, when one did. Enables the no-effect check. */
   action?: string | undefined;
   /**

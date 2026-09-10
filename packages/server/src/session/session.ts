@@ -15,6 +15,7 @@ const IMPACT_PUSH_DEBOUNCE_MS = 700;
 
 import { PendingCommands, CommandTimeoutError } from './pending-commands.js';
 import { span } from '../trace.js';
+import { keepCallerContextInDaemon, noteToDaemonLog } from './daemon-answers.js';
 import {
   isKnownRealm,
   EventType,
@@ -344,6 +345,10 @@ export class Session {
   preconditionFailure(): string | undefined {
     return this.#preconditionFailure;
   }
+
+  /** What the rules that decide a verdict need from the daemon. See daemon-answers.ts. */
+  readonly note = noteToDaemonLog;
+  readonly keepCallerContext = keepCallerContextInDaemon;
 
   /** Re-stamp an incoming event with server-relative time, buffer it, and fan out. */
   pushEvent(event: ReticleEvent, byteSize?: number): void {
@@ -867,10 +872,6 @@ export class Session {
     }
   }
 
-  /**
-   * Push a lifecycle state to the panel with optional human-facing `text`. State changes still flow
-   * through `setState`; an auto-ended session rides a `warn` tone so the panel can shout "agent stopped".
-   */
   /**
    * Push the impact record to this tab's HUD.
    *

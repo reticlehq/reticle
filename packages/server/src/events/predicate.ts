@@ -10,8 +10,7 @@ import {
   type ReticleEvent,
 } from '@reticlehq/core';
 
-import { log } from '../log.js';
-import { bindSpanContext } from '../trace.js';
+import type { KeepCallerContextFn, NoteFn } from './engine-host.js';
 
 import { predicateToExpectedLinks } from './predicate-to-links.js';
 import type { ExpectedLink } from '../capsule/divergence.js';
@@ -82,6 +81,19 @@ export interface PredicateSession {
   throttled?(): boolean;
   /** Precondition failure reason (e.g. seedStorage), if any. */
   preconditionFailure?(): string | undefined;
+  /**
+   * Somewhere to record a wait that could not be run at all. See engine-host.ts.
+   *
+   * Optional: a fake that omits it loses the note and nothing else. The daemon's own session
+   * supplies it, and `engine-host-is-supplied.test.ts` is what stops that quietly going away.
+   */
+  note?: NoteFn;
+  /**
+   * Keeps a re-check attached to the call that started the wait. See engine-host.ts.
+   *
+   * Optional: a fake that omits it gets its callback back unchanged.
+   */
+  keepCallerContext?: KeepCallerContextFn;
 }
 
 /**
@@ -651,7 +663,7 @@ export function waitForPredicate(
     let confirmTimer: ReturnType<typeof setTimeout> | undefined;
     /** Report a wait that could not run, and END it — see guardedCheck. */
     const failWait = (error: unknown): void => {
-      log('reticle_wait_failed', {
+      session.note?.('reticle_wait_failed', {
         predicate: predicate.kind,
         error: error instanceof Error ? error.message : String(error),
       });
@@ -788,7 +800,7 @@ export function waitForPredicate(
     // this every re-check opened a new call at depth 0 and emitted a `browser.command` with no
     // `tool.handler`. Measured on one healthy run: 23 such orphans, which is precisely the
     // documented signature of a HUNG call. A diagnostic that fires on healthy runs is not one.
-    const boundCheck = bindSpanContext(guardedCheck);
+    const boundCheck = session.keepCallerContext?.(guardedCheck) ?? guardedCheck;
     const unsub = session.onEvent(() => {
       boundCheck();
     });

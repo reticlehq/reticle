@@ -1,6 +1,5 @@
 import type { ReticleEvent } from '@reticlehq/core';
 import type { Contradiction, ContradictionOptions } from './contradictions.js';
-import { log } from '../log.js';
 
 /**
  * Rules a CONSUMER adds to the contradiction pass, without editing the ones this package ships.
@@ -106,7 +105,7 @@ export function runRegisteredFolds(
       found.push(...fold(events, options));
     } catch (error) {
       const why = error instanceof Error ? error.message : String(error);
-      log('contradiction_fold_failed', { error: why });
+      options.note?.('contradiction_fold_failed', { error: why });
       crashedRules.add(why);
     }
   }
