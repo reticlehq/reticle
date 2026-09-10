@@ -1,7 +1,8 @@
 import { dirname } from 'node:path';
 import type { FileSystemPort } from '../project/fs-port.js';
 import { reticleDirPaths } from '../project/reticle-dir.js';
-import { AmbientFileSchema, type AmbientCounts } from './ambient.js';
+import { AmbientFileSchema } from './ambient-file.js';
+import { type AmbientCounts } from '../events/ambient.js';
 
 /** Bumped on any breaking change to the persisted ambient-map shape. */
 const AMBIENT_FILE_VERSION = 1;

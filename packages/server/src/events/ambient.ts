@@ -1,4 +1,3 @@
-import { z } from 'zod';
 import type { ReticleEvent } from '@reticlehq/core';
 
 /**
@@ -10,6 +9,10 @@ import type { ReticleEvent } from '@reticlehq/core';
  *
  * Global, not per-flow: the journal already sees the churn across every session, so the map sharpens
  * over time. Only UNATTRIBUTED churn counts — an event caused by an action is signal, never ambient.
+ *
+ * Deciding which changes on a page are background noise and which are the consequence of an action
+ * is a judgement about what happened, so it lives with the rules that decide a verdict. Where the
+ * learned map is kept between runs is a different question, and that part stayed in the journal.
  */
 
 /** Per-region ambient churn counts. */
@@ -30,11 +33,6 @@ export function ambientKeyOf(event: {
   if ('string' === typeof region && region.length > 0) return region;
   return event.ref;
 }
-
-export const AmbientFileSchema = z.object({
-  version: z.literal(1),
-  regions: z.record(z.number()),
-});
 
 /** A ref must churn ambiently at least this many times before it is treated as ambient. */
 export const DEFAULT_AMBIENT_THRESHOLD = 20;

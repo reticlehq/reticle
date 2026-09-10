@@ -43,7 +43,7 @@ const PINNED_VERSIONS: Record<string, string> = {
   'packages/server/src/flows/assertion-tiers-store.ts': '1',
   'packages/server/src/flows/flake.ts': '1',
   'packages/server/src/intent/intent-shard.ts': 'INTENT_SHARD_VERSION,INTENT_SHARD_VERSION',
-  'packages/server/src/journal/ambient.ts': '1',
+  'packages/server/src/journal/ambient-file.ts': '1',
   'packages/server/src/journal/envelope-store.ts': 'ENVELOPE_FILE_VERSION',
 };
 

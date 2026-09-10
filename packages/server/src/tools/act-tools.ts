@@ -58,7 +58,7 @@ import {
 import { describeWaitTarget, namedNetIsInFlight } from '../honesty/unsettled.js';
 import { saveFailedAssertCapsule } from './act-capsule.js';
 import { buildDivergenceCapsule } from '../capsule/capsule.js';
-import { predicateToExpectedLinks } from '../capsule/predicate-to-links.js';
+import { predicateToExpectedLinks } from '../events/predicate-to-links.js';
 import { buildHonestyBlock } from '../honesty/honesty.js';
 import {
   absenceBlindSpotNote,

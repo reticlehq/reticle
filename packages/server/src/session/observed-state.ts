@@ -1,5 +1,5 @@
 import { BlindSpotKind, EventType, type ReticleEvent } from '@reticlehq/core';
-import { ambientKeyOf, type AmbientCounts } from '../journal/ambient.js';
+import { ambientKeyOf, type AmbientCounts } from '../events/ambient.js';
 
 /**
  * The two things a session learns by watching its own event stream, as opposed to storing.

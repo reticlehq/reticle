@@ -43,7 +43,7 @@ import {
   mergeEventsBySeq,
   type EventQueryOptions,
 } from '../journal/journal-query.js';
-import { type AmbientCounts } from '../journal/ambient.js';
+import { type AmbientCounts } from '../events/ambient.js';
 import { ObservedState } from './observed-state.js';
 import { recordBrowserLatency, recordSdkFailure } from '../telemetry/session-metrics.js';
 import { LiveControl, type InboxMessage } from './live-control.js';

@@ -1,5 +1,5 @@
 import { AmbientStore } from './ambient-store.js';
-import type { AmbientCounts } from './ambient.js';
+import type { AmbientCounts } from '../events/ambient.js';
 import type { JournalAction } from '@reticlehq/core';
 import type { FileSystemPort } from '../project/fs-port.js';
 import { pruneSessions } from './retention.js';

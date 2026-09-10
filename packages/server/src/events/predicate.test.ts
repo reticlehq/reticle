@@ -16,7 +16,7 @@ import {
   provenExpectedLinks,
   type PredicateSession,
 } from './predicate.js';
-import { predicateToExpectedLinks } from '../capsule/predicate-to-links.js';
+import { predicateToExpectedLinks } from './predicate-to-links.js';
 import type { Predicate } from './predicate-eval.js';
 
 /** In-memory session: events from an array, MATCH from a supplied matcher. */

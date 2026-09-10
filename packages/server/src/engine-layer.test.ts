@@ -12,7 +12,7 @@ import { join } from 'node:path';
  * liftable out of all of that, because somebody implementing the specification wants the rules
  * without the daemon.
  *
- * It is not liftable today. Two runtime imports cross out of it -- thirteen when this was written --
+ * It is not liftable today. Three runtime imports cross out of it -- thirteen when this was written --
  * and they are listed below
  * rather than banned, because a guard that is red the day it is written teaches people to switch it
  * off rather than to fix anything.
@@ -35,28 +35,28 @@ const ENGINE = ['packages/server/src/events', 'packages/server/src/honesty'];
  * Grouped by what each one will need. Read this as the extraction's to-do list.
  */
 const CROSSINGS_TODAY: Record<string, string> = {
-  // Four crossings that used to be here are gone: `asString` and `asNumber` were generic value
-  // narrowing filed under `tools/` because that is where they were first needed, and they now live in
-  // the shared foundation where the engine can read them without reaching through the tool surface.
-  // Two more are gone. Folding the daemon's view of a network request onto the page's own view was
-  // filed under `input/` beside the code that collects the daemon's half, but it is a decision about
-  // what happened rather than a way of finding out, so it moved to the engine and left the
-  // collecting behind.
-  // `pageTornDownWhileOn` is the single sentence both the verdict and the setup
-  // diagnosis use for a page that went away, kept in one place so the two cannot describe the same
-  // teardown differently. It now sits beside the rules, and the diagnosis reads it from there --
-  // delivery may depend on the engine, which is the direction that lets the engine be lifted out.
-  // Three more are gone, and the answer was that the files sat in the wrong place rather than that
-  // the engine needed them. `tool-hit-rate` and `feature-capture` measure how an agent used the tool
-  // surface, which is a question about the surface and not about whether a consequence held. Both
-  // were imported BY tools/ as well as importing FROM it, so the dependency already pointed there in
-  // both directions.
-  'predicate.ts -> capsule':
-    'converts a predicate into the links a divergence capsule walks. Takes an engine concept and ' +
-    'produces a capsule one, so it belongs at one end or the other rather than being reached across',
-  'predicate.ts -> journal':
-    'ambient-region learning, which decides when a page has settled. That is an engine question ' +
-    'implemented in the journal',
+  // What used to be here, and what the answer turned out to be each time.
+  //
+  // Nothing was extracted by force. In every case the file was simply in the wrong place: `asString`
+  // and `asNumber` were generic value narrowing filed under the tool surface because that is where
+  // they were first needed; `tool-hit-rate` and `feature-capture` measure how an agent used the tool
+  // surface, which is a question about the surface; `pageTornDownWhileOn` is one sentence both the
+  // verdict and the setup diagnosis say; folding the daemon's view of a network request onto the
+  // page's own view is a decision about what happened rather than a way of finding out; learning
+  // which parts of a page change on their own is the same kind of judgement, and only the storing of
+  // what was learned stayed behind; turning a declared consequence into the shape the capsule walks
+  // is the rules reading their own input.
+  //
+  // Two are left, and they are a different kind. Neither is a rule in the wrong folder -- they are
+  // the two things every part of this package uses.
+  'predicate.ts -> log':
+    'writes to the daemon log. A lifted engine has no daemon to log to, so this becomes something ' +
+    'handed in by whoever runs the rules, the way the scaffolder is handed everything it cannot ' +
+    'know for itself, rather than something reached for',
+  'contradiction-folds.ts -> log': 'the same, in the second file that writes to the log',
+  'predicate.ts -> trace':
+    'attaches the current trace span. Same answer as the log: a lifted engine is handed somewhere ' +
+    'to record what it did, and does not go looking for the daemon it was cut out of',
 };
 
 /** Runtime (non-type) imports leaving the engine, as `file -> layer`. */
@@ -69,7 +69,7 @@ function crossings(): string[] {
   for (const file of files) {
     const text = readFileSync(join(REPO_ROOT, file), 'utf8');
     for (const match of text.matchAll(
-      /^import\s+(type\s+)?\{?([^}]*?)\}?\s*from '(\.\.\/[a-z-]+\/[^']+)';/gm,
+      /^import\s+(type\s+)?\{?([^}]*?)\}?\s*from '(\.\.\/[^']+)';/gm,
     )) {
       const named = match[2] ?? '';
       const everyNameIsAType = named
@@ -77,7 +77,13 @@ function crossings(): string[] {
         .filter((part) => part.trim().length > 0)
         .every((part) => part.trim().startsWith('type '));
       if (match[1] !== undefined || everyNameIsAType) continue;
-      const layer = (match[3] ?? '').split('/')[1] ?? '';
+      // `../input/foo.js` is a whole layer; `../log.js` is a single file sitting at the package
+      // root. Both are outside the engine, and for a long time only the first shape was looked for,
+      // so two real crossings sat in plain sight and the count read lower than it was.
+      const target = (match[3] ?? '').slice('../'.length);
+      const layer = target.includes('/')
+        ? (target.split('/')[0] ?? '')
+        : target.replace(/\.js$/, '');
       if ('events' === layer || 'honesty' === layer) continue;
       const name = file.split('/').pop() ?? file;
       found.push(`${name} -> ${layer}`);

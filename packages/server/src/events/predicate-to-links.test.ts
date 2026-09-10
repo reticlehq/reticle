@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Predicate } from '../events/predicate.js';
+import type { Predicate } from './predicate.js';
 import { predicateToExpectedLinks } from './predicate-to-links.js';
 
 describe('predicateToExpectedLinks', () => {

@@ -13,9 +13,9 @@ import {
 import { log } from '../log.js';
 import { bindSpanContext } from '../trace.js';
 
-import { predicateToExpectedLinks } from '../capsule/predicate-to-links.js';
+import { predicateToExpectedLinks } from './predicate-to-links.js';
 import type { ExpectedLink } from '../capsule/divergence.js';
-import { isAmbient, ambientKeyOf, type AmbientCounts } from '../journal/ambient.js';
+import { isAmbient, ambientKeyOf, type AmbientCounts } from './ambient.js';
 import { evalRoute } from './predicate-route.js';
 import { describeSuperseded } from './observed-in-window.js';
 import { evalElement } from './predicate-element.js';
