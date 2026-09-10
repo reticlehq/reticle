@@ -99,6 +99,15 @@ const REACHES_FOR: Record<string, readonly string[]> = {
    */
   fields: ['tools'],
   /**
+   * What `reticle doctor` prints: the rows, the project line, the hint about Chromium.
+   *
+   * Worth its own name for a reason the guard made visible. Moving these OUT of `cli` removed
+   * `pool -> cli` and `tools -> cli` entirely: neither wanted the command-line at all, both
+   * wanted a row to print. That is this guard's own thesis -- most reaches it has removed turned
+   * out to be a file filed somewhere odd rather than a dependency anybody needed.
+   */
+  doctor: [],
+  /**
    * Who is attached to a session, and who may drive it. Reaches for NOTHING -- not even its own
    * parent -- which is the strongest form a group can take: `session` needs it, and it needs
    * nobody, so the edge cannot ever become mutual however either side grows.
@@ -138,6 +147,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   bridge: ['recording', 'flows', 'impact', 'project', 'session', 'telemetry', 'tools', 'version'],
   capsule: ['project'],
   cli: [
+    'doctor',
     'recording',
     'ports',
     'outcome',
@@ -197,7 +207,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   license: ['cli'],
   mcp: ['ports', 'cli', 'daemon', 'session', 'telemetry', 'tools', 'version'],
   memory: ['cloud', 'project', 'tools'],
-  pool: ['cli', 'input', 'telemetry'],
+  pool: ['doctor', 'input', 'telemetry'],
   project: ['cli', 'cloud', 'flows', 'runs', 'tools'],
   runs: ['cloud', 'flows', 'intent', 'mcp', 'project', 'telemetry', 'tools'],
   session: [
@@ -218,6 +228,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   setup: ['terminal', 'bridge', 'cli', 'daemon', 'mcp', 'telemetry'],
   telemetry: ['ports', 'cli', 'daemon', 'license', 'mcp', 'session', 'tools', 'update', 'version'],
   tools: [
+    'doctor',
     'gaps',
     'annotate-notes',
     'recording',
@@ -225,7 +236,6 @@ const REACHES_FOR: Record<string, readonly string[]> = {
     'read',
     'act',
     'capsule',
-    'cli',
     'crawl',
     'daemon',
     'domain',

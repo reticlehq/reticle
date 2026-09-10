@@ -1,6 +1,6 @@
 import { EventType } from '@reticlehq/core';
 import { captureMethod } from '../patching/capture-method.js';
-import { projectBody } from './network-body.js';
+import { projectBody } from './net-detail/network-body.js';
 import { observeSafely, observeValue, type Emit, type Teardown } from './types.js';
 
 /**

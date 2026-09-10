@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { DOCTOR_ROW_LABELS, DoctorRow, LABEL_COLUMN, doctorRow } from './doctor-rows.js';
-import { REPO_ROOT } from '../../repo-root.js';
+import { REPO_ROOT } from '../../../repo-root.js';
 
 /**
  * The guard for #340: `doctor`'s row vocabulary and the docs pages that reproduce its output must

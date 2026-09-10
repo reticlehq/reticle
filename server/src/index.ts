@@ -77,7 +77,7 @@ import { LeaseReaper } from './connection/pool/lease-reaper.js';
 import { readJournalEnabled, readProjectId } from './command/cli/ports/cli-port.js';
 import { hasProjectConnectedBefore } from './connection/session/connection-memory.js';
 import { reticleStateHome } from './command/daemon/daemon.js';
-import { probeChromium } from './command/cli/chromium-hint.js';
+import { probeChromium } from './command/cli/doctor/chromium-hint.js';
 import { makeJournalAttach } from './features/journal/attach-journal.js';
 import { makeSessionEnd } from './features/journal/session-end.js';
 import { AmbientStore } from './features/journal/ambient-store.js';

@@ -15,7 +15,7 @@
  */
 
 import { describeSkew } from '../version/version-skew.js';
-import { DoctorRow, doctorRow } from './doctor-rows.js';
+import { DoctorRow, doctorRow } from './doctor/doctor-rows.js';
 
 /** The fields of `/status` this line cares about. Both optional — an old daemon reports neither. */
 export interface DaemonIdentity {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { REDACTED_VALUE } from '@reticlehq/core';
-import { redactUrl } from './network-redact.js';
+import { redactUrl } from './net-detail/network-redact.js';
 
 describe('redactUrl — presigned cloud storage URLs', () => {
   const S3_URL =

@@ -13,8 +13,8 @@ import {
   projectErrorBody,
   shouldCaptureErrorBody,
   withBodyDeadline,
-} from './network-body.js';
-import { redactUrl, netUrlFields } from './network-redact.js';
+} from './net-detail/network-body.js';
+import { redactUrl, netUrlFields } from './net-detail/network-redact.js';
 import { watchStreamedBody } from './network-stream.js';
 import { requireCapturedMethod } from '../util/captured-method.js';
 

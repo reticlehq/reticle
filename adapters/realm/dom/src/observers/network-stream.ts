@@ -6,7 +6,7 @@
  */
 import { EventType, StreamDirection, StreamTransport } from '@reticlehq/core';
 import type { Emit } from './types.js';
-import { isStreamingBody } from './network-body.js';
+import { isStreamingBody } from './net-detail/network-body.js';
 import { nativeClearTimeout, nativeSetTimeout } from '../timers/native-timers.js';
 
 /**

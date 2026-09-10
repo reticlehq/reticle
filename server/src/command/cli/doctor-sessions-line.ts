@@ -1,5 +1,5 @@
 import { SELF_RECOVERING_MARKER } from '../../connection/session/no-session-diagnosis.js';
-import { DoctorRow, doctorRow } from './doctor-rows.js';
+import { DoctorRow, doctorRow } from './doctor/doctor-rows.js';
 
 /**
  * The line `doctor` was missing: is anything actually CONNECTED?

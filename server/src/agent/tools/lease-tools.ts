@@ -34,7 +34,7 @@ import {
 import { ReticleTool } from '@reticlehq/core';
 import type { ToolDef, ToolDeps } from './tool-kit.js';
 import { asString } from '@reticlehq/core';
-import { chromiumHint } from '../../command/cli/chromium-hint.js';
+import { chromiumHint } from '../../command/cli/doctor/chromium-hint.js';
 
 /**
  * Everything the daemon already knows about why a leased tab might not have dialled in.
