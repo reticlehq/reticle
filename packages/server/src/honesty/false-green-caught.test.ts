@@ -67,7 +67,7 @@ const refusalsOfAPassingAssertion: Record<string, Parameters<typeof decideVerifi
     pass: true,
     honesty: honesty(),
     settled: true,
-    outcomePending: true,
+    outcomePending: ['POST /api/orders'],
   },
   [VerifiedReason.OUTCOME_UNREAD]: {
     pass: true,

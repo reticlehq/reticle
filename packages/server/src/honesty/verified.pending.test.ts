@@ -46,7 +46,7 @@ describe('an accepted-but-unfinished write is not a failure', () => {
       declaredConsequence: true,
       honesty: clean,
       settled: true,
-      outcomePending: true,
+      outcomePending: ['POST /api/orders'],
     });
     expect(out.verified).toBe(Verified.UNKNOWN);
     expect(out.verifiedReason).toBe(VerifiedReason.OUTCOME_PENDING);
@@ -61,7 +61,7 @@ describe('an accepted-but-unfinished write is not a failure', () => {
       declaredConsequence: true,
       honesty: clean,
       settled: true,
-      outcomePending: true,
+      outcomePending: ['POST /api/orders'],
     });
     expect(out.verified).toBe(Verified.UNKNOWN);
     expect(out.verifiedReason).toBe(VerifiedReason.OUTCOME_PENDING);
@@ -86,7 +86,7 @@ describe('an accepted-but-unfinished write is not a failure', () => {
       declaredConsequence: true,
       honesty: clean,
       settled: true,
-      outcomePending: true,
+      outcomePending: ['POST /api/orders'],
       observationLost: true,
     });
     expect(out.verifiedReason).toBe(VerifiedReason.OBSERVATION_LOST);
@@ -107,7 +107,7 @@ describe('an accepted-but-unfinished write is not a failure', () => {
       declaredConsequence: true,
       honesty: { ...clean, integrity: { clean: false, issues: ['capture truncated'] } },
       settled: true,
-      outcomePending: true,
+      outcomePending: ['POST /api/orders'],
     });
     expect(out.verified).toBe(Verified.UNKNOWN);
     expect(out.verifiedReason).toBe(VerifiedReason.OUTCOME_PENDING);

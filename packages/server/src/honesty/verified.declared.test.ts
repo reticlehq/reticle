@@ -145,7 +145,7 @@ describe('a satisfied declared consequence outranks idle-settlement', () => {
         declaredConsequence: true,
         honesty: clean,
         settled: false,
-        outcomePending: true,
+        outcomePending: ['POST /api/orders'],
       }).verified,
     ).toBe(Verified.UNKNOWN);
     // A net-only declaration still loses to an unread body: the body is then the only channel
@@ -250,7 +250,7 @@ describe('a body-independent declared consequence outranks an unread payload', (
       independentOfBody: true,
       honesty: clean,
       settled: true,
-      outcomePending: true,
+      outcomePending: ['POST /api/orders'],
       outcomeUnread: ['POST /api/chat/messages'],
     });
     expect(v.verified).toBe(Verified.UNKNOWN);

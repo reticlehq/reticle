@@ -68,7 +68,7 @@ import {
   Coverage,
   impeachesCapture,
 } from '../honesty/blind-spots.js';
-import { hasAcceptedWrite } from '../honesty/accepted-write.js';
+import { acceptedWriteLabels } from '../honesty/accepted-write.js';
 import { unreadWriteLabels } from '../honesty/unread-outcome.js';
 import {
   evaluatePredicate,
@@ -748,7 +748,7 @@ export const ACT_TOOLS: ToolDef[] = [
         });
         // The single field an agent reads. Everything below it is the evidence it was derived from;
         // this is the only one that has to be interpreted, and now it interprets itself.
-        const outcomePending = hasAcceptedWrite(windowEvents);
+        const outcomePending = acceptedWriteLabels(windowEvents);
         const outcomeUnread = unreadWriteLabels(windowEvents);
         const stillInFlight = inFlightRequestLabels(windowEvents);
         const decision = decideVerified({
@@ -777,7 +777,7 @@ export const ACT_TOOLS: ToolDef[] = [
           ...(absenceBlindSpot === undefined ? {} : { absenceBlindSpot }),
           honesty,
           contradictions,
-          ...(outcomePending ? { outcomePending } : {}),
+          ...(0 === outcomePending.length ? {} : { outcomePending }),
           ...(outcomeUnread.length > 0 ? { outcomeUnread } : {}),
           // `settled` is genuinely optional: a wait that declared no predicate never measured it, and
           // passing `false` there would report "never settled" about something never asked to settle.

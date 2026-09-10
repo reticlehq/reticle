@@ -19,7 +19,7 @@ import {
   transportGapNote,
 } from '../honesty/blind-spots.js';
 import { buildHonestyBlock } from '../honesty/honesty.js';
-import { hasAcceptedWrite } from '../honesty/accepted-write.js';
+import { acceptedWriteLabels } from '../honesty/accepted-write.js';
 import { unreadWriteLabels } from '../honesty/unread-outcome.js';
 import { decideVerified } from '../honesty/verified.js';
 import { describeWaitTarget, namedNetIsInFlight } from '../honesty/unsettled.js';
@@ -132,7 +132,7 @@ export async function assertVerdict(
   const impeachingNotes = [impeaching.note, gap, ...crashedRuleNotes()].filter(
     (n): n is string => n !== undefined,
   );
-  const outcomePending = hasAcceptedWrite(windowEvents);
+  const outcomePending = acceptedWriteLabels(windowEvents);
   const outcomeUnread = unreadWriteLabels(windowEvents);
   const stillInFlight = inFlightRequestLabels(windowEvents);
   const effectiveInconclusive =
@@ -180,7 +180,7 @@ export async function assertVerdict(
       ],
     }),
     contradictions,
-    ...(outcomePending ? { outcomePending } : {}),
+    ...(0 === outcomePending.length ? {} : { outcomePending }),
     ...(outcomeUnread.length > 0 ? { outcomeUnread } : {}),
     // Same detail the act path supplies: this route reaches UNSETTLED through an absence-derived
     // contradiction, and "the window closed before the app finished" is no more actionable here.

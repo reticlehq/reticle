@@ -94,10 +94,18 @@ interface VerifiedInputs {
    */
   namedRequestInFlight?: boolean;
   /**
-   * A write in this window answered `202 Accepted` — the server took the request and has NOT
-   * finished processing it.
+   * Writes in this window that answered `202 Accepted`, as "METHOD url" — the server took the
+   * request and has NOT finished processing it.
+   *
+   * The LABELS rather than a flag, for the same reason `outcomeUnread` below carries them: this
+   * verdict tells the agent to re-check once the server reconciles, and that instruction is only
+   * usable if it knows WHICH write to re-check. A window with three requests and a verdict saying
+   * "a write returned 202" leaves it guessing, and guessing wrong means watching a call that has
+   * already finished while the real one is still pending.
+   *
+   * Empty means nothing is pending.
    */
-  outcomePending?: boolean;
+  outcomePending?: string[];
   /**
    * Writes in this window that returned 2xx with a payload that was never recorded, as "METHOD url",
    * so their outcome was never read. See `unreadWriteLabels` — the status line describes the
@@ -248,12 +256,13 @@ export function decideVerified(inputs: VerifiedInputs): VerifiedVerdict {
   // UNKNOWN rather than NO, in both directions now: nothing is known to have failed, and saying it
   // has would be its own false report. This matters most outside the browser, where a write that is
   // accepted and reflected a moment later is the normal healthy path rather than an edge case.
-  if (true === outcomePending) {
+  if (outcomePending !== undefined && outcomePending.length > 0) {
     return {
       verified: Verified.UNKNOWN,
       verifiedReason: VerifiedReason.OUTCOME_PENDING,
       because:
-        'a write returned 202 Accepted, so the server has not finished processing it — this window cannot contain the outcome; re-check once it reconciles',
+        `a write returned 202 Accepted (${outcomePending.join('; ')}), so the server has not finished ` +
+        'processing it — this window cannot contain the outcome; re-check that call once it reconciles',
     };
   }
 

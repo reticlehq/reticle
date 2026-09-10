@@ -32,7 +32,12 @@ describe('a 202 means the outcome does not exist yet', () => {
   } as unknown as Parameters<typeof decideVerified>[0]['honesty'];
 
   it('is UNKNOWN, not yes, when a write is still being processed', () => {
-    const r = decideVerified({ pass: true, honesty: clean, settled: true, outcomePending: true });
+    const r = decideVerified({
+      pass: true,
+      honesty: clean,
+      settled: true,
+      outcomePending: ['POST /api/orders'],
+    });
     expect(r.verified).toBe(Verified.UNKNOWN);
     expect(r.because).toContain('202');
   });
@@ -40,7 +45,12 @@ describe('a 202 means the outcome does not exist yet', () => {
   it('is UNKNOWN rather than NO — nothing has failed yet', () => {
     // Reporting a failure that has not happened is its own false report, in the other direction.
     expect(
-      decideVerified({ pass: true, honesty: clean, settled: true, outcomePending: true }).verified,
+      decideVerified({
+        pass: true,
+        honesty: clean,
+        settled: true,
+        outcomePending: ['POST /api/orders'],
+      }).verified,
     ).not.toBe(Verified.NO);
   });
 
@@ -61,7 +71,12 @@ describe('a 202 means the outcome does not exist yet', () => {
     // because the caller is told to re-check once the write reconciles, and because the alternative
     // is blaming an app for being asynchronous — which for a non-browser realm is the normal healthy
     // path, not an edge case.
-    const r = decideVerified({ pass: false, honesty: clean, settled: true, outcomePending: true });
+    const r = decideVerified({
+      pass: false,
+      honesty: clean,
+      settled: true,
+      outcomePending: ['POST /api/orders'],
+    });
     expect(r.verified).toBe(Verified.UNKNOWN);
     expect(r.verifiedReason).toBe(VerifiedReason.OUTCOME_PENDING);
   });
@@ -433,7 +448,7 @@ describe('every verdict names the clause that decided it', () => {
       pass: true,
       honesty: clean(),
       settled: true,
-      outcomePending: true,
+      outcomePending: ['POST /api/orders'],
     },
     [VerifiedReason.OUTCOME_UNREAD]: {
       pass: true,
