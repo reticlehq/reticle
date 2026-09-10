@@ -8,7 +8,7 @@ import {
   type HelloMessage,
   type ReticleEvent,
 } from '@reticlehq/core';
-import { nativeSetTimeout, nativeNow } from '../timers/native-timers.js';
+import { nativeSetTimeout, nativeNow } from '../timers/native/native-timers.js';
 import { nativeWarn } from '../timers/native-console.js';
 import { safeStringify } from '../security/serialization.js';
 

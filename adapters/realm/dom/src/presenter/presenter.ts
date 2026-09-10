@@ -10,7 +10,7 @@ import {
 import { refs } from '../dom/refs.js';
 import { unreachableStripText } from '../transport/unreachable-message.js';
 import { actionVerb } from './chrome/presenter-verbs.js';
-import { nativeSetTimeout, nativeClearTimeout, nativeNow } from '../timers/native-timers.js';
+import { nativeSetTimeout, nativeClearTimeout, nativeNow } from '../timers/native/native-timers.js';
 import {
   LOG_KIND,
   CHIP_LABEL,

@@ -1,5 +1,5 @@
 import { PresenterMode } from '@reticlehq/core';
-import { nativeSetTimeout, nativeClearTimeout } from '../timers/native-timers.js';
+import { nativeSetTimeout, nativeClearTimeout } from '../timers/native/native-timers.js';
 import {
   GlowPhase,
   BorderMode,

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { nativeSetInterval } from './native-timers.js';
+import { nativeSetInterval } from './native/native-timers.js';
 
 describe('nativeSetInterval', () => {
   it('stops firing after the returned stopper is called', async () => {

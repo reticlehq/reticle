@@ -7,7 +7,7 @@
  */
 import { REDACTED_VALUE } from '@reticlehq/core';
 import { isSensitiveKey, safeStringify, scrubKnownSecrets } from '../../security/serialization.js';
-import { nativeClearTimeout, nativeSetTimeout } from '../../timers/native-timers.js';
+import { nativeClearTimeout, nativeSetTimeout } from '../../timers/native/native-timers.js';
 
 /** Only text-like bodies are worth capturing; binary (images/fonts/octet-stream) is skipped. */
 const CAPTURABLE_CONTENT =

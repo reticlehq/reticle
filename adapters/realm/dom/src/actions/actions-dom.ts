@@ -1,6 +1,6 @@
 import { refs } from '../dom/refs.js';
 import { hitTestOccluder } from '../dom/occlusion.js';
-import { nativeFrame } from '../timers/native-timers.js';
+import { nativeFrame } from '../timers/native/native-timers.js';
 import { asSyntheticInput } from './synthetic-input.js';
 
 interface ClickGeometry {

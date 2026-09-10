@@ -3,7 +3,7 @@ import type { Emit, Teardown } from './types.js';
 import { countUnmountedRows } from '../dom/virtualized.js';
 import { isCaptured } from '../dom/shadow-registry.js';
 import { sameOriginFrameBodies } from './frames.js';
-import { nativeClearTimeout, nativeSetTimeout } from '../timers/native-timers.js';
+import { nativeClearTimeout, nativeSetTimeout } from '../timers/native/native-timers.js';
 
 /**
  * Blind-spot sensor. The SDK instruments the DOM, but a cross-origin iframe is a wall it cannot

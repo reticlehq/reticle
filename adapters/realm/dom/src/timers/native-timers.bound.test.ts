@@ -14,7 +14,7 @@ describe('boundedFrame is bounded — never hangs', () => {
 
   it('resolves with { settled: false } when rAF never fires', async () => {
     vi.stubGlobal('requestAnimationFrame', (_cb: FrameRequestCallback): number => 1);
-    const { boundedFrame } = await import('./native-timers.js');
+    const { boundedFrame } = await import('./native/native-timers.js');
 
     const outcome = await boundedFrame(50);
 
@@ -30,7 +30,7 @@ describe('boundedFrame is bounded — never hangs', () => {
       setTimeout(() => cb(0), 0);
       return 1;
     });
-    const { boundedFrame } = await import('./native-timers.js');
+    const { boundedFrame } = await import('./native/native-timers.js');
 
     const outcome = await boundedFrame(200);
     expect(outcome.settled).toBe(true);

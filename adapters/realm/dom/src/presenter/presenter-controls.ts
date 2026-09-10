@@ -1,5 +1,5 @@
 import { HumanControlKind, PresenterTone, SessionState, type FlowChip } from '@reticlehq/core';
-import { nativeSetTimeout, nativeClearTimeout } from '../timers/native-timers.js';
+import { nativeSetTimeout, nativeClearTimeout } from '../timers/native/native-timers.js';
 import { CHAT_TOGGLE_ATTR, CLEAR_MARKS_ATTR, MARKERS_BTN_ATTR } from './presenter-config.js';
 import {
   PresenterIcon,

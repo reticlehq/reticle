@@ -7,7 +7,7 @@
 import { EventType, StreamDirection, StreamTransport } from '@reticlehq/core';
 import type { Emit } from './types.js';
 import { isStreamingBody } from './net-detail/network-body.js';
-import { nativeClearTimeout, nativeSetTimeout } from '../timers/native-timers.js';
+import { nativeClearTimeout, nativeSetTimeout } from '../timers/native/native-timers.js';
 
 /**
  * Longest a streamed response body is watched before the record is closed anyway.

@@ -1,4 +1,4 @@
-import { nativeSetTimeout } from '../../timers/native-timers.js';
+import { nativeSetTimeout } from '../../timers/native/native-timers.js';
 
 /**
  * Synthetic-cursor + click effects - the visible "the agent is acting here" motion. Pure DOM helpers

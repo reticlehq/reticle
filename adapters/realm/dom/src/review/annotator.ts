@@ -2,7 +2,7 @@ import { isSyntheticInput } from '../actions/synthetic-input.js';
 import { EventType } from '@reticlehq/core';
 import { isReticleUi, isReticleOverlay } from '../dom/dom-ignore.js';
 import { resolveMarkAnchor, type MarkAnchor } from './mark-anchor.js';
-import { nativeSetTimeout, nativeClearTimeout } from '../timers/native-timers.js';
+import { nativeSetTimeout, nativeClearTimeout } from '../timers/native/native-timers.js';
 import {
   ANNOTATOR_CSS,
   ANNOTATOR_ROOT_HTML,

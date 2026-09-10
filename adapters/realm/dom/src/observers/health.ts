@@ -5,7 +5,7 @@ import {
   RETICLE_IPC_GLOBAL,
   SESSION_HEALTH,
 } from '@reticlehq/core';
-import { nativeSetInterval } from '../timers/native-timers.js';
+import { nativeSetInterval } from '../timers/native/native-timers.js';
 import type { Emit, Teardown } from './types.js';
 
 /**

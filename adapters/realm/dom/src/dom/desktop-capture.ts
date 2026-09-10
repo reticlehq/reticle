@@ -22,7 +22,7 @@
  */
 
 import { RETICLE_IPC_GLOBAL, RETICLE_TAURI_CAPTURE_COMMAND, VisualReason } from '@reticlehq/core';
-import { nativeFrame } from '../timers/native-timers.js';
+import { nativeFrame } from '../timers/native/native-timers.js';
 import { RETICLE_OVERLAY } from './dom-ignore.js';
 
 interface CaptureChannel {
