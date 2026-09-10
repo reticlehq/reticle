@@ -151,3 +151,60 @@ describe('browser-emitted resource failures reach the console channel', () => {
     expect(events.filter((e) => e.type === EventType.ERROR_UNCAUGHT)).toHaveLength(0);
   });
 });
+
+describe('CSP violations reach the console channel', () => {
+  let teardown: Teardown | undefined;
+  afterEach(() => {
+    teardown?.();
+    teardown = undefined;
+  });
+
+  /**
+   * `securitypolicyviolation` as the browser dispatches it. Constructed rather than provoked: a
+   * real violation needs a CSP header the test environment cannot set, and the shape is what the
+   * listener reads.
+   */
+  const dispatchViolation = (violatedDirective: string, blockedURI: string): void => {
+    const event = new Event('securitypolicyviolation', { bubbles: true, cancelable: false });
+    Object.assign(event, { violatedDirective, blockedURI });
+    document.dispatchEvent(event);
+  };
+
+  it('reports a blocked subresource that no console method ever sees', () => {
+    const { emit, events } = collect();
+    teardown = installConsole(emit);
+
+    dispatchViolation('script-src', 'https://cdn.example.test/analytics.js');
+
+    const errors = events.filter((e) => e.type === EventType.CONSOLE_ERROR);
+    expect(errors, 'DevTools prints this; an absent-console assertion must not pass').toHaveLength(
+      1,
+    );
+    expect(String(errors[0]?.data['message'])).toContain('analytics.js');
+    expect(String(errors[0]?.data['message'])).toContain('script-src');
+    expect(errors[0]?.data['kind']).toBe('securitypolicyviolation');
+    expect(errors[0]?.data['source']).toBe('https://cdn.example.test/analytics.js');
+  });
+
+  it('names inline content rather than reporting a blocked empty string', () => {
+    // `blockedURI` is '' for inline script/style, which is the common script-src violation. A bare
+    // interpolation would read "blocked " and say nothing about what was refused.
+    const { emit, events } = collect();
+    teardown = installConsole(emit);
+
+    dispatchViolation('script-src', '');
+
+    const error = events.find((e) => e.type === EventType.CONSOLE_ERROR);
+    expect(String(error?.data['message'])).toContain('inline content');
+    expect(error?.data).not.toHaveProperty('source');
+  });
+
+  it('stops reporting after teardown', () => {
+    const { emit, events } = collect();
+    installConsole(emit)();
+
+    dispatchViolation('img-src', 'https://example.test/pixel.gif');
+
+    expect(events.filter((e) => e.type === EventType.CONSOLE_ERROR)).toHaveLength(0);
+  });
+});
