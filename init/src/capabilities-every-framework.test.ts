@@ -13,9 +13,9 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { Framework, PackageManager, UiLibrary, type Detection } from './detect.js';
-import { FRAMEWORK_ADAPTERS } from './framework-adapter.js';
-import { StepStatus, type PlanInput, type Step } from './plan.js';
+import { Framework, PackageManager, UiLibrary, type Detection } from './detect/detect.js';
+import { FRAMEWORK_ADAPTERS } from './plan/framework-adapter.js';
+import { StepStatus, type PlanInput, type Step } from './plan/plan.js';
 
 const PROBE_TESTID = 'checkout-submit';
 

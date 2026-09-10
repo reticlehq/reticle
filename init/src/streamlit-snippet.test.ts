@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { streamlitPageSnippet } from './snippets.js';
+import { streamlitPageSnippet } from './patch/snippets.js';
 import { RETICLE_VERSION } from './version.js';
 
 const snippet = streamlitPageSnippet("{ token: 'tok_abc123' }");

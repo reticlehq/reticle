@@ -20,7 +20,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { htmlManual } from './snippets.js';
+import { htmlManual } from './patch/snippets.js';
 import { RETICLE_VERSION } from './version.js';
 
 const snippet = htmlManual(4400, 'demo', 'tok_abc123');

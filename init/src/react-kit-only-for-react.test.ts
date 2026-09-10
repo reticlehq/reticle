@@ -20,8 +20,8 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { frameworkPackages } from './plan.js';
-import { Framework, UiLibrary } from './detect.js';
+import { frameworkPackages } from './plan/plan.js';
+import { Framework, UiLibrary } from './detect/detect.js';
 
 const REACT_KIT = '@reticlehq/react';
 const SENSOR = '@reticlehq/browser';
@@ -89,7 +89,7 @@ describe('the React kit is only installed into a React codebase', () => {
  */
 describe('the unverified note tells each library the truth about component identity', () => {
   it('does not tell a Preact app it loses component identity', async () => {
-    const { unverifiedUiLibraryNote } = await import('./snippets.js');
+    const { unverifiedUiLibraryNote } = await import('./patch/snippets.js');
     const note = unverifiedUiLibraryNote('preact');
     expect(note).not.toContain('will NOT get');
     expect(note).toContain('preact/compat');
@@ -98,7 +98,7 @@ describe('the unverified note tells each library the truth about component ident
   });
 
   it('still tells a Vue app plainly that it does not get component identity', async () => {
-    const { unverifiedUiLibraryNote } = await import('./snippets.js');
+    const { unverifiedUiLibraryNote } = await import('./patch/snippets.js');
     expect(unverifiedUiLibraryNote('vue')).toContain('will NOT get');
   });
 });
@@ -126,12 +126,12 @@ describe('the generated import matches the installed package', () => {
   ];
 
   it.each(cases)('%s imports a package it also installs', async (_label, framework, ui) => {
-    const { sdkImport } = await import('./snippets.js');
+    const { sdkImport } = await import('./patch/snippets.js');
     expect(frameworkPackages(framework, ui)).toContain(sdkImport(ui).specifier);
   });
 
   it('the sensor path does not call install(), which it does not export', async () => {
-    const { sdkImport, svelteKitHooksFile } = await import('./snippets.js');
+    const { sdkImport, svelteKitHooksFile } = await import('./patch/snippets.js');
     expect(sdkImport(UiLibrary.SVELTE).usesInstall).toBe(false);
     const hook = svelteKitHooksFile(undefined, 'demo', UiLibrary.SVELTE);
     expect(hook).toContain("import('@reticlehq/browser')");
@@ -139,7 +139,7 @@ describe('the generated import matches the installed package', () => {
   });
 
   it('the React path still calls install(), which is what adds component identity', async () => {
-    const { sdkImport, svelteKitHooksFile } = await import('./snippets.js');
+    const { sdkImport, svelteKitHooksFile } = await import('./patch/snippets.js');
     expect(sdkImport(UiLibrary.REACT).usesInstall).toBe(true);
     expect(svelteKitHooksFile(undefined, 'demo', UiLibrary.REACT)).toContain('install();');
   });
@@ -156,14 +156,14 @@ describe('the generated import matches the installed package', () => {
  */
 describe('the note tells the truth about source pointers', () => {
   it('tells a Vue app it does NOT get file:line', async () => {
-    const { unverifiedUiLibraryNote } = await import('./snippets.js');
+    const { unverifiedUiLibraryNote } = await import('./patch/snippets.js');
     const note = unverifiedUiLibraryNote('vue');
     expect(note).toContain('does NOT come through');
     expect(note).toContain('single-file component');
   });
 
   it('still tells preact and svelte that it does', async () => {
-    const { unverifiedUiLibraryNote } = await import('./snippets.js');
+    const { unverifiedUiLibraryNote } = await import('./patch/snippets.js');
     for (const lib of ['preact', 'svelte']) {
       expect(unverifiedUiLibraryNote(lib), lib).toContain('does too');
     }
@@ -171,7 +171,7 @@ describe('the note tells the truth about source pointers', () => {
 
   it('says Vue’s install is gated while its drive is not', async () => {
     // Understating is as wrong as overstating: the install gate scaffolds Vue from scratch now.
-    const note = (await import('./snippets.js')).unverifiedUiLibraryNote('vue');
+    const note = (await import('./patch/snippets.js')).unverifiedUiLibraryNote('vue');
     expect(note).toContain('SETUP is proven');
     expect(note).not.toContain('No CI gate covers vue');
   });

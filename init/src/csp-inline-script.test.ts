@@ -8,9 +8,9 @@
  * the wrong cause, and nothing in the setup surface names the real one.
  */
 import { describe, expect, it } from 'vitest';
-import { cspInlineScriptProblem, EXTERNAL_CONNECT_PATH } from './csp-check.js';
-import { diagnoseWebCsp } from './csp-doctor.js';
-import { staticPageSnippet } from './snippets.js';
+import { cspInlineScriptProblem, EXTERNAL_CONNECT_PATH } from './diagnose/csp-check.js';
+import { diagnoseWebCsp } from './diagnose/csp-doctor.js';
+import { staticPageSnippet } from './patch/snippets.js';
 
 const PORT = 4400;
 const problem = (text: string): string | undefined => cspInlineScriptProblem(text, PORT);

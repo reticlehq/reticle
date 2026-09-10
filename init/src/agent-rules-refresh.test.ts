@@ -22,7 +22,7 @@ import {
   mergeMarkedInstruction,
   reticleMdFile,
   RETICLE_MD_PATH,
-} from './agent-rules.js';
+} from './project/agent-rules.js';
 
 const STALE = `<!-- reticle:begin (managed by \`reticle init\` — edit outside these markers) -->
 ## Verifying with Reticle

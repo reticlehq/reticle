@@ -3,8 +3,8 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { bridgeWsUrl, RETICLE_CLIENT_HOST } from '@reticlehq/core';
-import { craDevModuleFile } from './cra.js';
-import { astroManual, nextReticleDevFile } from './snippets.js';
+import { craDevModuleFile } from './patch/cra.js';
+import { astroManual, nextReticleDevFile } from './patch/snippets.js';
 
 /**
  * One place builds the bridge URL, and that is the whole point of `bridgeWsUrl`.

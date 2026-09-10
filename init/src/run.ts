@@ -5,34 +5,34 @@
  */
 
 import { dirname, join } from 'node:path';
-import { CONTAINER_MARKERS } from './containerised-dev-server.js';
-import { CSP_FILES } from './csp-doctor.js';
-import { preflightRefusal } from './preflight.js';
+import { CONTAINER_MARKERS } from './diagnose/containerised-dev-server.js';
+import { CSP_FILES } from './diagnose/csp-doctor.js';
+import { preflightRefusal } from './plan/preflight.js';
 import {
   detectDjangoProject,
   detectStreamlitProject,
   djangoSetupMessage,
   noPackageJsonMessage,
   streamlitSetupMessage,
-} from './non-js-project.js';
-import { devCommandFrom } from './dev-script.js';
-import { restartHint, FEEDBACK_HINT } from './closing-hint.js';
-import { projectIdOf, rememberProjectOnDisk } from './remember-project.js';
-import { detect, Framework, type DetectInput, UiLibrary } from './detect.js';
-import { wasMcpRegistered } from './mcp-registered.js';
-import { pickAstroHost } from './astro-host.js';
+} from './detect/non-js-project.js';
+import { devCommandFrom } from './detect/dev-script.js';
+import { restartHint, FEEDBACK_HINT } from './diagnose/closing-hint.js';
+import { projectIdOf, rememberProjectOnDisk } from './project/remember-project.js';
+import { detect, Framework, type DetectInput, UiLibrary } from './detect/detect.js';
+import { wasMcpRegistered } from './register/mcp-registered.js';
+import { pickAstroHost } from './patch/astro-host.js';
 import {
   ELECTRON_VITE_CONFIG_CANDIDATES,
   NEXT_CONFIG_CANDIDATES,
   PACKAGE_JSON,
   VITE_CONFIG_CANDIDATES,
-} from './workspace-apps.js';
-import { redirectToWorkspaceApp } from './workspace-redirect.js';
-import { isConnectStep } from './connect-steps.js';
-import { CURSOR_RULE_PATH, RETICLE_MD_PATH } from './agent-rules.js';
-import { CRA_ENV_PATH } from './cra.js';
-import { NEXT_LAYOUT_CANDIDATES, NEXT_PAGES_APP_CANDIDATES } from './next-patch.js';
-import { formatGeneratedSource } from './format-generated.js';
+} from './detect/workspace-apps.js';
+import { redirectToWorkspaceApp } from './detect/workspace-redirect.js';
+import { isConnectStep } from './plan/connect-steps.js';
+import { CURSOR_RULE_PATH, RETICLE_MD_PATH } from './project/agent-rules.js';
+import { CRA_ENV_PATH } from './patch/cra.js';
+import { NEXT_LAYOUT_CANDIDATES, NEXT_PAGES_APP_CANDIDATES } from './patch/next-patch.js';
+import { formatGeneratedSource } from './patch/format-generated.js';
 
 /** CRA's bundled entry, in the order create-react-app itself generates them. */
 const CRA_ENTRY_CANDIDATES = ['src/index.tsx', 'src/index.jsx', 'src/index.ts', 'src/index.js'];
@@ -54,18 +54,18 @@ import {
   StepStatus,
   type Plan,
   type PlanInput,
-} from './plan.js';
-import { claudeAvailableProbe, claudeExistsProbe } from './mcp.js';
-import { reticleDevLocation } from './next-patch.js';
-import { scanTestids, storeHints, scanStores } from './capabilities.js';
+} from './plan/plan.js';
+import { claudeAvailableProbe, claudeExistsProbe } from './register/mcp.js';
+import { reticleDevLocation } from './patch/next-patch.js';
+import { scanTestids, storeHints, scanStores } from './detect/capabilities.js';
 import {
   fileBackedClients,
   clientMarkerRelPath,
   ConfigScope,
   McpClient,
   CURSOR_PROJECT_MARKER,
-} from './mcp-clients.js';
-import { deriveProjectId, packageName } from './project-id.js';
+} from './register/mcp-clients.js';
+import { deriveProjectId, packageName } from './project/project-id.js';
 import {
   VITE_DEV_MODULE_PATH,
   ELECTRON_VITE_DEV_MODULE_PATH,
@@ -75,15 +75,15 @@ import {
   djangoMiddlewareSnippet,
   reticleConfigContent,
   streamlitPageSnippet,
-} from './snippets.js';
-import { NUXT_CONFIG_CANDIDATES } from './nuxt-patch.js';
-import { CLAUDE_COMMAND_PATH, CURSOR_COMMAND_PATH } from './slash-command.js';
+} from './patch/snippets.js';
+import { NUXT_CONFIG_CANDIDATES } from './patch/nuxt-patch.js';
+import { CLAUDE_COMMAND_PATH, CURSOR_COMMAND_PATH } from './register/slash-command.js';
 import { RETICLE_VERSION } from './version.js';
-import { InitFailure } from './init-failure.js';
+import { InitFailure } from './diagnose/init-failure.js';
 import type { InitHost } from './host.js';
 import type { InitOutcome } from '@reticlehq/core/telemetry';
 
-import { resolveLockfiles } from './lockfiles.js';
+import { resolveLockfiles } from './detect/lockfiles.js';
 // Re-exported so the existing import site (and its test block) keeps working after the split.
 export { resolveLockfiles };
 

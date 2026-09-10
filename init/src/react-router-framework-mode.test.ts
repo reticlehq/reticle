@@ -9,12 +9,12 @@
  * Exactly the class SvelteKit and Astro are already detected for, and detected in the same place.
  */
 import { describe, expect, it } from 'vitest';
-import { detect, Framework, UiLibrary, type DetectInput } from './detect.js';
-import { frameworkPackages } from './plan.js';
-import { reactRouterSteps } from './plan-framework.js';
-import { REACT_ROUTER_ENTRY_PATH } from './snippets.js';
-import { StepStatus, type PlanInput } from './plan.js';
-import { isConnectStep } from './connect-steps.js';
+import { detect, Framework, UiLibrary, type DetectInput } from './detect/detect.js';
+import { frameworkPackages } from './plan/plan.js';
+import { reactRouterSteps } from './plan/plan-framework.js';
+import { REACT_ROUTER_ENTRY_PATH } from './patch/snippets.js';
+import { StepStatus, type PlanInput } from './plan/plan.js';
+import { isConnectStep } from './plan/connect-steps.js';
 
 const input = (over: Partial<DetectInput> = {}): DetectInput => ({
   pkg: {},

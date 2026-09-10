@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { astroManual, unverifiedUiLibraryNote } from './snippets.js';
+import { astroManual, unverifiedUiLibraryNote } from './patch/snippets.js';
 
 /**
  * An UNVERIFIED notice has to be accurate about what is actually lost, or it does damage in the

@@ -23,7 +23,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { DEV_SERVER_POLICY } from './agent-rules.js';
+import { DEV_SERVER_POLICY } from './project/agent-rules.js';
 import { execFileSync } from 'node:child_process';
 
 // Asked rather than counted. A walk of `..` segments up to the repository is a statement about how

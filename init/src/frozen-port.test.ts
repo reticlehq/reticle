@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { astroManual } from './snippets.js';
+import { astroManual } from './patch/snippets.js';
 import { bridgeWsUrl } from '@reticlehq/core';
-import { craEnvPatch, craDevModuleFile, TOKEN_VAR, URL_VAR } from './cra.js';
+import { craEnvPatch, craDevModuleFile, TOKEN_VAR, URL_VAR } from './patch/cra.js';
 
 /**
  * A daemon URL written once at install time is a fact about the day someone ran `init`. Every stack

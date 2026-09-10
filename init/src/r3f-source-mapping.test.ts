@@ -13,8 +13,8 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { buildPlan, type PlanInput } from './plan.js';
-import { Framework, PackageManager, UiLibrary, type Detection } from './detect.js';
+import { buildPlan, type PlanInput } from './plan/plan.js';
+import { Framework, PackageManager, UiLibrary, type Detection } from './detect/detect.js';
 
 const NEXT_CONFIG_SOURCE = `const nextConfig = {};
 export default nextConfig;

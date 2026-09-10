@@ -487,7 +487,7 @@ jobs:
           # by definition: the IPC observer, desktop capture, and the setup/doctor pair that shape
           # and diagnose a desktop install. Anything broader (all of adapters/realm/dom, say) would
           # route most PRs here and give the routing back for nothing.
-          if echo "$CHANGED" | grep -qE '^(adapters/realm/electron/|adapters/realm/tauri/|apps/(electron|tauri)-smoke/|adapters/realm/dom/src/observers/ipc\.ts|adapters/realm/dom/src/dom/desktop-capture\.ts|server/src/command/setup/desktop-shape\.ts|init/src/desktop-doctor\.ts|\.github/workflows/ci\.yml)'; then
+          if echo "$CHANGED" | grep -qE '^(adapters/realm/electron/|adapters/realm/tauri/|apps/(electron|tauri)-smoke/|adapters/realm/dom/src/observers/ipc\.ts|adapters/realm/dom/src/dom/desktop-capture\.ts|server/src/command/setup/desktop-shape\.ts|init/src/diagnose/desktop-doctor\.ts|\.github/workflows/ci\.yml)'; then
             echo "desktop=true" >> "$GITHUB_OUTPUT"
           else
             echo "desktop=false" >> "$GITHUB_OUTPUT"

@@ -20,7 +20,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { RULE_BODY } from './agent-rules.js';
+import { RULE_BODY } from './project/agent-rules.js';
 
 describe('the every-turn rules name the verdict values an agent will meet', () => {
   it('names `no-fault`, now that the undeclared path returns it', () => {

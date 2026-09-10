@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { nextReticleDevFile } from './snippets.js';
-import { nextSteps } from './plan-framework.js';
-import { StepStatus } from './plan.js';
+import { nextReticleDevFile } from './patch/snippets.js';
+import { nextSteps } from './plan/plan-framework.js';
+import { StepStatus } from './plan/plan.js';
 import { RETICLE_DEFAULT_PORT } from '@reticlehq/core';
 
 /**

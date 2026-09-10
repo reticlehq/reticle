@@ -19,18 +19,23 @@ export {
 export { buildNodeIo } from './node-io.js';
 export { type InitHost, SILENT_HOST } from './host.js';
 export { RETICLE_VERSION, RETICLE_NPM_PACKAGE } from './version.js';
-export { InitFailure } from './init-failure.js';
-export { NodePlatform } from './platform.js';
+export { InitFailure } from './diagnose/init-failure.js';
+export { NodePlatform } from './detect/platform.js';
 export {
   DEV_SERVER_PORTS,
   isLikelyDevServerPort,
   devServerPortWarning,
-} from './dev-server-ports.js';
-export { configWithInstallSource } from './install-source-config.js';
-export { projectIdOf, rememberProjectOnDisk, type RegistryIo } from './remember-project.js';
-export { detectPackageManager, installCommandParts, parseMajor, PackageManager } from './detect.js';
-export { findWorkspaceApps } from './workspace-apps.js';
-export { refreshAgentRules } from './refresh-rules.js';
-export { diagnoseDesktop, isDesktopProject } from './desktop-doctor.js';
-export { diagnoseWebCsp } from './csp-doctor.js';
-export { reticleConfigContent } from './snippets.js';
+} from './detect/dev-server-ports.js';
+export { configWithInstallSource } from './project/install-source-config.js';
+export { projectIdOf, rememberProjectOnDisk, type RegistryIo } from './project/remember-project.js';
+export {
+  detectPackageManager,
+  installCommandParts,
+  parseMajor,
+  PackageManager,
+} from './detect/detect.js';
+export { findWorkspaceApps } from './detect/workspace-apps.js';
+export { refreshAgentRules } from './project/refresh-rules.js';
+export { diagnoseDesktop, isDesktopProject } from './diagnose/desktop-doctor.js';
+export { diagnoseWebCsp } from './diagnose/csp-doctor.js';
+export { reticleConfigContent } from './patch/snippets.js';

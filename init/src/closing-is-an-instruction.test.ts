@@ -16,8 +16,8 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { restartHint } from './closing-hint.js';
-import { StepStatus } from './plan.js';
+import { restartHint } from './diagnose/closing-hint.js';
+import { StepStatus } from './plan/plan.js';
 
 const closing = (status: StepStatus) => restartHint(status, 'pnpm dev');
 

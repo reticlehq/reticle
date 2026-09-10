@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { htmlManual } from './snippets.js';
+import { htmlManual } from './patch/snippets.js';
 
 /**
  * A connect snippet without the pairing token cannot connect. Ever.

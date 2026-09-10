@@ -10,10 +10,10 @@
  * of lie as a green report over an app that cannot connect.
  */
 import { describe, expect, it } from 'vitest';
-import { detect, Framework, type DetectInput } from './detect.js';
-import { craSteps } from './plan-framework.js';
-import { StepStatus, type PlanInput } from './plan.js';
-import { WEBPACK4_REACT_SCRIPTS_MAJOR } from './snippets.js';
+import { detect, Framework, type DetectInput } from './detect/detect.js';
+import { craSteps } from './plan/plan-framework.js';
+import { StepStatus, type PlanInput } from './plan/plan.js';
+import { WEBPACK4_REACT_SCRIPTS_MAJOR } from './patch/snippets.js';
 
 const detectInput = (reactScripts: string | undefined): DetectInput => ({
   pkg: {

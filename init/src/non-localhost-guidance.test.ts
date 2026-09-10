@@ -12,7 +12,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { htmlManual, nuxtManual } from './snippets.js';
+import { htmlManual, nuxtManual } from './patch/snippets.js';
 
 /** Wherever the rule is stated, it has to be stated in full. */
 function statesTheWholeRule(text: string): boolean {

@@ -12,13 +12,13 @@
 
 import { describe, expect, it } from 'vitest';
 import { ReticleDir } from '@reticlehq/core';
-import { detect, Framework, UiLibrary } from './detect.js';
-import { frameworkPackages } from './plan.js';
-import { nuxtManual, nuxtPluginPath } from './snippets.js';
-import { nuxtSteps } from './plan-framework.js';
-import { StepStatus, type PlanInput } from './plan.js';
-import { patchNuxtConfig } from './nuxt-patch.js';
-import { PatchKind } from './patch-kind.js';
+import { detect, Framework, UiLibrary } from './detect/detect.js';
+import { frameworkPackages } from './plan/plan.js';
+import { nuxtManual, nuxtPluginPath } from './patch/snippets.js';
+import { nuxtSteps } from './plan/plan-framework.js';
+import { StepStatus, type PlanInput } from './plan/plan.js';
+import { patchNuxtConfig } from './patch/nuxt-patch.js';
+import { PatchKind } from './patch/patch-kind.js';
 
 const nuxtProject = {
   pkg: { devDependencies: { nuxt: '^4.4.8', vue: '^3.5.0' } },

@@ -10,10 +10,10 @@
  * home, runs for every page, and is what that reporter independently arrived at.
  */
 import { describe, expect, it } from 'vitest';
-import { detectDjangoProject, djangoSetupMessage } from './non-js-project.js';
-import { djangoMiddlewareSnippet, reticleConfigContent } from './snippets.js';
-import { deriveProjectId } from './project-id.js';
-import { Framework } from './detect.js';
+import { detectDjangoProject, djangoSetupMessage } from './detect/non-js-project.js';
+import { djangoMiddlewareSnippet, reticleConfigContent } from './patch/snippets.js';
+import { deriveProjectId } from './project/project-id.js';
+import { Framework } from './detect/detect.js';
 
 const has =
   (...files: string[]) =>

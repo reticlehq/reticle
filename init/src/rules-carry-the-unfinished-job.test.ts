@@ -24,7 +24,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { RULE_BODY } from './agent-rules.js';
+import { RULE_BODY } from './project/agent-rules.js';
 
 describe('the unfinished capabilities file survives the restart that erases the terminal', () => {
   it('names the file by path, so the agent can find it without the init output', () => {

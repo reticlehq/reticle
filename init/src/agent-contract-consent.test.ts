@@ -11,9 +11,9 @@
  * was already theirs. Both were known at the moment the step was built, and both were withheld.
  */
 import { describe, expect, it } from 'vitest';
-import { buildPlan, type PlanInput } from './plan.js';
-import { markedBlock } from './agent-rules.js';
-import { Framework, PackageManager } from './detect.js';
+import { buildPlan, type PlanInput } from './plan/plan.js';
+import { markedBlock } from './project/agent-rules.js';
+import { Framework, PackageManager } from './detect/detect.js';
 
 const EXISTING_CONTRACT = '# CLAUDE.md\n\nThe rules of this repository.\n';
 

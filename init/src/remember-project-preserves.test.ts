@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { rememberProjectOnDisk, type RegistryIo } from './remember-project.js';
+import { rememberProjectOnDisk, type RegistryIo } from './project/remember-project.js';
 
 /**
  * Registering one project must never forget the others.

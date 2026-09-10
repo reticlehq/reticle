@@ -14,13 +14,13 @@ import {
   accessSync,
   constants,
 } from 'node:fs';
-import { NodePlatform } from './platform.js';
+import { NodePlatform } from './detect/platform.js';
 import { join, dirname, isAbsolute } from 'node:path';
 import { homedir } from 'node:os';
 import { spawnSync } from 'node:child_process';
 import type { InitIo } from './run.js';
 import type { InitHost } from './host.js';
-import { windowsShellArg } from './windows-quote.js';
+import { windowsShellArg } from './register/windows-quote.js';
 
 /**
  * `shell: true` ONLY where it earns its keep.

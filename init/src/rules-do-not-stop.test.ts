@@ -19,7 +19,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { RULE_BODY } from './agent-rules.js';
+import { RULE_BODY } from './project/agent-rules.js';
 
 describe('the sequence is named as a sequence', () => {
   it('says setup is not finished until a verdict exists', () => {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { restartHint } from './closing-hint.js';
-import { StepStatus } from './plan.js';
+import { restartHint } from './diagnose/closing-hint.js';
+import { StepStatus } from './plan/plan.js';
 
 /**
  * `init`'s last line is the one an agent acts on, and it was telling agents to stop when they should

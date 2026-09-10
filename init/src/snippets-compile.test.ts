@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { htmlManual } from './snippets.js';
+import { htmlManual } from './patch/snippets.js';
 
 /**
  * A snippet we tell people to paste has to COMPILE in the project we are telling them to paste it
