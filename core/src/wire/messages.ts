@@ -10,6 +10,7 @@ import { HumanControlKind, MarkAnchorStrategy } from './session-constants.js';
 import { MAX_WIRE_REDACT_KEYS, MAX_WIRE_REDACT_KEY_LENGTH } from './redaction.js';
 import { DOCUMENT_ID_LENGTH } from '../identity/document-identity.js';
 import { NO_EDITS_OBSERVED } from '../identity/edit-epoch.js';
+import { PlatformProfile } from './platform.js';
 
 const sessionIdSchema = z.string().min(1).max(TRANSPORT_LIMITS.MAX_SESSION_ID_LENGTH);
 const refSchema = z.string().max(TRANSPORT_LIMITS.MAX_REF_LENGTH);
@@ -118,6 +119,19 @@ export const HelloMessageSchema = z.object({
     .max(TRANSPORT_LIMITS.MAX_ADAPTERS),
   /** Optional browser/bridge pairing token. Required when the bridge configures one. */
   token: z.string().max(TRANSPORT_LIMITS.MAX_TOKEN_LENGTH).optional(),
+  /**
+   * What kind of surface this is: a browser document, a web page in somebody else's window, a
+   * native view tree, or no rendering surface at all. See platform.ts.
+   *
+   * ABSENT MEANS `web`, never "unknown". Everything that connected before this field existed was a
+   * browser document, so absence is not a gap -- it is the answer those connections would have
+   * given. This is the same convention five other fields on this message already use.
+   *
+   * It is deliberately not the shell name. Electron and Tauri are two shells and one surface, and
+   * verification wants the surface: the question being asked is what can be demanded of you, not
+   * which product you are.
+   */
+  platform: z.nativeEnum(PlatformProfile).optional(),
   /** Whether the app has advertised a capability registry (reticle.describe). */
   hasCapabilities: z.boolean().optional(),
   /**

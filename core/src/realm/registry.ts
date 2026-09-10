@@ -28,6 +28,7 @@
  */
 
 import { AppRuntime } from '../telemetry-feedback.js';
+import { PlatformProfile } from '../wire/platform.js';
 
 /** What Reticle needs to know about a realm that it cannot work out by looking. */
 export interface Realm {
@@ -180,4 +181,26 @@ export function realmOfProject(
     }
   }
   return undefined;
+}
+
+/**
+ * Which kind of surface each shell we know about presents.
+ *
+ * The bridge between the two vocabularies, kept here rather than beside `PlatformProfile` so that
+ * the profile list itself depends on nothing. A connection that says which shell it is, and not
+ * which surface, still gets a surface -- which is what lets an older SDK keep working.
+ *
+ * `Record<AppRuntime, PlatformProfile>` means a new shell cannot be added without answering this.
+ */
+const PROFILE_OF_RUNTIME: Record<AppRuntime, PlatformProfile> = {
+  [AppRuntime.WEB]: PlatformProfile.WEB,
+  // Both are a web page in somebody else's window. That they are one profile is the entire point.
+  [AppRuntime.ELECTRON]: PlatformProfile.WEBVIEW,
+  [AppRuntime.TAURI]: PlatformProfile.WEBVIEW,
+};
+
+/** The kind of surface a shell presents, or undefined if we have never heard of the shell. */
+export function profileOfRuntime(runtime: string | undefined): PlatformProfile | undefined {
+  if (runtime === undefined) return undefined;
+  return PROFILE_OF_RUNTIME[runtime as AppRuntime];
 }
