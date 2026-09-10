@@ -25,6 +25,11 @@ const PACKAGE_DIR = join(__dirname, '..');
 
 /** Modules with no production importer, each with the reason it is allowed to stay. */
 const DECLARED_UNWIRED: Record<string, string> = {
+  'agent/runs/to-artifact.ts':
+    'turns a run into a document somebody outside this repository could read. It has no caller ' +
+    'because nobody outside this repository has asked for one yet, and that is the whole bet: one ' +
+    'pure mapper costs a file if the format is never adopted, where shaping our internal artifact ' +
+    'around a hypothetical consumer would cost the artifact. It is wired the day a consumer exists.',
   'workspace-packages.ts':
     'answers "which packages does this repository publish, and where do they live" for the checks ' +
     'that need to look at all of them. Like repo-root.ts it has no production caller, because the ' +
