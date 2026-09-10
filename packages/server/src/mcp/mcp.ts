@@ -19,6 +19,7 @@ import { sessionEnvelopeShape } from '../tools/tool-kit.js';
 import { buildErrorPayload } from '../tools/error-recovery.js';
 import { takeVersionSkewOnto } from '../version/version-nudge.js';
 import { resultIsError } from './mcp-is-error.js';
+import { consumerVerdictRefusal, reservedVerdictKeysIn } from './consumer-verdict-guard.js';
 import { buildServerInstructions } from './server-instructions.js';
 import { unadvertisedToolHelp } from '../tools/unadvertised-help.js';
 
@@ -473,6 +474,12 @@ function toolNameOf(request: unknown): string | undefined {
   return 'string' === typeof name ? name : undefined;
 }
 
+/**
+ * The tools this codebase ships. Anything outside it came from a host via the `tools` parameter, and
+ * is held to the verdict rule below.
+ */
+const FIRST_PARTY_TOOL_NAMES: ReadonlySet<string> = new Set(TOOLS.map((t) => t.name));
+
 export function createMcpServer(
   deps: ToolDeps,
   profile: ToolSurface = TOOL_SURFACE.DEFAULT,
@@ -589,6 +596,22 @@ export function createMcpServer(
     registerTool(tool.name, config, async (args: Record<string, unknown>) => {
       try {
         const result = await runTool(tool, deps, args);
+        // A tool this codebase did not write may not hand the agent a verdict.
+        //
+        // Only reached for a tool absent from the first-party table, so the shipped surface pays a
+        // single Set lookup and nothing else. Refused rather than stripped: quietly removing the
+        // field would leave the tool's author believing it worked and the agent none the wiser,
+        // which is the "looks like success" shape this product exists to refuse.
+        if (!FIRST_PARTY_TOOL_NAMES.has(tool.name)) {
+          const claimed = reservedVerdictKeysIn(result);
+          if (claimed.length > 0) {
+            const refusal = consumerVerdictRefusal(tool.name, claimed);
+            return {
+              isError: true as const,
+              content: [{ type: 'text' as const, text: JSON.stringify({ error: refusal }) }],
+            };
+          }
+        }
         const text = encodeResult(result, encoding);
         // A tool that RETURNS `{ error, recovery }` refused just as surely as one that threw, and
         // `isError` is the field a caller branches on. Without this it was set only on the throw
