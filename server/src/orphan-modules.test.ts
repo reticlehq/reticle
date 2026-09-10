@@ -38,25 +38,25 @@ const DECLARED_UNWIRED: Record<string, string> = {
     'client that offers nothing. It has no production caller by design — shipping a generator of ' +
     'deliberately unhelpful input would be shipping a way to produce it. Its only importer is the ' +
     'test beside it, which is where hostile input belongs.',
-  'dev/stale-issue-guard.ts':
+  'command/dev/stale-issue-guard.ts':
     'decision logic for scripts/check-stale-issues.mjs, which imports it from dist. That script is ' +
     'MANUAL: it is reachable only as the `check:stale-issues` package script, and nothing under ' +
     '.github/ runs it — an earlier version of this note claimed it "runs in CI", and a grep for ' +
     'check-stale-issues across .github/ returns nothing. A repo-hygiene guard has no caller inside ' +
     'the product by definition; the unit tests are here so the rule is testable without a network ' +
     'or a repo. Unwired in the sense that matters: no automation depends on it today.',
-  'session/fake-session.ts':
+  'connection/session/fake-session.ts':
     'test-only Session factory. Returns a REAL Session with inert defaults so a new method on the ' +
     'class arrives with a working default instead of undefined in seven stub files (#726); ' +
     'imported by specs, which this scan deliberately does not count as production importers.',
-  'project/memory-fs.ts':
+  'features/project/memory-fs.ts':
     'test-only in-memory FileSystemPort. Extracted after a third spec hand-rolled its own copy; ' +
     'imported by specs, which this scan deliberately does not count as production importers.',
-  'capsule/minimize.ts':
+  'agent/capsule/minimize.ts':
     'Pure prefix-trim for bug capsules, unit-tested. Ready to wire into capsule save; not yet called.',
-  'flows/flow-report.ts':
+  'features/flows/flow-report.ts':
     'Mermaid confidence report. No caller can produce it today — needs a CLI or tool surface first.',
-  'phenomena/phenomena.ts':
+  'features/phenomena/phenomena.ts':
     'Phenomenon classification over journal actions. Staged for the deviation reporter; not yet called.',
   'import-graph.ts':
     'Test-only walker over this package’s own imports, shared by the two boundary guards ' +
@@ -69,7 +69,7 @@ const DECLARED_UNWIRED: Record<string, string> = {
     'release. Production code never deletes a temp tree, so a production importer would be the ' +
     'surprise here — it is imported by ~30 test files and belongs to src only because that is where ' +
     'the tsconfig can see it.',
-  'ee/audit-log.ts':
+  'features/ee/audit-log.ts':
     'Enterprise audit hook, a self-admitted pass-through stub. Nothing calls it; the license gate that ' +
     'would is real, but this consumer is not implemented.',
 };

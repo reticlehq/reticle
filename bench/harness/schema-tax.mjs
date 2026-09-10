@@ -22,7 +22,7 @@ import { measure } from './tokenizer.mjs';
 
 /** Ours, one entry per advertised profile — the whole point is that the DEFAULT is what gets paid. */
 // There is one tool surface plus the ALL verification switch — `dynamic`, `core`, `hybrid` and
-// `standard` were retired (see server/src/tools/tool-surface.ts). Measured per surface here.
+// `standard` were retired (see server/src/agent/tools/tool-surface.ts). Measured per surface here.
 const RETICLE_SURFACES = [
   { label: 'default', env: {} },
   { label: 'all', env: { RETICLE_ADVERTISE_ALL_TOOLS: '1' } },

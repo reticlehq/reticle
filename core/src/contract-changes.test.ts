@@ -12,7 +12,7 @@ import { execFileSync } from 'node:child_process';
  * whoever maintains a program that talks to Reticle from outside this repository. "The contract
  * moved" is not something they can act on.
  *
- * So `contract/CHANGES.md` records it, and this keeps the two in step. Change the contract and the
+ * So `core/CHANGES.md` records it, and this keeps the two in step. Change the contract and the
  * fingerprint moves on its own, this goes red, and the way to make it green is to write the sentence.
  * A change log that is allowed to fall behind is worse than none, because it is read as current.
  */
@@ -23,7 +23,7 @@ const REPO_ROOT = execFileSync('git', ['rev-parse', '--show-toplevel'], {
   cwd: import.meta.dirname,
   encoding: 'utf8',
 }).trim();
-const CHANGES_FILE = join(REPO_ROOT, 'contract', 'CHANGES.md');
+const CHANGES_FILE = join(REPO_ROOT, 'core', 'CHANGES.md');
 
 /** Fingerprints listed in the history table, newest first. */
 function recordedFingerprints(): string[] {
@@ -32,7 +32,7 @@ function recordedFingerprints(): string[] {
   return [...history.matchAll(/^\|\s*`([0-9a-f]{8})`\s*\|/gm)].map((m) => m[1] ?? '');
 }
 
-describe('contract/CHANGES.md keeps up with the wire contract', () => {
+describe('core/CHANGES.md keeps up with the wire contract', () => {
   it('has a history to read', () => {
     // Without this, a table that stopped parsing would make the check below pass on an empty list.
     expect(recordedFingerprints().length).toBeGreaterThan(0);
@@ -41,7 +41,7 @@ describe('contract/CHANGES.md keeps up with the wire contract', () => {
   it('the newest entry describes the contract as it is now', () => {
     expect(
       recordedFingerprints()[0],
-      'The wire contract changed and contract/CHANGES.md was not updated. Add a row at the TOP of ' +
+      'The wire contract changed and core/CHANGES.md was not updated. Add a row at the TOP of ' +
         `its history table with the fingerprint ${CONTRACT_FINGERPRINT}, today's date, and one ` +
         'sentence saying what changed, written for somebody maintaining a program that talks to ' +
         'Reticle and cannot see this repository.',

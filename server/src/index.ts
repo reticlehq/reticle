@@ -1,20 +1,20 @@
 import { join } from 'node:path';
 import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { resolveProjectCloud } from './cloud/cloud-config.js';
-import { startSyncDaemon } from './cloud/sync-daemon.js';
+import { resolveProjectCloud } from './features/cloud/cloud-config.js';
+import { startSyncDaemon } from './features/cloud/sync-daemon.js';
 import {
   PROJECT_REGISTRY_FILE,
   emptyProjectRegistry,
   parseProjectRegistry,
   projectCandidates,
 } from '@reticlehq/core/artifacts';
-import { discoverProjectConfigs, type ConfigDiscovery } from './cli/config-discovery.js';
+import { discoverProjectConfigs, type ConfigDiscovery } from './command/cli/config-discovery.js';
 import {
   projectCandidatesFrom,
   resolveArtifactRoot,
   type ArtifactRoot,
-} from './project/artifact-root.js';
+} from './features/project/artifact-root.js';
 import type { Server } from 'node:http';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import {
@@ -28,62 +28,66 @@ import {
   EventType,
 } from '@reticlehq/core';
 import type { FlowReplayResult } from '@reticlehq/core';
-import { originOf } from './session/session-manager.js';
+import { originOf } from './connection/session/session-manager.js';
 import { setBrowserMode, BrowserMode } from './telemetry/browser-mode.js';
-import type { NetworkDetail } from './input/network-detail.js';
-import { replayNamedFlow } from './flows/flow-tools.js';
+import type { NetworkDetail } from './connection/input/network-detail.js';
+import { replayNamedFlow } from './features/flows/flow-tools.js';
 import { createSharedServer } from './http-server.js';
-import { openLoopbackAlias } from './daemon/loopback-alias.js';
+import { openLoopbackAlias } from './command/daemon/loopback-alias.js';
 import { reportAppInstrumented } from './telemetry/app-instrumented.js';
-import { resolveBridgeSecurityWithAutoToken } from './bridge/bridge-security.js';
-import { Bridge } from './bridge/bridge.js';
-import { sdkFixForDirectory } from './version/sdk-fix.js';
-import { SERVER_VERSION } from './version/server-version.js';
-import { BaselineStore } from './project/baselines.js';
-import { RecordingStore } from './flows/recordings.js';
-import { initImpact } from './impact/impact-recorder.js';
-import { FlowStore } from './flows/flows.js';
-import { buildFlowChips } from './flows/flow-scope.js';
-import { ProjectStore } from './project/project-store.js';
-import { attachRouteLearning } from './project/learned-routes.js';
-import { AnnotationStore } from './flows/annotation-store.js';
-import { createNodeFileSystem, type FileSystemPort } from './project/fs-port.js';
-import { cleanupCaptureDirectories } from './visual/capture-cleanup.js';
-import { ReticleRunner } from './runs/reticle-runner.js';
-import { createRunnerPort } from './runs/runner-port.js';
-import { RunStore } from './runs/run-store.js';
-import { startVerifyServer } from './runs/verify-server.js';
-import { createMcpServer } from './mcp/mcp.js';
-import { LEASE_ACQUIRE_TOOL } from './tools/lease-tools.js';
-import { runTool } from './tools/invoke-tool.js';
-import { SessionReaper, endAllSessions, MCP_DISCONNECT_SUMMARY } from './session/session-reaper.js';
-import { wireSessionScope } from './session/no-session-watch.js';
-import { buildIdlePredicate } from './daemon/daemon-usefulness.js';
-import { resolveToolSurface } from './tools/tool-surface.js';
+import { resolveBridgeSecurityWithAutoToken } from './connection/bridge/bridge-security.js';
+import { Bridge } from './connection/bridge/bridge.js';
+import { sdkFixForDirectory } from './command/version/sdk-fix.js';
+import { SERVER_VERSION } from './command/version/server-version.js';
+import { BaselineStore } from './features/project/baselines.js';
+import { RecordingStore } from './features/flows/recordings.js';
+import { initImpact } from './features/impact/impact-recorder.js';
+import { FlowStore } from './features/flows/flows.js';
+import { buildFlowChips } from './features/flows/flow-scope.js';
+import { ProjectStore } from './features/project/project-store.js';
+import { attachRouteLearning } from './features/project/learned-routes.js';
+import { AnnotationStore } from './features/flows/annotation-store.js';
+import { createNodeFileSystem, type FileSystemPort } from './features/project/fs-port.js';
+import { cleanupCaptureDirectories } from './features/visual/capture-cleanup.js';
+import { ReticleRunner } from './agent/runs/reticle-runner.js';
+import { createRunnerPort } from './agent/runs/runner-port.js';
+import { RunStore } from './agent/runs/run-store.js';
+import { startVerifyServer } from './agent/runs/verify-server.js';
+import { createMcpServer } from './agent/mcp/mcp.js';
+import { LEASE_ACQUIRE_TOOL } from './agent/tools/lease-tools.js';
+import { runTool } from './agent/tools/invoke-tool.js';
+import {
+  SessionReaper,
+  endAllSessions,
+  MCP_DISCONNECT_SUMMARY,
+} from './connection/session/session-reaper.js';
+import { wireSessionScope } from './connection/session/no-session-watch.js';
+import { buildIdlePredicate } from './command/daemon/daemon-usefulness.js';
+import { resolveToolSurface } from './agent/tools/tool-surface.js';
 import { statusPayload } from './status-payload.js';
-import { CdpRealInputProvider, LaunchedRealInputProvider } from './input/real-input.js';
+import { CdpRealInputProvider, LaunchedRealInputProvider } from './connection/input/real-input.js';
 import { cpus } from 'node:os';
-import { BrowserPool } from './pool/browser-pool.js';
+import { BrowserPool } from './connection/pool/browser-pool.js';
 import {
   AGENT_ALREADY_DRIVING_ELSEWHERE,
   shouldGreetWithLeaseNotice,
-} from './session/lease-visibility.js';
-import { playwrightLauncher, resolveMaxContexts } from './pool/playwright-launcher.js';
-import { LeaseReaper } from './pool/lease-reaper.js';
-import { readJournalEnabled, readProjectId } from './cli/cli-port.js';
-import { hasProjectConnectedBefore } from './session/connection-memory.js';
-import { reticleStateHome } from './daemon/daemon.js';
-import { probeChromium } from './cli/chromium-hint.js';
-import { makeJournalAttach } from './journal/attach-journal.js';
-import { makeSessionEnd } from './journal/session-end.js';
-import { AmbientStore } from './journal/ambient-store.js';
-import { ensureWorkspaceGitignore } from './journal/workspace-gitignore.js';
-import { pruneSessions } from './journal/retention.js';
+} from './connection/session/lease-visibility.js';
+import { playwrightLauncher, resolveMaxContexts } from './connection/pool/playwright-launcher.js';
+import { LeaseReaper } from './connection/pool/lease-reaper.js';
+import { readJournalEnabled, readProjectId } from './command/cli/cli-port.js';
+import { hasProjectConnectedBefore } from './connection/session/connection-memory.js';
+import { reticleStateHome } from './command/daemon/daemon.js';
+import { probeChromium } from './command/cli/chromium-hint.js';
+import { makeJournalAttach } from './features/journal/attach-journal.js';
+import { makeSessionEnd } from './features/journal/session-end.js';
+import { AmbientStore } from './features/journal/ambient-store.js';
+import { ensureWorkspaceGitignore } from './features/journal/workspace-gitignore.js';
+import { pruneSessions } from './features/journal/retention.js';
 import type {
   OwnedRealInputProvider,
   RealInputProvider,
   InjectConnectOptions,
-} from './input/real-input.js';
+} from './connection/input/real-input.js';
 import { log } from './log.js';
 
 /** A human-facing one-liner for a panel replay verdict — ✓ passed / ⚠ drifted / ✗ errored. */
@@ -98,37 +102,37 @@ function replayVerdictLine(result: FlowReplayResult): string {
 // not have to know that the vocabulary moved.
 export { ReticleTool } from '@reticlehq/core';
 export { RingBuffer } from '@reticlehq/engine/events/ring-buffer.js';
-export { Bridge } from './bridge/bridge.js';
-export { Session, SessionManager } from './session/session.js';
-export type { SessionInfo, SessionHealth } from './session/session.js';
-export { buildSessionRecommendation } from './session/session-recommendation.js';
-export type { RecommendationInputs } from './session/session-recommendation.js';
-export { TOOLS } from './tools/tools.js';
-export type { ToolDeps, ToolDef } from './tools/tools.js';
-export { createToolInvoker, UNKNOWN_TOOL_ERROR } from './tools/tool-invoker.js';
-export { runTool, SESSION_BOUND_TOOLS, SESSION_EXEMPT_TOOLS } from './tools/invoke-tool.js';
-export type { ToolInvoker } from './tools/tool-invoker.js';
-export { BaselineStore, normalizeLines, diffLines } from './project/baselines.js';
-export { RecordingStore } from './flows/recordings.js';
-export type { RecordedStep, CompiledProgram } from './flows/recordings.js';
-export { FlowStore, recordedStepToFlowStep } from './flows/flows.js';
-export type { FlowResult, Clock } from './flows/flows.js';
+export { Bridge } from './connection/bridge/bridge.js';
+export { Session, SessionManager } from './connection/session/session.js';
+export type { SessionInfo, SessionHealth } from './connection/session/session.js';
+export { buildSessionRecommendation } from './connection/session/session-recommendation.js';
+export type { RecommendationInputs } from './connection/session/session-recommendation.js';
+export { TOOLS } from './agent/tools/tools.js';
+export type { ToolDeps, ToolDef } from './agent/tools/tools.js';
+export { createToolInvoker, UNKNOWN_TOOL_ERROR } from './agent/tools/tool-invoker.js';
+export { runTool, SESSION_BOUND_TOOLS, SESSION_EXEMPT_TOOLS } from './agent/tools/invoke-tool.js';
+export type { ToolInvoker } from './agent/tools/tool-invoker.js';
+export { BaselineStore, normalizeLines, diffLines } from './features/project/baselines.js';
+export { RecordingStore } from './features/flows/recordings.js';
+export type { RecordedStep, CompiledProgram } from './features/flows/recordings.js';
+export { FlowStore, recordedStepToFlowStep } from './features/flows/flows.js';
+export type { FlowResult, Clock } from './features/flows/flows.js';
 export {
   assertSuccess,
   successToPredicate,
   dynamicTestids,
   successLabel,
-} from './flows/flow-success.js';
-export { classifyFlowAssertions, FlowAssertionGrade } from './flows/flow-classify.js';
-export type { FlowAssertionClassification } from './flows/flow-classify.js';
-export { buildDomainModel } from './domain/domain-model.js';
-export type { DomainModel, DomainFlowSummary, DomainGaps } from './domain/domain-model.js';
-export { ProjectStore } from './project/project-store.js';
-export type { ReadProjectResult } from './project/project-store.js';
-export { VisualStore } from './visual/visual-store.js';
-export { diffPng } from './visual/visual-diff.js';
-export type { VisualDiffResult, VisualRect, DiffOptions } from './visual/visual-diff.js';
-export { crawl } from './crawl/crawl.js';
+} from './features/flows/flow-success.js';
+export { classifyFlowAssertions, FlowAssertionGrade } from './features/flows/flow-classify.js';
+export type { FlowAssertionClassification } from './features/flows/flow-classify.js';
+export { buildDomainModel } from './agent/domain/domain-model.js';
+export type { DomainModel, DomainFlowSummary, DomainGaps } from './agent/domain/domain-model.js';
+export { ProjectStore } from './features/project/project-store.js';
+export type { ReadProjectResult } from './features/project/project-store.js';
+export { VisualStore } from './features/visual/visual-store.js';
+export { diffPng } from './features/visual/visual-diff.js';
+export type { VisualDiffResult, VisualRect, DiffOptions } from './features/visual/visual-diff.js';
+export { crawl } from './features/crawl/crawl.js';
 /**
  * The contradiction pass, and the seam a consumer adds its own rules through.
  *
@@ -143,7 +147,7 @@ export { findContradictions } from '@reticlehq/engine/events/contradictions.js';
  * Without this the composition seam is unreachable from outside the package: a consumer can build the
  * list and has nothing to hand it to.
  */
-export { createMcpServer } from './mcp/mcp.js';
+export { createMcpServer } from './agent/mcp/mcp.js';
 export type {
   Contradiction,
   ContradictionOptions,
@@ -154,11 +158,18 @@ export {
 } from '@reticlehq/engine/events/contradiction-folds.js';
 export type { ContradictionFold } from '@reticlehq/engine/events/contradiction-folds.js';
 export { MCP_SSE_PATH, MCP_MESSAGE_PATH } from '@reticlehq/core';
-export { BrowserPool, DEFAULT_LEASE_TTL_MS } from './pool/browser-pool.js';
-export type { Lease, Launcher, PooledBrowser } from './pool/browser-pool.js';
-export { playwrightLauncher, resolveMaxContexts } from './pool/playwright-launcher.js';
-export { appendReticleParams } from './tools/lease-tools.js';
-export { writePid, removePid, isRunning, logPath, readPid, isAlive } from './daemon/daemon.js';
+export { BrowserPool, DEFAULT_LEASE_TTL_MS } from './connection/pool/browser-pool.js';
+export type { Lease, Launcher, PooledBrowser } from './connection/pool/browser-pool.js';
+export { playwrightLauncher, resolveMaxContexts } from './connection/pool/playwright-launcher.js';
+export { appendReticleParams } from './agent/tools/lease-tools.js';
+export {
+  writePid,
+  removePid,
+  isRunning,
+  logPath,
+  readPid,
+  isAlive,
+} from './command/daemon/daemon.js';
 // The daemon's own liveness vocabulary, exported so a GATE can read a daemon log back and say how
 // that daemon ended. Without this the battery would re-implement the rule, and a guard that
 // re-implements what it guards is insensitive to it.
@@ -168,21 +179,30 @@ export {
   DAEMON_HEARTBEAT_EVENT,
   DAEMON_HEARTBEAT_MS,
   type DaemonLife,
-} from './daemon/heartbeat.js';
-export type { CrawlReport, CrawlAnomaly, CrawlOptions, CrawlSession } from './crawl/crawl.js';
-export { scrollToFind } from './input/scroll-find.js';
-export type { ScrollFindResult, ScrollFindQuery, ScrollFindSession } from './input/scroll-find.js';
+} from './command/daemon/heartbeat.js';
+export type {
+  CrawlReport,
+  CrawlAnomaly,
+  CrawlOptions,
+  CrawlSession,
+} from './features/crawl/crawl.js';
+export { scrollToFind } from './connection/input/scroll-find.js';
+export type {
+  ScrollFindResult,
+  ScrollFindQuery,
+  ScrollFindSession,
+} from './connection/input/scroll-find.js';
 export {
   CORE_TOOL_NAMES,
   TOOL_SURFACE,
   TOOL_PROFILE_ENV,
   filterTools,
   resolveToolSurface,
-} from './tools/tool-surface.js';
-export type { ToolSurface } from './tools/tool-surface.js';
-export { AnnotationStore } from './flows/annotation-store.js';
-export { replayFlow, nearestTestid } from './flows/flow-replay.js';
-export type { FlowReplaySession, WaitForSignal } from './flows/flow-replay.js';
+} from './agent/tools/tool-surface.js';
+export type { ToolSurface } from './agent/tools/tool-surface.js';
+export { AnnotationStore } from './features/flows/annotation-store.js';
+export { replayFlow, nearestTestid } from './features/flows/flow-replay.js';
+export type { FlowReplaySession, WaitForSignal } from './features/flows/flow-replay.js';
 export {
   ensureReticleDir,
   writeContract,
@@ -190,31 +210,31 @@ export {
   reticleDirPaths,
   flowPath,
   baselinePath,
-} from './project/reticle-dir.js';
-export type { ReticleDirPaths, ReadContractResult } from './project/reticle-dir.js';
-export { createNodeFileSystem } from './project/fs-port.js';
-export type { FileSystemPort } from './project/fs-port.js';
+} from './features/project/reticle-dir.js';
+export type { ReticleDirPaths, ReadContractResult } from './features/project/reticle-dir.js';
+export { createNodeFileSystem } from './features/project/fs-port.js';
+export type { FileSystemPort } from './features/project/fs-port.js';
 // Replay/Verify API — the programmatic surface an OEM/CI pipeline drives (see docs/platform-integration.md).
-export { ReticleRunner } from './runs/reticle-runner.js';
-export type { RunnerPort, VerifyOptions } from './runs/reticle-runner.js';
-export { createRunnerPort, defaultRunId } from './runs/runner-port.js';
-export { buildVerificationRun, computeVerdict } from './runs/build-verification-run.js';
-export type { VerificationRunInput } from './runs/build-verification-run.js';
-export { RunStore } from './runs/run-store.js';
-export type { ReadRunResult } from './runs/run-store.js';
-export { classifyChangedFiles, buildRisks, risksForPath } from './runs/risk-classify.js';
-export type { ChangedFileInput, RiskPolicy } from './runs/risk-classify.js';
-export { buildRepairPacket, buildRepairPackets } from './runs/repair-prompt.js';
-export { redactForProfile, REDACTED } from './runs/profile-redact.js';
-export { renderRunReport } from './runs/render-report.js';
-export { handleVerifyRequest, tokenOk, VERIFY_PATH } from './runs/verify-http.js';
-export type { VerifyHttpRequest, VerifyHttpResponse } from './runs/verify-http.js';
+export { ReticleRunner } from './agent/runs/reticle-runner.js';
+export type { RunnerPort, VerifyOptions } from './agent/runs/reticle-runner.js';
+export { createRunnerPort, defaultRunId } from './agent/runs/runner-port.js';
+export { buildVerificationRun, computeVerdict } from './agent/runs/build-verification-run.js';
+export type { VerificationRunInput } from './agent/runs/build-verification-run.js';
+export { RunStore } from './agent/runs/run-store.js';
+export type { ReadRunResult } from './agent/runs/run-store.js';
+export { classifyChangedFiles, buildRisks, risksForPath } from './agent/runs/risk-classify.js';
+export type { ChangedFileInput, RiskPolicy } from './agent/runs/risk-classify.js';
+export { buildRepairPacket, buildRepairPackets } from './agent/runs/repair-prompt.js';
+export { redactForProfile, REDACTED } from './agent/runs/profile-redact.js';
+export { renderRunReport } from './agent/runs/render-report.js';
+export { handleVerifyRequest, tokenOk, VERIFY_PATH } from './agent/runs/verify-http.js';
+export type { VerifyHttpRequest, VerifyHttpResponse } from './agent/runs/verify-http.js';
 export {
   createVerifyRequestListener,
   startVerifyServer,
   TOKEN_HEADER,
-} from './runs/verify-server.js';
-export type { VerifyServerOptions } from './runs/verify-server.js';
+} from './agent/runs/verify-server.js';
+export type { VerifyServerOptions } from './agent/runs/verify-server.js';
 export {
   evaluatePredicate,
   waitForPredicate,
@@ -229,7 +249,7 @@ export {
   performGesture,
   boxCenter,
   isPointerAction,
-} from './input/real-input.js';
+} from './connection/input/real-input.js';
 export type {
   RealInputProvider,
   OwnedRealInputProvider,
@@ -237,7 +257,7 @@ export type {
   LaunchedProviderOptions,
   ElementBox,
   RealInputArgs,
-} from './input/real-input.js';
+} from './connection/input/real-input.js';
 
 export interface StartOptions {
   port?: number;
@@ -306,7 +326,7 @@ export interface RunningServer {
   close: () => Promise<void>;
 }
 
-export { resolveBridgeSecurity } from './bridge/bridge-security.js';
+export { resolveBridgeSecurity } from './connection/bridge/bridge-security.js';
 
 /**
  * Build the shared browser pool (one headless Chromium, N capped isolated leased contexts). Lazy —

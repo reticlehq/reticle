@@ -6,9 +6,9 @@
  * there was no surface anywhere — not /status, not `reticle status` — naming the version actually
  * answering requests. See describeDaemonSkew.
  */
-import type { SessionInfo } from './session/session-info.js';
+import type { SessionInfo } from './connection/session/session-info.js';
 import { CONTRACT_FINGERPRINT } from '@reticlehq/core';
-import { SERVER_VERSION } from './version/server-version.js';
+import { SERVER_VERSION } from './command/version/server-version.js';
 
 interface StatusPayload {
   running: true;

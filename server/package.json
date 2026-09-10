@@ -14,8 +14,8 @@
       "default": "./dist/index.js"
     },
     "./cli": {
-      "types": "./dist/cli.d.ts",
-      "default": "./dist/cli.js"
+      "types": "./dist/command/cli.d.ts",
+      "default": "./dist/command/cli.js"
     }
   },
   "scripts": {

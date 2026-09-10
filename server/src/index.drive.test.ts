@@ -1,30 +1,30 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { LastAct } from './session/last-act.js';
+import { LastAct } from './connection/session/last-act.js';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DriveErrorCode, InputMode, SessionState } from '@reticlehq/core';
 import type { CommandResult } from '@reticlehq/core';
 import { start, type RunningServer } from './index.js';
-import { PAIRING_TOKEN_DIR_ENV } from './bridge/pairing-token.js';
+import { PAIRING_TOKEN_DIR_ENV } from './connection/bridge/pairing-token.js';
 
 // start auto-provisions a pairing token; keep it out of the real ~/.reticle during tests.
 process.env[PAIRING_TOKEN_DIR_ENV] = join(tmpdir(), 'reticle-drive-token-test');
-import { TOOLS, type ToolDeps } from './tools/tools.js';
+import { TOOLS, type ToolDeps } from './agent/tools/tools.js';
 import { ReticleTool } from '@reticlehq/core';
-import { BaselineStore } from './project/baselines.js';
-import { createNodeFileSystem } from './project/fs-port.js';
-import { RecordingStore } from './flows/recordings.js';
-import { FlowStore } from './flows/flows.js';
-import { ProjectStore } from './project/project-store.js';
-import { AnnotationStore } from './flows/annotation-store.js';
+import { BaselineStore } from './features/project/baselines.js';
+import { createNodeFileSystem } from './features/project/fs-port.js';
+import { RecordingStore } from './features/flows/recordings.js';
+import { FlowStore } from './features/flows/flows.js';
+import { ProjectStore } from './features/project/project-store.js';
+import { AnnotationStore } from './features/flows/annotation-store.js';
 import {
   DriveError,
   boxCenter,
   type ElementBox,
   type OwnedRealInputProvider,
   type RealInputProvider,
-} from './input/real-input.js';
-import type { Session, SessionManager } from './session/session.js';
+} from './connection/input/real-input.js';
+import type { Session, SessionManager } from './connection/session/session.js';
 
 const DRIVE_URL = 'http://localhost:3000/app';
 const SOURCE_BOX: ElementBox = { x: 0, y: 0, width: 200, height: 100 };

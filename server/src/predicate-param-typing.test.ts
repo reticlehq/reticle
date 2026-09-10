@@ -21,8 +21,8 @@
 
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import { advertisedTools, advertisedConfig } from './mcp/mcp.js';
-import { TOOL_SURFACE } from './tools/tool-surface.js';
+import { advertisedTools, advertisedConfig } from './agent/mcp/mcp.js';
+import { TOOL_SURFACE } from './agent/tools/tool-surface.js';
 
 const PREDICATE_MARKER = 'Predicate object';
 

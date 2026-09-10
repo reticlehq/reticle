@@ -5,7 +5,7 @@ import { importsOf, reachableFrom, resolveImport } from './import-graph.js';
 /**
  * The free build must never reach the paid code.
  *
- * `server/src/ee/` holds enterprise features and carries its own licence (see
+ * `server/src/features/ee/` holds enterprise features and carries its own licence (see
  * `ee/README.md`). Everything else in this repo is open source. That difference is the entire reason
  * the directory exists, and until now it was written down only in prose — no check enforced it.
  *
@@ -28,7 +28,7 @@ import { importsOf, reachableFrom, resolveImport } from './import-graph.js';
 const SRC = __dirname;
 
 /** The directory holding separately-licensed code. Any module under it is off limits to the free build. */
-const PAID_DIRECTORY = 'ee/';
+const PAID_DIRECTORY = 'features/ee/';
 
 /** The two ways anything outside this package gets in. If a rule holds at both, it holds. */
 const FREE_ENTRY_POINTS = ['index.ts', 'cli.ts'];

@@ -53,7 +53,7 @@ const DECLARED_CROSSINGS: Record<string, string> = {
     'branches on. It is DEFINED in the scaffolder because `node-io.ts` needs it and that package may ' +
     'not import this one; re-exported here so the five runtime readers are unchanged. A type-level ' +
     'constant, not a code path — nothing of the installer runs.',
-  'cli/cli-port.ts':
+  'command/cli/cli-port.ts':
     'Re-exports the dev-server port heuristics. `existing-config.ts` diagnoses a `.reticle.json` ' +
     'whose `port` is the app’s own dev-server port, so the set is defined there; the runtime ' +
     'readers (the dev-server probe, the no-session diagnosis) read it through here. Data, not a code ' +
@@ -88,12 +88,18 @@ describe('library path boundary', () => {
   it('the CLI entry point still owns the install-time surface', () => {
     // The counterpart, so the first assertion can never be satisfied by DELETING the install path —
     // which is the one fix that would pass this file and break the free product.
-    expect(crossings(reachableFrom(SRC, 'cli.ts').keys()).length).toBeGreaterThan(0);
+    expect(crossings(reachableFrom(SRC, 'command/cli.ts').keys()).length).toBeGreaterThan(0);
   });
 
   it('relative specifiers resolve the way the runtime resolves them', () => {
-    expect(resolveImport('mcp/mcp.ts', '../setup/confirm.js')).toBe('setup/confirm.ts');
-    expect(resolveImport('index.ts', './tools/tools.js')).toBe('tools/tools.ts');
+    // Across groups, which is what most cross-directory imports are now: two levels up, then the
+    // group, then the directory.
+    expect(resolveImport('agent/mcp/mcp.ts', '../../command/setup/confirm.js')).toBe(
+      'command/setup/confirm.ts',
+    );
+    // Within a group, unchanged: one level up and along.
+    expect(resolveImport('agent/mcp/mcp.ts', '../tools/tools.js')).toBe('agent/tools/tools.ts');
+    expect(resolveImport('index.ts', './agent/tools/tools.js')).toBe('agent/tools/tools.ts');
     expect(resolveImport('index.ts', '@reticlehq/core')).toBeUndefined();
   });
 });
@@ -103,9 +109,9 @@ describe('library path boundary', () => {
 describe('path normalisation', () => {
   it('compares POSIX-separated paths on every platform', () => {
     expect(
-      relative(SRC, join(SRC, 'setup', 'confirm.ts'))
+      relative(SRC, join(SRC, 'command', 'setup', 'confirm.ts'))
         .split(sep)
         .join('/'),
-    ).toBe('setup/confirm.ts');
+    ).toBe('command/setup/confirm.ts');
   });
 });

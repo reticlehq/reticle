@@ -10,13 +10,13 @@ import { TelemetryEventKind, type SessionSummary } from '@reticlehq/core/telemet
 import { getTelemetry } from './telemetry.js';
 import { getSessionMetrics } from './session-metrics.js';
 import { profileProject, type InstallFacts } from './project-profile.js';
-import { hasProjectConnectedBefore } from '../session/connection-memory.js';
-import { readProjectId } from '../cli/cli-port.js';
-import { reticleStateHome } from '../daemon/daemon.js';
-import { startUpdateCheck, updateNudgeState } from '../update/update-nudge.js';
+import { hasProjectConnectedBefore } from '../connection/session/connection-memory.js';
+import { readProjectId } from '../command/cli/cli-port.js';
+import { reticleStateHome } from '../command/daemon/daemon.js';
+import { startUpdateCheck, updateNudgeState } from '../command/update/update-nudge.js';
 import { markDaemonStart } from './mcp-connection.js';
 import { markInstrumentationClock } from './app-instrumented.js';
-import { markStallClock, STALL_AFTER_MS, stallUptime } from '../session/stall-clock.js';
+import { markStallClock, STALL_AFTER_MS, stallUptime } from '../connection/session/stall-clock.js';
 
 /**
  * Whether an app for this project has ever reached Reticle, read from the same durable memory the

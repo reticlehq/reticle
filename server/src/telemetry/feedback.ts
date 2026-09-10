@@ -34,7 +34,7 @@ import { getTelemetry } from './telemetry.js';
 import { noteFeedbackUndelivered } from './feedback-delivery.js';
 import { isReticleSourceCheckout } from './dev-repo.js';
 import { saveFeedbackLocally } from './feedback-local.js';
-import { SERVER_VERSION } from '../version/server-version.js';
+import { SERVER_VERSION } from '../command/version/server-version.js';
 import { feedbackContext, type SessionFacts } from './feedback-context.js';
 import { markDelivered, outboxPath, queueFeedback } from './feedback-outbox.js';
 

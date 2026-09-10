@@ -26,7 +26,7 @@
  * holds a customer list.
  */
 import { LicenseActivation } from '@reticlehq/core/telemetry';
-import { describeLicense, LICENSE_KEY_ENV } from '../license/license.js';
+import { describeLicense, LICENSE_KEY_ENV } from '../features/license/license.js';
 
 /** The activation facts that ride the wire. All absent on a build with no issuer key baked. */
 interface LicenseFacts {

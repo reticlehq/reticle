@@ -12,7 +12,7 @@
  * is still open and unlabelled, the tracker is lying to the next person who reads it, and that
  * person is by definition looking for something to start.
  *
- * The decision logic lives in `server/src/dev/stale-issue-guard.ts` and is unit-tested.
+ * The decision logic lives in `server/src/command/dev/stale-issue-guard.ts` and is unit-tested.
  * This file is the IO around it: what the commits say, and what GitHub says back.
  *
  * SKIPS RATHER THAN FAILS when it cannot see: no `gh`, no network, no auth, a fork PR without a

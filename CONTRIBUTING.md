@@ -211,4 +211,4 @@ For anything non-trivial, **open an issue first** so we can agree on the approac
 
 ## License of contributions
 
-Reticle uses a per-package license model (Apache-2.0 for the embeddable SDK packages, FSL-1.1-ALv2 for the server / CLI / umbrella, and the Reticle Enterprise License for `server/src/ee/`). By contributing, you agree that your contribution is licensed under the license of the package(s) you're modifying. See the root [LICENSE](LICENSE) and each package's own `LICENSE` file.
+Reticle uses a per-package license model (Apache-2.0 for the embeddable SDK packages, FSL-1.1-ALv2 for the server / CLI / umbrella, and the Reticle Enterprise License for `server/src/features/ee/`). By contributing, you agree that your contribution is licensed under the license of the package(s) you're modifying. See the root [LICENSE](LICENSE) and each package's own `LICENSE` file.

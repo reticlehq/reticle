@@ -9,7 +9,11 @@ import {
   DRIVE_PATH,
 } from '@reticlehq/core';
 import { getSessionMetrics } from './telemetry/session-metrics.js';
-import { noteAgentPeer, PEER_VERSION_PARAM, PEER_CONTRACT_PARAM } from './version/peer-announce.js';
+import {
+  noteAgentPeer,
+  PEER_VERSION_PARAM,
+  PEER_CONTRACT_PARAM,
+} from './command/version/peer-announce.js';
 import { log } from './log.js';
 import { reportMcpConnected } from './telemetry/mcp-connection.js';
 import {
@@ -18,7 +22,7 @@ import {
   isLoopbackPeer,
   requestToken,
   tokensMatch,
-} from './bridge/token-auth.js';
+} from './connection/bridge/token-auth.js';
 import { LOOPBACK_IDLE_MS } from './loopback-agent.js';
 
 export interface SharedServer {

@@ -10,4 +10,4 @@
 
 - **`reticle_capabilities` now reports what a session cannot observe.** It listed what the app offers — testids, signals, stores, flows — and said nothing about instrumentation that is switched off. So a verification could be planned around a request body and only then be refused for a session that records none. A live read now carries `cannot`, naming each absence, what it costs, and what to do about it. Absences that are usually deliberate say so, rather than telling you to fix a setting that is correct.
 
-- **A change log for the wire contract, at `contract/CHANGES.md`.** If you maintain something that talks to Reticle, this is where to look: one line per change, newest first, written to be read from outside this repository. A check keeps it honest — the contract cannot change without an entry being added.
+- **A change log for the wire contract, at `core/CHANGES.md`.** If you maintain something that talks to Reticle, this is where to look: one line per change, newest first, written to be read from outside this repository. A check keeps it honest — the contract cannot change without an entry being added.

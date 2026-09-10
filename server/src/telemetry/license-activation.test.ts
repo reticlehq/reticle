@@ -7,7 +7,11 @@ import { join } from 'node:path';
 import { TelemetryEventKind } from '@reticlehq/core/telemetry';
 import { licenseFacts } from './license-activation.js';
 import { createTelemetry, POSTHOG_GROUP_ORGANIZATION } from './telemetry.js';
-import { LICENSE_KEY_ENV, LICENSE_PUBLIC_KEY_ENV, signLicenseKey } from '../license/license.js';
+import {
+  LICENSE_KEY_ENV,
+  LICENSE_PUBLIC_KEY_ENV,
+  signLicenseKey,
+} from '../features/license/license.js';
 
 const NOW = 1_700_000_000_000;
 const { publicKey, privateKey } = generateKeyPairSync('ed25519');

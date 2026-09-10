@@ -68,17 +68,17 @@ writeFileSync(join(root, '.git', 'config'), '[remote "origin"]\n\turl = git@gith
 const { getTelemetry } = await import(`${DIST}/telemetry/telemetry.js`);
 const { getSessionMetrics, resetSessionMetrics } = await import(`${DIST}/telemetry/session-metrics.js`);
 const { installDaemonTelemetry } = await import(`${DIST}/telemetry/daemon-telemetry.js`);
-const { installDaemonResilience } = await import(`${DIST}/daemon/daemon-resilience.js`);
+const { installDaemonResilience } = await import(`${DIST}/command/daemon/daemon-resilience.js`);
 const { submitFeedback } = await import(`${DIST}/telemetry/feedback.js`);
 const { submitIdentity } = await import(`${DIST}/telemetry/identify.js`);
 const { reportCliRun } = await import(`${DIST}/telemetry/cli-telemetry.js`);
-const { runTool } = await import(`${DIST}/tools/invoke-tool.js`);
-const { TOOLS } = await import(`${DIST}/tools/tools.js`);
-const { buildErrorPayload } = await import(`${DIST}/tools/error-recovery.js`);
-const { reportVersionChange } = await import(`${DIST}/update/updater.js`);
+const { runTool } = await import(`${DIST}/agent/tools/invoke-tool.js`);
+const { TOOLS } = await import(`${DIST}/agent/tools/tools.js`);
+const { buildErrorPayload } = await import(`${DIST}/agent/tools/error-recovery.js`);
+const { reportVersionChange } = await import(`${DIST}/command/update/updater.js`);
 const { reportMcpConnected, markDaemonStart } = await import(`${DIST}/telemetry/mcp-connection.js`);
 const { reportInitOutcome, InitFailure } = await import(`${DIST}/telemetry/init-telemetry.js`);
-const { reportMcpOutage, resetOutageReporting, OutageStage } = await import(`${DIST}/mcp/mcp-outage.js`);
+const { reportMcpOutage, resetOutageReporting, OutageStage } = await import(`${DIST}/agent/mcp/mcp-outage.js`);
 const { decideVerified } = await import(`${ENGINE_DIST}/honesty/verified.js`);
 // Derived from core, never re-listed here — a copied vocabulary is correct on the day it is written
 // and silently wrong at the next addition, which has already cost this repo twice.

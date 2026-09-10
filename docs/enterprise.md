@@ -69,6 +69,6 @@ The honest one-pager a security review needs. Reticle is built so the answer to 
 | --- | --- | --- |
 | Embeddable SDK (`browser`, `protocol`, `react`, `babel-plugin`, `next`, `vite-plugin`, `eslint-plugin`) | **Apache-2.0** | safe to ship inside your customers' apps; explicit patent grant |
 | Server / CLI / MCP (`server`, `test`, umbrella) | **FSL-1.1-ALv2** | free for any use except reselling Reticle itself; converts to Apache after 2 years |
-| Enterprise features (`packages/server/src/ee/`) | **Reticle Enterprise License** | source-available; free for dev/eval, license key required in production |
+| Enterprise features (`packages/server/src/features/ee/`) | **Reticle Enterprise License** | source-available; free for dev/eval, license key required in production |
 
 Embedding / OEM / enterprise: **[hey@reticle.sh](mailto:hey@reticle.sh)**.

@@ -469,7 +469,7 @@ A per-package model, so it's safe to embed in your app and fair to build a busin
 
 - **Embedded in your app → Apache-2.0.** `core`, `browser`, `react`, `next`, `vite-plugin`, `babel-plugin`, `eslint-plugin` compile into your application. Use them anywhere, including apps you ship to customers. No copyleft; explicit patent grant.
 - **Server / CLI / MCP → FSL-1.1-ALv2.** `server` and `test` are free for any use except offering Reticle itself as a competing hosted service; each release converts to Apache-2.0 after two years.
-- **Enterprise features → Reticle Enterprise License.** Source-available under `server/src/ee/`; free to evaluate, a key is required in production.
+- **Enterprise features → Reticle Enterprise License.** Source-available under `server/src/features/ee/`; free to evaluate, a key is required in production.
 
 New here? See [CONTRIBUTING.md](CONTRIBUTING.md), [GOVERNANCE.md](GOVERNANCE.md), [RELEASING.md](RELEASING.md), and the [ROADMAP](ROADMAP.md). Contributions are certified under the [DCO](https://developercertificate.org) — just `git commit -s`. OEM / commercial licensing: **[hey@reticle.sh](mailto:hey@reticle.sh)**
 

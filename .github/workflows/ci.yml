@@ -464,11 +464,11 @@ jobs:
           # Anything a user runs BEFORE their first session, plus the gate itself and the dependency
           # graph it installs through. Deliberately broad — the cost of a false positive is CI time,
           # the cost of a false negative is the 0%-connect class shipping again.
-          # `server/src/setup/` and the top-level `setup/` script are named here as of 2.13.0. They
+          # `server/src/command/setup/` and the top-level `setup/` script are named here as of 2.13.0. They
           # are the whole of one-command onboarding — agent registration, pre-approval, the skill
           # file, the drive — and neither was on this list, so the release that made `init` an
           # install could edit every one of them without the install gate running once.
-          if echo "$CHANGED" | grep -qE '^((init|core)/|server/src/setup/|adapters/|setup/|apps/e2e/(install-gate|gate-harness|install-baseline)|package\.json|pnpm-lock\.yaml|\.github/workflows/ci\.yml)'; then
+          if echo "$CHANGED" | grep -qE '^((init|core)/|server/src/command/setup/|adapters/|setup/|apps/e2e/(install-gate|gate-harness|install-baseline)|package\.json|pnpm-lock\.yaml|\.github/workflows/ci\.yml)'; then
             echo "install=true" >> "$GITHUB_OUTPUT"
           else
             echo "install=false" >> "$GITHUB_OUTPUT"
@@ -487,7 +487,7 @@ jobs:
           # by definition: the IPC observer, desktop capture, and the setup/doctor pair that shape
           # and diagnose a desktop install. Anything broader (all of adapters/realm/dom, say) would
           # route most PRs here and give the routing back for nothing.
-          if echo "$CHANGED" | grep -qE '^(adapters/realm/electron/|adapters/realm/tauri/|apps/(electron|tauri)-smoke/|adapters/realm/dom/src/observers/ipc\.ts|adapters/realm/dom/src/dom/desktop-capture\.ts|server/src/setup/desktop-shape\.ts|init/src/desktop-doctor\.ts|\.github/workflows/ci\.yml)'; then
+          if echo "$CHANGED" | grep -qE '^(adapters/realm/electron/|adapters/realm/tauri/|apps/(electron|tauri)-smoke/|adapters/realm/dom/src/observers/ipc\.ts|adapters/realm/dom/src/dom/desktop-capture\.ts|server/src/command/setup/desktop-shape\.ts|init/src/desktop-doctor\.ts|\.github/workflows/ci\.yml)'; then
             echo "desktop=true" >> "$GITHUB_OUTPUT"
           else
             echo "desktop=false" >> "$GITHUB_OUTPUT"
@@ -498,7 +498,7 @@ jobs:
           # The observation payloads (snapshot, query, the verdict reasons) sit in browser and events.
           # bench-app is the fixture the numbers are measured against, so changing it moves the
           # baseline whether or not any product code changed.
-          if echo "$CHANGED" | grep -qE '^(core/src/|adapters/realm/dom/src/|server/src/(tools|session)/|engine/src/(events|honesty)/|apps/bench-app/|bench/|\.github/workflows/ci\.yml)'; then
+          if echo "$CHANGED" | grep -qE '^(core/src/|adapters/realm/dom/src/|server/src/(agent/tools|connection/session)/|engine/src/(events|honesty)/|apps/bench-app/|bench/|\.github/workflows/ci\.yml)'; then
             echo "bench=true" >> "$GITHUB_OUTPUT"
           else
             echo "bench=false" >> "$GITHUB_OUTPUT"

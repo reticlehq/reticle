@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync, existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { reclaimStaleDaemons, shouldRemovePid } from './daemon/daemon.js';
+import { reclaimStaleDaemons, shouldRemovePid } from './command/daemon/daemon.js';
 
 describe('shouldRemovePid — orphan-race guard', () => {
   it('removes a pidfile we own, an empty one, or a dead-owner one', () => {

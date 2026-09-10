@@ -92,7 +92,11 @@ const FIELD_NUMBER_PATTERNS: readonly { pattern: RegExp; why: string }[] = [
   },
 ];
 
-describe('no published file carries a field or user number', () => {
+// Reads every shipped source file, every doc and every skill, so it is slow by nature and slower
+// again when all the packages' suites run at once. The default five-second budget is a statement
+// about how busy the machine is rather than about this code, and this is the last check that should
+// ever be weakened to fit inside one -- so it gets time instead.
+describe('no published file carries a field or user number', { timeout: 120_000 }, () => {
   const files = [...SCANNED_ROOTS.flatMap(textFiles), ...SCANNED_FILES];
 
   it('finds files to scan (a green over zero files proves nothing)', () => {
