@@ -197,7 +197,14 @@
             "groups": [
               {
                 "group": "Working on Reticle",
-                "pages": ["first-drive", "gates", "gate-plan", "fixtures", "local-registry"]
+                "pages": [
+                  "first-drive",
+                  "gates",
+                  "gate-plan",
+                  "required-checks",
+                  "fixtures",
+                  "local-registry"
+                ]
               },
               {
                 "group": "Internals",

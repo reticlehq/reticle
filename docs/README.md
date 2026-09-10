@@ -83,6 +83,7 @@ Everything here is published to [docs.reticle.sh](https://docs.reticle.sh) by `d
 | --- | --- |
 | [gates.md](gates.md) | **I changed some files. Which gate do I run?** |
 | [gate-plan.md](gate-plan.md) | why the gates are shaped this way, and what is still unbuilt |
+| [required-checks.md](required-checks.md) | which checks actually block a merge, and which only look like they do |
 | [system-map.md](system-map.md) | how a tool call reaches the app, and which failures are silent |
 | [telemetry-contract.md](telemetry-contract.md) | required reading before touching anything that emits |
 | [telemetry-events.mdx](telemetry-events.mdx) | every event kind and its payload, and the question each one exists to answer |
