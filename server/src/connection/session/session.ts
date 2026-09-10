@@ -1,5 +1,5 @@
 import type { WebSocket } from 'ws';
-import type { ChannelId, ImpactSnapshot, PlatformProfile } from '@reticlehq/core';
+import type { ChannelId, ImpactSnapshot } from '@reticlehq/core';
 import type { HandshakeFacts } from './handshake-facts.js';
 import { refusedResult } from './undeclared-command.js';
 import { recordImpact } from '../../features/impact/impact-recorder.js';
@@ -138,7 +138,6 @@ export class Session implements HandshakeFacts {
   captureBodies?: boolean | undefined;
   channels?: readonly ChannelId[] | undefined;
   commands?: readonly string[] | undefined;
-  platform?: PlatformProfile | undefined;
   sourceMapping?: boolean | undefined;
   readonly redactKeys: readonly string[];
 

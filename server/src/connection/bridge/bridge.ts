@@ -611,10 +611,15 @@ export class Bridge {
           // a channel nobody declared, rather than answering it with an empty result that reads
           // exactly like the value not being there.
           session.channels = parsed.channels;
-          // What it will answer, and what kind of place it is. Both read at dispatch time, so a
-          // command the page does not serve is refused instead of waited out.
+          // What it will answer, read at dispatch time so a command the page does not serve is
+          // refused instead of waited out.
+          //
+          // `parsed.platform` is deliberately NOT kept. It is a protocol field and it is correct
+          // on the wire, but this daemon already learns the runtime from the health event and has
+          // no decision that needs the answer sooner. Storing it would be a handshake fact nobody
+          // reads, which is the shape this codebase has now produced twice in one week -- see
+          // handshake-facts-are-read.test.ts, which exists because of it.
           session.commands = parsed.commands;
-          session.platform = parsed.platform;
           if (skew !== undefined) {
             log('version_skew', {
               sessionId: session.id,
