@@ -83,5 +83,17 @@ export const JournalVerdictEffectSchema = z.object({
    * blind spots. Empty means nothing was hidden; absent means nobody looked.
    */
   couldNotSee: z.array(z.string().max(TRANSPORT_LIMITS.MAX_STRING_LENGTH)).optional(),
+  /**
+   * WHY the verdict came out this way, in the engine's own vocabulary.
+   *
+   * Without it, `unknown` is one word for facts that need opposite responses: "the outcome has
+   * not arrived yet" and "the capture was dirty so I could not see" are both `unknown`, and only
+   * the first can ever be answered by waiting. A reader of the record -- or a fold over it --
+   * cannot tell a question that is still open from one that was never answerable.
+   *
+   * Optional, because a record written before this existed has no reason to offer and must not
+   * be read as though it did.
+   */
+  reason: z.string().max(TRANSPORT_LIMITS.MAX_STRING_LENGTH).optional(),
 });
 export type JournalVerdictEffect = z.infer<typeof JournalVerdictEffectSchema>;

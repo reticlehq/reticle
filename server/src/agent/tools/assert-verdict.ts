@@ -250,6 +250,10 @@ export async function assertVerdict(
       // that does not have it -- and a claim written afterwards can always be shaped to fit what
       // happened, which is the whole reason the distinction is worth recording.
       declaredBeforeActing: false,
+      // The deciding clause, kept. `unknown` alone cannot distinguish an outcome that has not
+      // arrived from a capture that could not be read, and only the first is worth asking about
+      // again -- which is what makes a later answer a CORRECTION rather than a second opinion.
+      reason: decision.verifiedReason,
       grade: gradeOfPredicate(predicate),
       couldNotSee: spots.map((spot) => spot.kind),
     },

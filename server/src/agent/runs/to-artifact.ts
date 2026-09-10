@@ -64,6 +64,15 @@ export interface ExportedCheck {
    * app's. The specification says a verdict is one of four things; this is that verdict.
    */
   readonly verdict: Verified;
+  /** This check's own name, so a later document can cite it. */
+  readonly checkId?: string;
+  /**
+   * The earlier check this one corrects, as `<runId>#<checkId>`.
+   *
+   * The protocol's revision, reaching a reader at last. Present only on a correction, and the
+   * check it names is still in this same document, exactly as it was first given.
+   */
+  readonly supersedes?: string;
 }
 
 /** What was verified, and about what. */
@@ -134,6 +143,10 @@ function exportedChecks(run: ReticleVerificationRun): ExportedCheck[] {
         : { declaredBeforeActing: check.declaredBeforeActing }),
       ...(check.grade === undefined ? {} : { grade: check.grade }),
       ...(check.couldNotSee === undefined ? {} : { couldNotSee: check.couldNotSee }),
+      // A correction, when this check is one. The check it names is not withdrawn: both reach
+      // the reader, so "we always knew" stays unsayable.
+      ...(check.checkId === undefined ? {} : { checkId: check.checkId }),
+      ...(check.supersedes === undefined ? {} : { supersedes: check.supersedes }),
     });
   }
   return decided;

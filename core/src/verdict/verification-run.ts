@@ -283,6 +283,23 @@ export const RunCheckSchema = z.object({
    * blind spots. An empty list means nothing was hidden; absence means nobody looked.
    */
   couldNotSee: z.array(z.string()).optional(),
+  /**
+   * Why the verdict came out this way, in the engine's vocabulary.
+   *
+   * Carried so a reader -- and the fold that looks for late answers -- can tell an outcome that
+   * has not arrived from a capture that could not be read. Both are `unknown`, and only the
+   * first is a question that waiting can settle.
+   */
+  reason: z.string().optional(),
+  /** This check's own name, so a later verdict can cite it. See revision.ts. */
+  checkId: z.string().optional(),
+  /**
+   * The earlier check this one corrects, as `<runId>#<checkId>`.
+   *
+   * Present only on a correction, and the check it names is NOT edited: both stand, so a reader
+   * can see that the first answer was given, when it changed, and why.
+   */
+  supersedes: z.string().optional(),
 });
 export type RunCheck = z.infer<typeof RunCheckSchema>;
 

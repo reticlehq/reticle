@@ -37,6 +37,7 @@ import {
   type RunCheck,
 } from '@reticlehq/core';
 import type { VerificationRunInput } from './build-verification-run.js';
+import { withCorrections } from './late-answer.js';
 
 /** The author of record when no MCP peer introduced itself. Mirrors verification-sync's default. */
 const UNNAMED_AGENT = 'reticle-mcp';
@@ -124,6 +125,9 @@ export function driveRunFrom(
         : { declaredBeforeActing: verdict.declaredBeforeActing }),
       ...(verdict.grade === undefined ? {} : { grade: verdict.grade }),
       ...(verdict.couldNotSee === undefined ? {} : { couldNotSee: verdict.couldNotSee }),
+      // Kept so the fold below can tell a question that is still open from one that was never
+      // answerable. Both are `unknown`; only one of them can be corrected later.
+      ...(verdict.reason === undefined ? {} : { reason: verdict.reason }),
     });
   }
   // A session that never verified anything has nothing to report, and saying so on a dashboard every
@@ -131,6 +135,10 @@ export function driveRunFrom(
   // the opposite: it is the thing they most need to see -- and those checks are now in the list
   // rather than counted in a sentence, so the row shows what happened instead of alluding to it.
   if (0 === checks.length) return undefined;
+  // A verdict that was open because the outcome had not arrived, and a later verdict on the same
+  // claim that decided it, become a correction: the second cites the first and the first is left
+  // exactly as it was given. See late-answer.ts for what does and does not count as an answer.
+  const corrected = withCorrections(deps.runId, checks);
   return {
     runId: deps.runId,
     durationMs: spanOf(actions),
@@ -147,7 +155,7 @@ export function driveRunFrom(
     ...(deps.editEpoch === undefined ? {} : { editEpoch: deps.editEpoch }),
     changedFiles: [],
     flows: [],
-    checks,
+    checks: corrected,
     risks: [],
     // Empty rather than harvested. The journal holds the events, but the evidence block is a claim
     // about what was WRONG, and a fold that guessed at anomalies would be inventing findings — the

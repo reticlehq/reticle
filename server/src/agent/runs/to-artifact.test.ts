@@ -118,3 +118,49 @@ describe('exporting a run for somebody else to read', () => {
     expect('signature' in toArtifact(RUN)).toBe(false);
   });
 });
+
+/**
+ * A correction, end to end, because the mechanism existing is not the same as it arriving.
+ *
+ * `reviseVerdict` sat in core for weeks with `supersedes` reaching the exported document and no
+ * code path producing one. This is the test that the whole chain runs: a claim left open because
+ * the outcome had not arrived, answered later in the same session, folded into a run, and
+ * exported as a correction that a stranger can follow back.
+ */
+describe('a verdict corrected by a later one reaches the reader', () => {
+  const CORRECTED: ReticleVerificationRun = {
+    ...RUN,
+    runId: RunIdSchema.parse('drive-9'),
+    checks: [
+      {
+        kind: PredicateKind.NET,
+        predicate: 'the order posted',
+        status: Verified.UNKNOWN,
+        reason: 'outcome_pending',
+        checkId: 'c1',
+      },
+      {
+        kind: PredicateKind.NET,
+        predicate: 'the order posted',
+        status: Verified.YES,
+        checkId: 'c2',
+        supersedes: 'drive-9#c1',
+      },
+    ],
+  };
+
+  it('carries both, so the first answer is still there', () => {
+    const artifact = toArtifact(CORRECTED);
+    expect(artifact.checks).toHaveLength(2);
+    expect(artifact.checks[0]?.verdict).toBe(Verified.UNKNOWN);
+    expect(artifact.checks[1]?.verdict).toBe(Verified.YES);
+  });
+
+  it('and the correction says which one it replaces', () => {
+    // Both stand. Rewriting the first in place would erase the fact that the question was ever
+    // open, and "we always knew" is the shape of the problem this system exists to prevent.
+    const artifact = toArtifact(CORRECTED);
+    expect(artifact.checks[1]?.supersedes).toBe('drive-9#c1');
+    expect(artifact.checks[0]?.supersedes).toBeUndefined();
+  });
+});
