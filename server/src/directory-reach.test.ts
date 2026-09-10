@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
-import { basename, dirname, join, normalize, posix } from 'node:path';
+import { mutualPairs, nameCollisions, reaches } from '../../scripts/directory-reach.mjs';
+
+import { join } from 'node:path';
 import { REPO_ROOT } from './repo-root.js';
 
 /**
@@ -30,48 +30,15 @@ import { REPO_ROOT } from './repo-root.js';
  * counted a third of the graph as absent.
  */
 
-const SERVER_SRC = join(REPO_ROOT, 'server', 'src');
-
-/** Every directory under `src` that holds a source file, as a repo-relative path. */
-function directories(): string[] {
-  const files = execFileSync('git', ['ls-files', 'src'], {
-    cwd: join(SERVER_SRC, '..'),
-    encoding: 'utf8',
-  })
-    .split('\n')
-    .filter((f) => f.endsWith('.ts') && !f.includes('.test.'));
-  return [...new Set(files.map((f) => posix.dirname(f)))].filter((d) => 'src' !== d);
-}
-
-/** The directory each import actually lands in, for every file that has neighbours. */
-function reaches(): Map<string, Set<string>> {
-  const files = execFileSync('git', ['ls-files', 'src'], {
-    cwd: join(SERVER_SRC, '..'),
-    encoding: 'utf8',
-  })
-    .split('\n')
-    .filter((f) => f.endsWith('.ts') && !f.includes('.test.'));
-
-  const found = new Map<string, Set<string>>();
-  for (const file of files) {
-    const fromDir = posix.dirname(file);
-    const own = posix.basename(fromDir);
-    if ('src' === fromDir) continue; // a file with no directory of its own has no neighbours
-    const text = readFileSync(join(SERVER_SRC, '..', file), 'utf8');
-    for (const match of text.matchAll(/from '((?:\.\.\/|\.\/)[^']+)'/g)) {
-      const target = normalize(posix.join(fromDir, match[1] ?? ''))
-        .split('\\')
-        .join('/');
-      if (!target.startsWith('src/')) continue; // left the package: not this check's business
-      const other = basename(dirname(target));
-      if ('' === other || other === own || 'src' === other) continue;
-      const already = found.get(own) ?? new Set<string>();
-      already.add(other);
-      found.set(own, already);
-    }
-  }
-  return found;
-}
+/**
+ * The graph itself lives in `scripts/directory-reach.mjs`, not here.
+ *
+ * There are three callers now -- this guard, the browser package's, and `safe-to-group.mjs`,
+ * which predicts what both will say. Three copies of one graph computation is three chances for
+ * the prediction to disagree with the test it predicts, which would be worse than having no
+ * prediction at all.
+ */
+const SERVER = join(REPO_ROOT, 'server');
 
 /**
  * BEFORE MOVING FILES, ask `node scripts/safe-to-group.mjs <dir> <name...>`.
@@ -252,17 +219,6 @@ const REACHES_FOR: Record<string, readonly string[]> = {
  */
 const MUTUAL_PAIRS_TODAY = 32;
 
-/** The pairs where each reaches for the other, as `a <-> b`, each named once. */
-function mutualPairs(found: Map<string, Set<string>>): string[] {
-  const pairs = new Set<string>();
-  for (const [one, targets] of found) {
-    for (const other of targets) {
-      if (true === found.get(other)?.has(one)) pairs.add([one, other].sort().join(' <-> '));
-    }
-  }
-  return [...pairs].sort();
-}
-
 /**
  * Two directories may not share a name.
  *
@@ -282,14 +238,7 @@ function mutualPairs(found: Map<string, Set<string>>): string[] {
  */
 describe('directory names in this package are unique', () => {
   it('has no two directories sharing a basename', () => {
-    const seen = new Map<string, string[]>();
-    for (const dir of directories()) {
-      const name = dir.split('/').pop() ?? dir;
-      seen.set(name, [...(seen.get(name) ?? []), dir]);
-    }
-    const clashes = [...seen.entries()]
-      .filter(([, paths]) => paths.length > 1)
-      .map(([name, paths]) => `${name}: ${paths.join(' and ')}`);
+    const clashes = nameCollisions(SERVER);
     expect(
       clashes,
       'The reach graph identifies a directory by its basename, so these are one node to it -- ' +
@@ -303,11 +252,11 @@ describe('the directories in this package know only what they are allowed to kno
   it('finds the directories at all — a check over nothing passes about nothing', () => {
     // Grouping the directories moved every one of them. A scan that silently stopped resolving
     // would report an empty graph, and every check below would pass by having read no code.
-    expect(reaches().size).toBeGreaterThan(20);
+    expect(reaches(SERVER).size).toBeGreaterThan(20);
   });
 
   it('gains no new reach into another directory', () => {
-    const found = reaches();
+    const found = reaches(SERVER);
     const added: string[] = [];
     for (const [one, targets] of found) {
       for (const other of targets) {
@@ -326,7 +275,7 @@ describe('the directories in this package know only what they are allowed to kno
   it('does not describe reaches that are gone', () => {
     // The other direction, and a separate check because one equality for both would go red when a
     // reach is REMOVED -- and a check that punishes the work going well gets switched off.
-    const found = reaches();
+    const found = reaches(SERVER);
     const stale: string[] = [];
     for (const [one, targets] of Object.entries(REACHES_FOR)) {
       for (const other of targets) {
@@ -341,7 +290,7 @@ describe('the directories in this package know only what they are allowed to kno
   });
 
   it('has no more pairs that need each other than it had', () => {
-    const pairs = mutualPairs(reaches());
+    const pairs = mutualPairs(SERVER);
     expect(
       pairs.length,
       `Two directories that each need the other cannot be read, moved or tested apart. There are ` +

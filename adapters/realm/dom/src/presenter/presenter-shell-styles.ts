@@ -15,7 +15,7 @@ import {
   REDUCE_MOTION_ATTR,
   LIVENESS_ATTR,
 } from './presenter-config.js';
-import { HUD_DROP_SHADOW, HUD_SURFACE_FILL } from './presenter-hud-chrome.js';
+import { HUD_DROP_SHADOW, HUD_SURFACE_FILL } from './chrome/presenter-hud-chrome.js';
 
 const OVERLAY = 'data-reticle-overlay';
 const HUD = 'data-reticle-hud';

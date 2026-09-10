@@ -1,5 +1,5 @@
 import { PresenterMode } from '@reticlehq/core';
-import { LOG_KIND, LOG_RESULT, type LogKind, type LogResult } from './log-kinds.js';
+import { LOG_KIND, LOG_RESULT, type LogKind, type LogResult } from './chrome/log-kinds.js';
 import { nativeSetTimeout } from '../timers/native-timers.js';
 import {
   PresenterIcon,

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { PresenterMode } from '@reticlehq/core';
 import { Presenter } from './presenter.js';
-import { BRAND_NAME } from './presenter-brand.js';
+import { BRAND_NAME } from './chrome/presenter-brand.js';
 import {
   FAST_IDLE_MS,
   FAST_FADE_MS,

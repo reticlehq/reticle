@@ -10,7 +10,7 @@ import {
 } from './presenter-icons.js';
 import { getPresenterSettings } from './presenter-settings.js';
 import { mountWorkspaceSelector, workspaceRowHtml } from './presenter-workspace.js';
-import type { HeroIconBodyKey } from './presenter-heroicons-data.js';
+import type { HeroIconBodyKey } from './chrome/presenter-heroicons-data.js';
 // Live-control panel: the two-way control surface inside the floating HUD - Pause/Resume + End
 // (header), a message input + Send (footer), and the data-reticle-state visual machine. Split out of
 // presenter.ts to keep both files under the 500-line cap (mirrors the presenter-log.ts split).

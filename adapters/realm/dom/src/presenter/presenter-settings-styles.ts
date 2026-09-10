@@ -5,7 +5,11 @@ import {
   DOCK_ALIGN_ATTR,
   SETTINGS_PLACEMENT_ATTR,
 } from './presenter-config.js';
-import { HUD_DROP_SHADOW, HUD_SURFACE_CLASS, HUD_SURFACE_PAINT } from './presenter-hud-chrome.js';
+import {
+  HUD_DROP_SHADOW,
+  HUD_SURFACE_CLASS,
+  HUD_SURFACE_PAINT,
+} from './chrome/presenter-hud-chrome.js';
 
 /** Compact settings card - dock-anchored above the HUD pill. */
 export const SETTINGS_CSS = `

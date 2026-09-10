@@ -1,4 +1,4 @@
-import { HUD_DROP_SHADOW } from './presenter-hud-chrome.js';
+import { HUD_DROP_SHADOW } from './chrome/presenter-hud-chrome.js';
 import { DOCK_ALIGN_ATTR, DOCK_ATTR, REPORT_ATTR, REPORT_PANEL_ATTR } from './presenter-config.js';
 
 const OVERLAY = 'data-reticle-overlay';

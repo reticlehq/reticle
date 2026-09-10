@@ -34,7 +34,10 @@ function sources(root, out = []) {
   return out;
 }
 
-const ROOT = DIR.split('/').slice(0, 2).join('/');
+// The package root: walk up from the given directory to whatever holds `src`. Splitting on the
+// first two segments worked while every package was one level down and stopped the day one was
+// not, which is the same assumption that broke fifty path literals elsewhere in this repo.
+const ROOT = DIR.slice(0, DIR.indexOf('/src/') + 4);
 const files = new Set(sources(ROOT).map((p) => resolve(p)));
 const imports = new Map();
 for (const p of files) {

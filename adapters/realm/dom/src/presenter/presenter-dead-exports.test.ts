@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import * as brand from './presenter-brand.js';
+import * as brand from './chrome/presenter-brand.js';
 import * as config from './presenter-config.js';
 import * as controls from './presenter-controls.js';
 import * as shell from './presenter-shell.js';
@@ -25,7 +25,7 @@ describe('retired presenter artwork stays out of the page bundle', () => {
   });
 
   it('does not keep the wordmark SVG in source, even unexported', () => {
-    const src = readFileSync(join(DIR, 'presenter-brand.ts'), 'utf8');
+    const src = readFileSync(join(DIR, 'chrome', 'presenter-brand.ts'), 'utf8');
     expect(src).not.toContain('WORDMARK_SVG');
     expect(src).not.toContain('reticle-wordmark');
     expect(src).not.toContain('reticle-brand--toolbar');

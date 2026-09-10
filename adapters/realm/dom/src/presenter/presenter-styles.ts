@@ -1,9 +1,9 @@
-import { Z_OVERLAY } from './layers.js';
+import { Z_OVERLAY } from './chrome/layers.js';
 import { LOG_CSS } from './presenter-log.js';
 import { CONTROLS_CSS } from './presenter-controls.js';
 import { SHELL_CSS } from './presenter-shell-styles.js';
 import { SETTINGS_CSS } from './presenter-settings-styles.js';
-import { HUD_CHROME_CSS, HUD_LOG_WELL_CSS } from './presenter-hud-chrome.js';
+import { HUD_CHROME_CSS, HUD_LOG_WELL_CSS } from './chrome/presenter-hud-chrome.js';
 import { REPORT_CSS } from './presenter-report-styles.js';
 /**
  * All presenter overlay CSS - glow border, synthetic cursor/ring/ripple, and the floating HUD shell.

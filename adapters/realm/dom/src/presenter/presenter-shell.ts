@@ -14,7 +14,7 @@ import {
   SETTINGS_ATTR,
   SETTINGS_BTN_ATTR,
 } from './presenter-config.js';
-import { BRAND_NAME, FAB_TOGGLE_HTML, MARK_SVG } from './presenter-brand.js';
+import { BRAND_NAME, FAB_TOGGLE_HTML, MARK_SVG } from './chrome/presenter-brand.js';
 import { settleLogAtLatest } from './presenter-log.js';
 import { installHudDragHandles, installHudPositionGuards } from './presenter-drag.js';
 import { scheduleSyncDockLayout } from './presenter-dock-layout.js';
@@ -24,7 +24,7 @@ import {
   PRESENTER_ICON_SIZE,
   PresenterIcon,
 } from './presenter-icons.js';
-import { HUD_SURFACE_CLASS, HUD_LOG_WELL_CLASS } from './presenter-hud-chrome.js';
+import { HUD_SURFACE_CLASS, HUD_LOG_WELL_CLASS } from './chrome/presenter-hud-chrome.js';
 import { CONTROLS_TOOLBAR_HTML } from './presenter-controls.js';
 import {
   PresenterSettingsPanel,

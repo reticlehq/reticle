@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { PresenterIcon, hiIconHtml, hiToggleIconHtml } from './presenter-icons.js';
-import { HERO_ICON_BODIES, HERO_ICON_SOLID_BODIES } from './presenter-heroicons-data.js';
+import { HERO_ICON_BODIES, HERO_ICON_SOLID_BODIES } from './chrome/presenter-heroicons-data.js';
 
 describe('presenter heroicons', () => {
   it('every PresenterIcon key has an embedded SVG body', () => {

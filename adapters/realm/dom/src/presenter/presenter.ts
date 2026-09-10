@@ -9,7 +9,7 @@ import {
 } from '@reticlehq/core';
 import { refs } from '../dom/refs.js';
 import { unreachableStripText } from '../transport/unreachable-message.js';
-import { actionVerb } from './presenter-verbs.js';
+import { actionVerb } from './chrome/presenter-verbs.js';
 import { nativeSetTimeout, nativeClearTimeout, nativeNow } from '../timers/native-timers.js';
 import {
   LOG_KIND,
@@ -25,7 +25,7 @@ import {
 } from './presenter-log.js';
 import { PRESENTER_CSS } from './presenter-styles.js';
 import { HudShell } from './presenter-shell.js';
-import { parseImpactSnapshot } from './presenter-report-copy.js';
+import { parseImpactSnapshot } from './chrome/presenter-report-copy.js';
 import {
   BorderMode,
   DEFAULT_BORDER_MODE,
@@ -52,7 +52,7 @@ import {
   type PresenterOptions,
 } from './presenter-config.js';
 import { buildRunState, type PresenterRunState } from './presenter-run-state.js';
-import { moveCursor, ringAround, spawnRipple, pace } from './presenter-effects.js';
+import { moveCursor, ringAround, spawnRipple, pace } from './chrome/presenter-effects.js';
 import { GlowController } from './presenter-glow.js';
 import { PresenterIcon, PRESENTER_ICON_SIZE, hiIcon } from './presenter-icons.js';
 import { renderTally } from './presenter-tally.js';

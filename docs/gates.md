@@ -160,4 +160,17 @@ It answers SAFE or UNSAFE by the same rule the test uses: a group is unsafe exac
 Two rules learned the expensive way:
 
 - **Move only files that import no sibling.** A group containing something that imports back into its old home creates a mutual pair with its own parent.
+- **Six registries key on a source PATH, and a move breaks them silently.** They are correct and useful individually; together they are a class, and the class was discovered one move at a time. Grep for the file you are moving before you move it. In the order they were found:
+
+  | Registry                         | What it holds                                    |
+  | -------------------------------- | ------------------------------------------------ |
+  | `dispatch-attribution.test.ts`   | files allowed to dispatch an ACT                 |
+  | `library-path-boundary.test.ts`  | declared crossings into the install-time surface |
+  | `on-disk-versions.test.ts`       | every versioned on-disk format                   |
+  | `orphan-modules.test.ts`         | modules with no production importer, and why     |
+  | `config-search-depth.test.ts`    | the config walkers, opened by path               |
+  | `presenter-dead-exports.test.ts` | retired artwork that must stay out of the bundle |
+
+  A general guard was attempted and abandoned: a path in a string cannot be told apart from a fixture filename or an output path without guessing, and the noisy version of this check is worse than none: it would be switched off inside a week and take real coverage with it.
+
 - **Being a leaf among siblings is not enough.** A file can import no sibling and still close a cycle once its directory has a name -- `tool-kit.ts` imports no sibling and reaches `flows`, and `flows` reaches back. Invisible while both sat in one directory.

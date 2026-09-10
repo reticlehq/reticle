@@ -3,7 +3,7 @@ import {
   HERO_ICON_SOLID_BODIES,
   type HeroIconBodyKey,
   type HeroIconSolidBodyKey,
-} from './presenter-heroicons-data.js';
+} from './chrome/presenter-heroicons-data.js';
 
 /** Presenter icon keys used by the HUD. */
 export const PresenterIcon = {

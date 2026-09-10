@@ -13,7 +13,7 @@ import {
   buildXShareUrl,
   compactDuration,
   compactNumber,
-} from './presenter-report-copy.js';
+} from './chrome/presenter-report-copy.js';
 
 function scope(
   over: Partial<ReturnType<typeof emptyImpactCounts>> = {},

@@ -55,8 +55,8 @@ import type {
   ControlIntent,
 } from './presenter/presenter.js';
 // Values, from a leaf file that pulls nothing in behind it. See log-kinds.ts.
-import { LOG_KIND, LOG_RESULT } from './presenter/log-kinds.js';
-import { actionVerb } from './presenter/presenter-verbs.js';
+import { LOG_KIND, LOG_RESULT } from './presenter/chrome/log-kinds.js';
+import { actionVerb } from './presenter/chrome/presenter-verbs.js';
 import { str, refLabel, modeForCommand, presentStatus } from './reticle-presenter-helpers.js';
 import { resetClock } from './timers/clock.js';
 import { nativeWarn } from './timers/native-console.js';

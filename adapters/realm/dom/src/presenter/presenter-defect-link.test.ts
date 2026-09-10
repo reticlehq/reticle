@@ -15,7 +15,7 @@ import { describe, expect, it } from 'vitest';
 import { emptyImpactCounts, emptyImpactRecords, estimateImpactSavings } from '@reticlehq/core';
 import type { ImpactDefect, ImpactScope } from '@reticlehq/core';
 import { reportBodyHtml } from './presenter-report.js';
-import { REPORT_TEXT } from './presenter-report-copy.js';
+import { REPORT_TEXT } from './chrome/presenter-report-copy.js';
 
 const DEFECT: ImpactDefect = {
   title: 'Sign in did not navigate',
