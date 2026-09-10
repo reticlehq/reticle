@@ -21,7 +21,7 @@
 
 import { NoSessionReason } from '@reticlehq/core/telemetry';
 
-import { leaseCaveat, type LeaseBrowserState } from './lease-availability.js';
+import { leaseCaveat, type LeaseBrowserState } from './presence/lease-availability.js';
 import { DEV_SERVER_PORTS } from '../../command/cli/cli-port.js';
 import { siblingListenerNote } from '../../command/cli/sibling-ports.js';
 import { STALL_AFTER_MS } from './stall-clock.js';

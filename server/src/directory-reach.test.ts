@@ -63,6 +63,18 @@ function reaches(): Map<string, Set<string>> {
 }
 
 /**
+ * BEFORE MOVING FILES, ask `node scripts/safe-to-group.mjs <dir> <name...>`.
+ *
+ * This test is the authority and it answers only AFTER a move, which made the first round of
+ * directory grouping a sequence of move, rewrite every import, run this, revert. Three of the
+ * first four candidate groups had to be reverted that way -- each one an expensive route to a
+ * fact that was sitting in the import graph the whole time.
+ *
+ * That script answers the same question first. A group is unsafe exactly when some directory it
+ * reaches OUT to also reaches back IN to it, which is a mutual pair by definition and the only
+ * way a grouping can raise the count below. It is a prediction of this test; this test still
+ * decides.
+ *
  * What each directory reaches for today. Adding an entry is a decision, which is the point.
  *
  * Before adding one, the question worth asking is whether the thing being reached for is in the
@@ -95,9 +107,22 @@ const REACHES_FOR: Record<string, readonly string[]> = {
    * become mutual.
    */
   read: [],
+  /**
+   * Who is attached to a session, and who may drive it. Reaches for NOTHING -- not even its own
+   * parent -- which is the strongest form a group can take: `session` needs it, and it needs
+   * nobody, so the edge cannot ever become mutual however either side grows.
+   */
+  presence: [],
+  /**
+   * What a flow's result MEANS -- whether an assertion still has integrity, who a failure belongs
+   * to, why a role drifted. Reaches for nothing, like `presence`, so both edges into it are
+   * permanently one-way.
+   */
+  outcome: [],
   bridge: ['flows', 'impact', 'project', 'session', 'telemetry', 'tools', 'version'],
   capsule: ['project'],
   cli: [
+    'outcome',
     'bridge',
     'capsule',
     'cloud',
@@ -131,7 +156,18 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   daemon: ['telemetry'],
   domain: ['flows', 'oracles', 'project', 'tools'],
   ee: ['license'],
-  flows: ['act', 'cli', 'cloud', 'intent', 'journal', 'project', 'runs', 'session', 'tools'],
+  flows: [
+    'outcome',
+    'act',
+    'cli',
+    'cloud',
+    'intent',
+    'journal',
+    'project',
+    'runs',
+    'session',
+    'tools',
+  ],
   impact: ['cloud', 'session'],
   input: ['pool', 'telemetry', 'tools'],
   intent: ['project', 'tools'],
@@ -142,7 +178,18 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   pool: ['cli', 'input', 'telemetry'],
   project: ['cli', 'cloud', 'flows', 'runs', 'tools'],
   runs: ['cloud', 'flows', 'intent', 'mcp', 'project', 'telemetry', 'tools'],
-  session: ['bridge', 'cli', 'daemon', 'impact', 'input', 'journal', 'mcp', 'telemetry', 'tools'],
+  session: [
+    'presence',
+    'bridge',
+    'cli',
+    'daemon',
+    'impact',
+    'input',
+    'journal',
+    'mcp',
+    'telemetry',
+    'tools',
+  ],
   setup: ['bridge', 'cli', 'daemon', 'mcp', 'telemetry'],
   telemetry: ['cli', 'daemon', 'license', 'mcp', 'session', 'tools', 'update', 'version'],
   tools: [

@@ -144,3 +144,20 @@ Sometimes it is. The specific failures worth recognising:
 - **An `INCONCLUSIVE` verdict.** The harness is telling you the transport did not stay up, so it is claiming nothing about the product. That is the harness working, not the product failing.
 
 The four rules every tier obeys, and the incident behind each, are in [`apps/e2e/harness-rules.md`](../apps/e2e/harness-rules.md).
+
+## Reorganising a directory
+
+A directory with a long flat listing is a symptom, not a defect. What says whether it is badly organised is the number of directory pairs that reach for **each other** -- those cannot be read, moved or tested apart -- and `server/src/directory-reach.test.ts` already tracks it.
+
+So a grouping is an improvement only if that number stays flat. Check before you move:
+
+```
+node scripts/safe-to-group.mjs server/src/agent/tools query-shape snapshot-delta
+```
+
+It answers SAFE or UNSAFE by the same rule the test uses: a group is unsafe exactly when some directory it reaches out to also reaches back into it. It is a prediction; the test decides.
+
+Two rules learned the expensive way:
+
+- **Move only files that import no sibling.** A group containing something that imports back into its old home creates a mutual pair with its own parent.
+- **Being a leaf among siblings is not enough.** A file can import no sibling and still close a cycle once its directory has a name -- `tool-kit.ts` imports no sibling and reaches `flows`, and `flows` reaches back. Invisible while both sat in one directory.

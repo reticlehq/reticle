@@ -6,7 +6,7 @@ import {
   forgetDrivenRedactionKeys,
 } from '../input/driven-redaction.js';
 import { Session, type SessionInfo } from './session.js';
-import { AttachmentHistory } from './attachment-history.js';
+import { AttachmentHistory } from './presence/attachment-history.js';
 import type { NoSessionNextAction } from './no-session-next-action.js';
 import { pickDocumentSuccessor, type SessionIdentity } from './session-successor.js';
 

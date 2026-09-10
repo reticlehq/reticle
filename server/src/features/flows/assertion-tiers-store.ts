@@ -4,7 +4,7 @@ import type { FlowExpect } from '@reticlehq/core';
 import type { FileSystemPort } from '../project/fs-port.js';
 import { reticleDirPaths } from '../project/reticle-dir.js';
 import { withFileLock } from '../project/file-lock.js';
-import type { StepExpect } from './assertion-integrity.js';
+import type { StepExpect } from './outcome/assertion-integrity.js';
 
 /**
  * The anti-reward-hacking baseline. Detecting an assertion DOWNGRADE requires knowing what the

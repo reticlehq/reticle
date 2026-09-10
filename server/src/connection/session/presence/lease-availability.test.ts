@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { leaseCaveat } from './lease-availability.js';
-import { diagnoseNoSession } from './no-session-diagnosis.js';
+import { diagnoseNoSession } from '../no-session-diagnosis.js';
 
 /**
  * The escape hatch must not be recommended by the same output that just diagnosed why it cannot work.

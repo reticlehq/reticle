@@ -40,6 +40,7 @@ Rarely, and deliberately.
 | `set-version.mjs` | During a release. Sets one version across every file that carries one. `RELEASING.md` is the procedure. |
 | `local-registry.sh` | Publishes the packages to a registry on your own machine, so you can install them into a real outside app without publishing to npm. `verdaccio.yaml` beside it is that registry's config. The install gate uses both. See [local-registry.md](../docs/local-registry.md). |
 | `issue-license.mjs` | Mints an enterprise licence key. Only useful if you hold the issuing key. |
+| `safe-to-group.mjs` | Before moving files into a new subdirectory, asks whether it would make coupling worse. A group is unsafe exactly when some directory it reaches out to also reaches back into it — a mutual pair, and the only way a grouping can raise the count `directory-reach.test.ts` tracks. Written after three of the first four attempted groups had to be reverted; that test is still the authority, this just stops you learning its answer the slow way. See [gates.md](../docs/gates.md#reorganising-a-directory). |
 
 ## Adding a script
 

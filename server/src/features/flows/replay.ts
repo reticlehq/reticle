@@ -6,7 +6,7 @@ import {
   type CommandResult,
 } from '@reticlehq/core';
 import { ReticleTool } from '@reticlehq/core';
-import { predicateToExpect, enforcedOnReplay } from './predicate-to-expect.js';
+import { predicateToExpect, enforcedOnReplay } from './outcome/predicate-to-expect.js';
 import { PredicateSchema } from '@reticlehq/engine/question/predicate.js';
 import type { RecordedStep, CompiledProgram } from './recordings.js';
 import type { Session } from '../../connection/session/session.js';

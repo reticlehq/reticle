@@ -21,7 +21,7 @@ import { FlakeStore } from '../../features/flows/flake-store.js';
 import { formatBuddyStatus } from '../../features/flows/buddy-status.js';
 import { CapsuleStore } from '../../agent/capsule/capsule-store.js';
 import { AssertionTiersStore } from '../../features/flows/assertion-tiers-store.js';
-import { detectDowngrades } from '../../features/flows/assertion-integrity.js';
+import { detectDowngrades } from '../../features/flows/outcome/assertion-integrity.js';
 import { computeCoverage, flowCoverageReport } from '../../features/flows/coverage.js';
 import { createWatchBatcher } from '../../features/flows/watch-batcher.js';
 import { watch } from 'node:fs';

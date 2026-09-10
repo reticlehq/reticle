@@ -30,7 +30,7 @@ import {
   testidDrift,
 } from './flow-replay.js';
 import { nearestRoleName, type RoleCandidate } from './role-anchor-nearest.js';
-import { roleDriftReason } from './role-drift-reason.js';
+import { roleDriftReason } from './outcome/role-drift-reason.js';
 
 /** Query args for a NAMED role anchor — the handle that identifies an instance, not a JSX site. */
 function roleQueryArgs(

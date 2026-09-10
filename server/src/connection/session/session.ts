@@ -7,7 +7,7 @@ import { GapLedger } from '@reticlehq/engine/evidence/gap-ledger.js';
 import { CaptureLedger } from '../../agent/tools/feature-capture.js';
 import { commandTimeoutMessage, type PageRuntime } from './command-timeout.js';
 import { readHealthEvent, pendingNavigationMs, type SessionHealth } from './session-health.js';
-import { MIRRORED_COMMANDS, mirroredNarration } from './session-mirror.js';
+import { MIRRORED_COMMANDS, mirroredNarration } from './presence/session-mirror.js';
 
 export type { SessionHealth };
 
@@ -51,9 +51,9 @@ import { recordBrowserLatency, recordSdkFailure } from '../../telemetry/session-
 import { LiveControl, type InboxMessage } from './live-control.js';
 export type { InboxMessage } from './live-control.js'; // moved; still part of Session's surface
 import { ReviewStore, type ReviewMark } from './review-store.js';
-import { buildSessionRecommendation } from './session-recommendation.js';
+import { buildSessionRecommendation } from './presence/session-recommendation.js';
 import { buildPresenterArgs } from './presenter-args.js';
-import { buildSessionLease, type SessionLease } from './session-lease.js';
+import { buildSessionLease, type SessionLease } from './presence/session-lease.js';
 import type { SessionInfo } from './session-info.js';
 export type { SessionInfo } from './session-info.js';
 import { buildSessionInfo } from './session-info.js';
