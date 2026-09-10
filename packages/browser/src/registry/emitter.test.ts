@@ -11,7 +11,7 @@ function fakeTarget(connected: boolean): FakeTarget {
   return { connected, signal: vi.fn(), state: vi.fn() };
 }
 
-describe('createReticleEmitter (P5a inject-the-emitter)', () => {
+describe('createReticleEmitter — an app emits without importing the SDK', () => {
   it('forwards signal to target when connected', () => {
     const target = fakeTarget(true);
     const e = createReticleEmitter({ target });

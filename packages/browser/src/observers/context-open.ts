@@ -1,6 +1,6 @@
 import { EventType } from '@reticlehq/core';
 import { captureMethod } from '../patching/capture-method.js';
-import type { Emit, Teardown } from './types.js';
+import { observeSafely, type Emit, type Teardown } from './types.js';
 
 /**
  * The page asked for ANOTHER browsing context — `window.open` — so the consequence of whatever was
@@ -22,12 +22,21 @@ export function installContextOpen(emit: Emit): Teardown {
     target?: string,
     features?: string,
   ): Window | null {
-    emit(EventType.CONTEXT_OPENED, { ...(href === undefined ? {} : { href }) });
-    return originalOpen.call(this, href, target, features);
+    // The context opens FIRST and outside the guard — the app's call must succeed or fail on its own
+    // terms, and `window.open` returning a handle is what the caller is written against.
+    const opened = originalOpen.call(this, href, target, features);
+    observeSafely(() => {
+      emit(EventType.CONTEXT_OPENED, { ...(href === undefined ? {} : { href }) });
+    });
+    return opened;
   };
 
-  window.open = openPatch as typeof window.open;
+  const patchedOpen = openPatch as typeof window.open;
+  window.open = patchedOpen;
   return () => {
-    window.open = originalOpen;
+    // Restore ONLY if the slot still holds our wrapper — the rule route.ts states: something that
+    // wrapped `window.open` AFTER connect() (a popup blocker shim, an analytics SDK) keeps its
+    // instrumentation instead of being silently uninstalled by ours.
+    if (window.open === patchedOpen) window.open = originalOpen;
   };
 }

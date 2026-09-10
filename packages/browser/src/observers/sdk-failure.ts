@@ -40,6 +40,8 @@ export const SdkSite = {
   COMMAND: 'command',
   RECORDER: 'recorder',
   TRANSPORT: 'transport',
+  /** Undoing the patches, not installing them — a disposer that threw on disconnect. */
+  TEARDOWN: 'teardown',
 } as const;
 export type SdkSite = (typeof SdkSite)[keyof typeof SdkSite];
 
