@@ -15,7 +15,7 @@
  * any other reason is never retried — a tool that quietly re-runs actions would turn one click into
  * two, which is worse than the failure it was papering over.
  */
-import { waitForReaction } from './react-grace.js';
+import { waitForReaction } from './act/react-grace.js';
 
 /** Matches the daemon's own wording, which error-recovery.ts also keys its STALE_REF hint off. */
 const STALE_REF = /no longer resolves to an element/i;

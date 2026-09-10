@@ -25,7 +25,7 @@
  */
 
 import { EventType, MUTATING_METHODS } from '@reticlehq/core';
-import type { SettleSource } from './act/settle-in-flight.js';
+import type { SettleSource } from './settle-in-flight.js';
 
 /**
  * How long to let the app react. A React commit after a resolved fetch is one or two task hops; this

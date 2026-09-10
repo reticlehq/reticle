@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { sizeCost, estimateTokens } from '../../connection/session/output-budget.js';
-import { applySnapshotDelta, SnapshotCache } from './snapshot-delta.js';
+import { applySnapshotDelta, SnapshotCache } from './read/snapshot-delta.js';
 
 /**
  * A reproducible measurement of the token-efficiency wins, run over the REAL shipped functions

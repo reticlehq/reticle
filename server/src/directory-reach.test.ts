@@ -88,6 +88,13 @@ const REACHES_FOR: Record<string, readonly string[]> = {
    * under their old home; they are the same edges, now attributed to the directory that owns them.
    */
   act: ['capsule', 'input', 'session'],
+  /**
+   * The read leaves: what a snapshot or a query LOOKS like, with no opinion about what it means.
+   *
+   * Same construction as `act` -- nothing here imports a sibling, so `tools -> read` can never
+   * become mutual.
+   */
+  read: [],
   bridge: ['flows', 'impact', 'project', 'session', 'telemetry', 'tools', 'version'],
   capsule: ['project'],
   cli: [
@@ -124,7 +131,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   daemon: ['telemetry'],
   domain: ['flows', 'oracles', 'project', 'tools'],
   ee: ['license'],
-  flows: ['cli', 'cloud', 'intent', 'journal', 'project', 'runs', 'session', 'tools'],
+  flows: ['act', 'cli', 'cloud', 'intent', 'journal', 'project', 'runs', 'session', 'tools'],
   impact: ['cloud', 'session'],
   input: ['pool', 'telemetry', 'tools'],
   intent: ['project', 'tools'],
@@ -139,6 +146,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   setup: ['bridge', 'cli', 'daemon', 'mcp', 'telemetry'],
   telemetry: ['cli', 'daemon', 'license', 'mcp', 'session', 'tools', 'update', 'version'],
   tools: [
+    'read',
     'act',
     'capsule',
     'cli',

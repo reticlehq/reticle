@@ -8,7 +8,7 @@ import { salvageJson } from '@reticlehq/engine/window/json-salvage.js';
 import { withControl } from '../../connection/session/control-envelope.js';
 import { asNumber, asString } from '@reticlehq/core';
 import { type ToolDef, sessionIdShape, commandOrThrow } from './tool-kit.js';
-import { readCompleteTree } from './complete-snapshot.js';
+import { readCompleteTree } from './read/complete-snapshot.js';
 
 /**
  * Does the screen agree with the data the app was given?

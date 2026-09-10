@@ -22,7 +22,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { applySnapshotDelta, SnapshotCache, SnapshotDeltaMode } from './snapshot-delta.js';
+import { applySnapshotDelta, SnapshotCache, SnapshotDeltaMode } from './read/snapshot-delta.js';
 
 const OPTS = { sessionId: 's1', scope: '', mode: 'interactive', diff: true };
 

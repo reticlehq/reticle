@@ -9,7 +9,7 @@
  */
 import { ReticleCommand } from '@reticlehq/core';
 import type { Session } from '../../connection/session/session.js';
-import { normalizeQueryArgs } from './query-shape.js';
+import { normalizeQueryArgs } from './read/query-shape.js';
 import { resolveTargetRef, type TargetResolution } from './act/resolve-target.js';
 import { asRecord, asString } from '@reticlehq/core';
 

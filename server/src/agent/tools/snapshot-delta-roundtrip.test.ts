@@ -7,7 +7,7 @@ import {
   makeDeps,
   waitUntil,
 } from '../../connection/bridge/bridge.test-harness.js';
-import { SnapshotDeltaMode } from './snapshot-delta.js';
+import { SnapshotDeltaMode } from './read/snapshot-delta.js';
 
 describe('reticle_snapshot diff round trip — fields survive the tool boundary', () => {
   let bridge: Bridge;

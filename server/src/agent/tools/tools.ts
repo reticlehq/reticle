@@ -2,11 +2,11 @@ import { z } from 'zod';
 import { NoSessionAction, QueryBy, ReticleCommand, SnapshotMode } from '@reticlehq/core';
 import { ReticleTool } from '@reticlehq/core';
 import { withSizeCost } from '../../connection/session/output-budget.js';
-import { applySnapshotDelta, SnapshotCache } from './snapshot-delta.js';
+import { applySnapshotDelta, SnapshotCache } from './read/snapshot-delta.js';
 import { asNumber, asRecord, asString } from '@reticlehq/core';
 import { countSchema } from './numeric-bounds.js';
-import { normalizeQueryArgs } from './query-shape.js';
-import { paginateQueryResult } from './query-paginate.js';
+import { normalizeQueryArgs } from './read/query-shape.js';
+import { paginateQueryResult } from './read/query-paginate.js';
 
 /**
  * The query strategies, derived from the enum in core — never retyped.

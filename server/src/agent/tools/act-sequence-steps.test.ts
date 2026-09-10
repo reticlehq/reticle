@@ -7,7 +7,7 @@
  * so a typo in step three cannot leave one and two applied.
  */
 import { describe, expect, it } from 'vitest';
-import { assertSequenceSteps } from './act-preflight.js';
+import { assertSequenceSteps } from './act/act-preflight.js';
 import { describeStepResult } from './act-sequence-retry.js';
 
 describe('refusing a sequence that cannot act', () => {

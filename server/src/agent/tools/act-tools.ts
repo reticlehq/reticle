@@ -47,7 +47,7 @@ import {
   repeatedRequestLabels,
   waitForInFlight,
 } from './act/settle-in-flight.js';
-import { waitForReaction } from './react-grace.js';
+import { waitForReaction } from './act/react-grace.js';
 import { decideVerified } from '@reticlehq/engine/evidence/verified.js';
 import { honestyForVerdict } from '@reticlehq/engine/evidence/honesty.js';
 import {
@@ -88,7 +88,7 @@ import {
 } from '../../connection/session/control-envelope.js';
 import { asNumber, asRecord, asString } from '@reticlehq/core';
 import { sourceOf } from './tools-helpers.js';
-import { dispatchAct, preflightAct } from './act-preflight.js';
+import { dispatchAct, preflightAct } from './act/act-preflight.js';
 import { followLostObservation } from './act/act-observation.js';
 import { type ToolDef, type ToolDeps, intentArg, sessionIdShape } from './tool-kit.js';
 import { asActionType, gradeOf } from './act/act-helpers.js';

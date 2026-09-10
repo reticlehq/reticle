@@ -10,8 +10,8 @@
  * produce: it sends somebody to fix code that is not broken. "Nothing was acted on" is a far better
  * outcome than "unknown".
  */
-import { SessionReplacedError } from '../../connection/session/pending-commands.js';
-import { assertNativeInputSupported } from './act/act-danger.js';
+import { SessionReplacedError } from '../../../connection/session/pending-commands.js';
+import { assertNativeInputSupported } from './act-danger.js';
 import { unevaluablePredicateReason } from '@reticlehq/engine/question/predicate-precheck.js';
 
 /**

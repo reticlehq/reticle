@@ -23,7 +23,7 @@ import {
 import { asRecord } from '@reticlehq/core';
 import { sessionIdFromArgs } from './tools-helpers.js';
 import { describeStepResult, runStepWithStaleRetry } from './act-sequence-retry.js';
-import { assertSequenceSteps } from './act-preflight.js';
+import { assertSequenceSteps } from './act/act-preflight.js';
 import { type ToolDef, sessionIdShape } from './tool-kit.js';
 import { actCommand } from './act-tools.js';
 // resolveActTarget moved out of act-tools into its own module on this branch; #706 was written
