@@ -6,9 +6,7 @@ import { join } from 'node:path';
 import { transformSync } from '@babel/core';
 import reticleSource from '@reticlehq/babel-plugin';
 import {
-  RETICLE_DEFAULT_PORT,
   RETICLE_RENDER_PREHOOK,
-  bridgeWsUrl,
   ReticleDir,
   ReticleEnv,
   RETICLE_ROOT_GLOBAL,
@@ -26,6 +24,7 @@ import {
   optimizerOptionsKey,
   optimizerOptions,
 } from './installed.js';
+import { connectArgs } from './connect-args.js';
 
 export const RETICLE_VITE_PLUGIN_NAME = 'reticle';
 
@@ -195,6 +194,20 @@ export interface ReticleVitePluginOptions {
    * session without editing vite.config.
    */
   captureNetworkBodies?: boolean;
+  /**
+   * Per-body character cap for captured bodies. Default 8192; clamped to [256, 262144].
+   *
+   * Reachable here for the reason `captureNetworkBodies` is: the plugin is the only `connect()`
+   * most apps ever have, so an SDK option the plugin cannot pass is an option that does not exist.
+   *
+   * Raise it to make a NEGATIVE `bodyContains` decidable -- a negation is checked over the whole
+   * payload, so on a list endpoint bigger than the cap it is permanently undecidable, and that is
+   * the class that proves "this dangerous field is absent from every row" (#799).
+   *
+   * Also settable as `VITE_RETICLE_BODY_MAX_CHARS=65536`, so one run can raise it without editing
+   * vite.config.
+   */
+  networkBodyMaxChars?: number;
   /**
    * Retain a FAILED request's response body even with `captureNetworkBodies` off. Default true.
    *
@@ -460,52 +473,6 @@ function warnIfTokenMissing(token: string | undefined): string | undefined {
     console.warn(warning);
   }
   return token;
-}
-
-/** Build the `reticle.connect` argument literal — only includes keys the user set. */
-function connectArgs(options: ReticleVitePluginOptions): string {
-  const args: Record<string, string | number | boolean> = {};
-  const port = options.port ?? RETICLE_DEFAULT_PORT;
-  if (port !== RETICLE_DEFAULT_PORT) args['url'] = bridgeWsUrl(port);
-  if (options.session !== undefined) args['session'] = options.session;
-  if (options.projectId !== undefined) args['projectId'] = options.projectId;
-  if (options.token !== undefined) args['token'] = options.token;
-  // Passed as connect ARGUMENTS, not as a `define`. A define substitutes a bare identifier in the
-  // source it transforms; the SDK reads these as `globalThis[NAME]`, a dynamic lookup no define can
-  // ever reach — so defining them looked right, shipped, and did nothing. Baking them into the
-  // generated connect call is a literal in generated source: no bundler subtleties, works the same
-  // in dev and in a desktop build.
-  if (options.root !== undefined && options.root.length > 0) args['root'] = options.root;
-  if (options.sdkVersion !== undefined && options.sdkVersion.length > 0) {
-    args['sdkVersion'] = options.sdkVersion;
-  }
-  // A desktop renderer is a production build by construction; without this the SDK's prod backstop
-  // refuses to connect and the app is silently uninstrumented.
-  if (true === options.desktop) args['allowInProduction'] = true;
-  // Env wins nothing — it only turns the flag ON, so a config that never set it can still be
-  // switched on for one debugging session without editing vite.config and restarting the mental
-  // model with it.
-  if (true === options.captureNetworkBodies || '1' === process.env['VITE_RETICLE_CAPTURE_BODIES']) {
-    args['captureNetworkBodies'] = true;
-  }
-  // The one option that defaults ON, so the env var and the config flag both DISABLE rather than
-  // enable. Emitted only when switched off; the default stays implicit in the SDK.
-  if (false === options.captureErrorBodies || '1' === process.env['VITE_RETICLE_NO_ERROR_BODIES']) {
-    args['captureErrorBodies'] = false;
-  }
-  // Same shape, same reason. Off unless asked for, in a config or for one session.
-  if (true === options.exposePresenter || '1' === process.env['VITE_RETICLE_EXPOSE_PRESENTER']) {
-    args['exposePresenter'] = true;
-  }
-  // Same shape, same reason: without it an app that cannot be served on localhost has no way to
-  // reach the SDK option at all. The pairing token still applies — see the option's docstring.
-  if (
-    true === options.allowNonLocalhost ||
-    '1' === process.env['VITE_RETICLE_ALLOW_NON_LOCALHOST']
-  ) {
-    args['allowNonLocalhost'] = true;
-  }
-  return Object.keys(args).length > 0 ? JSON.stringify(args) : '';
 }
 
 /** The body of the connect module — real imports, resolved by Vite when the module is served. */

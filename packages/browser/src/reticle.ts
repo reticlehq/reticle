@@ -42,6 +42,7 @@ import {
   type CapabilitiesInput,
 } from './registry/capabilities.js';
 import { installAllObservers } from './observers/install-all.js';
+import { setNetworkBodyMaxChars } from './observers/network-body.js';
 import { installOverlay, type OverlayHandle } from './presenter/overlay.js';
 import {
   Presenter,
@@ -361,6 +362,11 @@ export class Reticle {
     // Contributors only, and reported in capabilities so a verdict drawn with it open is never
     // mistaken for an ordinary one. See connect-options.ts.
     setPresenterVisible(true === options.exposePresenter);
+
+    // Before the observers install, so the very first captured body already honours the cap.
+    if (options.networkBodyMaxChars !== undefined) {
+      setNetworkBodyMaxChars(options.networkBodyMaxChars);
+    }
 
     const emit = this.#emit;
     this.#captureBodies = true === options.captureNetworkBodies;
