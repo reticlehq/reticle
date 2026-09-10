@@ -51,6 +51,18 @@ export type Verified = (typeof Verified)[keyof typeof Verified];
  * equal). Nothing anywhere re-lists these.
  */
 export const VerifiedReason = {
+  /**
+   * The claim needed to read something this implementation never said it could see.
+   *
+   * Not a failure and not a refusal shape of its own. It arrives through the verdict, because the
+   * verdict is the one channel an agent is told to gate on -- adding a ninth way to say "I cannot"
+   * would repeat the mistake that made this necessary.
+   *
+   * The distinction it draws is between "it did not happen" and "nothing was watching", which used
+   * to produce the same empty answer. Saying `no` to the second blames the app for a gap in the
+   * tooling, and is the confident wrong answer this whole mechanism exists to remove.
+   */
+  CAPABILITY_ABSENT: 'capability-absent',
   /** The assertion was never EVALUATED — under-specified call, or nothing instrumented to read. */
   INCONCLUSIVE: 'inconclusive',
   /**

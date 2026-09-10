@@ -400,6 +400,15 @@ describe('nothing declared over a settled window is not the same as not having l
 
 describe('every verdict names the clause that decided it', () => {
   const branches: Record<VerifiedReason, VerifiedVerdictInput> = {
+    // A claim that needed a channel this build never said it watches. Decided before every other
+    // clause, so this row is deliberately otherwise unremarkable: `pass: true` and a clean capture
+    // would be a `yes` if the channel had been declared.
+    [VerifiedReason.CAPABILITY_ABSENT]: {
+      pass: true,
+      honesty: clean(),
+      channelsRead: ['state'],
+      channelsObservable: ['ui'],
+    },
     [VerifiedReason.INCONCLUSIVE]: { pass: true, honesty: clean(), inconclusive: 'no store named' },
     [VerifiedReason.ASSERTION_FAILED]: { pass: false, honesty: clean(), settled: true },
     // Same `pass: false` as the row above — the ONLY difference is that the observer left. Those two

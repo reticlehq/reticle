@@ -1,5 +1,6 @@
 import { bodyCaptureRemedy } from './body-capture-remedy.js';
 import {
+  type ChannelId,
   ContradictionKind,
   MUTATING_METHODS,
   Verified,
@@ -23,9 +24,36 @@ import { pageTornDownWhileOn } from './page-teardown.js';
  * should be told the most actionable fact rather than the first true one.
  */
 
+/**
+ * The channels a claim needed that the implementation never declared.
+ *
+ * Empty when the implementation declared nothing, which is not the same as declaring nothing
+ * observable. Every SDK in the field today says nothing, and reading that silence as "observes
+ * nothing" would turn every verdict everywhere into `unknown`. Absent means unknown, never false --
+ * the same convention the handshake uses throughout.
+ */
+function undeclaredChannels(inputs: VerifiedInputs): string[] {
+  const observable = inputs.channelsObservable;
+  if (observable === undefined) return [];
+  const needed = inputs.channelsRead ?? [];
+  return needed.filter((channel) => !observable.includes(channel));
+}
+
 interface VerifiedInputs {
   /** Did the declared consequence hold? Undefined when the action declared none. */
   pass?: boolean;
+  /**
+   * The channels this claim had to read to be answerable at all.
+   *
+   * Absent when nobody worked it out, which leaves the rule below inert rather than guessing.
+   */
+  channelsRead?: readonly ChannelId[];
+  /**
+   * The channels the implementation said it can observe, from the handshake.
+   *
+   * ABSENT MEANS "everything", not "nothing". See `undeclaredChannels`.
+   */
+  channelsObservable?: readonly ChannelId[];
   /**
    * The wait ended because the TAB went away, not because the app did anything.
    *
@@ -165,6 +193,20 @@ interface VerifiedVerdict {
 
 export function decideVerified(inputs: VerifiedInputs): VerifiedVerdict {
   const { pass, honesty, contradictions = [], settled, outcomePending, outcomeUnread } = inputs;
+
+  // FIRST, ahead of every other clause. A claim that needed to read something nobody was watching
+  // was never answerable, and any clause reaching a verdict before this one would report that as
+  // something else -- most often as a failure, which blames the app for a gap in the tooling.
+  const unobservable = undeclaredChannels(inputs);
+  if (unobservable.length > 0) {
+    return {
+      verified: Verified.UNKNOWN,
+      verifiedReason: VerifiedReason.CAPABILITY_ABSENT,
+      because:
+        `this build does not observe ${unobservable.join(', ')}, which this assertion needed to ` +
+        'read. It was not checked, and nothing about the app follows from that',
+    };
+  }
   /** The caller named a consequence before acting and it held — see `declaredConsequence`. */
   const declaredHeld = true === inputs.declaredConsequence && true === pass;
 
