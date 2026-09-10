@@ -827,6 +827,14 @@ export function main(): void {
   // Cloud subcommands (login/link/project/config/push) are a distinct family with their own async client;
   // handle them before the local typed parser so `reticle login` etc. work as one tool.
   if (isCloudCommand(argv[0])) {
+    // Asking a command what it does is never a request to run it. These dispatch before the typed
+    // parser, so the rule there that recognises `--help` anywhere never sees them, and
+    // `reticle link --help` used to run the command: it reached for the network and answered
+    // `fetch failed` with exit 1, to somebody who had asked what the command was for.
+    if (argv.some((arg) => '--help' === arg || '-h' === arg)) {
+      process.stdout.write(`${CLI_USAGE}\n`);
+      return;
+    }
     void runCloudCommand(argv).then((code) => process.exit(code));
     return;
   }
