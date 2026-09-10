@@ -13,7 +13,7 @@ import { crawlEmptyNote } from './crawl-empty.js';
 import { asNumber, asRecord, asString } from '@reticlehq/core';
 import { parseInteractive, sourceOf } from '../tools/tools-helpers.js';
 import { isSessionReplacedError } from '../session/session-replaced.js';
-import { ReticleTool } from '../tools/tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import { findContradictions } from '../events/contradictions.js';
 
 /** The slice of Session the crawler needs — so tests inject a fake without a live browser. */

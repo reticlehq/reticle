@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { SnapshotMode } from '@reticlehq/core';
 import { Bridge } from '../bridge/bridge.js';
 import type { ToolDeps } from './tools.js';
-import { ReticleTool } from './tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import { FakeBrowser, callTool, makeDeps, waitUntil } from '../bridge/bridge.test-harness.js';
 
 /**

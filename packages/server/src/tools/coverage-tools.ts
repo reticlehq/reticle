@@ -4,7 +4,7 @@ import { foldFeatureCapture } from '../tools/feature-capture.js';
 import { foldToolHitRate } from '../tools/tool-hit-rate.js';
 import { allSessionIntents } from '../intent/open-intents.js';
 import { ReticleCommand, SnapshotMode } from '@reticlehq/core';
-import { ReticleTool } from './tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import type { ToolDef, ToolDeps } from './tools.js';
 import { asString } from '@reticlehq/core';
 import { exercisedCount } from './coverage-identity.js';

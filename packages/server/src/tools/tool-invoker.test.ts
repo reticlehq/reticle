@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createToolInvoker, UNKNOWN_TOOL_ERROR } from './tool-invoker.js';
-import { ReticleTool } from './tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import type { ToolDeps } from './tools.js';
 import type { SessionManager } from '../session/session.js';
 

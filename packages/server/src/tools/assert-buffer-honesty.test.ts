@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { LastAct } from '../session/last-act.js';
 import { BUFFER_EVICTION_WARNING, SessionState, Verified, VerifiedReason } from '@reticlehq/core';
 import { TOOLS, type ToolDef, type ToolDeps } from './tools.js';
-import { ReticleTool } from './tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import type { Session, SessionManager } from '../session/session.js';
 import { EventType, type ReticleEvent } from '@reticlehq/core';
 

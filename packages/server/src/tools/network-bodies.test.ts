@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { EventType, type ReticleEvent } from '@reticlehq/core';
 import { OBSERVE_TOOLS } from './observe-tools.js';
-import { ReticleTool } from './tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import type { ToolDeps } from './tools.js';
 import type { Session, SessionManager } from '../session/session.js';
 

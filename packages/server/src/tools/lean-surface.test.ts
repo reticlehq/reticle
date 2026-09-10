@@ -7,7 +7,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { advertisedConfig, advertisedTools } from '../mcp/mcp.js';
 import { TOOLS } from './tools.js';
-import { ReticleTool } from './tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import {
   CORE_TOOL_NAMES,
   LEAN_TOOL_NAMES,

@@ -20,7 +20,7 @@
 import { describe, expect, it } from 'vitest';
 import { haltedFrom } from './replay-halt.js';
 import { FLOW_TOOLS } from './flow-tools.js';
-import { ReticleTool } from '../tools/tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 
 const okStep = (step: number) => ({ step, tool: 't', anchor: 'a', ok: true });
 const failedStep = (step: number) => ({ step, tool: 't', anchor: 'a', ok: false });

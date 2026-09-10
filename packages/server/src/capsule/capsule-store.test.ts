@@ -4,7 +4,7 @@ import { mkdtemp, mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ActionType, AnchorKind, type FlowStep } from '@reticlehq/core';
-import { ReticleTool } from '../tools/tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import { createNodeFileSystem } from '../project/fs-port.js';
 import {
   CapsuleStore,

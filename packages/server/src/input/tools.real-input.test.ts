@@ -3,7 +3,7 @@ import { LastAct } from '../session/last-act.js';
 import { ActionWarning, InputMode, InputModeReason, SessionState } from '@reticlehq/core';
 import type { CommandResult } from '@reticlehq/core';
 import { TOOLS, type ToolDeps } from '../tools/tools.js';
-import { ReticleTool } from '../tools/tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import { BaselineStore } from '../project/baselines.js';
 import { createNodeFileSystem } from '../project/fs-port.js';
 import { RecordingStore } from '../flows/recordings.js';

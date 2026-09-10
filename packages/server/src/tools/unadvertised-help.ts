@@ -14,7 +14,7 @@
  * So: a name Reticle owns never comes back as "not found". It comes back with the call that works
  * and the switch that makes it stop being necessary.
  */
-import { ReticleTool } from './tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import { ADVERTISE_ALL_ENV } from './tool-surface.js';
 import { mergedNameRedirect, mergedNameMessage } from './merged-name-redirect.js';
 

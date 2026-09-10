@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ProjectReadError, RunKind, RunStatus } from '@reticlehq/core';
 import { TOOLS, type ToolDeps } from '../tools/tools.js';
-import { ReticleTool } from '../tools/tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import { BaselineStore } from './baselines.js';
 import { RecordingStore } from '../flows/recordings.js';
 import { FlowStore } from '../flows/flows.js';

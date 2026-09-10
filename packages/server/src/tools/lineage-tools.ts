@@ -12,7 +12,7 @@
  */
 
 import { z } from 'zod';
-import { ReticleTool } from './tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import type { ToolDef, ToolDeps } from './tools.js';
 import { traceLineage } from '../events/lineage.js';
 import { asString } from '@reticlehq/core';

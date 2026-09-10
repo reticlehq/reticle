@@ -4,7 +4,7 @@ import { runTool } from './invoke-tool.js';
 import { buildErrorPayload } from './error-recovery.js';
 import { mergedNameRedirect, mergedNameMessage, retiredToolNames } from './merged-name-redirect.js';
 import { takeVersionSkewOnto } from '../version/version-nudge.js';
-import { ReticleTool } from './tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import { ADVERTISE_ALL_ENV, type ToolSurfaceOrigin } from './tool-surface.js';
 import { getSessionMetrics } from '../telemetry/session-metrics.js';
 import { isPredicateParam, predicateGrammar } from '../events/predicate-eval.js';

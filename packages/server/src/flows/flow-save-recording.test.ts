@@ -14,7 +14,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ActionType, QueryBy } from '@reticlehq/core';
 import { TOOLS, type ToolDeps } from '../tools/tools.js';
-import { ReticleTool } from '../tools/tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import { BaselineStore } from '../project/baselines.js';
 import { RecordingStore, type CompiledProgram } from './recordings.js';
 import { AnnotationStore } from './annotation-store.js';

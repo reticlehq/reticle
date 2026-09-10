@@ -15,7 +15,7 @@
  * `console-error`, `duplicate-request`. Never a selector, a URL, an element, or a description of
  * anyone's app: that a class of defect was found, never what it was found in.
  */
-import { ReticleTool } from '../tools/tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import {
   BugAttribution,
   BugSource,

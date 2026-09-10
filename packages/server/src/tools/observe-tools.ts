@@ -13,7 +13,7 @@ import {
   PredicateKind,
   Verified,
 } from '@reticlehq/core';
-import { ReticleTool } from './tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import {
   countSchema,
   cursorSchema,

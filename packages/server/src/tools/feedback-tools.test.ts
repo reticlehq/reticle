@@ -4,7 +4,7 @@ import { FeedbackKind, FEEDBACK_RATING_MAX, FEEDBACK_RATING_MIN } from '@reticle
 import * as feedbackModule from '../telemetry/feedback.js';
 import * as telemetryModule from '../telemetry/telemetry.js';
 import { TOOLS } from './tools.js';
-import { ReticleTool } from './tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import { TOOL_SURFACE, filterTools } from './tool-surface.js';
 import { buildErrorPayload, FEEDBACK_ASK, RECOVERY } from './error-recovery.js';
 import { resetFeedbackPrompt, takeFeedbackPrompt, VERDICT_TOOLS } from './feedback-tools.js';

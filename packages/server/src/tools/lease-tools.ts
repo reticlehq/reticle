@@ -31,7 +31,7 @@ import {
   scrubKnownSecrets,
   type SeedStorage,
 } from '@reticlehq/core';
-import { ReticleTool } from './tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import type { ToolDef, ToolDeps } from './tool-kit.js';
 import { asString } from '@reticlehq/core';
 import { chromiumHint } from '../cli/chromium-hint.js';

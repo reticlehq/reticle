@@ -29,7 +29,7 @@ import {
   runSequenceStep,
 } from './flow-step-runners.js';
 import { successToPredicate } from './flow-success.js';
-import { ReticleTool } from '../tools/tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 
 /**
  * The session surface flow-replay needs: QUERY to re-resolve a testid anchor against the live

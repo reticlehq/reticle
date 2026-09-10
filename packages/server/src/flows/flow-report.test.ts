@@ -5,7 +5,7 @@ import {
   type FlowFile,
   type FlowReplayResult,
 } from '@reticlehq/core';
-import { ReticleTool } from '../tools/tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import { buildFlowReport } from './flow-report.js';
 
 function flow(partial: Partial<FlowFile> = {}): FlowFile {

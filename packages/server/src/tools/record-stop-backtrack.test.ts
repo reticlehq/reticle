@@ -8,7 +8,7 @@
 import { describe, expect, it } from 'vitest';
 import { EventType } from '@reticlehq/core';
 import { READ_TOOLS } from './read-tools.js';
-import { ReticleTool } from './tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import type { ToolDeps } from './tools.js';
 import type { Session, SessionManager } from '../session/session.js';
 import { RecordingStore } from '../flows/recordings.js';

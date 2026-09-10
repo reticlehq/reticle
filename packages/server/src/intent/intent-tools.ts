@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { IntentStore } from './intent-store.js';
 import { IntentShardStore } from './intent-shard-store.js';
 import { IntentStatus } from './intent-shard.js';
-import { ReticleTool } from '../tools/tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import { sessionIdShape } from '../tools/tool-kit.js';
 import { sessionRoot } from '../project/session-root.js';
 import { asString } from '@reticlehq/core';

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { ProjectReadError, RunStatus, type RunRecord } from '@reticlehq/core';
-import { ReticleTool } from '../tools/tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import { countSchema } from '../tools/numeric-bounds.js';
 import { sessionIdShape } from '../tools/tool-kit.js';
 import { asNumber, asString } from '@reticlehq/core';

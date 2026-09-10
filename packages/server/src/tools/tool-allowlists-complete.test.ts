@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { ReticleTool } from './tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import { RAW_TOOLS, TOOLS } from './tools.js';
 
 const SERVER_SRC = join(dirname(fileURLToPath(import.meta.url)), '..');

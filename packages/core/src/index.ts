@@ -64,6 +64,7 @@ export * from './telemetry.js';
 export * from './no-session-reason.js';
 export * from './telemetry-refusal.js';
 export * from './narrow.js';
+export * from './tool-names.js';
 export * from './realm/registry.js';
 export * from '@reticlehq/openreality';
 export * from './telemetry-session.js'; // the session/project rollup payloads

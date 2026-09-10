@@ -5,7 +5,7 @@ import { awaitArrival, idsAtTarget, ARRIVAL_TIMEOUT_MS } from './navigate-arriva
 import { reloadResult } from './reload-result.js';
 import { waitForReconnect, RELOAD_RECONNECT_TIMEOUT_MS } from '../session/session-reconnect.js';
 import { ReticleCommand } from '@reticlehq/core';
-import { ReticleTool } from './tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import { asNumber, asString } from '@reticlehq/core';
 import { sessionIdShape, commandOrThrow } from './tool-kit.js';
 import { timeoutMsSchema } from './numeric-bounds.js';

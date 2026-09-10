@@ -19,7 +19,7 @@ import { FlowStore } from './flows.js';
 import { ProjectStore } from '../project/project-store.js';
 import { AnnotationStore } from './annotation-store.js';
 import { FLOW_TOOLS } from './flow-tools.js';
-import { ReticleTool } from '../tools/tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import { BaselineStore } from '../project/baselines.js';
 import { RecordingStore } from './recordings.js';
 import type { Session, SessionManager } from '../session/session.js';

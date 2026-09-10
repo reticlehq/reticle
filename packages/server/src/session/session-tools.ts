@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { ReticleCommand } from '@reticlehq/core';
-import { ReticleTool } from '../tools/tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import { asNumber, asString } from '@reticlehq/core';
 import { idleMsSchema } from '../tools/numeric-bounds.js';
 import type { ToolDef, ToolDeps } from '../tools/tools.js';

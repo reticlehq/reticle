@@ -10,7 +10,7 @@
  * stacks where the recorder is known to capture nothing, because there the empty save is the only
  * signal the agent would ever get that something went wrong.
  */
-import { ReticleTool } from '../tools/tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 
 interface EmptyFlowRefusal {
   error: string;

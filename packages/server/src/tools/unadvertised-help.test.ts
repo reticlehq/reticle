@@ -18,7 +18,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { unadvertisedToolHelp } from './unadvertised-help.js';
-import { ReticleTool } from './tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import { TOOLS } from './tools.js';
 import { ADVERTISE_ALL_ENV, TOOL_PROFILE_ENV } from './tool-surface.js';
 

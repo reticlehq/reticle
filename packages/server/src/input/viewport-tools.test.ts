@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { CDP_NO_PROVIDER_REASON } from '@reticlehq/core';
 import { VIEWPORT_TOOLS } from './viewport-tools.js';
-import { ReticleTool } from '../tools/tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import type { RealInputProvider } from './real-input.js';
 import type { SessionManager } from '../session/session.js';
 import type { ToolDeps } from '../tools/tools.js';

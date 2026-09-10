@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { ReticleTool } from '../tools/tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import type { ToolDef, ToolDeps } from '../tools/tools.js';
 import { loadNamedFlows, resolveChangedFiles } from '../cli/cli-flow-commands.js';
 import { sessionRoot, sessionProjectId } from '../project/session-root.js';

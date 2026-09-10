@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { LastAct } from '../session/last-act.js';
 import { EventType, type ReticleEvent } from '@reticlehq/core';
 import { TOOLS, type ToolDeps } from './tools.js';
-import { ReticleTool } from './tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import type { Session, SessionManager } from '../session/session.js';
 
 function ev(type: EventType, data: Record<string, unknown>): ReticleEvent {

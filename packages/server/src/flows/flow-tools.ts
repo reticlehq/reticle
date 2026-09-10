@@ -9,7 +9,7 @@ import {
 } from '@reticlehq/core';
 import type { FlowFile } from '@reticlehq/core';
 import { recordSuiteFlakes } from './suite-flakes.js';
-import { ReticleTool } from '../tools/tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import { asNumber, asString } from '@reticlehq/core';
 import { workerCountSchema } from '../tools/numeric-bounds.js';
 import { log } from '../log.js';

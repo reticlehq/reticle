@@ -19,7 +19,7 @@ import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { PredicateSchema } from '../events/predicate-eval.js';
 import { buildDynamicTools } from './dynamic-tools.js';
-import { ReticleTool } from './tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import type { ToolDef, ToolDeps } from './tools.js';
 
 const NO_DEPS = {} as ToolDeps;

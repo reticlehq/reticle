@@ -7,7 +7,7 @@ import {
   SessionState,
   YIELD_WITHOUT_SESSION_NOTE,
 } from '@reticlehq/core';
-import { ReticleTool } from '../tools/tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import { sessionIdShape } from '../tools/tool-kit.js';
 import { asString } from '@reticlehq/core';
 import type { ToolDef } from '../tools/tools.js';

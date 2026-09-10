@@ -12,7 +12,7 @@ import {
   type AnnotateResult,
 } from '@reticlehq/core';
 import { TOOLS, type ToolDeps } from '../tools/tools.js';
-import { ReticleTool } from '../tools/tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import { BaselineStore } from '../project/baselines.js';
 import { RecordingStore, type RecordedStep } from './recordings.js';
 import { AnnotationStore } from './annotation-store.js';

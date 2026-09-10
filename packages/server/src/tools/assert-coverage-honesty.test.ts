@@ -10,7 +10,7 @@ import {
   type ReticleEvent,
 } from '@reticlehq/core';
 import { TOOLS, type ToolDef, type ToolDeps } from './tools.js';
-import { ReticleTool } from './tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import { BaselineStore } from '../project/baselines.js';
 import { createNodeFileSystem } from '../project/fs-port.js';
 import { RecordingStore } from '../flows/recordings.js';

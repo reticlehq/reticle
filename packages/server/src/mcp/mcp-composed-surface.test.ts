@@ -3,7 +3,7 @@ import { createMcpServer } from './mcp.js';
 import { advertisedTools } from './mcp.js';
 import { TOOL_SURFACE } from '../tools/tool-surface.js';
 import { TOOLS, type ToolDef, type ToolDeps } from '../tools/tools.js';
-import { ReticleTool } from '../tools/tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 
 /**
  * A consumer embedding this engine may serve its own tools alongside ours, on one surface.

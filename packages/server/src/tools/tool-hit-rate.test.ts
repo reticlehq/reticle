@@ -9,7 +9,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { CORE_TOOL_NAMES, EXTENDED_TOOL_NAMES } from './tool-surface.js';
-import { ReticleTool } from './tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import { ToolTier, foldToolHitRate, tierOfTool } from './tool-hit-rate.js';
 
 const A_DEFAULT_TOOL = ReticleTool.SNAPSHOT;

@@ -10,7 +10,7 @@ import {
 } from '@reticlehq/core';
 import { LastAct } from '../session/last-act.js';
 import { TOOLS, type ToolDeps } from './tools.js';
-import { ReticleTool } from './tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import { BaselineStore } from '../project/baselines.js';
 import { createNodeFileSystem } from '../project/fs-port.js';
 import { RecordingStore } from '../flows/recordings.js';

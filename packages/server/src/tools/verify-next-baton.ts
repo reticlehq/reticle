@@ -18,7 +18,7 @@
  * failure in miniature: an agent that follows a fabricated next step follows it confidently.
  */
 
-import { ReticleTool } from './tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 
 /**
  * Set to `1` to withhold the baton from tool results — the control arm of its A/B, and nothing else.

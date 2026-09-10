@@ -6,7 +6,7 @@ import {
   type JournalAction,
 } from '@reticlehq/core/artifacts';
 import { subjectOf } from '../runs/run-context.js';
-import { ReticleTool } from './tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 
 /**
  * Were `reticle_context` and `reticle_intent` used at all — and did using them change anything?

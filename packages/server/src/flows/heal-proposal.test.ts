@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { DriftReason, HEAL_CONFIDENCE_MIN, type Drift, type FlowStepResult } from '@reticlehq/core';
 import { collectProposals, confidenceFor, proposeRebind } from './heal.js';
-import { ReticleTool } from '../tools/tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 
 /**
  * Pure proposal layer (no fs, no session). Confidence is derived

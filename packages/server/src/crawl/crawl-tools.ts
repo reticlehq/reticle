@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { ReticleTool } from '../tools/tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import { asNumber, asString } from '@reticlehq/core';
 import { stepCountSchema, timeoutMsSchema } from '../tools/numeric-bounds.js';
 import { crawl, type CrawlOptions } from './crawl.js';

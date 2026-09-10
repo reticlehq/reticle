@@ -16,7 +16,7 @@ import {
   type FlowStep,
   type FlowStepResult,
 } from '@reticlehq/core';
-import { ReticleTool } from '../tools/tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import { replayActionArgs } from './replay.js';
 import { isStaleRefError } from '../tools/act-sequence-retry.js';
 import { waitForReaction } from '../tools/react-grace.js';

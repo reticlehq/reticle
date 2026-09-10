@@ -5,7 +5,7 @@ import { IntentStore } from '../intent/intent-store.js';
 import { FlowStore, type FlowAnnotations } from './flows.js';
 import { flowIntentGap } from './flow-intent.js';
 import { InstrumentationGapKind } from '@reticlehq/core/artifacts';
-import { ReticleTool } from '../tools/tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import { dischargeFlowIntent, flowIntentId, flowIntentStatement } from './flow-intent.js';
 import type { CompiledProgram } from './recordings.js';
 

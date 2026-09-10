@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { NoSessionAction, QueryBy, ReticleCommand, SnapshotMode } from '@reticlehq/core';
-import { ReticleTool } from './tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import { withSizeCost } from '../session/output-budget.js';
 import { applySnapshotDelta, SnapshotCache } from './snapshot-delta.js';
 import { asNumber, asRecord, asString } from '@reticlehq/core';

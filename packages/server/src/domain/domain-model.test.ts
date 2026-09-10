@@ -7,7 +7,7 @@ import {
   type FlowFile,
   type FlowStep,
 } from '@reticlehq/core';
-import { ReticleTool } from '../tools/tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import { buildDomainModel } from './domain-model.js';
 
 function testidStep(value: string): FlowStep {

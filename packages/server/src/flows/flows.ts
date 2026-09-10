@@ -17,7 +17,7 @@ import type {
   HealChange,
   InstrumentationGap,
 } from '@reticlehq/core';
-import { ReticleTool } from '../tools/tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import { asRecord, asString } from '@reticlehq/core';
 import { applyHealChanges } from './heal.js';
 import { flowIntentGap, linkFlowIntent } from './flow-intent.js';

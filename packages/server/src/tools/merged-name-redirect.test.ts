@@ -14,7 +14,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { mergedNameRedirect } from './merged-name-redirect.js';
-import { ReticleTool } from './tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import { TOOLS } from './tools.js';
 
 describe('an old member name points at where the capability went', () => {

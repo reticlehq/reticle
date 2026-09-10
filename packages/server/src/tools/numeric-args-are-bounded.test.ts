@@ -25,7 +25,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { READ_TOOLS } from './read-tools.js';
-import { ReticleTool } from './tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 
 const depth = READ_TOOLS.find((t) => ReticleTool.STATE === t.name)?.inputSchema['depth'];
 

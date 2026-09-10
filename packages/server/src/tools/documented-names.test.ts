@@ -15,7 +15,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { ReticleTool } from './tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 
 const REPO = join(import.meta.dirname, '..', '..', '..', '..');
 /** The docs an AGENT is pointed at. Internal design notes are not a contract with anyone. */

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buildDynamicTools } from './dynamic-tools.js';
-import { ReticleTool } from './tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import { TOOL_SURFACE } from './tool-surface.js';
 import { z } from 'zod';
 import type { ToolDef, ToolDeps } from './tools.js';

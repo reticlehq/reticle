@@ -22,7 +22,7 @@ import { describe, expect, it } from 'vitest';
 import { advertisedConfig } from '../mcp/mcp.js';
 import { advertisedTools } from '../mcp/mcp.js';
 import { TOOL_SURFACE, type ToolSurface } from './tool-surface.js';
-import { ReticleTool } from './tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 
 function advertised(name: string, surface: ToolSurface): string {
   const tools = advertisedTools(surface);

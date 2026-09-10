@@ -24,7 +24,7 @@ import {
   type JournalVerdictEffect,
 } from '@reticlehq/core';
 import { leanActResult, mutatedWithin } from './act-view.js';
-import { ReticleTool } from './tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import { buildReactionReport, summarizeReaction } from '../events/reaction.js';
 import { parsePredicate } from '../events/predicate-parse.js';
 import { bodyClauseRefusal } from '../honesty/body-capture-remedy.js';

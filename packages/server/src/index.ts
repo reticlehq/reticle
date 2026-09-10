@@ -94,7 +94,9 @@ function replayVerdictLine(result: FlowReplayResult): string {
   return `✗ "${result.name}" failed — ${result.error?.message ?? 'could not replay'}`;
 }
 
-export { ReticleTool } from './tools/tool-names.js';
+// Re-exported from the contract, where the names now live: a consumer importing the server should
+// not have to know that the vocabulary moved.
+export { ReticleTool } from '@reticlehq/core';
 export { RingBuffer } from './events/ring-buffer.js';
 export { Bridge } from './bridge/bridge.js';
 export { Session, SessionManager } from './session/session.js';

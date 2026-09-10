@@ -21,7 +21,7 @@ import { BrowserBrand, CaptureLoss, Verified, VerifiedReason } from '@reticlehq/
 import { decideVerified } from '../honesty/verified.js';
 import { HonestyGrade } from '../honesty/honesty.js';
 import { verificationOf } from './verification-of.js';
-import { ReticleTool } from '../tools/tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import { BrowserMode, setBrowserMode, resetBrowserMode } from './browser-mode.js';
 
 // Whole-suite replay is `reticle_verify { action: 'flows' }` since the merge, so the NAME telemetry

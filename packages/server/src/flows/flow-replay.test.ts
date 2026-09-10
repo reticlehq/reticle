@@ -23,7 +23,7 @@ import {
 } from './flow-replay.js';
 import { waitForPredicate, type Predicate } from '../events/predicate.js';
 import { asRecord, asString } from '@reticlehq/core';
-import { ReticleTool } from '../tools/tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 
 /** A scripted QUERY response per testid: live elements + (on zero) the present-testids near-miss. */
 interface QueryScript {

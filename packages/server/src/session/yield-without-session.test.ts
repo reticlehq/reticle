@@ -16,7 +16,7 @@
 import { describe, expect, it } from 'vitest';
 import { YIELD_WITHOUT_SESSION_NOTE, PresenterTone } from '@reticlehq/core';
 import { LIVE_CONTROL_TOOLS } from './live-control-tools.js';
-import { ReticleTool } from '../tools/tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import type { ToolDef } from '../tools/tools.js';
 
 const toolNamed = (name: string): ToolDef => {

@@ -6,7 +6,7 @@ import {
   FROM_DISK_ARG,
   ReticleCommand,
 } from '@reticlehq/core';
-import { ReticleTool } from './tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import { capabilityAbsences } from './capability-absences.js';
 import { asString } from '@reticlehq/core';
 import { sessionIdShape, commandOrThrow } from './tool-kit.js';

@@ -11,7 +11,7 @@ import {
   TOOL_SURFACE,
   type ToolSurface,
 } from '../tools/tool-surface.js';
-import { ReticleTool } from '../tools/tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import { SHARED_PARAM_SHORT } from './shared-params.js';
 import { buildDynamicTools } from '../tools/dynamic-tools.js';
 import { runTool, SESSION_BOUND_TOOLS } from '../tools/invoke-tool.js';

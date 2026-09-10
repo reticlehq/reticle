@@ -11,7 +11,7 @@
 import { describe, expect, it } from 'vitest';
 import { SnapshotMode } from '@reticlehq/core';
 import { TOOLS } from './tools.js';
-import { ReticleTool } from './tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 
 const snapshot = TOOLS.find((t) => t.name === ReticleTool.SNAPSHOT);
 

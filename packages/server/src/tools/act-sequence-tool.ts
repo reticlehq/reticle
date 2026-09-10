@@ -13,7 +13,7 @@
 import { z } from 'zod';
 import { timeoutMsSchema } from './numeric-bounds.js';
 import { compileSequenceStep } from '../flows/replay.js';
-import { ReticleTool } from './tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import { healthEnvelope } from '../session/session-health.js';
 import { pausedShortCircuit, pausedOutputShape, withControl } from '../session/control-envelope.js';
 import { asRecord } from '@reticlehq/core';

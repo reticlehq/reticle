@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { PNG } from 'pngjs';
 import { VisualReason } from '@reticlehq/core';
 import { TOOLS, type ToolDeps } from '../tools/tools.js';
-import { ReticleTool } from '../tools/tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import { BaselineStore } from '../project/baselines.js';
 import { RecordingStore } from '../flows/recordings.js';
 import { FlowStore } from '../flows/flows.js';

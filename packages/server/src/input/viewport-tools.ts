@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { CDP_NO_PROVIDER_REASON, CDP_NO_PROVIDER_RECOMMENDATION } from '@reticlehq/core';
-import { ReticleTool } from '../tools/tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import { sessionIdShape } from '../tools/tool-kit.js';
 import { MAX_VIEWPORT_PX, MIN_VIEWPORT_PX, viewportPxSchema } from '../tools/numeric-bounds.js';
 import { asString } from '@reticlehq/core';

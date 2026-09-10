@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { QueryBy } from '@reticlehq/core';
 import { TOOLS } from './tools.js';
-import { ReticleTool } from './tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 
 /**
  * An unsupported query strategy must be REFUSED, never answered with zero matches.

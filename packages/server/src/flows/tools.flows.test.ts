@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { CommandResult } from '@reticlehq/core';
 import { ActionType, FlowErrorCode, QueryBy } from '@reticlehq/core';
 import { TOOLS, type ToolDeps } from '../tools/tools.js';
-import { ReticleTool } from '../tools/tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import { BaselineStore } from '../project/baselines.js';
 import { RecordingStore } from './recordings.js';
 import { FlowStore } from './flows.js';

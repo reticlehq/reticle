@@ -19,7 +19,7 @@ import { LastAct } from '../session/last-act.js';
 import { RecordingStore } from '../flows/recordings.js';
 import { Session, type SessionManager } from '../session/session.js';
 import { TOOLS, type ToolDef, type ToolDeps } from '../tools/tools.js';
-import { ReticleTool } from '../tools/tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 
 /**
  * Intent declared INLINE, on the two tools that draw a verdict.

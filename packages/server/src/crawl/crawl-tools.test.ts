@@ -8,7 +8,7 @@ import {
 } from '@reticlehq/core';
 import { z } from 'zod';
 import { TOOLS, type ToolDef, type ToolDeps } from '../tools/tools.js';
-import { ReticleTool } from '../tools/tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import { CAPPED_SNAPSHOT_NOTE, type CrawlReport } from './crawl.js';
 import { CRAWL_TOOLS } from './crawl-tools.js';
 import type { Session, SessionManager } from '../session/session.js';

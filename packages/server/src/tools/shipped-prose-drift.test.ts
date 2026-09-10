@@ -25,7 +25,7 @@ import { readFileSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { TOOLS } from './tools.js';
-import { ReticleTool } from './tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import { mergedNameRedirect } from './merged-name-redirect.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));

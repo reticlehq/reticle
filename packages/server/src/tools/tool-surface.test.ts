@@ -11,7 +11,7 @@ import {
   filterTools,
   resolveToolSurface,
 } from './tool-surface.js';
-import { ReticleTool } from './tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import { PAUSE_HINT } from '../session/control-envelope.js';
 import { buildSessionLease } from '../session/session-lease.js';
 

@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { TOOLS } from './tools.js';
 import { CORE_TOOL_NAMES, TOOL_SURFACE } from './tool-surface.js';
 import { advertisedConfig, advertisedTools } from '../mcp/mcp.js';
-import { ReticleTool } from './tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 
 /**
  * Examples are the fix for the one failure an agent cannot recover from on its own.

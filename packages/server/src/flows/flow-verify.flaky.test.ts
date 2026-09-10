@@ -7,7 +7,7 @@ import { ReplayStatus } from '@reticlehq/core';
 import { createNodeFileSystem } from '../project/fs-port.js';
 import { FlakeStore } from './flake-store.js';
 import { FLOW_TOOLS } from './flow-tools.js';
-import { ReticleTool } from '../tools/tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 
 /**
  * `flow_verify` accrues outcomes into the SAME flake ledger `reticle flow` keeps on the CLI, and

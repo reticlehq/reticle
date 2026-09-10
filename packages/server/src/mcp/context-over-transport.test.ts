@@ -13,7 +13,7 @@
 import { describe, expect, it } from 'vitest';
 import { createMcpServer } from './mcp.js';
 import { TOOL_SURFACE } from '../tools/tool-surface.js';
-import { ReticleTool } from '../tools/tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import { createMemoryFs } from '../project/memory-fs.js';
 import type { ToolDeps } from '../tools/tools.js';
 

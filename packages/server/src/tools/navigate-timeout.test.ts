@@ -12,7 +12,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { BROWSER_TOOLS } from './browser-tools.js';
-import { ReticleTool } from './tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import { LastAct } from '../session/last-act.js';
 import type { CommandResult } from '@reticlehq/core';
 import type { Session, SessionManager } from '../session/session.js';

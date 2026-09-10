@@ -26,7 +26,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { AnchorKind, DEGRADED_ANCHOR_ROLE, DriftReason } from '@reticlehq/core';
-import { ReticleTool } from '../tools/tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import { recordedStepToFlowStep } from './flows.js';
 import { isDegradedAnchor } from './flow-step-runners.js';
 

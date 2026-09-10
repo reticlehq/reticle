@@ -13,7 +13,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { TOOLS, type ToolDef, type ToolDeps } from './tools.js';
-import { ReticleTool } from './tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import type { SessionManager } from '../session/session.js';
 import { createFakeSession } from '../session/fake-session.js';
 

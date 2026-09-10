@@ -8,7 +8,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { SessionState } from '@reticlehq/core';
-import { ReticleTool } from './tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import { runTool } from './invoke-tool.js';
 import { buildDynamicTools } from './dynamic-tools.js';
 import { CaptureLedger } from '../tools/feature-capture.js';

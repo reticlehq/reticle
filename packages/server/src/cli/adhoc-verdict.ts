@@ -2,7 +2,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
 import { LOOPBACK_HOST, MCP_SSE_PATH } from '@reticlehq/core';
 import { TOKEN_QUERY_PARAM } from '../bridge/token-auth.js';
-import { ReticleTool } from '../tools/tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 
 /**
  * A verdict from the CLI, against the daemon that is already running.

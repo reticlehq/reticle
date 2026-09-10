@@ -1,4 +1,4 @@
-import { ReticleTool } from './tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import type { ToolDef } from './tools.js';
 
 /**

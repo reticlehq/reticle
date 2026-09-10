@@ -9,7 +9,7 @@
 
 import { beforeEach, describe, expect, it } from 'vitest';
 import { SessionState } from '@reticlehq/core';
-import { ReticleTool } from './tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import { runTool } from './invoke-tool.js';
 import { forgetRefProvenance } from '../session/ref-provenance.js';
 import { createNodeFileSystem } from '../project/fs-port.js';

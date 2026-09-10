@@ -13,7 +13,7 @@
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { TOOLS } from './tools.js';
-import { ReticleTool } from './tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 
 const schemaOf = (name: string): Record<string, unknown> | undefined =>
   TOOLS.find((t) => t.name === name)?.outputSchema;

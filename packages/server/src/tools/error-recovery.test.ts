@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { TRANSPORT_LIMITS } from '@reticlehq/core';
 import { FEEDBACK_ASK, RECOVERY, buildErrorPayload, recoveryFor } from './error-recovery.js';
 import { TOOLS } from './tools.js';
-import { ReticleTool } from './tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import { diagnoseNoSession } from '../session/no-session-diagnosis.js';
 
 describe('recoveryFor — every known error carries an actionable next move', () => {

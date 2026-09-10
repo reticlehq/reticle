@@ -25,7 +25,7 @@ import {
   type QueryEmptyHint,
 } from '@reticlehq/core';
 import { FLOW_TOOLS } from './flow-tools.js';
-import { ReticleTool } from '../tools/tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import { FlowStore } from './flows.js';
 import { ProjectStore } from '../project/project-store.js';
 import { replayFlow } from './flow-replay.js';

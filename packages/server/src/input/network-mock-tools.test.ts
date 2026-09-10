@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { CDP_NO_PROVIDER_REASON } from '@reticlehq/core';
 import { NETWORK_MOCK_TOOLS } from './network-mock-tools.js';
-import { ReticleTool } from '../tools/tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import type { MockRule } from './network-mock.js';
 import type { RealInputProvider } from './real-input.js';
 import type { SessionManager } from '../session/session.js';

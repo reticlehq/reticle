@@ -15,7 +15,7 @@
  */
 import { describe, expect, it, vi } from 'vitest';
 import { runAdhocVerdict, type ToolCaller } from './adhoc-verdict.js';
-import { ReticleTool } from '../tools/tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 
 /** A fake daemon: records what was asked, answers with the verdict it was given. */
 function caller(verdict: unknown): { tool: ToolCaller; calls: { name: string; args: unknown }[] } {

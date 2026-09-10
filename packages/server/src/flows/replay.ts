@@ -5,7 +5,7 @@ import {
   QueryBy,
   type CommandResult,
 } from '@reticlehq/core';
-import { ReticleTool } from '../tools/tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import { predicateToExpect, enforcedOnReplay } from './predicate-to-expect.js';
 import { PredicateSchema } from '../events/predicate.js';
 import type { RecordedStep, CompiledProgram } from './recordings.js';

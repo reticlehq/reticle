@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { EventType, Verified, VerifiedReason } from '@reticlehq/core';
 import { TOOLS, type ToolDef, type ToolDeps } from './tools.js';
-import { ReticleTool } from './tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import type { SessionManager } from '../session/session.js';
 import type { ReticleEvent } from '@reticlehq/core';
 import { createFakeSession } from '../session/fake-session.js';

@@ -17,7 +17,7 @@ import { BaselineStore } from '../project/baselines.js';
 import { AnnotationStore } from './annotation-store.js';
 import { RecordingStore, type CompiledProgram } from './recordings.js';
 import { FLOW_TOOLS } from './flow-tools.js';
-import { ReticleTool } from '../tools/tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import { flowIntentId } from './flow-intent.js';
 import type { ToolDeps } from '../tools/tools.js';
 import type { Session, SessionManager } from '../session/session.js';

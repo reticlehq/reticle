@@ -15,7 +15,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { ReticleTool } from './tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import { TOOLS } from './tools.js';
 import type { ToolDeps } from './tool-kit.js';
 

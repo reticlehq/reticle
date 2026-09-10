@@ -12,7 +12,7 @@
  * covered the day it lands instead of the day someone notices.
  */
 import { MERGE_PLANS, RETIRED_FROM_SURFACE } from './tools.js';
-import { ReticleTool } from './tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 
 interface MergedNameRedirect {
   /** The tool to call instead. */

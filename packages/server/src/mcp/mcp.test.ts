@@ -12,7 +12,7 @@ import {
 import { TOOL_SURFACE } from '../tools/tool-surface.js';
 import { TOOLS, type ToolDeps } from '../tools/tools.js';
 import { SESSION_BOUND_TOOLS } from '../tools/invoke-tool.js';
-import { ReticleTool } from '../tools/tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import { getSessionMetrics, resetSessionMetrics } from '../telemetry/session-metrics.js';
 
 describe('withSessionEnvelope — spliced fields survive structuredContent validation', () => {

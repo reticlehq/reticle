@@ -13,7 +13,7 @@ import { JournalRecorder, type JournalSink } from '../journal/journal-recorder.j
 import { provenFromJournal } from '../runs/run-context.js';
 import { Session, type SessionManager } from '../session/session.js';
 import { TOOLS, type ToolDef, type ToolDeps } from './tools.js';
-import { ReticleTool } from './tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 
 /**
  * `reticle_assert` produces a verdict, and for as long as it journalled nothing that proof was

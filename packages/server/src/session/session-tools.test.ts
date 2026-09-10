@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ReticleCommand, type CommandResult } from '@reticlehq/core';
 import { TOOLS, type ToolDeps } from '../tools/tools.js';
-import { ReticleTool } from '../tools/tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import type { Session, SessionManager } from './session.js';
 
 /** A session that echoes the SESSION_CONFIG args back (what the browser presenter would apply). */

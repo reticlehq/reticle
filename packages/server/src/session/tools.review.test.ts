@@ -11,7 +11,7 @@ import {
 } from '@reticlehq/core';
 import { Session, type SessionManager } from './session.js';
 import { LIVE_CONTROL_TOOLS } from './live-control-tools.js';
-import { ReticleTool } from '../tools/tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import type { ToolDeps } from '../tools/tools.js';
 
 const HELLO: HelloMessage = {

@@ -6,7 +6,7 @@ import {
   VISUAL_NO_PROVIDER_RECOMMENDATION,
   VisualReason,
 } from '@reticlehq/core';
-import { ReticleTool } from '../tools/tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import { sessionIdShape } from '../tools/tool-kit.js';
 import { ratioSchema } from '../tools/numeric-bounds.js';
 import { asNumber, asRecord, asString } from '@reticlehq/core';

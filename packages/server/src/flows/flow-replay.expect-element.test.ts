@@ -15,7 +15,7 @@ import { replayFlow, type FlowReplaySession } from './flow-replay.js';
 import { proposeRebind } from './heal.js';
 import { waitForPredicate } from '../events/predicate.js';
 import { asString } from '@reticlehq/core';
-import { ReticleTool } from '../tools/tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 
 /**
  * #697: a step whose `expect.element` testid is absent after the action reported the ASSERTION's

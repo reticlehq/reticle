@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { IntentState, Verified, type Intent, type JournalAction } from '@reticlehq/core';
-import { ReticleTool } from './tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import { CaptureLedger, foldFeatureCapture, type CapturedCall } from './feature-capture.js';
 
 const ACTED_REF = 'e7';

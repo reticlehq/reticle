@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { EventType, ReticleCommand, SessionState } from '@reticlehq/core';
 import { RECONCILE_TOOLS } from './reconcile-tools.js';
-import { ReticleTool } from './tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import type { ToolDeps } from './tools.js';
 import type { Session, SessionManager } from '../session/session.js';
 

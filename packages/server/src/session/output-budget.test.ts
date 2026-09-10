@@ -10,7 +10,7 @@ import {
   withSizeCost,
 } from './output-budget.js';
 import { TOOLS } from '../tools/tools.js';
-import { ReticleTool } from '../tools/tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import type { Session, SessionManager } from './session.js';
 import type { ToolDeps } from '../tools/tools.js';
 

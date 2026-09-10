@@ -21,7 +21,7 @@ import { verificationOf } from '../telemetry/verification-of.js';
 import { asString } from '@reticlehq/core';
 import { sessionIdFromArgs, spentRefFromArgs } from './tools-helpers.js';
 import { EnvelopeKey } from './tool-kit.js';
-import { ReticleTool } from './tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import { takeFeedbackPrompt } from './feedback-tools.js';
 import { takeFeedbackUndelivered } from '../telemetry/feedback-delivery.js';
 import type { Session } from '../session/session.js';

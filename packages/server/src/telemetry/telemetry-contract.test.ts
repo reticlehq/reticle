@@ -18,7 +18,7 @@ import {
 } from '@reticlehq/core';
 import { generateKeyPairSync } from 'node:crypto';
 import { TOOLS } from '../tools/tools.js';
-import { ReticleTool } from '../tools/tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import { VERDICT_TOOLS } from '../tools/feedback-tools.js';
 import { bugsInResult, type BugCandidate } from './bug-found.js';
 import { describeParam } from './argument-shape.js';

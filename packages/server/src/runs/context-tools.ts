@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { type JournalAction, type ReticleEvent } from '@reticlehq/core';
 import { runContextFor } from './run-context.js';
 import { openSessionIntents } from '../intent/open-intents.js';
-import { ReticleTool } from '../tools/tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import { sessionIdShape } from '../tools/tool-kit.js';
 import { asString } from '@reticlehq/core';
 import type { ToolDef, ToolDeps } from '../tools/tool-kit.js';

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { SessionState, UNSCRIPTABLE_TAB_RECOMMENDATION, TRANSPORT_LIMITS } from '@reticlehq/core';
 import { TOOLS, type ToolDef, type ToolDeps } from './tools.js';
-import { ReticleTool } from './tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import { EnvelopeKey } from './tool-kit.js';
 import { getSessionMetrics, resetSessionMetrics } from '../telemetry/session-metrics.js';
 import { buildDynamicTools } from './dynamic-tools.js';

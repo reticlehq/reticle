@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { ReticleCommand } from '@reticlehq/core';
 import { READ_TOOLS } from './read-tools.js';
-import { ReticleTool } from './tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import type { ToolDeps } from './tools.js';
 import type { Session, SessionManager } from '../session/session.js';
 

@@ -1,6 +1,16 @@
-import { FlowStepTool } from '@reticlehq/core';
+import { FlowStepTool } from './flow-types.js';
 
-/** MCP tool names exposed to the coding agent. No free strings. The three that appear in a persisted
+/**
+ * The names an agent calls Reticle by.
+ *
+ * Wire strings, and this package is where wire strings live: a name here crosses the boundary between
+ * an agent and the daemon exactly as an event type crosses the one between the page and the bridge.
+ * It sat under the server's tool directory because that is where the handlers are, and the result was
+ * that every feature wanting to name a tool -- flows naming the steps it replays, crawl, runs -- had
+ * to import from the tool surface to get at a string. Thirty-three of those imports were this one
+ * table.
+ *
+ * MCP tool names exposed to the coding agent. No free strings. The three that appear in a persisted
  *  flow (ACT / ACT_SEQUENCE / ACT_AND_WAIT) come from core's FlowStepTool — one source shared with the
  *  browser recorder and the flow schema, so a rename can't desync the recorder from the replayer. */
 export const ReticleTool = {

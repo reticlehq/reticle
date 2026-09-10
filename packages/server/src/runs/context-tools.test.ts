@@ -11,7 +11,7 @@ import {
 import { createMemoryFs } from '../project/memory-fs.js';
 import { IntentStore } from '../intent/intent-store.js';
 import { CONTEXT_TOOLS } from './context-tools.js';
-import { ReticleTool } from '../tools/tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import type { FileSystemPort } from '../project/fs-port.js';
 import type { ToolDeps } from '../tools/tool-kit.js';
 

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import type { CommandResult } from '@reticlehq/core';
 import { TOOLS, type ToolDeps } from './tools.js';
-import { ReticleTool } from './tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import type { Session, SessionManager } from '../session/session.js';
 
 /**

@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { sessionRoot } from '../project/session-root.js';
 import { asNumber, asString } from '@reticlehq/core';
 import type { FlowFile } from '@reticlehq/core';
-import { ReticleTool } from '../tools/tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import { countSchema } from '../tools/numeric-bounds.js';
 import { readContract } from '../project/reticle-dir.js';
 import { buildDomainModel } from './domain-model.js';

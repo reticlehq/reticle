@@ -11,7 +11,7 @@ import {
   SnapshotMode,
   StorageArea,
 } from '@reticlehq/core';
-import { ReticleTool } from './tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import { advanceMsSchema, depthSchema } from './numeric-bounds.js';
 import { proposeConsequences } from '../oracles/propose-consequences.js';
 import type { CompiledProgram } from '../flows/recordings.js';

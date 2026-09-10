@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { EventType, THROTTLED_WARNING } from '@reticlehq/core';
 import { Bridge } from './bridge.js';
 import { TOOLS, type ToolDeps } from '../tools/tools.js';
-import { ReticleTool } from '../tools/tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import { FakeBrowser, callTool, makeDeps, waitUntil } from './bridge.test-harness.js';
 
 describe('bridge round-trip (north-star)', () => {

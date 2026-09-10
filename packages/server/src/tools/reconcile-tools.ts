@@ -1,7 +1,7 @@
 import { bodyCaptureRemedy } from '../honesty/body-capture-remedy.js';
 import { z } from 'zod';
 import { EventType, ReticleCommand, SnapshotMode, urlForMatch } from '@reticlehq/core';
-import { ReticleTool } from './tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import { cursorSchema } from './numeric-bounds.js';
 import { reconcile, type Mismatch } from '../events/reconcile.js';
 import { salvageJson } from '../events/json-salvage.js';

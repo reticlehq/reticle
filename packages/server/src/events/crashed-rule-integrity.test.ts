@@ -8,7 +8,7 @@ import {
 import { SessionState, Verified, type ReticleEvent } from '@reticlehq/core';
 import { LastAct } from '../session/last-act.js';
 import { TOOLS, type ToolDef, type ToolDeps } from '../tools/tools.js';
-import { ReticleTool } from '../tools/tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import type { Session, SessionManager } from '../session/session.js';
 
 /** A healthy session with nothing wrong with it, so any UNKNOWN below comes from the crashed rule. */

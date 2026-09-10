@@ -12,7 +12,7 @@
  * useless but because consulting it was a separate act nobody performed.
  */
 import { z } from 'zod';
-import { ReticleTool } from '../tools/tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import { countSchema } from '../tools/numeric-bounds.js';
 import { sessionIdShape } from '../tools/tool-kit.js';
 import { asNumber, asString } from '@reticlehq/core';

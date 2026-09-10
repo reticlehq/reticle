@@ -22,7 +22,7 @@
 import { describe, expect, it } from 'vitest';
 import { PredicateKind } from '@reticlehq/core';
 import { TOOLS } from './tools.js';
-import { ReticleTool } from './tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 
 /**
  * Combinators are grammar, not vocabulary — an agent reaches for `allOf` only once it already has

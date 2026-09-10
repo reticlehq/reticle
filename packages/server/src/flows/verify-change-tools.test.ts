@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { Verified } from '@reticlehq/core';
 import { VERIFY_CHANGE_TOOLS } from './verify-change-tools.js';
 import { FLOW_TOOLS } from './flow-tools.js';
-import { ReticleTool } from '../tools/tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import type { ToolDeps } from '../tools/tools.js';
 
 const tool = VERIFY_CHANGE_TOOLS[0];

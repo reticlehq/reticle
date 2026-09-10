@@ -19,7 +19,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Bridge } from './bridge/bridge.js';
 import { FakeBrowser, callTool, makeDeps, waitUntil } from './bridge/bridge.test-harness.js';
-import { ReticleTool } from './tools/tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import type { ToolDeps } from './tools/tools.js';
 import { EventType, RETICLE_DEFAULT_PORT } from '@reticlehq/core';
 

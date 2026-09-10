@@ -25,7 +25,7 @@ import { IntentStore } from '../intent/intent-store.js';
 import { FlowAssertionGrade } from './flow-classify.js';
 import { TOOLS, type ToolDeps } from '../tools/tools.js';
 import { buildSuiteVerdict } from './decision.js';
-import { ReticleTool } from '../tools/tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import { BaselineStore } from '../project/baselines.js';
 import { RecordingStore } from './recordings.js';
 import { FlowStore, type FlowAnnotations } from './flows.js';

@@ -3,7 +3,7 @@ import { sessionRoot, sessionProjectId } from '../project/session-root.js';
 import { verdictForSuite } from './verify-change-verdict.js';
 import { attributedFailures } from './attributed-failure.js';
 import { Verified } from '@reticlehq/core';
-import { ReticleTool } from '../tools/tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import type { ToolDef, ToolDeps } from '../tools/tools.js';
 import { asNumber, asRecord, asString } from '@reticlehq/core';
 import { workerCountSchema } from '../tools/numeric-bounds.js';

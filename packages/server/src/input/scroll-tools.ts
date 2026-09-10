@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { QueryBy } from '@reticlehq/core';
-import { ReticleTool } from '../tools/tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import { asNumber, asString } from '@reticlehq/core';
 import { listIndexSchema, scrollCountSchema } from '../tools/numeric-bounds.js';
 import { scrollToFind, type ScrollFindQuery } from './scroll-find.js';

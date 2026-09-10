@@ -23,7 +23,7 @@
 import { describe, expect, it } from 'vitest';
 import { navigateResult } from './navigate-result.js';
 import { TOOLS } from './tools.js';
-import { ReticleTool } from './tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 
 const WAITED = 5_000;
 

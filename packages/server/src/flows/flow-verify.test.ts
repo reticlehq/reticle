@@ -4,7 +4,7 @@ import { leasableAppUrl, leaseFailureReplay } from './flow-tools.js';
 import type { ToolDeps } from '../tools/tools.js';
 import type { Session, SessionManager } from '../session/session.js';
 import { TOOLS } from '../tools/tools.js';
-import { ReticleTool } from '../tools/tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 
 /**
  * `reticle_flow_verify` is the tool a CI user runs first, and it had no tests at all — nothing

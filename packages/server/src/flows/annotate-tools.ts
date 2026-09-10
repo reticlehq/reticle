@@ -12,7 +12,7 @@ const UNKNOWN_KIND_RECOVERY =
   '{ kind: "assert-signal", name }, { kind: "assert-visible", testid }, ' +
   '{ kind: "assert-state", statePath }, { kind: "mark-dynamic", testid }, ' +
   '{ kind: "success-state", signal|testid }, or { kind: "intent", text }.';
-import { ReticleTool } from '../tools/tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import { asString } from '@reticlehq/core';
 import { compileAnnotation } from './annotate.js';
 import type { ToolDef, ToolDeps } from '../tools/tools.js';

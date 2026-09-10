@@ -11,7 +11,7 @@ import {
   RunProfile,
   RunTrigger,
 } from '@reticlehq/core';
-import { ReticleTool } from '../tools/tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import type { ToolDeps } from '../tools/tools.js';
 import type { SessionManager } from '../session/session.js';
 import { BaselineStore } from '../project/baselines.js';

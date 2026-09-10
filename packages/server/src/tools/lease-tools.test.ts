@@ -24,7 +24,7 @@ import {
 import { assertVerdict } from './assert-verdict.js';
 import { evaluatePredicate, type Predicate, type PredicateSession } from '../events/predicate.js';
 import type { Session } from '../session/session.js';
-import { ReticleTool } from './tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import type { ToolDeps } from './tool-kit.js';
 import type { BrowserPool, Lease } from '../pool/browser-pool.js';
 

@@ -18,7 +18,7 @@ import { createNodeFileSystem } from '../project/fs-port.js';
 import { FlakeStore } from './flake-store.js';
 import { recordSuiteFlakes } from './suite-flakes.js';
 import { FLOW_TOOLS } from './flow-tools.js';
-import { ReticleTool } from '../tools/tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 
 let root = '';
 const fs = createNodeFileSystem();

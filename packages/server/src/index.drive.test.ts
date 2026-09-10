@@ -10,7 +10,7 @@ import { PAIRING_TOKEN_DIR_ENV } from './bridge/pairing-token.js';
 // start auto-provisions a pairing token; keep it out of the real ~/.reticle during tests.
 process.env[PAIRING_TOKEN_DIR_ENV] = join(tmpdir(), 'reticle-drive-token-test');
 import { TOOLS, type ToolDeps } from './tools/tools.js';
-import { ReticleTool } from './tools/tool-names.js';
+import { ReticleTool } from '@reticlehq/core';
 import { BaselineStore } from './project/baselines.js';
 import { createNodeFileSystem } from './project/fs-port.js';
 import { RecordingStore } from './flows/recordings.js';
