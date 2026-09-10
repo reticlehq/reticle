@@ -21,7 +21,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { navigateResult } from './navigate-result.js';
+import { navigateResult } from './act/navigate-result.js';
 import { TOOLS } from './tools.js';
 import { ReticleTool } from '@reticlehq/core';
 

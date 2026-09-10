@@ -29,7 +29,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { recoveryFor } from './error-recovery.js';
-import { resolveTargetRef } from './resolve-target.js';
+import { resolveTargetRef } from './act/resolve-target.js';
 
 /** The exact string measured from a live daemon. */
 const DRAG =

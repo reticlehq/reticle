@@ -17,7 +17,7 @@ import {
   inFlightRequestIds,
   inFlightRequestLabels,
   repeatedRequestLabels,
-} from './settle-in-flight.js';
+} from './act/settle-in-flight.js';
 
 const HMR = 'http://localhost:3000/_next/static/webpack/633457081244afec.webpack.hot-update.json';
 const OVERLAY = 'http://localhost:3000/__nextjs_original-stack-frames';

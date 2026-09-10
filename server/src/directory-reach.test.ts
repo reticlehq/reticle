@@ -75,6 +75,19 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   // count is unchanged by it, which is the test that matters -- a grouping that raises that number
   // is a shorter directory listing bought with a real property.
   realm: ['session'],
+  /**
+   * The act LEAVES, and why this grouping is allowed where an earlier one was not.
+   *
+   * A first attempt moved the whole act cluster, `act-tools.ts` included, and the mutual-pair
+   * count went 32 -> 34: the tool registry and the act tools need each other, so splitting them
+   * bought a shorter directory listing with a real property, and it was reverted.
+   *
+   * What moved instead is only the files that import NO sibling. That makes the edge strictly
+   * one-way by construction -- `tools` reaches for `act`, and `act` can never reach back, because
+   * nothing in it imports upward. The three reaches below are the ones these files already had
+   * under their old home; they are the same edges, now attributed to the directory that owns them.
+   */
+  act: ['capsule', 'input', 'session'],
   bridge: ['flows', 'impact', 'project', 'session', 'telemetry', 'tools', 'version'],
   capsule: ['project'],
   cli: [
@@ -126,6 +139,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   setup: ['bridge', 'cli', 'daemon', 'mcp', 'telemetry'],
   telemetry: ['cli', 'daemon', 'license', 'mcp', 'session', 'tools', 'update', 'version'],
   tools: [
+    'act',
     'capsule',
     'cli',
     'crawl',

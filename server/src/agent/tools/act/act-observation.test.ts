@@ -2,11 +2,11 @@
  * A write whose transport was displaced must not become a claim about the app.
  */
 import { describe, expect, it } from 'vitest';
-import { dispatchAct } from './act-preflight.js';
-import { SessionReplacedError } from '../../connection/session/pending-commands.js';
-import { CommandTimeoutError } from '../../connection/session/pending-commands.js';
+import { dispatchAct } from '../act-preflight.js';
+import { SessionReplacedError } from '../../../connection/session/pending-commands.js';
+import { CommandTimeoutError } from '../../../connection/session/pending-commands.js';
 import { followLostObservation } from './act-observation.js';
-import type { Session } from '../../connection/session/session.js';
+import type { Session } from '../../../connection/session/session.js';
 
 describe('dispatchAct', () => {
   it('returns the result when nothing displaced the transport', async () => {

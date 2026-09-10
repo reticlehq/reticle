@@ -1,8 +1,8 @@
 import { carryReticleIdentity } from './lease-tools.js';
 import { z } from 'zod';
-import { navigateResult } from './navigate-result.js';
+import { navigateResult } from './act/navigate-result.js';
 import { awaitArrival, idsAtTarget, ARRIVAL_TIMEOUT_MS } from './navigate-arrival.js';
-import { reloadResult } from './reload-result.js';
+import { reloadResult } from './act/reload-result.js';
 import {
   waitForReconnect,
   RELOAD_RECONNECT_TIMEOUT_MS,

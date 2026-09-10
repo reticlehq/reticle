@@ -11,11 +11,10 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
-    "./schema/*.json": "./schema/*.json"
+    "./schema/*.json": "./dist/schema/*.json"
   },
   "files": [
     "dist",
-    "schema",
     "README.md",
     "SPEC.md",
     "GOVERNANCE.md"

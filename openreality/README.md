@@ -4,7 +4,7 @@
 
 - **[SPEC.md](./SPEC.md)** — the normative specification.
 - **[GOVERNANCE.md](./GOVERNANCE.md)** — how it changes, and the vendor conflict it does not hide.
-- **`schema/`** — JSON Schema for every noun, generated from the source. Implement in any language by validating against these; you need none of this code.
+- **`dist/schema/`** (generated) — JSON Schema for every noun, generated from the source. Implement in any language by validating against these; you need none of this code.
 
 ## Implementing it
 

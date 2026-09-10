@@ -19,7 +19,7 @@
  */
 
 import type { SessionManager } from '../../connection/session/session-manager.js';
-import type { NavigateArrival } from './navigate-result.js';
+import type { NavigateArrival } from './act/navigate-result.js';
 
 /**
  * The default when the caller gives no `timeout_ms`: long enough for a dev server to serve a page

@@ -11,11 +11,11 @@
  * where observation can be lost: a write rejected at dispatch, and a wait cut off mid-predicate.
  */
 
-import type { Session } from '../../connection/session/session.js';
+import type { Session } from '../../../connection/session/session.js';
 import {
   awaitDocumentSuccessor,
   type SuccessorRegistry,
-} from '../../connection/session/session-successor.js';
+} from '../../../connection/session/session-successor.js';
 import type { EvalResult } from '@reticlehq/engine/question/predicate-eval.js';
 
 interface FollowSuccessor {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ActionType, NATIVE_INPUT_ARG } from '@reticlehq/core';
-import { assertNativeInputSupported, NATIVE_INPUT_UNSUPPORTED } from './act-danger.js';
+import { assertNativeInputSupported, NATIVE_INPUT_UNSUPPORTED } from './act/act-danger.js';
 
 /**
  * `reticle_act_and_wait` takes `args` as an open record, so `args.native` was ACCEPTED and then

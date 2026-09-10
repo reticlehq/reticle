@@ -23,7 +23,7 @@ import {
   PredicateKind,
   type JournalVerdictEffect,
 } from '@reticlehq/core';
-import { leanActResult, mutatedWithin } from './act-view.js';
+import { leanActResult, mutatedWithin } from './act/act-view.js';
 import { ReticleTool } from '@reticlehq/core';
 import { buildReactionReport, summarizeReaction } from '@reticlehq/engine/question/reaction.js';
 import { parsePredicate } from '@reticlehq/engine/question/predicate-parse.js';
@@ -46,7 +46,7 @@ import {
   inFlightRequestLabels,
   repeatedRequestLabels,
   waitForInFlight,
-} from './settle-in-flight.js';
+} from './act/settle-in-flight.js';
 import { waitForReaction } from './react-grace.js';
 import { decideVerified } from '@reticlehq/engine/evidence/verified.js';
 import { honestyForVerdict } from '@reticlehq/engine/evidence/honesty.js';
@@ -89,9 +89,9 @@ import {
 import { asNumber, asRecord, asString } from '@reticlehq/core';
 import { sourceOf } from './tools-helpers.js';
 import { dispatchAct, preflightAct } from './act-preflight.js';
-import { followLostObservation } from './act-observation.js';
+import { followLostObservation } from './act/act-observation.js';
 import { type ToolDef, type ToolDeps, intentArg, sessionIdShape } from './tool-kit.js';
-import { asActionType, gradeOf } from './act-helpers.js';
+import { asActionType, gradeOf } from './act/act-helpers.js';
 import { resolveActTarget } from './act-target.js';
 import { tryRealInput, rewriteUploadArgs, HOVER_NEEDS_POINTER_MSG } from './real-input-attempt.js';
 import { gradeOfPredicate } from './assert-grade.js';

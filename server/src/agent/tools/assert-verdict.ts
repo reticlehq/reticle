@@ -29,7 +29,7 @@ import { acceptedWriteLabels } from '@reticlehq/engine/evidence/accepted-write.j
 import { unreadWriteLabels } from '@reticlehq/engine/evidence/unread-outcome.js';
 import { decideVerified } from '@reticlehq/engine/evidence/verified.js';
 import { describeWaitTarget, namedNetIsInFlight } from '@reticlehq/engine/evidence/unsettled.js';
-import { inFlightRequestLabels, repeatedRequestLabels } from './settle-in-flight.js';
+import { inFlightRequestLabels, repeatedRequestLabels } from './act/settle-in-flight.js';
 import { gradeOfPredicate } from './assert-grade.js';
 import { assertSource } from './assert-source.js';
 

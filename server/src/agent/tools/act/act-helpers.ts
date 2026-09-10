@@ -6,9 +6,9 @@
  * is why they can be tested without a browser and why they were the right thing to move.
  */
 import { ActionType, ConsequenceKind } from '@reticlehq/core';
-import type { ElementBox } from '../../connection/input/real-input.js';
+import type { ElementBox } from '../../../connection/input/real-input.js';
 import { HonestyGrade } from '@reticlehq/engine/evidence/honesty.js';
-import type { ExpectedLink } from '../capsule/divergence.js';
+import type { ExpectedLink } from '../../capsule/divergence.js';
 import { asNumber, asRecord, asString } from '@reticlehq/core';
 
 /** The strongest consequence grade a set of expected links proves (signal > net > state > presence). */

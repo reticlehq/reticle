@@ -17,7 +17,11 @@ import { zodToJsonSchema } from 'zod-to-json-schema';
 import * as ovp from '../dist/index.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const OUT = join(HERE, '..', 'schema');
+// Emitted into `dist/`, like core's wire schemas, and for the same two reasons: generated output
+// is not source and does not belong in git, and a generator that writes into the tree fights the
+// formatter on every build -- twenty-two files, every time, blocking a commit that changed none
+// of them.
+const OUT = join(HERE, '..', 'dist', 'schema');
 
 /** The base every `$id` hangs off. Stable: a moved schema url is a broken contract. */
 const BASE = 'https://openreality.dev/schema/v1';
@@ -69,7 +73,7 @@ function main() {
   for (const [name, schema] of Object.entries(built)) {
     writeFileSync(join(OUT, `${name}.json`), `${JSON.stringify(schema, null, 2)}\n`);
   }
-  console.log(`wrote ${Object.keys(built).length} OVP schemas to schema/`);
+  console.log(`wrote ${Object.keys(built).length} OVP schemas to dist/schema/`);
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) main();

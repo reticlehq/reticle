@@ -12,7 +12,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { EventType, NetInitiator } from '@reticlehq/core';
-import { inFlightRequestIds, inFlightRequestLabels } from './settle-in-flight.js';
+import { inFlightRequestIds, inFlightRequestLabels } from './act/settle-in-flight.js';
 
 const pending = (
   id: string,

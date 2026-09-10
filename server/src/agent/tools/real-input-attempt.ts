@@ -22,11 +22,11 @@ import { ActionType, InputModeReason, ReticleCommand, TRANSPORT_LIMITS } from '@
 import type { Session } from '../../connection/session/session.js';
 import type { ElementBox, RealInputArgs } from '../../connection/input/real-input.js';
 import { boxCenter, isPointerAction } from '../../connection/input/real-input.js';
-import { assertDragNotDestructive, assertNotDestructive } from './act-danger.js';
+import { assertDragNotDestructive, assertNotDestructive } from './act/act-danger.js';
 import { NATIVE_INPUT_ARG } from '@reticlehq/core';
 import { asRecord, asString } from '@reticlehq/core';
 import { type ToolDeps, commandOrThrow } from './tool-kit.js';
-import { asBox } from './act-helpers.js';
+import { asBox } from './act/act-helpers.js';
 import { isAbsolute, join, relative, extname, basename } from 'node:path';
 
 /**
