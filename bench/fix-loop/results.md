@@ -95,7 +95,7 @@ The strong-model run above left the thesis untested: a capable agent code-archae
 node bench/fix-loop/run-fix-loop.mjs --selftest
 
 # With-Reticle live setup used for this run:
-#   1) daemon: feat/v2.2.0 packages/server on :4460 (the session MCP already points here)
+#   1) daemon: feat/v2.2.0 server on :4460 (the session MCP already points here)
 #   2) bench-app: cd apps/bench-app && RETICLE_PORT=4460 VITE_RETICLE_TOKEN="$(cat ~/.reticle/pairing-token)" pnpm dev
 #   3) open http://localhost:<vite-port>/ in a browser → SDK connects as a NEW session
 #      (the session id ROTATES on every HMR reload — resolve it fresh via reticle_sessions each cell)

@@ -20,7 +20,7 @@ import { fileURLToPath } from 'node:url';
 import { freePortSafely } from '../gate-harness.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
-const CLI = path.join(ROOT, 'packages/server/dist/cli.js');
+const CLI = path.join(ROOT, 'server/dist/cli.js');
 const PORT = Number(process.env.DAEMON_PORT_HONESTY_PORT ?? '4744');
 
 let pass = 0;

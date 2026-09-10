@@ -44,7 +44,7 @@ console.log('\n=== BROWSER STRESS: the daemon ↔ page channel ===');
 process.on('unhandledRejection', () => undefined);
 process.chdir(ROOT);
 
-const client = new McpStdioClient('node', ['packages/server/dist/cli.js', 'mcp', '--port', PORT], {
+const client = new McpStdioClient('node', ['server/dist/cli.js', 'mcp', '--port', PORT], {
   RETICLE_PORT: PORT,
   RETICLE_TELEMETRY: '0',
 });

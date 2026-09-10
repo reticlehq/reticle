@@ -7,15 +7,15 @@
 
 area/core:
   - changed-files:
-      - any-glob-to-any-file: ['packages/core/**']
+      - any-glob-to-any-file: ['core/**']
 
 area/browser:
   - changed-files:
-      - any-glob-to-any-file: ['packages/browser/**']
+      - any-glob-to-any-file: ['adapters/realm/dom/**']
 
 area/server:
   - changed-files:
-      - any-glob-to-any-file: ['packages/server/**']
+      - any-glob-to-any-file: ['server/**']
 
 area/react:
   - changed-files:
@@ -23,7 +23,7 @@ area/react:
 
 area/vite-plugin:
   - changed-files:
-      - any-glob-to-any-file: ['packages/vite-plugin/**']
+      - any-glob-to-any-file: ['adapters/build/vite/**']
 
 area/babel-plugin:
   - changed-files:
@@ -40,15 +40,15 @@ area/electron:
 
 area/tauri:
   - changed-files:
-      - any-glob-to-any-file: ['packages/tauri/**', 'apps/tauri-smoke/**']
+      - any-glob-to-any-file: ['adapters/realm/tauri/**', 'apps/tauri-smoke/**']
 
 area/test:
   - changed-files:
-      - any-glob-to-any-file: ['packages/test/**']
+      - any-glob-to-any-file: ['spec-runner/**']
 
 area/eslint-plugin:
   - changed-files:
-      - any-glob-to-any-file: ['packages/eslint-plugin/**']
+      - any-glob-to-any-file: ['eslint-plugin/**']
 
 area/docs:
   - changed-files:

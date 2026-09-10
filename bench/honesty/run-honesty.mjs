@@ -12,11 +12,11 @@
 // Run: node bench/honesty/run-honesty.mjs   (deterministic, no agent/API cost)
 
 import { EventType } from '@reticlehq/core';
-import { buildHonestyBlock, meetsHonestyBar } from '../../packages/server/dist/honesty/honesty.js';
+import { buildHonestyBlock, meetsHonestyBar } from '../../engine/dist/honesty/honesty.js';
 import {
   blindSpotsFromEvents,
   buildCoverageStatement,
-} from '../../packages/server/dist/honesty/blind-spots.js';
+} from '../../engine/dist/honesty/blind-spots.js';
 import { HONESTY_SCENARIOS } from './scenarios.mjs';
 
 /** Derive the honesty inputs act_and_wait would compute from a window + the asserted grade. */

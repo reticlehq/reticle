@@ -4,7 +4,7 @@ Sixteen files, and none of them is dead. This page says what each one does, who 
 
 They are grouped by **who runs them**, because that is the question people actually have. A script you never type is a very different thing from one you type during a release.
 
-`packages/server/src/loose-scripts.test.ts` fails if a script here is reachable from nothing, and `scripts-documented.test.ts` fails if one is missing from this page. So both "quietly dead" and "quietly undocumented" are caught rather than noticed years later.
+`server/src/loose-scripts.test.ts` fails if a script here is reachable from nothing, and `scripts-documented.test.ts` fails if one is missing from this page. So both "quietly dead" and "quietly undocumented" are caught rather than noticed years later.
 
 ## Nobody runs these — they run themselves
 
@@ -23,7 +23,7 @@ Guards. Each one exists because something went wrong once and nobody noticed unt
 
 | script | what it catches |
 | --- | --- |
-| `check-boundaries.mjs` | A package importing across the browser/server line, or an untagged package sneaking in as "safe for everyone". Run `--self-test` to prove the checker itself still catches a bad graph. |
+| `check-boundaries.mjs` | A package importing across the browser/server line, or an untagged package sneaking in as "safe for everyone". It reads which packages exist from the pnpm workspace file, so a package that moves cannot fall out of its sight. Run `--self-test` to prove the checker itself still catches a bad graph. `check-boundaries.d.mts` beside it is just the type declaration for the one function other checks reuse; it has no other reason to exist. |
 | `check-lossy-transforms.mjs` | A read path that quietly drops part of what it was given. |
 | `orphan-scan.mjs` | Modules nothing imports. Every package's `orphan-modules.test.ts` calls this one scanner rather than each writing its own. `orphan-scan.d.mts` beside it is just its type declaration; it has no other reason to exist. |
 | `check-stale-issues.mjs` | An issue we already fixed still reading as available work, so somebody starts on it. |

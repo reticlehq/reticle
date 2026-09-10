@@ -8,5 +8,8 @@
     "composite": false
   },
   "include": ["src/**/*", "vite.config.ts"],
-  "references": [{ "path": "../../packages/browser" }, { "path": "../../adapters/framework/react" }]
+  "references": [
+    { "path": "../../adapters/realm/dom" },
+    { "path": "../../adapters/framework/react" }
+  ]
 }

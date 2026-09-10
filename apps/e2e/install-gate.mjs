@@ -124,7 +124,7 @@ function pm(cmd, args = []) {
 }
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
-const CLI = join(ROOT, 'packages/server/dist/cli.js');
+const CLI = join(ROOT, 'server/dist/cli.js');
 /** Private ports, so this never fights the battery or a developer's own daemon. */
 /**
  * Separate port ranges for the self-test, which runs FIRST in CI and in the same job.
@@ -386,7 +386,7 @@ const INIT_DEV_PORTS = {
 /**
  * NOT `INSTALL_PROBE_TESTID`, and the difference is load-bearing.
  *
- * `domTestids` (packages/browser/src/registry/auto-testids.ts) drops every observed testid whose
+ * `domTestids` (adapters/realm/dom/src/registry/auto-testids.ts) drops every observed testid whose
  * name begins `reticle-`, because Reticle's own overlay stamps testids and they are not the host
  * app's surface. The stamped probe id starts with exactly that, so a `reticle-install-probe` in the
  * DOM is filtered out and `hasCapabilities` stays false — measured on astro, which failed this way
@@ -448,7 +448,7 @@ const CRA_FILES = {
  * `hasCapabilities: false` — connected and unverifiable.
  *
  * A testid in the DOM is the other half of the same question, and the product answers it
- * deliberately: `hasCapabilities()` (packages/browser/src/registry/capabilities.ts) counts LIVE
+ * deliberately: `hasCapabilities()` (adapters/realm/dom/src/registry/capabilities.ts) counts LIVE
  * testids as well as declared ones, precisely so an app with a testable surface is not reported as
  * having none just because nobody typed the facts into a config file. So this is the realistic
  * probe, not a weakened one — the assertion still requires a session that connects AND advertises
@@ -927,7 +927,7 @@ async function driveScaffold(scaffold, index) {
     const pkgPath = join(app, 'package.json');
     const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'));
     // `dev` OR `start`: CRA's own template names the script `start`, and `init` accepts either
-    // (DEV_SCRIPT_NAMES in packages/init/src/dev-script.ts). Requiring `dev` here would
+    // (DEV_SCRIPT_NAMES in init/src/dev-script.ts). Requiring `dev` here would
     // fail a CRA app for being shaped exactly like every CRA app.
     chk(
       'the scaffold is a real app',

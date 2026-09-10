@@ -195,13 +195,9 @@ async function bootFixtures() {
 /** Free any reticle daemon left on the bench port so the next script starts from a clean session. */
 function cleanupDaemon() {
   try {
-    execFileSync(
-      'node',
-      ['packages/server/dist/cli.js', 'stop', '--port', RETICLE_PORT, '--quiet'],
-      {
-        stdio: 'ignore',
-      },
-    );
+    execFileSync('node', ['server/dist/cli.js', 'stop', '--port', RETICLE_PORT, '--quiet'], {
+      stdio: 'ignore',
+    });
   } catch {
     /* none running — fine */
   }

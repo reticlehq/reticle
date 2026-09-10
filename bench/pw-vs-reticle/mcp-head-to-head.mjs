@@ -94,14 +94,7 @@ function serverFor(toolKey, url) {
   }
   return {
     command: 'node',
-    args: [
-      path.join(REPO, 'packages/server/dist/cli.js'),
-      'mcp',
-      '--port',
-      RETICLE_PORT,
-      '--drive',
-      url,
-    ],
+    args: [path.join(REPO, 'server/dist/cli.js'), 'mcp', '--port', RETICLE_PORT, '--drive', url],
     env: {
       RETICLE_PORT,
       // Opt the Reticle arm onto the lean verify surface, to measure what a smaller advertised
@@ -457,13 +450,7 @@ async function runCell(bug, toolKey, variant) {
         const { execFileSync } = await import('node:child_process');
         execFileSync(
           'node',
-          [
-            path.join(REPO, 'packages/server/dist/cli.js'),
-            'stop',
-            '--port',
-            RETICLE_PORT,
-            '--quiet',
-          ],
+          [path.join(REPO, 'server/dist/cli.js'), 'stop', '--port', RETICLE_PORT, '--quiet'],
           { stdio: 'ignore' },
         );
       } catch {
@@ -507,7 +494,7 @@ async function preflightReticle(url) {
       const { execFileSync } = await import('node:child_process');
       execFileSync(
         'node',
-        [path.join(REPO, 'packages/server/dist/cli.js'), 'stop', '--port', RETICLE_PORT, '--quiet'],
+        [path.join(REPO, 'server/dist/cli.js'), 'stop', '--port', RETICLE_PORT, '--quiet'],
         { stdio: 'ignore' },
       );
     } catch {

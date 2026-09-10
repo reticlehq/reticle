@@ -35,7 +35,7 @@ const chk = (label, ok, detail = '') => {
 // DELIBERATELY no RETICLE_ADVERTISE_ALL_TOOLS: the point is the surface a user actually gets.
 const client = new McpStdioClient(
   'node',
-  ['packages/server/dist/cli.js', 'mcp', '--port', PORT, '--drive', APP],
+  ['server/dist/cli.js', 'mcp', '--port', PORT, '--drive', APP],
   { RETICLE_PORT: PORT, RETICLE_TELEMETRY: '0' },
 );
 

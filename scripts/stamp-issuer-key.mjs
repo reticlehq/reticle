@@ -27,11 +27,11 @@ import { createPublicKey } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 
-// Resolved from this file, not the cwd: the stamp runs from packages/server (prepack) as well as from
+// Resolved from this file, not the cwd: the stamp runs from server (prepack) as well as from
 // the repo root, and a cwd-relative path would silently miss in one of them.
 const TARGET = resolve(
   dirname(fileURLToPath(import.meta.url)),
-  '../packages/server/dist/license/license.js',
+  '../server/dist/license/license.js',
 );
 /** Must match the declaration in license.ts verbatim. A rename here fails loudly rather than no-oping. */
 const EMPTY_DECLARATION = "const BAKED_ISSUER_PUBLIC_KEY_PEM = '';";
