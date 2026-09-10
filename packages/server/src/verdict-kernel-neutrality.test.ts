@@ -38,7 +38,7 @@ const ASKS_ABOUT_RUNTIME = /AppRuntime\.|runtime ===|=== runtime/;
  * than banned because each is CORRECT today and deleting it would break something real.
  */
 const ALLOWED_TO_ASK: Record<string, string> = {
-  'packages/core/src/realm-registry.ts':
+  'packages/core/src/realm/registry.ts':
     'this is the table that ANSWERS the question, not a rule that asks it. Naming every realm is its ' +
     'entire job, and it is what lets the rules stop branching -- two of them already have. Listed ' +
     'rather than exempted by narrowing the search, because the search being wide is what makes it ' +

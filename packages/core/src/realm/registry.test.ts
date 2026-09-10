@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { AppRuntime } from './telemetry-feedback.js';
-import { REALMS, isKnownRealm, realmOf } from './realm-registry.js';
+import { AppRuntime } from '../telemetry-feedback.js';
+import { REALMS, isKnownRealm, realmOf, realmOfProject } from './registry.js';
 
 /**
  * The table has to be complete, and the unknown case has to be the safe one.
@@ -95,5 +95,39 @@ describe('recognising a realm the page names', () => {
     // The two functions answer different questions -- "do we know this name" and "what are its
     // facts" -- and they must not disagree about which names are known.
     expect(realmOf('holodeck')).toEqual(realmOf(undefined));
+  });
+});
+
+describe('working out which realm a project on disk is', () => {
+  const noFiles = (): boolean => false;
+  const noDeps = (): boolean => false;
+
+  it('recognises Tauri by its config file', () => {
+    expect(realmOfProject((p) => 'src-tauri/tauri.conf.json' === p, noDeps)).toBe(AppRuntime.TAURI);
+  });
+
+  it('recognises Electron by the dependency, since it has no config file of its own', () => {
+    expect(realmOfProject(noFiles, (d) => 'electron' === d)).toBe(AppRuntime.ELECTRON);
+  });
+
+  it('says nothing about a plain web project', () => {
+    // Undefined rather than `web`: "this is an ordinary web project" and "I could not tell" are the
+    // same observation from here, and returning `web` would state more than was seen.
+    expect(realmOfProject(noFiles, noDeps)).toBeUndefined();
+  });
+
+  it('a config file beats a leftover dependency', () => {
+    // A project can carry both. A config file exists because somebody set the project up to be that
+    // kind of app; a dependency can be transitive or left behind by something that was abandoned. The
+    // stronger claim wins, which is what the hand-written checks this replaces already did.
+    const both = realmOfProject(
+      (p) => 'src-tauri/tauri.conf.json' === p,
+      (d) => 'electron' === d,
+    );
+    expect(both).toBe(AppRuntime.TAURI);
+  });
+
+  it('the web is deliberately unmarked, or every project would match twice', () => {
+    expect(REALMS[AppRuntime.WEB].projectMarker).toBeUndefined();
   });
 });

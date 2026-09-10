@@ -1,4 +1,4 @@
-import { RETICLE_IPC_GLOBAL } from '@reticlehq/core';
+import { RETICLE_IPC_GLOBAL, realmOf, realmOfProject } from '@reticlehq/core';
 
 /**
  * Setup RCA for desktop apps.
@@ -210,11 +210,22 @@ function diagnoseElectron(read: ReadFile, main: string): DesktopDiagnosis[] {
 
 /** Is this project a desktop shell at all? Used to print a positive result instead of silence. */
 export function isDesktopProject(read: ReadFile): boolean {
-  if (read(TAURI_CONF) !== undefined) return true;
+  // Asked of the realm table rather than answered here. Which file or dependency marks a realm is a
+  // fact about that realm, and the copy of it that lived in this function was the second one -- so a
+  // realm added to the table but not to this line would have been reported as an ordinary web app,
+  // which is the answer least likely to look wrong.
+  const found = realmOfProject(
+    (path) => read(path) !== undefined,
+    (name) => dependenciesOf(read)[name] !== undefined,
+  );
+  return found !== undefined && realmOf(found).isDesktopShell;
+}
+
+/** Every dependency a project declares, both kinds, in one record. */
+function dependenciesOf(read: ReadFile): Record<string, unknown> {
   const pkg = parseJson(read('package.json'));
-  if (pkg === undefined) return false;
-  const deps = { ...record(pkg['dependencies']), ...record(pkg['devDependencies']) };
-  return deps['electron'] !== undefined;
+  if (pkg === undefined) return {};
+  return { ...record(pkg['dependencies']), ...record(pkg['devDependencies']) };
 }
 
 /** Which desktop shell (if any) this project is, and what is missing from its Reticle wiring. */

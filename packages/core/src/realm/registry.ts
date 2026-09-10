@@ -27,7 +27,7 @@
  * nobody asked for. This table holds facts you could write on an index card.
  */
 
-import { AppRuntime } from './telemetry-feedback.js';
+import { AppRuntime } from '../telemetry-feedback.js';
 
 /** What Reticle needs to know about a realm that it cannot work out by looking. */
 export interface Realm {
@@ -67,6 +67,17 @@ export interface Realm {
    * filed under its own name, so two realms of one project cannot overwrite each other's pictures.
    */
   readonly hasOwnBaselineDirectory: boolean;
+  /**
+   * How a project on disk says it is this realm, or `undefined` when nothing marks it.
+   *
+   * A fact you could write on an index card, which is why it belongs here: a Tauri project has a
+   * `src-tauri/tauri.conf.json`, an Electron project depends on `electron`. What to DO once you know
+   * stays where it is; this only answers which realm you are looking at.
+   *
+   * The web has no marker, and that is the point rather than an omission. A web project is a project
+   * with none of the others' markers, so giving it one would make every project match two realms.
+   */
+  readonly projectMarker?: { readonly file: string } | { readonly dependency: string };
 }
 
 /**
@@ -84,6 +95,8 @@ export const REALMS: Record<AppRuntime, Realm> = {
   },
   [AppRuntime.ELECTRON]: {
     isDesktopShell: true,
+    // No config file of its own: an Electron app is one that depends on Electron.
+    projectMarker: { dependency: 'electron' },
     // Chromium, whatever the host operating system is.
     usesWebKit: false,
     ownsCoverageKinds: true,
@@ -91,6 +104,7 @@ export const REALMS: Record<AppRuntime, Realm> = {
   },
   [AppRuntime.TAURI]: {
     isDesktopShell: true,
+    projectMarker: { file: 'src-tauri/tauri.conf.json' },
     // The system webview: WKWebView on macOS, WebKitGTK on Linux.
     usesWebKit: true,
     // A desktop shell that raises none of its own coverage warnings. Its `invoke` is a fetch to a
@@ -133,4 +147,37 @@ export function realmOf(runtime: string | undefined): Realm {
     ? REALMS[runtime as AppRuntime]
     : REALMS[AppRuntime.WEB];
   return known;
+}
+
+/**
+ * Which realm a project on disk is, judged only by its markers.
+ *
+ * A project can carry more than one marker, so precedence has to be decided rather than inherited
+ * from whatever order the table happens to be written in.
+ *
+ * A CONFIG FILE beats a DEPENDENCY. A file like `src-tauri/tauri.conf.json` exists because somebody
+ * set this project up to be that kind of app; a dependency can be transitive, vestigial, or left
+ * behind by something that was tried and abandoned. The stronger claim wins, which is also what the
+ * hand-written checks this replaces already did.
+ *
+ * Returns undefined rather than the web when nothing matches. "This is a plain web project" and "I
+ * could not tell" are the same observation here, and naming it `web` would state more than was seen.
+ */
+export function realmOfProject(
+  hasFile: (path: string) => boolean,
+  hasDependency: (name: string) => boolean,
+): AppRuntime | undefined {
+  const marked = Object.entries(REALMS).filter(([, realm]) => realm.projectMarker !== undefined);
+  for (const [runtime, realm] of marked) {
+    const marker = realm.projectMarker;
+    if (marker !== undefined && 'file' in marker && hasFile(marker.file))
+      return runtime as AppRuntime;
+  }
+  for (const [runtime, realm] of marked) {
+    const marker = realm.projectMarker;
+    if (marker !== undefined && 'dependency' in marker && hasDependency(marker.dependency)) {
+      return runtime as AppRuntime;
+    }
+  }
+  return undefined;
 }

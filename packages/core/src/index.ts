@@ -63,7 +63,7 @@ export * from './telemetry.js';
 // Split out of telemetry.js at the 1000-line cap; the barrel keeps the import path callers use.
 export * from './no-session-reason.js';
 export * from './telemetry-refusal.js';
-export * from './realm-registry.js';
+export * from './realm/registry.js';
 export * from './telemetry-session.js'; // the session/project rollup payloads
 export * from './telemetry-license.js'; // LicenseActivation — shared by the licence gate and telemetry
 export * from './telemetry-feedback.js'; // the two things a PERSON writes: feedback + a self-declared identity // anonymous adoption telemetry wire contract (DAU/WAU/MAU/installs)
