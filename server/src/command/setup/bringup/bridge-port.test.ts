@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PortPresence } from '../daemon/port-presence.js';
+import { PortPresence } from '../../daemon/port-presence.js';
 import { bridgeOccupied } from './bridge-port.js';
 
 /**

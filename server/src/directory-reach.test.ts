@@ -108,6 +108,19 @@ const REACHES_FOR: Record<string, readonly string[]> = {
    */
   doctor: [],
   /**
+   * Getting something running and waiting for it: the bridge port, the daemon, the dev server,
+   * the relaunch. Everything `reticle init` does between writing files and having a session.
+   */
+  bringup: ['cli', 'daemon', 'mcp'],
+  /**
+   * What the daemon remembers between sessions: which projects have registered, what a previous
+   * connection looked like, whether an address smells like somebody's dev server.
+   *
+   * Moving it out removed `command -> session` and `mcp -> session`. Neither wanted a live
+   * session; both wanted the memory of one.
+   */
+  recall: [],
+  /**
    * Who is attached to a session, and who may drive it. Reaches for NOTHING -- not even its own
    * parent -- which is the strongest form a group can take: `session` needs it, and it needs
    * nobody, so the edge cannot ever become mutual however either side grows.
@@ -147,6 +160,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   bridge: ['recording', 'flows', 'impact', 'project', 'session', 'telemetry', 'tools', 'version'],
   capsule: ['project'],
   cli: [
+    'recall',
     'doctor',
     'recording',
     'ports',
@@ -167,6 +181,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   ],
   cloud: ['cli', 'intent', 'project'],
   command: [
+    'recall',
     'ports',
     'cli',
     'daemon',
@@ -175,7 +190,6 @@ const REACHES_FOR: Record<string, readonly string[]> = {
     'license',
     'mcp',
     'project',
-    'session',
     'setup',
     'telemetry',
     'update',
@@ -205,12 +219,13 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   intent: ['project', 'tools'],
   journal: ['project', 'runs'],
   license: ['cli'],
-  mcp: ['ports', 'cli', 'daemon', 'session', 'telemetry', 'tools', 'version'],
+  mcp: ['recall', 'ports', 'cli', 'daemon', 'telemetry', 'tools', 'version'],
   memory: ['cloud', 'project', 'tools'],
   pool: ['doctor', 'input', 'telemetry'],
   project: ['cli', 'cloud', 'flows', 'runs', 'tools'],
   runs: ['cloud', 'flows', 'intent', 'mcp', 'project', 'telemetry', 'tools'],
   session: [
+    'recall',
     'gaps',
     'human',
     'ports',
@@ -225,9 +240,21 @@ const REACHES_FOR: Record<string, readonly string[]> = {
     'telemetry',
     'tools',
   ],
-  setup: ['terminal', 'bridge', 'cli', 'daemon', 'mcp', 'telemetry'],
-  telemetry: ['ports', 'cli', 'daemon', 'license', 'mcp', 'session', 'tools', 'update', 'version'],
+  setup: ['bringup', 'terminal', 'bridge', 'cli', 'daemon', 'mcp', 'telemetry'],
+  telemetry: [
+    'recall',
+    'ports',
+    'cli',
+    'daemon',
+    'license',
+    'mcp',
+    'session',
+    'tools',
+    'update',
+    'version',
+  ],
   tools: [
+    'recall',
     'doctor',
     'gaps',
     'annotate-notes',
@@ -266,7 +293,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
  * A count rather than a list: the list is derivable and printed on failure, and a hand-written copy
  * would be one more thing to keep in step.
  */
-const MUTUAL_PAIRS_TODAY = 32;
+const MUTUAL_PAIRS_TODAY = 30;
 
 /**
  * Two directories may not share a name.
@@ -343,8 +370,16 @@ describe('the directories in this package know only what they are allowed to kno
     expect(
       pairs.length,
       `Two directories that each need the other cannot be read, moved or tested apart. There are ` +
-        `now ${String(pairs.length)}, and there were ${String(MUTUAL_PAIRS_TODAY)}:\n` +
+        `now ${String(pairs.length)}, and the recorded number is ${String(MUTUAL_PAIRS_TODAY)}:\n` +
         pairs.map((p) => `  ${p}`).join('\n'),
-    ).toBeLessThanOrEqual(MUTUAL_PAIRS_TODAY);
+      // EQUAL, not "at most". A `<=` here is slack, and slack gets spent: this number dropped from
+      // 32 to 30 when one grouping untangled two pairs, and nothing would have gone red if the next
+      // change had quietly put them back. An improvement that is not recorded is an improvement
+      // somebody else pays for twice.
+      //
+      // So both directions fail. Up means a grouping made coupling worse -- revert it rather than
+      // raising the number. Down means something got untangled: lower the constant in the same
+      // commit, and the gain is locked in.
+    ).toBe(MUTUAL_PAIRS_TODAY);
   });
 });

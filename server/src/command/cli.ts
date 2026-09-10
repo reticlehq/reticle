@@ -9,7 +9,7 @@ import { readDevServers } from './daemon/dev-servers.js';
 import {
   hasConnectedBefore,
   hasProjectConnectedBefore,
-} from '../connection/session/connection-memory.js';
+} from '../connection/session/recall/connection-memory.js';
 import { attachStatusFields } from '../agent/mcp/attach-memory.js';
 import { reticleStateHome } from './daemon/daemon.js';
 import { handleMcp } from './cli/mcp-command.js';

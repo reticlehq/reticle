@@ -33,9 +33,12 @@ const BROWSER = join(
  * A count, not a list: the list is derivable and printed on failure, and a second hand-written
  * copy would be one more thing to keep in step.
  *
- * `dom <-> registry` and `presenter <-> review` as of writing. Both are real and both are old.
+ * `dom <-> registry`, and that is all. It was two: extracting `presenter/chrome` broke
+ * `presenter <-> review`, and nothing noticed until this assertion was changed from "at most" to
+ * "exactly" -- which is the argument for the change. An unrecorded improvement is one somebody
+ * else pays for twice.
  */
-const MUTUAL_PAIRS_TODAY = 2;
+const MUTUAL_PAIRS_TODAY = 1;
 
 describe('the browser SDK knows only what it is allowed to know', () => {
   it('finds directories to check, so a passing run cannot mean it read nothing', () => {
@@ -60,8 +63,16 @@ describe('the browser SDK knows only what it is allowed to know', () => {
       `Two directories that each need the other cannot be read, moved or tested apart. There are ` +
         `now ${String(pairs.length)}, and there were ${String(MUTUAL_PAIRS_TODAY)}:\n  ` +
         pairs.join('\n  ') +
-        '\n\nIf this rose while grouping files, the grouping is wrong: revert it rather than ' +
+        '\n\nIf this ROSE, the grouping is wrong: revert it rather than ' +
         'raising the number. Ask `node scripts/safe-to-group.mjs <dir> <name...>` first.',
-    ).toBeLessThanOrEqual(MUTUAL_PAIRS_TODAY);
+      // EQUAL, not "at most". A `<=` here is slack, and slack gets spent: this number dropped from
+      // 32 to 30 when one grouping untangled two pairs, and nothing would have gone red if the next
+      // change had quietly put them back. An improvement that is not recorded is an improvement
+      // somebody else pays for twice.
+      //
+      // So both directions fail. Up means a grouping made coupling worse -- revert it rather than
+      // raising the number. Down means something got untangled: lower the constant in the same
+      // commit, and the gain is locked in.
+    ).toBe(MUTUAL_PAIRS_TODAY);
   });
 });

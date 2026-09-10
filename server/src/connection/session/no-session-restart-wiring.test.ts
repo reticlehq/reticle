@@ -11,7 +11,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { NoSessionAction } from '@reticlehq/core';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { rememberConnected } from './connection-memory.js';
+import { rememberConnected } from './recall/connection-memory.js';
 import { nextActionFor } from './no-session-next-action.js';
 import { startNoSessionWatch } from './no-session-watch.js';
 import { SessionManager } from './session-manager.js';

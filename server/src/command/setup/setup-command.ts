@@ -15,7 +15,7 @@ import { stopOnInterrupt } from './terminal/interrupt.js';
 import { applyAgentPlan, applyAgentSkills } from './agent-writer.js';
 import { ApprovalOutcome, grantAutoApproval } from './auto-approve.js';
 import { agentIo } from './agent-io.js';
-import { EnsureDaemon, ensureDaemon, nodeEnsureDaemonDeps } from './ensure-daemon.js';
+import { EnsureDaemon, ensureDaemon, nodeEnsureDaemonDeps } from './bringup/ensure-daemon.js';
 import { openInBrowser } from '../cli/cli-launch.js';
 import { chooseDriver, DRIVERS, shouldEscalate } from './drive-plan.js';
 import { driveWith } from './drive-agent.js';

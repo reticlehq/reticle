@@ -12,7 +12,12 @@
  * and a real browser to find out what happens when neither works.
  */
 
-import { judgeWait, QUIET_MEANS_HUNG_MS, urlToWatch, WaitVerdict } from './dev-server-wait.js';
+import {
+  judgeWait,
+  QUIET_MEANS_HUNG_MS,
+  urlToWatch,
+  WaitVerdict,
+} from './bringup/dev-server-wait.js';
 import { waitProgressLine } from './terminal/wait-progress.js';
 
 /**

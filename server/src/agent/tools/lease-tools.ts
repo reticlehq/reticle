@@ -14,7 +14,7 @@ import { z } from 'zod';
 import { leaseNotConnectedHint, type LeaseEvidence } from './lease-hint.js';
 import { probeSdkMarker } from './gaps/sdk-marker-probe.js';
 import { readProjectFramework, readProjectId } from '../../command/cli/ports/cli-port.js';
-import { hasConnectedBefore } from '../../connection/session/connection-memory.js';
+import { hasConnectedBefore } from '../../connection/session/recall/connection-memory.js';
 import {
   AGENT_DRIVING_ELSEWHERE,
   AGENT_DRIVING_HERE_AGAIN,
