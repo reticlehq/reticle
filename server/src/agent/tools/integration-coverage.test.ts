@@ -130,7 +130,8 @@ describe('every shipped integration is covered by an app AND a gate', () => {
       'dom',
       'server',
       'spec-runner',
-      'eslint-plugin',
+      // The lint rule we ship. Its directory is `eslint`, under `adapters/lint/`.
+      'eslint',
       // The project scaffolder. It is what WIRES an integration, so every scaffold the install gate
       // drives is a test of it — but a user never installs it to wire a framework, and it has no app
       // of its own. `apps/e2e/install-gate.mjs` is its coverage.

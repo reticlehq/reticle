@@ -11,6 +11,15 @@ A **realm** is the layer that lets an agent do things in an environment and see 
 
 Everything else is built on top of that. A **framework adapter** (React, Vue, Svelte) does not talk to the environment at all — it tells the realm how to turn a thing on screen into "the Cart component, defined in `Cart.tsx` line 40". Every web framework uses the same realm, because they all end up as a page. A phone framework would use a phone realm. That is the point of naming the layer: the number of framework adapters times the number of environments would otherwise be the number of integrations somebody has to write.
 
+## The kinds of adapter
+
+| Kind | What it teaches Reticle |
+| --- | --- |
+| `realm/` | How to interact with a kind of environment. This file. |
+| `framework/` | How to turn a thing on screen into a named component in your source. |
+| `build/` | How to get the SDK into your app, and how to stamp source locations. |
+| `lint/` | Rules for your own linter, so a mistake is caught before it runs. |
+
 ## What is here
 
 | Realm | Environment |

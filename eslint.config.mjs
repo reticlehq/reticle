@@ -217,7 +217,7 @@ export default tseslint.config(
     // The rule that BANS these tokens has to name them — in its own doc comment explaining the ban, and
     // in fixtures asserting it fires. Exempting only this package keeps the rule enforceable everywhere
     // else while letting it document itself.
-    files: ['eslint-plugin/src/**'],
+    files: ['adapters/lint/eslint/src/**'],
     rules: { 'reticle/no-internal-tags': 'off' },
   },
 );

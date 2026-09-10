@@ -48,7 +48,7 @@ area/test:
 
 area/eslint-plugin:
   - changed-files:
-      - any-glob-to-any-file: ['eslint-plugin/**']
+      - any-glob-to-any-file: ['adapters/lint/eslint/**']
 
 area/docs:
   - changed-files:

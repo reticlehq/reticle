@@ -41,7 +41,7 @@ importers:
         version: link:core
       '@reticlehq/eslint-plugin':
         specifier: workspace:*
-        version: link:eslint-plugin
+        version: link:adapters/lint/eslint
       '@reticlehq/next':
         specifier: workspace:*
         version: link:adapters/build/next
@@ -165,6 +165,19 @@ importers:
       react-dom:
         specifier: ^19.2.8
         version: 19.2.8(react@19.2.8)
+
+  adapters/lint/eslint:
+    dependencies:
+      '@typescript-eslint/utils':
+        specifier: ^8.67.0
+        version: 8.67.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3)
+      eslint:
+        specifier: '>=9'
+        version: 9.39.4(jiti@2.7.0)
+    devDependencies:
+      '@typescript-eslint/rule-tester':
+        specifier: ^8.67.0
+        version: 8.67.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3)
 
   adapters/realm/dom:
     dependencies:
@@ -658,17 +671,6 @@ importers:
         specifier: ^8.2.1
         version: 8.2.1(@types/node@26.4.0)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0)
 
-  engine:
-    dependencies:
-      '@reticlehq/core':
-        specifier: workspace:*
-        version: link:../core
-      zod:
-        specifier: ^3.24.1
-        version: 3.25.76
-
-  openreality: {}
-
   core:
     dependencies:
       '@reticlehq/openreality':
@@ -682,24 +684,22 @@ importers:
         specifier: ^3.24.0
         version: 3.25.2(zod@3.25.76)
 
-  eslint-plugin:
+  engine:
     dependencies:
-      '@typescript-eslint/utils':
-        specifier: ^8.67.0
-        version: 8.67.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3)
-      eslint:
-        specifier: '>=9'
-        version: 9.39.4(jiti@2.7.0)
-    devDependencies:
-      '@typescript-eslint/rule-tester':
-        specifier: ^8.67.0
-        version: 8.67.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3)
+      '@reticlehq/core':
+        specifier: workspace:*
+        version: link:../core
+      zod:
+        specifier: ^3.24.1
+        version: 3.25.76
 
   init:
     dependencies:
       '@reticlehq/core':
         specifier: workspace:*
         version: link:../core
+
+  openreality: {}
 
   server:
     dependencies:
