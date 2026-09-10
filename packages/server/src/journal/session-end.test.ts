@@ -4,6 +4,7 @@ import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createNodeFileSystem } from '../project/fs-port.js';
+import { Verified } from '@reticlehq/core';
 import { AmbientStore } from './ambient-store.js';
 import { makeSessionEnd, type SessionEndTarget } from './session-end.js';
 import { DEFAULT_SESSION_RETENTION } from './retention.js';
@@ -123,4 +124,80 @@ describe('journal retention is bounded on a long-running daemon', () => {
     },
     SESSION_RETENTION_TIMEOUT_MS,
   );
+});
+
+/**
+ * Teardown is where a drive becomes an artifact the platform can see.
+ *
+ * From a field session: 104 verdicts driven live, `lastPushAt: null`, an empty dashboard. Nothing
+ * was broken — `.reticle/runs/` had one writer, the flow-replay path, so driving the app produced no
+ * run and the sync daemon correctly had nothing to send.
+ */
+describe('the run a drive leaves behind', () => {
+  let root: string;
+  const fs = createNodeFileSystem();
+
+  beforeEach(async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'reticle-driverun-'));
+    root = join(dir, '.reticle');
+  });
+  afterEach(async () => {
+    await removeTempDir(join(root, '..'));
+  });
+
+  const driven = (verdicts: readonly Verified[]): SessionEndTarget => ({
+    ...fakeSession('s-driven', {}),
+    projectId: 'acme-web-1234abcd',
+    artifactRoot: root,
+    readJournalActions: () =>
+      Promise.resolve(
+        verdicts.map((verified, i) => ({
+          v: 1 as const,
+          actionId: `c${String(i)}`,
+          tool: 'reticle_act_and_wait',
+          args: {},
+          effect: { claim: `claim ${String(i)}`, verified },
+          tRange: { from: 0, to: i },
+          at: i,
+        })),
+      ),
+  });
+
+  const runsWritten = async (): Promise<string[]> => {
+    try {
+      return await fs.readdir(reticleDirPaths(root).runs);
+    } catch {
+      return [];
+    }
+  };
+
+  it('writes a run artifact for a session that proved something', async () => {
+    const end = makeSessionEnd({ fs, reticleRoot: root, enabled: true, now: () => 1_700_000 });
+    await end(driven([Verified.YES, Verified.NO]));
+    const files = await runsWritten();
+    expect(files.filter((f) => f.endsWith('.json'))).toHaveLength(1);
+  });
+
+  it('writes a run when every verdict was undetermined, because that is worth seeing', async () => {
+    // The end-to-end half of the same decision. A drive that verified things and resolved none of
+    // them means the verification is not working, and an empty dashboard looks identical to never
+    // having driven at all. It reads UNKNOWN, not PASS, so saying it is now honest.
+    const end = makeSessionEnd({ fs, reticleRoot: root, enabled: true, now: () => 1_700_000 });
+    await end(driven([Verified.UNKNOWN, Verified.NO_FAULT]));
+    expect((await runsWritten()).filter((f) => f.endsWith('.json'))).toHaveLength(1);
+  });
+
+  it('writes nothing for a session that never verified anything', async () => {
+    const end = makeSessionEnd({ fs, reticleRoot: root, enabled: true, now: () => 1_700_000 });
+    await end(driven([]));
+    expect((await runsWritten()).filter((f) => f.endsWith('.json'))).toHaveLength(0);
+  });
+
+  it('leaves teardown intact for a session that cannot answer — every existing double', async () => {
+    const end = makeSessionEnd({ fs, reticleRoot: root, enabled: true });
+    let flushed = false;
+    await end(fakeSession('s-plain', {}, () => (flushed = true)));
+    expect(flushed).toBe(true);
+    expect((await runsWritten()).filter((f) => f.endsWith('.json'))).toHaveLength(0);
+  });
 });
