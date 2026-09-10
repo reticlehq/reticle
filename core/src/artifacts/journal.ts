@@ -59,5 +59,29 @@ export const JournalVerdictEffectSchema = z.object({
   verified: z.nativeEnum(Verified),
   /** `file:line` for the element driven, when the page told us one. */
   source: z.string().max(TRANSPORT_LIMITS.MAX_URL_LENGTH).optional(),
+  /**
+   * Was the claim written down BEFORE the action, or after it?
+   *
+   * The difference between a check and a rationalisation. Recorded here because the journal is the
+   * durable record a run artifact is built from: a fact that never reaches it is a fact nothing
+   * downstream can ever report, however well the verdict knew it at the time.
+   *
+   * Absent is not `false`. `false` says the claim came afterwards; absent says nobody recorded which.
+   */
+  declaredBeforeActing: z.boolean().optional(),
+  /**
+   * What kind of evidence bought the answer -- the grade the verdict actually proved.
+   *
+   * A green paid for with "something matching was on screen" is not the green paid for with "the
+   * request went out", and a record that keeps only the word `yes` cannot tell them apart later.
+   */
+  grade: z.string().max(TRANSPORT_LIMITS.MAX_STRING_LENGTH).optional(),
+  /**
+   * What could not be seen while this was being checked.
+   *
+   * The one property with no prior art: every other kind of test record is silent about its own
+   * blind spots. Empty means nothing was hidden; absent means nobody looked.
+   */
+  couldNotSee: z.array(z.string().max(TRANSPORT_LIMITS.MAX_STRING_LENGTH)).optional(),
 });
 export type JournalVerdictEffect = z.infer<typeof JournalVerdictEffectSchema>;

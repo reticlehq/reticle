@@ -230,6 +230,31 @@ export const RunCheckSchema = z.object({
   predicate: z.string(),
   status: z.nativeEnum(RunCheckStatus),
   evidence: z.unknown().optional(),
+  /**
+   * Was this claim written down BEFORE the action, or after it?
+   *
+   * The difference between a check and a rationalisation. Afterwards, anything that happened can be
+   * described as what you meant; a claim made in advance can only be met or missed.
+   *
+   * Optional, and absence is not `false`. `false` says the claim came afterwards. Absent says nobody
+   * recorded which, and those are different facts about the evidence.
+   */
+  declaredBeforeActing: z.boolean().optional(),
+  /**
+   * What kind of evidence bought this answer.
+   *
+   * A green paid for with "something matching was on screen" is not the same green as one paid for
+   * with "the request went out", and a report that flattens them lets the cheap one pass for the
+   * dear one. Free-form because the grades belong to whoever produced the verdict.
+   */
+  grade: z.string().optional(),
+  /**
+   * What could not be seen while this was being checked.
+   *
+   * The property with no prior art: every other test report in existence is silent about its own
+   * blind spots. An empty list means nothing was hidden; absence means nobody looked.
+   */
+  couldNotSee: z.array(z.string()).optional(),
 });
 export type RunCheck = z.infer<typeof RunCheckSchema>;
 
@@ -360,6 +385,15 @@ export const ReticleVerificationRunSchema = z.object({
     diffRef: z.string().optional(),
     note: z.string().optional(),
   }),
+
+  /**
+   * Which round of source edits this evidence belongs to.
+   *
+   * Evidence gathered before the change under test is true about the OLD code. Reporting it as true
+   * about the new code is a false pass, and it is the kind nobody notices because everything looks
+   * green. Absent when the run had no way to know.
+   */
+  editEpoch: z.number().optional(),
 
   changedFiles: z.array(RunChangedFileSchema).default([]),
   flows: z.array(RunFlowResultSchema).default([]),

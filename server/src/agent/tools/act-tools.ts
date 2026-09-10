@@ -94,6 +94,7 @@ import { type ToolDef, type ToolDeps, intentArg, sessionIdShape } from './tool-k
 import { asActionType, gradeOf } from './act-helpers.js';
 import { resolveActTarget } from './act-target.js';
 import { tryRealInput, rewriteUploadArgs, HOVER_NEEDS_POINTER_MSG } from './real-input-attempt.js';
+import { gradeOfPredicate } from './assert-grade.js';
 
 /**
  * Single dispatch point for every ACT and ACT_SEQUENCE command.
@@ -868,6 +869,12 @@ export const ACT_TOOLS: ToolDef[] = [
           claim: describeWaitTarget(until),
           verified: decision.verified,
           ...(actedSourceLabel === undefined ? {} : { source: actedSourceLabel }),
+          // TRUE here, and false on the `assert` path, and the difference is the point. This tool
+          // takes `until` BEFORE it acts: the consequence is named in advance and can then only be
+          // met or missed. A claim written after the fact can be shaped to fit whatever happened,
+          // which is why the two are recorded apart rather than assumed alike.
+          declaredBeforeActing: true,
+          grade: gradeOfPredicate(until),
         };
         // Recorded on the session, so a later "am I done?" can answer with what is STILL missing
         // rather than with everything that was ever missing. An empty list closes a gap, which is

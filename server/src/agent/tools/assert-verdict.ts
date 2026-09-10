@@ -234,6 +234,18 @@ export async function assertVerdict(
       claim: describeWaitTarget(predicate),
       verified: decision.verified,
       ...(source === undefined ? {} : { source }),
+      // The three facts that make a verdict something other than a pass/fail line. All three were
+      // known right here and none of them survived into the durable record, so nothing downstream
+      // could report them however well this moment understood them.
+      //
+      // FALSE, and this is the one value here that is easy to get wrong. This path serves `assert`,
+      // which reads a window that is already open: the claim is made after the action, not before.
+      // Recording it as pre-registered would put the product's own headline property on evidence
+      // that does not have it -- and a claim written afterwards can always be shaped to fit what
+      // happened, which is the whole reason the distinction is worth recording.
+      declaredBeforeActing: false,
+      grade: gradeOfPredicate(predicate),
+      couldNotSee: spots.map((spot) => spot.kind),
     },
   };
 }

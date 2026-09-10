@@ -21,6 +21,7 @@
  * that means "nothing was measured" is worse than no row on the dashboard.
  */
 
+import type { JournalVerdictEffect } from '@reticlehq/core/artifacts';
 import { isValidRunId } from '../../features/project/reticle-dir.js';
 import { defaultRunId } from './runner-port.js';
 import {
@@ -53,13 +54,18 @@ export interface DriveRunDeps {
   /** The MCP client's own claim from the handshake, when it made one. */
   agentId?: string | undefined;
   framework?: RunFramework | undefined;
+  /**
+   * Which round of source edits this drive's evidence belongs to.
+   *
+   * Passed in rather than derived, because the session knows it and a fold over the journal cannot.
+   * Absent when nobody was counting edits, which must not be reported as "the first round".
+   */
+  editEpoch?: number | undefined;
 }
 
 /** Every verdict a verification tool recorded on this session's actions, in order. */
-function verdicts(
-  actions: readonly JournalAction[],
-): { claim: string; verified: Verified; source?: string | undefined }[] {
-  const out: { claim: string; verified: Verified; source?: string | undefined }[] = [];
+function verdicts(actions: readonly JournalAction[]): JournalVerdictEffect[] {
+  const out: JournalVerdictEffect[] = [];
   for (const action of actions) {
     const parsed = JournalVerdictEffectSchema.safeParse(action.effect);
     if (parsed.success) out.push(parsed.data);
@@ -122,6 +128,14 @@ export function driveRunFrom(
       predicate: verdict.claim,
       status,
       ...(verdict.source === undefined ? {} : { evidence: { source: verdict.source } }),
+      // Carried through rather than recomputed. These were established at the moment the verdict
+      // was made and written down then; a run built later cannot know any of them, and inferring
+      // them here would be inventing evidence about evidence.
+      ...(verdict.declaredBeforeActing === undefined
+        ? {}
+        : { declaredBeforeActing: verdict.declaredBeforeActing }),
+      ...(verdict.grade === undefined ? {} : { grade: verdict.grade }),
+      ...(verdict.couldNotSee === undefined ? {} : { couldNotSee: verdict.couldNotSee }),
     });
   }
   // A session that never verified anything has nothing to report, and saying so on a dashboard every
@@ -156,6 +170,7 @@ export function driveRunFrom(
           : `driven live through the Reticle tools; ${String(undetermined)} further verdict(s) were ` +
             'undetermined (unknown / no-fault) and are not counted as passes or failures',
     },
+    ...(deps.editEpoch === undefined ? {} : { editEpoch: deps.editEpoch }),
     changedFiles: [],
     flows: [],
     checks,
