@@ -69,6 +69,9 @@ export const RETICLE_CONNECT_MODULE = '/@reticle-connect';
  * here. Only a path base is joined: Vite serves the dev app from the root when `base` is an
  * external URL, so prefixing a CDN origin onto a dev-server module would point the tag off-host.
  */
+import { mergeIgnored, type WatchPattern } from './watch-ignore.js';
+import { isVitestBrowserServer } from './vitest-browser.js';
+
 export function connectModuleUrl(base: string | undefined): string {
   if (undefined === base || !base.startsWith('/')) return RETICLE_CONNECT_MODULE;
   // Trimmed by slicing rather than with `/\/+$/`: a trailing-slash-run regex is a polynomial
@@ -193,6 +196,14 @@ export interface ReticleVitePluginOptions {
    */
   captureNetworkBodies?: boolean;
   /**
+   * Retain a FAILED request's response body even with `captureNetworkBodies` off. Default true.
+   *
+   * Reachable here for the reason `captureNetworkBodies` is: the plugin is the only `connect()`
+   * most apps ever have. Also settable as `VITE_RETICLE_NO_ERROR_BODIES=1`, which turns it OFF --
+   * the inverse of the other env vars, because this is the one that defaults on (#800).
+   */
+  captureErrorBodies?: boolean;
+  /**
    * Make Reticle's OWN presenter visible to snapshots and queries. CONTRIBUTORS ONLY.
    *
    * Reachable here for the same reason `captureNetworkBodies` is: the plugin is the only `connect()`
@@ -234,24 +245,52 @@ export interface ReticleVitePluginOptions {
   onWarn?: (message: string) => void;
 }
 
+/**
+ * The slice of Vite's `UserConfig` the `config` hook reads. Everything is optional AND nullable
+ * because that is what Vite declares — a stand-in that is narrower than the real value is not a
+ * looser type, it is a stricter one, and it makes the whole plugin unassignable to `Plugin`.
+ */
+export interface ViteUserConfigLike {
+  optimizeDeps?:
+    | {
+        include?: string[] | undefined;
+        /** Whichever key the app used — the plugin reads both and writes the one this Vite wants. */
+        esbuildOptions?: Record<string, unknown> | undefined;
+        rolldownOptions?: Record<string, unknown> | undefined;
+      }
+    | undefined;
+  define?: Record<string, unknown> | undefined;
+  root?: string | undefined;
+  /**
+   * The app's own watcher config. `watch` is nullable because `null` is how a config switches the
+   * watcher off, and `ignored` is `unknown` because Vite's `AnymatchMatcher` is not an array — it is
+   * a string, a RegExp, a predicate function, or an array of those. Typing it as an array here is
+   * the narrowing that made the whole plugin unassignable to Vite's `Plugin`, and it also invited a
+   * runtime defect: see `mergeIgnored`.
+   */
+  server?: { watch?: { ignored?: unknown } | null | undefined } | undefined;
+  /**
+   * Vitest's block, when this config belongs to a Vitest run. Read ONLY to spot browser mode — see
+   * `isVitestBrowserServer`. Typed as `unknown` because it is Vitest's shape, not Vite's, and this
+   * plugin has no business asserting anything about the rest of it.
+   */
+  test?: unknown;
+}
+
 /** Structural Vite plugin shape — avoids a hard dependency on `vite` while staying assignable to its `Plugin`. */
 export interface ReticleVitePlugin {
   name: string;
   /**
    * Vite's `config` hook. Used to declare the SDK's CJS runtime deps for pre-bundling — see the
    * implementation for why omitting them makes the whole SDK fail to load on linked setups.
+   *
+   * METHOD syntax, not a property, and every field it reads is optional-and-nullable. Both halves
+   * are load-bearing, and both are the contravariance trap this file's sibling test documents:
+   * a property's parameter is checked strictly, so a narrow stand-in REJECTS the wider `UserConfig`
+   * Vite actually passes. `server.watch` is where it bit — Vite types it `WatchOptions | null`,
+   * `null` being how a config turns the watcher off, and SvelteKit's template does exactly that.
    */
-  config?: (config: {
-    optimizeDeps?: {
-      include?: string[];
-      /** Whichever key the app used — the plugin reads both and writes the one this Vite wants. */
-      esbuildOptions?: Record<string, unknown>;
-      rolldownOptions?: Record<string, unknown>;
-    };
-    define?: Record<string, string>;
-    root?: string;
-    server?: { watch?: { ignored?: (string | RegExp)[] } };
-  }) => {
+  config?(config: ViteUserConfigLike): {
     optimizeDeps: {
       include: string[];
       // Either `esbuildOptions` or `rolldownOptions`, chosen from the installed Vite's major — v7
@@ -260,7 +299,7 @@ export interface ReticleVitePlugin {
       [optionsKey: string]: unknown;
     };
     define: Record<string, string>;
-    server: { watch: { ignored: (string | RegExp)[] } };
+    server: { watch: { ignored: WatchPattern[] } };
   };
   /** Absent in desktop mode, where the plugin must also run for `vite build`. */
   apply?: 'serve';
@@ -270,7 +309,13 @@ export interface ReticleVitePlugin {
   load: (id: string) => string | null;
   transformIndexHtml: (html: string) => HtmlTag[];
   /** Vite hands over the resolved config; used to resolve the HTML entry exactly. */
-  configResolved?: (config: { root?: string; command?: string; base?: string }) => void;
+  configResolved?: (config: {
+    root?: string;
+    command?: string;
+    base?: string;
+    /** Vitest's block, read only to spot browser mode. See isVitestBrowserServer. */
+    test?: unknown;
+  }) => void;
   /** Dev-server hook: keeps the served connect module from outliving the token it was built without. */
   configureServer?: (server: ViteDevServerLike) => void;
   /** Build-time post-condition: desktop injection must have happened. */
@@ -443,6 +488,11 @@ function connectArgs(options: ReticleVitePluginOptions): string {
   if (true === options.captureNetworkBodies || '1' === process.env['VITE_RETICLE_CAPTURE_BODIES']) {
     args['captureNetworkBodies'] = true;
   }
+  // The one option that defaults ON, so the env var and the config flag both DISABLE rather than
+  // enable. Emitted only when switched off; the default stays implicit in the SDK.
+  if (false === options.captureErrorBodies || '1' === process.env['VITE_RETICLE_NO_ERROR_BODIES']) {
+    args['captureErrorBodies'] = false;
+  }
   // Same shape, same reason. Off unless asked for, in a config or for one session.
   if (true === options.exposePresenter || '1' === process.env['VITE_RETICLE_EXPOSE_PRESENTER']) {
     args['exposePresenter'] = true;
@@ -598,6 +648,8 @@ export function reticle(options: ReticleVitePluginOptions = {}): ReticleVitePlug
   let command: string | undefined;
   /** Vite's resolved `base`. Undefined until configResolved, which is before any HTML is served. */
   let base: string | undefined;
+  /** True only when THIS server is Vitest's browser-mode runner — see isVitestBrowserServer. */
+  let vitestBrowser = false;
   const warn = options.onWarn ?? ((message: string) => globalThis.console.warn(message));
   /** Whether connect() actually reached a module — asserted at buildEnd, never assumed. */
   let injected = false;
@@ -678,18 +730,7 @@ export function reticle(options: ReticleVitePluginOptions = {}): ReticleVitePlug
      * second accessibility engine, so keeping those names would make Vite pre-bundle packages the
      * app may not have and blame Reticle for a false `Failed to resolve dependency` warning.
      */
-    config(config: {
-      optimizeDeps?: {
-        include?: string[];
-        esbuildOptions?: Record<string, unknown>;
-        rolldownOptions?: Record<string, unknown>;
-      };
-      define?: Record<string, string>;
-      /** Vite's UserConfig root; undefined means the cwd. `configResolved` runs too late for this. */
-      root?: string;
-      /** The app's own watcher config; its `ignored` list is preserved, never replaced. */
-      server?: { watch?: { ignored?: (string | RegExp)[] } };
-    }) {
+    config(config: ViteUserConfigLike) {
       // Everything below asks what the APP has installed, so every lookup is rooted here and never
       // at the plugin's own location. Vite defaults an omitted root to the cwd; so do we.
       const appRoot = config.root ?? process.cwd();
@@ -723,7 +764,7 @@ export function reticle(options: ReticleVitePluginOptions = {}): ReticleVitePlug
         // Appends to the app's list rather than replacing it, so nothing it already excluded is lost.
         server: {
           watch: {
-            ignored: [...(config.server?.watch?.ignored ?? []), JOURNAL_IGNORE],
+            ignored: mergeIgnored(config.server?.watch?.ignored, JOURNAL_IGNORE),
           },
         },
         // Expose the daemon's pairing token to hand-written connects in the same Vite app. The
@@ -822,6 +863,7 @@ export function reticle(options: ReticleVitePluginOptions = {}): ReticleVitePlug
       root = config.root;
       command = config.command;
       base = config.base;
+      vitestBrowser = isVitestBrowserServer(config);
     },
     /**
      * Serve the connect module fresh, every time.
@@ -927,8 +969,10 @@ export function reticle(options: ReticleVitePluginOptions = {}): ReticleVitePlug
         (timer as { unref?: () => void }).unref?.();
       }
       // Desktop injects via the entry module instead (see transform) — a tag here would be a dead
-      // URL in a packaged build.
+      // URL in a packaged build. A Vitest run gets nothing unless `inject: true` says otherwise —
+      // see isVitestBrowserServer.
       if (!inject || desktop) return [];
+      if (true !== options.inject && vitestBrowser) return [];
       return [
         // A CLASSIC inline script in <head>, and it has to be both.
         //

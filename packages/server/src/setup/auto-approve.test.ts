@@ -68,25 +68,21 @@ describe('pre-approving Reticle', () => {
     expect(second[0]?.outcome).toBe(ApprovalOutcome.ALREADY);
   });
 
-  it('uses Cursor’s own allowlist spelling', () => {
+  it('never creates Cursor’s permissions file, which would pin the run mode to Allowlist', () => {
     const io = fakeIo({ '/home/u/.cursor': '' });
-    grantAutoApproval(io, WHERE, [grantById('cursor')]);
-    expect(written(io, '/home/u/.cursor/permissions.json')).toEqual({
-      mcpAllowlist: ['reticle:*'],
-    });
+    const result = grantAutoApproval(io, WHERE, [grantById('cursor')])[0];
+    expect(result?.outcome).toBe(ApprovalOutcome.DEFERRED);
+    expect(io.files['/home/u/.cursor/permissions.json']).toBeUndefined();
+    expect(result?.warn).toContain('Approvals & Execution');
   });
 
-  it('warns that a new Cursor permissions file supersedes what was approved in the app', () => {
-    const io = fakeIo({ '/home/u/.cursor': '' });
-    expect(grantAutoApproval(io, WHERE, [grantById('cursor')])[0]?.warn).toContain('ask again');
-  });
-
-  it('does not repeat that warning once the file is the user’s own', () => {
+  it('uses Cursor’s own allowlist spelling in a file the user already has', () => {
     const io = fakeIo({
       '/home/u/.cursor': '',
       '/home/u/.cursor/permissions.json': JSON.stringify({ mcpAllowlist: ['github:*'] }),
     });
     const result = grantAutoApproval(io, WHERE, [grantById('cursor')])[0];
+    expect(result?.outcome).toBe(ApprovalOutcome.GRANTED);
     expect(result?.warn).toBeUndefined();
     expect(written(io, '/home/u/.cursor/permissions.json')['mcpAllowlist']).toEqual([
       'github:*',
@@ -130,16 +126,16 @@ describe('pre-approving Reticle', () => {
   });
 
   it('reports an unwritable config instead of failing the other agents', () => {
-    const io = fakeIo({ '/home/u/.claude': '', '/home/u/.cursor': '' });
+    const io = fakeIo({ '/home/u/.claude': '', '/home/u/.gemini': '' });
     const broken: AgentWriterIo = {
       ...io,
       writeFile: (p, c) => {
-        if (p.includes('.cursor')) throw new Error('EACCES');
+        if (p.includes('.gemini')) throw new Error('EACCES');
         io.writeFile(p, c);
       },
     };
     const results = grantAutoApproval(broken, WHERE, [
-      grantById('cursor'),
+      grantById('gemini-cli'),
       grantById('claude-code'),
     ]);
     expect(results[0]?.outcome).toBe(ApprovalOutcome.FAILED);

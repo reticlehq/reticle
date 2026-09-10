@@ -57,6 +57,44 @@ describe('readStorage', () => {
       if (realLocal) Object.defineProperty(window, 'localStorage', realLocal);
     }
   });
+
+  it('redacts secret-shaped values (e.g. JWT) even under benign key names', () => {
+    const jwtSecret =
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c';
+    const apiKeySecret = 'sk_test_mocktoken1234567890abcdef';
+
+    localStorage.setItem('custom_app_cache', jwtSecret);
+    sessionStorage.setItem('cached_payload', `prefix-${apiKeySecret}-suffix`);
+    document.cookie = `benign_cookie=${jwtSecret}`;
+
+    const snap = readStorage() as StorageSnapshot;
+    expect(snap.local['custom_app_cache']).toBe('[REDACTED]');
+    expect(snap.local['custom_app_cache']).not.toContain(jwtSecret);
+
+    expect(snap.session['cached_payload']).toBe('prefix-[REDACTED]-suffix');
+    expect(snap.session['cached_payload']).not.toContain(apiKeySecret);
+
+    expect(snap.cookies['benign_cookie']).toBe('[REDACTED]');
+    expect(snap.cookies['benign_cookie']).not.toContain(jwtSecret);
+  });
+
+  it('preserves legitimate near-miss values that merely resemble a secret', () => {
+    const nearMiss1 = 'eyJshort'; // not a 3-part base64 JWT
+    const nearMiss2 = 'sk_unknown_prefix_12345'; // not live/test
+    const legitimateText = 'standard-user-profile-description';
+    const validJson = JSON.stringify({ count: 42, label: 'items_in_cart' });
+
+    localStorage.setItem('description', legitimateText);
+    localStorage.setItem('cart_json', validJson);
+    localStorage.setItem('near_miss_data', nearMiss1);
+    sessionStorage.setItem('fake_key', nearMiss2);
+
+    const snap = readStorage() as StorageSnapshot;
+    expect(snap.local['description']).toBe(legitimateText);
+    expect(snap.local['cart_json']).toBe(validJson);
+    expect(snap.local['near_miss_data']).toBe(nearMiss1);
+    expect(snap.session['fake_key']).toBe(nearMiss2);
+  });
 });
 
 /**

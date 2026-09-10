@@ -9,7 +9,7 @@
 import { GateExit } from './gate-exit.js';
 import { gateHookMessage, GATE_SKIP_ENV } from './gate-hook-message.js';
 import { readProjectId } from './cli-port.js';
-import { changedFilesSince } from '../flows/git-changed.js';
+import { changedFilesSince, type ChangedFiles } from '../flows/git-changed.js';
 import { join } from 'node:path';
 import { ReticleDir, RunFlowStatus } from '@reticlehq/core';
 import { FlowStore } from '../flows/flows.js';
@@ -28,19 +28,39 @@ import { watch } from 'node:fs';
 import { log } from '../log.js';
 /** Load the {name, steps} of every saved flow for the active project. */
 /** Explicit files plus, when --since is given, the git-changed files since that ref. */
+/**
+ * `cwd` is the tree to diff, and it is a PARAMETER because the two callers do not share one. From a
+ * terminal `process.cwd()` is the project; inside a globally-registered daemon it is `/` or `$HOME`,
+ * where `git diff` answers about the wrong repository or about none.
+ */
 export async function resolveChangedFiles(
   files: string[],
   since: string | undefined,
-): Promise<string[]> {
-  if (since === undefined) return files;
-  return [...new Set([...files, ...(await changedFilesSince(since, process.cwd()))])];
+  cwd: string,
+): Promise<ChangedFiles> {
+  // No ref means no question was asked of git, which is not a failure to answer one.
+  if (since === undefined) return { files, failed: false };
+  const changed = await changedFilesSince(since, cwd);
+  return {
+    files: [...new Set([...files, ...changed.files])],
+    failed: changed.failed,
+    ...(changed.reason === undefined ? {} : { reason: changed.reason }),
+  };
 }
 
+/**
+ * `projectId` is a PARAMETER for the same reason `reticleRoot` already is: the two together are one
+ * address, and reading half of it from a global made them disagree. Resolved through `sessionRoot`
+ * the root named the session's project while `readProjectId(process.cwd())` named the daemon's —
+ * and a daemon started outside a project has none, so the list came back EMPTY. `affected` renders
+ * that as "no saved flows exist yet" and `verify_change` as nothing covering the change: a
+ * confident negative about somebody else's project, which is worse than an error.
+ */
 export async function loadNamedFlows(
   fs: FileSystemPort,
   reticleRoot: string,
+  projectId: string | undefined,
 ): Promise<NamedFlow[]> {
-  const projectId = readProjectId(process.cwd());
   const store = new FlowStore(fs, reticleRoot, { now: () => Date.now() });
   const flows: NamedFlow[] = [];
   for (const name of await store.list(projectId)) {
@@ -104,7 +124,7 @@ export function handleWatch(): void {
       setTimeout(fn, ms).unref();
     },
     onFlush: (files) => {
-      void loadNamedFlows(fs, reticleRoot)
+      void loadNamedFlows(fs, reticleRoot, readProjectId(process.cwd()))
         .then(async (flows) => {
           const result = affectedSavedFlows(flows, files);
           if (result.affected.length > 0) {
@@ -121,7 +141,7 @@ export function handleWatch(): void {
   });
   log('reticle_watch_started', { cwd: process.cwd() });
   // Print the ambient line once at startup so the human sees where they stand before touching anything.
-  void loadNamedFlows(fs, reticleRoot)
+  void loadNamedFlows(fs, reticleRoot, readProjectId(process.cwd()))
     .then((flows) => emitBuddyStatus(fs, reticleRoot, flows, []))
     .catch(() => undefined);
   watch(process.cwd(), { recursive: true }, (_event, filename) => {
@@ -171,8 +191,9 @@ export async function handleGate(
   try {
     const fs = createNodeFileSystem();
     const reticleRoot = join(process.cwd(), ReticleDir.ROOT);
-    const changed = await resolveChangedFiles(files, since);
-    const allFlows = await loadNamedFlows(fs, reticleRoot);
+    // Same deliberate degradation as the gate: a terminal caller sees git's own error anyway.
+    const changed = (await resolveChangedFiles(files, since, process.cwd())).files;
+    const allFlows = await loadNamedFlows(fs, reticleRoot, readProjectId(process.cwd()));
     const affected = affectedSavedFlows(allFlows, changed).affected;
     const latest = await new RunStore(fs, reticleRoot).latest();
     const passing = (latest?.flows ?? [])

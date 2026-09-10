@@ -16,6 +16,12 @@ export const VITE_CONFIG_CANDIDATES = [
   'vite.config.mjs',
   'vite.config.mts',
 ];
+export const ELECTRON_VITE_CONFIG_CANDIDATES = [
+  'electron.vite.config.ts',
+  'electron.vite.config.js',
+  'electron.vite.config.mjs',
+  'electron.vite.config.mts',
+];
 export const NEXT_CONFIG_CANDIDATES = [
   'next.config.mjs',
   'next.config.js',
@@ -112,7 +118,7 @@ export function workspaceParents(sources: WorkspaceSources): string[] {
  * shape, next to `workspaceParents`, which answers the other half of it.
  */
 /** Deps that mark a directory as a runnable web app even when it has no bundler config file. */
-const APP_DEPS = ['next', 'vite'] as const;
+const APP_DEPS = ['next', 'vite', 'electron-vite'] as const;
 
 function hasDevScript(pkgRaw: string): boolean {
   try {
@@ -133,7 +139,11 @@ function hasDevScript(pkgRaw: string): boolean {
 function looksLikeApp(dir: string, io: Pick<InitIo, 'exists' | 'readFile'>): boolean {
   const pkgRaw = io.readFile(`${dir}/${PACKAGE_JSON}`);
   if (null === pkgRaw) return false;
-  const configs = [...VITE_CONFIG_CANDIDATES, ...NEXT_CONFIG_CANDIDATES];
+  const configs = [
+    ...VITE_CONFIG_CANDIDATES,
+    ...ELECTRON_VITE_CONFIG_CANDIDATES,
+    ...NEXT_CONFIG_CANDIDATES,
+  ];
   if (configs.some((c) => io.exists(`${dir}/${c}`))) return true;
   // `next.config` is optional in Next, so the dependency list is the other half of the signal.
   if (APP_DEPS.some((d) => pkgRaw.includes(`"${d}"`))) return true;

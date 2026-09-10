@@ -72,6 +72,34 @@ describe('detect framework', () => {
       ).framework,
     ).toBe(Framework.SVELTEKIT);
   });
+  /**
+   * #883: a plain Svelte + Vite SPA also ships a `svelte.config.js` — for the Svelte preprocessor
+   * (`@sveltejs/vite-plugin-svelte`'s own config), unrelated to SvelteKit — so bare file presence
+   * alone (the previous test) is not sufficient to tell the two apart. The discriminator this uses is
+   * the one the issue itself names: SvelteKit renders through `src/app.html` and ships no root
+   * `index.html`; a plain Vite SPA (Svelte or otherwise) always has one. Without this, `init` wrote a
+   * SvelteKit-only `src/hooks.client.ts` bootstrap into a project where nothing imports it.
+   */
+  it('does NOT detect SvelteKit from svelte.config.js alone when a root index.html exists', () => {
+    expect(
+      detect(
+        input({
+          pkg: { devDependencies: { vite: '^5', svelte: '^5' } },
+          configFiles: new Set(['svelte.config.js', 'vite.config.ts', 'index.html']),
+        }),
+      ).framework,
+    ).toBe(Framework.VITE);
+  });
+  it('still detects SvelteKit from svelte.config.js when @sveltejs/kit IS present, index.html or not', () => {
+    expect(
+      detect(
+        input({
+          pkg: { devDependencies: { '@sveltejs/kit': '^2', vite: '^5' } },
+          configFiles: new Set(['svelte.config.js', 'vite.config.ts', 'index.html']),
+        }),
+      ).framework,
+    ).toBe(Framework.SVELTEKIT);
+  });
 });
 
 describe('detect source mapping need', () => {
@@ -174,6 +202,50 @@ describe('detect — Astro', () => {
 });
 
 /**
+ * electron-vite ships `vite` as a dependency and uses `electron.vite.config.ts`, so the generic
+ * Vite branch would claim it and then fail to find a file to patch. Detected in its own right so
+ * the renderer-scoped patcher runs instead.
+ */
+describe('detect — electron-vite', () => {
+  it('is recognised from the dependency or the config, before the generic Vite branch', () => {
+    expect(
+      detect({
+        pkg: { devDependencies: { 'electron-vite': '^5' } },
+        configFiles: new Set(),
+        lockfiles: new Set(),
+      }).framework,
+    ).toBe(Framework.ELECTRON_VITE);
+    expect(
+      detect({
+        pkg: {},
+        configFiles: new Set(['electron.vite.config.ts']),
+        lockfiles: new Set(),
+      }).framework,
+    ).toBe(Framework.ELECTRON_VITE);
+  });
+
+  it('wins over a bare vite dependency, which electron-vite apps always list', () => {
+    expect(
+      detect({
+        pkg: { devDependencies: { 'electron-vite': '^5', vite: '^7' } },
+        configFiles: new Set(['electron.vite.config.ts']),
+        lockfiles: new Set(),
+      }).framework,
+    ).toBe(Framework.ELECTRON_VITE);
+  });
+
+  it('leaves a plain Vite app as Vite', () => {
+    expect(
+      detect({
+        pkg: { devDependencies: { vite: '^7' } },
+        configFiles: new Set(['vite.config.ts']),
+        lockfiles: new Set(),
+      }).framework,
+    ).toBe(Framework.VITE);
+  });
+});
+
+/**
  * No lockfile is not the same as "npm". A pnpm-installed project with an uncommitted lockfile was
  * read as npm, and `npm i -D` then died on pnpm's symlink layout with "Cannot read properties of
  * null (reading 'matches')" — leaving the package present in node_modules but absent from
@@ -257,5 +329,36 @@ describe('the dependency install is quiet about things that are not ours', () =>
       const { args } = installCommandParts(pm, ['@reticlehq/react']);
       expect(args).not.toContain('--no-audit');
     }
+  });
+});
+
+describe('customReconciler', () => {
+  // The whole point: a lowercase tag in these projects may not be a DOM element, and stamping one
+  // unmounts the app to a white screen from inside the commit phase.
+  it.each([
+    '@react-three/fiber',
+    'react-three-fiber',
+    '@react-pdf/renderer',
+    'ink',
+    'react-native',
+  ])('is true when %s is a dependency', (name) => {
+    expect(
+      detect(input({ pkg: { dependencies: { react: '^19.0.0', [name]: '^9.0.0' } } }))
+        .customReconciler,
+    ).toBe(true);
+  });
+
+  it('finds it in devDependencies too', () => {
+    expect(
+      detect(input({ pkg: { devDependencies: { '@react-three/fiber': '^9.0.0' } } }))
+        .customReconciler,
+    ).toBe(true);
+  });
+
+  it('is false for an ordinary React DOM app', () => {
+    expect(
+      detect(input({ pkg: { dependencies: { react: '^19.0.0', three: '^0.170.0' } } }))
+        .customReconciler,
+    ).toBe(false);
   });
 });

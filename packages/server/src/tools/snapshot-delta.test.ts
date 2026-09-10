@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   snapshotDelta,
+  snapshotGrowthNote,
   SnapshotCache,
   applySnapshotDelta,
   snapshotCacheKey,
@@ -293,5 +294,135 @@ describe('full-tree fallback carries mode and reason', () => {
     expect(out.mode).toBe(SnapshotDeltaMode.DELTA);
     expect(out.changed).toEqual(['- textbox "Q" (ref=e1) [value="hi"]']);
     expect(out.changedCount).toBe(1);
+  });
+});
+
+/**
+ * #787: a route predicate can go green over a skeleton, and the natural next move — a snapshot — is
+ * exactly as misleading in that window. `snapshotGrowthNote` catches it after the fact: a scope that
+ * was SMALLER moments ago and has since grown means the earlier reading was very likely taken
+ * mid-load, which is precisely when a wrong "renders nothing" conclusion gets drawn.
+ */
+describe('snapshotGrowthNote (pure)', () => {
+  const SMALL = '- navigation "breadcrumb" (ref=e1)\n- heading "Loading" (ref=e2)';
+  const GROWN = [
+    '- navigation "breadcrumb" (ref=e1)',
+    '- heading "Loading" (ref=e2)',
+    '- paragraph "Row one" (ref=e3)',
+    '- paragraph "Row two" (ref=e4)',
+    '- paragraph "Row three" (ref=e5)',
+  ].join('\n');
+
+  it('undefined when there is no prior snapshot', () => {
+    expect(snapshotGrowthNote(undefined, GROWN, 1000)).toBeUndefined();
+  });
+
+  it('undefined when the page did not grow', () => {
+    const prior = { tree: GROWN, atMs: 0 };
+    expect(snapshotGrowthNote(prior, SMALL, 500)).toBeUndefined();
+  });
+
+  it('undefined when the prior snapshot is stale — old growth is not a mid-load trap', () => {
+    const prior = { tree: SMALL, atMs: 0 };
+    expect(snapshotGrowthNote(prior, GROWN, 60_000)).toBeUndefined();
+  });
+
+  it('names the earlier count and elapsed time when a recent, smaller snapshot grew', () => {
+    const prior = { tree: SMALL, atMs: 1000 };
+    const note = snapshotGrowthNote(prior, GROWN, 3400);
+    expect(note).toBeDefined();
+    expect(note).toContain('2'); // the earlier (smaller) node count
+    expect(note).toContain('2400'); // elapsed ms
+  });
+
+  it('a custom window is honoured — just past the default window still counts under a wider one', () => {
+    const prior = { tree: SMALL, atMs: 0 };
+    expect(snapshotGrowthNote(prior, GROWN, 5001)).toBeUndefined(); // past default 5000ms
+    expect(snapshotGrowthNote(prior, GROWN, 5001, 10_000)).toBeDefined(); // widened window
+  });
+});
+
+describe('SnapshotCache tracks WHEN each entry was remembered (injected clock)', () => {
+  it('priorEntry carries the tree and the timestamp it was remembered at', () => {
+    let now = 1000;
+    const c = new SnapshotCache(50, () => now);
+    c.remember('k', '/', TREE_A);
+    now = 1250;
+    expect(c.priorEntry('k', '/')).toEqual({ tree: TREE_A, atMs: 1000 });
+  });
+
+  it('priorEntry is route-gated, same as recall', () => {
+    const c = new SnapshotCache();
+    c.remember('k', '/a', TREE_A);
+    expect(c.priorEntry('k', '/b')).toBeUndefined();
+  });
+});
+
+describe('applySnapshotDelta surfaces the growth note (#787)', () => {
+  it('flags a recently-smaller snapshot on a plain (non-diff) call', () => {
+    let now = 0;
+    const c = new SnapshotCache(50, () => now);
+    const small = { tree: 'a\nb', status: { route: '/' } };
+    const grown = { tree: 'a\nb\nc\nd\ne', status: { route: '/' } };
+    applySnapshotDelta(small, { sessionId: 's', scope: '', mode: 'full', diff: false }, c);
+    now = 2000;
+    const out = applySnapshotDelta(
+      grown,
+      { sessionId: 's', scope: '', mode: 'full', diff: false },
+      c,
+    ) as { growthWarning?: string };
+    expect(out.growthWarning).toBeDefined();
+  });
+
+  it('flags it on a diff:true call too, alongside the delta', () => {
+    let now = 0;
+    const c = new SnapshotCache(50, () => now);
+    applySnapshotDelta(
+      { tree: TREE_A, status: { route: '/' } },
+      { sessionId: 's', scope: '', mode: 'full', diff: true },
+      c,
+    );
+    now = 1500;
+    const out = applySnapshotDelta(
+      { tree: TREE_B, status: { route: '/' } },
+      { sessionId: 's', scope: '', mode: 'full', diff: true },
+      c,
+    ) as { growthWarning?: string; mode?: string };
+    expect(out.mode).toBe(SnapshotDeltaMode.DELTA);
+    expect(out.growthWarning).toBeDefined();
+  });
+
+  it('stays silent when the prior snapshot was not recent', () => {
+    let now = 0;
+    const c = new SnapshotCache(50, () => now);
+    applySnapshotDelta(
+      { tree: 'a\nb', status: { route: '/' } },
+      { sessionId: 's', scope: '', mode: 'full', diff: false },
+      c,
+    );
+    now = 60_000;
+    const out = applySnapshotDelta(
+      { tree: 'a\nb\nc\nd\ne', status: { route: '/' } },
+      { sessionId: 's', scope: '', mode: 'full', diff: false },
+      c,
+    ) as { growthWarning?: string };
+    expect(out.growthWarning).toBeUndefined();
+  });
+
+  it('stays silent when the page did not grow', () => {
+    let now = 0;
+    const c = new SnapshotCache(50, () => now);
+    applySnapshotDelta(
+      { tree: 'a\nb\nc\nd\ne', status: { route: '/' } },
+      { sessionId: 's', scope: '', mode: 'full', diff: false },
+      c,
+    );
+    now = 500;
+    const out = applySnapshotDelta(
+      { tree: 'a\nb', status: { route: '/' } },
+      { sessionId: 's', scope: '', mode: 'full', diff: false },
+      c,
+    ) as { growthWarning?: string };
+    expect(out.growthWarning).toBeUndefined();
   });
 });

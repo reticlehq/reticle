@@ -68,3 +68,34 @@ describe('resolve follows a unique same-origin successor', () => {
     expect(() => mgr.resolve('old')).toThrow(/old/);
   });
 });
+
+/**
+ * When the page is torn down and nothing HELLO's back, the tombstone is the last thing we knew.
+ * `reticle_sessions` and the no-session diagnosis read this so an empty list is not a dead end (#808).
+ */
+describe('lastKnown remembers the departed tab', () => {
+  it('is undefined until a session has connected and left', () => {
+    expect(new SessionManager().lastKnown()).toBeUndefined();
+  });
+
+  it('names the id and URL of the session that just disappeared', () => {
+    const mgr = new SessionManager();
+    const old = session('torn', 'http://localhost:3000/orders/explode', 'shop');
+    mgr.add(old);
+    expect(mgr.lastKnown()).toBeUndefined();
+    mgr.remove(old);
+    expect(mgr.lastKnown()).toEqual({
+      id: 'torn',
+      url: 'http://localhost:3000/orders/explode',
+      projectId: 'shop',
+    });
+  });
+
+  it('a vanished id with no live successor names the last URL rather than only the missing id', () => {
+    const mgr = new SessionManager();
+    const old = session('torn', 'http://localhost:3000/orders/explode', 'shop');
+    mgr.add(old);
+    mgr.remove(old);
+    expect(() => mgr.resolve('torn')).toThrow(/orders\/explode/);
+  });
+});

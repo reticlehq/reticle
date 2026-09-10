@@ -25,16 +25,20 @@ import { navigateResult } from './navigate-result.js';
 import { TOOLS } from './tools.js';
 import { ReticleTool } from './tool-names.js';
 
+const WAITED = 5_000;
+
 describe('navigateResult', () => {
   it('keeps ok for existing callers', () => {
-    expect(navigateResult({ ok: true, url: 'http://localhost:3000/x' })).toMatchObject({
+    expect(
+      navigateResult({ ok: true, url: 'http://localhost:3000/x' }, null, WAITED),
+    ).toMatchObject({
       ok: true,
       url: 'http://localhost:3000/x',
     });
   });
 
   it('says arrival is UNCONFIRMED, because the SDK cannot survive the navigation to report it', () => {
-    const out = navigateResult({ ok: true, url: 'http://x/y' });
+    const out = navigateResult({ ok: true, url: 'http://x/y' }, null, WAITED);
     expect(out['confirmed']).toBe(false);
     expect(String(out['note'])).toMatch(/dispatch/i);
     // And names the way to actually check.
@@ -43,14 +47,50 @@ describe('navigateResult', () => {
 
   it('does not claim dispatch when the browser refused outright', () => {
     // A refusal IS conclusive — the page never moved, so there is nothing unconfirmed about it.
-    const out = navigateResult({ ok: false, reason: 'only http(s) navigation is allowed' });
+    const out = navigateResult(
+      { ok: false, reason: 'only http(s) navigation is allowed' },
+      null,
+      WAITED,
+    );
     expect(out).toMatchObject({ ok: false, reason: 'only http(s) navigation is allowed' });
     expect(out['confirmed']).toBeUndefined();
     expect(out['note']).toBeUndefined();
+    expect(out['waitedMs']).toBeUndefined();
   });
 
   it('passes a reason through when one is given', () => {
-    expect(navigateResult({ ok: false, reason: 'url required' })['reason']).toBe('url required');
+    expect(navigateResult({ ok: false, reason: 'url required' }, null, WAITED)['reason']).toBe(
+      'url required',
+    );
+  });
+});
+
+/**
+ * `confirmed: false` used to be one word for two situations: Reticle stopped waiting, and the page
+ * never came back. A Nuxt SPA reattaching under HMR was measured at 30–60s, so against it every
+ * navigation gave up at 5s and read as a failed navigation — and there was no `timeout_ms` to say
+ * "wait longer". The unconfirmed envelope now names the budget that expired and the parameter that
+ * raises it.
+ */
+describe('an unconfirmed navigation says what the wait ended on', () => {
+  it('reports the budget that expired', () => {
+    const out = navigateResult({ ok: true, url: 'http://localhost:3000/dashboard' }, null, 30_000);
+    expect(out['waitedMs']).toBe(30_000);
+    expect(String(out['note'])).toContain('30000ms');
+  });
+
+  it('names timeout_ms as the way to wait longer', () => {
+    const out = navigateResult({ ok: true, url: 'http://localhost:3000/dashboard' }, null, WAITED);
+    expect(String(out['note'])).toContain('timeout_ms');
+  });
+
+  it('does not report a budget on a confirmed arrival — nothing expired', () => {
+    const out = navigateResult(
+      { ok: true, url: 'http://localhost:3000/dashboard' },
+      { sessionId: 's-new' },
+      WAITED,
+    );
+    expect(out['waitedMs']).toBeUndefined();
   });
 });
 
@@ -71,19 +111,20 @@ describe('confirmed reports arrival when arrival is observable', () => {
     const out = navigateResult(
       { ok: true, url: 'http://localhost:3000/dashboard' },
       { sessionId: 's-new' },
+      WAITED,
     );
     expect(out['confirmed']).toBe(true);
     expect(out['sessionId'], 'the SDK reconnects as a NEW session — name it').toBe('s-new');
   });
 
   it('stays false, with the note, when nothing arrives in the window', () => {
-    const out = navigateResult({ ok: true, url: 'http://localhost:3000/dashboard' }, null);
+    const out = navigateResult({ ok: true, url: 'http://localhost:3000/dashboard' }, null, WAITED);
     expect(out['confirmed']).toBe(false);
     expect(String(out['note'])).toContain('reticle_sessions');
   });
 
   it('a refusal is still conclusive — no confirmed, no sessionId', () => {
-    const out = navigateResult({ ok: false, reason: 'url required' }, null);
+    const out = navigateResult({ ok: false, reason: 'url required' }, null, WAITED);
     expect(out['confirmed']).toBeUndefined();
     expect(out['sessionId']).toBeUndefined();
   });
@@ -108,5 +149,38 @@ describe('the navigate description matches what navigate now returns', () => {
       tellsToPoll,
       'that instruction is now wrong whenever arrival was confirmed — the result already says so',
     ).toBe(false);
+  });
+
+  it('tells the agent the window is its own to size', () => {
+    expect(nav?.description).toContain('timeout_ms');
+  });
+});
+
+/**
+ * The 5s arrival window was fixed and unstated: `reticle_navigate` took no `timeout_ms`, so unlike
+ * `assert` / `wait_for` / `act_and_wait` — which all spend the caller's budget — nobody could tell
+ * it to wait longer. The parameter is declared with the same bounds those tools use.
+ */
+describe('reticle_navigate takes a timeout_ms', () => {
+  const timeout = TOOLS.find((t) => t.name === ReticleTool.NAVIGATE)?.inputSchema['timeout_ms'];
+
+  it('is declared', () => {
+    expect(timeout).toBeDefined();
+  });
+
+  it('stays optional — omitting it keeps the 5s default, so nothing gets slower by accident', () => {
+    expect(timeout?.safeParse(undefined).success).toBe(true);
+  });
+
+  it('takes the budget a slow SPA needs', () => {
+    expect(timeout?.safeParse(30_000).success).toBe(true);
+  });
+
+  it('takes 0 — look once, do not wait', () => {
+    expect(timeout?.safeParse(0).success).toBe(true);
+  });
+
+  it('refuses a negative budget instead of ignoring it', () => {
+    expect(timeout?.safeParse(-1).success).toBe(false);
   });
 });

@@ -55,10 +55,11 @@ function blastRadius(
 export function buildDivergenceCapsule(
   expected: readonly ExpectedLink[],
   observed: readonly ReticleEvent[],
+  truncated = false,
 ): DivergenceCapsule {
   return {
-    summary: causalSummary(observed),
-    firstDivergence: firstDivergence(expected, observed),
+    summary: causalSummary(observed, { truncated }),
+    firstDivergence: firstDivergence(expected, observed, truncated),
     blastRadius: blastRadius(expected, observed),
   };
 }

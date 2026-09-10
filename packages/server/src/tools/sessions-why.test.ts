@@ -21,12 +21,19 @@ import type { ToolDeps } from './tool-kit.js';
 const sessionsTool = TOOLS.find((tool) => ReticleTool.SESSIONS === tool.name);
 
 /** Only the fields this handler reads — the rest of ToolDeps is irrelevant here. */
-function depsWith(list: unknown[], hint: string | undefined, next?: NoSessionNextAction): ToolDeps {
+function depsWith(
+  list: unknown[],
+  hint: string | undefined,
+  next?: NoSessionNextAction,
+  lastKnown?: { sessionId: string; url: string },
+): ToolDeps {
   return {
     sessions: {
       list: () => list,
       noSessionHint: () => hint,
       noSessionNextAction: () => next,
+      lastKnown: () =>
+        lastKnown === undefined ? undefined : { id: lastKnown.sessionId, url: lastKnown.url },
     },
   } as unknown as ToolDeps;
 }
@@ -90,5 +97,58 @@ describe('reticle_sessions explains an empty list', () => {
     };
     expect(result.sessions).toHaveLength(1);
     expect(result.why).toBeUndefined();
+  });
+});
+
+/**
+ * An empty list with a remembered URL is the 500-overlay case: the page was here, then it was not,
+ * and the SDK never HELLO'd back. `why` already says a tab went away; without `lastKnown` the agent
+ * still cannot tell /orders/explode from "the human closed the tab" (#808 option 1).
+ */
+describe('reticle_sessions names the last known page when the list is empty', () => {
+  const lastKnown = {
+    sessionId: 's-torn',
+    url: 'http://localhost:3000/orders/explode',
+  };
+
+  it('is a declared output field, so a strict client does not strip it', () => {
+    expect(sessionsTool?.outputSchema).toHaveProperty('lastKnown');
+  });
+
+  it('carries the last session id and URL beside the empty list', async () => {
+    const result = (await sessionsTool?.handler(
+      depsWith([], 'the page was torn down', undefined, lastKnown),
+      {},
+    )) as {
+      sessions: unknown[];
+      lastKnown?: { sessionId: string; url: string };
+    };
+    expect(result.sessions).toEqual([]);
+    expect(result.lastKnown).toEqual(lastKnown);
+  });
+
+  it('omits lastKnown when nothing was ever connected, rather than shipping a zeroed shell', async () => {
+    const result = (await sessionsTool?.handler(depsWith([], 'run init'), {})) as {
+      lastKnown?: { sessionId: string; url: string };
+    };
+    expect(result.lastKnown).toBeUndefined();
+  });
+
+  it('does not keep a tombstone on a LIVE listing — that would look like the current tab', async () => {
+    const session = {
+      sessionId: 's1',
+      url: 'http://localhost:5173/',
+      adapters: [],
+      hasCapabilities: true,
+      lastSeenMs: 0,
+      throttled: false,
+      focused: true,
+      hidden: false,
+    };
+    const result = (await sessionsTool?.handler(
+      depsWith([session], undefined, undefined, lastKnown),
+      {},
+    )) as { lastKnown?: { sessionId: string; url: string } };
+    expect(result.lastKnown).toBeUndefined();
   });
 });

@@ -1,3 +1,4 @@
+import { bodyCaptureRemedy } from '../honesty/body-capture-remedy.js';
 import { z } from 'zod';
 import { EventType, ReticleCommand, SnapshotMode, urlForMatch } from '@reticlehq/core';
 import { ReticleTool } from './tool-names.js';
@@ -98,7 +99,7 @@ export const RECONCILE_TOOLS: ToolDef[] = [
           note:
             0 === total
               ? 'no responses in this window matched — nothing was compared'
-              : `${String(total)} response(s) matched but NONE carried a recorded body, so nothing was compared. Enable it where your app calls connect(): \`reticle.connect({ captureNetworkBodies: true })\`, then re-run`,
+              : `${String(total)} response(s) matched but NONE carried a recorded body, so nothing was compared. ${bodyCaptureRemedy(session.sdkVersion)}`,
         });
       }
 

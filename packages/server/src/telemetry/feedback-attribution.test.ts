@@ -22,6 +22,10 @@ describe('reconcileStack — the app outranks the directory when they disagree',
       stack: 'sveltekit',
       stackMajor: 2,
     });
+    expect(reconcileStack({ stack: 'tanstack-start', stackMajor: 1 }, ['react'])).toEqual({
+      stack: 'tanstack-start',
+      stackMajor: 1,
+    });
   });
 
   it('takes the APP when the directory describes a different family — the reported bug', () => {

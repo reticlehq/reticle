@@ -14,6 +14,11 @@ name: DCO
 
 on:
   pull_request:
+  # The merge queue reports against `merge_group`, not against the PR, so a required check that does
+  # not run here leaves every queued entry waiting forever. The sign-off itself was already certified
+  # on the PR — this event carries the same commits — so the job runs and reports green rather than
+  # re-deriving a range that has no `pull_request` context to read.
+  merge_group:
 
 permissions:
   contents: read
@@ -26,6 +31,7 @@ jobs:
         with:
           fetch-depth: 0
       - name: Check Signed-off-by on every commit in the PR
+        if: github.event_name == 'pull_request'
         env:
           BASE: ${{ github.event.pull_request.base.sha }}
           HEAD: ${{ github.event.pull_request.head.sha }}

@@ -92,14 +92,30 @@ export function pickDocumentSuccessor(
 ): SessionIdentity | undefined {
   const origin = originOf(departed.url);
   if (origin === undefined) return undefined;
+  // A candidate must belong to the same app. `sessionStorage` is scoped to the ORIGIN rather than
+  // the app, so recycling a port (stop app A on :3000, start app B, reload the tab) has app B read
+  // app A's id out of storage and register under it with its own projectId. The guard was on the
+  // candidate search only, and a matching id returned before it ran — so an explicit sessionId was
+  // answered by a different product, and every observation afterwards was about the wrong app
+  // (#785).
+  const sameProject = (s: SessionIdentity): boolean =>
+    departed.projectId === undefined || s.projectId === departed.projectId;
   const atOrigin = live.filter((s) => originOf(s.url) === origin);
   const sameId = atOrigin.find((s) => s.id === departed.id);
-  if (sameId !== undefined) return sameId;
+  // `mayInherit` deliberately does NOT apply here. It asks whether ANOTHER session may take over a
+  // claimed identity, and a matching id is not another session — it is this one, reconnecting with
+  // the id that survived in sessionStorage. The claim lives in a URL PARAM, which an ordinary
+  // navigation drops (`navigate { url, reload: true }` reloads the bare address), so demanding it
+  // again would refuse the reload this whole mechanism exists for. A leased context has its own
+  // sessionStorage, so a human's tab cannot pick the id up that way — only by carrying the param,
+  // which satisfies `mayInherit` anyway. The gate would cost the ordinary case and buy nothing.
+  //
+  // Refusal, not a second guess, when the project does not match: an exact id match belonging to
+  // another app is the strongest evidence there is that the caller's id is stale, so falling
+  // through to whatever else sits on the origin would be the silent redirect this prevents.
+  if (sameId !== undefined) return sameProject(sameId) ? sameId : undefined;
   const others = atOrigin.filter(
-    (s) =>
-      s.id !== departed.id &&
-      (departed.projectId === undefined || s.projectId === departed.projectId) &&
-      mayInherit(departed, s),
+    (s) => s.id !== departed.id && sameProject(s) && mayInherit(departed, s),
   );
   if (1 !== others.length) return undefined;
   return others[0];

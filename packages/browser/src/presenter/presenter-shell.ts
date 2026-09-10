@@ -125,7 +125,7 @@ export class HudShell {
     const gear = hiToggleIconHtml(PresenterIcon.GEAR, PRESENTER_ICON_SIZE.TOOLBAR);
     const exit = hiIconHtml(PresenterIcon.REMOVE, PRESENTER_ICON_SIZE.TOOLBAR);
     return `<div ${DOCK_ATTR}>
-      <div ${CHAT_PANEL_ATTR} class="reticle-chat-panel ${HUD_SURFACE_CLASS}" role="dialog" aria-label="Reticle agent chat" aria-hidden="true">
+      <div ${CHAT_PANEL_ATTR} class="reticle-chat-panel ${HUD_SURFACE_CLASS}" role="dialog" aria-label="Reticle session" aria-hidden="true">
         <div class="reticle-chat-head">
           <span class="reticle-chat-brand">${MARK_SVG}<span class="reticle-chat-brandname">${BRAND_NAME}</span></span>
         </div>
@@ -385,10 +385,6 @@ export class HudShell {
     this.#chatToggle?.setAttribute('aria-pressed', 'true');
     this.#callbacks.onChatOpen?.();
     if (this.#dock !== undefined) scheduleSyncDockLayout(this.#dock, this.#root);
-    const input = this.#root.querySelector<HTMLTextAreaElement>('[data-reticle-input]');
-    if (input !== null && !input.disabled) {
-      requestAnimationFrame(() => input.focus());
-    }
   }
   closeChat(): void {
     if (this.#root === undefined || !this.isChatOpen()) return;

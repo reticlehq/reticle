@@ -70,6 +70,25 @@ const DISCONNECT_CODES: ReadonlySet<string> = new Set([
  */
 const UNREACHABLE_CODES: ReadonlySet<string> = new Set(['ECONNREFUSED']);
 
+/**
+ * How many absorbed client disconnects mean the client is GONE rather than between reconnects.
+ *
+ * Absorbing a disconnect and continuing is right for one: the client closed a socket, the proxy
+ * rebuilds it. It is catastrophic for a stream of them, because the write that failed is retried
+ * immediately, fails identically, and is absorbed again — a tight loop with no backoff and no exit.
+ *
+ * Measured in the field: one proxy ran four days after its editor closed, at 97-98% of a core, with
+ * 1473 minutes of CPU time and ~930 MB/hour of identical log lines, every entry stamped to the same
+ * millisecond. Nothing in Reticle's own output showed it — the daemon beside it reported healthy,
+ * `sessions: 0` — so it was findable only by running `ps` by hand, and thirteen more idle pairs from
+ * earlier sessions were still resident behind it.
+ *
+ * Chosen well above the handful a genuine reconnect produces and far below a runaway. The proxy's
+ * whole purpose is to be the stdio server its editor launched; once that editor is gone there is
+ * nobody left to serve, and the correct thing is to leave rather than to burn a core proving it.
+ */
+const DISCONNECT_STORM = 20;
+
 /** The expected-failure code this value carries, and which class it belongs to. */
 function expectedCode(value: unknown): { code: string; unreachable: boolean } | undefined {
   const raw = (value as { code?: unknown } | null | undefined)?.code;
@@ -281,25 +300,46 @@ export function installDaemonResilience(proc: ProcessLike, log: LogFn, onFatal: 
  * dormant paths). A crashed-but-serving proxy answers the handshake and `tools/list` from cache; a
  * dead one answers nothing and needs a human.
  *
- * `onCrash` is for reporting only — it must not end the process.
+ * `onCrash` is for reporting only — it must not end the process. `onGone` is the ONE exception, and
+ * it is the subject of DISCONNECT_STORM below.
  */
 export function installProxyResilience(
   proc: ProcessLike,
   log: LogFn,
   onCrash: (kind: CrashKind, cause: unknown) => void = reportCrash,
+  onGone: () => void = () => process.exit(0),
 ): void {
   const expected: ExpectedEvents = {
     disconnected: 'reticle_mcp_proxy_client_disconnected',
     unreachable: 'reticle_mcp_proxy_daemon_unreachable',
   };
+  // "Absorb the disconnect and keep serving" is right for ONE disconnect and catastrophic for a
+  // stream of them — see DISCONNECT_STORM.
+  let disconnects = 0;
+  let gone = false;
+  const absorb = (value: unknown): boolean => {
+    if (!absorbExpected(value, log, expected)) return false;
+    if (false === expectedCode(value)?.unreachable) {
+      disconnects += 1;
+      if (disconnects >= DISCONNECT_STORM && !gone) {
+        gone = true;
+        log('reticle_mcp_proxy_client_gone', {
+          disconnects,
+          note: 'the client end is gone for good, not between reconnects — exiting instead of retrying forever',
+        });
+        onGone();
+      }
+    }
+    return true;
+  };
   proc.on('unhandledRejection', (reason: unknown) => {
-    if (absorbExpected(reason, log, expected)) return;
+    if (absorb(reason)) return;
     log('reticle_mcp_proxy_unhandled_rejection', { reason: describe(reason) });
     onCrash(CrashKind.UNHANDLED_REJECTION, reason);
   });
   proc.on('uncaughtException', (err: unknown) => {
     // The client closing its end of stdio is how this process is SUPPOSED to end its day.
-    if (absorbExpected(err, log, expected)) return;
+    if (absorb(err)) return;
     log('reticle_mcp_proxy_uncaught_exception', {
       error: describe(err),
       note: 'still serving — exiting here would disconnect the MCP client',

@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { emptyImpactCounts, emptyImpactRecords, estimateImpactSavings } from '@reticlehq/core';
+import {
+  emptyImpactCounts,
+  emptyImpactRecords,
+  estimateImpactSavings,
+  IMPACT_BASIS,
+} from '@reticlehq/core';
 import type { ImpactDefect, ImpactScope, ImpactSnapshot } from '@reticlehq/core';
 import { PresenterReport, reportBodyHtml, reportPanelHtml } from './presenter-report.js';
 import {
@@ -50,8 +55,12 @@ describe('the impact report', () => {
   it('labels every estimate and keeps its basis on the element', () => {
     const html = reportBodyHtml(scope({ calls: 10, verdicts: 6, failed: 2, tokensReturned: 500 }));
     expect(html).toContain('estimate');
-    expect(html).toContain('vs an agent reading the app through screenshots');
-    expect(html).toContain('vs one re-prompt cycle per defect caught');
+    // Asserted against the CONSTANT, not a copy of its wording. The basis text lives in one place
+    // (impact-savings.ts) precisely so a claim cannot be changed in one half of the codebase; a test
+    // that restates it turns that single source into two, and this one went red for saying the old
+    // words rather than for the report dropping a denominator.
+    expect(html).toContain(IMPACT_BASIS.TOKENS);
+    expect(html).toContain(IMPACT_BASIS.MINUTES);
   });
 
   it('says nothing at all before anything has been recorded', () => {
@@ -71,7 +80,9 @@ describe('what an UNLINKED user is told about the dashboard', () => {
   const withVerdicts = scope({ calls: 40, verdicts: 12, passed: 9, failed: 2, unknown: 1 });
 
   it('names the one command, once, when there is a record worth keeping', () => {
-    const html = reportBodyHtml(withVerdicts);
+    // The account state is now REQUIRED to say this. Without it the machine's status is unknown,
+    // and an unknown must not be read as signed-out — see the account-state tests beside this file.
+    const html = reportBodyHtml(withVerdicts, undefined, { signedIn: false });
     expect(html).toContain('This record stops at this machine.');
     expect(html).toContain('reticle login');
     // Once. A second mention in the same panel is where a line becomes a nag.

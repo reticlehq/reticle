@@ -139,6 +139,15 @@ export const RAW_TOOLS: ToolDef[] = [
         .describe(
           "Present ONLY when `sessions` is empty: the same answer as `why`, executable. `command` is the LITERAL command to run, sourced from this project's own package.json scripts and lockfile — it is absent, never guessed, when the project declares no dev script. `action` is one of daemon_split | start_dev_server | run_init | open_app | reopen_app. `daemon_split` outranks the rest and means the app IS running and instrumented, on a DIFFERENT daemon than the one you are attached to — do not start or re-init anything, read `reason`.",
         ),
+      lastKnown: z
+        .object({
+          sessionId: z.string(),
+          url: z.string(),
+        })
+        .optional()
+        .describe(
+          'Present ONLY when `sessions` is empty AND a tab was connected to this daemon earlier: the last sessionId and URL that tab was on when it disappeared. A route that 500s tears the page down and the SDK never reconnects — this is the last thing we knew, not a route-500 verdict. An empty list with no lastKnown is a tab that never arrived.',
+        ),
     },
     handler: async (deps) => {
       const provider = deps.realInput;
@@ -159,10 +168,14 @@ export const RAW_TOOLS: ToolDef[] = [
         // The executable half. `why` is for the human reading the transcript; this is the one the
         // agent acts on, so it never has to parse a paragraph to find a command inside it.
         const next = deps.sessions.noSessionNextAction();
+        // The last tab, when one was here. Optional-call: test stubs of SessionManager predate it.
+        const known = deps.sessions.lastKnown?.();
+        const lastKnown = undefined === known ? undefined : { sessionId: known.id, url: known.url };
         return {
           sessions,
           ...(why === undefined ? {} : { why }),
           ...(next === undefined ? {} : { next_action: next }),
+          ...(undefined === lastKnown ? {} : { lastKnown }),
         };
       }
       return { sessions };
@@ -257,6 +270,12 @@ export const RAW_TOOLS: ToolDef[] = [
         .optional()
         .describe(
           'True when a scope was given but resolved to nothing — the tree is EMPTY on purpose, not because the page is empty. Do not read an absent element as absent from the page; re-check the scope.',
+        ),
+      growthWarning: z
+        .string()
+        .optional()
+        .describe(
+          'Present when this same scope was smaller moments ago — content likely arrived after your last look, and a presence/absence conclusion drawn from that earlier snapshot may have been taken mid-load. Re-check rather than trusting the earlier read.',
         ),
     },
     // async so a synchronous resolve() failure (no session connected) surfaces as a REJECTED promise —
