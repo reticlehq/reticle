@@ -25,6 +25,11 @@ const PACKAGE_DIR = join(__dirname, '..');
 
 /** Modules with no production importer, each with the reason it is allowed to stay. */
 const DECLARED_UNWIRED: Record<string, string> = {
+  'events/adversary.ts':
+    'builds the smallest wire events the contract accepts, so the readers can be checked against a ' +
+    'client that offers nothing. It has no production caller by design — shipping a generator of ' +
+    'deliberately unhelpful input would be shipping a way to produce it. Its only importer is the ' +
+    'test beside it, which is where hostile input belongs.',
   'dev/stale-issue-guard.ts':
     'decision logic for scripts/check-stale-issues.mjs, which imports it from dist. That script is ' +
     'MANUAL: it is reachable only as the `check:stale-issues` package script, and nothing under ' +
