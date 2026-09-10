@@ -17,7 +17,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { EventType } from '@reticlehq/core';
 import { installDialogs } from './dialogs.js';
-import { asSyntheticInput } from '../actions/synthetic-input.js';
+import { asSyntheticInput } from '../actions/synthetic/synthetic-input.js';
 import type { Emit, Teardown } from './types.js';
 
 interface Emitted {

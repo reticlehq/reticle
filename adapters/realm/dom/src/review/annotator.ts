@@ -1,4 +1,4 @@
-import { isSyntheticInput } from '../actions/synthetic-input.js';
+import { isSyntheticInput } from '../actions/synthetic/synthetic-input.js';
 import { EventType } from '@reticlehq/core';
 import { isReticleUi, isReticleOverlay } from '../dom/dom-ignore.js';
 import { resolveMarkAnchor, type MarkAnchor } from './mark-anchor.js';

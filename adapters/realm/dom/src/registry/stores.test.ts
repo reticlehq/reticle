@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import * as nativeConsole from '../timers/native-console.js';
+import * as nativeConsole from '../timers/console/native-console.js';
 import {
   registerStore,
   unregisterStore,

@@ -15,7 +15,7 @@ import {
   chromiumInstallCommand,
   chromiumInstallDepsCommand,
   bundledPlaywrightVersion,
-} from '../../command/cli/doctor/chromium-hint.js';
+} from '../../command/cli/doctor/browser/chromium-hint.js';
 import type { Launcher, PooledBrowser, PooledContext, PooledPage } from './browser-pool.js';
 import { installNetworkMocks } from '../input/network-mock.js';
 

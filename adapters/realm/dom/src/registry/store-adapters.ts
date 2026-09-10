@@ -1,4 +1,4 @@
-import { nativeWarn } from '../timers/native-console.js';
+import { nativeWarn } from '../timers/console/native-console.js';
 import { markAdapterSource, type StoreLike, type StoreSubscribe } from './stores.js';
 
 /**

@@ -6,7 +6,7 @@ import {
   NATIVE_INPUT_ARG,
   SettleReason,
 } from '@reticlehq/core';
-import { asSyntheticInput } from './synthetic-input.js';
+import { asSyntheticInput } from './synthetic/synthetic-input.js';
 import { echoRef, refs } from '../dom/refs.js';
 import {
   dangerousActionContext,

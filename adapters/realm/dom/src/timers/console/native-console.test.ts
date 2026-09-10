@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { EventType } from '@reticlehq/core';
-import { installConsole } from '../observers/console.js';
-import type { Emit, Teardown } from '../observers/types.js';
+import { installConsole } from '../../observers/console.js';
+import type { Emit, Teardown } from '../../observers/types.js';
 import { nativeWarn } from './native-console.js';
 
 interface Emitted {

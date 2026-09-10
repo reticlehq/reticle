@@ -59,7 +59,7 @@ import { LOG_KIND, LOG_RESULT } from './presenter/chrome/log-kinds.js';
 import { actionVerb } from './presenter/chrome/presenter-verbs.js';
 import { str, refLabel, modeForCommand, presentStatus } from './reticle-presenter-helpers.js';
 import { resetClock } from './timers/clock.js';
-import { nativeWarn } from './timers/native-console.js';
+import { nativeWarn } from './timers/console/native-console.js';
 import { installRecorder, type RecorderHandle } from './recorder/recorder.js';
 import { Annotator } from './review/annotator.js';
 import type { Teardown } from './observers/types.js';

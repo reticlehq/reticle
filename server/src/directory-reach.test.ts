@@ -178,6 +178,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
    * earlier in this audit, on a collision introduced by this audit.
    */
   prior: [],
+  browser: [],
   peer: [],
   tape: [],
   /**
@@ -232,6 +233,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   capsule: ['dir', 'fs'],
   cli: [
     'bridge',
+    'browser',
     'capsule',
     'cloud',
     'daemon',
@@ -300,7 +302,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   license: ['config'],
   mcp: ['daemon', 'identity', 'launch', 'prior', 'resolve', 'telemetry', 'tools', 'version'],
   memory: ['cloud', 'fs', 'project', 'tools'],
-  pool: ['doctor', 'input', 'telemetry'],
+  pool: ['browser', 'input', 'telemetry'],
   project: ['cloud', 'config', 'dir', 'flows', 'fs', 'runs', 'tools'],
   runs: ['cloud', 'dir', 'flows', 'fs', 'intent', 'peer', 'project', 'telemetry', 'tools'],
   session: [
@@ -337,11 +339,11 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   tools: [
     'act',
     'annotate-notes',
+    'browser',
     'capsule',
     'crawl',
     'daemon',
     'dir',
-    'doctor',
     'domain',
     'flows',
     'fs',

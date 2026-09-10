@@ -1,7 +1,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { Presenter } from './presenter.js';
 import { HudShell } from './presenter-shell.js';
-import { asSyntheticInput } from '../actions/synthetic-input.js';
+import { asSyntheticInput } from '../actions/synthetic/synthetic-input.js';
 import { Annotator } from '../review/annotator.js';
 import { LOG_KIND } from './presenter-log.js';
 

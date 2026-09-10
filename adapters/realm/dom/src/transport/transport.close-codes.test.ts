@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { RETICLE_PROTOCOL_VERSION, MessageKind, type HelloMessage } from '@reticlehq/core';
-import * as nativeConsole from '../timers/native-console.js';
+import * as nativeConsole from '../timers/console/native-console.js';
 import { Transport } from './transport.js';
 
 /**

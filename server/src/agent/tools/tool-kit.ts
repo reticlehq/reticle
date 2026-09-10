@@ -17,7 +17,7 @@ import type { FlowStore } from '../../features/flows/flows.js';
 import type { ProjectStore } from '../../features/project/project-store.js';
 import type { AnnotationStore } from '../../features/flows/annotation-store.js';
 import type { BrowserPool } from '../../connection/pool/browser-pool.js';
-import type { ChromiumProbe } from '../../command/cli/doctor/chromium-hint.js';
+import type { ChromiumProbe } from '../../command/cli/doctor/browser/chromium-hint.js';
 
 export interface ToolDeps<Ext = unknown> {
   sessions: SessionManager;

@@ -19,7 +19,7 @@ import { installRoute } from './route.js';
 import { installDownload } from './download.js';
 import { installStoreState } from './state.js';
 import { installNetwork } from './network.js';
-import { asSyntheticInput } from '../actions/synthetic-input.js';
+import { asSyntheticInput } from '../actions/synthetic/synthetic-input.js';
 import { registerStore, unregisterStore } from '../registry/stores.js';
 import { captureMethod } from '../patching/capture-method.js';
 import type { Emit, Teardown } from './types.js';

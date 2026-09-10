@@ -14,7 +14,7 @@ import { SELF_RECOVERING_MARKER } from '../../connection/session/no-session-diag
 import {
   chromiumInstallCommand,
   bundledPlaywrightVersion,
-} from '../../command/cli/doctor/chromium-hint.js';
+} from '../../command/cli/doctor/browser/chromium-hint.js';
 
 /** Marks where an over-long message had its middle removed. Named so tests assert it by value. */
 const ELISION = '… [elided] …';

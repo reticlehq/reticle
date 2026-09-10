@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { EventType } from '@reticlehq/core';
 import { Annotator } from './annotator.js';
-import { asSyntheticInput } from '../actions/synthetic-input.js';
+import { asSyntheticInput } from '../actions/synthetic/synthetic-input.js';
 
 interface Emitted {
   type: EventType;

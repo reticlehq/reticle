@@ -17,7 +17,7 @@
 
 import { EventType } from '@reticlehq/core';
 import { observeSafely, type Emit, type Teardown } from './types.js';
-import { isSyntheticInput } from '../actions/synthetic-input.js';
+import { isSyntheticInput } from '../actions/synthetic/synthetic-input.js';
 
 /**
  * What Reticle answers, per dialog.

@@ -9,7 +9,7 @@ import {
   type ReticleEvent,
 } from '@reticlehq/core';
 import { nativeSetTimeout, nativeNow } from '../timers/native/native-timers.js';
-import { nativeWarn } from '../timers/native-console.js';
+import { nativeWarn } from '../timers/console/native-console.js';
 import { safeStringify } from '../security/serialization.js';
 
 export interface CommandOutcome {

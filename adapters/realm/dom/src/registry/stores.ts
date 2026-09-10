@@ -1,5 +1,5 @@
 import { RETICLE_RENDERS_STORE } from '@reticlehq/core';
-import { nativeWarn } from '../timers/native-console.js';
+import { nativeWarn } from '../timers/console/native-console.js';
 import { sanitizeWithReport, type TruncationReport } from '../security/serialization.js';
 
 /** Store registry — lets the agent pull live framework/store state on demand. */

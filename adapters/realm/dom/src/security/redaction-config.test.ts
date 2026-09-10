@@ -6,13 +6,13 @@ import {
 } from '@reticlehq/core';
 import { sanitizeForTransport } from './serialization.js';
 import { readStorage } from '../observers/storage.js';
-import { nativeWarn } from '../timers/native-console.js';
+import { nativeWarn } from '../timers/console/native-console.js';
 import { reticle } from '../index.js';
 
 // The SDK's own diagnostics deliberately go through the console reference captured at module load,
 // so they never become CONSOLE_WARN events the agent then reads back as app output. That also means
 // spying on `console.warn` cannot see them — mock the module instead.
-vi.mock('../timers/native-console.js', () => ({ nativeWarn: vi.fn() }));
+vi.mock('../timers/console/native-console.js', () => ({ nativeWarn: vi.fn() }));
 
 afterEach(() => {
   resetActiveRedactionPolicy();
