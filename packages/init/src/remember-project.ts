@@ -2,6 +2,7 @@ import { join } from 'node:path';
 import {
   PROJECT_REGISTRY_FILE,
   ReticleDir,
+  ProjectRegistrySchema,
   emptyProjectRegistry,
   parseProjectRegistry,
   rememberProject,
@@ -53,14 +54,50 @@ export function rememberProjectOnDisk(
   try {
     const path = join(io.homeDir(), ReticleDir.ROOT, PROJECT_REGISTRY_FILE);
     const existing = io.exists(path) ? io.readFile(path) : null;
-    const registry =
-      null === existing ? emptyProjectRegistry() : parseProjectRegistry(safeJson(existing));
+    if (null === existing) {
+      io.writeFile(
+        path,
+        `${JSON.stringify(rememberProject(emptyProjectRegistry(), projectId, directory, now), null, 2)}\n`,
+      );
+      return true;
+    }
+
+    // A registry from a version we do not know is left EXACTLY as it is.
+    //
+    // Reading one falls back to an empty registry, and for reading that is right: a cache the daemon
+    // cannot understand is one it does without, and it finds the project by looking instead. Writing
+    // that emptiness back is a different act. It turns one file we could not parse into one file
+    // holding a single project, and every other project the user has set up is gone -- during
+    // `init`, which is what somebody runs right after upgrading.
+    //
+    // Failing here costs nothing, which is the point. The caller ignores the result and this is a
+    // cache that makes a later lookup faster, so a swallowed failure should leave things as they
+    // were rather than tidy them away.
+    //
+    // A file that is not JSON at all is a different case and IS replaced. There is nothing in it to
+    // keep, nobody can repair `{ half a file` by hand, and refusing would mean this user's projects
+    // are never recorded again -- silently, because failures here are swallowed by design.
+    const raw = safeJson(existing);
+    if (fromAnotherVersion(raw)) return false;
+    const registry = parseProjectRegistry(raw);
     const next = rememberProject(registry, projectId, directory, now);
     io.writeFile(path, `${JSON.stringify(next, null, 2)}\n`);
     return true;
   } catch {
     return false;
   }
+}
+
+/**
+ * Is this a registry written by a Reticle that is not this one?
+ *
+ * True only when the file parsed as JSON and declares a version we do not use. A file that is not
+ * JSON, or declares no version, is damage rather than a message from another release.
+ */
+function fromAnotherVersion(raw: unknown): boolean {
+  if ('object' !== typeof raw || null === raw) return false;
+  const version = (raw as { version?: unknown }).version;
+  return 'number' === typeof version && !ProjectRegistrySchema.safeParse(raw).success;
 }
 
 function safeJson(raw: string): unknown {
