@@ -4,6 +4,8 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { MessageKind, RETICLE_PROTOCOL_VERSION } from './constants.js';
 import { Verified } from '../verdict/verified-constants.js';
+import { ContradictionKind } from '../verdict/findings.js';
+import { RefusalReason } from '../telemetry-refusal.js';
 
 /**
  * The written specification must describe the contract this code actually enforces.
@@ -65,6 +67,30 @@ describe('the written specification describes the contract the code enforces', (
       SPEC.includes(`version is **${String(RETICLE_PROTOCOL_VERSION)}**`),
       `openreality/SPEC.md does not say the protocol version is ${String(RETICLE_PROTOCOL_VERSION)}.`,
     ).toBe(true);
+  });
+
+  it('still says that anomalies are part of the model', () => {
+    // The part of the model that produces something nobody asked for. It is also the part most
+    // easily dropped from a document, because no caller misses it -- and dropping it would leave a
+    // specification for a tool that only answers questions it was handed.
+    expect(SPEC).toMatch(/## \d+\. Anomalies/);
+    const kinds = Object.values(ContradictionKind).length;
+    expect(
+      SPEC.includes(`${String(kinds)} kinds of contradiction`) ||
+        SPEC.includes('twenty-three kinds of contradiction'),
+      `The specification states a number of contradiction kinds that is not ${String(kinds)}.`,
+    ).toBe(true);
+  });
+
+  it('still says a realm must refuse what it did not declare', () => {
+    expect(SPEC).toMatch(/must \*\*refuse\*\*/);
+    // Named because it is the one that stops a realm doing something adjacent and calling it done.
+    expect(SPEC).toContain(RefusalReason.UNSUPPORTED);
+  });
+
+  it('still says every observation belongs to a window', () => {
+    // A verdict with no window is a claim nobody can argue with, which is the same as no claim.
+    expect(SPEC).toMatch(/scoped to a \*\*window\*\*/);
   });
 
   it('still states the rule that makes a verdict mean anything', () => {
