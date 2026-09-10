@@ -3,14 +3,16 @@ import {
   PredicateKind,
   ReticleCommand,
   THROTTLED_STARVED_NOTE,
+  capDepth,
   isSameDocument,
+  selectPath,
   type CommandResult,
   type ReticleEvent,
 } from '@reticlehq/core';
 
 import { log } from '../log.js';
 import { bindSpanContext } from '../trace.js';
-import { selectPath, capDepth } from '../session/state-select.js';
+
 import { predicateToExpectedLinks } from '../capsule/predicate-to-links.js';
 import type { ExpectedLink } from '../capsule/divergence.js';
 import { isAmbient, ambientKeyOf, type AmbientCounts } from '../journal/ambient.js';

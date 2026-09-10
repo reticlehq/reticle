@@ -12,7 +12,7 @@ import { join } from 'node:path';
  * liftable out of all of that, because somebody implementing the specification wants the rules
  * without the daemon.
  *
- * It is not liftable today. Five runtime imports cross out of it -- thirteen when this was written --
+ * It is not liftable today. Four runtime imports cross out of it -- thirteen when this was written --
  * and they are listed below
  * rather than banned, because a guard that is red the day it is written teaches people to switch it
  * off rather than to fix anything.
@@ -43,11 +43,17 @@ const CROSSINGS_TODAY: Record<string, string> = {
   // surface, which is a question about the surface and not about whether a consequence held. Both
   // were imported BY tools/ as well as importing FROM it, so the dependency already pointed there in
   // both directions.
-  'predicate.ts -> session': 'asks the live session directly',
-  'verified.ts -> session': 'asks the live session directly',
-  'predicate.ts -> capsule': 'reads stored capsules',
-  'predicate.ts -> journal': 'reads the journal',
-  'event-filters.ts -> input': 'reads input state',
+  'verified.ts -> session':
+    'wants one function, `pageTornDownWhileOn`, out of a 675-line diagnosis module. Extract the ' +
+    'function rather than move the file',
+  'predicate.ts -> capsule':
+    'converts a predicate into the links a divergence capsule walks. Takes an engine concept and ' +
+    'produces a capsule one, so it belongs at one end or the other rather than being reached across',
+  'predicate.ts -> journal':
+    'ambient-region learning, which decides when a page has settled. That is an engine question ' +
+    'implemented in the journal',
+  'event-filters.ts -> input':
+    'merges network detail onto an event, which is event processing living under input',
 };
 
 /** Runtime (non-type) imports leaving the engine, as `file -> layer`. */
