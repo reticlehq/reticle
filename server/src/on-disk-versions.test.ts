@@ -38,7 +38,9 @@ const PINNED_VERSIONS: Record<string, string> = {
   'core/src/verdict/intent.ts': 'INTENT_FILE_VERSION',
   'core/src/registry/project-registry.ts': '1',
   'core/src/verdict/verification-run.ts': 'z.literal(RUN_FILE_VERSION',
-  'core/src/wire/messages.ts': 'RETICLE_PROTOCOL_VERSION',
+  'core/src/artifacts/impact.ts': '.int().positive()',
+  'core/src/wire/messages.ts':
+    '.int().min(RETICLE_MIN_PROTOCOL_VERSION).max(RETICLE_PROTOCOL_VERSION)',
   'core/src/wire/types.ts': 'CONTRACT_FILE_VERSION,PROJECT_FILE_VERSION',
   'server/src/agent/capsule/capsule-store.ts': 'CAPSULE_VERSION',
   'server/src/features/flows/assertion-tiers-store.ts': '1',
@@ -65,16 +67,22 @@ function declaredVersions(): Record<string, string> {
     } catch {
       continue;
     }
-    // `schemaVersion:` as well as `version:`, and a union as well as a single literal. The pattern
-    // used to be `version:` alone and lowercase, so a field called `schemaVersion` was invisible --
-    // which hid the run artifact, a versioned file written to disk, from the check that exists to
-    // pin exactly those. It was found by changing that file's version and watching nothing go red.
-    const matches = [...text.matchAll(/version:\s*z\.(?:literal|union)\(([^;]+?)\)[,\n]/gi)].map(
-      (m) =>
-        (m[1] ?? '')
-          .replace(/\s+/g, ' ')
-          .replace(/^\[\s*/, '')
-          .trim(),
+    // Every shape a declared version takes: a single literal, a union of them, or a numeric range.
+    //
+    // It has been widened twice, both times because something it should have been watching turned
+    // out to be invisible. It matched `version:` in lower case only, so a field named
+    // `schemaVersion` -- the run artifact's -- was never seen. Then the protocol version became a
+    // range rather than a fixed number, which is exactly the kind of change this exists to notice,
+    // and the literal-only pattern would have dropped it silently.
+    const matches = [
+      ...text.matchAll(
+        /version:\s*z\s*\.\s*(?:literal|union)\(([^;]+?)\)[,\n]|version:\s*z\s*\.\s*number\(\)([\s\S]{0,160}?)[,\n]\s*\/?\*?/gi,
+      ),
+    ].map((m) =>
+      (m[1] ?? m[2] ?? '')
+        .replace(/\s+/g, ' ')
+        .replace(/^\[\s*/, '')
+        .trim(),
     );
     if (matches.length > 0) found[file] = matches.join(',');
   }
@@ -87,7 +95,7 @@ describe('on-disk format versions are pinned', () => {
   it('finds the versioned stores at all', () => {
     // Without this, a change to how versions are written would empty the scan and the check below
     // would pass by having nothing to compare.
-    expect(Object.keys(declared).length).toBeGreaterThanOrEqual(12);
+    expect(Object.keys(declared).length).toBeGreaterThanOrEqual(13);
   });
 
   it('no version has changed, and no store has appeared or vanished', () => {

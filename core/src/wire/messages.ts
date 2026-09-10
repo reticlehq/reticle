@@ -2,6 +2,7 @@ import { z } from 'zod';
 import {
   EventAttribution,
   EventType,
+  RETICLE_MIN_PROTOCOL_VERSION,
   RETICLE_PROTOCOL_VERSION,
   MessageKind,
   TRANSPORT_LIMITS,
@@ -104,7 +105,16 @@ export type ReticleEvent = z.infer<typeof ReticleEventSchema>;
 /** Browser announces itself to the bridge on connect. */
 export const HelloMessageSchema = z.object({
   kind: z.literal(MessageKind.HELLO),
-  protocolVersion: z.literal(RETICLE_PROTOCOL_VERSION),
+  /**
+   * The wire protocol this peer speaks.
+   *
+   * A RANGE, not a fixed number. An exact match is right while both halves ship together and wrong
+   * as soon as anything else implements this: a peer one version behind is not incompatible, it is
+   * behind. The bridge accepts anything from the oldest version it still talks to up to its own.
+   *
+   * Out of range is still a hard door, with the diagnostics that already name which side is stale.
+   */
+  protocolVersion: z.number().int().min(RETICLE_MIN_PROTOCOL_VERSION).max(RETICLE_PROTOCOL_VERSION),
   sessionId: sessionIdSchema,
   url: z.string().max(TRANSPORT_LIMITS.MAX_URL_LENGTH),
   title: z.string().max(TRANSPORT_LIMITS.MAX_TITLE_LENGTH),
@@ -154,6 +164,23 @@ export const HelloMessageSchema = z.object({
   commands: z
     .array(z.string().max(TRANSPORT_LIMITS.MAX_TOKEN_LENGTH))
     .max(TRANSPORT_LIMITS.MAX_ADAPTERS)
+    .optional(),
+  /**
+   * The wire names this peer actually speaks, so compatibility can be judged name by name.
+   *
+   * The fingerprint beside it is a hash over the whole vocabulary: it can say "same" or "different"
+   * and nothing else. An implementation that speaks part of the contract -- which is the right thing
+   * for anything that is not a browser to do -- can never produce a matching hash, and was therefore
+   * reported as skewed on every call forever.
+   *
+   * Absent means "compare the fingerprint", which is what every build in the field does today.
+   */
+  contractParts: z
+    .object({
+      commands: z.array(z.string()).max(TRANSPORT_LIMITS.MAX_ADAPTERS),
+      events: z.array(z.string()).max(TRANSPORT_LIMITS.MAX_ADAPTERS),
+      actions: z.array(z.string()).max(TRANSPORT_LIMITS.MAX_ADAPTERS),
+    })
     .optional(),
   /** Whether the app has advertised a capability registry (reticle.describe). */
   hasCapabilities: z.boolean().optional(),

@@ -43,14 +43,48 @@ export interface PeerIdentity {
   version: string | undefined;
   /** Contract fingerprint. Undefined means the peer predates the field — itself evidence of age. */
   contract: string | undefined;
+  /**
+   * The vocabulary this peer actually speaks, when it says so.
+   *
+   * Present, this is compared name by name: a peer declaring a subset is compatible. Absent, the
+   * fingerprint is all there is and the comparison stays what it always was -- which is what every
+   * SDK in the field relies on.
+   */
+  contractParts?: ContractParts | undefined;
   /** What the human runs to bring this piece into line. */
   fix: string;
+}
+
+/** The names one side of a connection speaks. */
+export interface ContractParts {
+  readonly commands: readonly string[];
+  readonly events: readonly string[];
+  readonly actions: readonly string[];
 }
 
 /** Everything a build knows about itself. */
 interface SelfIdentity {
   version: string;
   contract: string;
+  contractParts?: ContractParts | undefined;
+}
+
+/**
+ * Names the peer speaks that we have never heard of.
+ *
+ * This is the whole structural comparison, and the asymmetry is deliberate. A peer speaking FEWER
+ * names than us is implementing part of the contract, which is the correct thing for anything that
+ * is not a browser to do -- there is no touch equivalent of a console error. A peer speaking a name
+ * we do not know was built against a contract this daemon does not have, and that is a genuine
+ * mismatch: one of us is stale, and tools will behave in ways neither side reports.
+ */
+function namesWeDoNotKnow(peer: ContractParts, self: ContractParts): string[] {
+  const unknown = [
+    ...peer.commands.filter((name) => !self.commands.includes(name)),
+    ...peer.events.filter((name) => !self.events.includes(name)),
+    ...peer.actions.filter((name) => !self.actions.includes(name)),
+  ];
+  return [...new Set(unknown)].sort();
 }
 
 function versionPhrase(peer: PeerIdentity, self: SelfIdentity): string {
@@ -65,6 +99,12 @@ function versionPhrase(peer: PeerIdentity, self: SelfIdentity): string {
  * Silent when the fingerprints MATCH, whatever the versions say — that is the point: a patch bump
  * that changed no wire name is not skew, and warning about it is how a real warning gets ignored.
  *
+ * When BOTH sides say which names they speak, the comparison is structural instead: a peer that
+ * declares a subset of what we know is compatible and silent, however different the fingerprints
+ * are. That is the only relationship a third-party implementation will ever have with us, and under
+ * a hash comparison it was reported as skewed on every call, forever, with a fix that would not have
+ * fixed anything.
+ *
  * A peer with no fingerprint is treated as skewed ONLY when its version also differs from ours: the
  * field is absent exactly on builds that predate it, so "no fingerprint AND a different version" is
  * a build provably older than this daemon. With neither signal there is nothing to go on, and
@@ -72,6 +112,17 @@ function versionPhrase(peer: PeerIdentity, self: SelfIdentity): string {
  */
 export function describeSkew(peer: PeerIdentity, self: SelfIdentity): string | undefined {
   if (peer.contract !== undefined && peer.contract === self.contract) return undefined;
+
+  // Both sides said which names they speak, so compare the names rather than a hash over them.
+  if (peer.contractParts !== undefined && self.contractParts !== undefined) {
+    const unknown = namesWeDoNotKnow(peer.contractParts, self.contractParts);
+    if (0 === unknown.length) return undefined;
+    return (
+      `version skew: ${versionPhrase(peer, self)}, and ${peer.what} speaks names this daemon does ` +
+      `not know (${unknown.join(', ')}) — so it was built against a newer contract than this one. ` +
+      `Tools will behave in ways neither side reports. ${peer.fix}`
+    );
+  }
   if (peer.contract === undefined) {
     if (peer.version === undefined || peer.version === self.version) return undefined;
     return (

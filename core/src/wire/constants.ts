@@ -40,6 +40,18 @@ export const DRIVE_PATH = '/drive';
 export const RETICLE_PROTOCOL_VERSION = 1;
 
 /**
+ * The oldest protocol version this build still talks to.
+ *
+ * A range rather than a single number, because the door used to be exact: a peer one version out was
+ * refused outright. That is correct when both sides ship together and wrong the moment anything else
+ * implements this -- an SDK a user has not upgraded yet is not an incompatible SDK.
+ *
+ * Equal to the current version today, so nothing changes yet. It exists so that raising the current
+ * version is a decision about what to keep supporting, rather than an automatic break.
+ */
+export const RETICLE_MIN_PROTOCOL_VERSION = 1;
+
+/**
  * The host a CLIENT names when it dials the bridge, as opposed to the address the bridge BINDS.
  *
  * They are deliberately different values and both are correct. The daemon binds `127.0.0.1` so it can
