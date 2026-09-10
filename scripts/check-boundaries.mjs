@@ -23,7 +23,7 @@
 // package inherits the iso policy and is refused the Node externals it legitimately needs.
 //
 // `@reticlehq/electron` had been sitting in that gap. A Rust crate with no package.json is still not
-// an error: `readManifests` never sees it, so `packages/tauri` needs no tag.
+// an error: `readManifests` never sees it, so `adapters/realm/tauri` needs no tag.
 
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -193,7 +193,7 @@ function directoriesFor(glob, root) {
 /**
  * Read every package.json the workspace covers, skipping the local fixture apps.
  *
- * A directory without a manifest is not an error: `packages/tauri` is a Rust crate, which has a Cargo
+ * A directory without a manifest is not an error: `adapters/realm/tauri` is a Rust crate, which has a Cargo
  * manifest and no npm one. It has no JavaScript dependency edges, so there is nothing here to check.
  */
 function readManifests(root = REPO_ROOT) {
