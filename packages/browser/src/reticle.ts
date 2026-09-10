@@ -434,7 +434,7 @@ export class Reticle {
     this.#connected = true;
   }
 
-  /** Whether the in-page SDK is connected to the bridge (read by createReticleEmitter, P5a). */
+  /** Whether the in-page SDK is connected to the bridge (read by createReticleEmitter). */
   get connected(): boolean {
     return this.#connected;
   }

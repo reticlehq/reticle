@@ -40,6 +40,16 @@ ruleTester.run('no-internal-tags (paths)', noInternalTags, {
   ],
   invalid: [
     {
+      // A tracking code with a letter on the end. Four of these were sitting in shipped source while
+      // this rule was on and green: the pattern required a non-alphanumeric character after the
+      // digits, so `P5` was caught and `P5a` was not. The suffix is how a design document tells its
+      // parts apart, which makes it the form most likely to appear, not the least.
+      code: '/** P5c — self-registering domains. */\nconst x = 1;',
+      filename: 'packages/browser/src/registry/domains.ts',
+      errors: [{ messageId: 'internalTag', data: { tag: 'P5c' } }],
+    },
+
+    {
       code: '// ordinary',
       filename: 'packages/server/src/n5-ring-buffer.ts',
       errors: [{ messageId: 'pathTag', data: { tag: 'n5' } }],

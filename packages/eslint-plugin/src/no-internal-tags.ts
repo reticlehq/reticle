@@ -34,8 +34,19 @@ const INTERNAL_TAG_MESSAGE =
 const PATH_TAG_MESSAGE =
   "Internal reference '{{tag}}' does not belong in a file or directory name. It means nothing to a reader without the design doc — name the module after what it does.";
 
-/** `(W11)`, `B37`, `W10.3`, `N5:` — a short capital-prefixed code used as a label. */
-const TRACKING_CODE = /(?<![A-Za-z0-9])[A-Z]{1,2}\d{1,2}(?:\.\d{1,2})?(?![A-Za-z0-9])/g;
+/**
+ * `(W11)`, `B37`, `W10.3`, `N5:` — a short capital-prefixed code used as a label.
+ *
+ * The optional trailing lower-case letter is how a design document tells sibling parts apart, and it
+ * was missing here: the pattern demanded a non-alphanumeric character straight after the digits, so
+ * `P5` was caught and `P5a` was not. Four of those were sitting in shipped source while this rule was
+ * switched on and reporting nothing. The suffixed form is the one most likely to appear, not the
+ * least, because it is what a document uses once a section has more than one piece.
+ *
+ * Exactly ONE letter, and lower case. Two would start matching ordinary identifiers, and an upper-case
+ * one would catch things like `UTF8B` that are names rather than references.
+ */
+const TRACKING_CODE = /(?<![A-Za-z0-9])[A-Z]{1,2}\d{1,2}(?:\.\d{1,2})?[a-z]?(?![A-Za-z0-9])/g;
 /**
  * `§4.3` — a design-doc section reference.
  *
