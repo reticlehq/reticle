@@ -414,6 +414,9 @@ jobs:
     timeout-minutes: 5
     outputs:
       install: ${{ steps.filter.outputs.install }}
+      # Whether the install gate's OWN machinery changed, which is the only thing that can alter
+      # whether it is still able to detect a broken install. See the self-test step for why.
+      gateself: ${{ steps.filter.outputs.gateself }}
       bench: ${{ steps.filter.outputs.bench }}
       desktop: ${{ steps.filter.outputs.desktop }}
       rust: ${{ steps.filter.outputs.rust }}
@@ -440,6 +443,7 @@ jobs:
           if ! git rev-parse --verify "$BASE" >/dev/null 2>&1; then
             echo "cannot resolve $BASE — running every tier"
             echo "install=true" >> "$GITHUB_OUTPUT"
+            echo "gateself=true" >> "$GITHUB_OUTPUT"
             echo "desktop=true" >> "$GITHUB_OUTPUT"
             echo "bench=true" >> "$GITHUB_OUTPUT"
             echo "rust=true" >> "$GITHUB_OUTPUT"; exit 0
@@ -451,6 +455,7 @@ jobs:
           if [ -z "$CHANGED" ]; then
             echo "no diff against $BASE — running every tier"
             echo "install=true" >> "$GITHUB_OUTPUT"
+            echo "gateself=true" >> "$GITHUB_OUTPUT"
             echo "desktop=true" >> "$GITHUB_OUTPUT"
             echo "bench=true" >> "$GITHUB_OUTPUT"
             echo "rust=true" >> "$GITHUB_OUTPUT"; exit 0
@@ -467,6 +472,14 @@ jobs:
             echo "install=true" >> "$GITHUB_OUTPUT"
           else
             echo "install=false" >> "$GITHUB_OUTPUT"
+          fi
+          # The gate's OWN machinery, which is a narrower question than "could the install break".
+          # The self-test proves the gate can still FAIL. That ability changes when the gate, its
+          # harness, or its recorded baseline changes -- not when somebody edits the browser SDK.
+          if echo "$CHANGED" | grep -qE '^(apps/e2e/(install-gate|gate-harness|install-baseline)|\.github/workflows/ci\.yml)'; then
+            echo "gateself=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "gateself=false" >> "$GITHUB_OUTPUT"
           fi
           # The desktop battery boots a real Electron main process and BUILDS a Tauri binary from
           # Rust — the slowest job in this file — and it ran on every PR including docs-only ones.
@@ -615,7 +628,20 @@ jobs:
       # requires the gate to go red; if it passes, the gate proves nothing and the run below would be
       # a green that means nothing. check-boundaries and check-lossy-transforms already self-test in
       # CI for the same reason.
+      # Run the negative control when it can actually have broken, not on every PR.
+      #
+      # It costs 17.1 min on Windows and 8.3 on Ubuntu against 10.7 and 3.8 for the real gate, so it
+      # is 63% of this job -- and this job sets the whole pipeline's wall clock: `gate` finished two
+      # seconds after it, with everything else idle for twelve minutes.
+      #
+      # What it proves is that the gate can still FAIL, and that only changes when the gate itself
+      # changes. So: whenever the gate's own machinery is touched, and on every path that actually
+      # LANDS code (push to main, and the merge queue). A PR that broke detection without touching
+      # the gate is caught before it merges rather than at PR time -- later, but not never, and the
+      # real run below still covers every scaffold on every PR.
       - name: Install-gate self-test (a guard that has never failed is not a guard)
+        if: >-
+          needs.changes.outputs.gateself == 'true' || github.event_name == 'push' || github.event_name == 'merge_group'
         run: pnpm gate:install:self-test --only ${{ matrix.scaffold }}
       - name: Install gate (scaffold, init, boot, open, assert a session)
         run: pnpm gate:install --only ${{ matrix.scaffold }}
