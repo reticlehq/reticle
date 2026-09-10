@@ -21,6 +21,7 @@
     "test:bench": "vitest run bench/harness",
     "test:coverage": "turbo run test:coverage",
     "test:e2e": "bash apps/e2e/run-ci.sh",
+    "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test:unit",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "bench": "node bench/harness/bench-all.mjs",

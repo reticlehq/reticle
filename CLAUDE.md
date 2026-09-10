@@ -77,7 +77,9 @@ This is **one git repo** at the root (pnpm + turbo monorepo). The TS library pac
 
 > The routing below is also a table in [`docs/gates.md`](docs/gates.md) — that file is the one a human contributor reads, and it carries the "what is each gate blind to" column. If you change a gate's cost or scope, change it in both; they are the same rule stated twice on purpose, because one of the two audiences never opens the other file.
 
-**Before coding:** scan for existing code to reuse → identify the constants you'll need and add them first → write the failing test. **After coding:** refactor with tests green → check the file is still cohesive (and under the 1000-line backstop) → run `pnpm format:check && pnpm lint && pnpm typecheck && pnpm test:unit` **before committing, not chained after it** → confirm no `any`, no free strings, no `console.log`.
+**Before coding:** scan for existing code to reuse → identify the constants you'll need and add them first → write the failing test. **After coding:** refactor with tests green → check the file is still cohesive (and under the 1000-line backstop) → run **`pnpm verify`** (which is `format:check && lint && typecheck && test:unit`) **before committing, not chained after it** → confirm no `any`, no free strings, no `console.log`.
+
+**Run it as `pnpm verify`, not as four separate lines.** The `&&` is what makes a failure stop the run: pasted as separate commands, or chained with newlines, only the LAST one decides the exit code, so a red `lint` in the middle reports success. That is not hypothetical — it happened while writing this line, and the "all green" it produced was a lint error in code written seconds earlier.
 
 `format:check` is first because it is the one CI enforces that **`pnpm lint` does not run**. This checklist omitted it until 2.6.0, which is exactly how a release branch with all four heavy gates green locally still turned CI's `verify` red on six prettier warnings — and `verify` is a dependency of `e2e`, `desktop-e2e` and `install-gate`, so one unformatted file skips every expensive gate behind it. `pnpm format` writes the fixes.
 
