@@ -53,6 +53,7 @@
         "$TURBO_ROOT$/engine/src/**",
         "$TURBO_ROOT$/engine/package.json",
         "$TURBO_ROOT$/openreality/src/**",
+        "$TURBO_ROOT$/conformance/**",
         "$TURBO_ROOT$/apps/**",
         "$TURBO_ROOT$/bench/**",
         "$TURBO_ROOT$/scripts/**",

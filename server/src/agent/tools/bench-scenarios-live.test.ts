@@ -166,6 +166,11 @@ describe('every declared bench scenario is scored by something', () => {
     join(REPO, 'bench'),
     join(REPO, 'apps', 'e2e', 'specs'),
     join(REPO, 'docs'),
+    // The conformance suite scores injected defects too, and against a published specification
+    // rather than against a catch rate. It was added here after `hung-login` -- injected for a
+    // conformance scenario and driven by one -- was reported as measured by nothing, which was
+    // this list being out of date rather than a real gap.
+    join(REPO, 'conformance'),
   ];
   const SEARCH_EXT = ['.mjs', '.js', '.ts', '.json', '.md', '.mdx'];
 

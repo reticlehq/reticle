@@ -102,7 +102,7 @@ export const SCENARIOS = [
     id: 'subject-disappears-mid-window',
     profile: Profile.EFFECT,
     plant: 'The thing being watched goes away before the window closes.',
-    mustProduce: { verdict: Verdict.UNKNOWN, reason: 'observation_lost' },
+    mustProduce: { verdict: Verdict.UNKNOWN, ground: 'coverage-impeached' },
     neverProduce: Verdict.NO,
     why: 'The observer left. Blaming the app for that is the most common way a check becomes a liar.',
   },

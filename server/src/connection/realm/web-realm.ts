@@ -2,6 +2,7 @@ import {
   CHANNEL_DEFAULTS,
   type Action,
   type ActionReceipt,
+  type BlindSpot,
   BlindSpotKind,
   type Capability,
   type ChannelDescriptor,
@@ -21,6 +22,7 @@ import {
 import {
   CONTRADICTION_CHANNELS,
   ContradictionKind,
+  EventType,
   ReticleCommand,
   tierOfFinding,
 } from '@reticlehq/core';
@@ -142,6 +144,20 @@ const PAGE_CAPABILITIES: readonly Capability[] = [
  * unrecognised is reported on no channel rather than guessed onto one, because a guess here is an
  * observation attributed to a source that did not produce it.
  */
+/** A network event's correlation id, if it carries one. Events are `unknown` at this boundary. */
+function readRequestId(data: unknown): string | undefined {
+  if ('object' !== typeof data || null === data) return undefined;
+  const id = (data as { id?: unknown }).id;
+  return 'string' === typeof id ? id : undefined;
+}
+
+/** What the request was pointed at, for a blind spot a person has to read. */
+function readUrl(data: unknown): string | undefined {
+  if ('object' !== typeof data || null === data) return undefined;
+  const url = (data as { url?: unknown }).url;
+  return 'string' === typeof url ? url : undefined;
+}
+
 const CHANNEL_OF_PREFIX: Readonly<Record<string, ProtocolChannel>> = {
   net: ProtocolChannel.NET,
   ipc: ProtocolChannel.NET,
@@ -344,12 +360,16 @@ export class WebRealm extends Realm {
   }
 
   /**
-   * What could not be seen, from the two things the session already tracks.
+   * What could not be seen.
    *
-   * `impeaching` is left FALSE for both, deliberately. Whether a blind spot bears on a verdict
+   * `impeaching` is left FALSE throughout, deliberately. Whether a blind spot bears on a verdict
    * depends on which channels the claim reads, and a realm does not see the claim — deciding it
-   * here would be the observer grading the relevance of its own gaps. The adjudicator is handed
-   * the list and decides.
+   * here would be the observer grading the relevance of its own gaps. What a realm CAN do is say
+   * which channel each gap falls on, and the adjudicator matches that against the claim.
+   *
+   * That is a correction. Both halves used to defer: this said the adjudicator would decide, and
+   * the adjudicator filtered on a flag that nothing ever set. Clause 6 was unreachable, and a
+   * window that closed over a request still in flight proved things.
    */
   coverage(window: ProtocolWindow): Promise<Coverage> {
     const { session } = this.#deps;
@@ -385,8 +405,33 @@ export class WebRealm extends Realm {
     return Promise.resolve({
       window: window.id,
       observed,
-      blindSpots: [...structural, ...truncated, ...undeclared],
+      blindSpots: [...structural, ...truncated, ...undeclared, ...this.#stillInFlight(window)],
     });
+  }
+
+  /**
+   * Operations that had not finished when the window closed.
+   *
+   * A request that opened and never settled is the difference between "it did not happen" and
+   * "I stopped watching first", and only the second is true. The window's end was our choice, so
+   * an unsettled operation is a gap in the OBSERVATION and never a fault in the application —
+   * which is why it lands here rather than among the anomalies, where it could force a `no` on
+   * somebody whose backend is merely slow.
+   */
+  #stillInFlight(window: ProtocolWindow): readonly BlindSpot[] {
+    const opened = new Map<string, string>();
+    for (const event of this.#deps.session.eventsSince(window.openedAt)) {
+      const id = readRequestId(event.data);
+      if (id === undefined) continue;
+      if (event.type === EventType.NET_PENDING) opened.set(id, readUrl(event.data) ?? id);
+      else if (event.type === EventType.NET_REQUEST) opened.delete(id);
+    }
+    return [...opened.values()].map((where) => ({
+      kind: BlindSpotKind.STILL_IN_FLIGHT,
+      channel: ProtocolChannel.NET,
+      detail: `${where} had not settled when the window closed`,
+      impeaching: false,
+    }));
   }
 
   /**
@@ -413,7 +458,12 @@ export class WebRealm extends Realm {
   ): Promise<readonly Anomaly[]> {
     void observed;
     const events = this.#deps.session.eventsSince(window.openedAt);
-    const found = findContradictions(events, {});
+    // `actionSince` is not optional decoration: several rules -- the double-submit one among
+    // them -- do not run at all without it, because "the same write fired twice" is only a
+    // finding relative to ONE action. Passing `{}` left that rule switched off, and a planted
+    // double submit came back proved. In this protocol the window IS the action's extent, so
+    // its opening moment is exactly the boundary those rules are asking for.
+    const found = findContradictions(events, { actionSince: window.openedAt });
     // Synchronous underneath: the rules read a buffer that is already in memory. The interface
     // is async for a realm that has to go and ask.
     return Promise.resolve(

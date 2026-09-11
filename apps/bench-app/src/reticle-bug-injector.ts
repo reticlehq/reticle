@@ -336,6 +336,10 @@ const NET_HANG: Record<string, NetHangBug> = {
   'hung-generate': { urlContains: '/api/generate-script' },
   'hung-but-ui-done': { urlContains: '/api/generate-script', uiDone: true },
   'slow-then-drop': { urlContains: '/api/generate-script', abort: true },
+  // Sign-in that never comes back. Added for the conformance suite, which needs an operation
+  // still in flight when the window closes -- the whole catalogue above hangs `/api/generate-script`,
+  // and the only control a verification run can reach without first signing in is the sign-in.
+  'hung-login': { urlContains: '/api/login' },
 };
 
 /** Rewrite/stall responses per the net-status + net-hang registries. One fetch wrap serves both. */

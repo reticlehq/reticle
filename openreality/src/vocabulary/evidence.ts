@@ -169,7 +169,36 @@ export const CoverageSchema = z.object({
 });
 export type Coverage = z.infer<typeof CoverageSchema>;
 
-/** Does anything in this coverage fall on evidence the claim needed? */
+/**
+ * The blind spots that bear on a claim reading these channels.
+ *
+ * A spot impeaches when EITHER the implementation said so, or it names a channel the claim
+ * actually reads. The second half is the load-bearing one, and it exists because the first half
+ * alone was a mechanism nobody drove: a realm does not see the claim, so it has no honest basis
+ * for setting the flag, and every implementation written against this specification set it to
+ * `false` everywhere and documented that the adjudicator would decide. The adjudicator was
+ * filtering on the flag. Between the two of them the whole of clause 6 was unreachable, and a
+ * window that closed over an operation still in flight was proving things.
+ *
+ * A spot naming NO channel can only impeach by its flag: it is a statement about the observation
+ * as a whole, and only the implementation knows what it bears on.
+ */
+export function impeachingSpots(
+  coverage: Coverage,
+  channelsRead: readonly string[],
+): readonly BlindSpot[] {
+  const needed = new Set(channelsRead);
+  return coverage.blindSpots.filter(
+    (spot) => spot.impeaching || (spot.channel !== undefined && needed.has(spot.channel)),
+  );
+}
+
+/**
+ * Does anything in this coverage fall on evidence the claim needed?
+ *
+ * The claim-blind form, kept for a caller that has no claim to hand. Prefer `impeachingSpots`:
+ * this one can only see what an implementation was willing to declare about itself.
+ */
 export function isImpeached(coverage: Coverage): boolean {
   return coverage.blindSpots.some((spot) => spot.impeaching);
 }

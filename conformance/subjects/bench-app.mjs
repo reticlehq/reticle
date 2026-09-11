@@ -43,7 +43,7 @@ export const BENCH_APP_SUBJECT = Object.freeze({
 
   /** One action, two identical writes, against a claim that named one. */
   'double-submit-against-count-one': {
-    bug: 'double-submit',
+    bug: 'double-login',
     act: { capability: 'act', target: 'testid=login-submit', verb: 'click' },
     claim: 'exactly one sign-in request was made',
     reads: ['net'],
@@ -52,12 +52,13 @@ export const BENCH_APP_SUBJECT = Object.freeze({
   /**
    * The thing being watched goes away before the window closes.
    *
-   * `slow-then-drop` starts a request and loses it. The observer leaves, which is a fact about
-   * the observation and never a fault in the app -- a scenario that exists because blaming the
-   * app for that is the commonest way a check becomes a liar.
+   * `hung-login` starts a request and never finishes it, so the window closes over an operation
+   * still in flight. That is a fact about the OBSERVATION and never a fault in the app -- a
+   * scenario that exists because blaming the app for it is the commonest way a check becomes a
+   * liar.
    */
   'subject-disappears-mid-window': {
-    bug: 'slow-then-drop',
+    bug: 'hung-login',
     act: { capability: 'act', target: 'testid=login-submit', verb: 'click' },
     claim: 'the sign-in completed',
     reads: ['net'],

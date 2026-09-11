@@ -9,7 +9,7 @@ import {
   canSupportConsequence,
   type Coverage,
   type Evidence,
-  isImpeached,
+  impeachingSpots,
 } from '../vocabulary/evidence.js';
 import { type Window, closedCleanly } from '../vocabulary/realm-surface.js';
 import { type Anomaly, AnomalyTier, Verdict } from '../vocabulary/verdict.js';
@@ -163,9 +163,13 @@ export function adjudicate(input: AdjudicationInput): Adjudication {
   // 6. Something the claim needed was not visible. Honest implementations declare more of these,
   //    and only the IMPEACHING ones count -- see BlindSpot.impeaching, without which honesty is
   //    punished and an implementation learns to declare less.
-  if (isImpeached(coverage)) {
-    const spots = coverage.blindSpots.filter((s) => s.impeaching).map((s) => s.detail);
-    return { verdict: Verdict.UNKNOWN, ground: Ground.COVERAGE_IMPEACHED, reasons: spots };
+  const impeaching = impeachingSpots(coverage, channelsNeeded(claim));
+  if (impeaching.length > 0) {
+    return {
+      verdict: Verdict.UNKNOWN,
+      ground: Ground.COVERAGE_IMPEACHED,
+      reasons: impeaching.map((s) => s.detail),
+    };
   }
 
   // 7. An absence-derived anomaly. Never a fault; always a reason to look again.

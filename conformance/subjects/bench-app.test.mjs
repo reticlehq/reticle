@@ -43,7 +43,7 @@ describe('the subject only claims scenarios that exist', () => {
 describe('planting is a URL, and an unplantable scenario says so', () => {
   it('adds the injected bug for a scenario that needs one', () => {
     expect(plantUrl('http://app', 'double-submit-against-count-one')).toContain(
-      'reticle-bug=double-submit',
+      'reticle-bug=double-login',
     );
   });
 
