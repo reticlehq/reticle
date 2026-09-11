@@ -629,7 +629,11 @@ const MAX_NAME_NEAR_MISSES = 5;
  * keeping the match exact was meant to avoid.
  */
 function nameNearMisses(container: HTMLElement, query: ElementQuery): string[] {
-  const role = QueryBy.ROLE === query.by ? query.value : undefined;
+  // BOTH spellings of the same query. `findIn` resolves `{ by: 'role', value, name }` and
+  // `{ role, name }` through one function, and its comment says the two forms must not disagree
+  // about what is findable -- but the hint read only the first, so the structured spelling missed
+  // in silence while the by/value spelling explained itself. Same query, same page, two answers.
+  const role = QueryBy.ROLE === query.by ? query.value : query.role;
   const wanted = query.name;
   if (role === undefined || wanted === undefined || 0 === wanted.length) return [];
   const target = normaliseVisibleText(wanted).toLowerCase();

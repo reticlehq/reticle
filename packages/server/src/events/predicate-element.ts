@@ -26,6 +26,7 @@ import {
 import type { PredicateSession } from './predicate.js';
 import { describeTestidMiss } from './testid-near-miss.js';
 import { describeSplitTextMiss } from './split-text-miss.js';
+import { describeNameNearMiss } from './name-near-miss.js';
 
 export async function matchOnce(
   session: PredicateSession,
@@ -239,7 +240,12 @@ export async function evalElement(
   // element that never rendered. Naming the container is the difference between a retry and a bug
   // report against working code. See split-text-miss.ts.
   const splitText = describeSplitTextMiss(match.hint?.splitText, query.text);
-  const clause = splitText ?? (alsoHere === undefined || '' === alsoHere ? undefined : alsoHere);
+  // Same asymmetry one field over: an exact role+name miss reads like an element that never
+  // rendered, while the identical failure through reticle_query lists the labels that role really
+  // has. The browser computed them on its way to reporting zero. See name-near-miss.ts.
+  const nearMiss = describeNameNearMiss(match.hint?.nameNearMiss, query.name, query.role);
+  const clause =
+    splitText ?? nearMiss ?? (alsoHere === undefined || '' === alsoHere ? undefined : alsoHere);
   const suffix = clause === undefined ? '' : ` — ${clause}`;
   return {
     pass: false,
