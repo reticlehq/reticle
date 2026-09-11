@@ -102,13 +102,33 @@ export function conformanceClient(realm: WebRealm, now: () => number): Conforman
   /** The window the last action was performed inside, handed to the next `verify`. */
   let open: ReturnType<WebRealm['openWindow']> | undefined;
   return {
-    hello() {
-      // Synchronous underneath: both answers are already declared. The interface is async for an
-      // implementation that has to go and ask.
-      return Promise.resolve({
+    async hello() {
+      // `describe` is REQUIRED by the interface and was called by nothing in this binding, so an
+      // implementation could have thrown from it and still earned a profile. It is exercised
+      // here rather than in a scenario because it is not a claim about an application: it is the
+      // question "can this implementation read its own subject at all", which belongs with the
+      // other two handshake answers.
+      //
+      // A failure refuses the run instead of scoring it. That is deliberately unlike a plant we
+      // cannot apply, which is ABSENT: ABSENT means *we* could not ask, and this means the
+      // implementation does not answer something the interface obliges it to.
+      let described: unknown;
+      try {
+        described = await realm.describe();
+      } catch (error) {
+        throw new Error(
+          `the implementation's describe() threw, and the interface requires it: ${String(error)}`,
+        );
+      }
+      if (described === undefined) {
+        throw new Error("the implementation's describe() answered nothing, and it is required");
+      }
+      // Both answers below are already declared; the interface is async for an implementation
+      // that has to go and ask.
+      return {
         channels: realm.channels().map((c) => c.id),
         commands: realm.capabilities().map((c) => c.name),
-      });
+      };
     },
 
     locate(query) {
