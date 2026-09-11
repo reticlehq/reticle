@@ -193,6 +193,26 @@ const MUTATING_COMMANDS: ReadonlySet<string> = new Set(
  * listed one. Filing an anomaly under the wrong kind is worse than filing it under an
  * unfamiliar name, because the wrong kind is believed.
  */
+/**
+ * Findings the specification models as COVERAGE rather than as anomalies.
+ *
+ * Both describe a gap in what was observed, not a fault in the application, and the protocol
+ * gives each a `BlindSpotKind`: `consequence-elsewhere` is `effect-elsewhere`, and
+ * `request-never-settled` is `still-in-flight`. Reporting them as anomalies put them in the
+ * wrong plane -- and `request-never-settled` was reported TWICE, once here and once as the
+ * blind spot `coverage()` already emits.
+ *
+ * The verdict is unchanged either way, because both were absence-derived and both routes
+ * downgrade to `unknown`. The plane is what matters: the specification separates "I could not
+ * see" from "something is wrong" precisely so that an unsettled request cannot read as a fault,
+ * and an implementation that files it under anomalies has agreed with the words and not the
+ * shape.
+ */
+const REPORTED_AS_COVERAGE: ReadonlySet<string> = new Set<string>([
+  ContradictionKind.CONSEQUENCE_ELSEWHERE,
+  ContradictionKind.REQUEST_NEVER_SETTLED,
+]);
+
 const PROTOCOL_ANOMALY: Readonly<Record<string, string>> = {
   [ContradictionKind.UI_ADVANCED_REQUEST_FAILED]: AnomalyKind.ADVANCED_OVER_FAILURE,
   [ContradictionKind.SIGNAL_CONTRADICTED]: AnomalyKind.CLAIMED_OVER_FAILURE,
@@ -202,6 +222,12 @@ const PROTOCOL_ANOMALY: Readonly<Record<string, string>> = {
   [ContradictionKind.UNIT_MISMATCH]: AnomalyKind.VALUE_NOT_APPLIED,
   [ContradictionKind.WRITE_FIELD_IGNORED]: AnomalyKind.VALUE_NOT_APPLIED,
   [ContradictionKind.DUPLICATE_REQUEST]: AnomalyKind.DUPLICATED_EFFECT,
+  // The same kind, and the TIER carries the difference: Reticle grades this one `advisory`,
+  // which the specification defines as "true, worth reporting, and not about the claim. Decides
+  // nothing." It was falling through to `x-duplicate-request-unrelated` for want of a line,
+  // which named a kind no reader of the protocol knows while the protocol already had the exact
+  // pairing.
+  [ContradictionKind.DUPLICATE_REQUEST_UNRELATED]: AnomalyKind.DUPLICATED_EFFECT,
   [ContradictionKind.STALE_RESPONSE_APPLIED]: AnomalyKind.STALE_APPLIED,
   [ContradictionKind.ACTION_HAD_NO_EFFECT]: AnomalyKind.NO_EFFECT,
   [ContradictionKind.FAILURE_MISATTRIBUTED]: AnomalyKind.FAULT_MISATTRIBUTED,
@@ -397,8 +423,32 @@ export class WebRealm extends Realm {
     return Promise.resolve({
       window: window.id,
       observed,
-      blindSpots: [...structural, ...truncated, ...undeclared, ...this.#stillInFlight(window)],
+      blindSpots: [
+        ...structural,
+        ...truncated,
+        ...undeclared,
+        ...this.#stillInFlight(window),
+        ...this.#effectElsewhere(window),
+      ],
     });
+  }
+
+  /**
+   * A consequence that happened somewhere this observer cannot follow.
+   *
+   * Reticle finds this and used to report it as an anomaly. The specification models it as a
+   * blind spot, which is the same judgement in the right plane: nothing here says the
+   * application is wrong, only that the proof is somewhere we cannot reach.
+   */
+  #effectElsewhere(window: ProtocolWindow): readonly BlindSpot[] {
+    const events = this.#deps.session.eventsSince(window.openedAt);
+    return findContradictions(events, { actionSince: window.openedAt })
+      .filter((c) => ContradictionKind.CONSEQUENCE_ELSEWHERE === c.kind)
+      .map((c) => ({
+        kind: BlindSpotKind.EFFECT_ELSEWHERE,
+        detail: c.detail ?? c.counter,
+        impeaching: false,
+      }));
   }
 
   /**
@@ -455,7 +505,9 @@ export class WebRealm extends Realm {
     // finding relative to ONE action. Passing `{}` left that rule switched off, and a planted
     // double submit came back proved. In this protocol the window IS the action's extent, so
     // its opening moment is exactly the boundary those rules are asking for.
-    const found = findContradictions(events, { actionSince: window.openedAt });
+    const found = findContradictions(events, { actionSince: window.openedAt }).filter(
+      (c) => !REPORTED_AS_COVERAGE.has(c.kind),
+    );
     // Synchronous underneath: the rules read a buffer that is already in memory. The interface
     // is async for a realm that has to go and ask.
     return Promise.resolve(
