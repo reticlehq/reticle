@@ -91,7 +91,12 @@ function main() {
   for (const [name, schema] of Object.entries(built)) {
     writeFileSync(join(OUT, `${name}.json`), `${JSON.stringify(schema, null, 2)}\n`);
   }
-  console.log(`wrote ${Object.keys(built).length} OVP schemas to dist/schema/`);
+  // stderr, not stdout. This runs inside `prepack`, so anything printed on stdout is prepended
+  // to the output of whatever invoked the pack, and `npm pack --json` stops being parseable —
+  // which is how you would script a tarball size check or a supply-chain audit on the package
+  // whose entire purpose is being audited by other people. `core` learned this and wrote the
+  // reason down; this package was added afterwards and did not inherit it.
+  process.stderr.write(`wrote ${String(Object.keys(built).length)} OVP schemas to dist/schema/\n`);
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) main();
