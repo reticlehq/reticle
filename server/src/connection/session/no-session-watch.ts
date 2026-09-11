@@ -10,13 +10,13 @@
  * daemon that outlives the agent by hours has no business scanning ports it does not need.
  */
 
-import { probeDevServers, probeDevServerStates } from './dev-server-probe.js';
+import { probeDevServers, probeDevServerStates } from './dev-server/dev-server-probe.js';
 import type { NoSessionReason } from '@reticlehq/core/telemetry';
 import { homedir } from 'node:os';
 import { registeredElsewhere } from './recall/registered-projects.js';
 import { explainNoSession } from './no-session-diagnosis.js';
 import type { NoSessionFacts } from './no-session-diagnosis.js';
-import { detectDevCommand } from './dev-command.js';
+import { detectDevCommand } from './dev-server/dev-command.js';
 import { nextActionFor, renderNextAction } from './no-session-next-action.js';
 import type { NoSessionNextAction } from './no-session-next-action.js';
 import {

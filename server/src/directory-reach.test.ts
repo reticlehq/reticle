@@ -394,6 +394,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   proxy: ['daemon', 'identity', 'telemetry'],
   runs: ['artifact', 'cloud', 'dir', 'flows', 'intent', 'peer', 'project', 'telemetry', 'tools'],
   session: [
+    'dev-server',
     'args',
     'timing',
     'facts',
@@ -477,6 +478,14 @@ const REACHES_FOR: Record<string, readonly string[]> = {
    * the launcher, the mcp surface and the port table.
    */
   drive: ['daemon', 'launch', 'mcp', 'ports'],
+  /**
+   * This project's dev server: the literal command that starts it, read from the project's own
+   * scripts, and which of the usual ports already have something listening. Named dev-server
+   * rather than dev because command/dev already owns that basename, and the reach graph keys on
+   * the basename alone -- two directories called dev are one node to it, and a mutual pair
+   * between them could not be reported at all.
+   */
+  'dev-server': ['recall', 'resolve'],
   tools: [
     'args',
     'timing',

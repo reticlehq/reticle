@@ -14,7 +14,7 @@
  */
 
 import { NoSessionAction, ReticleEnv } from '@reticlehq/core';
-import type { DevCommand } from './dev-command.js';
+import type { DevCommand } from './dev-server/dev-command.js';
 
 /** The executable half of the no-session payload. */
 export interface NoSessionNextAction {
