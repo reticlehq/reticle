@@ -10,17 +10,20 @@ Reticle is the **proof layer for AI agents** — it verifies a running web app f
 
 ```
 core          @reticlehq/core         — bottom-of-graph foundation: wire contract, constants, zod schemas (deps: zod)
+openreality   @reticlehq/openreality  — the Open Verification Protocol: vocabulary, rules, `Realm`, `adjudicate()` (deps: zod)
+engine        @reticlehq/engine       — the rules that decide a verdict, with no browser, daemon or CLI attached
+conformance   —                       — drives the protocol's own scenarios against an implementation (PRIVATE, not published)
 adapters/realm/dom       @reticlehq/browser      — instrumentation SDK embedded in the app (DOM-side)
 server        @reticlehq/server       — bridge + MCP server, the `reticle` CLI (Node-side)
 init          @reticlehq/init         — project scaffolder: `reticle init`'s codemod, no runtime (Node-side)
-packages/react         @reticlehq/react        — React adapter: DOM ref -> component -> source file
-packages/vite-plugin   @reticlehq/vite-plugin  — Vite integration: stamps source + auto-injects connect()
-packages/babel-plugin  @reticlehq/babel-plugin — stamps data-reticle-source (source mapping, React 19)
-packages/next          @reticlehq/next         — Next.js source mapping (keeps SWC) via withReticle (CJS)
-packages/electron      @reticlehq/electron     — Electron main-process adapter (IPC observer, capture)
-packages/tauri         reticle-tauri           — Tauri capture backend (RUST — outside every JS gate)
+adapters/framework/react  @reticlehq/react        — React adapter: DOM ref -> component -> source file
+adapters/build/vite       @reticlehq/vite-plugin  — Vite integration: stamps source + auto-injects connect()
+adapters/build/babel-plugin  @reticlehq/babel-plugin — stamps data-reticle-source (source mapping, React 19)
+adapters/build/next       @reticlehq/next         — Next.js source mapping (keeps SWC) via withReticle (CJS)
+adapters/realm/electron   @reticlehq/electron     — Electron main-process adapter (IPC observer, capture)
+adapters/realm/tauri      reticle-tauri           — Tauri capture backend (RUST — outside every JS gate)
 spec-runner          @reticlehq/test         — spec runner + matchers for CI (peer vitest)
-eslint-plugin @reticlehq/eslint-plugin — dev-only lint rule: state changed ⇒ signal fired
+adapters/lint/eslint  @reticlehq/eslint-plugin — dev-only lint rule: state changed ⇒ signal fired
 apps/bench-app         @reticlehq/bench-app    — integration proof (Vite + React) AND the primary benchmark target
 apps/api               @reticlehq/api          — support infra: backend the web e2e battery drives against
 apps/next-smoke        @reticlehq/next-smoke   — integration proof: Next.js 15 App Router, RSC, SWC source mapping
