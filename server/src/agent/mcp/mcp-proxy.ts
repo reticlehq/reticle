@@ -34,7 +34,7 @@ import {
   OnDrop,
   OnRequest,
 } from './proxy/proxy-lifecycle.js';
-import { describePresence, probePresence } from '../../command/daemon/port-presence.js';
+import { describePresence, probePresence } from '../../command/daemon/binding/port-presence.js';
 import { flushProxySessionMetrics } from '../../telemetry/proxy-telemetry.js';
 /**
  * The same `/status` probe `doctor`, `status` and `kill` ask with. Reused rather than re-written:

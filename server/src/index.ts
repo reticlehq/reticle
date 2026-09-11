@@ -36,7 +36,7 @@ import { setBrowserMode, BrowserMode } from './telemetry/browser-mode.js';
 import type { NetworkDetail } from './connection/input/network-detail.js';
 import { replayNamedFlow } from './features/flows/flow-tools.js';
 import { createSharedServer } from './http-server.js';
-import { openLoopbackAlias } from './command/daemon/loopback-alias.js';
+import { openLoopbackAlias } from './command/daemon/binding/loopback-alias.js';
 import { reportAppInstrumented } from './telemetry/app-instrumented.js';
 import { resolveBridgeSecurityWithAutoToken } from './connection/bridge/bridge-security.js';
 import { Bridge } from './connection/bridge/bridge.js';

@@ -12,7 +12,7 @@
  * boot uses; this is just the wake path finally asking it.
  */
 
-import { PortPresence } from './port-presence.js';
+import { PortPresence } from './binding/port-presence.js';
 import { adoptable } from './daemon-resolve.js';
 
 export const WakeAction = {

@@ -15,7 +15,7 @@ import {
   probePresence,
   presenceIsUsable,
   describePresence,
-} from '../daemon/port-presence.js';
+} from '../daemon/binding/port-presence.js';
 import {
   waitForDaemon,
   startMcpProxy,
@@ -28,7 +28,7 @@ import { readProjectId } from './ports/resolve/cli-port.js';
 import { resolveMcpPort, daemonProjectAt } from '../daemon/daemon-resolve.js';
 import { daemonSpawnArgs } from './daemon-start-options.js';
 import { WakeAction, decideWake } from '../daemon/wake-decision.js';
-import { pickDaemonPortToBind } from '../daemon/free-port.js';
+import { pickDaemonPortToBind } from '../daemon/binding/free-port.js';
 import { fetchStatus } from './launch/cli-launch.js';
 import { migrateApprovals } from '../setup/approval-migration.js';
 import { ReticleEnv } from '@reticlehq/core';

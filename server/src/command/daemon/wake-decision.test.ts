@@ -13,7 +13,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { PortPresence } from './port-presence.js';
+import { PortPresence } from './binding/port-presence.js';
 import { WakeAction, decideWake } from './wake-decision.js';
 
 describe('waking onto a port that already has a daemon', () => {

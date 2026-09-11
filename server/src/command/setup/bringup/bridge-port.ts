@@ -10,7 +10,7 @@
  * fact told to somebody installing, and it has to say what the bridge IS: that sentence is what
  * makes "no session appeared" mean something.
  */
-import { PortPresence } from '../../daemon/port-presence.js';
+import { PortPresence } from '../../daemon/binding/port-presence.js';
 
 /** The refusal to print, or undefined when the port is usable. */
 export function bridgeOccupied(presence: PortPresence, port: number): string | undefined {

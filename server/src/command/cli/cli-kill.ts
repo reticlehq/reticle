@@ -18,7 +18,7 @@
  * user actually wants freed, and falls back to the pid file only where the lookup cannot run.
  */
 
-import { PortPresence, probePresence } from '../daemon/port-presence.js';
+import { PortPresence, probePresence } from '../daemon/binding/port-presence.js';
 import { isAlive, readPid, removePid } from '../daemon/daemon.js';
 import { probeDaemon } from '../../agent/mcp/mcp-proxy.js';
 import { log } from '../../log.js';

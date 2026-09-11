@@ -18,7 +18,7 @@
  * thing it claims to guard.
  */
 
-import { PortPresence } from '../../../command/daemon/port-presence.js';
+import { PortPresence } from '../../../command/daemon/binding/port-presence.js';
 
 /** What to do when the SSE stream drops. */
 export const OnDrop = {

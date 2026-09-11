@@ -20,7 +20,7 @@ import {
   OnDrop,
   OnRequest,
 } from './proxy-lifecycle.js';
-import { PortPresence } from '../../../command/daemon/port-presence.js';
+import { PortPresence } from '../../../command/daemon/binding/port-presence.js';
 
 describe('onStreamDrop — a dropped stream is not demand', () => {
   it('reattaches when a Reticle daemon is already listening', () => {

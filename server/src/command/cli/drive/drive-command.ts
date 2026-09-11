@@ -9,7 +9,7 @@
 
 import { start, type StartOptions } from '../../../index.js';
 import { log } from '../../../log.js';
-import { probePresence, describePresence } from '../../daemon/port-presence.js';
+import { probePresence, describePresence } from '../../daemon/binding/port-presence.js';
 import { probeDaemon } from '../../../agent/mcp/mcp-proxy.js';
 import { readPid } from '../../daemon/daemon.js';
 import { fetchStatus } from '../launch/cli-launch.js';

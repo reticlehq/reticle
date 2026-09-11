@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { ReticleEnv } from '@reticlehq/core';
 import { readPid, reticleStateHome } from '../daemon/daemon.js';
-import { PortPresence, probePresence } from '../daemon/port-presence.js';
+import { PortPresence, probePresence } from '../daemon/binding/port-presence.js';
 import { probeDaemon } from '../../agent/mcp/mcp-proxy.js';
 import { fetchStatus } from './launch/cli-launch.js';
 import { daemonLine, type DaemonIdentity } from './doctor/doctor-daemon-line.js';

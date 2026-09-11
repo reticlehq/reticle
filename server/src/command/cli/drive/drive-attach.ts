@@ -31,7 +31,7 @@
 
 import * as http from 'node:http';
 import { DRIVE_PATH, LOOPBACK_HOST } from '@reticlehq/core';
-import { PortPresence } from '../../daemon/port-presence.js';
+import { PortPresence } from '../../daemon/binding/port-presence.js';
 
 /** What `drive` should do about the port, given what is on it. */
 export const DriveMode = {

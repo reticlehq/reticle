@@ -19,7 +19,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { OnDrop, onStreamDrop } from './proxy/proxy-lifecycle.js';
-import { PortPresence } from '../../command/daemon/port-presence.js';
+import { PortPresence } from '../../command/daemon/binding/port-presence.js';
 
 describe('what the proxy does with the port after a drop', () => {
   it('reattaches only to a port that answered as a Reticle daemon', () => {

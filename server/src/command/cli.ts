@@ -61,7 +61,7 @@ import {
   probePresence,
   presenceIsUsable,
   describePresence,
-} from './daemon/port-presence.js';
+} from './daemon/binding/port-presence.js';
 import { waitForDaemon, probeDaemon } from '../agent/mcp/mcp-proxy.js';
 import {
   installDaemonResilience,

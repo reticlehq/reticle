@@ -152,7 +152,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
    * Getting something running and waiting for it: the bridge port, the daemon, the dev server,
    * the relaunch. Everything `reticle init` does between writing files and having a session.
    */
-  bringup: ['cli', 'daemon', 'launch', 'mcp'],
+  bringup: ['binding', 'cli', 'daemon', 'launch', 'mcp'],
   /**
    * What the daemon remembers between sessions: which projects have registered, what a previous
    * connection looked like, whether an address smells like somebody's dev server.
@@ -275,6 +275,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   ],
   capsule: ['dir', 'fs'],
   cli: [
+    'binding',
     'suite',
     'change',
     'stores',
@@ -305,6 +306,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   ],
   cloud: ['cli', 'fs', 'intent'],
   command: [
+    'binding',
     'drive',
     'cli',
     'daemon',
@@ -322,7 +324,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
     'update',
   ],
   crawl: ['args', 'project', 'tools', 'facts'],
-  daemon: ['telemetry'],
+  daemon: ['binding', 'telemetry'],
   domain: ['args', 'dir', 'flows', 'oracles', 'project', 'tools'],
   ee: ['license'],
   flows: [
@@ -369,6 +371,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   journal: ['artifact', 'dir', 'fs', 'project', 'runs'],
   license: ['config'],
   mcp: [
+    'binding',
     'daemon',
     'faults',
     'identity',
@@ -391,7 +394,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   // `telemetry` arrived with `mcp-post-transport`, which is the proxy's POST leg and had been
   // filed beside the proxy rather than in it. Moving it in adds an edge and removes a lie about
   // where that code lives; the count is unchanged either way.
-  proxy: ['daemon', 'identity', 'telemetry'],
+  proxy: ['binding', 'daemon', 'identity', 'telemetry'],
   runs: ['artifact', 'cloud', 'dir', 'flows', 'intent', 'peer', 'project', 'telemetry', 'tools'],
   session: [
     'dev-server',
@@ -459,7 +462,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
    * is why setup no longer reaches bridge, proxy or telemetry at all — those three reaches were
    * these two files and nothing else.
    */
-  init: ['bridge', 'bringup', 'daemon', 'launch', 'proxy', 'setup', 'telemetry', 'terminal'],
+  init: ['binding', 'bridge', 'bringup', 'launch', 'proxy', 'setup', 'telemetry', 'terminal'],
   /**
    * A file changed: which flows must re-verify, what the gate does about it, and how a
    * save-heavy editor's burst becomes one flush. Four files that import nothing whatsoever,
@@ -477,7 +480,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
    * port itself, which is the whole reason the two files exist and why they reach the daemon,
    * the launcher, the mcp surface and the port table.
    */
-  drive: ['daemon', 'launch', 'mcp', 'ports'],
+  drive: ['binding', 'daemon', 'launch', 'mcp', 'ports'],
   /**
    * This project's dev server: the literal command that starts it, read from the project's own
    * scripts, and which of the usual ports already have something listening. Named dev-server
@@ -486,6 +489,14 @@ const REACHES_FOR: Record<string, readonly string[]> = {
    * between them could not be reported at all.
    */
   'dev-server': ['recall', 'resolve'],
+  /**
+   * The address the daemon lives at: a port this machine will actually let us bind, the IPv6
+   * loopback alias that makes `localhost` reach it on every platform, and the three-state answer
+   * to what is already on the bridge port. Eight directories reach these three files and they
+   * import nothing at all, which is why they were the most-reached flat files in the package.
+   * Naming them also untangled init, which no longer reaches daemon for anything else.
+   */
+  binding: [],
   tools: [
     'args',
     'timing',

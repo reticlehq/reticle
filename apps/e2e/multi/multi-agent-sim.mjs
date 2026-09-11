@@ -97,7 +97,7 @@ function resolvePortFor(cwd, requested) {
     process.execPath,
     ['-e', `
       const { resolveMcpPort } = require(${JSON.stringify(join(ROOT, 'server/dist/command/daemon/daemon-resolve.js'))});
-      const { pickDaemonPortToBind } = require(${JSON.stringify(join(ROOT, 'server/dist/command/daemon/free-port.js'))});
+      const { pickDaemonPortToBind } = require(${JSON.stringify(join(ROOT, 'server/dist/command/daemon/binding/free-port.js'))});
       const net = require('node:net');
       const open = (p) => new Promise((res) => { const s = new net.Socket(); s.setTimeout(600);
         s.on('connect',()=>{s.destroy();res(true)}); s.on('error',()=>res(false));
