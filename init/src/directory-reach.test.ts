@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { mutualPairs, nameCollisions, reaches } from '../../scripts/directory-reach.mjs';
+import {
+  directories,
+  mutualPairs,
+  nameCollisions,
+  reaches,
+} from '../../scripts/directory-reach.mjs';
 
 /**
  * The scaffolder's directories, held to the rule the other four packages are held to.
@@ -47,6 +52,16 @@ const MUTUAL_PAIRS_TODAY = 3;
 describe('the scaffolder knows only what it is allowed to know', () => {
   it('finds directories to check, so a passing run cannot mean it read nothing', () => {
     expect(reaches(INIT).size).toBeGreaterThan(3);
+  });
+
+  it('has 7 directories, and each one was a decision', () => {
+    // the scaffolder. The seventh is detect/declared, which holds the two things the developer states outright rather than the ones init works out.
+    //
+    // Recorded by EQUALITY, not as a floor. The check above only proves the scan read
+    // something; it stays green when a directory appears, and appearing unnoticed is how a
+    // grouping gets made without anybody looking at what it did to the shape of the package.
+    // Adding or removing one here means writing the new number down in the same commit.
+    expect(directories(INIT).length).toBe(7);
   });
 
   it('has no two directories sharing a basename', () => {

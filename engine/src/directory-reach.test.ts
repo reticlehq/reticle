@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { mutualPairs, nameCollisions, reaches } from '../../scripts/directory-reach.mjs';
+import {
+  directories,
+  mutualPairs,
+  nameCollisions,
+  reaches,
+} from '../../scripts/directory-reach.mjs';
 
 /**
  * The rules package, held to the rule the other two are held to.
@@ -54,6 +59,16 @@ describe('the rules know only what they are allowed to know', () => {
     // this file passes trivially against an empty graph, so a guard that silently read nothing
     // would report a perfect score forever.
     expect(reaches(ENGINE).size).toBeGreaterThan(2);
+  });
+
+  it('has 5 directories, and each one was a decision', () => {
+    // carved out of server deliberately, and nothing here is mutual. Four of these five are wildcard export subpaths, so their FILENAMES are published API and a rename is a breaking change — see public-subpaths-are-pinned.test.ts.
+    //
+    // Recorded by EQUALITY, not as a floor. The check above only proves the scan read
+    // something; it stays green when a directory appears, and appearing unnoticed is how a
+    // grouping gets made without anybody looking at what it did to the shape of the package.
+    // Adding or removing one here means writing the new number down in the same commit.
+    expect(directories(ENGINE).length).toBe(5);
   });
 
   it('has no two directories sharing a basename', () => {
