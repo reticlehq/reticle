@@ -16,7 +16,7 @@
 import { describe, expect, it } from 'vitest';
 import { ReticleCommand } from '@reticlehq/core';
 import { crawl } from './crawl.js';
-import { sessionReplacedReason } from '../../connection/session/session-replaced.js';
+import { sessionReplacedReason } from '../../connection/session/facts/session-replaced.js';
 
 /** A page with two links, whose first click reconnects the SDK the way a real page load does. */
 function mpaSession(): { session: Parameters<typeof crawl>[0]; clicks: () => number } {

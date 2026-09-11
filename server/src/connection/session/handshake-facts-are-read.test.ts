@@ -29,7 +29,7 @@ import { REPO_ROOT } from '../../repo-root.js';
  * it would be dead weight.
  */
 
-const FACTS = join(REPO_ROOT, 'server/src/connection/session/handshake-facts.ts');
+const FACTS = join(REPO_ROOT, 'server/src/connection/session/facts/handshake-facts.ts');
 
 /** The fields `HandshakeFacts` declares, read from the interface rather than a second list. */
 function declaredFacts(): string[] {

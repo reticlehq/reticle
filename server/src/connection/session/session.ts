@@ -1,6 +1,6 @@
 import type { WebSocket } from 'ws';
 import type { ChannelId, ImpactSnapshot } from '@reticlehq/core';
-import type { HandshakeFacts } from './handshake-facts.js';
+import type { HandshakeFacts } from './facts/handshake-facts.js';
 import { refusedResult } from './undeclared-command.js';
 import { recordImpact } from '../../features/impact/impact-recorder.js';
 import { LastAct } from './last-act.js';
@@ -47,7 +47,7 @@ import {
   type EventQueryOptions,
 } from '../../features/journal/journal-query.js';
 import { type AmbientCounts } from '@reticlehq/engine/window/ambient.js';
-import { ObservedState } from './observed-state.js';
+import { ObservedState } from './facts/observed-state.js';
 import { recordBrowserLatency, recordSdkFailure } from '../../telemetry/session-metrics.js';
 import { LiveControl, type InboxMessage } from './human/live-control.js';
 export type { InboxMessage } from './human/live-control.js'; // moved; still part of Session's surface

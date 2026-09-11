@@ -11,7 +11,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { SessionState } from '@reticlehq/core';
 import { ReticleTool } from '@reticlehq/core';
 import { runTool } from './invoke-tool.js';
-import { forgetRefProvenance } from '../../connection/session/ref-provenance.js';
+import { forgetRefProvenance } from '../../connection/session/facts/ref-provenance.js';
 import { createNodeFileSystem } from '../../features/project/fs/fs-port.js';
 import { BaselineStore } from '../../features/project/baselines.js';
 import { RecordingStore } from '../../features/flows/recording/tape/recordings.js';

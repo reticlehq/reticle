@@ -27,7 +27,7 @@ import { tokensMatch } from './token-auth.js';
 import { pairingTokenSource } from './pairing-token.js';
 import { log } from '../../log.js';
 import { getSessionMetrics } from '../../telemetry/session-metrics.js';
-import { sessionReplacedReason } from '../session/session-replaced.js';
+import { sessionReplacedReason } from '../session/facts/session-replaced.js';
 import { describeSkew, sdkFix, SkewPair } from '../../command/version/version-skew.js';
 import { noteVersionSkew } from '../../command/version/version-nudge.js';
 import { protocolSkewReason } from './protocol-skew.js';

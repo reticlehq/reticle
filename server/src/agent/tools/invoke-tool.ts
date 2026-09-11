@@ -25,7 +25,7 @@ import { ReticleTool } from '@reticlehq/core';
 import { takeFeedbackPrompt } from './feedback-tools.js';
 import { takeFeedbackUndelivered } from '../../telemetry/feedback-delivery.js';
 import type { Session } from '../../connection/session/session.js';
-import { noteRefsMinted, wrongTabRefusal } from '../../connection/session/ref-provenance.js';
+import { noteRefsMinted, wrongTabRefusal } from '../../connection/session/facts/ref-provenance.js';
 import { CAPTURED_TOOLS, noteCapturedCall, noteToolDispatched } from '../tools/feature-capture.js';
 import { span } from '../../trace.js';
 import {

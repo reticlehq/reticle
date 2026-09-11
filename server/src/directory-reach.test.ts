@@ -60,6 +60,25 @@ const SERVER = join(REPO_ROOT, 'server');
  * somewhere odd rather than a dependency anybody needed.
  */
 const REACHES_FOR: Record<string, readonly string[]> = {
+  /**
+   * Four directories reach `session/facts/`, and the edge COUNT went up while the coupling
+   * went down. That is worth stating, because this list counts edges and cannot weigh them.
+   *
+   * `facts` holds what is known ABOUT a session and computes nothing: the handshake's facts,
+   * the ambient observed state, which tab a ref came from, and how a reconnect is recognised.
+   * It reaches out to NOTHING -- a pure sink. So `tools`, `bridge`, `crawl` and `session`
+   * itself now depend on a dependency-free group of four files instead of on `session`, a
+   * 34-file directory that depends on a great deal.
+   *
+   * The ledger: four edges in, one out. `crawl -> session` is GONE, which is what
+   * `safe-to-group` predicted before anything moved, and the mutual-pair count did not move --
+   * the property this file actually protects.
+   *
+   * Depending on a sink is weaker coupling than depending on a hub, and a directory that
+   * imports nothing can be read, moved and tested alone. If a later reading disagrees, the
+   * thing to re-examine is whether `facts` stayed a sink: the moment it reaches out to
+   * anything, this trade stops being one.
+   */
   // One way, and it stays one way: the OpenReality adapter reads a live session to answer the
   // protocol's eight questions, and nothing in `session` knows the adapter exists. The mutual-pair
   // count is unchanged by it, which is the test that matters -- a grouping that raises that number
@@ -219,6 +238,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   /** What a human wrote on a step, and where they pointed when they wrote it. */
   'annotate-notes': [],
   bridge: [
+    'facts',
     'flows',
     'fs',
     'identity',
@@ -275,7 +295,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
     'telemetry',
     'update',
   ],
-  crawl: ['project', 'session', 'tools'],
+  crawl: ['project', 'tools', 'facts'],
   daemon: ['telemetry'],
   domain: ['dir', 'flows', 'oracles', 'project', 'tools'],
   ee: ['license'],
@@ -344,6 +364,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   proxy: ['daemon', 'identity', 'telemetry'],
   runs: ['artifact', 'cloud', 'dir', 'flows', 'intent', 'peer', 'project', 'telemetry', 'tools'],
   session: [
+    'facts',
     'bridge',
     'config',
     'daemon',
@@ -378,6 +399,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
     'update',
   ],
   tools: [
+    'facts',
     'act',
     'annotate-notes',
     'artifact',
