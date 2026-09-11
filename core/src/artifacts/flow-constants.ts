@@ -185,6 +185,10 @@ export const HealStatus = {
   UNHEALABLE: 'unhealable', // drift exists but no proposal cleared the confidence floor
   NOTHING_TO_HEAL: 'nothing_to_heal', // replay was green
   CONSEQUENCE_BROKEN: 'consequence_broken', // rebind resolves a locator but the flow's success consequence no longer fires — REFUSED (file untouched)
+  // the flow asserts nothing a wrong rebind could fail — REFUSED before replaying (file untouched).
+  // Distinct from CONSEQUENCE_BROKEN: there the consequence exists and stopped firing; here there is
+  // no consequence at all, so a heal could never be checked and would pass forever.
+  UNFALSIFIABLE: 'unfalsifiable',
   ERROR: 'error', // flow missing/malformed/invalid-name, or a resolved action failed
 } as const;
 export type HealStatus = (typeof HealStatus)[keyof typeof HealStatus];

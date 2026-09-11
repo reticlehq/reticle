@@ -39,6 +39,14 @@ const DECLARED_UNWIRED: Record<string, string> = {
     'reason those tests cannot silently drift from the real interface.',
   'features/project/memory-fs.ts':
     'an in-memory FileSystemPort, so a test can exercise project code without touching disk.',
+  // Proven and deliberately NOT wired yet. It decides whether a flow may be healed at all: a rebind
+  // is only safe because a consequence can catch one that pointed at the wrong element, so a flow
+  // asserting nothing must not have a heal written to disk. Wiring it flips a documented product
+  // decision (heal today writes, with "no success consequence" in the message) and heal's own test
+  // fixtures are assertion-free by construction, so it needs its own change with those reworked --
+  // not a drive-by that leaves the feature half-broken.
+  'features/flows/heal-precondition.ts':
+    'the no-consequence-no-heal gate: unit-proven, wiring deferred to its own change (1.5b).',
   'workspace-packages.ts': 'reads the workspace layout; used by the cross-package guards.',
   'import-graph.ts': 'builds the import graph the boundary guards assert over.',
 
