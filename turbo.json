@@ -34,7 +34,8 @@
       "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/adapters/realm/tauri/src/**"]
     },
     "test:guards": {
-      "dependsOn": ["^build"]
+      "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/scripts/**"]
     },
     "@reticlehq/server#test:guards": {
       "dependsOn": ["^build"],
