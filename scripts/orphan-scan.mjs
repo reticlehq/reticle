@@ -67,16 +67,44 @@ function sourceCandidates(target) {
   return SOURCE_EXTENSIONS.map((extension) => `${withoutDist}${extension}`);
 }
 
-/** Entry points for a package: every source file its manifest publishes. */
-export function entryPoints(packageDir) {
+/**
+ * Entry points for a package: every source file its manifest publishes.
+ *
+ * `available` is the package's own source list, needed only because an `exports` subpath may be a
+ * PATTERN. `"./question/*.js": "./dist/question/*.js"` publishes every module in that directory,
+ * and without expanding it the candidate is the literal string `question/*.ts`, which matches no
+ * file on disk -- so every module the package deliberately publishes reads as unreachable.
+ *
+ * Not hypothetical, and it stayed hidden for a reason worth recording: `@reticlehq/engine` is the
+ * only package here that publishes by pattern, and it was the only sizeable package with no
+ * orphan guard. The first run of that guard reported seventeen orphans, all of them files
+ * `server` imports by name every day. A guard whose first result is seventeen findings is
+ * usually wrong about the question rather than right about the code.
+ */
+export function entryPoints(packageDir, available = []) {
   const manifestPath = join(packageDir, 'package.json');
   if (!existsSync(manifestPath)) return new Set();
   const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
   const entries = new Set();
   for (const target of manifestTargets(manifest)) {
-    for (const candidate of sourceCandidates(target)) entries.add(candidate);
+    for (const candidate of sourceCandidates(target)) {
+      if (!candidate.includes('*')) {
+        entries.add(candidate);
+        continue;
+      }
+      // One `*` matches within a path segment, as Node resolves `exports` patterns: it may span
+      // `/`, so `./a/*.js` covers a nested file too. Anchored at both ends so a pattern cannot
+      // quietly excuse a file outside the directory it names.
+      const pattern = new RegExp(`^${candidate.split('*').map(escapeForRegExp).join('(.+)')}$`);
+      for (const file of available) if (pattern.test(file)) entries.add(file);
+    }
   }
   return entries;
+}
+
+/** Everything a regular expression treats specially, so a path is matched literally. */
+function escapeForRegExp(text) {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 /** Production source files under `srcDir`, repo-relative to it, POSIX-separated. */
@@ -126,7 +154,7 @@ export function scanPackage(packageDir, declaredUnwired = {}) {
     path: file,
     text: readFileSync(join(srcDir, file), 'utf8'),
   }));
-  const entries = entryPoints(packageDir);
+  const entries = entryPoints(packageDir, files);
 
   const orphans = files.filter(
     (file) =>
