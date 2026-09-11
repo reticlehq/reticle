@@ -27,6 +27,25 @@
  * "type into this" are different things to do to the same handle, and the specification's
  * `Action` carries parameters for exactly that reason.
  */
+/**
+ * Exactly what the SDK declares on connect for this subject, `state` included -- the bench app
+ * registers a store, so the channel is real.
+ *
+ * Here rather than inline at the registration because two places read it: the runner, which
+ * hands it to the handshake check, and a test that asserts what it implies about the profile
+ * this subject can claim. A second copy would let those two disagree silently.
+ */
+export const BENCH_APP_CHANNELS = Object.freeze([
+  'ui',
+  'net',
+  'log',
+  'route',
+  'storage',
+  'time',
+  'signal',
+  'state',
+]);
+
 export const BENCH_APP_SUBJECT = Object.freeze({
   /**
    * A request fails and the screen moves on anyway -- the swallowed rejection.

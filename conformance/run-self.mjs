@@ -39,7 +39,7 @@ import { chromium } from 'playwright';
 import { spawn } from 'node:child_process';
 import { start, WebRealm, conformanceClient } from '@reticlehq/server';
 import { driveAll } from './drive.mjs';
-import { BENCH_APP_SUBJECT, plantUrl } from './subjects/bench-app.mjs';
+import { BENCH_APP_CHANNELS, BENCH_APP_SUBJECT, plantUrl } from './subjects/bench-app.mjs';
 import { Profile } from './scenarios/index.mjs';
 
 const PORT = 4400;
@@ -200,12 +200,28 @@ async function main() {
         name: 'reticle',
         version: process.env['npm_package_version'] ?? 'dev',
         platform: 'web',
-        // Exactly what the SDK declares on connect, including `state` -- the bench app
-        // registers a store, so the channel is real. The first run registered without it and the
-        // handshake check refused to score, which is the check doing its job: a registration
-        // that understates the implementation would have it scored on fewer scenarios than it
-        // can answer, and one that overstates it would have it scored on evidence it never had.
-        channels: ['ui', 'net', 'log', 'route', 'storage', 'time', 'signal', 'state'],
+        // The first run registered without `state` and the handshake check refused to score,
+        // which is the check doing its job: a registration that understates the implementation
+        // would have it scored on fewer scenarios than it can answer, and one that overstates
+        // it would have it scored on evidence it never had.
+        channels: [...BENCH_APP_CHANNELS],
+        // `effect`, and NOT because that is the most this implementation could claim. Measured:
+        // the channels above satisfy every profile's requirement, `surface` included --
+        //
+        //   effect    net, log
+        //   in-realm  net, log, state, signal
+        //   surface   net, log, state, signal, ui
+        //
+        // so the channel gate in `profileEarned` would pass at any of the three. What stops a
+        // higher claim is FIXTURES: `subjects/bench-app.mjs` can plant eight of sixteen
+        // scenarios and none of the four above `effect`. Claiming `surface` would move those
+        // four from "not asked" to ABSENT and buy no new evidence -- a bigger denominator and
+        // the same numerator, which is the participation trophy this suite is built to refuse.
+        //
+        // The comment on `channels` above already reasons about understating and overstating a
+        // registration. That reasoning applies to this line too and was not written here, so
+        // the claim read as the ceiling when it is a floor. Raise it when the bench app grows a
+        // planter for an `in-realm` scenario, not before.
         profile: Profile.EFFECT,
       }),
     );

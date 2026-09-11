@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { BENCH_APP_SUBJECT, plantable, plantUrl } from './bench-app.mjs';
-import { SCENARIOS } from '../scenarios/index.mjs';
+import { BENCH_APP_CHANNELS, BENCH_APP_SUBJECT, plantable, plantUrl } from './bench-app.mjs';
+import { CHANNELS_REQUIRED, Profile, SCENARIOS } from '../scenarios/index.mjs';
 
 /**
  * The subject file, checked against the scenarios it claims to plant.
@@ -63,5 +63,47 @@ describe('planting is a URL, and an unplantable scenario says so', () => {
       expect(entry.claim, `${id} plants a bug and claims nothing`).toBeDefined();
       expect(entry.reads.length, `${id} claims nothing readable`).toBeGreaterThan(0);
     }
+  });
+});
+
+/**
+ * Why this subject claims `effect` and not more, pinned so the reason cannot rot into a comment
+ * that used to be true.
+ *
+ * The registration in `run-self.mjs` carries a careful note about understating and overstating
+ * the CHANNELS, and directly beneath it the profile sat as a bare constant with no reason at
+ * all. The measurement is that channels are not what holds the claim down -- they satisfy every
+ * profile including `surface` -- and fixtures are. If that ever stops being true, the comment
+ * beside the claim is wrong and this says so.
+ */
+describe('what profile this subject could claim, and why it does not', () => {
+  it('declares enough channels for every profile, so the claim is not a capability limit', () => {
+    for (const profile of Object.values(Profile)) {
+      const missing = (CHANNELS_REQUIRED[profile] ?? []).filter(
+        (c) => !BENCH_APP_CHANNELS.includes(c),
+      );
+      expect(missing, `${String(profile)} needs channels this subject never declares`).toEqual([]);
+    }
+  });
+
+  it('cannot plant anything above effect, which is what actually holds the claim down', () => {
+    const above = SCENARIOS.filter((s) => s.profile !== Profile.EFFECT);
+    expect(above.length, 'no scenarios above effect, so this test proves nothing').toBeGreaterThan(
+      0,
+    );
+    // Negative control, because an empty result here is also what a broken `plantUrl` returns,
+    // and the two would look identical. An `effect` scenario must still come back with a URL.
+    expect(
+      plantUrl('http://x', 'effect-failed-surface-advanced'),
+      'plantUrl answers nothing at all, so the assertion below proves nothing',
+    ).toBeDefined();
+    // The day one of these gets a planter, the claim should rise with it -- and this test is
+    // what fails to say so, rather than the claim quietly staying low beside a stale comment.
+    const planted = above.filter((s) => plantUrl('http://x', s.id) !== undefined);
+    expect(
+      planted.map((s) => s.id),
+      'this subject can now plant a scenario above `effect` — raise the claimed profile in ' +
+        'run-self.mjs, and delete this expectation for the ones it covers',
+    ).toEqual([]);
   });
 });
