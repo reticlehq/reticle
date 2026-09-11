@@ -588,7 +588,7 @@ export async function replayFlow(
           return degradedStepResult(step, index, label);
         }
         if (subSteps !== undefined && subSteps.length > 0) {
-          return runSequenceStep(session, step, index, subSteps, confirmDangerous, sleep);
+          return runSequenceStep(session, step, index, subSteps, confirmDangerous, sleep, dynamic);
         }
         if (step.anchor.kind === AnchorKind.SIGNAL) {
           return runSignalStep(

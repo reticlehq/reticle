@@ -90,17 +90,7 @@ function sequenceFlow(subs: FlowStep[]): FlowFile {
 }
 
 describe('a sequence sub-step`s declared consequence is enforced on replay', () => {
-  /*
-   * KNOWN GAP, pinned with `it.fails` so it breaks loudly the day it is closed.
-   *
-   * `expect.element.testid` is asserted inside `runTestidStep` -- the runner resolves the testid
-   * against the live DOM after the action. A sequence goes to `runSequenceStep`, which has no such
-   * block, so an element expect on a SUB-step reaches neither path. The consequence predicates
-   * (signal, net, state, text) ARE now enforced for sub-steps via assertStepExpect; only the element
-   * form is still unreached, and closing it means teaching the sequence runner the same assertion
-   * the testid runner already does.
-   */
-  it.fails('goes RED when a sub-step`s expect.element does not hold — NOT YET', async () => {
+  it('goes RED when a sub-step`s expect.element does not hold', async () => {
     // Both controls resolve and both clicks fire. The consequence "receipt" never appears, and that
     // is the whole point of having declared it.
     const session = new FakeSession(new Set(['email', 'confirm']));

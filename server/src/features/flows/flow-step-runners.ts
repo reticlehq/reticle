@@ -26,6 +26,7 @@ import {
   anchorLabel,
   componentLabel,
   componentQueryArgs,
+  expectElementDrift,
   resolveQuery,
   testidDrift,
 } from './flow-replay.js';
@@ -341,6 +342,8 @@ export async function runSequenceStep(
   subs: readonly FlowStep[],
   confirmDangerous: boolean,
   sleep: Sleep,
+  /** Testids whose presence is deliberately NOT asserted — the LLM-output case. */
+  dynamic: ReadonlySet<string> = new Set(),
 ): Promise<FlowStepResult> {
   const live: { ref: string; action: string; args: Record<string, unknown> }[] = [];
   for (const [subIndex, sub] of subs.entries()) {
@@ -387,6 +390,33 @@ export async function runSequenceStep(
     anchor: anchorLabel(step.anchor),
     ok: act.ok,
   };
-  if (!act.ok) result.error = replayDestructiveActionHint(act.error ?? 'command failed');
+  if (!act.ok) {
+    result.error = replayDestructiveActionHint(act.error ?? 'command failed');
+    return result;
+  }
+  /*
+   * Each sub-step's `expect.element` testid, asserted after the batch.
+   *
+   * `runTestidStep` does this for a single act, and a sequence never enters it -- so a sub-step
+   * could declare "and then the receipt appears", be COUNTED as an assertion by
+   * classifyFlowAssertions, and be checked by nothing. The grade said the flow could go red; it
+   * could not.
+   *
+   * Sequential rather than parallel, and it stops at the first absence: replay reports one drift and
+   * the first one is the one that explains the rest.
+   */
+  for (const sub of subs) {
+    const expectTestid = sub.expect?.element?.testid;
+    if (expectTestid === undefined || dynamic.has(expectTestid)) continue;
+    const found = await resolveQuery(session, { by: QueryBy.TESTID, value: expectTestid }, sleep);
+    if (0 === found.refs.length) {
+      result.ok = false;
+      // The STEP's anchor, not the assertion's target: replay stops at the first drift, so naming
+      // the expectation here would read as "this step's locator drifted" on a step whose locator
+      // resolved and whose actions all fired.
+      result.drift = expectElementDrift(expectTestid, found.hint);
+      return result;
+    }
+  }
   return result;
 }
