@@ -85,7 +85,7 @@ import { makeJournalAttach } from './features/journal/attach-journal.js';
 import { makeSessionEnd } from './features/journal/session-end.js';
 import { AmbientStore } from './features/journal/ambient-store.js';
 import { ensureWorkspaceGitignore } from './features/journal/on-disk/workspace-gitignore.js';
-import { pruneSessions } from './features/journal/on-disk/retention.js';
+import { pruneSessions, pruneVisualDiffs } from './features/journal/on-disk/retention.js';
 import type {
   OwnedRealInputProvider,
   RealInputProvider,
@@ -427,6 +427,8 @@ function attachJournal(
   bridge.attachSessionEnd(makeSessionEnd(deps));
   if (deps.enabled) {
     void pruneSessions(deps.fs, deps.reticleRoot);
+    // The largest thing in the workspace, and until now the only one with no delete path at all.
+    void pruneVisualDiffs(deps.fs, deps.reticleRoot);
     // Here rather than in `init`, because this is the moment we are actually about to write into
     // somebody's repository — and the paths that reach it without ever running `init` (a plugin
     // install, a hand-added client config) are exactly the ones that would otherwise leave an
