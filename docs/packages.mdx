@@ -175,6 +175,26 @@ module.exports = withReticle({/* your config */});
 
 ---
 
+## @reticlehq/openreality
+
+**The specification, as a package.** The vocabulary a verification is described in (subject, channel, intent, claim, window, observation, evidence, coverage, verdict), plus `Realm`, the interface an implementation answers, and `adjudicate()`, the function that turns evidence into a verdict. It ships `SPEC.md`, a JSON Schema for every noun, and a conformance suite that scores an implementation against the rules.
+
+**Why it exists:** Reticle's rules about what may buy a green were real and were scattered. The independence rule lived in a channel table, the four verdict values in an enum, the blind-spot idea in a coverage type, and nothing said they were one contract that something other than Reticle could implement. You do not need this package to use Reticle. You need it to write something else that can be checked the same way, or to check what Reticle's verdicts actually mean.
+
+**Depends on:** `zod`, and nothing else. Deliberately: implementing the contract must not require installing the product.
+
+---
+
+## @reticlehq/engine
+
+**The rules that decide a verdict, with nothing attached.** Give it what happened in a running app (the clicks, the network calls, the state changes, the console) together with a statement about what should have followed, and it answers whether that statement held. No browser, no daemon, no command line, no storage.
+
+**Why it exists:** the decision and the machinery that feeds it are different jobs with different reasons to change. Carved out of `@reticlehq/server` so the part that judges can be read, tested and reused without starting anything.
+
+**Depends on:** `@reticlehq/core`, `zod`.
+
+---
+
 ## @reticlehq/test
 
 **The spec runner for CI.** `reticleTest` registers declarative specs and runs them against Reticle's tools directly, with no MCP or stdio in the loop.
