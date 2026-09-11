@@ -109,8 +109,25 @@ leads/
 .playwright-cli/
 /docs-api/
 
-# local reticle workspace (session artifacts, visual baselines, run residue)
-.reticle/
+# This repository's own Reticle workspace. NOT a blanket ignore: a bare `.reticle/` matches at any
+# depth and swallowed the whole directory, which shadowed the precise rules above and meant zero
+# flows and zero capsules were tracked here — while the header Reticle itself writes into every
+# user's `.reticle/.gitignore` says those are meant to be committed. We were the one project not
+# eating its own dog food, and nobody working on Reticle ever saw what a user sees.
+#
+# Keep this list in step with TRANSIENT in server/src/features/journal/on-disk/workspace-gitignore.ts
+# — that is the file users get, and this is the same decision made for ourselves.
+**/.reticle/sessions/
+**/.reticle/visual/
+**/.reticle/feedback/
+**/.reticle/ambient.json
+**/.reticle/envelopes.json
+**/.reticle/flake.json
+**/.reticle/assertion-tiers.json
+**/.reticle/impact.json
+**/.reticle/cloud-state.json
+**/.reticle/issues.json
+**/.reticle/*.tmp
 
 # Complex app fixtures now live in their own repo, reticle-fixtures — see docs/fixtures.md.
 # They are somebody else's apps at real scale, with their own package managers (react-admin is a

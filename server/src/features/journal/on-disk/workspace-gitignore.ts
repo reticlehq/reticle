@@ -14,15 +14,46 @@ import type { FileSystemPort } from '../../project/fs/fs-port.js';
  * the user, so it arrives untracked and unexplained, and one `git add -A` puts an app's traffic into
  * a shared repository. Reticle created the directory; the ignore for it is Reticle's to write.
  */
-const TRANSIENT: readonly string[] = [
-  `${ReticleDir.SESSIONS_SUBDIR}/`,
-  `${ReticleDir.RUNS_SUBDIR}/`,
-  `${ReticleDir.VISUAL_SUBDIR}/`,
+/**
+ * The local feedback copies — `.reticle/feedback/`.
+ *
+ * Named here rather than imported: the directory is spelled inline where it is written, in files
+ * another agent owns, and the ignore for a directory Reticle creates is Reticle's to write whether
+ * or not that name has been hoisted yet.
+ */
+const FEEDBACK_SUBDIR = 'feedback';
+
+/** Local directories, without the trailing slash the ignore file wants. */
+const TRANSIENT_DIRS: readonly string[] = [
+  ReticleDir.SESSIONS_SUBDIR,
+  ReticleDir.RUNS_SUBDIR,
+  ReticleDir.VISUAL_SUBDIR,
+  // Write-only: a local copy of what was already sent. The outbox is the record.
+  FEEDBACK_SUBDIR,
+];
+
+/** Local files. Exported with the directories as `TRANSIENT_NAMES`, which the partition guard reads. */
+const TRANSIENT_FILES: readonly string[] = [
   ReticleDir.PROJECT_FILE,
   ReticleDir.AMBIENT_FILE,
   ReticleDir.ENVELOPES_FILE,
   ReticleDir.FLAKE_FILE,
   ReticleDir.TIERS_FILE,
+  // The user's own record of what Reticle did for them, on THIS machine.
+  ReticleDir.IMPACT_FILE,
+  // This machine's conversation with the server. Its own doc comment says why committing it is
+  // harmful: one machine's pull cursor makes every other machine skip what it has not seen.
+  ReticleDir.CLOUD_STATE_FILE,
+  // Triage pulled back from the dashboard — a cache of somebody's decisions, re-pullable at will.
+  ReticleDir.ISSUES_FILE,
+];
+
+/** Every name Reticle treats as machine-local, however it is spelled in the ignore file. */
+export const TRANSIENT_NAMES: readonly string[] = [...TRANSIENT_DIRS, ...TRANSIENT_FILES];
+
+const TRANSIENT: readonly string[] = [
+  ...TRANSIENT_DIRS.map((dir) => `${dir}/`),
+  ...TRANSIENT_FILES,
   '*.log',
   '*.tmp',
 ];
