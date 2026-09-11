@@ -44,6 +44,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 // The same derivation the dependency-boundary guard uses, so the two cannot come to disagree about
 // which packages exist. Both went blind once by keeping their own list of directories.
 import { workspaceGlobs } from '../../../../scripts/check-boundaries.mjs';
+import { guardTests } from '../../../../scripts/guard-tests.mjs';
 import { execFileSync } from 'node:child_process';
 import { join, relative, sep } from 'node:path';
 import { REPO_ROOT } from '../../repo-root.js';
@@ -286,6 +287,44 @@ describe('cross-package guards are cache-invalidated by what they scan', () => {
  */
 describe('the guard/unit split covers every test that reads the repo', () => {
   const split = packages().filter((pkg) => pkg.task.endsWith('#test:guards'));
+
+  /**
+   * The split must still BE a split, which no other assertion here notices.
+   *
+   * Every check in this file guards under-detection: a repo-reading test landing in the cheap
+   * task would replay a stale green, which is the false green the whole arrangement exists to
+   * prevent. `guard-tests.mjs` errs towards over-detection on purpose for that reason, and
+   * says so: "Over-detection costs two seconds in the cheap task. Under-detection is a false
+   * green in the gate."
+   *
+   * True about correctness, and it leaves the other direction unwatched. Forcing
+   * `escapesPackage` to answer `true` for everything leaves all thirteen tests in this file
+   * GREEN -- measured -- while putting all 602 of server's test files in the repo-reading task.
+   * That is 144 seconds where the split bought 2, and every change anywhere in the repository
+   * invalidating the whole suite again, which is the exact problem the split was introduced to
+   * fix. Not a false green, but a silent undoing of the reason any of this exists.
+   *
+   * A share rather than a count, and a loose one: this is a backstop against the mechanism
+   * collapsing, not a budget. Measured today at 12% for server, 10% core, 1% engine.
+   */
+  it('leaves most of the suite in the cheap half, so the split still buys something', () => {
+    for (const pkg of split) {
+      const all = execFileSync('git', ['ls-files', 'src'], {
+        cwd: join(REPO, pkg.path),
+        encoding: 'utf8',
+      })
+        .split('\n')
+        .filter((f) => f.endsWith('.test.ts'));
+      const guards = guardTests(join(REPO, pkg.path));
+      expect(all.length, `${pkg.path} has no tests to split`).toBeGreaterThan(10);
+      expect(
+        guards.length / all.length,
+        `${pkg.path}: ${String(guards.length)} of ${String(all.length)} tests are in the ` +
+          'repo-reading half. The split exists so an unrelated change does not invalidate the ' +
+          'whole suite; at this share it has stopped buying that.',
+      ).toBeLessThan(0.5);
+    }
+  });
 
   it('finds a package that has split at all (a pass over none proves nothing)', () => {
     expect(split.length).toBeGreaterThan(0);

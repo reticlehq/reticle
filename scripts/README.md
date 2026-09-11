@@ -29,7 +29,7 @@ Guards. Each one exists because something went wrong once and nobody noticed unt
 | `orphan-scan.mjs` | Modules nothing imports. Every package's `orphan-modules.test.ts` calls this one scanner rather than each writing its own. `orphan-scan.d.mts` beside it is just its type declaration; it has no other reason to exist. |
 | `check-stale-issues.mjs` | An issue we already fixed still reading as available work, so somebody starts on it. |
 | `check-docs-site.mjs` | Runs after the docs site deploys and fetches every page it claims to publish, so a page that 404s is caught by us rather than by a reader. |
-| `guard-tests.mjs` | Works out which of a package's tests read the rest of the repository. Those cannot be cached like ordinary tests, because the thing they check lives outside the package. |
+| `guard-tests.mjs` | Works out which of a package's tests read the rest of the repository. Those cannot be cached like ordinary tests, because the thing they check lives outside the package. `guard-tests.d.mts` beside it is just the type declaration for the two functions other checks reuse; it has no other reason to exist. |
 | `ci-run.mjs` | Wraps a CI command so "this failed" and "the runner never started" are told apart. A build that never ran is not a build that passed. |
 
 ## You run these, by hand
