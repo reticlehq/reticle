@@ -34,7 +34,13 @@ import { waitProgressLine } from './terminal/wait-progress.js';
 const WINDOWS_QUIET_MEANS_HUNG_MS = 3 * 60_000;
 const WINDOWS_QUIET_MEANS_HUNG_MS_APPLIES = 'win32' === process.platform;
 import { pickSession, type CandidateSession } from './session-pick.js';
-import { readPage, describePage, PageFinding, type PageProbe } from './page-probe.js';
+import {
+  readPage,
+  describePage,
+  findingBeforeOpen,
+  PageFinding,
+  type PageProbe,
+} from './page-probe.js';
 import { remainingSteps, type Progress } from './remaining-steps.js';
 import { AppShape, isDesktop, policyFor } from './desktop-shape.js';
 
@@ -289,12 +295,12 @@ export async function runSetupPhases(input: SetupInput, fx: SetupEffects): Promi
     //
     // So presence decides only WHEN: open the moment it appears (the fast path for the frameworks
     // that inline it), otherwise once the short readiness window is out.
-    const readyBy = fx.now() + Math.min(SDK_READY_WINDOW_MS, budgetMs);
-    let finding = readPage(await fx.probePage(url));
-    while (PageFinding.SDK_MISSING === finding && fx.now() < readyBy) {
-      await fx.sleep(input.pollMs);
-      finding = readPage(await fx.probePage(url));
-    }
+    const finding = await findingBeforeOpen(
+      () => fx.probePage(url),
+      { now: () => fx.now(), sleep: (ms: number) => fx.sleep(ms) },
+      Math.min(SDK_READY_WINDOW_MS, budgetMs),
+      input.pollMs,
+    );
     if (PageFinding.NOT_SERVED === finding || PageFinding.TLS_REFUSED === finding) {
       note(describePage(finding, url));
       note(

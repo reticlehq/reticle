@@ -74,3 +74,44 @@ export function describePage(finding: PageFinding, url: string): string {
       );
   }
 }
+
+/**
+ * What the page looks like once it has had its short chance to come up.
+ *
+ * The wait before opening a browser used to retry on `SDK_MISSING` and on nothing else, so a
+ * first probe of `NOT_SERVED` left the loop at once and the window was refused on ONE sample.
+ * That refusal is right for a url that will never answer and wrong for one that is still
+ * starting, and the two are identical at the first probe.
+ *
+ * Measured on the install gate's Nuxt scaffold: "nothing is serving" and "Not opening a
+ * browser", then two lines later "http://localhost:3000/ is served". The dev server came up
+ * during the phase, the window was never opened, no session could appear, and `init` exited 1
+ * on a correct install. Nothing about it is Nuxt-specific; it is the slowest scaffold here and
+ * any cold start slower than the first probe loses the same race.
+ *
+ * So both unfinished states wait: NOT_SERVED because the server may still be starting, and
+ * SDK_MISSING because the bundle may still be arriving. Whatever is true when the window closes
+ * is the answer, and a url that never answers is still refused -- by then it has been asked
+ * repeatedly rather than once.
+ *
+ * A function rather than a loop inside `runSetupPhases`, because the caller polls the same
+ * `probePage` 1,500 times before reaching this point and a test of the decision cannot get near
+ * it through that. Here it takes a probe and a clock and answers in three lines of setup.
+ */
+export async function findingBeforeOpen(
+  probe: () => Promise<PageProbe>,
+  clock: { readonly now: () => number; readonly sleep: (ms: number) => Promise<void> },
+  windowMs: number,
+  pollMs: number,
+): Promise<PageFinding> {
+  const readyBy = clock.now() + windowMs;
+  let finding = readPage(await probe());
+  while (
+    (PageFinding.SDK_MISSING === finding || PageFinding.NOT_SERVED === finding) &&
+    clock.now() < readyBy
+  ) {
+    await clock.sleep(pollMs);
+    finding = readPage(await probe());
+  }
+  return finding;
+}
