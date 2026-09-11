@@ -113,7 +113,9 @@ Why somebody acted, in prose, captured early. Origin MUST be recorded (`user`, `
 
 Intent has two properties moving in opposite directions. **Fidelity** is highest the moment somebody asks and decays with every restatement. **Bindability** — whether it can be written as something checkable — starts near zero, because there is no route, no element and often no code, and rises as the code appears. Demanding a predicate at declare time collects _mechanisms_, which is what assertions already are. Waiting until verify time collects a _re-derivation_, which is the weak artifact this exists to replace.
 
-So `statement` is prose and mandatory; binding to claims is optional and may arrive later or never. An intent that stays `declared` is not a failure — it names something a team meant that nothing can prove, which is the most interesting row in any ledger.
+So `statement` is prose and mandatory; binding to claims is optional and may arrive later or never. An intent is in one of three states: `declared` (said, and nothing can verify it yet), `bound` (attached to at least one claim something can evaluate), or `abandoned` (deliberately closed without ever being bound, and the reason MUST be recorded).
+
+An intent that stays `declared` is not a failure. It names something a team meant that nothing can prove, which is the most interesting row in any ledger. `abandoned` exists so that giving up is a decision somebody wrote down rather than a row that quietly stopped moving.
 
 ### Claim
 
@@ -132,6 +134,8 @@ An **assertion** is one condition and MUST name the channels answering it requir
 **But it does name a few forms it evaluates itself**, because an opaque predicate cannot be compared across implementations, and a clause nobody can reach is not a rule. `predicate` stays `unknown` and an implementation may accept anything it likes; alongside that, `Predicate` names three shapes — `count`, `present`, `absent` — selecting observations by channel, by exact `summary`, and by a substring of the rendered value. They read only what an `Observation` carries in every realm, so a service, a robot and a browser answer them identically, and they cover what a claim about a consequence mostly is: counting and presence.
 
 `evaluate(predicate, observations)` returns `true`, `false`, or **`undefined` meaning nobody evaluated this**. That third answer is normative and load-bearing: a predicate written in a language this specification does not speak is NOT a failed claim, and an adjudicator MUST NOT read it as one. `assertionsHeld` is three-valued for the same reason, answers from whatever subset it could evaluate, and any single `false` decides.
+
+`count` carries one of three comparisons: `exactly`, `at-least`, `at-most`. A claim that names a count is the honest route to disproving a duplicate: two writes where one was claimed fails the assertion clause directly, without any anomaly detector having to notice.
 
 Two deliberate limits. `summary` matches exactly and never as a pattern — a regular expression over it would be a predicate language arriving through the back door. And `valueContains` is the weakest thing in the protocol: rendering is an implementation's own, so two conformant implementations may legitimately disagree about a substring. The rendering function is specified and exported so a disagreement has one place to be resolved; a claim MUST NOT rest on `valueContains` alone.
 
@@ -225,6 +229,10 @@ A blind spot is **impeaching** when it falls on a channel the claim actually nee
 **Who decides that is specified, because leaving it open made clause 6 unreachable.** A realm MUST NOT judge relevance: it does not see the claim, so it has no honest basis for the flag, and every implementation written against an earlier draft of this section set `impeaching: false` everywhere and documented that the adjudicator would decide — while the adjudicator filtered on the flag. Between them, a window that closed over an operation still in flight was proving things.
 
 So the rule is: a blind spot impeaches when the implementation says so **or** when it names a `channel` the claim reads. A realm's job is to say which channel each gap falls on; matching that against the claim is the adjudicator's. A blind spot naming no channel can only impeach by its flag — it is a statement about the observation as a whole, and only the implementation knows what it bears on.
+
+Six kinds are named, and an implementation reports the closest one: `channel-unobserved` (a channel exists here and this implementation does not watch it), `boundary-uncrossable` (part of the subject is somewhere this observer cannot enter), `buffer-truncated` (the record was capped and older entries dropped), `redacted` (content withheld deliberately: a secret), `still-in-flight` (the window closed while something was outstanding), and `effect-elsewhere` (the consequence happened somewhere this observer cannot follow).
+
+`still-in-flight` is the one most often reported as something else. An operation that had not finished when the window closed is a gap in the OBSERVATION, because the window's end was the verifier's choice; reporting it as an anomaly would let a slow backend convict an application that did nothing wrong.
 
 An empty `blindSpots` array is a positive claim that nothing was hidden. An implementation that cannot enumerate its blind spots MUST omit the field rather than send `[]`.
 
@@ -341,6 +349,8 @@ So memory is in this specification, and it is fenced:
 > **A `learned` belief MUST NOT, by itself, produce a `yes`.**
 
 It may raise a question. It may direct attention. It may downgrade a verdict to `unknown`, which is the honest verdict for a suspicion and which sends an actor to gather evidence rather than to fix something that may not be broken.
+
+A belief is about one of two things: a `failure-mode` (this is how this subject tends to break) or a `repair-outcome` (this is what fixing it tended to do). Both are memory about the past, and neither is evidence about the window under test.
 
 The only route from `learned` to authoritative is **promotion by a named person or specification**. Not by repetition. Not by a confidence threshold — a threshold is a number somebody picked. Not as a side effect of being right a lot.
 
