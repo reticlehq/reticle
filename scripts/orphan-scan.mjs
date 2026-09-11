@@ -150,6 +150,18 @@ function isImported(file, corpus) {
 export function scanPackage(packageDir, declaredUnwired = {}) {
   const srcDir = join(packageDir, 'src');
   const files = sourceFiles(srcDir);
+  // Scanning nothing produces no orphans, which is indistinguishable from a clean package. Ten
+  // test files call this and every one of them asserts only that the result is empty, so a
+  // `src` that exists but yields no source -- a renamed layout, a changed extension, a filter
+  // that stops matching -- would turn all ten green while checking nothing. A MISSING `src`
+  // already throws from readdirSync; this is the quieter half of the same failure, and it
+  // belongs here rather than in ten copies of an assertion somebody has to remember to write.
+  if (0 === files.length) {
+    throw new Error(
+      `orphan scan found no source files under ${srcDir}. An empty result here would read as ` +
+        'a clean package rather than as a scan that never happened.',
+    );
+  }
   const corpus = files.map((file) => ({
     path: file,
     text: readFileSync(join(srcDir, file), 'utf8'),
