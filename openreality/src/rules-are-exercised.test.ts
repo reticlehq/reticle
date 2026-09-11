@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import {
   canProve,
+  canSupportConsequence,
+  closedCleanly,
+  CloseCondition,
+  disagreementCanConvict,
+  impeachingSpots,
+  isImpeached,
+  BlindSpotKind,
+  matches,
+  render,
   channelsMissingFor,
   ChannelId,
   citeVerdict,
@@ -17,6 +26,8 @@ import {
   Surface,
   Verdict,
   type ChannelDescriptor,
+  type BlindSpot,
+  type Coverage,
   type Evidence,
   type SubjectRef,
   type VerdictRecord,
@@ -201,5 +212,139 @@ describe('what a whole run amounts to', () => {
     });
     const standing = standingVerdicts(run([first, corrected]));
     expect(standing.map((v) => v.id)).toEqual(['v2']);
+  });
+});
+
+describe('what evidence is allowed to buy a proof', () => {
+  it('needs independence AND consequence grade AND a provenance that is not learned', () => {
+    // All three, and the third is the fence around a model's opinion: a learned belief may be
+    // right and may not be evidence that something happened.
+    expect(canSupportConsequence(evidence())).toBe(true);
+    expect(canSupportConsequence(evidence(ProvenanceClass.LEARNED))).toBe(false);
+    expect(
+      canSupportConsequence({ ...evidence(), independence: Independence.ACTUATION_DERIVED }),
+    ).toBe(false);
+    expect(canSupportConsequence({ ...evidence(), grade: Grade.PRESENCE })).toBe(false);
+  });
+});
+
+describe('when two channels disagreeing is allowed to convict', () => {
+  const independent = {
+    id: ChannelId.NET,
+    independence: Independence.INDEPENDENT,
+    grade: Grade.CONSEQUENCE,
+  };
+  const derived = {
+    id: ChannelId.UI,
+    independence: Independence.ACTUATION_DERIVED,
+    grade: Grade.PRESENCE,
+  };
+
+  it('requires at least one independent side, in either position', () => {
+    // The subject contradicting its own reporting is real and is not proof that anything
+    // failed. Both orders are asserted because a rule that holds one way round and not the
+    // other would convict or acquit depending on argument order.
+    expect(disagreementCanConvict(independent, derived)).toBe(true);
+    expect(disagreementCanConvict(derived, independent)).toBe(true);
+    expect(disagreementCanConvict(independent, independent)).toBe(true);
+    expect(disagreementCanConvict(derived, derived)).toBe(false);
+  });
+});
+
+describe('when a window counts as closed', () => {
+  const open = {
+    id: 'w1',
+    subject: subject(),
+    openedAt: 0,
+    budgetMs: 100,
+    closes: CloseCondition.QUIESCENCE,
+  };
+
+  it('needs a close time, a close reason, and a reason that is not the budget running out', () => {
+    expect(closedCleanly({ ...open, closedAt: 10, closedBy: CloseCondition.QUIESCENCE })).toBe(
+      true,
+    );
+    // The one that matters: spending the whole budget is the verifier giving up, and a verdict
+    // resting on it is a statement about our patience rather than about the application.
+    expect(
+      closedCleanly({ ...open, closedAt: 10, closedBy: CloseCondition.BUDGET_EXHAUSTED }),
+    ).toBe(false);
+    expect(closedCleanly(open)).toBe(false);
+    expect(closedCleanly({ ...open, closedAt: 10 })).toBe(false);
+  });
+});
+
+describe('which blind spots bear on a claim', () => {
+  const onNet = {
+    kind: BlindSpotKind.STILL_IN_FLIGHT,
+    channel: ChannelId.NET,
+    detail: 'a request had not settled',
+    impeaching: false,
+  };
+  const unflagged = {
+    kind: BlindSpotKind.REDACTED,
+    detail: 'a secret was withheld',
+    impeaching: false,
+  };
+  const coverage = (blindSpots: readonly BlindSpot[]): Coverage => ({
+    window: 'w1',
+    observed: [],
+    blindSpots: [...blindSpots],
+  });
+
+  it('impeaches on a channel the claim reads, even when the realm did not say so', () => {
+    // The half that was missing while clause 6 was unreachable: a realm cannot judge relevance
+    // because it does not see the claim, so the match happens here.
+    expect(impeachingSpots(coverage([onNet]), [ChannelId.NET])).toHaveLength(1);
+    expect(impeachingSpots(coverage([onNet]), [ChannelId.UI])).toHaveLength(0);
+  });
+
+  it('impeaches on the flag alone when the spot names no channel', () => {
+    // A statement about the observation as a whole: only the implementation knows what it bears
+    // on, so the flag is the only thing that can speak for it.
+    expect(impeachingSpots(coverage([unflagged]), [ChannelId.NET])).toHaveLength(0);
+    expect(
+      impeachingSpots(coverage([{ ...unflagged, impeaching: true }]), [ChannelId.NET]),
+    ).toHaveLength(1);
+  });
+
+  it('isImpeached reads the flag only, which is why it is the weaker form', () => {
+    expect(isImpeached(coverage([onNet]))).toBe(false);
+    expect(isImpeached(coverage([{ ...onNet, impeaching: true }]))).toBe(true);
+  });
+});
+
+describe('how a predicate selects observations', () => {
+  const observation = {
+    id: 'o1',
+    window: 'w1',
+    channel: ChannelId.NET,
+    at: 1,
+    summary: 'net.request',
+    value: { url: 'https://host/api/login' },
+  };
+
+  it('matches on channel, exact summary, and a substring of the rendered value', () => {
+    const rendered = render(observation.value);
+    expect(matches({ channel: ChannelId.NET }, observation, rendered)).toBe(true);
+    expect(matches({ channel: ChannelId.UI }, observation, rendered)).toBe(false);
+    // Exact, never a pattern: a regular expression over `summary` would be a predicate language
+    // arriving through the back door.
+    expect(matches({ channel: ChannelId.NET, summary: 'net.req' }, observation, rendered)).toBe(
+      false,
+    );
+    expect(
+      matches({ channel: ChannelId.NET, valueContains: '/api/login' }, observation, rendered),
+    ).toBe(true);
+  });
+
+  it('renders a string as itself and anything unserialisable as empty', () => {
+    // Empty rather than a guess: an unmatched value is honest, and a rendering that invented
+    // something would make `valueContains` match things that are not there.
+    expect(render('already text')).toBe('already text');
+    expect(render({ a: 1 })).toBe('{"a":1}');
+    const cyclic: Record<string, unknown> = {};
+    cyclic['self'] = cyclic;
+    expect(render(cyclic)).toBe('');
   });
 });
