@@ -6,7 +6,7 @@ You do not tell us it works. You **run one command, run your client, and submit 
 
 ## The records are eight releases old
 
-Everything in here was submitted against **2.5.0**. The repo ships **2.14.0**. Nothing has been re-measured since, so [`MATRIX.md`](./MATRIX.md) carries a banner saying so, and `matrix-freshness.test.ts` fails the unit gate if that banner is missing or names the wrong versions.
+Everything in here was submitted against **2.5.0**. The repo ships **3.0.0**. Nothing has been re-measured since, so [`MATRIX.md`](./MATRIX.md) carries a banner saying so, and `matrix-freshness.test.ts` fails the unit gate if that banner is missing or names the wrong versions.
 
 Two things follow. `apps/e2e/matrix.mjs` regenerates `MATRIX.md` and does not know about the banner, so **regenerating deletes it and the guard reddens**. That is deliberate: republishing stale rows should cost somebody a decision. And the guard goes green on its own the moment `docs/matrix/2.13.<something>/` holds one record, which is the outcome it is actually asking for.
 

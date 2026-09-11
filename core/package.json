@@ -1,6 +1,6 @@
 {
   "name": "@reticlehq/core",
-  "version": "2.14.0",
+  "version": "3.0.0",
   "description": "The Reticle foundation: the shared wire contract \u2014 types, zod schemas, constants, messages, and the isomorphic kernel that every Reticle package (browser SDK, server, kits, test harness) imports. Depends only on zod.",
   "type": "module",
   "main": "./dist/index.js",

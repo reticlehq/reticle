@@ -1,6 +1,6 @@
 {
   "name": "@reticlehq/openreality",
-  "version": "2.14.0",
+  "version": "3.0.0",
   "description": "The Open Verification Protocol: the vocabulary, the rules and the interface an implementation answers, so that \"it works\" can be checked from outside the thing claiming it.",
   "license": "Apache-2.0",
   "type": "module",

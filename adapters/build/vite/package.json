@@ -1,6 +1,6 @@
 {
   "name": "@reticlehq/vite-plugin",
-  "version": "2.14.0",
+  "version": "3.0.0",
   "description": "Vite plugin for Reticle: dev-only source-map stamping plus auto-injected reticle.connect(). apply:'serve' guarantees it never ships to production.",
   "type": "module",
   "license": "Apache-2.0",
