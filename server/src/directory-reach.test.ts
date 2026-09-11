@@ -254,6 +254,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   /** What a human wrote on a step, and where they pointed when they wrote it. */
   'annotate-notes': [],
   bridge: [
+    'stores',
     'facts',
     'flows',
     'fs',
@@ -268,6 +269,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   ],
   capsule: ['dir', 'fs'],
   cli: [
+    'stores',
     'artifact',
     'auth',
     'bridge',
@@ -316,6 +318,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   domain: ['dir', 'flows', 'oracles', 'project', 'tools'],
   ee: ['license'],
   flows: [
+    'stores',
     'act',
     'annotate-notes',
     'cli',
@@ -417,7 +420,14 @@ const REACHES_FOR: Record<string, readonly string[]> = {
     'tools',
     'update',
   ],
+  /**
+   * The three flow stores that read and write .reticle/ on disk, moved out of a 35-file directory
+   * because each one imports no sibling. They reach the filesystem port and the flow shapes they
+   * persist, and nothing in flows is reached back through them.
+   */
+  stores: ['dir', 'fs', 'outcome', 'project', 'recording'],
   tools: [
+    'stores',
     'assert',
     'facts',
     'act',

@@ -7,7 +7,7 @@ import { BaselineStore } from '../project/baselines.js';
 import { RecordingStore } from './recording/tape/recordings.js';
 import { FlowStore } from './flows.js';
 import { ProjectStore } from '../project/project-store.js';
-import { AnnotationStore } from './annotation-store.js';
+import { AnnotationStore } from './stores/annotation-store.js';
 import type { FileSystemPort } from '../project/fs/fs-port.js';
 import type { Session, SessionManager } from '../../connection/session/session.js';
 import type { CompiledProgram, RecordedStep } from './recording/tape/recordings.js';

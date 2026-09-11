@@ -32,7 +32,7 @@ import { IntentStore } from '../intent/intent-store.js';
 import { sessionRoot } from '../project/session-root.js';
 import { waitForPredicate } from '@reticlehq/engine/question/predicate/predicate.js';
 import { computeSegments } from '../journal/rollups.js';
-import { AssertionTiersStore } from './assertion-tiers-store.js';
+import { AssertionTiersStore } from './stores/assertion-tiers-store.js';
 import { toFlowSources } from './flow-sources.js';
 import { reportAndAccumulate } from '../journal/deviation-service.js';
 import { EnvelopeStore } from '../journal/envelope-store.js';

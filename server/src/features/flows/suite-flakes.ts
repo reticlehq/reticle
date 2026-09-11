@@ -16,7 +16,7 @@
  * never turn a working verification into an error.
  */
 import { ReplayStatus } from '@reticlehq/core';
-import { FlakeStore } from './flake-store.js';
+import { FlakeStore } from './stores/flake-store.js';
 import type { FileSystemPort } from '../project/fs/fs-port.js';
 
 /** Just the shape this needs from a replay — so a test does not have to build a whole result. */

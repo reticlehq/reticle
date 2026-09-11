@@ -17,7 +17,7 @@ import {
 import { createNodeFileSystem, type FileSystemPort } from '../project/fs/fs-port.js';
 import { FlowStore } from './flows.js';
 import { ProjectStore } from '../project/project-store.js';
-import { AnnotationStore } from './annotation-store.js';
+import { AnnotationStore } from './stores/annotation-store.js';
 import { FLOW_TOOLS } from './flow-tools.js';
 import { ReticleTool } from '@reticlehq/core';
 import { BaselineStore } from '../project/baselines.js';

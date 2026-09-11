@@ -1,10 +1,10 @@
 import { dirname } from 'node:path';
 import { z } from 'zod';
 import type { FlowExpect } from '@reticlehq/core';
-import type { FileSystemPort } from '../project/fs/fs-port.js';
-import { reticleDirPaths } from '../project/dir/reticle-dir.js';
-import { withFileLock } from '../project/file-lock.js';
-import type { StepExpect } from './outcome/assertion-integrity.js';
+import type { FileSystemPort } from '../../project/fs/fs-port.js';
+import { reticleDirPaths } from '../../project/dir/reticle-dir.js';
+import { withFileLock } from '../../project/file-lock.js';
+import type { StepExpect } from '../outcome/assertion-integrity.js';
 
 /**
  * The anti-reward-hacking baseline. Detecting an assertion DOWNGRADE requires knowing what the

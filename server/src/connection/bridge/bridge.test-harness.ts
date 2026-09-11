@@ -12,7 +12,7 @@ import { createNodeFileSystem } from '../../features/project/fs/fs-port.js';
 import { RecordingStore } from '../../features/flows/recording/tape/recordings.js';
 import { FlowStore } from '../../features/flows/flows.js';
 import { ProjectStore } from '../../features/project/project-store.js';
-import { AnnotationStore } from '../../features/flows/annotation-store.js';
+import { AnnotationStore } from '../../features/flows/stores/annotation-store.js';
 import { TOOLS, type ToolDeps } from '../../agent/tools/tools.js';
 
 /** The app-advertised testable surface a FakeBrowser reports for an reticle_capabilities round-trip. */

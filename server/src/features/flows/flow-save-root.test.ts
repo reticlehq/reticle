@@ -8,7 +8,7 @@ import { RecordingStore, type CompiledProgram } from './recording/tape/recording
 import { FlowStore } from './flows.js';
 import { FLOW_TOOLS } from './flow-tools.js';
 import { ProjectStore } from '../project/project-store.js';
-import { AnnotationStore } from './annotation-store.js';
+import { AnnotationStore } from './stores/annotation-store.js';
 import { ArtifactRootReason } from '../project/artifact-root.js';
 import { createMemoryFs } from '../project/memory-fs.js';
 import type { FileSystemPort } from '../project/fs/fs-port.js';

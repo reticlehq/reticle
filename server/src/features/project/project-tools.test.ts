@@ -10,7 +10,7 @@ import { BaselineStore } from './baselines.js';
 import { RecordingStore } from '../flows/recording/tape/recordings.js';
 import { FlowStore } from '../flows/flows.js';
 import { ProjectStore } from './project-store.js';
-import { AnnotationStore } from '../flows/annotation-store.js';
+import { AnnotationStore } from '../flows/stores/annotation-store.js';
 import { createNodeFileSystem, type FileSystemPort } from './fs/fs-port.js';
 import type { Session, SessionManager } from '../../connection/session/session.js';
 

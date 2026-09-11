@@ -49,7 +49,7 @@ import { FlowStore } from './features/flows/flows.js';
 import { buildFlowChips } from './features/flows/flow-scope.js';
 import { ProjectStore } from './features/project/project-store.js';
 import { attachRouteLearning } from './features/project/learned-routes.js';
-import { AnnotationStore } from './features/flows/annotation-store.js';
+import { AnnotationStore } from './features/flows/stores/annotation-store.js';
 import { createNodeFileSystem, type FileSystemPort } from './features/project/fs/fs-port.js';
 import { cleanupCaptureDirectories } from './features/visual/capture-cleanup.js';
 import { ReticleRunner } from './agent/runs/reticle-runner.js';
@@ -203,7 +203,7 @@ export {
   resolveToolSurface,
 } from './agent/tools/tool-surface.js';
 export type { ToolSurface } from './agent/tools/tool-surface.js';
-export { AnnotationStore } from './features/flows/annotation-store.js';
+export { AnnotationStore } from './features/flows/stores/annotation-store.js';
 export { replayFlow, nearestTestid } from './features/flows/flow-replay.js';
 export type { FlowReplaySession, WaitForSignal } from './features/flows/flow-replay.js';
 export {

@@ -30,7 +30,7 @@ import { BaselineStore } from '../project/baselines.js';
 import { RecordingStore } from './recording/tape/recordings.js';
 import { FlowStore, type FlowAnnotations } from './flows.js';
 import { ProjectStore } from '../project/project-store.js';
-import { AnnotationStore } from './annotation-store.js';
+import { AnnotationStore } from './stores/annotation-store.js';
 import { createNodeFileSystem, type FileSystemPort } from '../project/fs/fs-port.js';
 import { flowPath } from '../project/dir/reticle-dir.js';
 import { asRecord, asString } from '@reticlehq/core';

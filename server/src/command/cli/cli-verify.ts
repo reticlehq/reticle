@@ -56,7 +56,7 @@ import { BaselineStore } from '../../features/project/baselines.js';
 import { RecordingStore } from '../../features/flows/recording/tape/recordings.js';
 import { FlowStore } from '../../features/flows/flows.js';
 import { ProjectStore } from '../../features/project/project-store.js';
-import { AnnotationStore } from '../../features/flows/annotation-store.js';
+import { AnnotationStore } from '../../features/flows/stores/annotation-store.js';
 import { createNodeFileSystem } from '../../features/project/fs/fs-port.js';
 import type { SessionManager } from '../../connection/session/session-manager.js';
 import type { ToolDeps } from '../../agent/tools/tools.js';

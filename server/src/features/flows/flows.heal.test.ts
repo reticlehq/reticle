@@ -30,7 +30,7 @@ import { FlowStore } from './flows.js';
 import { ProjectStore } from '../project/project-store.js';
 import { replayFlow } from './flow-replay.js';
 import { waitForPredicate } from '@reticlehq/engine/question/predicate/predicate.js';
-import { AnnotationStore } from './annotation-store.js';
+import { AnnotationStore } from './stores/annotation-store.js';
 import { createNodeFileSystem } from '../project/fs/fs-port.js';
 import { BaselineStore } from '../project/baselines.js';
 import { RecordingStore } from './recording/tape/recordings.js';

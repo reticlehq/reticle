@@ -15,7 +15,7 @@ import { FlowStore } from '../../server/dist/features/flows/flows.js';
 import { ProjectStore } from '../../server/dist/features/project/project-store.js';
 import { BaselineStore } from '../../server/dist/features/project/baselines.js';
 import { RecordingStore } from '../../server/dist/features/flows/recording/tape/recordings.js';
-import { AnnotationStore } from '../../server/dist/features/flows/annotation-store.js';
+import { AnnotationStore } from '../../server/dist/features/flows/stores/annotation-store.js';
 import { createNodeFileSystem } from '../../server/dist/features/project/fs/fs-port.js';
 import { BrowserPool } from '../../server/dist/connection/pool/browser-pool.js';
 import {
