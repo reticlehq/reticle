@@ -15,7 +15,7 @@
 // Names are given without extension. Test files are ignored, because the guard ignores them.
 // The answer is a prediction of one specific test; the test is still what decides.
 
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, dirname, basename, resolve, relative } from 'node:path';
 
 const [, , DIR, ...NAMES] = process.argv;
@@ -49,7 +49,25 @@ for (const p of files) {
   imports.set(p, found);
 }
 
-const group = new Set(NAMES.map((n) => resolve(join(DIR, `${n}.ts`))).filter((p) => files.has(p)));
+const asked = NAMES.map((n) => resolve(join(DIR, `${n}.ts`)));
+const group = new Set(asked.filter((p) => files.has(p)));
+
+/**
+ * Named, present on disk, and invisible to this tool -- which is not the same as safe.
+ *
+ * `sources()` drops test files because the guard drops them, so a group of tests produces an
+ * empty group and prints "(nothing)" on every line. That reads as a clean bill of health when
+ * it means "I cannot see these files". It is the more dangerous half of the two, because the
+ * guard cannot see them either: MUTUAL_PAIRS_TODAY is computed over non-test sources ONLY, so
+ * moving tests around can never raise it, and "the count did not move" is then a fact about
+ * the guard rather than about the move.
+ *
+ * Two extractions on this branch -- 27 repo-wide guards, then 3 daemon tests -- were signed off
+ * with "MUTUAL_PAIRS_TODAY unchanged". True, and guaranteed before either file moved. The
+ * moves were still worth making, because 160 flat files in one directory is a real problem and
+ * 133 is less of one; only the verification was weaker than it was reported to be.
+ */
+const invisible = asked.filter((p) => !files.has(p) && existsSync(p));
 const dirOf = (p) => basename(dirname(p));
 const label = (p) => (dirname(p) === resolve(DIR) ? 'PARENT' : dirOf(p));
 
@@ -87,6 +105,15 @@ for (const d of inbound) {
   if (!others) freed.push(d);
 }
 
+if (invisible.length > 0) {
+  console.log(
+    `NOTE: ${String(invisible.length)} of ${String(asked.length)} named file(s) are TESTS.\n` +
+      '      directory-reach reads non-test sources only, so it cannot see them and cannot\n' +
+      '      count them. Moving them will not raise MUTUAL_PAIRS_TODAY whatever they import,\n' +
+      '      and a green run afterwards says nothing about coupling. Judge the move on whether\n' +
+      '      the directory reads better, which is a real reason, and do not call it verified.',
+  );
+}
 console.log(`group of ${String(group.size)} in ${DIR}`);
 console.log(`  reaches out to : ${[...out].sort().join(', ') || '(nothing)'}`);
 console.log(`  reached in from: ${[...inbound].sort().join(', ') || '(nobody)'}`);
