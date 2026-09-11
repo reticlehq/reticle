@@ -9,7 +9,7 @@ import {
   type Window,
 } from '../vocabulary/realm-surface.js';
 import { BlindSpotKind, type Coverage, type Observation } from '../vocabulary/evidence.js';
-import type { SubjectRef } from '../vocabulary/subject.js';
+import { Surface, type SubjectRef } from '../vocabulary/subject.js';
 
 /**
  * A realm for something with no screen, written to find out whether this interface is honest.
@@ -107,7 +107,7 @@ export class ServiceRealm extends Realm {
     const { id, deploy } = this.#ports.instance();
     const epoch = this.#ports.epoch?.();
     return {
-      surface: 'service',
+      surface: Surface.SERVICE,
       // A restart replaces the instance and everything observed under the old one stops being
       // about the world. Folding the deploy in means a redeploy invalidates too, which is the
       // service equivalent of a navigation.
