@@ -26,6 +26,30 @@ import { REPO_ROOT } from './machine/repo-root.js';
  */
 const WORKFLOW = join(REPO_ROOT, '.github', 'workflows', 'ci.yml');
 
+/**
+ * Every OTHER workflow, because this guard read one file and the rot went to a different one.
+ *
+ * `ci.yml`'s filters are correct precisely because this test watches them, and nothing watched
+ * the other ten. That asymmetry is what this closes.
+ *
+ * **What it does NOT close, stated because I wrote the opposite first.** The defect that sent me
+ * here was a SHELL GLOB — a loop over a `packages` glob inside a run step — and this check reads
+ * routing patterns, not shell. Reinstating that glob does not turn this test red; I tried it.
+ * An empty loop is defended instead by the `checked` floor inside the workflow itself, which
+ * fails the step when it inspects fewer packages than it should. Two failures, two mechanisms,
+ * and neither one covers the other.
+ *
+ * Checked the same way and with the same tolerance: a routed path may name a file, a directory
+ * or a filename prefix.
+ */
+const OTHER_WORKFLOWS = execFileSync('git', ['ls-files', '.github/workflows/*.yml'], {
+  cwd: REPO_ROOT,
+  encoding: 'utf8',
+})
+  .trim()
+  .split('\n')
+  .filter((path) => '' !== path && !path.endsWith('/ci.yml'));
+
 /** Paths that are allowed to be absent, each with the reason. Empty, and it should stay empty. */
 const DECLARED_ABSENT: Record<string, string> = {};
 
@@ -91,6 +115,28 @@ describe('the CI router only names paths that exist', () => {
     // below would pass by having nothing to check.
     expect(paths.length).toBeGreaterThan(10);
     expect(paths).toContain('adapters/realm/tauri');
+  });
+
+  it('no other workflow names a path that matches nothing', () => {
+    const stale: string[] = [];
+    for (const relative of OTHER_WORKFLOWS) {
+      const text = readFileSync(join(REPO_ROOT, relative), 'utf8');
+      // Comments explain what a path USED to be, which is the opposite of a stale reference.
+      const live = text
+        .split('\n')
+        .filter((line) => !line.trimStart().startsWith('#'))
+        .join('\n');
+      for (const path of routedPaths(live)) {
+        if (DECLARED_ABSENT[path] !== undefined) continue;
+        if (!matchesSomething(path)) stale.push(`${relative}: ${path}`);
+      }
+    }
+    expect(
+      stale.sort(),
+      'these paths are named in a workflow and match nothing. A filter that matches nothing ' +
+        'skips its job, and a loop over a glob that matches nothing exits 0 having done no ' +
+        'work — both report success.',
+    ).toEqual([]);
   });
 
   it('every routed path still matches a real file', () => {
