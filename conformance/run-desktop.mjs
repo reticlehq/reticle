@@ -53,65 +53,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
  * language for a suite that has two subjects, and the second one is here to test the protocol on
  * a different shell, not to test a factoring.
  */
-const SUBJECT = Object.freeze({
-  /**
-   * The screen moves on over an operation that failed.
-   *
-   * `todos:archive` always rejects and the renderer updates optimistically and swallows it --
-   * a defect the smoke app has carried since it was written, for the web battery's benefit.
-   * Nothing was added to the fixture to reach this scenario, which matters: inventing a bug to
-   * raise a conformance score is building the fixture around the number it produces.
-   */
-  'effect-failed-surface-advanced': {
-    act: { target: 'archive-1', verb: 'click' },
-    claim: 'the todo was archived',
-    reads: ['net'],
-  },
-
-  /**
-   * An action whose effect nothing can observe.
-   *
-   * `todos:seen` is `ipcRenderer.send` with no reply, so the renderer cannot learn whether it
-   * ran. This scenario is ABSENT on the web subject and reachable here, which is the first case
-   * of the desktop shell covering something the browser fixture cannot.
-   */
-  'fire-and-forget': {
-    act: { target: 'mark-seen', verb: 'click' },
-    claim: 'the todo was marked seen',
-    reads: ['net'],
-  },
-
-  'healthy-app-real-claim': {
-    // Crosses the contextBridge and comes back with a row the renderer did not author.
-    act: { target: 'add', verb: 'click' },
-    claim: 'the todo was added',
-    reads: ['net'],
-  },
-  /**
-   * The same claim-is-the-plant scenario the web subject uses, and it needs nothing from this
-   * app either. `visual` is undeclared on both shells, so clause 2 answers before any evidence
-   * is weighed.
-   */
-  'claim-reads-an-undeclared-channel': {
-    act: { target: 'add', verb: 'click' },
-    claim: 'the screen showed the new todo',
-    reads: ['visual'],
-  },
-
-  /**
-   * The healthy run with the claim written down afterwards. Same action, same evidence; only
-   * the order differs, which is what makes it the scenario an implementation passes by accident
-   * if it ignores `declaredAt`.
-   */
-  'claim-written-after-the-action': {
-    act: { target: 'add', verb: 'click' },
-    claim: 'the todo was added',
-    reads: ['net'],
-    declaredAt: 'after-action',
-  },
-
-  'nothing-declared': { act: undefined, claim: undefined, reads: [] },
-});
+import { ELECTRON_SMOKE_SUBJECT as SUBJECT } from './subjects/electron-smoke.mjs';
 
 /** Electron, as the desktop battery resolves it. */
 function electronBinary() {
