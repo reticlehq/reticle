@@ -494,6 +494,12 @@ export const FLOW_TOOLS: ToolDef[] = [
         .describe(
           'Steps driven, and how many declared a consequence. 47 of 63 is not "75% verified" — it is verified for 47 and silent about 16.',
         ),
+      contradictions: z
+        .array(z.unknown())
+        .optional()
+        .describe(
+          'Channel disagreements found anywhere in the suite, INCLUDING on flows that passed — each addressed back to its flow and step. A green flow with one is the false green a regression suite exists to catch, so their presence also stops the suite reporting `pass`.',
+        ),
       unreached: z
         .array(z.string())
         .optional()

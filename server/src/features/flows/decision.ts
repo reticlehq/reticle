@@ -8,6 +8,7 @@ import {
   type SuiteFlowResult,
   type FlowStep,
   type SuiteVerdict,
+  type SuiteContradiction,
   unreachedRoutes,
 } from '@reticlehq/core';
 import { classifyFlowAssertions, FlowAssertionGrade } from './flow-classify.js';
@@ -207,6 +208,26 @@ export function buildSuiteVerdict(
     row.nextAction = decision.nextAction;
     failures.push(row);
   }
+  /*
+   * Collected from EVERY run, not only the failures.
+   *
+   * A failing flow's contradictions would otherwise only reach a reader who went and fetched the
+   * replay; a passing flow's would reach nobody at all. Both are the same finding, and the second is
+   * the more dangerous one, because nothing else about that run invites a second look.
+   */
+  const contradictions: SuiteContradiction[] = [];
+  for (const { replay } of runs) {
+    for (const step of replay.steps) {
+      for (const found of step.contradictions ?? []) {
+        contradictions.push({ flow: replay.name, step: step.step, ...found });
+      }
+    }
+  }
+  const disagreed =
+    0 === contradictions.length
+      ? ''
+      : ` — ${String(contradictions.length)} contradiction(s): a channel disagrees with what the app showed, on ${[...new Set(contradictions.map((c) => c.flow))].join(', ')}`;
+
   const total = runs.length;
   const failed = failures.length;
   // A real failure outranks an unverifiable flow: a broken flow is worse news than an empty one.
@@ -216,7 +237,16 @@ export function buildSuiteVerdict(
   // any project where the flows directory failed to resolve. Found by the adversarial MCP sweep; it
   // was the only invented answer in 994 calls.
   const status: SuiteVerdict['status'] =
-    failed > 0 ? 'fail' : unverifiable.length > 0 || 0 === total ? 'unverifiable' : 'pass';
+    failed > 0
+      ? 'fail'
+      : /*
+         * A green run with a contradiction is not a `pass`. Nothing the flow DECLARED went unproved,
+         * so calling it `fail` would say the wrong thing — but a suite whose channels disagree is
+         * exactly a green that cannot be trusted, which is what `unverifiable` already means here.
+         */
+        unverifiable.length > 0 || contradictions.length > 0 || 0 === total
+        ? 'unverifiable'
+        : 'pass';
   const cannotFail =
     0 === unverifiable.length
       ? ''
@@ -252,11 +282,12 @@ export function buildSuiteVerdict(
     total,
     passed,
     failed,
-    summary: summary + silentSteps + neverOpened,
+    summary: summary + silentSteps + neverOpened + disagreed,
     failures,
     ...(unverifiable.length > 0 ? { unverifiable } : {}),
     ...(coverage === undefined ? {} : { coverage }),
     ...(0 === unreached.length ? {} : { unreached }),
+    ...(0 === contradictions.length ? {} : { contradictions }),
   };
 }
 

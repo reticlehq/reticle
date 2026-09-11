@@ -447,6 +447,26 @@ export interface SuiteVerdict {
    * an empty ledger reads as a clean sweep rather than as an unanswered question.
    */
   unreached?: string[];
+  /**
+   * Every channel disagreement the suite saw, including on flows that PASSED.
+   *
+   * The step-level rule already says a contradiction is reported regardless of `ok`, for the reason
+   * that a step whose action fired and whose consequence held, while a request in the same window
+   * failed, is the false green this product exists to catch. The suite verdict returned only its
+   * failures, so on a green run every one of those was computed, attached to a step, and discarded
+   * at exactly the moment somebody would have read it — a nightly run of a hundred steps reporting
+   * "all 12 flows pass".
+   *
+   * Carrying them also means a green suite is not reported as `pass`: see `status`.
+   */
+  contradictions?: SuiteContradiction[];
+}
+
+/** A step-level contradiction, addressed back to the flow and step that produced it. */
+export interface SuiteContradiction extends Contradiction {
+  flow: string;
+  /** Index within the flow, so the reader can drill straight to the step's own window. */
+  step: number;
 }
 
 /** The reticle_flow_replay envelope. */
