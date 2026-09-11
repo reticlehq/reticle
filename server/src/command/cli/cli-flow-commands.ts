@@ -7,7 +7,7 @@
  */
 
 import { GateExit } from './answers/gate-exit.js';
-import { gateHookMessage, GATE_SKIP_ENV } from './gate-hook-message.js';
+import { gateHookMessage, GATE_SKIP_ENV } from './answers/gate-hook-message.js';
 import { readProjectId } from './ports/resolve/cli-port.js';
 import { changedFilesSince, type ChangedFiles } from '../../features/flows/change/git-changed.js';
 import { join } from 'node:path';

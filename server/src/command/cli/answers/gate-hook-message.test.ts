@@ -13,7 +13,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { gateHookMessage, GATE_SKIP_ENV } from './gate-hook-message.js';
-import { GateExit } from './answers/gate-exit.js';
+import { GateExit } from './gate-exit.js';
 
 const none = { uncovered: [], quarantined: [], downgraded: [], deleted: [] };
 
