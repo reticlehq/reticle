@@ -25,7 +25,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PassThrough } from 'node:stream';
 import { LOOPBACK_HOST } from '@reticlehq/core';
-import { degradedInstructions, localInitializeResponse } from './proxy-handshake.js';
+import { degradedInstructions, localInitializeResponse } from './proxy/proxy-handshake.js';
 import { buildServerInstructions } from './server-instructions.js';
 import { startMcpProxy } from './mcp-proxy.js';
 import { resetOutageReporting } from './mcp-outage.js';

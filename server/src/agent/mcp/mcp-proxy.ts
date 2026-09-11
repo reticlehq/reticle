@@ -5,10 +5,10 @@ import {
   isHandshakeLine,
   drainLines,
   MAX_STDIN_LINE_BYTES,
-} from './proxy-handshake.js';
+} from './proxy/proxy-handshake.js';
 import { isToolCallRequest, isToolsListRequest, ToolCatalogCache } from './tool-catalog-cache.js';
 import { rememberEnumerated, rememberProxyStarted, rememberToolCalled } from './attach-memory.js';
-import { toolsChangedNotification } from './proxy-handshake.js';
+import { toolsChangedNotification } from './proxy/proxy-handshake.js';
 import {
   LOOPBACK_HOST,
   MCP_SSE_PATH,
@@ -18,8 +18,8 @@ import {
 } from '@reticlehq/core';
 import { SseFrameParser } from './sse-frame-parser.js';
 export { SseFrameParser, type SseFrame } from './sse-frame-parser.js';
-export { probeDaemon, waitForDaemon } from './proxy-daemon-probe.js';
-import { probeDaemon } from './proxy-daemon-probe.js';
+export { probeDaemon, waitForDaemon } from './proxy/proxy-daemon-probe.js';
+import { probeDaemon } from './proxy/proxy-daemon-probe.js';
 import { SERVER_VERSION } from '../../command/version/identity/server-version.js';
 import { buildServerInstructions } from './server-instructions.js';
 import { hasProjectConnectedBefore } from '../../connection/session/recall/prior/connection-memory.js';
@@ -33,7 +33,7 @@ import {
   onQueueExpired,
   OnDrop,
   OnRequest,
-} from './proxy-lifecycle.js';
+} from './proxy/proxy-lifecycle.js';
 import { describePresence, probePresence } from '../../command/daemon/port-presence.js';
 import { flushProxySessionMetrics } from '../../telemetry/proxy-telemetry.js';
 /**
@@ -53,12 +53,12 @@ export {
   PROXY_LOG_CHECK_BYTES,
   recoverOversizedProxyLog,
   setProxyLogPort,
-} from './proxy-log.js';
-import { proxyLog } from './proxy-log.js';
+} from './proxy/proxy-log.js';
+import { proxyLog } from './proxy/proxy-log.js';
 import { OutageReason, OutageStage, reportMcpOutage } from './mcp-outage.js';
 import { postToSession } from './mcp-post-transport.js';
-import { reconnectDelayMs } from './proxy-backoff.js';
-export { reconnectDelayMs, RECONNECT_BASE_MS, RECONNECT_CAP_MS } from './proxy-backoff.js';
+import { reconnectDelayMs } from './proxy/proxy-backoff.js';
+export { reconnectDelayMs, RECONNECT_BASE_MS, RECONNECT_CAP_MS } from './proxy/proxy-backoff.js';
 
 export {
   MCP_PROXY_HTTP_AGENT_OPTIONS,

@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events';
 import type * as http from 'node:http';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MCP_PROXY_HTTP_AGENT_OPTIONS, postToSession, shouldRetryUnsentPost } from './mcp-proxy.js';
-import { daemonPollDelayMs } from './proxy-daemon-probe.js';
+import { daemonPollDelayMs } from './proxy/proxy-daemon-probe.js';
 import { getSessionMetrics, resetSessionMetrics } from '../../telemetry/session-metrics.js';
 
 const noBuffers = Object.assign(new Error('no buffer space'), { code: 'ENOBUFS' });

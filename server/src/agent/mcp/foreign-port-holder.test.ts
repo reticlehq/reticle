@@ -18,7 +18,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { OnDrop, onStreamDrop } from './proxy-lifecycle.js';
+import { OnDrop, onStreamDrop } from './proxy/proxy-lifecycle.js';
 import { PortPresence } from '../../command/daemon/port-presence.js';
 
 describe('what the proxy does with the port after a drop', () => {

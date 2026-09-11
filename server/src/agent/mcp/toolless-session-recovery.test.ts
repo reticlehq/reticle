@@ -20,7 +20,7 @@
  * `listChanged` is not decoration.
  */
 import { describe, expect, it } from 'vitest';
-import { localInitializeResponse, TOOLS_CHANGED_NOTIFICATION } from './proxy-handshake.js';
+import { localInitializeResponse, TOOLS_CHANGED_NOTIFICATION } from './proxy/proxy-handshake.js';
 
 const initialize = (id: number | string = 1): string =>
   JSON.stringify({ jsonrpc: '2.0', id, method: 'initialize', params: { protocolVersion: 'x' } });

@@ -10,8 +10,8 @@ import { appendFileSync, mkdirSync, renameSync, statSync, truncateSync } from 'n
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { ReticleDir } from '@reticlehq/core';
-import { log } from '../../log.js';
-import { MAX_DAEMON_LOG_BYTES, rotateDaemonLog } from '../../command/daemon/daemon.js';
+import { log } from '../../../log.js';
+import { MAX_DAEMON_LOG_BYTES, rotateDaemonLog } from '../../../command/daemon/daemon.js';
 
 /**
  * Which port this proxy serves, for the log file name. Set once at startup.

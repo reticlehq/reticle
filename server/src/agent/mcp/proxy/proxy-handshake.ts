@@ -14,7 +14,7 @@
  * Safe because the proxy replays the client's own `initialize` to the daemon whenever a session is
  * finally established (see `replayLines`), so the daemon still gets its handshake in order.
  */
-import { SERVER_VERSION } from '../../command/version/identity/server-version.js';
+import { SERVER_VERSION } from '../../../command/version/identity/server-version.js';
 import { MCP_SERVER_NAME } from '@reticlehq/core';
 
 /** The version we answer with if the client proposed none. */

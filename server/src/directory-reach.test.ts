@@ -300,10 +300,24 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   intent: ['dir', 'fs', 'project', 'tools'],
   journal: ['dir', 'fs', 'project', 'runs'],
   license: ['config'],
-  mcp: ['daemon', 'identity', 'launch', 'prior', 'resolve', 'telemetry', 'tools', 'version'],
+  mcp: [
+    'daemon',
+    'identity',
+    'launch',
+    'prior',
+    'proxy',
+    'resolve',
+    'telemetry',
+    'tools',
+    'version',
+  ],
   memory: ['cloud', 'fs', 'project', 'tools'],
   pool: ['browser', 'input', 'telemetry'],
   project: ['cloud', 'config', 'dir', 'flows', 'fs', 'runs', 'tools'],
+  // The MCP proxy: the transport half of `mcp`, which reaches nothing of its siblings and was
+  // therefore extractable without tangling anything. Reaches out to two, reached in from two,
+  // and no pair among them is mutual -- which is the only thing that would have raised the count.
+  proxy: ['daemon', 'identity'],
   runs: ['cloud', 'dir', 'flows', 'fs', 'intent', 'peer', 'project', 'telemetry', 'tools'],
   session: [
     'bridge',
@@ -323,7 +337,10 @@ const REACHES_FOR: Record<string, readonly string[]> = {
     'telemetry',
     'tools',
   ],
-  setup: ['bridge', 'bringup', 'daemon', 'launch', 'mcp', 'telemetry', 'terminal'],
+  // `mcp` dropped out when the proxy files left it: what setup actually wanted from that
+  // directory was the proxy, and nothing else. The extraction made an existing dependency
+  // legible rather than adding one -- see `would FREE` in scripts/safe-to-group.mjs.
+  setup: ['bridge', 'bringup', 'daemon', 'launch', 'proxy', 'telemetry', 'terminal'],
   telemetry: [
     'cli',
     'daemon',

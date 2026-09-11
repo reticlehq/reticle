@@ -17,7 +17,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { OnDrop, OnRequest, onQueueExpired, onClientRequest } from './proxy-lifecycle.js';
+import { OnDrop, OnRequest, onQueueExpired, onClientRequest } from './proxy/proxy-lifecycle.js';
 
 describe('queue expiry', () => {
   it('goes dormant rather than staying in a reconnect that will never land', () => {
