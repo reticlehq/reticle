@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { isReticleSourceCheckout } from './dev-repo.js';
-import { REPO_ROOT } from '../repo-root.js';
+import { REPO_ROOT } from '../machine/repo-root.js';
 import { join } from 'node:path';
 
 /**

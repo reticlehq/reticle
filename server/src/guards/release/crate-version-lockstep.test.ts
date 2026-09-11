@@ -24,7 +24,7 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { SERVER_VERSION } from '../../command/version/identity/server-version.js';
-import { REPO_ROOT } from '../../repo-root.js';
+import { REPO_ROOT } from '../../machine/repo-root.js';
 
 const REPO = REPO_ROOT;
 const CARGO = join(REPO, 'adapters', 'realm', 'tauri', 'Cargo.toml');

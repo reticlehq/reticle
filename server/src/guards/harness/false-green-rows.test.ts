@@ -17,7 +17,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { REPO_ROOT } from '../../repo-root.js';
+import { REPO_ROOT } from '../../machine/repo-root.js';
 
 const ROWS = join(REPO_ROOT, 'bench/false-green-corpus/rows.json');
 const corpus = JSON.parse(readFileSync(ROWS, 'utf8')) as {

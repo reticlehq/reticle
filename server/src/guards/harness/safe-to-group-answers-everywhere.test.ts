@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { basename, dirname, join } from 'node:path';
-import { REPO_ROOT } from '../../repo-root.js';
+import { REPO_ROOT } from '../../machine/repo-root.js';
 
 /**
  * The advice tool must be able to answer about every directory somebody would ask it about.

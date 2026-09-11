@@ -47,7 +47,7 @@ import { workspaceGlobs } from '../../../../scripts/check-boundaries.mjs';
 import { guardTests } from '../../../../scripts/guard-tests.mjs';
 import { execFileSync } from 'node:child_process';
 import { join, relative, sep } from 'node:path';
-import { REPO_ROOT } from '../../repo-root.js';
+import { REPO_ROOT } from '../../machine/repo-root.js';
 
 const REPO = REPO_ROOT;
 

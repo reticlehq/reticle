@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { mutualPairs, nameCollisions, reaches } from '../../scripts/directory-reach.mjs';
 
 import { join } from 'node:path';
-import { REPO_ROOT } from './repo-root.js';
+import { REPO_ROOT } from './machine/repo-root.js';
 
 /**
  * Which directories in this package reach for which other ones.
@@ -179,7 +179,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
    * `mcp -> cli`, `setup -> cli` and `terminal -> cli` are gone. None of them wanted the
    * command-line surface; each wanted to start a process. Mutual pairs 29 -> 27.
    */
-  launch: ['identity', 'version'],
+  launch: ['machine', 'identity', 'version'],
   /**
    * Where `.reticle/` is for a given project, and the id derived from it.
    *
@@ -364,7 +364,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   // file in it is about the cloud -- `features/cloud` already owns that basename, and the reach
   // graph keys on basename, so a second `cloud` would merge the two into one node and every test
   // would still pass. That has happened here once already.
-  auth: ['cloud'],
+  auth: ['machine', 'cloud'],
   // How the MCP layer's failures reach the agent: recognising a refusal that arrived dressed as
   // a success, and reporting that the tools are gone. What `tools` wanted from `mcp` was these
   // two files and nothing else, which is why lifting them broke the `mcp <-> tools` pair.
@@ -505,6 +505,12 @@ const REACHES_FOR: Record<string, readonly string[]> = {
    * down. Five files, none of which imports anything.
    */
   lifetime: [],
+  /**
+   * Facts and chores about the computer this daemon is running on: the `process.platform` values
+   * it actually branches on, where the checkout is, and how to delete a temp directory on an OS
+   * that does not release handles promptly. Three files at the package root that import nothing.
+   */
+  machine: [],
   tools: [
     'lifetime',
     'args',
@@ -552,7 +558,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
     'version',
     'visual',
   ],
-  update: ['identity', 'project', 'telemetry'],
+  update: ['machine', 'identity', 'project', 'telemetry'],
   version: ['identity', 'project', 'tools'],
   visual: ['args', 'dir', 'fs', 'input', 'tools'],
 };

@@ -48,7 +48,7 @@ const DECLARED_CROSSINGS: Record<string, string> = {
     'lifting them out means editing the install path — the one path in this repo with the worst ' +
     'track record for silent breakage. Left in place deliberately: a consumer embedding the engine ' +
     'takes this module verbatim and never calls the installer, so the crossing costs it nothing.',
-  'platform.ts':
+  'machine/platform.ts':
     'Re-exports `NodePlatform`, four lines naming the two `process.platform` values this daemon ' +
     'branches on. It is DEFINED in the scaffolder because `node-io.ts` needs it and that package may ' +
     'not import this one; re-exported here so the five runtime readers are unchanged. A type-level ' +

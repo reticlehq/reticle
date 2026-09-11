@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { CORE_TOOL_NAMES } from '../tools/tool-surface.js';
 import { ReticleTool } from '@reticlehq/core';
 import { buildServerInstructions } from './server-instructions.js';
-import { REPO_ROOT } from '../../repo-root.js';
+import { REPO_ROOT } from '../../machine/repo-root.js';
 
 /**
  * Three sources describe the tool surface, and they have to agree.

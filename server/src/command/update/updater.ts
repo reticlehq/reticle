@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { NodePlatform } from '../../platform.js';
+import { NodePlatform } from '../../machine/platform.js';
 import { existsSync } from 'node:fs';
 import { platform } from 'node:os';
 import { dirname, join } from 'node:path';

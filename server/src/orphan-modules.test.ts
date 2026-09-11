@@ -13,7 +13,7 @@ import { scanPackage } from '../../scripts/orphan-scan.mjs';
  * Eleven modules have no PRODUCTION importer, and every one of them is imported by tests. That
  * splits two ways, and the split is the point of the list below:
  *
- *   **Test infrastructure living in `src/`** — `temp-dir` (33 test importers), `fake-session`
+ *   **Test infrastructure living in `src/`** — `machine/temp-dir` (33 test importers), `fake-session`
  *   (11), `memory-fs` (7), `workspace-packages` (4), `import-graph` (2). Real, used constantly,
  *   and invisible to this scan because the scan deliberately ignores test importers: a module
  *   kept alive only by tests is exactly what it is looking for. These are the false positives
@@ -33,7 +33,7 @@ const PACKAGE_DIR = join(__dirname, '..');
 /** Modules with no production importer, each with the reason it is allowed to stay. */
 const DECLARED_UNWIRED: Record<string, string> = {
   // ── test infrastructure that happens to live in src/ ────────────────────────────────────────
-  'temp-dir.ts': 'test helper: makes and removes scratch directories. 33 test importers.',
+  'machine/temp-dir.ts': 'test helper: makes and removes scratch directories. 33 test importers.',
   'connection/session/fake-session.ts':
     'the typed Session double every connection test builds on. 11 test importers, and the ' +
     'reason those tests cannot silently drift from the real interface.',

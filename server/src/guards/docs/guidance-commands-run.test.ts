@@ -23,7 +23,7 @@ import { join, relative } from 'node:path';
 import { parseCliArgs } from '../../command/cli/cli-parse.js';
 import { isCloudCommand } from '../../command/cli/cloud-cli.js';
 import { RETICLE_DEFAULT_PORT } from '@reticlehq/core';
-import { REPO_ROOT } from '../../repo-root.js';
+import { REPO_ROOT } from '../../machine/repo-root.js';
 
 // This package's source, named rather than counted. It used to be one directory up from here, which
 // was true when this file sat directly under `src/`; the directories were then grouped and it

@@ -26,7 +26,7 @@ import { join } from 'node:path';
 import { TOOLS } from './tools.js';
 import { ReticleTool } from '@reticlehq/core';
 import { mergedNameRedirect } from './merged-name-redirect.js';
-import { REPO_ROOT } from '../../repo-root.js';
+import { REPO_ROOT } from '../../machine/repo-root.js';
 
 const REPO = REPO_ROOT;
 

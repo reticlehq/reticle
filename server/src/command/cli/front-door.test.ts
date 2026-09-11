@@ -3,7 +3,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { SERVER_VERSION } from '../version/identity/server-version.js';
-import { REPO_ROOT } from '../../repo-root.js';
+import { REPO_ROOT } from '../../machine/repo-root.js';
 
 /**
  * What a person gets in their first two minutes, checked against the program they actually run.

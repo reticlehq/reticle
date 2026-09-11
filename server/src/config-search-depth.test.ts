@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { REPO_ROOT } from './repo-root.js';
+import { REPO_ROOT } from './machine/repo-root.js';
 
 /**
  * The plugin and the CLI must look for `.reticle.json` exactly as far up as each other.

@@ -17,7 +17,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { CORE_TOOL_NAMES } from './tool-surface.js';
 import { TOOLS } from './tools.js';
-import { REPO_ROOT } from '../../repo-root.js';
+import { REPO_ROOT } from '../../machine/repo-root.js';
 
 const CHEATSHEET = join(REPO_ROOT, 'docs/agent-cheatsheet.md');
 const doc = readFileSync(CHEATSHEET, 'utf8');

@@ -1,4 +1,4 @@
-import { removeTempDir } from '../../temp-dir.js';
+import { removeTempDir } from '../../machine/temp-dir.js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { mkdtemp, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';

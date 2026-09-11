@@ -1,5 +1,5 @@
 import * as http from 'node:http';
-import { NodePlatform } from '../../../platform.js';
+import { NodePlatform } from '../../../machine/platform.js';
 import { spawn } from 'node:child_process';
 import { isOpaqueOrigin, LOOPBACK_HOST, STATUS_PATH } from '@reticlehq/core';
 import { daemonFix, describeSkew } from '../../version/version-skew.js';

@@ -21,7 +21,7 @@ import { describe, expect, it } from 'vitest';
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { REPO_ROOT } from '../../repo-root.js';
+import { REPO_ROOT } from '../../machine/repo-root.js';
 
 const REPO = REPO_ROOT;
 const INJECTOR = join(REPO, 'apps', 'bench-app', 'src', 'reticle-bug-injector.ts');

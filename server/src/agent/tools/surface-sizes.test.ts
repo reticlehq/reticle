@@ -17,7 +17,7 @@ import { TOOL_SURFACE, type ToolSurface } from './tool-surface.js';
 import { advertisedTools } from '../mcp/mcp.js';
 import { TOOLS } from './tools.js';
 import { buildDynamicTools } from './dynamic-tools.js';
-import { REPO_ROOT } from '../../repo-root.js';
+import { REPO_ROOT } from '../../machine/repo-root.js';
 
 /** The advertised size of each surface. Update WITH the surface, never after it. */
 const EXPECTED_SIZE: Record<ToolSurface, number> = {

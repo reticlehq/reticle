@@ -3,7 +3,7 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 // The same derivation the other repo-wide checks use, so they cannot disagree about what exists.
 import { workspaceGlobs } from '../../../../scripts/check-boundaries.mjs';
-import { REPO_ROOT } from '../../repo-root.js';
+import { REPO_ROOT } from '../../machine/repo-root.js';
 
 const REPO = REPO_ROOT;
 

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { basename, extname, join } from 'node:path';
-import { REPO_ROOT } from './repo-root.js';
+import { REPO_ROOT } from './machine/repo-root.js';
 
 /**
  * Every loose script in the repo must be reachable from something.

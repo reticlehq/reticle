@@ -23,7 +23,7 @@
 import { describe, expect, it } from 'vitest';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { REPO_ROOT } from '../../repo-root.js';
+import { REPO_ROOT } from '../../machine/repo-root.js';
 
 /** The registry that says which bug is present, i.e. the ground truth the scorecard is scored on. */
 const GROUND_TRUTH = join(REPO_ROOT, 'bench/pw-vs-reticle/bugs.mjs');

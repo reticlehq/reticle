@@ -11,7 +11,7 @@
 import { describe, expect, it } from 'vitest';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { REPO_ROOT } from '../../repo-root.js';
+import { REPO_ROOT } from '../../machine/repo-root.js';
 
 const REPO = REPO_ROOT;
 const TELEMETRY_EVENTS_SPEC = join(REPO, 'apps', 'e2e', 'specs', 'telemetry-events-test.mjs');

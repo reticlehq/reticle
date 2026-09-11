@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { REPO_ROOT } from './repo-root.js';
+import { REPO_ROOT } from './machine/repo-root.js';
 
 /**
  * The final `gate` job is the one check a merge is allowed to depend on. It passes when every job it

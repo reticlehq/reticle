@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseCliArgs, knownCommand, UNKNOWN_COMMAND } from '../../command/cli/cli-parse.js';
-import { REPO_ROOT } from '../../repo-root.js';
+import { REPO_ROOT } from '../../machine/repo-root.js';
 import { publishedPackageDirs } from '../../workspace-packages.js';
 
 /**

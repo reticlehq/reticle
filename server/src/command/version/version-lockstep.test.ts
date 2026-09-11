@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { RETICLE_NPM_PACKAGE, RETICLE_VERSION } from '@reticlehq/init';
 import { SERVER_VERSION } from './identity/server-version.js';
-import { REPO_ROOT } from '../../repo-root.js';
+import { REPO_ROOT } from '../../machine/repo-root.js';
 
 /**
  * The scaffolder and the daemon must agree about what they are.

@@ -1,7 +1,7 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { workspaceGlobs } from '../../scripts/check-boundaries.mjs';
-import { REPO_ROOT } from './repo-root.js';
+import { REPO_ROOT } from './machine/repo-root.js';
 
 /**
  * Every package this repository publishes, and where it lives.

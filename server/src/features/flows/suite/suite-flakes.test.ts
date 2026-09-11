@@ -1,4 +1,4 @@
-import { removeTempDir } from '../../../temp-dir.js';
+import { removeTempDir } from '../../../machine/temp-dir.js';
 /**
  * The flake-ledger step of `flow_verify`, tested against the shipped function rather than a copy.
  *

@@ -28,7 +28,7 @@ import {
   LICENSE_PUBLIC_KEY_ENV,
   signLicenseKey,
 } from '../features/license/license.js';
-import { REPO_ROOT } from '../repo-root.js';
+import { REPO_ROOT } from '../machine/repo-root.js';
 import { join } from 'node:path';
 
 /**

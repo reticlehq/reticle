@@ -28,7 +28,7 @@ import { join } from 'node:path';
 import { StorageArea } from '@reticlehq/core';
 import { READ_TOOLS } from './read-tools.js';
 import { ReticleTool } from '@reticlehq/core';
-import { REPO_ROOT } from '../../repo-root.js';
+import { REPO_ROOT } from '../../machine/repo-root.js';
 
 const REPO = REPO_ROOT;
 const read = (path: string): string => readFileSync(join(REPO, path), 'utf8');

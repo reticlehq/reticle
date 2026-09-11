@@ -24,7 +24,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { REPO_ROOT } from '../../repo-root.js';
+import { REPO_ROOT } from '../../machine/repo-root.js';
 
 const REPO = REPO_ROOT;
 
