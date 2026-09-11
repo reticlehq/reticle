@@ -20,6 +20,7 @@
 import { describe, expect, it } from 'vitest';
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
+import { execFileSync } from 'node:child_process';
 import { REPO_ROOT } from '../../repo-root.js';
 
 const REPO = REPO_ROOT;
@@ -42,8 +43,10 @@ const BARE_BRANCH_IDS = ['state-desync', 'status-stale', 'render-storm'] as cons
 const UNSCORED = new Map<string, string>([
   [
     'empty-200-deployments',
-    'a 200 with an empty list where rows are expected. No harness drives it and no scorecard names ' +
-      'it, so it has never appeared in a catch rate.',
+    'a 200 with an empty list where rows are expected, on GET /api/deployments. UNPLANTABLE for ' +
+      'the same reason as payload-wrong-value: that path exists nowhere in the bench app except ' +
+      'this injector, so there is no request to answer emptily. Both entries on this list turned ' +
+      'out to be dead rather than merely undriven.',
   ],
   [
     'payload-wrong-value',
@@ -59,6 +62,26 @@ const UNSCORED = new Map<string, string>([
 ]);
 
 const source = (): string => readFileSync(INJECTOR, 'utf8');
+
+/** The bug id whose entry names this URL, so a declared-unscored bug is not reported twice. */
+function urlOwner(url: string): string {
+  const found = new RegExp(`'([a-z0-9-]+)': \\{[^}]*urlContains: '${url}'`).exec(source());
+  return found?.[1] ?? url;
+}
+
+/** Every bench-app source file except the injector: what the application itself actually does. */
+function applicationSource(): string {
+  const root = join(REPO, 'apps', 'bench-app', 'src');
+  const files = execFileSync('git', ['ls-files', 'src'], {
+    cwd: join(REPO, 'apps', 'bench-app'),
+    encoding: 'utf8',
+  })
+    .split('\n')
+    .filter(
+      (f) => (f.endsWith('.ts') || f.endsWith('.tsx')) && !f.includes('reticle-bug-injector'),
+    );
+  return files.map((f) => readFileSync(join(root, f.replace(/^src\//, '')), 'utf8')).join('\n');
+}
 
 /** Every `Record` table in the injector, with the scenario ids it declares. */
 function tables(): Map<string, string[]> {
@@ -200,6 +223,34 @@ describe('every declared bench scenario is scored by something', () => {
 
   it('finds harnesses and scorecards to check', () => {
     expect(SEARCH_ROOTS.flatMap(files).length).toBeGreaterThan(20);
+  });
+
+  it('every network bug names a URL the application actually requests', () => {
+    // A bug whose target the app never fetches cannot fire, however it is driven. That is worse
+    // than an unscored scenario and looks identical from outside: it is injectable, it appears
+    // in the catalogue, and it silently pads the denominator of every catch rate.
+    //
+    // Both entries on the UNSCORED list turned out to be this. `payload-wrong-value` rewrites a
+    // field on POST /api/deploy and `empty-200-deployments` empties GET /api/deployments, and
+    // neither path exists anywhere in the bench app except inside the injector. Found by trying
+    // to use the first one for a conformance scenario: the whole flow drove -- sign in, open the
+    // modal, name the service, submit -- and produced no request at all, because
+    // `createDeployment` is local store state with no fetch.
+    //
+    // Matching is on the literal path. The app builds request URLs as `${BASE}${path}` with the
+    // path passed as a string literal at every call site, so this sees them; a URL assembled
+    // from fragments would defeat it, and that is worth knowing rather than worth over-engineering.
+    const app = applicationSource();
+    const unreachable = [...source().matchAll(/urlContains: '([^']+)'/g)]
+      .map((m) => m[1] ?? '')
+      .filter((url) => '' !== url && !app.includes(url))
+      .filter((url) => !UNSCORED.has(urlOwner(url)));
+    expect(
+      [...new Set(unreachable)],
+      'these bugs intercept a URL the bench app never requests, so they can never fire and every ' +
+        'catch rate counts them as missed. Point each at a path the app uses, give the app the ' +
+        'request it claims to break, or declare it in UNSCORED with the reason.',
+    ).toEqual([]);
   });
 
   it('every scenario is either driven by a harness or listed as unscored', () => {
