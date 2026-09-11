@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 import type { FileSystemPort } from '../../project/fs/fs-port.js';
-import { reticleDirPaths, sessionDirPath, visualDir } from '../../project/dir/reticle-dir.js';
+import { reticleDirPaths, visualDir } from '../../project/dir/reticle-dir.js';
 
 /** Keep at most this many session journals on disk; older ones are pruned by recency. */
 export const DEFAULT_SESSION_RETENTION = 20;
@@ -11,7 +11,16 @@ export const DEFAULT_SESSION_RETENTION = 20;
  */
 export const DEFAULT_DIFF_RETENTION = 10;
 
+/**
+ * Keep at most this many local feedback copies. The outbox is the record; these are a convenience
+ * for the one case where delivery was refused and somebody has to file the report by hand.
+ */
+export const DEFAULT_FEEDBACK_RETENTION = 20;
+
 const DIFF_SUFFIX = '.diff.png';
+
+/** Where refused feedback reports are copied. Named here because the writer lives in another area. */
+const FEEDBACK_SUBDIR = 'feedback';
 
 interface DatedDir {
   name: string;
@@ -31,6 +40,48 @@ export function selectPrunable(dirs: readonly DatedDir[], retention: number): st
 }
 
 /**
+ * Keep the `retention` most-recent entries of `dir`, remove the rest by mtime.
+ *
+ * The one rule behind all three callers below — journals, overlay diffs, feedback copies. Never
+ * throws: retention is maintenance, and maintenance must never be the reason a daemon fails to come
+ * up or a session dies. A missing directory, an unstattable entry and a failed remove are all just
+ * "nothing to do here".
+ *
+ * @param keep an entry this returns false for is not a candidate and is never counted, so a
+ * directory holding two kinds of file can have one of them capped.
+ */
+async function pruneByRecency(
+  fs: FileSystemPort,
+  dir: string,
+  retention: number,
+  keep: (name: string) => boolean = () => true,
+): Promise<void> {
+  let names: string[];
+  try {
+    names = await fs.readdir(dir);
+  } catch {
+    return; // nothing written here yet
+  }
+  const dated: DatedDir[] = [];
+  for (const name of names) {
+    if (!keep(name)) continue;
+    try {
+      const { mtimeMs } = await fs.stat(join(dir, name));
+      dated.push({ name, mtimeMs });
+    } catch {
+      /* unstattable entry — skip */
+    }
+  }
+  for (const name of selectPrunable(dated, retention)) {
+    try {
+      await fs.rm(join(dir, name));
+    } catch {
+      /* best-effort */
+    }
+  }
+}
+
+/**
  * Bound the journal on disk: keep the `retention` most-recent session directories under
  * `.reticle/sessions/`, remove the rest by mtime. Never throws — retention is best-effort maintenance,
  * so a stat/rm failure on one dir (or a missing sessions/ dir) is swallowed, never crashing a session.
@@ -41,29 +92,7 @@ export async function pruneSessions(
   root: string,
   retention: number = DEFAULT_SESSION_RETENTION,
 ): Promise<void> {
-  const sessionsDir = reticleDirPaths(root).sessions;
-  let names: string[];
-  try {
-    names = await fs.readdir(sessionsDir);
-  } catch {
-    return; // no sessions dir yet
-  }
-  const dated: DatedDir[] = [];
-  for (const name of names) {
-    try {
-      const { mtimeMs } = await fs.stat(sessionDirPath(root, name));
-      dated.push({ name, mtimeMs });
-    } catch {
-      /* unstattable entry — skip */
-    }
-  }
-  for (const name of selectPrunable(dated, retention)) {
-    try {
-      await fs.rm(sessionDirPath(root, name));
-    } catch {
-      /* best-effort */
-    }
-  }
+  await pruneByRecency(fs, reticleDirPaths(root).sessions, retention);
 }
 
 /**
@@ -96,28 +125,24 @@ export async function pruneVisualDiffs(
     return; // no visual dir yet
   }
   for (const dir of dirs) {
-    const dated: DatedDir[] = [];
-    let names: string[];
-    try {
-      names = await fs.readdir(dir);
-    } catch {
-      continue;
-    }
-    for (const name of names) {
-      if (!name.endsWith(DIFF_SUFFIX)) continue;
-      try {
-        const { mtimeMs } = await fs.stat(join(dir, name));
-        dated.push({ name, mtimeMs });
-      } catch {
-        /* unstattable entry — skip */
-      }
-    }
-    for (const name of selectPrunable(dated, retention)) {
-      try {
-        await fs.rm(join(dir, name));
-      } catch {
-        /* best-effort */
-      }
-    }
+    await pruneByRecency(fs, dir, retention, (name) => name.endsWith(DIFF_SUFFIX));
   }
+}
+
+/**
+ * Bound `.reticle/feedback/` — local copies of reports that were already sent.
+ *
+ * Nothing reads the directory back: no readdir, no consumer. It exists so a report refused delivery
+ * is not lost and the receipt can hand somebody a path. That makes the recent ones useful and the
+ * rest dead weight. The outbox remains the record.
+ *
+ * Capped from here rather than from the writer, which lives in an area this file does not own. A
+ * retention rule is the same rule whether the directory holds journals, diffs or reports.
+ */
+export async function pruneFeedback(
+  fs: FileSystemPort,
+  root: string,
+  retention: number = DEFAULT_FEEDBACK_RETENTION,
+): Promise<void> {
+  await pruneByRecency(fs, join(root, FEEDBACK_SUBDIR), retention);
 }

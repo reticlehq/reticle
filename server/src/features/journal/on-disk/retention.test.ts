@@ -5,7 +5,7 @@ import { utimesSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createNodeFileSystem, type FileSystemPort } from '../../project/fs/fs-port.js';
-import { pruneSessions, pruneVisualDiffs, selectPrunable } from './retention.js';
+import { pruneFeedback, pruneSessions, pruneVisualDiffs, selectPrunable } from './retention.js';
 import { visualDiffPath, visualDir, visualPath } from '../../project/dir/reticle-dir.js';
 
 describe('selectPrunable', () => {
@@ -123,5 +123,55 @@ describe('the visual diffs nothing reads back', () => {
 
   it('never throws when there is no visual directory at all', async () => {
     await expect(pruneVisualDiffs(vfs, vroot)).resolves.toBeUndefined();
+  });
+});
+
+/**
+ * `.reticle/feedback/` is a write-only local copy of reports that were already sent.
+ *
+ * Nothing ever reads the directory back — there is no readdir, no prune, no consumer. It exists so
+ * that a report refused delivery is not lost, and the receipt hands the human a path to run. That
+ * makes the RECENT ones valuable and the rest dead weight: hundreds of copies of things the outbox
+ * already carries.
+ *
+ * The cap lives here rather than in the writer, which another agent owns. A retention rule about a
+ * directory is the same kind of rule whether the directory holds journals, diffs or reports.
+ */
+describe('the feedback copies nothing reads back', () => {
+  let froot: string;
+  let ffs: FileSystemPort;
+
+  beforeEach(async () => {
+    froot = join(await mkdtemp(join(tmpdir(), 'reticle-feedback-')), '.reticle');
+    ffs = createNodeFileSystem();
+  });
+
+  afterEach(async () => {
+    await removeTempDir(join(froot, '..'));
+  });
+
+  async function withReports(count: number, retention?: number): Promise<string[]> {
+    const dir = join(froot, 'feedback');
+    await mkdir(dir, { recursive: true });
+    for (let i = 0; i < count; i += 1) {
+      const path = join(dir, `report-${String(i)}.md`);
+      await writeFile(path, 'x');
+      const when = new Date(1_700_000_000_000 + i * 1000);
+      utimesSync(path, when, when);
+    }
+    await pruneFeedback(ffs, froot, retention);
+    return (await readdir(dir)).sort();
+  }
+
+  it('keeps only the most recent reports', async () => {
+    expect(await withReports(4, 2)).toEqual(['report-2.md', 'report-3.md']);
+  });
+
+  it('keeps everything under the cap', async () => {
+    expect(await withReports(2, 5)).toEqual(['report-0.md', 'report-1.md']);
+  });
+
+  it('never throws when no report was ever written', async () => {
+    await expect(pruneFeedback(ffs, froot)).resolves.toBeUndefined();
   });
 });
