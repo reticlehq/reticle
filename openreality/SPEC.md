@@ -129,6 +129,12 @@ Every claim MUST record `declaredAt`: `before-action` or `after-action`. This is
 
 An **assertion** is one condition and MUST name the channels answering it requires. The protocol does not standardise a predicate language — that ages badly and belongs to the realm. It standardises which channels are read, because that is what decides whether the assertion can prove anything.
 
+**But it does name a few forms it evaluates itself**, because an opaque predicate cannot be compared across implementations, and a clause nobody can reach is not a rule. `predicate` stays `unknown` and an implementation may accept anything it likes; alongside that, `Predicate` names three shapes — `count`, `present`, `absent` — selecting observations by channel, by exact `summary`, and by a substring of the rendered value. They read only what an `Observation` carries in every realm, so a service, a robot and a browser answer them identically, and they cover what a claim about a consequence mostly is: counting and presence.
+
+`evaluate(predicate, observations)` returns `true`, `false`, or **`undefined` meaning nobody evaluated this**. That third answer is normative and load-bearing: a predicate written in a language this specification does not speak is NOT a failed claim, and an adjudicator MUST NOT read it as one. `assertionsHeld` is three-valued for the same reason, answers from whatever subset it could evaluate, and any single `false` decides.
+
+Two deliberate limits. `summary` matches exactly and never as a pattern — a regular expression over it would be a predicate language arriving through the back door. And `valueContains` is the weakest thing in the protocol: rendering is an implementation's own, so two conformant implementations may legitimately disagree about a substring. The rendering function is specified and exported so a disagreement has one place to be resolved; a claim MUST NOT rest on `valueContains` alone.
+
 A **constraint** must hold _throughout_, not at the end. "The invoice exists" is a claim, checked once. "No payment is duplicated" is a constraint, and a verifier that only inspects the end state cannot see it violated in the middle. A verifier that cannot evaluate over the whole window MUST declare a blind spot rather than report the constraint held.
 
 ---
@@ -216,6 +222,10 @@ Three links, not one:
 
 A blind spot is **impeaching** when it falls on a channel the claim actually needed. Only impeaching blind spots prevent a `yes`. Without that distinction an honest implementation is punished for declaring blind spots and learns to declare fewer.
 
+**Who decides that is specified, because leaving it open made clause 6 unreachable.** A realm MUST NOT judge relevance: it does not see the claim, so it has no honest basis for the flag, and every implementation written against an earlier draft of this section set `impeaching: false` everywhere and documented that the adjudicator would decide — while the adjudicator filtered on the flag. Between them, a window that closed over an operation still in flight was proving things.
+
+So the rule is: a blind spot impeaches when the implementation says so **or** when it names a `channel` the claim reads. A realm's job is to say which channel each gap falls on; matching that against the claim is the adjudicator's. A blind spot naming no channel can only impeach by its flag — it is a statement about the observation as a whole, and only the implementation knows what it bears on.
+
 An empty `blindSpots` array is a positive claim that nothing was hidden. An implementation that cannot enumerate its blind spots MUST omit the field rather than send `[]`.
 
 ---
@@ -262,6 +272,10 @@ The clauses are checked in this order, and the order _is_ the specification. It 
 8. The claim was declared after the action → `unknown`.
 9. Nothing independent and consequence-grade supports it → `unknown`.
 10. Otherwise → `yes` at consequence grade.
+
+Each clause has a **ground**: a code naming which one decided, returned alongside the prose. In clause order: `nothing-declared`, `channel-not-observed`, `contradicted`, `assertion-failed`, `window-not-closed`, `coverage-impeached`, `suspicion-unresolved`, `declared-after-action`, `no-independent-consequence`, `proved`.
+
+The ground exists because a verdict alone is too coarse and its sentence is too fine. `no` is returned by both clause 3 and clause 4, so "disproved because independent channels contradicted" is not expressible in the verdict; and comparing the sentence would score every implementation against this one's vocabulary. The prose stays for a person to read. **A conformance scenario names a ground, never a wording.**
 
 The reference implementation of this order is `adjudicate()`. Where an implementation disagrees with it, that function is what this specification means.
 
@@ -386,7 +400,7 @@ Stated plainly, because a specification hiding its gaps is worse than a short on
 - **No version negotiation.** Both ends assume version 1.
 - **No registry service.** `Implementation` describes an entry; nothing says where entries live.
 - **A driver cannot resolve a reference through the interface.** `perform` returns a receipt and never data, which is right for an action and wrong for a query — a query is a read, and reads go through `describe`, which takes an opaque query and returns an opaque structure. There is no defined way to ask "what is the handle for the thing called X" and get an answer a later `act` can use. Found by writing a driver against it: every plant was refused because the selector a person writes is not the handle an action takes, and nothing in the interface bridges the two. Routing reads through `perform` would fix it by making a receipt carry data, which is the shape the separation exists to prevent, so it needs a real answer rather than a patch.
-- **Nothing in the interface produces an anomaly.** §8 defines twelve kinds across three tiers, and `adjudicate` takes them as an input — but `Realm` has no method that returns one, and no role in this document is given the job of finding them. A realm should not do it (it would be the subject reporting faults in itself), and the adjudicator cannot (it is handed them). So a conformant implementation can be built in which the whole of §8 is unreachable, and one was: the reference binding passes an empty array because it has nothing to ask, and three planted defects came back `yes`. **A false green produced by the specification's own gap.** The fix is a design decision — name a detector role, or make the adjudicator derive anomalies from the observations it already has — and it is not a patch.
+- ~~**Nothing in the interface produces an anomaly.**~~ _Closed._ `Realm.detect` is optional and named; an implementation may find anomalies and still cannot convict itself, because a disagreement only convicts when one of the two channels is independent (§3.1) and that check runs on the adjudicator's side. Kept here, struck through, because the shape of the defect recurred twice more afterwards — `impeaching` and `predicate` were both fields defined, deferred to somebody, and evaluated by nobody, each making a clause of §7.1 unreachable. **Three of ten clauses could not fire, and only running the conformance suite found it.** The original entry read: §8 defines twelve kinds across three tiers, and `adjudicate` takes them as an input — but `Realm` has no method that returns one, and no role in this document is given the job of finding them. A realm should not do it (it would be the subject reporting faults in itself), and the adjudicator cannot (it is handed them). So a conformant implementation can be built in which the whole of §8 is unreachable, and one was: the reference binding passes an empty array because it has nothing to ask, and three planted defects came back `yes`. **A false green produced by the specification's own gap.** The fix is a design decision — name a detector role, or make the adjudicator derive anomalies from the observations it already has — and it is not a patch.
 - **No predicate language.** Assertions carry an opaque predicate and a human rendering. Two implementations agree on which channels a claim reads, and not on how to write the condition.
 - **Nothing revises a verdict yet in practice.** §7 says how a correction is written and the mechanism exists; no shipping adjudication currently re-opens a window when late evidence lands.
 
