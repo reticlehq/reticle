@@ -72,6 +72,7 @@ export const CLI_USAGE = `usage:  npx @reticlehq/server <command>   (or \`reticl
   reticle open  [url] [--port N]                        (show the app: reuse the connected tab, else open one)
   reticle verify <url> [--port N] [--headed] [--timeout N] [--storage-state <file>] [--session-id <id>]  (one-shot: drive the URL, verify saved flows, exit 0=pass)
                        [--explore] [--persona <who>]   (no saved flows? let Reticle drive the app itself and record them)
+                       [--select <label>]              (repeatable: verify only flows carrying these labels — no model, exit 0=pass)
                 [--expect '<json predicate>']            (one verdict, no saved flows needed — asks
                 the daemon that is already running, so nothing is bound and nothing is stopped. This
                 is the path when your client never loaded the reticle_* tools. exit 0 ONLY on
@@ -338,6 +339,7 @@ export type CliResult =
       expect?: unknown;
       explore?: boolean;
       persona?: string;
+      select?: string[];
     }
   | { kind: 'affected'; files: string[]; since?: string }
   | { kind: 'hunt'; dir: string }
@@ -838,6 +840,7 @@ export function parseCliArgs(
         ...(r.expect !== undefined ? { expect: r.expect } : {}),
         ...(true === r.explore ? { explore: true } : {}),
         ...(r.persona !== undefined ? { persona: r.persona } : {}),
+        ...(r.select !== undefined ? { select: r.select } : {}),
       };
     }
     case CAPSULES_COMMAND:

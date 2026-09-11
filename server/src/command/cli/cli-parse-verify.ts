@@ -24,6 +24,8 @@ const SESSION_ID_FLAG = '--session-id';
 const EXPLORE_FLAG = '--explore';
 /** Who to be while exploring — a persona, or the business outcome to reach. Implies --explore. */
 const PERSONA_FLAG = '--persona';
+/** Narrow the suite to flows carrying this label. Repeatable — a set is the union of what you name. */
+const SELECT_FLAG = '--select';
 
 export type VerifySuffix =
   | {
@@ -37,6 +39,7 @@ export type VerifySuffix =
       expect?: unknown;
       explore?: boolean;
       persona?: string;
+      select?: string[];
     }
   | { kind: 'error'; message: string };
 
@@ -54,6 +57,7 @@ export function parseVerifySuffix(args: string[], defaultPort: number): VerifySu
   let expect: unknown;
   let explore = false;
   let persona: string | undefined;
+  const select: string[] = [];
   let port = defaultPort;
   let i = 0;
   while (i < args.length) {
@@ -85,6 +89,13 @@ export function parseVerifySuffix(args: string[], defaultPort: number): VerifySu
       const v = args[i];
       if (v === undefined) return missingValue(SESSION_ID_FLAG);
       sessionId = v;
+    } else if (arg === SELECT_FLAG) {
+      i++;
+      const v = args[i];
+      if (v === undefined) return missingValue(SELECT_FLAG);
+      // Repeatable rather than comma-split: a label is free-form, and a comma inside one would
+      // silently become two selections that match nothing.
+      select.push(v);
     } else if (arg === EXPLORE_FLAG) {
       explore = true;
     } else if (arg === PERSONA_FLAG) {
@@ -130,5 +141,6 @@ export function parseVerifySuffix(args: string[], defaultPort: number): VerifySu
     ...(sessionId !== undefined ? { sessionId } : {}),
     ...(explore ? { explore } : {}),
     ...(persona !== undefined ? { persona } : {}),
+    ...(select.length > 0 ? { select } : {}),
   };
 }

@@ -17,6 +17,7 @@ import {
   harnessAvailable,
   MSG_NO_HARNESS_KEY,
 } from '../../agent/tools/harness-explore.js';
+import { resolveSuiteSelection } from '../../features/flows/suite-selection.js';
 import {
   readOrCreatePairingTokenSync,
   defaultPairingTokenDir,
@@ -88,7 +89,13 @@ const MSG_VERIFY_PREFIX = 'verify failed: ';
 export interface VerifyConnection {
   /** Resolve true once a browser session has connected, or false at timeout. */
   sessionReady(timeoutMs: number): Promise<boolean>;
-  listFlows(): Promise<string[]>;
+  /**
+   * Flow names to verify, after selection. `select` narrows to flows carrying ANY of those labels.
+   *
+   * The connection applies it rather than the caller, because a label lives inside the flow file and
+   * only the connection can read one.
+   */
+  listFlows(select?: readonly string[]): Promise<string[]>;
   /**
    * Drive the app with a model and save what it drove. Present only when a model is configured.
    *
@@ -118,6 +125,8 @@ interface VerifyArgs {
   explore?: boolean;
   /** Who to be, or what to accomplish, while exploring. Implies `explore`. */
   persona?: string;
+  /** Verify only flows carrying ANY of these labels. */
+  select?: string[];
 }
 
 function errMessage(error: unknown): string {
@@ -145,7 +154,23 @@ export async function runVerify(args: VerifyArgs, ports: VerifyPorts): Promise<v
       ports.exit(EXIT_FAIL);
       return;
     }
-    let names = await conn.listFlows();
+    let names = await conn.listFlows(args.select);
+    /*
+     * A selection that matched nothing is NOT "no flows to verify".
+     *
+     * The generic refusal below would send somebody to record a flow they already have, while the
+     * real fault is a label that does not exist. And treating it as an empty suite is how a typo
+     * becomes a green pass over zero flows -- exactly the shape this command's exit code exists to
+     * prevent.
+     */
+    if (0 === names.length && args.select !== undefined && args.select.length > 0) {
+      ports.fail(
+        `No flow carries ${args.select.map((label) => `"${label}"`).join(' or ')}, so nothing ran ` +
+          `and nothing was proved. Check the label, or run without --select to verify every flow.`,
+      );
+      ports.exit(EXIT_FAIL);
+      return;
+    }
     /*
      * Drive the app ourselves, but only when asked and only when there is nothing to replay.
      *
@@ -360,7 +385,10 @@ async function openLiveConnection(opts: LiveOpts): Promise<VerifyConnection> {
   const runner = new ReticleRunner(createRunnerPort(deps, opts.sessionId));
   return {
     sessionReady: (timeoutMs) => waitForSession(deps.sessions, timeoutMs, opts.now),
-    listFlows: () => deps.flows.list(),
+    listFlows: async (select) =>
+      select === undefined || 0 === select.length
+        ? deps.flows.list()
+        : (await resolveSuiteSelection(deps, undefined, { labels: [...select] })).run,
     // Absent, not throwing, when no model is configured: the CLI reads its absence as "unavailable"
     // and prints the one sentence that makes it available.
     ...(harnessAvailable(process.env)
@@ -454,6 +482,8 @@ export function handleVerify(parsed: {
   timeoutMs?: number;
   storageState?: string;
   sessionId?: string;
+  /** Verify only flows carrying ANY of these labels. */
+  select?: string[];
   /** Drive the app with a model and record flows, when there are none saved yet. */
   explore?: boolean;
   /** Who to be, or what to accomplish, while exploring. Implies `explore`. */
@@ -519,6 +549,7 @@ export function handleVerify(parsed: {
         timeoutMs: parsed.timeoutMs ?? DEFAULT_SESSION_TIMEOUT_MS,
         ...(true === parsed.explore ? { explore: true } : {}),
         ...(parsed.persona === undefined ? {} : { persona: parsed.persona }),
+        ...(parsed.select === undefined ? {} : { select: parsed.select }),
       },
       ports,
     );

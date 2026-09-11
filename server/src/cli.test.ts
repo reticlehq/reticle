@@ -277,6 +277,35 @@ describe('parseCliArgs', () => {
     });
   });
 
+  it('verify <url> --select narrows the suite to a label', () => {
+    expect(parseCliArgs(['verify', URL, '--select', 'smoke'], PORT)).toEqual({
+      kind: 'verify',
+      url: URL,
+      headless: true,
+      port: PORT,
+      select: ['smoke'],
+    });
+  });
+
+  it('verify accepts --select more than once, because a set is a union', () => {
+    expect(parseCliArgs(['verify', URL, '--select', 'smoke', '--select', 'money'], PORT)).toEqual({
+      kind: 'verify',
+      url: URL,
+      headless: true,
+      port: PORT,
+      select: ['smoke', 'money'],
+    });
+  });
+
+  it('verify --select with no value says so rather than selecting nothing', () => {
+    // Silently selecting everything would turn a typo into a full suite run; silently selecting
+    // nothing would turn it into a green pass over zero flows. Neither is an answer.
+    expect(parseCliArgs(['verify', URL, '--select'], PORT)).toEqual({
+      kind: 'error',
+      message: '--select needs a value',
+    });
+  });
+
   it('verify with no url says it needs a url', () => {
     expect(parseCliArgs(['verify'], PORT)).toEqual({
       kind: 'error',

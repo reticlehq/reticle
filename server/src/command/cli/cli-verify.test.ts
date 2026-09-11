@@ -304,3 +304,33 @@ describe('exploring an app that has no saved flows', () => {
     expect(focus).toBe('a returning customer with a full basket');
   });
 });
+
+describe('verifying a subset', () => {
+  it('names the label that matched nothing, rather than reporting an empty suite as done', async () => {
+    // A typo must not become a green pass over zero flows, and it must not send somebody to record
+    // a flow they already have — which is what the generic no-flows refusal would have said.
+    const { ports, rec } = harness({ listFlows: () => Promise.resolve([]) });
+
+    await runVerify({ ...ARGS, select: ['smoek'] }, ports);
+
+    expect(rec.exit).toEqual([1]);
+    expect(rec.verifyCalls).toBe(0);
+    expect(rec.fail.join('\n')).toContain('smoek');
+    expect(rec.fail.join('\n')).toContain('nothing was proved');
+  });
+
+  it('passes the selection to the connection, which is the only thing that can read a label', async () => {
+    let asked: readonly string[] | undefined;
+    const { ports, rec } = harness({
+      listFlows: (select) => {
+        asked = select;
+        return Promise.resolve(['checkout']);
+      },
+    });
+
+    await runVerify({ ...ARGS, select: ['money'] }, ports);
+
+    expect(asked).toEqual(['money']);
+    expect(rec.exit).toEqual([0]);
+  });
+});
