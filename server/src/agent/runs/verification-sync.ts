@@ -18,7 +18,10 @@ import {
   type ReticleVerificationRun,
 } from '@reticlehq/core';
 import { homedir } from 'node:os';
-import { buildVerificationRun, type VerificationRunInput } from './build-verification-run.js';
+import {
+  buildVerificationRun,
+  type VerificationRunInput,
+} from './artifact/build-verification-run.js';
 import { mapReplayToFlowResult } from './artifact/replay-mapping.js';
 import { defaultRunId } from './runner-port.js';
 import { RunStore } from './artifact/run-store.js';

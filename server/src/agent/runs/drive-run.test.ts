@@ -8,9 +8,12 @@
  */
 import { describe, expect, it } from 'vitest';
 import { Verified, type JournalAction } from '@reticlehq/core';
-import { buildVerificationRun, type VerificationRunInput } from './build-verification-run.js';
+import {
+  buildVerificationRun,
+  type VerificationRunInput,
+} from './artifact/build-verification-run.js';
 import { driveRunFrom, driveRunId } from './drive-run.js';
-import { computeVerdict } from './build-verification-run.js';
+import { computeVerdict } from './artifact/build-verification-run.js';
 import { VerdictStatus } from '@reticlehq/core';
 
 let seq = 0;

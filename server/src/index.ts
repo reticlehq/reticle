@@ -221,8 +221,11 @@ export type { FileSystemPort } from './features/project/fs/fs-port.js';
 export { ReticleRunner } from './agent/runs/reticle-runner.js';
 export type { RunnerPort, VerifyOptions } from './agent/runs/reticle-runner.js';
 export { createRunnerPort, defaultRunId } from './agent/runs/runner-port.js';
-export { buildVerificationRun, computeVerdict } from './agent/runs/build-verification-run.js';
-export type { VerificationRunInput } from './agent/runs/build-verification-run.js';
+export {
+  buildVerificationRun,
+  computeVerdict,
+} from './agent/runs/artifact/build-verification-run.js';
+export type { VerificationRunInput } from './agent/runs/artifact/build-verification-run.js';
 export { RunStore } from './agent/runs/artifact/run-store.js';
 export type { ReadRunResult } from './agent/runs/artifact/run-store.js';
 export { classifyChangedFiles, buildRisks, risksForPath } from './agent/runs/risk-classify.js';

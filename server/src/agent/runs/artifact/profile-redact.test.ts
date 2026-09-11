@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { RunAgentKind, RunFramework, RunProfile, RunTrigger } from '@reticlehq/core';
-import { buildVerificationRun, type VerificationRunInput } from '../build-verification-run.js';
+import { buildVerificationRun, type VerificationRunInput } from './build-verification-run.js';
 import { REDACTED, redactForProfile } from './profile-redact.js';
 
 const inputFor = (profile: RunProfile): VerificationRunInput => ({

@@ -9,7 +9,10 @@ import {
   RunTrigger,
   VerdictStatus,
 } from '@reticlehq/core';
-import { buildVerificationRun, type VerificationRunInput } from './build-verification-run.js';
+import {
+  buildVerificationRun,
+  type VerificationRunInput,
+} from './artifact/build-verification-run.js';
 
 /**
  * The generated-app bug matrix — proof that Reticle's verdict catches the silent-failure classes a

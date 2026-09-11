@@ -17,7 +17,7 @@ import {
   type ReticleVerificationRun,
   type RunVerdict,
 } from '@reticlehq/core';
-import { redactForProfile } from './artifact/profile-redact.js';
+import { redactForProfile } from './profile-redact.js';
 
 /**
  * Everything a caller supplies; schemaVersion/createdAt/verdict are filled/computed by the builder.

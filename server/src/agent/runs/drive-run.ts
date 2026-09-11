@@ -36,7 +36,7 @@ import {
   type JournalAction,
   type RunCheck,
 } from '@reticlehq/core';
-import type { VerificationRunInput } from './build-verification-run.js';
+import type { VerificationRunInput } from './artifact/build-verification-run.js';
 import { withCorrections } from './late-answer.js';
 
 /** The author of record when no MCP peer introduced itself. Mirrors verification-sync's default. */

@@ -20,7 +20,10 @@ import {
   type RunId,
   type VerifyProgressEvent,
 } from '@reticlehq/core';
-import { buildVerificationRun, type VerificationRunInput } from './build-verification-run.js';
+import {
+  buildVerificationRun,
+  type VerificationRunInput,
+} from './artifact/build-verification-run.js';
 import { mapReplayToFlowResult } from './artifact/replay-mapping.js';
 import { buildRepairPackets } from './repair-prompt.js';
 import {

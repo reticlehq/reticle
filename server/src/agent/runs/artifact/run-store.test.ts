@@ -5,7 +5,7 @@ import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { asRunId, RunReadError, type ReticleVerificationRun } from '@reticlehq/core';
-import { buildVerificationRun, type VerificationRunInput } from '../build-verification-run.js';
+import { buildVerificationRun, type VerificationRunInput } from './build-verification-run.js';
 import { RunStore } from './run-store.js';
 import { createNodeFileSystem, type FileSystemPort } from '../../../features/project/fs/fs-port.js';
 import { RunAgentKind, RunFramework, RunProfile, RunTrigger } from '@reticlehq/core';

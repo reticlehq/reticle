@@ -10,7 +10,7 @@ import {
 import {
   buildVerificationRun,
   type VerificationRunInput,
-} from '../../agent/runs/build-verification-run.js';
+} from '../../agent/runs/artifact/build-verification-run.js';
 import {
   portBusyMessage,
   runVerify,

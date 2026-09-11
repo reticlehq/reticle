@@ -3,7 +3,7 @@ import type { AmbientCounts } from '@reticlehq/engine/window/ambient.js';
 import { subjectOf, type JournalAction } from '@reticlehq/core';
 import type { FileSystemPort } from '../project/fs/fs-port.js';
 import { pruneSessions } from './on-disk/retention.js';
-import { buildVerificationRun } from '../../agent/runs/build-verification-run.js';
+import { buildVerificationRun } from '../../agent/runs/artifact/build-verification-run.js';
 import { driveRunFrom, driveRunId } from '../../agent/runs/drive-run.js';
 import { RunStore } from '../../agent/runs/artifact/run-store.js';
 

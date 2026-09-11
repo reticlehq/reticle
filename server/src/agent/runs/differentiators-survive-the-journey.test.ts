@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Verified } from '@reticlehq/core';
-import { buildVerificationRun } from './build-verification-run.js';
+import { buildVerificationRun } from './artifact/build-verification-run.js';
 import { driveRunFrom } from './drive-run.js';
 import { toArtifact } from './artifact/to-artifact.js';
 
