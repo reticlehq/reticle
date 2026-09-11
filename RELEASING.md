@@ -46,6 +46,12 @@ git switch main && git pull                     # 1. green main, nothing local
 pnpm format:check                               # 2. the gates. FIRST: it is the one CI enforces
 pnpm lint && pnpm typecheck && pnpm test:unit   #    that `pnpm lint` does not run
 pnpm test:e2e                                   #    required for every release, not just tool changes
+pnpm test:e2e:desktop                           #    Electron and a packaged Tauri binary; the web
+                                                #    battery boots no desktop runtime and is blind to both
+pnpm gate:conformance                           #    this implementation still answers the published
+                                                #    specification correctly, on a browser AND a shell
+pnpm gate:install                               #    ~15 min, and the only thing that can see what a
+                                                #    user runs BEFORE their first session
 pnpm lint:docs                                  #    every documented command still parses; see below
 claude plugin validate ./plugin                 #    the published Claude Code plugin still resolves
 npx skills add reticlehq/reticle -l             #    the published skills are all still discoverable
@@ -53,6 +59,8 @@ npx skills add reticlehq/reticle -l             #    the published skills are al
 node scripts/set-version.mjs 2.3.0              # 3. every artifact that carries the number, in lockstep
 pnpm install --lockfile-only                   #    …then reconcile the lockfile
 ```
+
+**Three of those gates were missing from this list until 2026-09-11**, and the two that matter most were the ones this release exists for: `gate:conformance`, which is the only check that this implementation still answers its own published specification, and `test:e2e:desktop`, which is the only one that starts a desktop runtime at all. `gate:install` was absent too, and it is the gate whose absence let a release ship a Next.js install that connected 0% of the time. A release checklist that names five gates while the repository has eight is a checklist that quietly narrows what "all gates green" means. `release-gates-are-listed.test.ts` now fails when a gate is added without a decision about whether a release needs it.
 
 **The Rust crate is the last artifact and it is easy to forget**, which is not hypothetical: it sat at `0.1.0` from the day it was written until 2.11.0. `publish-crate.yml` publishes only when the version is ABSENT from crates.io, so every release found `0.1.0` already there, printed "nothing to do" and exited green — a silent no-op reporting success for months, while a desktop capture-path security fix sat undelivered and the docs told users to pin the build that had it. `crate-version-lockstep.test.ts` now fails the fast unit gate if the crate is forgotten, and `set-version.mjs` writes it along with every other site — so the guard is belt to the script's braces rather than the only thing standing between a release and nothing.
 
