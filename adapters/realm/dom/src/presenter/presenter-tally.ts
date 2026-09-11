@@ -1,5 +1,5 @@
 import { LOG_RESULT, type LogResult } from './presenter-log.js';
-import { PresenterIcon, PRESENTER_ICON_SIZE, hiIcon } from './presenter-icons.js';
+import { PresenterIcon, PRESENTER_ICON_SIZE, hiIcon } from './icons/presenter-icons.js';
 
 /**
  * Paint the live verdict tally into a YouTube-style segmented pill (pass | fail).

@@ -6,7 +6,7 @@ import {
   PRESENTER_ICON_SIZE,
   hiIcon,
   type PresenterIconName,
-} from './presenter-icons.js';
+} from './icons/presenter-icons.js';
 
 // Activity-log UI for the presenter HUD: a persistent, timestamped, scrollable transcript of
 // every read/act/narration. All strings here are presenter-only UI (chips, glyphs, attrs) - they

@@ -23,7 +23,7 @@ import {
   hiToggleIconHtml,
   PRESENTER_ICON_SIZE,
   PresenterIcon,
-} from './presenter-icons.js';
+} from './icons/presenter-icons.js';
 import { HUD_SURFACE_CLASS, HUD_LOG_WELL_CLASS } from './chrome/presenter-hud-chrome.js';
 import { CONTROLS_TOOLBAR_HTML } from './presenter-controls.js';
 import {

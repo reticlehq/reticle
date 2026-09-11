@@ -1,5 +1,5 @@
 import { RETICLE_ROOT_GLOBAL, RETICLE_URL_PARAM } from '@reticlehq/core';
-import { PresenterIcon, PRESENTER_ICON_SIZE, hiIconHtml } from './presenter-icons.js';
+import { PresenterIcon, PRESENTER_ICON_SIZE, hiIconHtml } from './icons/presenter-icons.js';
 
 const WORKSPACE_BTN_ATTR = 'data-reticle-workspace-btn';
 const WORKSPACE_MENU_ATTR = 'data-reticle-workspace-menu';

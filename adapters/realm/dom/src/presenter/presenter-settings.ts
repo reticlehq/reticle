@@ -13,7 +13,12 @@ import {
   DOCK_ATTR,
   MCP_DOCS_URL,
 } from './presenter-config.js';
-import { PresenterIcon, PRESENTER_ICON_SIZE, setHiIcon, hiIconHtml } from './presenter-icons.js';
+import {
+  PresenterIcon,
+  PRESENTER_ICON_SIZE,
+  setHiIcon,
+  hiIconHtml,
+} from './icons/presenter-icons.js';
 import { HUD_SURFACE_CLASS } from './chrome/presenter-hud-chrome.js';
 import { resetHudDockPosition } from './presenter-drag.js';
 import { findDock, scheduleSyncDockLayout } from './presenter-dock-layout.js';

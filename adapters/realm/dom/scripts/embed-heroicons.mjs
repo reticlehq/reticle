@@ -105,7 +105,11 @@ export const HERO_ICON_SOLID_BODIES: Record<keyof typeof SOLID_BODIES, string> =
 export type HeroIconSolidBodyKey = keyof typeof SOLID_BODIES;
 `;
 
-const outPath = join(pkgRoot, 'src', 'presenter', 'presenter-heroicons-data.ts');
+// `presenter/icons/`, not `presenter/`. A generated file has two homes -- where it is written
+// and where it is imported from -- and moving one without the other does not fail: the next
+// build simply writes a SECOND copy at the old path, and both compile. Caught here only because
+// the build ran immediately after the move and printed the file it had written.
+const outPath = join(pkgRoot, 'src', 'presenter', 'icons', 'presenter-heroicons-data.ts');
 writeFileSync(outPath, out, 'utf8');
 execSync(`pnpm exec prettier --write --log-level silent "${outPath}"`, {
   cwd: repoRoot,

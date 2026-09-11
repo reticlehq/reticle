@@ -4,7 +4,7 @@ import {
   type ImpactScope,
   type ImpactSnapshot,
 } from '@reticlehq/core';
-import { PresenterIcon, PRESENTER_ICON_SIZE, hiIconHtml } from './presenter-icons.js';
+import { PresenterIcon, PRESENTER_ICON_SIZE, hiIconHtml } from './icons/presenter-icons.js';
 import { HUD_SURFACE_CLASS } from './chrome/presenter-hud-chrome.js';
 import { REPORT_PANEL_ATTR, REPORT_ATTR, REPORT_CLOSE_ATTR } from './presenter-config.js';
 import {
