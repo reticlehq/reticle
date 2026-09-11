@@ -3,6 +3,7 @@ import {
   adjudicate,
   CHANNEL_DEFAULTS,
   ChannelId as ProtocolChannel,
+  BlindSpotKind,
   CloseCondition,
   Declaration,
   Grade,
@@ -53,6 +54,10 @@ function askProtocol(over: {
   anomalies?: Parameters<typeof adjudicate>[0]['anomalies'];
   closedBy?: CloseCondition;
   declaredAt?: Declaration;
+  /** Weaken the single piece of evidence, to reach clause 9. */
+  grade?: Grade;
+  /** A blind spot on this channel, to reach clause 6 from its impeaching side. */
+  impeachedOn?: ProtocolChannel;
 }): Verdict {
   const reads = over.reads ?? [ProtocolChannel.NET];
   const declares = over.declares ?? [
@@ -95,10 +100,24 @@ function askProtocol(over: {
           at: 5,
         },
         independence: CHANNEL_DEFAULTS[ProtocolChannel.NET].independence,
-        grade: Grade.CONSEQUENCE,
+        grade: over.grade ?? Grade.CONSEQUENCE,
       },
     ],
-    coverage: { window: 'w1', observed: [...declares], blindSpots: [] },
+    coverage: {
+      window: 'w1',
+      observed: [...declares],
+      blindSpots:
+        over.impeachedOn === undefined
+          ? []
+          : [
+              {
+                kind: BlindSpotKind.STILL_IN_FLIGHT,
+                channel: over.impeachedOn,
+                detail: 'a request had not settled when the window closed',
+                impeaching: false,
+              },
+            ],
+    },
     anomalies: over.anomalies ?? [],
     assertionsHeld: over.assertionsHeld ?? true,
   }).verdict;
@@ -330,10 +349,83 @@ describe('where they differ, and why', () => {
     expect(decideVerified({ pass: true, honesty: CLEAN }).verified).toBe(Verified.YES);
   });
 
-  it('is the only divergence in the compared set, and it is in the permissive direction', () => {
-    // A parity test's real job is to notice when this stops being true. A second divergence
-    // appearing silently is exactly the drift the specification's normativity claim rules out.
-    const strictnessGap = askProtocol({ declaredAt: Declaration.AFTER_ACTION }) === Verdict.UNKNOWN;
-    expect(strictnessGap).toBe(true);
+  /**
+   * The second divergence, and the one that matters most.
+   *
+   * Clause 9 is the specification's central claim: *nothing independent of the action supports
+   * this at consequence grade; the subject agreeing with itself is not evidence that it acted.*
+   * Reticle's grade ladder has the same idea — `presence` is its weakest rung — and stops short
+   * of the same conclusion: a passing assertion at `presence` is `yes`, with
+   * `verifiedReason: proved`.
+   *
+   * So an app whose only evidence is its own screen is proved here and unproved under the
+   * specification. Permissive again, like the declaration gap, and on the clause the whole
+   * protocol is built around.
+   *
+   * **This set did not compare clause 9 until now**, and the meta-test below used to say this
+   * was "the only divergence" while the case that would have contradicted it was missing. That
+   * is the failure mode a parity test exists to prevent, committed by the parity test.
+   *
+   * Recorded, not reconciled, on the same reasoning as the declaration gap: turning a
+   * presence-grade `yes` into `unknown` makes the product stricter, and a false NEGATIVE sends
+   * an agent back to redo work that already succeeded. That is a product decision with a
+   * measurement behind it, not something to change inside a parity test.
+   */
+  it('the protocol will not prove on presence alone, and Reticle will', () => {
+    expect(askProtocol({ grade: Grade.PRESENCE })).toBe(Verdict.UNKNOWN);
+    expect(
+      decideVerified({
+        pass: true,
+        honesty: { ...CLEAN, grade: HonestyGrade.PRESENCE },
+        declaredConsequence: true,
+      }).verified,
+    ).toBe(Verified.YES);
+  });
+
+  /**
+   * The third divergence, and the one where Reticle's position is the more considered.
+   *
+   * Clause 6 withholds a proof when a blind spot falls on a channel the claim READS -- a
+   * targeted test. Reticle's nearest concept is coarser: `coverage.partial`, which is true for a
+   * gap anywhere, and which `verified.ts` deliberately does not downgrade on, on the stated
+   * reasoning that a gap elsewhere "does not by itself make a graded, clean, uncontradicted pass
+   * untrustworthy". It discloses instead: the `because` says coverage was PARTIAL rather than
+   * claiming a clean capture.
+   *
+   * So the two agree wherever the gap is off the claim's channels, and differ where it is on
+   * them: unproved under the specification, proved-with-a-caveat here. Permissive a third time.
+   *
+   * Worth being precise about, because "Reticle fails to impeach" would misread a decision
+   * somebody made on purpose and wrote down. What Reticle lacks is not the judgement but the
+   * TARGETING -- it has no notion of which channels a claim reads, so it cannot ask the narrower
+   * question at all, and the coarse one it can ask was measured too noisy to gate on.
+   */
+  it("the protocol withholds a proof on a gap in the claim's own channel, and Reticle discloses it", () => {
+    expect(askProtocol({ impeachedOn: ProtocolChannel.NET })).toBe(Verdict.UNKNOWN);
+    const reticle = decideVerified({
+      pass: true,
+      honesty: { ...CLEAN, coverage: { partial: true } },
+      declaredConsequence: true,
+    });
+    expect(reticle.verified).toBe(Verified.YES);
+    // The disclosure is the half that keeps this defensible rather than merely permissive.
+    expect(reticle.because).toContain('PARTIAL');
+  });
+
+  it('has exactly three divergences, all in the permissive direction', () => {
+    // A parity test's real job is to notice when this stops being true, and the previous version
+    // of this test could not: it re-ran one assertion and called the answer "the only
+    // divergence", while clause 9 -- the second one -- was not in the compared set at all.
+    //
+    // All three are Reticle proving something the specification leaves unproved. Neither is Reticle
+    // convicting an application the specification would acquit, which is the direction that
+    // would matter more, and this asserts that too.
+    const divergences = [
+      askProtocol({ declaredAt: Declaration.AFTER_ACTION }),
+      askProtocol({ grade: Grade.PRESENCE }),
+      askProtocol({ impeachedOn: ProtocolChannel.NET }),
+    ];
+    expect(divergences).toEqual([Verdict.UNKNOWN, Verdict.UNKNOWN, Verdict.UNKNOWN]);
+    expect(divergences.includes(Verdict.NO)).toBe(false);
   });
 });
