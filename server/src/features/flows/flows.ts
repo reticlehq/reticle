@@ -126,7 +126,18 @@ function subStepToFlowStep(raw: unknown): FlowStep {
   const action = asString(sub['action']) as ActionType | undefined;
   const args = asRecord(sub['args']);
   const { anchor, degraded } = anchorForStep(sub);
-  return buildStep(ReticleTool.ACT, anchor, action, args, degraded);
+  const step = buildStep(ReticleTool.ACT, anchor, action, args, degraded);
+  /*
+   * The sub-step's own declared consequence, carried rather than folded into the parent.
+   *
+   * A sequence is one recorded step and one batched dispatch, but each of its steps claimed
+   * something different. Hanging every claim off the parent would let one signal answer for every
+   * click in the journey -- and `classifyFlowAssertions` already walks sub-steps looking for
+   * exactly this, so dropping it here made the grader count assertions that were never saved.
+   */
+  const expect = sub['expect'] as NonNullable<FlowStep['expect']> | undefined;
+  if (expect !== undefined) step.expect = expect;
+  return step;
 }
 
 /**

@@ -614,11 +614,31 @@ export async function replayFlow(
     );
     // Once the anchor resolved and the action ran, the step's own expect is evaluated — signal, net,
     // console and store truth alike — deterministically, in the same cheap replay loop, with no LLM.
-    const stepExpect = step.expect;
-    if (result.ok && result.drift === undefined && stepExpect !== undefined) {
+    /*
+     * The step's own expect, and then every sub-step's.
+     *
+     * `classifyFlowAssertions` already walks act_sequence sub-steps and counts an expect on either
+     * level, and states the invariant plainly: this and what replay enforces must move together, or
+     * "the difference is a false green or a lost verification". Enforcing only the top level was
+     * that difference -- a sequence whose sub-step declared a consequence was GRADED asserted and
+     * checked by nothing, so it could not go red while wearing the grade that says it could.
+     *
+     * WEAKER THAN THE LIVE PATH, and deliberately so rather than silently. A recorded sequence is
+     * dispatched as ONE batched command, so there are no per-sub-step cursors to open a window with
+     * -- every sub-step expect is evaluated against the window the whole sequence opened, which
+     * means sub-step three's claim can be satisfied by sub-step one's consequence. The live
+     * `act_sequence` path takes a cursor before each dispatch and does not have this. Narrowing it
+     * here means dispatching sub-steps individually on replay, which is a behaviour change to the
+     * replay path and belongs in its own commit.
+     */
+    const declared = [step.expect, ...(step.steps ?? []).map((sub) => sub.expect)].filter(
+      (expectation): expectation is NonNullable<FlowStep['expect']> => expectation !== undefined,
+    );
+    for (const expectation of declared) {
+      if (!result.ok || result.drift !== undefined) break;
       const expectDrift = await assertStepExpect(
         session,
-        stepExpect,
+        expectation,
         dynamic,
         waitForSignal,
         waitFor(step),

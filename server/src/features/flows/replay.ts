@@ -110,16 +110,23 @@ export function captureAct(
   // "assertion-free: it will pass even if the feature is broken", which is the regression-suite
   // story failing at its last step. Only kinds FlowExpect can express survive; see
   // predicate-to-expect.ts.
-  const until = args['until'] ?? args['predicate'];
-  if (until !== undefined) {
-    const parsed = PredicateSchema.safeParse(until);
-    // Only what a replay actually CHECKS — recording an unenforced assertion would grade the flow
-    // "asserted" while nothing verifies it, which is a false green in the feature built to prevent
-    // them. See enforcedOnReplay.
-    const expect = parsed.success ? enforcedOnReplay(predicateToExpect(parsed.data)) : undefined;
-    if (expect !== undefined) step.expect = expect;
-  }
+  const expect = enforceableExpect(args['until'] ?? args['predicate']);
+  if (expect !== undefined) step.expect = expect;
   recordings.capture(step);
+}
+
+/**
+ * A declared predicate, as a recorded expectation — or nothing.
+ *
+ * The ONE place this conversion happens, because it is the rule that decides whether a saved flow
+ * proves anything, and two copies of it would drift. Only kinds a replay actually CHECKS survive:
+ * recording an unenforced assertion grades the flow "asserted" while nothing verifies it, which is a
+ * false green inside the feature built to prevent them. See enforcedOnReplay.
+ */
+function enforceableExpect(raw: unknown): ReturnType<typeof predicateToExpect> | undefined {
+  if (raw === undefined) return undefined;
+  const parsed = PredicateSchema.safeParse(raw);
+  return parsed.success ? enforcedOnReplay(predicateToExpect(parsed.data)) : undefined;
 }
 
 /**
@@ -214,7 +221,11 @@ export function compileSequenceStep(args: Record<string, unknown>, res: unknown)
       replayActionArgs(step['args']),
     );
     if (!compiled.stable) stable = false;
-    return compiled.args;
+    // Each sub-step keeps its OWN declared consequence. A sequence records one step and replays as
+    // one batch, but what each step CLAIMED is per step -- folding them together would let one
+    // signal answer for every click in the journey.
+    const expect = enforceableExpect(step['expect']);
+    return expect === undefined ? compiled.args : { ...compiled.args, expect };
   });
   return { tool: ReticleTool.ACT_SEQUENCE, stable, args: { steps: subSteps } };
 }
