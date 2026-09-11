@@ -883,9 +883,15 @@ async function clearInitDevPorts(scaffold, note, exceptPort) {
 async function driveScaffold(scaffold, index) {
   let pass = 0;
   let fail = 0;
+  const failedChecks = [];
   const chk = (label, ok, detail = '') => {
     console.log(`   ${ok ? '✅' : '❌'} ${label}${detail ? '  — ' + detail : ''}`);
-    ok ? (pass += 1) : (fail += 1);
+    if (ok) {
+      pass += 1;
+    } else {
+      fail += 1;
+      failedChecks.push(label);
+    }
   };
   const note = (line) => console.log(`   · ${line}`);
 
@@ -1012,6 +1018,24 @@ async function driveScaffold(scaffold, index) {
 
     handedOverPorts = portsMentionedIn(report);
     chk('init exits 0', initExit === 0, `exit ${String(initExit)}`);
+    // Evidence for the OTHER failure path, which had none (#818).
+    //
+    // `dumpEvidence` ran only when the gate's own session check failed. The intermittent Windows
+    // failure is not that check -- it is this one: `init`'s own post-install verification reports
+    // "the SDK IS in the page and never dialled the bridge" against the dev server IT started and
+    // handed over, `init` exits 1, and then the gate boots the app itself and the session appears
+    // fine. So the run ended with a truncated headline and no evidence, and the one hypothesis the
+    // message itself names -- "a bridge port that differs on the two sides" -- is answerable from
+    // the registry and the daemon log, both of which were right there and never printed.
+    //
+    // Init drives its own page in a subprocess, so there is no page console to capture here. What
+    // there is: which bridge port init was told to use, which ports its report mentions, and which
+    // daemon claims which project.
+    if (0 !== initExit) {
+      note(`init was told to use bridge port ${String(SELF_TEST ? bridgePort + 1 : bridgePort)}`);
+      note(`init's report mentions ports: ${handedOverPorts.join(', ') || '(none)'}`);
+      dumpEvidence([], bridgePort);
+    }
 
     // The load-bearing assertion, and now an absolute one. A ⚠ is a step nothing performed, so the
     // app never dials the bridge and every tool answers "no browser session connected" — a
@@ -1311,7 +1335,12 @@ async function driveScaffold(scaffold, index) {
     }
   }
 
-  console.log(`   ${fail === 0 ? '✓' : '✗'} ${scaffold.id}: ${pass} passed, ${fail} failed`);
+  // Name the failing check, not just the count. "8 passed, 1 failed" sent every reader of #818
+  // scrolling to find out which one -- and the answer turned out to matter: the intermittent
+  // Windows failure is `init exits 0`, while the gate's own session check passes on the same
+  // scaffold seconds later.
+  const which = 0 === failedChecks.length ? '' : ` (${failedChecks.join('; ')})`;
+  console.log(`   ${fail === 0 ? '✓' : '✗'} ${scaffold.id}: ${pass} passed, ${fail} failed${which}`);
   return { id: scaffold.id, pass, fail };
 }
 
