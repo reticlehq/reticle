@@ -141,7 +141,13 @@ const REACHES_FOR: Record<string, readonly string[]> = {
    * wanted a row to print. That is this guard's own thesis -- most reaches it has removed turned
    * out to be a file filed somewhere odd rather than a dependency anybody needed.
    */
-  doctor: [],
+  /**
+   * The doctor rows. Two of them moved here from the flat cli directory to sit beside
+   * doctor-project-line, and they bring with them the two things a row reads: the session it
+   * describes and the version it prints. The cli directory stopped reaching for version at all
+   * in the same move, because that reach was only ever these files.
+   */
+  doctor: ['session', 'version'],
   /**
    * Getting something running and waiting for it: the bridge port, the daemon, the dev server,
    * the relaunch. Everything `reticle init` does between writing files and having a session.
@@ -294,7 +300,6 @@ const REACHES_FOR: Record<string, readonly string[]> = {
     'tape',
     'tools',
     'update',
-    'version',
   ],
   cloud: ['cli', 'fs', 'intent'],
   command: [
