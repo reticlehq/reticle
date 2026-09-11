@@ -544,6 +544,11 @@ async function runSignalStep(
  * On the first anchor MISS the step carries legible drift and replay STOPS, returning the partial
  * results. This is the "whose fault is it" contract, not a blind "command failed".
  */
+/** Where a replay starts reporting. Steps before it are re-driven, silently, as setup. */
+export interface ReplayFromOptions {
+  from?: number;
+}
+
 export async function replayFlow(
   session: FlowReplaySession,
   flow: FlowFile,
@@ -551,8 +556,19 @@ export async function replayFlow(
   signalTimeoutMs: number,
   confirmDangerous = false,
   sleep: Sleep = realSleep,
+  options: ReplayFromOptions = {},
 ): Promise<FlowStepResult[]> {
   const results: FlowStepResult[] = [];
+  /*
+   * Where to start REPORTING. Everything before it still runs.
+   *
+   * Resuming is re-driving the prefix, not restoring state: there is no way to put an app back
+   * where it was without driving it there, and at a measured ~27ms a step there is no reason to
+   * try. So the prefix executes silently and the caller sees the journey from the point it asked
+   * about -- which is what makes "fix the break, resume, find the next one" a loop rather than a
+   * full re-read each time.
+   */
+  const from = Math.max(0, options.from ?? 0);
   // testids whose region is LLM-dynamic — their expect-presence is NOT asserted.
   const dynamic = new Set<string>(
     (flow.dynamic ?? [])
@@ -658,7 +674,14 @@ export async function replayFlow(
     // the clock actually advanced, so a fixed-clock fake reads durationMs-free (additive, non-breaking).
     const durationMs = session.elapsed() - cursorBefore;
     if (durationMs > 0) result.durationMs = durationMs;
-    results.push(result);
+    /*
+     * A prefix step is setup and is not reported -- UNLESS it failed.
+     *
+     * A failure there means the resume never reached the step it was asked to resume from, and the
+     * run did not start where the caller will read it as having started. Swallowing it would turn
+     * "I could not get there" into "I got there and it was fine".
+     */
+    if (index >= from || !result.ok || result.drift !== undefined) results.push(result);
     if (result.drift !== undefined || !result.ok) break;
     index += 1;
   }
