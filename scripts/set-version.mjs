@@ -134,6 +134,15 @@ for (const rule of RULES) {
     }
     const next = rule.edit(text, current, nextVersion);
     if (next === text) {
+      // A rule that opts out of the containment check above is asking to SEE every file in its
+      // glob, not claiming every file needs changing. The crate-pin rule reads all of `docs/`
+      // and edits only the pages carrying `reticle-tauri = "X.Y"`, so a no-op is the expected
+      // answer for the rest -- and reporting it as "holds <version> but no rule matched"
+      // produced 74 warnings naming pages that contain no version string at all.
+      //
+      // A warning channel that is 74/74 false is worse than none: the person reading it at
+      // release time learns to scroll past, and the one true warning goes with them.
+      if (true === rule.matchesAnyVersion) continue;
       console.log(`  !!  ${file} — holds ${current} but no rule matched it (${rule.what})`);
       continue;
     }
