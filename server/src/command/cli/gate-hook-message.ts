@@ -11,7 +11,7 @@
  * nothing.
  */
 
-import { GateExit } from './gate-exit.js';
+import { GateExit } from './answers/gate-exit.js';
 
 /** Named so a reader of the hook output knows the flag is real and not a suggestion. */
 export const GATE_SKIP_ENV = 'RETICLE_SKIP_GATE';

@@ -12,7 +12,7 @@
  * is worse than one. This only supplies the facts the CLI has and renders the answer.
  */
 
-import { nextActionFor } from '../../connection/session/no-session-next-action.js';
+import { nextActionFor } from '../../../connection/session/no-session-next-action.js';
 
 export interface StatusFacts {
   /** Is a usable daemon answering on this port? */

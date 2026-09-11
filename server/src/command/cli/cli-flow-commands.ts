@@ -6,7 +6,7 @@
  * verification state, and none of them touch daemon lifecycle, which is what the rest of cli.ts does.
  */
 
-import { GateExit } from './gate-exit.js';
+import { GateExit } from './answers/gate-exit.js';
 import { gateHookMessage, GATE_SKIP_ENV } from './gate-hook-message.js';
 import { readProjectId } from './ports/resolve/cli-port.js';
 import { changedFilesSince, type ChangedFiles } from '../../features/flows/change/git-changed.js';

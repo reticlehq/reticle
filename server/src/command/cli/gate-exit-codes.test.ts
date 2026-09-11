@@ -17,7 +17,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { GateExit } from './gate-exit.js';
+import { GateExit } from './answers/gate-exit.js';
 
 describe('the gate distinguishes a failure from an absence', () => {
   it('passes with 0', () => {

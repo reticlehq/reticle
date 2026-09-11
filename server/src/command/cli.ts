@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 import { pathToFileURL } from 'node:url';
-import { openFailureNote } from './cli/open-note.js';
+import { openFailureNote } from './cli/answers/open-note.js';
 import { realpathSync } from 'node:fs';
 import { join } from 'node:path';
 import { stateDirProblem } from './daemon/state-dir.js';
-import { statusNextAction } from './cli/status-next-action.js';
+import { statusNextAction } from './cli/answers/status-next-action.js';
 import { readDevServers } from './daemon/dev-servers.js';
 import {
   hasConnectedBefore,

@@ -275,6 +275,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   ],
   capsule: ['dir', 'fs'],
   cli: [
+    'answers',
     'binding',
     'suite',
     'change',
@@ -306,6 +307,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   ],
   cloud: ['cli', 'fs', 'intent'],
   command: [
+    'answers',
     'lifetime',
     'binding',
     'drive',
@@ -533,6 +535,13 @@ const REACHES_FOR: Record<string, readonly string[]> = {
    * complete family — nothing about navigation is left flat beside it.
    */
   navigation: ['session'],
+  /**
+   * The last thing a command says. What `gate` means by its exit code, what `open` says when it
+   * launched a URL and no session ever appeared, and the sentence `status` owes the user
+   * because `init` promised it. Each is one command's human-facing answer, which is a different
+   * job from doing the work and drifts if it lives next to it.
+   */
+  answers: ['session'],
   tools: [
     'navigation',
     'lifetime',
