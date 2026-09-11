@@ -30,26 +30,46 @@ jobs:
       - name: publint (every published package)
         run: |
           set -e
-          for dir in packages/*/; do
+          # Every published package, found from the manifests. This was `for dir in packages/*/`
+          # until 2026-09-12, and `packages/` was dissolved on 2026-09-10: the glob matched
+          # nothing, bash passed the literal through, the require threw, `continue` fired, and the
+          # step exited 0 having linted ZERO packages. A check that reads nothing reports exactly
+          # like a check that passed. Driven off git now, so a rename cannot empty it again.
+          dirs=$(git ls-files '*/package.json' | grep -v '^apps/' | xargs -n1 dirname)
+          checked=0
+          for dir in $dirs; do
             name=$(node -p "try{require('./$dir/package.json').private?'':require('./$dir/package.json').name}catch(e){''}")
             [ -z "$name" ] && continue
+            checked=$((checked+1))
             echo "::group::publint $name"
             (cd "$dir" && npx --yes publint --strict)
             echo "::endgroup::"
           done
+          echo "publint checked $checked package(s)"
+          [ "$checked" -ge 10 ] || { echo "::error::publint checked $checked packages; expected at least 10"; exit 1; }
 
       - name: Are the types wrong (every published package)
         run: |
           set -e
-          for dir in packages/*/; do
+          # Every published package, found from the manifests. This was `for dir in packages/*/`
+          # until 2026-09-12, and `packages/` was dissolved on 2026-09-10: the glob matched
+          # nothing, bash passed the literal through, the require threw, `continue` fired, and the
+          # step exited 0 having linted ZERO packages. A check that reads nothing reports exactly
+          # like a check that passed. Driven off git now, so a rename cannot empty it again.
+          dirs=$(git ls-files '*/package.json' | grep -v '^apps/' | xargs -n1 dirname)
+          checked=0
+          for dir in $dirs; do
             name=$(node -p "try{require('./$dir/package.json').private?'':require('./$dir/package.json').name}catch(e){''}")
             [ -z "$name" ] && continue
+            checked=$((checked+1))
             echo "::group::attw $name"
             # Two justified ignores: cjs-resolves-to-esm (packages are ESM-first, no CJS entry by design) and
             # no-resolution (the legacy node10 resolver doesn't read exports maps — modern packages skip it).
             (cd "$dir" && npx --yes @arethetypeswrong/cli --pack --ignore-rules cjs-resolves-to-esm no-resolution)
             echo "::endgroup::"
           done
+          echo "attw checked $checked package(s)"
+          [ "$checked" -ge 10 ] || { echo "::error::attw checked $checked packages; expected at least 10"; exit 1; }
 
       - name: Embedded SDK size budget
         run: |
