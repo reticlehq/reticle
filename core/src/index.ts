@@ -32,6 +32,7 @@ export * from './identity/edit-epoch.js'; // which round of source edits an obse
 export * from './wire/messages.js'; // ReticleEvent + the message schemas
 export * from './wire/event-payloads.js'; // per-event payload schemas + wire vocab
 export * from './wire/event-priority.js'; // which events survive the bridge rate cap
+export * from './artifacts/flow-constants.js'; // moved off wire/constants, which had no use for them
 export * from './artifacts/flow-types.js'; // FlowStep, FlowExpect, FlowStepTool, replay result shapes
 export * from './verdict/verification-run.js'; // run/verdict shapes for the CI surface
 export * from './wire/types.js';

@@ -1,16 +1,18 @@
 import type { Ref } from '../identity/brand.js';
 import { z } from 'zod';
+import { CONTRACT_FILE_VERSION, ElementState, QueryBy } from './constants.js';
+// Named where they actually live. These five reached this file through a `export * from
+// '../artifacts/flow-constants.js'` in `wire/constants.ts`, which made artifact constants read as
+// wire constants at every call site -- including this one, which already imported
+// PROJECT_FILE_VERSION from the real path on the line below and the rest from the laundered one.
 import {
   AnnotationKind,
   type AnnotationErrorCode,
   type AnnotationTarget,
-  CONTRACT_FILE_VERSION,
-  ElementState,
-  QueryBy,
+  PROJECT_FILE_VERSION,
   RunKind,
   RunStatus,
-} from './constants.js';
-import { PROJECT_FILE_VERSION } from '../artifacts/flow-constants.js';
+} from '../artifacts/flow-constants.js';
 import { RiskSurface } from '../verdict/verification-run.js';
 import type { FlowExpect } from '../artifacts/flow-types.js';
 

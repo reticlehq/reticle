@@ -375,8 +375,11 @@ export const ContractReadError = {
 } as const;
 export type ContractReadError = (typeof ContractReadError)[keyof typeof ContractReadError];
 
-/** On-disk artifact constants (project/flow/replay/recorder/heal/annotation) live here. */
-export * from '../artifacts/flow-constants.js';
+// The on-disk artifact constants used to be re-exported from here, which was the whole of
+// `wire -> artifacts`: one convenience line, no symbol in this file using any of them. A barrel
+// is not a dependency, and putting one in a leaf module made the wire contract and the on-disk
+// artifacts need each other -- the shape that stops either being read or moved alone. The
+// re-export now lives in `index.ts`, which is the barrel, so the public surface is unchanged.
 
 /** Bounds for the per-session ring buffer (see plan/02-architecture.md). */
 export const RING_BUFFER_DEFAULTS = {

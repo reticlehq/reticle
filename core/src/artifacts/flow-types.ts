@@ -1,12 +1,15 @@
 import { z } from 'zod';
+import { ActionType } from '../wire/constants.js';
+// Its own directory's constants, which this file had been reaching through `wire/constants.js`
+// to get -- the clearest cost of that re-export: artifacts went out to wire to fetch a symbol
+// that had been sitting next door the whole time.
 import {
-  ActionType,
   AnchorKind,
   type DriftReason,
   FLOW_FILE_VERSION,
   type HealStatus,
   type ReplayStatus,
-} from '../wire/constants.js';
+} from './flow-constants.js';
 
 /**
  * The MCP tool names that can appear as a recorded flow step's `tool`. These are the ONLY tool names
