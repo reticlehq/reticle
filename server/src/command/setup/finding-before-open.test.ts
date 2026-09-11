@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { findingBeforeOpen, PageFinding, type PageProbe } from './page-probe.js';
+import { findingBeforeOpen, PageFinding, type PageProbe } from './probe/page-probe.js';
 
 /**
  * The decision that cost a supported framework its install.

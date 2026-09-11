@@ -40,7 +40,7 @@ import {
   findingBeforeOpen,
   PageFinding,
   type PageProbe,
-} from './page-probe.js';
+} from './probe/page-probe.js';
 import { remainingSteps, type Progress } from './remaining-steps.js';
 import { AppShape, isDesktop, policyFor } from './desktop-shape.js';
 

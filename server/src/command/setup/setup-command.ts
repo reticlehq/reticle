@@ -22,7 +22,7 @@ import { reticleStateHome } from '../daemon/daemon.js';
 import { readDevServers } from '../daemon/dev-servers.js';
 import { chooseDriver, DRIVERS, shouldEscalate } from './drive-plan.js';
 import { driveWith } from './drive-agent.js';
-import { urlOfExistingApp } from './existing-app.js';
+import { urlOfExistingApp } from './probe/existing-app.js';
 import {
   binaryExists,
   flowsSaved,

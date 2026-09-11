@@ -425,7 +425,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   // `resolve` arrived with 2.14.0: `setup-command` reports the project id in its result, and
   // `readProjectId` lives there. One way, and the same edge `mcp` and `tools` already had -- it
   // is the only module that exports it, so the alternative was a second copy of the reader.
-  setup: ['bringup', 'daemon', 'launch', 'resolve', 'terminal'],
+  setup: ['bringup', 'daemon', 'launch', 'probe', 'resolve', 'terminal'],
   telemetry: [
     'cli',
     'daemon',
@@ -518,6 +518,13 @@ const REACHES_FOR: Record<string, readonly string[]> = {
    * and nothing else.
    */
   'on-disk': ['dir', 'fs'],
+  /**
+   * Finding out what is actually there. The daemon cannot know what a page contains, which
+   * loopback address a dev server really answers on when the announced one misses, or whether a
+   * live server belonging to this project has already announced itself. Three files that import
+   * nothing and are reached only by setup.
+   */
+  probe: [],
   tools: [
     'lifetime',
     'args',

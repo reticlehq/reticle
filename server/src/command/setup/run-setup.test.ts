@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { runSetupPhases, SetupPhase, type SetupEffects, type SetupInput } from './run-setup.js';
 import { AppShape } from './desktop-shape.js';
 import type { CandidateSession } from './session-pick.js';
-import type { PageProbe } from './page-probe.js';
+import type { PageProbe } from './probe/page-probe.js';
 
 const INPUT: SetupInput = {
   appDir: '/app',

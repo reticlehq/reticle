@@ -26,8 +26,8 @@ import {
   type ProcessPair,
 } from './terminal/listeners.js';
 import type { CandidateSession } from './session-pick.js';
-import type { PageProbe } from './page-probe.js';
-import { loopbackProbeUrls } from './loopback-probe-urls.js';
+import type { PageProbe } from './probe/page-probe.js';
+import { loopbackProbeUrls } from './probe/loopback-probe-urls.js';
 
 const WINDOWS = 'win32' === process.platform;
 /** A page fetch that is slow is a page fetch that failed, for our purposes. */
