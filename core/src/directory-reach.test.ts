@@ -33,6 +33,12 @@ const CORE = join(
  * A count, not a list: the list is derivable and printed on failure, and a hand-written copy
  * would be one more thing to keep in step.
  *
+ * All four hinge on exactly ONE file and none of those files is a leaf: `verdict -> flow-types`,
+ * `artifacts -> constants`, `identity -> constants`, `verdict -> channel`. The same computation
+ * over every package gives the same answer everywhere, so the leaf-extraction rule -- move only
+ * what imports no sibling -- can no longer reach any pair in this repository. The next reduction
+ * anywhere is a SPLIT, which is a different and much more expensive kind of change.
+ *
  * Four. `wire <-> artifacts` survived an attempt to remove it, and the attempt is worth knowing
  * about: the whole of `wire -> artifacts` looked like one `export * from
  * '../artifacts/flow-constants.js'` in `wire/constants.ts`, a convenience barrel using nothing it

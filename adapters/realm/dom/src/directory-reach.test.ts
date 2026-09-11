@@ -33,6 +33,9 @@ const BROWSER = join(
  * A count, not a list: the list is derivable and printed on failure, and a second hand-written
  * copy would be one more thing to keep in step.
  *
+ * It hinges on one file, `dom -> capabilities`, which is not a leaf -- the same answer the same
+ * computation gives for every pair in every package here, so the leaf rule cannot reach it.
+ *
  * `dom <-> registry`, and that is all. It was two: extracting `presenter/chrome` broke
  * `presenter <-> review`, and nothing noticed until this assertion was changed from "at most" to
  * "exactly" -- which is the argument for the change. An unrecorded improvement is one somebody

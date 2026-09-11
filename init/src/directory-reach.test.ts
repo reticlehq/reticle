@@ -11,6 +11,10 @@ import { mutualPairs, nameCollisions, reaches } from '../../scripts/directory-re
  * "organise the big directories" was going to be attempted here sooner or later, and the record
  * of doing that on judgement alone in this repository is three wrong out of the first four.
  *
+ * All three hinge on exactly ONE file and none is a leaf (`plan`, `plan`, `mcp`), which is what
+ * the same computation says of every pair in every package here. The leaf rule cannot reach any
+ * of them.
+ *
  * Three pairs, and they were measured against a reduction attempt before being written down.
  * Both obvious candidates are refused by the predictor:
  *
