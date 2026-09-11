@@ -23,7 +23,7 @@ import { describe, expect, it } from 'vitest';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { changedFilesSince } from './git-changed.js';
+import { changedFilesSince } from './change/git-changed.js';
 import { resolveChangedFiles } from '../../command/cli/cli-flow-commands.js';
 
 describe('changedFilesSince reports failure instead of inventing an empty diff', () => {

@@ -275,6 +275,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   ],
   capsule: ['dir', 'fs'],
   cli: [
+    'change',
     'stores',
     'artifact',
     'auth',
@@ -323,6 +324,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   domain: ['args', 'dir', 'flows', 'oracles', 'project', 'tools'],
   ee: ['license'],
   flows: [
+    'change',
     'args',
     'stores',
     'act',
@@ -454,6 +456,12 @@ const REACHES_FOR: Record<string, readonly string[]> = {
    * these two files and nothing else.
    */
   init: ['bridge', 'bringup', 'daemon', 'launch', 'proxy', 'setup', 'telemetry', 'terminal'],
+  /**
+   * A file changed: which flows must re-verify, what the gate does about it, and how a
+   * save-heavy editor's burst becomes one flush. Four files that import nothing whatsoever,
+   * which is what let them out of a 32-file directory.
+   */
+  change: [],
   tools: [
     'args',
     'timing',
