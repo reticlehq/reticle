@@ -313,6 +313,16 @@ function comparedWithWeb(report) {
       'absent' !== mine[id],
   );
   const disagreed = shared.filter((id) => web[id] !== mine[id]);
+  // Nothing in common is not agreement, and it prints identically unless it is said. A web pass
+  // whose handshake was REJECTED writes an empty outcome set, and this reported "0 of 0
+  // scenarios answer identically" with the same confidence as five of five. That is the defect
+  // the whole function exists to fix, reintroduced one commit later inside the fix.
+  if (0 === shared.length) {
+    return {
+      line: 'cross-surface agreement: no scenario was planted on both surfaces, nothing compared',
+      disagreed: [],
+    };
+  }
   const line =
     disagreed.length > 0
       ? `cross-surface agreement: ${String(disagreed.length)} of ${String(shared.length)} DISAGREE — ${disagreed.join(', ')}`
