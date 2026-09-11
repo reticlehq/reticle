@@ -250,6 +250,20 @@ export function conformanceClient(realm: WebRealm, now: () => number): Conforman
         // specification does not speak comes back `undefined`, which means nobody evaluated it
         // and must never be read as either pass or fail.
         assertionsHeld: assertionsHeld(claim.assertions, observations),
+        // NOT supplied, and deliberately left `undefined` rather than `false`. The
+        // specification reads `undefined` here as NOBODY CHECKED and `false` as "checked, and
+        // it did not already hold" -- so passing `false` to fill the field would be a lie that
+        // scores better, which is the one thing a conformance client must never do.
+        //
+        // It is not supplied because this client cannot answer it: the window opens at
+        // `command` and the claim only arrives here at `verify`, so at the moment the
+        // before-state could be read there is nothing yet to evaluate against. Answering it
+        // needs the claim declared before the action, which the protocol already has a word
+        // for (`Declaration.BEFORE_ACTION`) and this binding does not yet act on.
+        //
+        // The cost is exact and worth writing down: clause 10 (`already-true`) is the one
+        // adjudication clause no run of this suite can reach. Pinned in
+        // conformance/subjects/coverage.test.mjs so closing this gap deletes a line there.
       });
       return {
         verdict: decided.verdict,

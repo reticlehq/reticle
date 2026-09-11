@@ -65,4 +65,41 @@ describe('what the web and desktop subjects reach between them', () => {
     const ids = new Set(SCENARIOS.map((s) => s.id));
     for (const id of PLANTED_NOWHERE) expect(ids.has(id), `${id} is not a scenario`).toBe(true);
   });
+
+  /**
+   * The one clause no run can reach, named so it stops being a surprise.
+   *
+   * `already-true` is clause 10, added this release. It is specified, it has a `Ground`, and the
+   * adjudicator has unit tests for it. It is also reachable by nothing: no subject can plant
+   * `consequence-already-true`, and separately **no implementation sets
+   * `consequenceHeldBefore`** -- `conformance-client.ts` supplies every other field on the
+   * adjudication input and not that one. Either gap alone would be enough.
+   *
+   * The specification is not wrong to allow this: `undefined` there means NOBODY CHECKED, which
+   * is honest and conformant. What was wrong was the release log claiming every clause is
+   * "driven by a real application". Ten of eleven are.
+   *
+   * Equality, not a bound, for the same reason as the list above: closing either gap should
+   * fail this test and make somebody delete a line.
+   */
+  it('names the grounds the whole suite cannot reach on any surface', () => {
+    const union = new Set([...WEB, ...DESKTOP]);
+    const unreachable = SCENARIOS.filter(
+      (s) => s.mustProduce?.ground !== undefined && !union.has(s.id),
+    ).map((s) => s.mustProduce.ground);
+    expect([...new Set(unreachable)].sort()).toEqual([
+      'already-true',
+      'contradicted',
+      'coverage-impeached',
+    ]);
+    // `contradicted` and `coverage-impeached` appear here only because a SECOND scenario asking
+    // for them is unplantable; both are reached by a scenario that is. `already-true` is the
+    // only ground with no reachable scenario at all, which is the fact worth keeping.
+    const reachableGrounds = new Set(
+      SCENARIOS.filter((s) => union.has(s.id)).map((s) => s.mustProduce?.ground),
+    );
+    expect([...new Set(unreachable)].filter((g) => !reachableGrounds.has(g))).toEqual([
+      'already-true',
+    ]);
+  });
 });
