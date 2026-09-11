@@ -421,6 +421,27 @@ const REACHES_FOR: Record<string, readonly string[]> = {
  * A count rather than a list: the list is derivable and printed on failure, and a hand-written copy
  * would be one more thing to keep in step.
  *
+ * ── WHAT THE REMAINING 22 ARE MADE OF ───────────────────────────────────────────────────────────
+ * Computed across every pair rather than guessed at, and the answer ends the leaf-extraction
+ * phase in this package: **seventeen of the twenty-two hinge on exactly ONE file, and not one of
+ * those files is a leaf.** Every one imports a sibling, so the rule that produced the last four
+ * reductions -- move only what imports no sibling -- cannot reach any of them.
+ *
+ * Two structures account for nearly all of it, and neither is a misfiling:
+ *
+ *   - **The tool registry.** `tools.ts` imports every feature's tool module by name, because a
+ *     registry that advertises tools has to know them. That is `tools -> crawl`, `-> domain`,
+ *     `-> memory`, `-> visual`, and `telemetry -> feedback-tools`. Each feature imports back for
+ *     shared helpers, and the pair closes.
+ *   - **The shared kit.** `tool-kit` is the thin side of `intent`, `version`, `runs`, `input`,
+ *     `project`, `session` and `flows`. It is a leaf by the import-no-sibling rule and a HUB by
+ *     the only measure that matters here: it reaches into eight directories, so giving it a node
+ *     of its own hands four of them a mutual partner. Measured: frees two, creates four.
+ *
+ * So the next reduction is a SPLIT of `tool-kit` or of the registry, not another lift. That is a
+ * refactor of code thirteen directories depend on, and it is not something to start because a
+ * number looks improvable.
+ *
  * Asserted with equality rather than `<=`, which is what makes it a RECORD instead of a ceiling.
  * A bound only ever says "no worse"; equality forces the number down in the same commit that
  * earns it, and forces somebody to look when it moves either way. It came down from 24 when
