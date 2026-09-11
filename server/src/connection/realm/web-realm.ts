@@ -21,6 +21,7 @@ import {
 } from '@reticlehq/openreality';
 import {
   CONTRADICTION_CHANNELS,
+  SettleReason,
   ContradictionKind,
   EventType,
   ReticleCommand,
@@ -147,6 +148,13 @@ const PAGE_CAPABILITIES: readonly Capability[] = [
  * unrecognised is reported on no channel rather than guessed onto one, because a guess here is an
  * observation attributed to a source that did not produce it.
  */
+/** Why an action's settle wait ended, when the page said. */
+function readSettleReason(result: unknown): string | undefined {
+  if ('object' !== typeof result || null === result) return undefined;
+  const reason = (result as { settleReason?: unknown }).settleReason;
+  return 'string' === typeof reason ? reason : undefined;
+}
+
 /** A network event's correlation id, if it carries one. Events are `unknown` at this boundary. */
 function readRequestId(data: unknown): string | undefined {
   if ('object' !== typeof data || null === data) return undefined;
@@ -306,6 +314,23 @@ const PROTOCOL_TIER: Readonly<Record<string, AnomalyTier>> = {
 export class WebRealm extends Realm {
   readonly #deps: WebRealmDeps;
   #windowSeq = 0;
+  /**
+   * Whether the last action's settle wait ended because the page was THROTTLED.
+   *
+   * Kept because the specification names this exact case and forbids the obvious handling of
+   * it: *"'the verifier gave up' and 'this realm cannot measure the close condition' are
+   * different facts, and an implementation MUST NOT report the second as the first. A hidden
+   * browser tab never flushes the frame that quiescence is read from, and a hidden tab is the
+   * NORMAL state for agent-driven verification, so an implementation that reports an
+   * unmeasurable settle signal as `budget-exhausted` makes every backgrounded subject
+   * permanently unprovable."*
+   *
+   * Which is what this adapter did. `closedBy` derives `budget-exhausted` from elapsed time, and
+   * a throttled tab always outlasts its budget, so every verdict taken in a backgrounded page
+   * was `unknown` at clause 5 -- the specification's own example of the mistake, committed by
+   * the implementation that ships beside it.
+   */
+  #settleThrottled = false;
 
   constructor(deps: WebRealmDeps) {
     super();
@@ -385,6 +410,7 @@ export class WebRealm extends Realm {
       ...(action.target === undefined ? {} : { ref: action.target }),
     };
     const result = await this.#deps.session.command(action.capability, args);
+    this.#settleThrottled = readSettleReason(result.result) === SettleReason.THROTTLED;
     if (true !== result.ok) {
       // The page answered and said no. That is a refusal, not a verdict and not a failure of the
       // application: nothing was learned about whether the consequence would have held.
@@ -505,8 +531,33 @@ export class WebRealm extends Realm {
         ...undeclared,
         ...this.#stillInFlight(window),
         ...this.#effectElsewhere(window),
+        ...(this.#settleThrottled
+          ? [
+              {
+                kind: BlindSpotKind.BOUNDARY_UNCROSSABLE,
+                channel: ProtocolChannel.TIME,
+                detail:
+                  'the page was throttled, so the frame quiescence is read from never arrived; ' +
+                  'this window cannot say whether it went idle',
+                // Non-impeaching, exactly as the specification prescribes: it costs a claim
+                // nothing unless that claim reads `time`, and clause 6 decides that by matching
+                // the channel rather than by trusting this flag.
+                impeaching: false,
+              },
+            ]
+          : []),
       ],
     });
+  }
+
+  /**
+   * Did the last settle wait end because the page was throttled?
+   *
+   * Read by the binding as well as by `coverage()`, so that the close condition and the blind
+   * spot agree about the same window rather than each deciding for itself.
+   */
+  settleWasThrottled(): boolean {
+    return this.#settleThrottled;
   }
 
   /**

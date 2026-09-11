@@ -99,7 +99,19 @@ function provesOnlyDispatch(observation: { readonly value?: unknown }): boolean 
 function closedBy(
   window: { readonly openedAt: number; readonly budgetMs: number; readonly closes: CloseCondition },
   closedAt: number,
+  settleUnmeasurable: boolean,
 ): CloseCondition {
+  // A throttled page is the case the specification singles out: *"'the verifier gave up' and
+  // 'this realm cannot measure the close condition' are different facts, and an implementation
+  // MUST NOT report the second as the first."* A hidden tab never flushes the frame quiescence
+  // is read from, and it is the NORMAL state for agent-driven verification, so reporting
+  // budget-exhausted here would make every backgrounded subject permanently unprovable at
+  // clause 5.
+  //
+  // The gap is reported instead as a non-impeaching `time` blind spot by the realm, which costs
+  // a claim nothing unless it reads `time`. This line is what stops the budget derivation
+  // overriding that.
+  if (settleUnmeasurable) return window.closes;
   return closedAt - window.openedAt >= window.budgetMs
     ? CloseCondition.BUDGET_EXHAUSTED
     : window.closes;
@@ -222,7 +234,11 @@ export function conformanceClient(realm: WebRealm, now: () => number): Conforman
       const coverage: Coverage = await realm.coverage(window);
       const decided = adjudicate({
         claim: { ...claim, declaredAt: claim.declaredAt ?? Declaration.BEFORE_ACTION },
-        window: { ...window, closedAt: closedAt, closedBy: closedBy(window, closedAt) },
+        window: {
+          ...window,
+          closedAt: closedAt,
+          closedBy: closedBy(window, closedAt, realm.settleWasThrottled()),
+        },
         channels: realm.channels(),
         evidence: asEvidence(realm, observations, now()),
         coverage,
