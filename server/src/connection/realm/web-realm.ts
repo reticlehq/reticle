@@ -340,7 +340,22 @@ export class WebRealm extends Realm {
   }
 
   capabilities(): readonly Capability[] {
-    return PAGE_CAPABILITIES;
+    // Narrowed to what THIS page said it serves. The list above is what a current build can do;
+    // the session's handshake says what the build on the other end actually does, and declaring
+    // the union of the two was a first assertion that could be false.
+    //
+    // The protocol treats capabilities as the implementation's own claim, and seals `perform()`
+    // so an undeclared one is refused before an action is spent. Declaring a command the page
+    // cannot answer inverts that: the refusal arrives later, from the session, after the action
+    // has been committed to.
+    //
+    // `undefined` means an SDK too old to report its commands, and is NOT "none" -- the same
+    // rule `HandshakeFacts` states for every field it carries. Such a page gets the full list,
+    // which is the behaviour it had before anyone could ask.
+    const served = this.#deps.session.commands;
+    if (served === undefined) return PAGE_CAPABILITIES;
+    const offered = new Set(served);
+    return PAGE_CAPABILITIES.filter((c) => offered.has(c.name));
   }
 
   async describe(query?: unknown): Promise<unknown> {

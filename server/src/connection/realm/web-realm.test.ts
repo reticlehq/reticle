@@ -289,3 +289,29 @@ describe('desktop is the same realm with a different camera', () => {
     await expect(r.photograph()).rejects.toThrow(/must not pretend/);
   });
 });
+
+describe('what it declares it can do is what the page said it serves', () => {
+  /**
+   * The protocol seals `perform()` so an undeclared capability is refused before an action is
+   * spent. That only means anything if the declaration is true: a realm claiming a command the
+   * page cannot answer moves the refusal later, to the session, after the action was committed
+   * to -- which is the ordering the seal exists to prevent.
+   */
+  it('offers only the commands this build reported at connect', () => {
+    const names = realm({ commands: [ReticleCommand.ACT, ReticleCommand.QUERY] })
+      .capabilities()
+      .map((c) => c.name);
+    expect(names).toEqual([ReticleCommand.ACT, ReticleCommand.QUERY]);
+  });
+
+  it('offers everything when the SDK is too old to say, because absent is not none', () => {
+    // The rule `HandshakeFacts` states for every field it carries. Reading silence as "serves
+    // nothing" would refuse every action from every older page, which looks like the tool being
+    // broken rather than the tool being careful.
+    expect(realm({ commands: undefined }).capabilities().length).toBeGreaterThan(5);
+  });
+
+  it('offers nothing when the page says it serves nothing, which is a real answer', () => {
+    expect(realm({ commands: [] }).capabilities()).toEqual([]);
+  });
+});
