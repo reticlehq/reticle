@@ -49,7 +49,7 @@ import {
   UNVERIFIED_TANSTACK_START_NOTE,
   htmlManual,
 } from '../patch/snippets.js';
-import { hasOptOut, OPT_OUT_MARKER } from '../detect/init-opt-out.js';
+import { hasOptOut, OPT_OUT_MARKER } from '../detect/declared/init-opt-out.js';
 import { StepStatus, type PlanInput, type Step } from './plan.js';
 import { RETICLE_DEFAULT_PORT } from '@reticlehq/core';
 import { CSP_STEP_TITLE } from '../diagnose/csp-check.js';

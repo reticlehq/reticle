@@ -14,7 +14,7 @@
 import { join } from 'node:path';
 import { detect, Framework } from './detect.js';
 import { findWorkspaceApps, PACKAGE_JSON } from './workspace-apps.js';
-import { chooseWorkspaceApp, withoutTrailingSlashes } from './app-choice.js';
+import { chooseWorkspaceApp, withoutTrailingSlashes } from './declared/app-choice.js';
 import type { InitIo, InitOptions, InitResult } from '../run.js';
 
 /** Re-enter `init`, scoped to one directory of the workspace. */
