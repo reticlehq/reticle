@@ -23,6 +23,16 @@ import { join } from 'node:path';
  * MUTUAL_PAIRS_TODAY whatever they import, and a green run afterwards is a fact about the
  * guard rather than about the move. Two extractions on this branch were reported as verified
  * on exactly that basis.
+ *
+ * The PUBLIC-SUBPATH NOTE — the third thing it cannot see, and the one that costs somebody else
+ * rather than us. A wildcard export like `"./alpha/*.js"` makes every filename under `alpha/` a
+ * public entry point. Moving one into a subdirectory keeps resolving here, because a pattern
+ * substitutes across slashes, so the type checker, the build, the tests and this tool's own
+ * SAFE verdict are all unchanged; the path a user was told to import simply stops existing.
+ * That happened: a four-file extraction from `engine/src/evidence` was predicted SAFE, made,
+ * and reverted only because `public-subpaths-are-pinned.test.ts` had written the warning into
+ * a comment. Advice that is right about coupling and silent about the package boundary sends
+ * people at exactly this move.
  */
 
 let dir: string | undefined;
@@ -37,10 +47,16 @@ const REPO = execFileSync('git', ['rev-parse', '--show-toplevel'], {
 }).trim();
 
 /** A package with `alpha` holding the candidate, and `beta` wired as asked. */
-function fixture(betaReachesBack: boolean): string {
+function fixture(betaReachesBack: boolean, exported?: Record<string, string>): string {
   dir = mkdtempSync(join(tmpdir(), 'safe-group-'));
   mkdirSync(join(dir, 'src', 'alpha'), { recursive: true });
   mkdirSync(join(dir, 'src', 'beta'), { recursive: true });
+  if (exported !== undefined) {
+    writeFileSync(
+      join(dir, 'package.json'),
+      `${JSON.stringify({ name: '@scope/fixture', exports: exported }, undefined, 2)}\n`,
+    );
+  }
   writeFileSync(join(dir, 'src', 'alpha', 'candidate.ts'), "export const candidate = 'x';\n");
   writeFileSync(join(dir, 'src', 'alpha', 'candidate.test.ts'), 'export const t = 1;\n');
   writeFileSync(
@@ -144,5 +160,25 @@ describe('the tool the guard tells people to ask first', () => {
 
   it('stays quiet about tests when none were named', () => {
     expect(ask(fixture(true), 'candidate').said).not.toContain('are TESTS');
+  });
+
+  it('warns that a wildcard export makes the filename public, and prints the path that breaks', () => {
+    // SAFE and a breaking change at the same time. The group has no way back -- the control two
+    // cases up proves this same fixture reads SAFE -- so the coupling verdict is right and is
+    // also not the whole answer.
+    const { said } = ask(fixture(false, { './alpha/*.js': './dist/alpha/*.js' }), 'candidate');
+    expect(said).not.toContain('UNSAFE');
+    expect(said).toContain('PUBLIC');
+    // The specifier a user wrote, not just the filename, because that is the thing that stops
+    // resolving and the thing a changelog entry has to name.
+    expect(said).toContain('@scope/fixture/alpha/candidate.js');
+  });
+
+  it('says nothing about the package boundary when no export pattern covers the file', () => {
+    // The control. A tool that warns on every move teaches people to skip the warning, and the
+    // root-barrel packages -- where every file under src/ is private and may be rearranged
+    // freely -- are most of this repository.
+    const { said } = ask(fixture(false, { '.': './dist/index.js' }), 'candidate');
+    expect(said).not.toContain('PUBLIC');
   });
 });

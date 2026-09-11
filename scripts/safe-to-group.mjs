@@ -137,6 +137,61 @@ for (const d of inbound) {
   if (!others) freed.push(d);
 }
 
+/**
+ * Filenames this package has already promised to somebody else.
+ *
+ * A wildcard export -- `"./evidence/*.js"` -- makes every file under that directory a public
+ * entry point. A pattern substitutes across slashes, so moving one into a subdirectory keeps
+ * resolving for US: the type checker is happy, the build is happy, every test is happy, and the
+ * verdict above stays SAFE, because nothing about the coupling changed. The path a user was
+ * given is simply gone, and the breakage is entirely on the other side of the package boundary
+ * where nothing in this repository can see it.
+ *
+ * This tool sent me at exactly that move. Four files in `engine/src/evidence` predicted SAFE,
+ * moved, and reverted only because `public-subpaths-are-pinned.test.ts` happened to name
+ * `evidence/gaps/` in a comment as the worked example. A reader who had not opened that file
+ * would have committed it. The guard is still the authority -- it pins the filenames and fails
+ * a commit that changes them -- but advice given before the move should not be silent about the
+ * one consequence the mutual-pair count cannot express.
+ *
+ * Packages that export only `"."` are deliberately quiet here. Every file under their `src/` is
+ * private and may be rearranged freely, and that is most of this repository; a tool that warned
+ * on every move would teach people to read past the warning.
+ */
+function publicSpecifiers() {
+  const manifest = join(dirname(ROOT), 'package.json');
+  if (!existsSync(manifest)) return [];
+  const pkg = JSON.parse(readFileSync(manifest, 'utf8'));
+  const exports = pkg.exports;
+  if (typeof exports !== 'object' || null === exports) return [];
+  const found = [];
+  for (const key of Object.keys(exports)) {
+    if (!key.includes('*')) continue;
+    const [prefix, suffix] = key.replace(/^\.\//, '').split('*');
+    for (const p of group) {
+      const spec = relative(ROOT, p).replace(/\.ts$/, '.js');
+      if (spec.startsWith(prefix) && spec.endsWith(suffix)) {
+        found.push(`${pkg.name}/${spec}`);
+      }
+    }
+  }
+  return [...new Set(found)].sort();
+}
+
+const promised = publicSpecifiers();
+if (promised.length > 0) {
+  console.log(
+    `PUBLIC: ${String(promised.length)} of these file(s) are published entry points. Moving one\n` +
+      '        is a BREAKING CHANGE for anybody who imported it, and nothing in this repository\n' +
+      '        goes red -- a wildcard subpath substitutes across slashes, so the move keeps\n' +
+      '        resolving here and stops resolving for them. These specifiers would die:\n' +
+      promised.map((s) => `          ${s}`).join('\n') +
+      '\n        Doing it anyway is fine when it is deliberate: update the pinned list in\n' +
+      '        public-subpaths-are-pinned.test.ts in the same commit, and name the old path and\n' +
+      '        the new one in the changelog.',
+  );
+}
+
 if (invisible.length > 0) {
   console.log(
     `NOTE: ${String(invisible.length)} of ${String(asked.length)} named file(s) are TESTS.\n` +
