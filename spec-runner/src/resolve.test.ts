@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { ReticleTool } from '@reticlehq/server';
 import { QueryBy } from '@reticlehq/core';
 import { resolveTestid } from './resolve.js';
-import { ReticleQueryEmptyError } from './skip.js';
-import { NO_ELEMENT_FOR_TESTID } from './constants.js';
+import { ReticleQueryEmptyError } from './outcome/skip.js';
+import { NO_ELEMENT_FOR_TESTID } from './outcome/constants.js';
 import type { ToolInvoker } from '@reticlehq/server';
 
 /** A fake invoker scripted per tool name; records every call for assertion. */

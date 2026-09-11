@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { TestStatus } from './constants.js';
+import { TestStatus } from './outcome/constants.js';
 import { toJUnitXml } from './junit.js';
 import type { SpecResult } from './types.js';
 

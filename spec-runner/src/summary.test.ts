@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { summarize, printSummary } from './summary.js';
-import { TestStatus } from './constants.js';
+import { TestStatus } from './outcome/constants.js';
 import type { SpecResult } from './types.js';
 
 const mixed: SpecResult[] = [

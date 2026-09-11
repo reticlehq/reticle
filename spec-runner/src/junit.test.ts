@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { toJUnitXml, writeJUnit } from './junit.js';
-import { TestStatus } from './constants.js';
+import { TestStatus } from './outcome/constants.js';
 import type { FileSystemPort } from '@reticlehq/server';
 import type { SpecResult } from './types.js';
 

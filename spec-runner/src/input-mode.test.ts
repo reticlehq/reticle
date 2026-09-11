@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { ReticleTool } from '@reticlehq/server';
 import { ActionType, InputMode } from '@reticlehq/core';
 import { createTestContext } from './test-context.js';
-import { ReticleSkip, isSkip } from './skip.js';
-import { SKIP_REASON_REAL_INPUT } from './constants.js';
+import { ReticleSkip, isSkip } from './outcome/skip.js';
+import { SKIP_REASON_REAL_INPUT } from './outcome/constants.js';
 import type { ToolInvoker } from '@reticlehq/server';
 
 function fakeInvoker(handlers: Record<string, (args: Record<string, unknown>) => unknown>): {

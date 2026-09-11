@@ -11,7 +11,7 @@ import {
 } from '@reticlehq/core';
 import type { Clock, EvalResult, FileSystemPort } from '@reticlehq/server';
 import { FlowStore } from '@reticlehq/server';
-import { SpecKind, SpecMessage, SpecOutcome } from './constants.js';
+import { SpecKind, SpecMessage, SpecOutcome } from './outcome/constants.js';
 import { flowToSpec, flowsAsSpecs } from './flow-spec.js';
 
 const FIXED_MS = 1_700_000_000_000;

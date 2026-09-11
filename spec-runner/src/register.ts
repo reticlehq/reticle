@@ -1,6 +1,6 @@
 import type { FlowErrorCode } from '@reticlehq/core';
 import type { FlowReplaySession } from '@reticlehq/server';
-import { FLOW_LOAD_ERROR_PREFIX, SpecKind, SpecOutcome } from './constants.js';
+import { FLOW_LOAD_ERROR_PREFIX, SpecKind, SpecOutcome } from './outcome/constants.js';
 import { flowsAsSpecs } from './flow-spec.js';
 import type { FlowSpec, FlowsAsSpecsOptions, SpecRunResult } from './flow-spec.js';
 

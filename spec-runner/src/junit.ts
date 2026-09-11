@@ -1,5 +1,5 @@
 import type { FileSystemPort } from '@reticlehq/server';
-import { DEFAULT_JUNIT_SUITE_NAME, JUnit, TestStatus } from './constants.js';
+import { DEFAULT_JUNIT_SUITE_NAME, JUnit, TestStatus } from './outcome/constants.js';
 import { summarize } from './summary.js';
 import type { SpecResult } from './types.js';
 

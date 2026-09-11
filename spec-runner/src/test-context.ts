@@ -13,7 +13,7 @@ import {
   expectSignal,
   expectText,
 } from './matchers.js';
-import { DEFAULT_ASSERT_TIMEOUT_MS } from './constants.js';
+import { DEFAULT_ASSERT_TIMEOUT_MS } from './outcome/constants.js';
 
 /** A declarative predicate (the reticle_assert/until DSL). Kept structural to avoid a server type dep. */
 export type Predicate = Record<string, unknown>;

@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { ReticleTool } from '@reticlehq/server';
 import { createTestContext } from './test-context.js';
-import { ReticleAssertionError } from './skip.js';
-import { DEFAULT_ASSERT_TIMEOUT_MS, PredicateKind } from './constants.js';
+import { ReticleAssertionError } from './outcome/skip.js';
+import { DEFAULT_ASSERT_TIMEOUT_MS, PredicateKind } from './outcome/constants.js';
 import type { ToolInvoker } from '@reticlehq/server';
 
 function fakeInvoker(handlers: Record<string, (args: Record<string, unknown>) => unknown>): {

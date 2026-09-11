@@ -13,8 +13,8 @@ import type {
   FlowReplaySession,
   WaitForSignal,
 } from '@reticlehq/server';
-import { SpecKind, SpecMessage, SpecOutcome } from './constants.js';
-import { assertSuccess } from './success-assert.js';
+import { SpecKind, SpecMessage, SpecOutcome } from './outcome/constants.js';
+import { assertSuccess } from './outcome/success-assert.js';
 
 /** FLOW2SPEC — the result of running one RUNNABLE flow spec, evidence-bearing on a FAIL. */
 export interface SpecRunResult {

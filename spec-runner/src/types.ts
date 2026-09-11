@@ -1,6 +1,6 @@
 import type { ToolInvoker } from '@reticlehq/server';
 import type { TestContext } from './test-context.js';
-import type { TestStatus } from './constants.js';
+import type { TestStatus } from './outcome/constants.js';
 
 /**
  * The per-spec `t` handed to a spec body.

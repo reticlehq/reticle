@@ -1,5 +1,5 @@
-import { TestStatus } from './constants.js';
-import { isSkip } from './skip.js';
+import { TestStatus } from './outcome/constants.js';
+import { isSkip } from './outcome/skip.js';
 import { getRegistered } from './registry.js';
 import { summarize, printSummary } from './summary.js';
 import type { ReticleSpec, RunSummary, RunnerOptions, SpecResult } from './types.js';

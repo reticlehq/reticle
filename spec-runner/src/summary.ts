@@ -1,4 +1,4 @@
-import { STATUS_GLYPH, SUMMARY_FOOTER_PREFIX, TestStatus } from './constants.js';
+import { STATUS_GLYPH, SUMMARY_FOOTER_PREFIX, TestStatus } from './outcome/constants.js';
 import type { RunSummary, SpecResult } from './types.js';
 
 export function summarize(results: readonly SpecResult[]): RunSummary {

@@ -8,7 +8,7 @@ import {
   type ReticleEvent,
 } from '@reticlehq/core';
 import type { Clock, EvalResult, FileSystemPort } from '@reticlehq/server';
-import { FLOW_LOAD_ERROR_PREFIX, SpecMessage } from './constants.js';
+import { FLOW_LOAD_ERROR_PREFIX, SpecMessage } from './outcome/constants.js';
 import { registerFlowSpecs } from './register.js';
 
 const FIXED_MS = 1_700_000_000_000;

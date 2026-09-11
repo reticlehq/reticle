@@ -5,8 +5,13 @@ export { summarize, printSummary } from './summary.js';
 export { toJUnitXml, writeJUnit } from './junit.js';
 export { bootSession } from './boot.js';
 export type { BootedRun, BootOptions } from './boot.js';
-export { ReticleSkip, ReticleAssertionError, ReticleQueryEmptyError, isSkip } from './skip.js';
-export type { AssertionDetail } from './skip.js';
+export {
+  ReticleSkip,
+  ReticleAssertionError,
+  ReticleQueryEmptyError,
+  isSkip,
+} from './outcome/skip.js';
+export type { AssertionDetail } from './outcome/skip.js';
 export { createTestContext } from './test-context.js';
 export type { TestContext, TestContextOptions, Predicate } from './test-context.js';
 export type { TestClock } from './clock.js';
@@ -22,7 +27,7 @@ export {
   DEFAULT_ASSERT_TIMEOUT_MS,
   PredicateKind,
   PROBE_TESTID,
-} from './constants.js';
+} from './outcome/constants.js';
 export type {
   SpecContext,
   SpecFn,
@@ -36,7 +41,7 @@ export type {
 // flows under .reticle/flows become the runnable suite.
 export { flowToSpec, flowsAsSpecs } from './flow-spec.js';
 export type { FlowSpec, FlowSpecOptions, FlowsAsSpecsOptions, SpecRunResult } from './flow-spec.js';
-export { assertSuccess, successToPredicate } from './success-assert.js';
+export { assertSuccess, successToPredicate } from './outcome/success-assert.js';
 export { registerFlowSpecs, FlowMalformedError, SpecFailure } from './register.js';
 export type { RegisterFn, RegisterFlowSpecsOptions } from './register.js';
-export { SpecKind, SpecOutcome, SpecMessage, FLOW_LOAD_ERROR_PREFIX } from './constants.js';
+export { SpecKind, SpecOutcome, SpecMessage, FLOW_LOAD_ERROR_PREFIX } from './outcome/constants.js';

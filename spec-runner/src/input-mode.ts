@@ -1,7 +1,7 @@
 import { ReticleTool, type ToolInvoker } from '@reticlehq/server';
 import { InputMode } from '@reticlehq/core';
-import { ReticleSkip } from './skip.js';
-import { SKIP_REASON_REAL_INPUT } from './constants.js';
+import { ReticleSkip } from './outcome/skip.js';
+import { SKIP_REASON_REAL_INPUT } from './outcome/constants.js';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return 'object' === typeof value && value !== null;

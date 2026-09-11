@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { runSpecs, runOne } from './runner.js';
-import { ReticleSkip } from './skip.js';
-import { TestStatus } from './constants.js';
+import { ReticleSkip } from './outcome/skip.js';
+import { TestStatus } from './outcome/constants.js';
 import type { ToolInvoker } from '@reticlehq/server';
 import type { ReticleSpec, RunnerOptions, SpecContext } from './types.js';
 

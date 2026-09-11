@@ -53,9 +53,9 @@ const PACKAGES: Readonly<Record<string, Recorded>> = {
     note: 'the SDK. Twenty-one directories and one mutual pair (dom <-> registry), which is the best ratio here.',
   },
   'spec-runner': {
-    directories: 0,
+    directories: 1,
     mutual: 0,
-    note: 'FLAT — eighteen source files and no subdirectory at all, so this graph is empty and these two zeros measure nothing. That is the point of recording them: the first grouping in this package turns directories into 1, this goes red, and whoever did it has to put a real baseline here rather than inherit a vacuous pass.',
+    note: 'was FLAT, and the recorded zero did its job: the first grouping here turned directories into 1, this went red, and the baseline below was measured rather than inherited. outcome/ holds how a spec reports what happened; nothing is mutual with it because it imports nothing.',
   },
   'adapters/build/vite': {
     directories: 0,
