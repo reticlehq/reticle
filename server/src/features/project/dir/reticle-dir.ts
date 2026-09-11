@@ -163,12 +163,18 @@ export function baselinePath(root: string, name: string): string {
   return join(root, ReticleDir.BASELINES_SUBDIR, `${name}.json`);
 }
 
-/** Idempotent: creates .reticle/,.reticle/flows/,.reticle/baselines/ (recursive mkdir → safe to re-run). */
+/**
+ * Idempotent: creates `.reticle/` and `.reticle/flows/` (recursive mkdir, safe to re-run).
+ *
+ * `baselines/` used to be created here and never could hold anything — `BaselineStore` is an
+ * in-memory `Map` that dies with the daemon, and `baselinePath()` has no caller. An empty directory
+ * is harmless; advertising it to the user as a shareable artifact store, which the generated
+ * `.gitignore` header did, is not.
+ */
 export async function ensureReticleDir(fs: FileSystemPort, root: string): Promise<void> {
   const p = reticleDirPaths(root);
   await fs.mkdir(p.root);
   await fs.mkdir(p.flows);
-  await fs.mkdir(p.baselines);
 }
 
 const JSON_INDENT = 2;

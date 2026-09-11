@@ -127,14 +127,15 @@ describe('reticle-dir — temp-dir filesystem, never touches the repo', () => {
     await ensureReticleDir(fs, root);
     const p = reticleDirPaths(root);
     expect(await fs.exists(p.flows)).toBe(true);
-    expect(await fs.exists(p.baselines)).toBe(true);
   });
 
-  it('9: ensureReticleDir creates flows/ and baselines/', async () => {
+  // `baselines/` is deliberately NOT created: nothing can write one (BaselineStore is an in-memory
+  // Map) and every install was advertising a shareable store that is structurally empty. See
+  // empty-baselines.test.ts, which pins the absence and the reason.
+  it('9: ensureReticleDir creates flows/', async () => {
     await ensureReticleDir(fs, root);
     const p = reticleDirPaths(root);
     expect(await fs.exists(p.flows)).toBe(true);
-    expect(await fs.exists(p.baselines)).toBe(true);
   });
 
   it('10: reticleDirPaths/flowPath/baselinePath compose correctly', () => {
