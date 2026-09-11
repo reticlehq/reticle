@@ -50,7 +50,7 @@ node_modules
 
 # Build output
 dist/
-build/
+/build/
 .next/
 .turbo/
 *.tsbuildinfo
