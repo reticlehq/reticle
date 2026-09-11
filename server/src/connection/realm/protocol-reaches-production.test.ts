@@ -72,6 +72,31 @@ describe('how much of the protocol the shipping product uses', () => {
     expect(writers).toEqual(['server/src/connection/realm/web-realm.ts']);
   });
 
+  it('has no caller for the artifact exporter, which is the third disconnected piece', () => {
+    // The seam from this product to the protocol is built in three parts and joined in none:
+    //
+    //   SubjectRef on the run   declared, written by nothing        (asserted above)
+    //   WebRealm                constructed only by conformance     (asserted above)
+    //   toArtifact              exported, imported by nothing       (here)
+    //
+    // Each is individually honest — `to-artifact.ts` is in server's DECLARED_UNWIRED list with
+    // the reason "no production path reaches it" — and the three together are the whole story,
+    // which no single declaration says. `b4217853` is titled "export a run in a format somebody
+    // else could read"; nothing reads it because nothing produces it.
+    //
+    // Not a defect to fix by wiring something arbitrary: where the export surfaces (a CLI
+    // command, a tool, a file written when a run completes) is a product decision with three
+    // reasonable answers. It is a defect to leave unstated, which is what this prevents.
+    const callers = tracked('server/src', 'core/src', 'adapters').filter(
+      (f) => f !== 'server/src/agent/runs/to-artifact.ts' && code(f).includes('toArtifact'),
+    );
+    expect(
+      callers,
+      'something now calls toArtifact. The protocol export has a consumer, which is a real ' +
+        'change — update the three-part claim in this file and in the changelog.',
+    ).toEqual([]);
+  });
+
   it('exports an artifact whose subject is deliberately not the protocol shape', () => {
     // Pinned so that changing one without the other is loud. The exported shape is Reticle's,
     // the protocol's is SubjectRef, and today they are different on purpose.
