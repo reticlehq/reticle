@@ -72,30 +72,32 @@ describe('how much of the protocol the shipping product uses', () => {
     expect(writers).toEqual(['server/src/connection/realm/web-realm.ts']);
   });
 
-  it('has no caller for the artifact exporter, which is the third disconnected piece', () => {
-    // The seam from this product to the protocol is built in three parts and joined in none:
+  it('exports the artifact from exactly one place, the run export tool', () => {
+    // This seam was built in three parts and joined in none. Two are still disconnected:
     //
     //   SubjectRef on the run   declared, written by nothing        (asserted above)
     //   WebRealm                constructed only by conformance     (asserted above)
-    //   toArtifact              exported, imported by nothing       (here)
+    //   toArtifact              exported, imported by nothing       (NO LONGER TRUE)
     //
-    // Each is individually honest — `to-artifact.ts` is in server's DECLARED_UNWIRED list with
-    // the reason "no production path reaches it" — and the three together are the whole story,
-    // which no single declaration says. `b4217853` is titled "export a run in a format somebody
-    // else could read"; nothing reads it because nothing produces it.
+    // The third is joined: `reticle_run_export` gained `format:"openreality"`. The reason it took
+    // so long is worth keeping, because the shape recurs -- each piece was individually honest
+    // (`to-artifact.ts` sat in server's DECLARED_UNWIRED list with the reason "no production path
+    // reaches it"), and no single declaration said that the three together meant the specification
+    // this repository publishes could be implemented by everybody except us.
     //
-    // Not a defect to fix by wiring something arbitrary: where the export surfaces (a CLI
-    // command, a tool, a file written when a run completes) is a product decision with three
-    // reasonable answers. It is a defect to leave unstated, which is what this prevents.
+    // Pinned to ONE caller rather than relaxed to "at least one". A second call site would mean the
+    // export had grown a second way out with its own shape, which is the thing worth noticing --
+    // not because a second consumer is wrong, but because it should be a decision and not a drift.
     const callers = tracked('server/src', 'core/src', 'adapters').filter(
       (f) =>
         f !== 'server/src/agent/runs/artifact/to-artifact.ts' && code(f).includes('toArtifact'),
     );
     expect(
       callers,
-      'something now calls toArtifact. The protocol export has a consumer, which is a real ' +
-        'change — update the three-part claim in this file and in the changelog.',
-    ).toEqual([]);
+      'the artifact exporter grew or lost a caller. One call site is the intended state — the ' +
+        '`format:"openreality"` branch of reticle_run_export. If the export now surfaces somewhere ' +
+        'else too, say so here and in the changelog.',
+    ).toEqual(['server/src/agent/runs/run-tools.ts']);
   });
 
   it('exports an artifact whose subject is deliberately not the protocol shape', () => {

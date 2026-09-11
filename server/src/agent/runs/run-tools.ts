@@ -9,6 +9,7 @@ import type { ToolDef, ToolDeps } from '../tools/tools.js';
 import { RunStore } from './artifact/run-store.js';
 import { renderRunReport } from './artifact/render-report.js';
 import { diffRuns } from './artifact/run-diff.js';
+import { toArtifact } from './artifact/to-artifact.js';
 
 /**
  * The verification-run export tool. `reticle_run_export` reads a persisted ReticleVerificationRun artifact
@@ -16,6 +17,14 @@ import { diffRuns } from './artifact/run-diff.js';
  * runId it returns that run; without one it returns the most recent. With format:"report" it returns a
  * legible ✓/✗ text report instead of raw JSON. The RunStore is built inline from the injected fs +
  * reticleRoot (it is stateless), so this needs no new ToolDeps wiring.
+ *
+ * format:"openreality" is where the protocol leaves this tool. `toArtifact` had been built, tested
+ * and exported with no caller anywhere -- a run could be exported in Reticle's own shape and in no
+ * other, so the specification this repository publishes could be implemented by everybody except
+ * us. It surfaces HERE rather than as a new tool or a file written beside the run, because the
+ * question "give me this run in a format somebody else can read" is the one this tool already
+ * answers three ways; a fourth format is a smaller surface than a fourth tool, and a consumer who
+ * already knows `reticle_run_export` needs to learn nothing.
  */
 export const RUN_TOOLS: ToolDef[] = [
   {
@@ -28,10 +37,10 @@ export const RUN_TOOLS: ToolDef[] = [
         .optional()
         .describe('The run id to export. Omit to return the most recent run.'),
       format: z
-        .enum(['json', 'report', 'diff'])
+        .enum(['json', 'report', 'diff', 'openreality'])
         .optional()
         .describe(
-          'json (default) returns the full run; report returns a legible text summary; diff returns the delta vs the previous run.',
+          'json (default) returns the full run; report returns a legible text summary; diff returns the delta vs the previous run; openreality returns the run as an OpenReality (OVP) artifact a non-Reticle consumer can read.',
         ),
       ...sessionIdShape,
     },
@@ -39,6 +48,7 @@ export const RUN_TOOLS: ToolDef[] = [
       run: z.unknown().optional(),
       report: z.string().optional(),
       diff: z.unknown().optional(),
+      artifact: z.unknown().optional(),
       error: z.string().optional(),
     },
     handler: async (deps: ToolDeps, args: Record<string, unknown>) => {
@@ -82,7 +92,10 @@ export const RUN_TOOLS: ToolDef[] = [
         }
         run = latest;
       }
-      return 'report' === asString(args['format']) ? { report: renderRunReport(run) } : { run };
+      const format = asString(args['format']);
+      if ('report' === format) return { report: renderRunReport(run) };
+      if ('openreality' === format) return { artifact: toArtifact(run) };
+      return { run };
     },
   },
 ];

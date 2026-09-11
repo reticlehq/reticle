@@ -92,6 +92,28 @@ describe('reticle_run_export (MCP persona)', () => {
     expect(out.run?.runId).toBe('run-a');
   });
 
+  it('returns the OpenReality artifact with format:"openreality"', async () => {
+    if (tool === undefined) return;
+    const out = (await tool.handler(deps, { format: 'openreality' })) as {
+      artifact?: { kind?: string; runId?: string; subject?: { name?: string } };
+    };
+    // The protocol shape, not Reticle's own run shape: a consumer who implements OVP and has never
+    // seen this codebase reads `kind` to know what it is holding.
+    expect(out.artifact?.kind).toBe('openreality.verification');
+    expect(out.artifact?.runId).toBe('run-a');
+    expect(out.artifact?.subject?.name).toBe('demo');
+  });
+
+  it('exports the same artifact twice, so a consumer can diff two exports meaningfully', async () => {
+    if (tool === undefined) return;
+    // `toArtifact` is pure by design -- it reads no clock, precisely so that exporting one run
+    // twice cannot produce two different documents. Wiring it to a tool is the step that could
+    // break that, by stamping a time on the way out.
+    const a = (await tool.handler(deps, { format: 'openreality' })) as Record<string, unknown>;
+    const b = (await tool.handler(deps, { format: 'openreality' })) as Record<string, unknown>;
+    expect(JSON.stringify(a)).toBe(JSON.stringify(b));
+  });
+
   it('returns a legible text report with format:"report"', async () => {
     if (tool === undefined) return;
     const out = (await tool.handler(deps, { format: 'report' })) as { report?: string };
