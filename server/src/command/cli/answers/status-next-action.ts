@@ -31,6 +31,16 @@ export interface StatusFacts {
    */
   initialized: boolean;
   /**
+   * Has THIS project connected before, as opposed to any app on this port.
+   *
+   * Both facts are needed and they are not interchangeable. `previouslyConnected` is wide: with
+   * no project id its helper falls back to "has this daemon ever served anything", which is the
+   * right answer for ranking a dev-server hint and the wrong one for any sentence about the
+   * directory the reader is standing in. Every claim below that says "this project" or decides
+   * whether THIS app is instrumented uses the narrow one.
+   */
+  projectPreviouslyConnected: boolean;
+  /**
    * Ports of dev servers that ANNOUNCED themselves — i.e. that have Reticle loaded in the process
    * actually running.
    *
@@ -73,11 +83,11 @@ export function statusNextAction(facts: StatusFacts): string | undefined {
     //
     // So the wide fact gets the wide sentence. Losing the reassurance is the point when the thing
     // it reassures about cannot be checked.
-    const wiring = !facts.previouslyConnected
-      ? ''
-      : facts.initialized
-        ? 'This project has connected before, so the wiring is correct.'
-        : 'An app has connected on this port before, though nothing here identifies this directory as that project.';
+    const wiring = facts.projectPreviouslyConnected
+      ? 'This project has connected before, so the wiring is correct.'
+      : facts.previouslyConnected
+        ? 'An app has connected on this port before, though nothing here identifies this directory as that project.'
+        : '';
     return (
       `no daemon is running on this port, which is normal — an agent starts it when it first calls a ` +
       `Reticle tool, and it exits again when idle. ${wiring} Ask your agent to verify something, then ` +
@@ -87,9 +97,15 @@ export function statusNextAction(facts: StatusFacts): string | undefined {
 
   // Only diagnose instrumentation after a live daemon makes that diagnosis possible. When the
   // daemon is absent, claiming the app is unwired confuses missing evidence with evidence of a
-  // missing install. `previouslyConnected` overrides this branch because plugin-based wiring may
+  // missing install. A previous connection overrides this branch because plugin-based wiring may
   // connect without creating `.reticle.json`.
-  if (!facts.initialized && !facts.previouslyConnected) {
+  //
+  // THIS project's previous connection, not any. The override used to read the wide fact, so a
+  // stranger's app touching this port once was enough to silence "your app is not instrumented,
+  // run init" for every uninstrumented directory afterwards. Driving it produced the symptom:
+  // a live daemon, an empty directory, and `status` with no advice at all, while `doctor` two
+  // commands later said the app was not instrumented.
+  if (!facts.initialized && !facts.projectPreviouslyConnected) {
     return (
       'no app has ever connected for this project, and there is no Reticle config here — so the ' +
       'tools are registered and the app itself is not instrumented. Those are two different halves ' +
@@ -106,11 +122,13 @@ export function statusNextAction(facts: StatusFacts): string | undefined {
     // a session", which a daemon seconds old cannot know; from the CLI the honest equivalent is "an app
     // for this project has connected on this port", which is the fact that decides whether the wiring
     // is in question at all.
-    everConnected: facts.previouslyConnected,
+    // The comment above this line already described the narrow question — "an app for this
+    // project has connected on this port" — while the wide value was being passed.
+    everConnected: facts.projectPreviouslyConnected,
     initialized: facts.initialized,
     listening: facts.devServerPorts ?? [],
     dev: undefined,
-    previouslyConnected: facts.previouslyConnected,
+    previouslyConnected: facts.projectPreviouslyConnected,
   });
   return next.reason;
 }

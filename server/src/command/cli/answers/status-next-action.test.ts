@@ -25,6 +25,7 @@ describe('statusNextAction', () => {
       running: false,
       sessionCount: 0,
       previouslyConnected: false,
+      projectPreviouslyConnected: false,
       initialized: true,
     });
     expect(next).toBeDefined();
@@ -42,6 +43,7 @@ describe('statusNextAction', () => {
       running: false,
       sessionCount: 0,
       previouslyConnected: true,
+      projectPreviouslyConnected: false,
       initialized: false,
     });
     expect(next).toBeDefined();
@@ -51,6 +53,39 @@ describe('statusNextAction', () => {
     expect(next).toContain('connected on this port before');
   });
 
+  it('still says "not instrumented" when a STRANGER used this port', () => {
+    // The silent case, found by driving: a live daemon, a directory with no config and no app,
+    // and `status` returned nothing at all — while `doctor`, two commands later in the same
+    // directory, said the app was not instrumented and to run init.
+    //
+    // The override exists so plugin-based wiring (which connects without writing .reticle.json)
+    // is not told to run init. It read the WIDE fact, so any app that had ever touched this port
+    // silenced the advice for every uninstrumented directory afterwards.
+    const next = statusNextAction({
+      running: true,
+      sessionCount: 0,
+      previouslyConnected: true,
+      projectPreviouslyConnected: false,
+      initialized: false,
+    });
+    expect(next).toBeDefined();
+    expect(next).toContain('init');
+  });
+
+  it('stays quiet about init when THIS project connected without a config', () => {
+    // The case the override is for: plugin-based wiring connects and writes no .reticle.json.
+    // Telling that project to run init is the one action that cannot help and can overwrite a
+    // working config.
+    const next = statusNextAction({
+      running: true,
+      sessionCount: 0,
+      previouslyConnected: true,
+      projectPreviouslyConnected: true,
+      initialized: false,
+    });
+    expect(next ?? '').not.toContain('init');
+  });
+
   it('does not send a previously-connected project back to `init`', () => {
     // The install is known-good the moment an app has ever connected on this port, and `init` is the
     // one action that cannot help and can overwrite a config that works.
@@ -58,6 +93,7 @@ describe('statusNextAction', () => {
       running: false,
       sessionCount: 0,
       previouslyConnected: true,
+      projectPreviouslyConnected: true,
       initialized: true,
     });
     expect(next).not.toContain('init');
@@ -68,6 +104,7 @@ describe('statusNextAction', () => {
       running: true,
       sessionCount: 0,
       previouslyConnected: false,
+      projectPreviouslyConnected: false,
       initialized: true,
     });
     expect(next).toBeDefined();
@@ -79,6 +116,7 @@ describe('statusNextAction', () => {
       running: true,
       sessionCount: 0,
       previouslyConnected: true,
+      projectPreviouslyConnected: true,
       initialized: true,
     });
     expect(next?.toLowerCase()).toMatch(/wiring is correct|reopen/);
@@ -92,6 +130,7 @@ describe('statusNextAction', () => {
         running: true,
         sessionCount: 1,
         previouslyConnected: true,
+        projectPreviouslyConnected: true,
         initialized: true,
       }),
     ).toBeUndefined();
@@ -114,6 +153,7 @@ describe('status can say that init was never run here', () => {
       running: false,
       sessionCount: 0,
       previouslyConnected: false,
+      projectPreviouslyConnected: false,
       initialized: false,
     });
     expect(next).toMatch(/no daemon is running/);
@@ -125,6 +165,7 @@ describe('status can say that init was never run here', () => {
       running: true,
       sessionCount: 0,
       previouslyConnected: false,
+      projectPreviouslyConnected: false,
       initialized: false,
     });
     expect(next).toMatch(/init/);
@@ -135,6 +176,7 @@ describe('status can say that init was never run here', () => {
       running: true,
       sessionCount: 0,
       previouslyConnected: false,
+      projectPreviouslyConnected: false,
       initialized: true,
     });
     expect(next ?? '').not.toMatch(/reticle init|server init/);
@@ -146,6 +188,7 @@ describe('status can say that init was never run here', () => {
         running: true,
         sessionCount: 1,
         previouslyConnected: false,
+        projectPreviouslyConnected: false,
         initialized: false,
       }),
     ).toBeUndefined();

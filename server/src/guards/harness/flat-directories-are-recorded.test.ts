@@ -50,7 +50,7 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   'init/src/patch': 14,
   'server/src/agent/runs': 11,
   'server/src/agent/tools': 32,
-  'server/src/command/cli': 17,
+  'server/src/command/cli': 18,
   'server/src/command/setup': 15,
   'server/src/connection/session': 20,
   'server/src/features/flows': 24,

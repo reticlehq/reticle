@@ -9,6 +9,7 @@ const wired: StatusFacts = {
   running: true,
   sessionCount: 0,
   previouslyConnected: false,
+  projectPreviouslyConnected: false,
   initialized: true,
 };
 

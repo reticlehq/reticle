@@ -4,22 +4,17 @@ import { openFailureNote } from './cli/answers/open-note.js';
 import { realpathSync } from 'node:fs';
 import { join } from 'node:path';
 import { stateDirProblem } from './daemon/state-dir.js';
-import { statusNextAction } from './cli/answers/status-next-action.js';
 import { readDevServers } from './daemon/dev-servers.js';
 import {
   hasAnyAppConnectedBefore,
   hasProjectConnectedBefore,
 } from '../connection/session/recall/prior/connection-memory.js';
 import { attachStatusFields } from '../agent/mcp/attach-memory.js';
+import { splitBrainFields, withNextAction } from './cli/status-fields.js';
 import { reticleStateHome } from './daemon/daemon.js';
 import { handleMcp } from './cli/mcp-command.js';
+import { resolveDaemonForProject } from './daemon/daemon-resolve.js';
 import { daemonSpawnArgs, daemonStartOptions } from './cli/daemon-start-options.js';
-import {
-  daemonsServingProjectElsewhere,
-  resolveDaemonForProject,
-  splitBrainNote,
-  wrongDaemonNote,
-} from './daemon/daemon-resolve.js';
 import {
   handleWatch,
   handleCapsules,
@@ -347,43 +342,14 @@ async function handleRestart(port: number, force: boolean): Promise<void> {
   await serveWithHonestExit({ port, headless: true, http: false });
 }
 
-/** `{ nextAction }` when there is one, `{}` when a session is connected — so the success case is silent. */
-function withNextAction(facts: {
-  running: boolean;
-  sessionCount: number;
-  previouslyConnected: boolean;
-  initialized: boolean;
-  devServerPorts?: readonly number[];
-}): { nextAction?: string } {
-  const next = statusNextAction(facts);
-  return next === undefined ? {} : { nextAction: next };
-}
-
-/**
- * What `status` says about a project whose daemons have split in two.
- *
- * Both halves in one place because they are one condition asked from two positions, and a command
- * can be standing on either. Silent — no key at all — when there is nothing to report, so a healthy
- * run reads exactly as it did.
- */
-function splitBrainFields(port: number, projectId: string | undefined): { splitBrain?: string } {
-  const home = reticleStateHome();
-  const elsewhere = splitBrainNote(
-    port,
-    daemonsServingProjectElsewhere(projectId, port, home, isAlive, (other) =>
-      hasProjectConnectedBefore(home, other, projectId),
-    ),
-  );
-  const note =
-    elsewhere ?? wrongDaemonNote(port, resolveDaemonForProject(projectId, home, isAlive));
-  return note === undefined ? {} : { splitBrain: note };
-}
-
 export async function handleStatus(port: number): Promise<void> {
   const pid = readPid(port);
   // Durable, so it survives the daemon idling out — which is the state `status` is most often run in.
   const projectId = readProjectId(process.cwd());
   const previouslyConnected = hasAnyAppConnectedBefore(reticleStateHome(), port, projectId);
+  // The narrow twin. Every sentence that says "this project", and the decision about whether THIS
+  // app is instrumented, needs the question the wide one cannot answer without a project id.
+  const projectPreviouslyConnected = hasProjectConnectedBefore(reticleStateHome(), port, projectId);
   // Whether `init` has run HERE. Registering the MCP server does not wire the app, and more than one
   // path does the first without the second — so this is the commonest reason `status` has nothing to
   // report, and it was not among the facts this command could state.
@@ -421,6 +387,7 @@ export async function handleStatus(port: number): Promise<void> {
         running: false,
         sessionCount: 0,
         previouslyConnected,
+        projectPreviouslyConnected,
         initialized,
         devServerPorts,
       }),
@@ -446,6 +413,7 @@ export async function handleStatus(port: number): Promise<void> {
         running: true,
         sessionCount: 0,
         previouslyConnected,
+        projectPreviouslyConnected,
         initialized,
         devServerPorts,
       }),
@@ -464,6 +432,7 @@ export async function handleStatus(port: number): Promise<void> {
           running: true,
           ...summary,
           previouslyConnected,
+          projectPreviouslyConnected,
           initialized,
           devServerPorts,
         })
