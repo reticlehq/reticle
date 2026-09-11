@@ -27,9 +27,9 @@ A ↻ row's COUNT was re-derived; a ↻ row's ✅ is still the August sweep unle
 | `pnpm typecheck` | ✅ | ~10s |
 | ↻ `pnpm test:unit` | ✅ **9,210 tests / 934 files** across 10 packages plus the bench harness | ~70s |
 | `pnpm format:check` | ✅ | ~10s |
-| `pnpm test:integration` | ✅ 12/12 | 17s |
-| ↻ `pnpm test:e2e` | ✅ (Aug). **36 web specs**, counted 2026-09-09 | **490s** (Aug) |
-| `pnpm test:e2e:desktop` | ✅ 2/2 (Electron 20, Tauri 17) | 58s |
+| `pnpm test:integration` | ✅ **14/14**, re-measured 2026-09-11 | 17s |
+| ↻ `pnpm test:e2e` | ✅ **39/39 specs, 334 checks**, re-measured 2026-09-11 | **490s** (Aug) |
+| `pnpm test:e2e:desktop` | ✅ **3/3** (Electron 22, electron-vite 6, Tauri 17), 2026-09-11; see the Tauri note below | 58s |
 | `node apps/e2e/soak.mjs --self-check` | ✅ | `<1s` |
 | `node apps/e2e/matrix.mjs --self-check` | ✅ | `<1s` |
 | `pnpm matrix:compat --only cursor` | ✅ 4/4 | ~10s |
@@ -39,7 +39,11 @@ A ↻ row's COUNT was re-derived; a ↻ row's ✅ is still the August sweep unle
 
 That paragraph used to end "**nothing in CI runs it**, so it can only rot silently", and it is left here because it is the reason the `bench` job below exists. It is no longer true: `ci.yml` has a `bench` job that runs `pnpm bench:full` then `pnpm bench:gate`, path-routed on the files that can move token cost. What is still true is the narrower claim in section 4: `bench/` as a whole is measurement, and only the replay + observation-cost numbers are gated.
 
-`pnpm gate:install` (~15 min) and the Windows / Rust jobs were **not** run in this sweep; they are CI-only or network-bound. They are green on `main` per the last CI run, which is a weaker claim than every row above, and is stated that way on purpose.
+**`pnpm gate:install` was run on 2026-09-11 and passed 10/10 scaffolds**, which is a stronger claim than this paragraph used to make. It matters this release because `pnpm -r publish` selects **thirteen** packages and two of them gained a `prepack` during v3; the gate is the only thing that runs those prepacks against a real registry.
+
+The Windows and Rust jobs are still **not** run here: they are CI-only. They are green on `main` per the last CI run, which is a weaker claim than every row above and is stated that way on purpose.
+
+**The Tauri spec is FLAKY on macOS, not broken.** Measured 2026-09-11 over six runs: three failed and three passed, standalone and in-battery alike. When it succeeds the boot IPC arrives in under 200ms against an 8000ms budget, so the failure is all-or-nothing rather than slow, and raising the timeout is not the fix. CI runs Tauri on Linux under WebKitGTK, where it is green. Re-run before blaming a diff.
 
 ---
 
