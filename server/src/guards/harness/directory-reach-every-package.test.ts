@@ -43,9 +43,9 @@ const PACKAGES: Readonly<Record<string, Recorded>> = {
     note: 'FLAT. Plain CJS tooling, outside every TypeScript gate, and small enough that a directory would be ceremony.',
   },
   'adapters/build/vite': {
-    directories: 0,
+    directories: 1,
     mutual: 0,
-    note: 'FLAT, thirteen source files. The first grouping here turns directories into 1 and this goes red, which is the point of recording a zero.',
+    note: 'was FLAT, and the recorded zero did its job a second time: the first grouping here went red and this baseline was measured. token/ holds the pairing token and where machine state lives.',
   },
   'adapters/framework/react': {
     directories: 0,

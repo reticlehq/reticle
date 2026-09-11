@@ -21,7 +21,7 @@
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { devServerRegistryFileName, type DevServerEntry } from '@reticlehq/core';
-import { stateHome } from './state-home.js';
+import { stateHome } from './token/state-home.js';
 
 const JSON_INDENT = 2;
 

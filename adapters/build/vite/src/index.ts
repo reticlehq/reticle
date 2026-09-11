@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
-import { missingTokenWarning } from './missing-token.js';
-import { ensurePairingToken } from './ensure-token.js';
+import { missingTokenWarning } from './token/missing-token.js';
+import { ensurePairingToken } from './token/ensure-token.js';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { transformSync } from '@babel/core';

@@ -12,7 +12,7 @@ import {
   pickDaemonPort,
   type DaemonRegistryEntry,
 } from '@reticlehq/core';
-import { stateHome } from './state-home.js';
+import { stateHome } from './token/state-home.js';
 
 /** process.kill(pid, 0) throws iff the process is gone — the same liveness probe the daemon uses. */
 function isAlive(pid: number): boolean {
