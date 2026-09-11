@@ -226,9 +226,16 @@ describe('every declared bench scenario is scored by something', () => {
   });
 
   it('every network bug names a URL the application actually requests', () => {
-    // A bug whose target the app never fetches cannot fire, however it is driven. That is worse
-    // than an unscored scenario and looks identical from outside: it is injectable, it appears
-    // in the catalogue, and it silently pads the denominator of every catch rate.
+    // A bug whose target the app never fetches cannot fire, however it is driven, and it looks
+    // identical from outside to one the tool failed to catch: injectable, present in the
+    // catalogue, no error when applied.
+    //
+    // This guard is PROSPECTIVE, and the distinction was worth checking rather than assuming.
+    // The two dead bugs found today are in no harness: `bench/pw-vs-reticle/bugs.mjs` is 88
+    // curated entries with no dynamic enumeration of the injector, so neither has ever reached a
+    // catch rate, and the UNSCORED list was right to say so. The damage is what happens NEXT --
+    // somebody adds a dead bug to a harness list, and from then on every rate counts it as
+    // missed with nothing to say otherwise.
     //
     // Both entries on the UNSCORED list turned out to be this. `payload-wrong-value` rewrites a
     // field on POST /api/deploy and `empty-200-deployments` empties GET /api/deployments, and
@@ -247,8 +254,9 @@ describe('every declared bench scenario is scored by something', () => {
       .filter((url) => !UNSCORED.has(urlOwner(url)));
     expect(
       [...new Set(unreachable)],
-      'these bugs intercept a URL the bench app never requests, so they can never fire and every ' +
-        'catch rate counts them as missed. Point each at a path the app uses, give the app the ' +
+      'these bugs intercept a URL the bench app never requests, so they can never fire. A ' +
+        'harness that lists one counts it as missed forever. Point each at a path the app uses, ' +
+        'give the app the ' +
         'request it claims to break, or declare it in UNSCORED with the reason.',
     ).toEqual([]);
   });
