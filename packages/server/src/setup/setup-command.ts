@@ -17,8 +17,12 @@ import { ApprovalOutcome, grantAutoApproval } from './auto-approve.js';
 import { agentIo } from './agent-io.js';
 import { EnsureDaemon, ensureDaemon, nodeEnsureDaemonDeps } from './ensure-daemon.js';
 import { openInBrowser } from '../cli/cli-launch.js';
+import { readProjectId } from '../cli/cli-port.js';
+import { reticleStateHome } from '../daemon/daemon.js';
+import { readDevServers } from '../daemon/dev-servers.js';
 import { chooseDriver, DRIVERS, shouldEscalate } from './drive-plan.js';
 import { driveWith } from './drive-agent.js';
+import { urlOfExistingApp } from './existing-app.js';
 import {
   binaryExists,
   flowsSaved,
@@ -156,6 +160,13 @@ export async function runSetupCommand(
       server.start(command, cwd, input.env);
       return Promise.resolve();
     },
+    existingAppUrl: () =>
+      Promise.resolve(
+        urlOfExistingApp(readDevServers(reticleStateHome()), {
+          projectId: readProjectId(input.appDir),
+          root: input.appDir,
+        }),
+      ),
     devServerOutput: () => server.output(),
     devServerExited: () => server.exited(),
     devServerQuietForMs: () => server.quietForMs(),

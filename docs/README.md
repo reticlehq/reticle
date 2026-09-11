@@ -85,6 +85,7 @@ Everything here is published to [docs.reticle.sh](https://docs.reticle.sh) by `d
 | [system-map.md](system-map.md) | how a tool call reaches the app, and which failures are silent |
 | [telemetry-contract.md](telemetry-contract.md) | required reading before touching anything that emits |
 | [telemetry-events.mdx](telemetry-events.mdx) | every event kind and its payload, and the question each one exists to answer |
+| [first-drive.md](first-drive.md) | clone to a real verdict in about fifteen minutes, and the traps on the way |
 | [debugging.md](debugging.md) | debugging Reticle itself: the four signals and what each answers |
 | [fixtures.md](fixtures.md) | the sibling `reticle-fixtures` repo: install complexity, not regressions |
 | [matrix/README.md](matrix/README.md) | submitting an MCP-client compatibility record, the best first contribution |

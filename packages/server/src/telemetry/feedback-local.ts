@@ -13,7 +13,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { ReticleDir } from '@reticlehq/core';
-import type { Feedback } from '@reticlehq/core';
+import type { Feedback } from '@reticlehq/core/telemetry';
 
 /** Reports live beside the rest of the workspace, not in a temp dir somebody has to be told about. */
 const FEEDBACK_SUBDIR = 'feedback';

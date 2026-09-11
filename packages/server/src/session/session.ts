@@ -135,6 +135,11 @@ export class Session {
   /** Whether the page records network bodies; undefined on an SDK too old to say. See HELLO. */
   captureBodies?: boolean | undefined;
   /**
+   * Whether this build stamps `data-reticle-source`, when the build plugin said. See HELLO.
+   * `false` separates "the project turned it off" from "nothing provides one"; undefined is unknown.
+   */
+  sourceMapping?: boolean | undefined;
+  /**
    * Extra key names this app declared sensitive via `connect({ redact: { keys } })`. Held so the
    * DRIVEN path can redact them too — a request body the daemon captures from the network stack
    * never passes through the SDK, so nothing else would.
@@ -197,6 +202,7 @@ export class Session {
     this.title = hello.title;
     this.adapters = hello.adapters;
     this.hasCapabilities = hello.hasCapabilities ?? false;
+    this.sourceMapping = hello.sourceMapping;
     this.redactKeys = hello.redactKeys ?? [];
     this.#socket = socket;
     this.#clock = clock;

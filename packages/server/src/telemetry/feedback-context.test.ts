@@ -2,7 +2,7 @@ import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { StackUnknownReason } from '@reticlehq/core';
+import { StackUnknownReason } from '@reticlehq/core/telemetry';
 import { detectStack } from './feedback-context.js';
 
 /**

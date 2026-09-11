@@ -9,7 +9,7 @@ import {
   type Intent,
   type IntentFile,
   type IntentSurface,
-} from '@reticlehq/core';
+} from '@reticlehq/core/artifacts';
 import type { FileSystemPort } from '../project/fs-port.js';
 import { reticleDirPaths } from '../project/reticle-dir.js';
 import { withFileLock } from '../project/file-lock.js';

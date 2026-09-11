@@ -27,6 +27,7 @@ import {
 } from './listeners.js';
 import type { CandidateSession } from './session-pick.js';
 import type { PageProbe } from './page-probe.js';
+import { loopbackProbeUrls } from './loopback-probe-urls.js';
 
 const WINDOWS = 'win32' === process.platform;
 /** A page fetch that is slow is a page fetch that failed, for our purposes. */
@@ -185,21 +186,35 @@ function windowsProcessPairs(): ProcessPair[] {
  * A refused certificate is reported separately because the server ANSWERED: a self-signed dev cert
  * is an ordinary local setup, and calling it "nothing is listening" sends somebody to start a
  * server that is already running.
+ *
+ * On loopback, the announced host is tried first and the other loopback families follow when it
+ * misses — so an IPv6-only Vite that printed `127.0.0.1` still counts as served (#884).
  */
 export async function probePage(url: string): Promise<PageProbe> {
-  try {
-    const res = await fetch(url, { signal: AbortSignal.timeout(PROBE_TIMEOUT_MS) });
-    const body = await res.text();
-    return { served: true, sdkInPage: /@reticlehq|@reticle-connect|reticle-dev/.test(body) };
-  } catch (err) {
-    const message = String(
-      (err as { cause?: { message?: string }; message?: string })?.cause?.message ??
-        (err as Error)?.message ??
-        '',
-    );
-    const tlsRefused = /certificate|SELF_SIGNED|DEPTH_ZERO|ERR_TLS|unable to verify/i.test(message);
-    return { served: false, sdkInPage: false, tlsRefused };
+  const candidates = loopbackProbeUrls(url);
+  let sawTlsRefused = false;
+  for (const candidate of candidates) {
+    try {
+      const res = await fetch(candidate, { signal: AbortSignal.timeout(PROBE_TIMEOUT_MS) });
+      const body = await res.text();
+      const sdkInPage = /@reticlehq|@reticle-connect|reticle-dev/.test(body);
+      // Only stamp reachedUrl when we had to leave the announcement — callers that already have
+      // the working URL should not rewrite it for a no-op.
+      return candidate === url
+        ? { served: true, sdkInPage }
+        : { served: true, sdkInPage, reachedUrl: candidate };
+    } catch (err) {
+      const message = String(
+        (err as { cause?: { message?: string }; message?: string })?.cause?.message ??
+          (err as Error)?.message ??
+          '',
+      );
+      if (/certificate|SELF_SIGNED|DEPTH_ZERO|ERR_TLS|unable to verify/i.test(message)) {
+        sawTlsRefused = true;
+      }
+    }
   }
+  return { served: false, sdkInPage: false, ...(sawTlsRefused ? { tlsRefused: true } : {}) };
 }
 
 /** Sessions the daemon is holding, in the shape the picker reads. */

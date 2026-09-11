@@ -427,7 +427,7 @@ Read [`docs/telemetry-contract.md`](/telemetry-contract) before you touch anythi
 3. Add the payload key to `TelemetryEventSchema`.
 4. Add it to the emitter's key allowlist, or it will be silently dropped.
 5. Decide whether it is session-scoped and add it to `SESSION_SCOPED` if so.
-6. If it produces a verdict, add the tool to `VERIFICATION_TOOLS`. If it introduces a finding kind, add that to core's enum and never re-list it locally.
+6. If it produces a verdict, add the tool to `VERDICT_TOOLS` (`packages/server/src/tools/feedback-tools.ts`). If it introduces a finding kind, add that to core's enum and never re-list it locally.
 
 `telemetry-contract.test.ts` enforces the parts that can be enforced, and `pnpm test:e2e` runs a spec that fires every event kind against a real capture endpoint and asserts each one lands.
 

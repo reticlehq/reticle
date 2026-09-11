@@ -110,6 +110,21 @@ export interface SnapshotResult {
    */
   hiddenSkipped?: number;
   /**
+   * How many elements exist under the scope at all, present ONLY when the walk produced no nodes.
+   *
+   * The third cause of an empty tree, and the one no count of the WALK can reach: a walk that
+   * visited nothing has nothing to report. Filed from the field after the source-mapping stamp
+   * crashed a react-three-fiber app — React unmounted everything, the page went white, and
+   * `{ tree: "", nodes: 0 }` was indistinguishable from a page that had not rendered yet. A
+   * diagnosis pass went on establishing which.
+   *
+   * Counted off the DOM instead, which settles it outright: a handful of elements is a mount
+   * container with nothing in it, and dozens is a page whose elements were all skipped (see
+   * `hiddenSkipped`). Deliberately a number rather than a verdict, for the reason `hiddenSkipped`
+   * gives — the walk knows this for certain and cannot know why the app unmounted.
+   */
+  domElements?: number;
+  /**
    * Refs of the subtree roots the walk never entered, present ONLY when `truncated`. This is the
    * cut's own frontier: re-snapshot each with `{ scope: ref, includeRoot: true }` and the union is
    * the whole tree. Without it `truncated` says only THAT the read stopped, never WHERE, so nobody
@@ -399,14 +414,10 @@ function walk(parent: Element, depth: number, ctx: WalkCtx, inLive = false): voi
 }
 
 /**
- * The APP's open dialogs. Reticle's own panels are excluded, always.
- *
- * The HUD's chat and report panels carry `role="dialog"` because that is the correct role for what
- * they are — but they are OUR surface, not the application's. Once the presenter became visible to
- * the tool surface (so that Reticle can be used to check its own HUD), every snapshot of every page
- * started reporting the HUD's own panel in `visibleDialogs`, telling the agent a modal was up when
- * the app had none. An agent that believes a dialog is open dismisses it before doing anything else,
- * which is a wasted action at best and a dismissed REAL dialog at worst.
+ * The APP's open dialogs. Reticle's own panels use `role="region"` (not `dialog`) so they are not
+ * mistaken for the application's modal layer by snapshot hints, query orientation, or a library's
+ * outside-click walk — see #783. Anything that still carries `role="dialog"` inside our overlay is
+ * excluded here via `isReticleOverlay`.
  */
 function collectDialogs(root: ParentNode): string[] {
   const nodes = root.querySelectorAll('[role="dialog"], dialog[open], [aria-modal="true"]');
@@ -529,6 +540,9 @@ export function buildSnapshot(options: SnapshotOptions = {}): SnapshotResult {
     status,
     nodes: ctx.nodes,
     truncated: ctx.truncated,
+    // Only when the tree is empty: on any other result it is a number nobody reads, paid for on
+    // every snapshot. `querySelectorAll` on an empty container is the cheapest possible count.
+    ...(0 === ctx.nodes ? { domElements: root.querySelectorAll('*').length } : {}),
     ...(ctx.leanSkipped > 0 ? { leanSkipped: ctx.leanSkipped } : {}),
     ...(ctx.hiddenSkipped > 0 ? { hiddenSkipped: ctx.hiddenSkipped } : {}),
     ...(ctx.unread.length > 0 ? { unread: ctx.unread } : {}),

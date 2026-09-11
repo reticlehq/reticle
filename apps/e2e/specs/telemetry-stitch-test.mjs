@@ -27,6 +27,8 @@ import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { McpStdioClient } from '../../../bench/harness/mcp-client.mjs';
 import { waitForSession } from '../wait-for-session.mjs';
+import { waitUntil } from '../wait-until.mjs';
+import { pidOnPort } from '../port-pid.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 // The battery's bench-app dials :4400 (see run-ci.sh), so a spec that needs a session must use it.
@@ -75,7 +77,11 @@ const CLI = path.join(ROOT, 'packages', 'server', 'dist', 'cli.js');
 // specs start with RETICLE_TELEMETRY=0) would capture nothing and the spec would pass vacuously.
 // The browser reconnects to the replacement on the same port.
 spawnSync('node', [CLI, 'stop', '--port', PORT, '--quiet'], { cwd: PROJECT });
-await sleep(1000);
+// Wait for the PORT, not for a second. `stop` signals the daemon; it does not free the socket
+// synchronously, and the client below binds it. This is the same defect run-ci.sh already documents
+// on its own retry path — "a sleep standing in for 'the port is free'" — which cost a whole battery
+// run to an EADDRINUSE six seconds after cleanup began.
+await waitUntil(() => pidOnPort(PORT) === null);
 
 const client = new McpStdioClient(
   'node',
@@ -239,7 +245,10 @@ chk(
 // 5. Clean shutdown — the session summary rides out on this path.
 await sleep(1500);
 spawnSync('node', [CLI, 'stop', '--port', PORT, '--quiet'], { cwd: PROJECT });
-await sleep(3000);
+// The summary is the whole point of the shutdown path, so wait for it to ARRIVE rather than for
+// three seconds to pass. Capped, so a summary that never comes is reported by the checks below —
+// which name what is missing — instead of hanging here.
+await waitUntil(() => events.some((e) => e.event === 'daemon_stopped'));
 
 // ── Now: do the events describe what just happened? ────────────────────────────────────────────
 const kindsOf = (name) => events.filter((e) => e.event === name);

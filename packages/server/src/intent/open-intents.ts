@@ -1,6 +1,6 @@
 import { IntentStore } from './intent-store.js';
 import { sessionRoot } from '../project/session-root.js';
-import type { Intent } from '@reticlehq/core';
+import type { Intent } from '@reticlehq/core/artifacts';
 import type { ToolDeps } from '../tools/tool-kit.js';
 
 /**

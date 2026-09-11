@@ -28,6 +28,22 @@ pnpm hooks:install    # symlinks pre-commit.sh — runs format → lint → type
 
 The hook is optional and mirrors the fast gate, so it catches locally what CI would catch in ten minutes. It is not installed automatically; a repo that silently writes to your `.git/hooks` on `install` is a repo you cannot trust with a `postinstall`.
 
+### Fifteen minutes to a real verdict
+
+Before anything else, see the thing working: **[`docs/first-drive.md`](docs/first-drive.md)** takes you from `git clone` to a verdict on screen against a running app. A first ten minutes that ends with a passing unit test tells you the repo builds; it does not tell you what this project does.
+
+### What will bite you
+
+Every item here cost somebody a debugging session. None is discoverable by reading the code.
+
+- **Port 4400 is the bridge, and something is probably on it.** Every e2e spec binds it, so a spec run with your editor's MCP client open dies with `EADDRINUSE`. Never `kill -9` the holder: on 4400 that list includes the `reticle mcp` proxy, and killing it cuts your own agent's link **with no log**, because the process that writes the log is the one that dies. Use `freePortSafely` from [`apps/e2e/gate-harness.mjs`](apps/e2e/gate-harness.mjs), which spares the proxy by design.
+- **Telemetry fails silently.** Nothing throws, no test reddens, the data is just permanently gone — `daemon_stopped` was fired just before `process.exit(0)` for months and every POST died unseen. Read [`docs/telemetry-contract.md`](docs/telemetry-contract.md) first.
+- **The fixtures are in a second repo.** Every app in `apps/` is already instrumented, so none of them can tell you whether a fresh install still works — re-running `init` over one reports "already wired" for every step and proves nothing. That question lives in [`reticle-fixtures`](https://github.com/reticlehq/reticle-fixtures), which keeps a pristine `clean` branch of real third-party apps plus `main` and `reticle/<version>`. See [`docs/fixtures.md`](docs/fixtures.md).
+- **`packages/core` is the contract and may not gain dependencies** (zod only). Anything crossing browser ↔ bridge ↔ agent is a named constant plus a zod schema there. A wire string inlined in `browser` or `server` is the bug, not a shortcut.
+- **A new tool field needs several allowlists.** Miss one and the call silently returns nothing — measured, twice. If you add a field and it "does not arrive", start by grepping for every place the existing fields are listed.
+- **`format:check` is not run by `pnpm lint`.** CI enforces it separately, so all four heavy gates can be green locally and CI still red on formatting alone.
+- **A local gate is only trustworthy in a quiet checkout.** If something else is editing the same worktree, turbo will read files mid-write and report failures that are not yours.
+
 ### Your first change: pick the smallest useful one
 
 - **Three minutes, highest value:** submit an MCP-client compatibility record. Most rows in [`docs/matrix/MATRIX.md`](docs/matrix/MATRIX.md) are `◐` — meaning `init` writes a runnable entry and _nobody has ever run that client_. See [`docs/matrix/README.md`](docs/matrix/README.md).

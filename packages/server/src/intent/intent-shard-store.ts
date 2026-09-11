@@ -19,7 +19,7 @@
  * an older build still reading the flat file keeps working, because nothing removes it. Deleting it
  * is a separate decision somebody can take once they believe the migration.
  */
-import { parseIntentFile, type Intent } from '@reticlehq/core';
+import { parseIntentFile, type Intent } from '@reticlehq/core/artifacts';
 import type { FileSystemPort } from '../project/fs-port.js';
 import { reticleDirPaths } from '../project/reticle-dir.js';
 import { withFileLock } from '../project/file-lock.js';

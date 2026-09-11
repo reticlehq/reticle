@@ -45,22 +45,32 @@ export const VIEWPORT_TOOLS: ToolDef[] = [
       recommendation: z.string().optional(),
     },
     handler: async (deps, args) => {
-      const provider = viewportProvider(deps);
-      if (provider === undefined) {
-        return {
-          applied: false,
-          width: 0,
-          height: 0,
-          ok: false,
-          reason: CDP_NO_PROVIDER_REASON,
-          recommendation: CDP_NO_PROVIDER_RECOMMENDATION,
-        };
-      }
       const width = clampDim(args['width']);
       const height = clampDim(args['height']);
       const session = deps.sessions.resolve(asString(args['sessionId']));
-      const applied = await provider.setViewport(session.url, { width, height });
-      return { applied, width, height };
+      const provider = viewportProvider(deps);
+      if (provider !== undefined) {
+        const applied = await provider.setViewport(session.url, { width, height });
+        if (applied) return { applied: true, width, height };
+      }
+      // A lease is a Playwright-owned page, so the resize was always possible — this tool just had
+      // no route to it. Tried after the driven provider, on the same rule reticle_network_mock
+      // follows: when both exist, drive is the page the caller means and a lease is the fallback.
+      //
+      // Without this, `reticle_viewport` refused on every SDK-only install, which is the DEFAULT
+      // install. Reported from the field: mobile-only UI — a `lg:hidden` hamburger, a drawer that
+      // only mounts under a breakpoint — could not be driven at a desktop viewport at all, and the
+      // recommendation printed alongside the refusal asked the reader to install a second browser.
+      const leased = await deps.pool?.setViewportLease(session.id, { width, height });
+      if (true === leased) return { applied: true, width, height };
+      return {
+        applied: false,
+        width: 0,
+        height: 0,
+        ok: false,
+        reason: CDP_NO_PROVIDER_REASON,
+        recommendation: CDP_NO_PROVIDER_RECOMMENDATION,
+      };
     },
   },
 ];

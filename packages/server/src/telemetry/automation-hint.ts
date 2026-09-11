@@ -25,7 +25,7 @@
  *    developer machines trip it; it separates nothing.
  */
 import { existsSync } from 'node:fs';
-import { AutomationHint } from '@reticlehq/core';
+import { AutomationHint } from '@reticlehq/core/telemetry';
 
 /** Container runtimes drop one of these at the filesystem root. */
 const CONTAINER_MARKERS = ['/.dockerenv', '/run/.containerenv'] as const;

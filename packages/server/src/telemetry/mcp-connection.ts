@@ -9,7 +9,7 @@
  * minutes, and in every other metric that is indistinguishable from enthusiastic use: more sessions,
  * more connects, more activity. The `reconnect` flag is what tells those two stories apart.
  */
-import { TelemetryEventKind } from '@reticlehq/core';
+import { TelemetryEventKind } from '@reticlehq/core/telemetry';
 import { getTelemetry } from './telemetry.js';
 import { appEverConnected } from './app-instrumented.js';
 

@@ -81,10 +81,10 @@ import { handleDrive } from './cli/drive-command.js';
 import { handleVerify } from './cli/cli-verify.js';
 import { runKill } from './cli/cli-kill.js';
 import { summarizeHunt, type HuntAnomaly, type HuntRun } from './hunt/hunt-report.js';
-import { runInit } from './init/run.js';
+import { runInit, buildNodeIo } from '@reticlehq/init';
 import { continueAfterInit } from './setup/init-runtime.js';
 import { handleDoctor } from './cli/cli-doctor.js';
-import { buildNodeIo } from './init/node-io.js';
+import { serverInitHost } from './setup/init-host.js';
 import { describeLicense } from './license/license.js';
 import {
   isLikelyDevServerPort,
@@ -123,7 +123,7 @@ function handleInit(parsed: {
   driveModel?: string | undefined;
 }): void {
   const cwd = process.cwd();
-  const io = buildNodeIo(cwd);
+  const io = buildNodeIo(cwd, serverInitHost());
   const result = runInit(
     {
       cwd,

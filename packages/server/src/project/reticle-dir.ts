@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 import type { FlowName, SessionId } from '@reticlehq/core';
-import { AppRuntime } from '@reticlehq/core';
+import { AppRuntime } from '@reticlehq/core/telemetry';
 import {
   CONTRACT_FILE_VERSION,
   ContractFileSchema,

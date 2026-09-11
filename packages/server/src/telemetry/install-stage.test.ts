@@ -23,7 +23,7 @@ import {
   resetAppInstrumented,
 } from './app-instrumented.js';
 import { createTelemetry, type TelemetryExtra } from './telemetry.js';
-import { TelemetryEventKind } from '@reticlehq/core';
+import { TelemetryEventKind } from '@reticlehq/core/telemetry';
 
 const withTempProject = (build: (root: string) => void, check: (root: string) => void): void => {
   const root = mkdtempSync(join(tmpdir(), 'reticle-install-stage-'));

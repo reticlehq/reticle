@@ -21,7 +21,7 @@ import {
   isInViewport,
   isVisible,
 } from './a11y.js';
-import { isIgnored } from './dom-ignore.js';
+import { isIgnored, isReticleOverlay } from './dom-ignore.js';
 import { isSensitiveKey } from '../security/serialization.js';
 import { declaredTestids } from '../registry/capabilities.js';
 import { identifyComponent } from '../registry/adapters.js';
@@ -470,8 +470,19 @@ export function matchQuery(
     state === undefined ? elements : elements.filter((el) => inState(el, state, visMemo));
   const attrs = query.attrs;
   const described = filtered.slice(0, Math.max(0, Math.min(limit, MAX_DESCRIBED)));
+  // When more than one match is described, stamp `inViewport` onto those that sit in the window.
+  // Target resolution (#886) ranks ambiguity refusals by that fact; it is omitted from single-match
+  // and snapshot-wide describes because it would bloat every element on every look (#398).
+  const stampViewport = described.length > 1;
   const descriptors: ElementDescriptor[] = described.map((el) => {
-    const base = describe(el, visMemo);
+    let base = describe(el, visMemo);
+    if (
+      stampViewport &&
+      isInViewport(el, visMemo) &&
+      !base.states.includes(ElementState.IN_VIEWPORT)
+    ) {
+      base = { ...base, states: [...base.states, ElementState.IN_VIEWPORT] };
+    }
     if (attrs === undefined || 0 === attrs.length) return base;
     const projected = projectAttrs(el, attrs);
     return projected === undefined ? base : { ...base, attrs: projected };
@@ -531,6 +542,9 @@ function buildPresentRegions(query: ElementQuery): PresentRegion[] {
   for (const role of CONTAINER_ROLES) {
     const containers = queryByRoleAndName(container, role, undefined);
     for (const el of containers) {
+      // Reticle's HUD is not the app's modal layer — listing it here sent agents to dismiss a panel
+      // that was never the problem (#783).
+      if (isReticleOverlay(el)) continue;
       const name =
         el.getAttribute('aria-label') ??
         resolveLabelledBy(el) ?? // aria-labelledby is an element ID - resolve it to the referenced TEXT
@@ -598,6 +612,42 @@ function wantedTextOf(query: ElementQuery): string | undefined {
   return QueryBy.TEXT === query.by ? query.value : undefined;
 }
 
+/** How many near-miss names are worth offering. Beyond a few this is a snapshot, not a hint. */
+const MAX_NAME_NEAR_MISSES = 5;
+
+/**
+ * The names this ROLE does carry that nearly matched the one asked for.
+ *
+ * "Nearly" in BOTH directions, because the two spellings are the same mistake: a query for "Mesh"
+ * against a button reading "2 Mesh" (the asked-for name is contained), and a query for "2 Mesh"
+ * against a button reading "Mesh" (the asked-for name contains it). Normalised and case-folded the
+ * same way the exact matcher is, so this can never suggest something the exact match would have
+ * found already.
+ *
+ * Scoped to the requested role on purpose. A link called "2 Mesh" is not a recovery for a BUTTON
+ * called "Mesh": pointing at it would recommend acting on a different control, which is the failure
+ * keeping the match exact was meant to avoid.
+ */
+function nameNearMisses(container: HTMLElement, query: ElementQuery): string[] {
+  const role = QueryBy.ROLE === query.by ? query.value : undefined;
+  const wanted = query.name;
+  if (role === undefined || wanted === undefined || 0 === wanted.length) return [];
+  const target = normaliseVisibleText(wanted).toLowerCase();
+  if (0 === target.length) return [];
+  const out: string[] = [];
+  for (const el of elementsUnder(container)) {
+    if (isIgnored(el) || getRole(el) !== role) continue;
+    const name = normaliseVisibleText(getAccessibleName(el));
+    if (0 === name.length) continue;
+    const folded = name.toLowerCase();
+    // Equality is impossible here — the exact query already missed — so this is strictly "close".
+    if (!folded.includes(target) && !target.includes(folded)) continue;
+    if (!out.includes(name)) out.push(name);
+    if (out.length >= MAX_NAME_NEAR_MISSES) break;
+  }
+  return out;
+}
+
 /** Diagnostic hint for a zero-match query: what testids ARE present in the searched scope. */
 function buildEmptyHint(query: ElementQuery): QueryEmptyHint {
   const container = resolveContainer(query.scope).container ?? document.body;
@@ -629,6 +679,8 @@ function buildEmptyHint(query: ElementQuery): QueryEmptyHint {
     const owner = splitTextOwner(container, wanted);
     if (owner !== undefined) hint.splitText = describe(owner);
   }
+  const near = nameNearMisses(container, query);
+  if (near.length > 0) hint.nameNearMiss = near;
   return hint;
 }
 

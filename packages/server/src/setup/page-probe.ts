@@ -23,6 +23,11 @@ export interface PageProbe {
    * already running.
    */
   readonly tlsRefused?: boolean | undefined;
+  /**
+   * The URL that actually answered, when the announced host missed and a loopback sibling did not.
+   * Callers that open a browser or wait on a session should prefer this over the announcement (#884).
+   */
+  readonly reachedUrl?: string | undefined;
 }
 
 export const PageFinding = {

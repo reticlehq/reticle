@@ -1,0 +1,235 @@
+{
+  "$comment": "Third-party false-green corpus rows (#130 item 1). A row's ground truth is SOMEBODY ELSE'S: an upstream commit that fixed a bug and shipped the regression test for it. The oracle is that test, run against the broken source. Refs are immutable, so upstream cannot move a row under the measurement. Candidates are found with find-candidate-rows.mjs; a candidate becomes a row ONLY after the fail/pass below is measured, because an unverified row makes the scorecard read stronger than it is.",
+  "rows": [
+    {
+      "id": "nuclear-queue-double-click",
+      "upstream": "https://github.com/nukeop/nuclear.git",
+      "fixedRef": "db61d554436",
+      "brokenRef": "db61d554436~1",
+      "subject": "Fix queue item double click",
+      "oracle": {
+        "kind": "upstream-test",
+        "package": "packages/player",
+        "install": "pnpm install --filter @nuclearplayer/player... --ignore-scripts",
+        "command": "npx vitest --run src/stores/queueStore.test.ts",
+        "brokenSource": ["packages/player/src/stores/queueStore.ts"]
+      },
+      "verified": {
+        "at": "2026-09-09",
+        "fixedRef": "34 passed",
+        "brokenRef": "2 failed, 32 passed",
+        "failing": [
+          "goToIndex to the current index does not stop playback",
+          "goToId with the current item id does not stop playback"
+        ],
+        "note": "Exactly the two tests the fix shipped fail, and the other 32 still pass. The oracle discriminates this defect specifically rather than reporting the build broken."
+      },
+      "whyItIsAFalseGreen": "Double-clicking the queue item that is already playing silently STOPS playback. The item is selected, the queue renders correctly, and nothing on screen says anything is wrong \u2014 the failure is a state change nobody asked for. A presence-only check of the queue UI passes here, which is exactly the shape this corpus exists to measure.",
+      "boot": {
+        "$comment": "The renderer is a Vite app; `pnpm dev` is `tauri dev` and needs a Rust toolchain, but vite alone serves the same frontend as an ordinary web page. Measured: ready in 1.5s, HTTP 200.",
+        "cwd": "packages/player",
+        "command": "npx vite --port {port} --strictPort",
+        "port": 4399,
+        "url": "http://localhost:4399/",
+        "renders": true,
+        "rendersNote": "CORRECTED TWICE, and the second correction is the important one. main.tsx branches on window.__TAURI_INTERNALS__: under Tauri it loads initPlayerApp (the player, where this row's defect lives) and in a plain browser it loads initRemoteApp \u2014 a REMOTE CONTROL app, a different application. So a bare `vite` renders 1867 characters of 'Connecting to Nuclear...' and Reticle returns verified:\"yes\" for text on it. That verdict is real and it is about the wrong app. A naive __TAURI_INTERNALS__ stub does not help: the player branch then fails with \"Cannot read properties of undefined (reading 'currentWindow')\". Driving this row needs the real Tauri runtime, which is desktop-e2e territory.",
+        "measured": "2026-09-09: bare vite -> remote app, root 1867 chars, reticle_assert text verified:\"yes\"; with a minimal Tauri stub -> root 0 chars, pageerror on currentWindow.",
+        "identifies": {
+          "$comment": "Text that proves the RIGHT application is loaded. Without this a row can be scored against a different app that happens to render \u2014 see rendersNote.",
+          "textContains": "Queue"
+        },
+        "drivableInBrowser": false
+      },
+      "drive": {
+        "$comment": "What Reticle must catch. The defect is a state change nobody asked for: activating the ALREADY-PLAYING queue item stops playback. Declared as the consequence an agent would asserting on it, so a miss here is a false green in the exact sense this corpus measures.",
+        "defect": "activating the already-current queue item stops playback",
+        "observableVia": "state",
+        "note": "Reaching a PLAYING queue, which the declared defect needs, is still app-specific setup and is not automated.",
+        "status": "NOT drivable in a browser \u2014 the defect is in the Tauri-only player branch",
+        "openQuestion": "An earlier note here asked why reticle_snapshot said nodes: 0 while reticle_assert proved text. Resolved, and not a Reticle defect: the two readings were taken against different app states while the remote app was still connecting."
+      },
+      "scoreable": false,
+      "notScoreableReason": "Drivable only under the real Tauri runtime: in a browser main.tsx loads a different application (the remote control) from the one the defect lives in."
+    },
+    {
+      "id": "excalidraw-bound-label-order",
+      "upstream": "https://github.com/excalidraw/excalidraw.git",
+      "fixedRef": "c9c96f619",
+      "brokenRef": "c9c96f619~1",
+      "subject": "normalize container + bound text order on restore",
+      "oracle": {
+        "kind": "upstream-test",
+        "package": ".",
+        "install": "yarn install --ignore-scripts",
+        "command": "npx vitest --run packages/excalidraw/tests/data/restore.test.ts",
+        "brokenSource": [
+          "packages/element/src/sortElements.ts",
+          "packages/excalidraw/actions/actionGroup.tsx",
+          "packages/excalidraw/data/restore.ts"
+        ]
+      },
+      "verified": {
+        "at": "2026-09-09",
+        "fixedRef": "51 passed",
+        "brokenRef": "2 failed, 49 passed",
+        "failing": [
+          "repairing bindings > should repair bound arrow label order and fractional index",
+          "repairing bindings > should repair bound rectangle label order and fractional index"
+        ],
+        "note": "Exactly the assertions the fix shipped fail; the other 49 pass. The oracle discriminates this defect rather than reporting the build broken."
+      },
+      "boot": {
+        "cwd": "excalidraw-app",
+        "command": "npx vite --port {port} --strictPort",
+        "port": 4396,
+        "url": "http://localhost:4396/",
+        "renders": null,
+        "drivableInBrowser": true,
+        "identifies": {
+          "textContains": "Excalidraw"
+        },
+        "$comment": "A pure web app with no native runtime, which is why this row exists: the nuclear row's defect lives in a Tauri-only branch and cannot be driven in a browser at all. `renders` is null because it has NOT been measured in a browser yet, and the guard treats UNMEASURED as do-not-score."
+      },
+      "whyItIsAFalseGreen": "A restored document renders: the shapes and their labels are all on the canvas and the drawing looks correct. What is wrong is the ORDER of a container and its bound text, which decides z-order and which element a later edit binds to. Nothing on screen announces it, and a presence check of the canvas passes.",
+      "scoreable": false,
+      "notScoreableReason": "The defect is canvas-internal. Excalidraw draws through StaticCanvas/InteractiveCanvas, and this bug is the ORDER of a container and its bound text \u2014 z-order and later binding. Reticle observes DOM, state and network; none of them can see it. Scoring here would record a MISS that is really the documented canvas gap (#880), which would make the false-green number a measurement of Reticle's known blind spot rather than of its honesty."
+    },
+    {
+      "id": "formbricks-survey-list-stale-removal",
+      "upstream": "https://github.com/formbricks/formbricks.git",
+      "fixedRef": "0d0a35a69e91cc752d31db3b200d7514831fc771",
+      "brokenRef": "0d0a35a69e91cc752d31db3b200d7514831fc771~1",
+      "subject": "hold a survey out of the list until its removal settles",
+      "oracle": {
+        "kind": "upstream-test",
+        "package": "apps/web",
+        "install": "pnpm install --ignore-scripts",
+        "command": "npx vitest run modules/survey/list/hooks/use-archive-survey.test.ts modules/survey/list/hooks/use-surveys.test.ts",
+        "brokenSource": [
+          "apps/web/modules/survey/list/hooks/use-pending-survey-removals.ts",
+          "apps/web/modules/survey/list/hooks/use-survey-removal-mutation.ts",
+          "apps/web/modules/survey/list/hooks/use-surveys.ts",
+          "apps/web/modules/survey/list/lib/query.ts"
+        ],
+        "$comment": "use-pending-survey-removals.ts is NEW in the fix, so restoring the broken side DELETES it rather than checking it out."
+      },
+      "verified": {
+        "at": "2026-09-09",
+        "fixedRef": "8 passed",
+        "brokenRef": "4 failed, 4 passed",
+        "failing": ["use-surveys > a survey whose removal is pending is held out of the list"],
+        "note": "Half the suite fails and half passes, so the oracle discriminates the defect rather than reporting the build broken. The central assertion is literally the false-green shape: expect(list.surveys).toHaveLength(0) returns 1."
+      },
+      "whyItIsAFalseGreen": "A survey the user has just deleted or archived stays in the list until the removal settles. Nothing on the page reports an error: the request succeeded, the list rendered, and it shows a row that no longer exists. An agent that deletes something and then reads the page back sees the deleted item and can equally well conclude the delete failed or that the page is fine \u2014 both readings are wrong.",
+      "observableVia": ["dom"],
+      "boot": {
+        "cwd": "apps/web",
+        "command": "pnpm dev",
+        "needs": "postgres (docker compose -f docker-compose.dev.yml up -d) + prisma migrate + seed",
+        "renders": null,
+        "drivableInBrowser": "unmeasured",
+        "identifies": {
+          "textContains": "Formbricks"
+        },
+        "$comment": "UNMEASURED, and the value says so rather than guessing. Unlike the other two rows this one needs a database before it renders at all, so drivability is a real question here and not a formality."
+      },
+      "scoreable": false,
+      "notScoreableReason": "Criteria 1 and 3 are satisfied and verified: the oracle discriminates (8 passed at the fix, 4 failed and 4 passed against the broken source) and the defect is a list rendering a row that should not be there, which is plain DOM. Criterion 2 is not yet measured \u2014 the app needs postgres, migrations and a seed before it serves a page, so booting it is a real task rather than a formality. It is not scoreable until that boot has actually happened."
+    },
+    {
+      "id": "react-admin-duplicate-undoable-delete",
+      "upstream": "https://github.com/marmelab/react-admin.git",
+      "fixedRef": "62a56d8349c2a36695080a2af8714b4a568ef87f",
+      "brokenRef": "62a56d8349c2a36695080a2af8714b4a568ef87f~1",
+      "subject": "prevent duplicate undoable mutation commits",
+      "oracle": {
+        "kind": "upstream-test",
+        "package": ".",
+        "install": "yarn install --mode=skip-build",
+        "command": "npx cross-env LANG=en_US.UTF-8 NODE_ENV=test BABEL_ENV=cjs npx jest packages/ra-ui-materialui/src/layout/Notification.spec.tsx",
+        "brokenSource": ["packages/ra-ui-materialui/src/layout/Notification.tsx"],
+        "$comment": "jest, not vitest \u2014 the root test-unit script is cross-env + jest."
+      },
+      "verified": {
+        "at": "2026-09-09",
+        "fixedRef": "6 passed",
+        "brokenRef": "3 failed, 3 passed",
+        "failing": [
+          "<Notification /> > should confirm an undoable mutation once when the notification exits with MUI 6/7/9"
+        ],
+        "note": "Half fails and half passes, so the oracle discriminates. The assertion is expect(deleteOne).toHaveBeenCalledTimes(1) and the broken build records 2."
+      },
+      "whyItIsAFalseGreen": "An undoable delete commits TWICE. The screen is correct and reassuring: one row leaves the table, one 'deleted' notification appears, and it is dismissed normally. The wire carries two DELETE calls. Nothing rendered is wrong, so a screenshot, a human glance and a DOM assertion all pass \u2014 the only witness is the network channel disagreeing with the notification count. That is the two-channel contradiction this product claims to catch, which makes it the row most worth scoring.",
+      "observableVia": ["network", "dom"],
+      "boot": {
+        "cwd": "examples/tutorial",
+        "command": "npx vite --port {port} --strictPort",
+        "port": 4395,
+        "url": "http://localhost:4395/",
+        "needs": "outbound network \u2014 the dataProvider is ra-data-json-server against jsonplaceholder.typicode.com, which is what makes the defect reach the wire",
+        "login": {
+          "username": "login",
+          "password": "password",
+          "note": "any credentials; the tutorial authProvider accepts them"
+        },
+        "path": "sign in -> menuitem Posts -> select row checkbox -> Delete",
+        "renders": true,
+        "drivableInBrowser": true,
+        "identifies": {
+          "textContains": "Posts"
+        },
+        "$comment": "examples/tutorial, NOT examples/simple. simple boots faster and drives perfectly but its dataProvider is in-memory, so the duplicate never reaches a channel. demo has the right seam (fakerest MswAdapter over real fetch) and renders 0 characters at this ref \u2014 the control with the FIXED source also renders 0, so demo is broken independently of the defect. crm boots but its delete needs navigation through a filtered list that would not populate."
+      },
+      "scoreable": true,
+      "$whyThisOneIsScoreable": "The first row to satisfy all four criteria. Its defect reaches the wire only because the tutorial's dataProvider speaks real HTTP; the same defect in the same library is invisible in examples/simple. Observability is a property of the BOOT, which is the thing four apps of searching actually taught.",
+      "scoreAttempt": {
+        "at": "2026-09-09",
+        "setup": "released 2.13.1 on every side (vite-plugin, browser, react, server) to remove the wire-contract skew this branch introduces",
+        "drive": "select one post row, then click Delete with until={kind:net, method:DELETE, urlContains:posts, count:1}",
+        "reticleSaid": {
+          "verified": "no",
+          "verifiedReason": "assertion_failed",
+          "failureReason": "expected 1 network call(s) matching {method:DELETE, urlContains:posts}, saw 0"
+        },
+        "groundTruth": "the delete DID happen -- posts/getList total went 13 -> 12 -- with zero network traffic",
+        "reading": "Reticle did NOT emit a false green: it refused to claim success and said which channel came up empty. But it also did not catch the duplicate, because there was no duplicate to see on the wire. The verdict is honest and the row is not yet a test of the thing it was chosen for.",
+        "alsoObserved": "The capture reported integrity clean:false with buffer_loss, and flagged a no-signal-on-mutation instrumentation gap naming Button.tsx:54 -- both self-reported rather than silent.",
+        "toMakeItScoreable": "NOT BOUNDED, corrected after trying it. I first wrote that swapping to an HTTP-backed react-admin example was a small change to one row. Measured, all three candidates fail differently: examples/simple boots perfectly but its dataProvider is in-memory, so no request exists to count; examples/demo uses fakerest's MswAdapter over real fetch, which is the right seam, but renders 0 characters at this ref -- and the control run with the FIXED source also renders 0, so the demo is broken here independently of the defect; examples/crm boots and renders 6945 characters, but its delete path needs app-specific navigation through a filtered contacts list that had not populated. Making this row scoreable is per-app fixture engineering, which is the cost the corpus exists to avoid paying. The row stays verified and unscoreable until a boot is found whose delete reaches fetch without hand-built navigation."
+      },
+      "score": {
+        "at": "2026-09-09",
+        "setup": "released 2.13.1 on every side (vite-plugin, browser, react, server); daemon confirmed to be the released binary so no wire-contract skew",
+        "assertion": "until = { kind: net, method: DELETE, urlContains: posts, count: 1 }",
+        "groundTruth": {
+          "broken": "2 DELETE requests to jsonplaceholder posts/1",
+          "fixed": "1 DELETE request",
+          "measuredBy": "plain playwright with no Reticle involved, both arms"
+        },
+        "reticle": {
+          "broken": {
+            "verified": "no",
+            "verifiedReason": "assertion_failed",
+            "failureReason": "expected 1 network call(s) matching {method:DELETE, urlContains:posts}, saw 2",
+            "reading": "CAUGHT. The DOM in the same result reads `1-10 of 99 | 0 items selected` \u2014 the page looked entirely correct while two DELETEs went out."
+          },
+          "fixed": {
+            "verified": "unknown",
+            "verifiedReason": "outcome_unread",
+            "verdictPass": true,
+            "matched": 1,
+            "reading": "The count assertion HELD at exactly 1, which is what discriminates this build from the broken one. Reticle still refused to answer yes: the DELETE returned 2xx with an unrecorded body, and a 200 describes the transport rather than the result. It named its own fix, captureNetworkBodies: true. Conservative rather than wrong, and not a false green."
+          }
+        },
+        "falseGreens": 0,
+        "conclusion": "On this row Reticle never claimed success on a broken build. It caught the duplicate on the network channel \u2014 the only channel that could see it, since nothing rendered was wrong \u2014 and on the fixed build it declined to certify a write whose outcome it had not read rather than passing it. Both halves were checked, because a verifier that always says no would score identically on the broken arm alone."
+      }
+    }
+  ],
+  "$selectionCriteria": {
+    "$comment": "Learned by measuring, in this order, and each one eliminated a row that passed the ones before it.",
+    "1_auditableOracle": "An upstream commit that fixed a bug AND shipped its regression test. rowy has none in 600 commits; phanpy has none.",
+    "2_drivableApp": "The app must boot into the SAME application the defect lives in. nuclear passes 1 and fails this: a browser gets its remote-control UI, not the player.",
+    "3_observableDefect": "The defect must be visible through DOM, state or network. excalidraw passes 1 and 2 and fails this: it is a canvas app and the defect is z-order, which Reticle cannot see by design (#880). Scoring it would measure a known blind spot rather than honesty.",
+    "note": "All three are necessary. A row satisfying only the first two produces a confident number about nothing."
+  }
+}

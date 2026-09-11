@@ -41,7 +41,8 @@
 
 import { describe, expect, it } from 'vitest';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { execFileSync } from 'node:child_process';
+import { dirname, join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -70,6 +71,18 @@ interface Package {
   /** Directory name under `packages/`, which is what a relative escape spells. */
   readonly directory: string;
   readonly src: string;
+  /**
+   * The turbo task that actually RUNS this package's repo-scanning tests, and so is the task whose
+   * cache key has to name what they read.
+   *
+   * For most packages that is `test:unit`. `@reticlehq/server` split the two halves apart: its
+   * seventeen `$TURBO_ROOT$` globs meant a typo in a doc re-ran 6,700 tests to check 400 of them, so
+   * the repo-scanning half moved to `test:guards` and took the wide input set with it. A package
+   * that declares that script is asserted against it; one that does not is asserted against
+   * `test:unit`, exactly as before. Read off the manifest rather than hardcoded, so the next package
+   * to split is covered on the day it splits.
+   */
+  readonly task: string;
 }
 
 /**
@@ -90,7 +103,8 @@ function packages(): Package[] {
     };
     const name = parsed.name;
     if (undefined === name || undefined === parsed.scripts?.['test:unit']) continue;
-    out.push({ name, directory, src });
+    const half = undefined === parsed.scripts['test:guards'] ? 'test:unit' : 'test:guards';
+    out.push({ name, directory, src, task: `${name}#${half}` });
   }
   return out;
 }
@@ -121,19 +135,23 @@ function sourceFiles(dir: string): string[] {
  * A guard that reached out some other way is still missed. That is a real limit, and it is why the
  * failure messages say what to add rather than only what is wrong.
  */
+function readsRepo(file: string): string[] {
+  const text = readFileSync(file, 'utf8');
+  const paths = new Set<string>();
+  for (const match of text.matchAll(/join\(\s*REPO,\s*'([^']+)'/g)) {
+    const first = match[1];
+    if (first !== undefined) paths.add(first);
+  }
+  for (const match of text.matchAll(/join\(\s*process\.cwd\(\),\s*'\.\.',\s*'([^']+)'/g)) {
+    const sibling = match[1];
+    if (sibling !== undefined) paths.add(`packages/${sibling}`);
+  }
+  return [...paths];
+}
+
 function repoPathsRead(pkg: Package): Set<string> {
   const paths = new Set<string>();
-  for (const file of sourceFiles(pkg.src)) {
-    const text = readFileSync(file, 'utf8');
-    for (const match of text.matchAll(/join\(\s*REPO,\s*'([^']+)'/g)) {
-      const first = match[1];
-      if (first !== undefined) paths.add(first);
-    }
-    for (const match of text.matchAll(/join\(\s*process\.cwd\(\),\s*'\.\.',\s*'([^']+)'/g)) {
-      const sibling = match[1];
-      if (sibling !== undefined) paths.add(`packages/${sibling}`);
-    }
-  }
+  for (const file of sourceFiles(pkg.src)) for (const path of readsRepo(file)) paths.add(path);
   return paths;
 }
 
@@ -183,7 +201,7 @@ describe('cross-package guards are cache-invalidated by what they scan', () => {
   });
 
   describe.each(reaching)('$pkg.name', ({ pkg, reads }) => {
-    const task = `${pkg.name}#test:unit`;
+    const task = pkg.task;
 
     it('declares inputs for the task at all', () => {
       expect(
@@ -212,6 +230,56 @@ describe('cross-package guards are cache-invalidated by what they scan', () => {
           `leaves the cache key untouched and the guard replays an old pass. Add ` +
           `"$TURBO_ROOT$/<path>/**" to the \`inputs\` of ${task} in turbo.json:\n` +
           missing.map((p) => `  $TURBO_ROOT$/${p}`).join('\n'),
+      ).toEqual([]);
+    });
+  });
+});
+
+/**
+ * The split itself: nothing that reads the repo may be left in the narrow half.
+ *
+ * `@reticlehq/server#test:unit` no longer declares the wide input set — `test:guards` does. That is
+ * only safe while the two halves are cut in the right place: a repo-scanning test that ends up on
+ * the `test:unit` side has a cache key that says nothing about what it reads, which is the SAME
+ * false green everything above this line exists to stop, reintroduced by the fix for it.
+ *
+ * `scripts/guard-tests.mjs` decides the cut, from a coarse rule (three `..` segments, or a sideways
+ * `process.cwd(), '..'`). This checks that rule against the finer one used above — every file whose
+ * actual READS this test can see must be on the guard side. The two disagreeing is not a style
+ * difference; it is a file that is about to replay a stale pass.
+ */
+describe('the guard/unit split covers every test that reads the repo', () => {
+  const split = packages().filter((pkg) => pkg.task.endsWith('#test:guards'));
+
+  it('finds a package that has split at all (a pass over none proves nothing)', () => {
+    expect(split.length).toBeGreaterThan(0);
+  });
+
+  describe.each(split)('$name', (pkg) => {
+    const listed = new Set(
+      execFileSync(process.execPath, [join(REPO, 'scripts', 'guard-tests.mjs'), 'list'], {
+        cwd: join(PACKAGES, pkg.directory),
+        encoding: 'utf8',
+      })
+        .split('\n')
+        .map((line) => line.trim())
+        .filter((line) => '' !== line),
+    );
+
+    it('runs every repo-reading test in the guard half', () => {
+      const missing = sourceFiles(pkg.src)
+        .filter((file) => file.endsWith('.test.ts'))
+        .filter((file) => 0 < readsRepo(file).length)
+        .map((file) => relative(join(PACKAGES, pkg.directory), file).split(sep).join('/'))
+        .filter((rel) => !listed.has(rel))
+        .sort();
+
+      expect(
+        missing,
+        `These tests read repo-root paths but scripts/guard-tests.mjs does not put them in ` +
+          `${pkg.name}'s \`test:guards\` half, so they run under \`test:unit\` — whose cache key ` +
+          `names none of it. Widen the ESCAPES rule in that script:\n` +
+          missing.map((m) => `  ${m}`).join('\n'),
       ).toEqual([]);
     });
   });

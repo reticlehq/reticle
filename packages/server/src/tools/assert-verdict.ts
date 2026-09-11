@@ -3,7 +3,7 @@ import { gapsForAction } from '../honesty/instrumentation-gaps.js';
 import { noteSessionGaps } from '../honesty/gap-ledger.js';
 import { declaresState } from '../events/predicate-asks.js';
 import { isStateUnwatched } from '../honesty/blind-spots.js';
-import type { InstrumentationGap, JournalVerdictEffect } from '@reticlehq/core';
+import type { InstrumentationGap, JournalVerdictEffect } from '@reticlehq/core/artifacts';
 import type { Predicate } from '../events/predicate.js';
 import type { Session } from '../session/session.js';
 import { findContradictions, type Contradiction } from '../events/contradictions.js';
@@ -196,6 +196,9 @@ export async function assertVerdict(
     stateUnwatched: isStateUnwatched(spots),
     // What the app DECLARED, so an under-instrumented one is told without having to be asked.
     hasCapabilities: session.hasCapabilities,
+    // Whether the build TURNED the source stamp off, so a red with no file:line prescribes the
+    // right fix. `false` from the page is the only value that means anything; absent is unknown.
+    ...(false === session.sourceMapping ? { sourceMappingDisabled: true } : {}),
     domMutated: false,
     signalsFired: 0,
     routeChanged: false,

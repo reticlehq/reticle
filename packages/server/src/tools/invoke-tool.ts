@@ -91,6 +91,8 @@ const REF_MINTING_TOOLS: ReadonlySet<string> = new Set([
 ]);
 
 export const SESSION_BOUND_TOOLS: ReadonlySet<string> = new Set([
+  // Resolves a session and reads its event window (`session.eventsSince`), exactly as OBSERVE and
+  // NETWORK do. Without this it runs with no session and answers from nothing.
   ReticleTool.SNAPSHOT,
   ReticleTool.QUERY,
   ReticleTool.INSPECT,

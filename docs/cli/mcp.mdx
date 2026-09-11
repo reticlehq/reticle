@@ -31,6 +31,7 @@ The proxy **is** the MCP server the editor launched. Nothing respawns it, so an 
 - Crash handlers write to the proxy's own log file, not just stderr, because the editor swallows stderr.
 - A daemon that is not there is not fatal. The proxy answers `initialize` itself, serves the cached tool catalog, and retries a daemon on every client request. Present and complaining beats absent, because absent needs a human.
 - Reconnect is self-healing: if the daemon exited, crashed, was stopped, or shut itself down as idle, the reconnect path spawns a new one rather than retrying a dead port until the budget runs out.
+- A proxy with no client traffic and no work in flight exits after 24 hours, so abandoned editor sessions do not leave process pairs behind forever. Set `RETICLE_MCP_PROXY_IDLE_MS=0` to disable that watcher, or set an explicit millisecond window.
 
 ## What it prints
 
@@ -41,10 +42,11 @@ Structured lines to the proxy log (`~/.reticle/`), not to your terminal, since s
 | `reticle_mcp_daemon_started` | It spawned a daemon |
 | `reticle_mcp_daemon_unavailable` | It could not, and is serving anyway |
 | `reticle_mcp_proxy_first_connect_failed` | The first connect was refused. Expected when the daemon is still coming up |
+| `reticle_mcp_proxy_idle_exit` | The client link stayed quiet for the full idle window and the proxy exited with no work in flight |
 
 ## Exit codes
 
-Runs for the life of the editor session.
+Runs for the life of an active editor session. A fully quiet, abandoned link exits after the idle window above.
 
 ## Worked example
 

@@ -162,6 +162,16 @@ export interface QueryEmptyHint {
    * the recovery is `{ scope: <ref>, self: true }` rather than another guess at the text.
    */
   splitText?: ElementDescriptor;
+  /**
+   * Present only when a ROLE+NAME search missed and that role DOES carry a nearly-matching name.
+   *
+   * Role+name matching is exact, deliberately: substring matching on `name` would let a query for
+   * "Save" select "Save and close", and acting on the wrong control is a worse failure than not
+   * finding the right one. But an exact miss used to say nothing about a label the caller was one
+   * word away from — reported from the field as a query for the button "Mesh" against a page whose
+   * button read "2 Mesh", costing a snapshot to discover. The match stays exact; the miss answers.
+   */
+  nameNearMiss?: string[];
 }
 
 /** Result of the QUERY command / reticle_query tool. `hint` present ONLY on zero matches. */
@@ -353,6 +363,24 @@ export const AnnotationSchema = z.discriminatedUnion('kind', [
       .object({
         level: z.string().min(1).optional(),
         absent: z.boolean().optional(),
+      })
+      .optional(),
+    // A rendered-text golden end-condition, in the shapes the assert surface already accepts.
+    //
+    // The app this exists for has no testids, no `reticle.signal`, no registrable store and no
+    // network call on the interaction under test: a discount price computed and rendered, a
+    // formatted total, a derived label. Every other kind here needs a channel that app does not
+    // have, so it could not produce an asserted flow AT ALL -- and a flow with no assertion is a
+    // permanent green (#811).
+    //
+    // Ranked below `testid` in the precedence order: an element is a locator, text is content, and
+    // where a caller offered both the locator is the more stable anchor.
+    text: z
+      .object({
+        contains: z.string().min(1),
+        scope: z.string().min(1).optional(),
+        absent: z.boolean().optional(),
+        visible: z.boolean().optional(),
       })
       .optional(),
   }),

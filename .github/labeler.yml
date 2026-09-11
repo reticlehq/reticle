@@ -1,0 +1,76 @@
+# Path → `area/*` label, applied automatically to every PR. One label per package, plus the four
+# cross-cutting areas that are not packages. Triage was reading diffs to answer "which part of the
+# product is this", which is a question the paths already answer.
+#
+# Config format is actions/labeler v5+; see .github/workflows/labeler.yml for the pinned action.
+# `dot: true` is the default there, so `.github/**` matches without special-casing.
+
+area/core:
+  - changed-files:
+      - any-glob-to-any-file: ['packages/core/**']
+
+area/browser:
+  - changed-files:
+      - any-glob-to-any-file: ['packages/browser/**']
+
+area/server:
+  - changed-files:
+      - any-glob-to-any-file: ['packages/server/**']
+
+area/react:
+  - changed-files:
+      - any-glob-to-any-file: ['packages/react/**']
+
+area/vite-plugin:
+  - changed-files:
+      - any-glob-to-any-file: ['packages/vite-plugin/**']
+
+area/babel-plugin:
+  - changed-files:
+      - any-glob-to-any-file: ['packages/babel-plugin/**']
+
+area/next:
+  - changed-files:
+      - any-glob-to-any-file: ['packages/next/**']
+
+area/electron:
+  - changed-files:
+      - any-glob-to-any-file:
+          ['packages/electron/**', 'apps/electron-smoke/**', 'apps/electron-vue-pinia/**']
+
+area/tauri:
+  - changed-files:
+      - any-glob-to-any-file: ['packages/tauri/**', 'apps/tauri-smoke/**']
+
+area/test:
+  - changed-files:
+      - any-glob-to-any-file: ['packages/test/**']
+
+area/eslint-plugin:
+  - changed-files:
+      - any-glob-to-any-file: ['packages/eslint-plugin/**']
+
+area/docs:
+  - changed-files:
+      - any-glob-to-any-file: ['docs/**', '**/*.md', '**/*.mdx', 'SKILL.md', 'README.md']
+
+area/ci:
+  - changed-files:
+      - any-glob-to-any-file: ['.github/**', 'scripts/**', 'apps/e2e/**', 'turbo.json']
+
+area/bench:
+  - changed-files:
+      - any-glob-to-any-file: ['bench/**', 'apps/bench-app/**', 'apps/large-dom-bench/**']
+
+# The adversarial fixtures and the sibling-repo verification tier — a change here moves what the
+# gates are measured AGAINST, which is a different review than a change to what they measure.
+area/fixtures:
+  - changed-files:
+      - any-glob-to-any-file:
+          [
+            'apps/atlas/**',
+            'apps/examples/**',
+            'apps/api/**',
+            'apps/next-smoke/**',
+            'docs/fixtures.md',
+          ]

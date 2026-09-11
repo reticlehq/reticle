@@ -12,6 +12,7 @@ export const ReticleTool = {
   ACT_SEQUENCE: FlowStepTool.ACT_SEQUENCE,
   ACT_AND_WAIT: FlowStepTool.ACT_AND_WAIT,
   OBSERVE: 'reticle_observe',
+  LINEAGE: 'reticle_lineage',
   WAIT_FOR: 'reticle_wait_for',
   NETWORK: 'reticle_network',
   CONSOLE: 'reticle_console',

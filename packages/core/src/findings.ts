@@ -145,6 +145,26 @@ export const ContradictionKind = {
    */
   ROUTE_RENDERED_NOTHING: 'route-rendered-nothing',
   /**
+   * The route changed, nothing was rendered for it, AND the window holds a console error — the same
+   * shape as `ROUTE_RENDERED_NOTHING`, but with positive evidence of WHY the destination is blank,
+   * not merely its absence.
+   *
+   * `ROUTE_RENDERED_NOTHING` is deliberately absence-derived: a route that renders nothing might be a
+   * false positive (a view revealed from DOM that already existed — the 1-in-11 case measured on its
+   * own doc comment), so it downgrades to UNKNOWN rather than assert a fault nobody proved. That
+   * caution is wrong for THIS case. A console error in the same window is not an absence of
+   * evidence, it is a specific, positive claim — the destination crashed, and the app's own error
+   * boundary or console said so. Reported `unknown` anyway once, when a route-rendered-nothing
+   * window also carried a React hooks error: the console errors and the empty destination were both
+   * in hand, and the honest answer was available and not given.
+   *
+   * NOT in `ABSENCE_DERIVED_CONTRADICTIONS` — this is exactly the "evidence AGAINST the action"
+   * category that set exists to distinguish itself from, and it is graded `NO` for the same reason
+   * `ui-advanced-request-failed` is: a definitive verdict is available and inconclusive is a weaker,
+   * wrong answer to give when it is.
+   */
+  ROUTE_RENDERED_NOTHING_CRASHED: 'route-rendered-nothing-crashed',
+  /**
    * Everything this window held belongs to a document that has SINCE been replaced.
    *
    * Not a disagreement between channels; a disagreement between the evidence and the clock. A window

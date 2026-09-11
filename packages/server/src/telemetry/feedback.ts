@@ -28,7 +28,7 @@ import {
   FEEDBACK_FIELD_MAX,
   TelemetryEventKind,
   type Feedback,
-} from '@reticlehq/core';
+} from '@reticlehq/core/telemetry';
 import { platform } from 'node:os';
 import { getTelemetry } from './telemetry.js';
 import { noteFeedbackUndelivered } from './feedback-delivery.js';

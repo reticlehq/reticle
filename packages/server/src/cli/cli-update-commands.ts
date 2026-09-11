@@ -8,14 +8,12 @@
 import { checkForUpdate } from '../update/update-checker.js';
 import { updateTarget } from '../update/update-nudge.js';
 import { applyUpdate, rollback } from '../update/updater.js';
-import { refreshAgentRules } from '../init/refresh-rules.js';
+import { refreshAgentRules, detectPackageManager, buildNodeIo, SILENT_HOST } from '@reticlehq/init';
 import { SERVER_VERSION } from '../version/server-version.js';
 import { log } from '../log.js';
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { reticleDepsOf, sdkSyncCommand } from '../update/sdk-sync.js';
-import { detectPackageManager } from '../init/detect.js';
-import { buildNodeIo } from '../init/node-io.js';
 
 /**
  * Bring the SDK in the CURRENT project to the version being installed.
@@ -34,7 +32,9 @@ function syncProjectSdk(target: string): void {
     return; // not an app directory
   }
   const packages = reticleDepsOf(manifest);
-  const io = buildNodeIo(cwd);
+  // Nothing to trace and nothing to report: this reads the manifest and runs one package-manager
+  // command. It never enters `runInit`, so there is no init outcome for a host to carry.
+  const io = buildNodeIo(cwd, SILENT_HOST);
   const pm = detectPackageManager(new Set(io.rootFiles()), new Set(io.listDirs('node_modules')));
   const cmd = sdkSyncCommand(pm, packages, target);
   if (null === cmd) {

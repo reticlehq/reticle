@@ -488,6 +488,10 @@ function connectArgs(options: ReticleVitePluginOptions): string {
   if (true === options.captureNetworkBodies || '1' === process.env['VITE_RETICLE_CAPTURE_BODIES']) {
     args['captureNetworkBodies'] = true;
   }
+  // Only the OPT-OUT is announced, never the default. The daemon reads absence as "unknown", so
+  // sending `true` here would say nothing it does not already assume — while sending `false` is the
+  // one fact a red verdict needs to stop prescribing a plugin this project has deliberately muted.
+  if (false === options.sourceMapping) args['sourceMapping'] = false;
   // The one option that defaults ON, so the env var and the config flag both DISABLE rather than
   // enable. Emitted only when switched off; the default stays implicit in the SDK.
   if (false === options.captureErrorBodies || '1' === process.env['VITE_RETICLE_NO_ERROR_BODIES']) {

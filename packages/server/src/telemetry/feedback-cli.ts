@@ -1,4 +1,4 @@
-import { FeedbackKind, FeedbackSource } from '@reticlehq/core';
+import { FeedbackKind, FeedbackSource } from '@reticlehq/core/telemetry';
 import { AGENT_FLAG, BUG_FLAG, FEEDBACK_KINDS, KIND_FLAG, RATING_FLAG } from '../cli/cli-parse.js';
 import { describeFeedbackPayload, submitFeedback } from './feedback.js';
 import { describeTelemetry, setTelemetryEnabled } from './telemetry.js';

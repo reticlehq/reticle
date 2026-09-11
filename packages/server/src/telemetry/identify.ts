@@ -21,7 +21,7 @@
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { TelemetryEventKind, UsageContextKind, type Identity } from '@reticlehq/core';
+import { TelemetryEventKind, UsageContextKind, type Identity } from '@reticlehq/core/telemetry';
 import { getTelemetry } from './telemetry.js';
 
 const RETICLE_DIR = join(homedir(), '.reticle');

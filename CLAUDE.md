@@ -12,6 +12,7 @@ Reticle is the **proof layer for AI agents** — it verifies a running web app f
 packages/core          @reticlehq/core         — bottom-of-graph foundation: wire contract, constants, zod schemas (deps: zod)
 packages/browser       @reticlehq/browser      — instrumentation SDK embedded in the app (DOM-side)
 packages/server        @reticlehq/server       — bridge + MCP server, the `reticle` CLI (Node-side)
+packages/init          @reticlehq/init         — project scaffolder: `reticle init`'s codemod, no runtime (Node-side)
 packages/react         @reticlehq/react        — React adapter: DOM ref -> component -> source file
 packages/vite-plugin   @reticlehq/vite-plugin  — Vite integration: stamps source + auto-injects connect()
 packages/babel-plugin  @reticlehq/babel-plugin — stamps data-reticle-source (source mapping, React 19)
@@ -43,6 +44,7 @@ This is **one git repo** at the root (pnpm + turbo monorepo). The TS library pac
 - **`@reticlehq/core` is the contract.** Any message that crosses browser ↔ bridge ↔ agent is defined there as a constant + zod schema. It sits at the bottom of the graph (deps: `zod` only); everything depends on it, it depends on nothing. Never inline a wire string in `browser` or `server` — add it to `core`.
 - **`@reticlehq/browser` only touches the DOM/page.** It never imports Node APIs.
 - **`@reticlehq/server` only runs in Node.** It never imports DOM APIs.
+- **`@reticlehq/init` is build-time only.** It writes files and shells out to a package manager; it never opens a socket, reads daemon state or emits an event, and it imports NOTHING from `@reticlehq/server`. Everything it cannot know for itself — the release version, a tracer, the outcome reporter, the bridge pairing token, the declared install channel — arrives through the injected `InitHost` on `InitIo`. A new outward need is a new member on that interface, never an import.
 - **`@reticlehq/react` is optional enrichment.** Core must work without it.
 
 ## Non-negotiable rules
@@ -56,7 +58,7 @@ This is **one git repo** at the root (pnpm + turbo monorepo). The TS library pac
 7. **Inject the clock.** Never call `Date.now()`/`Math.random()` inside pure logic — pass them in.
 8. **Scope every data access to the authenticated principal.**
 9. **Design tokens are the only place design values live.**
-10. **Telemetry is part of the feature, not a follow-up.** Adding a tool? Put it in `TOOLS` and, if it produces a verdict, in `VERIFICATION_TOOLS`. Adding a finding kind? Add it to core's enum and never re-list it locally. Adding a dispatch path that bypasses `runTool`? It is invisible until you give it a reporter. Telemetry fails SILENTLY — nothing throws, no test reddens, the data is just permanently gone — so the rules are enforced by `telemetry-contract.test.ts` and written down in [`docs/telemetry-contract.md`](docs/telemetry-contract.md). Read that before touching anything that emits.
+10. **Telemetry is part of the feature, not a follow-up.** Adding a tool? Put it in `TOOLS` and, if it produces a verdict, in `VERDICT_TOOLS` (`packages/server/src/tools/feedback-tools.ts`). Adding a finding kind? Add it to core's enum and never re-list it locally. Adding a dispatch path that bypasses `runTool`? It is invisible until you give it a reporter. Telemetry fails SILENTLY — nothing throws, no test reddens, the data is just permanently gone — so the rules are enforced by `telemetry-contract.test.ts` and written down in [`docs/telemetry-contract.md`](docs/telemetry-contract.md). Read that before touching anything that emits.
 11. **No internal tracking tags.** Comments, file names, directory names, and test descriptions must never contain design-doc reference codes (letter + digit patterns like `N5`, `G4`, `M8`, `P2`, `F1`, `R1`) or internal version strings (like `0.3.7`).
 
 ## Naming conventions
@@ -87,7 +89,9 @@ This is **one git repo** at the root (pnpm + turbo monorepo). The TS library pac
 
 **Touching `reticle init`, `@reticlehq/vite-plugin`, `@reticlehq/next`, or anything a user runs before their first session?** Run **`pnpm gate:install`** (~15 min). Nothing else in this repo can see the install: every app in `apps/` is already instrumented, so re-running `init` over one reports "already wired" for every step and proves nothing — which is exactly how v2.3.0 shipped a Next.js install that connected **0% of the time** through three independent defects, none of which any check short of opening a browser could see.
 
-The gate scaffolds five pristine apps (`npm create vite` React and Vue, `create-next-app` App and Pages Router, and a Next app in a monorepo subdirectory), publishes this checkout to a local Verdaccio so `init` does its own dependency install, boots each one, opens it in a real browser and polls for a session. It asserts **zero `⚠`** and diffs `init`'s plan against `apps/e2e/install-baseline.json` — because a step silently changing mark, or vanishing from the plan, passes every other check. Changed the plan on purpose? `pnpm gate:install --update-baseline` and commit the diff.
+The gate scaffolds ten pristine apps — `vite-react`, `vite-vue`, `next-app-router`, `next-pages-router`, `monorepo-subdir`, `astro`, `sveltekit`, `cra`, `nuxt` and `react-router`, run as a matrix cell each across two OSes, so twenty cells — publishes this checkout to a local Verdaccio so `init` does its own dependency install, boots each one, opens it in a real browser and polls for a session. It asserts **zero `⚠`** and diffs `init`'s plan against `apps/e2e/install-baseline.json` — because a step silently changing mark, or vanishing from the plan, passes every other check. Changed the plan on purpose? `pnpm gate:install --update-baseline` and commit the diff (add `--only <id>` to re-record one scaffold; the write merges, so it will not truncate the others).
+
+Nuxt and React Router used to be deliberately absent from that list, because `init` handed both a MANUAL step instead of writing the connect file and so could never satisfy the zero-`⚠` assertion — React Router framework mode is where #678 happened. `init` now writes both files itself, which is what let them into the gate; the scaffold list above is the one place that says which paths are actually covered.
 
 `pnpm gate:install:self-test` is the negative control and runs FIRST in CI: it mis-wires every scaffold and requires the gate to go RED. If it ever passes, the real run's green means nothing.
 

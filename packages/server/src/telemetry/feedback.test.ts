@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { FEEDBACK_TEXT_MAX, StackUnknownReason } from '@reticlehq/core';
+import { FEEDBACK_TEXT_MAX, StackUnknownReason } from '@reticlehq/core/telemetry';
 import {
   FEEDBACK_ENV,
   REDACTED,

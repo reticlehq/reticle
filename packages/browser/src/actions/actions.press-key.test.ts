@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach } from 'vitest';
-import { ActionType } from '@reticlehq/core';
+import { ActionType, ActionWarning } from '@reticlehq/core';
 import { executeAction } from './actions.js';
 import { refs } from '../dom/refs.js';
 
@@ -82,5 +82,70 @@ describe('press sends the key it was asked for', () => {
     const keys = listen(el);
     await executeAction(refs.refFor(el), ActionType.PRESS, {});
     expect(keys).toEqual(['Enter']);
+  });
+});
+
+/**
+ * Escape to dismiss a drawer is a document key. Requiring a ref forced a snapshot just to name
+ * an element the press is not about; pressing against body/document was refused the same way.
+ *
+ * Dispatch at the focused element (or the document when nothing is focused), the way a real
+ * keystroke lands. The effect must not invent a target: targetMatched is false, no minted ref,
+ * no component/testid of whatever happened to be under focus.
+ */
+describe('a document-key press needs no ref', () => {
+  beforeEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  it('Escape with no ref reaches a document-level handler', async () => {
+    const atDocument: string[] = [];
+    const onDoc = (e: KeyboardEvent): void => void atDocument.push(e.key);
+    document.addEventListener('keydown', onDoc);
+    await executeAction('', ActionType.PRESS, { text: 'Escape' });
+    document.removeEventListener('keydown', onDoc);
+    expect(atDocument).toEqual(['Escape']);
+  });
+
+  it('lands on the focused control when there is one, and still bubbles', async () => {
+    const input = document.createElement('input');
+    document.body.appendChild(input);
+    input.focus();
+    const onInput: string[] = [];
+    const onDoc: string[] = [];
+    input.addEventListener('keydown', (e) => onInput.push(e.key));
+    const docListener = (e: KeyboardEvent): void => void onDoc.push(e.key);
+    document.addEventListener('keydown', docListener);
+    await executeAction('', ActionType.PRESS, { text: 'Escape' });
+    document.removeEventListener('keydown', docListener);
+    expect(onInput).toEqual(['Escape']);
+    expect(onDoc).toEqual(['Escape']);
+  });
+
+  it('a modifier shortcut with no ref is the same: Cmd+K is not aimed at a control', async () => {
+    const atDocument: string[] = [];
+    const onDoc = (e: KeyboardEvent): void => {
+      if (e.metaKey) atDocument.push(e.key);
+    };
+    document.addEventListener('keydown', onDoc);
+    await executeAction('', ActionType.PRESS, { text: 'k', modifiers: ['Meta'] });
+    document.removeEventListener('keydown', onDoc);
+    expect(atDocument).toEqual(['k']);
+  });
+
+  it('does not invent a target in the effect', async () => {
+    const r = await executeAction('', ActionType.PRESS, { text: 'Escape' });
+    expect(r.effect.targetMatched, 'no named element was resolved').toBe(false);
+    expect(r.ref, 'must not mint a ref for body/document').toBe('');
+    expect(r.testid).toBeUndefined();
+    expect(r.component).toBeUndefined();
+    expect(r.warning).toBe(ActionWarning.GLOBAL_PRESS);
+  });
+
+  it('Enter without a ref is still a missing locator — it submits whatever is focused', async () => {
+    await expect(executeAction('', ActionType.PRESS, { text: 'Enter' })).rejects.toThrow(
+      /no longer resolves/,
+    );
+    await expect(executeAction('', ActionType.PRESS, {})).rejects.toThrow(/no longer resolves/);
   });
 });

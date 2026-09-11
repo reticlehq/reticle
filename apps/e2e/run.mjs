@@ -90,6 +90,13 @@ const ORDER = [
   'live-control-test',
   'real-world-tests',
   'response-ignored-test',
+  // A saved flow whose declared consequence outlives replay's default 4s wait. Sits beside
+  // response-ignored because it drives the same bench-app fixture, with its slow-endpoint knob.
+  'slow-endpoint-replay-test',
+  // A 401 the app recovered from must not read as two defects. Same bench-app, its own fixture view.
+  'auth-retry-not-a-defect-test',
+  // A file input, an unnamed icon button and a canvas — three properties `apps/` had no fixture for.
+  'awkward-controls-test',
   'multi-agent-lease-test',
   'atlas-hard-fixture-test',
   // Drives a real session and then checks that the EVENTS describe it — a different question from

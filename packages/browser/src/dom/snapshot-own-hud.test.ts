@@ -12,14 +12,14 @@ beforeEach(() => {
 
 /** The label the fixture uses — asserted against, so the two cannot drift apart silently. */
 const appHudLabel = (): string | undefined =>
-  document.querySelector('[data-reticle-hud] [role="dialog"]')?.getAttribute('aria-label') ??
+  document.querySelector('[data-reticle-hud] [role="region"]')?.getAttribute('aria-label') ??
   undefined;
 
 const appWithHud = (): void => {
   document.body.innerHTML = `
     <main><h1>Issues</h1><ul data-testid="issue-list"><li>a defect</li></ul></main>
     <div data-reticle-hud>
-      <div role="dialog" aria-label="Reticle session">session</div>
+      <div role="region" aria-label="Reticle session">session</div>
     </div>`;
 };
 
@@ -52,7 +52,7 @@ describe('the HUD never masquerades as the app', () => {
     document.body.innerHTML = `
       <main aria-hidden="true"><h1>Issues</h1></main>
       <div data-reticle-hud>
-        <div role="dialog" aria-label="Reticle session">session</div>
+        <div role="region" aria-label="Reticle session">session</div>
       </div>`;
     const snap = buildSnapshot();
     expect(JSON.stringify(snap.status ?? {})).not.toContain('focus-trap modal');

@@ -3,7 +3,7 @@ name: install-and-verify
 description: Verify that a web app change actually works by driving the running app from the inside (DOM, network, routing, console, framework state) instead of screenshots or guessing. Use after any user-facing change, when a fix is claimed but unproven, when a test passes but the UI is broken, or when you need a real verdict rather than "looks right". Also use to install and wire up Reticle in a project that does not have it yet.
 license: Apache-2.0
 metadata:
-  version: 2.13.1
+  version: 2.14.0
   homepage: https://www.reticle.sh
   repository: https://github.com/reticlehq/reticle
 ---
