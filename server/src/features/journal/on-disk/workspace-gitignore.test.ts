@@ -21,7 +21,7 @@ import { mkdtempSync, rmSync, readFileSync, existsSync, writeFileSync, mkdirSync
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ReticleDir } from '@reticlehq/core';
-import { createNodeFileSystem } from '../project/fs/fs-port.js';
+import { createNodeFileSystem } from '../../project/fs/fs-port.js';
 import { ensureWorkspaceGitignore } from './workspace-gitignore.js';
 
 let dir = '';

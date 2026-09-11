@@ -84,8 +84,8 @@ import { probeChromium } from './command/cli/doctor/browser/chromium-hint.js';
 import { makeJournalAttach } from './features/journal/attach-journal.js';
 import { makeSessionEnd } from './features/journal/session-end.js';
 import { AmbientStore } from './features/journal/ambient-store.js';
-import { ensureWorkspaceGitignore } from './features/journal/workspace-gitignore.js';
-import { pruneSessions } from './features/journal/retention.js';
+import { ensureWorkspaceGitignore } from './features/journal/on-disk/workspace-gitignore.js';
+import { pruneSessions } from './features/journal/on-disk/retention.js';
 import type {
   OwnedRealInputProvider,
   RealInputProvider,

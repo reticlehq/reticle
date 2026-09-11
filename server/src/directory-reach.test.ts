@@ -369,7 +369,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   // a success, and reporting that the tools are gone. What `tools` wanted from `mcp` was these
   // two files and nothing else, which is why lifting them broke the `mcp <-> tools` pair.
   faults: ['telemetry'],
-  journal: ['artifact', 'dir', 'fs', 'project', 'runs'],
+  journal: ['on-disk', 'artifact', 'dir', 'fs', 'project', 'runs'],
   license: ['config'],
   mcp: [
     'binding',
@@ -511,6 +511,13 @@ const REACHES_FOR: Record<string, readonly string[]> = {
    * that does not release handles promptly. Three files at the package root that import nothing.
    */
   machine: [],
+  /**
+   * What the journal leaves on the filesystem: the shape of the file the learned ambient map is
+   * kept in, which `.reticle/` entries are local state that must never be committed, and how
+   * long any of it is kept. Three files that reach the directory layout and the filesystem port
+   * and nothing else.
+   */
+  'on-disk': ['dir', 'fs'],
   tools: [
     'lifetime',
     'args',
