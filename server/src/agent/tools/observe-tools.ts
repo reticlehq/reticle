@@ -597,7 +597,20 @@ export const OBSERVE_TOOLS: ToolDef[] = [
         .optional()
         .describe('Total matches before `limit` — present only when capped.'),
       droppedOldest: z.number().optional().describe('How many older matches `limit` dropped.'),
-      hint: z.object({ totalInWindow: z.number(), present: z.array(z.string()) }).optional(),
+      /*
+       * `present` carries CALLS, not strings. Declared as `z.array(z.string())` it made the protocol
+       * layer reject the whole response — a dead tool call rather than a wrong answer, and only in
+       * the zero-match case this hint exists to serve. Kept in step with `netEmptyHint`, which is
+       * what actually builds it.
+       */
+      hint: z
+        .object({
+          totalInWindow: z.number(),
+          present: z.array(
+            z.object({ method: z.string(), url: z.string(), status: z.number().optional() }),
+          ),
+        })
+        .optional(),
       bodiesNotCaptured: z
         .string()
         .optional()
