@@ -124,3 +124,23 @@ describe('a replayed step carries the window its evidence lives in', () => {
     expect(results[0]?.window).toBeUndefined();
   });
 });
+
+describe('a replayed step carries the structured digest of what the app did', () => {
+  it('reports counts, not just a prose consequence', async () => {
+    // `consequence` is a sentence — readable, and not scannable. Twenty-five of them is prose to
+    // read; twenty-five digests is a surface to scan, which is the whole difference between a step
+    // ledger an agent skims and one it has to parse.
+    const results = await replayFlow(
+      new TickingSession(new Set(['one'])),
+      flow(['one']),
+      waitForPredicate,
+      FAST,
+    );
+
+    expect(results[0]?.digest).toBeDefined();
+    expect(results[0]?.digest?.summary.total).toBeTypeOf('number');
+    expect(results[0]?.digest?.summary).toHaveProperty('consoleErrors');
+    expect(results[0]?.digest?.summary).toHaveProperty('network');
+    expect(results[0]?.digest?.summary).toHaveProperty('signals');
+  });
+});

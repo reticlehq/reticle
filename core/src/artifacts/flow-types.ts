@@ -241,6 +241,31 @@ export interface Drift {
 }
 
 /** The per-step result of re-resolving + running one anchored step. */
+/**
+ * Counts of what an app did inside one window, and the width of that window.
+ *
+ * Defined HERE because it is part of the artifact contract, and consumed by the engine that computes
+ * it: core is the bottom of the graph and everything depends on it, so one shape lives in one place
+ * rather than being declared twice and drifting.
+ */
+export interface ReactionSummary {
+  total: number;
+  network: number;
+  domAdded: number;
+  domRemoved: number;
+  domChanged: number;
+  routeChanges: number;
+  consoleErrors: number;
+  animations: number;
+  signals: number;
+}
+
+/** The lean reaction report: the window and the counts, without the per-event timeline. */
+export interface ReactionDigest {
+  window_ms: number;
+  summary: ReactionSummary;
+}
+
 export interface FlowStepResult {
   /** 0-based index of this step in the flow. */
   step: number;
@@ -283,6 +308,18 @@ export interface FlowStepResult {
    * until: 0}` would read as "this step caused nothing" instead of "nothing here measures time".
    */
   window?: { since: number; until: number };
+  /**
+   * What the app DID in that window, as counts.
+   *
+   * `consequence` beside it is a sentence — readable, and not scannable. Twenty-five sentences is
+   * prose somebody has to read; twenty-five of these is a surface they can skim for the one row that
+   * is unlike the others, which is the whole difference between a step ledger and a wall of text.
+   *
+   * The counts, not the events. The per-event timeline is the expensive half and it is one
+   * `reticle_observe { since, until }` away using this step's own `window`, so the cheap form is
+   * what travels and the full form is addressable rather than sent.
+   */
+  digest?: ReactionDigest;
   ok: boolean;
   error?: string;
   note?: string;

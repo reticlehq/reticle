@@ -1,5 +1,6 @@
 import { span } from '../../trace.js';
 import { routeOfEvent } from '@reticlehq/engine/question/predicate/predicate-route.js';
+import { buildReactionReport, summarizeReaction } from '@reticlehq/engine/question/reaction.js';
 import {
   AnchorKind,
   DriftReason,
@@ -666,9 +667,8 @@ export async function replayFlow(
       }
     }
     if (page !== undefined) result.page = page;
-    const consequence = summarizeConsequence(
-      session.eventsSince(cursorBefore).filter((e) => e.t >= cursorBefore),
-    );
+    const windowEvents = session.eventsSince(cursorBefore).filter((e) => e.t >= cursorBefore);
+    const consequence = summarizeConsequence(windowEvents);
     if (consequence !== undefined) result.consequence = consequence;
     // Per-step wall time from the session's injected clock (dispatch → here, post-settle). Only set when
     // the clock actually advanced, so a fixed-clock fake reads durationMs-free (additive, non-breaking).
@@ -678,6 +678,9 @@ export async function replayFlow(
     // The drill address. Bounded on both ends so this step's window is THIS step's — see the field's
     // own note in core. Omitted when the clock never moved rather than reported as zero-width.
     if (cursorAfter > cursorBefore) result.window = { since: cursorBefore, until: cursorAfter };
+    // The same reaction report the live tools return, over this step's own slice — one builder, so a
+    // replayed step and a driven one describe what happened in identical words.
+    result.digest = summarizeReaction(buildReactionReport([...windowEvents], durationMs));
     /*
      * A prefix step is setup and is not reported -- UNLESS it failed.
      *

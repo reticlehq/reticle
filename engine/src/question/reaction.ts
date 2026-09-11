@@ -1,16 +1,12 @@
-import { EventType, type ReticleEvent } from '@reticlehq/core';
+import {
+  EventType,
+  type ReactionDigest,
+  type ReactionSummary,
+  type ReticleEvent,
+} from '@reticlehq/core';
 
-interface ReactionSummary {
-  total: number;
-  network: number;
-  domAdded: number;
-  domRemoved: number;
-  domChanged: number;
-  routeChanges: number;
-  consoleErrors: number;
-  animations: number;
-  signals: number;
-}
+// The shape lives in core, where the artifact contract lives, so a replayed step's `digest` and the
+// live reaction report are the SAME type rather than two that happen to match today.
 
 interface ReactionReport {
   window_ms: number;
@@ -65,12 +61,6 @@ export function buildReactionReport(events: ReticleEvent[], windowMs: number): R
     }
   }
   return { window_ms: windowMs, events, summary };
-}
-
-/** The lean form of a reaction report: window + counts, WITHOUT the heavy per-event timeline. */
-interface ReactionDigest {
-  window_ms: number;
-  summary: ReactionSummary;
 }
 
 /**
