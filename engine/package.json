@@ -33,6 +33,9 @@
     "dist",
     "README.md"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsc -b",
     "prepack": "tsc -b && node ../scripts/prepare-dist.mjs dist",

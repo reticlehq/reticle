@@ -31,6 +31,9 @@
     "README.md",
     "NOTICE"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "keywords": [
     "electron",
     "reticle",
