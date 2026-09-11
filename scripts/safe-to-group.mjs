@@ -68,6 +68,31 @@ const group = new Set(asked.filter((p) => files.has(p)));
  * 133 is less of one; only the verification was weaker than it was reported to be.
  */
 const invisible = asked.filter((p) => !files.has(p) && existsSync(p));
+
+/**
+ * Nothing resolved, which is not the same as nothing being wrong.
+ *
+ * An empty group reaches nothing, is reached by nothing, frees nothing and prints SAFE -- a
+ * clean bill of health for a question nobody asked. That is how this tool told me three
+ * groupings were safe when my shell had passed all the names as ONE argument: zsh does not
+ * word-split an unquoted parameter, so `$g` arrived as a single unresolvable name.
+ *
+ * The same shape as an orphan scan over zero files, and the same fix: refuse, rather than
+ * answer about nothing. Named files that exist but are TESTS are reported separately above;
+ * this is for names that resolve to nothing at all.
+ */
+const unresolved = asked.filter((p) => !files.has(p) && !existsSync(p));
+// Only when nothing resolved AND nothing was a test. Naming only test files is a real question
+// with a real answer -- the NOTE below says the guard cannot see them, which is the useful
+// reply. Naming something that does not exist is not a question at all.
+if (0 === group.size && 0 === invisible.length) {
+  console.error(
+    `no source file in ${DIR} matched: ${unresolved.map((p) => basename(p, '.ts')).join(', ')}\n` +
+      'An empty group would print SAFE while answering nothing. Pass each name as its own\n' +
+      'argument -- in zsh an unquoted "a b c" is ONE word, not three.',
+  );
+  process.exit(2);
+}
 const dirOf = (p) => basename(dirname(p));
 const label = (p) => (dirname(p) === resolve(DIR) ? 'PARENT' : dirOf(p));
 

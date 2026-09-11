@@ -103,6 +103,15 @@ describe('the tool the guard tells people to ask first', () => {
     expect(said).toContain('cannot see them');
   });
 
+  it('refuses a group where no name resolved, instead of printing SAFE about nothing', () => {
+    // An empty group reaches nothing, frees nothing and used to print SAFE. It told me three
+    // groupings were safe when my shell had passed every name as ONE argument: zsh does not
+    // word-split an unquoted parameter. Same shape as an orphan scan over zero files.
+    const asked = ask(fixture(true), 'candidate other');
+    expect(asked.said).not.toContain('SAFE');
+    expect(asked.code).not.toBe(0);
+  });
+
   it('stays quiet about tests when none were named', () => {
     expect(ask(fixture(true), 'candidate').said).not.toContain('are TESTS');
   });
