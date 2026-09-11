@@ -97,7 +97,11 @@ A claim is real only when the layers agree. Check more than the UI:
 
 > **Rule:** a passing UI assert that the store, network, or signal contradicts is a **false green**.
 
-**Session health is universal.** Every live-session tool result carries a `session` block (`throttled`, `focused`, `lastSeenMs`); when `throttled:true` it also adds a `warning` + `recommendation` (refocus, or `reticle drive`). A throttled/backgrounded tab can silently no-op timers/rAF/pointer gestures. If you see `session.throttled`, distrust a green and refocus first.
+**Session health is universal.** Every live-session tool result carries a `session` block (`throttled`, `focused`, `lastSeenMs`); when `throttled:true` it also adds a `warning` + `recommendation`. Read the `recommendation`: it differs by cause, and the two causes have different fixes.
+
+`throttled` is `hidden || stale`, and it is not a verdict that the tab cannot be driven. A tab that is **hidden** does clamp timers and rAF, so an action can land on a page that never advances. A tab that is merely **stale**, meaning no health heartbeat arrived inside the window, is usually just a quiet page, and is very often still driveable; a session flagged this way has taken a sign-in and two clean net-grade verdicts with no retries. Try the drive before you conclude anything, and reach for `refuseWhenThrottled: true` when the work is timing-sensitive (animations, debounces, gestures), which is what actually degrades.
+
+**Leasing is not a free upgrade.** `reticle_lease` gives a guaranteed scriptable context, and it is a _separate_ one: the HUD lives in the human's tab, so everything you do in a lease is invisible to the person watching. Taking that advice with someone sitting in front of the app makes the product look broken while it works correctly. Working alone, lease and do not think about it; with an audience, spend a slower tab to stay visible.
 
 > Store reads (`reticle_state`) are the reliable path; the DOM can lie (optimistic UI, stale render).
 

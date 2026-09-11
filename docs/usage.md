@@ -84,7 +84,7 @@ Who benefits most: anyone shipping **dashboards, internal tools, SaaS apps**. Be
 
 ### `reticle_sessions`
 
-List connected tabs. → `{ sessions: [{ sessionId, url, title, lastSeenMs, hidden, focused, throttled }] }`. `lastSeenMs` is the silence since the tab last reported (not time-since-connect); `throttled` is `true` when the tab is hidden or has gone quiet, and a throttled tab silently no-ops timers/rAF/pointer.
+List connected tabs. → `{ sessions: [{ sessionId, url, title, lastSeenMs, hidden, focused, throttled }] }`. `lastSeenMs` is the silence since the tab last reported (not time-since-connect); `throttled` is `true` when the tab is hidden **or** has merely gone quiet, and the two are not the same finding: a hidden tab clamps timers/rAF/pointer so an action can land on a page that never advances, while a quiet-but-visible tab is usually still driveable. The accompanying `recommendation` says which case you are in; treat `throttled` as a reason to read it, not as a reason to lease.
 
 ### `reticle_snapshot`
 
