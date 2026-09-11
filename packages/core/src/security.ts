@@ -40,10 +40,22 @@ const DANGEROUS_ACTION =
   /\b(delete|remove|destroy|erase|drop|terminate|revoke|reset|close account|cancel subscription|purchase|buy|pay|payment|place order|confirm order|send money|send funds|transfer|withdraw|refund)\b/i;
 
 /**
- * Roles that pick a value from a list, not perform an action. Selecting "Payment" as a document
- * type is not a payment. `menuitem` is deliberately not here: a menu item labelled Delete still is.
+ * Roles that pick a VALUE, not perform an action. Selecting "Payment" as a document type is not a
+ * payment, and choosing "Refund" from a reason group is not a refund -- the act those choices feed
+ * is the submit that follows, and that control is judged on its own terms.
+ *
+ * `radio` joins `option` on exactly that argument. Reported from the field alongside the other
+ * false positives in the same session: choosing "Inlet" from two radio-like choices was blocked,
+ * and the reporter's summary is the cost -- "I ended up passing confirmDangerous: true reflexively
+ * on every action, which is how a safety guard becomes decoration". A guard that fires on picking a
+ * value is not protecting the destructive action either.
+ *
+ * `checkbox` is deliberately NOT here. It is a value picker too, but it is also the shape a
+ * one-click irreversible confirmation takes ("Delete this repository" with no separate submit), and
+ * this guard is asymmetric on purpose: a false block costs a round trip, a missed block cannot be
+ * undone. `menuitem` stays out for the reason it always did -- a menu item labelled Delete IS one.
  */
-const VALUE_PICKER_ROLE = 'option';
+const VALUE_PICKER_ROLES: ReadonlySet<string> = new Set(['option', 'radio']);
 
 /** The hostnames that ARE loopback outright, with no parsing: the name, and IPv6 ::1 both ways. */
 const LOOPBACK_HOSTNAMES: readonly string[] = ['localhost', '::1', '0:0:0:0:0:0:0:1'];
@@ -124,6 +136,6 @@ export function isOpaqueOrigin(origin: string): boolean {
  * role (a tool name, a click with no role on the descriptor) omit it and the text decides.
  */
 export function isDangerousActionText(text: string, role?: string): boolean {
-  if (role !== undefined && role.trim().toLowerCase() === VALUE_PICKER_ROLE) return false;
+  if (role !== undefined && VALUE_PICKER_ROLES.has(role.trim().toLowerCase())) return false;
   return DANGEROUS_ACTION.test(text.replace(/[_-]+/g, ' '));
 }
