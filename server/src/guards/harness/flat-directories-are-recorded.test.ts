@@ -62,6 +62,11 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   'init/src/patch': 14,
   'server/src/agent/runs': 11,
   'server/src/agent/tools': 32,
+  // Crossed the line when a planned step gained its own `expect`: the grading rule and its test
+  // joined the act cluster (preflight, target, retry, capsule). Recorded rather than grouped,
+  // because this directory IS the grouping -- these files were split out of act-tools.ts when it
+  // hit the line cap, and splitting them again would scatter one cohesive unit across two homes.
+  'server/src/agent/tools/act': 11,
   'server/src/command/cli': 17,
   'server/src/command/setup': 15,
   'server/src/connection/session': 20,

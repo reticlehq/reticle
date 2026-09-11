@@ -214,6 +214,11 @@ export const FEEDBACK_PROMPT = {
  */
 export const VERDICT_TOOLS: ReadonlySet<string> = new Set([
   ReticleTool.ACT_AND_WAIT,
+  // ACT_SEQUENCE joined the moment a planned step could carry its own `expect`. It now declares
+  // `verified` and grades the whole plan from what its steps declared, which is the same shape
+  // ACT_AND_WAIT has -- and the guard that checks SHAPE rather than tool NAME is what caught it
+  // here rather than six months from now in a metric that had quietly read low the whole time.
+  ReticleTool.ACT_SEQUENCE,
   ReticleTool.ASSERT,
   // Merged: `flow_verify` and `verify_change` are actions on this tool now. Naming the merged tool
   // does NOT make every action a verification — `verificationOf` still requires the result to carry
