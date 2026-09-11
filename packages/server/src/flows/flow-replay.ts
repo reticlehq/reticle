@@ -30,6 +30,8 @@ import {
 } from './flow-step-runners.js';
 import { successToPredicate } from './flow-success.js';
 import { ReticleTool } from '../tools/tool-names.js';
+import { inFlightRequestLabels } from '../tools/settle-in-flight.js';
+import { namedNetIsInFlight } from '../honesty/unsettled.js';
 
 /**
  * The session surface flow-replay needs: QUERY to re-resolve a testid anchor against the live
@@ -475,12 +477,49 @@ async function assertStepExpect(
   if (predicate === undefined) return undefined;
   const verdict = await waitForSignal(session, predicate, timeoutMs, since);
   if (verdict.pass) return undefined;
+
+  // The budget ended; that does not mean the call never happened. A request matching this step's
+  // URL and method may be sitting on the wire right now, and "no network call matched POST
+  // /geometry" reads as a feature that regressed. See pendingRequestDrift.
+  const pending = pendingRequestDrift(session, expect, predicate, since);
+  if (pending !== undefined) return pending;
+
   return {
     // The store case keeps its own kind because heal and the run report branch on it; everything
     // else is a consequence that did not hold, and the reason carries observed-vs-expected.
     reasonKind:
       expect.state !== undefined ? DriftReason.STATE_MISMATCH : DriftReason.SIGNAL_NOT_OBSERVED,
     reason: verdict.failureReason ?? "the step's declared consequence did not hold",
+    anchor: expectLabel(expect),
+    nearest: null,
+  };
+}
+
+/**
+ * The drift for a step whose wait expired while its own request was still open, or undefined.
+ *
+ * Undefined is the common case and has to stay cheap: an ordinary miss keeps the reason it had, and
+ * an unrelated poll left hanging must not pardon a named URL that never started -- which is exactly
+ * what `namedNetIsInFlight` discriminates, and why this reuses it instead of matching URLs here.
+ *
+ * The verdict stays a drift. The step did not prove its consequence, and pretending otherwise would
+ * be the opposite error. What changes is what a reader is sent to do about it: a budget to raise
+ * (`timeoutMs` on the step, or `signalTimeoutMs` on the flow) rather than a deleted feature to hunt.
+ */
+function pendingRequestDrift(
+  session: FlowReplaySession,
+  expect: NonNullable<FlowStep['expect']>,
+  predicate: Predicate,
+  since: number,
+): Drift | undefined {
+  const stillInFlight = inFlightRequestLabels(session.eventsSince(since));
+  if (!namedNetIsInFlight(predicate, stillInFlight)) return undefined;
+  return {
+    reasonKind: DriftReason.REQUEST_STILL_IN_FLIGHT,
+    reason:
+      `the wait ended while a matching request was STILL IN FLIGHT (${stillInFlight.join(', ')}), ` +
+      'so this is a timeout against a slow app, not a call that never happened. Raise the budget — ' +
+      '`timeoutMs` on this step, or `signalTimeoutMs` on the flow — before looking for a regression',
     anchor: expectLabel(expect),
     nearest: null,
   };

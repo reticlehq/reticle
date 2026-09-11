@@ -121,6 +121,20 @@ export const DriftReason = {
    * step whose anchor was fine.
    */
   EXPECT_ELEMENT_NOT_FOUND: 'expect_element_not_found',
+  /**
+   * The step's `expect.net` budget ran out while a request matching its URL and method was STILL ON
+   * THE WIRE. The call was not missing; the wait ended before the app did.
+   *
+   * Distinct from SIGNAL_NOT_OBSERVED, and the distinction is the whole point of the member. "No
+   * network call matched POST /geometry" reads as a feature that regressed and sends a reader to
+   * look for deleted code; the truth was a slow backend and a budget that expired, which is a
+   * different fix in a different file. Reported from the field against a replay whose verdict said
+   * the call never happened while `reticle_network` showed that exact POST pending.
+   *
+   * The live path already draws this line -- see `namedNetIsInFlight`, which this reuses rather than
+   * reimplements, so the two paths cannot come to disagree about what "in flight" means.
+   */
+  REQUEST_STILL_IN_FLIGHT: 'request_still_in_flight',
 } as const;
 export type DriftReason = (typeof DriftReason)[keyof typeof DriftReason];
 
