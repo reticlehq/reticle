@@ -60,14 +60,10 @@ export const SCENARIOS = [
     id: 'consequence-already-true',
     profile: Profile.EFFECT,
     plant: 'The thing being claimed is already true before the action happens.',
-    // Verdict only, and that is a GAP being recorded rather than a requirement being relaxed.
-    // This needs "unknown BECAUSE the consequence was already true before the action", and the
-    // specification has no ground for it: the ten clauses cover what could not be seen and what
-    // did not hold, and not "the evidence is real and is about something that had already
-    // happened". Pre-registration (`declaredAt: before-action`) is the nearest thing and does
-    // not say it. Naming a Reticle reason code here instead would pin every implementation to
-    // our vocabulary, which is the objection that moved scoring to `ground` in the first place.
-    mustProduce: { verdict: Verdict.UNKNOWN },
+    // Was verdict-only, recorded as a gap: the specification had no ground for "unknown BECAUSE
+    // the consequence was already true". It has one now. The gap was real and is closed, and the
+    // scenario that named it is what forced the clause.
+    mustProduce: { verdict: Verdict.UNKNOWN, ground: 'already-true' },
     why: 'Nothing was proved. The action may have done nothing at all and the claim still holds.',
   },
   {

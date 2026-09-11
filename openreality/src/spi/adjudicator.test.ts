@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { adjudicate, couldEverProve, type AdjudicationInput } from './adjudicator.js';
+import { adjudicate, couldEverProve, Ground, type AdjudicationInput } from './adjudicator.js';
 import { CHANNEL_DEFAULTS, ChannelId, Grade, Independence } from '../vocabulary/channel.js';
 import { Declaration } from '../vocabulary/intent.js';
 import { CloseCondition } from '../vocabulary/realm-surface.js';
@@ -240,5 +240,40 @@ describe('an implementation can know at startup whether it could ever prove anyt
     expect(CHANNEL_DEFAULTS[ChannelId.STATE].grade).toBe(Grade.CONSEQUENCE);
     expect(CHANNEL_DEFAULTS[ChannelId.STATE].independence).toBe(Independence.ACTUATION_DERIVED);
     expect(couldEverProve([channel(ChannelId.STATE)])).toBe(false);
+  });
+});
+
+describe('a consequence that was already true', () => {
+  /**
+   * The clause the specification was missing, found by its own conformance suite.
+   *
+   * Before it existed, `adjudicate` answered `yes` here: the evidence is real, independent and
+   * consequence grade, the window closed cleanly, the claim was pre-registered and the assertion
+   * held. Nothing was wrong except that it had been true all along, and no input could say so --
+   * while `consequence-already-true` had been demanding `unknown` since the scenario list was
+   * written. The normative function could not pass the normative suite.
+   */
+  it('is unknown, not proved, when the implementation checked and it was', () => {
+    expect(adjudicate(input({ consequenceHeldBefore: true })).verdict).toBe(Verdict.UNKNOWN);
+    expect(adjudicate(input({ consequenceHeldBefore: true })).ground).toBe(Ground.ALREADY_TRUE);
+  });
+
+  it('is proved when the implementation checked and it was not', () => {
+    expect(adjudicate(input({ consequenceHeldBefore: false })).verdict).toBe(Verdict.YES);
+  });
+
+  it('is proved when nobody checked, because absent is not false', () => {
+    // The distinction this input exists to keep: an implementation that cannot read the
+    // before-state gets the verdict it would have got anyway, and is not punished for honesty.
+    expect(adjudicate(input()).verdict).toBe(Verdict.YES);
+    expect(adjudicate(input({ consequenceHeldBefore: undefined })).verdict).toBe(Verdict.YES);
+  });
+
+  it('does not outrank a real fault', () => {
+    // Last of the eleven on purpose: every earlier clause is a stronger reason to withhold a
+    // proof, and an already-true consequence must not mask an assertion that failed.
+    expect(adjudicate(input({ consequenceHeldBefore: true, assertionsHeld: false })).ground).toBe(
+      Ground.ASSERTION_FAILED,
+    );
   });
 });

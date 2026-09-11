@@ -279,11 +279,16 @@ The clauses are checked in this order, and the order _is_ the specification. It 
 7. An absence-derived anomaly → `unknown`.
 8. The claim was declared after the action → `unknown`.
 9. Nothing independent and consequence-grade supports it → `unknown`.
-10. Otherwise → `yes` at consequence grade.
+10. The consequence was already true before the action → `unknown`.
+11. Otherwise → `yes` at consequence grade.
+
+Clause 10 exists because the specification could not express its own scenario. `adjudicate` answered `yes` to a consequence that had been true all along: every input was healthy, and nothing in `AdjudicationInput` could say that the evidence was about something which had already happened. The conformance suite has demanded `unknown` for that case since it was written, so the normative function could not pass the normative suite, and the gap was found by mapping one real implementation's verdict reasons onto these grounds and looking for one with no home.
+
+`consequenceHeldBefore` is optional, and `undefined` means NOBODY CHECKED rather than `false`. An implementation that cannot read the before-state says so by omission and gets the verdict it would have got anyway; one that can, and finds the consequence already true, must not report a proof.
 
 Clause 8 is the one an implementation passes by accident. An implementation that ignores `declaredAt` entirely answers a late claim exactly as it answers a pre-registered one, and nothing about its output looks wrong. The conformance suite therefore drives the two as a PAIR: the same application, the same action, the same evidence, differing only in when the claim was written down. If both come back `yes`, the field is being ignored.
 
-Each clause has a **ground**: a code naming which one decided, returned alongside the prose. In clause order: `nothing-declared`, `channel-not-observed`, `contradicted`, `assertion-failed`, `window-not-closed`, `coverage-impeached`, `suspicion-unresolved`, `declared-after-action`, `no-independent-consequence`, `proved`.
+Each clause has a **ground**: a code naming which one decided, returned alongside the prose. In clause order: `nothing-declared`, `channel-not-observed`, `contradicted`, `assertion-failed`, `window-not-closed`, `coverage-impeached`, `suspicion-unresolved`, `declared-after-action`, `no-independent-consequence`, `already-true`, `proved`.
 
 The ground exists because a verdict alone is too coarse and its sentence is too fine. `no` is returned by both clause 3 and clause 4, so "disproved because independent channels contradicted" is not expressible in the verdict; and comparing the sentence would score every implementation against this one's vocabulary. The prose stays for a person to read. **A conformance scenario names a ground, never a wording.**
 

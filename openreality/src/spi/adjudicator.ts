@@ -59,6 +59,8 @@ export const Ground = {
   DECLARED_AFTER_ACTION: 'declared-after-action',
   /** Clause 9: nothing independent and consequence-grade paid for it. */
   NO_INDEPENDENT_CONSEQUENCE: 'no-independent-consequence',
+  /** Clause 10: the consequence was already true before the action, so it proves nothing. */
+  ALREADY_TRUE: 'already-true',
   /** The bottom of the ladder: every rung cleared. */
   PROVED: 'proved',
 } as const;
@@ -83,6 +85,19 @@ export interface AdjudicationInput {
   readonly anomalies: readonly Anomaly[];
   /** Did the claim's own assertions evaluate true? Undefined means nothing could evaluate them. */
   readonly assertionsHeld: boolean | undefined;
+  /**
+   * Was the declared consequence ALREADY true before the action?
+   *
+   * Undefined means nobody checked, which is not the same as `false` and must not be read as it:
+   * an implementation that cannot look at the before-state says so by omission, and gets the
+   * verdict it would have got anyway.
+   *
+   * This input exists because the specification could not express the situation at all, and
+   * `adjudicate` therefore answered `yes` to it. Every other input was healthy -- real evidence,
+   * independent, consequence grade, a cleanly closed window, a pre-registered claim, an assertion
+   * that held -- and the only thing wrong was that it had been true all along.
+   */
+  readonly consequenceHeldBefore?: boolean | undefined;
 }
 
 /** The channels this claim needed, gathered from its assertions. */
@@ -100,6 +115,7 @@ function channelsNeeded(claim: Claim): readonly string[] {
  */
 export function adjudicate(input: AdjudicationInput): Adjudication {
   const { claim, window, channels, evidence, coverage, anomalies, assertionsHeld } = input;
+  const { consequenceHeldBefore } = input;
 
   // 1. Nothing was declared. Not a pass, and not a failure to see -- a different fact from both.
   if (claim.assertions.length === 0) {
@@ -203,6 +219,23 @@ export function adjudicate(input: AdjudicationInput): Adjudication {
       reasons: [
         'nothing independent of the action supports this at consequence grade; ' +
           'the subject agreeing with itself is not evidence that it acted',
+      ],
+    };
+  }
+
+  // 10. It was already true. Everything above passed, the evidence is real, and none of it is
+  //     about the action -- so this is the last thing that can stop a proof, and it has to be
+  //     last, because every earlier clause describes a stronger reason to withhold one.
+  //
+  //     `unknown` rather than `no-fault`: something WAS declared, which is what `no-fault`
+  //     requires to be absent, and nobody can tell whether the action would have caused it.
+  if (true === consequenceHeldBefore) {
+    return {
+      verdict: Verdict.UNKNOWN,
+      ground: Ground.ALREADY_TRUE,
+      reasons: [
+        'the declared consequence was already true before the action, so this evidence proves ' +
+          'nothing about it; declare something the action changes',
       ],
     };
   }
