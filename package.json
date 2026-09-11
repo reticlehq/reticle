@@ -50,7 +50,8 @@
     "knip": "npx --yes knip --no-progress",
     "hooks:install": "ln -sf ../../pre-commit.sh .git/hooks/pre-commit && ln -sf ../../prepare-commit-msg.sh .git/hooks/prepare-commit-msg && echo \"pre-commit + sign-off hooks installed\"",
     "check:stale-issues": "node scripts/check-stale-issues.mjs",
-    "check:stale-issues:self-test": "node scripts/check-stale-issues.mjs --self-test"
+    "check:stale-issues:self-test": "node scripts/check-stale-issues.mjs --self-test",
+    "gate:conformance:self-test": "node conformance/run-self.mjs --self-test"
   },
   "pnpm": {
     "overrides": {

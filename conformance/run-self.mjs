@@ -103,6 +103,34 @@ async function waitFor(url, what) {
   throw new Error(`${what} never answered on ${url}`);
 }
 
+/**
+ * The negative control: make the subject lie, and require the gate to notice.
+ *
+ * `gate:install` has `gate:install:self-test`, which mis-wires every scaffold and demands a RED
+ * run, and CI runs it FIRST: if the negative control ever passes, the real run's green means
+ * nothing. `gate:multi` and the stale-issue check have the same. This gate did not, which is
+ * the one that matters most -- it is the whole evidence for "our web and desktop surfaces
+ * implement the protocol", and it had never been shown able to fail.
+ *
+ * The lie chosen is the most consequential one a subject can tell: every claim held. Scenarios
+ * whose right answer is `no`, `unknown` or `no-fault` are then answered wrongly, `failed` rises
+ * above zero, and `--gate` must exit non-zero. A subject that says yes to everything is exactly
+ * the false green this entire product exists to prevent, so it is the right thing to plant.
+ *
+ * What this proves and what it does not. It exercises the real driver, the real scenarios, the
+ * real adjudicator and the real scoring, and it proves the path from a wrong answer to a
+ * non-zero exit is connected. It does NOT prove the browser automation is sound: the lie is
+ * injected at the client seam rather than inside the app, so a subject that drives nothing at
+ * all would still be caught here, and would not be caught by this alone.
+ */
+function dishonestIfSelfTesting(client) {
+  if (!process.argv.includes('--self-test')) return client;
+  return {
+    ...client,
+    verify: async () => ({ verdict: 'yes', ground: 'proved', reason: 'self-test: always yes' }),
+  };
+}
+
 async function main() {
   // Declared out here and started INSIDE the try, so the finally can reach whatever got as far
   // as existing.
@@ -221,7 +249,7 @@ async function main() {
 
     Object.assign(
       report,
-      await driveAll(client, {
+      await driveAll(dishonestIfSelfTesting(client), {
         name: 'reticle',
         version: process.env['npm_package_version'] ?? 'dev',
         platform: 'web',
@@ -286,6 +314,22 @@ async function main() {
   );
 
   const failed = report.failed.length;
+  if (process.argv.includes('--self-test')) {
+    // Inverted on purpose: the control passes only when the gate would have FAILED.
+    if (0 === failed) {
+      console.error(
+        '\nSELF-TEST FAILED: a subject answering "yes" to every claim was scored clean.\n' +
+          'Whatever this gate is measuring, it is not whether the answers are right, and a\n' +
+          'green run of it proves nothing.\n',
+      );
+      process.exit(1);
+    }
+    console.log(
+      `\nself-test passed: a subject that says yes to everything was caught on ` +
+        `${String(failed)} scenario(s).\n`,
+    );
+    process.exit(0);
+  }
   if (process.argv.includes('--gate') && failed > 0) {
     console.error(
       `\nconformance: ${String(failed)} plantable scenario(s) answered wrongly: ` +

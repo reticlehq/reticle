@@ -880,6 +880,15 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @reticlehq/e2e --fail-if-no-match exec playwright install --with-deps chromium
       - run: pnpm build
+      # FIRST, as the install gate's self-test is. It makes the subject answer "yes" to every
+      # claim and requires the gate to go RED. If this step ever passes, the scored run below
+      # is measuring something other than whether the answers are right, and its green is worth
+      # nothing.
+      - name: Negative control — a subject that says yes to everything must fail
+        run: xvfb-run -a pnpm gate:conformance:self-test
+        env:
+          ELECTRON_DISABLE_SANDBOX: '1'
+
       - name: Score this implementation against the published specification
         run: xvfb-run -a pnpm gate:conformance
         env:
