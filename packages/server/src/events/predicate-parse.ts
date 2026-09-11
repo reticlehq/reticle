@@ -97,6 +97,59 @@ function placeholderValue(input: unknown): string | undefined {
   return 'string' === typeof value && UNFILLED_PLACEHOLDER.test(value) ? value : undefined;
 }
 
+/**
+ * The timeout spellings a predicate may carry harmlessly, and why they are dropped rather than
+ * rejected.
+ *
+ * `reticle_act_and_wait { until: { kind: "element", query: {...}, timeout_ms: 30000 } }` came from
+ * the field. The rejection was good -- precise, and it named the accepted fields -- but the agent
+ * had to provoke it, and a rejected predicate produces no verdict at all, so the round trip ended
+ * with nothing (#877).
+ *
+ * The enclosing call already carries `timeout_ms` and it means exactly the same thing, so the
+ * intent is unambiguous and refusing buys nothing. That equality is the whole licence: this must
+ * NOT grow to cover a field that would CHANGE behaviour, because silently dropping one of those is
+ * how a step-level timeout went missing and a flow reported a working feature as a regression.
+ *
+ * Live calls only. Flow files validate through `PredicateSchema` directly (flow-expect-grammar.ts,
+ * replay.ts), so #744's rule that a saved contract rejects unknown keys is untouched -- a flow file
+ * is a contract, a live call is not.
+ */
+const REDUNDANT_TIMEOUT_KEYS = ['timeout_ms', 'timeoutMs'] as const;
+
+/**
+ * `input` without a redundant timeout at any predicate level, or `input` unchanged.
+ *
+ * Recursive through the combinators: an agent that writes the field once writes it inside an
+ * `allOf` member for the same reason, and the outer call's timeout governs the whole tree either
+ * way. Returns the original object when there is nothing to strip, so the ordinary path allocates
+ * nothing.
+ */
+function withoutRedundantTimeout(input: unknown): unknown {
+  if ('object' !== typeof input || null === input || Array.isArray(input)) return input;
+  const record = input as Record<string, unknown>;
+  const carries = REDUNDANT_TIMEOUT_KEYS.some((key) => key in record);
+
+  const nestedOne = record['predicate'];
+  const strippedOne = withoutRedundantTimeout(nestedOne);
+  const nestedMany = record['predicates'];
+  const strippedMany = Array.isArray(nestedMany)
+    ? nestedMany.map(withoutRedundantTimeout)
+    : nestedMany;
+  const nestedChanged =
+    strippedOne !== nestedOne ||
+    (Array.isArray(nestedMany) &&
+      (strippedMany as unknown[]).some((value, index) => value !== nestedMany[index]));
+
+  if (!carries && !nestedChanged) return input;
+
+  const out: Record<string, unknown> = { ...record };
+  for (const key of REDUNDANT_TIMEOUT_KEYS) delete out[key];
+  if (nestedOne !== undefined) out['predicate'] = strippedOne;
+  if (Array.isArray(nestedMany)) out['predicates'] = strippedMany;
+  return out;
+}
+
 export function parsePredicate(input: unknown): z.infer<typeof PredicateSchema> {
   const unfilled = placeholderValue(input);
   if (unfilled !== undefined) {
@@ -108,7 +161,7 @@ export function parsePredicate(input: unknown): z.infer<typeof PredicateSchema> 
         'route, or store state. Text on screen that was already there proves nothing.',
     );
   }
-  const parsed = PredicateSchema.safeParse(input);
+  const parsed = PredicateSchema.safeParse(withoutRedundantTimeout(input));
   if (parsed.success) return parsed.data;
   const kind =
     'object' === typeof input && null !== input && 'kind' in input

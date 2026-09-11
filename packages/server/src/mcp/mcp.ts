@@ -126,7 +126,9 @@ export function firstSentence(description: string): string {
  */
 const PREDICATE_KINDS =
   'Predicate object: { kind, ...fields }. kind is one of element | text | net | route | console | ' +
-  'animation | signal | state | settled | allOf | anyOf | not.';
+  'animation | signal | state | settled | allOf | anyOf | not. Combinators: allOf/anyOf take ' +
+  '`predicates: [...]`, not takes `predicate: {...}`. A predicate carries no timeout — the ' +
+  "enclosing call's timeout_ms governs it.";
 
 /**
  * Said once per turn: the bug-catching options, and where to get the rest of the field grammar.
