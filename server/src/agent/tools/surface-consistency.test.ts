@@ -8,9 +8,9 @@
  *   reticle_annotate     { flow }   vs  reticle_flow_save / _replay / flow { flowName }
  *   reticle_query        { by,value } vs every predicate's { testid | text | role }
  *
- * They matter far out of proportion to their size. Of the 25 sessions that called any tool in a day,
- * 13 made exactly ONE call and stopped — so a call rejected on spelling is a session that never comes
- * back, and the rejection says nothing to distinguish "you named it wrong" from "the app is broken".
+ * They matter far out of proportion to their size. A large share of the sessions that call any tool
+ * make exactly ONE call and stop, so a call rejected on spelling is a session that never comes back,
+ * and the rejection says nothing to distinguish "you named it wrong" from "the app is broken".
  *
  * Prose cannot hold this line: the surface is assembled from a dozen modules and nobody sees two
  * spellings of one idea unless they happen to read both files. So it is a test. Adding a tool that

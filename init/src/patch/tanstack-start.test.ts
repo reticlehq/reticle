@@ -3,7 +3,7 @@
  *
  * The Vite plugin's non-desktop injection is a `transformIndexHtml` hook, which Start never calls.
  * `init` classified the app as Vite, wired the plugin, reported every step green ("also injects
- * connect()"), and the page never got the connect script — confirmed in the field as ~13 minutes of
+ * connect()"), and the page never got the connect script — confirmed in the field as many minutes of
  * "still verifying" against a daemon showing no session.
  *
  * Exactly the class SvelteKit, Astro and React Router framework mode are already detected for, and

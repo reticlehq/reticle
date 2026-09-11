@@ -12,8 +12,8 @@
  * description instructs the agent to call `reticle_annotate`, which is the one flow tool that does
  * not say `flowName`.
  *
- * It matters because of where these land: of the 25 sessions that called any tool in a day, 13 made
- * exactly ONE call and stopped. A rejected call early is a session that never comes back.
+ * It matters because of where these land: a large share of the sessions that call any tool make
+ * exactly ONE call and stop. A rejected call early is a session that never comes back.
  */
 
 import { describe, expect, it } from 'vitest';

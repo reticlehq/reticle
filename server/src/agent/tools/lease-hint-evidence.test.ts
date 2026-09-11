@@ -76,7 +76,7 @@ describe('a project that has connected before is not proof THIS app is wired', (
    * a missing peer dependency, a non-localhost page. **Every one of them presupposes the SDK is
    * already installed**, and the app in question had never been wired at all.
    *
-   * That is the 90% case in one sentence: the users who do not have an instrumented app get a
+   * That is the common case in one sentence: the users who do not have an instrumented app get a
    * diagnosis written for people who do, and `reticle init` — the only thing that would help — is
    * named nowhere in it. The branch that DOES mention init is the one reached when nothing is
    * known, which is exactly the case a monorepo or a second app never lands in.

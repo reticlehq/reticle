@@ -9,9 +9,9 @@
  * and applies it to `reticle_query` gets `-32602: Unknown parameter for reticle_query: text`. I hit
  * exactly this on my own first call of the night, before knowing anything about the codebase.
  *
- * That matters more here than a papercut usually would: of the 25 sessions that called any tool in a
- * day, 13 made exactly ONE call and stopped. A rejected first call is a bounced session. Accepting
- * the shape the rest of the surface teaches costs nothing and removes a first-call failure.
+ * That matters more here than a papercut usually would: a large share of the sessions that call any
+ * tool make exactly ONE call and stop. A rejected first call is a bounced session. Accepting the
+ * shape the rest of the surface teaches costs nothing and removes a first-call failure.
  */
 
 import { describe, expect, it } from 'vitest';

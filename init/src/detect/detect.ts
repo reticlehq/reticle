@@ -41,7 +41,7 @@ export const Framework = {
    * TanStack Start SSRs `<html>` from `src/routes/__root.tsx` and never sends Vite's index.html, so
    * the plugin's `transformIndexHtml` injection never fires. It used to fall through to
    * `Framework.VITE`, where `init` wired the plugin, reported every step green ("also injects
-   * connect()"), and produced zero sessions — confirmed in the field as ~13 minutes of "still
+   * connect()"), and produced zero sessions — confirmed in the field as many minutes of "still
    * verifying" against a daemon showing none (#773).
    *
    * Keyed on `@tanstack/react-start` or the older `@tanstack/start`, never on

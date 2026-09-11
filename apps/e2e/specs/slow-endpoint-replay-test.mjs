@@ -2,8 +2,9 @@
 //
 // Replay's wait for a declared consequence was a fixed 4s with no env var, no flow field and no
 // parameter to raise it. That is not a tuning knob — it decides whether an honest flow can ever be
-// green. Two field reports, the same shape: a login whose POST measures 5.5s against a remote
-// database, and a model-backed import taking ~22s. Both were verified live with
+// green. Field reports keep arriving in the same shape: a login whose POST takes several seconds
+// against a remote database, and a model-backed import taking tens of seconds. Both were verified
+// live with
 // `act_and_wait { timeout_ms }` and returned `verified: "yes"`; the identical saved flow drifted at
 // ~4020ms with `signal_not_observed`, and the summary said NO LONGER TRUE — a working feature
 // reported to the user as a regression. The only ways to green them were to weaken or delete the

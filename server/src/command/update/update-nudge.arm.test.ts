@@ -1,9 +1,9 @@
 /**
  * Getting a published release in front of the people running an old one.
  *
- * Measured over a day of real telemetry: the entire install base was on 2.3.0 or 2.2.1 and NOBODY
- * was on the release published the day before — the one carrying the fix for a lost first-load
- * connect on every Vite app. Adoption was zero. Two mechanical reasons, both here:
+ * A release went out carrying the fix for a lost first-load connect on every Vite app, and the
+ * day after, nobody had it. Everyone was still on the two releases before it. Two mechanical
+ * reasons, both here:
  *
  * 1. The nudge is armed by a network check fired 8s AFTER the daemon boots, and it is delivered by
  *    riding a tool result. But half the sessions that touch Reticle at all make exactly ONE tool

@@ -537,8 +537,8 @@ describe('shipped docs never name a tool a reader cannot call', () => {
 /**
  * The surface has to point at the verdict, because the surface is what the agent reads.
  *
- * Measured over a day of real telemetry: `reticle_act` 50 calls, `reticle_act_and_wait` 14 — so 78%
- * of the actions agents drove produced no verdict at all, and `verification_completed` was 2. The
+ * Agents reach for `reticle_act` far more often than `reticle_act_and_wait`, so most of the actions
+ * they drive produce no verdict at all, and verdicts are rarer still than that. The
  * cause is in the descriptions: `reticle_act` sent the reader to `reticle_observe`, which is a LOOK,
  * and never mentioned `reticle_act_and_wait` at all. `act_and_wait`'s own description calls itself
  * "one hop for the act->observe->assert loop" — but only somebody who already found it ever reads
