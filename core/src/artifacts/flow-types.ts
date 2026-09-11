@@ -267,6 +267,22 @@ export interface FlowStepResult {
    * Additive/optional: absent in contexts with no advancing clock. Feeds per-step run-to-run perf diffs.
    */
   durationMs?: number;
+  /**
+   * The event-stream span this step's evidence lives in — its drill address.
+   *
+   * `reticle_observe` already accepts `{ since, until }` and returns "the span between action A and
+   * B", so a step that carries its own window is a step somebody can ask about afterwards without
+   * re-driving anything. Without it the evidence is captured and has no address, which is why a
+   * deterministic run could say a step passed and nothing more.
+   *
+   * Bounded on BOTH ends deliberately. A `since` alone returns everything from that point to now, so
+   * on a long flow step two's window would include steps three through twenty-five — and an agent
+   * reading it would attribute the whole tail to one click.
+   *
+   * Additive/optional, and omitted rather than zero-width where no clock advanced: a `{since: 0,
+   * until: 0}` would read as "this step caused nothing" instead of "nothing here measures time".
+   */
+  window?: { since: number; until: number };
   ok: boolean;
   error?: string;
   note?: string;

@@ -672,8 +672,12 @@ export async function replayFlow(
     if (consequence !== undefined) result.consequence = consequence;
     // Per-step wall time from the session's injected clock (dispatch → here, post-settle). Only set when
     // the clock actually advanced, so a fixed-clock fake reads durationMs-free (additive, non-breaking).
-    const durationMs = session.elapsed() - cursorBefore;
+    const cursorAfter = session.elapsed();
+    const durationMs = cursorAfter - cursorBefore;
     if (durationMs > 0) result.durationMs = durationMs;
+    // The drill address. Bounded on both ends so this step's window is THIS step's — see the field's
+    // own note in core. Omitted when the clock never moved rather than reported as zero-width.
+    if (cursorAfter > cursorBefore) result.window = { since: cursorBefore, until: cursorAfter };
     /*
      * A prefix step is setup and is not reported -- UNLESS it failed.
      *
