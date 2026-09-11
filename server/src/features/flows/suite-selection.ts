@@ -11,7 +11,7 @@
  * already existed. The pure rule lives in core (`selectFlows`); this is the part that has to read
  * the files, because a label lives in one and `list` returns only names.
  */
-import { FLOW_FILE_VERSION, selectFlows, type FlowFile } from '@reticlehq/core';
+import { FLOW_FILE_VERSION, orderFlows, selectFlows, type FlowFile } from '@reticlehq/core';
 import { flowsForSession } from './flow-store-for-session.js';
 import type { ToolDeps } from '../../agent/tools/tools.js';
 
@@ -29,7 +29,15 @@ export async function resolveSuiteSelection(
   deps: ToolDeps,
   projectId: string | undefined,
   args: Record<string, unknown>,
-): Promise<{ run: string[]; quarantined: string[]; unmatched: string[] }> {
+): Promise<{
+  run: string[];
+  quarantined: string[];
+  unmatched: string[];
+  /** Flows in a dependency cycle — none of them ran. */
+  cycles?: string[];
+  /** A flow whose prerequisite is not in this run, so it did not run either. */
+  unsatisfied?: { flow: string; needs: string }[];
+}> {
   const store = flowsForSession(deps, projectId).flows;
   const names = await store.list(projectId);
   const asStrings = (value: unknown): string[] =>
@@ -71,9 +79,18 @@ export async function resolveSuiteSelection(
    * flows reports a clean pass.
    */
   const missingNames = wantedNames.filter((name) => !names.includes(name));
+  /*
+   * Ordered AFTER selection, so a prerequisite filtered out by a label is reported rather than
+   * silently pulled back in. A flow whose `login` was excluded does not run: failing it here would
+   * produce a failure about the wrong thing, and quietly adding `login` back would run a flow the
+   * caller did not ask for.
+   */
+  const ordered = orderFlows(chosen.run);
   return {
-    run: [...chosen.run.map((flow) => flow.name), ...missingNames],
+    run: [...ordered.run.map((flow) => flow.name), ...missingNames],
     quarantined: chosen.quarantined,
     unmatched: chosen.unmatched.filter((entry) => !wantedNames.includes(entry)),
+    ...(0 === ordered.cycles.length ? {} : { cycles: ordered.cycles }),
+    ...(0 === ordered.unsatisfied.length ? {} : { unsatisfied: ordered.unsatisfied }),
   };
 }

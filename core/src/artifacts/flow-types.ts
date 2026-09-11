@@ -551,6 +551,14 @@ export const FlowFileSchema = z.object({
    * every flow already on disk keeps loading.
    */
   labels: z.array(z.string().min(1)).optional(),
+  /**
+   * Flows that must run, and pass, before this one.
+   *
+   * By name, because a name is what every other caller addresses a flow by. A prerequisite that is
+   * not in the run is reported rather than assumed satisfied: a checkout flow whose login was
+   * filtered out by a label would otherwise fail for a reason that has nothing to do with checkout.
+   */
+  needs: z.array(z.string().min(1)).optional(),
   /** Whether a suite runs this flow. Absent means active — see FlowStatus. */
   status: z.enum([FlowStatus.ACTIVE, FlowStatus.QUARANTINED, FlowStatus.DRAFT]).optional(),
   /**

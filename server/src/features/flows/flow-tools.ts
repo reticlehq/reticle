@@ -500,6 +500,18 @@ export const FLOW_TOOLS: ToolDef[] = [
         .describe(
           'Names or labels that matched no flow — a typo, or a set that no longer exists. Reported because silently passing over one is how "all green" comes to mean "nothing ran".',
         ),
+      cycles: z
+        .array(z.string())
+        .optional()
+        .describe(
+          'Flows whose `needs` form a cycle. None of them ran: an order was declared that cannot exist, and inventing one would produce a suite nobody can reason about when it fails.',
+        ),
+      unsatisfied: z
+        .array(z.unknown())
+        .optional()
+        .describe(
+          'Flows whose prerequisite is not in this run — filtered out by a label, quarantined, or never saved. They did NOT run, because failing them would report the wrong thing.',
+        ),
       // Session-EXEMPT, so it does not inherit `sessionEnvelopeShape` — declare the one-shot human
       // feedback ask here or a validating profile strips it off the suite verdict.
       feedback_prompt: z.unknown().optional(),
@@ -514,6 +526,8 @@ export const FLOW_TOOLS: ToolDef[] = [
       const heldBack = {
         ...(0 === selected.quarantined.length ? {} : { quarantined: selected.quarantined }),
         ...(0 === selected.unmatched.length ? {} : { unmatched: selected.unmatched }),
+        ...(selected.cycles === undefined ? {} : { cycles: selected.cycles }),
+        ...(selected.unsatisfied === undefined ? {} : { unsatisfied: selected.unsatisfied }),
       };
       // verify:server — hand the whole suite to the hosted runner; it records the verification itself.
       const cloud = await resolveProjectCloud(deps.fs, deps.reticleRoot, homedir(), process.env);
