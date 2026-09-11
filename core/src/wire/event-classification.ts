@@ -1,4 +1,4 @@
-import { EventType } from './constants.js';
+import { EventType } from './constants/constants.js';
 
 /**
  * The high-volume, low-signal floor. These fire continuously on any live page and are the ONLY

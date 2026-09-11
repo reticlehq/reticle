@@ -26,7 +26,7 @@
  * ph="..." placeholder text
  */
 
-import { ElementState } from './constants.js';
+import { ElementState } from './constants/constants.js';
 
 /** Encode an ElementDescriptor to a TOON line. */
 export interface ToonElement {

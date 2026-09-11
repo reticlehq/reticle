@@ -3,7 +3,7 @@ import { AppRuntime } from '../telemetry-feedback.js';
 import { PlatformProfile } from './platform.js';
 import { profileOfRuntime } from '../realm/registry.js';
 import { HelloMessageSchema } from './messages.js';
-import { MessageKind, RETICLE_PROTOCOL_VERSION } from './constants.js';
+import { MessageKind, RETICLE_PROTOCOL_VERSION } from './constants/constants.js';
 
 /**
  * What kind of surface is on the other end, told apart from which shell it happens to be.

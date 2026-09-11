@@ -3,7 +3,7 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { existsSync } from 'node:fs';
-import { MessageKind, RETICLE_PROTOCOL_VERSION } from './constants.js';
+import { MessageKind, RETICLE_PROTOCOL_VERSION } from './constants/constants.js';
 import { CHANNEL_INDEPENDENCE, ChannelId } from './channel.js';
 import { VerdictStatus } from '../verdict/verification-run.js';
 import { Verified } from '../verdict/verified-constants.js';

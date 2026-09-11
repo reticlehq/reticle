@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { toToon, resultToToon, isToonable, type ToonElement } from './toon.js';
-import { ElementState } from './constants.js';
+import { ElementState } from './constants/constants.js';
 
 function el(over: Partial<ToonElement> = {}): ToonElement {
   return { ref: 'e1', role: 'button', name: 'Save', ...over };

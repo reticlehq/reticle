@@ -1,4 +1,4 @@
-import { EventType } from './constants.js';
+import { EventType } from './constants/constants.js';
 
 /**
  * Which events survive the bridge's rate cap.

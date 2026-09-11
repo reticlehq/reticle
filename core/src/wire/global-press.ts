@@ -1,4 +1,4 @@
-import { ActionType } from './constants.js';
+import { ActionType } from './constants/constants.js';
 
 /**
  * The key a `press` sends when neither `text` nor `key` was named.

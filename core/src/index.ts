@@ -21,19 +21,19 @@
  */
 
 // ── STABLE public surface: the wire/domain contract ──────────────────────────────────────────────
-export * from './wire/constants.js'; // EventType, ActionType, wire constants, TRANSPORT_LIMITS, …
+export * from './wire/constants/constants.js'; // EventType, ActionType, wire constants, TRANSPORT_LIMITS, …
 export * from './identity/source-constants.js'; // DATA_RETICLE_SOURCE_ATTR, RETICLE_ROOT_GLOBAL
 export * from './wire/event-classification.js'; // CHURN_TYPES — shared eviction priority for buffer/queue
 export * from './wire/global-press.js'; // which press is a document key (Escape / Tab / a shortcut)
 export * from './verdict/verified-constants.js'; // Verified — the one field an agent gates on
 export * from './verdict/verify-progress.js'; // VerifyPhase — what a run is doing while it is still doing it
-export * from './wire/session-constants.js';
+export * from './wire/constants/session-constants.js';
 export * from './identity/document-identity.js'; // which document an observation belongs to
 export * from './identity/edit-epoch.js'; // which round of source edits an observation belongs to
 export * from './wire/messages.js'; // ReticleEvent + the message schemas
 export * from './wire/event-payloads.js'; // per-event payload schemas + wire vocab
 export * from './wire/event-priority.js'; // which events survive the bridge rate cap
-export * from './artifacts/flow-constants.js'; // moved off wire/constants, which had no use for them
+export * from './artifacts/flow-constants.js'; // moved off wire/constants/constants, which had no use for them
 export * from './artifacts/flow-types.js'; // FlowStep, FlowExpect, FlowStepTool, replay result shapes
 export * from './verdict/verification-run.js'; // run/verdict shapes for the CI surface
 export * from './wire/types.js';

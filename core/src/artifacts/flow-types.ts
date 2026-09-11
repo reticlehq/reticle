@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { ActionType } from '../wire/constants.js';
-// Its own directory's constants, which this file had been reaching through `wire/constants.js`
+import { ActionType } from '../wire/constants/constants.js';
+// Its own directory's constants, which this file had been reaching through `wire/constants/constants.js`
 // to get -- the clearest cost of that re-export: artifacts went out to wire to fetch a symbol
 // that had been sitting next door the whole time.
 import {

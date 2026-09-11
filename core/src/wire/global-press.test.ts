@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ActionType } from './constants.js';
+import { ActionType } from './constants/constants.js';
 import { isGlobalPress, isGlobalPressCall, pressKeyFromArgs } from './global-press.js';
 
 /**

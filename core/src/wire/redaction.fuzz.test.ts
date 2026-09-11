@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { isSensitiveKey, scrubKnownSecrets } from './redaction.js';
-import { REDACTED_VALUE } from './constants.js';
+import { REDACTED_VALUE } from './constants/constants.js';
 
 /**
  * Property / fuzz coverage for the redaction primitives — the highest-risk parse surface in the wire

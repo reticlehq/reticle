@@ -1,4 +1,4 @@
-import { VisualReason } from './constants.js';
+import { VisualReason } from './constants/constants.js';
 
 /**
  * The desktop wiring contract — the single source of truth for the strings that let an Electron

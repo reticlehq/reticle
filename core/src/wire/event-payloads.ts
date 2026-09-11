@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { EventType, PerfMetric } from './constants.js';
+import { EventType, PerfMetric } from './constants/constants.js';
 import { BlindSpotKind } from '../verdict/verified-constants.js';
 import { BrowserBrand } from '../telemetry-feedback.js';
 import { HumanControlDataSchema, HumanMarkDataSchema } from './messages.js';

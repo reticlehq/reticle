@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { PredicateKind } from '../verdict/consequence.js';
 import { ChannelId, channelsRead } from './channel.js';
 import { HelloMessageSchema } from './messages.js';
-import { MessageKind, RETICLE_PROTOCOL_VERSION } from './constants.js';
+import { MessageKind, RETICLE_PROTOCOL_VERSION } from './constants/constants.js';
 
 /**
  * Which sources of truth a claim needs to look at.

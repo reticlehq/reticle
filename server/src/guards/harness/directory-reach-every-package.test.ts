@@ -33,9 +33,9 @@ interface Recorded {
 
 const PACKAGES: Readonly<Record<string, Recorded>> = {
   core: {
-    directories: 7,
-    mutual: 4,
-    note: 'the contract. Four mutual pairs in five directories is the highest density in the repository, and the sibling file already names the cause: wire, verdict and artifacts each hold part of the same shapes.',
+    directories: 8,
+    mutual: 2,
+    note: 'the contract. Was four mutual pairs; moving the two constant tables into wire/constants/ freed identity <-> wire and artifacts <-> wire, because those tables were all either directory wanted from wire.',
   },
   engine: {
     directories: 5,

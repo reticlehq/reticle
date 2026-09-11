@@ -5,8 +5,8 @@ import {
   RETICLE_PROTOCOL_VERSION,
   MessageKind,
   TRANSPORT_LIMITS,
-} from './constants.js';
-import { MarkAnchorStrategy } from './session-constants.js';
+} from './constants/constants.js';
+import { MarkAnchorStrategy } from './constants/session-constants.js';
 import { HelloMessageSchema, HumanMarkDataSchema, ReticleEventSchema } from './messages.js';
 
 function event(): Record<string, unknown> {

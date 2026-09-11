@@ -41,14 +41,21 @@ const CORE = join(
  *
  * Four. `wire <-> artifacts` survived an attempt to remove it, and the attempt is worth knowing
  * about: the whole of `wire -> artifacts` looked like one `export * from
- * '../artifacts/flow-constants.js'` in `wire/constants.ts`, a convenience barrel using nothing it
+ * '../artifacts/flow-constants.js'` in `wire/constants/constants.ts`, a convenience barrel using nothing it
  * re-exported. Deleting it did not break the cycle, because `wire/types.ts` genuinely references
  * annotation and run constants -- the barrel was hiding WHERE they came from, not creating the
  * dependency. Removing it was still worth doing (`artifacts/flow-types.ts` had been reaching
  * through `wire` to fetch a constant from its own directory), but the number did not move, and a
  * guard is the place to say so before somebody tries it again.
  */
-const MUTUAL_PAIRS_TODAY = 4;
+/**
+ * Four until `wire/constants.ts` and `wire/session-constants.ts` moved into `wire/constants/`.
+ * Both are pure tables of named values that import nothing, and both were reached by `identity`
+ * and by `artifacts`; those were the ONLY things either directory wanted from `wire`, so
+ * `identity <-> wire` and `artifacts <-> wire` both stopped being mutual. Lowered here in the
+ * same commit that earned it, which is what the equality below is for.
+ */
+const MUTUAL_PAIRS_TODAY = 2;
 
 describe('the contract knows only what it is allowed to know', () => {
   it('finds directories to check, so a passing run cannot mean it read nothing', () => {

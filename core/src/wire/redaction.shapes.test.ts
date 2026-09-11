@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { REDACTED_VALUE } from './constants.js';
+import { REDACTED_VALUE } from './constants/constants.js';
 import { scrubKnownSecrets } from './redaction.js';
 
 /**

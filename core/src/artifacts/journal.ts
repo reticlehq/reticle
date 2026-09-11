@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { TRANSPORT_LIMITS } from '../wire/constants.js';
+import { TRANSPORT_LIMITS } from '../wire/constants/constants.js';
 import { Verified } from '../verdict/verified-constants.js';
 
 /**

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { EventType } from './constants.js';
+import { EventType } from './constants/constants.js';
 import { EVENT_PAYLOAD_SCHEMAS } from './event-payloads.js';
 
 /**

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ActionType } from './constants.js';
+import { ActionType } from './constants/constants.js';
 import { AnchorKind, FLOW_FILE_VERSION } from '../artifacts/flow-constants.js';
 import { FlowFileSchema, RecordedFlowSchema } from '../artifacts/flow-types.js';
 

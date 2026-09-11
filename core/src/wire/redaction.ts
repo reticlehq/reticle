@@ -1,4 +1,4 @@
-import { REDACTED_VALUE } from './constants.js';
+import { REDACTED_VALUE } from './constants/constants.js';
 import { URL_RAW } from './net.js';
 
 /**
