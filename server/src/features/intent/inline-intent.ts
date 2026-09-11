@@ -162,8 +162,26 @@ export async function linkInlineIntent(
     const id = existing?.id ?? inlineIntentId(intent);
     // Declared WITHOUT a surface on purpose: see dischargeInlineIntent for why the route that
     // describes this record only exists after the action it is about.
-    if (existing === undefined) await store.declare([{ id, statement: intent }]);
-    if (binding !== undefined && existing?.binding === undefined) await store.bind(id, binding);
+    const declaredHere = existing === undefined;
+    if (declaredHere) await store.declare([{ id, statement: intent }]);
+    /*
+     * A binding may be INVENTED only for a row this call also declared.
+     *
+     * Inline, the agent wrote the statement and the predicate in one breath, so pairing them is
+     * recording the agent's own act. A row that ALREADY existed was paired by nothing: the prose was
+     * written at one moment about one thing, and the predicate belongs to whatever this call happens
+     * to assert. Binding them is the ledger inventing a relationship nobody claimed.
+     *
+     * Measured against a live daemon: an intent reading "applying a discount code reduces the order
+     * total shown at checkout" was declared separately, then referenced by id from an act asserting
+     * an unrelated element on another route. It was recorded `proved` at presence grade, with that
+     * unrelated predicate retro-fitted as its binding — a false green in the one layer where prose
+     * meets evidence, and the only place in this product with no honesty check on the join.
+     *
+     * An existing row stays open until `reticle_intent { action: "bind" }` says what would prove it.
+     * That is a real cost — one call — and it is the cost of the ledger meaning anything.
+     */
+    if (binding !== undefined && declaredHere) await store.bind(id, binding);
     return id;
   } catch {
     return undefined;

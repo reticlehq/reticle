@@ -207,7 +207,21 @@ describe('the undeclared-change gap is silent on the verdict that declared inlin
 });
 
 describe('an intent already in the ledger is referenced by id, not restated', () => {
-  it('proves the existing row and keeps its own words', async () => {
+  it('keeps its own words, and is NOT proved by a predicate nobody bound to it', async () => {
+    /*
+     * The ledger may not invent the binding for a row it did not declare in this call.
+     *
+     * Measured against a live daemon: an intent reading "applying a discount code reduces the order
+     * total shown at checkout" was declared separately, then referenced by id on an act that
+     * asserted an unrelated element on another route. The ledger recorded it `proved`, at presence
+     * grade, AND retro-fitted that unrelated predicate as its binding. Prose and predicate were
+     * never related by anything.
+     *
+     * Declaring INLINE is different and still allowed: there the agent wrote the statement and the
+     * predicate in one breath, so the pairing is the agent's own. A row that already existed was
+     * paired by nothing, and `reticle_intent { action: "bind" }` is how an agent says what would
+     * prove it.
+     */
     const { session, deps, ledger } = harness();
     await ledger.declare([{ id: 'checkin', statement: STATEMENT }]);
     session.pushEvent(signalEvent());
@@ -215,7 +229,17 @@ describe('an intent already in the ledger is referenced by id, not restated', ()
     const intents = await ledger.read();
     expect(intents).toHaveLength(1);
     expect(intents[0]?.statement).toBe(STATEMENT);
-    expect(intents[0]?.state).toBe(IntentState.PROVED);
+    expect(intents[0]?.state).toBe(IntentState.DECLARED);
+    expect(intents[0]?.binding).toBeUndefined();
+  });
+
+  it('IS proved once the agent has bound it deliberately', async () => {
+    const { session, deps, ledger } = harness();
+    await ledger.declare([{ id: 'checkin', statement: STATEMENT }]);
+    await ledger.bind('checkin', { kind: 'signal', name: SIGNAL_NAME });
+    session.pushEvent(signalEvent());
+    await tool(ReticleTool.ASSERT).handler(deps, { ...assertSignal, intent: 'checkin' });
+    expect((await ledger.read())[0]?.state).toBe(IntentState.PROVED);
   });
 
   it('does not overwrite a binding the agent bound deliberately', async () => {
