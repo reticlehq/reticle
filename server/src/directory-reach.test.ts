@@ -388,6 +388,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   proxy: ['daemon', 'identity', 'telemetry'],
   runs: ['artifact', 'cloud', 'dir', 'flows', 'intent', 'peer', 'project', 'telemetry', 'tools'],
   session: [
+    'timing',
     'facts',
     'bridge',
     'config',
@@ -431,7 +432,15 @@ const REACHES_FOR: Record<string, readonly string[]> = {
    * persist, and nothing in flows is reached back through them.
    */
   stores: ['dir', 'fs', 'outcome', 'project', 'recording'],
+  /**
+   * Deadlines, and the clock they are measured against. Three files that import nothing at all,
+   * which is what let them out of a 27-file directory. stall-clock belongs with them by subject
+   * and stayed behind: it is mutual with telemetry, and this rule does not move a file that would
+   * carry a knot with it.
+   */
+  timing: [],
   tools: [
+    'timing',
     'stores',
     'assert',
     'facts',
