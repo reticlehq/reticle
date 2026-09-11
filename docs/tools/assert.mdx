@@ -6,7 +6,7 @@ icon: gavel
 
 `reticle_assert` evaluates a predicate against what the app actually did and returns a verdict: `verified` plus `pass`, evidence when it holds, and `expected` versus `observed` when it does not. Reach for it when you want a verdict on something you did not just cause, or on several actions at once.
 
-It is the second of the two tools that produce a verdict, the other being [`reticle_act_and_wait`](/tools-act-and-wait). It takes the same predicate grammar and evaluates it against what already happened.
+It is the second of the two tools that produce a verdict, the other being [`reticle_act_and_wait`](/tools/act-and-wait). It takes the same predicate grammar and evaluates it against what already happened.
 
 ## A real failure
 
@@ -116,7 +116,7 @@ The cursor comes from the preceding `reticle_act` response. Use it whenever you 
 
 ## When to use assert over act_and_wait
 
-Use [`reticle_act_and_wait`](/tools-act-and-wait) when you are performing the action. Use `reticle_assert` when:
+Use [`reticle_act_and_wait`](/tools/act-and-wait) when you are performing the action. Use `reticle_assert` when:
 
 - you are checking a precondition before acting;
 - the state was reached by several actions and you want one verdict over the lot;

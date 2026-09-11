@@ -106,7 +106,7 @@ Reticle is a stdio MCP server. A host that wires it correctly does four things, 
 
 ### Hosts that cap the number of tools
 
-Some editors cap the total tool count across every MCP server, which is why Reticle advertises a small surface instead of everything it can do. Nothing is out of reach: `reticle_tools { names: [...] }` lists the tools and returns the full argument grammar for the ones you name, and `reticle_run { tool, args }` invokes any of them, advertised or not. A host that is short on tool slots pays for the advertised handful and still reaches the whole surface through that pair. See [`reticle_tools` and `reticle_run`](/tools-tools-and-run).
+Some editors cap the total tool count across every MCP server, which is why Reticle advertises a small surface instead of everything it can do. Nothing is out of reach: `reticle_tools { names: [...] }` lists the tools and returns the full argument grammar for the ones you name, and `reticle_run { tool, args }` invokes any of them, advertised or not. A host that is short on tool slots pays for the advertised handful and still reaches the whole surface through that pair. See [`reticle_tools` and `reticle_run`](/tools/tools-and-run).
 
 ---
 

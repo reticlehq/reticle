@@ -4,7 +4,7 @@ description: Act on an element and wait for a named consequence in one call. Thi
 icon: circle-check
 ---
 
-`reticle_act_and_wait` performs one action on an element and waits for a named consequence, returning a verdict in the same call. Reach for it whenever an action is supposed to cause something: it is one of only two Reticle tools that produce a verdict, the other being [`reticle_assert`](/tools-assert).
+`reticle_act_and_wait` performs one action on an element and waits for a named consequence, returning a verdict in the same call. Reach for it whenever an action is supposed to cause something: it is one of only two Reticle tools that produce a verdict, the other being [`reticle_assert`](/tools/assert).
 
 This is the tool Reticle exists for. It does the act, observe and assert steps in one round trip, and it makes you name the expected consequence **before** the action runs.
 
@@ -94,7 +94,7 @@ Real response. The `initiatorStack`, `storageDiffs` and per-event trace detail a
 }
 ```
 
-`trace` is a digest of what the app did in the window. When the counts are not enough, pass the top-level `since` cursor to [`reticle_observe`](/tools-observe) for the per-event timeline.
+`trace` is a digest of what the app did in the window. When the counts are not enough, pass the top-level `since` cursor to [`reticle_observe`](/tools/observe) for the per-event timeline.
 
 ## The predicate grammar
 
@@ -157,7 +157,7 @@ A verification tool that cannot describe the quality of its own evidence is aski
 
 | Argument | What it does |
 | --- | --- |
-| `ref`, `action`, `args` | As [`reticle_act`](/tools-act) |
+| `ref`, `action`, `args` | As [`reticle_act`](/tools/act) |
 | `until` | The predicate to wait for. Omit it to wait for the page to settle |
 | `predicate` | Alias for `until`, the name `assert` and `wait_for` use |
 | `timeout_ms` | Maximum wait, defaulting to 4000. `0` evaluates the predicate once, no wait |

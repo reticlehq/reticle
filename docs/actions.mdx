@@ -5,7 +5,7 @@ description: Every action reticle_act and reticle_act_and_wait can perform, with
 icon: hand-pointer
 ---
 
-Every action Reticle can perform takes the same shape: a `ref` from [`reticle_snapshot`](/tools-snapshot) or [`reticle_query`](/tools-query), an `action` name, and an optional `args` object. The same seventeen actions are available on [`reticle_act`](/tools-act), which proves nothing, and on [`reticle_act_and_wait`](/tools-act-and-wait), which returns a verdict.
+Every action Reticle can perform takes the same shape: a `ref` from [`reticle_snapshot`](/tools/snapshot) or [`reticle_query`](/tools/query), an `action` name, and an optional `args` object. The same seventeen actions are available on [`reticle_act`](/tools/act), which proves nothing, and on [`reticle_act_and_wait`](/tools/act-and-wait), which returns a verdict.
 
 ```json
 { "ref": "e104", "action": "fill", "args": { "value": "reticle" } }
@@ -93,9 +93,9 @@ Several actions in one round trip:
 ```
 
 <Warning>
-  [`reticle_act_sequence`](/tools-act-sequence) returns `ok: true` when the steps were
+  [`reticle_act_sequence`](/tools/act-sequence) returns `ok: true` when the steps were
   **dispatched**, not when they worked. Batch the setup, then prove the outcome with
-  [`reticle_act_and_wait`](/tools-act-and-wait) on the final step.
+  [`reticle_act_and_wait`](/tools/act-and-wait) on the final step.
 </Warning>
 
 ## Real versus synthetic input
@@ -115,6 +115,6 @@ Fields sitting at their uninformative default are **omitted**, so a clean action
 
 `occluded` is the answer to a large share of "the button doesn't work" reports: the click landed on the modal overlay sitting on top of it.
 
-<Card title="Full field-by-field walkthrough" icon="hand-pointer" href="/tools-act">
+<Card title="Full field-by-field walkthrough" icon="hand-pointer" href="/tools/act">
   What each effect field tells you, with a real response.
 </Card>

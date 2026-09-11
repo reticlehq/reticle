@@ -4,9 +4,9 @@ description: Block until a predicate holds. Or return immediately if it is alrea
 icon: hourglass
 ---
 
-`reticle_wait_for` blocks until a predicate holds, or returns straight away if it is already satisfied in the recent event buffer. Reach for it when you are waiting on something you did not cause. It reads and waits; it does not produce a verdict, so finish with [`reticle_assert`](/tools-assert).
+`reticle_wait_for` blocks until a predicate holds, or returns straight away if it is already satisfied in the recent event buffer. Reach for it when you are waiting on something you did not cause. It reads and waits; it does not produce a verdict, so finish with [`reticle_assert`](/tools/assert).
 
-It takes the same predicate grammar as [`reticle_act_and_wait`](/tools-act-and-wait), without the action. Use it when the thing you are waiting for was triggered by something other than your own click. A timer, a websocket push, a background refresh.
+It takes the same predicate grammar as [`reticle_act_and_wait`](/tools/act-and-wait), without the action. Use it when the thing you are waiting for was triggered by something other than your own click. A timer, a websocket push, a background refresh.
 
 ## Example
 

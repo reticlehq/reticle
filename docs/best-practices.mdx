@@ -23,7 +23,7 @@ Not this:
 
 ...followed by looking around for something that seems fine.
 
-An agent that acts first and then decides what counts as success will always find something that counts. Stating the expectation up front is the entire difference between a check and a rationalisation, and it costs no extra calls: [`reticle_act_and_wait`](/tools-act-and-wait) does both in one hop.
+An agent that acts first and then decides what counts as success will always find something that counts. Stating the expectation up front is the entire difference between a check and a rationalisation, and it costs no extra calls: [`reticle_act_and_wait`](/tools/act-and-wait) does both in one hop.
 
 ## A drive that ends on `reticle_act` proved nothing
 
@@ -49,7 +49,7 @@ We hit one writing the instrumentation page: a login that genuinely succeeded, s
 { "verified": "unknown", "verifiedReason": "unsettled", "verdict": { "pass": true } }
 ```
 
-Report it as unknown. If you believe it is wrong, [say so](/tools-session-and-feedback). Reticle calls an unknown verdict its own defect, and the response literally invites the report.
+Report it as unknown. If you believe it is wrong, [say so](/tools/session-and-feedback). Reticle calls an unknown verdict its own defect, and the response literally invites the report.
 
 ## Focus the tab
 
@@ -196,7 +196,7 @@ Sessions accumulate. Four stale ones pointing at dev servers you restarted an ho
 
 ## Confirm a navigation landed
 
-`reticle_navigate` returns `confirmed: false` by design. A navigation destroys the document the SDK lives in, so it can only report dispatch. Check [`reticle_sessions`](/tools-sessions) for a session at the new URL before acting, and re-snapshot: refs do not survive a new document.
+`reticle_navigate` returns `confirmed: false` by design. A navigation destroys the document the SDK lives in, so it can only report dispatch. Check [`reticle_sessions`](/tools/sessions) for a session at the new URL before acting, and re-snapshot: refs do not survive a new document.
 
 ## Start with what the app says about itself
 

@@ -25,8 +25,8 @@ describe('retired RETICLE_TOOL_PROFILE is not advertised as the live knob', () =
     expect(text).toContain(ADVERTISE_ALL_ENV);
   });
 
-  it('docs/tools-tools-and-run.mdx does not tell agents to change the retired env', () => {
-    const text = read('docs/tools-tools-and-run.mdx');
+  it('docs/tools/tools-and-run.mdx does not tell agents to change the retired env', () => {
+    const text = read('docs/tools/tools-and-run.mdx');
     expect(text).not.toMatch(new RegExp(`change ${TOOL_PROFILE_ENV}`));
     expect(text).toContain(ADVERTISE_ALL_ENV);
   });

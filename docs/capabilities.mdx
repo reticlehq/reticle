@@ -4,7 +4,7 @@ description: Coverage, storage, fake clocks, autonomous crawling, visual diffing
 icon: sparkles
 ---
 
-These are the Reticle tools that do something other than look, act, observe and assert: control coverage, client storage, a fake clock, autonomous crawling, semantic and visual baselines, network mocking, flow recording and replay, and the CI artifact. Reach for them when the verify loop is not the shape of the question. None of them live in the default advertised surface, so all of them are called through [`reticle_run`](/tools-tools-and-run).
+These are the Reticle tools that do something other than look, act, observe and assert: control coverage, client storage, a fake clock, autonomous crawling, semantic and visual baselines, network mocking, flow recording and replay, and the CI artifact. Reach for them when the verify loop is not the shape of the question. None of them live in the default advertised surface, so all of them are called through [`reticle_run`](/tools/tools-and-run).
 
 Most of the time you want the verify loop. Look, act, observe, assert. These are the tools for the times you want something else, and they are the ones people are most surprised exist.
 
@@ -55,7 +55,7 @@ Useful at the end of a drive, when the agent is about to report success. "I veri
 }
 ```
 
-Note the token redaction. Credential-shaped values are stripped here exactly as they are in [`reticle_network`](/tools-network), so reading storage never puts a session token in your context.
+Note the token redaction. Credential-shaped values are stripped here exactly as they are in [`reticle_network`](/tools/network), so reading storage never puts a session token in your context.
 
 localStorage, sessionStorage and readable cookies.
 
@@ -358,7 +358,7 @@ Stopping a recording used to return a very large payload, almost all of it the r
 }
 ```
 
-Each step's `args` is elided above because a recorded step is an anchor, not a call you make by hand: it resolves a testid at replay time rather than a `ref`, so copying it into [`reticle_act`](/tools-act) would not work.
+Each step's `args` is elided above because a recorded step is an anchor, not a call you make by hand: it resolves a testid at replay time rather than a `ref`, so copying it into [`reticle_act`](/tools/act) would not work.
 
 Nine hundred and fifty-three bytes for 445 recorded events. `timeline_omitted` hands you the exact `reticle_observe` call to make if you want them, so nothing is lost, it is only not charged for by default.
 

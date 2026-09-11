@@ -105,7 +105,7 @@ When something did move, you get only what changed. This is the same call after 
 A route change resets it: the next call after one returns a full snapshot rather than a delta against a page that no longer exists.
 
 <Tip>
-  Reach for [`reticle_query`](/tools-query) instead when you already know what you're looking for.
+  Reach for [`reticle_query`](/tools/query) instead when you already know what you're looking for.
   Snapshot is for orientation; query is for retrieval, and it's almost always cheaper.
 </Tip>
 
@@ -124,6 +124,6 @@ Reticle refuses a stale ref rather than clicking whatever now occupies that slot
 
 <Note>
   That `recovery` string is trimmed. The full text also recommends
-  [`reticle_act_and_wait`](/tools-act-and-wait) with `until`, so the next ref is taken after the
+  [`reticle_act_and_wait`](/tools/act-and-wait) with `until`, so the next ref is taken after the
   page settles.
 </Note>

@@ -12,7 +12,7 @@ If you haven't set up Reticle yet, start with [Getting Started](getting-started.
 >
 > | Looking for                                | Go to                                   |
 > | ------------------------------------------ | --------------------------------------- |
-> | One tool, with a real request and response | [Tools reference](/tools-overview)      |
+> | One tool, with a real request and response | [Tools reference](/tools/overview)      |
 > | The predicate grammar                      | [Predicates](/predicates)               |
 > | Every action and its arguments             | [Actions](/actions)                     |
 > | Worked examples for real situations        | [Recipes](/recipes)                     |

@@ -4,7 +4,7 @@ description: List every connected browser tab, with the health fields that tell 
 icon: list-check
 ---
 
-`reticle_sessions` lists every browser tab currently connected to the Reticle daemon, with the health fields that decide whether it can actually be driven. Reach for it first when a tool says no session is connected, and after every [`reticle_navigate`](/tools-navigate) that came back `confirmed: false`.
+`reticle_sessions` lists every browser tab currently connected to the Reticle daemon, with the health fields that decide whether it can actually be driven. Reach for it first when a tool says no session is connected, and after every [`reticle_navigate`](/tools/navigate) that came back `confirmed: false`.
 
 ```json
 {}
@@ -67,7 +67,7 @@ That string is trimmed. The full text also lists the exact ports it scanned and 
 | --- | --- |
 | `throttled` | The browser is deprioritising a background tab. Synthetic timers and pointer gestures may silently no-op |
 | `hidden` / `focused` | Why it's throttled, and what to do about it |
-| `hasCapabilities` | Whether the app registered testids, signals and stores. `false` means [`reticle_state`](/tools-state) has nothing to read |
+| `hasCapabilities` | Whether the app registered testids, signals and stores. `false` means [`reticle_state`](/tools/state) has nothing to read |
 | `adapters` | `["react"]` means you get component names and source pointers |
 | `realInputAvailable` | `true` when native CDP input is available, under `reticle drive` |
 | `outages` | How often the connection has dropped. Non-zero is worth investigating |
@@ -80,7 +80,7 @@ That string is trimmed. The full text also lists the exact ports it scanned and 
 
 ## Confirm after navigating
 
-[`reticle_navigate`](/tools-navigate) can only report that a navigation was dispatched. `sessions` is how you confirm one arrived: a session at the new URL means the page loaded **and** is instrumented. No session means one of those two is false, and you find out now rather than after three confusing failures.
+[`reticle_navigate`](/tools/navigate) can only report that a navigation was dispatched. `sessions` is how you confirm one arrived: a session at the new URL means the page loaded **and** is instrumented. No session means one of those two is false, and you find out now rather than after three confusing failures.
 
 ## Scoping
 

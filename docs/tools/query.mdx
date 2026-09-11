@@ -118,7 +118,7 @@ The testid existed, on another route. `hint.route` says where you actually are, 
 
 `truncated: true` with `total: 7` means `limit` cut the list, not that Reticle ran out of room. Neither field is emitted when nothing was cut, so their absence is itself the signal that you are looking at every match.
 
-`states` distinguishes `present` from `visible` from `enabled`. An element can be all three and still be covered by a modal. [`reticle_inspect`](/tools-inspect) reports `occluded` for that.
+`states` distinguishes `present` from `visible` from `enabled`. An element can be all three and still be covered by a modal. [`reticle_inspect`](/tools/inspect) reports `occluded` for that.
 
 <Tip>
   Query by `testid` when you can. Role and text queries survive refactors well; testids survive

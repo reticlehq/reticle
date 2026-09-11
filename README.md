@@ -419,7 +419,7 @@ The SDK runs inside your app and observes the DOM, network, console, routing, st
 
 **Full documentation: [docs.reticle.sh](https://docs.reticle.sh)**. A page per tool, a page per CLI command, a page per package, and every command on them captured from a real run.
 
-→ [Quickstart](https://docs.reticle.sh/quickstart) · [Every tool](https://docs.reticle.sh/tools-overview) · [Every command](https://docs.reticle.sh/cli) · [Troubleshooting](https://docs.reticle.sh/troubleshooting) · [Desktop apps](https://docs.reticle.sh/desktop)
+→ [Quickstart](https://docs.reticle.sh/quickstart) · [Every tool](https://docs.reticle.sh/tools/overview) · [Every command](https://docs.reticle.sh/cli) · [Troubleshooting](https://docs.reticle.sh/troubleshooting) · [Desktop apps](https://docs.reticle.sh/desktop)
 
 **Reading this as an agent?** Append `.md` to any page URL for the source with no site chrome, and start from [`/llms.txt`](https://docs.reticle.sh/llms.txt) to pick the one page you need. Details: [Docs for agents](https://docs.reticle.sh/for-agents).
 

@@ -4,7 +4,7 @@ description: Run several actions in order in one round trip. Fill, fill, submit.
 icon: layer-group
 ---
 
-`reticle_act_sequence` runs several actions in order in a single round trip. Reach for it whenever a journey needs more than one step, such as fill, fill, submit, and then prove the outcome once with [`reticle_act_and_wait`](/tools-act-and-wait), because a sequence itself produces no verdict.
+`reticle_act_sequence` runs several actions in order in a single round trip. Reach for it whenever a journey needs more than one step, such as fill, fill, submit, and then prove the outcome once with [`reticle_act_and_wait`](/tools/act-and-wait), because a sequence itself produces no verdict.
 
 A login is three actions. Driving it one call at a time costs three round trips and three turns of context. `reticle_act_sequence` does it in one.
 
@@ -22,7 +22,7 @@ This tool exists because of a measured problem: agents were driving forms one ca
 }
 ```
 
-Steps may also name a `target` instead of a `ref`, the same locator [`reticle_act`](/tools-act) takes. The sequence resolves each one before dispatch, so a login does not need a query round trip per field:
+Steps may also name a `target` instead of a `ref`, the same locator [`reticle_act`](/tools/act) takes. The sequence resolves each one before dispatch, so a login does not need a query round trip per field:
 
 ```json
 {
@@ -104,8 +104,8 @@ That password was wrong. The app rejected it. And this tool still reported `ok: 
 <Warning>
   This is the whole reason `act` and `act_sequence` do not produce verdicts. `ok: true` is a
   statement about the input, not about the outcome. Follow a sequence with
-  [`reticle_act_and_wait`](/tools-act-and-wait) on the final step, or with an
-  [`reticle_assert`](/tools-assert), or you have proved nothing.
+  [`reticle_act_and_wait`](/tools/act-and-wait) on the final step, or with an
+  [`reticle_assert`](/tools/assert), or you have proved nothing.
 </Warning>
 
 The honest pattern is: batch the setup, prove the outcome.
@@ -144,7 +144,7 @@ Two calls instead of four, and the last one returns a verdict. Note `grade: "sig
 
 ## What each step reports
 
-Every step comes back with the same `effect` fields as [`reticle_act`](/tools-act): `valueChanged`, `focusMoved`, `domMutatedWithin`, `occluded`. Plus its `testid`, `component` and `source`. When a sequence goes wrong, that per-step detail tells you which step, and which line of which file.
+Every step comes back with the same `effect` fields as [`reticle_act`](/tools/act): `valueChanged`, `focusMoved`, `domMutatedWithin`, `occluded`. Plus its `testid`, `component` and `source`. When a sequence goes wrong, that per-step detail tells you which step, and which line of which file.
 
 <Note>
   Steps run in order and do not stop on a soft failure, because "the field rejected the value" is

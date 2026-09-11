@@ -19,7 +19,7 @@ Everything not in this file is at `https://docs.reticle.sh`, and it is built to 
 ```bash
 curl https://docs.reticle.sh/llms.txt                  # every page title and URL, small enough to read whole
 curl https://docs.reticle.sh/cli/doctor.md             # one CLI command: flags, real output, exit codes
-curl https://docs.reticle.sh/tools-act-and-wait.md     # one tool: arguments and what a verdict means
+curl https://docs.reticle.sh/tools/act-and-wait.md     # one tool: arguments and what a verdict means
 curl https://docs.reticle.sh/troubleshooting.md        # the failures people actually hit
 ```
 

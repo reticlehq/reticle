@@ -70,4 +70,4 @@ Then `reticle_session({ action: "yield", mode: "waiting" })` so the human's pane
 
 ---
 
-More detail, fetchable one page at a time: `curl https://docs.reticle.sh/llms.txt` for the index, then the single page you need (`tools-act-and-wait.md`, `predicates.md`, `troubleshooting.md`). If Reticle itself misbehaves, file it with `reticle_feedback`: one call, then carry on.
+More detail, fetchable one page at a time: `curl https://docs.reticle.sh/llms.txt` for the index, then the single page you need (`tools/act-and-wait.md`, `predicates.md`, `troubleshooting.md`). If Reticle itself misbehaves, file it with `reticle_feedback`: one call, then carry on.

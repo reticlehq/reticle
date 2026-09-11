@@ -38,7 +38,7 @@ Support beyond that is uneven, and we would rather say so than let you find out:
 <Accordion title="Can it tell me whether my UI looks good?">
   No. Reticle verifies behaviour, not aesthetics. Visual correctness and "does this feel right" remain a human job, or a visual-diff tool's.
 
-It does read design tokens. [`reticle_inspect`](/tools-inspect) reports whether a colour came from your theme or from someone's clipboard. But that is a consistency check, not taste.
+It does read design tokens. [`reticle_inspect`](/tools/inspect) reports whether a colour came from your theme or from someone's clipboard. But that is a consistency check, not taste.
 
 </Accordion>
 
@@ -58,7 +58,7 @@ Measured on the same app: Reticle caught 10 of 10 injected bugs, Playwright MCP 
 </Accordion>
 
 <Accordion title="Can I run several apps or tabs at once?">
-  Yes. Each is a session. Pass `sessionId` to any tool when more than one is connected, and [`reticle_sessions`](/tools-sessions) lists them.
+  Yes. Each is a session. Pass `sessionId` to any tool when more than one is connected, and [`reticle_sessions`](/tools/sessions) lists them.
 
 Reticle scopes to your project and prefers the active tab, and it **refuses rather than guesses** when the choice is ambiguous. A refusal you can act on beats a silent pick of the wrong tab.
 
@@ -104,7 +104,7 @@ What is measured is detection: 10 of 10 injected regressions caught, with zero f
 
 Nothing is unreachable. `reticle_tools` lists every tool (pass `names: [...]` for full parameters) and `reticle_run({ tool, args })` invokes any of them by name. If you want the whole surface advertised directly, set `RETICLE_ADVERTISE_ALL_TOOLS=1` in the **daemon's** environment and restart it, which costs roughly seven times the per-turn schema tax and is meant for suites that call by name rather than for running agents.
 
-  <Card title="The surface, explained" icon="wrench" href="/tools-overview">
+  <Card title="The surface, explained" icon="wrench" href="/tools/overview">
     Which tools are advertised directly, and why each earned its slot.
   </Card>
 </Accordion>

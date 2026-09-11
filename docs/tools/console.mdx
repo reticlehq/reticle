@@ -56,8 +56,8 @@ That fails if the click succeeds _and_ logs an error, which is exactly the case 
 
 <Tip>
   `level: "error"` is the fast triage read. If it comes back empty with `observed: true`, stop
-  looking at the console and go look at [`reticle_network`](/tools-network) or
-  [`reticle_state`](/tools-state) instead. That is a real capture from this fixture:
+  looking at the console and go look at [`reticle_network`](/tools/network) or
+  [`reticle_state`](/tools/state) instead. That is a real capture from this fixture:
   `{"logs":[],"observed":true,"cost":{"bytes":337,"tokens":85}}`, eighty-five tokens to rule out a
   whole class of bug.
 </Tip>
