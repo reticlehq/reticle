@@ -66,6 +66,19 @@ describe('contradictions survive a green suite', () => {
     expect(verdict.contradictions?.[0]?.step).toBe(2);
   });
 
+  it('carries a cross-step one under step -1, which belongs to no single step', () => {
+    // The whole reason it was looked for: a request opened at step 2 and still unanswered at step 5
+    // sits outside every per-step window, so it has no step to be attributed to.
+    const spanning = {
+      name: 'checkout',
+      status: ReplayStatus.OK,
+      steps: [{ step: 0, ok: true }],
+      crossStep: [swallowed],
+    } as FlowReplayResult;
+    const verdict = buildSuiteVerdict([{ replay: spanning, flow: flow('checkout') }]);
+    expect(verdict.contradictions).toEqual([{ flow: 'checkout', step: -1, ...swallowed }]);
+  });
+
   it('omits the field entirely when the channels agreed', () => {
     const clean = {
       name: 'login',

@@ -473,6 +473,19 @@ export interface SuiteContradiction extends Contradiction {
 export interface FlowReplayResult {
   name: string;
   status: ReplayStatus;
+
+  /**
+   * Contradictions that span steps — found by re-running the detectors over the WHOLE replay, minus
+   * everything a step already reported.
+   *
+   * A step's window closes when the step ends, so a request fired at step 2 and still unanswered at
+   * step 5 sits outside every per-step window. It is exactly the shape a long journey produces and
+   * exactly the shape a per-step view cannot see.
+   *
+   * Omitted when the whole-span pass adds nothing over the steps.
+   */
+  crossStep?: Contradiction[];
+
   steps: FlowStepResult[];
   /** The machine-actionable decision derived from this replay (autonomy layer). */
   decision?: ReplayDecision;

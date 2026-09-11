@@ -222,6 +222,10 @@ export function buildSuiteVerdict(
         contradictions.push({ flow: replay.name, step: step.step, ...found });
       }
     }
+    /* Step -1: this one belongs to no single step — that is the whole reason it was looked for. */
+    for (const found of replay.crossStep ?? []) {
+      contradictions.push({ flow: replay.name, step: -1, ...found });
+    }
   }
   const disagreed =
     0 === contradictions.length

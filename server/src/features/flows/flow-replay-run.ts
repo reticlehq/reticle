@@ -11,6 +11,7 @@ import {
   type CommandResult,
   type FlowFile,
   type FlowReplayResult,
+  type Contradiction,
   type FlowStepResult,
   type ReticleEvent,
 } from '@reticlehq/core';
@@ -32,6 +33,7 @@ import { IntentStore } from '../intent/intent-store.js';
 import { sessionRoot } from '../project/session-root.js';
 import { waitForPredicate } from '@reticlehq/engine/question/predicate/predicate.js';
 import { computeSegments } from '../journal/rollups.js';
+import { stepEffect } from '@reticlehq/engine/evidence/step-effect.js';
 import { AssertionTiersStore } from './stores/assertion-tiers-store.js';
 import { toFlowSources } from './change/flow-sources.js';
 import { reportAndAccumulate } from '../journal/deviation-service.js';
@@ -416,6 +418,20 @@ export async function replayNamedFlow(
   // Computed HERE, before the synthetic success row is appended below: once that row is pushed,
   // `steps.length` no longer counts only the flow's own steps and the arithmetic is wrong.
   const halted = haltedFrom(steps, loaded.value.steps.length);
+  /*
+   * The whole-span pass, run once the journey is over. Best-effort by construction: a session stub
+   * without `eventsSince` must not be able to abort a healthy replay, and a missing cross-step
+   * finding is a smaller loss than a run that dies computing one.
+   */
+  const crossStep = ((): Contradiction[] => {
+    try {
+      const span = { since: replayFloor, until: session.elapsed() };
+      const events = session.eventsSince(replayFloor).filter((e) => e.t >= replayFloor);
+      return crossStepOnly(stepEffect(events, span).contradictions ?? [], steps);
+    } catch {
+      return [];
+    }
+  })();
   // "green means intent satisfied": when every step ran clean, assert the flow's success
   // end-condition as a real consequence. A signal/net success that never fires FAILS the replay
   // even though all locators resolved — the regression a healed-but-wrong locator ships green.
@@ -502,6 +518,7 @@ export async function replayNamedFlow(
     applyStartPathHint(errored, startPathHint);
     if (deviation !== undefined) errored.deviation = deviation;
     if (knows !== undefined) errored.knows = knows;
+    if (crossStep.length > 0) errored.crossStep = crossStep;
     return errored;
   }
   const result: FlowReplayResult = { name, status, steps };
@@ -516,7 +533,32 @@ export async function replayNamedFlow(
   if (status !== ReplayStatus.OK) result.decision = buildDecision(result, loaded.value, intentSaid);
   applyStartPathHint(result, startPathHint);
   if (deviation !== undefined) result.deviation = deviation;
+  if (crossStep.length > 0) result.crossStep = crossStep;
   return result;
+}
+
+/** A contradiction's identity for de-duplication: the rule that fired, and the evidence it fired on. */
+function contradictionId(found: Contradiction): string {
+  return `${found.kind}|${found.detail}`;
+}
+
+/**
+ * The contradictions the whole-span pass found that no individual step could.
+ *
+ * A step's window closes when the step ends, so a request fired at step 2 and still unanswered at
+ * step 5 is invisible to every per-step window: step 2's closed before the answer came and step 5
+ * never saw it start. Re-running the detectors over the whole replay span finds those — and re-finds
+ * everything the steps already reported, which is what the subtraction is for. Reporting a finding
+ * twice teaches a reader that the count is noise.
+ *
+ * Exported for its own test: the subtraction is the whole rule, and it is pure.
+ */
+export function crossStepOnly(
+  whole: readonly Contradiction[],
+  steps: readonly FlowStepResult[],
+): Contradiction[] {
+  const seen = new Set(steps.flatMap((step) => (step.contradictions ?? []).map(contradictionId)));
+  return whole.filter((found) => !seen.has(contradictionId(found)));
 }
 
 /**
