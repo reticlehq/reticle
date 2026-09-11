@@ -122,7 +122,10 @@ async function main() {
           if (ref === undefined) {
             return { planted: false, reason: `nothing matched ${entry.act.target}` };
           }
-          const receipt = await realm.client.command(entry.act.capability, { ref });
+          const receipt = await realm.client.command(entry.act.capability, {
+            ref,
+            action: entry.act.verb,
+          });
           if (receipt['planted'] !== true) {
             // Printed: an action refused after a handle resolved is the next thing to diagnose,
             // and a silent ABSENT would hide which half failed.

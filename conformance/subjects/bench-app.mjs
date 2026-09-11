@@ -19,7 +19,14 @@
  * catalogue was grown for a benchmark and not for this.
  */
 
-/** How a scenario is planted: a bug to inject, or nothing at all for the clean cases. */
+/**
+ * How a scenario is planted: a bug to inject, or nothing at all for the clean cases.
+ *
+ * `act` carries a VERB as well as a target. Naming the capability and the thing to point at is
+ * not enough -- `act` answered `unknown action ''` to every plant, because "press this" and
+ * "type into this" are different things to do to the same handle, and the specification's
+ * `Action` carries parameters for exactly that reason.
+ */
 export const BENCH_APP_SUBJECT = Object.freeze({
   /**
    * A request fails and the screen moves on anyway -- the swallowed rejection.
@@ -29,7 +36,7 @@ export const BENCH_APP_SUBJECT = Object.freeze({
    */
   'effect-failed-surface-advanced': {
     bug: 'swallowed-500-login',
-    act: { capability: 'act', target: 'testid=login-submit' },
+    act: { capability: 'act', target: 'testid=login-submit', verb: 'click' },
     claim: 'the sign-in completed',
     reads: ['net'],
   },
@@ -37,7 +44,7 @@ export const BENCH_APP_SUBJECT = Object.freeze({
   /** One action, two identical writes, against a claim that named one. */
   'double-submit-against-count-one': {
     bug: 'double-submit',
-    act: { capability: 'act', target: 'testid=login-submit' },
+    act: { capability: 'act', target: 'testid=login-submit', verb: 'click' },
     claim: 'exactly one sign-in request was made',
     reads: ['net'],
   },
@@ -51,7 +58,7 @@ export const BENCH_APP_SUBJECT = Object.freeze({
    */
   'subject-disappears-mid-window': {
     bug: 'slow-then-drop',
-    act: { capability: 'act', target: 'testid=login-submit' },
+    act: { capability: 'act', target: 'testid=login-submit', verb: 'click' },
     claim: 'the sign-in completed',
     reads: ['net'],
   },
@@ -65,7 +72,7 @@ export const BENCH_APP_SUBJECT = Object.freeze({
    */
   'healthy-app-real-claim': {
     bug: undefined,
-    act: { capability: 'act', target: 'testid=login-submit' },
+    act: { capability: 'act', target: 'testid=login-submit', verb: 'click' },
     claim: 'the sign-in completed',
     reads: ['net'],
   },
