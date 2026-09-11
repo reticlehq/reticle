@@ -57,7 +57,10 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   'adapters/realm/dom/src/presenter': 16,
   'core/src/verdict': 11,
   'core/src/wire': 15,
-  'engine/src/evidence': 14,
+  // 15 since the shared step-effect builder. Recorded rather than grouped: the note above explains
+  // why this directory cannot come down by the usual rule — its FILENAMES are published API, so
+  // moving one to tidy the count would be a breaking change for somebody outside this repository.
+  'engine/src/evidence': 15,
   'engine/src/question/predicate': 15,
   'init/src/patch': 14,
   'server/src/agent/runs': 11,

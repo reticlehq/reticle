@@ -31,9 +31,28 @@ import {
   waitForPredicate,
 } from '@reticlehq/engine/question/predicate/predicate.js';
 import { DeviationMode, gradeSequence, type StepExpectation } from './act/sequence-grade.js';
+import { stepEffect, type StepEffect } from '@reticlehq/engine/evidence/step-effect.js';
+import type { Session } from '../../connection/session/session.js';
 // resolveActTarget moved out of act-tools into its own module on this branch; #706 was written
 // against the older layout where act-tools re-exported it.
 import { resolveActTarget } from './act/act-target.js';
+
+/**
+ * The step's effect record, best-effort.
+ *
+ * An observation must never be able to fail the action it describes. This repo already states that
+ * rule for progress reporters -- "a reporter must never be able to fail the thing it is reporting
+ * on" -- and it holds harder here: a session shape without an event reader would otherwise throw
+ * INSIDE the step loop, be caught as a step failure, and abort the rest of a journey that was
+ * running perfectly. The drive is the product; the description of it is not.
+ */
+function effectOf(session: Session, since: number): StepEffect {
+  try {
+    return stepEffect(session.eventsSince(since), { since, until: session.elapsed() });
+  } catch {
+    return {};
+  }
+}
 
 export const ACT_SEQUENCE_TOOL: ToolDef = {
   name: ReticleTool.ACT_SEQUENCE,
@@ -83,6 +102,12 @@ export const ACT_SEQUENCE_TOOL: ToolDef = {
     coverage: z.object({ declared: z.number(), total: z.number() }).optional(),
     /** Steps never run, verbatim, so a caller re-plans the failure rather than the whole journey. */
     tail: z.array(z.record(z.unknown())).optional(),
+    /**
+     * Each step carries the same effect record a REPLAYED step carries: `window` (the
+     * `reticle_observe { since, until }` drill address), `digest` (what the app did, as counts) and
+     * `contradictions` (channels that disagree, present even when the step passed). Declared here
+     * because an undeclared field is stripped from structuredContent and would be silently lost.
+     */
     steps: z.array(z.record(z.unknown())).optional(),
     result: z.unknown().optional(),
     session: z
@@ -151,7 +176,18 @@ export const ACT_SEQUENCE_TOOL: ToolDef = {
             });
             break;
           }
-          const described = describeStepResult(step, asRecord(outcome.result));
+          /*
+           * The SAME effect record a replayed step carries, from the same builder.
+           *
+           * A planned step driven now and the identical step replayed tomorrow have to describe what
+           * happened in one vocabulary, or the before/after comparison this product exists for
+           * cannot be read. Sharing the builder is what makes that true by construction rather than
+           * by two implementations agreeing today.
+           */
+          const described = {
+            ...describeStepResult(step, asRecord(outcome.result)),
+            ...effectOf(session, stepSince),
+          };
           /*
            * Evaluate what the step SAID it would cause, in the window this step opened.
            *

@@ -66,6 +66,10 @@ const PINNED: readonly PublicSurface[] = [
       'evidence/instrumentation-gaps.ts',
       'evidence/observability.ts',
       'evidence/page-teardown.ts',
+      // New public entry point: the one builder that turns a window of events into a step's effect
+      // record, shared by the live act path and replay so a driven step and a replayed one describe
+      // what happened in the same words.
+      'evidence/step-effect.ts',
       'evidence/uncaptured-bodies.ts',
       'evidence/undeclared-change.ts',
       'evidence/unread-outcome.ts',
