@@ -117,11 +117,35 @@ export function installConsole(emit: Emit): Teardown {
       });
     });
   };
+  /**
+   * A CSP violation is not a console call, and the browser never routes it through one.
+   *
+   * DevTools prints it, so a human reading the page sees dozens of them while
+   * `reticle_assert({ kind: "console", level: "error", absent: true })` returns a confident pass.
+   * That is a false green in the one place the product's claim rests, and
+   * `securitypolicyviolation` exists precisely so a page can observe what the browser refused.
+   *
+   * `blockedURI` is empty for inline content, which is the common case for a script-src violation;
+   * it is named rather than reported as a blocked empty string.
+   */
+  const onViolation = (event: SecurityPolicyViolationEvent): void => {
+    emit(EventType.CONSOLE_ERROR, {
+      message:
+        `Content Security Policy directive: ${event.violatedDirective} blocked ` +
+        `${0 === event.blockedURI.length ? 'inline content' : event.blockedURI}`,
+      kind: 'securitypolicyviolation',
+      ...(0 === event.blockedURI.length ? {} : { source: event.blockedURI }),
+    });
+  };
   // Capture phase: element `error` events do not bubble, so this is the only registration that
   // sees a failed subresource. Uncaught script errors reach a capturing window listener too, so one
   // registration covers both.
   window.addEventListener('error', onError, true);
   window.addEventListener('unhandledrejection', onRejection);
+  // Dispatched on `document` and it bubbles, so a window listener sees it; registered in the
+  // capture phase alongside the others so a page that stops propagation on `document` cannot hide
+  // one from us.
+  window.addEventListener('securitypolicyviolation', onViolation, true);
 
   return () => {
     for (const [method, original] of originals) {
@@ -131,5 +155,6 @@ export function installConsole(emit: Emit): Teardown {
     }
     window.removeEventListener('error', onError, true);
     window.removeEventListener('unhandledrejection', onRejection);
+    window.removeEventListener('securitypolicyviolation', onViolation, true);
   };
 }
