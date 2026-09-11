@@ -400,9 +400,25 @@ describe('how a predicate selects observations', () => {
     expect(matches({ channel: ChannelId.NET, summary: 'net.req' }, observation, rendered)).toBe(
       false,
     );
+    // Paired with the exact summary, because that is now the only well-formed way to write it:
+    // `valueContains` alone is no longer expressible as a `Match`, and this line stopped
+    // compiling when the rule moved from a `.refine()` into the type. The rule says a claim may
+    // not REST on a substring, not that a substring cannot narrow one, so the assertion is
+    // unchanged -- it still proves the substring is what decides this match.
     expect(
-      matches({ channel: ChannelId.NET, valueContains: '/api/login' }, observation, rendered),
+      matches(
+        { channel: ChannelId.NET, summary: 'net.request', valueContains: '/api/login' },
+        observation,
+        rendered,
+      ),
     ).toBe(true);
+    expect(
+      matches(
+        { channel: ChannelId.NET, summary: 'net.request', valueContains: '/api/logout' },
+        observation,
+        rendered,
+      ),
+    ).toBe(false);
   });
 
   it('renders a string as itself and anything unserialisable as empty', () => {

@@ -45,36 +45,54 @@ export const IntentStatus = {
 } as const;
 export type IntentStatus = (typeof IntentStatus)[keyof typeof IntentStatus];
 
-export const IntentSchema = z
-  .object({
-    id: z.string().min(1),
-    /** Prose, and mandatory. The thing whose fidelity decays -- captured before it does. */
-    statement: z.string().min(1),
-    origin: z.nativeEnum(IntentOrigin),
-    status: z.nativeEnum(IntentStatus),
-    /** Claim ids this intent was bound to. Empty while `declared`. */
-    claims: z.array(z.string()).default([]),
-    /**
-     * Why it was abandoned. Required WHEN abandoned, and refused blank; omitted in every other
-     * state, because only giving up owes an explanation.
-     *
-     * This said "Required in spirit" and was enforced by nothing, so `{ status: 'abandoned' }`
-     * validated -- and SPEC.md is not written in spirit here, it says the reason MUST be
-     * recorded, on the grounds that "`abandoned` exists so that giving up is a decision somebody
-     * wrote down rather than a row that quietly stopped moving". A bare abandonment IS that row.
-     */
-    abandonedBecause: z.string().optional(),
-    declaredAt: z.number().int().optional(),
-  })
-  .refine(
-    (i) => i.status !== IntentStatus.ABANDONED || (i.abandonedBecause ?? '').trim().length > 0,
-    {
-      message:
-        'an abandoned intent must record why: the reason is what makes giving up a decision ' +
-        'somebody wrote down rather than a row that quietly stopped moving.',
-      path: ['abandonedBecause'],
-    },
-  );
+/** Everything an intent carries regardless of how far it has got. */
+const IntentBaseSchema = z.object({
+  id: z.string().min(1),
+  /** Prose, and mandatory. The thing whose fidelity decays -- captured before it does. */
+  statement: z.string().min(1),
+  origin: z.nativeEnum(IntentOrigin),
+  /** Claim ids this intent was bound to. Empty while `declared`. */
+  claims: z.array(z.string()).default([]),
+  declaredAt: z.number().int().optional(),
+});
+
+/**
+ * The part that depends on the state, and the reason this is a union rather than a `.refine()`.
+ *
+ * SPEC.md says an abandoned intent's reason MUST be recorded -- abandonment "exists so that
+ * giving up is a decision somebody wrote down rather than a row that quietly stopped moving".
+ * A bare `{ status: 'abandoned' }` IS that row, and for most of this release it validated.
+ *
+ * The first fix was a `.refine()`, which enforced it correctly for anyone who installs this
+ * package and **not at all for anyone who does not**: `zod-to-json-schema` drops a refinement's
+ * predicate silently, and `gen-schema.mjs` says in its own header that the JSON Schema is the
+ * CONTRACT. So the rule was enforced in the authoring form and absent from the published one --
+ * which, for a rule whose entire purpose is that another implementation honours it, is most of
+ * the way to not having the rule.
+ *
+ * A discriminated union says the same thing in a shape the generator CAN express. It emits
+ * `anyOf` with `required: ['status', 'abandonedBecause']` on the abandoned branch, so an
+ * implementation validating against `schema/intent.json` alone now rejects what this package
+ * rejects. `z.undefined().optional()` on the other two branches is what keeps a stray reason
+ * off a `declared` intent, which the refinement never checked either.
+ */
+const IntentStateSchema = z.discriminatedUnion('status', [
+  z.object({
+    status: z.literal(IntentStatus.ABANDONED),
+    /** Required here, and refused blank: a bare abandonment says nothing. */
+    abandonedBecause: z.string().trim().min(1),
+  }),
+  z.object({
+    status: z.literal(IntentStatus.DECLARED),
+    abandonedBecause: z.undefined().optional(),
+  }),
+  z.object({
+    status: z.literal(IntentStatus.BOUND),
+    abandonedBecause: z.undefined().optional(),
+  }),
+]);
+
+export const IntentSchema = IntentBaseSchema.and(IntentStateSchema);
 export type Intent = z.infer<typeof IntentSchema>;
 
 /**

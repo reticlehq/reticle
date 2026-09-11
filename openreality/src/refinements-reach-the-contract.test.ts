@@ -4,80 +4,92 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 /**
- * A rule the published JSON Schema cannot carry is a rule other languages do not get.
+ * No rule in this package may be expressed as a `.refine()`, because the contract cannot carry one.
  *
  * `gen-schema.mjs` states the direction of authority in its own header: "the TypeScript is the
- * AUTHORING form and the JSON Schema is the CONTRACT". Everything in this package is written
- * for an implementer who never installs it and reads `schema/*.json` instead.
+ * AUTHORING form and the JSON Schema is the CONTRACT". Everything here is written for an
+ * implementer who never installs this package and reads `schema/*.json` instead.
  *
- * `zod-to-json-schema` cannot express a `.refine()`. It emits the object and drops the
- * predicate, silently and with no warning, so a conditional MUST enforced here is simply absent
- * there — `required` does not list the field and no `if`/`then` appears. Two such rules exist
- * today and BOTH were added in this release:
+ * `zod-to-json-schema` cannot express a refinement. It emits the object and discards the
+ * predicate, silently and with no warning -- `required` does not grow, no `if`/`then` appears.
+ * So a conditional MUST written as a `.refine()` is enforced for people who install the
+ * TypeScript and absent for everybody the contract exists to serve. For a rule about
+ * PORTABILITY, which both of this release's were, that is most of the way to not having it.
  *
- *   - a match may not rest on `valueContains` alone (predicate.ts)
- *   - an abandoned intent must record why (intent.ts)
+ * Both were rewritten as unions, which the generator CAN express:
  *
- * Neither is a mistake to have made — they are real rules and enforcing them in the authoring
- * form is better than not enforcing them at all. What would be a mistake is believing they are
- * published. This test makes the gap countable: every refinement must appear below with the
- * spec sentence that carries it, so a reader of the JSON Schema alone can be pointed at prose
- * for the part the machine-readable form drops.
+ *   match.json   anyOf, required: ['summary', 'valueContains']  — a match may not rest on a
+ *                substring alone
+ *   intent.json  anyOf, required: ['status', 'abandonedBecause'] — an abandoned intent must
+ *                record why
  *
- * Asserted by equality. Adding a refinement fails this test, which is the moment to decide
- * whether to model it as a discriminated union the generator CAN express, or to add it here.
+ * If a future rule genuinely cannot be shaped as a union, this test is where the divergence gets
+ * declared -- with the spec sentence that carries it, so a reader of the JSON Schema alone can
+ * be pointed at prose for the part the machine-readable form drops. An empty list is the goal,
+ * not the assumption.
  */
 
-const SRC = join(__dirname);
 const REPO = execFileSync('git', ['rev-parse', '--show-toplevel'], {
-  cwd: SRC,
+  cwd: __dirname,
   encoding: 'utf8',
 }).trim();
 
-/** Files carrying a `.refine()`, as paths relative to the package. */
-function filesWithRefinements(): string[] {
-  const out = execFileSync('git', ['grep', '-l', '--', '.refine(', 'openreality/src'], {
-    cwd: REPO,
-    encoding: 'utf8',
-  });
-  return out
-    .split('\n')
-    .filter((f) => '' !== f && !f.endsWith('.test.ts'))
-    .sort();
+/**
+ * Source with comments stripped, because the first version of this guard was GREEN on three
+ * comment lines and zero real refinements.
+ *
+ * It matched the prose explaining why these are unions rather than refinements — including
+ * prose written in the same commit that removed the last refinement. A guard that reads its own
+ * explanation as the thing it forbids reports the opposite of the truth, and this repository has
+ * a note about that exact failure from a previous occurrence.
+ */
+function code(file: string): string {
+  return readFileSync(join(REPO, file), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/^\s*\/\/.*$/gm, '');
 }
 
-/**
- * Every refinement, and the SPEC.md sentence a reader of the JSON Schema must be sent to.
- *
- * The spec text is quoted rather than cited by line number, because a line number is a fact
- * about today's file and this list has to survive an edit above it.
- */
-const KNOWN = [
-  {
-    file: 'openreality/src/vocabulary/intent.ts',
-    rule: 'an abandoned intent must record why',
-    specSays: 'the reason MUST be recorded',
-  },
-  {
-    file: 'openreality/src/vocabulary/predicate.ts',
-    rule: 'a match may not rest on valueContains alone',
-    specSays: 'valueContains',
-  },
-];
+function sourceFiles(): string[] {
+  return execFileSync('git', ['ls-files', 'openreality/src'], { cwd: REPO, encoding: 'utf8' })
+    .split('\n')
+    .filter((f) => f.endsWith('.ts') && !f.endsWith('.test.ts'));
+}
 
-describe('rules the JSON Schema cannot carry are named rather than assumed published', () => {
-  it('finds the refinements, so an empty answer cannot mean it read nothing', () => {
-    expect(filesWithRefinements().length).toBeGreaterThan(0);
+/** Refinements that genuinely cannot be a union, each with the spec sentence carrying it. */
+const DECLARED_DIVERGENCES: { readonly file: string; readonly specSays: string }[] = [];
+
+describe('every published rule survives the trip to JSON Schema', () => {
+  it('reads the source, so an empty answer cannot mean it read nothing', () => {
+    const files = sourceFiles();
+    expect(files.length).toBeGreaterThan(5);
+    // The stripper must not eat the code along with the comments.
+    expect(code('openreality/src/vocabulary/intent.ts')).toContain('discriminatedUnion');
+    // ...and it must actually strip: this phrase exists only inside a comment block.
+    expect(code('openreality/src/vocabulary/intent.ts')).not.toContain('quietly stopped moving');
   });
 
-  it('has an entry for every refinement in the package, and no stale ones', () => {
-    expect(filesWithRefinements()).toEqual(KNOWN.map((k) => k.file).sort());
+  it('has no refinement that is not a declared divergence', () => {
+    const found = sourceFiles().filter((f) => code(f).includes('.refine('));
+    expect(found.sort()).toEqual(DECLARED_DIVERGENCES.map((d) => d.file).sort());
   });
 
-  it('points each one at prose that actually exists in the specification', () => {
+  it('points each declared divergence at prose that exists in the specification', () => {
     const spec = readFileSync(join(REPO, 'openreality', 'SPEC.md'), 'utf8');
-    for (const entry of KNOWN) {
+    for (const entry of DECLARED_DIVERGENCES) {
       expect(spec.includes(entry.specSays), `SPEC.md never says "${entry.specSays}"`).toBe(true);
+    }
+  });
+
+  it('the two rules that were refinements are in the published schemas now', () => {
+    // The point of the rewrite, asserted against the generated artefact rather than the source.
+    for (const name of ['match', 'predicate', 'intent']) {
+      const schema = readFileSync(
+        join(REPO, 'openreality', 'dist', 'schema', `${name}.json`),
+        'utf8',
+      );
+      expect(schema, `${name}.json carries no conditional requirement`).toMatch(
+        /"required":\s*\[\s*"(summary|status)",\s*"(valueContains|abandonedBecause)"\s*\]/,
+      );
     }
   });
 });

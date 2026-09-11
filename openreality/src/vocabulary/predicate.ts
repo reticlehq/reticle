@@ -28,35 +28,46 @@ import type { Observation } from './evidence.js';
  *     this*, and is honest rather than absent.
  */
 
-/** How a predicate selects the observations it is about. */
-export const MatchSchema = z
-  .object({
-    /** The channel the observations must have come from. */
-    channel: ChannelIdSchema,
+/** How a predicate selects the observations it is about, minus the part the rule constrains. */
+const MatchBaseSchema = z.object({
+  /** The channel the observations must have come from. */
+  channel: ChannelIdSchema,
+});
+
+/**
+ * The rule: a match may not rest on `valueContains` alone.
+ *
+ * Rendering is an implementation's own, so an unanchored substring can match in one conformant
+ * implementation and not in another, and a claim that hinges on it is **not portable** -- which
+ * is the one property a published predicate form exists to have.
+ *
+ * A union rather than a `.refine()`, and the difference is not stylistic. `zod-to-json-schema`
+ * drops a refinement's predicate silently, and `gen-schema.mjs` says in its own header that the
+ * JSON Schema is the CONTRACT. Enforcing a portability rule only for people who install this
+ * TypeScript package, and not for the other-language implementer the whole contract exists to
+ * serve, is most of the way to not enforcing it. This shape emits `anyOf` with
+ * `required: ['summary', 'valueContains']` on the first branch, so `schema/match.json` alone
+ * now rejects what this package rejects.
+ */
+const MatchTargetSchema = z.union([
+  z.object({
     /**
      * The observation's `summary`, exactly.
      *
      * Exact rather than a pattern on purpose: a summary is a short realm-defined label, and a
      * regular expression over it would be a predicate language arriving through the back door.
      */
+    summary: z.string().min(1),
+    /** A substring of the observation's rendered value. Only ever alongside a `summary`. */
+    valueContains: z.string().min(1),
+  }),
+  z.object({
     summary: z.string().min(1).optional(),
-    /**
-     * A substring of the observation's rendered value.
-     *
-     * The weakest thing here, and it says so. Rendering is an implementation's own, so two
-     * conformant implementations may disagree about whether this matches. Use it to name an
-     * endpoint or an identifier -- something that survives any reasonable rendering -- and never as
-     * the whole of a claim.
-     */
-    valueContains: z.string().min(1).optional(),
-  })
-  .refine((m) => m.valueContains === undefined || m.summary !== undefined, {
-    message:
-      'a match may not rest on valueContains alone: pair it with an exact `summary`. Rendering ' +
-      "is an implementation's own, so an unanchored substring can match in one conformant " +
-      'implementation and not in another, and a claim that hinges on it is not portable.',
-    path: ['valueContains'],
-  });
+    valueContains: z.undefined().optional(),
+  }),
+]);
+
+export const MatchSchema = MatchBaseSchema.and(MatchTargetSchema);
 export type Match = z.infer<typeof MatchSchema>;
 
 /** Comparisons a count may be held to. */
