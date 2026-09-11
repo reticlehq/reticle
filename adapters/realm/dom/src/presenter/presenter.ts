@@ -55,7 +55,7 @@ import { buildRunState, type PresenterRunState } from './presenter-run-state.js'
 import { moveCursor, ringAround, spawnRipple, pace } from './chrome/presenter-effects.js';
 import { GlowController } from './presenter-glow.js';
 import { PresenterIcon, PRESENTER_ICON_SIZE, hiIcon } from './icons/presenter-icons.js';
-import { renderTally } from './presenter-tally.js';
+import { renderTally } from './chrome/presenter-tally.js';
 import {
   CONTROLS_BANNER_HTML,
   CONTROLS_FLOWS_HTML,

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { countVerdicts, renderTally, type TallyCounts } from './presenter-tally.js';
-import { Presenter } from './presenter.js';
+import { Presenter } from '../presenter.js';
 
 describe('countVerdicts', () => {
   it('counts pass/fail results and ignores rows with no verdict', () => {

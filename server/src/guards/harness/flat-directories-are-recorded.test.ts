@@ -53,7 +53,7 @@ const FLAT_FILE_LIMIT = 10;
 const OVER_THE_LINE: Readonly<Record<string, number>> = {
   'adapters/realm/dom/src/dom': 11,
   'adapters/realm/dom/src/observers': 23,
-  'adapters/realm/dom/src/presenter': 17,
+  'adapters/realm/dom/src/presenter': 16,
   'core/src/verdict': 11,
   'core/src/wire': 15,
   'engine/src/evidence': 14,
