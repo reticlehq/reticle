@@ -162,6 +162,32 @@ export function scanPackage(packageDir, declaredUnwired = {}) {
         'a clean package rather than as a scan that never happened.',
     );
   }
+  // A declaration names a file by PATH, and a path is a string: moving the file it names does
+  // not break the build, does not break this scan, and does not make the declaration red. It
+  // makes it describe nothing. `stale` below catches a declared module that got WIRED; it
+  // cannot catch one that got RENAMED, because a path matching no file is imported by nobody
+  // and so looks exactly like a well-behaved orphan.
+  //
+  // Twice in one afternoon a grouping moved a declared module -- `to-artifact.ts` into
+  // `runs/artifact/` and `ambient-file.ts` into `journal/on-disk/` -- and both declarations had
+  // to be repointed by hand, found by grepping the old path rather than by anything going red.
+  //
+  // Thrown rather than returned: the list is an INPUT, and an input naming a file that is not
+  // there is a mistake in the list, not a finding about the package. Throwing also reaches all
+  // ten callers without ten of them having to remember a new assertion.
+  const present = new Set(files);
+  const absent = Object.keys(declaredUnwired)
+    .filter((declared) => !present.has(declared))
+    .sort();
+  if (0 < absent.length) {
+    throw new Error(
+      `these modules are declared unwired in ${packageDir} but no such file exists:\n` +
+        absent.map((path) => `  ${path}`).join('\n') +
+        '\nA declaration names a path. If the file moved, repoint it; if it was deleted, delete ' +
+        'the entry. Left alone it describes nothing and this scan stays green.',
+    );
+  }
+
   const corpus = files.map((file) => ({
     path: file,
     text: readFileSync(join(srcDir, file), 'utf8'),
