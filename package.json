@@ -14,7 +14,7 @@
     "check:boundaries": "node scripts/check-boundaries.mjs",
     "check:lossy": "node scripts/check-lossy-transforms.mjs",
     "changelog:assemble": "node scripts/assemble-changelog.mjs",
-    "lint:docs": "pnpm --filter @reticlehq/server exec vitest run src/tools/docs-commands-run.test.ts src/tools/docs-code-blocks.test.ts src/tools/docs-index-coverage.test.ts src/tools/guidance-commands-run.test.ts src/tools/e2e-surface-drift.test.ts src/tools/published-skill-artifacts.test.ts",
+    "lint:docs": "pnpm --filter @reticlehq/server exec vitest run src/agent/tools/docs-commands-run.test.ts src/agent/tools/docs-code-blocks.test.ts src/agent/tools/docs-index-coverage.test.ts src/agent/tools/guidance-commands-run.test.ts src/agent/tools/e2e-surface-drift.test.ts src/agent/tools/published-skill-artifacts.test.ts",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test:unit test:guards",
     "test:unit": "turbo run test:unit test:guards && pnpm test:bench",

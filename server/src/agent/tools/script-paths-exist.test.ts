@@ -1,0 +1,101 @@
+import { describe, expect, it } from 'vitest';
+import { execFileSync } from 'node:child_process';
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { REPO_ROOT } from '../../repo-root.js';
+
+/**
+ * A path named in a package script must exist.
+ *
+ * `lint:docs` sat in the release checklist naming six test files under `src/tools/`. The tools
+ * moved to `src/agent/tools/` in a directory regrouping, nobody updated the script, and it
+ * **could not run at all** from that day. It failed with vitest's "no test files" path, which
+ * prints `undefined` and an exit code and looks like a tooling fault rather than a stale string.
+ *
+ * Nothing caught it because `lint:docs` is not part of `pnpm verify`: it is a RELEASE-time gate,
+ * so the first person to discover it would have been whoever was cutting the release, at the
+ * moment they least want a surprise. It stayed broken for a day only because a release happened
+ * not to be cut in that window.
+ *
+ * This is the same shape as the e2e spec that imported `agent/mcp/mcp-outage.js` by path and
+ * broke when that file moved: a string that names a file, unchecked by any compiler. That one
+ * had a guard. This one did not.
+ */
+
+const REPO = REPO_ROOT;
+
+/** Every workspace manifest, since a script in any of them can name a path. */
+function manifests(): string[] {
+  return execFileSync('git', ['ls-files', '*package.json'], { cwd: REPO, encoding: 'utf8' })
+    .split('\n')
+    .filter((f) => '' !== f && !f.includes('node_modules'));
+}
+
+/**
+ * Paths a script names, as opposed to the flags and package names around them.
+ *
+ * Deliberately narrow: a token is only checked when it looks like a repository path -- it
+ * contains a `/`, starts with a directory that exists, and is not a URL, a glob or an npm
+ * package. Over-matching here would fail on `@reticlehq/server` or `--filter`, and a guard that
+ * cries wolf about package names gets switched off.
+ */
+function pathsNamedIn(script: string): string[] {
+  // `ln -s` targets are relative to the LINK's directory, not the working directory, so
+  // `ln -sf ../../pre-commit.sh .git/hooks/pre-commit` names a file at the repo root and looks
+  // like a miss to anything resolving from cwd. Skipped rather than modelled: symlink semantics
+  // are not what this guard is for, and a wrong answer here would be the noise that gets a
+  // guard switched off.
+  if (script.includes('ln -s')) return [];
+  return script
+    .split(/\s+/)
+    .filter((token) => token.includes('/'))
+    .filter((token) => !token.startsWith('-') && !token.startsWith('@') && !token.includes('://'))
+    .filter((token) => !token.includes('*') && !token.includes('$'))
+    .filter((token) => /\.(ts|tsx|mjs|cjs|js|json|md|yaml|yml|sh)$/.test(token));
+}
+
+/** Where the package with this name lives, so a `--filter` script resolves from the right root. */
+function packageDirectory(name: string, all: readonly string[]): string | undefined {
+  for (const rel of all) {
+    const pkg = JSON.parse(readFileSync(join(REPO, rel), 'utf8')) as { name?: string };
+    if (pkg.name === name) return join(REPO, rel).replace(/package\.json$/, '');
+  }
+  return undefined;
+}
+
+describe('a path named in a package script still exists', () => {
+  it('finds manifests and scripts, so a passing run cannot mean it read nothing', () => {
+    expect(manifests().length).toBeGreaterThan(5);
+  });
+
+  it('names no file that is not there', () => {
+    const missing: string[] = [];
+    for (const rel of manifests()) {
+      const dir = join(REPO, rel).replace(/package\.json$/, '');
+      const pkg = JSON.parse(readFileSync(join(REPO, rel), 'utf8')) as {
+        scripts?: Record<string, string>;
+      };
+      for (const [name, script] of Object.entries(pkg.scripts ?? {})) {
+        // `pnpm --filter <pkg> exec …` runs in THAT package's directory, so a path after it is
+        // relative to the filtered package and not to this manifest. Getting this wrong is what
+        // made the first version of this guard report six files that were all present.
+        const filtered = /--filter\s+(@?[\w/-]+)/.exec(script)?.[1];
+        const filteredDir =
+          filtered === undefined ? undefined : packageDirectory(filtered, manifests());
+        for (const path of pathsNamedIn(script)) {
+          // Resolved against the manifest's own directory, which is how the script runs, then
+          // the filtered package's, then the repo root for a root script naming a package path.
+          if (filteredDir !== undefined && existsSync(join(filteredDir, path))) continue;
+          if (existsSync(join(dir, path)) || existsSync(join(REPO, path))) continue;
+          missing.push(`${rel} → ${name} → ${path}`);
+        }
+      }
+    }
+    expect(
+      missing,
+      'these package scripts name files that do not exist, so the script cannot do what it says. ' +
+        'A release-checklist gate broke this way and went unnoticed for a day, because it is not ' +
+        'part of `pnpm verify` and only runs when somebody cuts a release.',
+    ).toEqual([]);
+  });
+});
