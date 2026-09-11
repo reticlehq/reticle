@@ -50,14 +50,6 @@ const DECLARED_UNWIRED: Record<string, string> = {
     'check-stale-issues across .github/ returns nothing. A repo-hygiene guard has no caller inside ' +
     'the product by definition; the unit tests are here so the rule is testable without a network ' +
     'or a repo. Unwired in the sense that matters: no automation depends on it today.',
-  'connection/realm/conformance-client.ts':
-    'binds the conformance driver to a live session, so the suite this project publishes can be ' +
-    'run against this project. Unwired for one honest reason: the suite inverts the plant ' +
-    'contract on purpose -- it cannot inject a defect into an application it does not own, so an ' +
-    'implementation supplies a subject answering `x-conformance.plant`, and our fixture does not ' +
-    'answer it yet. Every scenario would come back ABSENT. The connection problem is solved here; ' +
-    'the subject problem is not, and shipping the client without saying so would look like a ' +
-    'suite that runs.',
   'connection/session/fake-session.ts':
     'test-only Session factory. Returns a REAL Session with inert defaults so a new method on the ' +
     'class arrives with a working default instead of undefined in seven stub files (#726); ' +

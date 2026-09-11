@@ -33,6 +33,20 @@ export interface ConformanceClient {
   verify(claim: Claim): Promise<{ verdict: string; reason?: string }>;
 }
 
+/**
+ * The window has to be open BEFORE the action, and the first version of this got it backwards.
+ *
+ * `verify` opened a fresh window and observed it, which is a window containing nothing: the
+ * action had already happened during the plant. Every scenario came back unproved, including the
+ * healthy one whose entire job is to come back `yes` — and a suite where the negative control
+ * fails is a suite that cannot tell a careful implementation from a mute one.
+ *
+ * That is the specification's own ordering, stated in its own words -- a claim is registered
+ * before the action and a window is opened to hold what follows -- and it was violated by the
+ * binding written to demonstrate it. Which is the argument for running your own suite: the rule
+ * was written down, agreed with, and broken in the same week by the person who wrote it.
+ */
+
 /** How long a scenario's window is given before it is judged on what it saw. */
 const WINDOW_BUDGET_MS = 8_000;
 
@@ -77,6 +91,8 @@ function asEvidence(
  * rules would make every implementation conformant by construction.
  */
 export function conformanceClient(realm: WebRealm, now: () => number): ConformanceClient {
+  /** The window the last action was performed inside, handed to the next `verify`. */
+  let open: ReturnType<WebRealm['openWindow']> | undefined;
   return {
     hello() {
       // Synchronous underneath: both answers are already declared. The interface is async for an
@@ -88,6 +104,8 @@ export function conformanceClient(realm: WebRealm, now: () => number): Conforman
     },
 
     async command(name, args = {}) {
+      // Opened before the action, not after it. See the note above.
+      open = realm.openWindow(WINDOW_BUDGET_MS);
       const receipt = await realm.perform({
         id: `conformance-${String(now())}`,
         actor: 'conformance',
@@ -104,7 +122,11 @@ export function conformanceClient(realm: WebRealm, now: () => number): Conforman
     },
 
     async verify(claim) {
-      const window = realm.openWindow(WINDOW_BUDGET_MS);
+      // The window opened by `command`, holding what the action caused. Falling back to a fresh
+      // one keeps a caller that verifies without acting honest rather than crashing -- it will
+      // observe nothing and be told so.
+      const window = open ?? realm.openWindow(WINDOW_BUDGET_MS);
+      open = undefined;
       const observations = await realm.observe(window);
       const coverage: Coverage = await realm.coverage(window);
       const decided = adjudicate({

@@ -928,3 +928,15 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
     },
   };
 }
+
+// The OpenReality binding, exported so a conformance run can be driven from outside this package.
+//
+// It was written and then not reachable: `conformanceClient` takes a `WebRealm`, a `WebRealm`
+// takes a live `Session`, and a `Session` exists only inside a running daemon. A runner that
+// cannot import it cannot score anything, which would have made the whole conformance chain
+// complete and unusable.
+export { WebRealm, type RealmSurface, type WebRealmDeps } from './connection/realm/web-realm.js';
+export {
+  conformanceClient,
+  type ConformanceClient,
+} from './connection/realm/conformance-client.js';
