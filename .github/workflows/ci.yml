@@ -419,6 +419,7 @@ jobs:
       gateself: ${{ steps.filter.outputs.gateself }}
       bench: ${{ steps.filter.outputs.bench }}
       desktop: ${{ steps.filter.outputs.desktop }}
+      conformance: ${{ steps.filter.outputs.conformance }}
       rust: ${{ steps.filter.outputs.rust }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -446,6 +447,7 @@ jobs:
             echo "gateself=true" >> "$GITHUB_OUTPUT"
             echo "desktop=true" >> "$GITHUB_OUTPUT"
             echo "bench=true" >> "$GITHUB_OUTPUT"
+            echo "conformance=true" >> "$GITHUB_OUTPUT"
             echo "rust=true" >> "$GITHUB_OUTPUT"; exit 0
           fi
           CHANGED="$(git diff --name-only "$BASE"...HEAD || true)"
@@ -458,6 +460,7 @@ jobs:
             echo "gateself=true" >> "$GITHUB_OUTPUT"
             echo "desktop=true" >> "$GITHUB_OUTPUT"
             echo "bench=true" >> "$GITHUB_OUTPUT"
+            echo "conformance=true" >> "$GITHUB_OUTPUT"
             echo "rust=true" >> "$GITHUB_OUTPUT"; exit 0
           fi
           echo "changed files:"; echo "$CHANGED" | sed 's/^/  /'
@@ -491,6 +494,17 @@ jobs:
             echo "desktop=true" >> "$GITHUB_OUTPUT"
           else
             echo "desktop=false" >> "$GITHUB_OUTPUT"
+          fi
+          # What can change a CONFORMANCE ANSWER, which is a different question from what can
+          # break the desktop battery. The specification and its adjudicator; the suite, its
+          # scenarios and its two subject maps; the realm and the client that binds Reticle to the
+          # SPI; the two functions in core that build a protocol subject; and the two fixture apps
+          # the scenarios are planted into. Narrower than `desktop` in some places and wider in
+          # others, so it gets its own filter rather than borrowing one.
+          if echo "$CHANGED" | grep -qE '^(openreality/|conformance/|server/src/connection/realm/|core/src/realm/|core/src/verdict/verification-run\.ts|apps/bench-app/|apps/electron-smoke/|\.github/workflows/ci\.yml)'; then
+            echo "conformance=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "conformance=false" >> "$GITHUB_OUTPUT"
           fi
           # What can move TOKEN COST, which is a different question from what can break the install.
           # A tool's description and input schema are charged to the agent on every turn, so an edit
@@ -829,6 +843,48 @@ jobs:
         env:
           ELECTRON_DISABLE_SANDBOX: '1'
 
+  # The specification's own scenarios, driven against this implementation on a real browser AND a
+  # real Electron shell, with every verdict decided by the spec's `adjudicate` rather than by
+  # Reticle's kernel. CLAUDE.md and docs/gates.md have both listed this as required since it was
+  # written; neither made it run. A gate documented in two places and wired into none is the same
+  # defect this release kept finding in the protocol itself — defined, deferred to somebody,
+  # reached by nobody — so it is wired here rather than described again.
+  #
+  # It gates REGRESSION, never the score. `earned` stays `none` until the fixtures grow, and
+  # `--gate` fails only when a scenario that COULD be planted was driven and answered wrongly.
+  #
+  # Deliberately NOT folded into `e2e`: that job boots the demo API with REFLECT_MS=6000, and a
+  # conformance run beside it would score every scenario against a deliberately-slowed backend
+  # while still printing a number. The two also both want port 8787.
+  #
+  # Cheap despite the desktop half, because `run-desktop.mjs` needs Electron and a display and
+  # NOT Rust — it drives apps/electron-smoke, not the packaged Tauri binary that makes
+  # `desktop-e2e` the slowest job in this file.
+  conformance:
+    runs-on: ubuntu-latest
+    needs: [verify, changes]
+    if: needs.changes.outputs.conformance == 'true'
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: pnpm
+      # xvfb and libgbm are what let a never-shown Electron window be CREATED at all.
+      - name: Install headless display libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends xvfb libgbm1 libnss3 libasound2t64
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @reticlehq/e2e --fail-if-no-match exec playwright install --with-deps chromium
+      - run: pnpm build
+      - name: Score this implementation against the published specification
+        run: xvfb-run -a pnpm gate:conformance
+        env:
+          ELECTRON_DISABLE_SANDBOX: '1'
+
   # Token cost is the one property of this product nothing in CI measured, which is how a released
   # version once shipped a measurable token regression with every other gate green.
   #
@@ -916,6 +972,7 @@ jobs:
         rust-audit,
         rust-macos,
         desktop-e2e,
+        conformance,
         bench,
         multi-agent,
       ]
