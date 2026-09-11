@@ -141,6 +141,10 @@ Two deliberate limits. `summary` matches exactly and never as a pattern — a re
 
 A **constraint** must hold _throughout_, not at the end. "The invoice exists" is a claim, checked once. "No payment is duplicated" is a constraint, and a verifier that only inspects the end state cannot see it violated in the middle. A verifier that cannot evaluate over the whole window MUST declare a blind spot rather than report the constraint held.
 
+A broken constraint is recorded on the run as a **violation**, and a violated `blocking` constraint makes the run's outcome `fail` ahead of every other consideration. That sentence used to be unkeepable: `severity: blocking` said it "stops the run", the run listed its constraints and never their fate, and `outcomeOf` counted only verdicts. So a run could satisfy every claim, break the one condition that was supposed to hold throughout, and report a pass. Something proved beside a duplicated payment is not a partial success.
+
+A violation is deliberately not an anomaly. An anomaly is something nobody asked about; a violation is a condition somebody declared MUST hold, which is why it can end a run and an anomaly cannot.
+
 ---
 
 ## 5. The Reality Plane

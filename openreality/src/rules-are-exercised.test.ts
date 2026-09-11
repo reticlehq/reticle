@@ -25,6 +25,7 @@ import {
   standingVerdicts,
   Surface,
   Verdict,
+  OVP_VERSION,
   type ChannelDescriptor,
   type BlindSpot,
   type Coverage,
@@ -89,8 +90,39 @@ const verdict = (over: Partial<VerdictRecord> = {}): VerdictRecord =>
     ...over,
   }) as VerdictRecord;
 
-const run = (verdicts: readonly VerdictRecord[]): VerificationRun =>
-  ({ id: 'r1', subject: subject(), verdicts, startedAt: 0, endedAt: 1 }) as VerificationRun;
+/**
+ * A complete run, built rather than cast.
+ *
+ * The previous fixture was `as VerificationRun` over four fields, and adding two more made the
+ * compiler refuse the overlap -- which is the cast doing the only useful thing a cast does,
+ * failing late. Written out in full, so the next field added to the schema is a type error here
+ * rather than a silent gap in what this test believes it is checking.
+ */
+const run = (
+  verdicts: readonly VerdictRecord[],
+  over: Partial<VerificationRun> = {},
+): VerificationRun => ({
+  ovp: OVP_VERSION,
+  id: 'r1',
+  verifier: { name: 'test', version: '0' },
+  subject: subject(),
+  channels: [],
+  intents: [],
+  claims: [],
+  constraints: [],
+  actions: [],
+  receipts: [],
+  windows: [],
+  evidence: [],
+  coverage: [],
+  anomalies: [],
+  verdicts: [...verdicts],
+  repairs: [],
+  violations: [],
+  startedAt: 0,
+  endedAt: 1,
+  ...over,
+});
 
 describe('a subject identity decides what evidence still counts', () => {
   it('admits evidence only from the same instance', () => {
@@ -199,6 +231,41 @@ describe('what a whole run amounts to', () => {
     expect(outcomeOf(run([]))).toBe(RunOutcome.UNKNOWN);
     expect(outcomeOf(run([verdict({ verdict: Verdict.UNKNOWN })]))).toBe(RunOutcome.UNKNOWN);
     expect(outcomeOf(run([verdict({ verdict: Verdict.NO_FAULT })]))).toBe(RunOutcome.UNKNOWN);
+  });
+
+  it('fails outright when a blocking constraint was broken, whatever else was proved', () => {
+    // `severity: blocking` has always said it stops the run, and nothing could record that one
+    // had been broken, so it stopped nothing. Something proved beside a duplicated payment is
+    // not a partial success.
+    const withConstraint = run([verdict()], {
+      constraints: [
+        {
+          id: 'k1',
+          statement: 'no payment is duplicated',
+          predicate: {},
+          channels: [ChannelId.NET],
+          severity: 'blocking' as const,
+        },
+      ],
+      violations: [{ constraint: 'k1', at: 5, detail: 'two charges for one action', evidence: [] }],
+    });
+    expect(outcomeOf(withConstraint)).toBe(RunOutcome.FAIL);
+  });
+
+  it('does not fail on an advisory constraint, which is the point of the severity', () => {
+    const advisory = run([verdict()], {
+      constraints: [
+        {
+          id: 'k2',
+          statement: 'no console noise',
+          predicate: {},
+          channels: [ChannelId.LOG],
+          severity: 'advisory' as const,
+        },
+      ],
+      violations: [{ constraint: 'k2', at: 5, detail: 'two warnings', evidence: [] }],
+    });
+    expect(outcomeOf(advisory)).toBe(RunOutcome.PASS);
   });
 
   it('counts only the verdicts no correction has replaced', () => {

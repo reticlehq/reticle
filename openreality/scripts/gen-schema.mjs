@@ -45,6 +45,7 @@ export const SCHEMAS = Object.freeze({
   predicate: ovp.PredicateSchema,
   match: ovp.MatchSchema,
   constraint: ovp.ConstraintSchema,
+  'constraint-violation': ovp.ConstraintViolationSchema,
   capability: ovp.CapabilitySchema,
   handle: ovp.HandleSchema,
   action: ovp.ActionSchema,

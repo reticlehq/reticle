@@ -29,6 +29,23 @@ export const OVP_VERSION = '1.0' as const;
  *
  * A reader who checks nothing else should check those four.
  */
+/**
+ * A constraint that did not hold.
+ *
+ * Carries the constraint's id rather than repeating it: the run already lists the constraints,
+ * and a violation that restated one could disagree with it.
+ */
+export const ConstraintViolationSchema = z.object({
+  constraint: z.string().min(1),
+  /** When it was first observed to fail, so a reader can place it against the windows. */
+  at: z.number().int(),
+  /** What was seen. Prose, for the person who has to act on it. */
+  detail: z.string().min(1),
+  /** Evidence ids behind it, so the claim can be re-checked without the realm. */
+  evidence: z.array(z.string()).default([]),
+});
+export type ConstraintViolation = z.infer<typeof ConstraintViolationSchema>;
+
 export const VerificationRunSchema = z.object({
   ovp: z.literal(OVP_VERSION),
   id: z.string().min(1),
@@ -56,6 +73,20 @@ export const VerificationRunSchema = z.object({
   anomalies: z.array(AnomalySchema).default([]),
 
   verdicts: z.array(VerdictRecordSchema).default([]),
+  /**
+   * Constraints that were broken, and when.
+   *
+   * `Constraint.severity` has said `blocking` means *"stops the run: a duplicated payment is not
+   * something to note and continue past"* since it was written, and nothing could record that
+   * one had been broken -- the run listed the constraints and never their fate, so `outcomeOf`
+   * counted verdicts and a blocking constraint stopped nothing. A severity that cannot be acted
+   * on is a word.
+   *
+   * Separate from an anomaly on purpose. An anomaly is something nobody asked about; a
+   * violation is a condition somebody declared MUST hold throughout, which is why it can end a
+   * run and an anomaly cannot.
+   */
+  violations: z.array(ConstraintViolationSchema).default([]),
   repairs: z.array(RepairSchema).default([]),
 
   startedAt: z.number().int(),
@@ -97,6 +128,15 @@ export type RunOutcome = (typeof RunOutcome)[keyof typeof RunOutcome];
 export function outcomeOf(run: VerificationRun): RunOutcome {
   const proved = run.verdicts.filter((v) => v.verdict === Verdict.YES).length;
   const disproved = run.verdicts.filter((v) => v.verdict === Verdict.NO).length;
+  // A broken BLOCKING constraint ends the run, ahead of everything else and regardless of what
+  // else was proved. That is what `severity: blocking` has always said it meant, and until
+  // `violations` existed there was no way to say it had happened -- so a run could satisfy
+  // every claim, break the one condition that was supposed to hold throughout, and report a
+  // pass. Something proved beside a duplicated payment is not a partial success.
+  const blocking = new Set(
+    run.constraints.filter((c) => 'blocking' === c.severity).map((c) => c.id),
+  );
+  if (run.violations.some((v) => blocking.has(v.constraint))) return RunOutcome.FAIL;
   if (disproved > 0 && proved > 0) return RunOutcome.PARTIAL;
   if (disproved > 0) return RunOutcome.FAIL;
   if (proved > 0) return RunOutcome.PASS;
