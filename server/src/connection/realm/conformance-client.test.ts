@@ -36,7 +36,7 @@ function realmWith(over: Partial<Session> = {}) {
     lostSince: () => false,
     ...over,
   } as Partial<Session>);
-  return new WebRealm({ session, surface: 'web', now: () => 0 });
+  return new WebRealm({ session, now: () => 0 });
 }
 
 const CLAIM = {

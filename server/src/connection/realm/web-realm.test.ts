@@ -11,7 +11,7 @@ import {
   RefusalReason,
   Verdict,
 } from '@reticlehq/openreality';
-import { ChannelId, MessageKind, ReticleCommand } from '@reticlehq/core';
+import { AppRuntime, ChannelId, MessageKind, ReticleCommand } from '@reticlehq/core';
 import { WebRealm } from './web-realm.js';
 import { createFakeSession } from '../session/fake-session.js';
 import type { Session } from '../session/session.js';
@@ -70,8 +70,7 @@ function fakeSession(over: Partial<Session> = {}): Session {
 const answer = (over: { ok: boolean; result?: unknown; error?: string }) =>
   Promise.resolve({ kind: MessageKind.COMMAND_RESULT, id: 'cmd-1', ...over } as const);
 
-const realm = (over = {}, surface: 'web' | 'desktop' = 'web') =>
-  new WebRealm({ session: fakeSession(over), surface, now: () => clock });
+const realm = (over = {}) => new WebRealm({ session: fakeSession(over), now: () => clock });
 
 describe('the web realm answers the protocol', () => {
   it('reports an identity that dies with the document, carrying the edit round', () => {
@@ -124,7 +123,7 @@ describe('it refuses rather than approximating', () => {
     // method around detached from its object.
     const command = vi.fn(() => answer({ ok: true, result: {} }));
     const session = fakeSession({ command });
-    const receipt = await new WebRealm({ session, surface: 'web', now: () => clock }).perform({
+    const receipt = await new WebRealm({ session, now: () => clock }).perform({
       id: 'a1',
       actor: 'test',
       capability: 'drop_database',
@@ -260,23 +259,33 @@ describe('it reaches a verdict through the same rules as a realm with no screen'
 });
 
 describe('desktop is the same realm with a different camera', () => {
+  /** A session on a desktop shell, as the SDK reports it in the handshake. */
+  const onDesktop = { runtime: AppRuntime.TAURI } as Partial<Session>;
+
   it('answers identity, channels and actions identically', () => {
-    const web = realm({}, 'web');
-    const desktop = realm({}, 'desktop');
+    const web = realm();
+    const desktop = realm(onDesktop);
     expect(desktop.identity().instance).toBe(web.identity().instance);
     expect(desktop.channels()).toEqual(web.channels());
     expect(desktop.capabilities()).toEqual(web.capabilities());
   });
 
-  it('differs only in the surface it reports', () => {
-    expect(realm({}, 'desktop').identity().surface).toBe('desktop');
-    expect(realm({}, 'web').identity().surface).toBe('web');
+  it('reads the surface off the shell the SDK reported, not off a parameter', () => {
+    // The surface used to be handed in, and every caller in the repository handed in `web` --
+    // so `desktop` had never been the surface of anything, however many Electron and Tauri
+    // sessions had connected. Deriving it removes the way to be wrong.
+    expect(realm({ runtime: AppRuntime.TAURI }).identity().surface).toBe('desktop');
+    expect(realm({ runtime: AppRuntime.ELECTRON }).identity().surface).toBe('desktop');
+    expect(realm({ runtime: AppRuntime.WEB }).identity().surface).toBe('web');
+    // An SDK too old to report one. `web` is an assumption, and the weaker of the two: a desktop
+    // app identified as a page understates the subject rather than misdescribing it.
+    expect(realm({ runtime: undefined }).identity().surface).toBe('web');
   });
 
   it('refuses to invent a picture when the shell returned none', async () => {
     // A realm that pretends to have taken a picture is worse than one that admits it cannot: an
     // empty buffer saved as a baseline is a comparison that passes forever.
-    const r = realm({ command: vi.fn(() => answer({ ok: true, result: {} })) }, 'desktop');
+    const r = realm({ ...onDesktop, command: vi.fn(() => answer({ ok: true, result: {} })) });
     await expect(r.photograph()).rejects.toThrow(/must not pretend/);
   });
 });

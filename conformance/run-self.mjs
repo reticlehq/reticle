@@ -222,7 +222,7 @@ async function liveRealm(server, page) {
     const info = server.bridge.sessions.list()[0];
     const session = info === undefined ? undefined : server.bridge.sessions.get(info.sessionId);
     if (session !== undefined) {
-      const realm = new WebRealm({ session, surface: 'web', now: () => session.elapsed() });
+      const realm = new WebRealm({ session, now: () => session.elapsed() });
       return { realm, client: conformanceClient(realm, () => session.elapsed()) };
     }
     await sleep(250);

@@ -20,6 +20,7 @@ import {
   type Window as ProtocolWindow,
 } from '@reticlehq/openreality';
 import {
+  AppRuntime,
   CONTRADICTION_CHANNELS,
   ContradictionKind,
   EventType,
@@ -54,16 +55,34 @@ import type { Session } from '../session/session.js';
  *
  * **Desktop is the same realm with a different camera.** Electron and Tauri run this same SDK in
  * their renderer, so identity, channels, actions and observations are byte-identical to the web.
- * The only divergence is who owns the pixels. That is one method, and it is why `WebRealm` takes
- * the surface as a parameter rather than being subclassed three times.
+ * The only divergence is who owns the pixels — one method, which is why this is one class rather
+ * than three subclasses.
+ *
+ * The surface used to arrive as a PARAMETER, on the same reasoning. It is derived now, because
+ * a parameter is a place to be wrong: every caller in the repository passed `'web'`, the session
+ * had known its runtime the whole time, and `desktop` had therefore never once been the surface
+ * of anything. A field a caller must remember to set correctly, which nothing checks, and which
+ * every caller sets the same way, is not a parameter — it is a constant with a way to lie.
  */
 
 /** Which of the protocol's surfaces this session is running on. */
 export type RealmSurface = 'web' | 'desktop';
 
+/**
+ * The protocol's surface for a shell the SDK reported.
+ *
+ * `undefined` is an SDK too old to say, and is read as `web`. That IS an assumption, and it is
+ * the one this function cannot avoid: a surface is mandatory on a `SubjectRef`, and there is no
+ * other tell in the handshake. It is wrong for exactly one population — a desktop app on an SDK
+ * predating the runtime report — and the consequence is a subject identified as a page, which is
+ * a weaker statement rather than a false one.
+ */
+export function surfaceOf(runtime: AppRuntime | undefined): RealmSurface {
+  return AppRuntime.ELECTRON === runtime || AppRuntime.TAURI === runtime ? 'desktop' : 'web';
+}
+
 export interface WebRealmDeps {
   readonly session: Session;
-  readonly surface: RealmSurface;
   /**
    * The SESSION's clock, in elapsed milliseconds since it connected — `session.elapsed()`.
    *
@@ -231,7 +250,8 @@ export class WebRealm extends Realm {
    * strongest evidence available that the abstraction was not invented for this document.
    */
   identity(): SubjectRef {
-    const { session, surface } = this.#deps;
+    const { session } = this.#deps;
+    const surface = surfaceOf(session.runtime);
     const document = session.currentDocumentId;
     const epoch = session.currentEditEpoch;
     return {
