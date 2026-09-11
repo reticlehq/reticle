@@ -277,3 +277,42 @@ describe('a consequence that was already true', () => {
     );
   });
 });
+
+/**
+ * With nothing observed, never `yes`. The one property that must not be vacuous.
+ *
+ * Every other empty case in this repository has been found reading as a pass: an orphan scan
+ * over zero files looked like a clean package, a grouping check over an empty group printed
+ * SAFE, a cross-surface comparison over an empty overlap said the surfaces agreed. A check
+ * that reads nothing reports exactly like a check that passed.
+ *
+ * This is where that failure would matter most. `adjudicate` deciding `yes` from an empty
+ * evidence list is a false green at the root of the system, and every verdict downstream
+ * inherits it.
+ *
+ * It does not, and clause 9 is why: nothing independent of the action supports the claim, so
+ * the answer is `unknown` with a ground that says so. Holding a caller's `assertionsHeld: true`
+ * does not change it, which is the case worth pinning, because that is the shape of a realm
+ * that evaluated its own predicate correctly and observed nothing at all.
+ *
+ * Measured before it was written down. Untested until now, which is why it is here.
+ */
+describe('an empty window proves nothing, however confident the caller is', () => {
+  it('refuses yes with no evidence, even when the caller says the assertions held', () => {
+    const decided = adjudicate(input({ evidence: [], assertionsHeld: true }));
+    expect(decided.verdict).toBe(Verdict.UNKNOWN);
+    expect(decided.ground).toBe(Ground.NO_INDEPENDENT_CONSEQUENCE);
+  });
+
+  it('refuses yes with no evidence when nobody evaluated the assertions either', () => {
+    expect(adjudicate(input({ evidence: [], assertionsHeld: undefined })).verdict).toBe(
+      Verdict.UNKNOWN,
+    );
+  });
+
+  it('still says yes when evidence IS there, so the rule above is not refusing everything', () => {
+    // The control. A clause that answered `unknown` to every input would satisfy both cases
+    // above and destroy the verdict, which is worse than the bug they guard against.
+    expect(adjudicate(input()).verdict).toBe(Verdict.YES);
+  });
+});
