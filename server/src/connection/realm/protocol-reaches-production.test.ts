@@ -88,7 +88,8 @@ describe('how much of the protocol the shipping product uses', () => {
     // command, a tool, a file written when a run completes) is a product decision with three
     // reasonable answers. It is a defect to leave unstated, which is what this prevents.
     const callers = tracked('server/src', 'core/src', 'adapters').filter(
-      (f) => f !== 'server/src/agent/runs/to-artifact.ts' && code(f).includes('toArtifact'),
+      (f) =>
+        f !== 'server/src/agent/runs/artifact/to-artifact.ts' && code(f).includes('toArtifact'),
     );
     expect(
       callers,
@@ -100,7 +101,7 @@ describe('how much of the protocol the shipping product uses', () => {
   it('exports an artifact whose subject is deliberately not the protocol shape', () => {
     // Pinned so that changing one without the other is loud. The exported shape is Reticle's,
     // the protocol's is SubjectRef, and today they are different on purpose.
-    const artifact = code('server/src/agent/runs/to-artifact.ts');
+    const artifact = code('server/src/agent/runs/artifact/to-artifact.ts');
     expect(artifact).toContain('OPENREALITY_ARTIFACT_KIND');
     expect(artifact).not.toContain('SubjectRef');
   });

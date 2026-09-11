@@ -10,7 +10,7 @@ import {
   RunProfile,
   RunTrigger,
 } from '@reticlehq/core';
-import { buildVerificationRun, type VerificationRunInput } from './build-verification-run.js';
+import { buildVerificationRun, type VerificationRunInput } from '../build-verification-run.js';
 import { renderRunReport } from './render-report.js';
 
 const base: Omit<VerificationRunInput, 'flows' | 'checks' | 'risks' | 'repair'> = {

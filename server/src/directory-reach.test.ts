@@ -350,7 +350,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   // must stay singular: `core/src/artifacts` is a different package and a different node, and
   // "correcting" the spelling would give two directories one basename, which is how the reach
   // graph silently collapsed `cli/cloud` into `features/cloud` with every test still passing.
-  artifact: ['dir', 'fs'],
+  artifact: ['dir', 'flows', 'fs'],
   // `reticle login` and what it leaves on the machine: the credential store, the signed-in
   // session, and the browser device flow. Named `auth` and deliberately NOT `cloud`, though every
   // file in it is about the cloud -- `features/cloud` already owns that basename, and the reach

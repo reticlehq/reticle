@@ -49,7 +49,7 @@ const DECLARED_UNWIRED: Record<string, string> = {
   'agent/capsule/minimize.ts':
     'a first cut at bug-capsule minimization (prefix-trim). Written and tested; nothing calls ' +
     'it yet, because the capsule pipeline it belongs to is not assembled.',
-  'agent/runs/to-artifact.ts':
+  'agent/runs/artifact/to-artifact.ts':
     'converts a drive into the run artifact shape. Three tests cover it and no production path ' +
     'reaches it; `build-verification-run.ts` is what the daemon actually calls.',
   'features/flows/flow-report.ts':

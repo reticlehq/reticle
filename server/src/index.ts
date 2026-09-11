@@ -228,8 +228,8 @@ export type { ReadRunResult } from './agent/runs/artifact/run-store.js';
 export { classifyChangedFiles, buildRisks, risksForPath } from './agent/runs/risk-classify.js';
 export type { ChangedFileInput, RiskPolicy } from './agent/runs/risk-classify.js';
 export { buildRepairPacket, buildRepairPackets } from './agent/runs/repair-prompt.js';
-export { redactForProfile, REDACTED } from './agent/runs/profile-redact.js';
-export { renderRunReport } from './agent/runs/render-report.js';
+export { redactForProfile, REDACTED } from './agent/runs/artifact/profile-redact.js';
+export { renderRunReport } from './agent/runs/artifact/render-report.js';
 export { handleVerifyRequest, tokenOk, VERIFY_PATH } from './agent/runs/verify-http.js';
 export type { VerifyHttpRequest, VerifyHttpResponse } from './agent/runs/verify-http.js';
 export {

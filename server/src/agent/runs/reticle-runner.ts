@@ -21,7 +21,7 @@ import {
   type VerifyProgressEvent,
 } from '@reticlehq/core';
 import { buildVerificationRun, type VerificationRunInput } from './build-verification-run.js';
-import { mapReplayToFlowResult } from './replay-mapping.js';
+import { mapReplayToFlowResult } from './artifact/replay-mapping.js';
 import { buildRepairPackets } from './repair-prompt.js';
 import {
   buildRisks,

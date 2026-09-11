@@ -11,7 +11,7 @@ import {
   VerdictStatus,
   type ReticleVerificationRun,
 } from '@reticlehq/core';
-import { toArtifact } from './to-artifact.js';
+import { toArtifact } from './artifact/to-artifact.js';
 
 /**
  * The four things that make this different from every test report that already exists.

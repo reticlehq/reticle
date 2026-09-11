@@ -11,7 +11,7 @@ import {
   type FlowReplayResult,
   type RunFlowResult,
 } from '@reticlehq/core';
-import { SUCCESS_STEP_TOOL } from '../../features/flows/flow-success.js';
+import { SUCCESS_STEP_TOOL } from '../../../features/flows/flow-success.js';
 
 /** OK → PASS; DRIFT/ERROR → FAIL (a healed flow is produced by the heal path, not plain replay). */
 export function runFlowStatusOf(status: ReplayStatus): RunFlowStatus {

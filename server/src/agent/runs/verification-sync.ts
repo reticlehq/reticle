@@ -19,7 +19,7 @@ import {
 } from '@reticlehq/core';
 import { homedir } from 'node:os';
 import { buildVerificationRun, type VerificationRunInput } from './build-verification-run.js';
-import { mapReplayToFlowResult } from './replay-mapping.js';
+import { mapReplayToFlowResult } from './artifact/replay-mapping.js';
 import { defaultRunId } from './runner-port.js';
 import { RunStore } from './artifact/run-store.js';
 import { cloudFetch, syncRunToCloud, SyncOutcome } from '../../features/cloud/cloud-sync.js';

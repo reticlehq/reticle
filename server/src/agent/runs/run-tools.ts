@@ -7,7 +7,7 @@ import { sessionIdShape } from '../tools/tool-kit.js';
 import { isValidRunId } from '../../features/project/dir/reticle-dir.js';
 import type { ToolDef, ToolDeps } from '../tools/tools.js';
 import { RunStore } from './artifact/run-store.js';
-import { renderRunReport } from './render-report.js';
+import { renderRunReport } from './artifact/render-report.js';
 import { diffRuns } from './artifact/run-diff.js';
 
 /**
