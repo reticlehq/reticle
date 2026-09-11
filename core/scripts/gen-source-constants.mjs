@@ -42,7 +42,10 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
 
   const here = dirname(fileURLToPath(import.meta.url));
   const dist = join(here, '..', 'dist');
-  const mod = await import(pathToFileURL(join(dist, 'source-constants.js')).href);
+  // `dist/identity/`, for the same reason as the desktop contract: the source moved into
+  // `src/identity/` and this path did not follow it. The output stays at the dist root, where
+  // `@reticlehq/core/source-constants` resolves.
+  const mod = await import(pathToFileURL(join(dist, 'identity', 'source-constants.js')).href);
   const constants = {
     DATA_RETICLE_SOURCE_ATTR: mod.DATA_RETICLE_SOURCE_ATTR,
     RETICLE_ROOT_GLOBAL: mod.RETICLE_ROOT_GLOBAL,

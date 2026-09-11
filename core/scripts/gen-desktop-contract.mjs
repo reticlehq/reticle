@@ -58,7 +58,14 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   // `pathToFileURL`, not the bare path: a dynamic import of an absolute Windows path (`C:\…`) is
   // rejected outright — Node reads `c:` as a URL scheme. This was invisible until the CLI-entry
   // guard above was fixed, because the guard never let this line run on Windows in the first place.
-  const { DESKTOP_CONTRACT } = await import(pathToFileURL(join(dist, 'desktop-contract.js')).href);
+  // `dist/wire/`, mirroring where the source sits. `src/desktop-contract.ts` moved into `src/wire/`
+  // and this import was not moved with it, so it read a dist file that tsc had STOPPED emitting and
+  // that survived only because a build never deletes what it no longer writes. Every local build
+  // kept working and every clean checkout failed -- which is what CI found the first time it ran.
+  // The OUTPUT stays at the dist root: `@reticlehq/core/desktop-contract` resolves there.
+  const { DESKTOP_CONTRACT } = await import(
+    pathToFileURL(join(dist, 'wire', 'desktop-contract.js')).href
+  );
   const outCjs = join(dist, 'desktop-contract.cjs');
   const outDts = join(dist, 'desktop-contract.d.cts');
   writeFileSync(outCjs, renderDesktopContract(DESKTOP_CONTRACT), 'utf8');
