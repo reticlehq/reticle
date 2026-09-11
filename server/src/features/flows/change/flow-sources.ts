@@ -1,5 +1,5 @@
 import { AnchorKind, type FlowStep } from '@reticlehq/core';
-import { affectedFlows, type AffectedResult, type FlowSources } from './change/affected.js';
+import { affectedFlows, type AffectedResult, type FlowSources } from './affected.js';
 
 /**
  * A flow's sources manifest, DERIVED from its already-persisted step anchors — no separate storage. A

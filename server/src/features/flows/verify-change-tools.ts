@@ -8,7 +8,7 @@ import type { ToolDef, ToolDeps } from '../../agent/tools/tools.js';
 import { asNumber, asRecord, asString } from '@reticlehq/core';
 import { workerCountSchema } from '../../agent/tools/args/numeric-bounds.js';
 import { loadNamedFlows, resolveChangedFiles } from '../../command/cli/cli-flow-commands.js';
-import { affectedSavedFlows } from './flow-sources.js';
+import { affectedSavedFlows } from './change/flow-sources.js';
 import { FLOW_TOOLS } from './flow-tools.js';
 import { findContradictions } from '@reticlehq/engine/disagreement/contradictions.js';
 import { parseControls } from '../../agent/tools/coverage-tools.js';

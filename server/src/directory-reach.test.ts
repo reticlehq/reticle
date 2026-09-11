@@ -313,7 +313,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
     'drive',
     'cli',
     'daemon',
-    'flows',
+    'change',
     'fs',
     'hunt',
     'identity',

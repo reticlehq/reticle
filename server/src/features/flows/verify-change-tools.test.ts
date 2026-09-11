@@ -72,7 +72,7 @@ describe('reticle_verify_change — it delegates rather than reimplements', () =
     const deps = withFlows({ status: 'fail', total: 3, passed: 2, failed: 1 });
     // Force one affected flow by pretending provenance is unknown for a saved flow.
     const spy = vi
-      .spyOn(await import('./flow-sources.js'), 'affectedSavedFlows')
+      .spyOn(await import('./change/flow-sources.js'), 'affectedSavedFlows')
       .mockReturnValue({ affected: ['checkout'], unknownProvenance: [] });
 
     const result = (await tool.handler(deps, { files: ['src/Checkout.tsx'] })) as Record<
@@ -87,7 +87,7 @@ describe('reticle_verify_change — it delegates rather than reimplements', () =
   it('reports YES only when every covering flow passed', async () => {
     const deps = withFlows({ status: 'pass', total: 2, passed: 2, failed: 0 });
     const spy = vi
-      .spyOn(await import('./flow-sources.js'), 'affectedSavedFlows')
+      .spyOn(await import('./change/flow-sources.js'), 'affectedSavedFlows')
       .mockReturnValue({ affected: ['checkout', 'login'], unknownProvenance: [] });
 
     const result = (await tool.handler(deps, { files: ['src/Checkout.tsx'] })) as Record<
@@ -106,7 +106,7 @@ describe('reticle_verify_change — it delegates rather than reimplements', () =
   it('discloses when flows were included only for unknown provenance', async () => {
     const deps = withFlows({ status: 'pass', total: 1, passed: 1, failed: 0 });
     const spy = vi
-      .spyOn(await import('./flow-sources.js'), 'affectedSavedFlows')
+      .spyOn(await import('./change/flow-sources.js'), 'affectedSavedFlows')
       .mockReturnValue({ affected: ['legacy'], unknownProvenance: ['legacy'] });
 
     const result = (await tool.handler(deps, { files: ['src/A.tsx'] })) as Record<string, unknown>;
@@ -141,7 +141,7 @@ describe('reticle_verify_change — a green suite is not the end of the check', 
     if (verify === undefined) throw new Error('flow_verify missing');
     vi.spyOn(verify, 'handler').mockResolvedValue(passingSuite);
     const affectedSpy = vi
-      .spyOn(await import('./flow-sources.js'), 'affectedSavedFlows')
+      .spyOn(await import('./change/flow-sources.js'), 'affectedSavedFlows')
       .mockReturnValue({ affected: ['checkout'], unknownProvenance: [] });
     const contradictionSpy = vi
       .spyOn(await import('@reticlehq/engine/disagreement/contradictions.js'), 'findContradictions')
@@ -162,7 +162,7 @@ describe('reticle_verify_change — a green suite is not the end of the check', 
     if (verify === undefined) throw new Error('flow_verify missing');
     vi.spyOn(verify, 'handler').mockResolvedValue(passingSuite);
     const affectedSpy = vi
-      .spyOn(await import('./flow-sources.js'), 'affectedSavedFlows')
+      .spyOn(await import('./change/flow-sources.js'), 'affectedSavedFlows')
       .mockReturnValue({ affected: ['checkout'], unknownProvenance: [] });
 
     const tree = '- button "Pay" (ref=e1)\n- button "Cancel" (ref=e2)';
@@ -186,7 +186,7 @@ describe('reticle_verify_change — a green suite is not the end of the check', 
     if (verify === undefined) throw new Error('flow_verify missing');
     vi.spyOn(verify, 'handler').mockResolvedValue(passingSuite);
     const affectedSpy = vi
-      .spyOn(await import('./flow-sources.js'), 'affectedSavedFlows')
+      .spyOn(await import('./change/flow-sources.js'), 'affectedSavedFlows')
       .mockReturnValue({ affected: ['checkout'], unknownProvenance: [] });
 
     const parallelRun = (await tool.handler(sessionWith([], '', []), {

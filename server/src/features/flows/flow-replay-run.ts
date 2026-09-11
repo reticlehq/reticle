@@ -33,7 +33,7 @@ import { sessionRoot } from '../project/session-root.js';
 import { waitForPredicate } from '@reticlehq/engine/question/predicate/predicate.js';
 import { computeSegments } from '../journal/rollups.js';
 import { AssertionTiersStore } from './stores/assertion-tiers-store.js';
-import { toFlowSources } from './flow-sources.js';
+import { toFlowSources } from './change/flow-sources.js';
 import { reportAndAccumulate } from '../journal/deviation-service.js';
 import { EnvelopeStore } from '../journal/envelope-store.js';
 import type { DeviationReport } from '../journal/deviation-report.js';
