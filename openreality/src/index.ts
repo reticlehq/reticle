@@ -15,6 +15,7 @@
 
 export * from './vocabulary/subject.js';
 export * from './vocabulary/channel.js';
+export * from './vocabulary/determinism.js'; // DeterminismProfile / resumeStrategy — how a subject may be DRIVEN
 export * from './vocabulary/intent.js';
 export * from './vocabulary/predicate.js';
 export * from './vocabulary/realm-surface.js';

@@ -12,6 +12,7 @@ import {
   AnomalyKind,
   AnomalyTier,
   type Coverage,
+  type DeterminismProfile,
   type Handle,
   type Observation,
   Realm,
@@ -357,6 +358,26 @@ export class WebRealm extends Realm {
    * loud answer. Substituting a hopeful default here would be this file quietly restoring the
    * exact bug the declaration was added to remove.
    */
+  /**
+   * A browser is the cheapest subject in this table, and saying so is what lets the rest of the
+   * protocol stop assuming every subject is one.
+   *
+   * `replayPrefix: 'free'` is measured, not asserted: re-driving a recorded step costs ~27ms, which
+   * is what makes "fix the break, resume, find the next one" a loop rather than a full re-read.
+   * `time: 'injectable'` because the clock control ships. `actions: 'reversible'` is about the REALM
+   * — a click can be undone by a reload — and not a promise about the app behind it, which is why a
+   * destructive action still needs its own confirmation.
+   */
+  determinism(): DeterminismProfile {
+    return {
+      reset: 'cheap',
+      replayPrefix: 'free',
+      time: 'injectable',
+      observation: 'exact',
+      actions: 'reversible',
+    };
+  }
+
   channels(): readonly ChannelDescriptor[] {
     const declared = this.#deps.session.channels ?? [];
     return declared

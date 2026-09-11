@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ServiceRealm, type ServiceCall, type ServiceRealmPorts } from './service-realm.js';
+import { ResumeStrategy, resumeStrategy } from '../vocabulary/determinism.js';
 import { adjudicate } from '../spi/adjudicator.js';
 import { ChannelId, Grade } from '../vocabulary/channel.js';
 import { Declaration } from '../vocabulary/intent.js';
@@ -310,5 +311,24 @@ describe('a measured quantity, produced by a realm rather than by a fixture', ()
     // reading the realm's number rather than answering the same way whatever it is given.
     expect(within(10_000, 0)).toBe(true);
     expect(within(-1, 0)).toBe(false);
+  });
+});
+
+/**
+ * The row the determinism profile exists for.
+ *
+ * A service is the counterexample to the assumption the rest of the protocol was carrying: resume
+ * is not free here, because re-driving steps 0..N-1 re-submits every write the prefix contained.
+ * Declaring `unsafe` is what turns that from a caveat somebody has to remember into a refusal.
+ */
+describe('how the service realm says it may be driven', () => {
+  it('refuses to have its prefix re-driven — a POST is not idempotent', () => {
+    const profile = new ServiceRealm(ports()).determinism();
+    expect(profile.replayPrefix).toBe('unsafe');
+    expect(resumeStrategy(profile)).toBe(ResumeStrategy.REFUSE);
+  });
+
+  it('says its actions commit, so nothing can treat them as undoable', () => {
+    expect(new ServiceRealm(ports()).determinism().actions).toBe('irreversible');
   });
 });

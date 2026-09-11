@@ -1,4 +1,5 @@
 import { Realm } from '../spi/realm.js';
+import type { DeterminismProfile } from '../vocabulary/determinism.js';
 import { CHANNEL_DEFAULTS, ChannelId, type ChannelDescriptor } from '../vocabulary/channel.js';
 import {
   type Action,
@@ -126,6 +127,26 @@ export class ServiceRealm extends Realm {
    * log statement. The order is in the database or it is not, and the log line is not evidence
    * either way.
    */
+  /**
+   * The row this whole member exists for.
+   *
+   * A POST is not idempotent, so re-driving steps 0..N-1 to resume at N would re-submit every write
+   * the prefix contained. `unsafe` is not a cost to weigh against a cheap reset — it is a statement
+   * that the re-drive must not happen, and `resumeStrategy` reads it first for that reason.
+   *
+   * Reset is `costly` because returning a service to a known start means fixtures, not a reload. The
+   * clock is the wall's: a service's timestamps come from its own host and from whatever it calls.
+   */
+  determinism(): DeterminismProfile {
+    return {
+      reset: 'costly',
+      replayPrefix: 'unsafe',
+      time: 'wall',
+      observation: 'exact',
+      actions: 'irreversible',
+    };
+  }
+
   channels(): readonly ChannelDescriptor[] {
     return [
       { id: ChannelId.NET, ...CHANNEL_DEFAULTS[ChannelId.NET], note: 'observed at the boundary' },

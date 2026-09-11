@@ -406,6 +406,7 @@ Extend `Realm` from `@reticlehq/openreality`. The compiler names what you must a
 class MyRealm extends Realm {
   identity(); // what this is, and what invalidates evidence about it
   channels(); // what you can see — and whether any of it is independent
+  determinism(); // how you may be DRIVEN — resume, reset, clock, reads, reversibility
   capabilities(); // what an actor may ask for
   describe(); // what is here now, as structure
   dispatch(); // do one thing; report that you did it, never that it worked
@@ -417,6 +418,37 @@ class MyRealm extends Realm {
 ```
 
 `perform()` is sealed and refuses undeclared capabilities on your behalf. There is no method that returns a verdict, and that is not an oversight.
+
+### 10.1 The determinism profile
+
+Every other question here is about what a realm can SEE. `determinism()` is about what it can be PUT THROUGH, and it exists because the rest of this specification had inherited a browser's answer to a question no browser has to ask.
+
+_"Resume is nearly free — re-drive steps 0..N-1 at a few milliseconds each"_ is true of a web page. On a service a `POST` is not idempotent, so re-driving the prefix re-submits every write it contained. On hardware it moves a physical arm, costs real time, and may not repeat. A protocol that silently re-drove a payment or a servo would be a defect, not a feature.
+
+```ts
+interface DeterminismProfile {
+  reset: 'none' | 'cheap' | 'costly'; // can the subject be returned to a known start?
+  replayPrefix: 'free' | 'costly' | 'unsafe'; // may steps 0..N-1 be re-driven?
+  time: 'wall' | 'injectable' | 'stepped'; // is the clock ours?
+  observation: 'exact' | 'sampled'; // do two reads of an unchanged subject agree?
+  actions: 'reversible' | 'irreversible'; // does an action commit something?
+}
+```
+
+It is abstract, like `channels()`, and for the same reason: **declaring a property you do not have is the lie the conformance suite exists to catch.** A default would be wrong either way — `free` would tell a payment service it is a browser, `unsafe` would silently downgrade every realm that is honestly cheap to re-drive. This is the more expensive half of that rule, because a channel you cannot observe costs a wrong verdict and a `replayPrefix` you do not have costs a re-sent payment.
+
+Callers do not read `replayPrefix` themselves. They derive the strategy, so the decision is made once and identically everywhere:
+
+| the profile says | `resumeStrategy` returns | what it means |
+| --- | --- | --- |
+| `replayPrefix: 'free'` | `replay-prefix` | re-drive 0..N-1 silently and report from N |
+| `replayPrefix: 'costly'`, and a reset exists | `reset-then-replay` | return to a known start first; resume is a budget decision |
+| `replayPrefix: 'costly'`, `reset: 'none'` | `replay-prefix` | a reset is not a way out if there is no reset |
+| `replayPrefix: 'unsafe'` | `refuse` | do not resume. Report the stop and require an explicit instruction |
+
+`unsafe` is checked first and alone. It is not a cost to be weighed against a cheap reset — reading the reset first and concluding _"cheap reset, so go ahead"_ is exactly the reasoning that re-sends the payment.
+
+`ServiceRealm` declares `replayPrefix: 'unsafe'` and `actions: 'irreversible'`. A web realm declares `{reset:'cheap', replayPrefix:'free', time:'injectable', observation:'exact', actions:'reversible'}` — and `reversible` there is a claim about the REALM, that a click can be undone by a reload, not a promise about the application behind it.
 
 ---
 

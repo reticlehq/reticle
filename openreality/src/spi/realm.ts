@@ -8,6 +8,7 @@ import {
   RefusalReason,
 } from '../vocabulary/realm-surface.js';
 import { type ChannelDescriptor, type ChannelId } from '../vocabulary/channel.js';
+import type { DeterminismProfile } from '../vocabulary/determinism.js';
 import { type Coverage, type Observation } from '../vocabulary/evidence.js';
 import type { Anomaly } from '../vocabulary/verdict.js';
 import { type SubjectRef } from '../vocabulary/subject.js';
@@ -71,6 +72,26 @@ export abstract class Realm {
    * to catch, because it produces a verifier that is scored on evidence it never had.
    */
   abstract channels(): readonly ChannelDescriptor[];
+
+  /**
+   * How this subject may be DRIVEN — the five properties that decide resume, reset and safety.
+   *
+   * Abstract on purpose, and it is the one place this specification asks a question a browser never
+   * has to. Everything else here is about what a realm can SEE; this is about what it can be put
+   * through, and the rest of the protocol had quietly inherited a web page's answer: "resume is
+   * nearly free, re-drive the prefix". On a service a POST is not idempotent. On hardware it moves
+   * a physical arm.
+   *
+   * A default would have been the mistake either way. `free` would be the protocol telling a payment
+   * service it is a browser; `unsafe` would silently downgrade every realm that is honestly cheap to
+   * re-drive. So every realm says, the same way it says what it can observe — and declaring a
+   * property you do not have is the lie the conformance suite exists to catch. This is the more
+   * expensive half of that rule: a channel you cannot observe costs a wrong verdict, a
+   * `replayPrefix` you do not have costs a re-sent payment.
+   *
+   * Callers derive the strategy with `resumeStrategy`; they never read `replayPrefix` themselves.
+   */
+  abstract determinism(): DeterminismProfile;
 
   /** What an actor may ask for. Anything not here is refused by `perform`, not by you. */
   abstract capabilities(): readonly Capability[];

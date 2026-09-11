@@ -4,6 +4,7 @@ import { CHANNEL_DEFAULTS, ChannelId } from '../vocabulary/channel.js';
 import { CloseCondition, RefusalReason } from '../vocabulary/realm-surface.js';
 import type { Action, ActionReceipt, Capability, Window } from '../vocabulary/realm-surface.js';
 import type { Coverage, Observation } from '../vocabulary/evidence.js';
+import { ResumeStrategy, resumeStrategy } from '../vocabulary/determinism.js';
 import type { SubjectRef } from '../vocabulary/subject.js';
 
 /**
@@ -20,6 +21,16 @@ class Careless extends Realm {
 
   identity(): SubjectRef {
     return { surface: 'service', instance: 'svc-1', epoch: 2 };
+  }
+  determinism() {
+    // A service: a POST is not idempotent, so its prefix must not be re-driven.
+    return {
+      reset: 'costly',
+      replayPrefix: 'unsafe',
+      time: 'wall',
+      observation: 'exact',
+      actions: 'irreversible',
+    } as const;
   }
   channels() {
     return [
@@ -120,5 +131,22 @@ describe('there is no way for a realm to return a verdict', () => {
     for (const forbidden of ['verify', 'verdict', 'adjudicate', 'assert', 'pass', 'succeeded']) {
       expect(surface.has(forbidden), `Realm must not expose ${forbidden}()`).toBe(false);
     }
+  });
+});
+
+/**
+ * A realm must DECLARE how it may be driven, and the refusal is derived from that declaration.
+ *
+ * Abstract rather than defaulted is the whole point, and the COMPILER is the test: a realm that
+ * omits it does not build. A default of `free` would be the protocol telling a payment service it is
+ * a browser; a default of `unsafe` would silently downgrade every realm that is honestly cheap to
+ * re-drive. `channels()` is abstract for the same reason, and this is the more expensive of the two
+ * to get wrong — a channel you cannot observe costs a wrong verdict, a `replayPrefix` you do not
+ * have costs a re-sent payment.
+ */
+describe('how a realm says it may be driven', () => {
+  it('is read through the derived strategy, never as a raw field', () => {
+    const realm = new Careless();
+    expect(resumeStrategy(realm.determinism())).toBe(ResumeStrategy.REFUSE);
   });
 });

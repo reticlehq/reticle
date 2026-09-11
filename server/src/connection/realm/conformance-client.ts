@@ -2,6 +2,7 @@ import {
   adjudicate,
   assertionsHeld,
   Declaration,
+  isDeterminismProfile,
   type Claim,
   type Coverage,
 } from '@reticlehq/openreality';
@@ -184,6 +185,26 @@ export function conformanceClient(realm: WebRealm, now: () => number): Conforman
       }
       if (described === undefined) {
         throw new Error("the implementation's describe() answered nothing, and it is required");
+      }
+      /*
+       * `determinism()` is required too, and reading it here is what stops it being decorative.
+       *
+       * A member no binding ever calls can be stubbed or thrown from and the implementation still
+       * earns a profile — the same hole `describe()` above was closed for. The shape is checked
+       * rather than taken on trust because the derived strategy falls through to "re-drive the
+       * prefix" for anything it does not recognise: a stubbed `{}` would quietly authorise
+       * re-driving a payment service's prefix.
+       *
+       * What is NOT checked is whether the declaration is TRUE. A realm claiming `free` that cannot
+       * afford it is telling the same kind of lie as one declaring a channel it cannot observe, and
+       * only driving the subject can catch either.
+       */
+      if (!isDeterminismProfile(realm.determinism())) {
+        throw new Error(
+          "the implementation's determinism() did not return a complete profile, and the interface " +
+            'requires one: { reset, replayPrefix, time, observation, actions }. Silence here would ' +
+            'be read as "this subject may be re-driven freely".',
+        );
       }
       // Both answers below are already declared; the interface is async for an implementation
       // that has to go and ask.
