@@ -329,6 +329,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   domain: ['args', 'dir', 'flows', 'oracles', 'project', 'tools'],
   ee: ['license'],
   flows: [
+    'navigation',
     'suite',
     'change',
     'args',
@@ -525,7 +526,15 @@ const REACHES_FOR: Record<string, readonly string[]> = {
    * nothing and are reached only by setup.
    */
   probe: [],
+  /**
+   * Going somewhere, and what that is honest to report afterwards. A navigation is the action
+   * nobody can fully confirm: navigate-result is the envelope that says so, reload-result is
+   * what the reload form of it reports, navigate-arrival is how we decide it arrived. The
+   * complete family — nothing about navigation is left flat beside it.
+   */
+  navigation: ['session'],
   tools: [
+    'navigation',
     'lifetime',
     'args',
     'timing',

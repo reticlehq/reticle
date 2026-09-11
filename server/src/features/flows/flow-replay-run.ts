@@ -17,7 +17,7 @@ import {
 import { haltedFrom } from './recording/replay-halt.js';
 import { asRecord, asString } from '@reticlehq/core';
 import { routeOfEvent, routeOfUrl } from '@reticlehq/engine/question/predicate/predicate-route.js';
-import type { ArrivalClock } from '../../agent/tools/act/navigate-arrival.js';
+import type { ArrivalClock } from '../../agent/tools/act/navigation/navigate-arrival.js';
 import { carryReticleIdentity } from '../../agent/tools/lease-tools.js';
 import type { SessionManager } from '../../connection/session/session-manager.js';
 import type { Session } from '../../connection/session/session.js';

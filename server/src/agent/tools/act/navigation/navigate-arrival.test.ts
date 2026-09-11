@@ -10,7 +10,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { awaitArrival, idsAtTarget, type ArrivalScope } from './navigate-arrival.js';
-import type { SessionManager } from '../../../connection/session/session-manager.js';
+import type { SessionManager } from '../../../../connection/session/session-manager.js';
 
 /** Just enough SessionManager for `awaitArrival`, which only ever calls `all()`. */
 function fakeSessions(urlsOverTime: { id: string; url: string }[][]): {
