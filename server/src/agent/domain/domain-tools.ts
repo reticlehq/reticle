@@ -3,7 +3,7 @@ import { sessionRoot } from '../../features/project/session-root.js';
 import { asNumber, asString } from '@reticlehq/core';
 import type { FlowFile } from '@reticlehq/core';
 import { ReticleTool } from '@reticlehq/core';
-import { countSchema } from '../tools/numeric-bounds.js';
+import { countSchema } from '../tools/args/numeric-bounds.js';
 import { readContract } from '../../features/project/dir/reticle-dir.js';
 import { buildDomainModel } from './domain-model.js';
 import { proposeInstrumentation } from '../oracles/self-instrument.js';

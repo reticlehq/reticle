@@ -8,7 +8,7 @@ import {
 } from '@reticlehq/core';
 import { ReticleTool } from '@reticlehq/core';
 import { sessionIdShape } from '../../agent/tools/tool-kit.js';
-import { ratioSchema } from '../../agent/tools/numeric-bounds.js';
+import { ratioSchema } from '../../agent/tools/args/numeric-bounds.js';
 import { asNumber, asRecord, asString } from '@reticlehq/core';
 import { diffPng, type VisualRect } from './visual-diff.js';
 import { VisualStore } from './visual-store.js';

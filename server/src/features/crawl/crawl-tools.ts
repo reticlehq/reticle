@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { ReticleTool } from '@reticlehq/core';
 import { asNumber, asString } from '@reticlehq/core';
-import { stepCountSchema, timeoutMsSchema } from '../../agent/tools/numeric-bounds.js';
+import { stepCountSchema, timeoutMsSchema } from '../../agent/tools/args/numeric-bounds.js';
 import { crawl, type CrawlOptions } from './crawl.js';
 import type { ToolDef, ToolDeps } from '../../agent/tools/tools.js';
 import { routeFromUrl, routesFromEvents } from '../project/learned-routes.js';

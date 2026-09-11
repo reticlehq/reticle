@@ -11,7 +11,7 @@
  */
 
 import { z } from 'zod';
-import { timeoutMsSchema } from './numeric-bounds.js';
+import { timeoutMsSchema } from './args/numeric-bounds.js';
 import { compileSequenceStep } from '../../features/flows/replay.js';
 import { ReticleTool } from '@reticlehq/core';
 import { healthEnvelope } from '../../connection/session/session-health.js';

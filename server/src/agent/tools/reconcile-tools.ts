@@ -2,7 +2,7 @@ import { bodyCaptureRemedy } from '@reticlehq/engine/evidence/body-capture-remed
 import { z } from 'zod';
 import { EventType, ReticleCommand, SnapshotMode, urlForMatch } from '@reticlehq/core';
 import { ReticleTool } from '@reticlehq/core';
-import { cursorSchema } from './numeric-bounds.js';
+import { cursorSchema } from './args/numeric-bounds.js';
 import { reconcile, type Mismatch } from '@reticlehq/engine/disagreement/reconcile.js';
 import { salvageJson } from '@reticlehq/engine/window/json-salvage.js';
 import { withControl } from '../../connection/session/control-envelope.js';

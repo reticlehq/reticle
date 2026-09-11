@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { emptyFlowRefusal } from './empty-flow.js';
-import { aliasParam } from '../../agent/tools/alias-args.js';
+import { aliasParam } from '../../agent/tools/args/alias-args.js';
 import {
   FlowErrorCode,
   RecordedSaveError,
@@ -11,7 +11,7 @@ import type { FlowFile } from '@reticlehq/core';
 import { recordSuiteFlakes } from './suite-flakes.js';
 import { ReticleTool } from '@reticlehq/core';
 import { asNumber, asString } from '@reticlehq/core';
-import { workerCountSchema } from '../../agent/tools/numeric-bounds.js';
+import { workerCountSchema } from '../../agent/tools/args/numeric-bounds.js';
 import { log } from '../../log.js';
 import { cloudFetch, syncFlowToCloud, SyncOutcome } from '../cloud/cloud-sync.js';
 import { mapWithConcurrency, resolveConcurrency } from './parallel-suite.js';

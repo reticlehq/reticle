@@ -5,7 +5,7 @@
 import { describe, expect, it } from 'vitest';
 import { z, type ZodTypeAny } from 'zod';
 import { ReticleTool } from '@reticlehq/core';
-import { RAW_TOOLS, TOOLS } from './tools.js';
+import { RAW_TOOLS, TOOLS } from '../tools.js';
 import {
   MAX_RESULT_COUNT,
   MAX_STATE_DEPTH,

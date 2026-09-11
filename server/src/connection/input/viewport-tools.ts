@@ -6,7 +6,7 @@ import {
   MAX_VIEWPORT_PX,
   MIN_VIEWPORT_PX,
   viewportPxSchema,
-} from '../../agent/tools/numeric-bounds.js';
+} from '../../agent/tools/args/numeric-bounds.js';
 import { asString } from '@reticlehq/core';
 import type { RealInputProvider } from './real-input.js';
 import type { ToolDef, ToolDeps } from '../../agent/tools/tools.js';

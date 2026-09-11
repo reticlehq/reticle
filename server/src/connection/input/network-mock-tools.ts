@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { CDP_NO_PROVIDER_REASON, CDP_NO_PROVIDER_RECOMMENDATION } from '@reticlehq/core';
 import { ReticleTool } from '@reticlehq/core';
 import { sessionIdShape } from '../../agent/tools/tool-kit.js';
-import { delayMsSchema, httpStatusSchema } from '../../agent/tools/numeric-bounds.js';
+import { delayMsSchema, httpStatusSchema } from '../../agent/tools/args/numeric-bounds.js';
 import { asString } from '@reticlehq/core';
 import type { RealInputProvider } from './real-input.js';
 import type { MockRule } from './network-mock.js';

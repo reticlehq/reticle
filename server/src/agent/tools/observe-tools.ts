@@ -4,7 +4,7 @@
  */
 import { noteEmptyRead } from './gaps/observed-nothing.js';
 import { z } from 'zod';
-import { aliasParam } from './alias-args.js';
+import { aliasParam } from './args/alias-args.js';
 import {
   CONSOLE_ATTACH_NOTE,
   CONSOLE_LEVELS,
@@ -20,7 +20,7 @@ import {
   httpStatusSchema,
   timeoutMsSchema,
   windowMsSchema,
-} from './numeric-bounds.js';
+} from './args/numeric-bounds.js';
 import { buildReactionReport } from '@reticlehq/engine/question/reaction.js';
 import { findContradictions } from '@reticlehq/engine/disagreement/contradictions.js';
 import {

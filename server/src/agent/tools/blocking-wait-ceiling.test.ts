@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MAX_BLOCKING_WAIT_MS, MAX_TIMEOUT_MS, timeoutMsSchema } from './numeric-bounds.js';
+import { MAX_BLOCKING_WAIT_MS, MAX_TIMEOUT_MS, timeoutMsSchema } from './args/numeric-bounds.js';
 
 /**
  * An advertised bound has to be one we can actually honour.

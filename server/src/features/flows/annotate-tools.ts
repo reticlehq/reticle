@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { aliasParam } from '../../agent/tools/alias-args.js';
+import { aliasParam } from '../../agent/tools/args/alias-args.js';
 import { AnnotationErrorCode, AnnotationSchema, type AnnotateResult } from '@reticlehq/core';
 import { RECOVERY } from '../../agent/tools/error-recovery.js';
 

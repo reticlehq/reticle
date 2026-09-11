@@ -5,11 +5,11 @@
  */
 import type { Session } from '../../connection/session/session.js';
 import { z } from 'zod';
-import { aliasParam } from './alias-args.js';
+import { aliasParam } from './args/alias-args.js';
 import { resolveSessionWithin } from '../../connection/session/timing/resolve-within.js';
 import { WALL_CLOCK } from '../../connection/session/timing/wall-clock.js';
 import { ACT_SEQUENCE_TOOL } from './act-sequence-tool.js';
-import { timeoutMsSchema } from './numeric-bounds.js';
+import { timeoutMsSchema } from './args/numeric-bounds.js';
 import { captureAct } from '../../features/flows/replay.js';
 import {
   ActionType,

@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { QueryBy } from '@reticlehq/core';
 import { ReticleTool } from '@reticlehq/core';
 import { asNumber, asString } from '@reticlehq/core';
-import { listIndexSchema, scrollCountSchema } from '../../agent/tools/numeric-bounds.js';
+import { listIndexSchema, scrollCountSchema } from '../../agent/tools/args/numeric-bounds.js';
 import { scrollToFind, type ScrollFindQuery } from './scroll-find.js';
 import type { ToolDef, ToolDeps } from '../../agent/tools/tools.js';
 

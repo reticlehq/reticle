@@ -318,11 +318,12 @@ const REACHES_FOR: Record<string, readonly string[]> = {
     'telemetry',
     'update',
   ],
-  crawl: ['project', 'tools', 'facts'],
+  crawl: ['args', 'project', 'tools', 'facts'],
   daemon: ['telemetry'],
-  domain: ['dir', 'flows', 'oracles', 'project', 'tools'],
+  domain: ['args', 'dir', 'flows', 'oracles', 'project', 'tools'],
   ee: ['license'],
   flows: [
+    'args',
     'stores',
     'act',
     'annotate-notes',
@@ -342,7 +343,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
     'tools',
   ],
   impact: ['cloud', 'session'],
-  input: ['pool', 'telemetry', 'tools'],
+  input: ['args', 'pool', 'telemetry', 'tools'],
   intent: ['dir', 'fs', 'project', 'tools'],
   // What a run artifact is FOR once it exists -- stored, compared, and read back as established
   // fact -- as against the rest of `runs`, which produces one. Named `artifact`, singular, and it
@@ -374,11 +375,11 @@ const REACHES_FOR: Record<string, readonly string[]> = {
     'tools',
     'version',
   ],
-  memory: ['cloud', 'fs', 'project', 'tools'],
+  memory: ['args', 'cloud', 'fs', 'project', 'tools'],
   pool: ['browser', 'input', 'telemetry'],
   // `runs` dropped out: what project wanted from it was the artifact, which is what broke the
   // project <-> runs mutual pair and took the count from 24 to 23.
-  project: ['artifact', 'cloud', 'config', 'dir', 'flows', 'fs', 'tools'],
+  project: ['args', 'artifact', 'cloud', 'config', 'dir', 'flows', 'fs', 'tools'],
   // The MCP proxy: the transport half of `mcp`, which reaches nothing of its siblings and was
   // therefore extractable without tangling anything. Reaches out to two, reached in from two,
   // and no pair among them is mutual -- which is the only thing that would have raised the count.
@@ -388,6 +389,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   proxy: ['daemon', 'identity', 'telemetry'],
   runs: ['artifact', 'cloud', 'dir', 'flows', 'intent', 'peer', 'project', 'telemetry', 'tools'],
   session: [
+    'args',
     'timing',
     'facts',
     'bridge',
@@ -439,7 +441,14 @@ const REACHES_FOR: Record<string, readonly string[]> = {
    * carry a knot with it.
    */
   timing: [],
+  /**
+   * What a caller may pass. Two files that import nothing at all: the spellings one tool accepts
+   * from the tool next door, and the bounds a numeric input has to sit inside. Nine directories
+   * reach them, which is the argument for a name rather than against one.
+   */
+  args: [],
   tools: [
+    'args',
     'timing',
     'stores',
     'assert',
@@ -486,7 +495,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   ],
   update: ['identity', 'project', 'telemetry'],
   version: ['identity', 'project', 'tools'],
-  visual: ['dir', 'fs', 'input', 'tools'],
+  visual: ['args', 'dir', 'fs', 'input', 'tools'],
 };
 
 /**

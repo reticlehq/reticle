@@ -4,7 +4,7 @@ import { ReticleTool } from '@reticlehq/core';
 import { withSizeCost } from '../../connection/session/output-budget.js';
 import { applySnapshotDelta, SnapshotCache } from './read/snapshot-delta.js';
 import { asNumber, asRecord, asString } from '@reticlehq/core';
-import { countSchema } from './numeric-bounds.js';
+import { countSchema } from './args/numeric-bounds.js';
 import { normalizeQueryArgs } from './read/query-shape.js';
 import { paginateQueryResult } from './read/query-paginate.js';
 

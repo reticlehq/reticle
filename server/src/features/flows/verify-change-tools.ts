@@ -6,7 +6,7 @@ import { Verified } from '@reticlehq/core';
 import { ReticleTool } from '@reticlehq/core';
 import type { ToolDef, ToolDeps } from '../../agent/tools/tools.js';
 import { asNumber, asRecord, asString } from '@reticlehq/core';
-import { workerCountSchema } from '../../agent/tools/numeric-bounds.js';
+import { workerCountSchema } from '../../agent/tools/args/numeric-bounds.js';
 import { loadNamedFlows, resolveChangedFiles } from '../../command/cli/cli-flow-commands.js';
 import { affectedSavedFlows } from './flow-sources.js';
 import { FLOW_TOOLS } from './flow-tools.js';

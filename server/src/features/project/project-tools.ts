@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { ProjectReadError, RunStatus, type RunRecord } from '@reticlehq/core';
 import { ReticleTool } from '@reticlehq/core';
-import { countSchema } from '../../agent/tools/numeric-bounds.js';
+import { countSchema } from '../../agent/tools/args/numeric-bounds.js';
 import { sessionIdShape } from '../../agent/tools/tool-kit.js';
 import { asNumber, asString } from '@reticlehq/core';
 import {

@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { ReticleCommand } from '@reticlehq/core';
 import { ReticleTool } from '@reticlehq/core';
 import { asNumber, asString } from '@reticlehq/core';
-import { idleMsSchema } from '../../agent/tools/numeric-bounds.js';
+import { idleMsSchema } from '../../agent/tools/args/numeric-bounds.js';
 import type { ToolDef, ToolDeps } from '../../agent/tools/tools.js';
 
 /**
