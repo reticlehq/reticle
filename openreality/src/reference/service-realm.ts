@@ -202,6 +202,27 @@ export class ServiceRealm extends Realm {
         value: call,
         summary: `${call.method} ${call.target} → ${String(call.status)}`,
       })),
+      // The same call as a MEASURED QUANTITY, so a claim can say "within 300 ms" rather than
+      // only "it happened". Latency from the window opening to the call being observed, which
+      // needs no input this realm does not already have.
+      //
+      // A separate observation rather than a field inside the one above, because `measure`
+      // reads `observation.value` when it is a number and will not reach into a structure. That
+      // is deliberate in the specification: a path selector would be a predicate language
+      // arriving through the back door, which is the same reason `summary` is matched exactly
+      // rather than by pattern. So a realm that wants a quantity measured emits it as one.
+      //
+      // The unit is in the summary. The specification has no unit field on purpose: one the
+      // engine could not check would exist to be ignored, and two implementations disagreeing
+      // about it would disagree silently.
+      ...calls.map((call, index) => ({
+        id: `${window.id}-latency-${String(index)}`,
+        window: window.id,
+        channel: ChannelId.NET,
+        at: call.at,
+        value: call.at - window.openedAt,
+        summary: 'service.call.latency.ms',
+      })),
       ...lines.map((line, index) => ({
         id: `${window.id}-log-${String(index)}`,
         window: window.id,

@@ -5,6 +5,7 @@ import { ChannelId, Grade } from '../vocabulary/channel.js';
 import { Declaration } from '../vocabulary/intent.js';
 import { CloseCondition, RefusalReason } from '../vocabulary/realm-surface.js';
 import { ProvenanceClass } from '../vocabulary/evidence.js';
+import { evaluate, MeasureOp, PredicateKind } from '../vocabulary/predicate.js';
 import { Verdict, reviseVerdict } from '../vocabulary/verdict.js';
 import { profileFromChannels, Profile } from '../registry.js';
 
@@ -250,5 +251,64 @@ describe('the realm is honest about what it is', () => {
       ports({ instance: () => ({ id: 'orders-7f2', deploy: 'd4e5f6' }) }),
     ).identity();
     expect(a.instance).not.toBe(b.instance);
+  });
+});
+
+/**
+ * The reference realm emits a measurable quantity, so `measure` is exercised by a realm rather
+ * than only by hand-built observations.
+ *
+ * `measure` was added because every domain outside a browser claims numbers, and a predicate
+ * form that only unit tests ever reach would be one more thing defined and reached by nobody,
+ * which is the defect this release spent its length finding. This realm is where the
+ * specification proves its own vocabulary: it exists because "a specification whose only
+ * implementation is the author's flagship has demonstrated nothing".
+ *
+ * The quantity is latency from window open to the call being observed, which needs no new
+ * input — `ServiceCall.at` and `Window.openedAt` are both already there. It is the quantity a
+ * service claim actually names: *the write landed within 300 ms of the action*.
+ *
+ * The unit rides on the summary, `service.call.latency.ms`, because the specification has no
+ * unit field on purpose: a unit the engine could not check would be a field that exists to be
+ * ignored, and two implementations disagreeing about it would disagree silently.
+ */
+describe('a measured quantity, produced by a realm rather than by a fixture', () => {
+  it('emits a numeric latency observation alongside the call it describes', async () => {
+    reset();
+    const realm = new ServiceRealm(ports());
+    const window = realm.openWindow(8_000);
+    // The port records nothing by itself; a call exists because the service made one.
+    clock += 40;
+    calls.push(placed(200));
+    await realm.perform({ id: 'a1', actor: 'test', capability: 'place_order', at: clock });
+    const observations = await realm.observe(realm.closeWindow(window));
+    const latency = observations.filter((o) => o.summary === 'service.call.latency.ms');
+    expect(latency.length, 'the realm emitted no latency observation').toBeGreaterThan(0);
+    for (const o of latency) expect(typeof o.value).toBe('number');
+  });
+
+  it('answers a measure predicate over what the realm actually reported', async () => {
+    reset();
+    const realm = new ServiceRealm(ports());
+    const window = realm.openWindow(8_000);
+    clock += 40;
+    calls.push(placed(200));
+    await realm.perform({ id: 'a1', actor: 'test', capability: 'place_order', at: clock });
+    const observations = await realm.observe(realm.closeWindow(window));
+    const within = (ms: number, tolerance: number): boolean | undefined =>
+      evaluate(
+        {
+          kind: PredicateKind.MEASURE,
+          match: { channel: ChannelId.NET, summary: 'service.call.latency.ms' },
+          op: MeasureOp.AT_MOST,
+          value: ms,
+          tolerance,
+        },
+        observations,
+      );
+    // A generous bound holds and a mean one does not, which together prove the predicate is
+    // reading the realm's number rather than answering the same way whatever it is given.
+    expect(within(10_000, 0)).toBe(true);
+    expect(within(-1, 0)).toBe(false);
   });
 });
