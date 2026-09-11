@@ -56,6 +56,14 @@ That is a real cost, and it is the correct one. It is the same cost this project
 
 If a plant is refused, the scenario is scored **unplantable** — never passed.
 
+## The subject this project supplies
+
+`subjects/bench-app.mjs` is our side of the inverted contract: a scenario id, how to put the app into that state, and what to claim once it is there. Planting is a URL — `apps/bench-app` carries seventy-three injected regressions reachable as `?reticle-bug=<id>`, and five of them happen to be the behaviours five scenarios describe.
+
+**Five of fourteen.** The other nine have no entry and are scored `absent`, never passed. That number is published rather than smoothed because the gap is the FIXTURE, not the implementation: the bug catalogue was grown for a benchmark, and nobody has yet built a subject that can produce "the result appears somewhere this implementation is not watching".
+
+A subject map is the one place an implementation can cheat unnoticed — name a scenario it cannot really produce, and the driver will drive it, get whatever the app happens to do, and score that as an answer. So `plantUrl` returns `undefined` rather than a plausible base URL for anything it cannot plant, and a test asserts that every id in the map is a scenario the suite defines.
+
 ## What we score ourselves
 
 Two scenarios ship failing for this project's own implementation, and they stay on the list:
