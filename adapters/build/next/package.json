@@ -7,7 +7,7 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/reticlehq/reticle.git",
-    "directory": "packages/next"
+    "directory": "adapters/build/next"
   },
   "homepage": "https://github.com/reticlehq/reticle#readme",
   "keywords": [

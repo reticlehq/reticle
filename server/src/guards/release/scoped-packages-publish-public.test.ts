@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { REPO_ROOT } from '../../machine/repo-root.js';
 
@@ -89,6 +89,28 @@ describe('what a scoped package asks npm for', () => {
       thin,
       'these publish to npm with nothing on the page: no source link, nowhere to report a bug, ' +
         'or no statement of what they are. Copy the shape from any neighbour.',
+    ).toEqual([]);
+  });
+
+  it('every repository link points at a directory that is there', () => {
+    // npm renders repository.directory as the package page's "source" link. It is a path, so a
+    // rename breaks it silently and only somebody clicking it on npm ever finds out.
+    //
+    // Five of thirteen were pointing into `packages/`, which was dissolved two days before this
+    // was written. The same dead prefix left seven wrong lines in the CLAUDE.md layout map and
+    // a dead command in a user's MCP registration, which is what sent me looking here.
+    const broken = publishable()
+      .map(({ manifest }) => ({
+        name: manifest.name ?? '',
+        dir: (manifest.repository as { directory?: string } | undefined)?.directory,
+      }))
+      .filter(({ dir }) => undefined !== dir && !existsSync(join(REPO_ROOT, dir)))
+      .map(({ name, dir }) => `${name} -> ${String(dir)}`)
+      .sort();
+    expect(
+      broken,
+      'these name a repository directory that does not exist, so the source link on npm goes ' +
+        'nowhere. A rename moves the code and leaves this behind.',
     ).toEqual([]);
   });
 

@@ -1,7 +1,7 @@
 {
   "name": "@reticlehq/react",
   "version": "3.0.0",
-  "description": "Reticle React adapter — maps a DOM ref to its component stack and source file via the fiber tree.",
+  "description": "Reticle React adapter \u2014 maps a DOM ref to its component stack and source file via the fiber tree.",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -43,7 +43,7 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/reticlehq/reticle.git",
-    "directory": "packages/react"
+    "directory": "adapters/framework/react"
   },
   "homepage": "https://github.com/reticlehq/reticle#readme",
   "bugs": "https://github.com/reticlehq/reticle/issues",
