@@ -86,3 +86,30 @@ export function gradeSequence(steps: readonly StepExpectation[]): SequenceGrade 
         : `every declared consequence held, but only ${String(declared)} of ${String(total)} steps declared one — the rest were driven, not verified`,
   };
 }
+
+/**
+ * The offer to keep a driven plan as a flow, or nothing.
+ *
+ * A completed sequence is already a compiled program — anchors resolved, actions ordered, and, where
+ * a step declared one, a consequence. It is a flow minus somebody deciding to save it, and the agent
+ * holds the whole thing at the moment it is cheapest to keep.
+ *
+ * The gate is the part that matters: **no consequence, no save.** A plan where every step drove and
+ * none declared replays green whatever the app does, so offering to keep it would manufacture
+ * regression coverage that cannot go red — the same false green `unverifiable` names on the suite,
+ * one step earlier. A plan whose consequence did NOT hold is not offered either: that journey is the
+ * bug report, not the regression test, and saving it now would pin the broken behaviour as expected.
+ *
+ * The coverage travels in the sentence for the same reason it travels on the verdict. Keeping a
+ * two-of-twelve plan as a regression flow is a reasonable thing to do and a bad thing to do without
+ * knowing it.
+ */
+export function offerToKeep(grade: SequenceGrade): string | undefined {
+  if (grade.verified !== Verified.YES || 0 === grade.declared) return undefined;
+  return (
+    `this plan proved something (${String(grade.declared)} of ${String(grade.total)} steps declared a ` +
+    'consequence and every one held) — keep it as a regression flow with ' +
+    'reticle_flow_save { saveAs: "<name>" }, and the steps that declared nothing will replay ' +
+    'without proving anything, exactly as they did here'
+  );
+}

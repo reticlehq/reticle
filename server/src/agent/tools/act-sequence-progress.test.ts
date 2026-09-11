@@ -287,3 +287,29 @@ describe('what completed counts when a declared consequence does not hold', () =
     expect(result.completed + (result.tail ?? []).length).toBe(plan.length);
   });
 });
+
+/**
+ * The offer rides on the response, or does not — the rule itself is proved in sequence-offer.test.ts.
+ * What is pinned here is the wiring: that a real handler call carries it, and that the plan which
+ * declared nothing does not get one.
+ */
+describe('keeping a driven plan as a flow', () => {
+  it('offers on a plan whose declared consequence held', async () => {
+    const session = fakeSession({});
+    const result = (await tool(ReticleTool.ACT_SEQUENCE).handler(fakeDeps(session), {
+      steps: [{ ref: 'e1', action: 'click', expect: { kind: 'settled' } }],
+      timeout_ms: 0,
+    })) as SequenceResult & { verified?: string; keep?: string };
+    // Vacuity: without a held consequence there is nothing to offer and the absence proves nothing.
+    expect(result.verified).toBe('yes');
+    expect(result.keep).toMatch(/reticle_flow_save/);
+  });
+
+  it('stays silent on a plan that declared nothing', async () => {
+    const session = fakeSession({});
+    const result = (await tool(ReticleTool.ACT_SEQUENCE).handler(fakeDeps(session), {
+      steps: [{ ref: 'e1', action: 'click' }],
+    })) as SequenceResult & { keep?: string };
+    expect(result.keep).toBeUndefined();
+  });
+});

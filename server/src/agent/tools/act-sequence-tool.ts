@@ -30,7 +30,12 @@ import {
   PredicateSchema,
   waitForPredicate,
 } from '@reticlehq/engine/question/predicate/predicate.js';
-import { DeviationMode, gradeSequence, type StepExpectation } from './act/sequence-grade.js';
+import {
+  DeviationMode,
+  gradeSequence,
+  offerToKeep,
+  type StepExpectation,
+} from './act/sequence-grade.js';
 import { stepEffect, type StepEffect } from '@reticlehq/engine/evidence/step-effect.js';
 import type { Session } from '../../connection/session/session.js';
 // resolveActTarget moved out of act-tools into its own module on this branch; #706 was written
@@ -98,6 +103,12 @@ export const ACT_SEQUENCE_TOOL: ToolDef = {
     /** THE field to gate on: "yes" | "no" | "unknown" — see `because`. */
     verified: z.string().optional(),
     because: z.string().optional(),
+    /**
+     * Present only when the plan PROVED something — see `offerToKeep`. A plan that declared nothing
+     * replays green whatever the app does, so offering to keep it would manufacture regression
+     * coverage that cannot go red.
+     */
+    keep: z.string().optional(),
     /** How many steps declared a consequence, of how many were driven. Never averaged away. */
     coverage: z.object({ declared: z.number(), total: z.number() }).optional(),
     /** Steps never run, verbatim, so a caller re-plans the failure rather than the whole journey. */
@@ -271,6 +282,11 @@ export const ACT_SEQUENCE_TOOL: ToolDef = {
         ...(stoppedAt !== undefined ? { stopped_at: stoppedAt } : {}),
         verified: grade.verified,
         because: grade.because,
+        // Offered at the one moment the compiled program is in hand and free to keep.
+        ...((): Record<string, string> => {
+          const keep = offerToKeep(grade);
+          return keep === undefined ? {} : { keep };
+        })(),
         coverage: { declared: grade.declared, total: inputSteps.length },
         // Verbatim and unmodified: the steps after the break are usually still correct, and handing
         // them back edited invites a caller to re-plan work that was never wrong.
