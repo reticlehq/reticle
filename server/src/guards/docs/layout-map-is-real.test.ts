@@ -42,6 +42,27 @@ function mappedPaths(): string[] {
     .sort();
 }
 
+/**
+ * Is git tracking anything under this path, or is it deliberately absent from a clone?
+ *
+ * Two different absences look identical to `existsSync`: a directory that MOVED (a real defect in
+ * the map) and one that is gitignored on purpose. Only the first should fail.
+ */
+function isTracked(path: string): boolean {
+  const listed = execFileSync('git', ['ls-files', '--', path], {
+    cwd: REPO_ROOT,
+    encoding: 'utf8',
+  }).trim();
+  if ('' !== listed) return true;
+  // Nothing tracked. Ignored on purpose is fine; anything else is a path that is simply not there.
+  try {
+    execFileSync('git', ['check-ignore', '-q', '--', path], { cwd: REPO_ROOT });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 describe('the map at the top of CLAUDE.md', () => {
   it('finds paths to check, so a pass is not a pass over nothing', () => {
     // A changed fence, a reformatted table or a stricter regex would silently empty this.
@@ -49,13 +70,25 @@ describe('the map at the top of CLAUDE.md', () => {
     expect(mappedPaths()).toContain('server');
   });
 
-  it('names only directories that exist', () => {
-    const absent = mappedPaths().filter((path) => !existsSync(join(REPO_ROOT, path)));
+  it('names only directories that exist in a fresh clone', () => {
+    // `existsSync` alone asks the WRONG filesystem. `plan/` is in the map and is always
+    // gitignored, so it is on every developer's disk and in nobody's clone: this assertion passed
+    // locally for everyone and failed the first time CI ever ran, on a checkout that had no
+    // `plan/` because no checkout ever does.
+    //
+    // The exemption is derived rather than listed. A path git ignores is deliberately absent from
+    // a clone, so "does it exist" is not the question to ask about it — and deriving means the
+    // next deliberately-untracked entry needs no edit here, while a directory that is simply GONE
+    // is not ignored and still fails.
+    const absent = mappedPaths().filter(
+      (path) => !existsSync(join(REPO_ROOT, path)) || !isTracked(path),
+    );
     expect(
       absent,
-      `${CLAUDE_MD} points at these and they are not there. This block is the first thing ` +
-        'anybody reads to find out where code lives, and a wrong map sends every reader and ' +
-        'every agent to the wrong place.',
+      `${CLAUDE_MD} points at these and a fresh clone does not have them. This block is the ` +
+        'first thing anybody reads to find out where code lives, and a wrong map sends every ' +
+        'reader and every agent to the wrong place. A path that is deliberately gitignored (like ' +
+        '`plan/`) is exempt automatically — if one is listed here, git is tracking nothing under it.',
     ).toEqual([]);
   });
 
