@@ -37,6 +37,8 @@ export interface PredicateSession {
   command(name: string, args?: Record<string, unknown>): Promise<CommandResult>;
   eventsSince(cursor: number): ReticleEvent[];
   onEvent(listener: (event: ReticleEvent) => void): () => void;
+  /** Hold this wait's window against eviction while it is graded; returns the release (#668). */
+  protectWindow?(cursor: number): () => void;
   /** Milliseconds since connect — the same clock that stamps event `t` (injected, testable). */
   elapsed(): number;
   /**
@@ -636,6 +638,9 @@ export function waitForPredicate(
 ): Promise<EvalResult> {
   return new Promise<EvalResult>((resolve) => {
     let done = false;
+    // Released in `finish`, on every exit path. Without it a flood inside the window can evict the
+    // event the predicate is armed on, and the verdict blames the app (#668).
+    const releaseWindow = session.protectWindow?.(since);
     const failed = (error: unknown): EvalResult => ({
       pass: false,
       failureReason: error instanceof Error ? error.message : String(error),
@@ -663,6 +668,7 @@ export function waitForPredicate(
     const finish = (result: EvalResult): void => {
       if (done) return;
       done = true;
+      releaseWindow?.();
       unsub();
       unsubDisconnect?.();
       clearInterval(interval);

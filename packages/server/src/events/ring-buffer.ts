@@ -3,6 +3,22 @@ import { CHURN_TYPES, RING_BUFFER_DEFAULTS, type ReticleEvent } from '@reticlehq
 /** How far forward to look for a churn event to sacrifice before falling back to plain FIFO. */
 const CHURN_SCAN_LIMIT = 256;
 
+/**
+ * Extra events the count cap may hold while a verdict window is armed.
+ *
+ * A predicate's own match being evicted INSIDE the window it is being graded against is the worst
+ * shape of false negative: the verdict says the flow is red while the flow was green, and the
+ * caller cannot detect it, because `dropped` is a session-wide counter with no way to attribute a
+ * loss to this assertion's own `since` (#668).
+ *
+ * The buffer is time-ordered and eviction takes from the head, so "pin the armed window" is the
+ * same thing as "let the buffer run over its count cap rather than eat into that window". The
+ * allowance is a constant, so a wait that never ends cannot grow the buffer without bound, and the
+ * BYTE cap is deliberately left hard -- bytes are the real memory bound, and a window that floods
+ * past it degrades through the existing honest path rather than through this one.
+ */
+const ARMED_WINDOW_OVERFLOW = 2000;
+
 interface RingBufferOptions {
   maxEvents?: number;
   maxAgeMs?: number;
@@ -41,6 +57,15 @@ export class RingBuffer {
    * `lostSince` and `ring-buffer-window-loss.test.ts`.
    */
   #lastScarceLossT: number | undefined;
+  /**
+   * Cursors of the verdict windows currently being graded, one entry per armed wait.
+   *
+   * A multiset rather than a single value: concurrent waits are ordinary (an `act_and_wait` whose
+   * `until` is an `allOf`, a background `wait_for`), and the buffer must protect back to the
+   * EARLIEST of them. Held as counts so releasing one wait does not unprotect another armed on the
+   * same cursor.
+   */
+  #armedWindows = new Map<number, number>();
 
   constructor(options: RingBufferOptions = {}) {
     this.#maxEvents = options.maxEvents ?? RING_BUFFER_DEFAULTS.MAX_EVENTS;
@@ -95,8 +120,17 @@ export class RingBuffer {
     // `dropped` moved. Bytes is a soft cap and per-value serialization already bounds any one event, so
     // keeping the sole survivor over the budget is the correct trade. The count cap (maxEvents, ~2000)
     // is a hard bound and stays `> maxEvents`.
+    // While a verdict window is armed, the count cap gets a bounded allowance -- but only while the
+    // event about to be dropped actually belongs to that window. A buffer full of events older than
+    // every armed cursor is evicted exactly as before, so an idle-but-armed session does not sit on
+    // a larger buffer for nothing.
+    const floor = this.#armedFloor();
+    const countCap = (): number =>
+      floor !== undefined && (this.#events[this.#head]?.t ?? -Infinity) >= floor
+        ? this.#maxEvents + ARMED_WINDOW_OVERFLOW
+        : this.#maxEvents;
     while (
-      this.#liveCount() > this.#maxEvents ||
+      this.#liveCount() > countCap() ||
       (this.#totalBytes > this.#maxBytes && this.#liveCount() > 1)
     ) {
       if (CHURN_TYPES.has(this.#events[this.#head]?.type ?? '')) {
@@ -130,6 +164,40 @@ export class RingBuffer {
       this.#eventBytes = this.#eventBytes.slice(this.#head);
       this.#head = 0;
     }
+  }
+
+  /**
+   * Protect events at or after `cursor` from count-cap eviction until the returned function runs.
+   *
+   * Call it when a wait arms and call the result when the verdict is graded, in a `finally`: a
+   * leaked protection would hold the allowance open for the life of the session. Releasing twice is
+   * harmless.
+   *
+   * This is a bounded promise, not an absolute one. Past {@link ARMED_WINDOW_OVERFLOW} events, or
+   * under byte pressure, the window is evicted anyway and the loss is recorded as scarce -- so
+   * `lostSince` turns the verdict undecidable instead of returning the false red that pinning
+   * exists to prevent. Degrading into "I could not see" is right; degrading into "it did not
+   * happen" is the defect.
+   */
+  protect(cursor: number): () => void {
+    this.#armedWindows.set(cursor, (this.#armedWindows.get(cursor) ?? 0) + 1);
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      const remaining = (this.#armedWindows.get(cursor) ?? 1) - 1;
+      if (remaining <= 0) this.#armedWindows.delete(cursor);
+      else this.#armedWindows.set(cursor, remaining);
+    };
+  }
+
+  /** The earliest armed cursor, or `undefined` when no verdict window is open. */
+  #armedFloor(): number | undefined {
+    let floor: number | undefined;
+    for (const cursor of this.#armedWindows.keys()) {
+      if (floor === undefined || cursor < floor) floor = cursor;
+    }
+    return floor;
   }
 
   /** Record an eviction at `index` as scarce loss, unless it was the churn floor being sacrificed. */

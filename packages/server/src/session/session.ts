@@ -639,6 +639,14 @@ export class Session {
     return this.#buffer.lostSince(cursor);
   }
 
+  /**
+   * Hold events at/after `cursor` against count-cap eviction until the returned function runs, so a
+   * predicate's own match cannot be dropped inside the window it is graded on (#668).
+   */
+  protectWindow(cursor: number): () => void {
+    return this.#buffer.protect(cursor);
+  }
+
   onEvent(listener: (event: ReticleEvent) => void): () => void {
     this.#listeners.add(listener);
     return () => this.#listeners.delete(listener);
