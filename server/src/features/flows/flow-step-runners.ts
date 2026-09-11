@@ -377,46 +377,71 @@ export async function runSequenceStep(
       args: replayActionArgs(sub.args, confirmDangerous, anchorFieldName(sub.anchor)),
     });
   }
-  session.beginAction?.(ReticleTool.FLOW_REPLAY, { steps: live.length });
-  let act;
-  try {
-    act = await session.command(ReticleCommand.ACT_SEQUENCE, { steps: live });
-  } finally {
-    session.finishAction?.();
-  }
   const result: FlowStepResult = {
     step: index,
     tool: step.tool,
     anchor: anchorLabel(step.anchor),
-    ok: act.ok,
+    ok: true,
   };
-  if (!act.ok) {
+
+  /** One dispatch through the SAME command either way, so batched and walked replay identically. */
+  const dispatch = async (steps: typeof live): Promise<boolean> => {
+    session.beginAction?.(ReticleTool.FLOW_REPLAY, { steps: steps.length });
+    let act;
+    try {
+      act = await session.command(ReticleCommand.ACT_SEQUENCE, { steps });
+    } finally {
+      session.finishAction?.();
+    }
+    if (act.ok) return true;
+    result.ok = false;
     result.error = replayDestructiveActionHint(act.error ?? 'command failed');
+    return false;
+  };
+
+  /** The sub-step's own expectation, unless its testid is deliberately unasserted. */
+  const declaredBy = (sub: FlowStep): string | undefined => {
+    const testid = sub.expect?.element?.testid;
+    return testid === undefined || dynamic.has(testid) ? undefined : testid;
+  };
+
+  /**
+   * Assert one sub-step's expectation. Absence stops the sequence.
+   *
+   * The STEP's anchor is named, not the assertion's target: replay stops at the first drift, and
+   * naming the expectation here would read as "this step's locator drifted" on a step whose locator
+   * resolved and whose action fired.
+   */
+  const assertDeclared = async (testid: string): Promise<boolean> => {
+    const found = await resolveQuery(session, { by: QueryBy.TESTID, value: testid }, sleep);
+    if (0 < found.refs.length) return true;
+    result.ok = false;
+    result.drift = expectElementDrift(testid, found.hint);
+    return false;
+  };
+
+  /*
+   * A sequence that declares nothing goes as ONE batch — the cheap path, and the common one.
+   *
+   * When a sub-step DOES declare, the sub-steps are walked and each expectation is checked right
+   * after its own action. Checking them all at the end, which is what replay used to do, let "click
+   * Pay, and the receipt appears" pass because a LATER sub-step produced the receipt: true by the
+   * time anybody looked, and no longer a claim about this action. The live act path never had that
+   * hole, because it asserts before moving on; this is replay catching up to it.
+   *
+   * The walk costs a round trip per sub-step, so only a flow that declared something pays for it.
+   */
+  const declaring = subs.some((sub) => declaredBy(sub) !== undefined);
+  if (!declaring) {
+    await dispatch(live);
     return result;
   }
-  /*
-   * Each sub-step's `expect.element` testid, asserted after the batch.
-   *
-   * `runTestidStep` does this for a single act, and a sequence never enters it -- so a sub-step
-   * could declare "and then the receipt appears", be COUNTED as an assertion by
-   * classifyFlowAssertions, and be checked by nothing. The grade said the flow could go red; it
-   * could not.
-   *
-   * Sequential rather than parallel, and it stops at the first absence: replay reports one drift and
-   * the first one is the one that explains the rest.
-   */
-  for (const sub of subs) {
-    const expectTestid = sub.expect?.element?.testid;
-    if (expectTestid === undefined || dynamic.has(expectTestid)) continue;
-    const found = await resolveQuery(session, { by: QueryBy.TESTID, value: expectTestid }, sleep);
-    if (0 === found.refs.length) {
-      result.ok = false;
-      // The STEP's anchor, not the assertion's target: replay stops at the first drift, so naming
-      // the expectation here would read as "this step's locator drifted" on a step whose locator
-      // resolved and whose actions all fired.
-      result.drift = expectElementDrift(expectTestid, found.hint);
-      return result;
-    }
+  for (const [subIndex, sub] of subs.entries()) {
+    const one = live[subIndex];
+    if (one === undefined) continue;
+    if (!(await dispatch([one]))) return result;
+    const testid = declaredBy(sub);
+    if (testid !== undefined && !(await assertDeclared(testid))) return result;
   }
   return result;
 }
