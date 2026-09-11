@@ -2,15 +2,16 @@
  * Why a leased tab did not dial in.
  *
  * The lease pool opens the app itself, which is what makes it the highest-value path in the product
- * — it does not wait for the human's tab. Measured over a day: lease sessions had a median of 30
- * tool calls and produced 46% of all bugs found, against a median of 1 call for everything else.
+ * — it does not wait for the human's tab. A leased session is driven far harder than an unleased
+ * one and is where most of the bugs anybody finds are actually found, so a lease that does not
+ * dial in costs more than any other kind of failed start.
  *
  * The old hint asked "is <url> running with @reticlehq/core enabled?", which is the one thing that
  * cannot be in doubt: the pool just navigated a real browser to it. Its replacement then swung to
  * the other confident-but-unevidenced claim — "the usual cause is a PORT MISMATCH" — and the daemon
  * ended up contradicting ITSELF inside one response, saying in `reticle_sessions` that a session had
- * connected earlier "so the wiring is correct" and here that the port was probably wrong. Across a
- * batch of field reports on four apps the port was correct every single time, and `reticle init`
+ * connected earlier "so the wiring is correct" and here that the port was probably wrong. In every
+ * field report we looked at, the port was correct, and `reticle init`
  * would have been the wrong action every single time.
  *
  * So: rank by what the daemon actually knows, and fall back to the differential only when it knows

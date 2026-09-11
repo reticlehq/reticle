@@ -106,9 +106,9 @@ describe('diagnoseNoSession', () => {
    * The branch where the agent does not need the human at all.
    *
    * `reticle_lease` opens a browser Reticle controls instead of waiting for the human's tab to dial
-   * in. Measured over a day: the 5 sessions that used it had a MEDIAN of 30 tool calls and produced
-   * 46% of every bug found, against a median of 1 call for the 20 active sessions that did not — and
-   * not one single-call bounce used a lease. It is the difference between working and bouncing.
+   * in. A leased session is driven many times harder than an unleased one and is where most of
+   * the bugs anybody finds get found; sessions that bounce after a single call never used a
+   * lease. It is the difference between working and bouncing.
    *
    * It is also advertised on NO profile but `full`, so an agent finds it only if it already knew.
    * The moment it matters is exactly here, so this is where it gets named — at no per-turn cost.

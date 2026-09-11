@@ -1,11 +1,10 @@
 /**
  * What a leased tab that did not connect should say.
  *
- * `reticle_lease` is the highest-value path in the whole product and nobody knows it. Measured over
- * a day: the 5 sessions that used it had a MEDIAN of 30 tool calls and produced 46% of all bugs
- * found, while the 20 active sessions that did not had a median of 1 call. Not one single-call
- * bounce used a lease. It works because it does not wait for the human's tab to dial in — Reticle
- * opens its own.
+ * `reticle_lease` is the highest-value path in the whole product and nobody knows it. A leased
+ * session is driven many times harder than an unleased one and is where most of the bugs anybody
+ * finds get found; sessions that bounce after a single call never used a lease. It works because
+ * it does not wait for the human's tab to dial in — Reticle opens its own.
  *
  * And the plan file listed it as UNVERIFIED, "one acquire returned ready:false", possibly broken.
  * Driven for real it is not broken at all: against a daemon on the port the app was built to dial,
