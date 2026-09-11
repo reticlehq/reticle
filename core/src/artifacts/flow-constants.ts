@@ -179,6 +179,26 @@ export type RecordedSaveError = (typeof RecordedSaveError)[keyof typeof Recorded
  * Rebinds testid anchors only (role/name/signal re-anchoring is future). A confident nearest-match
  * is required before any disk write — the "never silently rewrite" invariant.
  */
+/**
+ * Whether a suite should run this flow at all.
+ *
+ * Absent means `active` — every flow already on disk stays exactly as it was.
+ *
+ * `quarantined` exists because a permanently failing flow is worse than no flow: measured on this
+ * repo's own ledger, one flow has failed 366 of 366 runs and is still replayed on every suite. That
+ * is not a regression signal, it is noise, and noise is what teaches people to stop reading the
+ * suite. Quarantine takes it out of the verdict while keeping it VISIBLE and owned -- a silent skip
+ * would just be the same problem with the evidence removed.
+ *
+ * `draft` is for a flow being authored: saved, not yet part of anybody's verdict.
+ */
+export const FlowStatus = {
+  ACTIVE: 'active',
+  QUARANTINED: 'quarantined',
+  DRAFT: 'draft',
+} as const;
+export type FlowStatus = (typeof FlowStatus)[keyof typeof FlowStatus];
+
 export const HealStatus = {
   HEALED: 'healed', // apply:true and >=1 anchor rewritten on disk
   DRIFT: 'drift', // apply:false: confident proposal(s) returned, file untouched

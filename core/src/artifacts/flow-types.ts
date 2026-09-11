@@ -8,6 +8,7 @@ import {
   AnchorKind,
   type DriftReason,
   FLOW_FILE_VERSION,
+  FlowStatus,
   type HealStatus,
   type ReplayStatus,
 } from './flow-constants.js';
@@ -542,8 +543,63 @@ export const FlowFileSchema = z.object({
    * presence, not words. Compiled from a `mark-dynamic` annotation.
    */
   dynamic: z.array(FlowAnchorSchema).optional(),
+  /**
+   * Free-form labels a suite selects on — `smoke`, `checkout`, `slow`.
+   *
+   * Not an enum: the useful sets are the ones a team invents for its own product, and a closed list
+   * would mean shipping somebody's release process in the contract. Optional and back-compat, so
+   * every flow already on disk keeps loading.
+   */
+  labels: z.array(z.string().min(1)).optional(),
+  /** Whether a suite runs this flow. Absent means active — see FlowStatus. */
+  status: z.enum([FlowStatus.ACTIVE, FlowStatus.QUARANTINED, FlowStatus.DRAFT]).optional(),
+  /**
+   * Why this flow is out of the suite, who owns getting it back, and since when.
+   *
+   * Required in full when quarantined, because a quarantine without a reason and an owner is a
+   * silent skip wearing a label: it removes the failure from the verdict AND the reason to ever fix
+   * it. `until` is the optional half — a date somebody has to look at it again.
+   */
+  quarantine: z
+    .object({
+      reason: z.string().min(1),
+      since: z.string().min(1),
+      owner: z.string().min(1),
+      until: z.string().optional(),
+    })
+    .optional(),
 });
 export type FlowFile = z.infer<typeof FlowFileSchema>;
+
+/**
+ * Is this flow excluded from the suite's verdict?
+ *
+ * Quarantine takes a flow out of the verdict, which is a real power, and the failure mode is not a
+ * malformed file — it is a flow quietly leaving the suite and nobody noticing it went. So this fails
+ * TOWARD running it: an incomplete quarantine is treated as no quarantine at all. Whoever wants a
+ * flow out has to say why, who owns getting it back, and since when.
+ *
+ * A function rather than a schema rule, deliberately. The conditional form would be a zod
+ * `.refine()` — this package has none, and a refinement does not survive into the generated JSON
+ * Schema, so an implementation reading the contract from `schema/` would never see it. "Does this
+ * file parse" and "is this flow actually excluded" are two different questions; this is the second.
+ *
+ * The status is the decision and the block is the paperwork: a leftover note without the status
+ * excludes nothing, so tidying a flow back into the suite is one field.
+ */
+export function isQuarantined(flow: Pick<FlowFile, 'status' | 'quarantine'>): boolean {
+  if (flow.status !== FlowStatus.QUARANTINED) return false;
+  const q = flow.quarantine;
+  return (
+    q !== undefined &&
+    'string' === typeof q.reason &&
+    q.reason.length > 0 &&
+    'string' === typeof q.owner &&
+    q.owner.length > 0 &&
+    'string' === typeof q.since &&
+    q.since.length > 0
+  );
+}
 
 /**
  * The in-page → wire payload for a finished human recording. The browser
