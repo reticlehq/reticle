@@ -9,13 +9,13 @@
  */
 import type { InitHost } from '@reticlehq/init';
 import type { InitOutcome } from '@reticlehq/core/telemetry';
-import { spanSync } from '../../trace.js';
-import { reportInitOutcome } from '../../telemetry/init-telemetry.js';
+import { spanSync } from '../../../trace.js';
+import { reportInitOutcome } from '../../../telemetry/init-telemetry.js';
 import {
   defaultPairingTokenDir,
   readOrCreatePairingTokenSync,
-} from '../../connection/bridge/pairing-token.js';
-import { declaredInstallSource } from '../../telemetry/install-source.js';
+} from '../../../connection/bridge/pairing-token.js';
+import { declaredInstallSource } from '../../../telemetry/install-source.js';
 
 export function serverInitHost(): InitHost {
   return {

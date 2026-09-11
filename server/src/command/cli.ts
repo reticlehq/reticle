@@ -85,9 +85,9 @@ import { handleVerify } from './cli/cli-verify.js';
 import { runKill } from './cli/cli-kill.js';
 import { summarizeHunt, type HuntAnomaly, type HuntRun } from '../features/hunt/hunt-report.js';
 import { runInit, buildNodeIo } from '@reticlehq/init';
-import { continueAfterInit } from './setup/init-runtime.js';
+import { continueAfterInit } from './setup/init/init-runtime.js';
 import { handleDoctor } from './cli/cli-doctor.js';
-import { serverInitHost } from './setup/init-host.js';
+import { serverInitHost } from './setup/init/init-host.js';
 import { describeLicense } from '../features/license/license.js';
 import {
   isLikelyDevServerPort,

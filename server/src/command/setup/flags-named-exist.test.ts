@@ -14,7 +14,12 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-const SETUP_SOURCES = ['run-setup.ts', 'setup-options.ts', 'init-runtime.ts', 'setup-command.ts'];
+const SETUP_SOURCES = [
+  'run-setup.ts',
+  'setup-options.ts',
+  'init/init-runtime.ts',
+  'setup-command.ts',
+];
 
 const read = (file: string): string => readFileSync(join(__dirname, file), 'utf8');
 

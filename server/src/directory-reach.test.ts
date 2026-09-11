@@ -314,7 +314,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
     'mcp',
     'prior',
     'resolve',
-    'setup',
+    'init',
     'telemetry',
     'update',
   ],
@@ -415,7 +415,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   // `resolve` arrived with 2.14.0: `setup-command` reports the project id in its result, and
   // `readProjectId` lives there. One way, and the same edge `mcp` and `tools` already had -- it
   // is the only module that exports it, so the alternative was a second copy of the reader.
-  setup: ['bridge', 'bringup', 'daemon', 'launch', 'proxy', 'resolve', 'telemetry', 'terminal'],
+  setup: ['bringup', 'daemon', 'launch', 'resolve', 'terminal'],
   telemetry: [
     'cli',
     'daemon',
@@ -447,6 +447,13 @@ const REACHES_FOR: Record<string, readonly string[]> = {
    * reach them, which is the argument for a name rather than against one.
    */
   args: [],
+  /**
+   * The daemon half of `reticle init`: the capabilities the init package cannot know for itself,
+   * and what happens after the files are written. Both were flat in setup/, and taking them out
+   * is why setup no longer reaches bridge, proxy or telemetry at all — those three reaches were
+   * these two files and nothing else.
+   */
+  init: ['bridge', 'bringup', 'daemon', 'launch', 'proxy', 'setup', 'telemetry', 'terminal'],
   tools: [
     'args',
     'timing',

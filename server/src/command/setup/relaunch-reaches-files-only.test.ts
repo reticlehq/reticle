@@ -6,7 +6,7 @@
  * that returned before the decision was made. The flag parsed, exited zero, and printed nothing.
  */
 import { describe, expect, it } from 'vitest';
-import { continueAfterInit } from './init-runtime.js';
+import { continueAfterInit } from './init/init-runtime.js';
 
 const RESULT = { ok: true, applied: 1, manual: 0 } as const;
 

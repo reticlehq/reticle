@@ -7,7 +7,7 @@ import { runInit, resolveLockfiles, type InitIo, type InitOptions } from './run.
  * The token the host hands over. Minting belongs to the bridge, which owns the file — this package
  * only asks for one and inlines the answer, so what these tests prove is that it asks and that the
  * answer reaches the snippet. That the daemon's host actually MINTS is proved on the server side by
- * `setup/init-host.test.ts`, against the real `~/.reticle` seam.
+ * `setup/init/init-host.test.ts`, against the real `~/.reticle` seam.
  */
 const HOST_TOKEN = 'a1b2c3d4e5f6';
 
