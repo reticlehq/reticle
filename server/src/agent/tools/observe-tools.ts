@@ -60,9 +60,9 @@ import {
   DERIVED_IPC_STATUS_ADVICE,
   isPresenceOnlyAssertion,
   PRESENCE_ONLY_ADVICE,
-} from './assert-grade.js';
-import { assertVerdict } from './assert-verdict.js';
-import { assertionSource } from './assert-source.js';
+} from './assert/assert-grade.js';
+import { assertVerdict } from './assert/assert-verdict.js';
+import { assertionSource } from './assert/assert-source.js';
 import { isChangeUndeclared } from '@reticlehq/engine/evidence/undeclared-change.js';
 import { openSessionIntents } from '../../features/intent/open-intents.js';
 import {
@@ -75,7 +75,7 @@ import { bodyClauseRefusal } from '@reticlehq/engine/evidence/body-capture-remed
 import { withControl } from '../../connection/session/control-envelope.js';
 import { asNumber, asRecord, asString } from '@reticlehq/core';
 import { type ToolDef, intentArg, sessionIdShape, commandOrThrow } from './tool-kit.js';
-import { gradeOfPredicate } from './assert-grade.js';
+import { gradeOfPredicate } from './assert/assert-grade.js';
 
 /**
  * Evidence-completeness block: present on observe/network/console only when the ring buffer has

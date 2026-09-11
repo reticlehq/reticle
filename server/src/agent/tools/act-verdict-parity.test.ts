@@ -109,7 +109,7 @@ function createParitySessionDeps(blindSpots: Record<string, number>): ToolDeps {
 
 describe('act_and_wait and assert see the same evidence', () => {
   const act = src('act-tools.ts');
-  const assert = src('assert-verdict.ts');
+  const assert = src('assert/assert-verdict.ts');
 
   it('both paths pass `prior` to the contradiction engine', () => {
     // Without this on the act path, `unit-mismatch` cannot fire there at all.

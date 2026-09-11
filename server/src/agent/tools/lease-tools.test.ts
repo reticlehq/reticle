@@ -21,7 +21,7 @@ import {
   scrubSeedFromError,
   waitForLeasedSession,
 } from './lease-tools.js';
-import { assertVerdict } from './assert-verdict.js';
+import { assertVerdict } from './assert/assert-verdict.js';
 import {
   evaluatePredicate,
   type Predicate,

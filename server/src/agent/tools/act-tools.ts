@@ -94,7 +94,7 @@ import { type ToolDef, type ToolDeps, intentArg, sessionIdShape } from './tool-k
 import { asActionType, gradeOf } from './act/act-helpers.js';
 import { resolveActTarget } from './act/act-target.js';
 import { tryRealInput, rewriteUploadArgs, HOVER_NEEDS_POINTER_MSG } from './real-input-attempt.js';
-import { gradeOfPredicate } from './assert-grade.js';
+import { gradeOfPredicate } from './assert/assert-grade.js';
 
 /**
  * Single dispatch point for every ACT and ACT_SEQUENCE command.

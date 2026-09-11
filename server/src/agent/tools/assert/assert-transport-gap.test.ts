@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { EventType, Verified, VerifiedReason } from '@reticlehq/core';
-import { TOOLS, type ToolDef, type ToolDeps } from './tools.js';
+import { TOOLS, type ToolDef, type ToolDeps } from '../tools.js';
 import { ReticleTool } from '@reticlehq/core';
-import type { SessionManager } from '../../connection/session/session.js';
+import type { SessionManager } from '../../../connection/session/session.js';
 import type { ReticleEvent } from '@reticlehq/core';
-import { createFakeSession } from '../../connection/session/fake-session.js';
+import { createFakeSession } from '../../../connection/session/fake-session.js';
 
 /**
  * A window the browser dropped events in must not grade `proved`.

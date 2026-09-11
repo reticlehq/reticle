@@ -61,6 +61,22 @@ const SERVER = join(REPO_ROOT, 'server');
  */
 const REACHES_FOR: Record<string, readonly string[]> = {
   /**
+   * Everything about how an assertion becomes a verdict: the grade it earns, where the claim
+   * came from, and the verdict itself. Twelve files by that name sat loose in a directory of
+   * 138, and the name was already doing the grouping.
+   *
+   * It is NOT a sink like `facts`, and the ledger is worse than that one's: three edges in,
+   * none freed. `assert` reads a session to know what was observed and `act` to know what was
+   * done, which is what an assertion is made of, so those two are inherent rather than
+   * incidental. What it buys is a directory of twelve files that are one subject, out of a
+   * directory that is the largest in the repository.
+   *
+   * `safe-to-group` said SAFE before the move and the mutual-pair count did not change, which
+   * is the property this file actually protects. If a fourth edge ever appears here, the
+   * question to ask is whether `assert` has stopped being one subject.
+   */
+  assert: ['act', 'session'],
+  /**
    * Four directories reach `session/facts/`, and the edge COUNT went up while the coupling
    * went down. That is worth stating, because this list counts edges and cannot weigh them.
    *
@@ -402,6 +418,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
     'update',
   ],
   tools: [
+    'assert',
     'facts',
     'act',
     'annotate-notes',

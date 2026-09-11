@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { LastAct } from '../../connection/session/last-act.js';
+import { LastAct } from '../../../connection/session/last-act.js';
 import { BUFFER_EVICTION_WARNING, SessionState, Verified, VerifiedReason } from '@reticlehq/core';
-import { TOOLS, type ToolDef, type ToolDeps } from './tools.js';
+import { TOOLS, type ToolDef, type ToolDeps } from '../tools.js';
 import { ReticleTool } from '@reticlehq/core';
-import type { Session, SessionManager } from '../../connection/session/session.js';
+import type { Session, SessionManager } from '../../../connection/session/session.js';
 import { EventType, type ReticleEvent } from '@reticlehq/core';
 
 /**

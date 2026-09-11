@@ -9,10 +9,10 @@ import {
   type JournalAction,
   type ReticleEvent,
 } from '@reticlehq/core';
-import { JournalRecorder, type JournalSink } from '../../features/journal/journal-recorder.js';
-import { provenFromJournal } from '../runs/artifact/run-context.js';
-import { Session, type SessionManager } from '../../connection/session/session.js';
-import { TOOLS, type ToolDef, type ToolDeps } from './tools.js';
+import { JournalRecorder, type JournalSink } from '../../../features/journal/journal-recorder.js';
+import { provenFromJournal } from '../../runs/artifact/run-context.js';
+import { Session, type SessionManager } from '../../../connection/session/session.js';
+import { TOOLS, type ToolDef, type ToolDeps } from '../tools.js';
 import { ReticleTool } from '@reticlehq/core';
 
 /**

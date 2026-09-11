@@ -20,17 +20,17 @@
 
 import { describe, expect, it } from 'vitest';
 import { type CommandResult, type ReticleEvent } from '@reticlehq/core';
-import { LastAct } from '../../connection/session/last-act.js';
-import { TOOLS, type ToolDef, type ToolDeps } from './tools.js';
+import { LastAct } from '../../../connection/session/last-act.js';
+import { TOOLS, type ToolDef, type ToolDeps } from '../tools.js';
 import { ReticleTool } from '@reticlehq/core';
-import { BaselineStore } from '../../features/project/baselines.js';
-import { createNodeFileSystem } from '../../features/project/fs/fs-port.js';
-import { RecordingStore } from '../../features/flows/recording/tape/recordings.js';
-import { FlowStore } from '../../features/flows/flows.js';
-import { ProjectStore } from '../../features/project/project-store.js';
-import { AnnotationStore } from '../../features/flows/annotation-store.js';
-import type { Session, SessionManager } from '../../connection/session/session.js';
-import { createFakeSession } from '../../connection/session/fake-session.js';
+import { BaselineStore } from '../../../features/project/baselines.js';
+import { createNodeFileSystem } from '../../../features/project/fs/fs-port.js';
+import { RecordingStore } from '../../../features/flows/recording/tape/recordings.js';
+import { FlowStore } from '../../../features/flows/flows.js';
+import { ProjectStore } from '../../../features/project/project-store.js';
+import { AnnotationStore } from '../../../features/flows/annotation-store.js';
+import type { Session, SessionManager } from '../../../connection/session/session.js';
+import { createFakeSession } from '../../../connection/session/fake-session.js';
 
 const ACTED_SOURCE = 'app/page.tsx:22';
 const NAV_SOURCE = 'ui/global-nav.tsx:54';
