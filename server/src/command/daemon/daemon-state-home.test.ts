@@ -20,7 +20,7 @@ import { describe, expect, it, afterEach } from 'vitest';
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir, homedir } from 'node:os';
 import { join } from 'node:path';
-import { reticleStateHome, spawnDaemon, STATE_DIR_ENV } from './command/daemon/daemon.js';
+import { reticleStateHome, spawnDaemon, STATE_DIR_ENV } from './daemon.js';
 
 const created: string[] = [];
 afterEach(() => {
