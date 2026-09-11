@@ -52,20 +52,26 @@ function publishable(): { dir: string; manifest: Manifest }[] {
 /**
  * Known to ship no licence text, with the decision it is waiting on.
  *
- * NOT an accepted state. `@reticlehq/engine` declares `Apache-2.0` and is 9,100 lines carved
- * out of `@reticlehq/server`, which is FSL-1.1. Writing an Apache-2.0 file into it would settle
- * a licensing question by committing a file, and that is not a thing to decide because a test
- * is red. So it is named here, and the name is the reminder.
+ * Empty, and the emptiness is the point: every publishable package now carries the licence it
+ * declares. `@reticlehq/engine` was the one entry, held open on the belief that giving it a file
+ * would settle a licensing question by committing one. Four facts closed it rather than a
+ * preference:
  *
- * Delete the entry when the licence is chosen and its text is added. If a SECOND package ever
- * appears in this list, something has gone wrong with how packages are created here.
+ *   - The plan decides it, in three places and as a commercial requirement rather than a
+ *     courtesy: running on the OSS engine must require NO licence, because adapter authorship
+ *     that costs money means no adapters get written.
+ *   - The manifest already declared `Apache-2.0`, so the file agrees with the claim rather than
+ *     making a new one. Declaring a licence and shipping no text is the defect.
+ *   - `git log -- engine/src` has exactly ONE author, the copyright holder. The contributor-
+ *     consent question I had recorded against this entry was about five non-owner contributors
+ *     who turn out to have no commits in these files at all.
+ *   - The server it was carved out of is FSL-1.1-**ALv2**, which converts to Apache-2.0 by its
+ *     own terms. Granting it now is the same licence earlier, never a narrower one.
+ *
+ * If a package ever appears in this list, something has gone wrong with how packages are created
+ * here -- and an entry is a reminder to resolve, not a state to live in.
  */
-const NO_LICENCE_TEXT_YET: Record<string, string> = {
-  '@reticlehq/engine':
-    'declares Apache-2.0 and ships no licence file. It was carved out of the FSL-1.1 server, so ' +
-    'which licence it should carry is an open question and not one a guard should answer by ' +
-    'writing a file. Blocks publishing this package correctly.',
-};
+const NO_LICENCE_TEXT_YET: Record<string, string> = {};
 
 describe('every published package carries the licence it claims', () => {
   it('finds the publishable packages, so a pass is not a pass over nothing', () => {
