@@ -1,7 +1,7 @@
 import type { WebSocket } from 'ws';
 import type { ChannelId, ImpactSnapshot } from '@reticlehq/core';
 import type { HandshakeFacts } from './facts/handshake-facts.js';
-import { refusedResult } from './undeclared-command.js';
+import { refusedResult } from './page-commands/undeclared-command.js';
 import { recordImpact } from '../../features/impact/impact-recorder.js';
 import { LastAct } from './last-act.js';
 import { GapLedger } from '@reticlehq/engine/evidence/gap-ledger.js';
@@ -15,7 +15,7 @@ export type { SessionHealth };
 /** The HUD does not need 200 frames to watch a counter climb; the last state always lands. */
 const IMPACT_PUSH_DEBOUNCE_MS = 700;
 
-import { PendingCommands, CommandTimeoutError } from './pending-commands.js';
+import { PendingCommands, CommandTimeoutError } from './page-commands/pending-commands.js';
 import { span } from '../../trace.js';
 import { keepCallerContextInDaemon, noteToDaemonLog } from './daemon-answers.js';
 import {

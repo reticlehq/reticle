@@ -112,7 +112,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
    * nothing in it imports upward. The three reaches below are the ones these files already had
    * under their old home; they are the same edges, now attributed to the directory that owns them.
    */
-  act: ['capsule', 'input', 'read', 'session'],
+  act: ['page-commands', 'capsule', 'input', 'read', 'session'],
   /**
    * The read leaves: what a snapshot or a query LOOKS like, with no opinion about what it means.
    *
@@ -401,6 +401,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   proxy: ['binding', 'daemon', 'identity', 'telemetry'],
   runs: ['artifact', 'cloud', 'dir', 'flows', 'intent', 'peer', 'project', 'telemetry', 'tools'],
   session: [
+    'page-commands',
     'dev-server',
     'args',
     'timing',
@@ -542,6 +543,16 @@ const REACHES_FOR: Record<string, readonly string[]> = {
    * job from doing the work and drifts if it lives next to it.
    */
   answers: ['session'],
+  /**
+   * A command sent to the page: whether this page should be asked for it at all, and the
+   * in-flight table that correlates the reply, times out the ones that never come back and
+   * fails the rest when the socket drops.
+   *
+   * Named page-commands rather than commands because `command/` already exists one level up and
+   * two directory names a single letter apart are a trap for a reader even where the basename
+   * guard is satisfied.
+   */
+  'page-commands': [],
   tools: [
     'navigation',
     'lifetime',

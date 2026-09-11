@@ -11,7 +11,7 @@
  * outcome than "unknown".
  */
 import { isGlobalPressCall } from '@reticlehq/core';
-import { SessionReplacedError } from '../../../connection/session/pending-commands.js';
+import { SessionReplacedError } from '../../../connection/session/page-commands/pending-commands.js';
 import { assertNativeInputSupported } from './act-danger.js';
 import { unevaluablePredicateReason } from '@reticlehq/engine/question/predicate/predicate-precheck.js';
 
