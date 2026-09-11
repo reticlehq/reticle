@@ -33,15 +33,20 @@ const BASE = 'https://openreality.dev/schema/v1';
  * payload shapes in one vendor's TypeScript has published a shape and withheld the contract — the
  * reader can see what a message looks like and not what it may contain.
  */
-const SCHEMAS = Object.freeze({
+// Exported so the guard can read the same map the generator does. Two copies of "what the
+// contract contains" would be the drift this file exists to prevent, one level up.
+export const SCHEMAS = Object.freeze({
   'subject-ref': ovp.SubjectRefSchema,
+  invalidation: ovp.InvalidationSchema,
   'channel-descriptor': ovp.ChannelDescriptorSchema,
   intent: ovp.IntentSchema,
   claim: ovp.ClaimSchema,
   assertion: ovp.AssertionSchema,
   predicate: ovp.PredicateSchema,
+  match: ovp.MatchSchema,
   constraint: ovp.ConstraintSchema,
   capability: ovp.CapabilitySchema,
+  handle: ovp.HandleSchema,
   action: ovp.ActionSchema,
   'action-receipt': ovp.ActionReceiptSchema,
   window: ovp.WindowSchema,
