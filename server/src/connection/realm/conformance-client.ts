@@ -143,7 +143,9 @@ export function conformanceClient(realm: WebRealm, now: () => number): Conforman
         channels: realm.channels(),
         evidence: asEvidence(realm, observations, now()),
         coverage,
-        anomalies: [],
+        // Asked for, at last. The binding passed an empty array for as long as the interface
+        // had no way to return one, and three planted defects came back `yes` because of it.
+        anomalies: realm.detect === undefined ? [] : await realm.detect(window, observations),
         // The suite plants a behaviour and asks what the implementation says about it; whether
         // the claim's own predicate held is the realm's answer, and this binding does not have
         // one to give. Undefined is "nobody evaluated it", which is what that means.

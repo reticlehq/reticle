@@ -9,6 +9,7 @@ import {
 } from '../vocabulary/realm-surface.js';
 import { type ChannelDescriptor, type ChannelId } from '../vocabulary/channel.js';
 import { type Coverage, type Observation } from '../vocabulary/evidence.js';
+import type { Anomaly } from '../vocabulary/verdict.js';
 import { type SubjectRef } from '../vocabulary/subject.js';
 
 /**
@@ -122,6 +123,33 @@ export abstract class Realm {
    * beside the one it meant, which this project has measured and reported as a clean green.
    */
   locate?(query: unknown): Promise<readonly Handle[]>;
+
+  /**
+   * Two things in this window that cannot both be true.
+   *
+   * §8 defines twelve anomaly kinds and, until this method existed, named nobody who produces
+   * one. `adjudicate` took them as an input and the interface had no way to return one, so a
+   * conformant implementation could be built in which the whole of anomaly detection was
+   * unreachable — and one was. Three planted defects came back `yes`.
+   *
+   * **Why it is safe for an adapter to do this, when a realm must never return a verdict.** An
+   * anomaly is not a verdict; it is the observation that two channels disagree, and the
+   * adjudicator decides what that is worth. More importantly it is GATED: a disagreement may
+   * only convict when at least one of the two channels is independent of the action, and that
+   * check runs on the adjudicator's side over the channel declaration. So an implementation
+   * that reported its own screen contradicting its own store would find the anomaly recorded
+   * and deciding nothing. It cannot convict itself however hard it tries.
+   *
+   * Optional, because detecting these needs to know what a request or a render IS, and a realm
+   * with neither has nothing to compare. An implementation that omits it is conformant and
+   * simply never reports the class.
+   *
+   * An implementation MUST set the tier honestly. `observed` may force a `no`;
+   * `absence-derived` may only downgrade to `unknown`, because "I did not see it happen" and
+   * "it did not happen" are different facts and the window's end was our choice, not the
+   * subject's.
+   */
+  detect?(window: Window, observed: readonly Observation[]): Promise<readonly Anomaly[]>;
 
   /** Pixels, when this realm has them. Optional: a service has nothing to photograph. */
   photograph?(window: Window): Promise<Uint8Array>;

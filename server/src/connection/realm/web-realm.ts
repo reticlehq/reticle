@@ -7,6 +7,9 @@ import {
   type ChannelDescriptor,
   ChannelId as ProtocolChannel,
   CloseCondition,
+  type Anomaly,
+  AnomalyKind,
+  AnomalyTier,
   type Coverage,
   type Handle,
   type Observation,
@@ -15,7 +18,13 @@ import {
   type SubjectRef,
   type Window as ProtocolWindow,
 } from '@reticlehq/openreality';
-import { ReticleCommand } from '@reticlehq/core';
+import {
+  CONTRADICTION_CHANNELS,
+  ContradictionKind,
+  ReticleCommand,
+  tierOfFinding,
+} from '@reticlehq/core';
+import { findContradictions } from '@reticlehq/engine/disagreement/contradictions.js';
 import type { Session } from '../session/session.js';
 
 /**
@@ -156,6 +165,37 @@ const CHANNEL_OF_PREFIX: Readonly<Record<string, ProtocolChannel>> = {
 const MUTATING_COMMANDS: ReadonlySet<string> = new Set(
   PAGE_CAPABILITIES.filter((c) => c.mutating).map((c) => c.name),
 );
+
+/**
+ * Reticle's contradiction kinds, in the protocol's vocabulary.
+ *
+ * `Record` would be wrong here: ours is deliberately the larger list, and a kind with no
+ * protocol equivalent is reported with an `x-` prefix rather than squeezed into the nearest
+ * listed one. Filing an anomaly under the wrong kind is worse than filing it under an
+ * unfamiliar name, because the wrong kind is believed.
+ */
+const PROTOCOL_ANOMALY: Readonly<Record<string, string>> = {
+  [ContradictionKind.UI_ADVANCED_REQUEST_FAILED]: AnomalyKind.ADVANCED_OVER_FAILURE,
+  [ContradictionKind.SIGNAL_CONTRADICTED]: AnomalyKind.CLAIMED_OVER_FAILURE,
+  [ContradictionKind.RESPONSE_IGNORED]: AnomalyKind.EFFECT_DISCARDED,
+  [ContradictionKind.SIGNAL_WITHOUT_CONSEQUENCE]: AnomalyKind.CLAIM_UNCORROBORATED,
+  [ContradictionKind.PARTIAL_FAILURE_IN_OK_RESPONSE]: AnomalyKind.FAILURE_INSIDE_SUCCESS,
+  [ContradictionKind.UNIT_MISMATCH]: AnomalyKind.VALUE_NOT_APPLIED,
+  [ContradictionKind.WRITE_FIELD_IGNORED]: AnomalyKind.VALUE_NOT_APPLIED,
+  [ContradictionKind.DUPLICATE_REQUEST]: AnomalyKind.DUPLICATED_EFFECT,
+  [ContradictionKind.STALE_RESPONSE_APPLIED]: AnomalyKind.STALE_APPLIED,
+  [ContradictionKind.ACTION_HAD_NO_EFFECT]: AnomalyKind.NO_EFFECT,
+  [ContradictionKind.FAILURE_MISATTRIBUTED]: AnomalyKind.FAULT_MISATTRIBUTED,
+  [ContradictionKind.EVIDENCE_SUPERSEDED]: AnomalyKind.EVIDENCE_SUPERSEDED,
+  [ContradictionKind.EVIDENCE_PREDATES_EDIT]: AnomalyKind.EVIDENCE_PREDATES_EDIT,
+};
+
+/** Reticle's finding tiers, in the protocol's. The tier decides what an anomaly may do. */
+const PROTOCOL_TIER: Readonly<Record<string, AnomalyTier>> = {
+  observed: AnomalyTier.OBSERVED,
+  'absence-derived': AnomalyTier.ABSENCE_DERIVED,
+  advisory: AnomalyTier.ADVISORY,
+};
 
 export class WebRealm extends Realm {
   readonly #deps: WebRealmDeps;
@@ -347,6 +387,55 @@ export class WebRealm extends Realm {
       observed,
       blindSpots: [...structural, ...truncated, ...undeclared],
     });
+  }
+
+  /**
+   * Two things in the window that cannot both be true.
+   *
+   * This is not new detection. Reticle has found these for a long time -- seventeen kinds of
+   * cross-channel contradiction -- and the specification simply never said whose job it was, so
+   * a binding written from the specification passed an empty array and three planted defects
+   * came back green. The rules were here; nothing was asking for them.
+   *
+   * What crosses from Reticle's registry to the protocol's is deliberately lossy. The protocol
+   * names twelve domain-independent kinds and Reticle has seventeen, because several of ours are
+   * about a browser specifically. A kind with no protocol equivalent is reported with an `x-`
+   * prefix, which the specification allows, rather than being forced into the nearest listed one
+   * -- an anomaly filed under the wrong kind is worse than one filed under an unfamiliar name.
+   *
+   * The TIER is carried across unchanged and that is the load-bearing part: `absence-derived`
+   * may only downgrade a verdict to `unknown`, never force a `no`, because the window's end was
+   * our choice and "I stopped looking" is not "it did not happen".
+   */
+  override detect(
+    window: ProtocolWindow,
+    observed: readonly Observation[],
+  ): Promise<readonly Anomaly[]> {
+    void observed;
+    const events = this.#deps.session.eventsSince(window.openedAt);
+    const found = findContradictions(events, {});
+    // Synchronous underneath: the rules read a buffer that is already in memory. The interface
+    // is async for a realm that has to go and ask.
+    return Promise.resolve(
+      found.map((contradiction) => {
+        const kind = PROTOCOL_ANOMALY[contradiction.kind] ?? `x-${contradiction.kind}`;
+        const channels = CONTRADICTION_CHANNELS[contradiction.kind as ContradictionKind];
+        return {
+          kind,
+          // An unrecognised tier falls to ABSENCE_DERIVED, not OBSERVED. The safe direction is
+          // the one that can only downgrade a verdict: a tier we do not understand must never be
+          // able to force a `no` on an application.
+          tier: PROTOCOL_TIER[tierOfFinding(contradiction.kind)] ?? AnomalyTier.ABSENCE_DERIVED,
+          claim: contradiction.claim,
+          counter: contradiction.counter,
+          between: (channels ?? [ProtocolChannel.UI, ProtocolChannel.NET]) as [
+            ProtocolChannel,
+            ProtocolChannel,
+          ],
+          evidence: [],
+        };
+      }),
+    );
   }
 
   /**

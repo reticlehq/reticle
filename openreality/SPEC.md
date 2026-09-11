@@ -158,6 +158,16 @@ An action produces a **receipt**, never a verdict. `dispatched: true` means the 
 
 > A realm MUST NOT return a verdict. A realm that could decide whether its own action succeeded would be the thing under test grading its own work.
 
+### Detect — who finds an anomaly
+
+§8 defines twelve anomaly kinds, `adjudicate` takes them as an input, and for a while nothing in this document said who produces one. A conformant implementation could be built in which the whole of §8 was unreachable, and one was: the reference binding passed an empty array because there was nothing to ask, and three planted defects came back `yes`.
+
+`detect` closes it. It is **optional** — finding these needs to know what a request or a render IS, and a realm with neither has nothing to compare.
+
+**Why an implementation may do this, when it may never return a verdict.** An anomaly is not a verdict. It is the observation that two channels disagree, and what that is worth is decided elsewhere. More to the point it is **gated**: a disagreement may only convict when at least one of the two channels is independent of the action (§3.1), and that check runs on the adjudicator's side over the declared channels. An implementation reporting its own screen contradicting its own store gets the anomaly recorded and deciding nothing. **It cannot convict itself however hard it tries** — which is the property that makes this safe, and it is structural rather than a matter of good behaviour.
+
+An implementation MUST set the tier honestly, and an implementation that cannot tell SHOULD say `absence-derived`: that tier may only downgrade a verdict to `unknown`, so an uncertain classification costs a `no` that was never proved rather than inventing one.
+
 ### Locate — how a name becomes a target
 
 An action names a `target`, and until a driver was written against this interface nothing said where a target comes from. A caller holding _"the button called Pay"_ had no defined route to something `act` would accept, and every action it attempted was refused — correctly, because a selector a person writes is not a handle.
