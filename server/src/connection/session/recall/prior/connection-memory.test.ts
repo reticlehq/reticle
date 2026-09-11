@@ -17,7 +17,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
-  hasConnectedBefore,
+  hasAnyAppConnectedBefore,
   hasProjectConnectedBefore,
   rememberConnected,
 } from './connection-memory.js';
@@ -33,44 +33,44 @@ describe('connection memory', () => {
   });
 
   it('reports nothing before anything has ever connected', () => {
-    expect(hasConnectedBefore(dir, 4400, 'app-abc')).toBe(false);
+    expect(hasAnyAppConnectedBefore(dir, 4400, 'app-abc')).toBe(false);
   });
 
   it('remembers a connection across processes, keyed on port and project', () => {
     rememberConnected(dir, 4400, 'app-abc');
-    expect(hasConnectedBefore(dir, 4400, 'app-abc')).toBe(true);
+    expect(hasAnyAppConnectedBefore(dir, 4400, 'app-abc')).toBe(true);
   });
 
   it('does not claim a DIFFERENT project connected before', () => {
     rememberConnected(dir, 4400, 'app-abc');
-    expect(hasConnectedBefore(dir, 4400, 'other-app')).toBe(false);
+    expect(hasAnyAppConnectedBefore(dir, 4400, 'other-app')).toBe(false);
   });
 
   it('does not claim a different PORT saw the project', () => {
     rememberConnected(dir, 4400, 'app-abc');
-    expect(hasConnectedBefore(dir, 4500, 'app-abc')).toBe(false);
+    expect(hasAnyAppConnectedBefore(dir, 4500, 'app-abc')).toBe(false);
   });
 
   it('remembers an untagged session per port, for an SDK that stamps no projectId', () => {
     rememberConnected(dir, 4400, undefined);
-    expect(hasConnectedBefore(dir, 4400, undefined)).toBe(true);
+    expect(hasAnyAppConnectedBefore(dir, 4400, undefined)).toBe(true);
   });
 
   it('a project that connected also satisfies an untagged query on the same port', () => {
     rememberConnected(dir, 4400, 'app-abc');
-    expect(hasConnectedBefore(dir, 4400, undefined)).toBe(true);
+    expect(hasAnyAppConnectedBefore(dir, 4400, undefined)).toBe(true);
   });
 
   it('is idempotent and never grows without bound on repeated connects', () => {
     for (let i = 0; i < 50; i += 1) rememberConnected(dir, 4400, 'app-abc');
-    expect(hasConnectedBefore(dir, 4400, 'app-abc')).toBe(true);
+    expect(hasAnyAppConnectedBefore(dir, 4400, 'app-abc')).toBe(true);
   });
 
   it('survives a corrupt state file rather than throwing at the diagnosis', () => {
     writeFileSync(join(dir, 'connected-4400.json'), 'not json at all', 'utf8');
-    expect(hasConnectedBefore(dir, 4400, 'app-abc')).toBe(false);
+    expect(hasAnyAppConnectedBefore(dir, 4400, 'app-abc')).toBe(false);
     rememberConnected(dir, 4400, 'app-abc');
-    expect(hasConnectedBefore(dir, 4400, 'app-abc')).toBe(true);
+    expect(hasAnyAppConnectedBefore(dir, 4400, 'app-abc')).toBe(true);
   });
 
   it('never throws when the state directory cannot be written', () => {
@@ -89,7 +89,7 @@ describe('connection memory', () => {
  * default port has ever served anything, that is true — so the guidance was suppressed for exactly
  * the person it was written for, and their agent was told the setup was done.
  *
- * `hasConnectedBefore` keeps the weaker reading on purpose: the no-session diagnosis genuinely wants
+ * `hasAnyAppConnectedBefore` keeps the weaker reading on purpose: the no-session diagnosis genuinely wants
  * "has this daemon ever served an app", and answering "no" there would be the over-confident claim
  * that file exists to remove. The two questions are different, so they are two functions.
  */
@@ -105,7 +105,7 @@ describe('the first-move question is about the project, not the port', () => {
   it('holds that nothing connected here when this project has no identity yet', () => {
     rememberConnected(dir, 4400, 'some-other-app');
     // The weaker question is still honestly true — a daemon on this port HAS served an app.
-    expect(hasConnectedBefore(dir, 4400, undefined)).toBe(true);
+    expect(hasAnyAppConnectedBefore(dir, 4400, undefined)).toBe(true);
     // But not for this project, which is what the instructions claim.
     expect(hasProjectConnectedBefore(dir, 4400, undefined)).toBe(false);
   });

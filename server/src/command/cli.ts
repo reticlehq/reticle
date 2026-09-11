@@ -7,7 +7,7 @@ import { stateDirProblem } from './daemon/state-dir.js';
 import { statusNextAction } from './cli/answers/status-next-action.js';
 import { readDevServers } from './daemon/dev-servers.js';
 import {
-  hasConnectedBefore,
+  hasAnyAppConnectedBefore,
   hasProjectConnectedBefore,
 } from '../connection/session/recall/prior/connection-memory.js';
 import { attachStatusFields } from '../agent/mcp/attach-memory.js';
@@ -383,7 +383,7 @@ export async function handleStatus(port: number): Promise<void> {
   const pid = readPid(port);
   // Durable, so it survives the daemon idling out — which is the state `status` is most often run in.
   const projectId = readProjectId(process.cwd());
-  const previouslyConnected = hasConnectedBefore(reticleStateHome(), port, projectId);
+  const previouslyConnected = hasAnyAppConnectedBefore(reticleStateHome(), port, projectId);
   // Whether `init` has run HERE. Registering the MCP server does not wire the app, and more than one
   // path does the first without the second — so this is the commonest reason `status` has nothing to
   // report, and it was not among the facts this command could state.

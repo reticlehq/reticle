@@ -73,7 +73,23 @@ export function rememberConnected(
  * "no" for a daemon that plainly has served apps, which is the same over-confident claim this file
  * exists to remove.
  */
-export function hasConnectedBefore(
+/**
+ * Has ANY app connected on this port — not necessarily the one in front of you.
+ *
+ * The name says "any app" because the old one did not, and the ambiguity cost a shipped lie.
+ * With a project id this answers the narrow question; WITHOUT one it falls back to "has this
+ * daemon ever served anything", which is deliberate and is what the lease diagnosis and the
+ * dev-server branch of `status` both want.
+ *
+ * It is also, read carelessly, a boolean called `previouslyConnected` that is true in a
+ * directory with no app in it. `reticle status` took that fallback and printed "This project
+ * has connected before, so the wiring is correct" in an empty directory. Two files already
+ * explained the distinction in prose, including this one, and the prose did not stop it — so
+ * the distinction is in the name now, where a caller has to type it.
+ *
+ * Want "has THIS project connected": `hasProjectConnectedBefore`, immediately below.
+ */
+export function hasAnyAppConnectedBefore(
   stateDir: string,
   port: number,
   projectId: string | undefined,
@@ -86,7 +102,7 @@ export function hasConnectedBefore(
 /**
  * Has an app connected before FOR THIS PROJECT — the question the first-move instructions ask.
  *
- * Separate from `hasConnectedBefore` because they are genuinely different questions and only one of
+ * Separate from `hasAnyAppConnectedBefore` because they are genuinely different questions and only one of
  * them tolerates the untagged fallback. The no-session diagnosis wants "has this daemon ever served
  * an app", and answering "no" there when it plainly has is the over-confident claim this file
  * exists to remove. The first-move block claims something narrower and says so in its own first
@@ -118,5 +134,5 @@ export function hasProjectConnectedBefore(
   projectId: string | undefined,
 ): boolean {
   if (projectId === undefined) return false;
-  return hasConnectedBefore(stateDir, port, projectId);
+  return hasAnyAppConnectedBefore(stateDir, port, projectId);
 }

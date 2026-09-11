@@ -60,7 +60,7 @@ export function statusNextAction(facts: StatusFacts): string | undefined {
     // started by an agent, on demand, and idles out when nobody is driving. A user who has not
     // attached an agent yet is exactly on track, and saying so is the whole job of this branch.
     // `previouslyConnected` answers the WIDE question — has any app connected on this port —
-    // because `hasConnectedBefore` falls back to that when the directory has no project id, and
+    // because `hasAnyAppConnectedBefore` falls back to that when the directory has no project id, and
     // the branch below genuinely wants the wide answer: plugin-based wiring can connect without
     // ever writing `.reticle.json`.
     //

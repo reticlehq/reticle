@@ -14,7 +14,7 @@ import { z } from 'zod';
 import { leaseNotConnectedHint, type LeaseEvidence } from './lease-hint.js';
 import { probeSdkMarker } from './gaps/sdk-marker-probe.js';
 import { readProjectFramework, readProjectId } from '../../command/cli/ports/resolve/cli-port.js';
-import { hasConnectedBefore } from '../../connection/session/recall/prior/connection-memory.js';
+import { hasAnyAppConnectedBefore } from '../../connection/session/recall/prior/connection-memory.js';
 import {
   AGENT_DRIVING_ELSEWHERE,
   AGENT_DRIVING_HERE_AGAIN,
@@ -60,7 +60,7 @@ async function leaseEvidence(deps: ToolDeps, port: number, url: string): Promise
     ...(refusal === undefined ? {} : { refusal }),
     ...(framework === undefined ? {} : { framework }),
     ...(sdkMarker === undefined ? {} : { sdkMarker }),
-    previouslyConnected: hasConnectedBefore(reticleStateHome(), port, projectId),
+    previouslyConnected: hasAnyAppConnectedBefore(reticleStateHome(), port, projectId),
     initialized: projectId !== undefined,
   };
 }
