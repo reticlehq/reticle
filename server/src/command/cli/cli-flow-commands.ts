@@ -13,7 +13,7 @@ import { changedFilesSince, type ChangedFiles } from '../../features/flows/git-c
 import { join } from 'node:path';
 import { ReticleDir, RunFlowStatus } from '@reticlehq/core';
 import { FlowStore } from '../../features/flows/flows.js';
-import { RunStore } from '../../agent/runs/run-store.js';
+import { RunStore } from '../../agent/runs/artifact/run-store.js';
 import { createNodeFileSystem, type FileSystemPort } from '../../features/project/fs/fs-port.js';
 import { affectedSavedFlows, type NamedFlow } from '../../features/flows/flow-sources.js';
 import { gateDecision } from '../../features/flows/gate.js';

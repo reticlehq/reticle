@@ -21,7 +21,7 @@ import { ProjectStore } from '../../features/project/project-store.js';
 import { AnnotationStore } from '../../features/flows/annotation-store.js';
 import { createNodeFileSystem } from '../../features/project/fs/fs-port.js';
 import { RUN_TOOLS } from './run-tools.js';
-import { RunStore } from './run-store.js';
+import { RunStore } from './artifact/run-store.js';
 import { buildVerificationRun, type VerificationRunInput } from './build-verification-run.js';
 
 const now = (): number => 0;

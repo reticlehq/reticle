@@ -45,7 +45,7 @@ import {
 } from '../../features/cloud/cloud-sync.js';
 import { ReticleRunner, type VerifyProgressListener } from '../../agent/runs/reticle-runner.js';
 import { createRunnerPort } from '../../agent/runs/runner-port.js';
-import { RunStore } from '../../agent/runs/run-store.js';
+import { RunStore } from '../../agent/runs/artifact/run-store.js';
 import { renderRunReport } from '../../agent/runs/render-report.js';
 import { BaselineStore } from '../../features/project/baselines.js';
 import { RecordingStore } from '../../features/flows/recording/tape/recordings.js';

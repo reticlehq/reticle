@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { type JournalAction, type ReticleEvent } from '@reticlehq/core';
-import { runContextFor } from './run-context.js';
+import { runContextFor } from './artifact/run-context.js';
 import { openSessionIntents } from '../../features/intent/open-intents.js';
 import { ReticleTool } from '@reticlehq/core';
 import { sessionIdShape } from '../tools/tool-kit.js';

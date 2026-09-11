@@ -6,9 +6,9 @@ import { asString } from '@reticlehq/core';
 import { sessionIdShape } from '../tools/tool-kit.js';
 import { isValidRunId } from '../../features/project/dir/reticle-dir.js';
 import type { ToolDef, ToolDeps } from '../tools/tools.js';
-import { RunStore } from './run-store.js';
+import { RunStore } from './artifact/run-store.js';
 import { renderRunReport } from './render-report.js';
-import { diffRuns } from './run-diff.js';
+import { diffRuns } from './artifact/run-diff.js';
 
 /**
  * The verification-run export tool. `reticle_run_export` reads a persisted ReticleVerificationRun artifact

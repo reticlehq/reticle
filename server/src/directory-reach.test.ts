@@ -232,6 +232,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   ],
   capsule: ['dir', 'fs'],
   cli: [
+    'artifact',
     'bridge',
     'browser',
     'capsule',
@@ -298,7 +299,13 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   impact: ['cloud', 'session'],
   input: ['pool', 'telemetry', 'tools'],
   intent: ['dir', 'fs', 'project', 'tools'],
-  journal: ['dir', 'fs', 'project', 'runs'],
+  // What a run artifact is FOR once it exists -- stored, compared, and read back as established
+  // fact -- as against the rest of `runs`, which produces one. Named `artifact`, singular, and it
+  // must stay singular: `core/src/artifacts` is a different package and a different node, and
+  // "correcting" the spelling would give two directories one basename, which is how the reach
+  // graph silently collapsed `cli/cloud` into `features/cloud` with every test still passing.
+  artifact: ['dir', 'fs'],
+  journal: ['artifact', 'dir', 'fs', 'project', 'runs'],
   license: ['config'],
   mcp: [
     'daemon',
@@ -313,12 +320,14 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   ],
   memory: ['cloud', 'fs', 'project', 'tools'],
   pool: ['browser', 'input', 'telemetry'],
-  project: ['cloud', 'config', 'dir', 'flows', 'fs', 'runs', 'tools'],
+  // `runs` dropped out: what project wanted from it was the artifact, which is what broke the
+  // project <-> runs mutual pair and took the count from 24 to 23.
+  project: ['artifact', 'cloud', 'config', 'dir', 'flows', 'fs', 'tools'],
   // The MCP proxy: the transport half of `mcp`, which reaches nothing of its siblings and was
   // therefore extractable without tangling anything. Reaches out to two, reached in from two,
   // and no pair among them is mutual -- which is the only thing that would have raised the count.
   proxy: ['daemon', 'identity'],
-  runs: ['cloud', 'dir', 'flows', 'fs', 'intent', 'peer', 'project', 'telemetry', 'tools'],
+  runs: ['artifact', 'cloud', 'dir', 'flows', 'intent', 'peer', 'project', 'telemetry', 'tools'],
   session: [
     'bridge',
     'config',
@@ -356,6 +365,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   tools: [
     'act',
     'annotate-notes',
+    'artifact',
     'browser',
     'capsule',
     'crawl',
@@ -395,8 +405,16 @@ const REACHES_FOR: Record<string, readonly string[]> = {
  *
  * A count rather than a list: the list is derivable and printed on failure, and a hand-written copy
  * would be one more thing to keep in step.
+ *
+ * Asserted with equality rather than `<=`, which is what makes it a RECORD instead of a ceiling.
+ * A bound only ever says "no worse"; equality forces the number down in the same commit that
+ * earns it, and forces somebody to look when it moves either way. It came down from 24 when
+ * `run-store`, `run-diff` and `run-context` left `runs` for `runs/artifact`: `project` had
+ * reached into `runs` only for those three, so the pair stopped being mutual. The move was
+ * predicted safe and turned out to be subtractive, which is the pattern worth looking for --
+ * see `would FREE` in scripts/safe-to-group.mjs.
  */
-const MUTUAL_PAIRS_TODAY = 24;
+const MUTUAL_PAIRS_TODAY = 23;
 
 /**
  * Two directories may not share a name.
