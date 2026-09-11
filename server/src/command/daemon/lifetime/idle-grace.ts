@@ -20,7 +20,7 @@
 /**
  * An attached daemon waits this many times the base grace. Six is chosen against the two measurements
  * that matter: the default base is 5 minutes, so an attached daemon survives 30 — comfortably past
- * the slow installs that were killing runs, and comfortably short of the 28-minute median idle the
+ * the slow installs that were killing runs, and comfortably short of the long idles the
  * shorter rule was introduced to end.
  */
 export const ATTACHED_GRACE_MULTIPLIER = 6;

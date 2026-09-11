@@ -1,7 +1,7 @@
 /**
  * A locally-answered handshake left the client CONNECTED WITH NO TOOLS.
  *
- * Measured over one editor session on port 4400: 25 stream drops, 11 dormant, only 4 reconnects, and
+ * Measured over one editor session on port 4400: many stream drops, most dormant, few reconnects, and
  * 4 falls back to a local handshake. That last one is the user-visible failure — the proxy answers
  * `initialize` itself so the client does not hang, but it has no tool catalog, so `tools/list`
  * returns nothing and the agent sits there with Reticle "connected" and zero tools. That is exactly

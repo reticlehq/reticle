@@ -2,7 +2,7 @@ import { PredicateKind } from '@reticlehq/core';
 /**
  * The assertion the agent MADE, in the shape a saved flow can keep.
  *
- * `reticle_act_and_wait { until }` is how agents assert — 12 of 14 calls in a day of telemetry
+ * `reticle_act_and_wait { until }` is how agents assert — nearly every asserting call in a day of telemetry
  * carried an `until`. `compileActStep` recorded only the ACTION, so a flow saved after an asserted
  * drive came back graded `assertion-free`: "performs actions but asserts no observable consequence —
  * it will pass even if the feature is broken." The agent had already said what success meant;

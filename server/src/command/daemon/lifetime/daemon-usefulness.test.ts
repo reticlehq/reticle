@@ -69,7 +69,7 @@ describe('noteToolCall — the lifetime latch', () => {
  *
  * The clause that matters is the one that was missing: an agent IS attached (so the original
  * `!agentConnected` is false) and the daemon has still never done anything. Without it the watcher
- * was unreachable for a whole editor session, which is exactly the 28-minute median with zero busy
+ * was unreachable for a whole editor session, which is exactly the long idle with zero busy
  * time the telemetry shows.
  */
 describe('buildIdlePredicate', () => {

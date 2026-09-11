@@ -1,9 +1,9 @@
 /**
  * A live drive is a verification, and until now it left no artifact.
  *
- * Reported from the field, and confirmed in the transcript: a session drove 89 `reticle_act_and_wait`
- * calls and 15 `reticle_assert` calls — 104 verdicts — and the dashboard stayed empty, with
- * `lastPushAt: null` throughout. Nothing was broken. `diskSource.runs()` reads `.reticle/runs/`, and
+ * Reported from the field, and confirmed in the transcript: a session drove the app hard, many
+ * `reticle_act_and_wait` and `reticle_assert` calls, every one producing a verdict — and the
+ * dashboard stayed empty, with `lastPushAt: null` throughout. Nothing was broken. `diskSource.runs()` reads `.reticle/runs/`, and
  * the ONLY writer of that directory was the flow-replay path, so a run artifact existed if and only
  * if somebody had recorded a flow and replayed it. Every verdict produced by driving the app — which
  * is the entire product experience — was local and stayed local.

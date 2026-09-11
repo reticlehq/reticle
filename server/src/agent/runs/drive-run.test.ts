@@ -1,7 +1,7 @@
 /**
  * The dashboard was empty because nothing wrote a run, and driving the app is the product.
  *
- * From a field session: 89 `reticle_act_and_wait` and 15 `reticle_assert` calls, `lastPushAt: null`
+ * From a field session: a long run of `reticle_act_and_wait` and `reticle_assert` calls, `lastPushAt: null`
  * throughout, no rows on the platform. `diskSource.runs()` reads `.reticle/runs/`, and the only
  * writer was flow replay — so a live drive, which is how every user meets Reticle, produced no
  * artifact and therefore synced nothing.

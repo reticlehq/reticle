@@ -134,7 +134,8 @@ describe('journal retention is bounded on a long-running daemon', () => {
 /**
  * Teardown is where a drive becomes an artifact the platform can see.
  *
- * From a field session: 104 verdicts driven live, `lastPushAt: null`, an empty dashboard. Nothing
+ * From a field session: a long run of verdicts driven live, `lastPushAt: null`, an empty
+ * dashboard. Nothing
  * was broken — `.reticle/runs/` had one writer, the flow-replay path, so driving the app produced no
  * run and the sync daemon correctly had nothing to send.
  */

@@ -7,9 +7,10 @@
  * across a kill, a replay that dies mid-flight, a queue that flushes while fresh traffic arrives)
  * stays correct without leaking state, duplicating answers, or silently dropping requests.
  *
- * Every scenario is reported from production telemetry: ~8 SSE aborts/day across 54 users, 172
- * connection-lost events total. The harm is proportional to the compound effects — not any single
- * drop, but what happens when two drops land before the first reconnect finishes.
+ * Every scenario is reported from production telemetry: SSE aborts and connection-lost events are
+ * a daily occurrence across the people using this. The harm is proportional to the compound
+ * effects — not any single drop, but what happens when two land before the first reconnect
+ * finishes.
  *
  * Driven over real sockets, following `proxy-reconnect-fanout.test.ts` and its reasoning: the
  * whole behaviour lives in which Node events fire in which order, and a stubbed `http` would pass

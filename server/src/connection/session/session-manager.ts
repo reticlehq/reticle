@@ -368,8 +368,9 @@ export class SessionManager {
   /**
    * A dead `sessionId`, answered with what the caller needs to recover — not with an errand.
    *
-   * Telemetry, 2026-08-10: one agent called `reticle_navigate` twelve times against an id that was
-   * no longer connected. That single loop is **12 of the 58 tool errors recorded all day, 21%**. The
+   * Reported from telemetry: one agent called `reticle_navigate` repeatedly against an id that was
+   * no longer connected. That single loop accounted for a large share of every tool error seen that
+   * day. The
    * refusal said only `no connected session with id 'x'`, and the recovery hint told it to call
    * `reticle_sessions` and retry — two extra round trips to learn something this method already
    * knows at the moment it refuses. An agent charged two calls to recover will often just repeat the

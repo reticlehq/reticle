@@ -28,7 +28,7 @@ const DAEMON_SIGNAL_EVENT = 'reticle_daemon_signalled';
 /**
  * How often a live daemon says so.
  *
- * The median daemon lives 28 minutes, so at 30s that is ~56 lines — readable, and small against a log
+ * A daemon that lives half an hour writes about sixty lines at 30s — readable, and small against a log
  * that already rotates. Shorter would make the gap sharper and the file noisier; the gap only needs
  * to be legible against a connect window, which is measured in seconds.
  */

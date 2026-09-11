@@ -1,7 +1,7 @@
 /**
  * Carrying the assertion an agent MADE into the flow it saved.
  *
- * `reticle_act_and_wait { until }` is how agents assert — 12 of the 14 calls in a day of telemetry
+ * `reticle_act_and_wait { until }` is how agents assert — nearly every asserting call in a day of telemetry
  * carried an `until`. But `compileActStep` recorded only the ACTION, so a flow saved after an
  * asserted drive came back graded `assertion-free`: "performs actions but asserts no observable
  * consequence — it will pass even if the feature is broken."

@@ -3,7 +3,7 @@
  *
  * When the daemon does not answer in time the proxy answers `initialize` itself — a hang gives the
  * agent no tools AND no diagnosis, so that is right. But it left the client CONNECTED WITH NO TOOLS,
- * because `tools/list` then had nothing behind it. Measured over one editor session: 25 stream drops,
+ * because `tools/list` then had nothing behind it. Measured over one editor session: many stream drops,
  * 11 dormant, 4 reconnects, 4 local handshakes — and each of those four is a state where a human has
  * to notice and reconnect by hand.
  *

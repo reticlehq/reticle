@@ -205,7 +205,7 @@ function reportCrash(kind: CrashKind, value: unknown): void {
 /**
  * Log EVERY way this process can leave, so a death always leaves a line.
  *
- * Reported from the field: a 115-line daemon log containing zero of `reticle_daemon_idle_exit`,
+ * Reported from the field: a daemon log containing not one `reticle_daemon_idle_exit`,
  * `reticle_daemon_close_error`, `daemon_stopped`, `uncaught` or `unhandled` — the daemon simply
  * stopped existing mid-wait. Both crash handlers below already log before exiting, so their silence
  * ruled themselves out and left nothing else to read: no shutdown path had run at all.

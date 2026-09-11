@@ -1,7 +1,7 @@
 /**
  * The daemon idle-exited at 5 minutes and took the run with it.
  *
- * Evidence from a user's machine: 187 `reticle_daemon_idle_shutdown` lines across
+ * Evidence from a user's machine: `reticle_daemon_idle_shutdown` repeating across
  * ~/.reticle/daemon-*.log, and this cycle repeating in the log —
  *
  *   mcp_client_connected  ->  (5 min quiet)  ->  idle_shutdown  ->  mcp_client_disconnected
