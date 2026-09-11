@@ -59,8 +59,12 @@ const DECLARED_UNWIRED: Record<string, string> = {
     'named, evidence-backed anomalies over the journal. Its own header describes matchers that ' +
     'land when a later signal exists, so it is staged ahead of its caller.',
   'command/dev/stale-issue-guard.ts':
-    'a maintenance guard that nothing invokes -- not a package script, not a workflow, only its ' +
-    'own test. Worth knowing: a guard whose sole caller is its test guards nothing.',
+    'the decision logic behind `pnpm check:stale-issues`, which loads it from `dist` in a plain ' +
+    '.mjs, so no import in `src` points at it and this scanner cannot see the caller. This ' +
+    'entry used to say nothing invoked it, "not a package script, not a workflow". A package ' +
+    'script did, and was crashing on the way: the module moved into `command/` and the ' +
+    "script's require kept the old path. Guarded now by the dist-require check in " +
+    'guards/harness/script-paths-exist.test.ts.',
 };
 
 describe('no undeclared orphan modules', () => {

@@ -30,7 +30,7 @@ const {
   closedRefsIn,
   staleIssues,
   staleIssueReport,
-} = require('../server/dist/dev/stale-issue-guard.js');
+} = require('../server/dist/command/dev/stale-issue-guard.js');
 
 const BASE = process.argv[2] ?? 'origin/main';
 

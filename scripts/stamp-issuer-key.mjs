@@ -31,7 +31,7 @@ import { dirname, resolve } from 'node:path';
 // the repo root, and a cwd-relative path would silently miss in one of them.
 const TARGET = resolve(
   dirname(fileURLToPath(import.meta.url)),
-  '../server/dist/license/license.js',
+  '../server/dist/features/license/license.js',
 );
 /** Must match the declaration in license.ts verbatim. A rename here fails loudly rather than no-oping. */
 const EMPTY_DECLARATION = "const BAKED_ISSUER_PUBLIC_KEY_PEM = '';";
