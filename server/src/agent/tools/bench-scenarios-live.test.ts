@@ -47,7 +47,14 @@ const UNSCORED = new Map<string, string>([
   ],
   [
     'payload-wrong-value',
-    'a response body with a plausible but wrong field. Same status: injectable, never scored.',
+    'a response body with a plausible but wrong field, rewriting `service` on a POST to ' +
+      '/api/deploy. Not merely unscored -- UNPLANTABLE: the bench app never requests that URL. ' +
+      '`createDeployment` is local store state with no fetch, so the interceptor has nothing to ' +
+      'intercept and the defect cannot occur however it is driven. Found by trying to use it for ' +
+      "the conformance suite's `write-echoes-different-value`, which drove the whole flow " +
+      '(sign in, open the modal, name the service, submit) and produced no request at all. ' +
+      'Fixing it means pointing it at a URL the app uses, or giving the app the write it claims ' +
+      'to break; both are fixture changes somebody should choose deliberately.',
   ],
 ]);
 
