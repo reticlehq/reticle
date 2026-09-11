@@ -1,4 +1,4 @@
-import { removeTempDir } from '../../temp-dir.js';
+import { removeTempDir } from '../../../temp-dir.js';
 /**
  * The flake-ledger step of `flow_verify`, tested against the shipped function rather than a copy.
  *
@@ -14,10 +14,10 @@ import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ReplayStatus } from '@reticlehq/core';
-import { createNodeFileSystem } from '../project/fs/fs-port.js';
-import { FlakeStore } from './stores/flake-store.js';
+import { createNodeFileSystem } from '../../project/fs/fs-port.js';
+import { FlakeStore } from '../stores/flake-store.js';
 import { recordSuiteFlakes } from './suite-flakes.js';
-import { FLOW_TOOLS } from './flow-tools.js';
+import { FLOW_TOOLS } from '../flow-tools.js';
 import { ReticleTool } from '@reticlehq/core';
 
 let root = '';

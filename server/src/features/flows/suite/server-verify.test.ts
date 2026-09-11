@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { submitServerVerification, type FetchPostJsonLike } from '../cloud/cloud-sync.js';
+import { submitServerVerification, type FetchPostJsonLike } from '../../cloud/cloud-sync.js';
 import { toSuiteVerdict } from './server-verify.js';
 
 /** A FetchPostJsonLike that returns a canned server report (or a non-ok status). */

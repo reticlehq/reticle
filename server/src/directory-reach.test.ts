@@ -275,6 +275,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   ],
   capsule: ['dir', 'fs'],
   cli: [
+    'suite',
     'change',
     'stores',
     'artifact',
@@ -324,6 +325,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   domain: ['args', 'dir', 'flows', 'oracles', 'project', 'tools'],
   ee: ['license'],
   flows: [
+    'suite',
     'change',
     'args',
     'stores',
@@ -462,6 +464,12 @@ const REACHES_FOR: Record<string, readonly string[]> = {
    * which is what let them out of a 32-file directory.
    */
   change: [],
+  /**
+   * The whole set rather than one flow: running the suite in parallel over the lease pool,
+   * handing it to the hosted runner instead, how much of the declared surface it covered, and
+   * what the flake ledger learned from the run.
+   */
+  suite: ['cloud', 'fs', 'stores', 'tools'],
   tools: [
     'args',
     'timing',

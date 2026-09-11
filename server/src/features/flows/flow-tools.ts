@@ -8,13 +8,13 @@ import {
   type FlowReplayResult,
 } from '@reticlehq/core';
 import type { FlowFile } from '@reticlehq/core';
-import { recordSuiteFlakes } from './suite-flakes.js';
+import { recordSuiteFlakes } from './suite/suite-flakes.js';
 import { ReticleTool } from '@reticlehq/core';
 import { asNumber, asString } from '@reticlehq/core';
 import { workerCountSchema } from '../../agent/tools/args/numeric-bounds.js';
 import { log } from '../../log.js';
 import { cloudFetch, syncFlowToCloud, SyncOutcome } from '../cloud/cloud-sync.js';
-import { mapWithConcurrency, resolveConcurrency } from './parallel-suite.js';
+import { mapWithConcurrency, resolveConcurrency } from './suite/parallel-suite.js';
 import { acquireLeasedSession } from '../../agent/tools/lease-tools.js';
 import { homedir } from 'node:os';
 import { resolveProjectCloud } from '../cloud/cloud-config.js';
@@ -36,7 +36,7 @@ import {
   persistAndSyncVerificationRun,
   type TimedReplay,
 } from '../../agent/runs/verification-sync.js';
-import { runServerVerify } from './server-verify.js';
+import { runServerVerify } from './suite/server-verify.js';
 import { healFlow } from './heal-run.js';
 
 export { replayNamedFlow } from './flow-replay-run.js';

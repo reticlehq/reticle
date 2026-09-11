@@ -22,7 +22,7 @@ vi.mock('./flow-replay-run.js', () => ({
   latestRecordedFlow: () => undefined,
 }));
 
-vi.mock('./server-verify.js', () => ({
+vi.mock('./suite/server-verify.js', () => ({
   runServerVerify: () => Promise.resolve(null),
 }));
 

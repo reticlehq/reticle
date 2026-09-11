@@ -22,7 +22,7 @@ import { formatBuddyStatus } from '../../features/flows/buddy-status.js';
 import { CapsuleStore } from '../../agent/capsule/capsule-store.js';
 import { AssertionTiersStore } from '../../features/flows/stores/assertion-tiers-store.js';
 import { detectDowngrades } from '../../features/flows/outcome/assertion-integrity.js';
-import { computeCoverage, flowCoverageReport } from '../../features/flows/coverage.js';
+import { computeCoverage, flowCoverageReport } from '../../features/flows/suite/coverage.js';
 import { createWatchBatcher } from '../../features/flows/change/watch-batcher.js';
 import { watch } from 'node:fs';
 import { log } from '../../log.js';
