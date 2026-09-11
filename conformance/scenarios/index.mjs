@@ -60,7 +60,14 @@ export const SCENARIOS = [
     id: 'consequence-already-true',
     profile: Profile.EFFECT,
     plant: 'The thing being claimed is already true before the action happens.',
-    mustProduce: { verdict: Verdict.UNKNOWN, reason: 'already_true' },
+    // Verdict only, and that is a GAP being recorded rather than a requirement being relaxed.
+    // This needs "unknown BECAUSE the consequence was already true before the action", and the
+    // specification has no ground for it: the ten clauses cover what could not be seen and what
+    // did not hold, and not "the evidence is real and is about something that had already
+    // happened". Pre-registration (`declaredAt: before-action`) is the nearest thing and does
+    // not say it. Naming a Reticle reason code here instead would pin every implementation to
+    // our vocabulary, which is the objection that moved scoring to `ground` in the first place.
+    mustProduce: { verdict: Verdict.UNKNOWN },
     why: 'Nothing was proved. The action may have done nothing at all and the claim still holds.',
   },
   {
@@ -74,7 +81,12 @@ export const SCENARIOS = [
     id: 'accepted-but-not-finished',
     profile: Profile.EFFECT,
     plant: 'A write is accepted for later processing and has not finished when the window closes.',
-    mustProduce: { verdict: Verdict.UNKNOWN, reason: 'outcome_pending' },
+    // `coverage-impeached`: the window closed over a write that had not finished, which the
+    // specification reports as a blind spot rather than as a fault. Was `reason:
+    // 'outcome_pending'`, a code from Reticle's own vocabulary that the driver stopped
+    // comparing when scoring moved to `ground` -- so this requirement had quietly become
+    // "any unknown" without anybody choosing that.
+    mustProduce: { verdict: Verdict.UNKNOWN, ground: 'coverage-impeached' },
     why: 'The truth has not arrived yet. Saying either yes or no would be inventing it.',
   },
   {
@@ -128,7 +140,7 @@ export const SCENARIOS = [
     id: 'claim-reads-an-undeclared-channel',
     profile: Profile.EFFECT,
     plant: 'A claim that needs a channel this implementation did not declare it can observe.',
-    mustProduce: { verdict: Verdict.UNKNOWN, reason: 'capability-absent' },
+    mustProduce: { verdict: Verdict.UNKNOWN, ground: 'channel-not-observed' },
     knownFailingForUs: true,
     why:
       'Knowable when the connection opens, rather than after the action has been spent. The rule ' +

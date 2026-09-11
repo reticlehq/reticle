@@ -87,6 +87,17 @@ const SUBJECT = Object.freeze({
     claim: 'the todo was added',
     reads: ['net'],
   },
+  /**
+   * The same claim-is-the-plant scenario the web subject uses, and it needs nothing from this
+   * app either. `visual` is undeclared on both shells, so clause 2 answers before any evidence
+   * is weighed.
+   */
+  'claim-reads-an-undeclared-channel': {
+    act: { target: 'add', verb: 'click' },
+    claim: 'the screen showed the new todo',
+    reads: ['visual'],
+  },
+
   'nothing-declared': { act: undefined, claim: undefined, reads: [] },
 });
 

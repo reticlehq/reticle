@@ -54,6 +54,18 @@ describe('an answer is scored against what the scenario required', () => {
     expect(answersScenario(scenario(), { verdict: Verdict.NO, ground: 'anything' })).toBe(true);
   });
 
+  it('refuses a scenario that names a field nothing compares', () => {
+    // The silent weakening this catches actually happened. Scoring moved from `reason` to
+    // `ground`, three scenarios kept a `reason`, and their requirement quietly became "any
+    // verdict of this kind" -- nobody chose that and nothing said so. A requirement that stops
+    // being enforced must be a loud error, not a field that ages out.
+    expect(() =>
+      answersScenario(scenario({ mustProduce: { verdict: Verdict.NO, reason: 'contradicted' } }), {
+        verdict: Verdict.NO,
+      }),
+    ).toThrow(/reason/);
+  });
+
   it('honours notVerdict, which most scenarios use', () => {
     // Most of this list asks for something OTHER than a confident yes, rather than for one
     // specific answer -- because there is usually more than one honest thing to say.

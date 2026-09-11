@@ -41,6 +41,16 @@ export const SCENARIO_TIMEOUT_MS = 60_000;
 /** Did the implementation say what this scenario required? */
 export function answersScenario(scenario, answer) {
   const want = scenario.mustProduce ?? {};
+  // A field nothing reads is a requirement that has stopped being enforced, and it must say so
+  // rather than age out quietly. Scoring moved from `reason` to `ground` and three scenarios
+  // kept a `reason`: each had silently become "any verdict of this kind", which nobody chose.
+  if (want.reason !== undefined) {
+    throw new Error(
+      `scenario ${String(scenario.id)} names \`reason\`, which nothing compares. Scoring is by ` +
+        '`ground` -- the deciding clause as a code. Give it a ground, or state plainly that the ' +
+        'requirement is the verdict alone.',
+    );
+  }
   if (scenario.neverProduce !== undefined && answer.verdict === scenario.neverProduce) return false;
   if (want.notVerdict !== undefined) return answer.verdict !== want.notVerdict;
   if (want.verdict !== undefined && answer.verdict !== want.verdict) return false;

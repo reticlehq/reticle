@@ -89,6 +89,26 @@ export const BENCH_APP_SUBJECT = Object.freeze({
     reads: ['net'],
   },
 
+  /**
+   * A claim that needs a channel the implementation never said it could observe.
+   *
+   * The only scenario here that needs NO defect and no fixture at all: the plant is the claim.
+   * `visual` is the one channel of the protocol's nine that this build does not declare at
+   * connect, so a claim reading it must come back `unknown` at clause 2 -- before any evidence
+   * is weighed, because "nothing was watching" and "it did not happen" produce identical empty
+   * evidence and must never read alike.
+   *
+   * It was ABSENT on both subjects purely because nobody had written these six lines, which
+   * left clause 2 undriven by the suite while three other clauses were being exercised every
+   * run.
+   */
+  'claim-reads-an-undeclared-channel': {
+    bug: undefined,
+    act: { capability: 'act', target: 'testid=login-submit', verb: 'click' },
+    claim: 'the screen showed the signed-in view',
+    reads: ['visual'],
+  },
+
   /** A clean, quiet window in which nobody claimed anything. */
   'nothing-declared': {
     bug: undefined,
