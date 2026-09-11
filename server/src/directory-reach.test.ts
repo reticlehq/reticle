@@ -445,9 +445,16 @@ const REACHES_FOR: Record<string, readonly string[]> = {
  *
  * ── WHAT THE REMAINING 22 ARE MADE OF ───────────────────────────────────────────────────────────
  * Computed across every pair rather than guessed at, and the answer ends the leaf-extraction
- * phase in this package: **seventeen of the twenty-two hinge on exactly ONE file, and not one of
+ * phase in this package: **fifteen of the twenty-two hinge on exactly ONE file, and not one of
  * those files is a leaf.** Every one imports a sibling, so the rule that produced the last four
  * reductions -- move only what imports no sibling -- cannot reach any of them.
+ *
+ * That said seventeen when the count was twenty-four, and the definition was not written down,
+ * so re-deriving it took a wrong answer first. It is this: for each mutual pair, count the
+ * non-test files in A that import anything under B, and the same for B into A. The pair HINGES
+ * when either direction has exactly one such file, because moving that one file would break the
+ * pair. Fifteen of twenty-two today. A figure nobody can reproduce is a figure nobody can
+ * correct, which is why the method is here and not just the number.
  *
  * Two structures account for nearly all of it, and neither is a misfiling:
  *
@@ -463,6 +470,23 @@ const REACHES_FOR: Record<string, readonly string[]> = {
  * So the next reduction is a SPLIT of `tool-kit` or of the registry, not another lift. That is a
  * refactor of code thirteen directories depend on, and it is not something to start because a
  * number looks improvable.
+ *
+ * ── AND THE SAME QUESTION ASKED OF EVERY OTHER PACKAGE ──────────────────────────────────────────
+ * Swept with `scripts/safe-to-group.mjs` rather than read off the graph, across roughly
+ * twenty-five directories in six packages: server, browser, core, engine, init, spec-runner.
+ * The sweep asks two things of every candidate, SAFE and `would FREE`, and the result is short:
+ *
+ *   - Every remaining candidate that is SAFE is a SINGLE FILE. Moving one file into a new
+ *     subdirectory is moving a file. It adds an edge from each importer and buys one freed
+ *     reach, and the directory it creates is named after one thing rather than a category.
+ *   - Every multi-file group that IS a category came back UNSAFE. In `core/src/wire`, the three
+ *     event files are mutual with the package root; the three constants files are mutual with
+ *     `artifacts`; `net`/`channel`/`platform` are mutual with `verdict`.
+ *
+ * One coherent SAFE category existed in the whole repository and it is `connection/session/facts`,
+ * extracted the day this note was written. The leaf rule is spent, and now measured spent rather
+ * than assumed so -- an earlier version of this claim was made three times from reading the
+ * import graph, and the sweep that settles it takes thirty milliseconds per candidate.
  *
  * Asserted with equality rather than `<=`, which is what makes it a RECORD instead of a ceiling.
  * A bound only ever says "no worse"; equality forces the number down in the same commit that
