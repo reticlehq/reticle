@@ -158,6 +158,18 @@ An action produces a **receipt**, never a verdict. `dispatched: true` means the 
 
 > A realm MUST NOT return a verdict. A realm that could decide whether its own action succeeded would be the thing under test grading its own work.
 
+### Locate — how a name becomes a target
+
+An action names a `target`, and until a driver was written against this interface nothing said where a target comes from. A caller holding _"the button called Pay"_ had no defined route to something `act` would accept, and every action it attempted was refused — correctly, because a selector a person writes is not a handle.
+
+`locate` closes that. It takes a description and returns **handles**: an opaque `ref` the realm minted, and a `describes` for the human who reads the verdict later.
+
+It is **optional**, like `photograph`, and for the same reason: a realm with no addressable surface has nothing to locate. A service answers requests; there is no _"the button called Pay"_ in it.
+
+It is a **read**, so it returns data — and that is why it cannot be folded into `perform`, which returns a receipt and never results. A receipt that carried data would be one step from a receipt that carried a verdict, which is the separation the whole protocol rests on.
+
+A realm MAY return several handles and MUST NOT choose between them. Returning the first plausible match for an ambiguous description is how a driver acts on the element beside the one it meant — measured on a real dashboard, reported as a clean green.
+
 ### Window — and the mistake most implementations make
 
 Everything a realm reports is scoped to a **window**: a bounded stretch of time with a beginning and an end, holding what was seen in it. A window is not an implementation detail. An observation with no window cannot be argued with — "the request went out" is not checkable unless you can say _when_, and relative to what. So every observation belongs to a window, and any verdict built from observations is a claim about that window and no other.

@@ -111,8 +111,28 @@ async function main() {
         current = realm.client;
         const entry = BENCH_APP_SUBJECT[String(args?.scenario)];
         if (entry?.act !== undefined) {
-          await realm.client.command(entry.act.capability, { ref: entry.act.target });
-          await sleep(500);
+          // Resolve a handle first. `testid=login-submit` is how a person names a control; `act`
+          // takes a ref. Handing the selector straight to `act` had every plant refused -- the
+          // refusal was correct, and the interface had no way to bridge the two until `locate`.
+          const handles = await realm.client.locate({
+            by: 'testid',
+            value: entry.act.target.replace('testid=', ''),
+          });
+          const ref = handles[0]?.ref;
+          if (ref === undefined) {
+            return { planted: false, reason: `nothing matched ${entry.act.target}` };
+          }
+          const receipt = await realm.client.command(entry.act.capability, { ref });
+          if (receipt['planted'] !== true) {
+            // Printed: an action refused after a handle resolved is the next thing to diagnose,
+            // and a silent ABSENT would hide which half failed.
+            console.log('   · act refused: ' + String(receipt['reason'] ?? 'no reason given'));
+            return {
+              planted: false,
+              reason: String(receipt['reason'] ?? 'the action was refused'),
+            };
+          }
+          await sleep(800);
         }
         return {
           planted: true,

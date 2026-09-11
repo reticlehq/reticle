@@ -8,6 +8,7 @@ import {
   ChannelId as ProtocolChannel,
   CloseCondition,
   type Coverage,
+  type Handle,
   type Observation,
   Realm,
   RefusalReason,
@@ -346,6 +347,43 @@ export class WebRealm extends Realm {
       observed,
       blindSpots: [...structural, ...truncated, ...undeclared],
     });
+  }
+
+  /**
+   * How a person names a control, turned into a handle `act` will accept.
+   *
+   * The gap that a driver written against this interface fell straight into: it held
+   * `testid=login-submit`, handed it to `act` as a target, and every action was refused --
+   * correctly, because a selector is not a handle, and nothing in the interface bridged the two.
+   *
+   * Several matches are returned, never narrowed. Picking the first plausible one is how a
+   * driver acts on the element beside the one it meant, which this project has measured on a
+   * real dashboard and reported as a clean green.
+   */
+  override async locate(query: unknown): Promise<readonly Handle[]> {
+    const args = 'object' === typeof query && null !== query ? { ...query } : {};
+    const result = await this.#deps.session.command(ReticleCommand.QUERY, args);
+    if (true !== result.ok) return [];
+    const elements = (result.result as { elements?: unknown } | undefined)?.elements;
+    if (!Array.isArray(elements)) return [];
+    const found: Handle[] = [];
+    for (const element of elements) {
+      if ('object' !== typeof element || null === element) continue;
+      const ref = (element as { ref?: unknown }).ref;
+      if ('string' !== typeof ref) continue;
+      const name = (element as { name?: unknown; text?: unknown }).name;
+      const text = (element as { text?: unknown }).text;
+      found.push({
+        ref,
+        describes:
+          'string' === typeof name && name.length > 0
+            ? name
+            : 'string' === typeof text && text.length > 0
+              ? text
+              : ref,
+      });
+    }
+    return found;
   }
 
   /**

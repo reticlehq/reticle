@@ -30,6 +30,8 @@ import type { WebRealm } from './web-realm.js';
 export interface ConformanceClient {
   hello(): Promise<{ channels: readonly string[]; commands: readonly string[] }>;
   command(name: string, args?: Record<string, unknown>): Promise<Record<string, unknown>>;
+  /** How a person names a control, turned into a handle `command` will accept as `ref`. */
+  locate(query: unknown): Promise<readonly { ref: string; describes: string }[]>;
   verify(claim: Claim): Promise<{ verdict: string; reason?: string }>;
 }
 
@@ -101,6 +103,12 @@ export function conformanceClient(realm: WebRealm, now: () => number): Conforman
         channels: realm.channels().map((c) => c.id),
         commands: realm.capabilities().map((c) => c.name),
       });
+    },
+
+    locate(query) {
+      // A read, so it returns data. It cannot go through `command`, which reports a receipt and
+      // never results -- the separation that stops an action reporting whether it worked.
+      return realm.locate === undefined ? Promise.resolve([]) : realm.locate(query);
     },
 
     async command(name, args = {}) {

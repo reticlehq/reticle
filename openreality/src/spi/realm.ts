@@ -1,4 +1,5 @@
 import {
+  type Handle,
   type Capability,
   type ActionReceipt,
   type Action,
@@ -103,6 +104,24 @@ export abstract class Realm {
    * nothing -- a silent `[]` is the most expensive value in this interface.
    */
   abstract coverage(window: Window): Promise<Coverage>;
+
+  /**
+   * Turn how a person names something into a handle an action will accept.
+   *
+   * Optional, like `photograph`, and for the same reason: a realm with no addressable surface
+   * has nothing to locate. A service answers requests; there is no "the button called Pay" in
+   * it, and requiring this would make every such realm return an empty array forever.
+   *
+   * It is a READ, so it returns data. That is why it cannot be folded into `perform`, which
+   * returns a receipt and never data — a receipt that carried results would be the shape the
+   * action/verdict separation exists to prevent, and an action that returned what it found
+   * would be one step from an action that returns whether it worked.
+   *
+   * A realm MAY return several handles, and MUST NOT guess between them. Returning the first
+   * plausible match for an ambiguous description is how a driver ends up acting on the element
+   * beside the one it meant, which this project has measured and reported as a clean green.
+   */
+  locate?(query: unknown): Promise<readonly Handle[]>;
 
   /** Pixels, when this realm has them. Optional: a service has nothing to photograph. */
   photograph?(window: Window): Promise<Uint8Array>;

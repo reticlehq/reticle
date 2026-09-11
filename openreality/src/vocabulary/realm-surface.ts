@@ -56,12 +56,38 @@ export const RefusalReason = {
 } as const;
 export type RefusalReason = (typeof RefusalReason)[keyof typeof RefusalReason];
 
+/**
+ * A handle for something in the realm, and how a person would recognise it.
+ *
+ * The thing a driver could not get. An action names a `target`, and the specification never said
+ * where a target comes from -- so a caller holding "the button called Pay" had no defined route
+ * to something `act` would accept. Found by writing a driver against the interface: every action
+ * it attempted was refused, correctly, because a selector a person writes is not a handle.
+ *
+ * `ref` is OPAQUE and belongs to the realm. It is not a selector, not a path, and not stable
+ * across subjects -- a realm may mint it however it likes and is entitled to reject one that has
+ * gone stale, which is the behaviour that makes a handle safer than a selector: a selector
+ * silently matches something else when the thing moves, and a handle refuses.
+ *
+ * `describes` is for the human reading the verdict afterwards, and for nothing else. Deciding
+ * anything from it would be matching on prose.
+ */
+export const HandleSchema = z.object({
+  /** Opaque, realm-minted, and the only thing an action should be given. */
+  ref: z.string().min(1),
+  /** How a person would recognise this, for a verdict somebody has to read. */
+  describes: z.string().min(1),
+  /** Where it is, when the realm has a meaningful answer. */
+  at: z.string().optional(),
+});
+export type Handle = z.infer<typeof HandleSchema>;
+
 export const ActionSchema = z.object({
   id: z.string().min(1),
   /** Who or what performed it. */
   actor: z.string().min(1),
   capability: z.string().min(1),
-  /** What it was performed against, in the realm's addressing. */
+  /** The handle's `ref`. See `HandleSchema`: a selector is not a target. */
   target: z.string().optional(),
   parameters: z.unknown().optional(),
   at: z.number().int(),
