@@ -1,5 +1,6 @@
 import { span } from '../../trace.js';
 import { routeOfEvent } from '@reticlehq/engine/question/predicate/predicate-route.js';
+import { findContradictions } from '@reticlehq/engine/disagreement/contradictions.js';
 import { buildReactionReport, summarizeReaction } from '@reticlehq/engine/question/reaction.js';
 import {
   AnchorKind,
@@ -681,6 +682,23 @@ export async function replayFlow(
     // The same reaction report the live tools return, over this step's own slice — one builder, so a
     // replayed step and a driven one describe what happened in identical words.
     result.digest = summarizeReaction(buildReactionReport([...windowEvents], durationMs));
+    /*
+     * Channels that disagree, reported whether or not the step passed.
+     *
+     * The detectors are independent of the assertion by design, so this is the one thing a green
+     * step can carry that makes it a finding. `reticle_act_and_wait` already returns these for its
+     * own action window; a replayed step now returns them for the window it already carries, so a
+     * driven step and a replayed one describe the same disagreement rather than only the live one
+     * seeing it.
+     *
+     * Omitted when empty rather than sent as `[]` — a field that is always there gets skimmed past,
+     * and its presence is the whole signal.
+     */
+    // `actionSince` is what tells the detectors which window belongs to THIS action. Without it the
+    // headline rule cannot attribute a failed request to the click that made the screen move, and
+    // the whole family goes quiet -- passing the step's own cursor is what makes them fire at all.
+    const contradictions = findContradictions(windowEvents, { actionSince: cursorBefore });
+    if (contradictions.length > 0) result.contradictions = contradictions;
     /*
      * A prefix step is setup and is not reported -- UNLESS it failed.
      *

@@ -1,4 +1,5 @@
 import {
+  type Contradiction,
   ContradictionKind,
   EventType,
   MUTATING_METHODS,
@@ -38,31 +39,15 @@ import { runRegisteredFolds } from './contradiction-folds.js';
  * Pure: a window of events in, findings out. No session, no IO, no clock.
  */
 
-export interface Contradiction {
-  /**
-   * Typed `string`, not `ContradictionKind`, because the vocabulary is open at the EDGE.
-   *
-   * `ContradictionKind` enumerates what THIS package's rules emit, and every one of them is still
-   * checked against it — see `OwnContradiction`, which is what the folds below build. A rule
-   * registered by a consumer emits kinds this package has never heard of and must not have to add
-   * them here to be reportable: a shared enum is exactly how a consumer's private vocabulary ends up
-   * shipped in the free product by accident.
-   */
-  kind: string;
-  /** What one channel asserted — the optimistic half. */
-  claim: string;
-  /** What the other channel asserted — the half that contradicts it. */
-  counter: string;
-  /** Concrete evidence, so the agent can go straight to the call or the control. */
-  detail: string;
-}
-
 /**
  * A contradiction emitted by one of THIS package's rules — the kind is closed.
  *
  * Widening `Contradiction.kind` to `string` for the consumer seam would otherwise have made every
  * emit site below accept a typo'd literal. This keeps them checked without closing the edge.
  */
+// Re-exported so every existing consumer keeps its import path; the shape itself lives in core.
+export type { Contradiction };
+
 export type OwnContradiction = Contradiction & { kind: ContradictionKind };
 
 interface NetCall {

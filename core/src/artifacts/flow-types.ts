@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { ActionType } from '../wire/constants/constants.js';
+import type { Contradiction } from '../verdict/findings.js';
 // Its own directory's constants, which this file had been reaching through `wire/constants/constants.js`
 // to get -- the clearest cost of that re-export: artifacts went out to wire to fetch a symbol
 // that had been sitting next door the whole time.
@@ -320,6 +321,18 @@ export interface FlowStepResult {
    * what travels and the full form is addressable rather than sent.
    */
   digest?: ReactionDigest;
+  /**
+   * Channels that DISAGREE about what this step did — reported even when the step passed.
+   *
+   * That is the entire point. A step whose anchor resolved, whose action fired and whose declared
+   * consequence held, while a request in the same window failed, is the false green this product
+   * exists to catch. The detectors run independently of the assertion, so a green step with an entry
+   * here is a finding, not a contradiction in terms.
+   *
+   * Omitted when the channels agree, never an empty array: a field that is always present teaches a
+   * reader to skim past it, and the whole value here is that its presence is the signal.
+   */
+  contradictions?: Contradiction[];
   ok: boolean;
   error?: string;
   note?: string;

@@ -16,6 +16,28 @@ import { ChannelId, disagreementCanConvict } from '../wire/channel.js';
  * and the app is wrong. Contrast `CrawlAnomalyKind`, whose members are all SINGLE-channel facts (an
  * error was logged; a request failed) — those are findable by reading one stream.
  */
+/**
+ * Two channels disagreeing about the same action — the shape every rule reports.
+ *
+ * Lives here, beside the kinds, because it is part of the artifact contract: a replayed step and a
+ * driven one both carry these, and a shape declared twice is a shape that drifts.
+ *
+ * `kind` is typed `string`, not `ContradictionKind`, because the vocabulary is open at the EDGE. The
+ * enum below enumerates what the engine's own rules emit and every one of those is still checked
+ * against it; a rule registered by a consumer emits kinds this package has never heard of and must
+ * not have to be added here to be reportable. A shared closed enum is exactly how a consumer's
+ * private vocabulary ends up shipped in the free product by accident.
+ */
+export interface Contradiction {
+  kind: string;
+  /** What one channel asserted — the optimistic half. */
+  claim: string;
+  /** What the other channel asserted — the half that contradicts it. */
+  counter: string;
+  /** Concrete evidence, so the agent can go straight to the call or the control. */
+  detail: string;
+}
+
 export const ContradictionKind = {
   /** The screen moved forward while a request in the same window failed — the swallowed rejection. */
   UI_ADVANCED_REQUEST_FAILED: 'ui-advanced-request-failed',
