@@ -1,5 +1,5 @@
 import { SESSION_LIFECYCLE } from '@reticlehq/core';
-import { idleGraceMs } from './idle-grace.js';
+import { idleGraceMs } from './lifetime/idle-grace.js';
 import { log } from '../../log.js';
 
 export interface IdleShutdownOptions {

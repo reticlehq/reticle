@@ -12,7 +12,7 @@ import { getTelemetry } from '../../telemetry/telemetry.js';
 import { takeUpdateNudge } from '../../command/update/update-nudge.js';
 import { takeVersionSkew } from '../../command/version/version-nudge.js';
 import { rewriteClosedAsSkew } from '../../command/version/version-skew.js';
-import { noteToolCall } from '../../command/daemon/daemon-usefulness.js';
+import { noteToolCall } from '../../command/daemon/lifetime/daemon-usefulness.js';
 import { bugsInResult, routeOf } from '../../telemetry/bug-found.js';
 import { noteToolServed, reportToolRefused } from '../../telemetry/tool-refused.js';
 import { buildErrorPayload, refusalReasonFor } from './error-recovery.js';

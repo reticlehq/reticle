@@ -69,9 +69,12 @@ import {
   DaemonExitReason,
 } from './daemon/daemon-resilience.js';
 import { IdleShutdown, resolveIdleShutdownMs, resolveIdleCheckMs } from './daemon/idle-shutdown.js';
-import { DaemonHeartbeat, resolveHeartbeatMs } from './daemon/heartbeat.js';
-import { everServedToolCall } from './daemon/daemon-usefulness.js';
-import { DAEMON_START_FAILED_EVENT, readDaemonStartupCause } from './daemon/startup-failure.js';
+import { DaemonHeartbeat, resolveHeartbeatMs } from './daemon/lifetime/heartbeat.js';
+import { everServedToolCall } from './daemon/lifetime/daemon-usefulness.js';
+import {
+  DAEMON_START_FAILED_EVENT,
+  readDaemonStartupCause,
+} from './daemon/lifetime/startup-failure.js';
 import {
   fetchStatus,
   summarizeStatus,
@@ -792,7 +795,7 @@ function handleDaemonInner(parsed: {
       // `'exit'`, which a SIGKILL never fires — so a killed daemon left nothing behind, and the one
       // that exited tidily logged `code: 0`. A reader could not tell "shut down cleanly" from "the
       // bridge every app on this machine needs is gone", and a correct SvelteKit install was written
-      // up as an install failure on exactly that ambiguity. See daemon/heartbeat.ts.
+      // up as an install failure on exactly that ambiguity. See daemon/lifetime/heartbeat.ts.
       new DaemonHeartbeat({
         log,
         intervalMs: resolveHeartbeatMs(process.env[ReticleEnv.HEARTBEAT]),

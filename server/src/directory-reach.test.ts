@@ -306,6 +306,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   ],
   cloud: ['cli', 'fs', 'intent'],
   command: [
+    'lifetime',
     'binding',
     'drive',
     'cli',
@@ -324,7 +325,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
     'update',
   ],
   crawl: ['args', 'project', 'tools', 'facts'],
-  daemon: ['binding', 'telemetry'],
+  daemon: ['lifetime', 'binding', 'telemetry'],
   domain: ['args', 'dir', 'flows', 'oracles', 'project', 'tools'],
   ee: ['license'],
   flows: [
@@ -497,7 +498,15 @@ const REACHES_FOR: Record<string, readonly string[]> = {
    * Naming them also untangled init, which no longer reaches daemon for anything else.
    */
   binding: [],
+  /**
+   * How long a daemon lasts: the log event when the child cannot start, the pid of a predecessor
+   * that died without exiting, the beat that turns silence in the log into evidence, whether this
+   * one was ever useful to anybody, and how long an idle one is given before it shuts itself
+   * down. Five files, none of which imports anything.
+   */
+  lifetime: [],
   tools: [
+    'lifetime',
     'args',
     'timing',
     'stores',

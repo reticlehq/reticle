@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { SESSION_LIFECYCLE } from '@reticlehq/core';
-import { idleGraceMs } from '../../command/daemon/idle-grace.js';
+import { idleGraceMs } from '../../command/daemon/lifetime/idle-grace.js';
 import { PROXY_IDLE_EXIT_MS, ProxyIdleExit, resolveProxyIdleExitMs } from './proxy-idle-exit.js';
 
 function harness(opts: { graceMs?: number; busy?: boolean } = {}) {

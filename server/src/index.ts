@@ -65,7 +65,7 @@ import {
   MCP_DISCONNECT_SUMMARY,
 } from './connection/session/session-reaper.js';
 import { wireSessionScope } from './connection/session/no-session-watch.js';
-import { buildIdlePredicate } from './command/daemon/daemon-usefulness.js';
+import { buildIdlePredicate } from './command/daemon/lifetime/daemon-usefulness.js';
 import { resolveToolSurface } from './agent/tools/tool-surface.js';
 import { statusPayload } from './status-payload.js';
 import { CdpRealInputProvider, LaunchedRealInputProvider } from './connection/input/real-input.js';
@@ -182,7 +182,7 @@ export {
   DAEMON_HEARTBEAT_EVENT,
   DAEMON_HEARTBEAT_MS,
   type DaemonLife,
-} from './command/daemon/heartbeat.js';
+} from './command/daemon/lifetime/heartbeat.js';
 export type {
   CrawlReport,
   CrawlAnomaly,
