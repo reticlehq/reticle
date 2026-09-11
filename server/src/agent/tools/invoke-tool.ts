@@ -16,7 +16,7 @@ import { noteToolCall } from '../../command/daemon/daemon-usefulness.js';
 import { bugsInResult, routeOf } from '../../telemetry/bug-found.js';
 import { noteToolServed, reportToolRefused } from '../../telemetry/tool-refused.js';
 import { buildErrorPayload, refusalReasonFor } from './error-recovery.js';
-import { resultIsError } from '../mcp/mcp-is-error.js';
+import { resultIsError } from '../mcp/faults/mcp-is-error.js';
 import { verificationOf } from '../../telemetry/verification-of.js';
 import { asString } from '@reticlehq/core';
 import { sessionIdFromArgs, spentRefFromArgs } from './tools-helpers.js';

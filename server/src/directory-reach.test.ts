@@ -312,10 +312,15 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   // graph keys on basename, so a second `cloud` would merge the two into one node and every test
   // would still pass. That has happened here once already.
   auth: ['cloud'],
+  // How the MCP layer's failures reach the agent: recognising a refusal that arrived dressed as
+  // a success, and reporting that the tools are gone. What `tools` wanted from `mcp` was these
+  // two files and nothing else, which is why lifting them broke the `mcp <-> tools` pair.
+  faults: ['telemetry'],
   journal: ['artifact', 'dir', 'fs', 'project', 'runs'],
   license: ['config'],
   mcp: [
     'daemon',
+    'faults',
     'identity',
     'launch',
     'prior',
@@ -333,7 +338,10 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   // The MCP proxy: the transport half of `mcp`, which reaches nothing of its siblings and was
   // therefore extractable without tangling anything. Reaches out to two, reached in from two,
   // and no pair among them is mutual -- which is the only thing that would have raised the count.
-  proxy: ['daemon', 'identity'],
+  // `telemetry` arrived with `mcp-post-transport`, which is the proxy's POST leg and had been
+  // filed beside the proxy rather than in it. Moving it in adds an edge and removes a lie about
+  // where that code lives; the count is unchanged either way.
+  proxy: ['daemon', 'identity', 'telemetry'],
   runs: ['artifact', 'cloud', 'dir', 'flows', 'intent', 'peer', 'project', 'telemetry', 'tools'],
   session: [
     'bridge',
@@ -379,13 +387,13 @@ const REACHES_FOR: Record<string, readonly string[]> = {
     'daemon',
     'dir',
     'domain',
+    'faults',
     'flows',
     'fs',
     'gaps',
     'impact',
     'input',
     'intent',
-    'mcp',
     'memory',
     'oracles',
     'pool',
@@ -417,11 +425,13 @@ const REACHES_FOR: Record<string, readonly string[]> = {
  * A bound only ever says "no worse"; equality forces the number down in the same commit that
  * earns it, and forces somebody to look when it moves either way. It came down from 24 when
  * `run-store`, `run-diff` and `run-context` left `runs` for `runs/artifact`: `project` had
- * reached into `runs` only for those three, so the pair stopped being mutual. The move was
+ * reached into `runs` only for those three, so the pair stopped being mutual. It came down
+ * again, 23 to 22, when `mcp-is-error` and `mcp-outage` left `mcp` for `mcp/faults` -- the same
+ * shape a third time, since what `tools` wanted from `mcp` was those two files. The move was
  * predicted safe and turned out to be subtractive, which is the pattern worth looking for --
  * see `would FREE` in scripts/safe-to-group.mjs.
  */
-const MUTUAL_PAIRS_TODAY = 23;
+const MUTUAL_PAIRS_TODAY = 22;
 
 /**
  * Two directories may not share a name.

@@ -55,8 +55,8 @@ export {
   setProxyLogPort,
 } from './proxy/proxy-log.js';
 import { proxyLog } from './proxy/proxy-log.js';
-import { OutageReason, OutageStage, reportMcpOutage } from './mcp-outage.js';
-import { postToSession } from './mcp-post-transport.js';
+import { OutageReason, OutageStage, reportMcpOutage } from './faults/mcp-outage.js';
+import { postToSession } from './proxy/mcp-post-transport.js';
 import { reconnectDelayMs } from './proxy/proxy-backoff.js';
 export { reconnectDelayMs, RECONNECT_BASE_MS, RECONNECT_CAP_MS } from './proxy/proxy-backoff.js';
 
@@ -65,7 +65,7 @@ export {
   postToSession,
   shouldRetryUnsentPost,
   type PostFailure,
-} from './mcp-post-transport.js';
+} from './proxy/mcp-post-transport.js';
 
 /**
  * How many consecutive failed reconnects before the proxy stops RETRYING. It does not stop serving:

@@ -23,7 +23,7 @@ import { join } from 'node:path';
 import { PassThrough } from 'node:stream';
 import { LOOPBACK_HOST, MCP_SSE_PATH, STATUS_PATH } from '@reticlehq/core';
 import { proxyLogPath, startMcpProxy } from './mcp-proxy.js';
-import { resetOutageReporting } from './mcp-outage.js';
+import { resetOutageReporting } from './faults/mcp-outage.js';
 
 const SESSION_PATH = '/session/fanout';
 const SSE_HEADERS = { 'content-type': 'text/event-stream' } as const;

@@ -18,7 +18,7 @@ import { runTool, SESSION_BOUND_TOOLS } from '../tools/invoke-tool.js';
 import { sessionEnvelopeShape } from '../tools/tool-kit.js';
 import { buildErrorPayload } from '../tools/error-recovery.js';
 import { takeVersionSkewOnto } from '../../command/version/version-nudge.js';
-import { resultIsError } from './mcp-is-error.js';
+import { resultIsError } from './faults/mcp-is-error.js';
 import { consumerVerdictRefusal, reservedVerdictKeysIn } from './consumer-verdict-guard.js';
 import { buildServerInstructions } from './server-instructions.js';
 import { unadvertisedToolHelp } from '../tools/unadvertised-help.js';

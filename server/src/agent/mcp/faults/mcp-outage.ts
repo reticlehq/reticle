@@ -14,7 +14,7 @@
  */
 
 import { OutageReason, OutageStage, TelemetryEventKind } from '@reticlehq/core/telemetry';
-import { getTelemetry } from '../../telemetry/telemetry.js';
+import { getTelemetry } from '../../../telemetry/telemetry.js';
 
 /**
  * `OutageStage` and `OutageReason` are core's — this re-export only saves the proxy an import. They

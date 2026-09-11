@@ -28,7 +28,7 @@ import { LOOPBACK_HOST } from '@reticlehq/core';
 import { degradedInstructions, localInitializeResponse } from './proxy/proxy-handshake.js';
 import { buildServerInstructions } from './server-instructions.js';
 import { startMcpProxy } from './mcp-proxy.js';
-import { resetOutageReporting } from './mcp-outage.js';
+import { resetOutageReporting } from './faults/mcp-outage.js';
 
 const PORT = 4400;
 const REASON = 'a foreign process is holding the port';

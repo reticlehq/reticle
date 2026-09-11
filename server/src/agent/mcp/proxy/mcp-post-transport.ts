@@ -8,9 +8,9 @@
  */
 
 import * as http from 'node:http';
-import { log } from '../../log.js';
-import { getSessionMetrics } from '../../telemetry/session-metrics.js';
-import { reconnectDelayMs } from './proxy/proxy-backoff.js';
+import { log } from '../../../log.js';
+import { getSessionMetrics } from '../../../telemetry/session-metrics.js';
+import { reconnectDelayMs } from '../proxy/proxy-backoff.js';
 
 /** One bounded pool for the short-lived POST side of each MCP SSE session. */
 export const MCP_PROXY_HTTP_AGENT_OPTIONS = {

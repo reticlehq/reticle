@@ -32,7 +32,7 @@ import { join } from 'node:path';
 import { PassThrough } from 'node:stream';
 import { LOOPBACK_HOST, MCP_SSE_PATH, STATUS_PATH } from '@reticlehq/core';
 import { startMcpProxy } from './mcp-proxy.js';
-import { resetOutageReporting } from './mcp-outage.js';
+import { resetOutageReporting } from './faults/mcp-outage.js';
 
 const SSE_HEADERS = { 'content-type': 'text/event-stream' } as const;
 const endpointFrame = (n: number): string =>

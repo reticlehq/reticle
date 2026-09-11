@@ -78,7 +78,7 @@ const { buildErrorPayload } = await import(`${DIST}/agent/tools/error-recovery.j
 const { reportVersionChange } = await import(`${DIST}/command/update/updater.js`);
 const { reportMcpConnected, markDaemonStart } = await import(`${DIST}/telemetry/mcp-connection.js`);
 const { reportInitOutcome, InitFailure } = await import(`${DIST}/telemetry/init-telemetry.js`);
-const { reportMcpOutage, resetOutageReporting, OutageStage } = await import(`${DIST}/agent/mcp/mcp-outage.js`);
+const { reportMcpOutage, resetOutageReporting, OutageStage } = await import(`${DIST}/agent/mcp/faults/mcp-outage.js`);
 const { decideVerified } = await import(`${ENGINE_DIST}/evidence/verified.js`);
 // Derived from core, never re-listed here — a copied vocabulary is correct on the day it is written
 // and silently wrong at the next addition, which has already cost this repo twice.

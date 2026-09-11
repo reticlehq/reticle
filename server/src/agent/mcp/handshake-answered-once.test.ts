@@ -30,7 +30,7 @@ import { join } from 'node:path';
 import { PassThrough } from 'node:stream';
 import { LOOPBACK_HOST } from '@reticlehq/core';
 import { startMcpProxy } from './mcp-proxy.js';
-import { resetOutageReporting } from './mcp-outage.js';
+import { resetOutageReporting } from './faults/mcp-outage.js';
 
 const INITIALIZE_ID = 1;
 
