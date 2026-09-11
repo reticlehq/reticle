@@ -19,7 +19,7 @@
  */
 
 import { PredicateKind, QueryBy, type ElementQuery } from '@reticlehq/core';
-import type { Predicate } from './predicate-eval.js';
+import type { Predicate } from './predicate/predicate-eval.js';
 
 /** A failing call the caller named in advance — matched against the window's real calls. */
 export interface DeclaredNetFailure {

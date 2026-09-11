@@ -26,7 +26,7 @@ import {
   evaluatePredicate,
   type Predicate,
   type PredicateSession,
-} from '@reticlehq/engine/question/predicate.js';
+} from '@reticlehq/engine/question/predicate/predicate.js';
 import type { Session } from '../../connection/session/session.js';
 import { ReticleTool } from '@reticlehq/core';
 import type { ToolDeps } from './tool-kit.js';

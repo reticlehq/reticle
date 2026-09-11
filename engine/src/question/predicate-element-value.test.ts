@@ -19,7 +19,7 @@ import {
   type MatchResult,
   type ReticleEvent,
 } from '@reticlehq/core';
-import { evaluatePredicate, type PredicateSession } from './predicate.js';
+import { evaluatePredicate, type PredicateSession } from './predicate/predicate.js';
 
 function el(over: Partial<ElementDescriptor> = {}): ElementDescriptor {
   return {

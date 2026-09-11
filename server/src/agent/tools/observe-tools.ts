@@ -27,10 +27,10 @@ import {
   evaluatePredicate,
   waitForPredicate,
   PredicateSchema,
-} from '@reticlehq/engine/question/predicate.js';
+} from '@reticlehq/engine/question/predicate/predicate.js';
 import { resolveSessionWithin } from '../../connection/session/resolve-within.js';
 import { WALL_CLOCK } from '../../connection/session/wall-clock.js';
-import { parsePredicate } from '@reticlehq/engine/question/predicate-parse.js';
+import { parsePredicate } from '@reticlehq/engine/question/predicate/predicate-parse.js';
 import {
   matchNet,
   matchConsole,

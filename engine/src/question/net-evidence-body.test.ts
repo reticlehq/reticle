@@ -19,7 +19,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { EventType, PredicateKind, type ReticleEvent } from '@reticlehq/core';
-import { evalNet } from './predicate-eval.js';
+import { evalNet } from './predicate/predicate-eval.js';
 
 const BIG = `{"payload":"${'x'.repeat(9000)}","needle":"interview-complete"}`;
 

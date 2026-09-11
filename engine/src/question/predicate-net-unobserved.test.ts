@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { EventType } from '@reticlehq/core';
 import type { ReticleEvent } from '@reticlehq/core';
-import { evalNet } from './predicate-eval.js';
-import { PredicateKind } from './predicate.js';
+import { evalNet } from './predicate/predicate-eval.js';
+import { PredicateKind } from './predicate/predicate.js';
 
 /**
  * A request Reticle cannot see must not be graded as a request that did not happen.

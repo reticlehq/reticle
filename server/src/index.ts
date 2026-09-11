@@ -242,8 +242,8 @@ export {
   evaluatePredicate,
   waitForPredicate,
   PredicateSchema,
-} from '@reticlehq/engine/question/predicate.js';
-export type { Predicate, EvalResult } from '@reticlehq/engine/question/predicate.js';
+} from '@reticlehq/engine/question/predicate/predicate.js';
+export type { Predicate, EvalResult } from '@reticlehq/engine/question/predicate/predicate.js';
 export { buildReactionReport } from '@reticlehq/engine/question/reaction.js';
 export {
   CdpRealInputProvider,

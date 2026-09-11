@@ -22,7 +22,7 @@
 import { describe, expect, it } from 'vitest';
 import { EventType } from '@reticlehq/core';
 import type { ReticleEvent } from '@reticlehq/core';
-import { evalRoute } from './predicate-route.js';
+import { evalRoute } from './predicate/predicate-route.js';
 
 const routeEvent = (path: string, t: number): ReticleEvent =>
   ({

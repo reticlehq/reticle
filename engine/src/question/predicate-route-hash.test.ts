@@ -16,7 +16,7 @@
  * file's other test was written for, on the router that desktop actually uses.
  */
 import { describe, expect, it } from 'vitest';
-import { evalRoute } from './predicate-route.js';
+import { evalRoute } from './predicate/predicate-route.js';
 import { EventType, PredicateKind, type ReticleEvent } from '@reticlehq/core';
 
 const hashChange = (hash: string): ReticleEvent[] => [

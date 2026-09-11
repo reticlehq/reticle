@@ -9,7 +9,7 @@ import {
   urlForMatch,
   type ReticleEvent,
 } from '@reticlehq/core';
-import { describeSuperseded } from '../question/observed-in-window.js';
+import { describeSuperseded } from '../question/predicate/observed-in-window.js';
 import { findStaleResponses } from './stale-response.js';
 import { findBodyFailures } from './body-failures.js';
 import { findEchoMismatches } from './echo-mismatch.js';

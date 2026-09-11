@@ -12,7 +12,7 @@
  * had already timed out once at the default. Naming the destination turns a guess into a move.
  */
 import { describe, expect, it } from 'vitest';
-import { parsePredicate } from './predicate-parse.js';
+import { parsePredicate } from './predicate/predicate-parse.js';
 
 const messageFor = (predicate: unknown): string => {
   try {

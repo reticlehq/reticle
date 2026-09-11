@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { EventType, type ReticleEvent } from '@reticlehq/core';
-import { PredicateSchema } from '@reticlehq/engine/question/predicate.js';
+import { PredicateSchema } from '@reticlehq/engine/question/predicate/predicate.js';
 import { proposeConsequences } from './propose-consequences.js';
 
 let seq = 0;

@@ -35,8 +35,8 @@
 
 import { describe, expect, it } from 'vitest';
 import { ReticleCommand, type CommandResult, type ReticleEvent } from '@reticlehq/core';
-import { evaluatePredicate } from './predicate.js';
-import type { PredicateSession } from './predicate.js';
+import { evaluatePredicate } from './predicate/predicate.js';
+import type { PredicateSession } from './predicate/predicate.js';
 
 interface Reply {
   stores?: Record<string, unknown>;

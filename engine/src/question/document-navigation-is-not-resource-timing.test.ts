@@ -21,7 +21,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { NetInitiator } from '@reticlehq/core';
 
-const SOURCE = readFileSync(join(import.meta.dirname, 'predicate-eval.ts'), 'utf8');
+const SOURCE = readFileSync(join(import.meta.dirname, 'predicate/predicate-eval.ts'), 'utf8');
 const SET_NAME = 'DOCUMENT_INITIATORS';
 
 /** The literal members of the liveness set, read from the source that declares them. */

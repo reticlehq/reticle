@@ -22,7 +22,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { matchValue } from './predicate-eval.js';
+import { matchValue } from './predicate/predicate-eval.js';
 
 describe('matchValue compares structure, not identity', () => {
   it('matches an array with equal contents', () => {

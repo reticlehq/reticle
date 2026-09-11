@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { EventType, PredicateKind } from '@reticlehq/core';
 import type { ReticleEvent } from '@reticlehq/core';
-import { evalNet } from './predicate-eval.js';
+import { evalNet } from './predicate/predicate-eval.js';
 
 /**
  * A failure nobody can un-fail should not cost the caller the rest of the budget.

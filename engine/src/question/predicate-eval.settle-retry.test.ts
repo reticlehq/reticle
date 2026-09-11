@@ -16,7 +16,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { EventType, PredicateKind } from '@reticlehq/core';
-import { evalSettled } from './predicate-eval.js';
+import { evalSettled } from './predicate/predicate-eval.js';
 import type { ReticleEvent } from '@reticlehq/core';
 
 const settled = { kind: PredicateKind.SETTLED } as const;

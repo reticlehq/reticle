@@ -26,7 +26,7 @@ import {
 import { leanActResult, mutatedWithin } from './act/act-view.js';
 import { ReticleTool } from '@reticlehq/core';
 import { buildReactionReport, summarizeReaction } from '@reticlehq/engine/question/reaction.js';
-import { parsePredicate } from '@reticlehq/engine/question/predicate-parse.js';
+import { parsePredicate } from '@reticlehq/engine/question/predicate/predicate-parse.js';
 import { bodyClauseRefusal } from '@reticlehq/engine/evidence/body-capture-remedy.js';
 import { causalSummary } from '../capsule/causal-summary.js';
 import { findContradictions } from '@reticlehq/engine/disagreement/contradictions.js';
@@ -40,7 +40,7 @@ import {
   inlineVerdictId,
   linkInlineIntent,
 } from '../../features/intent/inline-intent.js';
-import { declaresState } from '@reticlehq/engine/question/predicate-asks.js';
+import { declaresState } from '@reticlehq/engine/question/predicate/predicate-asks.js';
 import { isStateUnwatched } from '@reticlehq/engine/evidence/blind-spots.js';
 import {
   inFlightRequestLabels,
@@ -61,7 +61,7 @@ import {
 import { describeWaitTarget, namedNetIsInFlight } from '@reticlehq/engine/evidence/unsettled.js';
 import { saveFailedAssertCapsule } from './act-capsule.js';
 import { buildDivergenceCapsule } from '../capsule/capsule.js';
-import { predicateToExpectedLinks } from '@reticlehq/engine/question/predicate-to-links.js';
+import { predicateToExpectedLinks } from '@reticlehq/engine/question/predicate/predicate-to-links.js';
 import { buildHonestyBlock } from '@reticlehq/engine/evidence/honesty.js';
 import {
   absenceBlindSpotNote,
@@ -78,7 +78,7 @@ import {
   waitForPredicate,
   provenExpectedLinks,
   PredicateSchema,
-} from '@reticlehq/engine/question/predicate.js';
+} from '@reticlehq/engine/question/predicate/predicate.js';
 import { healthEnvelope, refuseIfThrottled } from '../../connection/session/session-health.js';
 import {
   pausedShortCircuit,

@@ -18,7 +18,7 @@
 import { describe, expect, it } from 'vitest';
 import { EventType } from '@reticlehq/core';
 import type { ReticleEvent } from '@reticlehq/core';
-import { evalRoute } from './predicate-route.js';
+import { evalRoute } from './predicate/predicate-route.js';
 
 const pending = (id: string, url: string, t: number): ReticleEvent =>
   ({ type: EventType.NET_PENDING, t, data: { id, url, method: 'GET' } }) as unknown as ReticleEvent;

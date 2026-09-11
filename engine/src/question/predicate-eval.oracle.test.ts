@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { EventType, type ReticleEvent } from '@reticlehq/core';
-import { evalSettled, evalConsole, matchValue } from './predicate-eval.js';
+import { evalSettled, evalConsole, matchValue } from './predicate/predicate-eval.js';
 
 function ev(type: EventType, data: Record<string, unknown>, t: number): ReticleEvent {
   return { t, type, sessionId: 's', data };

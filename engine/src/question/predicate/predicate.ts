@@ -10,11 +10,11 @@ import {
   type ReticleEvent,
 } from '@reticlehq/core';
 
-import type { KeepCallerContextFn, NoteFn } from '../window/engine-host.js';
+import type { KeepCallerContextFn, NoteFn } from '../../window/engine-host.js';
 
 import { predicateToExpectedLinks } from './predicate-to-links.js';
 import type { ExpectedLink } from '@reticlehq/core';
-import { isAmbient, ambientKeyOf, type AmbientCounts } from '../window/ambient.js';
+import { isAmbient, ambientKeyOf, type AmbientCounts } from '../../window/ambient.js';
 import { evalRoute } from './predicate-route.js';
 import { describeSuperseded } from './observed-in-window.js';
 import { evalElement } from './predicate-element.js';

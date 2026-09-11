@@ -19,7 +19,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { evalRoute, RouteDecidedBy } from './predicate-route.js';
+import { evalRoute, RouteDecidedBy } from './predicate/predicate-route.js';
 import { EventType, type ReticleEvent } from '@reticlehq/core';
 
 const changed = (pathname: string): ReticleEvent[] => [

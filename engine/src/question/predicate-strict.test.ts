@@ -28,8 +28,8 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { PredicateSchema } from './predicate-eval.js';
-import { evalRoute } from './predicate-route.js';
+import { PredicateSchema } from './predicate/predicate-eval.js';
+import { evalRoute } from './predicate/predicate-route.js';
 import { EventType, type ReticleEvent } from '@reticlehq/core';
 
 describe('a predicate key that is not real is refused, never dropped', () => {

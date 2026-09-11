@@ -1,10 +1,10 @@
 import { CaptureLoss, channelsRead, PredicateKind } from '@reticlehq/core';
 import { gapsForAction } from '@reticlehq/engine/evidence/instrumentation-gaps.js';
 import { noteSessionGaps } from '@reticlehq/engine/evidence/gap-ledger.js';
-import { declaresState } from '@reticlehq/engine/question/predicate-asks.js';
+import { declaresState } from '@reticlehq/engine/question/predicate/predicate-asks.js';
 import { isStateUnwatched } from '@reticlehq/engine/evidence/blind-spots.js';
 import type { InstrumentationGap, JournalVerdictEffect } from '@reticlehq/core/artifacts';
-import type { Predicate } from '@reticlehq/engine/question/predicate.js';
+import type { Predicate } from '@reticlehq/engine/question/predicate/predicate.js';
 import type { Session } from '../../../connection/session/session.js';
 import {
   findContradictions,

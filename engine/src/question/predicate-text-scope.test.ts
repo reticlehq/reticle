@@ -17,7 +17,7 @@ import {
   type MatchResult,
   type ReticleEvent,
 } from '@reticlehq/core';
-import { evaluatePredicate, type PredicateSession } from './predicate.js';
+import { evaluatePredicate, type PredicateSession } from './predicate/predicate.js';
 
 const DIALOG = '[role=dialog]';
 

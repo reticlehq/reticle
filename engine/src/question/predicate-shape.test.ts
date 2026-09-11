@@ -17,8 +17,8 @@
 
 import { describe, expect, it } from 'vitest';
 import { PredicateKind } from '@reticlehq/core';
-import { parsePredicate } from './predicate-parse.js';
-import { nestedKeysOf, predicateFieldsFor } from './predicate-eval.js';
+import { parsePredicate } from './predicate/predicate-parse.js';
+import { nestedKeysOf, predicateFieldsFor } from './predicate/predicate-eval.js';
 import { z } from 'zod';
 
 const messageOf = (input: unknown): string => {

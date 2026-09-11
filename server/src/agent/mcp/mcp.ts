@@ -1,7 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { ErrorCode, McpError } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
-import { isPredicateParam } from '@reticlehq/engine/question/predicate-eval.js';
+import { isPredicateParam } from '@reticlehq/engine/question/predicate/predicate-eval.js';
 import { isToonable, resultToToon, MCP_SERVER_NAME } from '@reticlehq/core';
 import { TOOLS, type ToolDeps } from '../tools/tools.js';
 import type { ToolDef } from '../tools/tools.js';
@@ -42,7 +42,7 @@ import { log } from '../../log.js';
 import { SERVER_VERSION } from '../../command/version/identity/server-version.js';
 import { setMcpClientNameHook } from '../../telemetry/feedback-context.js';
 import { getSessionMetrics } from '../../telemetry/session-metrics.js';
-import { parsePredicate } from '@reticlehq/engine/question/predicate-parse.js';
+import { parsePredicate } from '@reticlehq/engine/question/predicate/predicate-parse.js';
 
 /**
  * Merge the runtime-spliced envelope (health/lease/age/control) into a session-bound tool's declared

@@ -21,7 +21,10 @@ import {
   replayFlow,
   type FlowReplaySession,
 } from './flow-replay.js';
-import { waitForPredicate, type Predicate } from '@reticlehq/engine/question/predicate.js';
+import {
+  waitForPredicate,
+  type Predicate,
+} from '@reticlehq/engine/question/predicate/predicate.js';
 import { asRecord, asString } from '@reticlehq/core';
 import { ReticleTool } from '@reticlehq/core';
 

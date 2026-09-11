@@ -17,8 +17,8 @@
 
 import { describe, expect, it } from 'vitest';
 import { EventType, type CommandResult, type ReticleEvent } from '@reticlehq/core';
-import { evaluatePredicate, type PredicateSession } from './predicate.js';
-import type { Predicate } from './predicate.js';
+import { evaluatePredicate, type PredicateSession } from './predicate/predicate.js';
+import type { Predicate } from './predicate/predicate.js';
 
 let seq = 0;
 function ev(type: EventType, data: Record<string, unknown>, documentId?: string): ReticleEvent {

@@ -8,7 +8,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { EventType, type ReticleEvent } from '@reticlehq/core';
-import { routeOfEvent, routeOfUrl } from './predicate-route.js';
+import { routeOfEvent, routeOfUrl } from './predicate/predicate-route.js';
 
 const change = (data: Record<string, unknown>): ReticleEvent => ({
   t: 1,

@@ -31,8 +31,8 @@
 
 import { describe, expect, it } from 'vitest';
 import { ReticleCommand, type CommandResult, type ReticleEvent } from '@reticlehq/core';
-import { evaluatePredicate } from './predicate.js';
-import type { PredicateSession } from './predicate.js';
+import { evaluatePredicate } from './predicate/predicate.js';
+import type { PredicateSession } from './predicate/predicate.js';
 
 /** Minimal session that answers STATE_READ with a fixed set of stores. */
 class Stores implements PredicateSession {

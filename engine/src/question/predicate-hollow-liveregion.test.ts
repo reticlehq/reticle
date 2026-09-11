@@ -17,8 +17,8 @@
 
 import { describe, expect, it } from 'vitest';
 import type { ElementDescriptor, ElementQuery, Ref } from '@reticlehq/core';
-import { evaluatePredicate } from './predicate.js';
-import type { PredicateSession } from './predicate.js';
+import { evaluatePredicate } from './predicate/predicate.js';
+import type { PredicateSession } from './predicate/predicate.js';
 import { ReticleCommand } from '@reticlehq/core';
 import type { CommandResult, MatchResult, ReticleEvent } from '@reticlehq/core';
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { EventType, type CommandResult, type ReticleEvent } from '@reticlehq/core';
 import { assertSuccess, successToPredicate, dynamicTestids } from './flow-success.js';
-import { waitForPredicate } from '@reticlehq/engine/question/predicate.js';
+import { waitForPredicate } from '@reticlehq/engine/question/predicate/predicate.js';
 import type { FlowReplaySession } from './flow-replay.js';
 
 /** Minimal session: scripted events drive signal/net predicates; QUERY answers element presence. */

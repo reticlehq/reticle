@@ -24,8 +24,8 @@
 
 import { describe, expect, it } from 'vitest';
 import { PredicateKind, ReticleCommand } from '@reticlehq/core';
-import { evaluatePredicate, type PredicateSession } from './predicate.js';
-import type { Predicate } from './predicate.js';
+import { evaluatePredicate, type PredicateSession } from './predicate/predicate.js';
+import type { Predicate } from './predicate/predicate.js';
 
 /** The one shape under test: a clause nobody could evaluate, beside one that plainly holds. */
 const INCONCLUSIVE_REASON = "multiple stores (a, b) expose 'view'; name one with `store`";

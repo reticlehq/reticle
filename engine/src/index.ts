@@ -13,10 +13,10 @@
  */
 
 /** Ask whether something held, once. */
-export { evaluatePredicate, PredicateSchema } from './question/predicate.js';
+export { evaluatePredicate, PredicateSchema } from './question/predicate/predicate.js';
 /** Ask whether something holds, and keep watching until it does or the time runs out. */
-export { waitForPredicate } from './question/predicate.js';
-export type { Predicate, EvalResult, PredicateSession } from './question/predicate.js';
+export { waitForPredicate } from './question/predicate/predicate.js';
+export type { Predicate, EvalResult, PredicateSession } from './question/predicate/predicate.js';
 
 /** What the rules need from you, and what happens when you do not supply it. */
 export type { NoteFn, KeepCallerContextFn } from './window/engine-host.js';

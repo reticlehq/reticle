@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { PredicateKind } from '@reticlehq/core';
-import { parsePredicate } from './predicate-parse.js';
+import { parsePredicate } from './predicate/predicate-parse.js';
 
 /**
  * When a predicate is rejected, the example offered has to be of the kind that FAILED.

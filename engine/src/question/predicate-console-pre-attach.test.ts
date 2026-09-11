@@ -21,7 +21,7 @@
 import { describe, expect, it } from 'vitest';
 import { EventType } from '@reticlehq/core';
 import type { ReticleEvent } from '@reticlehq/core';
-import { evalConsole } from './predicate-eval.js';
+import { evalConsole } from './predicate/predicate-eval.js';
 
 const ev = (type: EventType, message: string, t: number): ReticleEvent =>
   ({ type, t, data: { message } }) as unknown as ReticleEvent;

@@ -13,7 +13,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { PredicateKind } from '@reticlehq/core';
-import { parsePredicate } from './predicate-parse.js';
+import { parsePredicate } from './predicate/predicate-parse.js';
 
 describe('predicate spellings an agent reaches for', () => {
   it('reads `type` as the discriminator when `kind` is absent', () => {

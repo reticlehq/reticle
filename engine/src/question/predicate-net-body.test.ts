@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { EventType } from '@reticlehq/core';
 import type { ReticleEvent } from '@reticlehq/core';
-import { evalNet } from './predicate-eval.js';
-import { parsePredicate } from './predicate-parse.js';
-import { PredicateKind } from './predicate.js';
+import { evalNet } from './predicate/predicate-eval.js';
+import { parsePredicate } from './predicate/predicate-parse.js';
+import { PredicateKind } from './predicate/predicate.js';
 
 /**
  * Asserting on a response BODY, because a status code cannot see the worst false green there is.

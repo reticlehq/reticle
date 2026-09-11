@@ -15,7 +15,7 @@ import {
   type HealProposal,
 } from '@reticlehq/core';
 import { asString } from '@reticlehq/core';
-import { waitForPredicate } from '@reticlehq/engine/question/predicate.js';
+import { waitForPredicate } from '@reticlehq/engine/question/predicate/predicate.js';
 import { replayFlow } from './flow-replay.js';
 import { applyHealChanges, collectProposals } from './heal.js';
 import { assertSuccess, dynamicTestids, successLabel } from './flow-success.js';
