@@ -273,9 +273,22 @@ function print(report) {
     );
     for (const id of report.couldNotBePlanted) console.log(`              ${id}`);
   }
+  // Not scored and not a mark against the implementation -- but printed, because "it could not
+  // answer" and "we did not ask" are different facts and this block used to print only the
+  // first. With `effect` claimed, four of sixteen scenarios appeared in no line at all while
+  // the footer below called the list "the honest half of this score".
+  if (report.outOfProfile?.length > 0) {
+    console.log(
+      `  not asked: ${report.outOfProfile.length} scenario(s) above the claimed profile ` +
+        `(${String(report.claimed)})`,
+    );
+    for (const id of report.outOfProfile) console.log(`              ${id}`);
+  }
   console.log(
     '\n  A scenario nobody could plant is ABSENT, never a pass. The absent list is the honest\n' +
-      '  half of this score and it is the fixture that is missing, not the implementation.\n',
+      '  half of this score and it is the fixture that is missing, not the implementation.\n' +
+      '  The "not asked" list is neither: those scenarios belong to a profile this subject did\n' +
+      '  not claim, so they were never offered. Claiming higher is what puts them in play.\n',
   );
 }
 

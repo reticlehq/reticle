@@ -129,3 +129,48 @@ describe('the scenario list itself', () => {
     expect(new Set(SCENARIOS.map((s) => s.id)).size).toBe(SCENARIOS.length);
   });
 });
+
+/**
+ * The scoreboard must account for every scenario in the suite, not only the ones it scores.
+ *
+ * `report` scopes each of its buckets to `requiredScenarios(claimed)`, which is right for
+ * SCORING -- an implementation is judged against what it claims, never against a profile it
+ * never claimed. But it made the *reporting* short: with `effect` claimed, four of the sixteen
+ * scenarios fall outside every bucket, so the runner printed "absent: 4 scenario(s) this
+ * subject cannot plant" when eight of sixteen went unanswered.
+ *
+ * That matters because the absent list is the one part of this score that is supposed to be
+ * unflattering. Its own printed footer calls it "the honest half of this score". A half that
+ * silently omits the scenarios belonging to profiles above the claimed one is a shrinking
+ * denominator of exactly the kind the comment on `report` warns about two lines earlier.
+ *
+ * So this asserts the arithmetic rather than the wording: every scenario lands in exactly one
+ * bucket, and the buckets add up to the suite.
+ */
+describe('every scenario is accounted for somewhere', () => {
+  it('puts each scenario in exactly one bucket, and the buckets cover the suite', () => {
+    const registered = { name: 'x', profile: Profile.EFFECT, channels: [] };
+    const outcomes = {};
+    for (const s of SCENARIOS) outcomes[s.id] = Outcome.ABSENT;
+    const r = report(registered, outcomes);
+    const buckets = [
+      ...r.failed,
+      ...r.couldNotBePlanted,
+      ...r.neverAttempted,
+      ...(r.outOfProfile ?? []),
+    ];
+    expect(new Set(buckets).size, 'a scenario appears in two buckets').toBe(buckets.length);
+    expect([...buckets].sort()).toEqual(SCENARIOS.map((s) => s.id).sort());
+  });
+
+  it('names the scenarios that are out of scope rather than dropping them', () => {
+    const registered = { name: 'x', profile: Profile.EFFECT, channels: [] };
+    const outcomes = {};
+    for (const s of SCENARIOS) outcomes[s.id] = Outcome.PASSED;
+    const r = report(registered, outcomes);
+    // Not the subject's fault and not scored -- but said out loud, because "we did not ask"
+    // and "it could not answer" are different facts and the printed score conflated them.
+    expect(r.outOfProfile.length).toBeGreaterThan(0);
+    expect(r.couldNotBePlanted).toEqual([]);
+  });
+});

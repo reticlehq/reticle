@@ -92,9 +92,23 @@ export function profileEarned(registered, outcomes) {
  *
  * The unanswered list is not decoration. A scoreboard that reports only a grade lets a shrinking
  * suite look like a steady one, so what could not be planted is named every time.
+ *
+ * **Every scenario lands in exactly one bucket and the buckets cover the suite**, which is
+ * pinned by a test because it did not used to be true. Scoring is correctly scoped to the
+ * claimed profile -- an implementation is judged against what it claims, never against a
+ * profile it never claimed -- but the REPORT was scoped the same way, so with `effect` claimed
+ * the four `in-realm` and `surface` scenarios fell outside every bucket and were printed
+ * nowhere. The runner then said "absent: 4 scenario(s) this subject cannot plant" while eight
+ * of sixteen went unanswered, under a footer calling that list "the honest half of this score".
+ *
+ * `outOfProfile` is the fourth bucket. It is not a mark against the implementation and it is
+ * not scored; it is the difference between "it could not answer" and "we did not ask", which
+ * the old output conflated into one number.
  */
 export function report(registered, outcomes) {
-  const attempted = requiredScenarios(registered.profile ?? Profile.EFFECT);
+  const claimed = registered.profile ?? Profile.EFFECT;
+  const attempted = requiredScenarios(claimed);
+  const inScope = new Set(attempted.map((s) => s.id));
   return {
     name: registered.name,
     claimed: registered.profile,
@@ -102,5 +116,6 @@ export function report(registered, outcomes) {
     failed: attempted.filter((s) => outcomes[s.id] === Outcome.FAILED).map((s) => s.id),
     couldNotBePlanted: attempted.filter((s) => outcomes[s.id] === Outcome.ABSENT).map((s) => s.id),
     neverAttempted: attempted.filter((s) => outcomes[s.id] === undefined).map((s) => s.id),
+    outOfProfile: SCENARIOS.filter((s) => !inScope.has(s.id)).map((s) => s.id),
   };
 }

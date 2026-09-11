@@ -33,7 +33,7 @@ import path from 'node:path';
 import { ReticleCommand } from '@reticlehq/core';
 import { start, WebRealm, conformanceClient } from '@reticlehq/server';
 import { driveAll } from './drive.mjs';
-import { Profile } from './scenarios/index.mjs';
+import { Profile, SCENARIOS } from './scenarios/index.mjs';
 
 // The daemon's default. Not a free choice either: the renderer's SDK dials the default unless a
 // build-time value overrides it, so a spare port here produced an app that started perfectly and
@@ -306,10 +306,22 @@ function print(report) {
   console.log(`  earned  : ${String(report.earned ?? 'none')}`);
   if (report.failed.length > 0) console.log(`  failed  : ${report.failed.join(', ')}`);
   console.log(`  absent  : ${String(report.couldNotBePlanted.length)} scenario(s)`);
+  for (const id of report.couldNotBePlanted) console.log(`              ${id}`);
+  // Counted from the suite rather than written down, because the sentence under this block used
+  // to say "Two scenarios" long after six were running, and nobody reading the output would
+  // have known which number to believe.
+  if (report.outOfProfile?.length > 0) {
+    console.log(
+      `  not asked: ${String(report.outOfProfile.length)} scenario(s) above the claimed profile`,
+    );
+    for (const id of report.outOfProfile) console.log(`              ${id}`);
+  }
+  const unanswered = report.couldNotBePlanted.length + (report.outOfProfile?.length ?? 0);
+  const driven = SCENARIOS.length - unanswered;
   console.log(
-    '\n  Two scenarios, and the number is honest rather than disappointing: the rest need a\n' +
-      '  defect planted and this app carries no bug injector. What these two prove is that a real\n' +
-      '  desktop shell reaches the same verdicts as a browser tab, which until now was a comment.\n',
+    `\n  ${String(driven)} scenarios, and the number is honest rather than disappointing: the rest\n` +
+      '  need a defect planted and this app carries no bug injector. What these prove is that a\n' +
+      '  real desktop shell reaches the same verdicts as a browser tab, which was once a comment.\n',
   );
 }
 
