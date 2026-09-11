@@ -2,9 +2,11 @@ import { z } from 'zod';
 import { emptyFlowRefusal } from './empty-flow.js';
 import { aliasParam } from '../../agent/tools/args/alias-args.js';
 import {
+  FLOW_FILE_VERSION,
   FlowErrorCode,
   RecordedSaveError,
   ReplayStatus,
+  selectFlows,
   type FlowReplayResult,
 } from '@reticlehq/core';
 import type { FlowFile } from '@reticlehq/core';
@@ -107,6 +109,69 @@ const INTENT_GAP_FIELD = z
   .describe(
     'Present ONLY when the flow was saved with nothing saying what it is for: { kind, missing, cost, fix }. The flow is on disk either way — this never blocks a save. Close it by saving again with `intent`, or by setting the flow file’s `intentId` to an intent already in the ledger. Nothing here is ever derived from the flow name, the steps or the assertions: a guessed goal reads as the author’s own words.',
   );
+
+/**
+ * Resolve what a suite run should replay, and what it is holding back.
+ *
+ * Loads the candidate flows so selection can read their labels and status — `list` returns names,
+ * and a label lives in the file. The reads are small and the suite is about to replay these anyway.
+ *
+ * A flow that fails to load is kept as a candidate rather than dropped: refusing to run it here
+ * would turn a corrupt file into missing coverage nobody is told about, and replay reports the parse
+ * failure far better than a silent omission does.
+ */
+async function resolveSuiteSelection(
+  deps: ToolDeps,
+  projectId: string | undefined,
+  args: Record<string, unknown>,
+): Promise<{ run: string[]; quarantined: string[]; unmatched: string[] }> {
+  const store = flowsForSession(deps, projectId).flows;
+  const names = await store.list(projectId);
+  const asStrings = (value: unknown): string[] =>
+    Array.isArray(value) ? value.filter((v): v is string => 'string' === typeof v) : [];
+  const wantedNames = asStrings(args['names']);
+  const wantedLabels = asStrings(args['labels']);
+
+  const loaded: FlowFile[] = [];
+  for (const name of names) {
+    const file = await store.load(name, projectId);
+    /*
+     * The LISTED name wins over the file's own.
+     *
+     * The listing is what the store says exists and is what every other caller addresses a flow by;
+     * the `name` inside the file is data that can disagree with it — a hand-edited file, a copy, a
+     * rename that touched one and not the other. Selecting on the file's copy would then run a flow
+     * under a name nothing else recognises.
+     *
+     * An unreadable file keeps its place in the running set rather than being dropped: replay
+     * reports a parse failure far better than a silent omission, which would turn a corrupt file
+     * into missing coverage nobody is told about.
+     */
+    const base: Omit<FlowFile, 'name'> = file.ok
+      ? file.value
+      : { version: FLOW_FILE_VERSION, createdAt: 0, steps: [] };
+    loaded.push({ ...base, name });
+  }
+
+  const chosen = selectFlows(loaded, {
+    ...(0 === wantedNames.length ? {} : { names: wantedNames }),
+    ...(0 === wantedLabels.length ? {} : { labels: wantedLabels }),
+  });
+  /*
+   * A name the caller asked for that no file matches is still ATTEMPTED.
+   *
+   * Replay already answers a missing flow with the real reason, and that is a better answer than
+   * quietly running one fewer flow than was asked for. `unmatched` therefore reports labels, where
+   * a typo has no other way of surfacing -- ask for `@smoek` and, without this, a suite of zero
+   * flows reports a clean pass.
+   */
+  const missingNames = wantedNames.filter((name) => !names.includes(name));
+  return {
+    run: [...chosen.run.map((flow) => flow.name), ...missingNames],
+    quarantined: chosen.quarantined,
+    unmatched: chosen.unmatched.filter((entry) => !wantedNames.includes(entry)),
+  };
+}
 
 export const FLOW_TOOLS: ToolDef[] = [
   {
@@ -457,7 +522,11 @@ export const FLOW_TOOLS: ToolDef[] = [
       names: z
         .array(z.string())
         .optional()
-        .describe('Flow names to verify. Omit to verify every saved flow.'),
+        .describe('Flow names to verify. Omit for every saved flow.'),
+      labels: z
+        .array(z.string())
+        .optional()
+        .describe('Verify flows with ANY of these labels. Quarantined flows never run.'),
       parallel: workerCountSchema
         .optional()
         .describe(
@@ -483,6 +552,18 @@ export const FLOW_TOOLS: ToolDef[] = [
         .describe(
           'Flows that have both passed and failed on UNCHANGED code — intermittent, not regressions. Omitted when none are known.',
         ),
+      quarantined: z
+        .array(z.string())
+        .optional()
+        .describe(
+          'Flows you asked for that were NOT run because they are quarantined. Named rather than subtracted: a suite that quietly returns fewer flows than were selected is one whose coverage nobody can account for.',
+        ),
+      unmatched: z
+        .array(z.string())
+        .optional()
+        .describe(
+          'Names or labels that matched no flow — a typo, or a set that no longer exists. Reported because silently passing over one is how "all green" comes to mean "nothing ran".',
+        ),
       // Session-EXEMPT, so it does not inherit `sessionEnvelopeShape` — declare the one-shot human
       // feedback ask here or a validating profile strips it off the suite verdict.
       feedback_prompt: z.unknown().optional(),
@@ -491,9 +572,13 @@ export const FLOW_TOOLS: ToolDef[] = [
       const sessionId = asString(args['sessionId']);
       // "Replay all" means all of THIS app's flows (+ legacy), not every project's on a shared daemon.
       const projectId = sessionProjectId(deps, sessionId);
-      const requested = Array.isArray(args['names'])
-        ? args['names'].filter((n): n is string => 'string' === typeof n)
-        : await flowsForSession(deps, projectId).flows.list(projectId);
+      const selected = await resolveSuiteSelection(deps, projectId, args);
+      const requested = selected.run;
+      /** Named rather than subtracted — a suite that returns fewer than were asked for must say so. */
+      const heldBack = {
+        ...(0 === selected.quarantined.length ? {} : { quarantined: selected.quarantined }),
+        ...(0 === selected.unmatched.length ? {} : { unmatched: selected.unmatched }),
+      };
       // verify:server — hand the whole suite to the hosted runner; it records the verification itself.
       const cloud = await resolveProjectCloud(deps.fs, deps.reticleRoot, homedir(), process.env);
       const server = await runServerVerify(deps, cloud, sessionId, requested);
@@ -549,7 +634,11 @@ export const FLOW_TOOLS: ToolDef[] = [
         const flaky = await recordSuiteFlakes(deps.fs, deps.reticleRoot, parallelRuns);
         await persistAndSyncVerificationRun(deps, timed, projectId);
         const verdict = buildSuiteVerdict(parallelRuns);
-        return flaky.length > 0 ? { ...verdict, flaky: [...flaky] } : verdict;
+        return {
+          ...verdict,
+          ...(flaky.length > 0 ? { flaky: [...flaky] } : {}),
+          ...heldBack,
+        };
       }
       // The flow FILE travels with each replay so the verdict can tell a green that verified
       // something from a green that could never have gone red. Without it the suite reported "all 1
@@ -578,7 +667,11 @@ export const FLOW_TOOLS: ToolDef[] = [
       // A flow that has both passed and failed on UNCHANGED code is a different thing from a
       // regression, and an agent that cannot tell them apart either chases a ghost or ignores a real
       // break. Present only when the ledger has seen enough runs to say so.
-      return flaky.length > 0 ? { ...verdict, flaky: [...flaky] } : verdict;
+      return {
+        ...verdict,
+        ...(flaky.length > 0 ? { flaky: [...flaky] } : {}),
+        ...heldBack,
+      };
     },
   },
   {

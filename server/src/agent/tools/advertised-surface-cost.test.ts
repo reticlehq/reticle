@@ -93,7 +93,19 @@ const bytesOf = (json: string): number => Buffer.byteLength(json, 'utf8');
  * not forbidden, it is a DECISION — move the number and write the reason here. Coming in well under,
  * move it down.
  */
-const DEFAULT_SURFACE_BYTE_BUDGET = 24_000;
+/*
+ * Moved 24_000 -> 24_100 for `reticle_verify { action: "flows", labels }`.
+ *
+ * The decision, since going over is one: this parameter is a ROUTE feature, not evidence. It adds
+ * nothing to what a verdict can see -- it lets a caller run five flows instead of fifty, and the
+ * suite read is already flat in the number of flows. Fifty bytes per turn buys back the replay cost
+ * of forty-five flows on every selective run, which is not a close trade.
+ *
+ * The prose was cut to the shortest form that still teaches the two things a caller gets wrong:
+ * labels are a UNION (ask for two, get either), and a quarantined flow never runs however it is
+ * labelled. Everything else about selection lives in the tool description, which is sent once.
+ */
+const DEFAULT_SURFACE_BYTE_BUDGET = 24_100;
 // Raised once, deliberately, from 23_000 — with the measurement that bought it.
 //
 // `reticle_verify` was promoted into the default surface and costs 898 B on the wire (22,680 ->
